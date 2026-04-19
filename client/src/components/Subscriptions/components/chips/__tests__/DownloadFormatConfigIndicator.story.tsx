@@ -3,7 +3,7 @@ import { expect, within } from 'storybook/test';
 import DownloadFormatConfigIndicator from '../DownloadFormatConfigIndicator';
 
 const meta: Meta<typeof DownloadFormatConfigIndicator> = {
-  title: 'Components/ChannelManager/DownloadFormatConfigIndicator',
+  title: 'Components/Subscriptions/DownloadFormatConfigIndicator',
   component: DownloadFormatConfigIndicator,
   args: {
     audioFormat: null,

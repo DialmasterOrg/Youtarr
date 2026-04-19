@@ -20,13 +20,14 @@ import {
 import { AlertTriangle as WarningAmberIcon } from 'lucide-react';
 import { AppShell } from './components/layout/AppShell';
 import { Settings } from './components/Settings/Settings';
-import ChannelManager from './components/ChannelManager';
+import Subscriptions from './components/Subscriptions';
 import DownloadManager from './components/DownloadManager';
 import VideosPage from './components/VideosPage';
 import FindVideos from './components/FindVideos';
 import LocalLogin from './components/LocalLogin';
 import InitialSetup from './components/InitialSetup';
 import ChannelPage from './components/ChannelPage';
+import PlaylistPage from './components/PlaylistPage';
 import ImportSubscriptionsPage from './components/SubscriptionImport';
 import ChangelogPage from './components/ChangelogPage';
 import { AuthSplash } from './components/AuthSplash';
@@ -476,11 +477,11 @@ function AppContent() {
                     onSetupComplete={(newToken) => {
                       setToken(newToken);
                       setRequiresSetup(false);
-                      window.location.href = '/channels';
+                      window.location.href = '/subscriptions';
                     }}
                   />
                 ) : (
-                  <Navigate to="/channels" replace />
+                  <Navigate to="/subscriptions" replace />
                 )
               }
             />
@@ -490,9 +491,9 @@ function AppContent() {
               path="/login"
               element={
                 isPlatformManaged ? (
-                  <Navigate to="/channels" replace />
+                  <Navigate to="/subscriptions" replace />
                 ) : token ? (
-                  <Navigate to="/channels" replace />
+                  <Navigate to="/subscriptions" replace />
                 ) : (
                   <AuthSplash setToken={setToken} />
                 )
@@ -517,22 +518,25 @@ function AppContent() {
                   >
                     <Container
                       maxWidth={false}
-                      className={location.pathname.startsWith('/channels') ? 'w-full flex flex-col' : 'w-full'}
-                      style={location.pathname.startsWith('/channels') ? { minHeight: 'calc(100vh - 140px)' } : undefined}
+                      className={location.pathname.startsWith('/subscriptions') ? 'w-full flex flex-col' : 'w-full'}
+                      style={location.pathname.startsWith('/subscriptions') ? { minHeight: 'calc(100vh - 140px)' } : undefined}
                     >
                       <ErrorBoundary fallbackMessage="An unexpected error occurred. Please refresh the page to continue.">
                         <Routes>
                           <Route path="/changelog" element={<ChangelogPage />} />
                           <Route path="/settings/*" element={<Settings token={token} />} />
                           <Route path="/configuration" element={<Navigate to="/settings" replace />} />
-                          <Route path="/channels" element={<ChannelManager token={token} />} />
-                          <Route path="/channels/imports" element={<ImportSubscriptionsPage token={token} />} />
+                          <Route path="/subscriptions" element={<Subscriptions token={token} />} />
+                          <Route path="/subscriptions/imports" element={<ImportSubscriptionsPage token={token} />} />
+                          <Route path="/channels" element={<Navigate to="/subscriptions" replace />} />
+                          <Route path="/channels/imports" element={<Navigate to="/subscriptions/imports" replace />} />
                           <Route path="/downloads/*" element={<DownloadManager token={token} />} />
                           <Route path="/videos" element={<VideosPage token={token} />} />
                           <Route path="/videos/find" element={<FindVideos token={token} />} />
                           <Route path="/channel/:channel_id" element={<ChannelPage token={token} />} />
-                          <Route path="/" element={<Navigate to="/channels" replace />} />
-                          <Route path="/*" element={<Navigate to="/channels" replace />} />
+                          <Route path="/playlist/:id" element={<PlaylistPage token={token} />} />
+                          <Route path="/" element={<Navigate to="/subscriptions" replace />} />
+                          <Route path="/*" element={<Navigate to="/subscriptions" replace />} />
                         </Routes>
                       </ErrorBoundary>
                     </Container>

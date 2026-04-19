@@ -3,7 +3,7 @@ import { expect, within } from 'storybook/test';
 import QualityChip from '../QualityChip';
 
 const meta: Meta<typeof QualityChip> = {
-  title: 'Atomic/ChannelManager/Chips/QualityChip',
+  title: 'Atomic/Subscriptions/Chips/QualityChip',
   component: QualityChip,
   args: {
     globalPreferredResolution: '1080',

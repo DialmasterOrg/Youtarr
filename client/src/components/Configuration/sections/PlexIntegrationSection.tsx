@@ -111,6 +111,7 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
         <Typography variant="body2">
           • Automatic library refresh after downloads
           <br />• Direct library selection from Plex server
+          <br />• Required for Youtarr-managed YouTube playlists to appear as native playlists in Plex
           <br />
           If you don't use Plex, your videos will still download to your specified directory.
           <br />
@@ -309,6 +310,37 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
             plexConnectionStatus={plexConnectionStatus}
             plexLibraries={plexLibraries}
           />
+        </Grid>
+
+        <Grid item xs={12}>
+          <details>
+            <summary
+              style={{
+                cursor: 'pointer',
+                fontSize: '0.85rem',
+                color: 'var(--muted-foreground)',
+                paddingBottom: 6,
+              }}
+            >
+              Advanced: playlist-only Plex token override
+            </summary>
+            <Box className="mt-2">
+              <TextField
+                fullWidth
+                label="Plex Playlist Token (advanced)"
+                name="plexPlaylistToken"
+                value={config.plexPlaylistToken || ''}
+                onChange={handleInputChange}
+                helperText={
+                  'Optional. Leave blank to reuse your Plex API key for playlist scope. ' +
+                  'Set to "UNCLAIMED_SERVER" for an unclaimed-server LAN setup, or paste a ' +
+                  'specific user account token to route Youtarr playlists through that user. ' +
+                  'Most users do not need this.'
+                }
+                inputProps={{ 'data-testid': 'plex-playlist-token-input' }}
+              />
+            </Box>
+          </details>
         </Grid>
       </Grid>
     </ConfigurationAccordion>

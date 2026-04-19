@@ -3,12 +3,12 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { expect, userEvent, within, waitFor } from 'storybook/test';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter } from 'react-router-dom';
-import ChannelManager from '../ChannelManager';
+import Subscriptions from '../Subscriptions';
 import { DEFAULT_CONFIG } from '../../config/configSchema';
 
-const meta: Meta<typeof ChannelManager> = {
-  title: 'Pages/ChannelManager',
-  component: ChannelManager,
+const meta: Meta<typeof Subscriptions> = {
+  title: 'Pages/Subscriptions',
+  component: Subscriptions,
   tags: ['veracity'],
   args: {
     token: 'storybook-token',
@@ -26,10 +26,10 @@ const meta: Meta<typeof ChannelManager> = {
 };
 
 export default meta;
-type Story = StoryObj<typeof ChannelManager>;
+type Story = StoryObj<typeof Subscriptions>;
 
 export const Default: Story = {
-  render: (args) => <ChannelManager {...args} />,
+  render: (args) => <Subscriptions {...args} />,
   parameters: {
     msw: {
       handlers: [
@@ -79,7 +79,7 @@ export const Default: Story = {
   },  play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
-    await expect(await canvas.findByText('Channels', {}, { timeout: 3000 })).toBeInTheDocument();
+    await expect(await canvas.findByText('Channels & Playlists', {}, { timeout: 3000 })).toBeInTheDocument();
     await expect(await canvas.findByText(/alpha channel/i, {}, { timeout: 3000 })).toBeInTheDocument();
     await expect(await canvas.findByText(/beta channel/i, {}, { timeout: 3000 })).toBeInTheDocument();
     await waitFor(() => {

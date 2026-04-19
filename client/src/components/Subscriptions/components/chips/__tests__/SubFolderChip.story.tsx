@@ -4,7 +4,7 @@ import SubFolderChip from '../SubFolderChip';
 import { GLOBAL_DEFAULT_SENTINEL } from '../../../../../utils/channelHelpers';
 
 const meta: Meta<typeof SubFolderChip> = {
-  title: 'Atomic/ChannelManager/Chips/SubFolderChip',
+  title: 'Atomic/Subscriptions/Chips/SubFolderChip',
   component: SubFolderChip,
   args: {
     subFolder: 'Movies',

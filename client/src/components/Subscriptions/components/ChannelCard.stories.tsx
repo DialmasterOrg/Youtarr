@@ -30,7 +30,7 @@ const audioOnlyChannel: Channel = {
 };
 
 const meta: Meta<typeof ChannelCard> = {
-  title: 'ChannelManager/ChannelCard',
+  title: 'Subscriptions/ChannelCard',
   component: ChannelCard,
   tags: ['autodocs'],
   parameters: { layout: 'padded' },

@@ -5,7 +5,7 @@ import ChannelCard from '../ChannelCard';
 import { Channel } from '../../../../types/Channel';
 
 const meta: Meta<typeof ChannelCard> = {
-  title: 'Components/ChannelManager/ChannelCard',
+  title: 'Components/Subscriptions/ChannelCard',
   component: ChannelCard,
   parameters: {
     docs: {

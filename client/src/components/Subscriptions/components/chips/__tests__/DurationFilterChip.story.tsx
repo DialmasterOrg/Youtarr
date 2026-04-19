@@ -3,7 +3,7 @@ import { expect, within } from 'storybook/test';
 import DurationFilterChip from '../DurationFilterChip';
 
 const meta: Meta<typeof DurationFilterChip> = {
-  title: 'Atomic/ChannelManager/Chips/DurationFilterChip',
+  title: 'Atomic/Subscriptions/Chips/DurationFilterChip',
   component: DurationFilterChip,
   args: {
     minDuration: 10 * 60,

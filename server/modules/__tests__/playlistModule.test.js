@@ -148,8 +148,25 @@ describe('playlistModule', () => {
 
       expect(PlaylistVideo.bulkCreate).toHaveBeenCalledWith(
         expect.arrayContaining([
-          expect.objectContaining({ playlist_id: 'PLabc', youtube_id: 'v1', position: 1, channel_id: 'UC1' }),
-          expect.objectContaining({ playlist_id: 'PLabc', youtube_id: 'v2', position: 2, channel_id: 'UC2' }),
+          expect.objectContaining({
+            playlist_id: 'PLabc',
+            youtube_id: 'v1',
+            position: 1,
+            channel_id: 'UC1',
+            channel_name: 'A',
+            title: 'Video 1',
+            duration: 300,
+            thumbnail: 'https://i.ytimg.com/vi/v1/hqdefault.jpg',
+          }),
+          expect.objectContaining({
+            playlist_id: 'PLabc',
+            youtube_id: 'v2',
+            position: 2,
+            channel_id: 'UC2',
+            channel_name: 'B',
+            title: 'Video 2',
+            duration: 200,
+          }),
         ]),
         expect.objectContaining({ updateOnDuplicate: expect.any(Array) })
       );
@@ -184,6 +201,63 @@ describe('playlistModule', () => {
 
       const call = PlaylistVideo.bulkCreate.mock.calls[0][0];
       expect(call.map((v) => v.youtube_id)).toEqual(['v2']);
+    });
+
+    test('backfills playlist thumbnail from first video when null', async () => {
+      const update = jest.fn().mockResolvedValue(true);
+      Playlist.findOne.mockResolvedValue({
+        id: 1, playlist_id: 'PLabc', url: 'https://u',
+        thumbnail: null,
+        min_duration: null, max_duration: null, title_filter_regex: null,
+        update,
+      });
+      PlaylistVideo.findAll.mockResolvedValue([]);
+      PlaylistVideo.bulkCreate.mockResolvedValue([]);
+
+      const mockChild = new EventEmitter();
+      mockChild.stdout = new EventEmitter();
+      mockChild.stderr = new EventEmitter();
+      childProcess.spawn.mockReturnValue(mockChild);
+      const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      mockChild.stdout.emit('data', JSON.stringify({ id: 'firstVid', title: 'a' }) + '\n');
+      mockChild.emit('close', 0);
+      await promise;
+
+      expect(update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          thumbnail: 'https://i.ytimg.com/vi/firstVid/hqdefault.jpg',
+        })
+      );
+    });
+
+    test('does not overwrite existing playlist thumbnail', async () => {
+      const update = jest.fn().mockResolvedValue(true);
+      Playlist.findOne.mockResolvedValue({
+        id: 1, playlist_id: 'PLabc', url: 'https://u',
+        thumbnail: 'https://existing.example/thumb.jpg',
+        min_duration: null, max_duration: null, title_filter_regex: null,
+        update,
+      });
+      PlaylistVideo.findAll.mockResolvedValue([]);
+      PlaylistVideo.bulkCreate.mockResolvedValue([]);
+
+      const mockChild = new EventEmitter();
+      mockChild.stdout = new EventEmitter();
+      mockChild.stderr = new EventEmitter();
+      childProcess.spawn.mockReturnValue(mockChild);
+      const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      mockChild.stdout.emit('data', JSON.stringify({ id: 'firstVid', title: 'a' }) + '\n');
+      mockChild.emit('close', 0);
+      await promise;
+
+      const passed = update.mock.calls[0][0];
+      expect(passed).not.toHaveProperty('thumbnail');
     });
   });
 

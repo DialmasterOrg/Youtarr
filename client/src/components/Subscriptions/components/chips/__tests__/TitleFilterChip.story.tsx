@@ -3,7 +3,7 @@ import { expect, fn, userEvent, within } from 'storybook/test';
 import TitleFilterChip from '../TitleFilterChip';
 
 const meta: Meta<typeof TitleFilterChip> = {
-  title: 'Atomic/ChannelManager/Chips/TitleFilterChip',
+  title: 'Atomic/Subscriptions/Chips/TitleFilterChip',
   component: TitleFilterChip,
   args: {
     titleFilterRegex: 'foo.*bar',

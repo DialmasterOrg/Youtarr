@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import HelpDialog from '../ChannelManager/HelpDialog';
+import HelpDialog from '../Subscriptions/HelpDialog';
 
 const meta: Meta<typeof HelpDialog> = {
-  title: 'Components/ChannelManager/HelpDialog',
+  title: 'Components/Subscriptions/HelpDialog',
   component: HelpDialog,
   args: {
     open: true,

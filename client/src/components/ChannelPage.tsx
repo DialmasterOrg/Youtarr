@@ -8,9 +8,9 @@ import RatingBadge from './shared/RatingBadge';
 import ChannelVideos from './ChannelPage/ChannelVideos';
 import ChannelSettingsDialog from './ChannelPage/ChannelSettingsDialog';
 import { useConfig } from '../hooks/useConfig';
-import SubFolderChip from './ChannelManager/components/chips/SubFolderChip';
-import QualityChip from './ChannelManager/components/chips/QualityChip';
-import AutoDownloadChips from './ChannelManager/components/chips/AutoDownloadChips';
+import SubFolderChip from './Subscriptions/components/chips/SubFolderChip';
+import QualityChip from './Subscriptions/components/chips/QualityChip';
+import AutoDownloadChips from './Subscriptions/components/chips/AutoDownloadChips';
 import { SHARED_CHANNEL_META_CHIP_STYLE, SHARED_CHANNEL_META_DEFAULT_SURFACE_STYLE } from './shared/chipStyles';
 
 interface ChannelPageProps {

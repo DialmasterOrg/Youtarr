@@ -41,30 +41,34 @@ import { useNavigate } from 'react-router-dom';
 import WebSocketContext, { Message } from '../contexts/WebSocketContext';
 import { useConfig } from '../hooks/useConfig';
 import { Channel } from '../types/Channel';
-import { useChannelList } from './ChannelManager/hooks/useChannelList';
-import { useChannelMutations } from './ChannelManager/hooks/useChannelMutations';
-import ChannelCard from './ChannelManager/components/ChannelCard';
-import ChannelListRow, { CHANNEL_LIST_DESKTOP_TEMPLATE } from './ChannelManager/components/ChannelListRow';
+import { useChannelList } from './Subscriptions/hooks/useChannelList';
+import { useChannelMutations } from './Subscriptions/hooks/useChannelMutations';
+import ChannelCard from './Subscriptions/components/ChannelCard';
+import ChannelListRow, { CHANNEL_LIST_DESKTOP_TEMPLATE } from './Subscriptions/components/ChannelListRow';
 import {
   channelMatchesFilter,
   DEFAULT_SUBFOLDER_KEY,
   normalizeSubFolderKey,
   formatSubFolderLabel,
 } from '../utils/channelHelpers';
-import HelpDialog from './ChannelManager/HelpDialog';
-import PendingSaveBanner from './ChannelManager/components/PendingSaveBanner';
+import HelpDialog from './Subscriptions/HelpDialog';
+import PendingSaveBanner from './Subscriptions/components/PendingSaveBanner';
 import PageControls from './shared/PageControls';
-import ActiveImportBanner from './ChannelManager/components/ActiveImportBanner';
+import ActiveImportBanner from './Subscriptions/components/ActiveImportBanner';
+import SubscriptionsFilter, { SubscriptionsFilterValue } from './Subscriptions/components/SubscriptionsFilter';
+import AddPlaylistDialog from './Subscriptions/components/AddPlaylistDialog';
+import PlaylistListBlock from './Subscriptions/components/PlaylistListBlock';
 import { useActiveImport } from '../hooks/useActiveImport';
+import { usePlaylistList } from '../hooks/usePlaylistList';
 
 type ViewMode = 'list' | 'grid';
 type SortOrder = 'asc' | 'desc';
 
-interface ChannelManagerProps {
+interface SubscriptionsProps {
   token: string | null;
 }
 
-const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
+const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
   const websocketContext = useContext(WebSocketContext);
   if (!websocketContext) {
     throw new Error('WebSocketContext not found');
@@ -81,6 +85,8 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   const [newChannelUrl, setNewChannelUrl] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedSubFolder, setSelectedSubFolder] = useState<string | null>(null);
+  const [typeFilter, setTypeFilter] = useState<SubscriptionsFilterValue>('all');
+  const [addPlaylistOpen, setAddPlaylistOpen] = useState(false);
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [page, setPage] = useState(1);
   const [filterValue, setFilterValue] = useState('');
@@ -123,6 +129,12 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
     refetch,
     subFolders: apiSubFolders,
   } = useChannelList(channelListParams);
+
+  const {
+    playlists,
+    total: playlistTotal,
+    loading: playlistsLoading,
+  } = usePlaylistList({ token, page: 1, pageSize: 100 });
 
   const {
     pendingAdditions,
@@ -371,14 +383,14 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   };
 
   const handleOpenSubscriptions = () => {
-    navigate('/channels/imports');
+    navigate('/subscriptions/imports');
   };
 
   return (
     <>
       <div style={{ display: 'flex', flexDirection: 'column', height: 'auto', minHeight: 0 }}>
         <CardHeader
-          title="Channels"
+          title="Channels & Playlists"
           action={
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Tooltip title="Learn how channel downloads work" disableTouchListener>
@@ -429,7 +441,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
             </Grid>
             <Grid item xs={12} md={4}>
               <Grid container spacing={1.5}>
-                <Grid item xs={6}>
+                <Grid item xs={4}>
                   <Button
                     fullWidth
                     variant="contained"
@@ -440,7 +452,17 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
                     {isAddingChannel ? 'Adding…' : 'Channel'}
                   </Button>
                 </Grid>
-                <Grid item xs={6}>
+                <Grid item xs={4}>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    startIcon={<AddIcon />}
+                    onClick={() => setAddPlaylistOpen(true)}
+                  >
+                    Playlist
+                  </Button>
+                </Grid>
+                <Grid item xs={4}>
                   <Button
                     fullWidth
                     variant="outlined"
@@ -453,6 +475,12 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
               </Grid>
             </Grid>
           </Grid>
+
+          <SubscriptionsFilter
+            value={typeFilter}
+            onChange={setTypeFilter}
+            counts={{ channels: total, playlists: playlistTotal }}
+          />
 
           {/* ── Mobile toolbar: view toggle + filter + actions ── */}
           {isMobile && (
@@ -605,7 +633,9 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
           <Divider style={{ marginBottom: 8 }} />
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }} ref={channelsContainerRef}>
-            {loading ? (
+            {typeFilter === 'playlists' ? (
+              <PlaylistListBlock playlists={playlists} loading={playlistsLoading} />
+            ) : loading ? (
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', paddingTop: 24, paddingBottom: 24 }}>
                 <CircularProgress />
               </div>
@@ -676,7 +706,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
               </div>
             )}
 
-            {useInfiniteScroll ? (
+            {typeFilter === 'playlists' ? null : useInfiniteScroll ? (
               <>
                 <div
                   ref={loadMoreRef}
@@ -879,6 +909,12 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
 
       <HelpDialog open={helpDialogOpen} onClose={() => setHelpDialogOpen(false)} isMobile={isMobile} />
 
+      <AddPlaylistDialog
+        open={addPlaylistOpen}
+        token={token}
+        onClose={() => setAddPlaylistOpen(false)}
+      />
+
       <Popover
         open={Boolean(regexPopoverAnchor)}
         anchorEl={regexPopoverAnchor?.el}
@@ -911,4 +947,4 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   );
 };
 
-export default ChannelManager;
+export default Subscriptions;

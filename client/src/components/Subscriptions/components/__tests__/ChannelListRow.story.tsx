@@ -19,7 +19,7 @@ const channel: Channel = {
 };
 
 const meta: Meta<typeof ChannelListRow> = {
-  title: 'Components/ChannelManager/ChannelListRow',
+  title: 'Components/Subscriptions/ChannelListRow',
   component: ChannelListRow,
   args: {
     channel,

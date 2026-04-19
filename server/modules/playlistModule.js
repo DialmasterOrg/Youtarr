@@ -85,22 +85,55 @@ class PlaylistModule {
       return true;
     };
 
+    const pickThumbnail = (e) => {
+      if (typeof e.thumbnail === 'string' && e.thumbnail) return e.thumbnail;
+      if (Array.isArray(e.thumbnails) && e.thumbnails.length > 0) {
+        const last = e.thumbnails[e.thumbnails.length - 1];
+        if (last && typeof last.url === 'string') return last.url;
+      }
+      return e.id ? `https://i.ytimg.com/vi/${e.id}/hqdefault.jpg` : null;
+    };
+
     const rows = entries
       .map((e, idx) => ({ entry: e, row: {
         playlist_id: playlist.playlist_id,
         youtube_id: e.id,
         position: idx + 1,
         channel_id: e.channel_id || null,
+        channel_name: e.uploader || e.channel || null,
+        title: e.title || null,
+        thumbnail: pickThumbnail(e),
+        duration: typeof e.duration === 'number' ? e.duration : null,
+        published_at: e.upload_date || e.release_date || null,
         added_at: new Date(),
       }}))
       .filter(({ entry }) => passes(entry))
       .map(({ row }) => row);
 
     await PlaylistVideo.bulkCreate(rows, {
-      updateOnDuplicate: ['position', 'channel_id', 'added_at', 'updatedAt'],
+      updateOnDuplicate: [
+        'position',
+        'channel_id',
+        'channel_name',
+        'title',
+        'thumbnail',
+        'duration',
+        'published_at',
+        'added_at',
+        'updatedAt',
+      ],
     });
 
-    await playlist.update({ lastFetched: new Date(), video_count: entries.length });
+    // Backfill the playlist's own thumbnail from the first entry's video id when
+    // it is missing. yt-dlp's `--playlist-items 0` mode used by getPlaylistInfo
+    // does not return a playlist-level thumbnail, leaving the column null on
+    // initial subscribe. The first video's hqdefault is what YouTube itself
+    // renders as the playlist cover.
+    const update = { lastFetched: new Date(), video_count: entries.length };
+    if (!playlist.thumbnail && entries[0]?.id) {
+      update.thumbnail = `https://i.ytimg.com/vi/${entries[0].id}/hqdefault.jpg`;
+    }
+    await playlist.update(update);
     return rows.length;
   }
 

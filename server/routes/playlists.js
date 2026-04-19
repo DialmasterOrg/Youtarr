@@ -2,7 +2,7 @@ const express = require('express');
 
 function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models }) {
   const router = express.Router();
-  const { Playlist, PlaylistVideo } = models;
+  const { Playlist, PlaylistVideo, Video } = models;
 
   router.get('/api/playlists', verifyToken, async (req, res) => {
     try {
@@ -18,6 +18,17 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     } catch (err) {
       req.log.error({ err }, 'GET /api/playlists failed');
       res.status(500).json({ error: 'Failed to list playlists' });
+    }
+  });
+
+  router.get('/api/playlists/:playlistId', verifyToken, async (req, res) => {
+    try {
+      const p = await Playlist.findOne({ where: { playlist_id: req.params.playlistId } });
+      if (!p) return res.status(404).json({ error: 'Playlist not found' });
+      res.json({ playlist: p });
+    } catch (err) {
+      req.log.error({ err }, 'GET /api/playlists/:playlistId failed');
+      res.status(500).json({ error: 'Failed to fetch playlist' });
     }
   });
 
@@ -123,7 +134,51 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
         offset: (page - 1) * pageSize,
         order: [['position', 'ASC']],
       });
-      res.json({ total: count, videos: rows });
+
+      const youtubeIds = rows.map((r) => r.youtube_id).filter(Boolean);
+      const downloadedById = new Map();
+      if (youtubeIds.length > 0 && Video) {
+        const downloaded = await Video.findAll({
+          where: { youtubeId: youtubeIds },
+          attributes: ['id', 'youtubeId', 'youTubeVideoName', 'youTubeChannelName', 'duration', 'originalDate', 'removed', 'youtube_removed', 'filePath', 'fileSize'],
+        });
+        downloaded.forEach((v) => downloadedById.set(v.youtubeId, v));
+      }
+
+      const videos = rows.map((row) => {
+        const dl = downloadedById.get(row.youtube_id);
+        const youtubeId = row.youtube_id;
+        const isDownloaded = !!(dl && !dl.removed && dl.filePath);
+        const youtubeRemoved = Boolean(dl?.youtube_removed);
+        const localThumb = `/images/videothumb-${youtubeId}.jpg`;
+        const flatThumb = row.thumbnail || `https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg`;
+        return {
+          id: row.id,
+          playlist_id: row.playlist_id,
+          youtube_id: youtubeId,
+          position: row.position,
+          added_at: row.added_at,
+          channel_id: row.channel_id || null,
+          ignored: row.ignored,
+          ignored_at: row.ignored_at,
+          title: row.title || dl?.youTubeVideoName || null,
+          channel_name: row.channel_name || dl?.youTubeChannelName || null,
+          duration: typeof row.duration === 'number'
+            ? row.duration
+            : typeof dl?.duration === 'number'
+              ? dl.duration
+              : null,
+          published_at: row.published_at || dl?.originalDate || null,
+          thumbnail: youtubeRemoved ? localThumb : flatThumb,
+          downloaded: isDownloaded,
+          youtube_removed: youtubeRemoved,
+          video_id: dl?.id ?? null,
+          file_path: dl?.filePath ?? null,
+          file_size: dl?.fileSize != null ? Number(dl.fileSize) : null,
+        };
+      });
+
+      res.json({ total: count, videos });
     } catch (err) {
       req.log.error({ err }, 'get videos failed');
       res.status(500).json({ error: 'Failed to list videos' });

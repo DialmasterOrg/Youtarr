@@ -3,7 +3,7 @@ import { expect, within } from 'storybook/test';
 import PendingSaveBanner from '../PendingSaveBanner';
 
 const meta: Meta<typeof PendingSaveBanner> = {
-  title: 'Components/ChannelManager/PendingSaveBanner',
+  title: 'Components/Subscriptions/PendingSaveBanner',
   component: PendingSaveBanner,
   args: {
     show: true,

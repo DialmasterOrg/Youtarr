@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import useMediaQuery from '../../hooks/useMediaQuery';
-import ChannelManager from '../ChannelManager';
+import Subscriptions from '../Subscriptions';
 import { renderWithProviders, createMockWebSocketContext } from '../../test-utils';
 import { Channel } from '../../types/Channel';
 
@@ -24,11 +24,11 @@ const mockQueueChannelForDeletion = jest.fn();
 const mockUndoChanges = jest.fn();
 const mockSaveChanges = jest.fn();
 
-jest.mock('../ChannelManager/hooks/useChannelList', () => ({
+jest.mock('../Subscriptions/hooks/useChannelList', () => ({
   useChannelList: jest.fn(),
 }));
 
-jest.mock('../ChannelManager/hooks/useChannelMutations', () => ({
+jest.mock('../Subscriptions/hooks/useChannelMutations', () => ({
   useChannelMutations: jest.fn(),
 }));
 
@@ -37,7 +37,7 @@ jest.mock('../../hooks/useConfig', () => ({
 }));
 
 // Mock child components
-jest.mock('../ChannelManager/components/ChannelCard', () => ({
+jest.mock('../Subscriptions/components/ChannelCard', () => ({
   __esModule: true,
   default: function MockChannelCard({ channel, onNavigate, onDelete, isPendingAddition }: any) {
     const React = require('react');
@@ -58,7 +58,7 @@ jest.mock('../ChannelManager/components/ChannelCard', () => ({
   }
 }));
 
-jest.mock('../ChannelManager/components/ChannelListRow', () => ({
+jest.mock('../Subscriptions/components/ChannelListRow', () => ({
   __esModule: true,
   default: function MockChannelListRow({ channel, onNavigate, onDelete, isPendingAddition }: any) {
     const React = require('react');
@@ -80,7 +80,7 @@ jest.mock('../ChannelManager/components/ChannelListRow', () => ({
   CHANNEL_LIST_DESKTOP_TEMPLATE: '2fr 1fr 1fr 1fr auto',
 }));
 
-jest.mock('../ChannelManager/components/PendingSaveBanner', () => ({
+jest.mock('../Subscriptions/components/PendingSaveBanner', () => ({
   __esModule: true,
   default: function MockPendingSaveBanner({ show }: any) {
     const React = require('react');
@@ -88,7 +88,7 @@ jest.mock('../ChannelManager/components/PendingSaveBanner', () => ({
   }
 }));
 
-jest.mock('../ChannelManager/HelpDialog', () => ({
+jest.mock('../Subscriptions/HelpDialog', () => ({
   __esModule: true,
   default: function MockHelpDialog({ open, onClose }: any) {
     const React = require('react');
@@ -99,11 +99,11 @@ jest.mock('../ChannelManager/HelpDialog', () => ({
   }
 }));
 
-const { useChannelList } = require('../ChannelManager/hooks/useChannelList');
-const { useChannelMutations } = require('../ChannelManager/hooks/useChannelMutations');
+const { useChannelList } = require('../Subscriptions/hooks/useChannelList');
+const { useChannelMutations } = require('../Subscriptions/hooks/useChannelMutations');
 const { useConfig } = require('../../hooks/useConfig');
 
-describe('ChannelManager Component', () => {
+describe('Subscriptions Component', () => {
   const mockToken = 'test-token';
 
   const mockChannels: Channel[] = [
@@ -125,10 +125,10 @@ describe('ChannelManager Component', () => {
     },
   ];
 
-  const renderChannelManager = (props = {}) => {
+  const renderSubscriptions = (props = {}) => {
     const wsCtx = createMockWebSocketContext();
     return renderWithProviders(
-      <ChannelManager token={mockToken} {...props} />,
+      <Subscriptions token={mockToken} {...props} />,
       { websocketValue: wsCtx }
     );
   };
@@ -168,28 +168,28 @@ describe('ChannelManager Component', () => {
 
   describe('Component Rendering', () => {
     test('renders without crashing', () => {
-      renderChannelManager();
-      expect(screen.getByText('Channels')).toBeInTheDocument();
+      renderSubscriptions();
+      expect(screen.getByText('Channels & Playlists')).toBeInTheDocument();
     });
 
     test('throws error when WebSocketContext is not provided', () => {
       const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
       expect(() => {
-        render(<ChannelManager token={mockToken} />);
+        render(<Subscriptions token={mockToken} />);
       }).toThrow('WebSocketContext not found');
 
       spy.mockRestore();
     });
 
     test('displays help button', () => {
-      renderChannelManager();
+      renderSubscriptions();
       const helpButton = screen.getByRole('button', { name: /learn how channel downloads work/i });
       expect(helpButton).toBeInTheDocument();
     });
 
     test('displays add channel input and button', () => {
-      renderChannelManager();
+      renderSubscriptions();
       expect(screen.getByPlaceholderText('Paste a channel URL or @handle')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /^channel$/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /import/i })).toBeInTheDocument();
@@ -206,7 +206,7 @@ describe('ChannelManager Component', () => {
         subFolders: [],
       });
 
-      renderChannelManager();
+      renderSubscriptions();
       expect(screen.getByRole('progressbar')).toBeInTheDocument();
     });
 
@@ -221,7 +221,7 @@ describe('ChannelManager Component', () => {
         subFolders: [],
       });
 
-      renderChannelManager();
+      renderSubscriptions();
       expect(screen.getByRole('alert')).toBeInTheDocument();
       expect(screen.getByText('Failed to load channels')).toBeInTheDocument();
     });
@@ -237,13 +237,13 @@ describe('ChannelManager Component', () => {
         subFolders: [],
       });
 
-      renderChannelManager();
+      renderSubscriptions();
       expect(screen.getByTestId(`channel-row-${mockChannels[0].url}`)).toBeInTheDocument();
       expect(screen.getByTestId(`channel-row-${mockChannels[1].url}`)).toBeInTheDocument();
     });
 
     test('shows no channels message when empty', () => {
-      renderChannelManager();
+      renderSubscriptions();
       expect(screen.getByText('No channels found. Try adjusting your filter.')).toBeInTheDocument();
     });
 
@@ -258,21 +258,21 @@ describe('ChannelManager Component', () => {
         subFolders: [],
       });
 
-      renderChannelManager();
+      renderSubscriptions();
       expect(screen.getByText('Total channels: 42')).toBeInTheDocument();
     });
   });
 
   describe('View Mode Toggle', () => {
     test('renders view mode toggle buttons on desktop', () => {
-      renderChannelManager();
+      renderSubscriptions();
       expect(screen.getByLabelText('List view')).toBeInTheDocument();
       expect(screen.getByLabelText('Grid view')).toBeInTheDocument();
     });
 
     test('renders the mobile view mode toggle on mobile', () => {
       (useMediaQuery as jest.Mock).mockReturnValue(true);
-      renderChannelManager();
+      renderSubscriptions();
       expect(screen.getByLabelText('List view')).toBeInTheDocument();
       expect(screen.getByLabelText('Grid view')).toBeInTheDocument();
     });
@@ -289,7 +289,7 @@ describe('ChannelManager Component', () => {
         subFolders: [],
       });
 
-      renderChannelManager();
+      renderSubscriptions();
 
       await user.click(screen.getByLabelText('Grid view'));
 
@@ -309,7 +309,7 @@ describe('ChannelManager Component', () => {
         subFolders: [],
       });
 
-      renderChannelManager();
+      renderSubscriptions();
       expect(screen.getAllByText('Channel').length).toBeGreaterThan(0);
       expect(screen.getByText('Quality / Folder')).toBeInTheDocument();
       expect(screen.getByText('Auto downloads')).toBeInTheDocument();
@@ -322,7 +322,7 @@ describe('ChannelManager Component', () => {
       const user = userEvent.setup();
       mockAddChannel.mockResolvedValue({ success: true });
 
-      renderChannelManager();
+      renderSubscriptions();
 
       const input = screen.getByPlaceholderText('Paste a channel URL or @handle');
       await user.type(input, 'https://www.youtube.com/@newchannel');
@@ -337,7 +337,7 @@ describe('ChannelManager Component', () => {
       const user = userEvent.setup();
       mockAddChannel.mockResolvedValue({ success: true });
 
-      renderChannelManager();
+      renderSubscriptions();
 
       const input = screen.getByPlaceholderText('Paste a channel URL or @handle');
       await user.type(input, 'https://www.youtube.com/@newchannel');
@@ -349,7 +349,7 @@ describe('ChannelManager Component', () => {
     });
 
     test('does not add channel when input is empty', () => {
-      renderChannelManager();
+      renderSubscriptions();
 
       const addButton = screen.getByRole('button', { name: /^channel$/i });
       // Button should be disabled when input is empty
@@ -361,7 +361,7 @@ describe('ChannelManager Component', () => {
       const user = userEvent.setup();
       mockAddChannel.mockResolvedValue({ success: true });
 
-      renderChannelManager();
+      renderSubscriptions();
 
       const input = screen.getByPlaceholderText('Paste a channel URL or @handle') as HTMLInputElement;
       await user.type(input, 'https://www.youtube.com/@newchannel');
@@ -379,7 +379,7 @@ describe('ChannelManager Component', () => {
         message: 'Channel not found'
       });
 
-      renderChannelManager();
+      renderSubscriptions();
 
       const input = screen.getByPlaceholderText('Paste a channel URL or @handle');
       await user.type(input, 'https://www.youtube.com/@invalid');
@@ -403,7 +403,7 @@ describe('ChannelManager Component', () => {
         hasPendingChanges: false,
       });
 
-      renderChannelManager();
+      renderSubscriptions();
       expect(screen.getByRole('button', { name: /adding/i })).toBeDisabled();
     });
 
@@ -414,7 +414,7 @@ describe('ChannelManager Component', () => {
         message: 'Channel already exists'
       });
 
-      renderChannelManager();
+      renderSubscriptions();
 
       const input = screen.getByPlaceholderText('Paste a channel URL or @handle');
       await user.type(input, 'https://www.youtube.com/@existing');
@@ -428,11 +428,11 @@ describe('ChannelManager Component', () => {
     test('navigates to imports when Import button clicked', async () => {
       const user = userEvent.setup();
 
-      renderChannelManager();
+      renderSubscriptions();
 
       await user.click(screen.getByRole('button', { name: /import/i }));
 
-      expect(mockNavigate).toHaveBeenCalledWith('/channels/imports');
+      expect(mockNavigate).toHaveBeenCalledWith('/subscriptions/imports');
     });
   });
 
@@ -449,7 +449,7 @@ describe('ChannelManager Component', () => {
         subFolders: [],
       });
 
-      renderChannelManager();
+      renderSubscriptions();
 
       await user.click(screen.getByTestId(`delete-${mockChannels[0].url}`));
 
@@ -471,7 +471,7 @@ describe('ChannelManager Component', () => {
         subFolders: [],
       });
 
-      renderChannelManager();
+      renderSubscriptions();
 
       await user.click(screen.getByTestId(`delete-${mockChannels[0].url}`));
 
@@ -496,7 +496,7 @@ describe('ChannelManager Component', () => {
         subFolders: [],
       });
 
-      renderChannelManager();
+      renderSubscriptions();
 
       await user.click(screen.getByTestId(`delete-${mockChannels[0].url}`));
 
@@ -527,7 +527,7 @@ describe('ChannelManager Component', () => {
         hasPendingChanges: true,
       });
 
-      renderChannelManager();
+      renderSubscriptions();
       expect(screen.getByTestId('pending-save-banner')).toBeInTheDocument();
     });
 
@@ -544,7 +544,7 @@ describe('ChannelManager Component', () => {
         hasPendingChanges: true,
       });
 
-      renderChannelManager();
+      renderSubscriptions();
       expect(screen.getByLabelText('Save changes')).toBeInTheDocument();
       expect(screen.getByLabelText('Undo changes')).toBeInTheDocument();
     });
@@ -565,7 +565,7 @@ describe('ChannelManager Component', () => {
         hasPendingChanges: true,
       });
 
-      renderChannelManager();
+      renderSubscriptions();
 
       await user.click(screen.getByLabelText('Save changes'));
 
@@ -589,7 +589,7 @@ describe('ChannelManager Component', () => {
         hasPendingChanges: true,
       });
 
-      renderChannelManager();
+      renderSubscriptions();
 
       await user.click(screen.getByLabelText('Undo changes'));
 
@@ -615,7 +615,7 @@ describe('ChannelManager Component', () => {
         hasPendingChanges: true,
       });
 
-      renderChannelManager();
+      renderSubscriptions();
 
       await user.click(screen.getByLabelText('Save changes'));
 
@@ -637,7 +637,7 @@ describe('ChannelManager Component', () => {
         hasPendingChanges: true,
       });
 
-      renderChannelManager();
+      renderSubscriptions();
       expect(screen.getByLabelText('Save changes')).toBeDisabled();
     });
 
@@ -671,7 +671,7 @@ describe('ChannelManager Component', () => {
         hasPendingChanges: true,
       });
 
-      renderChannelManager();
+      renderSubscriptions();
 
       const pendingCard = screen.getByTestId(`channel-row-${pendingChannel.url}`);
       expect(pendingCard).toHaveAttribute('data-pending', 'true');
@@ -700,7 +700,7 @@ describe('ChannelManager Component', () => {
         hasPendingChanges: true,
       });
 
-      renderChannelManager();
+      renderSubscriptions();
 
       expect(screen.queryByTestId(`channel-row-${mockChannels[0].url}`)).not.toBeInTheDocument();
       expect(screen.getByTestId(`channel-row-${mockChannels[1].url}`)).toBeInTheDocument();
@@ -709,13 +709,13 @@ describe('ChannelManager Component', () => {
 
   describe('Sorting', () => {
     test('displays sort button', () => {
-      renderChannelManager();
+      renderSubscriptions();
       expect(screen.getByRole('button', { name: /sort alphabetically/i })).toBeInTheDocument();
     });
 
     test('toggles sort order when sort button clicked', async () => {
       const user = userEvent.setup();
-      renderChannelManager();
+      renderSubscriptions();
 
       // Initially ascending
       expect(screen.getByRole('button', { name: /sort alphabetically \(A → Z\)/i })).toBeInTheDocument();
@@ -733,13 +733,13 @@ describe('ChannelManager Component', () => {
 
   describe('Filtering', () => {
     test('displays filter button', () => {
-      renderChannelManager();
+      renderSubscriptions();
       expect(screen.getByRole('button', { name: /filter by channel name/i })).toBeInTheDocument();
     });
 
     test('opens filter popover when filter button clicked', async () => {
       const user = userEvent.setup();
-      renderChannelManager();
+      renderSubscriptions();
 
       await user.click(screen.getByRole('button', { name: /filter by channel name/i }));
 
@@ -750,7 +750,7 @@ describe('ChannelManager Component', () => {
 
     test('closes filter popover when filter button is clicked again', async () => {
       const user = userEvent.setup();
-      renderChannelManager();
+      renderSubscriptions();
 
       const filterButton = screen.getByRole('button', { name: /filter by channel name/i });
       await user.click(filterButton);
@@ -768,7 +768,7 @@ describe('ChannelManager Component', () => {
 
     test('applies filter when text entered', async () => {
       const user = userEvent.setup();
-      renderChannelManager();
+      renderSubscriptions();
 
       await user.click(screen.getByRole('button', { name: /filter by channel name/i }));
 
@@ -784,7 +784,7 @@ describe('ChannelManager Component', () => {
 
     test('clears filter when clear button clicked', async () => {
       const user = userEvent.setup();
-      renderChannelManager();
+      renderSubscriptions();
 
       await user.click(screen.getByRole('button', { name: /filter by channel name/i }));
 
@@ -806,7 +806,7 @@ describe('ChannelManager Component', () => {
 
     test('highlights filter button when filter is active', async () => {
       const user = userEvent.setup();
-      renderChannelManager();
+      renderSubscriptions();
 
       const filterButton = screen.getByRole('button', { name: /filter by channel name/i });
 
@@ -825,7 +825,7 @@ describe('ChannelManager Component', () => {
 
     test('resets page to 1 when filter applied', async () => {
       const user = userEvent.setup();
-      renderChannelManager();
+      renderSubscriptions();
 
       await user.click(screen.getByRole('button', { name: /filter by channel name/i }));
       const filterInput = await screen.findByLabelText('Filter channels');
@@ -842,7 +842,7 @@ describe('ChannelManager Component', () => {
       const user = userEvent.setup();
       (useMediaQuery as jest.Mock).mockReturnValue(true);
 
-      renderChannelManager();
+      renderSubscriptions();
 
       await user.click(screen.getByRole('button', { name: /filters/i }));
 
@@ -860,7 +860,7 @@ describe('ChannelManager Component', () => {
 
   describe('Folder Filtering', () => {
     test('displays folder filter button', () => {
-      renderChannelManager();
+      renderSubscriptions();
       expect(screen.getByRole('button', { name: /filter or group by folder/i })).toBeInTheDocument();
     });
 
@@ -876,7 +876,7 @@ describe('ChannelManager Component', () => {
         subFolders: ['music', 'news'],
       });
 
-      renderChannelManager();
+      renderSubscriptions();
 
       await user.click(screen.getByRole('button', { name: /filter or group by folder/i }));
 
@@ -897,7 +897,7 @@ describe('ChannelManager Component', () => {
         subFolders: ['music', 'news'],
       });
 
-      renderChannelManager();
+      renderSubscriptions();
 
       await user.click(screen.getByRole('button', { name: /filter or group by folder/i }));
 
@@ -919,7 +919,7 @@ describe('ChannelManager Component', () => {
         subFolders: ['music', 'news'],
       });
 
-      renderChannelManager();
+      renderSubscriptions();
 
       await user.click(screen.getByRole('button', { name: /filter or group by folder/i }));
       await user.click(screen.getByText('__music/'));
@@ -943,7 +943,7 @@ describe('ChannelManager Component', () => {
         subFolders: ['music'],
       });
 
-      renderChannelManager();
+      renderSubscriptions();
 
       // First select a folder
       await user.click(screen.getByRole('button', { name: /filter or group by folder/i }));
@@ -973,7 +973,7 @@ describe('ChannelManager Component', () => {
         subFolders: [],
       });
 
-      renderChannelManager();
+      renderSubscriptions();
       expect(screen.getByRole('navigation')).toBeInTheDocument();
     });
 
@@ -989,7 +989,7 @@ describe('ChannelManager Component', () => {
         subFolders: [],
       });
 
-      renderChannelManager();
+      renderSubscriptions();
 
       const nextButton = screen.getByRole('button', { name: /go to page 2/i });
       await user.click(nextButton);
@@ -1012,7 +1012,7 @@ describe('ChannelManager Component', () => {
         subFolders: [],
       });
 
-      renderChannelManager();
+      renderSubscriptions();
 
       // The component should automatically adjust if page > pageCount
       expect(useChannelList).toHaveBeenCalledWith(
@@ -1034,7 +1034,7 @@ describe('ChannelManager Component', () => {
         subFolders: [],
       });
 
-      renderChannelManager();
+      renderSubscriptions();
 
       await user.click(screen.getByTestId(`navigate-${mockChannels[0].url}`));
 
@@ -1059,7 +1059,7 @@ describe('ChannelManager Component', () => {
         subFolders: [],
       });
 
-      renderChannelManager();
+      renderSubscriptions();
 
       await user.click(screen.getByTestId(`navigate-${channelWithoutId.url}`));
 
@@ -1071,7 +1071,7 @@ describe('ChannelManager Component', () => {
     test('subscribes to websocket on mount', () => {
       const wsCtx = createMockWebSocketContext();
       renderWithProviders(
-        <ChannelManager token={mockToken} />,
+        <Subscriptions token={mockToken} />,
         { websocketValue: wsCtx }
       );
 
@@ -1084,7 +1084,7 @@ describe('ChannelManager Component', () => {
     test('unsubscribes from websocket on unmount', () => {
       const wsCtx = createMockWebSocketContext();
       const { unmount } = renderWithProviders(
-        <ChannelManager token={mockToken} />,
+        <Subscriptions token={mockToken} />,
         { websocketValue: wsCtx }
       );
 
@@ -1108,7 +1108,7 @@ describe('ChannelManager Component', () => {
 
       const wsCtx = createMockWebSocketContext();
       renderWithProviders(
-        <ChannelManager token={mockToken} />,
+        <Subscriptions token={mockToken} />,
         { websocketValue: wsCtx }
       );
 
@@ -1150,7 +1150,7 @@ describe('ChannelManager Component', () => {
 
       const wsCtx = createMockWebSocketContext();
       renderWithProviders(
-        <ChannelManager token={mockToken} />,
+        <Subscriptions token={mockToken} />,
         { websocketValue: wsCtx }
       );
 
@@ -1167,7 +1167,7 @@ describe('ChannelManager Component', () => {
   describe('Help Dialog', () => {
     test('opens help dialog when help button clicked', async () => {
       const user = userEvent.setup();
-      renderChannelManager();
+      renderSubscriptions();
 
       await user.click(screen.getByRole('button', { name: /learn how channel downloads work/i }));
 
@@ -1178,7 +1178,7 @@ describe('ChannelManager Component', () => {
 
     test('closes help dialog when close action triggered', async () => {
       const user = userEvent.setup();
-      renderChannelManager();
+      renderSubscriptions();
 
       await user.click(screen.getByRole('button', { name: /learn how channel downloads work/i }));
 
@@ -1194,7 +1194,7 @@ describe('ChannelManager Component', () => {
   describe('Responsive Behavior', () => {
     test('uses mobile page size on mobile', () => {
       (useMediaQuery as jest.Mock).mockReturnValue(true);
-      renderChannelManager();
+      renderSubscriptions();
 
       expect(useChannelList).toHaveBeenCalledWith(
         expect.objectContaining({ pageSize: 16 })
@@ -1202,7 +1202,7 @@ describe('ChannelManager Component', () => {
     });
 
     test('uses desktop page size on desktop in list view', () => {
-      renderChannelManager();
+      renderSubscriptions();
 
       expect(useChannelList).toHaveBeenCalledWith(
         expect.objectContaining({ pageSize: 20 })
@@ -1211,7 +1211,7 @@ describe('ChannelManager Component', () => {
 
     test('uses grid page size on desktop in grid view', async () => {
       const user = userEvent.setup();
-      renderChannelManager();
+      renderSubscriptions();
 
       await user.click(screen.getByLabelText('Grid view'));
 
@@ -1225,8 +1225,8 @@ describe('ChannelManager Component', () => {
 
   describe('Edge Cases', () => {
     test('handles null token gracefully', () => {
-      renderChannelManager({ token: null });
-      expect(screen.getByText('Channels')).toBeInTheDocument();
+      renderSubscriptions({ token: null });
+      expect(screen.getByText('Channels & Playlists')).toBeInTheDocument();
     });
 
     test('handles empty subfolder list', () => {
@@ -1240,8 +1240,8 @@ describe('ChannelManager Component', () => {
         subFolders: [],
       });
 
-      renderChannelManager();
-      expect(screen.getByText('Channels')).toBeInTheDocument();
+      renderSubscriptions();
+      expect(screen.getByText('Channels & Playlists')).toBeInTheDocument();
     });
 
     test('closes dialog when close button clicked', async () => {
@@ -1251,7 +1251,7 @@ describe('ChannelManager Component', () => {
         message: 'Test error'
       });
 
-      renderChannelManager();
+      renderSubscriptions();
 
       const input = screen.getByPlaceholderText('Paste a channel URL or @handle');
       await user.type(input, '@test');
@@ -1280,7 +1280,7 @@ describe('ChannelManager Component', () => {
         subFolders: ['music'],
       });
 
-      renderChannelManager();
+      renderSubscriptions();
 
       // Apply text filter
       await user.click(screen.getByRole('button', { name: /filter by channel name/i }));

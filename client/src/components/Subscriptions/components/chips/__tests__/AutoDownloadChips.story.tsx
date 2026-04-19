@@ -3,7 +3,7 @@ import { expect, within } from 'storybook/test';
 import AutoDownloadChips from '../AutoDownloadChips';
 
 const meta: Meta<typeof AutoDownloadChips> = {
-  title: 'Atomic/ChannelManager/Chips/AutoDownloadChips',
+  title: 'Atomic/Subscriptions/Chips/AutoDownloadChips',
   component: AutoDownloadChips,
   args: {
     availableTabs: 'videos,shorts,streams',

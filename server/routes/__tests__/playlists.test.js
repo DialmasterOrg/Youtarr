@@ -57,6 +57,10 @@ const buildDeps = (overrides = {}) => ({
       update: jest.fn(),
       ...overrides.PlaylistVideo,
     },
+    Video: {
+      findAll: jest.fn().mockResolvedValue([]),
+      ...overrides.Video,
+    },
     ...overrides.models,
   },
 });
@@ -135,6 +139,53 @@ describe('GET /api/playlists', () => {
 
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: 'Failed to list playlists' });
+  });
+});
+
+describe('GET /api/playlists/:playlistId', () => {
+  test('returns the playlist when found', async () => {
+    const deps = buildDeps();
+    const playlist = makePlaylist();
+    deps.models.Playlist.findOne.mockResolvedValue(playlist);
+
+    const handler = getHandler('get', '/api/playlists/:playlistId', deps);
+    const req = { params: { playlistId: 'PLtest123' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.models.Playlist.findOne).toHaveBeenCalledWith({
+      where: { playlist_id: 'PLtest123' },
+    });
+    expect(res.json).toHaveBeenCalledWith({ playlist });
+  });
+
+  test('returns 404 when playlist not found', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(null);
+
+    const handler = getHandler('get', '/api/playlists/:playlistId', deps);
+    const req = { params: { playlistId: 'PLmissing' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Playlist not found' });
+  });
+
+  test('returns 500 on db error', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockRejectedValue(new Error('db down'));
+
+    const handler = getHandler('get', '/api/playlists/:playlistId', deps);
+    const req = { params: { playlistId: 'PLtest123' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Failed to fetch playlist' });
   });
 });
 
@@ -467,7 +518,11 @@ describe('GET /api/playlists/:playlistId/videos', () => {
     const deps = buildDeps();
     deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue({
       count: 3,
-      rows: [{ youtube_id: 'vid1' }, { youtube_id: 'vid2' }, { youtube_id: 'vid3' }],
+      rows: [
+        { id: 1, playlist_id: 'PLtest123', youtube_id: 'vid1', position: 1, ignored: false, ignored_at: null, added_at: null, channel_id: null },
+        { id: 2, playlist_id: 'PLtest123', youtube_id: 'vid2', position: 2, ignored: false, ignored_at: null, added_at: null, channel_id: null },
+        { id: 3, playlist_id: 'PLtest123', youtube_id: 'vid3', position: 3, ignored: false, ignored_at: null, added_at: null, channel_id: null },
+      ],
     });
 
     const handler = getHandler('get', '/api/playlists/:playlistId/videos', deps);
@@ -485,6 +540,95 @@ describe('GET /api/playlists/:playlistId/videos', () => {
       })
     );
     expect(res.json).toHaveBeenCalledWith({ total: 3, videos: expect.any(Array) });
+    const payload = res.json.mock.calls[0][0];
+    expect(payload.videos[0]).toMatchObject({
+      youtube_id: 'vid1',
+      position: 1,
+      thumbnail: 'https://i.ytimg.com/vi/vid1/hqdefault.jpg',
+      downloaded: false,
+    });
+  });
+
+  test('returns metadata stored on playlistvideos rows, with downloaded-status overlay from Videos', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue({
+      count: 2,
+      rows: [
+        {
+          id: 1,
+          playlist_id: 'PLtest123',
+          youtube_id: 'downloaded1',
+          position: 1,
+          ignored: false,
+          ignored_at: null,
+          added_at: null,
+          channel_id: 'UC1',
+          channel_name: 'Downloaded Channel',
+          title: 'A downloaded video',
+          thumbnail: 'https://thumb/1.jpg',
+          duration: 123,
+          published_at: '20260101',
+        },
+        {
+          id: 2,
+          playlist_id: 'PLtest123',
+          youtube_id: 'tracked2',
+          position: 2,
+          ignored: false,
+          ignored_at: null,
+          added_at: null,
+          channel_id: 'UC2',
+          channel_name: 'Tracked Channel',
+          title: 'A tracked video',
+          thumbnail: 'https://thumb/2.jpg',
+          duration: 456,
+          published_at: '20260215',
+        },
+      ],
+    });
+    deps.models.Video.findAll.mockResolvedValue([
+      {
+        id: 42,
+        youtubeId: 'downloaded1',
+        youTubeVideoName: 'A downloaded video',
+        youTubeChannelName: 'Downloaded Channel',
+        duration: 123,
+        originalDate: '20260101',
+        removed: false,
+        youtube_removed: false,
+        filePath: '/videos/downloaded1.mp4',
+        fileSize: 1024,
+      },
+    ]);
+
+    const handler = getHandler('get', '/api/playlists/:playlistId/videos', deps);
+    const req = { params: { playlistId: 'PLtest123' }, query: {}, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    const payload = res.json.mock.calls[0][0];
+    expect(payload.videos[0]).toMatchObject({
+      youtube_id: 'downloaded1',
+      title: 'A downloaded video',
+      channel_name: 'Downloaded Channel',
+      duration: 123,
+      published_at: '20260101',
+      thumbnail: 'https://thumb/1.jpg',
+      downloaded: true,
+      video_id: 42,
+      file_path: '/videos/downloaded1.mp4',
+      file_size: 1024,
+    });
+    expect(payload.videos[1]).toMatchObject({
+      youtube_id: 'tracked2',
+      title: 'A tracked video',
+      duration: 456,
+      published_at: '20260215',
+      thumbnail: 'https://thumb/2.jpg',
+      downloaded: false,
+      video_id: null,
+    });
   });
 
   test('caps pageSize at 200', async () => {
