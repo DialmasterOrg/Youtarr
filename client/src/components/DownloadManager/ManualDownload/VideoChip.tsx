@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
 import { Chip, Tooltip, Box, Grow, Popover, Typography, IconButton } from '../../ui';
-import { Close as CloseIcon, Lock, Link as LinkIcon } from '../../../lib/icons';
+import { Close as CloseIcon, Lock, Link as LinkIcon, Loader2 } from '../../../lib/icons';
 import { History as HistoryIcon } from 'lucide-react';
 import { VideoInfo } from './types';
-import { useThemeEngine } from '../../../contexts/ThemeEngineContext';
 
 interface VideoChipProps {
   video: VideoInfo;
   onDelete: (youtubeId: string) => void;
+  isEnriching?: boolean;
 }
+
+const THUMBNAIL_WIDTH = 64;
+const THUMBNAIL_HEIGHT = 36;
 
 const formatMediaTypeLabel = (mediaType: string): string => {
   return mediaType
@@ -33,20 +36,65 @@ const getMediaTypeInfo = (mediaType?: string) => {
   }
 };
 
-const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
+interface VideoThumbnailProps {
+  youtubeId: string;
+}
+
+const VideoThumbnail: React.FC<VideoThumbnailProps> = ({ youtubeId }) => {
+  const [visible, setVisible] = useState(true);
+  if (!visible) return null;
+  return (
+    <img
+      src={`https://i.ytimg.com/vi/${youtubeId}/mqdefault.jpg`}
+      alt=""
+      aria-hidden="true"
+      onError={() => setVisible(false)}
+      style={{
+        width: THUMBNAIL_WIDTH,
+        height: THUMBNAIL_HEIGHT,
+        objectFit: 'cover',
+        borderRadius: 4,
+        flexShrink: 0,
+        backgroundColor: 'var(--muted)',
+      }}
+    />
+  );
+};
+
+const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete, isEnriching = false }) => {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
-  const [tooltipOpen, setTooltipOpen] = useState(false);
 
   if (video.isBulkImport) {
     const bulkLabel = (
-      <Box className="flex items-center gap-2">
-        <LinkIcon size={14} data-testid="LinkIcon" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
-        <Box>
-          <Box className="text-xs font-bold">
+      <Box className="flex items-center gap-2 w-full min-w-0">
+        <VideoThumbnail youtubeId={video.youtubeId} />
+        {isEnriching ? (
+          <Loader2
+            size={14}
+            data-testid="EnrichingSpinner"
+            className="animate-spin"
+            style={{ color: 'var(--muted-foreground)', flexShrink: 0 }}
+            aria-label="Fetching video details"
+          />
+        ) : (
+          <LinkIcon
+            size={14}
+            data-testid="LinkIcon"
+            style={{ color: 'var(--muted-foreground)', flexShrink: 0 }}
+          />
+        )}
+        <Box className="min-w-0 flex-1">
+          <Box
+            className="text-xs font-bold truncate"
+            style={{ color: 'var(--foreground)' }}
+          >
             {video.youtubeId}
           </Box>
-          <Box className="text-[0.7rem] text-muted-foreground">
-            URL-only import
+          <Box
+            className="text-[0.7rem] truncate"
+            style={{ color: 'var(--muted-foreground)' }}
+          >
+            {isEnriching ? 'Fetching details...' : 'URL-only import'}
           </Box>
         </Box>
       </Box>
@@ -54,17 +102,17 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
 
     return (
       <Grow in={true} timeout={300}>
-        <Tooltip title={video.url} open={tooltipOpen}>
+        <Tooltip title={video.url} fullWidth>
           <Chip
-            onMouseOver={() => setTooltipOpen(true)}
-            onMouseOut={() => setTooltipOpen(false)}
             onClick={() => {}}
             aria-label={video.url}
             label={bulkLabel}
             onDelete={() => onDelete(video.youtubeId)}
             deleteIcon={<CloseIcon size={14} data-testid="CloseIcon" />}
-            color="info"
+            color="default"
             variant="filled"
+            className="!justify-start"
+            labelClassName="flex-1 min-w-0 !overflow-visible !whitespace-normal"
             style={{
               height: 'auto',
               paddingTop: 8,
@@ -90,7 +138,6 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
 
   const open = Boolean(anchorEl);
   const mediaTypeInfo = getMediaTypeInfo(video.media_type);
-  const { themeMode } = useThemeEngine();
 
   const formatDuration = (seconds: number): string => {
     const hours = Math.floor(seconds / 3600);
@@ -103,67 +150,86 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
     return `${minutes}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const truncateText = (text: string, maxLength: number): string => {
-    if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength - 3) + '...';
-  };
+  const formattedPublishDate = video.publishedAt
+    ? new Date(video.publishedAt * 1000).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: '2-digit',
+      })
+    : null;
 
   const getChipColor = (): 'default' | 'success' | 'warning' | 'error' => {
-    if (video.isAlreadyDownloaded) return 'warning';  // Changed to warning (yellow/orange)
+    if (video.isAlreadyDownloaded) return 'warning';
     if (video.isMembersOnly) return 'error';
     return 'default';
   };
 
   const chipLabel = (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-      <div>
-        <div style={{ fontWeight: 'bold', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 3 }}>
-          {truncateText(video.channelName, 20)}
+    <div className="flex items-center gap-2 w-full min-w-0">
+      <VideoThumbnail youtubeId={video.youtubeId} />
+      <div className="min-w-0 flex-1 flex flex-col">
+        <div className="flex items-center gap-1 text-[0.75rem] font-bold min-w-0">
+          <span className="truncate">{video.channelName}</span>
           {video.isAlreadyDownloaded && (
             <IconButton
               size="small"
               aria-label="Download history"
               onClick={handlePopoverOpen}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', padding: 0, marginLeft: 4 }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', padding: 0, flexShrink: 0 }}
             >
               <HistoryIcon size={14} data-testid="HistoryIcon" style={{ color: 'var(--muted-foreground)' }} />
             </IconButton>
           )}
         </div>
-        <div style={{ fontSize: '0.7rem' }}>
-          {truncateText(video.videoTitle, 40)}
+        <div className="text-[0.7rem] truncate">
+          {video.videoTitle}
         </div>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 8 }}>
-        {mediaTypeInfo && (
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 3,
-              fontSize: '0.65rem',
-              fontWeight: 600,
-              color: 'var(--muted-foreground)',
-            }}
-          >
+      <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
+        <div className="flex items-center gap-1">
+          {mediaTypeInfo && (
             <span
               style={{
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                backgroundColor: mediaTypeInfo.color,
-                flexShrink: 0,
-                display: 'inline-block',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 3,
+                fontSize: '0.65rem',
+                fontWeight: 600,
+                color: 'var(--muted-foreground)',
               }}
-            />
-            {mediaTypeInfo.label}
+            >
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  backgroundColor: mediaTypeInfo.color,
+                  flexShrink: 0,
+                  display: 'inline-block',
+                }}
+              />
+              {mediaTypeInfo.label}
+            </span>
+          )}
+          {video.duration > 0 && (
+            <span style={{ fontSize: '0.65rem', backgroundColor: 'rgba(0,0,0,0.1)', padding: '2px 4px', borderRadius: 'var(--radius-ui)' }}>
+              {formatDuration(video.duration)}
+            </span>
+          )}
+          {video.isMembersOnly && <Lock size={16} data-testid="LockIcon" />}
+        </div>
+        {formattedPublishDate && (
+          <span
+            style={{
+              fontSize: '0.6rem',
+              color: 'var(--muted-foreground)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {formattedPublishDate}
           </span>
         )}
-        <span style={{ fontSize: '0.65rem', backgroundColor: 'rgba(0,0,0,0.1)', padding: '2px 4px', borderRadius: 'var(--radius-ui)' }}>
-          {formatDuration(video.duration)}
-        </span>
       </div>
-      {video.isMembersOnly && <Lock size={16} data-testid="LockIcon" style={{ marginLeft: 4 }} />}
     </div>
   );
 
@@ -180,10 +246,8 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
   return (
     <>
       <Grow in={true} timeout={300}>
-        <Tooltip title={getTooltipTitle()} open={tooltipOpen}>
+        <Tooltip title={getTooltipTitle()} fullWidth>
           <Chip
-            onMouseOver={() => setTooltipOpen(true)}
-            onMouseOut={() => setTooltipOpen(false)}
             onClick={() => {}}
             aria-label={getTooltipTitle()}
             label={chipLabel}
@@ -191,6 +255,8 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
             deleteIcon={<CloseIcon size={14} data-testid="CloseIcon" />}
             color={getChipColor()}
             variant="filled"
+            className="!justify-start"
+            labelClassName="flex-1 min-w-0 !overflow-visible !whitespace-normal"
             style={{
               height: 'auto',
               paddingTop: 8,
@@ -199,7 +265,6 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
               transition: 'all 0.2s ease',
               boxShadow: 'var(--chip-shadow)',
             }}
-
           />
         </Tooltip>
       </Grow>

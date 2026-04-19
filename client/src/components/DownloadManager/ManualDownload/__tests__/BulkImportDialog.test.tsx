@@ -31,8 +31,9 @@ describe('BulkImportDialog', () => {
 
       expect(screen.getByText('Bulk Import URLs')).toBeInTheDocument();
       expect(
-        screen.getByText('Paste YouTube video URLs, one per line:')
+        screen.getByText(/Paste YouTube video URLs, one per line/i)
       ).toBeInTheDocument();
+      expect(screen.getByText(/max 100 per import/i)).toBeInTheDocument();
       expect(screen.getByTestId('bulk-import-textarea')).toBeInTheDocument();
       expect(
         screen.getByRole('button', { name: /upload .txt file/i })
@@ -219,6 +220,36 @@ describe('BulkImportDialog', () => {
         youtubeId: 'jNQXAC9IVRw',
         isBulkImport: true,
       });
+    });
+
+    test('caps import at 100 URLs and warns the user', async () => {
+      // Build 110 distinct valid YouTube URLs. The video IDs must be 11 chars
+      // and distinct so the parser does not dedupe them.
+      const chars = 'abcdefghijklmnopqrstuvwxyz0123456789_-';
+      const urls: string[] = [];
+      for (let i = 0; i < 110; i++) {
+        const a = chars[Math.floor(i / chars.length) % chars.length];
+        const b = chars[i % chars.length];
+        const id = `${a}${b}aaaaaaaaa`;
+        urls.push(`https://www.youtube.com/watch?v=${id}`);
+      }
+
+      render(<BulkImportDialog {...defaultProps} />);
+      const textarea = screen.getByTestId('bulk-import-textarea');
+      fireEvent.change(textarea, { target: { value: urls.join('\n') } });
+
+      jest.advanceTimersByTime(300);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Only the first 100 URLs will be imported/i)).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId('bulk-import-confirm')).toHaveTextContent('Add 100 to Queue');
+
+      fireEvent.click(screen.getByTestId('bulk-import-confirm'));
+
+      expect(mockOnImport).toHaveBeenCalledTimes(1);
+      expect(mockOnImport.mock.calls[0][0]).toHaveLength(100);
     });
 
     test('shows correct count in button text', async () => {

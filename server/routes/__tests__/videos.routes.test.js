@@ -75,6 +75,84 @@ describe('POST /api/videos/rating', () => {
   });
 });
 
+describe('POST /api/bulkEnrichVideos', () => {
+  const loggerMock = {
+    info: jest.fn(),
+    error: jest.fn(),
+  };
+
+  const createResponse = () => {
+    const res = {};
+    res.status = jest.fn(() => res);
+    res.json = jest.fn(() => res);
+    return res;
+  };
+
+  let enricherStub;
+
+  const getHandler = () => {
+    const router = createVideoRoutes({
+      verifyToken: (req, res, next) => next(),
+      videosModule: {},
+      downloadModule: {},
+      videoOembedEnricher: enricherStub,
+    });
+    const app = express();
+    app.use(express.json());
+    app.use(router);
+    return findRouteHandler(app, 'post', '/api/bulkEnrichVideos');
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    enricherStub = { enrichByIds: jest.fn() };
+  });
+
+  test('returns enriched map from the oembed enricher', async () => {
+    enricherStub.enrichByIds.mockResolvedValue({
+      aaaaaaaaaaa: { title: 'A', channelName: 'CA' },
+    });
+    const handler = getHandler();
+    const req = { body: { ids: ['aaaaaaaaaaa', 'bbbbbbbbbbb'] }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(enricherStub.enrichByIds).toHaveBeenCalledWith([
+      'aaaaaaaaaaa',
+      'bbbbbbbbbbb',
+    ]);
+    expect(res.json).toHaveBeenCalledWith({
+      enriched: { aaaaaaaaaaa: { title: 'A', channelName: 'CA' } },
+    });
+  });
+
+  test('returns 400 when ids is not an array', async () => {
+    const handler = getHandler();
+    const req = { body: { ids: 'not-an-array' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(enricherStub.enrichByIds).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'ids must be an array' });
+  });
+
+  test('returns 500 when the enricher throws', async () => {
+    enricherStub.enrichByIds.mockRejectedValue(new Error('boom'));
+    const handler = getHandler();
+    const req = { body: { ids: ['aaaaaaaaaaa'] }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Internal server error' });
+    expect(loggerMock.error).toHaveBeenCalled();
+  });
+});
+
 describe('PATCH /api/videos/:id/protected', () => {
   const loggerMock = {
     info: jest.fn(),

@@ -21,6 +21,8 @@ import {
 import { VideoInfo } from './types';
 import { parseYoutubeUrls, BulkParseResult } from './urlParser';
 
+const MAX_BULK_IMPORT_URLS = 100;
+
 interface BulkImportDialogProps {
   open: boolean;
   onClose: () => void;
@@ -100,7 +102,8 @@ const BulkImportDialog: React.FC<BulkImportDialogProps> = ({
   const handleImport = useCallback(() => {
     if (!parseResult || parseResult.valid.length === 0) return;
 
-    const videos: VideoInfo[] = parseResult.valid.map((parsed) => ({
+    const capped = parseResult.valid.slice(0, MAX_BULK_IMPORT_URLS);
+    const videos: VideoInfo[] = capped.map((parsed) => ({
       youtubeId: parsed.youtubeId,
       url: parsed.url,
       channelName: '',
@@ -138,13 +141,15 @@ const BulkImportDialog: React.FC<BulkImportDialogProps> = ({
   const dupeCount = parseResult?.duplicates.length ?? 0;
   const invalidCount = parseResult?.invalid.length ?? 0;
   const playlistCount = parseResult?.playlistLines.length ?? 0;
+  const exceedsCap = validCount > MAX_BULK_IMPORT_URLS;
+  const effectiveImportCount = Math.min(validCount, MAX_BULK_IMPORT_URLS);
   const hasResults = parseResult !== null && (validCount > 0 || dupeCount > 0 || invalidCount > 0 || playlistCount > 0);
 
   return (
     <Dialog
       open={open}
       onClose={onClose}
-      maxWidth="sm"
+      maxWidth="md"
       fullWidth
       data-testid="bulk-import-dialog"
     >
@@ -154,7 +159,7 @@ const BulkImportDialog: React.FC<BulkImportDialogProps> = ({
 
       <DialogContent>
         <Typography variant="body2" color="text.secondary" className="mb-4">
-          Paste YouTube video URLs, one per line:
+          Paste YouTube video URLs, one per line (max {MAX_BULK_IMPORT_URLS} per import):
         </Typography>
 
         <TextField
@@ -205,6 +210,14 @@ const BulkImportDialog: React.FC<BulkImportDialogProps> = ({
             {validCount > 0 && (
               <Alert severity="success" variant="outlined">
                 {validCount} valid URL{validCount !== 1 ? 's' : ''} found
+              </Alert>
+            )}
+
+            {exceedsCap && (
+              <Alert severity="warning" variant="outlined">
+                Only the first {MAX_BULK_IMPORT_URLS} URLs will be imported
+                ({validCount - MAX_BULK_IMPORT_URLS} extra will be skipped).
+                Run Bulk Import again with the remainder if you need them.
               </Alert>
             )}
 
@@ -271,7 +284,7 @@ const BulkImportDialog: React.FC<BulkImportDialogProps> = ({
           disabled={validCount === 0}
           data-testid="bulk-import-confirm"
         >
-          Add {validCount > 0 ? validCount : ''} to Queue
+          Add {effectiveImportCount > 0 ? effectiveImportCount : ''} to Queue
         </Button>
       </DialogActions>
     </Dialog>
