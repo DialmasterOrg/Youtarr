@@ -163,8 +163,8 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           # Create or update CHANGELOG.md
-          # Pass interpolated values via env vars (not ${{ }} text substitution)
-          # so quotes/parens in commit messages can't break bash parsing.
+          # Values are passed via env vars (see `env:` above) so quotes/parens
+          # in commit messages do not break bash parsing.
           CHANGELOG_ENTRY="## [${NEW_TAG}](https://github.com/${REPO}/releases/tag/${NEW_TAG}) - $(date +%Y-%m-%d)
 
           ${CHANGELOG_BODY}
