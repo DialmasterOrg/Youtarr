@@ -10,7 +10,7 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 
 > **Like Youtarr?** Consider [supporting the project on Patreon](https://www.patreon.com/c/ChrisDial) to help keep it free and actively developed!
 
-https://github.com/user-attachments/assets/34e5b50b-1a38-4f0b-9f84-bd47cefe4348
+https://github.com/user-attachments/assets/a80548fc-bcf9-4ad0-889c-dbd5aac250ee
 
 ## Why Youtarr?
 
@@ -105,25 +105,26 @@ Interested in contributing to Youtarr? We welcome contributions of all kinds!
 <details>
 <summary>Click to view screenshots</summary>
 
-### Channel Management
-![ChannelsPage](https://github.com/user-attachments/assets/75adf139-f202-499d-9eee-1c81b71a4355)
+### Channel Management (using "Dark Modern" theme)
+<img width="1522" height="850" alt="image" src="https://github.com/user-attachments/assets/76a23a1a-2c8d-4c27-8ebc-4f430917a2e7" />
 
-### Video Browser
-![ChannelPage](https://github.com/user-attachments/assets/f658c97b-3898-477c-82d1-4a15d6b34207)
+### Video Browser (using "Playful (Classic)" theme)
+<img width="1507" height="1298" alt="image" src="https://github.com/user-attachments/assets/b7b50a72-942c-4653-930f-270ca27ac888" />
 
+### Configuration (using "Bold Flat" theme)
+<img width="1524" height="1296" alt="image" src="https://github.com/user-attachments/assets/3d6c28a6-c564-4972-b275-71da11dc39e9" />
 
-### Configuration
-![ConfigurationPage](https://github.com/user-attachments/assets/9aba2e17-9d53-4adb-9c05-c6f9dc926dcf)
+### Download Manager (Dark Modern)
+<img width="1521" height="1297" alt="image" src="https://github.com/user-attachments/assets/3a13c822-af39-4498-8e2c-9dcc990b3cfb" />
 
+### Individual Video Modal (Playful Classic)
+<img width="1523" height="1117" alt="image" src="https://github.com/user-attachments/assets/6d08ac34-544b-4e8c-8bfe-5b8fd3f341fe" />
 
-### Download Manager
-![DownloadsPage](https://github.com/user-attachments/assets/5aa84c3c-6bc7-478b-b97d-c8f1e46e8ca2)
+### Search for videos on YouTube from in-app (Bold Flat)
+<img width="1507" height="1120" alt="image" src="https://github.com/user-attachments/assets/1c42f56e-57a3-41b5-b1c7-89f5552d3c99" />
 
-### Individual Video Modal
-![VideoModal](https://github.com/user-attachments/assets/e27f8adb-73fc-4cc8-826e-bec1ac505b18)
-
-### SponsorBlock Settings
-![SponsorBlock](https://github.com/user-attachments/assets/0bcf1d1a-2d8c-4dff-9e67-abbe369e64d5)
+### Responsive for mobile (Bold Flat)
+<img width="340" height="757" alt="image" src="https://github.com/user-attachments/assets/79f153ef-01d0-4238-8f11-d04f5ea6aad8" />
 
 </details>
 
