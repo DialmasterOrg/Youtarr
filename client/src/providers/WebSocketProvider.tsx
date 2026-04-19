@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, ReactNode, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, ReactNode, useRef } from 'react';
 import WebSocketContext from '../contexts/WebSocketContext';
 import { locationUtils } from '../utils/location';
 
@@ -133,8 +133,13 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
     };
   }, [connect, socket]);
 
+  const contextValue = useMemo(
+    () => ({ socket, subscribe, unsubscribe }),
+    [socket, subscribe, unsubscribe]
+  );
+
   return (
-    <WebSocketContext.Provider value={{ socket, subscribe, unsubscribe }}>
+    <WebSocketContext.Provider value={contextValue}>
       {children}
     </WebSocketContext.Provider>
   );
