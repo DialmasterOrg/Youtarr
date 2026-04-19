@@ -70,12 +70,13 @@ export interface ChipProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'c
   avatar?: React.ReactNode;
   disabled?: boolean;
   className?: string;
+  labelClassName?: string;
   deleteIcon?: React.ReactNode;
   style?: React.CSSProperties;
 }
 
 const Chip = React.forwardRef<HTMLDivElement, ChipProps>(
-  ({ label, onDelete, onClick, icon, avatar, disabled, className, variant, color, size, deleteIcon, style, ...rest }, ref) => {
+  ({ label, onDelete, onClick, icon, avatar, disabled, className, labelClassName, variant, color, size, deleteIcon, style, ...rest }, ref) => {
     const isClickable = !!onClick;
     const Tag = isClickable ? 'button' : 'div';
 
@@ -108,7 +109,7 @@ const Chip = React.forwardRef<HTMLDivElement, ChipProps>(
       },
       avatar && <span className="shrink-0 -ml-0.5">{avatar}</span>,
       icon && <span className="shrink-0 [&>svg]:h-[1em] [&>svg]:w-[1em]">{icon}</span>,
-      <span key="label" className="px-0.5 truncate">{label}</span>,
+      <span key="label" className={cn('px-0.5 truncate', labelClassName)}>{label}</span>,
       onDelete && (
         <span
           key="delete"

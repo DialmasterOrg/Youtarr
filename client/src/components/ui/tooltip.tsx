@@ -19,6 +19,7 @@ export interface TooltipProps {
   className?: string;
   open?: boolean;
   onClose?: () => void;
+  fullWidth?: boolean;
 }
 
 const Tooltip: React.FC<TooltipProps> = ({
@@ -34,7 +35,11 @@ const Tooltip: React.FC<TooltipProps> = ({
   className,
   open,
   onClose,
+  fullWidth = false,
 }) => {
+  const triggerWrapperStyle: React.CSSProperties = fullWidth
+    ? { position: 'relative', display: 'flex', width: '100%' }
+    : { position: 'relative', display: 'inline-flex' };
   const [touchOpen, setTouchOpen] = React.useState(false);
   const triggerRef = React.useRef<HTMLElement | null>(null);
   const [coarsePointer, setCoarsePointer] = React.useState(false);
@@ -170,7 +175,7 @@ const Tooltip: React.FC<TooltipProps> = ({
   // Controlled mode: simple inline overlay
   if (isControlled) {
     return (
-      <span style={{ position: 'relative', display: 'inline-flex' }}>
+      <span style={triggerWrapperStyle}>
         {children}
         {open && (
           <div
@@ -219,7 +224,7 @@ const Tooltip: React.FC<TooltipProps> = ({
   if (coarsePointer) {
     return (
       <>
-        <span style={{ position: 'relative', display: 'inline-flex' }}>
+        <span style={triggerWrapperStyle}>
           {childWithTouch}
         </span>
         {touchOpen && touchPosition && typeof document !== 'undefined'

@@ -12,6 +12,7 @@ import {
   Collapse
 } from '../../ui';
 import { TransitionGroup } from 'react-transition-group';
+import { useMediaQuery, breakpoints } from '../../../hooks/useMediaQuery';
 import {
   Download as DownloadIcon,
   X as ClearIcon,
@@ -24,6 +25,33 @@ import DownloadSettingsDialog from './DownloadSettingsDialog';
 import BulkImportDialog from './BulkImportDialog';
 import { VideoInfo, ValidationResponse, DownloadSettings } from './types';
 
+const ENRICH_CHUNK_SIZE = 25;
+
+interface EnrichedVideoMeta {
+  title: string;
+  channelName: string;
+}
+
+async function enrichBulkImports(
+  ids: string[],
+  token: string | null,
+  onChunk: (chunk: Record<string, EnrichedVideoMeta>) => void
+): Promise<void> {
+  for (let i = 0; i < ids.length; i += ENRICH_CHUNK_SIZE) {
+    const chunk = ids.slice(i, i + ENRICH_CHUNK_SIZE);
+    try {
+      const { data } = await axios.post<{ enriched: Record<string, EnrichedVideoMeta> }>(
+        '/api/bulkEnrichVideos',
+        { ids: chunk },
+        { headers: { 'x-access-token': token || '' } }
+      );
+      if (data?.enriched) onChunk(data.enriched);
+    } catch (err) {
+      console.error('Bulk enrichment chunk failed:', err);
+    }
+  }
+}
+
 interface ManualDownloadProps {
   onStartDownload: (urls: string[], settings?: DownloadSettings | null) => void;
   token: string | null;
@@ -31,6 +59,7 @@ interface ManualDownloadProps {
 }
 
 const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token, defaultResolution = '1080' }) => {
+  const isMobile = useMediaQuery(breakpoints.down('sm'));
   const [validatedVideos, setValidatedVideos] = useState<VideoInfo[]>([]);
   const [isValidating, setIsValidating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -39,12 +68,32 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [previouslyDownloadedCount, setPreviouslyDownloadedCount] = useState(0);
   const [showBulkImport, setShowBulkImport] = useState(false);
+  const [isEnrichingBulk, setIsEnrichingBulk] = useState(false);
 
   const handleBulkImport = useCallback((videos: VideoInfo[]) => {
     setValidatedVideos(prev => [...prev, ...videos]);
     setShowBulkImport(false);
     setSuccessMessage(`Added ${videos.length} URL${videos.length !== 1 ? 's' : ''} to download queue.`);
-  }, []);
+
+    const ids = videos.map(v => v.youtubeId).filter(Boolean);
+    if (ids.length === 0) return;
+
+    setIsEnrichingBulk(true);
+    void enrichBulkImports(ids, token, (chunk) => {
+      setValidatedVideos(prev => prev.map(v => {
+        const meta = chunk[v.youtubeId];
+        if (!meta || !v.isBulkImport) return v;
+        return {
+          ...v,
+          videoTitle: meta.title || v.videoTitle,
+          channelName: meta.channelName || v.channelName,
+          isBulkImport: false,
+        };
+      }));
+    }).finally(() => {
+      setIsEnrichingBulk(false);
+    });
+  }, [token]);
 
   const validateUrl = useCallback(async (url: string): Promise<boolean> => {
     setIsValidating(true);
@@ -227,8 +276,8 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
             <TransitionGroup
               style={{
                 display: 'grid',
-                gridTemplateColumns: window.innerWidth < 900 ? '1fr' : '1fr 1fr',
-                gap: '8px'
+                gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+                gap: '12px'
               }}
             >
               {validatedVideos.map((video) => (
@@ -236,6 +285,7 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
                   <VideoChip
                     video={video}
                     onDelete={handleRemoveVideo}
+                    isEnriching={isEnrichingBulk}
                   />
                 </Collapse>
               ))}

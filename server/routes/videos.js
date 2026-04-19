@@ -11,6 +11,16 @@ const videoValidationLimiter = rateLimit({
   validate: { trustProxy: false },
 });
 
+// Bulk enrichment rate limiter
+const bulkEnrichLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 20, // 20 enrichment batches per minute per client
+  message: 'Too many enrichment requests, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { trustProxy: false },
+});
+
 // API key download rate limiter
 const apiKeyDownloadLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
@@ -42,7 +52,7 @@ const apiKeyDownloadLimiter = rateLimit({
  * @param {Object} deps.downloadModule - Download module
  * @returns {express.Router}
  */
-module.exports = function createVideoRoutes({ verifyToken, videosModule, downloadModule }) {
+module.exports = function createVideoRoutes({ verifyToken, videosModule, downloadModule, videoOembedEnricher }) {
   const router = express.Router();
 
   /**
@@ -466,6 +476,52 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
         isValidUrl: false,
         error: 'Internal server error'
       });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/bulkEnrichVideos:
+   *   post:
+   *     summary: Enrich a batch of YouTube video IDs with title + channel name
+   *     description: >
+   *       Fetches lightweight metadata (title, channel name) for a batch of
+   *       YouTube video IDs via YouTube's public oEmbed endpoint. Used by the
+   *       Manual Download bulk-import flow to turn raw IDs into readable
+   *       chips without the cost of a full yt-dlp metadata fetch.
+   *       Outbound requests are rate-limited to protect the server's IP.
+   *     tags: [Videos]
+   *     security:
+   *       - BearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [ids]
+   *             properties:
+   *               ids:
+   *                 type: array
+   *                 items: { type: string }
+   *                 description: YouTube video IDs (11 chars)
+   *     responses:
+   *       200:
+   *         description: Map of id to metadata; failed lookups are omitted.
+   *       400:
+   *         description: Invalid body.
+   */
+  router.post('/api/bulkEnrichVideos', verifyToken, bulkEnrichLimiter, async (req, res) => {
+    try {
+      const { ids } = req.body || {};
+      if (!Array.isArray(ids)) {
+        return res.status(400).json({ error: 'ids must be an array' });
+      }
+      const enriched = await videoOembedEnricher.enrichByIds(ids);
+      res.json({ enriched });
+    } catch (error) {
+      req.log.error({ err: error }, 'Failed to enrich videos');
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
