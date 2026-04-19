@@ -135,34 +135,35 @@ describe('ChannelVideosFilters Component', () => {
   });
 
   describe('Mobile Mode', () => {
-    test('renders filter button on mobile', () => {
-      renderWithProviders(<ChannelVideosFilters {...defaultProps} isMobile={true} />);
-
-      expect(screen.getByRole('button', { name: /Filters/i })).toBeInTheDocument();
-    });
-
-    test('opens drawer when filter button is clicked', async () => {
-      const user = userEvent.setup();
-
+    test('renders the mobile filter container on mobile', () => {
       renderWithProviders(<ChannelVideosFilters {...defaultProps} isMobile={true} />);
 
       expect(screen.queryByTestId('mobile-filter-drawer')).not.toBeInTheDocument();
+    });
 
-      await user.click(screen.getByRole('button', { name: /Filters/i }));
+    test('renders drawer when mobileDrawerOpen is true', () => {
+      renderWithProviders(<ChannelVideosFilters {...defaultProps} isMobile={true} mobileDrawerOpen={true} />);
 
       expect(screen.getByTestId('mobile-filter-drawer')).toBeInTheDocument();
     });
 
     test('closes drawer when close button is clicked', async () => {
       const user = userEvent.setup();
+      const onMobileDrawerClose = jest.fn();
 
-      renderWithProviders(<ChannelVideosFilters {...defaultProps} isMobile={true} />);
+      renderWithProviders(
+        <ChannelVideosFilters
+          {...defaultProps}
+          isMobile={true}
+          mobileDrawerOpen={true}
+          onMobileDrawerClose={onMobileDrawerClose}
+        />
+      );
 
-      await user.click(screen.getByRole('button', { name: /Filters/i }));
       expect(screen.getByTestId('mobile-filter-drawer')).toBeInTheDocument();
 
       await user.click(screen.getByTestId('drawer-close'));
-      expect(screen.queryByTestId('mobile-filter-drawer')).not.toBeInTheDocument();
+      expect(onMobileDrawerClose).toHaveBeenCalledTimes(1);
     });
 
     test('shows filter chips on mobile when filters are active', () => {
@@ -181,21 +182,19 @@ describe('ChannelVideosFilters Component', () => {
       expect(screen.queryByTestId('filter-chips')).not.toBeInTheDocument();
     });
 
-    test('displays badge with active filter count', () => {
+    test('does not render a local badge for active filter count', () => {
       renderWithProviders(
         <ChannelVideosFilters {...defaultProps} isMobile={true} activeFilterCount={2} />
       );
 
-      // The badge should show the count
-      expect(screen.getByText('2')).toBeInTheDocument();
+      expect(screen.queryByText('2')).not.toBeInTheDocument();
     });
 
-    test('hides badge when no active filters', () => {
+    test('does not render a local badge when no active filters are present', () => {
       renderWithProviders(
         <ChannelVideosFilters {...defaultProps} isMobile={true} activeFilterCount={0} />
       );
 
-      // Badge should be invisible (not rendered in the DOM as visible text)
       expect(screen.queryByText('0')).not.toBeInTheDocument();
     });
   });

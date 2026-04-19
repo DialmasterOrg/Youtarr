@@ -10,7 +10,7 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 
 > **Like Youtarr?** Consider [supporting the project on Patreon](https://www.patreon.com/c/ChrisDial) to help keep it free and actively developed!
 
-https://github.com/user-attachments/assets/34e5b50b-1a38-4f0b-9f84-bd47cefe4348
+https://github.com/user-attachments/assets/a80548fc-bcf9-4ad0-889c-dbd5aac250ee
 
 ## Why Youtarr?
 
@@ -26,6 +26,7 @@ https://github.com/user-attachments/assets/34e5b50b-1a38-4f0b-9f84-bd47cefe4348
 - **Smart Downloads**: Pre-validate manually pasted URLs with metadata preview before downloading
 - **Channel Subscriptions**: Subscribe to channels and auto-download new videos, shorts, and streams with per-tab controls
 - **Browse Channels**: View and search all videos from subscribed channels with advanced filtering, tabbed views for Videos/Shorts/Streams, and contextual publish date accuracy tips
+- **Find on YouTube**: Search YouTube from inside Youtarr, see which results are already downloaded or missing, and click any result to queue a download
 - **In-App Playback**: Click any thumbnail to open a detail modal with extended metadata and in-browser streaming of downloaded videos; no media server required
 - **Channel Grouping & Multi-Library Support**: Organize channels into custom subfolders (e.g., `__kids`, `__music`, `__news`) to create separate media server libraries
 - **Smart Organization**: Videos organized by channel with metadata and thumbnails
@@ -50,55 +51,18 @@ Youtarr and [Pinchflat](https://github.com/kieraneglin/pinchflat) solve the same
 
 Youtarr predates Pinchflat (first commit May 2023 vs. January 2024); the two projects arrived at similar solutions independently and have evolved in parallel. For a side-by-side of where they actually differ — Plex integration, in-app playback, content ratings, REST API, RSS feeds, indexing strategy — see [Youtarr vs Pinchflat](docs/YOUTARR_VS_PINCHFLAT.md).
 
-## Prerequisites
-- Docker & Docker Compose
-- Git
-- Bash shell (Git Bash for Windows)
+## Quick Start
+
+You'll need Docker, Docker Compose, Git, and a Bash shell (Git Bash on Windows). See the [Installation Guide](docs/INSTALLATION.md) for prerequisites, install methods, initial setup, and updating.
+
 > **Heads up:** Youtarr runs exclusively via Docker; direct `npm start`/Node deployments are unsupported.
 
-## Using Development Builds
-
-Want to try new features before they're officially released? Youtarr offers bleeding-edge development builds that contain the latest merged changes.
-
-> ⚠️ **Warning:** Dev builds are not fully tested and may be unstable. Use at your own risk, and expect potential bugs or breaking changes. Recommended for testing/feedback only.
-
-### Option 1: Using the start script (recommended)
-
-```bash
-./start.sh --dev --pull-latest
-```
-
-This pulls and runs the `dev-latest` image, which is automatically built whenever changes are merged to the `dev` branch.
-
-### Option 2: Manual configuration
-
-If you're not using the start script, set the `YOUTARR_IMAGE` environment variable in your `.env` file or docker-compose command:
-
-```bash
-# In .env file
-YOUTARR_IMAGE=dialmaster/youtarr:dev-latest
-```
-
-Or with docker-compose directly:
-
-```bash
-YOUTARR_IMAGE=dialmaster/youtarr:dev-latest docker compose up -d
-```
-
-### Switching back to stable
-
-Simply run without the `--dev` flag:
-
-```bash
-./start.sh --pull-latest
-```
-
-Or remove/comment out the `YOUTARR_IMAGE` line in your `.env` file to use the default stable `latest` tag.
+> Want to try unreleased features? See [Using Development Builds](docs/DEVELOPMENT.md#using-development-builds) for the bleeding-edge `dev-latest` image.
 
 ## Documentation
 
-### Getting Started
-- [Installation Guide](docs/INSTALLATION.md) - Quick Start guide, installation and setup instructions
+### Setup & Configuration
+- [Installation Guide](docs/INSTALLATION.md) - Install methods, initial setup, and updating
 - [Usage Guide](docs/USAGE_GUIDE.md) - Step-by-step tutorials for common tasks
 - [Configuration Reference](docs/CONFIG.md) - All configuration options
 - [Environment Variables](docs/ENVIRONMENT_VARIABLES.md) - Docker environment settings
@@ -120,7 +84,7 @@ Or remove/comment out the `YOUTARR_IMAGE` line in your `.env` file to use the de
 - [Backup & Restore](docs/BACKUP_RESTORE.md) - Backup your configuration and database, restore to new systems
 - [Database Management](docs/DATABASE.md) - Database configuration and maintenance
 - [Docker Configuration](docs/DOCKER.md) - Advanced Docker settings
-- [Development Guide](docs/DEVELOPMENT.md) - Contributing and development setup
+- [Development Guide](docs/DEVELOPMENT.md) - Contributing, development setup, and using bleeding-edge dev builds
 - [API Documentation](http://localhost:3087/swagger) - Interactive Swagger/OpenAPI documentation (requires running instance)
 
 ### Help & Support
@@ -141,25 +105,26 @@ Interested in contributing to Youtarr? We welcome contributions of all kinds!
 <details>
 <summary>Click to view screenshots</summary>
 
-### Channel Management
-![ChannelsPage](https://github.com/user-attachments/assets/75adf139-f202-499d-9eee-1c81b71a4355)
+### Channel Management (using "Dark Modern" theme)
+<img width="1522" height="850" alt="image" src="https://github.com/user-attachments/assets/76a23a1a-2c8d-4c27-8ebc-4f430917a2e7" />
 
-### Video Browser
-![ChannelPage](https://github.com/user-attachments/assets/f658c97b-3898-477c-82d1-4a15d6b34207)
+### Video Browser (using "Playful (Classic)" theme)
+<img width="1507" height="1298" alt="image" src="https://github.com/user-attachments/assets/b7b50a72-942c-4653-930f-270ca27ac888" />
 
+### Configuration (using "Bold Flat" theme)
+<img width="1524" height="1296" alt="image" src="https://github.com/user-attachments/assets/3d6c28a6-c564-4972-b275-71da11dc39e9" />
 
-### Configuration
-![ConfigurationPage](https://github.com/user-attachments/assets/9aba2e17-9d53-4adb-9c05-c6f9dc926dcf)
+### Download Manager (Dark Modern)
+<img width="1521" height="1297" alt="image" src="https://github.com/user-attachments/assets/3a13c822-af39-4498-8e2c-9dcc990b3cfb" />
 
+### Individual Video Modal (Playful Classic)
+<img width="1523" height="1117" alt="image" src="https://github.com/user-attachments/assets/6d08ac34-544b-4e8c-8bfe-5b8fd3f341fe" />
 
-### Download Manager
-![DownloadsPage](https://github.com/user-attachments/assets/5aa84c3c-6bc7-478b-b97d-c8f1e46e8ca2)
+### Search for videos on YouTube from in-app (Bold Flat)
+<img width="1507" height="1120" alt="image" src="https://github.com/user-attachments/assets/1c42f56e-57a3-41b5-b1c7-89f5552d3c99" />
 
-### Individual Video Modal
-![VideoModal](https://github.com/user-attachments/assets/e27f8adb-73fc-4cc8-826e-bec1ac505b18)
-
-### SponsorBlock Settings
-![SponsorBlock](https://github.com/user-attachments/assets/0bcf1d1a-2d8c-4dff-9e67-abbe369e64d5)
+### Responsive for mobile (Bold Flat)
+<img width="340" height="757" alt="image" src="https://github.com/user-attachments/assets/79f153ef-01d0-4238-8f11-d04f5ea6aad8" />
 
 </details>
 

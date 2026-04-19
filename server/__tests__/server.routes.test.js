@@ -219,7 +219,8 @@ const createServerModule = ({
             }
             return null;
           }),
-          getRunningJobs: jest.fn(() => [])
+          getRunningJobs: jest.fn(() => []),
+          getRunningJobsWithFreshVideos: jest.fn().mockResolvedValue([])
         };
 
         const videosModuleMock = {
@@ -346,6 +347,12 @@ const createServerModule = ({
         jest.doMock('../modules/subscriptionImport', () => ({
           init: jest.fn(),
           ImportInProgressError: class ImportInProgressError extends Error {}
+        }));
+        jest.doMock('../modules/videoSearchModule', () => ({
+          searchVideos: jest.fn().mockResolvedValue([]),
+          ALLOWED_COUNTS: [10, 25, 50],
+          SearchCanceledError: class SearchCanceledError extends Error {},
+          SearchTimeoutError: class SearchTimeoutError extends Error {},
         }));
         jest.doMock('../modules/messageEmitter', () => ({
           emitMessage: jest.fn(),
@@ -1661,7 +1668,7 @@ describe('server routes - jobs', () => {
   describe('GET /runningjobs', () => {
     test('returns list of running jobs', async () => {
       const { app, jobModuleMock } = await createServerModule();
-      jobModuleMock.getRunningJobs.mockReturnValueOnce([
+      jobModuleMock.getRunningJobsWithFreshVideos.mockResolvedValueOnce([
         { id: 'job-1', status: 'In Progress' },
         { id: 'job-2', status: 'In Progress' }
       ]);
@@ -1674,7 +1681,7 @@ describe('server routes - jobs', () => {
 
       await runningJobsHandler(req, res);
 
-      expect(jobModuleMock.getRunningJobs).toHaveBeenCalled();
+      expect(jobModuleMock.getRunningJobsWithFreshVideos).toHaveBeenCalled();
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual([
         { id: 'job-1', status: 'In Progress' },

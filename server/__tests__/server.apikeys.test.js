@@ -258,7 +258,8 @@ const createServerModule = ({
           doSpecificDownloads: jest.fn().mockResolvedValue({ success: true })
         }));
         jest.doMock('../modules/jobModule', () => ({
-          getRunningJobs: jest.fn(() => [])
+          getRunningJobs: jest.fn(() => []),
+          getRunningJobsWithFreshVideos: jest.fn().mockResolvedValue([])
         }));
         jest.doMock('../modules/videosModule', () => ({}));
         jest.doMock('../modules/videoMetadataModule', () => ({
@@ -276,6 +277,12 @@ const createServerModule = ({
         jest.doMock('../modules/subscriptionImport', () => ({
           init: jest.fn(),
           ImportInProgressError: class ImportInProgressError extends Error {}
+        }));
+        jest.doMock('../modules/videoSearchModule', () => ({
+          searchVideos: jest.fn().mockResolvedValue([]),
+          ALLOWED_COUNTS: [10, 25, 50],
+          SearchCanceledError: class SearchCanceledError extends Error {},
+          SearchTimeoutError: class SearchTimeoutError extends Error {},
         }));
         jest.doMock('../modules/messageEmitter', () => ({
           emitMessage: jest.fn(),

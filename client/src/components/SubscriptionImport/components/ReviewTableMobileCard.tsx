@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Box, Card, Checkbox, Chip, IconButton, Typography } from '@mui/material';
-import { Settings as SettingsIcon } from '@mui/icons-material';
+import { Checkbox, Chip, IconButton, Typography } from '../../ui';
+import { Settings as SettingsIcon } from '../../../lib/icons';
 import { ReviewChannel, RowState } from '../../../types/subscriptionImport';
 import { ImportFlowAction } from '../hooks/useImportFlow';
 import ChannelThumbnail from './ChannelThumbnail';
@@ -28,39 +28,31 @@ const ReviewTableMobileCard: React.FC<ReviewTableMobileCardProps> = ({
   };
 
   return (
-    <Card
-      variant="outlined"
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        p: 1.5,
-        mb: 1,
-        opacity: channel.alreadySubscribed ? 0.6 : 1,
-      }}
-    >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0, flex: 1 }}>
+    <div className={`mb-3 flex items-start justify-between gap-3 rounded-[var(--radius-ui)] border border-[var(--border-strong)] bg-card p-3 ${channel.alreadySubscribed ? 'opacity-60' : ''}`}>
+      <div className="flex min-w-0 flex-1 items-start gap-3">
         <ChannelThumbnail thumbnailUrl={channel.thumbnailUrl} title={channel.title} size={36} />
-        <Box sx={{ minWidth: 0 }}>
-          <Typography variant="body2" noWrap sx={{ fontWeight: 500 }}>
+        <div className="min-w-0 flex-1">
+          <Typography variant="body2" noWrap className="font-semibold">
             {channel.title}
           </Typography>
           {channel.alreadySubscribed ? (
-            <Chip label="Already subscribed" size="small" color="default" sx={{ mt: 0.5 }} />
+            <div className="mt-2">
+              <Chip label="Already subscribed" size="small" color="default" />
+            </div>
           ) : (
-            <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div className="mt-2 flex flex-wrap items-center gap-1">
               <SubFolderChip subFolder={rowState.settings.subFolder} />
               <QualityChip
                 videoQuality={rowState.settings.videoQuality}
                 globalPreferredResolution={globalPreferredResolution}
               />
               <RatingBadge rating={rowState.settings.defaultRating} />
-            </Box>
+            </div>
           )}
-        </Box>
-      </Box>
+        </div>
+      </div>
 
-      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', ml: 1 }}>
+      <div className="flex flex-col items-center gap-1">
         <Checkbox
           checked={rowState.selected}
           onChange={handleCheckboxChange}
@@ -72,10 +64,11 @@ const ReviewTableMobileCard: React.FC<ReviewTableMobileCardProps> = ({
           size="small"
           onClick={() => setSheetOpen(true)}
           aria-label={`Settings for ${channel.title}`}
+          disabled={channel.alreadySubscribed}
         >
-          <SettingsIcon fontSize="small" />
+          <SettingsIcon size={16} />
         </IconButton>
-      </Box>
+      </div>
 
       <RowSettingsSheet
         open={sheetOpen}
@@ -87,7 +80,7 @@ const ReviewTableMobileCard: React.FC<ReviewTableMobileCardProps> = ({
         subfolders={subfolders}
         defaultSubfolderDisplay={defaultSubfolderDisplay}
       />
-    </Card>
+    </div>
   );
 };
 

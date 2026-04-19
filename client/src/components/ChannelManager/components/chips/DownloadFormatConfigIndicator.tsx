@@ -1,6 +1,6 @@
 import React from 'react';
-import { Box, Tooltip } from '@mui/material';
-import { MovieOutlined as VideoIcon, AudiotrackOutlined as AudioIcon } from '@mui/icons-material';
+import { Tooltip } from '../../../../components/ui';
+import { AudioIcon } from '../../../../lib/icons';
 
 interface DownloadFormatConfigIndicatorProps {
   audioFormat: string | null | undefined;
@@ -9,45 +9,31 @@ interface DownloadFormatConfigIndicatorProps {
 const DownloadFormatConfigIndicator: React.FC<DownloadFormatConfigIndicatorProps> = ({
   audioFormat,
 }) => {
-  // Determine which icons to show based on audio_format setting:
-  // - null or undefined: video only (default)
-  // - 'video_mp3': both video and mp3
-  // - 'mp3_only': mp3 only
-  const showVideo = !audioFormat || audioFormat === 'video_mp3';
+  // Show audio icon only when MP3 downloads are enabled:
+  // - null or undefined: video only (default, no extra indicator)
+  // - 'video_mp3': both video and mp3 → show audio icon
+  // - 'mp3_only': mp3 only → show audio icon
   const showAudio = audioFormat === 'video_mp3' || audioFormat === 'mp3_only';
 
+  if (!showAudio) return null;
+
   return (
-    <Box
-      sx={{
+    <div
+      style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 0.25,
+        gap: 2,
       }}
       data-testid="download-format-config-indicator"
     >
-      {showVideo && (
-        <Tooltip title="Video downloads" arrow placement="top" enterTouchDelay={0}>
-          <VideoIcon
-            data-testid="video-format-icon"
-            sx={{
-              fontSize: '1rem',
-              color: 'primary.main',
-            }}
-          />
-        </Tooltip>
-      )}
-      {showAudio && (
-        <Tooltip title="MP3 downloads" arrow placement="top" enterTouchDelay={0}>
-          <AudioIcon
-            data-testid="audio-format-icon"
-            sx={{
-              fontSize: '1rem',
-              color: 'secondary.main',
-            }}
-          />
-        </Tooltip>
-      )}
-    </Box>
+      <Tooltip title="MP3 downloads" arrow placement="top" enterTouchDelay={0}>
+        <AudioIcon
+          data-testid="audio-format-icon"
+          size={16}
+          style={{ color: 'var(--muted-foreground)' }}
+        />
+      </Tooltip>
+    </div>
   );
 };
 

@@ -5,11 +5,13 @@ import tsconfigPaths from 'vite-tsconfig-paths';
 export default defineConfig(({ command }) => {
   const backendPort = process.env.VITE_BACKEND_PORT || '3087';
   const backendTarget = `http://127.0.0.1:${backendPort}`;
+  const devServerHost = process.env.VITE_HOST || '0.0.0.0';
 
   return {
     plugins: [react(), tsconfigPaths()],
     envPrefix: ['VITE_', 'REACT_APP_'],
     server: {
+      host: devServerHost,
       port: 3000,
       proxy: {
         // Handle WebSocket path explicitly first
@@ -60,6 +62,42 @@ export default defineConfig(({ command }) => {
     build: {
       outDir: 'build',
       sourcemap: true,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) {
+              return undefined;
+            }
+
+            if (
+              id.includes('/react/') ||
+              id.includes('/react-dom/') ||
+              id.includes('/react-router/') ||
+              id.includes('/react-router-dom/')
+            ) {
+              return 'react-vendor';
+            }
+
+            if (id.includes('/@radix-ui/')) {
+              return 'radix-vendor';
+            }
+
+            if (id.includes('/lucide-react/')) {
+              return 'icon-vendor';
+            }
+
+            if (
+              id.includes('/axios/') ||
+              id.includes('/lodash/') ||
+              id.includes('/date-fns/')
+            ) {
+              return 'data-vendor';
+            }
+
+            return undefined;
+          },
+        },
+      },
     },
   };
 });

@@ -1,9 +1,11 @@
 import { mergeConfig } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
+import type { StorybookConfig } from '@storybook/react-vite';
 
-const config = {
+const config: StorybookConfig = {
   stories: [
-    '../src/**/__tests__/**/*.story.@(js|jsx|mjs|ts|tsx|mdx)',
+    '../src/**/*.stories.@(ts|tsx|js|jsx|mdx)',
+    '../src/**/__tests__/**/*.story.@(ts|tsx|js|jsx|mdx)',
   ],
   addons: ['@storybook/addon-a11y', '@storybook/addon-links'],
   staticDirs: ['../public'],
@@ -11,13 +13,14 @@ const config = {
     name: '@storybook/react-vite',
     options: {},
   },
-  async viteFinal(config) {
-    return mergeConfig(config, {
+  docs: {
+    autodocs: 'tag',
+  },
+  async viteFinal(existingConfig) {
+    return mergeConfig(existingConfig, {
       plugins: [tsconfigPaths()],
       define: {
-        ...(config.define ?? {}),
-        // Explicitly define NODE_ENV rather than wiping all of process.env,
-        // which would conflict with envPrefix env-var injection.
+        ...(existingConfig.define ?? {}),
         'process.env.NODE_ENV': JSON.stringify('development'),
       },
       envPrefix: ['VITE_', 'REACT_APP_'],

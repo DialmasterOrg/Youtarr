@@ -1,6 +1,6 @@
 import React from 'react';
-import { Alert, Box, Slide, Typography } from '@mui/material';
-import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import { Alert, Slide, Typography } from '../../../components/ui';
+import { WarningAmber as WarningAmberIcon } from '../../../lib/icons';
 
 interface PendingSaveBannerProps {
   show: boolean;
@@ -9,55 +9,58 @@ interface PendingSaveBannerProps {
 const PendingSaveBanner: React.FC<PendingSaveBannerProps> = ({ show }) => {
   return (
     <Slide direction="up" in={show} mountOnEnter unmountOnExit>
-      <Box
-        sx={{
+      <div
+        style={{
           position: 'fixed',
           left: 0,
           right: 0,
           bottom: 0,
           display: 'flex',
           justifyContent: 'center',
-          pb: { xs: 0, sm: 2 },
-          px: { xs: 0, sm: 2 },
-          zIndex: (theme) => theme.zIndex.snackbar,
+          paddingBottom: 16,
+          paddingLeft: 16,
+          paddingRight: 16,
+          zIndex: 1400,
           pointerEvents: 'none',
-          minHeight: { xs: 60, sm: 64 },
+          minHeight: 60,
         }}
       >
         <Alert
           severity="warning"
-          icon={<WarningAmberIcon fontSize="small" />}
+          icon={<WarningAmberIcon fontSize="small" data-testid="WarningAmberIcon" />}
           variant="outlined"
-          sx={{
+          style={{
             alignItems: 'center',
-            gap: 1,
-            px: { xs: 1, sm: 2 },
-            py: { xs: 0, sm: 1 },
-            maxWidth: { xs: '90%', sm: 560 },
-            maxHeight: '48px',
+            gap: 8,
+            paddingLeft: 16,
+            paddingRight: 16,
+            paddingTop: 8,
+            paddingBottom: 8,
+            maxWidth: 560,
+            maxHeight: 48,
             width: '100%',
             pointerEvents: 'auto',
-            borderRadius: 2,
-            boxShadow: (theme) => theme.shadows[6],
-            bgcolor: 'background.paper',
-            borderColor: 'warning.light',
+            borderRadius: 'var(--radius-ui)',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+            backgroundColor: 'var(--card)',
+            borderColor: 'var(--warning)',
           }}
         >
           <Typography
             variant="body2"
-            sx={{
+            style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: 0.75,
+              gap: 6,
               textAlign: 'center',
-              py: { xs: 0, sm: 1 },
-            }}
-          >
+              paddingTop: 8,
+              paddingBottom: 8,
+            }}>
             You have pending changes. Save to apply them.
           </Typography>
         </Alert>
-      </Box>
+      </div>
     </Slide>
   );
 };

@@ -18,17 +18,17 @@ import {
   Alert,
   Paper,
   SelectChangeEvent
-} from '@mui/material';
+} from '../../ui';
 import {
   Download as DownloadIcon,
   Settings as SettingsIcon,
   FolderOpen as FolderIcon,
-  HighQuality as QualityIcon,
-  Videocam as VideocamIcon
-} from '@mui/icons-material';
+  Gauge as QualityIcon,
+  Video as VideocamIcon
+} from '../../../lib/icons';
 import { DownloadSettings } from './types';
-import RatingBadge from '../../shared/RatingBadge';
 import { SubfolderAutocomplete } from '../../shared/SubfolderAutocomplete';
+import RatingBadge from '../../shared/RatingBadge';
 import { useSubfolders } from '../../../hooks/useSubfolders';
 
 interface DownloadSettingsDialogProps {
@@ -43,8 +43,8 @@ interface DownloadSettingsDialogProps {
   defaultResolutionSource?: 'channel' | 'global';
   defaultAudioFormat?: string | null; // For channel audio format default
   defaultAudioFormatSource?: 'channel' | 'global';
-  token?: string | null; // For fetching subfolders
   defaultRating?: string | null;
+  token?: string | null; // For fetching subfolders
 }
 
 const RESOLUTION_OPTIONS = [
@@ -68,11 +68,9 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   defaultResolutionSource = 'global',
   defaultAudioFormat = null,
   defaultAudioFormatSource = 'global',
+  defaultRating = null,
   token = null
-  ,
-  defaultRating = null
 }) => {
-  const [rating, setRating] = useState<string | null>(null);
   const [useCustomSettings, setUseCustomSettings] = useState(false);
   const [resolution, setResolution] = useState(defaultResolution);
   const [channelVideoCount, setChannelVideoCount] = useState(defaultVideoCount);
@@ -80,6 +78,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const [subfolderOverride, setSubfolderOverride] = useState<string | null>(null);
   const [audioFormat, setAudioFormat] = useState<string | null>(defaultAudioFormat);
+  const [rating, setRating] = useState<string | null>(defaultRating);
   const [skipVideoFolder, setSkipVideoFolder] = useState(false);
 
   // Fetch available subfolders
@@ -105,8 +104,6 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
       setResolution(defaultResolution);
       setChannelVideoCount(defaultVideoCount);
       setAudioFormat(defaultAudioFormat);
-      // Initialize rating from prop when dialog opens
-      setRating(defaultRating ?? null);
       // Auto-check re-download if there are missing videos or previously downloaded videos in manual mode
       if (missingVideoCount > 0) {
         setAllowRedownload(true);
@@ -126,18 +123,15 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
       setRating(defaultRating ?? null);
       setSkipVideoFolder(false);
     }
-  }, [open, defaultAudioFormat]);
+  }, [open, defaultAudioFormat, defaultRating]);
 
   const handleUseCustomToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
     const checked = event.target.checked;
     setUseCustomSettings(checked);
     setHasUserInteracted(true);
     if (checked) {
-      // When enabling custom settings, if rating is not set, initialize to channel/defaultRating
       if (rating === null || rating === undefined) {
-        // defaultRating prop may be undefined in some usages
-        // prefer to leave null if no defaultRating available
-        if (typeof defaultRating !== 'undefined' && defaultRating !== null) {
+        if (defaultRating !== null) {
           setRating(defaultRating);
         }
       }
@@ -159,7 +153,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
 
   // Generate options for video count dropdown
   const getVideoCountOptions = () => {
-    const options = [];
+    const options: number[] = [];
     // Always include 1-10
     for (let i = 1; i <= 10; i++) {
       options.push(i);
@@ -179,16 +173,12 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
       const settingsToSave: any = {
         useCustom: useCustomSettings,
         resolution: resolution,
-        allowRedownload: allowRedownload
+        allowRedownload: allowRedownload,
+        rating: null,
       };
 
       if (mode === 'channel') {
         settingsToSave.videoCount = channelVideoCount;
-      }
-
-      // Save rating preference locally only when custom selected in manual mode
-      if (rating !== undefined) {
-        settingsToSave.rating = rating;
       }
 
       localStorage.setItem(storageKey, JSON.stringify(settingsToSave));
@@ -200,7 +190,8 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
     // Include subfolder override if set (only for manual mode)
     const hasOverride = useCustomSettings || allowRedownload ||
       (mode === 'manual' && subfolderOverride !== null) ||
-      (mode === 'manual' && audioFormat !== null);
+      (mode === 'manual' && audioFormat !== null) ||
+      (mode === 'manual' && skipVideoFolder);
 
     if (hasOverride) {
       onConfirm({
@@ -209,13 +200,11 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
         allowRedownload,
         subfolder: mode === 'manual' ? subfolderOverride : undefined,
         audioFormat: mode === 'manual' ? audioFormat : undefined,
-        // Include rating only if custom settings are enabled (user explicitly selected it)
-        // Use an explicit sentinel 'NR' when the user selected "No Rating" (null)
         rating: useCustomSettings ? (rating === null ? 'NR' : (rating ?? undefined)) : undefined,
         skipVideoFolder: mode === 'manual' ? (useCustomSettings ? skipVideoFolder : false) : undefined
       });
     } else {
-      onConfirm(null); // Use defaults - post-processor will apply channel default rating
+      onConfirm(null); // Use defaults
     }
   };
 
@@ -229,19 +218,21 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
     <Dialog
       open={open}
       onClose={handleCancel}
-      maxWidth="sm"
+      maxWidth="lg"
       fullWidth
       BackdropProps={{ 'data-testid': 'dialog-backdrop' } as any}
     >
-      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <SettingsIcon />
-        Download Settings
+      <DialogTitle>
+        <span className="flex items-center gap-2">
+          <SettingsIcon size={20} data-testid="SettingsIcon" />
+          Download Settings
+        </span>
       </DialogTitle>
 
       <DialogContent>
-        <Box sx={{ pt: 1 }}>
+        <Box className="pt-2">
           {/* Info Alert */}
-          <Alert severity="info" sx={{ mb: 2 }}>
+          <Alert severity="info" className="mb-4">
             <Typography variant="body2">
               {mode === 'channel'
                 ? 'Downloading new videos from auto-download enabled channels/tabs. Channel settings and filters will be applied per channel.'
@@ -253,7 +244,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
 
           {/* Warning for previously downloaded */}
           {missingVideoCount > 0 && (
-            <Alert severity="warning" sx={{ mb: 2 }}>
+            <Alert severity="warning" className="mb-4">
               <Typography variant="body2">
                 {mode === 'manual' ? (
                   missingVideoCount === 1
@@ -272,66 +263,49 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
           <Collapse in={!useCustomSettings} timeout={300}>
             <Paper
               variant="outlined"
-              sx={{
-                p: 2,
-                mb: 2,
-                bgcolor: 'action.hover',
-                borderColor: 'divider'
-              }}
+              className="p-4 mb-4 bg-muted/50 border-border"
               data-testid="settings-summary"
             >
-              <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>
+              <Typography variant="subtitle2" className="mb-3 font-semibold">
                 Current Settings
               </Typography>
 
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <QualityIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+              <Box className="flex items-center gap-2 mb-2">
+                <QualityIcon size={16} className="text-muted-foreground" />
                 <Typography variant="body2">
                   <strong>Quality:</strong> {defaultQualityLabel}
                 </Typography>
               </Box>
 
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                <FolderIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+              <Box className="flex items-center gap-2 mb-3">
+                <FolderIcon size={16} className="text-muted-foreground" />
                 <Typography variant="body2">
                   <strong>Destination:</strong> Per channel settings (or global default)
                 </Typography>
               </Box>
 
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                <VideocamIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+              <Box className="flex items-center gap-2 mb-3">
+                <VideocamIcon size={16} className="text-muted-foreground" />
                 <Typography variant="body2">
                   <strong>Download Type:</strong> {defaultAudioFormatLabel}
                   {defaultAudioFormatSource === 'channel' && (
-                    <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+                    <Typography component="span" variant="caption" color="text.secondary" className="ml-1">
                       (channel)
                     </Typography>
                   )}
                 </Typography>
               </Box>
 
-              {/* Content Rating in summary */}
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <strong>Content Rating:</strong>
-                  {defaultRating ? (
-                    <RatingBadge rating={defaultRating} size="small" />
-                  ) : (
-                    <span>Not set</span>
-                  )}
-                </Typography>
-              </Box>
-
               {mode === 'channel' && (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                  <DownloadIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                <Box className="flex items-center gap-2 mb-3">
+                  <DownloadIcon size={16} data-testid="DownloadIcon" className="text-muted-foreground" />
                   <Typography variant="body2">
                     <strong>Videos per channel:</strong> {defaultVideoCount}
                   </Typography>
                 </Box>
               )}
 
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+              <Typography variant="caption" color="text.secondary" className="block mt-2">
                 Configured channels will use their subfolder settings.
                 Enable custom settings to download MP3 audio.
               </Typography>
@@ -348,12 +322,12 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
               />
             }
             label="Use custom settings for this download"
-            sx={{ mb: 2 }}
+            className="mb-4"
           />
 
           {/* Custom Settings - Only shown when toggle is ON */}
           <Collapse in={useCustomSettings} timeout={300}>
-            <Box data-testid="custom-settings-section" sx={{ mb: 2 }}>
+            <Box data-testid="custom-settings-section" className="mb-4">
               {/* Allow Re-download Toggle */}
               <FormControlLabel
                 control={
@@ -367,15 +341,15 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                   />
                 }
                 label="Allow re-downloading previously fetched videos"
-                sx={{ mb: 2, display: 'block' }}
+                className="mb-4 block"
               />
 
               {/* Resolution Selection */}
-              <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+              <Typography variant="subtitle2" color="text.secondary" className="mb-2">
                 Maximum Resolution
               </Typography>
 
-              <FormControl fullWidth sx={{ mb: 2 }}>
+              <FormControl fullWidth className="mb-4">
                 <InputLabel id="resolution-select-label">Maximum Resolution</InputLabel>
                 <Select
                   labelId="resolution-select-label"
@@ -396,7 +370,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
               </FormControl>
 
               {resolution === '2160' && (
-                <Alert severity="warning" sx={{ mb: 2 }}>
+                <Alert severity="warning" className="mb-4">
                   <Typography variant="body2">
                     4K videos may take significantly longer to download and use more storage space.
                   </Typography>
@@ -406,11 +380,11 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
               {/* Videos Per Channel - Channel mode only */}
               {mode === 'channel' && (
                 <>
-                  <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                  <Typography variant="subtitle2" color="text.secondary" className="mb-2">
                     Videos Per Channel
                   </Typography>
 
-                  <FormControl fullWidth sx={{ mb: 2 }}>
+                  <FormControl fullWidth className="mb-4">
                     <InputLabel id="video-count-select-label">Number of videos to download per channel</InputLabel>
                     <Select
                       labelId="video-count-select-label"
@@ -432,7 +406,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
               {/* Subfolder Override - Manual mode only */}
               {mode === 'manual' && (
                 <>
-                  <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                  <Typography variant="subtitle2" color="text.secondary" className="mb-2">
                     Destination Override
                   </Typography>
 
@@ -449,11 +423,11 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                     helperText="Configured channels use their subfolder, unconfigured channels use global default."
                   />
 
-                  <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, mt: 2 }}>
+                  <Typography variant="subtitle2" color="text.secondary" className="mb-2 mt-4">
                     Download Type
                   </Typography>
 
-                  <FormControl fullWidth sx={{ mb: 2 }}>
+                  <FormControl fullWidth className="mb-4 audio-control audio-control--download-type">
                     <InputLabel id="audio-format-select-label" shrink>Download Type</InputLabel>
                     <Select
                       labelId="audio-format-select-label"
@@ -477,12 +451,11 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                       </FormHelperText>
                     )}
                   </FormControl>
-                  {/* Rating Override - manual/custom only */}
-                  <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, mt: 2 }}>
+                    <Typography variant="subtitle2" color="text.secondary" className="mb-2 mt-4">
                     Content Rating Override
                   </Typography>
 
-                  <FormControl fullWidth sx={{ mb: 2 }}>
+                    <FormControl fullWidth className="mb-4">
                     <InputLabel id="rating-select-label" shrink>Content Rating</InputLabel>
                     <Select
                       labelId="rating-select-label"
@@ -499,17 +472,17 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                       <MenuItem value="">
                         <em>No Rating</em>
                       </MenuItem>
-                      <MenuItem value="G"><RatingBadge rating="G" size="small" sx={{ mr: 1 }} /> G</MenuItem>
-                      <MenuItem value="PG"><RatingBadge rating="PG" size="small" sx={{ mr: 1 }} /> PG</MenuItem>
-                      <MenuItem value="PG-13"><RatingBadge rating="PG-13" size="small" sx={{ mr: 1 }} /> PG-13</MenuItem>
-                      <MenuItem value="R"><RatingBadge rating="R" size="small" sx={{ mr: 1 }} /> R</MenuItem>
-                      <MenuItem value="NC-17"><RatingBadge rating="NC-17" size="small" sx={{ mr: 1 }} /> NC-17</MenuItem>
-                      <MenuItem value="TV-Y"><RatingBadge rating="TV-Y" size="small" sx={{ mr: 1 }} /> TV-Y</MenuItem>
-                      <MenuItem value="TV-Y7"><RatingBadge rating="TV-Y7" size="small" sx={{ mr: 1 }} /> TV-Y7</MenuItem>
-                      <MenuItem value="TV-G"><RatingBadge rating="TV-G" size="small" sx={{ mr: 1 }} /> TV-G</MenuItem>
-                      <MenuItem value="TV-PG"><RatingBadge rating="TV-PG" size="small" sx={{ mr: 1 }} /> TV-PG</MenuItem>
-                      <MenuItem value="TV-14"><RatingBadge rating="TV-14" size="small" sx={{ mr: 1 }} /> TV-14</MenuItem>
-                      <MenuItem value="TV-MA"><RatingBadge rating="TV-MA" size="small" sx={{ mr: 1 }} /> TV-MA</MenuItem>
+                      <MenuItem value="G"><RatingBadge rating="G" size="small" style={{ marginRight: 8 }} /> G</MenuItem>
+                      <MenuItem value="PG"><RatingBadge rating="PG" size="small" style={{ marginRight: 8 }} /> PG</MenuItem>
+                      <MenuItem value="PG-13"><RatingBadge rating="PG-13" size="small" style={{ marginRight: 8 }} /> PG-13</MenuItem>
+                      <MenuItem value="R"><RatingBadge rating="R" size="small" style={{ marginRight: 8 }} /> R</MenuItem>
+                      <MenuItem value="NC-17"><RatingBadge rating="NC-17" size="small" style={{ marginRight: 8 }} /> NC-17</MenuItem>
+                      <MenuItem value="TV-Y"><RatingBadge rating="TV-Y" size="small" style={{ marginRight: 8 }} /> TV-Y</MenuItem>
+                      <MenuItem value="TV-Y7"><RatingBadge rating="TV-Y7" size="small" style={{ marginRight: 8 }} /> TV-Y7</MenuItem>
+                      <MenuItem value="TV-G"><RatingBadge rating="TV-G" size="small" style={{ marginRight: 8 }} /> TV-G</MenuItem>
+                      <MenuItem value="TV-PG"><RatingBadge rating="TV-PG" size="small" style={{ marginRight: 8 }} /> TV-PG</MenuItem>
+                      <MenuItem value="TV-14"><RatingBadge rating="TV-14" size="small" style={{ marginRight: 8 }} /> TV-14</MenuItem>
+                      <MenuItem value="TV-MA"><RatingBadge rating="TV-MA" size="small" style={{ marginRight: 8 }} /> TV-MA</MenuItem>
                     </Select>
                   </FormControl>
 
@@ -525,26 +498,33 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                       />
                     }
                     label="Flat file structure (no video subfolders)"
-                    sx={{ mb: 1 }}
+                    className="mb-1"
                   />
-                  <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
+                  <Typography variant="caption" color="text.secondary" className="mb-4 block">
                     Save files directly in the channel folder instead of individual video subfolders.
                   </Typography>
                 </>
               )}
             </Box>
           </Collapse>
+
+          {/* Note about YouTube quality */}
+          <Box className="p-4 bg-muted/50 rounded-[var(--radius-ui)]">
+            <Typography variant="caption" color="text.secondary">
+              <strong>Note:</strong> YouTube will provide the best available quality up to your selected resolution.
+            </Typography>
+          </Box>
         </Box>
       </DialogContent>
 
-      <DialogActions sx={{ px: 3, pb: 2 }}>
+      <DialogActions className="px-6 pb-4">
         <Button onClick={handleCancel} color="inherit">
           Cancel
         </Button>
         <Button
           onClick={handleConfirm}
           variant="contained"
-          startIcon={<DownloadIcon />}
+          startIcon={<DownloadIcon data-testid="DownloadIcon" />}
           color="primary"
         >
           Start Download

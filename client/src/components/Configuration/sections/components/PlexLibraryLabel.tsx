@@ -1,6 +1,9 @@
 import React from 'react';
-import { Box, Typography } from '@mui/material';
+import { Box, Typography } from '../../../ui';
 import { PlexLibraryDisplay } from '../../../../utils/plexLibraries';
+
+type TypographyVariant = React.ComponentProps<typeof Typography>['variant'];
+type TypographyColor = React.ComponentProps<typeof Typography>['color'];
 
 interface PlexLibraryLabelProps {
   display: PlexLibraryDisplay;
@@ -9,6 +12,10 @@ interface PlexLibraryLabelProps {
    * Used by DefaultPlexLibraryDisplay; PlexSubfolderMappings uses the default.
    */
   boldPrimary?: boolean;
+  primaryVariant?: TypographyVariant;
+  secondaryVariant?: TypographyVariant;
+  primaryColor?: TypographyColor;
+  secondaryColor?: TypographyColor;
 }
 
 /**
@@ -20,6 +27,10 @@ interface PlexLibraryLabelProps {
 export const PlexLibraryLabel: React.FC<PlexLibraryLabelProps> = ({
   display,
   boldPrimary = false,
+  primaryVariant = 'body2',
+  secondaryVariant = 'body2',
+  primaryColor,
+  secondaryColor = 'text.secondary',
 }) => {
   const primarySx = boldPrimary ? { fontWeight: 600 } : undefined;
 
@@ -28,23 +39,23 @@ export const PlexLibraryLabel: React.FC<PlexLibraryLabelProps> = ({
       case 'resolved':
         return (
           <>
-            <Typography variant="body2" sx={primarySx}>
+            <Typography variant={primaryVariant} color={primaryColor} sx={primarySx}>
               {display.title}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant={secondaryVariant} color={secondaryColor}>
               (id: {display.id})
             </Typography>
           </>
         );
       case 'id-fallback':
         return (
-          <Typography variant="body2" sx={primarySx}>
+          <Typography variant={primaryVariant} color={primaryColor} sx={primarySx}>
             Library ID: {display.id}
           </Typography>
         );
       case 'id-only':
         return (
-          <Typography variant="body2" sx={primarySx}>
+          <Typography variant={primaryVariant} color={primaryColor} sx={primarySx}>
             {display.id}
           </Typography>
         );
@@ -56,7 +67,7 @@ export const PlexLibraryLabel: React.FC<PlexLibraryLabelProps> = ({
   };
 
   return (
-    <Box sx={{ display: 'inline-flex', alignItems: 'baseline', gap: 0.5, flexWrap: 'wrap' }}>
+    <Box className="inline-flex flex-wrap items-baseline gap-1 md:flex-nowrap">
       {renderContent()}
     </Box>
   );

@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Youtarr is a Dockerized application that automatically downloads videos from YouTube channels and integrates them with Plex Media Server. It consists of:
 
 - **Backend**: Node.js/Express server with MariaDB database using Sequelize ORM
-- **Frontend**: React/TypeScript application with Material-UI components
+- **Frontend**: React/TypeScript application with a custom UI layer (Radix primitives + Tailwind CSS, themed via CSS variables)
 - **Infrastructure**: Docker Compose setup with separate containers for app and database
 
 ## Scope Discipline
@@ -31,8 +31,8 @@ For multi-part requests (e.g., "review this PR AND explain WebSocket handling"),
 ### Backend (server/)
 - `server.js`: Express entry point. `db.js`: Sequelize setup. `logger.js`: Pino logger with request correlation.
 - `models/`: Sequelize models (channel, video, job, jobvideo, jobvideodownload, channelvideo, session, apikey). Associations: Channel hasMany Videos, Job hasMany JobVideos.
-- `routes/`: API handlers (auth, channels, videos, videoDetail, config, jobs, plex, setup, subscriptions, apikeys, health). All use the dependency injection factory pattern; wiring lives in `server/routes/index.js`.
-- `modules/`: class-based singletons holding business logic. Top-level modules include `channelModule`, `downloadModule`, `plexModule`, `jobModule`, `configModule`, `videosModule`, `videoMetadataModule`, `webSocketServer`, `databaseHealthModule`, `notificationModule`, `channelSettingsModule`, `videoDeletionModule`, `nfoGenerator`, `cronJobs`, `apiKeyModule`, `ytdlpModule`, `messageEmitter`.
+- `routes/`: API handlers (auth, channels, videos, videoDetail, videoSearch, config, jobs, plex, setup, subscriptions, apikeys, health). All use the dependency injection factory pattern; wiring lives in `server/routes/index.js`.
+- `modules/`: class-based singletons holding business logic. Top-level modules include `channelModule`, `downloadModule`, `plexModule`, `jobModule`, `configModule`, `videosModule`, `videoMetadataModule`, `videoSearchModule`, `webSocketServer`, `databaseHealthModule`, `notificationModule`, `channelSettingsModule`, `videoDeletionModule`, `nfoGenerator`, `cronJobs`, `apiKeyModule`, `ytdlpModule`, `messageEmitter`.
 - `modules/download/`: download orchestration (`downloadExecutor`, `ytdlpCommandBuilder`, `DownloadProgressMonitor`, `tempPathManager`, `videoMetadataProcessor`).
 - `modules/filesystem/`: path/file abstraction (`pathBuilder`, `directoryManager`, `fileOperations`, `sanitizer`, `constants`). Good example of the sub-module aggregator pattern.
 - `modules/notifications/`: multi-service notifications via Apprise (`serviceRegistry`, `formatters/`, `senders/`). Good example of a pluggable service registry.
@@ -42,10 +42,14 @@ For multi-part requests (e.g., "review this PR AND explain WebSocket handling"),
 - `App.tsx`: app routing plus a global `fetch()` override that detects 503 `requiresDbFix` responses and surfaces the database error overlay. You can use normal `fetch()` anywhere; database errors are handled automatically.
 - `components/`: feature directories and pages. Complex features pair a top-level `FeatureName.tsx` with a same-named `FeatureName/` directory holding `components/`, `hooks/`, and `__tests__/`. Examples of this sibling-file layout: `ChannelManager.tsx` + `ChannelManager/`, `Configuration.tsx` + `Configuration/`, `ChannelPage.tsx` + `ChannelPage/`. Newer features (e.g. `SubscriptionImport/`) put the main component at `FeatureName/index.tsx` instead; either layout is acceptable for new features.
 - `components/shared/`: reusable components used across multiple features (e.g. `VideoModal/` for the video detail modal, `ThumbnailClickOverlay` for clickable thumbnail hotspots, `DeleteVideosDialog`).
+- `components/ui/`: theme-neutral UI primitives (Button, Card, Dialog, Select, etc.) built on Radix and styled via CSS variables + Tailwind. Use these instead of Material-UI imports in new code.
+- `components/layout/`: app shell and navigation chrome. `AppShell.tsx` is the outer frame; `NavSidebar.tsx` / `NavHeader.tsx` own desktop and mobile nav; `navLayoutConstants.ts` holds shared sidebar/header sizing constants; `layoutFallback.css` provides fallback CSS variables for themes that skip layout overrides.
+- `components/Settings/`: Settings page wrapper and splash index (`SettingsIndex.tsx`) listing the per-section routes under `/settings/<key>`.
+- `themes/`: theme definitions (`playful`, `linear`, `flat`), shared layout policy (`layoutPolicy.ts`), and the `ALL_THEMES` registry. New themes add an entry here and implement the required token surface.
 - `hooks/`: app-wide custom hooks for data fetching and state.
-- `contexts/` and `providers/`: React Context for cross-cutting concerns (auth token, WebSocket, theme).
+- `contexts/` and `providers/`: React Context for cross-cutting concerns (auth token, WebSocket, theme). `contexts/ThemeEngineContext.tsx` owns the active theme mode, resolves the layout policy for the current viewport, and injects theme CSS variables onto the document root.
 - `config/configSchema.ts`: the `CONFIG_FIELDS` registry. Use this pattern when adding new configuration fields; it auto-derives types, defaults, and change tracking.
-- `theme.ts`: Material-UI theme (light/dark mode). `types/`, `utils/`: shared types and helpers.
+- `types/`, `utils/`: shared types and helpers.
 
 ### Database
 - MariaDB 10.3 with utf8mb4. Migrations in `migrations/` run automatically on container startup. Create new migrations with `./scripts/db-create-migration.sh migration-name`.
@@ -154,9 +158,10 @@ These standards apply when you are authoring new code or doing an explicit rewri
 - **Memoize deliberately**: `useMemo` for genuinely expensive derivations, `useCallback` for callbacks passed to memoized children. Do not over-memoize trivial values.
 
 #### Styling
-- **Use MUI's `sx` prop** for styling, not inline `style`. `sx` is theme-aware, responsive, and supports hover states and dark mode.
-- **Theme values**: `theme.palette.primary.main`, not `'#1976d2'`.
-- **Responsive breakpoints**: `useMediaQuery(theme.breakpoints.down('sm'))`.
+- **Tailwind utility classes** via `className` are the default for layout, spacing, and typography. Import UI primitives from `./ui` (Box, Card, Typography, Button, Chip, Dialog, etc.); do not reach for MUI, it is not installed.
+- **Theme tokens via CSS variables**, not hardcoded colors: `var(--destructive)`, `text-foreground`, `text-muted-foreground`, `bg-card`. Theme values are set on the document root by `ThemeEngineContext`.
+- **Inline `style` is acceptable only for computed/dynamic values** (e.g., a padding driven by `isMobile`, a length-dependent `maxHeight`). For static styling, prefer Tailwind classes.
+- **Responsive breakpoints**: use the custom `useMediaQuery` from `hooks/useMediaQuery` with a raw media query (`useMediaQuery('(max-width: 767px)')`) or the exported `breakpoints.down('sm')` helper. Tailwind's `md:`/`sm:` class prefixes are also fine for pure-CSS responsive behavior.
 
 #### API Calls
 - **Use Axios** in new hooks and components. A few legacy hooks use raw `fetch()` (`client/src/hooks/useConfig.ts` and `client/src/components/Configuration/hooks/usePlexConnection.ts`); do not copy them.

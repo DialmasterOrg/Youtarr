@@ -11,15 +11,8 @@ import {
   AlertTitle,
   Divider,
   Chip,
-  useTheme,
-} from '@mui/material';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import StorageIcon from '@mui/icons-material/Storage';
-import WarningAmberIcon from '@mui/icons-material/WarningAmber';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
-import { getCustomColors } from '../theme';
+} from './ui';
+import { ErrorOutline as ErrorOutlineIcon, Refresh as RefreshIcon, Storage as StorageIcon, WarningAmber as WarningAmberIcon, CheckCircle as CheckCircleIcon, AccessTime as AccessTimeIcon } from '../lib/icons';
 
 interface DatabaseErrorOverlayProps {
   errors: string[];
@@ -44,62 +37,40 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
   recovered = false,
   countdown = 15
 }) => {
-  const theme = useTheme();
-  const customColors = getCustomColors(theme.palette.mode);
   const hasConnectionError = errors.some(e => categorizeError(e) === 'connection');
   const hasSchemaError = errors.some(e => categorizeError(e) === 'schema');
 
   return (
     <Box
-      sx={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100vw',
-        height: '100vh',
-        backgroundColor: customColors.errorOverlayBackdrop,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 9999,
-        padding: 2,
-        backdropFilter: 'blur(4px)',
-      }}
+      className="fixed inset-0 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'var(--overlay-backdrop-background-strong)', backdropFilter: 'var(--overlay-backdrop-filter)', zIndex: 9999, position: 'fixed', top: 0, left: 0 }}
       data-testid="database-error-overlay"
     >
       <Paper
         elevation={24}
-        sx={{
-          maxWidth: 900,
-          width: '100%',
-          padding: { xs: 3, sm: 5 },
-          maxHeight: '90vh',
-          overflow: 'auto',
-          borderRadius: 2,
-          bgcolor: 'background.paper',
-        }}
+        className="w-full max-w-[900px] p-6 sm:p-10 max-h-[90vh] overflow-auto"
       >
         {/* Header */}
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 2 }}>
+        <Box className="flex items-center mb-4 gap-4">
           {recovered ? (
-            <CheckCircleIcon sx={{ fontSize: 56, color: 'success.main' }} />
+            <CheckCircleIcon size={56} className="text-success shrink-0" />
           ) : (
-            <ErrorOutlineIcon sx={{ fontSize: 56, color: 'error.main' }} />
+            <ErrorOutlineIcon size={56} className="text-destructive shrink-0" />
           )}
-          <Box sx={{ flex: 1 }}>
+          <Box className="flex-1">
             <Typography
               variant="h4"
               component="h1"
-              color={recovered ? 'success.main' : 'error.main'}
-              fontWeight="bold"
+              color={recovered ? 'success' : 'error'}
+              style={{ fontWeight: 'bold' }}
             >
               {recovered ? 'Database Connection Restored!' : 'Database Issue Detected'}
             </Typography>
             {!recovered && (
-              <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
+              <Box className="flex gap-2 mt-2 flex-wrap">
                 {hasConnectionError && (
                   <Chip
-                    icon={<StorageIcon />}
+                    icon={<StorageIcon size={14} />}
                     label="Connection Error"
                     color="error"
                     size="small"
@@ -107,7 +78,7 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
                 )}
                 {hasSchemaError && (
                   <Chip
-                    icon={<WarningAmberIcon />}
+                    icon={<WarningAmberIcon size={14} />}
                     label="Schema Mismatch"
                     color="warning"
                     size="small"
@@ -118,12 +89,12 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
           </Box>
         </Box>
 
-        <Divider sx={{ mb: 3 }} />
+        <Divider className="mb-6" />
 
         {/* Recovery Success Message */}
         {recovered && (
-          <Alert severity="success" sx={{ mb: 3 }}>
-            <AlertTitle sx={{ fontWeight: 'bold' }}>
+          <Alert severity="success" className="mb-6">
+            <AlertTitle>
               Connection Re-established
             </AlertTitle>
             The database connection has been successfully restored. The application is now ready to use.
@@ -134,8 +105,8 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
         {/* Main Error Message */}
         {!recovered && (
           <>
-            <Alert severity={hasConnectionError ? "error" : "warning"} sx={{ mb: 3 }}>
-              <AlertTitle sx={{ fontWeight: 'bold' }}>
+            <Alert severity={hasConnectionError ? "error" : "warning"} className="mb-6">
+              <AlertTitle>
                 {hasConnectionError && 'Cannot Connect to Database'}
                 {!hasConnectionError && hasSchemaError && 'Database Schema Mismatch'}
                 {!hasConnectionError && !hasSchemaError && 'Database Error'}
@@ -148,7 +119,7 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
               {!hasConnectionError && hasSchemaError && (
                 <>
                   The database is running but the schema doesn't match the application code. This typically happens when:
-                  <Box component="ul" sx={{ mt: 1, mb: 0, pl: 2 }}>
+                  <Box component="ul" className="mt-2 mb-0 pl-4">
                     <li>Database migrations haven't been run after updating the code</li>
                     <li>Old database migrations are being mounted instead of using the migrations built into the docker image</li>
                     <li>The code was updated but the database wasn't migrated</li>
@@ -159,9 +130,9 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
             </Alert>
 
             {/* Countdown Display */}
-            <Alert severity="info" icon={<AccessTimeIcon />} sx={{ mb: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography variant="body1" fontWeight="bold">
+            <Alert severity="info" icon={<AccessTimeIcon size={20} />} className="mb-6">
+              <Box className="flex items-center gap-2">
+                <Typography variant="body1" style={{ fontWeight: 'bold' }}>
                   Checking again in {countdown} second{countdown !== 1 ? 's' : ''}...
                 </Typography>
               </Box>
@@ -171,50 +142,29 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
 
         {/* Error List - only show when not recovered */}
         {!recovered && errors && errors.length > 0 && (
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="h6" gutterBottom fontWeight="bold">
+          <Box className="mb-6">
+            <Typography variant="h6" gutterBottom style={{ fontWeight: 'bold' }}>
               Specific Errors:
             </Typography>
             <Paper
               variant="outlined"
-              sx={{
-                maxHeight: 300,
-                overflow: 'auto',
-                p: 2,
-                backgroundColor: customColors.errorListBackground,
-                borderColor: customColors.errorListBorder,
-              }}
+              className="max-h-[300px] overflow-auto p-4 bg-muted/30"
             >
               <List dense>
                 {errors.map((error, index) => (
                   <ListItem
                     key={index}
-                    sx={{
-                      pl: 0,
-                      alignItems: 'flex-start',
-                    }}
+                    className="pl-0 items-start"
                   >
                     <Box
                       component="span"
-                      sx={{
-                        minWidth: '24px',
-                        color: 'error.main',
-                        fontWeight: 'bold',
-                        mr: 1,
-                      }}
+                      className="min-w-[24px] text-destructive font-bold mr-2"
                     >
                       •
                     </Box>
                     <ListItemText
                       primary={error}
-                      sx={{
-                        '& .MuiListItemText-primary': {
-                          fontFamily: 'monospace',
-                          fontSize: '0.9rem',
-                          color: customColors.errorText,
-                          wordBreak: 'break-word',
-                        },
-                      }}
+                      className="font-mono text-sm break-words"
                     />
                   </ListItem>
                 ))}
@@ -225,18 +175,18 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
 
         {/* Troubleshooting Steps - only show when not recovered */}
         {!recovered && (
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="h6" gutterBottom fontWeight="bold" color="primary">
+          <Box className="mb-6">
+            <Typography variant="h6" gutterBottom style={{ fontWeight: 'bold' }} color="primary">
               How to Fix This:
             </Typography>
           {hasConnectionError ? (
-            <Paper sx={{ p: 2, backgroundColor: customColors.codeBlockBackground }}>
+            <Paper className="p-4 bg-muted/30">
               <List>
                 <ListItem>
                   <ListItemText
-                    primary={<Typography fontWeight="bold">1. Check database container status</Typography>}
+                    primary={<Typography style={{ fontWeight: 'bold' }}>1. Check database container status</Typography>}
                     secondary={
-                      <Box component="code" sx={{ display: 'block', mt: 1, p: 1, backgroundColor: customColors.codeBlockInner, borderRadius: 1 }}>
+                      <Box component="code" className="block mt-2 p-2 bg-muted rounded text-sm font-mono">
                         docker compose ps
                       </Box>
                     }
@@ -244,9 +194,9 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
                 </ListItem>
                 <ListItem>
                   <ListItemText
-                    primary={<Typography fontWeight="bold">2. Start the database if it's not running</Typography>}
+                    primary={<Typography style={{ fontWeight: 'bold' }}>2. Start the database if it's not running</Typography>}
                     secondary={
-                      <Box component="code" sx={{ display: 'block', mt: 1, p: 1, backgroundColor: customColors.codeBlockInner, borderRadius: 1 }}>
+                      <Box component="code" className="block mt-2 p-2 bg-muted rounded text-sm font-mono">
                         docker compose up -d youtarr-db
                       </Box>
                     }
@@ -254,9 +204,9 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
                 </ListItem>
                 <ListItem>
                   <ListItemText
-                    primary={<Typography fontWeight="bold">3. Check database logs for errors</Typography>}
+                    primary={<Typography style={{ fontWeight: 'bold' }}>3. Check database logs for errors</Typography>}
                     secondary={
-                      <Box component="code" sx={{ display: 'block', mt: 1, p: 1, backgroundColor: customColors.codeBlockInner, borderRadius: 1 }}>
+                      <Box component="code" className="block mt-2 p-2 bg-muted rounded text-sm font-mono">
                         docker compose logs -f youtarr-db
                       </Box>
                     }
@@ -265,14 +215,14 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
               </List>
             </Paper>
           ) : hasSchemaError ? (
-            <Paper sx={{ p: 2, backgroundColor: customColors.warningBackground }}>
+            <Paper className="p-4 bg-warning/10">
               <List>
                 <ListItem>
                   <ListItemText
-                    primary={<Typography fontWeight="bold">1. Restart the application to run migrations</Typography>}
+                    primary={<Typography style={{ fontWeight: 'bold' }}>1. Restart the application to run migrations</Typography>}
                     secondary={
                       <>
-                        <Typography variant="body2" sx={{ mt: 1 }}>
+                        <Typography variant="body2" className="mt-2">
                           This will automatically apply any pending database migrations:
                         </Typography>
                       </>
@@ -281,13 +231,13 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
                 </ListItem>
                 <ListItem>
                   <ListItemText
-                    primary={<Typography fontWeight="bold">2. Check application logs</Typography>}
+                    primary={<Typography style={{ fontWeight: 'bold' }}>2. Check application logs</Typography>}
                     secondary={
                       <>
-                        <Typography variant="body2" sx={{ mt: 1 }}>
+                        <Typography variant="body2" className="mt-2">
                           Look for migration errors or schema validation messages:
                         </Typography>
-                        <Box component="code" sx={{ display: 'block', mt: 1, p: 1, backgroundColor: customColors.codeBlockInner, borderRadius: 1 }}>
+                        <Box component="code" className="block mt-2 p-2 bg-muted rounded text-sm font-mono">
                           docker compose logs -f youtarr
                         </Box>
                       </>
@@ -296,9 +246,9 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
                 </ListItem>
                 <ListItem>
                   <ListItemText
-                    primary={<Typography fontWeight="bold">3. If problem persists, check for code/database sync issues</Typography>}
+                    primary={<Typography style={{ fontWeight: 'bold' }}>3. If problem persists, check for code/database sync issues</Typography>}
                     secondary={
-                      <Typography variant="body2" sx={{ mt: 1 }}>
+                      <Typography variant="body2" className="mt-2">
                         The application code may have been updated without the database being migrated, or vice versa.
                       </Typography>
                     }
@@ -307,13 +257,13 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
               </List>
             </Paper>
           ) : (
-            <Paper sx={{ p: 2, backgroundColor: customColors.codeBlockBackground }}>
+            <Paper className="p-4 bg-muted/30">
               <List>
                 <ListItem>
                   <ListItemText
-                    primary={<Typography fontWeight="bold">Check the application logs for details</Typography>}
+                    primary={<Typography style={{ fontWeight: 'bold' }}>Check the application logs for details</Typography>}
                     secondary={
-                      <Box component="code" sx={{ display: 'block', mt: 1, p: 1, backgroundColor: customColors.codeBlockInner, borderRadius: 1 }}>
+                      <Box component="code" className="block mt-2 p-2 bg-muted rounded text-sm font-mono">
                         docker compose logs -f youtarr
                       </Box>
                     }
@@ -325,35 +275,26 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
           </Box>
         )}
 
-        <Divider sx={{ mb: 3 }} />
+        <Divider className="mb-6" />
 
         {/* Action Button */}
-        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+        <Box className="flex justify-center mb-4">
           <Button
             variant="contained"
             color={recovered ? "success" : "primary"}
-            size="large"
-            startIcon={<RefreshIcon />}
+            size="lg"
+            startIcon={<RefreshIcon size={16} />}
             onClick={onRetry}
             data-testid="retry-button"
-            sx={{
-              paddingX: 4,
-              paddingY: 1.5,
-              fontSize: '1.1rem',
-              fontWeight: 'bold',
-              boxShadow: 3,
-              '&:hover': {
-                boxShadow: 6,
-              },
-            }}
+            style={{ fontSize: '1.1rem', fontWeight: 'bold', paddingLeft: '2rem', paddingRight: '2rem' }}
           >
             {recovered ? 'Refresh to Continue' : 'Refresh & Check Again'}
           </Button>
         </Box>
 
         {/* Footer Note */}
-        <Alert severity="info" icon={false} sx={{ textAlign: 'center' }}>
-          <Typography variant="body2" fontWeight="medium">
+        <Alert severity="info" icon={false} className="text-center">
+          <Typography variant="body2" style={{ fontWeight: 500 }}>
             After fixing the issue, click "Refresh & Check Again" to reload the application.
           </Typography>
         </Alert>

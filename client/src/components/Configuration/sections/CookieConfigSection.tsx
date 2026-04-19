@@ -1,17 +1,13 @@
 import React from 'react';
 import {
-  FormControlLabel,
-  Switch,
   Grid,
-  Box,
   Alert,
   AlertTitle,
   Typography,
   Button,
   Chip,
-} from '@mui/material';
+} from '../../ui';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
-import { InfoTooltip } from '../common/InfoTooltip';
 import { useCookieManagement } from '../hooks/useCookieManagement';
 import { ConfigState, SnackbarState } from '../types';
 
@@ -32,6 +28,7 @@ export const CookieConfigSection: React.FC<CookieConfigSectionProps> = ({
   setSnackbar,
   onMobileTooltipClick,
 }) => {
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const {
     cookieStatus,
     uploadingCookie,
@@ -50,11 +47,18 @@ export const CookieConfigSection: React.FC<CookieConfigSectionProps> = ({
       title="Cookie Configuration"
       chipLabel={config.cookiesEnabled ? "Cookies Enabled" : "Cookies Disabled"}
       chipColor={config.cookiesEnabled ? "success" : "default"}
+      statusBanner={{
+        enabled: config.cookiesEnabled,
+        label: 'Enable Cookies',
+        onToggle: (enabled) => onConfigChange({ cookiesEnabled: enabled }),
+        onText: 'Cookies Enabled',
+        offText: 'Cookies Disabled',
+      }}
       defaultExpanded={false}
     >
-      <Alert severity="warning" sx={{ mb: 2 }}>
+      <Alert severity="warning" style={{ marginBottom: 16 }}>
         <AlertTitle>Security Warning</AlertTitle>
-        <Typography variant="body2" paragraph>
+        <Typography variant="body2" style={{ marginBottom: 16 }}>
           Cookie files contain authentication information for your Google account.
           We strongly recommend using a throwaway account instead of your main account.
         </Typography>
@@ -69,7 +73,7 @@ export const CookieConfigSection: React.FC<CookieConfigSectionProps> = ({
         </Typography>
       </Alert>
 
-      <Alert severity="info" sx={{ mb: 2 }}>
+      <Alert severity="info" style={{ marginBottom: 16 }}>
         <Typography variant="body2">
           Cookies help bypass YouTube's bot detection. If you encounter "Sign in to confirm you're not a bot" errors,
           enabling cookies can resolve the issue.
@@ -77,45 +81,26 @@ export const CookieConfigSection: React.FC<CookieConfigSectionProps> = ({
       </Alert>
 
       <Grid container spacing={2}>
-        <Grid item xs={12}>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={config.cookiesEnabled}
-                onChange={(e) => onConfigChange({ cookiesEnabled: e.target.checked })}
-              />
-            }
-            label={
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                Enable Cookies
-                <InfoTooltip
-                  text="Use cookies to bypass YouTube bot detection and access age-restricted content."
-                  onMobileClick={onMobileTooltipClick}
-                />
-              </Box>
-            }
-          />
-        </Grid>
-
         {config.cookiesEnabled && (
           <>
             <Grid item xs={12}>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                   <Button
                     variant="contained"
-                    component="label"
                     disabled={uploadingCookie}
+                    onClick={() => fileInputRef.current?.click()}
                   >
                     {uploadingCookie ? 'Uploading...' : 'Upload Cookie File'}
-                    <input
-                      type="file"
-                      hidden
-                      accept=".txt,text/plain"
-                      data-testid="cookie-file-input"
-                      onChange={handleCookieUpload}
-                    />
                   </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    hidden
+                    accept=".txt,text/plain"
+                    data-testid="cookie-file-input"
+                    onChange={handleCookieUpload}
+                  />
                   {cookieStatus?.customFileExists && (
                     <>
                       <Chip
@@ -133,17 +118,17 @@ export const CookieConfigSection: React.FC<CookieConfigSectionProps> = ({
                       </Button>
                     </>
                   )}
-                </Box>
-                <Typography variant="caption" color="text.secondary">
+                </div>
+                <Typography variant="caption" style={{ color: 'var(--muted-foreground)' }}>
                   Upload a Netscape format cookie file exported from your browser.
                   File must be less than 1MB.
                 </Typography>
-              </Box>
+              </div>
             </Grid>
 
             {cookieStatus && (
               <Grid item xs={12}>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" style={{ color: 'var(--muted-foreground)' }}>
                   Status: {cookieStatus.customFileExists ?
                     'Using custom cookies' :
                     'No cookie file uploaded'}

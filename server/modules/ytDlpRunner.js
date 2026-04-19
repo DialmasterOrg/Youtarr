@@ -19,7 +19,7 @@ class YtDlpRunner {
    * @returns {Promise<string>} - stdout output or empty string if piped to file
    */
   async run(args, options = {}) {
-    const { timeoutMs = this.defaultTimeout, pipeToFile } = options;
+    const { timeoutMs = this.defaultTimeout, pipeToFile, signal } = options;
 
     return new Promise((resolve, reject) => {
       if (!Array.isArray(args)) {
@@ -54,6 +54,33 @@ class YtDlpRunner {
         }
       }
 
+      const makeAbortError = () => {
+        const err = new Error('yt-dlp run aborted');
+        err.name = 'AbortError';
+        err.code = 'ABORT_ERR';
+        return err;
+      };
+
+      const onAbort = () => {
+        ytDlpProcess.kill('SIGTERM');
+        const graceHandle = setTimeout(() => {
+          if (!ytDlpProcess.killed) {
+            ytDlpProcess.kill('SIGKILL');
+          }
+        }, 1000);
+        graceHandle.unref();
+        reject(makeAbortError());
+      };
+
+      if (signal) {
+        if (signal.aborted) {
+          ytDlpProcess.kill('SIGTERM');
+          reject(makeAbortError());
+          return;
+        }
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
+
       ytDlpProcess.stdout.on('data', (data) => {
         if (fileStream) {
           fileStream.write(data);
@@ -67,6 +94,7 @@ class YtDlpRunner {
       });
 
       ytDlpProcess.on('close', (code) => {
+        if (signal) signal.removeEventListener('abort', onAbort);
         if (fileStream) {
           fileStream.end();
         }
@@ -80,7 +108,9 @@ class YtDlpRunner {
         } else if (code === 0) {
           resolve(stdout);
         } else if (code === null) {
-          reject(new Error(`yt-dlp process timed out after ${timeoutMs}ms`));
+          const timeoutError = new Error(`yt-dlp process timed out after ${timeoutMs}ms`);
+          timeoutError.code = 'YTDLP_TIMEOUT';
+          reject(timeoutError);
         } else {
           const errorMessage = stderr || `yt-dlp process exited with code ${code}`;
           reject(new Error(errorMessage));
@@ -88,6 +118,7 @@ class YtDlpRunner {
       });
 
       ytDlpProcess.on('error', (error) => {
+        if (signal) signal.removeEventListener('abort', onAbort);
         if (fileStream) {
           fileStream.end();
         }

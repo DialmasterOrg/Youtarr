@@ -28,10 +28,6 @@ const createSectionProps = (
 });
 
 // Helper to expand accordion
-const expandAccordion = async (user: ReturnType<typeof userEvent.setup>) => {
-  const accordionButton = screen.getByRole('button', { name: /Notifications/i });
-  await user.click(accordionButton);
-};
 
 // Use delay: null to prevent timer-related flakiness when running with other tests
 const setupUser = () => userEvent.setup({ delay: null });
@@ -60,7 +56,6 @@ describe('NotificationsSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       // Check for Apprise link and description text
       expect(screen.getByText(/Apprise/i)).toBeInTheDocument();
@@ -85,9 +80,9 @@ describe('NotificationsSection Component', () => {
 
     test('accordion is collapsed by default', () => {
       const props = createSectionProps();
-      const { container } = renderWithProviders(<NotificationsSection {...props} />);
-      const accordionButton = within(container).getByRole('button', { name: /Notifications/i });
-      expect(accordionButton).toHaveAttribute('aria-expanded', 'false');
+      renderWithProviders(<NotificationsSection {...props} />);
+
+      expect(screen.getByRole('heading', { name: /Notifications/i })).toBeInTheDocument();
     });
   });
 
@@ -97,7 +92,6 @@ describe('NotificationsSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByTestId('notifications-enabled-switch')).toBeInTheDocument();
     });
@@ -109,7 +103,6 @@ describe('NotificationsSection Component', () => {
       });
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       const switchControl = screen.getByTestId('notifications-enabled-switch');
       expect(switchControl).not.toBeChecked();
@@ -122,7 +115,6 @@ describe('NotificationsSection Component', () => {
       });
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       const switchControl = screen.getByTestId('notifications-enabled-switch');
       expect(switchControl).toBeChecked();
@@ -137,7 +129,6 @@ describe('NotificationsSection Component', () => {
       });
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       const switchControl = screen.getByTestId('notifications-enabled-switch');
       await user.click(switchControl);
@@ -155,7 +146,6 @@ describe('NotificationsSection Component', () => {
       });
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       const switchControl = screen.getByTestId('notifications-enabled-switch');
       await user.click(switchControl);
@@ -173,7 +163,6 @@ describe('NotificationsSection Component', () => {
       });
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.queryByLabelText(/Notification URL/i)).not.toBeInTheDocument();
     });
@@ -185,7 +174,6 @@ describe('NotificationsSection Component', () => {
       });
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByLabelText(/Notification URL/i)).toBeInTheDocument();
     });
@@ -197,7 +185,6 @@ describe('NotificationsSection Component', () => {
       });
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.queryByText(/Add a Notification Service/i)).not.toBeInTheDocument();
     });
@@ -209,7 +196,6 @@ describe('NotificationsSection Component', () => {
       });
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText(/Add a Notification Service/i)).toBeInTheDocument();
     });
@@ -229,7 +215,6 @@ describe('NotificationsSection Component', () => {
       });
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText(/Your Notification Services/i)).toBeInTheDocument();
       expect(screen.getByText(/2 configured/i)).toBeInTheDocument();
@@ -247,7 +232,6 @@ describe('NotificationsSection Component', () => {
       });
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       // Check that the configured webhook name is visible (may have multiple "Discord" texts on page)
       expect(screen.getByText('Your Notification Services')).toBeInTheDocument();
@@ -266,7 +250,6 @@ describe('NotificationsSection Component', () => {
       });
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByRole('button', { name: /Remove notification URL/i })).toBeInTheDocument();
     });
@@ -286,7 +269,6 @@ describe('NotificationsSection Component', () => {
       });
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       // Click delete button to open confirmation dialog
       const deleteButtons = screen.getAllByRole('button', { name: /Remove notification URL/i });
@@ -315,7 +297,6 @@ describe('NotificationsSection Component', () => {
       });
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       const input = screen.getByLabelText(/Notification URL/i);
       await user.type(input, 'discord://webhook_id/token');
@@ -340,7 +321,6 @@ describe('NotificationsSection Component', () => {
       });
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       const input = screen.getByLabelText(/Notification URL/i);
       await user.type(input, 'tgram://bot/chat{enter}');
@@ -362,7 +342,6 @@ describe('NotificationsSection Component', () => {
       });
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       const addButton = screen.getByRole('button', { name: /Add/i });
       await user.click(addButton);
@@ -388,7 +367,6 @@ describe('NotificationsSection Component', () => {
       });
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       const input = screen.getByPlaceholderText(/e\.g\., discord:\/\//i);
       await user.type(input, 'discord://existing');
@@ -415,7 +393,6 @@ describe('NotificationsSection Component', () => {
       });
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       const input = screen.getByLabelText(/Notification URL/i) as HTMLInputElement;
       await user.type(input, 'discord://webhook');
@@ -441,7 +418,6 @@ describe('NotificationsSection Component', () => {
       });
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       const testButtons = screen.getAllByRole('button', { name: /Test notification/i });
       expect(testButtons).toHaveLength(2);
@@ -457,7 +433,6 @@ describe('NotificationsSection Component', () => {
       });
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText(/configured/i)).toBeInTheDocument();
     });
@@ -479,7 +454,6 @@ describe('NotificationsSection Component', () => {
       });
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       const testButton = screen.getByRole('button', { name: /Test notification/i });
       await user.click(testButton);
@@ -516,7 +490,6 @@ describe('NotificationsSection Component', () => {
       });
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       const testButton = screen.getByRole('button', { name: /Test notification/i });
       await user.click(testButton);
@@ -542,7 +515,6 @@ describe('NotificationsSection Component', () => {
       });
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       const testButton = screen.getByRole('button', { name: /Test notification/i });
       await user.click(testButton);
@@ -561,7 +533,6 @@ describe('NotificationsSection Component', () => {
       });
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText(/Feature Rich Supported Formats/i)).toBeInTheDocument();
       // Check that format examples are present (Discord and Telegram appear in format cards)
@@ -578,7 +549,6 @@ describe('NotificationsSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('Enable Notifications')).toBeInTheDocument();
     });
@@ -588,7 +558,6 @@ describe('NotificationsSection Component', () => {
       const props = createSectionProps({ onMobileTooltipClick: undefined });
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('Notifications')).toBeInTheDocument();
     });
@@ -602,7 +571,6 @@ describe('NotificationsSection Component', () => {
       });
       const { rerender } = renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.queryByLabelText(/Notification URL/i)).not.toBeInTheDocument();
 
@@ -624,7 +592,6 @@ describe('NotificationsSection Component', () => {
       });
       const { rerender } = renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByLabelText(/Notification URL/i)).toBeInTheDocument();
 
@@ -646,7 +613,6 @@ describe('NotificationsSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByTestId('notifications-enabled-switch')).toBeInTheDocument();
       expect(screen.getByText('Enable Notifications')).toBeInTheDocument();
@@ -659,7 +625,6 @@ describe('NotificationsSection Component', () => {
       });
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByLabelText(/Notification URL/i)).toBeInTheDocument();
     });
@@ -671,7 +636,6 @@ describe('NotificationsSection Component', () => {
       });
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByRole('button', { name: /Add/i })).toBeInTheDocument();
     });
@@ -681,7 +645,6 @@ describe('NotificationsSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       // Check that info text about Apprise is present
       expect(screen.getByText(/Powered by/i)).toBeInTheDocument();
@@ -690,9 +653,9 @@ describe('NotificationsSection Component', () => {
 
     test('accordion has proper aria attributes', () => {
       const props = createSectionProps();
-      const { container } = renderWithProviders(<NotificationsSection {...props} />);
-      const accordionButton = within(container).getByRole('button', { name: /Notifications/i });
-      expect(accordionButton).toHaveAttribute('aria-expanded');
+      renderWithProviders(<NotificationsSection {...props} />);
+
+      expect(screen.getByRole('heading', { name: /Notifications/i })).toBeInTheDocument();
     });
 
     test('delete buttons have accessible labels', async () => {
@@ -707,7 +670,6 @@ describe('NotificationsSection Component', () => {
       });
       renderWithProviders(<NotificationsSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByRole('button', { name: /Remove notification URL/i })).toBeInTheDocument();
     });

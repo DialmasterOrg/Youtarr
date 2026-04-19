@@ -1,5 +1,5 @@
 import React from 'react';
-import { screen, waitFor, within } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { ConfigurationAccordion } from '../ConfigurationAccordion';
@@ -124,94 +124,72 @@ describe('ConfigurationAccordion Component', () => {
     });
   });
 
-  describe('Expansion Behavior', () => {
-    test('is collapsed by default when defaultExpanded is not provided', () => {
-      const { container } = renderWithProviders(<ConfigurationAccordion {...defaultProps} />);
-      const expandButton = within(container).getAllByRole('button')[0];
-      expect(expandButton).toHaveAttribute('aria-expanded', 'false');
+  describe('Status Banner', () => {
+    test('renders status banner text when provided', () => {
+      renderWithProviders(
+        <ConfigurationAccordion
+          {...defaultProps}
+          statusBanner={{
+            enabled: true,
+            label: 'Feature Toggle',
+            onToggle: jest.fn(),
+            onText: 'On',
+            offText: 'Off',
+          }}
+        />
+      );
+
+      expect(screen.getByText('On')).toBeInTheDocument();
     });
 
-    test('is collapsed by default when defaultExpanded is false', () => {
-      const { container } = renderWithProviders(<ConfigurationAccordion {...defaultProps} defaultExpanded={false} />);
-      const expandButton = within(container).getAllByRole('button')[0];
-      expect(expandButton).toHaveAttribute('aria-expanded', 'false');
-    });
-
-    test('is expanded by default when defaultExpanded is true', () => {
-      const { container } = renderWithProviders(<ConfigurationAccordion {...defaultProps} defaultExpanded={true} />);
-      const expandButton = within(container).getAllByRole('button')[0];
-      expect(expandButton).toHaveAttribute('aria-expanded', 'true');
-    });
-
-    test('can be expanded when clicking on collapsed accordion', async () => {
+    test('calls status banner toggle callback', async () => {
       const user = userEvent.setup();
-      const { container } = renderWithProviders(<ConfigurationAccordion {...defaultProps} />);
+      const onToggle = jest.fn();
 
-      const expandButton = within(container).getAllByRole('button')[0];
-      expect(expandButton).toHaveAttribute('aria-expanded', 'false');
+      renderWithProviders(
+        <ConfigurationAccordion
+          {...defaultProps}
+          statusBanner={{
+            enabled: false,
+            label: 'Feature Toggle',
+            onToggle,
+          }}
+        />
+      );
 
-      await user.click(expandButton);
+      const toggle = screen.getByRole('checkbox', { name: /Feature Toggle/i });
+      await user.click(toggle);
 
-      await waitFor(() => {
-        expect(expandButton).toHaveAttribute('aria-expanded', 'true');
-      });
+      expect(onToggle).toHaveBeenCalledWith(true);
+    });
+  });
+
+  describe('Section Behavior', () => {
+    test('renders content by default', () => {
+      renderWithProviders(<ConfigurationAccordion {...defaultProps} />);
+      expect(screen.getByRole('heading', { name: 'Test Section' })).toBeInTheDocument();
+      expect(screen.getByText('Test Content')).toBeVisible();
     });
 
-    test('can be collapsed when clicking on expanded accordion', async () => {
-      const user = userEvent.setup();
-      const { container } = renderWithProviders(<ConfigurationAccordion {...defaultProps} defaultExpanded={true} />);
-
-      const expandButton = within(container).getAllByRole('button')[0];
-      expect(expandButton).toHaveAttribute('aria-expanded', 'true');
-
-      await user.click(expandButton);
-
-      await waitFor(() => {
-        expect(expandButton).toHaveAttribute('aria-expanded', 'false');
-      });
+    test('defaultExpanded=false has no effect on visibility', () => {
+      renderWithProviders(<ConfigurationAccordion {...defaultProps} defaultExpanded={false} />);
+      expect(screen.getByText('Test Content')).toBeVisible();
     });
 
-    test('content is visible when expanded', async () => {
-      const user = userEvent.setup();
-      const { container } = renderWithProviders(<ConfigurationAccordion {...defaultProps} />);
-
-      const expandButton = within(container).getAllByRole('button')[0];
-      await user.click(expandButton);
-
-      await waitFor(() => {
-        expect(screen.getByText('Test Content')).toBeVisible();
-      });
+    test('defaultExpanded=true shows content', () => {
+      renderWithProviders(<ConfigurationAccordion {...defaultProps} defaultExpanded={true} />);
+      expect(screen.getByText('Test Content')).toBeVisible();
     });
 
-    test('toggles expansion state multiple times', async () => {
-      const user = userEvent.setup();
-      const { container } = renderWithProviders(<ConfigurationAccordion {...defaultProps} />);
-
-      const expandButton = within(container).getAllByRole('button')[0];
-
-      // Expand
-      await user.click(expandButton);
-      await waitFor(() => {
-        expect(expandButton).toHaveAttribute('aria-expanded', 'true');
-      });
-
-      // Collapse
-      await user.click(expandButton);
-      await waitFor(() => {
-        expect(expandButton).toHaveAttribute('aria-expanded', 'false');
-      });
-
-      // Expand again
-      await user.click(expandButton);
-      await waitFor(() => {
-        expect(expandButton).toHaveAttribute('aria-expanded', 'true');
-      });
+    test('title is rendered as a heading', () => {
+      renderWithProviders(<ConfigurationAccordion {...defaultProps} />);
+      expect(screen.getByRole('heading', { name: 'Test Section' })).toBeInTheDocument();
     });
   });
 
   describe('Props Combinations', () => {
     test('renders with all props provided', () => {
-      const { container } = renderWithProviders(
+      renderWithProviders(
         <ConfigurationAccordion
           title="Full Props Test"
           chipLabel="Beta"
@@ -225,9 +203,6 @@ describe('ConfigurationAccordion Component', () => {
       expect(screen.getByText('Full Props Test')).toBeInTheDocument();
       expect(screen.getByText('Beta')).toBeInTheDocument();
       expect(screen.getByText('Full content')).toBeInTheDocument();
-
-      const expandButton = within(container).getAllByRole('button')[0];
-      expect(expandButton).toHaveAttribute('aria-expanded', 'true');
     });
 
     test('renders with minimal props', () => {
@@ -241,8 +216,8 @@ describe('ConfigurationAccordion Component', () => {
       expect(screen.getByText('Minimal content')).toBeInTheDocument();
     });
 
-    test('renders with chip but collapsed by default', () => {
-      const { container } = renderWithProviders(
+    test('renders with chip and visible content', () => {
+      renderWithProviders(
         <ConfigurationAccordion
           title="Chip Test"
           chipLabel="New"
@@ -254,13 +229,11 @@ describe('ConfigurationAccordion Component', () => {
 
       expect(screen.getByText('Chip Test')).toBeInTheDocument();
       expect(screen.getByText('New')).toBeInTheDocument();
-
-      const expandButton = within(container).getAllByRole('button')[0];
-      expect(expandButton).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.getByText('Content with chip')).toBeVisible();
     });
 
-    test('renders with expanded but no chip', () => {
-      const { container } = renderWithProviders(
+    test('renders with defaultExpanded and no chip', () => {
+      renderWithProviders(
         <ConfigurationAccordion
           title="Expanded No Chip"
           defaultExpanded={true}
@@ -271,9 +244,6 @@ describe('ConfigurationAccordion Component', () => {
 
       expect(screen.getByText('Expanded No Chip')).toBeInTheDocument();
       expect(screen.getByText('Expanded content')).toBeInTheDocument();
-
-      const expandButton = within(container).getAllByRole('button')[0];
-      expect(expandButton).toHaveAttribute('aria-expanded', 'true');
     });
   });
 
@@ -339,16 +309,15 @@ describe('ConfigurationAccordion Component', () => {
   });
 
   describe('Accessibility', () => {
-    test('has proper ARIA attributes for collapsed state', () => {
-      const { container } = renderWithProviders(<ConfigurationAccordion {...defaultProps} />);
-      const expandButton = within(container).getAllByRole('button')[0];
-      expect(expandButton).toHaveAttribute('aria-expanded', 'false');
+    test('exposes the section title as a heading', () => {
+      renderWithProviders(<ConfigurationAccordion {...defaultProps} />);
+      expect(screen.getByRole('heading', { name: 'Test Section' })).toBeInTheDocument();
     });
 
-    test('has proper ARIA attributes for expanded state', () => {
-      const { container } = renderWithProviders(<ConfigurationAccordion {...defaultProps} defaultExpanded={true} />);
-      const expandButton = within(container).getAllByRole('button')[0];
-      expect(expandButton).toHaveAttribute('aria-expanded', 'true');
+    test('keeps content accessible when defaultExpanded is passed', () => {
+      renderWithProviders(<ConfigurationAccordion {...defaultProps} defaultExpanded={true} />);
+      expect(screen.getByText('Test Content')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Test Section' })).toBeInTheDocument();
     });
 
     test('title is accessible', () => {
@@ -356,20 +325,13 @@ describe('ConfigurationAccordion Component', () => {
       expect(screen.getByText('Test Section')).toBeInTheDocument();
     });
 
-    test('children content is accessible when expanded', async () => {
-      const user = userEvent.setup();
-      const { container } = renderWithProviders(
+    test('children content is accessible', () => {
+      renderWithProviders(
         <ConfigurationAccordion {...defaultProps}>
           <button>Accessible Button</button>
         </ConfigurationAccordion>
       );
-
-      const expandButton = within(container).getAllByRole('button')[0];
-      await user.click(expandButton);
-
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: 'Accessible Button' })).toBeInTheDocument();
-      });
+      expect(screen.getByRole('button', { name: 'Accessible Button' })).toBeInTheDocument();
     });
   });
 
@@ -395,9 +357,8 @@ describe('ConfigurationAccordion Component', () => {
       expect(screen.getByText('New')).toBeInTheDocument();
     });
 
-    test('each accordion maintains independent state', async () => {
-      const user = userEvent.setup();
-      const { container } = renderWithProviders(
+    test('each section renders independently', () => {
+      renderWithProviders(
         <>
           <ConfigurationAccordion title="First">
             <div>First content</div>
@@ -407,21 +368,10 @@ describe('ConfigurationAccordion Component', () => {
           </ConfigurationAccordion>
         </>
       );
-
-      const allButtons = within(container).getAllByRole('button');
-      const firstAccordion = allButtons[0];
-      const secondAccordion = allButtons[1];
-
-      expect(firstAccordion).toHaveAttribute('aria-expanded', 'false');
-      expect(secondAccordion).toHaveAttribute('aria-expanded', 'false');
-
-      await user.click(firstAccordion);
-
-      await waitFor(() => {
-        expect(firstAccordion).toHaveAttribute('aria-expanded', 'true');
-      });
-
-      expect(secondAccordion).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.getByRole('heading', { name: 'First' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Second' })).toBeInTheDocument();
+      expect(screen.getByText('First content')).toBeVisible();
+      expect(screen.getByText('Second content')).toBeVisible();
     });
   });
 });

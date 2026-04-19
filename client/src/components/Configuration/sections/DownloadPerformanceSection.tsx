@@ -13,7 +13,7 @@ import {
   Alert,
   AlertTitle,
   Typography,
-} from '@mui/material';
+} from '../../ui';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { ConfigState } from '../types';
@@ -32,11 +32,16 @@ export const DownloadPerformanceSection: React.FC<DownloadPerformanceSectionProp
   return (
     <ConfigurationAccordion
       title="Download Performance Settings"
-      chipLabel={config.enableStallDetection ? "Stall Detection On" : "Stall Detection Off"}
-      chipColor={config.enableStallDetection ? "success" : "default"}
+      statusBanner={{
+        enabled: config.enableStallDetection !== false,
+        label: 'Enable Stall Detection',
+        onToggle: (enabled) => onConfigChange({ enableStallDetection: enabled }),
+        onText: 'Stall Detection On',
+        offText: 'Stall Detection Off',
+      }}
       defaultExpanded={false}
     >
-      <Alert severity="info" sx={{ mb: 2 }}>
+      <Alert severity="info" className="mb-4">
         <AlertTitle>Performance Optimization</AlertTitle>
         <Typography variant="body2">
           Configure download timeouts, retry attempts, and stall detection to handle slow or interrupted downloads automatically.
@@ -104,38 +109,28 @@ export const DownloadPerformanceSection: React.FC<DownloadPerformanceSectionProp
           </FormControl>
         </Grid>
 
-        <Grid item xs={12}>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={config.enableStallDetection !== false}
-                onChange={(e) => onConfigChange({ enableStallDetection: e.target.checked })}
-              />
-            }
-            label={
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                Enable Stall Detection
-                <InfoTooltip
-                  text="Automatically detect and retry downloads that stall at slow speeds"
-                  onMobileClick={onMobileTooltipClick}
-                />
-              </Box>
-            }
-          />
-        </Grid>
-
         {config.enableStallDetection && (
           <>
             <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Stall Detection Window (seconds)"
-                type="number"
-                inputProps={{ min: 5, max: 120, step: 5 }}
-                value={config.stallDetectionWindowSeconds ?? 30}
-                onChange={(e) => onConfigChange({ stallDetectionWindowSeconds: Number(e.target.value) })}
-                helperText="How long the download must stay below the stall threshold before retry logic kicks in"
-              />
+              <FormControl fullWidth>
+                <InputLabel htmlFor="stall-detection-window-input">Stall Detection Window (seconds)</InputLabel>
+                <TextField
+                  id="stall-detection-window-input"
+                  fullWidth
+                  type="number"
+                  inputProps={{
+                    min: 5,
+                    max: 120,
+                    step: 5,
+                    style: { backgroundColor: 'var(--input)', minHeight: 48 },
+                  }}
+                  value={config.stallDetectionWindowSeconds ?? 30}
+                  onChange={(e) => onConfigChange({ stallDetectionWindowSeconds: Number(e.target.value) })}
+                />
+                <FormHelperText>
+                  How long the download must stay below the stall threshold before retry logic kicks in
+                </FormHelperText>
+              </FormControl>
             </Grid>
 
             <Grid item xs={12} md={6}>

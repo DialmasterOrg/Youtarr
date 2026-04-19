@@ -8,11 +8,10 @@ import {
   FormControlLabel,
   TextField,
   Grid,
-  Box,
   Alert,
   AlertTitle,
   Typography,
-} from '@mui/material';
+} from '../../ui';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { ConfigState, SponsorBlockCategories } from '../types';
@@ -51,11 +50,16 @@ export const SponsorBlockSection: React.FC<SponsorBlockSectionProps> = ({
   return (
     <ConfigurationAccordion
       title="SponsorBlock Integration"
-      chipLabel={config.sponsorblockEnabled ? "Enabled" : "Disabled"}
-      chipColor={config.sponsorblockEnabled ? "success" : "default"}
+      statusBanner={{
+        enabled: config.sponsorblockEnabled,
+        label: 'Enable SponsorBlock',
+        onToggle: (enabled) => onConfigChange({ sponsorblockEnabled: enabled }),
+        onText: 'Enabled',
+        offText: 'Disabled',
+      }}
       defaultExpanded={false}
     >
-      <Alert severity="info" sx={{ mb: 2 }}>
+      <Alert severity="info" style={{ marginBottom: 16 }}>
         <AlertTitle>What is SponsorBlock?</AlertTitle>
         <Typography variant="body2">
           SponsorBlock is a crowdsourced database that identifies segments in YouTube videos like sponsors, intros, outros, and self-promotions.
@@ -64,27 +68,6 @@ export const SponsorBlockSection: React.FC<SponsorBlockSectionProps> = ({
       </Alert>
 
       <Grid container spacing={2}>
-        <Grid item xs={12}>
-          <FormControlLabel
-            control={
-              <Checkbox
-                name="sponsorblockEnabled"
-                checked={config.sponsorblockEnabled}
-                onChange={(e) => onConfigChange({ sponsorblockEnabled: e.target.checked })}
-              />
-            }
-            label={
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                Enable SponsorBlock
-                <InfoTooltip
-                  text="Automatically handle sponsored segments and other marked content in downloaded videos."
-                  onMobileClick={onMobileTooltipClick}
-                />
-              </Box>
-            }
-          />
-        </Grid>
-
         {config.sponsorblockEnabled && (
           <>
             <Grid item xs={12} md={6}>
@@ -99,7 +82,7 @@ export const SponsorBlockSection: React.FC<SponsorBlockSectionProps> = ({
                   <MenuItem value="mark">Mark segments as chapters</MenuItem>
                 </Select>
               </FormControl>
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+              <Typography variant="caption" color="text.secondary" style={{ marginTop: 4, display: 'block' }}>
                 Remove: Cuts out segments entirely. Mark: Creates chapter markers for easy skipping.
               </Typography>
             </Grid>
@@ -117,7 +100,7 @@ export const SponsorBlockSection: React.FC<SponsorBlockSectionProps> = ({
             </Grid>
 
             <Grid item xs={12}>
-              <Typography variant="subtitle1" gutterBottom sx={{ mt: 1, mb: 1 }}>
+              <Typography variant="subtitle1" gutterBottom style={{ marginTop: 8, marginBottom: 8 }}>
                 Segment Categories to {config.sponsorblockAction === 'remove' ? 'Remove' : 'Mark'}:
               </Typography>
 
@@ -133,12 +116,12 @@ export const SponsorBlockSection: React.FC<SponsorBlockSectionProps> = ({
                         />
                       }
                       label={
-                        <Box>
+                        <div>
                           <Typography variant="body2">{label}</Typography>
                           <Typography variant="caption" color="text.secondary">
                             {description}
                           </Typography>
-                        </Box>
+                        </div>
                       }
                     />
                   </Grid>

@@ -1,12 +1,17 @@
 import React, { useState } from 'react';
 import {
-  Box, Button, Collapse, IconButton, LinearProgress, List, ListItem,
-  ListItemIcon, ListItemText, Typography,
-} from '@mui/material';
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  IconButton,
+  LinearProgress,
+  Typography,
+} from '../../ui';
 import {
-  CheckCircle, Error as ErrorIcon, ExpandMore, ExpandLess,
-  HourglassEmpty, SkipNext,
-} from '@mui/icons-material';
+  ChevronDown as ExpandMore,
+  ChevronUp as ExpandLess,
+} from '../../../lib/icons';
 import { ImportJobDetail, ImportChannelResult } from '../../../types/subscriptionImport';
 
 interface ImportProgressProps {
@@ -28,11 +33,11 @@ function getStatusText(jobDetail: ImportJobDetail): string {
   return `Importing ${jobDetail.done} of ${jobDetail.total} channels...`;
 }
 
-const stateIconMap: Record<ImportChannelResult['state'], React.ReactNode> = {
-  success: <CheckCircle sx={{ color: 'success.main' }} />,
-  error: <ErrorIcon sx={{ color: 'error.main' }} />,
-  skipped: <SkipNext sx={{ color: 'text.disabled' }} />,
-  pending: <HourglassEmpty sx={{ color: 'text.disabled' }} />,
+const stateChipMap: Record<ImportChannelResult['state'], { color: 'success' | 'error' | 'default'; label: string }> = {
+  success: { color: 'success', label: 'Imported' },
+  error: { color: 'error', label: 'Failed' },
+  skipped: { color: 'default', label: 'Skipped' },
+  pending: { color: 'default', label: 'Pending' },
 };
 
 const ChannelResultItem: React.FC<{ result: ImportChannelResult }> = ({ result }) => {
@@ -46,45 +51,38 @@ const ChannelResultItem: React.FC<{ result: ImportChannelResult }> = ({ result }
       : undefined;
 
   return (
-    <>
-      <ListItem
-        secondaryAction={
-          hasExpandableContent ? (
-            <IconButton
-              edge="end"
-              size="small"
-              onClick={() => setExpanded(!expanded)}
-              aria-label={expanded ? 'collapse details' : 'expand details'}
-            >
-              {expanded ? <ExpandLess /> : <ExpandMore />}
-            </IconButton>
-          ) : undefined
-        }
-        sx={{ py: 0.5 }}
-      >
-        <ListItemIcon sx={{ minWidth: 36 }}>
-          {stateIconMap[result.state]}
-        </ListItemIcon>
-        <ListItemText
-          primary={result.title || result.channelId}
-          secondary={secondaryText}
-          primaryTypographyProps={{ variant: 'body2' }}
-          secondaryTypographyProps={{
-            variant: 'caption',
-            sx: { color: result.state === 'error' ? 'error.main' : 'text.secondary' },
-          }}
-        />
-      </ListItem>
-      {hasExpandableContent && (
-        <Collapse in={expanded} timeout="auto">
-          <Box sx={{ pl: 7, pr: 2, pb: 1 }}>
-            <Typography variant="caption" sx={{ color: 'text.secondary', whiteSpace: 'pre-wrap' }}>
-              {result.details}
+    <div className="rounded-[var(--radius-ui)] border border-[var(--border-strong)] bg-card/70 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <Typography variant="body2" className="font-semibold">{result.title || result.channelId}</Typography>
+            <Chip size="small" color={stateChipMap[result.state].color} label={stateChipMap[result.state].label} />
+          </div>
+          {secondaryText && (
+            <Typography variant="caption" color={result.state === 'error' ? 'error' : 'secondary'}>
+              {secondaryText}
             </Typography>
-          </Box>
-        </Collapse>
+          )}
+        </div>
+        {hasExpandableContent && (
+          <IconButton
+            size="small"
+            onClick={() => setExpanded(!expanded)}
+            aria-label={expanded ? 'collapse details' : 'expand details'}
+          >
+            {expanded ? <ExpandLess size={16} /> : <ExpandMore size={16} />}
+          </IconButton>
+        )}
+      </div>
+      {hasExpandableContent && (
+        <pre
+          hidden={!expanded}
+          className="mt-3 whitespace-pre-wrap break-words rounded-[var(--radius-ui)] border border-[var(--border-strong)] bg-muted/40 p-3 text-xs text-muted-foreground"
+        >
+          {result.details}
+        </pre>
       )}
-    </>
+    </div>
   );
 };
 
@@ -93,41 +91,43 @@ const ImportProgress: React.FC<ImportProgressProps> = ({ jobDetail, onCancel }) 
   const isTerminal = TERMINAL_STATUSES.includes(jobDetail.status);
 
   return (
-    <Box>
-      <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 500 }}>
-        {getStatusText(jobDetail)}
-      </Typography>
+    <Card variant="outlined">
+      <CardContent className="space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <Typography variant="h6">Import Progress</Typography>
+            <Typography variant="body2" color="secondary">{getStatusText(jobDetail)}</Typography>
+          </div>
+          <Chip
+            size="small"
+            color={isTerminal ? (jobDetail.status === 'Failed' ? 'error' : 'success') : 'info'}
+            label={isTerminal ? 'Finished' : 'Running'}
+          />
+        </div>
 
-      <LinearProgress
-        variant={jobDetail.total > 0 ? 'determinate' : 'indeterminate'}
-        value={percent}
-        sx={{ mb: 1, height: 8, borderRadius: 1 }}
-      />
+        <LinearProgress
+          variant={jobDetail.total > 0 ? 'determinate' : 'indeterminate'}
+          value={percent}
+          height={8}
+        />
 
-      {jobDetail.total > 0 && (
-        <Typography variant="caption" sx={{ color: 'text.secondary', mb: 2, display: 'block' }}>
-          {percent}% complete
-        </Typography>
-      )}
+        {jobDetail.total > 0 && (
+          <Typography variant="caption" color="secondary">
+            {percent}% complete
+          </Typography>
+        )}
 
-      <Box sx={{ maxHeight: 400, overflow: 'auto', mb: 2 }}>
-        <List disablePadding>
+        <div className="max-h-[420px] space-y-2 overflow-auto pr-1">
           {jobDetail.results.map((result) => (
             <ChannelResultItem key={result.channelId} result={result} />
           ))}
-        </List>
-      </Box>
+        </div>
 
-      {!isTerminal && (
-        <Button
-          variant="outlined"
-          color="error"
-          onClick={onCancel}
-        >
-          Cancel Import
-        </Button>
-      )}
-    </Box>
+        {!isTerminal && (
+          <Button variant="outlined-destructive" onClick={onCancel}>Cancel Import</Button>
+        )}
+      </CardContent>
+    </Card>
   );
 };
 

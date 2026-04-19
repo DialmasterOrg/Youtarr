@@ -12,9 +12,9 @@ describe('UrlInput', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockReadText.mockClear();
-    // Suppress MUI Tooltip warnings about disabled buttons
+    // Suppress warnings about disabled buttons with Tooltip
     jest.spyOn(console, 'error').mockImplementation((msg) => {
-      if (typeof msg === 'string' && msg.includes('MUI: You are providing a disabled')) {
+      if (typeof msg === 'string' && msg.includes('providing a disabled')) {
         return;
       }
       console.warn(msg);

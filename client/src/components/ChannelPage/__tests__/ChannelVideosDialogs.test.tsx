@@ -237,12 +237,11 @@ describe('ChannelVideosDialogs Component', () => {
         />
       );
 
-      // MUI Dialog calls onClose when clicking backdrop
+      // Dialog should be rendered
       const dialog = screen.getByRole('dialog');
       expect(dialog).toBeInTheDocument();
 
-      // onClose is called by MUI when backdrop is clicked
-      // We can't simulate this directly, but we verify the prop is passed
+      // Verify the callback is passed
       expect(onRefreshCancel).toBeDefined();
     });
 
@@ -418,7 +417,7 @@ describe('ChannelVideosDialogs Component', () => {
       );
 
       const alert = screen.getByRole('alert');
-      expect(alert).toHaveClass('MuiAlert-standardError');
+      expect(alert).toHaveClass('alert-standard-error');
     });
 
     test('mobile tooltip shows info severity', () => {
@@ -430,7 +429,7 @@ describe('ChannelVideosDialogs Component', () => {
       );
 
       const alert = screen.getByRole('alert');
-      expect(alert).toHaveClass('MuiAlert-standardInfo');
+      expect(alert).toHaveClass('alert-standard-info');
     });
 
     test('success message shows success severity', () => {
@@ -442,7 +441,7 @@ describe('ChannelVideosDialogs Component', () => {
       );
 
       const alert = screen.getByRole('alert');
-      expect(alert).toHaveClass('MuiAlert-standardSuccess');
+      expect(alert).toHaveClass('alert-standard-success');
     });
 
     test('error message shows error severity', () => {
@@ -454,7 +453,7 @@ describe('ChannelVideosDialogs Component', () => {
       );
 
       const alert = screen.getByRole('alert');
-      expect(alert).toHaveClass('MuiAlert-standardError');
+      expect(alert).toHaveClass('alert-standard-error');
     });
   });
 

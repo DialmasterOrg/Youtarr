@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Box, Chip, IconButton, Popover, Typography } from '@mui/material';
-import FileDownloadIcon from '@mui/icons-material/FileDownload';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import { Chip, IconButton, Popover, Typography } from '../../../../components/ui';
+import { FileDownload as FileDownloadIcon, Info as InfoOutlinedIcon } from '../../../../lib/icons';
+import { SHARED_CHANNEL_META_DEFAULT_SURFACE_STYLE, SHARED_CHIP_RADIUS } from '../../../shared/chipStyles';
 
 interface AutoDownloadChipsProps {
   availableTabs: string | null | undefined;
@@ -42,21 +42,28 @@ const AutoDownloadChips: React.FC<AutoDownloadChipsProps> = ({
   if (available.length === 0) {
     const willAutoDownload = autoDownloadEnabled.length > 0;
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <Chip
           label={isMobile ? 'Videos' : 'Videos (default)'}
           size="small"
           variant={willAutoDownload ? 'filled' : 'outlined'}
           color={willAutoDownload ? 'primary' : 'default'}
-          icon={willAutoDownload ? <FileDownloadIcon sx={{ fontSize: '0.85rem' }} /> : undefined}
-          sx={{ fontSize: '0.7rem', opacity: willAutoDownload ? 1 : 0.7 }}
+          icon={willAutoDownload ? <FileDownloadIcon size={12} /> : undefined}
+          style={{
+            fontSize: '0.7rem',
+            height: 24,
+            borderRadius: SHARED_CHIP_RADIUS,
+            opacity: willAutoDownload ? 1 : 0.7,
+            ...(willAutoDownload ? undefined : SHARED_CHANNEL_META_DEFAULT_SURFACE_STYLE),
+          }}
         />
         <IconButton
           size="small"
           onClick={(e) => setInfoAnchor(e.currentTarget)}
-          sx={{ p: 0.25 }}
+          aria-label="Auto-download defaults info"
+          style={{ padding: 2 }}
         >
-          <InfoOutlinedIcon sx={{ fontSize: '0.9rem', opacity: 0.6 }} />
+          <InfoOutlinedIcon size={14} style={{ opacity: 0.65 }} />
         </IconButton>
         <Popover
           open={Boolean(infoAnchor)}
@@ -65,13 +72,15 @@ const AutoDownloadChips: React.FC<AutoDownloadChipsProps> = ({
           anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
           transformOrigin={{ vertical: 'top', horizontal: 'left' }}
         >
-          <Typography variant="body2" sx={{ p: 2, maxWidth: 300 }}>
-            Available tabs (Videos, Shorts, Streams) have not been detected for this
-            channel yet. They will be automatically detected when you visit the channel
-            page.
-          </Typography>
+          <div style={{ padding: 12, maxWidth: 300 }}>
+            <Typography variant="body2">
+              Available tabs (Videos, Shorts, Streams) have not been detected for this
+              channel yet. They will be automatically detected when you visit the channel
+              page.
+            </Typography>
+          </div>
         </Popover>
-      </Box>
+      </div>
     );
   }
 
@@ -89,14 +98,17 @@ const AutoDownloadChips: React.FC<AutoDownloadChipsProps> = ({
           data-autodownload={isAutoDownloadEnabled ? 'true' : 'false'}
           label={isMobile ? tabInfo.short : tabInfo.full}
           size="small"
-          variant={isAutoDownloadEnabled ? 'filled' : 'outlined'}
+          variant="filled"
           color={isAutoDownloadEnabled ? 'primary' : 'default'}
-          icon={isAutoDownloadEnabled ? <FileDownloadIcon sx={{ fontSize: '0.85rem' }} /> : undefined}
-          sx={{
+          icon={isAutoDownloadEnabled ? <FileDownloadIcon size={12} /> : undefined}
+          style={{
             fontSize: '0.7rem',
-            '& .MuiChip-icon': {
-              ml: 0.3,
-            },
+            height: 24,
+            lineHeight: '14px',
+            minWidth: isMobile ? 56 : 64,
+            borderRadius: SHARED_CHIP_RADIUS,
+            ...(isAutoDownloadEnabled ? undefined : SHARED_CHANNEL_META_DEFAULT_SURFACE_STYLE),
+            opacity: isAutoDownloadEnabled ? 1 : 0.8,
           }}
         />
       );
@@ -108,9 +120,9 @@ const AutoDownloadChips: React.FC<AutoDownloadChipsProps> = ({
   }
 
   return (
-    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
       {chips}
-    </Box>
+    </div>
   );
 };
 

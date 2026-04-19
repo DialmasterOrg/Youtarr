@@ -1,12 +1,16 @@
-import React, { useState, useMemo } from 'react';
-import {
-  Alert, Box, Button, Collapse, IconButton, List, ListItem,
-  ListItemIcon, ListItemText, Typography,
-} from '@mui/material';
-import {
-  CheckCircle, Error as ErrorIcon, ExpandLess, ExpandMore,
-} from '@mui/icons-material';
+import React, { useMemo, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
+import {
+  Alert,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  Collapse,
+  IconButton,
+  Typography,
+} from '../../ui';
+import { CheckCircle, ChevronDown as ExpandMore, ChevronUp as ExpandLess } from '../../../lib/icons';
 import { ImportJobDetail, ImportChannelResult } from '../../../types/subscriptionImport';
 
 interface ImportSummaryProps {
@@ -18,42 +22,30 @@ const ErrorItem: React.FC<{ result: ImportChannelResult }> = ({ result }) => {
   const hasDetails = Boolean(result.details);
 
   return (
-    <>
-      <ListItem
-        secondaryAction={
-          hasDetails ? (
-            <IconButton
-              edge="end"
-              size="small"
-              onClick={() => setExpanded(!expanded)}
-              aria-label={expanded ? 'collapse details' : 'expand details'}
-            >
-              {expanded ? <ExpandLess /> : <ExpandMore />}
-            </IconButton>
-          ) : undefined
-        }
-        sx={{ py: 0.5 }}
-      >
-        <ListItemIcon sx={{ minWidth: 36 }}>
-          <ErrorIcon sx={{ color: 'error.main' }} />
-        </ListItemIcon>
-        <ListItemText
-          primary={result.title || result.channelId}
-          secondary={result.error || 'Unknown error'}
-          primaryTypographyProps={{ variant: 'body2' }}
-          secondaryTypographyProps={{ variant: 'caption', sx: { color: 'error.main' } }}
-        />
-      </ListItem>
+    <div className="rounded-[var(--radius-ui)] border border-destructive/30 bg-destructive/5 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <Typography variant="body2" className="font-semibold">{result.title || result.channelId}</Typography>
+          <Typography variant="caption" color="error">{result.error || 'Unknown error'}</Typography>
+        </div>
+        {hasDetails && (
+          <IconButton
+            size="small"
+            onClick={() => setExpanded(!expanded)}
+            aria-label={expanded ? 'collapse details' : 'expand details'}
+          >
+            {expanded ? <ExpandLess size={16} /> : <ExpandMore size={16} />}
+          </IconButton>
+        )}
+      </div>
       {hasDetails && (
         <Collapse in={expanded} timeout="auto">
-          <Box sx={{ pl: 7, pr: 2, pb: 1 }}>
-            <Typography variant="caption" sx={{ color: 'text.secondary', whiteSpace: 'pre-wrap' }}>
-              {result.details}
-            </Typography>
-          </Box>
+          <pre className="mt-3 whitespace-pre-wrap break-words rounded-[var(--radius-ui)] border border-[var(--border-strong)] bg-card p-3 text-xs text-muted-foreground">
+            {result.details}
+          </pre>
         </Collapse>
       )}
-    </>
+    </div>
   );
 };
 
@@ -87,43 +79,42 @@ const ImportSummary: React.FC<ImportSummaryProps> = ({ jobDetail }) => {
   const isCancelled = jobDetail.status === 'Cancelled';
 
   return (
-    <Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-        <CheckCircle sx={{ color: 'success.main' }} />
-        <Typography variant="h6">Import {isCancelled ? 'Cancelled' : 'Complete'}</Typography>
-      </Box>
+    <Card variant="outlined">
+      <CardContent className="space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <CheckCircle size={20} className="text-success" />
+            <Typography variant="h6">Import {isCancelled ? 'Cancelled' : 'Complete'}</Typography>
+          </div>
+          <Chip size="small" color={errorCount > 0 ? 'warning' : 'success'} label={jobDetail.status} />
+        </div>
 
-      <Typography variant="body1" sx={{ mb: 2 }}>
-        {successCount} imported, {errorCount} errors, {skippedCount} skipped
-      </Typography>
+        <Typography variant="body2" color="secondary">
+          {successCount} imported, {errorCount} errors, {skippedCount} skipped
+        </Typography>
 
-      {isCancelled && (
-        <Alert severity="warning" sx={{ mb: 2 }}>
-          Import was cancelled.
-        </Alert>
-      )}
+        {isCancelled && (
+          <Alert severity="warning">
+            <Typography variant="body2">Import was cancelled.</Typography>
+          </Alert>
+        )}
 
-      {errorCount > 0 && (
-        <Box sx={{ mb: 2 }}>
-          <Typography variant="subtitle2" sx={{ mb: 1, color: 'error.main' }}>
-            Failed Channels
-          </Typography>
-          <List disablePadding>
-            {errorResults.map((result) => (
-              <ErrorItem key={result.channelId} result={result} />
-            ))}
-          </List>
-        </Box>
-      )}
+        {errorCount > 0 && (
+          <div className="space-y-2">
+            <Typography variant="subtitle2" color="error">Failed Channels</Typography>
+            <div className="space-y-2">
+              {errorResults.map((result) => (
+                <ErrorItem key={result.channelId} result={result} />
+              ))}
+            </div>
+          </div>
+        )}
 
-      <Button
-        component={RouterLink}
-        to="/channels"
-        variant="contained"
-      >
-        Back to channels
-      </Button>
-    </Box>
+        <Button asChild variant="contained">
+          <RouterLink to="/channels">Back to channels</RouterLink>
+        </Button>
+      </CardContent>
+    </Card>
   );
 };
 

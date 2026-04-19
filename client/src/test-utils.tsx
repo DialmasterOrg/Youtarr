@@ -1,8 +1,9 @@
 import React from 'react';
 import { render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
 import WebSocketContext from './contexts/WebSocketContext';
+import { ThemeEngineProvider } from './contexts/ThemeEngineContext';
+import { TooltipProvider } from './components/ui/tooltip';
 
 type WebSocketValue = {
   socket: any;
@@ -23,27 +24,20 @@ export function renderWithProviders(
   opts?: { websocketValue?: WebSocketValue }
 ) {
   const value = opts?.websocketValue ?? createMockWebSocketContext();
-  const theme = createTheme({
-    transitions: {
-      duration: {
-        shortest: 0,
-        shorter: 0,
-        short: 0,
-        standard: 0,
-        complex: 0,
-        enteringScreen: 0,
-        leavingScreen: 0,
-      },
-    },
-  });
 
-  return render(
-    <MemoryRouter>
-      <ThemeProvider theme={theme}>
-        <WebSocketContext.Provider value={value}>
-          {ui}
-        </WebSocketContext.Provider>
-      </ThemeProvider>
-    </MemoryRouter>
-  );
+  function Wrapper({ children }: { children: React.ReactNode }) {
+    return (
+      <MemoryRouter>
+        <ThemeEngineProvider>
+          <WebSocketContext.Provider value={value}>
+            <TooltipProvider>
+              {children}
+            </TooltipProvider>
+          </WebSocketContext.Provider>
+        </ThemeEngineProvider>
+      </MemoryRouter>
+    );
+  }
+
+  return render(ui, { wrapper: Wrapper });
 }

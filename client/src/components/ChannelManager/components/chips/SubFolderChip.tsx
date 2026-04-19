@@ -1,13 +1,19 @@
 import React from 'react';
-import { Chip } from '@mui/material';
-import FolderIcon from '@mui/icons-material/Folder';
+import { Chip } from '../../../../components/ui';
+import { Folder as FolderIcon } from '../../../../lib/icons';
 import { isUsingDefaultSubfolder, isExplicitlyNoSubfolder } from '../../../../utils/channelHelpers';
+import { SHARED_CHANNEL_META_CHIP_STYLE, SHARED_CHANNEL_META_DEFAULT_SURFACE_STYLE } from '../../../shared/chipStyles';
 
 interface SubFolderChipProps {
   subFolder: string | null | undefined;
 }
 
 const SubFolderChip: React.FC<SubFolderChipProps> = ({ subFolder }) => {
+  const chipStyle = {
+    ...SHARED_CHANNEL_META_CHIP_STYLE,
+    ...SHARED_CHANNEL_META_DEFAULT_SURFACE_STYLE,
+  };
+
   // NULL or empty = "root" (backwards compatible, download to root)
   if (isExplicitlyNoSubfolder(subFolder)) {
     return (
@@ -16,12 +22,10 @@ const SubFolderChip: React.FC<SubFolderChipProps> = ({ subFolder }) => {
         data-default="false"
         data-root="true"
         size="small"
-        icon={<FolderIcon sx={{ fontSize: '0.9rem', color: 'text.secondary' }} data-testid="FolderIcon" />}
+        color="default"
+        icon={<FolderIcon size={14} style={{ color: 'var(--channel-meta-chip-icon)' }} data-testid="FolderIcon" />}
         label="root"
-        sx={{
-          fontSize: '0.7rem',
-          '& .MuiChip-label': { fontStyle: 'italic', color: 'text.secondary' },
-        }}
+        style={chipStyle}
       />
     );
   }
@@ -33,27 +37,24 @@ const SubFolderChip: React.FC<SubFolderChipProps> = ({ subFolder }) => {
         data-testid="subfolder-chip"
         data-default="true"
         size="small"
-        icon={<FolderIcon sx={{ fontSize: '0.9rem', color: 'text.secondary' }} data-testid="FolderIcon" />}
+        color="default"
+        icon={<FolderIcon size={14} style={{ color: 'var(--channel-meta-chip-icon)' }} data-testid="FolderIcon" />}
         label="global default"
-        sx={{
-          fontSize: '0.7rem',
-          '& .MuiChip-label': { fontStyle: 'italic', color: 'text.secondary' },
-        }}
+        style={chipStyle}
       />
     );
   }
 
-  // Specific subfolder
+  // Specific subfolder — filled grey with folder icon to match quality chip style
   return (
     <Chip
       data-testid="subfolder-chip"
       data-default="false"
       size="small"
-      icon={<FolderIcon sx={{ fontSize: '0.9rem', color: 'primary.main' }} data-testid="FolderIcon" />}
+      color="default"
+      icon={<FolderIcon size={14} style={{ color: 'var(--channel-meta-chip-icon)' }} data-testid="FolderIcon" />}
       label={`__${subFolder}/`}
-      sx={{
-        fontSize: '0.7rem',
-      }}
+      style={chipStyle}
     />
   );
 };

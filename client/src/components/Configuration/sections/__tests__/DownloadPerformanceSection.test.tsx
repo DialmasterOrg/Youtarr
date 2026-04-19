@@ -21,10 +21,6 @@ const createSectionProps = (
   ...overrides,
 });
 
-const expandAccordion = async (user: ReturnType<typeof userEvent.setup>) => {
-  const accordionToggle = screen.getByRole('button', { name: /download performance settings/i });
-  await user.click(accordionToggle);
-};
 
 describe('DownloadPerformanceSection Component', () => {
   beforeEach(() => {
@@ -41,10 +37,9 @@ describe('DownloadPerformanceSection Component', () => {
     test('renders accordion with correct default state', () => {
       const props = createSectionProps();
       renderWithProviders(<DownloadPerformanceSection {...props} />);
+
       expect(screen.getByText('Download Performance Settings')).toBeInTheDocument();
-      // The accordion button should have aria-expanded="false" when collapsed
-      const accordionButton = screen.getByRole('button', { name: /download performance settings/i });
-      expect(accordionButton).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.getByRole('heading', { name: /download performance settings/i })).toBeInTheDocument();
     });
 
     test('renders info alert when expanded', async () => {
@@ -52,7 +47,6 @@ describe('DownloadPerformanceSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('Performance Optimization')).toBeInTheDocument();
       expect(screen.getByText(/Configure download timeouts, retry attempts, and stall detection/i)).toBeInTheDocument();
@@ -88,7 +82,6 @@ describe('DownloadPerformanceSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getAllByText('Socket Timeout').length).toBeGreaterThan(0);
     });
@@ -100,7 +93,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('30 seconds')).toBeInTheDocument();
     });
@@ -112,7 +104,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('10 seconds')).toBeInTheDocument();
     });
@@ -124,7 +115,6 @@ describe('DownloadPerformanceSection Component', () => {
       const props = createSectionProps({ config });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('30 seconds')).toBeInTheDocument();
     });
@@ -138,7 +128,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       const selectButton = screen.getByRole('button', { name: '30 seconds' });
       await user.click(selectButton);
@@ -154,7 +143,6 @@ describe('DownloadPerformanceSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       const selectButton = screen.getByRole('button', { name: '30 seconds' });
       await user.click(selectButton);
@@ -170,7 +158,6 @@ describe('DownloadPerformanceSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('Connection timeout for each download attempt')).toBeInTheDocument();
     });
@@ -182,7 +169,6 @@ describe('DownloadPerformanceSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getAllByText('Throttled Rate Detection').length).toBeGreaterThan(0);
     });
@@ -194,7 +180,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('100 KB/s')).toBeInTheDocument();
     });
@@ -206,7 +191,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('500 KB/s')).toBeInTheDocument();
     });
@@ -218,7 +202,6 @@ describe('DownloadPerformanceSection Component', () => {
       const props = createSectionProps({ config });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('100 KB/s')).toBeInTheDocument();
     });
@@ -232,7 +215,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       const selectButton = screen.getByRole('button', { name: '50 KB/s' });
       await user.click(selectButton);
@@ -250,7 +232,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       const selectButton = screen.getByRole('button', { name: '50 KB/s' });
       await user.click(selectButton);
@@ -269,7 +250,6 @@ describe('DownloadPerformanceSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('Minimum speed before considering download throttled')).toBeInTheDocument();
     });
@@ -281,7 +261,6 @@ describe('DownloadPerformanceSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getAllByText('Download Retries').length).toBeGreaterThan(0);
     });
@@ -293,7 +272,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('2 retries')).toBeInTheDocument();
     });
@@ -305,7 +283,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('3 retries')).toBeInTheDocument();
     });
@@ -317,7 +294,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('1 retry')).toBeInTheDocument();
     });
@@ -329,7 +305,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('No retries')).toBeInTheDocument();
     });
@@ -341,7 +316,6 @@ describe('DownloadPerformanceSection Component', () => {
       const props = createSectionProps({ config });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('2 retries')).toBeInTheDocument();
     });
@@ -355,7 +329,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       const selectButton = screen.getByRole('button', { name: '2 retries' });
       await user.click(selectButton);
@@ -371,7 +344,6 @@ describe('DownloadPerformanceSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       const selectButton = screen.getByRole('button', { name: '2 retries' });
       await user.click(selectButton);
@@ -387,7 +359,6 @@ describe('DownloadPerformanceSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('Number of retry attempts for failed downloads')).toBeInTheDocument();
     });
@@ -399,7 +370,6 @@ describe('DownloadPerformanceSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByRole('checkbox', { name: /enable stall detection/i })).toBeInTheDocument();
     });
@@ -411,7 +381,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       const switchElement = screen.getByRole('checkbox', { name: /enable stall detection/i });
       expect(switchElement).toBeChecked();
@@ -424,7 +393,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       const switchElement = screen.getByRole('checkbox', { name: /enable stall detection/i });
       expect(switchElement).not.toBeChecked();
@@ -437,7 +405,6 @@ describe('DownloadPerformanceSection Component', () => {
       const props = createSectionProps({ config });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       const switchElement = screen.getByRole('checkbox', { name: /enable stall detection/i });
       expect(switchElement).toBeChecked();
@@ -452,7 +419,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       const switchElement = screen.getByRole('checkbox', { name: /enable stall detection/i });
       await user.click(switchElement);
@@ -469,7 +435,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       const switchElement = screen.getByRole('checkbox', { name: /enable stall detection/i });
       await user.click(switchElement);
@@ -486,7 +451,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.queryByLabelText(/stall detection window/i)).not.toBeInTheDocument();
     });
@@ -498,7 +462,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByLabelText(/stall detection window/i)).toBeInTheDocument();
     });
@@ -510,7 +473,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       const input = screen.getByLabelText(/stall detection window/i) as HTMLInputElement;
       expect(input).toHaveValue(30);
@@ -523,7 +485,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       const input = screen.getByLabelText(/stall detection window/i) as HTMLInputElement;
       expect(input).toHaveValue(60);
@@ -536,7 +497,6 @@ describe('DownloadPerformanceSection Component', () => {
       const props = createSectionProps({ config });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       const input = screen.getByLabelText(/stall detection window/i) as HTMLInputElement;
       expect(input).toHaveValue(30);
@@ -551,7 +511,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       const input = screen.getByLabelText(/stall detection window/i);
 
@@ -575,7 +534,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       const input = screen.getByLabelText(/stall detection window/i);
       expect(input).toHaveAttribute('type', 'number');
@@ -591,7 +549,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText(/How long the download must stay below the stall threshold/i)).toBeInTheDocument();
     });
@@ -605,7 +562,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.queryByText('Stall Threshold Rate')).not.toBeInTheDocument();
     });
@@ -617,7 +573,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getAllByText('Stall Threshold Rate').length).toBeGreaterThan(0);
     });
@@ -632,7 +587,6 @@ describe('DownloadPerformanceSection Component', () => {
       const props = createSectionProps({ config });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       // Both throttled rate and stall threshold rate will show 250 KB/s, look for multiple
       const elements = screen.getAllByText('250 KB/s');
@@ -650,7 +604,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('500 KB/s')).toBeInTheDocument();
     });
@@ -663,7 +616,6 @@ describe('DownloadPerformanceSection Component', () => {
       const props = createSectionProps({ config });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       // Both throttled rate and stall threshold rate will show 100 KB/s
       const elements = screen.getAllByText('100 KB/s');
@@ -683,7 +635,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       // With different values, we can uniquely identify the stall threshold select by its value
       const stallThresholdButton = screen.getByRole('button', { name: '20 KB/s' });
@@ -706,7 +657,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       // With different values, we can uniquely identify the stall threshold select
       const stallThresholdButton = screen.getByRole('button', { name: '20 KB/s' });
@@ -728,7 +678,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText(/Speed threshold for stall detection/i)).toBeInTheDocument();
     });
@@ -742,7 +691,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       const { rerender } = renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.queryByLabelText(/stall detection window/i)).not.toBeInTheDocument();
       expect(screen.queryByText('Stall Threshold Rate')).not.toBeInTheDocument();
@@ -766,7 +714,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       const { rerender } = renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByLabelText(/stall detection window/i)).toBeInTheDocument();
       expect(screen.getAllByText('Stall Threshold Rate').length).toBeGreaterThan(0);
@@ -792,7 +739,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       // Change socket timeout
       const timeoutButton = screen.getByRole('button', { name: '30 seconds' });
@@ -844,7 +790,6 @@ describe('DownloadPerformanceSection Component', () => {
       const props = createSectionProps({ onMobileTooltipClick });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       // InfoTooltip components are present with onMobileTooltipClick prop
       expect(screen.getByRole('checkbox', { name: /enable stall detection/i })).toBeInTheDocument();
@@ -855,7 +800,6 @@ describe('DownloadPerformanceSection Component', () => {
       const props = createSectionProps({ onMobileTooltipClick: undefined });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('Download Performance Settings')).toBeInTheDocument();
     });
@@ -874,7 +818,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('5 seconds')).toBeInTheDocument();
       expect(screen.getByText('No retries')).toBeInTheDocument();
@@ -894,7 +837,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('30 seconds')).toBeInTheDocument();
       expect(screen.getByText('3 retries')).toBeInTheDocument();
@@ -912,7 +854,6 @@ describe('DownloadPerformanceSection Component', () => {
         });
         const { unmount } = renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-        await expandAccordion(user);
 
         // Check that the component renders without crashing
         expect(screen.getByText('Download Performance Settings')).toBeInTheDocument();
@@ -930,7 +871,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getAllByText('Socket Timeout').length).toBeGreaterThan(0);
       expect(screen.getAllByText('Throttled Rate Detection').length).toBeGreaterThan(0);
@@ -943,7 +883,6 @@ describe('DownloadPerformanceSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByRole('checkbox', { name: /enable stall detection/i })).toBeInTheDocument();
     });
@@ -955,7 +894,6 @@ describe('DownloadPerformanceSection Component', () => {
       });
       renderWithProviders(<DownloadPerformanceSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByLabelText(/stall detection window/i)).toBeInTheDocument();
     });

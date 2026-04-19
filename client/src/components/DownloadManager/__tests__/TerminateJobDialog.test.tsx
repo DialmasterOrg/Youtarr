@@ -179,8 +179,8 @@ describe('TerminateJobDialog', () => {
     );
 
     const cancelButton = screen.getByRole('button', { name: 'Cancel' });
-    expect(cancelButton).toHaveClass('MuiButton-contained');
-    expect(cancelButton).toHaveClass('MuiButton-containedPrimary');
+    expect(cancelButton).toHaveClass('btn-contained');
+    expect(cancelButton).toHaveClass('btn-contained-primary');
   });
 
   test('Terminate Download button has warning color and is outlined variant', () => {
@@ -193,8 +193,8 @@ describe('TerminateJobDialog', () => {
     );
 
     const terminateButton = screen.getByRole('button', { name: 'Terminate Download' });
-    expect(terminateButton).toHaveClass('MuiButton-outlined');
-    expect(terminateButton).toHaveClass('MuiButton-outlinedWarning');
+    expect(terminateButton).toHaveClass('btn-outlined');
+    expect(terminateButton).toHaveClass('btn-outlined-warning');
   });
 
   test('Cancel button receives focus when dialog opens', () => {
@@ -265,9 +265,9 @@ describe('TerminateJobDialog', () => {
     expect(alerts).toHaveLength(2); // Warning alert and info alert
 
     // First alert should be warning
-    expect(alerts[0]).toHaveClass('MuiAlert-standardWarning');
+    expect(alerts[0]).toHaveClass('alert-standard-warning');
     // Second alert should be info
-    expect(alerts[1]).toHaveClass('MuiAlert-standardInfo');
+    expect(alerts[1]).toHaveClass('alert-standard-info');
   });
 
   test('action list is properly formatted as a bullet list', () => {

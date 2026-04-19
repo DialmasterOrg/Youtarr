@@ -1,21 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   TextField,
-  InputAdornment,
-  IconButton,
   CircularProgress,
   Tooltip,
   LinearProgress,
-  Box
-} from '@mui/material';
-import {
-  Add as AddIcon,
-  Clear as ClearIcon,
-  ContentPaste as PasteIcon
-} from '@mui/icons-material';
+} from '../../ui';
+import { Add as AddIcon, Clear as ClearIcon } from '../../../lib/icons';
+import { ClipboardPaste as PasteIcon } from 'lucide-react';
 
 interface UrlInputProps {
-  // onValidate may return a boolean or nothing; support sync/async handlers.
   onValidate: (url: string) => Promise<boolean | void> | boolean | void;
   isValidating: boolean;
   disabled?: boolean;
@@ -24,6 +17,17 @@ interface UrlInputProps {
 const UrlInput: React.FC<UrlInputProps> = ({ onValidate, isValidating, disabled = false }) => {
   const [inputValue, setInputValue] = useState('');
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const runValidation = useCallback(async (url: string) => {
+    try {
+      const isValid = await Promise.resolve(onValidate(url));
+      if (isValid) {
+        setInputValue('');
+      }
+    } catch (error) {
+      console.error('URL validation failed:', error);
+    }
+  }, [onValidate]);
 
   const handlePaste = useCallback((e: React.ClipboardEvent<HTMLDivElement>) => {
     const pastedText = e.clipboardData.getData('text');
@@ -35,25 +39,17 @@ const UrlInput: React.FC<UrlInputProps> = ({ onValidate, isValidating, disabled 
         clearTimeout(debounceTimerRef.current);
       }
 
-      debounceTimerRef.current = setTimeout(() => {
-        // fire-and-forget validation; parent may return boolean or nothing
-        Promise.resolve(onValidate(pastedText)).then((ok) => {
-          if (ok) setInputValue('');
-        }).catch(() => {});
+      debounceTimerRef.current = setTimeout(async () => {
+        await runValidation(pastedText);
       }, 500);
     }
-  }, [onValidate]);
+  }, [runValidation]);
 
   const handleAddClick = useCallback(async () => {
     if (inputValue.trim() && !isValidating) {
-      try {
-        const ok = await Promise.resolve(onValidate(inputValue.trim()));
-        if (ok) setInputValue('');
-      } catch (err) {
-        // swallow errors from validator - retain input for retry
-      }
+      await runValidation(inputValue.trim());
     }
-  }, [inputValue, isValidating, onValidate]);
+  }, [inputValue, isValidating, runValidation]);
 
   const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !isValidating && inputValue.trim()) {
@@ -78,16 +74,14 @@ const UrlInput: React.FC<UrlInputProps> = ({ onValidate, isValidating, disabled 
           clearTimeout(debounceTimerRef.current);
         }
 
-        debounceTimerRef.current = setTimeout(() => {
-          Promise.resolve(onValidate(text)).then((ok) => {
-            if (ok) setInputValue('');
-          }).catch(() => {});
+        debounceTimerRef.current = setTimeout(async () => {
+          await runValidation(text);
         }, 500);
       }
     } catch (error) {
       console.error('Failed to read clipboard:', error);
     }
-  }, [onValidate]);
+  }, [runValidation]);
 
   useEffect(() => {
     return () => {
@@ -98,15 +92,15 @@ const UrlInput: React.FC<UrlInputProps> = ({ onValidate, isValidating, disabled 
   }, []);
 
   return (
-    <Box sx={{ position: 'relative' }}>
+    <div style={{ position: 'relative' }}>
       {isValidating && (
         <LinearProgress
-          sx={{
+          style={{
             position: 'absolute',
             top: -4,
             left: 0,
             right: 0,
-            zIndex: 1
+            zIndex: 1,
           }}
         />
       )}
@@ -121,55 +115,51 @@ const UrlInput: React.FC<UrlInputProps> = ({ onValidate, isValidating, disabled 
       disabled={disabled || isValidating}
       InputProps={{
         startAdornment: (
-          <InputAdornment position="start">
-            <Tooltip title="Paste from clipboard">
-              <IconButton
-                onClick={handlePasteButtonClick}
-                size="small"
-                disabled={disabled || isValidating}
-              >
-                <PasteIcon />
-              </IconButton>
-            </Tooltip>
-          </InputAdornment>
+          <Tooltip title="Paste from clipboard">
+            <button
+              type="button"
+              onClick={handlePasteButtonClick}
+              aria-label="Paste from clipboard"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', padding: 4, opacity: (disabled || isValidating) ? 0.5 : 1 }}
+              disabled={disabled || isValidating}
+            >
+              <PasteIcon size={18} data-testid="ContentPasteIcon" />
+            </button>
+          </Tooltip>
         ),
         endAdornment: (
-          <InputAdornment position="end">
+          <>
             {isValidating ? (
               <CircularProgress size={20} />
             ) : (
               <>
                 {inputValue && (
-                  <IconButton
+                  <button
+                    type="button"
                     onClick={handleClear}
-                    size="small"
+                    aria-label="Clear"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', padding: 4, opacity: disabled ? 0.5 : 1 }}
                     disabled={disabled}
                   >
-                    <ClearIcon />
-                  </IconButton>
+                    <ClearIcon size={18} />
+                  </button>
                 )}
-                <IconButton
+                <button
+                  type="button"
                   onClick={handleAddClick}
-                  size="small"
+                  aria-label="Add"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', padding: 4, color: 'var(--primary)', opacity: (!inputValue.trim() || disabled) ? 0.5 : 1 }}
                   disabled={!inputValue.trim() || disabled}
-                  color="primary"
                 >
-                  <AddIcon />
-                </IconButton>
+                  <AddIcon size={18} />
+                </button>
               </>
             )}
-          </InputAdornment>
+          </>
         ),
       }}
-      sx={{
-        '& .MuiOutlinedInput-root': {
-          '&.Mui-focused fieldset': {
-            borderColor: isValidating ? 'warning.main' : 'primary.main',
-          },
-        },
-      }}
       />
-    </Box>
+    </div>
   );
 };
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Box, Checkbox, Chip, IconButton, TableCell, TableRow } from '@mui/material';
-import { Settings as SettingsIcon } from '@mui/icons-material';
+import { Checkbox, Chip, IconButton, TableCell, TableRow } from '../../ui';
+import { Settings as SettingsIcon } from '../../../lib/icons';
 import { ReviewChannel, RowState } from '../../../types/subscriptionImport';
 import { ImportFlowAction } from '../hooks/useImportFlow';
 import ChannelThumbnail from './ChannelThumbnail';
@@ -37,20 +37,17 @@ const ReviewTableRow: React.FC<ReviewTableRowProps> = ({
   };
 
   return (
-    <TableRow
-      sx={{
-        opacity: channel.alreadySubscribed ? 0.6 : 1,
-      }}
-    >
-      <TableCell padding="checkbox">
+    <TableRow hover className={channel.alreadySubscribed ? 'opacity-60' : undefined}>
+      <TableCell className="w-10">
         <Checkbox
           checked={rowState.selected}
           onChange={handleCheckboxChange}
           disabled={channel.alreadySubscribed}
+          size="small"
           inputProps={{ 'aria-label': `Select ${channel.title}` }}
         />
       </TableCell>
-      <TableCell sx={{ width: 56 }}>
+      <TableCell className="w-14">
         <ChannelThumbnail thumbnailUrl={channel.thumbnailUrl} title={channel.title} size={36} />
       </TableCell>
       <TableCell>{channel.title}</TableCell>
@@ -58,23 +55,24 @@ const ReviewTableRow: React.FC<ReviewTableRowProps> = ({
         {channel.alreadySubscribed ? (
           <Chip label="Already subscribed" size="small" color="default" />
         ) : (
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
+          <div className="flex flex-wrap items-center gap-1">
             <SubFolderChip subFolder={rowState.settings.subFolder} />
             <QualityChip
               videoQuality={rowState.settings.videoQuality}
               globalPreferredResolution={globalPreferredResolution}
             />
             <RatingBadge rating={rowState.settings.defaultRating} />
-          </Box>
+          </div>
         )}
       </TableCell>
-      <TableCell align="right" sx={{ width: 56 }}>
+      <TableCell align="right" className="w-14">
         <IconButton
           size="small"
           onClick={handleGearClick}
           aria-label={`Settings for ${channel.title}`}
+          disabled={channel.alreadySubscribed}
         >
-          <SettingsIcon fontSize="small" />
+          <SettingsIcon size={16} />
         </IconButton>
         <RowSettingsPopover
           anchorEl={anchorEl}

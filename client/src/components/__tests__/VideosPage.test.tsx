@@ -1,6 +1,7 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import VideosPage from '../VideosPage';
 import { VideoData } from '../../types/VideoData';
 
@@ -25,15 +26,11 @@ jest.mock('../../utils', () => ({
   })
 }));
 
-jest.mock('@mui/material/useMediaQuery');
-
-jest.mock('@mui/material/styles', () => ({
-  ...jest.requireActual('@mui/material/styles'),
-  useTheme: () => ({
-    breakpoints: {
-      down: (breakpoint: string) => false
-    }
-  })
+jest.mock('../../hooks/useMediaQuery');
+jest.mock('../../hooks/useConfig', () => ({
+  useConfig: jest.fn(() => ({
+    config: { channelVideosHotLoad: false },
+  })),
 }));
 
 jest.mock('../shared/DeleteVideosDialog', () => ({
@@ -61,6 +58,22 @@ jest.mock('../shared/DeleteVideosDialog', () => ({
 
 jest.mock('../shared/useVideoDeletion', () => ({
   useVideoDeletion: jest.fn()
+}));
+
+jest.mock('../shared/VideoModal', () => ({
+  __esModule: true,
+  default: function MockVideoModal(props: any) {
+    const React = require('react');
+
+    if (!props.open) {
+      return null;
+    }
+
+    return React.createElement('div', {
+      'data-testid': 'video-modal',
+      'data-video-title': props.video?.title,
+    }, props.video?.title);
+  }
 }));
 
 const mockVideos: VideoData[] = [
@@ -116,19 +129,33 @@ const mockPaginatedResponse = (videos: VideoData[], page = 1, limit = 12) => {
   };
 };
 
+const mockPaginatedResponseWithEnabledChannels = (videos: VideoData[], page = 1, limit = 12) => ({
+  ...mockPaginatedResponse(videos, page, limit),
+  enabledChannels: [
+    { channel_id: 'UC1', uploader: 'Tech Channel', enabled: true },
+    { channel_id: 'UC2', uploader: 'Gaming Channel', enabled: true },
+  ],
+});
+
 // Use delay: null to prevent timer-related flakiness when running with other tests
 const setupUser = () => userEvent.setup({ delay: null });
 
+function LocationDisplay() {
+  const location = useLocation();
+
+  return <div data-testid="location-path">{location.pathname}</div>;
+}
+
 describe('VideosPage Component', () => {
   const mockToken = 'test-token';
-  const useMediaQuery = require('@mui/material/useMediaQuery');
+  const { useMediaQuery } = require('../../hooks/useMediaQuery');
   const { useVideoDeletion } = require('../shared/useVideoDeletion');
 
   const mockDeleteVideos = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
-    useMediaQuery.default.mockReturnValue(false);
+    (useMediaQuery as jest.Mock).mockReturnValue(false);
 
     // Mock useVideoDeletion to return a mock function
     useVideoDeletion.mockReturnValue({
@@ -146,7 +173,7 @@ describe('VideosPage Component', () => {
       render(<VideosPage token={mockToken} />);
 
       await waitFor(() => {
-        expect(screen.getByText(/Downloaded Videos/)).toBeInTheDocument();
+        expect(screen.getByText(/Library/)).toBeInTheDocument();
       });
 
       await waitFor(() => {
@@ -177,25 +204,75 @@ describe('VideosPage Component', () => {
       expect(screen.getByText('React Tutorial')).toBeInTheDocument();
     });
 
+    test('opens the video modal when the thumbnail is clicked', async () => {
+      const user = setupUser();
+      axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse([mockVideos[0]]) });
+
+      render(<VideosPage token={mockToken} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('How to Code')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByAltText('thumbnail'));
+
+      expect(screen.getByTestId('video-modal')).toHaveAttribute('data-video-title', 'How to Code');
+    });
+
+    test('opens the video modal when the title is clicked', async () => {
+      const user = setupUser();
+      axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse([mockVideos[0]]) });
+
+      render(<VideosPage token={mockToken} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('How to Code')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole('button', { name: 'How to Code' }));
+
+      expect(screen.getByTestId('video-modal')).toHaveAttribute('data-video-title', 'How to Code');
+    });
+
+    test('renders the channel name as a link to the channel page', async () => {
+      const user = setupUser();
+      axios.get.mockResolvedValueOnce({ data: mockPaginatedResponseWithEnabledChannels([mockVideos[0]]) });
+
+      render(
+        <MemoryRouter>
+          <LocationDisplay />
+          <VideosPage token={mockToken} />
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('How to Code')).toBeInTheDocument();
+      });
+
+      const channelLink = screen.getByRole('link', { name: 'Tech Channel' });
+      await user.click(channelLink);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('location-path')).toHaveTextContent('/channel/UC1');
+      });
+    });
+
     test('does not fetch videos when token is null', () => {
       render(<VideosPage token={null} />);
 
       expect(axios.get).not.toHaveBeenCalled();
     });
 
-    test('displays table headers in desktop view', async () => {
+    test('displays table header with sort controls in desktop view', async () => {
       axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
 
       render(<VideosPage token={mockToken} />);
 
       await waitFor(() => {
-        expect(screen.getByText('Thumbnail')).toBeInTheDocument();
+        expect(screen.getByText('Downloaded Videos')).toBeInTheDocument();
       });
-      expect(screen.getByText('Channel')).toBeInTheDocument();
-      expect(screen.getByText('Video Information')).toBeInTheDocument();
-      expect(screen.getByText('Published')).toBeInTheDocument();
-      expect(screen.getByText('Added')).toBeInTheDocument();
-      expect(screen.getByText('File Info')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Published/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Added/ })).toBeInTheDocument();
     });
 
     test('filters videos by channel name', async () => {
@@ -386,7 +463,7 @@ describe('VideosPage Component', () => {
 
   describe('Mobile View', () => {
     beforeEach(() => {
-      useMediaQuery.default.mockReturnValue(true);
+      (useMediaQuery as jest.Mock).mockReturnValue(true);
     });
 
     test('renders mobile layout without table headers', async () => {
@@ -525,7 +602,7 @@ describe('VideosPage Component', () => {
 
       // Check file size display in format indicator chip (1GB formatted)
       expect(screen.getByText('1.0GB')).toBeInTheDocument();
-      expect(screen.getByTestId('MovieOutlinedIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('StorageIcon')).toBeInTheDocument();
     });
 
     test('displays missing file status for removed videos', async () => {
@@ -555,7 +632,7 @@ describe('VideosPage Component', () => {
       render(<VideosPage token={mockToken} />);
 
       await waitFor(() => {
-        expect(screen.getByText(/Downloaded Videos \(42 total\)/)).toBeInTheDocument();
+        expect(screen.getByText(/Library \(42 total\)/)).toBeInTheDocument();
       });
     });
 
@@ -568,14 +645,13 @@ describe('VideosPage Component', () => {
 
       render(<VideosPage token={mockToken} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Loading videos...')).toBeInTheDocument();
-      });
+      // While the fetch is pending the videos haven't rendered yet.
+      expect(screen.queryByText('How to Code')).not.toBeInTheDocument();
 
+      // Once the fetch resolves the video appears.
       await waitFor(() => {
         expect(screen.getByText('How to Code')).toBeInTheDocument();
       });
-      expect(screen.queryByText('Loading videos...')).not.toBeInTheDocument();
     });
 
     test('handles videos with no file size information', async () => {
@@ -622,7 +698,7 @@ describe('VideosPage Component', () => {
         expect(screen.getByText('Failed to load videos. Please try refreshing the page. If this error persists, the Youtarr backend may be down.')).toBeInTheDocument();
       });
 
-      expect(screen.getByText(/Downloaded Videos/)).toBeInTheDocument();
+      expect(screen.getByText(/Library/)).toBeInTheDocument();
       expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to fetch videos:', expect.any(Error));
 
       consoleErrorSpy.mockRestore();
@@ -947,12 +1023,12 @@ describe('VideosPage Component', () => {
       });
     });
 
-    describe('Mobile View - FAB Deletion', () => {
+    describe('Mobile View - Bottom Action Bar', () => {
       beforeEach(() => {
-        useMediaQuery.default.mockReturnValue(true);
+        (useMediaQuery as jest.Mock).mockReturnValue(true);
       });
 
-      test('shows delete icon on video thumbnails in mobile view', async () => {
+      test('shows selection checkboxes on downloaded video thumbnails in mobile view', async () => {
         const videosWithFiles = mockVideos.filter(v => v.fileSize);
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(videosWithFiles) });
 
@@ -962,12 +1038,11 @@ describe('VideosPage Component', () => {
           expect(screen.getByText('How to Code')).toBeInTheDocument();
         });
 
-        // Should have delete icons for videos with fileSize
-        const deleteIcons = screen.getAllByTestId('DeleteIcon');
-        expect(deleteIcons.length).toBeGreaterThan(0);
+        expect(screen.getByRole('checkbox', { name: /Select How to Code/i })).toBeInTheDocument();
+        expect(screen.getByRole('checkbox', { name: /Select Game Review/i })).toBeInTheDocument();
       });
 
-      test('toggles video selection when delete icon is clicked in mobile', async () => {
+      test('toggles video selection when thumbnail checkbox is clicked in mobile', async () => {
         const user = setupUser();
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse([mockVideos[0]]) });
 
@@ -977,20 +1052,17 @@ describe('VideosPage Component', () => {
           expect(screen.getByText('How to Code')).toBeInTheDocument();
         });
 
-        const deleteIcons = screen.getAllByTestId('DeleteIcon');
-        const thumbnailDeleteIcon = deleteIcons[0];
+        const selectionCheckbox = screen.getByRole('checkbox', { name: /Select How to Code/i });
 
-        // Click to select
-        await user.click(thumbnailDeleteIcon);
+        await user.click(selectionCheckbox);
 
-        // FAB should appear with badge - there should now be more delete icons
         await waitFor(() => {
-          const iconsAfterClick = screen.getAllByTestId('DeleteIcon');
-          expect(iconsAfterClick.length).toBeGreaterThanOrEqual(deleteIcons.length);
+          expect(screen.getByText(/1 video selected/i)).toBeInTheDocument();
         });
+        expect(screen.getByRole('button', { name: /^Delete$/i })).toBeInTheDocument();
       });
 
-      test('shows FAB with badge when videos are selected for deletion in mobile', async () => {
+      test('shows bottom action bar when videos are selected in mobile', async () => {
         const user = setupUser();
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos.slice(0, 2)) });
 
@@ -1000,14 +1072,14 @@ describe('VideosPage Component', () => {
           expect(screen.getByText('How to Code')).toBeInTheDocument();
         });
 
-        // Select first video via delete icon
-        const deleteIcons = screen.getAllByTestId('DeleteIcon');
-        await user.click(deleteIcons[0]);
+        await user.click(screen.getByRole('checkbox', { name: /Select How to Code/i }));
 
-        // Should show FAB (checking for presence in DOM)
         await waitFor(() => {
-          expect(deleteIcons.length).toBeGreaterThan(0);
+          expect(screen.getByText(/1 video selected/i)).toBeInTheDocument();
         });
+        expect(screen.getByRole('button', { name: /^Rating$/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^Delete$/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^Clear$/i })).toBeInTheDocument();
       });
     });
 

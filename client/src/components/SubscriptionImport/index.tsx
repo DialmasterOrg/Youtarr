@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useRef } from 'react';
-import { Box, Typography, Button } from '@mui/material';
-import { ArrowBack } from '@mui/icons-material';
-import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios, { AxiosError } from 'axios';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+
+import { Button, Card, CardContent, CircularProgress, Typography } from '../ui';
 
 import { useImportFlow } from './hooks/useImportFlow';
 import { usePreviewUpload } from './hooks/usePreviewUpload';
@@ -111,13 +111,18 @@ const ImportSubscriptionsPage: React.FC<ImportSubscriptionsPageProps> = ({ token
   const importDisabled = uploadLoading;
 
   return (
-    <Box sx={{ p: 3, maxWidth: 1200, mx: 'auto' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, gap: 1 }}>
-        <Button startIcon={<ArrowBack />} onClick={() => navigate('/channels')} size="small">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-start gap-3">
+        <Button variant="outlined" size="small" onClick={() => navigate('/channels')}>
           Back to channels
         </Button>
-        <Typography variant="h5" sx={{ ml: 1 }}>Import Subscriptions</Typography>
-      </Box>
+        <div className="space-y-1">
+          <Typography variant="h5">Import Channels</Typography>
+          <Typography variant="body2" color="secondary">
+            Preview subscriptions, tune per-channel defaults, and import them directly into your channels list.
+          </Typography>
+        </div>
+      </div>
 
       {(state.phase === 'source' || state.phase === 'preview-loading') && (
         <SourcePicker
@@ -149,6 +154,14 @@ const ImportSubscriptionsPage: React.FC<ImportSubscriptionsPageProps> = ({ token
         </>
       )}
 
+      {state.phase === 'importing' && !jobDetail && (
+        <Card variant="outlined">
+          <CardContent className="flex items-center gap-3">
+            <CircularProgress size={24} />
+            <Typography variant="body2" color="secondary">Loading import progress…</Typography>
+          </CardContent>
+        </Card>
+      )}
       {state.phase === 'importing' && jobDetail && (
         <ImportProgress
           jobDetail={jobDetail}
@@ -161,7 +174,7 @@ const ImportSubscriptionsPage: React.FC<ImportSubscriptionsPageProps> = ({ token
       )}
 
       <RecentImportsSection token={token} currentPhase={state.phase} />
-    </Box>
+    </div>
   );
 };
 

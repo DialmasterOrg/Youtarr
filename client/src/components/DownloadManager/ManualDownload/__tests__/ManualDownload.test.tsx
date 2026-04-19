@@ -33,9 +33,12 @@ jest.mock('../UrlInput', () => {
 });
 
 jest.mock('../VideoChip', () => {
-  return function MockVideoChip({ video, onDelete }: any) {
+  return function MockVideoChip({ video, onDelete, isEnriching }: any) {
     return (
-      <div data-testid={`video-chip-${video.youtubeId}`}>
+      <div
+        data-testid={`video-chip-${video.youtubeId}`}
+        data-enriching={isEnriching ? 'true' : 'false'}
+      >
         <span>{video.videoTitle}</span>
         <button
           onClick={() => onDelete(video.youtubeId)}
@@ -133,6 +136,14 @@ describe('ManualDownload', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Default: enrichment returns nothing. Individual tests can override.
+    mockedAxios.post.mockImplementation((url: string) => {
+      if (url === '/api/bulkEnrichVideos') {
+        return Promise.resolve({ data: { enriched: {} } });
+      }
+      // Leave other URLs for explicit mockResolvedValueOnce in tests
+      return Promise.reject(new Error(`Unexpected POST to ${url}`));
+    });
   });
 
   test('renders the component with initial state', () => {
@@ -587,6 +598,102 @@ describe('ManualDownload', () => {
     });
     expect(screen.getByTestId('video-chip-bulk2')).toBeInTheDocument();
     expect(screen.getByText('Added 2 URLs to download queue.')).toBeInTheDocument();
+    expect(screen.getByText('2 videos to download')).toBeInTheDocument();
+  });
+
+  test('enriches bulk-imported videos with title and channel from oembed', async () => {
+    mockedAxios.post.mockImplementation((url: string) => {
+      if (url === '/api/bulkEnrichVideos') {
+        return Promise.resolve({
+          data: {
+            enriched: {
+              bulk1: { title: 'First Video', channelName: 'First Channel' },
+              bulk2: { title: 'Second Video', channelName: 'Second Channel' },
+            },
+          },
+        });
+      }
+      return Promise.reject(new Error(`Unexpected POST to ${url}`));
+    });
+
+    render(<ManualDownload onStartDownload={mockOnStartDownload} token={mockToken} />);
+
+    const bulkButton = screen.getByRole('button', { name: /bulk import/i });
+    fireEvent.click(bulkButton);
+    fireEvent.click(screen.getByTestId('bulk-import-confirm'));
+
+    // Initial state: titles are empty strings
+    await waitFor(() => {
+      expect(screen.getByTestId('video-chip-bulk1')).toBeInTheDocument();
+    });
+
+    // After enrichment: the mocked VideoChip shows `video.videoTitle`, so it
+    // flipping to the new title proves the state was updated from the oembed
+    // response.
+    await waitFor(() => {
+      expect(screen.getByText('First Video')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Second Video')).toBeInTheDocument();
+
+    expect(mockedAxios.post).toHaveBeenCalledWith(
+      '/api/bulkEnrichVideos',
+      { ids: ['bulk1', 'bulk2'] },
+      { headers: { 'x-access-token': mockToken } }
+    );
+  });
+
+  test('marks bulk-imported chips as enriching until the request resolves', async () => {
+    // Create a deferred promise so we can observe the in-flight state.
+    let resolveEnrich: (value: any) => void = () => undefined;
+    const enrichPromise = new Promise((resolve) => {
+      resolveEnrich = resolve;
+    });
+
+    mockedAxios.post.mockImplementation((url: string) => {
+      if (url === '/api/bulkEnrichVideos') return enrichPromise;
+      return Promise.reject(new Error(`Unexpected POST to ${url}`));
+    });
+
+    render(<ManualDownload onStartDownload={mockOnStartDownload} token={mockToken} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /bulk import/i }));
+    fireEvent.click(screen.getByTestId('bulk-import-confirm'));
+
+    // While the enrichment request is in flight, chips should be marked.
+    await waitFor(() => {
+      expect(screen.getByTestId('video-chip-bulk1')).toHaveAttribute('data-enriching', 'true');
+    });
+    expect(screen.getByTestId('video-chip-bulk2')).toHaveAttribute('data-enriching', 'true');
+
+    // Resolve with empty enriched map; finally-clause flips the flag back.
+    resolveEnrich({ data: { enriched: {} } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('video-chip-bulk1')).toHaveAttribute('data-enriching', 'false');
+    });
+    expect(screen.getByTestId('video-chip-bulk2')).toHaveAttribute('data-enriching', 'false');
+  });
+
+  test('leaves bulk-imported videos unchanged when enrichment fails', async () => {
+    mockedAxios.post.mockImplementation((url: string) => {
+      if (url === '/api/bulkEnrichVideos') {
+        return Promise.reject(new Error('network down'));
+      }
+      return Promise.reject(new Error(`Unexpected POST to ${url}`));
+    });
+
+    render(<ManualDownload onStartDownload={mockOnStartDownload} token={mockToken} />);
+
+    const bulkButton = screen.getByRole('button', { name: /bulk import/i });
+    fireEvent.click(bulkButton);
+    fireEvent.click(screen.getByTestId('bulk-import-confirm'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('video-chip-bulk1')).toBeInTheDocument();
+    });
+
+    // The chip should still be there with its empty title. No crash.
+    expect(screen.getByTestId('video-chip-bulk2')).toBeInTheDocument();
     expect(screen.getByText('2 videos to download')).toBeInTheDocument();
   });
 

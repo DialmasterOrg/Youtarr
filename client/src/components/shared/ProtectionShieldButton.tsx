@@ -1,8 +1,6 @@
 import React from 'react';
-import { IconButton, Tooltip } from '@mui/material';
-import ShieldIcon from '@mui/icons-material/Shield';
-import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
-import { SxProps, Theme } from '@mui/material/styles';
+import { IconButton, Tooltip } from '../ui';
+import { Shield as ShieldIcon, ShieldCheck as ShieldOutlinedIcon } from '../../lib/icons';
 
 type ShieldVariant = 'overlay' | 'inline';
 type ShieldSize = 'small' | 'medium';
@@ -12,7 +10,7 @@ interface ProtectionShieldButtonProps {
   onClick: (e: React.MouseEvent) => void;
   variant?: ShieldVariant;
   size?: ShieldSize;
-  sx?: SxProps<Theme>;
+  style?: React.CSSProperties;
 }
 
 function ProtectionShieldButton({
@@ -20,54 +18,33 @@ function ProtectionShieldButton({
   onClick,
   variant = 'overlay',
   size = 'medium',
-  sx,
+  style,
 }: ProtectionShieldButtonProps) {
   const tooltipText = isProtected ? 'Remove protection' : 'Protect from auto-deletion';
+  const iconSize = size === 'small' ? 14 : 16;
 
-  const overlayStyles: SxProps<Theme> = {
-    bgcolor: isProtected ? 'primary.main' : 'rgba(0,0,0,0.5)',
-    color: isProtected ? 'white' : 'grey.500',
-    padding: size === 'small' ? 0.3 : 0.5,
-    opacity: isProtected ? 1 : 0.6,
-    '&:hover': {
-      bgcolor: isProtected ? 'primary.dark' : 'rgba(0,0,0,0.8)',
-      opacity: 1,
-    },
-    transition: 'all 0.2s',
-    boxShadow: isProtected ? '0 0 6px rgba(25,118,210,0.5)' : 'none',
-  };
+  const overlayClassName = isProtected
+    ? 'bg-primary text-primary-foreground opacity-100 transition-all duration-200'
+    : 'bg-black/50 text-white/60 opacity-60 hover:bg-black/80 hover:opacity-100 transition-all duration-200';
 
-  const inlineStyles: SxProps<Theme> = {
-    color: isProtected ? 'primary.main' : 'action.active',
-    opacity: isProtected ? 1 : 0.5,
-    '&:hover': {
-      color: 'primary.main',
-      bgcolor: 'primary.light',
-    },
-  };
+  const inlineClassName = isProtected
+    ? 'text-primary'
+    : 'text-foreground/50 hover:text-primary transition-colors duration-200';
 
-  const baseStyles = variant === 'overlay' ? overlayStyles : inlineStyles;
-  const iconFontSize = size === 'small' ? 14 : 16;
+  const buttonClassName = variant === 'overlay' ? overlayClassName : inlineClassName;
 
   return (
     <Tooltip title={tooltipText} arrow>
       <IconButton
         aria-label={tooltipText}
         onClick={onClick}
-        sx={[
-          baseStyles,
-          ...(Array.isArray(sx) ? sx : sx ? [sx] : []),
-        ]}
         size="small"
+        className={buttonClassName}
+        style={style}
       >
         {isProtected
-          ? (variant === 'inline'
-              ? <ShieldIcon fontSize="small" />
-              : <ShieldIcon sx={{ fontSize: iconFontSize }} />)
-          : (variant === 'inline'
-              ? <ShieldOutlinedIcon fontSize="small" />
-              : <ShieldOutlinedIcon sx={{ fontSize: iconFontSize }} />)
-        }
+          ? <ShieldIcon size={iconSize} />
+          : <ShieldOutlinedIcon size={iconSize} />}
       </IconButton>
     </Tooltip>
   );

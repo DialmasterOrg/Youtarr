@@ -1,28 +1,49 @@
 import React from 'react';
 import {
-  Box,
   Typography,
   CircularProgress,
   Skeleton,
   Card,
   CardContent,
   Grid,
-} from '@mui/material';
+} from '../../ui';
 
-function ConfigurationSkeleton() {
+interface ConfigurationSkeletonProps {
+  compact?: boolean;
+}
+
+function ConfigurationSkeleton({ compact = false }: ConfigurationSkeletonProps) {
   return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-        <CircularProgress size={20} sx={{ mr: 2 }} />
-        <Typography variant="h6">Loading configuration...</Typography>
-      </Box>
+    <div style={{ padding: compact ? 0 : 24 }}>
+      {!compact && (
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 24 }}>
+          <CircularProgress size={20} style={{ marginRight: 16 }} />
+          <Typography variant="h6">Loading configuration...</Typography>
+        </div>
+      )}
+
+      {compact && (
+        <span
+          aria-live="polite"
+          style={{
+            position: 'absolute',
+            width: '1px',
+            height: '1px',
+            overflow: 'hidden',
+            clip: 'rect(0 0 0 0)',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Loading configuration...
+        </span>
+      )}
 
       {/* Loading skeleton for Core Settings */}
-      <Card elevation={2} sx={{ mb: 3, border: 1, borderColor: 'divider' }}>
+      <Card elevation={2} style={{ marginBottom: 24, border: '1px solid var(--border)' }}>
         <CardContent>
-          <Skeleton variant="text" width={150} height={32} sx={{ mb: 1 }} />
-          <Skeleton variant="text" width={250} height={20} sx={{ mb: 2 }} />
-          <Grid container spacing={2} sx={{ mt: 1 }}>
+          <Skeleton variant="text" width={150} height={32} style={{ marginBottom: 8 }} />
+          <Skeleton variant="text" width={250} height={20} style={{ marginBottom: 16 }} />
+          <Grid container spacing={2} style={{ marginTop: 8 }}>
             <Grid item xs={12}>
               <Skeleton variant="rectangular" height={56} />
             </Grid>
@@ -48,44 +69,47 @@ function ConfigurationSkeleton() {
           key={index}
           variant="rectangular"
           height={48}
-          sx={{ mb: 3, borderRadius: 1 }}
+          style={{ marginBottom: 24, borderRadius: 'var(--radius-ui)' }}
         />
       ))}
 
       {/* Loading skeleton for Account & Security */}
-      <Card elevation={2} sx={{ mb: 3, border: 1, borderColor: 'divider' }}>
+      <Card elevation={2} style={{ marginBottom: 24, border: '1px solid var(--border)' }}>
         <CardContent>
-          <Skeleton variant="text" width={150} height={28} sx={{ mb: 2 }} />
+          <Skeleton variant="text" width={150} height={28} style={{ marginBottom: 16 }} />
           <Skeleton variant="rectangular" width={130} height={36} />
         </CardContent>
       </Card>
 
       {/* Loading skeleton for Save button */}
-      <Box sx={{ height: 88 }} />
-      <Box
-        sx={{
-          position: 'fixed',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          bgcolor: 'background.paper',
-          borderTop: '1px solid',
-          borderColor: 'divider',
-          p: 2,
-          zIndex: (theme) => theme.zIndex.drawer + 2,
-        }}
-      >
-        <Skeleton
-          variant="rectangular"
-          height={48}
-          sx={{
-            width: { xs: '100%', sm: '500px' },
-            mx: 'auto',
-            borderRadius: 1
-          }}
-        />
-      </Box>
-    </Box>
+      {!compact && (
+        <>
+          <div style={{ height: 88 }} />
+          <div
+            style={{
+              position: 'fixed',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'var(--card)',
+              borderTop: '1px solid var(--border)',
+              padding: 16,
+              zIndex: 1300,
+            }}
+          >
+            <Skeleton
+              variant="rectangular"
+              height={48}
+              style={{
+                maxWidth: 500,
+                margin: '0 auto',
+                borderRadius: 'var(--radius-ui)',
+              }}
+            />
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

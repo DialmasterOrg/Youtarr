@@ -1,21 +1,14 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import useMediaQuery from '@mui/material/useMediaQuery';
+import useMediaQuery from '../../hooks/useMediaQuery';
 import ChannelManager from '../ChannelManager';
 import { renderWithProviders, createMockWebSocketContext } from '../../test-utils';
 import { Channel } from '../../types/Channel';
 
-// Mock Material-UI hooks
-jest.mock('@mui/material/useMediaQuery');
-jest.mock('@mui/material/styles', () => ({
-  ...jest.requireActual('@mui/material/styles'),
-  useTheme: () => ({
-    breakpoints: { down: () => false },
-    zIndex: { snackbar: 1000, fab: 1050 },
-  }),
-}));
+// Mock custom hooks
+jest.mock('../../hooks/useMediaQuery');
 
 // Mock react-router-dom
 const mockNavigate = jest.fn();
@@ -176,7 +169,7 @@ describe('ChannelManager Component', () => {
   describe('Component Rendering', () => {
     test('renders without crashing', () => {
       renderChannelManager();
-      expect(screen.getByText('Your Channels')).toBeInTheDocument();
+      expect(screen.getByText('Channels')).toBeInTheDocument();
     });
 
     test('throws error when WebSocketContext is not provided', () => {
@@ -198,7 +191,8 @@ describe('ChannelManager Component', () => {
     test('displays add channel input and button', () => {
       renderChannelManager();
       expect(screen.getByPlaceholderText('Paste a channel URL or @handle')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /add channel/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^channel$/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /import/i })).toBeInTheDocument();
     });
 
     test('shows loading state when fetching channels', () => {
@@ -276,11 +270,11 @@ describe('ChannelManager Component', () => {
       expect(screen.getByLabelText('Grid view')).toBeInTheDocument();
     });
 
-    test('does not render view mode toggle on mobile', () => {
+    test('renders the mobile view mode toggle on mobile', () => {
       (useMediaQuery as jest.Mock).mockReturnValue(true);
       renderChannelManager();
-      expect(screen.queryByLabelText('List view')).not.toBeInTheDocument();
-      expect(screen.queryByLabelText('Grid view')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('List view')).toBeInTheDocument();
+      expect(screen.getByLabelText('Grid view')).toBeInTheDocument();
     });
 
     test('switches to grid view when grid button clicked', async () => {
@@ -316,7 +310,7 @@ describe('ChannelManager Component', () => {
       });
 
       renderChannelManager();
-      expect(screen.getByText('Channel')).toBeInTheDocument();
+      expect(screen.getAllByText('Channel').length).toBeGreaterThan(0);
       expect(screen.getByText('Quality / Folder')).toBeInTheDocument();
       expect(screen.getByText('Auto downloads')).toBeInTheDocument();
       expect(screen.getByText('Filters')).toBeInTheDocument();
@@ -324,7 +318,7 @@ describe('ChannelManager Component', () => {
   });
 
   describe('Adding Channels', () => {
-    test('adds channel when Add Channel button clicked', async () => {
+    test('adds channel when Channel button clicked', async () => {
       const user = userEvent.setup();
       mockAddChannel.mockResolvedValue({ success: true });
 
@@ -332,7 +326,7 @@ describe('ChannelManager Component', () => {
 
       const input = screen.getByPlaceholderText('Paste a channel URL or @handle');
       await user.type(input, 'https://www.youtube.com/@newchannel');
-      await user.click(screen.getByRole('button', { name: /add channel/i }));
+      await user.click(screen.getByRole('button', { name: /^channel$/i }));
 
       await waitFor(() => {
         expect(mockAddChannel).toHaveBeenCalledWith('https://www.youtube.com/@newchannel');
@@ -357,7 +351,7 @@ describe('ChannelManager Component', () => {
     test('does not add channel when input is empty', () => {
       renderChannelManager();
 
-      const addButton = screen.getByRole('button', { name: /add channel/i });
+      const addButton = screen.getByRole('button', { name: /^channel$/i });
       // Button should be disabled when input is empty
       expect(addButton).toBeDisabled();
       expect(mockAddChannel).not.toHaveBeenCalled();
@@ -371,7 +365,7 @@ describe('ChannelManager Component', () => {
 
       const input = screen.getByPlaceholderText('Paste a channel URL or @handle') as HTMLInputElement;
       await user.type(input, 'https://www.youtube.com/@newchannel');
-      await user.click(screen.getByRole('button', { name: /add channel/i }));
+      await user.click(screen.getByRole('button', { name: /^channel$/i }));
 
       await waitFor(() => {
         expect(input.value).toBe('');
@@ -389,7 +383,7 @@ describe('ChannelManager Component', () => {
 
       const input = screen.getByPlaceholderText('Paste a channel URL or @handle');
       await user.type(input, 'https://www.youtube.com/@invalid');
-      await user.click(screen.getByRole('button', { name: /add channel/i }));
+      await user.click(screen.getByRole('button', { name: /^channel$/i }));
 
       await waitFor(() => {
         expect(screen.getByText('Channel not found')).toBeInTheDocument();
@@ -424,11 +418,21 @@ describe('ChannelManager Component', () => {
 
       const input = screen.getByPlaceholderText('Paste a channel URL or @handle');
       await user.type(input, 'https://www.youtube.com/@existing');
-      await user.click(screen.getByRole('button', { name: /add channel/i }));
+      await user.click(screen.getByRole('button', { name: /^channel$/i }));
 
       await waitFor(() => {
         expect(screen.getByText('Channel already exists')).toBeInTheDocument();
       });
+    });
+
+    test('navigates to imports when Import button clicked', async () => {
+      const user = userEvent.setup();
+
+      renderChannelManager();
+
+      await user.click(screen.getByRole('button', { name: /import/i }));
+
+      expect(mockNavigate).toHaveBeenCalledWith('/channels/imports');
     });
   });
 
@@ -744,6 +748,24 @@ describe('ChannelManager Component', () => {
       });
     });
 
+    test('closes filter popover when filter button is clicked again', async () => {
+      const user = userEvent.setup();
+      renderChannelManager();
+
+      const filterButton = screen.getByRole('button', { name: /filter by channel name/i });
+      await user.click(filterButton);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Filter channels')).toBeInTheDocument();
+      });
+
+      await user.click(filterButton);
+
+      await waitFor(() => {
+        expect(screen.queryByLabelText('Filter channels')).not.toBeInTheDocument();
+      });
+    });
+
     test('applies filter when text entered', async () => {
       const user = userEvent.setup();
       renderChannelManager();
@@ -797,7 +819,7 @@ describe('ChannelManager Component', () => {
 
       // The filter button should now have primary color
       await waitFor(() => {
-        expect(filterButton).toHaveAttribute('class', expect.stringContaining('MuiIconButton'));
+        expect(filterButton).toHaveClass('icon-btn-primary');
       });
     });
 
@@ -813,6 +835,25 @@ describe('ChannelManager Component', () => {
         expect(useChannelList).toHaveBeenCalledWith(
           expect.objectContaining({ page: 1 })
         );
+      });
+    });
+
+    test('opens the mobile filter sheet from the toolbar button', async () => {
+      const user = userEvent.setup();
+      (useMediaQuery as jest.Mock).mockReturnValue(true);
+
+      renderChannelManager();
+
+      await user.click(screen.getByRole('button', { name: /filters/i }));
+
+      const dialog = await screen.findByRole('dialog');
+      expect(dialog).toHaveAttribute('aria-labelledby', 'channel-filter-sheet-title');
+      expect(within(dialog).getByLabelText('Filter channels')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /done/i }));
+
+      await waitFor(() => {
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       });
     });
   });
@@ -1185,7 +1226,7 @@ describe('ChannelManager Component', () => {
   describe('Edge Cases', () => {
     test('handles null token gracefully', () => {
       renderChannelManager({ token: null });
-      expect(screen.getByText('Your Channels')).toBeInTheDocument();
+      expect(screen.getByText('Channels')).toBeInTheDocument();
     });
 
     test('handles empty subfolder list', () => {
@@ -1200,7 +1241,7 @@ describe('ChannelManager Component', () => {
       });
 
       renderChannelManager();
-      expect(screen.getByText('Your Channels')).toBeInTheDocument();
+      expect(screen.getByText('Channels')).toBeInTheDocument();
     });
 
     test('closes dialog when close button clicked', async () => {
@@ -1214,7 +1255,7 @@ describe('ChannelManager Component', () => {
 
       const input = screen.getByPlaceholderText('Paste a channel URL or @handle');
       await user.type(input, '@test');
-      await user.click(screen.getByRole('button', { name: /add channel/i }));
+      await user.click(screen.getByRole('button', { name: /^channel$/i }));
 
       await waitFor(() => {
         expect(screen.getByText('Test error')).toBeInTheDocument();

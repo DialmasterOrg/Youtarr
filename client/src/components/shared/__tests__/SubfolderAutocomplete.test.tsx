@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { SubfolderAutocomplete } from '../SubfolderAutocomplete';
@@ -64,7 +64,7 @@ describe('SubfolderAutocomplete', () => {
       const autocomplete = screen.getByRole('combobox');
       await user.click(autocomplete);
 
-      expect(screen.getByText('No Subfolder (root)')).toBeInTheDocument();
+      expect(within(screen.getByRole('listbox')).getByText('No Subfolder (root)')).toBeInTheDocument();
     });
 
     test('shows existing subfolders with __ prefix', async () => {
@@ -109,7 +109,7 @@ describe('SubfolderAutocomplete', () => {
 
       const autocomplete = screen.getByRole('combobox');
       await user.click(autocomplete);
-      await user.click(screen.getByText('No Subfolder (root)'));
+      await user.click(within(screen.getByRole('listbox')).getByText('No Subfolder (root)'));
 
       expect(mockOnChange).toHaveBeenCalledWith(null);
     });
@@ -141,7 +141,7 @@ describe('SubfolderAutocomplete', () => {
       const autocomplete = screen.getByRole('combobox');
       await user.click(autocomplete);
 
-      expect(screen.getByText('No Subfolder (root)')).toBeInTheDocument();
+      expect(within(screen.getByRole('listbox')).getByText('No Subfolder (root)')).toBeInTheDocument();
     });
 
     test('shows "Default Subfolder (root)" when no defaultSubfolderDisplay', async () => {
@@ -198,7 +198,7 @@ describe('SubfolderAutocomplete', () => {
       const autocomplete = screen.getByRole('combobox');
       await user.click(autocomplete);
 
-      expect(screen.getByText('No override (use channel settings)')).toBeInTheDocument();
+      expect(within(screen.getByRole('listbox')).getByText('No override (use channel settings)')).toBeInTheDocument();
     });
 
     test('shows "Root directory (no subfolder)" option', async () => {
@@ -367,8 +367,7 @@ describe('SubfolderAutocomplete', () => {
     });
 
     test('accepts loading prop without crashing', () => {
-      // MUI Autocomplete handles loading internally with a spinner
-      // This test verifies the component accepts and handles the prop correctly
+      // Verify the component accepts and handles the loading prop correctly
       render(
         <SubfolderAutocomplete
           mode="global"
@@ -413,7 +412,7 @@ describe('SubfolderAutocomplete', () => {
       await user.click(autocomplete);
 
       // Should still show special options and Add Subfolder
-      expect(screen.getByText('No Subfolder (root)')).toBeInTheDocument();
+      expect(within(screen.getByRole('listbox')).getByText('No Subfolder (root)')).toBeInTheDocument();
       expect(screen.getByText('Add Subfolder')).toBeInTheDocument();
     });
 

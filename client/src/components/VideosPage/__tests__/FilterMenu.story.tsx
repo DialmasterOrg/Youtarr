@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import React, { useState } from 'react';
-import { Button } from '@mui/material';
 import FilterMenu from '../FilterMenu';
+import { Button } from '../../ui';
 
 const meta: Meta<typeof FilterMenu> = {
   title: 'Components/VideosPage/FilterMenu',
@@ -16,7 +16,7 @@ const meta: Meta<typeof FilterMenu> = {
     const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
     return (
       <>
-        <Button onClick={(e) => setAnchorEl(e.currentTarget)}>Open Menu</Button>
+        <Button onClick={(e: React.MouseEvent<HTMLButtonElement>) => setAnchorEl(e.currentTarget)}>Open Menu</Button>
         <FilterMenu
           {...args}
           anchorEl={anchorEl}

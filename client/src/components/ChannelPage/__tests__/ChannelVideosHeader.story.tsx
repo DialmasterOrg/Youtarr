@@ -30,21 +30,25 @@ const meta: Meta<typeof ChannelVideosHeader> = {
     fetchingAllVideos: false,
     checkedBoxes: ['vid1'],
     selectedForDeletion: [],
+    selectionMode: null,
     deleteLoading: false,
     paginatedVideos,
     autoDownloadsEnabled: true,
     selectedTab: 'videos',
+    maxRating: '',
     onViewModeChange: fn(),
     onSearchChange: fn(),
     onHideDownloadedChange: fn(),
-    onAutoDownloadChange: fn(),
     onRefreshClick: fn(),
     onDownloadClick: fn(),
-    onSelectAll: fn(),
+    onSelectAllDownloaded: fn(),
+    onSelectAllNotDownloaded: fn(),
     onClearSelection: fn(),
     onDeleteClick: fn(),
     onBulkIgnoreClick: fn(),
     onInfoIconClick: fn(),
+    onMaxRatingChange: fn(),
+    onAutoDownloadToggle: fn(),
   },
 };
 
@@ -62,16 +66,21 @@ export const DownloadSelection: Story = {
 export const ActionBarInteractions: Story = {
   args: {
     checkedBoxes: [],
-    selectedForDeletion: ['vid1'],
+    selectedForDeletion: [],
   },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
-    const selectAllButton = canvas.getByRole('button', { name: /select all this page/i });
-    await userEvent.click(selectAllButton);
-    await expect(args.onSelectAll).toHaveBeenCalledTimes(1);
+    const actionsButton = canvas.getByRole('button', { name: /actions/i });
+    await userEvent.click(actionsButton);
 
-    const deleteButton = canvas.getByRole('button', { name: /delete 1/i });
-    await userEvent.hover(deleteButton);
-    expect(deleteButton.className).toContain('intent-danger');
+    const body = within(canvasElement.ownerDocument.body);
+    const selectAllButton = await body.findByText(/select all \(not downloaded\)/i);
+    await userEvent.click(selectAllButton);
+    await expect(args.onSelectAllNotDownloaded).toHaveBeenCalledTimes(1);
+
+    await userEvent.click(actionsButton);
+    const clearSelectionButton = await body.findByText(/clear selection/i);
+    await userEvent.click(clearSelectionButton);
+    await expect(args.onClearSelection).toHaveBeenCalledTimes(1);
   },
 };

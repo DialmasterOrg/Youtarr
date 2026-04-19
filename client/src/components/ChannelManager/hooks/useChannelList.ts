@@ -10,6 +10,7 @@ interface UseChannelListParams {
   searchTerm: string;
   sortOrder: 'asc' | 'desc';
   subFolder?: string;
+  append?: boolean;
 }
 
 interface ChannelListResponse {
@@ -26,6 +27,7 @@ export const useChannelList = ({
   searchTerm,
   sortOrder,
   subFolder,
+  append = false,
 }: UseChannelListParams) => {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [total, setTotal] = useState(0);
@@ -61,7 +63,23 @@ export const useChannelList = ({
       });
 
       const payload = response.data;
-      setChannels(payload.channels || []);
+      const incomingChannels = payload.channels || [];
+      setChannels((prev) => {
+        if (!append || page <= 1) {
+          return incomingChannels;
+        }
+
+        const merged = [...prev, ...incomingChannels];
+        const seen = new Set<string>();
+        return merged.filter((channel) => {
+          const key = channel.channel_id || channel.url;
+          if (seen.has(key)) {
+            return false;
+          }
+          seen.add(key);
+          return true;
+        });
+      });
       setTotal(payload.total || 0);
       setTotalPages(payload.totalPages || 0);
       setSubFolders(
@@ -73,7 +91,7 @@ export const useChannelList = ({
     } finally {
       setLoading(false);
     }
-  }, [token, page, pageSize, searchTerm, sortOrder, subFolder]);
+  }, [token, page, pageSize, searchTerm, sortOrder, subFolder, append]);
 
   useEffect(() => {
     fetchChannels();

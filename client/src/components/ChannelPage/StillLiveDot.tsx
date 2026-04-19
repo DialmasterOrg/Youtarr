@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Tooltip, Chip } from '@mui/material';
-import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
+import { Tooltip, Chip } from '../ui';
+import { Circle } from 'lucide-react';
 
 interface StillLiveDotProps {
   isMobile?: boolean;
@@ -10,6 +10,7 @@ interface StillLiveDotProps {
 function StillLiveDot({ isMobile = false, onMobileClick }: StillLiveDotProps) {
   const [tooltipOpen, setTooltipOpen] = useState(false);
   const message = "Cannot download while still airing";
+  const tooltipTimeoutRef = React.useRef<number | null>(null);
 
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -18,37 +19,34 @@ function StillLiveDot({ isMobile = false, onMobileClick }: StillLiveDotProps) {
     if (isMobile && onMobileClick) {
       onMobileClick(message);
     } else {
+      if (tooltipTimeoutRef.current) {
+        clearTimeout(tooltipTimeoutRef.current);
+      }
       setTooltipOpen(!tooltipOpen);
-      // Auto-close tooltip after 2 seconds
-      setTimeout(() => setTooltipOpen(false), 2000);
+      // Auto-close tooltip after 2 seconds and store timeout id so we can clear it.
+      tooltipTimeoutRef.current = window.setTimeout(() => setTooltipOpen(false), 2000);
     }
   };
 
+  React.useEffect(() => {
+    return () => {
+      if (tooltipTimeoutRef.current) {
+        clearTimeout(tooltipTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const liveDot = (
     <Chip
-      icon={<FiberManualRecordIcon sx={{ fontSize: 12, animation: 'pulse 2s infinite' }} />}
+      icon={<Circle size={12} data-testid="FiberManualRecordIcon" style={{ animationName: 'pulse', animationDuration: '2s', animationIterationCount: 'infinite' }} />}
       label="LIVE"
       size="small"
       onClick={handleClick}
-      sx={{
-        bgcolor: 'error.main',
-        color: 'white',
+      style={{
+        backgroundColor: 'var(--destructive)',
+        color: 'var(--destructive-foreground)',
         fontWeight: 'bold',
         cursor: 'pointer',
-        '&:hover': {
-          bgcolor: 'error.dark',
-        },
-        '@keyframes pulse': {
-          '0%': {
-            opacity: 1,
-          },
-          '50%': {
-            opacity: 0.6,
-          },
-          '100%': {
-            opacity: 1,
-          },
-        },
       }}
     />
   );

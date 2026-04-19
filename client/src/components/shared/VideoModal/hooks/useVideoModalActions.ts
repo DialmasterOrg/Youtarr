@@ -137,12 +137,17 @@ export function useVideoModalActions({
   }, [localVideo.youtubeId, token, deletion, showSnackbar, onVideoDeleted, onClose]);
 
   const handleIgnoreToggle = useCallback(async () => {
+    if (!localVideo.channelId) {
+      showSnackbar('Cannot ignore: video has no channel context', 'error');
+      return;
+    }
     const newIgnored = !localVideo.isIgnored;
+    const action = newIgnored ? 'ignore' : 'unignore';
 
     try {
       await axios.post(
-        `/api/channels/videos/${localVideo.youtubeId}/ignore`,
-        { ignored: newIgnored },
+        `/api/channels/${localVideo.channelId}/videos/${localVideo.youtubeId}/${action}`,
+        undefined,
         { headers: { 'x-access-token': token || '' } }
       );
 
@@ -159,7 +164,7 @@ export function useVideoModalActions({
     } catch (err: unknown) {
       showSnackbar(extractErrorMessage(err, 'Failed to update ignore status'), 'error');
     }
-  }, [localVideo.isIgnored, localVideo.youtubeId, token, showSnackbar, onIgnoreChanged]);
+  }, [localVideo.isIgnored, localVideo.youtubeId, localVideo.channelId, token, showSnackbar, onIgnoreChanged]);
 
   const handleDownloadConfirm = useCallback(async (settings: DownloadSettings | null) => {
     setDownloadDialogOpen(false);
@@ -185,7 +190,7 @@ export function useVideoModalActions({
     if (success) {
       onDownloadQueued?.(localVideo.youtubeId);
       onClose();
-      navigate('/downloads');
+      navigate('/downloads/activity');
     } else {
       showSnackbar('Failed to queue download', 'error');
     }

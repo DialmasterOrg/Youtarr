@@ -10,19 +10,47 @@ import {
   CircularProgress,
   Badge,
   Collapse
-} from '@mui/material';
+} from '../../ui';
 import { TransitionGroup } from 'react-transition-group';
+import { useMediaQuery, breakpoints } from '../../../hooks/useMediaQuery';
 import {
   Download as DownloadIcon,
-  Clear as ClearIcon,
-  PlaylistAdd as PlaylistAddIcon
-} from '@mui/icons-material';
+  X as ClearIcon,
+  ListPlus as PlaylistAddIcon
+} from 'lucide-react';
 import axios from 'axios';
 import UrlInput from './UrlInput';
 import VideoChip from './VideoChip';
 import DownloadSettingsDialog from './DownloadSettingsDialog';
 import BulkImportDialog from './BulkImportDialog';
 import { VideoInfo, ValidationResponse, DownloadSettings } from './types';
+
+const ENRICH_CHUNK_SIZE = 25;
+
+interface EnrichedVideoMeta {
+  title: string;
+  channelName: string;
+}
+
+async function enrichBulkImports(
+  ids: string[],
+  token: string | null,
+  onChunk: (chunk: Record<string, EnrichedVideoMeta>) => void
+): Promise<void> {
+  for (let i = 0; i < ids.length; i += ENRICH_CHUNK_SIZE) {
+    const chunk = ids.slice(i, i + ENRICH_CHUNK_SIZE);
+    try {
+      const { data } = await axios.post<{ enriched: Record<string, EnrichedVideoMeta> }>(
+        '/api/bulkEnrichVideos',
+        { ids: chunk },
+        { headers: { 'x-access-token': token || '' } }
+      );
+      if (data?.enriched) onChunk(data.enriched);
+    } catch (err) {
+      console.error('Bulk enrichment chunk failed:', err);
+    }
+  }
+}
 
 interface ManualDownloadProps {
   onStartDownload: (urls: string[], settings?: DownloadSettings | null) => void;
@@ -31,6 +59,7 @@ interface ManualDownloadProps {
 }
 
 const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token, defaultResolution = '1080' }) => {
+  const isMobile = useMediaQuery(breakpoints.down('sm'));
   const [validatedVideos, setValidatedVideos] = useState<VideoInfo[]>([]);
   const [isValidating, setIsValidating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -39,12 +68,32 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [previouslyDownloadedCount, setPreviouslyDownloadedCount] = useState(0);
   const [showBulkImport, setShowBulkImport] = useState(false);
+  const [isEnrichingBulk, setIsEnrichingBulk] = useState(false);
 
   const handleBulkImport = useCallback((videos: VideoInfo[]) => {
     setValidatedVideos(prev => [...prev, ...videos]);
     setShowBulkImport(false);
     setSuccessMessage(`Added ${videos.length} URL${videos.length !== 1 ? 's' : ''} to download queue.`);
-  }, []);
+
+    const ids = videos.map(v => v.youtubeId).filter(Boolean);
+    if (ids.length === 0) return;
+
+    setIsEnrichingBulk(true);
+    void enrichBulkImports(ids, token, (chunk) => {
+      setValidatedVideos(prev => prev.map(v => {
+        const meta = chunk[v.youtubeId];
+        if (!meta || !v.isBulkImport) return v;
+        return {
+          ...v,
+          videoTitle: meta.title || v.videoTitle,
+          channelName: meta.channelName || v.channelName,
+          isBulkImport: false,
+        };
+      }));
+    }).finally(() => {
+      setIsEnrichingBulk(false);
+    });
+  }, [token]);
 
   const validateUrl = useCallback(async (url: string): Promise<boolean> => {
     setIsValidating(true);
@@ -163,37 +212,40 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
 
   return (
     <Box>
-      <Paper elevation={1} sx={{ p: 2, mb: 2 }}>
-        <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <PlaylistAddIcon />
+      <Paper elevation={1} className="p-4 mb-4">
+        <Typography variant="h6" gutterBottom className="flex items-center gap-2">
+          <PlaylistAddIcon size={20} />
           Add Videos to Download
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography variant="body2" color="text.secondary" className="mb-4">
           Paste YouTube video URLs to add to queue
         </Typography>
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-          <Box sx={{ flex: 1 }}>
+        <Box className="flex flex-col gap-4">
+          <Box className="w-full">
             <UrlInput
               onValidate={validateUrl}
               isValidating={isValidating}
               disabled={isDownloading}
             />
           </Box>
-          <Button
-            variant="outlined"
-            onClick={() => setShowBulkImport(true)}
-            startIcon={<PlaylistAddIcon />}
-            disabled={isDownloading}
-            sx={{ whiteSpace: 'nowrap', minHeight: 56 }}
-          >
-            Bulk Import
-          </Button>
+          <Box className="flex justify-center">
+            <Button
+              variant="outlined"
+              onClick={() => setShowBulkImport(true)}
+              startIcon={<PlaylistAddIcon />}
+              disabled={isDownloading}
+              className="w-full md:w-[20vw]"
+              sx={{ whiteSpace: 'nowrap', minHeight: 56 }}
+            >
+              Bulk Import
+            </Button>
+          </Box>
         </Box>
       </Paper>
 
       {validatedVideos.length > 0 && (
-        <Paper elevation={1} sx={{ p: 2, mb: 2 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Paper elevation={1} className="p-4 mb-4">
+          <Box className="flex justify-between items-center mb-4">
             <Box>
               <Typography variant="h6">
                 Download Queue
@@ -210,25 +262,22 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
               size="small"
               onClick={handleClearAll}
               startIcon={<ClearIcon />}
+              className="text-foreground border-border hover:bg-muted hover:border-foreground hover:text-foreground"
             >
               Clear All
             </Button>
           </Box>
 
-          <Divider sx={{ mb: 2 }} />
+          <Divider className="mb-4" />
 
           <Box
-            sx={{
-              mb: 2,
-              maxHeight: 400,
-              overflowY: 'auto'
-            }}
+            className="mb-4 max-h-[400px] overflow-y-auto"
           >
             <TransitionGroup
               style={{
                 display: 'grid',
-                gridTemplateColumns: window.innerWidth < 900 ? '1fr' : '1fr 1fr',
-                gap: '8px'
+                gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+                gap: '12px'
               }}
             >
               {validatedVideos.map((video) => (
@@ -236,13 +285,14 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
                   <VideoChip
                     video={video}
                     onDelete={handleRemoveVideo}
+                    isEnriching={isEnrichingBulk}
                   />
                 </Collapse>
               ))}
             </TransitionGroup>
           </Box>
 
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
+          <Box className="flex justify-end gap-4">
             <Badge
               badgeContent={validatedVideos.length}
               color="primary"
@@ -254,6 +304,7 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
                 onClick={handleOpenSettings}
                 disabled={validatedVideos.length === 0 || isDownloading}
                 startIcon={isDownloading ? <CircularProgress size={20} /> : <DownloadIcon />}
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
               >
                 {isDownloading ? 'Starting...' : 'Download Videos'}
               </Button>

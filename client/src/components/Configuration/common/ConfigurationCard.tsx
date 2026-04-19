@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, CardContent, Typography } from '@mui/material';
+import { Card, CardContent, Typography } from '../../ui';
 
 interface ConfigurationCardProps {
   title: string;
@@ -18,10 +18,9 @@ export const ConfigurationCard: React.FC<ConfigurationCardProps> = ({
   return (
     <Card
       elevation={2}
-      sx={{
-        mb: 3,
-        border: 1,
-        borderColor: 'divider'
+      style={{
+        marginBottom: 24,
+        border: '1px solid var(--border)',
       }}
     >
       <CardContent>

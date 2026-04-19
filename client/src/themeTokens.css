@@ -1,0 +1,390 @@
+:root {
+  --action-bar-gap: 8px;
+  --action-bar-gap-compact: 6px;
+  --action-bar-padding-y: 8px;
+  --action-bar-padding-x: 0px;
+
+  /* Chip & rating shadows (tokenizable per-theme) */
+  --chip-shadow: none;
+  --chip-shadow-hover: var(--chip-shadow-hover, var(--shadow-hard-hover));
+  --rating-chip-border: var(--channel-meta-chip-border);
+  --status-chip-border: var(--channel-meta-chip-border);
+  --rating-chip-shadow: var(--channel-meta-chip-shadow);
+  --rating-chip-shadow-hover: var(--rating-chip-shadow-hover, var(--shadow-hard-hover));
+  --rating-chip-unrated-background: var(--channel-meta-chip-background);
+  --rating-chip-unrated-foreground: var(--channel-meta-chip-foreground);
+  --ui-chip-small-height: 24px;
+  --ui-chip-small-font-size: 0.75rem;
+
+  /* Max widths for status/rating chips to prevent overflow; per-theme overrides encouraged */
+  --status-chip-max-width: 140px;
+  --rating-chip-max-width: 120px;
+  --ui-chip-radius: var(--video-chip-radius, var(--radius-ui));
+
+  /* Settings splash-specific tokens (override per-theme) */
+  --settings-splash-shadow-hover: var(--nav-item-shadow-hover);
+  --settings-splash-border: var(--nav-item-bg-selected);
+
+  /* Audio format indicator tokens */
+  --audio-chip-radius: var(--radius-ui);
+  --audio-chip-bg: transparent;
+  --audio-chip-border: var(--border);
+  --audio-chip-foreground: var(--foreground);
+  --audio-chip-icon: var(--secondary);
+  --audio-chip-shadow: var(--chip-shadow);
+  --audio-chip-shadow-hover: var(--chip-shadow-hover);
+
+  --video-chip-radius: var(--radius-ui);
+  --video-chip-bg: transparent;
+  --video-chip-border: var(--border);
+  --video-chip-foreground: var(--foreground);
+  --video-chip-icon: var(--primary);
+  --video-chip-shadow: var(--chip-shadow);
+  --video-chip-shadow-hover: var(--chip-shadow-hover);
+
+  /* Audio control tokens */
+  --audio-control-radius: var(--radius-input);
+  --audio-control-border: var(--input-border);
+  --audio-control-bg: var(--input);
+  --audio-control-foreground: var(--foreground);
+  --audio-control-shadow: var(--shadow-input-rest);
+  --audio-control-shadow-focus: var(--shadow-input-focus);
+
+  /* Overlay and text-on-media tokens */
+  --overlay-backdrop-background: rgba(0, 0, 0, 0.5);
+  --overlay-backdrop-background-strong: rgba(0, 0, 0, 0.6);
+  --overlay-backdrop-filter: blur(4px);
+  --media-placeholder-background: #111827;
+  --media-placeholder-border: 1px solid rgba(107, 114, 128, 0.4);
+  --media-overlay-foreground: #ffffff;
+  --media-overlay-background: rgba(0, 0, 0, 0.6);
+  --media-overlay-background-strong: rgba(0, 0, 0, 0.8);
+  --media-overlay-danger-background: rgba(211, 47, 47, 0.95);
+  --media-overlay-selection-background: rgba(25, 118, 210, 0.2);
+  --media-overlay-delete-selection-background: rgba(220, 38, 38, 0.2);
+  --media-overlay-delete-indicator-background: rgba(220, 38, 38, 0.8);
+  --media-overlay-ignore-button-background: rgba(0, 0, 0, 0.6);
+  --media-overlay-text-shadow: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.5));
+
+  /* Video modal tokens */
+  --video-modal-media-background: var(--card);
+  --video-modal-media-border: 1px solid var(--border);
+  --video-modal-media-radius: var(--radius-ui);
+  --video-modal-media-max-height-mobile: 44vh;
+  --video-modal-media-max-height-desktop: 58vh;
+  --video-modal-media-overlay-gradient: linear-gradient(to bottom, rgba(0, 0, 0, 0.08) 0%, rgba(0, 0, 0, 0.42) 100%);
+  --video-modal-overlay-action-background: var(--media-overlay-background-strong);
+  --video-modal-overlay-action-foreground: var(--media-overlay-foreground);
+  --video-modal-overlay-action-size: 72px;
+  --video-modal-overlay-action-icon-size: 48px;
+  --video-modal-overlay-download-size: 90px;
+  --video-modal-overlay-download-icon-size: 50px;
+  --video-modal-overlay-corner-background: var(--media-overlay-background);
+  --video-modal-overlay-corner-foreground: var(--media-overlay-foreground);
+  --video-modal-action-row-gap: 8px;
+  --video-modal-action-row-padding-y: 2px;
+  --video-modal-action-control-height: 28px;
+  --video-modal-action-control-min-width: 28px;
+  --video-modal-action-control-padding-x: 8px;
+  --video-modal-action-divider: var(--border);
+  --video-modal-section-gap: 12px;
+  --video-modal-content-gap: 12px;
+  --video-modal-content-padding-mobile: 8px;
+  --video-modal-content-padding-desktop: 12px;
+  --video-modal-delete-outline: var(--destructive);
+  --video-modal-delete-foreground: var(--destructive);
+  --video-modal-delete-hover-background: var(--destructive);
+  --video-modal-delete-hover-foreground: var(--destructive-foreground);
+  --video-modal-ignore-outline: var(--warning);
+  --video-modal-ignore-foreground: var(--warning);
+  --video-modal-ignore-hover-background: var(--warning);
+  --video-modal-ignore-hover-foreground: var(--warning-foreground);
+  --video-modal-link-color: hsl(var(--primary));
+  --video-modal-info-bubble-background: var(--popover);
+  --video-modal-info-bubble-foreground: var(--popover-foreground);
+  --video-modal-info-bubble-border: 1px solid var(--border);
+  --video-modal-info-bubble-shadow: var(--shadow-soft);
+
+  /* Snackbar surface tokens */
+  --snackbar-surface-background: rgba(17, 24, 39, 0.96);
+  --snackbar-surface-border: rgba(255, 255, 255, 0.16);
+  --snackbar-surface-foreground: #ffffff;
+
+  /* Auth and setup surface tokens */
+  --auth-splash-background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --auth-surface-background: var(--card);
+  --auth-surface-border: 1px solid var(--border);
+  --auth-surface-shadow: var(--shadow-soft);
+  --auth-surface-backdrop-filter: none;
+  --auth-surface-transform: none;
+  --auth-surface-padding: 32px;
+  --auth-title-font-weight: 700;
+  --auth-title-font-size: 2.5rem;
+  --auth-title-letter-spacing: normal;
+  --auth-title-text-shadow: none;
+  --auth-subtitle-font-size: 1rem;
+  --auth-button-text-transform: none;
+  --auth-button-letter-spacing: normal;
+
+  /* Decorative background tokens */
+  --linear-decor-blob-primary: radial-gradient(circle, rgba(94, 106, 210, 0.55) 0%, transparent 70%);
+  --linear-decor-blob-secondary: radial-gradient(circle, rgba(244, 114, 182, 0.4) 0%, transparent 70%);
+  --linear-decor-top-rail: linear-gradient(90deg, transparent, rgba(94, 106, 210, 0.5), transparent);
+
+  /* Header and navigation tokens */
+  --nav-item-border-hover: var(--nav-item-border);
+  --header-nav-active-color: var(--foreground);
+  --header-nav-default-color: var(--muted-foreground);
+  --header-subnav-active-color: var(--header-nav-active-color);
+  --header-update-indicator-width: 32px;
+  --header-update-indicator-height: 32px;
+  --header-update-indicator-radius: 6px;
+  --header-update-indicator-foreground: var(--warning);
+  --header-update-indicator-background: transparent;
+  --header-update-indicator-border: 1px solid rgba(255, 255, 255, 0.2);
+  --header-update-indicator-shadow: none;
+  --mobile-subnav-surface-background: var(--card);
+  --mobile-subnav-surface-border-top: var(--nav-border);
+  --mobile-subnav-surface-radius: 0;
+  --mobile-subnav-surface-margin-bottom: 0;
+  --mobile-subnav-surface-padding-bottom: 8px;
+  --mobile-subnav-item-border: var(--nav-item-border);
+  --mobile-subnav-item-border-selected: var(--nav-item-border-selected);
+  --mobile-subnav-item-radius: var(--radius-ui);
+  --mobile-subnav-item-text-transform: none;
+  --mobile-subnav-item-letter-spacing: normal;
+  --mobile-primary-nav-surface-background: var(--card);
+  --mobile-primary-nav-surface-border-top: var(--nav-border);
+  --mobile-primary-nav-surface-radius: 0;
+  --mobile-primary-nav-surface-shadow: var(--nav-shadow);
+  --mobile-primary-nav-active-color: var(--primary);
+  --mobile-primary-nav-active-background: transparent;
+  --mobile-primary-nav-label-font-size: 0.65rem;
+  --mobile-primary-nav-label-text-transform: none;
+  --mobile-primary-nav-label-letter-spacing: normal;
+
+  /* Channel meta chip tokens */
+  --channel-meta-chip-background: var(--card);
+  --channel-meta-chip-foreground: var(--foreground);
+  --channel-meta-chip-border: 1px solid var(--border);
+  --channel-meta-chip-shadow: none;
+  --channel-meta-chip-icon: var(--muted-foreground);
+
+  /* Selection action FAB tokens */
+  --selection-fab-size: 56px;
+  --selection-fab-radius: 14px;
+  --selection-fab-border: 1px solid transparent;
+  --selection-fab-shadow: var(--shadow-hard);
+  --selection-fab-shadow-hover: var(--shadow-hard-hover);
+  --selection-fab-shadow-active: var(--selection-fab-shadow);
+  --selection-fab-icon-size: 22px;
+  --selection-fab-badge-background: var(--card);
+  --selection-fab-badge-foreground: var(--foreground);
+  --selection-fab-badge-border: 1px solid var(--border);
+  --selection-fab-badge-shadow: var(--shadow-soft);
+  --selection-fab-badge-radius: 999px;
+  --selection-fab-badge-min-size: 24px;
+  --selection-fab-badge-padding-inline: 6px;
+  --selection-fab-badge-font-size: 0.75rem;
+} 
+
+
+
+.action-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--action-bar-gap);
+  padding: var(--action-bar-padding-y) var(--action-bar-padding-x);
+}
+
+.action-bar--compact {
+  gap: var(--action-bar-gap-compact);
+}
+
+.action-bar--playful {
+  --action-bar-gap: 10px;
+}
+
+.action-bar--linear,
+.action-bar--flat {
+  --action-bar-gap: 6px;
+}
+
+/* Action bar uses theme-provided tokens for foreground and borders */
+.action-bar {
+  color: var(--action-bar-foreground);
+}
+
+.action-bar [data-btn],
+.action-bar [data-icon-btn] {
+  color: var(--action-bar-foreground);
+  border: var(--border-weight) solid var(--action-bar-border);
+}
+
+.action-bar [data-btn]:hover,
+.action-bar [data-icon-btn]:hover {
+  border: var(--border-weight) solid var(--action-bar-hover-border);
+  color: var(--foreground);
+}
+
+/* Disabled state for action bar buttons - theme-controlled */
+.action-bar [data-btn]:disabled,
+.action-bar [data-icon-btn]:disabled {
+  color: var(--action-bar-disabled-foreground) !important;
+  border-color: var(--action-bar-border) !important;
+  background-color: transparent !important;
+  opacity: 1 !important;
+}
+
+.action-bar [data-btn]:disabled svg,
+.action-bar [data-icon-btn]:disabled svg {
+  color: var(--action-bar-disabled-foreground) !important;
+}
+
+.action-bar [data-btn].intent-warning:disabled,
+.action-bar [data-icon-btn].intent-warning:disabled {
+  color: var(--warning) !important;
+  border-color: var(--warning) !important;
+  opacity: 0.55 !important;
+}
+
+.action-bar [data-btn].intent-danger:disabled,
+.action-bar [data-icon-btn].intent-danger:disabled {
+  color: var(--destructive) !important;
+  border-color: var(--destructive) !important;
+  opacity: 0.55 !important;
+}
+
+[data-btn].intent-base,
+[data-icon-btn].intent-base {
+  color: var(--foreground);
+  background-color: transparent;
+  border-color: var(--border);
+}
+
+[data-btn].intent-base:hover,
+[data-icon-btn].intent-base:hover {
+  background-color: var(--muted);
+  color: var(--foreground);
+}
+
+[data-btn].intent-success,
+[data-icon-btn].intent-success {
+  color: var(--secondary);
+  background-color: transparent;
+  border: var(--border-weight) solid var(--secondary);
+}
+
+[data-btn].intent-success:hover,
+[data-icon-btn].intent-success:hover {
+  background-color: var(--secondary);
+  color: var(--secondary-foreground);
+  border: var(--border-weight) solid var(--secondary);
+}
+
+[data-btn].intent-warning,
+[data-icon-btn].intent-warning {
+  color: var(--accent);
+  background-color: transparent;
+  border: var(--border-weight) solid var(--accent);
+}
+
+[data-btn].intent-warning:hover,
+[data-icon-btn].intent-warning:hover {
+  background-color: var(--accent);
+  color: var(--accent-foreground);
+  border: var(--border-weight) solid var(--accent);
+}
+
+[data-btn].intent-danger,
+[data-icon-btn].intent-danger {
+  color: var(--destructive);
+  background-color: transparent;
+  border: var(--border-weight) solid var(--destructive);
+}
+
+[data-btn].intent-danger:hover,
+[data-icon-btn].intent-danger:hover {
+  background-color: var(--destructive);
+  color: var(--destructive-foreground);
+  border: var(--border-weight) solid var(--destructive);
+}
+
+.selection-action-fab-shell {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 1399;
+}
+
+.selection-action-fab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--selection-fab-size);
+  height: var(--selection-fab-size);
+  border-radius: var(--selection-fab-radius);
+  border: var(--selection-fab-border);
+  background: var(--selection-action-fab-bg);
+  color: var(--selection-action-fab-fg);
+  box-shadow: var(--selection-fab-shadow);
+  transition:
+    transform var(--transition-base) ease,
+    background-color var(--transition-base) ease,
+    color var(--transition-base) ease,
+    box-shadow var(--transition-base) ease;
+}
+
+.selection-action-fab svg {
+  width: var(--selection-fab-icon-size);
+  height: var(--selection-fab-icon-size);
+}
+
+.selection-action-fab--download {
+  --selection-action-fab-bg: var(--fab-primary-bg);
+  --selection-action-fab-fg: var(--fab-primary-fg);
+  --selection-action-fab-hover-bg: var(--fab-primary-hover-bg);
+  --selection-action-fab-hover-fg: var(--fab-primary-hover-fg);
+}
+
+.selection-action-fab--delete {
+  --selection-action-fab-bg: var(--fab-error-bg);
+  --selection-action-fab-fg: var(--fab-error-fg);
+  --selection-action-fab-hover-bg: var(--fab-error-hover-bg);
+  --selection-action-fab-hover-fg: var(--fab-error-hover-fg);
+}
+
+.selection-action-fab:hover {
+  background: var(--selection-action-fab-hover-bg);
+  color: var(--selection-action-fab-hover-fg);
+  box-shadow: var(--selection-fab-shadow-hover);
+  transform: translate3d(0, -1px, 0);
+}
+
+.selection-action-fab:active,
+.selection-action-fab--open {
+  box-shadow: var(--selection-fab-shadow-active);
+  transform: translate3d(0, 1px, 0);
+}
+
+.selection-action-fab__badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: var(--selection-fab-badge-min-size);
+  height: var(--selection-fab-badge-min-size);
+  padding: 0;
+  border-radius: var(--selection-fab-badge-radius);
+  border: var(--selection-fab-badge-border);
+  background: var(--selection-fab-badge-background);
+  color: var(--selection-fab-badge-foreground);
+  box-shadow: var(--selection-fab-badge-shadow);
+  display: grid;
+  place-items: center;
+  font-size: var(--selection-fab-badge-font-size);
+  font-weight: 700;
+  line-height: 1;
+  pointer-events: none;
+}

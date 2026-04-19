@@ -22,9 +22,7 @@ const meta: Meta<typeof DownloadHistory> = {
     jobs,
     currentTime: new Date(),
     expanded: {},
-    anchorEl: {},
     handleExpandCell: () => {},
-    setAnchorEl: () => {},
     isMobile: false,
   },
 };

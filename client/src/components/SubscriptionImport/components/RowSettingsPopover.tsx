@@ -1,9 +1,15 @@
 import React from 'react';
 import {
-  Box, FormControl, InputLabel, MenuItem, Popover, Select,
-  Switch, Typography, FormControlLabel,
-} from '@mui/material';
-import type { SelectChangeEvent } from '@mui/material';
+  FormControl,
+  FormControlLabel,
+  InputLabel,
+  MenuItem,
+  Popover,
+  Select,
+  SelectChangeEvent,
+  Switch,
+  Typography,
+} from '../../ui';
 import { RowState, RowSettings } from '../../../types/subscriptionImport';
 import { ImportFlowAction } from '../hooks/useImportFlow';
 import { QUALITY_OPTIONS, RATING_OPTIONS } from './rowSettingsOptions';
@@ -29,8 +35,8 @@ const RowSettingsPopover: React.FC<RowSettingsPopoverProps> = ({
     dispatch({ type: 'UPDATE_ROW_SETTINGS', payload: { channelId, settings: partial } });
   };
 
-  const handleAutoDownloadChange = (_event: React.ChangeEvent<HTMLInputElement>, checked: boolean) => {
-    updateSettings({ autoDownloadEnabled: checked });
+  const handleAutoDownloadChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    updateSettings({ autoDownloadEnabled: event.target.checked });
   };
 
   const handleQualityChange = (event: SelectChangeEvent<string>) => {
@@ -51,7 +57,7 @@ const RowSettingsPopover: React.FC<RowSettingsPopoverProps> = ({
       anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
       transformOrigin={{ vertical: 'top', horizontal: 'left' }}
     >
-      <Box sx={{ p: 2, minWidth: 280, display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <div className="flex min-w-[280px] flex-col gap-3 p-4">
         <Typography variant="subtitle2">Channel Settings</Typography>
 
         <FormControlLabel
@@ -65,13 +71,13 @@ const RowSettingsPopover: React.FC<RowSettingsPopoverProps> = ({
           label="Auto-download enabled"
         />
 
-        <FormControl size="small" fullWidth>
+        <FormControl fullWidth>
           <InputLabel id={`quality-label-${channelId}`}>Video Quality</InputLabel>
           <Select
             labelId={`quality-label-${channelId}`}
-            label="Video Quality"
             value={settings.videoQuality ?? ''}
             onChange={handleQualityChange}
+            fullWidth
           >
             {QUALITY_OPTIONS.map((opt) => (
               <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
@@ -88,20 +94,20 @@ const RowSettingsPopover: React.FC<RowSettingsPopoverProps> = ({
           label="Subfolder"
         />
 
-        <FormControl size="small" fullWidth>
+        <FormControl fullWidth>
           <InputLabel id={`rating-label-${channelId}`}>Content Rating</InputLabel>
           <Select
             labelId={`rating-label-${channelId}`}
-            label="Content Rating"
             value={settings.defaultRating ?? ''}
             onChange={handleRatingChange}
+            fullWidth
           >
             {RATING_OPTIONS.map((opt) => (
               <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
             ))}
           </Select>
         </FormControl>
-      </Box>
+      </div>
     </Popover>
   );
 };

@@ -1,6 +1,5 @@
 import React from 'react';
-import { Box, Typography } from '@mui/material';
-import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import { Alert, Box, Typography } from '../../../ui';
 import { InfoTooltip } from '../../common/InfoTooltip';
 import { PlexConnectionStatus } from '../../types';
 import {
@@ -22,7 +21,7 @@ interface DefaultPlexLibraryDisplayProps {
 }
 
 /**
- * Renders the "Default Plex Library: ..." line below the Test Connection /
+ * Renders the default Plex library block below the Test Connection /
  * Select Default Library buttons in PlexIntegrationSection.
  *
  * Three states:
@@ -42,12 +41,17 @@ export const DefaultPlexLibraryDisplay: React.FC<DefaultPlexLibraryDisplayProps>
   if (libraryId) {
     const display = resolveLibraryDisplay(libraries, libraryId);
     return (
-      <Box sx={{ mt: 1 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}>
-          <Typography variant="body2" color="text.secondary">
-            Default Plex Library:
-          </Typography>
-          <PlexLibraryLabel display={display} boldPrimary />
+      <Box className="mt-4">
+        <Typography variant="h6" color="text.secondary" className="mb-1.5">
+          Default Plex Library
+        </Typography>
+        <Box className="flex flex-wrap items-center gap-2 md:flex-nowrap">
+          <PlexLibraryLabel
+            display={display}
+            boldPrimary
+            primaryVariant="subtitle1"
+            secondaryVariant="body2"
+          />
           <InfoTooltip
             text={DEFAULT_LIBRARY_TOOLTIP}
             onMobileClick={onMobileTooltipClick}
@@ -56,8 +60,8 @@ export const DefaultPlexLibraryDisplay: React.FC<DefaultPlexLibraryDisplayProps>
         {plexConnectionStatus === 'not_connected' && (
           <Typography
             variant="caption"
-            color="warning.main"
-            sx={{ display: 'block', mt: 0.25 }}
+            color="warning"
+            className="mt-0.5 block"
             data-testid="default-library-unreachable-warning"
           >
             Cannot reach Plex; showing saved library ID.
@@ -69,15 +73,15 @@ export const DefaultPlexLibraryDisplay: React.FC<DefaultPlexLibraryDisplayProps>
 
   if (hasPlexServerConfigured && hasPlexApiKey) {
     return (
-      <Box
-        sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 1 }}
+      <Alert
+        severity="warning"
+        className="mt-4 w-full"
         data-testid="no-default-library-warning"
       >
-        <WarningAmberIcon fontSize="small" sx={{ color: 'warning.main' }} />
-        <Typography variant="body2" color="warning.main">
+        <Typography variant="body2" color="warning">
           No Default Plex Library Configured
         </Typography>
-      </Box>
+      </Alert>
     );
   }
 

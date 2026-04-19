@@ -22,10 +22,6 @@ const createSectionProps = (
 });
 
 // Helper to expand accordion
-const expandAccordion = async (user: ReturnType<typeof userEvent.setup>) => {
-  const accordionButton = screen.getByRole('button', { name: /SponsorBlock Integration/i });
-  await user.click(accordionButton);
-};
 
 describe('SponsorBlockSection Component', () => {
   beforeEach(() => {
@@ -61,19 +57,10 @@ describe('SponsorBlockSection Component', () => {
       expect(screen.getByText('Enabled')).toBeInTheDocument();
     });
 
-    test('accordion is collapsed by default', () => {
-      const props = createSectionProps();
-      const { container } = renderWithProviders(<SponsorBlockSection {...props} />);
-      const accordionButton = within(container).getByRole('button', { name: /SponsorBlock Integration/i });
-      expect(accordionButton).toHaveAttribute('aria-expanded', 'false');
-    });
-
     test('renders info alert with title and description', async () => {
       const user = userEvent.setup();
       const props = createSectionProps();
       renderWithProviders(<SponsorBlockSection {...props} />);
-
-      await expandAccordion(user);
 
       expect(screen.getByText('What is SponsorBlock?')).toBeInTheDocument();
       expect(screen.getByText(/SponsorBlock is a crowdsourced database/i)).toBeInTheDocument();
@@ -87,7 +74,6 @@ describe('SponsorBlockSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByRole('checkbox', { name: /Enable SponsorBlock/i })).toBeInTheDocument();
     });
@@ -99,7 +85,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const checkbox = screen.getByRole('checkbox', { name: /Enable SponsorBlock/i });
       expect(checkbox).not.toBeChecked();
@@ -112,7 +97,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const checkbox = screen.getByRole('checkbox', { name: /Enable SponsorBlock/i });
       expect(checkbox).toBeChecked();
@@ -127,7 +111,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const checkbox = screen.getByRole('checkbox', { name: /Enable SponsorBlock/i });
       await user.click(checkbox);
@@ -145,7 +128,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const checkbox = screen.getByRole('checkbox', { name: /Enable SponsorBlock/i });
       await user.click(checkbox);
@@ -163,7 +145,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.queryByText('Action for Segments')).not.toBeInTheDocument();
     });
@@ -175,7 +156,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const labels = screen.getAllByText('Action for Segments');
       expect(labels.length).toBeGreaterThan(0);
@@ -188,7 +168,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.queryByLabelText(/Custom API URL/i)).not.toBeInTheDocument();
     });
@@ -200,7 +179,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByLabelText(/Custom API URL/i)).toBeInTheDocument();
     });
@@ -212,7 +190,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.queryByText(/Segment Categories to/i)).not.toBeInTheDocument();
     });
@@ -224,7 +201,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText(/Segment Categories to Remove:/i)).toBeInTheDocument();
     });
@@ -241,7 +217,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('Remove segments from video')).toBeInTheDocument();
     });
@@ -256,7 +231,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('Mark segments as chapters')).toBeInTheDocument();
     });
@@ -273,7 +247,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const selectButton = screen.getByRole('button', { name: /Remove segments from video/i });
       await user.click(selectButton);
@@ -296,7 +269,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const selectButton = screen.getByRole('button', { name: /Mark segments as chapters/i });
       await user.click(selectButton);
@@ -314,7 +286,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const selectButton = screen.getByRole('button', { name: /Remove segments from video/i });
       await user.click(selectButton);
@@ -330,7 +301,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText(/Remove: Cuts out segments entirely/i)).toBeInTheDocument();
       expect(screen.getByText(/Mark: Creates chapter markers for easy skipping/i)).toBeInTheDocument();
@@ -348,7 +318,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const input = screen.getByLabelText(/Custom API URL/i) as HTMLInputElement;
       expect(input).toHaveValue('https://custom.api.url');
@@ -364,7 +333,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const input = screen.getByLabelText(/Custom API URL/i) as HTMLInputElement;
       expect(input).toHaveValue('');
@@ -377,7 +345,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const input = screen.getByLabelText(/Custom API URL/i);
       expect(input).toHaveAttribute('placeholder', 'https://sponsor.ajay.app');
@@ -390,7 +357,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText(/Leave empty to use the default SponsorBlock API/i)).toBeInTheDocument();
     });
@@ -404,7 +370,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const input = screen.getByLabelText(/Custom API URL/i);
       await user.type(input, 'https://test.api');
@@ -421,7 +386,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const input = screen.getByLabelText(/Custom API URL/i);
       expect(input).toHaveAttribute('name', 'sponsorblockApiUrl');
@@ -439,7 +403,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('Segment Categories to Remove:')).toBeInTheDocument();
     });
@@ -454,7 +417,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('Segment Categories to Mark:')).toBeInTheDocument();
     });
@@ -468,7 +430,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('Sponsor')).toBeInTheDocument();
       expect(screen.getByText('Intro')).toBeInTheDocument();
@@ -487,7 +448,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('Paid promotions, product placements')).toBeInTheDocument();
       expect(screen.getByText('Opening sequences, title cards')).toBeInTheDocument();
@@ -508,7 +468,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const sponsorCheckbox = screen.getByTestId('category-sponsor-checkbox');
       expect(sponsorCheckbox).toBeChecked();
@@ -521,7 +480,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const selfpromoCheckbox = screen.getByTestId('category-selfpromo-checkbox');
       expect(selfpromoCheckbox).toBeChecked();
@@ -534,7 +492,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const introCheckbox = screen.getByTestId('category-intro-checkbox');
       expect(introCheckbox).not.toBeChecked();
@@ -547,7 +504,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const outroCheckbox = screen.getByTestId('category-outro-checkbox');
       expect(outroCheckbox).not.toBeChecked();
@@ -560,7 +516,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const previewCheckbox = screen.getByTestId('category-preview-checkbox');
       expect(previewCheckbox).not.toBeChecked();
@@ -573,7 +528,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const fillerCheckbox = screen.getByTestId('category-filler-checkbox');
       expect(fillerCheckbox).not.toBeChecked();
@@ -586,7 +540,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const interactionCheckbox = screen.getByTestId('category-interaction-checkbox');
       expect(interactionCheckbox).not.toBeChecked();
@@ -599,7 +552,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const musicCheckbox = screen.getByTestId('category-music_offtopic-checkbox');
       expect(musicCheckbox).not.toBeChecked();
@@ -626,7 +578,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const sponsorCheckbox = screen.getByTestId('category-sponsor-checkbox');
       const introCheckbox = screen.getByTestId('category-intro-checkbox');
@@ -666,7 +617,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const sponsorCheckbox = screen.getByTestId('category-sponsor-checkbox');
       const introCheckbox = screen.getByTestId('category-intro-checkbox');
@@ -710,7 +660,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const sponsorCheckbox = screen.getByTestId('category-sponsor-checkbox');
       await user.click(sponsorCheckbox);
@@ -751,7 +700,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const introCheckbox = screen.getByTestId('category-intro-checkbox');
       await user.click(introCheckbox);
@@ -792,7 +740,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const outroCheckbox = screen.getByTestId('category-outro-checkbox');
       await user.click(outroCheckbox);
@@ -833,7 +780,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const fillerCheckbox = screen.getByTestId('category-filler-checkbox');
       await user.click(fillerCheckbox);
@@ -874,7 +820,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const interactionCheckbox = screen.getByTestId('category-interaction-checkbox');
       await user.click(interactionCheckbox);
@@ -915,7 +860,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const musicCheckbox = screen.getByTestId('category-music_offtopic-checkbox');
       await user.click(musicCheckbox);
@@ -942,7 +886,6 @@ describe('SponsorBlockSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('Enable SponsorBlock')).toBeInTheDocument();
     });
@@ -952,7 +895,6 @@ describe('SponsorBlockSection Component', () => {
       const props = createSectionProps({ onMobileTooltipClick: undefined });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('SponsorBlock Integration')).toBeInTheDocument();
     });
@@ -966,7 +908,6 @@ describe('SponsorBlockSection Component', () => {
       });
       const { rerender } = renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.queryByText('Action for Segments')).not.toBeInTheDocument();
       expect(screen.queryByLabelText(/Custom API URL/i)).not.toBeInTheDocument();
@@ -992,7 +933,6 @@ describe('SponsorBlockSection Component', () => {
       });
       const { rerender } = renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const labels = screen.getAllByText('Action for Segments');
       expect(labels.length).toBeGreaterThan(0);
@@ -1020,7 +960,6 @@ describe('SponsorBlockSection Component', () => {
       });
       const { rerender } = renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('Segment Categories to Remove:')).toBeInTheDocument();
 
@@ -1053,7 +992,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       // Change action to "mark"
       const selectButton = screen.getByRole('button', { name: /Remove segments from video/i });
@@ -1081,7 +1019,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       // Toggle intro
       const introCheckbox = screen.getByTestId('category-intro-checkbox');
@@ -1110,7 +1047,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const input = screen.getByLabelText(/Custom API URL/i) as HTMLInputElement;
       expect(input).toHaveValue('');
@@ -1127,7 +1063,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const input = screen.getByLabelText(/Custom API URL/i) as HTMLInputElement;
       expect(input).toHaveValue(longUrl);
@@ -1142,7 +1077,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const checkbox = screen.getByRole('checkbox', { name: /Enable SponsorBlock/i });
 
@@ -1161,7 +1095,6 @@ describe('SponsorBlockSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByRole('checkbox', { name: /Enable SponsorBlock/i })).toBeInTheDocument();
     });
@@ -1173,7 +1106,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const labels = screen.getAllByText('Action for Segments');
       expect(labels.length).toBeGreaterThan(0);
@@ -1186,7 +1118,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByLabelText(/Custom API URL/i)).toBeInTheDocument();
     });
@@ -1198,7 +1129,6 @@ describe('SponsorBlockSection Component', () => {
       });
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('Sponsor')).toBeInTheDocument();
       expect(screen.getByText('Intro')).toBeInTheDocument();
@@ -1215,7 +1145,6 @@ describe('SponsorBlockSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<SponsorBlockSection {...props} />);
 
-      await expandAccordion(user);
 
       const alert = screen.getByRole('alert');
       expect(alert).toBeInTheDocument();
@@ -1223,9 +1152,9 @@ describe('SponsorBlockSection Component', () => {
 
     test('accordion has proper aria attributes', () => {
       const props = createSectionProps();
-      const { container } = renderWithProviders(<SponsorBlockSection {...props} />);
-      const accordionButton = within(container).getByRole('button', { name: /SponsorBlock Integration/i });
-      expect(accordionButton).toHaveAttribute('aria-expanded');
+      renderWithProviders(<SponsorBlockSection {...props} />);
+
+      expect(screen.getByRole('heading', { name: /SponsorBlock Integration/i })).toBeInTheDocument();
     });
   });
 });

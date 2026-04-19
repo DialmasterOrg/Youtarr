@@ -1,173 +1,241 @@
 import React from 'react';
-import { Box, Button, Chip, IconButton, Tooltip } from '@mui/material';
-import DeleteIcon from '@mui/icons-material/Delete';
-import StarIcon from '@mui/icons-material/Star';
-import StarOutlineIcon from '@mui/icons-material/StarOutline';
-import BlockIcon from '@mui/icons-material/Block';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import ShieldIcon from '@mui/icons-material/Shield';
-import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
+import { Box, Button, Chip, Tooltip } from '../../../ui';
+import RatingBadge from '../../../shared/RatingBadge';
+import {
+  Delete as DeleteIcon,
+  Download as DownloadIcon,
+  Block as BlockIcon,
+  Eye as VisibilityIcon,
+  Shield as ShieldIcon,
+  ShieldCheck as ShieldOutlinedIcon,
+} from '../../../../lib/icons';
+import { Youtube as YoutubeIcon } from 'lucide-react';
 import { VideoModalData } from '../types';
-import { VideoStatus } from '../../../../utils/videoStatus';
-
-interface StatusChipInfo {
-  label: string;
-  color: 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning';
-}
-
-interface MediaTypeChipInfo {
-  label: string;
-  color: 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning';
-  icon: React.ReactElement;
-}
+import {
+  getMediaTypeInfo,
+  getStatusChipStyle,
+  getStatusChipVariant,
+  getStatusColor,
+  getStatusIcon,
+  getStatusLabel,
+} from '../../../../utils/videoStatus';
+import { SHARED_STATUS_CHIP_STYLE, SHARED_THEMED_CHIP_STYLE } from '../../../shared/chipStyles';
+import { YOUTUBE_URL_BASE } from '../constants';
 
 interface VideoActionsProps {
   video: VideoModalData;
-  statusChip: StatusChipInfo;
-  mediaTypeChip: MediaTypeChipInfo | null;
   onDelete: () => void;
   onProtectionToggle: () => void;
   onIgnoreToggle: () => void;
-  onRatingChange: () => void;
+  onDownloadClick: () => void;
+  onRatingClick: () => void;
   protectionLoading: boolean;
   isMobile: boolean;
+  allowIgnore?: boolean;
 }
-
-const PILL_SX = {
-  textTransform: 'none',
-  borderRadius: 5,
-  px: 1.5,
-  minHeight: 32,
-} as const;
 
 function VideoActions({
   video,
-  statusChip,
-  mediaTypeChip,
   onDelete,
   onProtectionToggle,
   onIgnoreToggle,
-  onRatingChange,
+  onDownloadClick,
+  onRatingClick,
   protectionLoading,
   isMobile,
+  allowIgnore = true,
 }: VideoActionsProps) {
   const isDownloadedAndPresent = video.isDownloaded && video.status !== 'missing';
   const showProtect = isDownloadedAndPresent;
-  const showRating = isDownloadedAndPresent;
-  const showIgnore = !video.isDownloaded || video.isIgnored;
+  const showDownload = !isDownloadedAndPresent;
+  const showIgnore = (!isDownloadedAndPresent || video.isIgnored) && allowIgnore;
   const showDelete = video.isDownloaded || video.status === 'missing';
+  const mediaTypeInfo = getMediaTypeInfo(video.mediaType);
+  const statusLabel = video.status === 'downloaded' ? 'Available' : getStatusLabel(video.status);
+  const youtubeUrl = `${YOUTUBE_URL_BASE}${video.youtubeId}`;
+  const useIconOnlyActions = isMobile;
+  const compactChipStyle = {
+    height: 'var(--video-modal-action-control-height, 28px)',
+    fontSize: 'var(--ui-chip-small-font-size, 0.75rem)',
+    paddingLeft: 8,
+    paddingRight: 8,
+    boxSizing: 'border-box',
+  } as React.CSSProperties;
+  const iconOnlyActionButtonStyle = {
+    width: 'var(--video-modal-action-control-min-width, 28px)',
+    minWidth: 'var(--video-modal-action-control-min-width, 28px)',
+    height: 'var(--video-modal-action-control-height, 28px)',
+    padding: 0,
+    flexShrink: 0,
+    boxSizing: 'border-box',
+  } as React.CSSProperties;
+  const labeledActionButtonStyle = {
+    height: 'var(--video-modal-action-control-height, 28px)',
+    minWidth: 'var(--video-modal-action-control-min-width, 28px)',
+    paddingLeft: 'var(--video-modal-action-control-padding-x, 8px)',
+    paddingRight: 'var(--video-modal-action-control-padding-x, 8px)',
+    flexShrink: 0,
+    boxSizing: 'border-box',
+  } as React.CSSProperties;
+  const actionButtonStyle = useIconOnlyActions ? iconOnlyActionButtonStyle : labeledActionButtonStyle;
 
   return (
     <Box
-      sx={{
+      style={{
         display: 'flex',
-        flexWrap: 'wrap',
+        flexWrap: 'nowrap',
         alignItems: 'center',
-        gap: 0.75,
-        py: 0.5,
+        gap: 'var(--video-modal-action-row-gap, 8px)',
+        paddingTop: 'var(--video-modal-action-row-padding-y, 2px)',
+        paddingBottom: 'var(--video-modal-action-row-padding-y, 2px)',
+        width: '100%',
+        minWidth: 0,
+        overflowX: 'hidden',
       }}
     >
-      {/* Status indicators (filled chips - not clickable) */}
       <Chip
-        label={statusChip.label}
-        color={statusChip.color}
+        icon={getStatusIcon(video.status)}
+        label={statusLabel}
+        color={getStatusColor(video.status)}
+        variant={getStatusChipVariant(video.status)}
         size="small"
-      />
-      {mediaTypeChip && (
-        <Chip
-          label={mediaTypeChip.label}
-          color={mediaTypeChip.color}
-          size="small"
-          icon={mediaTypeChip.icon}
-        />
-      )}
-
-      {/* Separator between status and actions */}
-      <Box
-        sx={{
-          width: '1px',
-          height: 20,
-          bgcolor: 'divider',
-          mx: 0.25,
+        style={{
+          ...SHARED_THEMED_CHIP_STYLE,
+          ...getStatusChipStyle(video.status),
+          ...compactChipStyle,
+          flexShrink: 0,
+          whiteSpace: 'nowrap',
         }}
       />
 
-      {/* Action buttons (outlined pills - clickable) */}
-      {showProtect && (
-        <Button
+      {mediaTypeInfo && (
+        <Chip
+          label={mediaTypeInfo.label}
+          color={mediaTypeInfo.color}
           size="small"
-          variant={video.isProtected ? 'contained' : 'outlined'}
-          color={video.isProtected ? 'primary' : 'inherit'}
-          startIcon={video.isProtected ? <ShieldIcon /> : <ShieldOutlinedIcon />}
-          onClick={(e: React.MouseEvent) => {
-            e.stopPropagation();
-            if (!protectionLoading) {
-              onProtectionToggle();
-            }
+          icon={mediaTypeInfo.icon}
+          variant="outlined"
+          style={{
+            ...SHARED_STATUS_CHIP_STYLE,
+            ...compactChipStyle,
+            flexShrink: 0,
           }}
-          disabled={protectionLoading}
-          aria-label={video.isProtected ? 'Remove protection' : 'Protect from auto-deletion'}
-          sx={PILL_SX}
-        >
-          {video.isProtected ? 'Protected' : 'Protect'}
-        </Button>
+        />
       )}
 
-      {showRating && (
-        <Button
-          size="small"
-          variant="outlined"
-          color={video.normalizedRating ? 'warning' : 'inherit'}
-          startIcon={video.normalizedRating ? <StarIcon /> : <StarOutlineIcon />}
-          onClick={onRatingChange}
-          aria-label="Change rating"
-          sx={PILL_SX}
-        >
-          {video.normalizedRating || 'Rate'}
-        </Button>
+      <Box
+        style={{
+          width: '1px',
+          height: 24,
+          backgroundColor: 'var(--video-modal-action-divider, var(--border))',
+          marginLeft: 1,
+          marginRight: 1,
+          flexShrink: 0,
+        }}
+      />
+
+      <RatingBadge
+        rating={video.normalizedRating}
+        ratingSource={video.ratingSource}
+        showNA
+        ariaLabel="Change rating"
+        onClick={onRatingClick}
+        size="small"
+        style={{
+          height: 'var(--video-modal-action-control-height, 28px)',
+          boxSizing: 'border-box',
+        }}
+      />
+
+      {showDownload && (
+        <Tooltip title="Download video">
+          <Button
+            size="small"
+            variant="contained"
+            color="primary"
+            onClick={onDownloadClick}
+            aria-label="Download video"
+            startIcon={useIconOnlyActions ? undefined : <DownloadIcon size={16} />}
+            style={actionButtonStyle}
+          >
+            {useIconOnlyActions ? <DownloadIcon size={16} /> : 'Download'}
+          </Button>
+        </Tooltip>
+      )}
+
+      {showProtect && (
+        <Tooltip title={video.isProtected ? 'Remove protection' : 'Protect from auto-deletion'}>
+          <Button
+            size="small"
+            variant={video.isProtected ? 'contained' : 'outlined'}
+            color={video.isProtected ? 'primary' : 'inherit'}
+            onClick={(e: React.MouseEvent) => {
+              e.stopPropagation();
+              if (!protectionLoading) {
+                onProtectionToggle();
+              }
+            }}
+            disabled={protectionLoading}
+            aria-label={video.isProtected ? 'Remove protection' : 'Protect from auto-deletion'}
+            startIcon={useIconOnlyActions ? undefined : (video.isProtected ? <ShieldIcon size={16} /> : <ShieldOutlinedIcon size={16} />)}
+            style={actionButtonStyle}
+          >
+            {useIconOnlyActions
+              ? (video.isProtected ? <ShieldIcon size={16} /> : <ShieldOutlinedIcon size={16} />)
+              : (video.isProtected ? 'Protected' : 'Protect')}
+          </Button>
+        </Tooltip>
       )}
 
       {showIgnore && (
+        <Tooltip title={video.isIgnored ? 'Unignore' : 'Ignore'}>
+          <Button
+            size="small"
+            variant="outlined"
+            color="warning"
+            onClick={onIgnoreToggle}
+            aria-label={video.isIgnored ? 'Unignore' : 'Ignore'}
+            startIcon={useIconOnlyActions ? undefined : (video.isIgnored ? <VisibilityIcon size={16} /> : <BlockIcon size={16} />)}
+            style={actionButtonStyle}
+          >
+            {useIconOnlyActions
+              ? (video.isIgnored ? <VisibilityIcon size={16} /> : <BlockIcon size={16} />)
+              : (video.isIgnored ? 'Unignore' : 'Ignore')}
+          </Button>
+        </Tooltip>
+      )}
+
+      <Tooltip title="Open in YouTube">
         <Button
+          asChild
           size="small"
           variant="outlined"
           color="inherit"
-          startIcon={video.isIgnored ? <VisibilityIcon /> : <BlockIcon />}
-          onClick={onIgnoreToggle}
-          aria-label={video.isIgnored ? 'Unignore' : 'Ignore'}
-          sx={PILL_SX}
+          style={actionButtonStyle}
         >
-          {video.isIgnored ? 'Unignore' : 'Ignore'}
+          <a href={youtubeUrl} target="_blank" rel="noopener noreferrer" aria-label="Open in YouTube">
+            {useIconOnlyActions ? <YoutubeIcon size={18} /> : 'Open in'}
+            {!useIconOnlyActions && <YoutubeIcon size={18} />}
+          </a>
         </Button>
-      )}
+      </Tooltip>
 
-      <Box sx={{ flex: 1 }} />
+      <Box style={{ flex: 1, minWidth: isMobile ? 0 : 12 }} />
 
       {showDelete && (
-        isMobile ? (
-          <Tooltip title="Delete video">
-            <IconButton
-              size="small"
-              color="error"
-              onClick={onDelete}
-              aria-label="Delete video"
-            >
-              <DeleteIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        ) : (
+        <Tooltip title="Delete video">
           <Button
             size="small"
             variant="outlined"
             color="error"
-            startIcon={<DeleteIcon />}
             onClick={onDelete}
             aria-label="Delete video"
-            sx={PILL_SX}
+            startIcon={useIconOnlyActions ? undefined : <DeleteIcon size={16} />}
+            style={actionButtonStyle}
           >
-            Delete
+            {useIconOnlyActions ? <DeleteIcon size={16} /> : 'Delete'}
           </Button>
-        )
+        </Tooltip>
       )}
     </Box>
   );

@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Box, Button, Typography } from '@mui/material';
+import { Button, Chip, Typography } from '../../ui';
 import { ReviewChannel, RowState } from '../../../types/subscriptionImport';
 import { ImportFlowAction } from '../hooks/useImportFlow';
 
@@ -54,34 +54,21 @@ const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
   };
 
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: 1.5,
-        py: 1.5,
-        px: 1,
-      }}
-    >
-      <Typography variant="body2" sx={{ color: 'text.secondary', mr: 1 }}>
-        {selectedCount} of {eligibleCount} selected
-      </Typography>
-
-      <Button variant="text" size="small" onClick={handleSelectAll}>
-        Select all
-      </Button>
-
-      <Button variant="text" size="small" onClick={handleDeselectAll}>
-        Deselect all
-      </Button>
-
+    <div className="mb-4 flex flex-wrap items-center gap-2 rounded-[var(--radius-ui)] border border-[var(--border-strong)] bg-card px-4 py-3">
+      <Chip
+        size="small"
+        color={selectedCount > 0 ? 'primary' : 'default'}
+        label={`${selectedCount} of ${eligibleCount} selected`}
+      />
+      <Button variant="text" size="small" onClick={handleSelectAll}>Select all</Button>
+      <Button variant="text" size="small" onClick={handleDeselectAll}>Deselect all</Button>
       <Button variant="text" size="small" onClick={handleToggleAutoDownload}>
         {allAutoDownloadEnabled ? 'Disable auto-download' : 'Enable auto-download'}
       </Button>
-
-      <Box sx={{ flex: 1 }} />
-
+      <div className="flex-1" />
+      <Typography variant="caption" color="secondary" className="mr-2">
+        Review settings before starting the import.
+      </Typography>
       <Button
         variant="contained"
         disabled={selectedCount === 0 || importDisabled}
@@ -89,7 +76,7 @@ const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
       >
         Import selected ({selectedCount})
       </Button>
-    </Box>
+    </div>
   );
 };
 

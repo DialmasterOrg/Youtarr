@@ -6,7 +6,7 @@ import {
   DialogActions,
   Button,
   TextField,
-} from '@mui/material';
+} from '../ui';
 
 const MAX_SUBFOLDER_LENGTH = 100;
 const VALID_NAME_REGEX = /^[a-zA-Z0-9\s\-_]+$/;
@@ -151,7 +151,7 @@ export function AddSubfolderDialog({
           inputProps={{
             maxLength: MAX_SUBFOLDER_LENGTH,
           }}
-          sx={{ mt: 1 }}
+          style={{ marginTop: 8 }}
         />
       </DialogContent>
       <DialogActions>

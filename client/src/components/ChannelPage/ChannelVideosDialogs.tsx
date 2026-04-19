@@ -8,7 +8,7 @@ import {
   Button,
   Snackbar,
   Alert,
-} from '@mui/material';
+} from '../ui';
 import DownloadSettingsDialog from '../DownloadManager/ManualDownload/DownloadSettingsDialog';
 import DeleteVideosDialog from '../shared/DeleteVideosDialog';
 import { DownloadSettings } from '../DownloadManager/ManualDownload/types';
@@ -31,7 +31,6 @@ export interface ChannelVideosDialogsProps {
   defaultAudioFormatSource?: 'channel' | 'global';
   selectedTab: string;
   tabLabel: string;
-  channelId?: string | null;
   onDownloadDialogClose: () => void;
   onDownloadConfirm: (settings: DownloadSettings | null) => void;
   onRefreshCancel: () => void;
@@ -47,7 +46,6 @@ export interface ChannelVideosDialogsProps {
 function ChannelVideosDialogs({
   token,
   downloadDialogOpen,
-  channelId,
   refreshConfirmOpen,
   deleteDialogOpen,
   fetchAllError,
@@ -74,30 +72,6 @@ function ChannelVideosDialogs({
   onSuccessMessageClose,
   onErrorMessageClose,
 }: ChannelVideosDialogsProps) {
-  const [defaultRating, setDefaultRating] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    const controller = new AbortController();
-    const fetchSettings = async () => {
-      if (!channelId || !token) return;
-      try {
-        const resp = await fetch(`/api/channels/${channelId}/settings`, {
-          headers: { 'x-access-token': token },
-          signal: controller.signal,
-        });
-        if (!resp.ok) return;
-        const data = await resp.json();
-        if (Object.prototype.hasOwnProperty.call(data, 'default_rating')) {
-          setDefaultRating(data.default_rating ?? null);
-        }
-      } catch (err) {
-        if (err instanceof DOMException && err.name === 'AbortError') return;
-      }
-    };
-
-    fetchSettings();
-    return () => { controller.abort(); };
-  }, [channelId, token]);
   return (
     <>
       {/* Download Settings Dialog */}
@@ -111,7 +85,6 @@ function ChannelVideosDialogs({
         defaultResolutionSource={defaultResolutionSource}
         defaultAudioFormat={defaultAudioFormat}
         defaultAudioFormatSource={defaultAudioFormatSource}
-        defaultRating={defaultRating}
         mode="manual"
         token={token}
       />
@@ -163,7 +136,6 @@ function ChannelVideosDialogs({
       {/* Mobile Tooltip Snackbar */}
       <Snackbar
         open={mobileTooltip !== null}
-        autoHideDuration={8000}
         onClose={onMobileTooltipClose}
       >
         <Alert onClose={onMobileTooltipClose} severity="info">

@@ -79,7 +79,7 @@ export const Default: Story = {
   },  play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
-    await expect(await canvas.findByText('Your Channels', {}, { timeout: 3000 })).toBeInTheDocument();
+    await expect(await canvas.findByText('Channels', {}, { timeout: 3000 })).toBeInTheDocument();
     await expect(await canvas.findByText(/alpha channel/i, {}, { timeout: 3000 })).toBeInTheDocument();
     await expect(await canvas.findByText(/beta channel/i, {}, { timeout: 3000 })).toBeInTheDocument();
     await waitFor(() => {

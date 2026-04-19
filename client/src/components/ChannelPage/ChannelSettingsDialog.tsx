@@ -14,24 +14,25 @@ import {
   TextField,
   CircularProgress,
   Alert,
-  Box,
   Typography,
   Divider,
   List,
   ListItem,
   ListItemText,
   ListItemIcon,
-  IconButton,
   Link,
-  Collapse
-} from '@mui/material';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import CancelIcon from '@mui/icons-material/Cancel';
-import InfoIcon from '@mui/icons-material/Info';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import RatingBadge from '../shared/RatingBadge';
+  Collapse,
+  ListItemButton,
+  Tab,
+  Tabs,
+  Chip,
+} from '../ui';
+import { CheckCircle as CheckCircleIcon, XCircle as CancelIcon, Info as InfoIcon, Copy as ContentCopyIcon, Settings as SettingsIcon, Download as DownloadIcon, Filter as FilterAltIcon, Shield as RatingIcon } from '../../lib/icons';
+import useMediaQuery from '../../hooks/useMediaQuery';
 import { useConfig } from '../../hooks/useConfig';
 import { SubfolderAutocomplete } from '../shared/SubfolderAutocomplete';
+import { RATING_OPTIONS } from '../../utils/ratings';
+import RatingBadge from '../shared/RatingBadge';
 import TabsEditor, { TabsEditorRefreshResult } from './components/TabsEditor';
 
 interface ChannelSettings {
@@ -40,8 +41,9 @@ interface ChannelSettings {
   min_duration: number | null;
   max_duration: number | null;
   title_filter_regex: string | null;
-  audio_format: string | null;
   default_rating: string | null;
+  auto_download_enabled_tabs: string | null;
+  audio_format: string | null;
   skip_video_folder: boolean | null;
   hidden_tabs: string[];
 }
@@ -73,6 +75,20 @@ interface ChannelSettingsDialogProps {
   onSettingsSaved?: (settings: ChannelSettings & ChannelTabsState) => void;
 }
 
+const TAB_TO_MEDIA_TYPE: Record<string, string> = {
+  videos: 'video',
+  shorts: 'short',
+  streams: 'livestream',
+};
+
+const MEDIA_TYPE_LABEL: Record<string, string> = {
+  video: 'New Videos',
+  short: 'New Shorts',
+  livestream: 'New Live/Streams',
+};
+
+const MEDIA_TYPE_ORDER: string[] = ['video', 'short', 'livestream'];
+
 const regexExamples = [
   {
     label: 'Exclude videos containing a word (case-insensitive)',
@@ -95,18 +111,21 @@ function ChannelSettingsDialog({
   open,
   onClose,
   channelId,
-  channelName,
   token,
   onSettingsSaved
 }: ChannelSettingsDialogProps) {
+  const isMobile = useMediaQuery('(max-width: 767px)');
+  const [activeSection, setActiveSection] = useState('general');
+
   const [settings, setSettings] = useState<ChannelSettings>({
     sub_folder: null,
     video_quality: null,
     min_duration: null,
     max_duration: null,
     title_filter_regex: null,
-    audio_format: null,
     default_rating: null,
+    audio_format: null,
+    auto_download_enabled_tabs: null,
     skip_video_folder: null,
     hidden_tabs: []
   });
@@ -116,8 +135,9 @@ function ChannelSettingsDialog({
     min_duration: null,
     max_duration: null,
     title_filter_regex: null,
-    audio_format: null,
     default_rating: null,
+    audio_format: null,
+    auto_download_enabled_tabs: null,
     skip_video_folder: null,
     hidden_tabs: []
   });
@@ -149,13 +169,18 @@ function ChannelSettingsDialog({
     : `${globalQuality}p (global)`;
 
   const qualityOptions = [
-    { value: null, label: `Use Global Setting (${globalQuality}p)` },
     { value: '360', label: '360p' },
     { value: '480', label: '480p' },
     { value: '720', label: '720p (HD)' },
     { value: '1080', label: '1080p (Full HD)' },
     { value: '1440', label: '1440p (2K)' },
     { value: '2160', label: '2160p (4K)' }
+  ];
+
+  const sections = [
+    { id: 'general', label: 'General', icon: <SettingsIcon size={18} /> },
+    { id: 'filters', label: 'Filters', icon: <FilterAltIcon size={18} /> },
+    { id: 'ratings', label: 'Ratings', icon: <RatingIcon size={18} /> }
   ];
 
   useEffect(() => {
@@ -172,6 +197,8 @@ function ChannelSettingsDialog({
       setError(null);
       return;
     }
+
+    setActiveSection('general');
 
     // Load all data when dialog opens
     const loadAllData = async () => {
@@ -197,6 +224,7 @@ function ChannelSettingsDialog({
           min_duration: settingsData.min_duration || null,
           max_duration: settingsData.max_duration || null,
           title_filter_regex: settingsData.title_filter_regex || null,
+          auto_download_enabled_tabs: settingsData.auto_download_enabled_tabs ?? 'video',
           audio_format: settingsData.audio_format || null,
           default_rating: Object.prototype.hasOwnProperty.call(settingsData, 'default_rating')
             ? settingsData.default_rating
@@ -261,8 +289,9 @@ function ChannelSettingsDialog({
           min_duration: settings.min_duration,
           max_duration: settings.max_duration,
           title_filter_regex: settings.title_filter_regex || null,
-          audio_format: settings.audio_format || null,
           default_rating: settings.default_rating || null,
+          audio_format: settings.audio_format || null,
+          auto_download_enabled_tabs: settings.auto_download_enabled_tabs,
           skip_video_folder: settings.skip_video_folder,
           hidden_tabs: settings.hidden_tabs
         })
@@ -306,6 +335,7 @@ function ChannelSettingsDialog({
         default_rating: result?.settings && Object.prototype.hasOwnProperty.call(result.settings, 'default_rating')
           ? result.settings.default_rating
           : settings.default_rating ?? null,
+        auto_download_enabled_tabs: result?.settings?.auto_download_enabled_tabs ?? settings.auto_download_enabled_tabs ?? null,
         skip_video_folder: result?.settings && Object.prototype.hasOwnProperty.call(result.settings, 'skip_video_folder')
           ? result.settings.skip_video_folder
           : settings.skip_video_folder ?? null,
@@ -356,25 +386,45 @@ function ChannelSettingsDialog({
            settings.min_duration !== originalSettings.min_duration ||
            settings.max_duration !== originalSettings.max_duration ||
            settings.title_filter_regex !== originalSettings.title_filter_regex ||
-          settings.audio_format !== originalSettings.audio_format ||
-          settings.default_rating !== originalSettings.default_rating ||
-          settings.skip_video_folder !== originalSettings.skip_video_folder ||
-          tabsChanged;
+           settings.audio_format !== originalSettings.audio_format ||
+           settings.default_rating !== originalSettings.default_rating ||
+           settings.auto_download_enabled_tabs !== originalSettings.auto_download_enabled_tabs ||
+           settings.skip_video_folder !== originalSettings.skip_video_folder ||
+           tabsChanged;
   };
 
   const allTabsHidden = detectedTabs.length > 0 &&
     detectedTabs.every((tab) => settings.hidden_tabs.includes(tab));
 
   const handleHiddenTabsChange = (nextHidden: string[]) => {
-    setSettings((prev) => ({ ...prev, hidden_tabs: nextHidden }));
+    const hiddenMediaTypes = new Set(
+      nextHidden.map((tab) => TAB_TO_MEDIA_TYPE[tab]).filter(Boolean)
+    );
+    setSettings((prev) => {
+      const currentAuto = prev.auto_download_enabled_tabs
+        ? prev.auto_download_enabled_tabs.split(',').map((t) => t.trim()).filter(Boolean)
+        : [];
+      const filteredAuto = currentAuto.filter((mt) => !hiddenMediaTypes.has(mt));
+      return {
+        ...prev,
+        hidden_tabs: nextHidden,
+        auto_download_enabled_tabs: filteredAuto.join(','),
+      };
+    });
   };
 
   const handleTabsRefresh = (result: TabsEditorRefreshResult) => {
     setDetectedTabs(result.detectedTabs);
-    setSettings((prev) => ({ ...prev, hidden_tabs: result.hiddenTabs }));
-    setOriginalSettings((prev) => ({ ...prev, hidden_tabs: result.hiddenTabs }));
-    // The backend also updates available_tabs/auto_download_enabled_tabs on refresh,
-    // but the dialog will reflect those the next time the parent reloads channel info.
+    setSettings((prev) => ({
+      ...prev,
+      hidden_tabs: result.hiddenTabs,
+      auto_download_enabled_tabs: result.autoDownloadEnabledTabs ?? prev.auto_download_enabled_tabs,
+    }));
+    setOriginalSettings((prev) => ({
+      ...prev,
+      hidden_tabs: result.hiddenTabs,
+      auto_download_enabled_tabs: result.autoDownloadEnabledTabs ?? prev.auto_download_enabled_tabs,
+    }));
   };
 
   const handlePreviewFilter = async () => {
@@ -443,30 +493,40 @@ function ChannelSettingsDialog({
     }
   };
 
-  return (
-    <Dialog open={open} onClose={handleCancel} maxWidth="sm" fullWidth>
-      <DialogTitle>
-        Channel Settings: {channelName}
-      </DialogTitle>
-      <DialogContent>
-        {loading ? (
-          <Box display="flex" justifyContent="center" alignItems="center" py={3}>
-            <CircularProgress />
-          </Box>
-        ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
-            {error && (
-              <Alert severity="error" onClose={() => setError(null)}>
-                {error}
-              </Alert>
-            )}
+  const toggleAutoDownloadTab = (tab: string, enabled: boolean) => {
+    const currentTabs = settings.auto_download_enabled_tabs ? settings.auto_download_enabled_tabs.split(',').map(t => t.trim()) : [];
+    let newTabs;
+    if (enabled) {
+      if (!currentTabs.includes(tab)) {
+        newTabs = [...currentTabs, tab].join(',');
+      } else {
+        newTabs = currentTabs.join(',');
+      }
+    } else {
+      newTabs = currentTabs.filter(t => t !== tab).join(',');
+    }
+    setSettings({
+      ...settings,
+      auto_download_enabled_tabs: newTabs || ''
+    });
+  };
 
-            {success && (
-              <Alert severity="success">
-                Settings saved successfully!
-              </Alert>
-            )}
+  const isTabEnabled = (tab: string) => {
+    const currentTabs = settings.auto_download_enabled_tabs ? settings.auto_download_enabled_tabs.split(',').map(t => t.trim()) : [];
+    return currentTabs.includes(tab);
+  };
 
+  const hiddenTabsSet = new Set(settings.hidden_tabs);
+  const availableMediaTypes = MEDIA_TYPE_ORDER.filter((mediaType) => {
+    const tabType = Object.keys(TAB_TO_MEDIA_TYPE).find((t) => TAB_TO_MEDIA_TYPE[t] === mediaType);
+    return tabType !== undefined && detectedTabs.includes(tabType) && !hiddenTabsSet.has(tabType);
+  });
+
+  const renderSectionContent = (sectionId: string) => {
+    switch (sectionId) {
+      case 'general':
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 16 : 24 }}>
             <TabsEditor
               channelId={channelId}
               token={token}
@@ -477,37 +537,74 @@ function ChannelSettingsDialog({
               disabled={saving}
             />
 
-            <Divider sx={{ my: 0 }} />
+            <Divider />
 
-            <FormControl fullWidth>
-              <InputLabel id="video-quality-label" shrink>Channel Video Quality Override</InputLabel>
-              <Select
-                labelId="video-quality-label"
-                value={settings.video_quality || ''}
-                label="Channel Video Quality Override"
-                onChange={(e) => setSettings({
-                  ...settings,
-                  video_quality: e.target.value || null
-                })}
-                displayEmpty
-                notched
-              >
-                <MenuItem value="">
-                  <em>Using Global Setting</em>
-                </MenuItem>
-                {qualityOptions.map((option) => (
-                  <MenuItem key={option.value || 'null'} value={option.value || ''}>
-                    {option.label}
+            <div>
+              <Typography variant="subtitle2" gutterBottom style={{ fontWeight: 600 }}>
+                Auto Downloads
+              </Typography>
+              <Alert severity="info" style={{ marginBottom: 12 }}>
+                <Typography variant="body2">
+                  Enable these to automatically download new content from this channel during scheduled tasks.
+                </Typography>
+              </Alert>
+              {availableMediaTypes.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No detected tabs are available for auto-download. Enable a tab above first.
+                </Typography>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
+                  {availableMediaTypes.map((mediaType) => (
+                    <FormControlLabel
+                      key={mediaType}
+                      control={
+                        <Switch
+                          checked={isTabEnabled(mediaType)}
+                          onChange={(e) => toggleAutoDownloadTab(mediaType, e.target.checked)}
+                        />
+                      }
+                      label={MEDIA_TYPE_LABEL[mediaType]}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <Divider />
+
+            <div>
+              <Typography variant="subtitle2" gutterBottom style={{ fontWeight: 600 }}>
+                Resolution Override
+              </Typography>
+              <FormControl fullWidth>
+                <InputLabel id="video-quality-label" shrink>Channel Video Quality Override</InputLabel>
+                <Select
+                  labelId="video-quality-label"
+                  value={settings.video_quality || ''}
+                  label="Channel Video Quality Override"
+                  onChange={(e) => setSettings({
+                    ...settings,
+                    video_quality: e.target.value || null
+                  })}
+                  displayEmpty
+                  notched
+                >
+                  <MenuItem value="">
+                    <em>Using Global Setting</em>
                   </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+                  {qualityOptions.map((option) => (
+                    <MenuItem key={option.value || 'null'} value={option.value || ''}>
+                      {option.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <Typography variant="caption" color="text.secondary" style={{ marginTop: 8, display: 'block' }}>
+                Effective channel quality: {effectiveQualityDisplay}.
+              </Typography>
+            </div>
 
-            <Typography variant="body2" color="text.secondary">
-              Effective channel quality: {effectiveQualityDisplay}.
-            </Typography>
-
-            <FormControl fullWidth sx={{ mt: 1 }}>
+            <FormControl fullWidth style={{ marginTop: 8 }}>
               <InputLabel id="audio-format-label" shrink>Download Type</InputLabel>
               <Select
                 labelId="audio-format-label"
@@ -529,7 +626,7 @@ function ChannelSettingsDialog({
             </FormControl>
 
             {settings.audio_format && (
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" color="text.secondary" style={{ marginTop: 8, display: 'block' }}>
                 MP3 files are saved at 192kbps in the same folder as videos.
               </Typography>
             )}
@@ -546,229 +643,176 @@ function ChannelSettingsDialog({
                 />
               }
               label="Flat file structure (no video subfolders)"
-              sx={{ mt: 1 }}
+              style={{ marginTop: 8 }}
             />
-            <Typography variant="caption" color="text.secondary" sx={{ mt: -1, mb: 1 }}>
+            <Typography variant="caption" color="text.secondary" style={{ marginTop: -4, marginBottom: 8, display: 'block' }}>
               When enabled, video files are saved directly in the channel folder instead of individual video subfolders. Only affects new downloads.
             </Typography>
 
-            <Alert severity="info" sx={{ mb: 2 }}>
-              <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>
+            <Alert severity="info" style={{ marginBottom: 16 }}>
+              <Typography variant="body2" style={{ fontWeight: 'bold', marginBottom: 8 }}>
                 Subfolder Organization
               </Typography>
-              <Typography variant="body2" component="div">
-                Subfolders are automatically prefixed with <code>__</code> on the filesystem.
-                Choose &quot;Default Subfolder&quot; to use your global default setting, or &quot;No Subfolder&quot; to explicitly place in the root directory.
+              <Typography variant="body2">
+                Use subfolders to keep channel downloads organized without changing your global storage path.
               </Typography>
             </Alert>
 
-            <SubfolderAutocomplete
-              mode="channel"
-              value={settings.sub_folder}
-              onChange={(newValue) => {
-                setSettings({
-                  ...settings,
-                  sub_folder: newValue
-                });
-              }}
-              subfolders={subfolders}
-              defaultSubfolderDisplay={config.defaultSubfolder || null}
-              label="Subfolder"
-              helperText="Choose where this channel's videos are saved"
-            />
+            <Divider />
 
-            <Typography variant="caption" color="text.secondary">
-              Note: Changing the subfolder will move the channel's existing folder and files!</Typography>
-
-            <FormControl fullWidth>
-              <InputLabel id="default-rating-label" shrink>Default Content Rating</InputLabel>
-              <Select
-                labelId="default-rating-label"
-                value={settings.default_rating || ''}
-                label="Default Content Rating"
-                onChange={(e) => setSettings({
-                  ...settings,
-                  default_rating: e.target.value || null
-                })}
-                displayEmpty
-                notched
-              >
-                <MenuItem value="">
-                  <em>No Default Rating</em>
-                </MenuItem>
-                <MenuItem value="G"><RatingBadge rating="G" size="small" sx={{ mr: 1 }} /> G</MenuItem>
-                <MenuItem value="PG"><RatingBadge rating="PG" size="small" sx={{ mr: 1 }} /> PG</MenuItem>
-                <MenuItem value="PG-13"><RatingBadge rating="PG-13" size="small" sx={{ mr: 1 }} /> PG-13</MenuItem>
-                <MenuItem value="R"><RatingBadge rating="R" size="small" sx={{ mr: 1 }} /> R</MenuItem>
-                <MenuItem value="NC-17"><RatingBadge rating="NC-17" size="small" sx={{ mr: 1 }} /> NC-17</MenuItem>
-                <MenuItem value="TV-Y"><RatingBadge rating="TV-Y" size="small" sx={{ mr: 1 }} /> TV-Y</MenuItem>
-                <MenuItem value="TV-Y7"><RatingBadge rating="TV-Y7" size="small" sx={{ mr: 1 }} /> TV-Y7</MenuItem>
-                <MenuItem value="TV-G"><RatingBadge rating="TV-G" size="small" sx={{ mr: 1 }} /> TV-G</MenuItem>
-                <MenuItem value="TV-PG"><RatingBadge rating="TV-PG" size="small" sx={{ mr: 1 }} /> TV-PG</MenuItem>
-                <MenuItem value="TV-14"><RatingBadge rating="TV-14" size="small" sx={{ mr: 1 }} /> TV-14</MenuItem>
-                <MenuItem value="TV-MA"><RatingBadge rating="TV-MA" size="small" sx={{ mr: 1 }} /> TV-MA</MenuItem>
-              </Select>
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
-                Rating to apply to videos in this channel if they don&apos;t have one. Will pass through to media server metadata.
+            <div>
+              <Typography variant="subtitle2" gutterBottom style={{ fontWeight: 600 }}>
+                Subfolder
               </Typography>
-            </FormControl>
+              <SubfolderAutocomplete
+                mode="channel"
+                value={settings.sub_folder}
+                onChange={(newValue) => {
+                  setSettings({
+                    ...settings,
+                    sub_folder: newValue
+                  });
+                }}
+                subfolders={subfolders}
+                defaultSubfolderDisplay={config.defaultSubfolder || null}
+                label="Subfolder"
+                helperText="Choose where this channel's videos are saved"
+              />
+              <Alert severity="info" style={{ marginTop: 8 }}>
+                <Typography variant="caption">
+                  Subfolders are automatically prefixed with <code>__</code> on the filesystem.
+                </Typography>
+              </Alert>
+              <Typography variant="caption" color="text.secondary" style={{ marginTop: 8, display: 'block' }}>
+                Note: Changing the subfolder will move the channel&apos;s existing folder and files!
+              </Typography>
+            </div>
+          </div>
+        );
+      case 'filters':
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 16 : 24 }}>
+            <div>
+              <Typography variant="subtitle2" gutterBottom style={{ fontWeight: 600 }}>
+                Duration Filters
+              </Typography>
+              <div style={{ display: 'flex', gap: 16, marginTop: 8, flexDirection: isMobile ? 'column' : 'row' }}>
+                <TextField
+                  label="Min Duration (mins)"
+                  type="number"
+                  value={minDurationMinutes}
+                  onChange={(e) => handleDurationChange('min', e.target.value)}
+                  placeholder="No minimum"
+                  fullWidth
+                  size="small"
+                  inputProps={{ min: 0 }}
+                  InputLabelProps={{ shrink: true }}
+                />
+                <TextField
+                  label="Max Duration (mins)"
+                  type="number"
+                  value={maxDurationMinutes}
+                  onChange={(e) => handleDurationChange('max', e.target.value)}
+                  placeholder="No maximum"
+                  fullWidth
+                  size="small"
+                  inputProps={{ min: 0 }}
+                  InputLabelProps={{ shrink: true }}
+                />
+              </div>
+            </div>
 
-            {/* Download Filters Section */}
-            <Divider sx={{ my: 0 }} />
+            <Divider />
 
-            <Typography variant="h6" sx={{ mb: 1 }}>
-              Download Filters
-            </Typography>
-            <Alert severity="info" sx={{ mb: 2 }}>
-              <Typography variant="body2">
+            <div>
+              <Typography variant="subtitle2" gutterBottom style={{ fontWeight: 600 }}>
+                Download Filters
+              </Typography>
+              <Typography variant="caption" color="text.secondary" style={{ display: 'block', marginBottom: 8 }}>
+                Only download videos with titles matching regex pattern
+              </Typography>
+              <Typography variant="caption" color="text.secondary" style={{ display: 'block', marginBottom: 8 }}>
                 These filters only apply to channel downloads. Manually selected videos will always download.
               </Typography>
-            </Alert>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 8 }}>
+                <TextField
+                  label="Title Filter (Python Regex)"
+                  value={settings.title_filter_regex || ''}
+                  onChange={(e) => setSettings({
+                    ...settings,
+                    title_filter_regex: e.target.value || null
+                  })}
+                  placeholder="e.g., (?i)podcast|interview"
+                  fullWidth
+                  size="small"
+                  InputLabelProps={{ shrink: true }}
+                />
+                <a
+                  href="https://docs.python.org/3/library/re.html#regular-expression-syntax"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Python regex documentation"
+                  style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', color: 'var(--muted-foreground)' }}
+                >
+                  <InfoIcon size={16} />
+                </a>
+              </div>
 
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <TextField
-                label="Min Duration (mins)"
-                type="number"
-                value={minDurationMinutes}
-                onChange={(e) => handleDurationChange('min', e.target.value)}
-                placeholder="No minimum"
-                helperText="Shorter videos will be skipped"
-                fullWidth
-                InputProps={{
-                  inputProps: { min: 0 }
-                }}
-                InputLabelProps={{
-                  shrink: true
-                }}
-              />
-              <TextField
-                label="Max Duration (mins)"
-                type="number"
-                value={maxDurationMinutes}
-                onChange={(e) => handleDurationChange('max', e.target.value)}
-                placeholder="No maximum"
-                helperText="Longer videos will be skipped"
-                fullWidth
-                InputProps={{
-                  inputProps: { min: 0 }
-                }}
-                InputLabelProps={{
-                  shrink: true
-                }}
-              />
-            </Box>
+              <div style={{ marginTop: 8 }}>
+                <button
+                  onClick={() => setShowRegexExamples(!showRegexExamples)}
+                  style={{ color: 'var(--primary)', cursor: 'pointer', background: 'none', border: 'none', padding: 0, textDecoration: 'underline', fontSize: '0.75rem' }}
+                >
+                  {showRegexExamples ? 'Hide examples' : 'Show examples'}
+                </button>
+              </div>
 
-            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-              <TextField
-                label="Title Filter (Python Regex)"
-                value={settings.title_filter_regex || ''}
-                onChange={(e) => setSettings({
-                  ...settings,
-                  title_filter_regex: e.target.value || null
-                })}
-                placeholder="e.g., (?i)podcast|interview"
-                helperText="Only download videos with titles matching regex pattern. (?i) for case-insensitive."
-                fullWidth
-                InputLabelProps={{
-                  shrink: true
-                }}
-              />
-              <IconButton
-                size="small"
-                component={Link}
-                href="https://docs.python.org/3/library/re.html#regular-expression-syntax"
-                target="_blank"
-                rel="noopener noreferrer"
-                sx={{ mt: 1 }}
-                title="Python regex documentation"
-              >
-                <InfoIcon fontSize="small" />
-              </IconButton>
-            </Box>
-
-            {/* Regex examples toggle and collapsible section */}
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <Typography
-                variant="body2"
-                component="button"
-                onClick={() => setShowRegexExamples(!showRegexExamples)}
-                sx={{
-                  color: 'primary.main',
-                  cursor: 'pointer',
-                  background: 'none',
-                  border: 'none',
-                  padding: 0,
-                  textDecoration: 'underline',
-                  '&:hover': { color: 'primary.dark' }
-                }}
-              >
-                {showRegexExamples ? 'Hide examples' : 'Show examples'}
-              </Typography>
-            </Box>
-
-            <Collapse in={showRegexExamples}>
-              <Box sx={{
-                mt: 1,
-                p: 2,
-                bgcolor: 'action.hover',
-                borderRadius: 1,
-                border: '1px solid',
-                borderColor: 'divider'
-              }}>
-                {regexExamples.map((example, index) => (
-                  <Box key={index} sx={{ mb: index < regexExamples.length - 1 ? 2 : 0 }}>
-                    <Typography variant="subtitle2" gutterBottom>
-                      {example.label}
-                    </Typography>
-                    <Box sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1,
-                      bgcolor: 'background.paper',
-                      p: 1,
-                      borderRadius: 1
-                    }}>
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          fontFamily: 'monospace',
-                          flex: 1,
-                          wordBreak: 'break-all'
-                        }}
-                      >
-                        {example.pattern}
+              <Collapse in={showRegexExamples}>
+                <div style={{ marginTop: 8, padding: 12, backgroundColor: 'var(--muted)', borderRadius: 4, border: '1px solid var(--border)' }}>
+                  {regexExamples.map((example, index) => (
+                    <div key={index} style={{ marginBottom: index < regexExamples.length - 1 ? 12 : 0 }}>
+                      <Typography variant="caption" style={{ fontWeight: 600 }} gutterBottom>
+                        {example.label}
                       </Typography>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleCopyRegex(example.pattern)}
-                        title="Copy to clipboard"
-                      >
-                        <ContentCopyIcon fontSize="small" />
-                      </IconButton>
-                    </Box>
-                    <Typography variant="caption" color="text.secondary">
-                      {example.description}
-                    </Typography>
-                  </Box>
-                ))}
-              </Box>
-            </Collapse>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, backgroundColor: 'var(--card)', padding: '4px 8px', borderRadius: 4, marginBottom: 4 }}>
+                        <Typography
+                          variant="caption"
+                          style={{ fontFamily: 'var(--font-body)', flex: 1, wordBreak: 'break-all' }}
+                        >
+                          {example.pattern}
+                        </Typography>
+                        <button
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', padding: 2, color: 'var(--muted-foreground)' }}
+                          onClick={() => handleCopyRegex(example.pattern)}
+                        >
+                          <ContentCopyIcon size={12} />
+                        </button>
+                      </div>
+                      <Typography variant="caption" color="text.secondary" style={{ fontSize: '0.7rem' }}>
+                        {example.description}
+                      </Typography>
+                    </div>
+                  ))}
+                </div>
+              </Collapse>
+            </div>
 
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            <div style={{ marginTop: 8 }}>
               <Button
                 variant="outlined"
                 onClick={handlePreviewFilter}
                 disabled={loadingPreview || !settings.title_filter_regex}
                 size="small"
               >
-                {loadingPreview ? <CircularProgress size={20} /> : 'Preview Regex'}
+                {loadingPreview ? <CircularProgress size={16} style={{ marginRight: 8 }} /> : null}
+                Preview Regex
               </Button>
               {previewResult && (
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="caption" color="text.secondary" style={{ marginLeft: 16 }}>
                   {previewResult.matchCount} of {previewResult.totalCount} recent videos match
                 </Typography>
               )}
-            </Box>
+            </div>
 
             {previewError && (
               <Alert severity="error" onClose={() => setPreviewError(null)}>
@@ -777,21 +821,22 @@ function ChannelSettingsDialog({
             )}
 
             {previewResult && (
-              <Box sx={{ mt: 2, maxHeight: 300, overflow: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+              <div style={{ maxHeight: 200, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 4 }}>
                 <List dense>
                   {previewResult.videos.map((video) => (
                     <ListItem key={video.video_id}>
-                      <ListItemIcon sx={{ minWidth: 36 }}>
+                      <ListItemIcon style={{ minWidth: 32 }}>
                         {video.matches ? (
-                          <CheckCircleIcon color="success" fontSize="small" />
+                          <CheckCircleIcon size={16} style={{ color: 'var(--success)' }} />
                         ) : (
-                          <CancelIcon color="error" fontSize="small" />
+                          <CancelIcon size={16} style={{ color: 'var(--destructive)' }} />
                         )}
                       </ListItemIcon>
                       <ListItemText
                         primary={video.title}
                         primaryTypographyProps={{
-                          sx: {
+                          style: {
+                            fontSize: '0.75rem',
                             opacity: video.matches ? 1 : 0.5,
                             textDecoration: video.matches ? 'none' : 'line-through'
                           }
@@ -800,19 +845,169 @@ function ChannelSettingsDialog({
                     </ListItem>
                   ))}
                 </List>
-              </Box>
+              </div>
             )}
-          </Box>
+          </div>
+        );
+      case 'ratings': {
+        const effectiveRatingLabel = settings.default_rating
+          ? (RATING_OPTIONS.find((option) => option.value === settings.default_rating)?.label || settings.default_rating)
+          : 'Global';
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <Typography variant="subtitle2" gutterBottom style={{ fontWeight: 600 }}>
+              Content Ratings
+            </Typography>
+            <Alert severity="info">
+              <Typography variant="body2">
+                Set a default rating for videos from this channel when no rating metadata is available.
+              </Typography>
+            </Alert>
+            <FormControl fullWidth>
+              <InputLabel>Default Rating</InputLabel>
+              <Select
+                value={settings.default_rating || ''}
+                label="Default Rating"
+                onChange={(event) => setSettings({
+                  ...settings,
+                  default_rating: event.target.value || null
+                })}
+              >
+                <MenuItem value="">No Override</MenuItem>
+                {RATING_OPTIONS.filter(option => option.value !== '').map(option => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <Typography variant="caption" color="text.secondary">
+                Effective default rating:
+              </Typography>
+              <RatingBadge 
+                rating={effectiveRatingLabel} 
+                size="small" 
+              />
+            </div>
+          </div>
+        );
+      }
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <Dialog 
+      open={open} 
+      onClose={handleCancel} 
+      maxWidth="xl" 
+      fullWidth
+      className={isMobile ? 'w-[calc(100vw-24px)] max-w-none max-h-[calc(100dvh-24px)]' : 'max-h-[calc(100vh-120px)]'}
+    >
+      <DialogTitle style={{ paddingBottom: 8 }}>
+        Channel Settings
+      </DialogTitle>
+      
+      {isMobile ? (
+        <div style={{ borderBottom: '1px solid var(--border)', padding: '0 8px' }}>
+          <Tabs
+            value={activeSection}
+            onChange={(_, newValue) => setActiveSection(String(newValue))}
+            variant="fullWidth"
+          >
+            {sections.map(section => (
+              <Tab 
+                key={section.id} 
+                value={section.id} 
+                label={section.label} 
+                icon={section.icon}
+                iconPosition="start"
+                style={{ minHeight: 40, textTransform: 'none', fontSize: '0.72rem', paddingLeft: 8, paddingRight: 8 }}
+              />
+            ))}
+          </Tabs>
+        </div>
+      ) : null}
+
+      <DialogContent style={{ padding: 0, display: 'flex', minHeight: 0 }}>
+        {!isMobile && (
+          <div style={{ 
+            width: 200, 
+            borderRight: '1px solid var(--border)',
+            backgroundColor: 'var(--muted)',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            <List style={{ paddingTop: 8 }}>
+              {sections.map((section) => (
+                <ListItemButton
+                  key={section.id}
+                  selected={activeSection === section.id}
+                  onClick={() => setActiveSection(section.id)}
+                  style={{
+                    paddingTop: 12,
+                    paddingBottom: 12,
+                    borderLeft: activeSection === section.id ? '4px solid var(--primary)' : '4px solid transparent',
+                  }}
+                >
+                  <ListItemIcon style={{ minWidth: 40, color: activeSection === section.id ? 'var(--primary)' : 'inherit' }}>
+                    {section.icon}
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary={section.label} 
+                    primaryTypographyProps={{ 
+                      variant: 'body2',
+                      style: {
+                        fontWeight: activeSection === section.id ? 600 : 400,
+                        color: activeSection === section.id ? 'var(--primary)' : 'inherit'
+                      }
+                    }} 
+                  />
+                </ListItemButton>
+              ))}
+            </List>
+          </div>
         )}
+
+        <div style={{ flex: 1, padding: isMobile ? 12 : 24, overflowY: 'auto', minHeight: 0 }}>
+          {loading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', paddingTop: 80, paddingBottom: 80 }}>
+              <CircularProgress />
+            </div>
+          ) : (
+            <>
+              {error && (
+                <Alert severity="error" style={{ marginBottom: 16 }} onClose={() => setError(null)}>
+                  {error}
+                </Alert>
+              )}
+
+              {success && (
+                <Alert severity="success" style={{ marginBottom: 16 }}>
+                  Settings saved successfully!
+                </Alert>
+              )}
+
+              {isMobile ? (
+                renderSectionContent(activeSection)
+              ) : (
+                renderSectionContent(activeSection)
+              )}
+            </>
+          )}
+        </div>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={handleCancel} disabled={saving}>
+      <DialogActions style={{ padding: isMobile ? '12px' : '16px 24px', borderTop: '1px solid var(--border)' }}>
+        <Button onClick={handleCancel} disabled={saving} variant="outlined">
           Cancel
         </Button>
         <Button
           onClick={handleSave}
           variant="contained"
           disabled={saving || loading || !hasChanges() || allTabsHidden}
+          style={{ minWidth: 100 }}
         >
           {saving ? <CircularProgress size={24} /> : 'Save'}
         </Button>

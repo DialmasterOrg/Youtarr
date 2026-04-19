@@ -3,17 +3,15 @@ import axios from 'axios';
 import {
   Dialog,
   DialogTitle,
-  DialogContent,
+  DialogContentBody,
   Box,
   Typography,
   IconButton,
   Snackbar,
   Alert,
-  useMediaQuery,
-  useTheme,
-} from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+} from '../../ui';
+import useMediaQuery from '../../../hooks/useMediaQuery';
+import { ChevronLeft as ArrowBackIcon } from '../../../lib/icons';
 import VideoPlayer from './components/VideoPlayer';
 import VideoMetadata from './components/VideoMetadata';
 import VideoActions from './components/VideoActions';
@@ -24,7 +22,6 @@ import { VideoModalProps } from './types';
 import DeleteVideosDialog from '../DeleteVideosDialog';
 import ChangeRatingDialog from '../ChangeRatingDialog';
 import DownloadSettingsDialog from '../../DownloadManager/ManualDownload/DownloadSettingsDialog';
-import { getStatusLabel, getStatusColor, getMediaTypeInfo } from '../../../utils/videoStatus';
 import { useConfig } from '../../../hooks/useConfig';
 
 const SNACKBAR_AUTO_HIDE_MS = 4000;
@@ -39,9 +36,9 @@ function VideoModal({
   onIgnoreChanged,
   onDownloadQueued,
   onRatingChanged,
+  allowIgnore,
 }: VideoModalProps) {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery('(max-width: 599px)');
 
   const {
     localVideo,
@@ -124,10 +121,6 @@ function VideoModal({
   const defaultAudioFormat = channelSettings.audio_format || null;
   const defaultAudioFormatSource: 'channel' | 'global' = hasChannelAudioOverride ? 'channel' : 'global';
 
-  const isShort = localVideo.mediaType === 'short';
-  const useSideBySide = isShort && !isMobile;
-  const mediaTypeInfo = getMediaTypeInfo(localVideo.mediaType);
-
   return (
     <>
       <Dialog
@@ -136,139 +129,92 @@ function VideoModal({
         maxWidth="lg"
         fullWidth
         fullScreen={isMobile}
-        PaperProps={{
-          sx: {
-            ...(!isMobile && { maxHeight: '92vh', m: 1.5 }),
-          },
-        }}
       >
         {/* Header bar - title + close */}
-        <DialogTitle
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-            py: 1.5,
-            px: 2,
-            borderBottom: 1,
-            borderColor: 'divider',
-          }}
-        >
-          {isMobile && (
-            <IconButton
-              onClick={onClose}
-              size="small"
-              aria-label="Close"
-              edge="start"
-              sx={{ mr: 0.5 }}
-            >
-              <ArrowBackIcon />
-            </IconButton>
-          )}
-          <Typography
-            variant="h6"
-            component="span"
-            sx={{
-              flex: 1,
+        <DialogTitle onClose={!isMobile ? onClose : undefined}>
+          <span
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              width: '100%',
               minWidth: 0,
-              fontSize: isMobile ? '1rem' : '1.15rem',
-              fontWeight: 600,
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
-              wordBreak: 'break-word',
             }}
           >
-            {localVideo.title}
-          </Typography>
-          {!isMobile && (
-            <IconButton
-              onClick={onClose}
-              size="small"
-              aria-label="Close"
-              edge="end"
+            {isMobile && (
+              <IconButton
+                onClick={onClose}
+                size="large"
+                aria-label="Close"
+                edge="start"
+              >
+                <ArrowBackIcon size={24} />
+              </IconButton>
+            )}
+            <Typography
+              variant="h6"
+              component="span"
+              sx={{
+                flex: 1,
+                minWidth: 0,
+                fontSize: isMobile ? '1rem' : '1.15rem',
+                fontWeight: 600,
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+                wordBreak: 'break-word',
+              }}
             >
-              <CloseIcon />
-            </IconButton>
-          )}
+              {localVideo.title}
+            </Typography>
+          </span>
         </DialogTitle>
-
-        <DialogContent sx={{ p: isMobile ? 1.5 : 2 }}>
-          {useSideBySide ? (
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <Box sx={{ width: 300, flexShrink: 0 }}>
-                <VideoPlayer
-                  video={localVideo}
-                  token={token}
-                  onDownloadClick={() => setDownloadDialogOpen(true)}
-                  isMobile={isMobile}
-                />
-              </Box>
-              <Box sx={{ minWidth: 0 }}>
-                <VideoActions
-                  video={localVideo}
-                  statusChip={{ label: getStatusLabel(localVideo.status), color: getStatusColor(localVideo.status) }}
-                  mediaTypeChip={mediaTypeInfo}
-                  onDelete={() => setDeleteDialogOpen(true)}
-                  onProtectionToggle={handleProtectionToggle}
-                  onIgnoreToggle={handleIgnoreToggle}
-                  onRatingChange={() => setRatingDialogOpen(true)}
-                  protectionLoading={protectionLoading}
-                  isMobile={isMobile}
-                />
-                <Box sx={{ mt: 2 }}>
-                  <VideoMetadata
-                    video={localVideo}
-                    metadata={metadata}
-                    loading={metadataLoading}
-                  />
-                  <VideoTechnical
-                    video={localVideo}
-                    metadata={metadata}
-                    loading={metadataLoading}
-                  />
-                </Box>
-              </Box>
-            </Box>
-          ) : (
-            <>
-              <VideoPlayer
-                video={localVideo}
-                token={token}
-                onDownloadClick={() => setDownloadDialogOpen(true)}
-                isMobile={isMobile}
-              />
-              <Box sx={{ mt: 1.5 }}>
-                <VideoActions
-                  video={localVideo}
-                  statusChip={{ label: getStatusLabel(localVideo.status), color: getStatusColor(localVideo.status) }}
-                  mediaTypeChip={mediaTypeInfo}
-                  onDelete={() => setDeleteDialogOpen(true)}
-                  onProtectionToggle={handleProtectionToggle}
-                  onIgnoreToggle={handleIgnoreToggle}
-                  onRatingChange={() => setRatingDialogOpen(true)}
-                  protectionLoading={protectionLoading}
-                  isMobile={isMobile}
-                />
-              </Box>
-              <Box sx={{ mt: 2 }}>
-                <VideoMetadata
-                  video={localVideo}
-                  metadata={metadata}
-                  loading={metadataLoading}
-                />
-              </Box>
-              <Box sx={{ mt: 2 }}>
-                <VideoTechnical
-                  video={localVideo}
-                  metadata={metadata}
-                  loading={metadataLoading}
-                />
-              </Box>
-            </>
-          )}
-        </DialogContent>
+        <DialogContentBody
+          style={{
+            padding: isMobile
+              ? 'var(--video-modal-content-padding-mobile, 8px)'
+              : 'var(--video-modal-content-padding-desktop, 12px)',
+          }}
+        >
+          <Box
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 'var(--video-modal-content-gap, 12px)',
+              width: '100%',
+              minWidth: 0,
+            }}
+          >
+            <VideoPlayer
+              video={localVideo}
+              token={token}
+              onDownloadClick={() => setDownloadDialogOpen(true)}
+              isMobile={isMobile}
+            />
+            <VideoActions
+              video={localVideo}
+              onDelete={() => setDeleteDialogOpen(true)}
+              onProtectionToggle={handleProtectionToggle}
+              onIgnoreToggle={handleIgnoreToggle}
+              onDownloadClick={() => setDownloadDialogOpen(true)}
+              onRatingClick={() => setRatingDialogOpen(true)}
+              protectionLoading={protectionLoading}
+              isMobile={isMobile}
+              allowIgnore={allowIgnore}
+            />
+            <VideoMetadata
+              video={localVideo}
+              metadata={metadata}
+              loading={metadataLoading}
+            />
+            <VideoTechnical
+              video={localVideo}
+              metadata={metadata}
+              loading={metadataLoading}
+            />
+          </Box>
+        </DialogContentBody>
       </Dialog>
 
       <DeleteVideosDialog
@@ -309,7 +255,7 @@ function VideoModal({
           onClose={handleSnackbarClose}
           severity={snackbar.severity}
           variant="filled"
-          sx={{ width: '100%' }}
+          className="w-full"
         >
           {snackbar.message}
         </Alert>

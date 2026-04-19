@@ -6,10 +6,8 @@ import {
   ListItemIcon,
   ListItemText,
   Divider,
-} from '@mui/material';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
-import EighteenUpRatingIcon from '@mui/icons-material/EighteenUpRating';
-import DeleteIcon from '@mui/icons-material/Delete';
+} from '../ui';
+import { MoreVert as MoreVertIcon, EighteenUpRating as EighteenUpRatingIcon, Delete as DeleteIcon } from '../../lib/icons';
 
 interface VideoActionsDropdownProps {
   selectedVideosCount: number;
@@ -68,8 +66,8 @@ const VideoActionsDropdown: React.FC<VideoActionsDropdownProps> = ({
         }}
       >
         <MenuItem onClick={() => handleMenuItemClick(onContentRating)}>
-          <ListItemIcon>
-            <EighteenUpRatingIcon fontSize="small" />
+          <ListItemIcon style={{ color: 'var(--info)' }}>
+          <EighteenUpRatingIcon size={16} data-testid="EighteenUpRatingIcon" />
           </ListItemIcon>
           <ListItemText>Update Content Rating</ListItemText>
         </MenuItem>
@@ -78,10 +76,10 @@ const VideoActionsDropdown: React.FC<VideoActionsDropdownProps> = ({
 
         <MenuItem
           onClick={() => handleMenuItemClick(onDelete)}
-          sx={{ color: 'error.main' }}
+          style={{ color: 'var(--destructive)' }}
         >
-          <ListItemIcon sx={{ color: 'error.main' }}>
-            <DeleteIcon fontSize="small" />
+          <ListItemIcon style={{ color: 'var(--destructive)' }}>
+            <DeleteIcon size={16} data-testid="DeleteIcon" />
           </ListItemIcon>
           <ListItemText>Delete Selected</ListItemText>
         </MenuItem>

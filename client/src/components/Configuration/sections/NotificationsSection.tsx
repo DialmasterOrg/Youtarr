@@ -18,15 +18,17 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
-} from '@mui/material';
-import DeleteIcon from '@mui/icons-material/Delete';
-import EditIcon from '@mui/icons-material/Edit';
-import SaveIcon from '@mui/icons-material/Save';
-import CancelIcon from '@mui/icons-material/Cancel';
-import AddIcon from '@mui/icons-material/Add';
-import SendIcon from '@mui/icons-material/Send';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import ErrorIcon from '@mui/icons-material/Error';
+} from '../../ui';
+import {
+  Trash2 as DeleteIcon,
+  Pencil as EditIcon,
+  Save as SaveIcon,
+  X as CancelIcon,
+  Plus as AddIcon,
+  Send as SendIcon,
+  CheckCircle2 as CheckCircleIcon,
+  AlertCircle as ErrorIcon,
+} from 'lucide-react';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { ConfigState, SnackbarState } from '../types';
@@ -291,32 +293,19 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
   return (
     <ConfigurationAccordion
       title="Notifications"
-      chipLabel={config.notificationsEnabled ? "Enabled" : "Disabled"}
-      chipColor={config.notificationsEnabled ? "success" : "default"}
+      statusBanner={{
+        enabled: config.notificationsEnabled,
+        label: 'Enable Notifications',
+        onToggle: (enabled) => onConfigChange({ notificationsEnabled: enabled }),
+        onText: 'Enabled',
+        offText: 'Disabled',
+        toggleTestId: 'notifications-enabled-switch',
+      }}
       defaultExpanded={false}
     >
       <Grid container spacing={2}>
-        {/* Enable switch - always visible */}
         <Grid item xs={12}>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={config.notificationsEnabled}
-                onChange={(e) => onConfigChange({ notificationsEnabled: e.target.checked })}
-                inputProps={{ 'data-testid': 'notifications-enabled-switch' } as any}
-              />
-            }
-            label={
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                Enable Notifications
-                <InfoTooltip
-                  text="Receive notifications when new videos are downloaded successfully."
-                  onMobileClick={onMobileTooltipClick}
-                />
-              </Box>
-            }
-          />
-          <Typography variant="body2" color="text.secondary" sx={{ ml: 4.5, mt: -0.5 }}>
+          <Typography variant="body2" color="secondary" style={{ marginTop: '-4px' }}>
             Powered by{' '}
             <Link
               href="https://github.com/caronc/apprise"
@@ -326,6 +315,10 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
               Apprise
             </Link>
             {' '}— supports 100+ services including Discord, Telegram, Slack, and email.
+            <InfoTooltip
+              text="Receive notifications when new videos are downloaded successfully."
+              onMobileClick={onMobileTooltipClick}
+            />
           </Typography>
         </Grid>
 
@@ -334,9 +327,9 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
             {/* Configured webhooks - show first if any exist */}
             {appriseUrls.length > 0 && (
               <Grid item xs={12}>
-                <Typography variant="subtitle2" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="subtitle2" className="mb-2 flex items-center gap-2">
                   Your Notification Services
-                  <Typography component="span" variant="caption" color="text.secondary">
+                  <Typography component="span" variant="caption" color="secondary">
                     ({appriseUrls.length} configured)
                   </Typography>
                 </Typography>
@@ -344,21 +337,12 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
                   <Paper
                     key={index}
                     variant="outlined"
-                    sx={{ 
-                      p: 1.5, 
-                      mb: 1,
-                      borderWidth: 2,
-                      borderColor: 'primary.main',
-                      borderLeftWidth: 4,
-                      '&:hover': {
-                        bgcolor: 'action.hover'
-                      }
-                    }}
+                    className="p-3 mb-2 border-2 border-primary border-l-4 hover:bg-muted/50"
                   >
                     {editingIndex === index ? (
                       // Edit mode
                       <Box>
-                        <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+                        <Box className="flex gap-2 mb-2">
                           <TextField
                             fullWidth
                             size="small"
@@ -369,7 +353,7 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
                             placeholder="e.g., Discord - Gaming Server"
                           />
                         </Box>
-                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1 }}>
+                        <Box className="flex gap-2 items-center mb-2">
                           <TextField
                             fullWidth
                             size="small"
@@ -381,7 +365,7 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
                           />
                         </Box>
                         {supportsRichFormatting(editingUrl) && (
-                          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                          <Box className="flex items-center mb-2">
                             <FormControlLabel
                               control={
                                 <Checkbox
@@ -398,12 +382,12 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
                             />
                           </Box>
                         )}
-                        <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
+                        <Box className="flex gap-1 justify-end">
                           <Button
                             size="small"
                             variant="contained"
                             onClick={handleSaveEdit}
-                            startIcon={<SaveIcon />}
+                            startIcon={<SaveIcon size={14} />}
                           >
                             Save
                           </Button>
@@ -411,7 +395,7 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
                             size="small"
                             variant="outlined"
                             onClick={handleCancelEdit}
-                            startIcon={<CancelIcon />}
+                            startIcon={<CancelIcon size={14} />}
                           >
                             Cancel
                           </Button>
@@ -420,15 +404,15 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
                     ) : (
                       // View mode
                       <Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <Box sx={{ flex: 1, minWidth: 0, mr: 1 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                              <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                        <Box className="flex items-center justify-between">
+                          <Box className="flex-1 min-w-0 mr-2">
+                            <Box className="flex items-center gap-1.5">
+                              <Typography variant="body2" className="font-medium">
                                 {entry.name}
                               </Typography>
                               {supportsRichFormatting(entry.url) && (
-                                <Typography variant="caption" sx={{ 
-                                  color: entry.richFormatting !== false ? 'success.main' : 'text.secondary',
+                                <Typography variant="caption" style={{ 
+                                  color: entry.richFormatting !== false ? 'var(--success)' : 'var(--muted-foreground)',
                                   fontSize: '0.7rem'
                                 }}>
                                   {entry.richFormatting !== false ? '✨' : '📝'}
@@ -437,20 +421,14 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
                             </Box>
                             <Typography
                               variant="caption"
-                              color="text.secondary"
-                              sx={{
-                                fontFamily: 'monospace',
-                                display: 'block',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                              }}
+                              color="secondary"
+                              className="font-mono block overflow-hidden text-ellipsis whitespace-nowrap"
                               title={entry.url}
                             >
                               {formatUrlForSubtitle(entry.url)}
                             </Typography>
                           </Box>
-                          <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                          <Box className="flex gap-1 items-center">
                             <Tooltip title="Send test notification">
                               <span>
                                 <IconButton
@@ -501,19 +479,19 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
                         {(webhookTestStatus[index]?.status === 'success' || 
                           webhookTestStatus[index]?.status === 'error' ||
                           webhookTestStatus[index]?.status === 'testing') && (
-                          <Box sx={{ mt: 0.5 }}>
+                          <Box className="mt-1">
                             {webhookTestStatus[index]?.status === 'success' && (
-                              <Typography variant="caption" color="success.main" sx={{ fontWeight: 'medium' }}>
+                              <Typography variant="caption" color="success" className="font-medium">
                                 ✓ {webhookTestStatus[index].message}
                               </Typography>
                             )}
                             {webhookTestStatus[index]?.status === 'error' && (
-                              <Typography variant="caption" color="error.main" sx={{ fontWeight: 'medium' }}>
+                              <Typography variant="caption" color="error" className="font-medium">
                                 ✗ {webhookTestStatus[index].message}
                               </Typography>
                             )}
                             {webhookTestStatus[index]?.status === 'testing' && (
-                              <Typography variant="caption" color="text.secondary">
+                              <Typography variant="caption" color="secondary">
                                 Sending test...
                               </Typography>
                             )}
@@ -528,11 +506,11 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
 
             {/* Add new service */}
             <Grid item xs={12}>
-              <Paper variant="outlined" sx={{ p: 2, bgcolor: 'action.hover' }}>
-                <Typography variant="subtitle2" sx={{ mb: 1.5 }}>
+              <Paper variant="outlined" className="p-4 bg-muted/30">
+                <Typography variant="subtitle2" className="mb-3">
                   {appriseUrls.length === 0 ? 'Add a Notification Service' : 'Add Another Service'}
                 </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                <Box className="flex flex-col gap-3">
                   <TextField
                     fullWidth
                     label="Name (optional)"
@@ -564,14 +542,14 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
                           ✨ Enable rich formatting (embeds, colors, styling)
                         </Typography>
                       }
-                      sx={{ ml: 0 }}
+                      className="ml-0"
                     />
                   )}
                   <Button
                     variant="contained"
                     onClick={handleAddUrl}
-                    startIcon={<AddIcon />}
-                    sx={{ alignSelf: 'flex-start' }}
+                    startIcon={<AddIcon size={16} />}
+                    className="self-start"
                   >
                     Add Service
                   </Button>
@@ -581,14 +559,10 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
 
             {/* URL formats reference */}
             <Grid item xs={12}>
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              <Typography variant="subtitle2" className="mb-2">
                 ✨ Feature Rich Supported Formats
               </Typography>
-              <Box sx={{ 
-                display: 'grid', 
-                gridTemplateColumns: 'repeat(2, 1fr)', 
-                gap: 1 
-              }}>
+              <Box className="grid grid-cols-2 gap-2">
                 {[
                   { name: 'Discord', url: 'discord://webhook_id/token' },
                   { name: 'Telegram', url: 'tgram://bot_token/chat_id' },
@@ -597,36 +571,22 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
                 ].map((service) => (
                   <Box 
                     key={service.name}
-                    sx={{ 
-                      px: 1.5,
-                      py: 1,
-                      borderRadius: 1,
-                      bgcolor: 'action.hover',
-                      border: 1,
-                      borderColor: 'divider'
-                    }}
+                    className="px-3 py-2 rounded bg-muted/50 border border-border"
                   >
-                    <Typography variant="body2" sx={{ fontWeight: 500, mb: 0.25 }}>
+                    <Typography variant="body2" className="font-medium mb-0.5">
                       {service.name}
                     </Typography>
                     <Typography 
                       variant="caption" 
-                      sx={{ 
-                        fontFamily: 'monospace', 
-                        color: 'info.main',
-                        fontSize: '0.7rem',
-                        display: 'block',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap'
-                      }}
+                      className="font-mono block overflow-hidden text-ellipsis whitespace-nowrap"
+                      style={{ color: 'var(--info)', fontSize: '0.7rem' }}
                     >
                       {service.url}
                     </Typography>
                   </Box>
                 ))}
               </Box>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+              <Typography variant="caption" color="secondary" className="block mt-2">
                 Other services receive plain text.{' '}
                 <Link
                   href="https://github.com/caronc/apprise/wiki#notification-services"

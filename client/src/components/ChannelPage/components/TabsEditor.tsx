@@ -7,10 +7,9 @@ import {
   Checkbox,
   CircularProgress,
   FormControlLabel,
-  FormGroup,
   Typography
-} from '@mui/material';
-import RefreshIcon from '@mui/icons-material/Refresh';
+} from '../../ui';
+import { Refresh as RefreshIcon } from '../../../lib/icons';
 
 const TAB_TYPE_ORDER: string[] = ['videos', 'shorts', 'streams'];
 const TAB_LABEL: Record<string, string> = {
@@ -23,6 +22,7 @@ export interface TabsEditorRefreshResult {
   availableTabs: string[];
   detectedTabs: string[];
   hiddenTabs: string[];
+  autoDownloadEnabledTabs?: string;
 }
 
 interface TabsEditorProps {
@@ -78,7 +78,10 @@ function TabsEditor({
       onRefresh({
         availableTabs: Array.isArray(data.availableTabs) ? data.availableTabs : [],
         detectedTabs: Array.isArray(data.detectedTabs) ? data.detectedTabs : [],
-        hiddenTabs: Array.isArray(data.hiddenTabs) ? data.hiddenTabs : []
+        hiddenTabs: Array.isArray(data.hiddenTabs) ? data.hiddenTabs : [],
+        autoDownloadEnabledTabs: typeof data.autoDownloadEnabledTabs === 'string'
+          ? data.autoDownloadEnabledTabs
+          : undefined,
       });
     } catch (err) {
       let message = 'Failed to refresh tabs';
@@ -94,8 +97,8 @@ function TabsEditor({
   };
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-      <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+    <Box style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <Typography variant="subtitle1" style={{ fontWeight: 'bold' }}>
         Channel Tabs
       </Typography>
       <Typography variant="caption" color="text.secondary">
@@ -106,12 +109,12 @@ function TabsEditor({
       </Typography>
 
       {orderedDetectedTabs.length === 0 ? (
-        <Alert severity="info" sx={{ mt: 1 }}>
+        <Alert severity="info">
           No tabs have been detected for this channel yet. Click &quot;Refresh from YouTube&quot;
           to run detection now.
         </Alert>
       ) : (
-        <FormGroup row sx={{ mt: 0.5 }}>
+        <Box style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginTop: 4 }}>
           {orderedDetectedTabs.map((tab) => (
             <FormControlLabel
               key={tab}
@@ -119,14 +122,14 @@ function TabsEditor({
                 <Checkbox
                   inputProps={{ 'data-testid': `tabs-editor-checkbox-${tab}` } as React.InputHTMLAttributes<HTMLInputElement>}
                   checked={!hiddenSet.has(tab)}
-                  onChange={(e) => handleToggle(tab, e.target.checked)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleToggle(tab, e.target.checked)}
                   disabled={disabled || refreshing}
                 />
               }
               label={TAB_LABEL[tab] || tab}
             />
           ))}
-        </FormGroup>
+        </Box>
       )}
 
       {allHidden && (
@@ -141,7 +144,7 @@ function TabsEditor({
         </Alert>
       )}
 
-      <Box sx={{ mt: 0.5 }}>
+      <Box style={{ marginTop: 4 }}>
         <Button
           data-testid="tabs-editor-refresh"
           variant="outlined"

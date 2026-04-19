@@ -1,0 +1,28 @@
+[data-layout-contract-root],
+[data-layout-contract-header] {
+  --layout-shell-background: linear-gradient(180deg, var(--card) 0%, var(--background) 55%, var(--background) 100%);
+  --layout-main-padding: calc(80px + var(--shell-gap)) var(--shell-gap) var(--shell-gap) calc(var(--nav-width) + var(--shell-gap) * 2);
+  --layout-main-margin-top: 0px;
+  --layout-content-padding: 24px 32px;
+  --layout-content-max-width: 1400px;
+  --layout-content-margin-inline: auto;
+  --layout-content-frame-background: transparent;
+  --layout-content-frame-border: none;
+  --layout-content-frame-radius: 0px;
+  --layout-content-frame-shadow: none;
+  --layout-header-background: var(--card, #fffdf5);
+  --layout-header-border: var(--appbar-border);
+  --layout-header-border-bottom: var(--appbar-border);
+  --layout-header-pattern: var(--appbar-pattern);
+  --layout-header-backdrop-filter: none;
+  --layout-header-border-radius: var(--radius-ui);
+  --layout-header-title-inset: 0px;
+  --layout-header-toggle-width: 44px;
+  --layout-header-toggle-height: 44px;
+  --layout-header-toggle-radius: var(--radius-ui);
+  --layout-header-toggle-color: var(--foreground);
+  --layout-header-menu-radius: var(--radius-ui);
+  --layout-header-menu-border: 2px solid var(--border-strong);
+  --layout-header-menu-background: var(--card);
+  --layout-header-menu-shadow: none;
+}

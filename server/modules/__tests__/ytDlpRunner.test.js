@@ -183,13 +183,16 @@ describe('YtDlpRunner', () => {
     });
   });
 
-  it('rejects when the process reports a timeout', async () => {
+  it('rejects with a YTDLP_TIMEOUT code when the process reports a timeout', async () => {
     const runPromise = ytDlpRunner.run(['--any'], { timeoutMs: 0 });
     const proc = getLastProcess();
 
     proc.emit('close', null);
 
-    await expect(runPromise).rejects.toThrow('yt-dlp process timed out after 0ms');
+    await expect(runPromise).rejects.toMatchObject({
+      message: 'yt-dlp process timed out after 0ms',
+      code: 'YTDLP_TIMEOUT',
+    });
   });
 
   it('rejects with stderr output when process exits with error code', async () => {
@@ -280,5 +283,27 @@ describe('YtDlpRunner', () => {
     await expect(ytDlpRunner.fetchMetadata('https://example.com')).rejects.toThrow('Failed to fetch video metadata: unexpected failure');
     expect(runSpy).toHaveBeenCalled();
     runSpy.mockRestore();
+  });
+
+  it('rejects with AbortError and kills process when signal aborts after spawn', async () => {
+    const controller = new AbortController();
+    const runPromise = ytDlpRunner.run(['--version'], { timeoutMs: 0, signal: controller.signal });
+    const proc = getLastProcess();
+
+    controller.abort();
+
+    await expect(runPromise).rejects.toMatchObject({ name: 'AbortError', code: 'ABORT_ERR' });
+    expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
+  });
+
+  it('rejects immediately with AbortError when signal is already aborted before run', async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    const runPromise = ytDlpRunner.run(['--version'], { timeoutMs: 0, signal: controller.signal });
+    const proc = getLastProcess();
+
+    await expect(runPromise).rejects.toMatchObject({ name: 'AbortError', code: 'ABORT_ERR' });
+    expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
   });
 });

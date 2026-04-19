@@ -24,14 +24,14 @@ describe('DownloadFormatIndicator', () => {
       render(<DownloadFormatIndicator filePath="/videos/test.mp4" fileSize={104857600} />);
 
       expect(screen.getByText('100MB')).toBeInTheDocument();
-      expect(screen.getByTestId('MovieOutlinedIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('StorageIcon')).toBeInTheDocument();
     });
 
     test('renders audio chip when audioFilePath is provided', () => {
       render(<DownloadFormatIndicator audioFilePath="/audio/test.mp3" audioFileSize={52428800} />);
 
       expect(screen.getByText('50MB')).toBeInTheDocument();
-      expect(screen.getByTestId('AudiotrackOutlinedIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('StorageIcon')).toBeInTheDocument();
     });
 
     test('renders both chips when both paths are provided', () => {
@@ -46,6 +46,7 @@ describe('DownloadFormatIndicator', () => {
 
       expect(screen.getByText('1.0GB')).toBeInTheDocument();
       expect(screen.getByText('50MB')).toBeInTheDocument();
+      expect(screen.getAllByTestId('StorageIcon')).toHaveLength(2);
     });
 
     test('shows "Unknown" when file size is not provided', () => {
@@ -75,7 +76,8 @@ describe('DownloadFormatIndicator', () => {
       await user.hover(chip);
 
       const tooltip = await screen.findByRole('tooltip');
-      expect(tooltip).toHaveTextContent('channel/video.mp4');
+      expect(tooltip).toHaveTextContent('channel');
+      expect(tooltip).not.toHaveTextContent('video.mp4');
       expect(tooltip).not.toHaveTextContent('/usr/src/app/data/');
     });
 
@@ -92,7 +94,8 @@ describe('DownloadFormatIndicator', () => {
       await user.hover(chip);
 
       const tooltip = await screen.findByRole('tooltip');
-      expect(tooltip).toHaveTextContent('/custom/path/video.mp4');
+      expect(tooltip).toHaveTextContent('/custom/path');
+      expect(tooltip).not.toHaveTextContent('video.mp4');
     });
   });
 });

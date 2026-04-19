@@ -184,6 +184,38 @@ describe('DownloadSettingsDialog', () => {
 
       expect(screen.getByText(/YouTube will provide the best available quality/i)).toBeInTheDocument();
     });
+
+    test('renders audio format options above the dialog when custom settings are enabled', async () => {
+      render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
+
+      fireEvent.click(screen.getByRole('checkbox', { name: /Use custom settings/i }));
+
+      fireEvent.mouseDown(screen.getByLabelText('Download Type'));
+
+      await waitFor(() => {
+        expect(screen.getByRole('option', { name: 'Video + MP3' })).toBeInTheDocument();
+      });
+
+      expect(screen.getByRole('option', { name: 'MP3 Only' })).toBeInTheDocument();
+      const content = screen.getByTestId('select-content');
+      expect(content).toHaveStyle({ zIndex: '1470' });
+    });
+
+    test('renders rating options above the dialog when custom settings are enabled', async () => {
+      render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
+
+      fireEvent.click(screen.getByRole('checkbox', { name: /Use custom settings/i }));
+
+      fireEvent.mouseDown(screen.getByLabelText('Content Rating'));
+
+      await waitFor(() => {
+        expect(screen.getByRole('option', { name: /PG-13/ })).toBeInTheDocument();
+      });
+
+      expect(screen.getByRole('option', { name: /TV-MA/ })).toBeInTheDocument();
+      const content = screen.getByTestId('select-content');
+      expect(content).toHaveStyle({ zIndex: '1470' });
+    });
   });
 
   describe('Default Values', () => {

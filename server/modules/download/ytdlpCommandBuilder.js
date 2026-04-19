@@ -366,6 +366,21 @@ class YtdlpCommandBuilder {
     return allFilters.join(' & ');
   }
 
+  static buildSearchArgs(query, count) {
+    // youtubetab:approximate_date populates an approximate upload_date/timestamp from "X years ago" text without paying for full per-video extraction.
+    const config = configModule.getConfig();
+    const args = [
+      ...this.buildCommonArgs(config, { skipSleepRequests: true }),
+      '--flat-playlist',
+      '--dump-json',
+      '--no-warnings',
+      '--extractor-args', 'youtubetab:approximate_date',
+      '--default-search', 'ytsearch',
+      `ytsearch${count}:${query}`,
+    ];
+    return args;
+  }
+
   /**
    * Build yt-dlp command args array for channel downloads
    * @param {string} resolution - Video resolution

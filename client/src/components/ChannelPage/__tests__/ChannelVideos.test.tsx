@@ -2,20 +2,13 @@ import React, { useState } from 'react';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import useMediaQuery from '@mui/material/useMediaQuery';
+import useMediaQuery from '../../../hooks/useMediaQuery';
 import ChannelVideos from '../ChannelVideos';
 import { ChannelVideo } from '../../../types/ChannelVideo';
 import { renderWithProviders, createMockWebSocketContext } from '../../../test-utils';
 
-// Mock Material-UI hooks
-jest.mock('@mui/material/useMediaQuery');
-jest.mock('@mui/material/styles', () => ({
-  ...jest.requireActual('@mui/material/styles'),
-  useTheme: () => ({
-    breakpoints: { down: () => false },
-    zIndex: { fab: 1050 },
-  }),
-}));
+// Mock custom hooks
+jest.mock('../../../hooks/useMediaQuery');
 
 // Mock react-router-dom
 const mockNavigate = jest.fn();
@@ -34,11 +27,68 @@ jest.mock('react-swipeable', () => ({
 // Mock child components
 jest.mock('../VideoCard', () => ({
   __esModule: true,
-  default: function MockVideoCard({ video }: any) {
+  default: function MockVideoCard({ video, onCheckChange, onVideoClick, onDeletionChange, selectionMode }: any) {
     const React = require('react');
-    return React.createElement('div', {
-      'data-testid': `video-card-${video.youtube_id}`
-    }, video.title);
+    // Mirror the real VideoCard's gating: when the other mode is active,
+    // the corresponding selection affordance is disabled so the parent's
+    // canSelectDownload / canSelectDeletion contract is observable here.
+    const downloadDisabled = selectionMode === 'delete';
+    const deleteDisabled = selectionMode === 'download';
+    return React.createElement(
+      'div',
+      {
+        'data-testid': `video-card-${video.youtube_id}`,
+        'data-selection-mode': selectionMode ?? 'null',
+      },
+      React.createElement('span', null, video.title),
+      React.createElement(
+        'button',
+        {
+          type: 'button',
+          'data-testid': `select-video-${video.youtube_id}`,
+          disabled: downloadDisabled,
+          onClick: () => {
+            if (downloadDisabled) return;
+            onCheckChange?.(video.youtube_id, true);
+          },
+        },
+        'Select'
+      ),
+      React.createElement(
+        'button',
+        {
+          type: 'button',
+          'data-testid': `select-delete-${video.youtube_id}`,
+          disabled: deleteDisabled,
+          onClick: () => {
+            if (deleteDisabled) return;
+            onDeletionChange?.(video.youtube_id, true);
+          },
+        },
+        'Select for delete'
+      ),
+      // Ungated delete affordance -- used only to simulate a hypothetical broken
+      // child-level gate so the parent's ternary-order invariant can be tested
+      // when both checkedBoxes and selectedForDeletion would coexist.
+      React.createElement(
+        'button',
+        {
+          type: 'button',
+          'data-testid': `force-select-delete-${video.youtube_id}`,
+          onClick: () => onDeletionChange?.(video.youtube_id, true),
+        },
+        'Force select for delete'
+      ),
+      React.createElement(
+        'button',
+        {
+          type: 'button',
+          'data-testid': `open-video-${video.youtube_id}`,
+          onClick: () => onVideoClick?.(video),
+        },
+        'Open'
+      )
+    );
   }
 }));
 
@@ -414,6 +464,144 @@ describe('ChannelVideos Component', () => {
 
       expect(screen.getByTestId('video-list-item-video1')).toBeInTheDocument();
     });
+
+    test('shows a desktop floating selection action button when a video is selected', async () => {
+      const user = userEvent.setup();
+
+      useChannelVideos.mockReturnValue({
+        videos: [mockVideos[0]],
+        totalCount: 1,
+        oldestVideoDate: '2023-01-01',
+        videoFailed: false,
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      await user.click(screen.getByTestId('select-video-video1'));
+
+      const floatingAction = await screen.findByRole('button', {
+        name: /Actions for 1 selected video/i,
+      });
+
+      expect(floatingAction).toBeInTheDocument();
+      expect(screen.getByTestId('selection-action-count')).toHaveTextContent('1');
+
+      await user.click(floatingAction);
+
+      expect(screen.getByRole('menuitem', { name: /Download Selected/i })).toBeInTheDocument();
+      expect(screen.getByRole('menuitem', { name: /Ignore Selected/i })).toBeInTheDocument();
+      expect(screen.getByRole('menuitem', { name: /Clear Selection/i })).toBeInTheDocument();
+    });
+  });
+
+  describe('Selection mode mutual exclusion', () => {
+    test('selecting a video for download locks all rows into download selectionMode', async () => {
+      const user = userEvent.setup();
+
+      useChannelVideos.mockReturnValue({
+        videos: mockVideos,
+        totalCount: 3,
+        oldestVideoDate: '2023-01-01',
+        videoFailed: false,
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      await user.click(screen.getByTestId('select-video-video1'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-selection-mode', 'download');
+      });
+      expect(screen.getByTestId('video-card-video2')).toHaveAttribute('data-selection-mode', 'download');
+      expect(screen.getByTestId('video-card-short1')).toHaveAttribute('data-selection-mode', 'download');
+
+      const floatingAction = await screen.findByRole('button', {
+        name: /Actions for 1 selected video/i,
+      });
+      await user.click(floatingAction);
+      expect(screen.getByRole('menuitem', { name: /Download Selected/i })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: /Delete Selected/i })).not.toBeInTheDocument();
+    });
+
+    test('selecting a video for deletion locks all rows into delete selectionMode', async () => {
+      const user = userEvent.setup();
+
+      useChannelVideos.mockReturnValue({
+        videos: mockVideos,
+        totalCount: 3,
+        oldestVideoDate: '2023-01-01',
+        videoFailed: false,
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      await user.click(screen.getByTestId('select-delete-video2'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('video-card-video2')).toHaveAttribute('data-selection-mode', 'delete');
+      });
+      expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-selection-mode', 'delete');
+      expect(screen.getByTestId('video-card-short1')).toHaveAttribute('data-selection-mode', 'delete');
+
+      const floatingAction = await screen.findByRole('button', {
+        name: /Actions for 1 selected video/i,
+      });
+      await user.click(floatingAction);
+      expect(screen.getByRole('menuitem', { name: /Delete Selected/i })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: /Download Selected/i })).not.toBeInTheDocument();
+    });
+
+    test('prefers download mode when both selections would coexist (ternary order)', async () => {
+      const user = userEvent.setup();
+
+      useChannelVideos.mockReturnValue({
+        videos: mockVideos,
+        totalCount: 3,
+        oldestVideoDate: '2023-01-01',
+        videoFailed: false,
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      // Enter download mode first by selecting a downloadable row.
+      await user.click(screen.getByTestId('select-video-video1'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-selection-mode', 'download');
+      });
+
+      // Child-level gating contract: with download mode active, every row's
+      // normal delete affordance is disabled, mirroring the real VideoCard.
+      expect(screen.getByTestId('select-delete-video2')).toBeDisabled();
+
+      // Simulate a state where the child-level gate failed and both arrays
+      // end up populated simultaneously. The parent's ternary must still
+      // pick 'download' as the active mode (first branch wins).
+      await user.click(screen.getByTestId('force-select-delete-video2'));
+
+      expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-selection-mode', 'download');
+      expect(screen.getByTestId('video-card-video2')).toHaveAttribute('data-selection-mode', 'download');
+      expect(screen.getByTestId('video-card-short1')).toHaveAttribute('data-selection-mode', 'download');
+
+      const floatingAction = await screen.findByRole('button', {
+        name: /Actions for 1 selected video/i,
+      });
+      await user.click(floatingAction);
+      expect(screen.getByRole('menuitem', { name: /Download Selected/i })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: /Delete Selected/i })).not.toBeInTheDocument();
+    });
   });
 
   describe('Pagination', () => {
@@ -449,7 +637,7 @@ describe('ChannelVideos Component', () => {
 
       renderChannelVideos();
 
-      expect(screen.getByLabelText('videos per page')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '16' })).toBeInTheDocument();
     });
 
     test('does not render page size selector when no videos', () => {
@@ -497,7 +685,7 @@ describe('ChannelVideos Component', () => {
 
       renderChannelVideos();
 
-      const select = screen.getByLabelText('videos per page');
+      const select = screen.getByRole('button', { name: '16' });
       expect(select).toHaveTextContent('16');
     });
 
@@ -542,7 +730,7 @@ describe('ChannelVideos Component', () => {
       await waitFor(() => {
         expect(screen.getAllByRole('navigation').length).toBeGreaterThan(0);
       });
-      const page2Buttons = screen.getAllByRole('button', { name: 'Go to page 2' });
+      const page2Buttons = screen.getAllByRole('button', { name: 'go to page 2' });
       await user.click(page2Buttons[0]);
 
       expect(useChannelVideos).toHaveBeenLastCalledWith(
@@ -553,7 +741,7 @@ describe('ChannelVideos Component', () => {
       // MUI Select (non-native) opens on mouseDown on the inner trigger div.
       // The "Per page:" label precedes the Select, and the Select displays "16".
       // Use within() on the labeled container to find the trigger by its text content.
-      const selectContainer = screen.getByLabelText('videos per page');
+      const selectContainer = screen.getByRole('button', { name: '16' });
       const trigger = within(selectContainer).getByText('16');
       fireEvent.mouseDown(trigger);
 
@@ -584,10 +772,10 @@ describe('ChannelVideos Component', () => {
       renderChannelVideos();
 
       // Selector should be present
-      expect(screen.getByLabelText('videos per page')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '16' })).toBeInTheDocument();
 
       // Only 1 page total (3 videos < 16 per page), so no page 2 button should exist
-      expect(screen.queryByRole('button', { name: 'Go to page 2' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'go to page 2' })).not.toBeInTheDocument();
     });
 
     test('renders both selector and pagination when multiple pages', () => {
@@ -604,7 +792,7 @@ describe('ChannelVideos Component', () => {
       renderChannelVideos();
 
       // Both should be present
-      expect(screen.getByLabelText('videos per page')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '16' })).toBeInTheDocument();
       expect(screen.getAllByRole('navigation').length).toBeGreaterThan(0);
     });
   });
@@ -694,7 +882,7 @@ describe('ChannelVideos Component', () => {
       renderChannelVideos();
 
       // Initially called with null tabType until tabs are loaded
-      expect(useChannelVideos).toHaveBeenCalledWith({
+      expect(useChannelVideos).toHaveBeenCalledWith(expect.objectContaining({
         channelId: 'UC123456',
         page: 1,
         pageSize: 16, // Desktop default
@@ -708,8 +896,11 @@ describe('ChannelVideos Component', () => {
         maxDuration: null,
         dateFrom: null,
         dateTo: null,
+        maxRating: '',
+        append: false,
+        resetKey: expect.any(String),
         protectedFilter: false,
-      });
+      }));
     });
 
     test('calls useRefreshChannelVideos hook with correct parameters', () => {
@@ -845,7 +1036,6 @@ describe('ChannelVideos Component', () => {
       renderChannelVideos();
 
       expect(screen.getByText('Loading and fetching/indexing new videos for this channel tab...')).toBeInTheDocument();
-      // Skeletons are MUI components, hard to test directly
     });
   });
 

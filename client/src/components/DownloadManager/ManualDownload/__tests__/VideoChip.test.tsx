@@ -59,24 +59,24 @@ describe('VideoChip', () => {
       expect(screen.getByText('1:00:01')).toBeInTheDocument();
     });
 
-    test('truncates long channel names', () => {
-      const video = {
-        ...baseVideo,
-        channelName: 'This is a very long channel name that should be truncated',
-      };
+    test('renders full channel name in a CSS-truncated container', () => {
+      const longChannelName = 'This is a very long channel name that should be truncated';
+      const video = { ...baseVideo, channelName: longChannelName };
       render(<VideoChip video={video} onDelete={mockOnDelete} />);
 
-      expect(screen.getByText('This is a very lo...')).toBeInTheDocument();
+      const element = screen.getByText(longChannelName);
+      expect(element).toBeInTheDocument();
+      expect(element).toHaveClass('truncate');
     });
 
-    test('truncates long video titles', () => {
-      const video = {
-        ...baseVideo,
-        videoTitle: 'This is a very long video title that should definitely be truncated after a certain number of characters',
-      };
+    test('renders full video title in a CSS-truncated container', () => {
+      const longTitle = 'This is a very long video title that should definitely be truncated after a certain number of characters';
+      const video = { ...baseVideo, videoTitle: longTitle };
       render(<VideoChip video={video} onDelete={mockOnDelete} />);
 
-      expect(screen.getByText('This is a very long video title that ...')).toBeInTheDocument();
+      const element = screen.getByText(longTitle);
+      expect(element).toBeInTheDocument();
+      expect(element).toHaveClass('truncate');
     });
 
     test('does not truncate short text', () => {
@@ -119,7 +119,7 @@ describe('VideoChip', () => {
       render(<VideoChip video={video} onDelete={mockOnDelete} />);
 
       const chip = screen.getByRole('button', { name: /Test Video Title/i });
-      expect(chip).toHaveClass('MuiChip-colorWarning');
+      expect(chip).toHaveClass('chip-warning');
     });
 
     test('applies error color for members-only videos', () => {
@@ -127,14 +127,14 @@ describe('VideoChip', () => {
       render(<VideoChip video={video} onDelete={mockOnDelete} />);
 
       const chip = screen.getByRole('button', { name: /Test Video Title/i });
-      expect(chip).toHaveClass('MuiChip-colorError');
+      expect(chip).toHaveClass('chip-error');
     });
 
     test('applies default color for regular videos', () => {
       render(<VideoChip video={baseVideo} onDelete={mockOnDelete} />);
 
       const chip = screen.getByRole('button', { name: /Test Video Title/i });
-      expect(chip).toHaveClass('MuiChip-colorDefault');
+      expect(chip).toHaveClass('chip-default');
     });
 
     test('applies filled variant for downloaded videos', () => {
@@ -142,7 +142,7 @@ describe('VideoChip', () => {
       render(<VideoChip video={video} onDelete={mockOnDelete} />);
 
       const chip = screen.getByRole('button', { name: /Test Video Title/i });
-      expect(chip).toHaveClass('MuiChip-filled');
+      expect(chip).toHaveClass('chip-filled');
     });
 
     test('applies filled variant for members-only videos', () => {
@@ -150,14 +150,14 @@ describe('VideoChip', () => {
       render(<VideoChip video={video} onDelete={mockOnDelete} />);
 
       const chip = screen.getByRole('button', { name: /Test Video Title/i });
-      expect(chip).toHaveClass('MuiChip-filled');
+      expect(chip).toHaveClass('chip-filled');
     });
 
     test('applies filled variant for regular videos', () => {
       render(<VideoChip video={baseVideo} onDelete={mockOnDelete} />);
 
       const chip = screen.getByRole('button', { name: /Test Video Title/i });
-      expect(chip).toHaveClass('MuiChip-filled');
+      expect(chip).toHaveClass('chip-filled');
     });
   });
 
@@ -191,34 +191,29 @@ describe('VideoChip', () => {
     });
   });
 
-  describe('Tooltip', () => {
-    test('shows basic tooltip with video title', async () => {
+  describe('Accessible name', () => {
+    test('exposes video title as the chip accessible name', () => {
       render(<VideoChip video={baseVideo} onDelete={mockOnDelete} />);
 
-      const chip = screen.getByRole('button');
-      fireEvent.mouseOver(chip);
-
-      expect(await screen.findByRole('tooltip')).toHaveTextContent('Test Video Title');
+      expect(screen.getByRole('button', { name: 'Test Video Title' })).toBeInTheDocument();
     });
 
-    test('shows tooltip for already downloaded videos', async () => {
+    test('annotates accessible name for already downloaded videos', () => {
       const video = { ...baseVideo, isAlreadyDownloaded: true };
       render(<VideoChip video={video} onDelete={mockOnDelete} />);
 
-      const chip = screen.getByRole('button', { name: /Test Video Title - Already downloaded/i });
-      fireEvent.mouseOver(chip);
-
-      expect(await screen.findByRole('tooltip')).toHaveTextContent('Test Video Title - Already downloaded');
+      expect(
+        screen.getByRole('button', { name: 'Test Video Title - Already downloaded' })
+      ).toBeInTheDocument();
     });
 
-    test('shows tooltip for members-only videos', async () => {
+    test('annotates accessible name for members-only videos', () => {
       const video = { ...baseVideo, isMembersOnly: true };
       render(<VideoChip video={video} onDelete={mockOnDelete} />);
 
-      const chip = screen.getByRole('button');
-      fireEvent.mouseOver(chip);
-
-      expect(await screen.findByRole('tooltip')).toHaveTextContent('Test Video Title - Members-only content (cannot download)');
+      expect(
+        screen.getByRole('button', { name: 'Test Video Title - Members-only content (cannot download)' })
+      ).toBeInTheDocument();
     });
   });
 
@@ -241,11 +236,11 @@ describe('VideoChip', () => {
   });
 
   describe('Edge Cases', () => {
-    test('handles zero duration', () => {
+    test('hides duration pill when duration is zero or unknown', () => {
       const video = { ...baseVideo, duration: 0 };
       render(<VideoChip video={video} onDelete={mockOnDelete} />);
 
-      expect(screen.getByText('0:00')).toBeInTheDocument();
+      expect(screen.queryByText('0:00')).not.toBeInTheDocument();
     });
 
     test('handles very long duration', () => {
@@ -299,7 +294,7 @@ describe('VideoChip', () => {
       expect(screen.getByTestId('HistoryIcon')).toBeInTheDocument();
       expect(screen.getByTestId('LockIcon')).toBeInTheDocument();
       const chip = screen.getByRole('button', { name: /Test Video Title/i });
-      expect(chip).toHaveClass('MuiChip-colorWarning');
+      expect(chip).toHaveClass('chip-warning');
     });
 
     test('renders chip with full width', () => {
@@ -335,22 +330,19 @@ describe('VideoChip', () => {
       expect(screen.getByText('URL-only import')).toBeInTheDocument();
     });
 
-    test('applies info color for bulk import chip', () => {
+    test('applies default color for bulk import chip', () => {
       render(<VideoChip video={bulkVideo} onDelete={mockOnDelete} />);
 
       const chip = screen.getByRole('button');
-      expect(chip).toHaveClass('MuiChip-colorInfo');
+      expect(chip).toHaveClass('chip-default');
     });
 
-    test('shows full URL in tooltip for bulk import', async () => {
+    test('exposes full URL as accessible name for bulk import', () => {
       render(<VideoChip video={bulkVideo} onDelete={mockOnDelete} />);
 
-      const chip = screen.getByRole('button');
-      fireEvent.mouseOver(chip);
-
-      expect(await screen.findByRole('tooltip')).toHaveTextContent(
-        'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
-      );
+      expect(
+        screen.getByRole('button', { name: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' })
+      ).toBeInTheDocument();
     });
 
     test('calls onDelete with youtubeId for bulk import chip', () => {
@@ -373,6 +365,23 @@ describe('VideoChip', () => {
       render(<VideoChip video={bulkVideo} onDelete={mockOnDelete} />);
 
       expect(screen.getByTestId('LinkIcon')).toBeInTheDocument();
+    });
+
+    test('shows a spinner and "Fetching details..." while enriching', () => {
+      render(<VideoChip video={bulkVideo} onDelete={mockOnDelete} isEnriching />);
+
+      expect(screen.getByTestId('EnrichingSpinner')).toBeInTheDocument();
+      expect(screen.getByText('Fetching details...')).toBeInTheDocument();
+      // The link icon should give way to the spinner while enrichment is active.
+      expect(screen.queryByTestId('LinkIcon')).not.toBeInTheDocument();
+      expect(screen.queryByText('URL-only import')).not.toBeInTheDocument();
+    });
+
+    test('shows link icon again if isEnriching is false', () => {
+      render(<VideoChip video={bulkVideo} onDelete={mockOnDelete} isEnriching={false} />);
+
+      expect(screen.getByTestId('LinkIcon')).toBeInTheDocument();
+      expect(screen.queryByTestId('EnrichingSpinner')).not.toBeInTheDocument();
     });
   });
 });

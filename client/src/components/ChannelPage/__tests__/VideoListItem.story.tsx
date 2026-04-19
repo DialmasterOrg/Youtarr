@@ -23,8 +23,9 @@ const meta: Meta<typeof VideoListItem> = {
     video,
     checkedBoxes: [],
     selectedForDeletion: [],
+    selectionMode: null,
     onCheckChange: fn(),
-    onToggleDeletion: fn(),
+    onDeletionChange: fn(),
     onToggleIgnore: fn(),
   },
 };
