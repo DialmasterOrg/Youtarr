@@ -1,5 +1,23 @@
 # Changelog
 
+## [v1.66.4](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.66.4) - 2026-04-20
+
+### [1.66.4](https://github.com/DialmasterOrg/Youtarr/compare/vv1.66.3...v1.66.4) (2026-04-20)
+
+
+### Bug Fixes
+
+* restore download progress bar fill ([94ba9e0](https://github.com/DialmasterOrg/Youtarr/commit/94ba9e02e191e3ede55b31838b8a9c1a5293cd17))
+
+
+### Documentation
+
+* update CHANGELOG for v1.66.3 [skip ci] ([68e6029](https://github.com/DialmasterOrg/Youtarr/commit/68e602923d0c250f16bea6f241b635b183c2217f))
+
+
+
+
+
 ## [v1.66.3](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.66.3) - 2026-04-20
 
 ### [1.66.3](https://github.com/DialmasterOrg/Youtarr/compare/vv1.66.2...v1.66.3) (2026-04-20)
