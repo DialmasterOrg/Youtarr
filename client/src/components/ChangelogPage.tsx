@@ -16,12 +16,38 @@ import { useChangelog } from '../hooks/useChangelog';
 const CHANGELOG_GITHUB_URL =
   'https://github.com/DialmasterOrg/Youtarr/blob/main/CHANGELOG.md';
 
-function ChangelogPage() {
+interface ChangelogPageProps {
+  updateAvailable?: boolean;
+  serverVersion?: string;
+}
+
+function ChangelogPage({ updateAvailable = false, serverVersion }: ChangelogPageProps = {}) {
   const isMobile = useMediaQuery('(max-width: 599px)');
   const { content, loading, error, refetch } = useChangelog();
 
   return (
-    <Card elevation={8} style={{ marginBottom: '16px' }}>
+    <>
+      {updateAvailable && (
+        <Alert
+          severity="info"
+          role="status"
+          className="mb-4 items-center gap-2 px-3.5 py-2 rounded-ui shadow-soft bg-card border-info"
+          data-testid="changelog-update-available"
+        >
+          <Typography variant="body2">
+            You are running an older version of Youtarr.
+            {serverVersion ? (
+              <>
+                {' '}
+                <strong>{serverVersion}</strong> is available. Pull the latest image to update.
+              </>
+            ) : (
+              <> Pull the latest image to update.</>
+            )}
+          </Typography>
+        </Alert>
+      )}
+      <Card elevation={8} style={{ marginBottom: '16px' }}>
       <CardContent>
         <div
           style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}
@@ -78,6 +104,7 @@ function ChangelogPage() {
         )}
       </CardContent>
     </Card>
+    </>
   );
 }
 

@@ -317,10 +317,15 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                         <MenuItem value="360">360p</MenuItem>
                       </Select>
                       <InfoTooltip
-                        text="The resolution we will try to download from YouTube. Note that this is not guaranteed as YouTube may not have your preferred resolution available."
+                        text="The resolution we will try to download from YouTube. Note that this is not guaranteed as YouTube may not have your preferred resolution available. YouTube only provides H.264 MP4 up to 1080p. Selecting 1440p or 2160p (4K) will use VP9 or AV1 (remuxed into MP4), which older Plex clients (Apple TV HD, iOS, older Rokus) may need to transcode."
                         onMobileClick={onMobileTooltipClick}
                       />
                     </Box>
+                    {(config.preferredResolution === '1440' || config.preferredResolution === '2160') && (
+                      <Box component="span" className="text-xs text-muted-foreground">
+                        1440p+ uses VP9/AV1 (remuxed into MP4). Older Plex clients without native VP9/AV1 decode may transcode. Select H.264 codec below for best compatibility (caps at 1080p).
+                      </Box>
+                    )}
                   </FormControl>
                 </Grid>
 
@@ -341,12 +346,12 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                         <MenuItem value="h265">H.265/HEVC (Balanced)</MenuItem>
                       </Select>
                       <InfoTooltip
-                        text="Select your preferred video codec. Youtarr will download this codec when available, and fall back to other codecs if your preference is not available for a video. H.264 is recommended for Apple TV and maximum device compatibility. VP9 is the default codec for most YouTube videos."
+                        text="Select your preferred video codec. Youtarr will download this codec when available, and fall back if it is not. H.264 is recommended for Apple TV and maximum device compatibility, but YouTube does not provide H.264 above 1080p so selecting it effectively caps downloads at 1080p regardless of the resolution preference above. Default lets YouTube pick the best codec (typically VP9 or AV1 at 1440p+)."
                         onMobileClick={onMobileTooltipClick}
                       />
                     </Box>
                     <Box component="span" className="text-xs text-muted-foreground">
-                      Note: H.264 produces larger file sizes but offers maximum compatibility for Apple TV. This is a preference and will fall back to available codecs.
+                      Note: H.264 offers maximum compatibility (Apple TV HD, iOS, older Rokus direct-play) but YouTube caps H.264 at 1080p, so it will override any 1440p/2160p preference.
                     </Box>
                   </FormControl>
                 </Grid>
