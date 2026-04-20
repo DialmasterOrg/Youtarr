@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import ChangelogPage from '../ChangelogPage';
@@ -182,6 +182,53 @@ describe('ChangelogPage', () => {
 
     expect(screen.getByRole('progressbar')).toBeInTheDocument();
     expect(screen.queryByText('Old cached content')).not.toBeInTheDocument();
+  });
+
+  describe('update-available banner', () => {
+    beforeEach(() => {
+      useChangelog.mockReturnValue({
+        content: '# Changelog',
+        loading: false,
+        error: null,
+        refetch: mockRefetch,
+      });
+    });
+
+    test('renders the update banner with server version when updateAvailable is true', () => {
+      render(<ChangelogPage updateAvailable serverVersion="v1.71.0" />);
+
+      const banner = screen.getByTestId('changelog-update-available');
+      expect(banner).toHaveTextContent('You are running an older version of Youtarr.');
+      expect(banner).toHaveTextContent('v1.71.0');
+      expect(banner).toHaveTextContent('Pull the latest image to update.');
+    });
+
+    test('renders a generic update message when serverVersion is not provided', () => {
+      render(<ChangelogPage updateAvailable />);
+
+      const banner = screen.getByTestId('changelog-update-available');
+      expect(banner).toHaveTextContent('You are running an older version of Youtarr.');
+      expect(banner).toHaveTextContent('Pull the latest image to update.');
+    });
+
+    test('does not render the update banner when updateAvailable is false', () => {
+      render(<ChangelogPage updateAvailable={false} serverVersion="v1.71.0" />);
+
+      expect(screen.queryByTestId('changelog-update-available')).not.toBeInTheDocument();
+    });
+
+    test('does not render the update banner by default', () => {
+      render(<ChangelogPage />);
+
+      expect(screen.queryByTestId('changelog-update-available')).not.toBeInTheDocument();
+    });
+
+    test('update banner has no dismiss button', () => {
+      render(<ChangelogPage updateAvailable serverVersion="v1.71.0" />);
+
+      const banner = screen.getByTestId('changelog-update-available');
+      expect(within(banner).queryByRole('button', { name: /close/i })).not.toBeInTheDocument();
+    });
   });
 
   test('renders markdown with proper structure', () => {
