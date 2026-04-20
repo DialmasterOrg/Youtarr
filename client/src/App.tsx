@@ -511,6 +511,7 @@ function AppContent() {
                     versionLabel={ytDlpLabel ? `${clientVersion} • ${ytDlpLabel}` : clientVersion}
                     updateAvailable={updateAvailable}
                     updateTooltip={updateTooltip}
+                    serverVersion={serverVersion}
                     ytDlpUpdateAvailable={ytDlpUpdateAvailable}
                     ytDlpUpdateTooltip={ytDlpUpdateTooltip}
                     onLogout={handleLogout}
@@ -522,7 +523,10 @@ function AppContent() {
                     >
                       <ErrorBoundary fallbackMessage="An unexpected error occurred. Please refresh the page to continue.">
                         <Routes>
-                          <Route path="/changelog" element={<ChangelogPage />} />
+                          <Route
+                            path="/changelog"
+                            element={<ChangelogPage updateAvailable={updateAvailable} serverVersion={serverVersion} />}
+                          />
                           <Route path="/settings/*" element={<Settings token={token} />} />
                           <Route path="/configuration" element={<Navigate to="/settings" replace />} />
                           <Route path="/channels" element={<ChannelManager token={token} />} />
