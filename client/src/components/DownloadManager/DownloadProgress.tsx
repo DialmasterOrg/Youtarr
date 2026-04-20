@@ -129,19 +129,19 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
   const progressColor = useMemo(() => {
     if (!currentProgress) return 'var(--muted-foreground)';
 
-    if (currentProgress.stalled) return 'hsl(var(--warning))';
+    if (currentProgress.stalled) return 'var(--warning)';
 
     switch (currentProgress.state) {
       case 'initiating':
         return 'var(--muted-foreground)';
       case 'complete':
-        return 'hsl(var(--success))';
+        return 'var(--success)';
       case 'terminated':
-        return 'hsl(var(--warning))';
+        return 'var(--warning)';
       case 'error':
-        return 'hsl(var(--destructive))';
+        return 'var(--destructive)';
       default:
-        return 'hsl(var(--primary))';
+        return 'var(--primary)';
     }
   }, [currentProgress]);
 
