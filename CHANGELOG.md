@@ -1,5 +1,24 @@
 # Changelog
 
+## [v1.66.3](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.66.3) - 2026-04-20
+
+### [1.66.3](https://github.com/DialmasterOrg/Youtarr/compare/vv1.66.2...v1.66.3) (2026-04-20)
+
+
+### Bug Fixes
+
+* download true 1440p/2160p with VP9/AV1 remuxed into MP4 ([#534](https://github.com/DialmasterOrg/Youtarr/issues/534)) ([a5bab33](https://github.com/DialmasterOrg/Youtarr/commit/a5bab3317b7a1d71df6ed400c22ea7366aa18798))
+* restore update available notification banner ([c391795](https://github.com/DialmasterOrg/Youtarr/commit/c39179551cbd7c17449c3c463bc0002d0976e75b))
+
+
+### Documentation
+
+* update CHANGELOG for v1.66.2 [skip ci] ([0cffcbf](https://github.com/DialmasterOrg/Youtarr/commit/0cffcbf54bf65c32376b850532bf331dbdda7ffa))
+
+
+
+
+
 ## [v1.66.2](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.66.2) - 2026-04-19
 
 ### [1.66.2](https://github.com/DialmasterOrg/Youtarr/compare/vv1.66.1...v1.66.2) (2026-04-19)
