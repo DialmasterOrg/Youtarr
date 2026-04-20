@@ -1,3 +1,10 @@
+// Ensure files Youtarr (and yt-dlp, which inherits this umask) creates are
+// group-writable by default, so SMB clients, Plex, and Jellyfin can rename/delete
+// downloads without an extra chmod step. Node's default umask is 0022 (files 644),
+// which is the root cause of many Unraid/NAS permission complaints. config.json
+// is separately locked to 0640 on write to keep plexApiKey out of world-read.
+process.umask(0o002);
+
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = require('express-rate-limit');
