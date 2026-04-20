@@ -1,5 +1,24 @@
 # Changelog
 
+## [v1.66.2](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.66.2) - 2026-04-19
+
+### [1.66.2](https://github.com/DialmasterOrg/Youtarr/compare/vv1.66.1...v1.66.2) (2026-04-19)
+
+
+### Bug Fixes
+
+* **websocket:** memoize context value to prevent render loop ([6b68082](https://github.com/DialmasterOrg/Youtarr/commit/6b68082648853fbc09d42429f5d536daab9c158e))
+
+
+### Documentation
+
+* backfill v1.66.0 payload into v1.66.1 CHANGELOG [skip ci] ([118f5ec](https://github.com/DialmasterOrg/Youtarr/commit/118f5ec9de449dfb1a8e0ef56f049ea16e6911e5))
+* update CHANGELOG for v1.66.1 [skip ci] ([1281f17](https://github.com/DialmasterOrg/Youtarr/commit/1281f17184c77d546c99a3cb2e8e8d72eae4f16c))
+
+
+
+
+
 ## [v1.66.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.66.1) - 2026-04-19
 
 ### [1.66.1](https://github.com/DialmasterOrg/Youtarr/compare/v1.65.0...v1.66.1) (2026-04-19)
