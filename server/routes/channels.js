@@ -476,12 +476,17 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *     responses:
    *       200:
    *         description: Channel settings
+   *       404:
+   *         description: Channel not found (e.g. not subscribed)
    *       500:
    *         description: Failed to get settings
    */
   router.get('/api/channels/:channelId/settings', verifyToken, async (req, res) => {
     try {
       const settings = await channelSettingsModule.getChannelSettings(req.params.channelId);
+      if (!settings) {
+        return res.status(404).json({ error: 'Channel not found' });
+      }
       res.json(settings);
     } catch (error) {
       console.error('Error getting channel settings:', error);
