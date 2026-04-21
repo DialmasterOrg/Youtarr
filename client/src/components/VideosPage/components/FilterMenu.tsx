@@ -6,8 +6,8 @@ import {
   TextField,
   Typography,
   Divider,
-} from '../ui';
-import { Check as CheckIcon, Search as SearchIcon } from '../../lib/icons';
+} from '../../ui';
+import { Check as CheckIcon, Search as SearchIcon } from '../../../lib/icons';
 
 interface FilterMenuProps {
   anchorEl: null | HTMLElement;
@@ -29,14 +29,12 @@ const FilterMenu: React.FC<FilterMenuProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Reset search when menu opens/closes
   useEffect(() => {
     if (!anchorEl) {
       setSearchTerm('');
     }
   }, [anchorEl]);
 
-  // Filter channels based on search term (case insensitive)
   const filteredChannels = uniqueChannels.filter(channel =>
     channel.toLowerCase().includes(searchTerm.toLowerCase())
   );

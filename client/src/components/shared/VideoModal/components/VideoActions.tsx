@@ -49,7 +49,7 @@ function VideoActions({
   const showProtect = isDownloadedAndPresent;
   const showDownload = !isDownloadedAndPresent;
   const showIgnore = (!isDownloadedAndPresent || video.isIgnored) && allowIgnore;
-  const showDelete = video.isDownloaded || video.status === 'missing';
+  const showDelete = isDownloadedAndPresent;
   const mediaTypeInfo = getMediaTypeInfo(video.mediaType);
   const statusLabel = video.status === 'downloaded' ? 'Available' : getStatusLabel(video.status);
   const youtubeUrl = `${YOUTUBE_URL_BASE}${video.youtubeId}`;

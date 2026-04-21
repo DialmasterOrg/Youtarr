@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import React, { useState } from 'react';
 import FilterMenu from '../FilterMenu';
-import { Button } from '../../ui';
+import { Button } from '../../../ui';
 
 const meta: Meta<typeof FilterMenu> = {
   title: 'Components/VideosPage/FilterMenu',

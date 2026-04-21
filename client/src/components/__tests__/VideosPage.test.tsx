@@ -16,14 +16,14 @@ jest.mock('react-swipeable', () => ({
 }));
 
 jest.mock('../../utils', () => ({
-  formatDuration: jest.fn((duration: number | null) => {
+  formatDuration: (duration: number | null) => {
     if (!duration) return 'Unknown';
     return `${Math.floor(duration / 60)}m`;
-  }),
-  formatYTDate: jest.fn((date: string | null) => {
+  },
+  formatYTDate: (date: string | null) => {
     if (!date) return 'Unknown';
     return '1/15/2024';
-  })
+  }
 }));
 
 jest.mock('../../hooks/useMediaQuery');
@@ -155,6 +155,7 @@ describe('VideosPage Component', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    window.localStorage.clear();
     (useMediaQuery as jest.Mock).mockReturnValue(false);
 
     // Mock useVideoDeletion to return a mock function
@@ -165,6 +166,15 @@ describe('VideosPage Component', () => {
       error: null
     });
   });
+
+  // Helper: force a particular view mode before rendering.
+  const useTableView = () => {
+    window.localStorage.setItem('youtarr:videosPageViewMode', 'table');
+  };
+
+  const useGridView = () => {
+    window.localStorage.setItem('youtarr:videosPageViewMode', 'grid');
+  };
 
   describe('Desktop View', () => {
     test('renders videos page with title', async () => {
@@ -264,15 +274,17 @@ describe('VideosPage Component', () => {
     });
 
     test('displays table header with sort controls in desktop view', async () => {
+      useTableView();
       axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
 
       render(<VideosPage token={mockToken} />);
 
       await waitFor(() => {
-        expect(screen.getByText('Downloaded Videos')).toBeInTheDocument();
+        expect(screen.getByText('How to Code')).toBeInTheDocument();
       });
       expect(screen.getByRole('button', { name: /Published/ })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Added/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Downloaded/ })).toBeInTheDocument();
+      expect(screen.getByRole('columnheader', { name: /Title/ })).toBeInTheDocument();
     });
 
     test('filters videos by channel name', async () => {
@@ -371,7 +383,7 @@ describe('VideosPage Component', () => {
         expect(screen.getByText('How to Code')).toBeInTheDocument();
       });
 
-      const addedHeader = screen.getByText('Added');
+      const addedHeader = screen.getByText('Downloaded');
       await user.click(addedHeader);
 
       // Verify that a new API call was made
@@ -420,7 +432,7 @@ describe('VideosPage Component', () => {
       expect(screen.getByText('Video 14')).toBeInTheDocument();
     });
 
-    test('handles image loading errors', async () => {
+    test('handles image loading errors (grid view)', async () => {
       axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse([mockVideos[0]]) });
 
       render(<VideosPage token={mockToken} />);
@@ -434,7 +446,7 @@ describe('VideosPage Component', () => {
       fireEvent.error(image);
 
       await waitFor(() => {
-        expect(screen.getByText('No thumbnail')).toBeInTheDocument();
+        expect(screen.getByText(/No thumbnail/)).toBeInTheDocument();
       });
     });
 
@@ -447,7 +459,8 @@ describe('VideosPage Component', () => {
         expect(screen.getByText('How to Code')).toBeInTheDocument();
       });
 
-      expect(screen.getByText(/Duration:/)).toBeInTheDocument();
+      // Grid card renders the formatted duration (mocked as "10m") in the metadata row.
+      expect(screen.getByText(/10m/)).toBeInTheDocument();
     });
 
     test('displays "Unknown" for missing duration', async () => {
@@ -456,8 +469,11 @@ describe('VideosPage Component', () => {
       render(<VideosPage token={mockToken} />);
 
       await waitFor(() => {
-        expect(screen.queryByText(/Duration:/)).not.toBeInTheDocument();
+        expect(screen.getByText('React Tutorial')).toBeInTheDocument();
       });
+
+      // Duration is hidden on the card when the field is null.
+      expect(screen.queryByText(/10m/)).not.toBeInTheDocument();
     });
   });
 
@@ -517,6 +533,7 @@ describe('VideosPage Component', () => {
     });
 
     test('displays video information in mobile card format', async () => {
+      useGridView();
       axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse([mockVideos[0]]) });
 
       render(<VideosPage token={mockToken} />);
@@ -527,8 +544,9 @@ describe('VideosPage Component', () => {
 
       const channelElements = screen.getAllByText('Tech Channel');
       expect(channelElements.length).toBeGreaterThan(0);
-      expect(screen.getByText(/Added:/)).toBeInTheDocument();
-      expect(screen.getByText(/Published/)).toBeInTheDocument();
+      expect(screen.getByText(/Downloaded:/)).toBeInTheDocument();
+      // Card metadata cell includes the published label with colon; sort button is "Published" alone.
+      expect(screen.getByText(/Published:/)).toBeInTheDocument();
     });
 
     test('handles mobile filter menu interaction', async () => {
@@ -737,7 +755,7 @@ describe('VideosPage Component', () => {
       });
 
       const publishedHeader = screen.getByText('Published');
-      const addedHeader = screen.getByText('Added');
+      const addedHeader = screen.getByText('Downloaded');
 
       await user.click(publishedHeader);
       await user.click(publishedHeader);
@@ -807,6 +825,10 @@ describe('VideosPage Component', () => {
 
   describe('Video Deletion Features', () => {
     describe('Desktop View - Checkbox Selection and Deletion', () => {
+      beforeEach(() => {
+        useTableView();
+      });
+
       test('renders checkboxes for video selection in desktop view', async () => {
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
 
@@ -1084,6 +1106,10 @@ describe('VideosPage Component', () => {
     });
 
     describe('Delete Confirmation and Execution', () => {
+      beforeEach(() => {
+        useTableView();
+      });
+
       test('successfully deletes videos and shows success message', async () => {
         const user = setupUser();
 
@@ -1306,6 +1332,10 @@ describe('VideosPage Component', () => {
     });
 
     describe('Snackbar Messages', () => {
+      beforeEach(() => {
+        useTableView();
+      });
+
       test('success snackbar can be dismissed', async () => {
         const user = setupUser();
 
