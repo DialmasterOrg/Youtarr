@@ -76,6 +76,214 @@ jest.mock('../shared/VideoModal', () => ({
   }
 }));
 
+// The old VideosHeader, VideosFilters, and FilterMenu components were replaced by
+// the shared VideoList module. We mock the module so tests can continue targeting
+// the same observable UI (channel filter menu, selection count, Actions menu) via
+// simple affordances without fighting the unified layout.
+jest.mock('../shared/VideoList', () => {
+  const React = require('react');
+  const actual = jest.requireActual('../shared/VideoList');
+
+  function ChannelFilterMenu({ filter }: any) {
+    const [open, setOpen] = React.useState(false);
+    if (filter.id !== 'channel') return null;
+    return React.createElement(
+      'div',
+      null,
+      React.createElement(
+        'button',
+        {
+          type: 'button',
+          'data-testid': 'FilterListIcon',
+          onClick: () => setOpen((v: boolean) => !v),
+        },
+        filter.value ? `Channel: ${filter.value}` : 'Filter by Channel'
+      ),
+      open
+        ? React.createElement(
+            'ul',
+            { role: 'menu' },
+            React.createElement(
+              'li',
+              {
+                role: 'menuitem',
+                'data-testid': 'filter-menu-all',
+                onClick: () => {
+                  filter.onChange('');
+                  setOpen(false);
+                },
+              },
+              'All'
+            ),
+            ...(filter.options || []).map((channel: string) =>
+              React.createElement(
+                'li',
+                {
+                  key: channel,
+                  role: 'menuitem',
+                  'data-testid': `filter-menu-${channel}`,
+                  onClick: () => {
+                    filter.onChange(channel);
+                    setOpen(false);
+                  },
+                },
+                channel
+              )
+            )
+          )
+        : null
+    );
+  }
+
+  return {
+    ...actual,
+    VideoListContainer: function MockVideoListContainer(props: any) {
+      const selection = props.selection;
+      const [menuOpen, setMenuOpen] = React.useState(false);
+      const count = selection?.count ?? 0;
+
+      const channelFilter = (props.filters || []).find((f: any) => f.id === 'channel');
+      const sort = props.sort;
+
+      const actionButtons =
+        selection?.hasSelection &&
+        (selection.actions || []).map((action: any) => {
+          const disabled = action.disabled ? action.disabled(selection.selectedIds) : false;
+          return React.createElement(
+            'button',
+            {
+              key: `mobile-${action.id}`,
+              type: 'button',
+              disabled,
+              onClick: () => {
+                if (disabled) return;
+                action.onClick(selection.selectedIds);
+              },
+            },
+            action.label
+          );
+        });
+
+      const selectionBar =
+        selection?.hasSelection &&
+        React.createElement(
+          'div',
+          null,
+          React.createElement(
+            'span',
+            null,
+            `${count} video${count !== 1 ? 's' : ''} selected`
+          ),
+          React.createElement(
+            'button',
+            {
+              type: 'button',
+              disabled: (selection.actions || []).some((a: any) =>
+                a.disabled ? a.disabled(selection.selectedIds) : false
+              ),
+              onClick: () => setMenuOpen((v: boolean) => !v),
+            },
+            `Actions (${count})`
+          ),
+          menuOpen
+            ? React.createElement(
+                'ul',
+                { role: 'menu' },
+                ...(selection.actions || []).map((action: any) => {
+                  const disabled = action.disabled
+                    ? action.disabled(selection.selectedIds)
+                    : false;
+                  return React.createElement(
+                    'li',
+                    {
+                      key: action.id,
+                      role: 'menuitem',
+                      'data-disabled': disabled ? 'true' : 'false',
+                      onClick: () => {
+                        if (disabled) return;
+                        action.onClick(selection.selectedIds);
+                        setMenuOpen(false);
+                      },
+                    },
+                    `${action.label} Selected`
+                  );
+                })
+              )
+            : null,
+          ...(actionButtons || []),
+          React.createElement(
+            'button',
+            { type: 'button', onClick: () => selection.clear() },
+            'Clear'
+          ),
+          React.createElement(
+            'button',
+            { type: 'button', onClick: () => selection.clear() },
+            'Clear Selection'
+          )
+        );
+
+      const sortControls =
+        sort &&
+        React.createElement(
+          'div',
+          null,
+          ...sort.options.map((opt: any) =>
+            React.createElement(
+              'button',
+              {
+                key: opt.key,
+                type: 'button',
+                'aria-pressed': sort.activeKey === opt.key,
+                onClick: () =>
+                  sort.onChange(
+                    opt.key,
+                    sort.activeKey === opt.key
+                      ? sort.direction === 'asc'
+                        ? 'desc'
+                        : 'asc'
+                      : 'desc'
+                  ),
+              },
+              opt.label
+            )
+          )
+        );
+
+      const searchBar = React.createElement('input', {
+        type: 'text',
+        placeholder: props.searchPlaceholder || 'Search videos...',
+        value: props.state?.searchInput ?? '',
+        onChange: (e: any) => props.state?.setSearchInput?.(e.target.value),
+      });
+
+      const empty = (props.itemCount ?? 0) === 0;
+
+      const content = empty
+        ? props.isError
+          ? React.createElement('div', { role: 'alert' }, props.errorMessage || 'error')
+          : props.isLoading
+            ? (props.loadingSkeleton || React.createElement('div', null, 'Loading...'))
+            : React.createElement('div', { 'data-testid': 'video-list-empty-state' }, 'No videos found')
+        : typeof props.renderContent === 'function'
+          ? props.renderContent(props.state?.viewMode ?? 'grid')
+          : null;
+
+      return React.createElement(
+        'div',
+        { 'data-testid': 'video-list-container' },
+        props.headerSlot,
+        searchBar,
+        channelFilter && React.createElement(ChannelFilterMenu, { filter: channelFilter }),
+        sortControls,
+        selectionBar,
+        content,
+        props.pagination
+      );
+    },
+  };
+});
+
 const mockVideos: VideoData[] = [
   {
     id: 1,
@@ -215,6 +423,7 @@ describe('VideosPage Component', () => {
     });
 
     test('opens the video modal when the thumbnail is clicked', async () => {
+      useGridView();
       const user = setupUser();
       axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse([mockVideos[0]]) });
 
@@ -606,6 +815,7 @@ describe('VideosPage Component', () => {
     });
 
     test('displays file size information when available', async () => {
+      useGridView();
       const videoWithFile = {
         ...mockVideos[0],
         filePath: '/path/to/video.mp4'

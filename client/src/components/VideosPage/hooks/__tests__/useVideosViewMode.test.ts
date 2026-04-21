@@ -6,14 +6,14 @@ describe('useVideosViewMode', () => {
     window.localStorage.clear();
   });
 
-  test('defaults to grid on desktop when nothing is stored', () => {
+  test('defaults to table on desktop when nothing is stored', () => {
     const { result } = renderHook(() => useVideosViewMode(false));
-    expect(result.current[0]).toBe('grid');
+    expect(result.current[0]).toBe('table');
   });
 
-  test('defaults to table on mobile when nothing is stored', () => {
+  test('defaults to list on mobile when nothing is stored', () => {
     const { result } = renderHook(() => useVideosViewMode(true));
-    expect(result.current[0]).toBe('table');
+    expect(result.current[0]).toBe('list');
   });
 
   test('reads a valid stored value from localStorage', () => {
@@ -25,7 +25,7 @@ describe('useVideosViewMode', () => {
   test('ignores an invalid stored value and falls back to viewport default', () => {
     window.localStorage.setItem('youtarr:videosPageViewMode', 'bogus');
     const { result } = renderHook(() => useVideosViewMode(false));
-    expect(result.current[0]).toBe('grid');
+    expect(result.current[0]).toBe('table');
   });
 
   test('setViewMode persists to localStorage', () => {

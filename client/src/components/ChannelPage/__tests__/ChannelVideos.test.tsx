@@ -112,16 +112,70 @@ jest.mock('../VideoTableView', () => ({
   }
 }));
 
-jest.mock('../ChannelVideosHeader', () => ({
-  __esModule: true,
-  default: function MockChannelVideosHeader(props: any) {
-    const React = require('react');
-    return React.createElement('div', {
-      'data-testid': 'channel-videos-header',
-      'data-view-mode': props.viewMode
-    }, 'Header');
-  }
-}));
+// The old ChannelVideosHeader / ChannelVideosFilters components have been replaced
+// by the shared VideoList module. We mock that module with a minimal passthrough
+// so tests can continue to focus on ChannelVideos' data flow and selection logic.
+jest.mock('../../shared/VideoList', () => {
+  const React = require('react');
+  const actual = jest.requireActual('../../shared/VideoList');
+  return {
+    ...actual,
+    VideoListContainer: function MockVideoListContainer(props: any) {
+      const selectionCount = props.selection?.count ?? 0;
+      const empty = (props.itemCount ?? 0) === 0;
+      const selectionPill = props.selection?.hasSelection
+        ? React.createElement(
+            'div',
+            null,
+            React.createElement(
+              'button',
+              {
+                type: 'button',
+                'data-testid': 'video-list-selection-pill',
+                'aria-label': `Actions for ${props.selection.count} selected video${props.selection.count !== 1 ? 's' : ''}`,
+              },
+              'Selection FAB'
+            ),
+            React.createElement(
+              'ul',
+              { role: 'menu' },
+              ...(props.selection.actions || []).map((action: any) =>
+                React.createElement(
+                  'li',
+                  { key: action.id, role: 'menuitem' },
+                  `${action.label} Selected`
+                )
+              ),
+              React.createElement('li', { role: 'menuitem' }, 'Clear Selection')
+            )
+          )
+        : null;
+      const content = empty
+        ? props.isError
+          ? React.createElement('div', { role: 'alert' }, props.errorMessage || 'error')
+          : props.isLoading
+            ? (props.loadingSkeleton || React.createElement('div', { 'data-testid': 'loading' }, 'Loading...'))
+            : React.createElement('div', { 'data-testid': 'video-list-empty-state' }, 'No videos found')
+        : (typeof props.renderContent === 'function'
+            ? props.renderContent(props.state?.viewMode ?? 'grid')
+            : null);
+      return React.createElement(
+        'div',
+        {
+          'data-testid': 'video-list-container',
+          'data-view-mode': props.state?.viewMode,
+          'data-selection-count': selectionCount,
+        },
+        props.headerSlot,
+        props.tabsSlot,
+        content,
+        props.infiniteScrollSentinel,
+        props.pagination,
+        selectionPill
+      );
+    },
+  };
+});
 
 jest.mock('../ChannelVideosDialogs', () => ({
   __esModule: true,
@@ -225,6 +279,10 @@ describe('ChannelVideos Component', () => {
     (useMediaQuery as jest.Mock).mockReturnValue(false);
     mockNavigate.mockClear();
     localStorage.removeItem('youtarr.channelVideos.pageSize');
+    // Pin the view so tests asserting VideoCard selection/ignore behavior keep
+    // rendering the grid. The "default is table on desktop" test below clears
+    // this to exercise the real default.
+    localStorage.setItem('youtarr:channelVideosViewMode', 'grid');
 
     // Default mock responses
     useChannelVideos.mockReturnValue({
@@ -284,7 +342,8 @@ describe('ChannelVideos Component', () => {
       expect(screen.getByText('Loading and fetching/indexing new videos for this channel tab...')).toBeInTheDocument();
     });
 
-    test('renders videos in grid view by default on desktop', () => {
+    test('renders videos in table view by default on desktop', () => {
+      localStorage.removeItem('youtarr:channelVideosViewMode');
       useChannelVideos.mockReturnValue({
         videos: mockVideos,
         totalCount: 3,
@@ -296,9 +355,8 @@ describe('ChannelVideos Component', () => {
       });
 
       renderChannelVideos();
-      expect(screen.getByTestId('video-card-video1')).toBeInTheDocument();
-      expect(screen.getByTestId('video-card-video2')).toBeInTheDocument();
-      expect(screen.getByTestId('video-card-short1')).toBeInTheDocument();
+      expect(screen.getByTestId('video-table-view')).toBeInTheDocument();
+      expect(screen.getByText('Table with 3 videos')).toBeInTheDocument();
     });
 
     test('shows no videos message when empty', () => {
@@ -448,6 +506,7 @@ describe('ChannelVideos Component', () => {
 
   describe('View Modes', () => {
     test('renders in list view on mobile by default', () => {
+      localStorage.removeItem('youtarr:channelVideosViewMode');
       (useMediaQuery as jest.Mock).mockReturnValue(true);
 
       useChannelVideos.mockReturnValue({
@@ -487,7 +546,7 @@ describe('ChannelVideos Component', () => {
       });
 
       expect(floatingAction).toBeInTheDocument();
-      expect(screen.getByTestId('selection-action-count')).toHaveTextContent('1');
+      expect(screen.getByTestId('video-list-selection-pill')).toHaveAccessibleName(/1 selected video/i);
 
       await user.click(floatingAction);
 
@@ -1055,6 +1114,7 @@ describe('ChannelVideos Component', () => {
     });
 
     test('renders list view by default on mobile', () => {
+      localStorage.removeItem('youtarr:channelVideosViewMode');
       useChannelVideos.mockReturnValue({
         videos: mockVideos,
         totalCount: 3,

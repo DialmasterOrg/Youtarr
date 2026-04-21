@@ -1,7 +1,7 @@
 import React from 'react';
-import { TextField, Typography } from '../../ui';
+import { TextField, Typography } from '../../../ui';
 
-interface DurationFilterInputProps {
+export interface DurationFilterProps {
   minDuration: number | null;
   maxDuration: number | null;
   onMinChange: (value: number | null) => void;
@@ -9,37 +9,20 @@ interface DurationFilterInputProps {
   compact?: boolean;
 }
 
-function DurationFilterInput({
+function parseMinutes(raw: string): number | null {
+  if (raw === '') return null;
+  const parsed = parseInt(raw, 10);
+  if (Number.isNaN(parsed) || parsed < 0) return null;
+  return parsed;
+}
+
+function DurationFilter({
   minDuration,
   maxDuration,
   onMinChange,
   onMaxChange,
   compact = false,
-}: DurationFilterInputProps) {
-  const handleMinChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    if (value === '') {
-      onMinChange(null);
-    } else {
-      const numValue = parseInt(value, 10);
-      if (!isNaN(numValue) && numValue >= 0) {
-        onMinChange(numValue);
-      }
-    }
-  };
-
-  const handleMaxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    if (value === '') {
-      onMaxChange(null);
-    } else {
-      const numValue = parseInt(value, 10);
-      if (!isNaN(numValue) && numValue >= 0) {
-        onMaxChange(numValue);
-      }
-    }
-  };
-
+}: DurationFilterProps) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
       {!compact && (
@@ -52,7 +35,7 @@ function DurationFilterInput({
         type="number"
         placeholder="Min"
         value={minDuration ?? ''}
-        onChange={handleMinChange}
+        onChange={(e) => onMinChange(parseMinutes(e.target.value))}
         inputProps={{ min: 0, 'aria-label': 'Minimum duration in minutes' }}
         style={{ width: compact ? 70 : 80 }}
       />
@@ -64,7 +47,7 @@ function DurationFilterInput({
         type="number"
         placeholder="Max"
         value={maxDuration ?? ''}
-        onChange={handleMaxChange}
+        onChange={(e) => onMaxChange(parseMinutes(e.target.value))}
         inputProps={{ min: 0, 'aria-label': 'Maximum duration in minutes' }}
         style={{ width: compact ? 70 : 80 }}
       />
@@ -75,4 +58,4 @@ function DurationFilterInput({
   );
 }
 
-export default DurationFilterInput;
+export default DurationFilter;

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-export type VideosViewMode = 'table' | 'grid';
+export type VideosViewMode = 'table' | 'grid' | 'list';
 
 const STORAGE_KEY = 'youtarr:videosPageViewMode';
 
@@ -8,7 +8,7 @@ function readStored(): VideosViewMode | null {
   if (typeof window === 'undefined') return null;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw === 'table' || raw === 'grid') return raw;
+    if (raw === 'table' || raw === 'grid' || raw === 'list') return raw;
     return null;
   } catch {
     return null;
@@ -16,7 +16,7 @@ function readStored(): VideosViewMode | null {
 }
 
 function defaultForViewport(isMobile: boolean): VideosViewMode {
-  return isMobile ? 'table' : 'grid';
+  return isMobile ? 'list' : 'table';
 }
 
 export function useVideosViewMode(isMobile: boolean): [VideosViewMode, (mode: VideosViewMode) => void] {
@@ -37,7 +37,7 @@ export function useVideosViewMode(isMobile: boolean): [VideosViewMode, (mode: Vi
       try {
         window.localStorage.setItem(STORAGE_KEY, mode);
       } catch {
-        // ignore storage failures (private mode, quota)
+        /* ignore */
       }
     }
   }, []);

@@ -1,40 +1,38 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import axios from 'axios';
-import { debounce } from 'lodash';
 import { useSwipeable } from 'react-swipeable';
-import {
-  Alert,
-  Box,
-  Button,
-  Grid,
-  Snackbar,
-  Stack,
-  Typography,
-} from '../ui';
-import { Trash2 as DeleteIcon, X as ClearIcon } from 'lucide-react';
+import { Alert, Box, Grid, Snackbar, Typography } from '../ui';
+import { Trash2 as DeleteIcon, Star as RatingIcon } from '../../lib/icons';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useConfig } from '../../hooks/useConfig';
-import { useThemeEngine } from '../../contexts/ThemeEngineContext';
 import { VideoData } from '../../types/VideoData';
 import DeleteVideosDialog from '../shared/DeleteVideosDialog';
 import { useVideoDeletion } from '../shared/useVideoDeletion';
 import ChangeRatingDialog from '../shared/ChangeRatingDialog';
-import VideoActionsDropdown from '../shared/VideoActionsDropdown';
 import PageControls from '../shared/PageControls';
-import { ActionBar } from '../shared/ActionBar';
 import { useVideoProtection } from '../shared/useVideoProtection';
 import VideoModal from '../shared/VideoModal';
 import { VideoModalData } from '../shared/VideoModal/types';
-import VideosHeader from './components/VideosHeader';
-import VideosFilters from './components/VideosFilters';
-import VideosResults from './components/VideosResults';
+import VideoCard from './components/VideoCard';
+import VideosTable from './components/VideosTable';
+import VideosListMobile from './components/VideosListMobile';
 import { useVideosData } from './hooks/useVideosData';
-import { useVideosViewMode } from './hooks/useVideosViewMode';
+import { useVideosViewMode, type VideosViewMode } from './hooks/useVideosViewMode';
+import {
+  VideoListContainer,
+  useVideoListState,
+  useVideoSelection,
+  type FilterConfig,
+  type SelectionAction,
+  type VideoListViewMode,
+  type SortConfig,
+} from '../shared/VideoList';
 
 interface VideosPageProps {
   token: string | null;
 }
+
+const VIEW_MODE_STORAGE_KEY = 'youtarr:videosPageViewMode';
 
 function videoDataToModalData(video: VideoData): VideoModalData {
   return {
@@ -62,22 +60,32 @@ function videoDataToModalData(video: VideoData): VideoModalData {
 }
 
 function VideosPage({ token }: VideosPageProps) {
-  const isMobile = useMediaQuery('(max-width: 599px)');
-  const { themeMode } = useThemeEngine();
-  const [viewMode, setViewMode] = useVideosViewMode(isMobile);
+  const isMobile = useMediaQuery('(max-width: 767px)');
+  const [viewMode, setViewModeLegacy] = useVideosViewMode(isMobile);
+
+  const listState = useVideoListState({
+    initialViewMode: (isMobile ? 'list' : 'table') as VideoListViewMode,
+    viewModeStorageKey: VIEW_MODE_STORAGE_KEY,
+  });
+
+  // Sync shared list state to the legacy hook (so persistence and viewMode stay aligned).
+  useEffect(() => {
+    if (listState.viewMode !== viewMode) {
+      setViewModeLegacy(listState.viewMode as VideosViewMode);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listState.viewMode]);
 
   const [page, setPage] = useState(1);
   const [channelFilter, setChannelFilter] = useState('');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [orderBy, setOrderBy] = useState<'published' | 'added'>('added');
-  const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
   const [maxRatingFilter, setMaxRatingFilter] = useState('');
   const [protectedFilter, setProtectedFilter] = useState(false);
 
-  const [selectedVideos, setSelectedVideos] = useState<number[]>([]);
-  const [imageErrors, setImageErrors] = useState<{ [key: string]: boolean }>({});
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -114,7 +122,7 @@ function VideosPage({ token }: VideosPageProps) {
     videosPerPage,
     orderBy,
     sortOrder,
-    search,
+    search: listState.search,
     channelFilter,
     dateFrom,
     dateTo,
@@ -123,25 +131,14 @@ function VideosPage({ token }: VideosPageProps) {
     useInfiniteScroll,
   });
 
-  const debouncedSearch = useMemo(
-    () =>
-      debounce((searchValue: string) => {
-        setSearch(searchValue);
-        setPage(1);
-      }, 500),
-    []
-  );
-
-  useEffect(() => {
-    return () => {
-      debouncedSearch.cancel();
-    };
-  }, [debouncedSearch]);
-
   useEffect(() => {
     setVideos([]);
     setPage(1);
   }, [useInfiniteScroll, setVideos]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [listState.search, orderBy, sortOrder]);
 
   useEffect(() => {
     if (!useInfiniteScroll) return;
@@ -155,50 +152,14 @@ function VideosPage({ token }: VideosPageProps) {
           setPage((prev) => (prev < totalPages ? prev + 1 : prev));
         }
       },
-      {
-        root: null,
-        rootMargin: '0px 0px 160px 0px',
-        threshold: 0,
-      }
+      { root: null, rootMargin: '0px 0px 160px 0px', threshold: 0 }
     );
-
     observer.observe(loadMoreRef.current);
     return () => observer.disconnect();
   }, [useInfiniteScroll, loading, page, totalPages]);
 
   const handleImageError = (youtubeId: string) => {
     setImageErrors((prev) => ({ ...prev, [youtubeId]: true }));
-  };
-
-  const handleChannelFilterChange = (value: string) => {
-    setChannelFilter(value);
-    setPage(1);
-  };
-
-  const handleDateFromChange = (value: string) => {
-    setDateFrom(value);
-    setPage(1);
-  };
-
-  const handleDateToChange = (value: string) => {
-    setDateTo(value);
-    setPage(1);
-  };
-
-  const handleClearDates = () => {
-    setDateFrom('');
-    setDateTo('');
-    setPage(1);
-  };
-
-  const handleMaxRatingChange = (value: string) => {
-    setMaxRatingFilter(value);
-    setPage(1);
-  };
-
-  const handleProtectedFilterChange = (value: boolean) => {
-    setProtectedFilter(value);
-    setPage(1);
   };
 
   const handleSortChange = (newOrderBy: 'published' | 'added') => {
@@ -208,39 +169,16 @@ function VideosPage({ token }: VideosPageProps) {
       setOrderBy(newOrderBy);
       setSortOrder('desc');
     }
-    setPage(1);
   };
 
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      const selectableVideos = videos.filter((v) => !v.removed);
-      setSelectedVideos(selectableVideos.map((v) => v.id));
-    } else {
-      setSelectedVideos([]);
-    }
-  };
-
-  const handleSelectVideo = (videoId: number) => {
-    setSelectedVideos((prev) =>
-      prev.includes(videoId) ? prev.filter((id) => id !== videoId) : [...prev, videoId]
-    );
-  };
-
-  const handleDeleteClick = () => setDeleteDialogOpen(true);
-  const handleDeleteCancel = () => setDeleteDialogOpen(false);
-
-  const handleDeleteConfirm = async () => {
+  const handleDeleteConfirm = async (selectedIds: number[]) => {
     setDeleteDialogOpen(false);
-    const videosToDelete = selectedVideos;
-    const result = await deleteVideos(videosToDelete, token);
-
+    const result = await deleteVideos(selectedIds, token);
     if (result.success) {
       setSuccessMessage(
-        `Successfully deleted ${result.deleted.length} video${
-          result.deleted.length !== 1 ? 's' : ''
-        }`
+        `Successfully deleted ${result.deleted.length} video${result.deleted.length !== 1 ? 's' : ''}`
       );
-      setSelectedVideos([]);
+      selection.clear();
       refetch();
     } else {
       const deletedCount = result.deleted.length;
@@ -249,7 +187,7 @@ function VideosPage({ token }: VideosPageProps) {
         setSuccessMessage(
           `Deleted ${deletedCount} video${deletedCount !== 1 ? 's' : ''}, but ${failedCount} failed`
         );
-        setSelectedVideos([]);
+        selection.clear();
         refetch();
       } else {
         setErrorMessage(
@@ -259,26 +197,18 @@ function VideosPage({ token }: VideosPageProps) {
     }
   };
 
-  const handleDeleteSingleVideo = (videoId: number) => {
-    setSelectedVideos([videoId]);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleChangeRatingClick = () => setRatingDialogOpen(true);
-
-  const handleApplyRating = async (rating: string | null) => {
+  const handleApplyRating = async (rating: string | null, selectedIds: number[]) => {
     if (!token) return;
-    const videoIdsToUpdate = selectedVideos;
     try {
       await axios.post(
         '/api/videos/rating',
-        { videoIds: videoIdsToUpdate, rating },
+        { videoIds: selectedIds, rating },
         { headers: { 'x-access-token': token } }
       );
       setSuccessMessage(
-        `Successfully updated content rating for ${videoIdsToUpdate.length} video(s)`
+        `Successfully updated content rating for ${selectedIds.length} video(s)`
       );
-      setSelectedVideos([]);
+      selection.clear();
       refetch();
     } catch (error: unknown) {
       console.error('Failed to update ratings:', error);
@@ -287,6 +217,47 @@ function VideosPage({ token }: VideosPageProps) {
         : 'Failed to update content ratings';
       setErrorMessage(message);
     }
+  };
+
+  const selectionActions = useMemo<SelectionAction<number>[]>(
+    () => [
+      {
+        id: 'rating',
+        label: 'Rating',
+        icon: <RatingIcon size={14} />,
+        intent: 'warning',
+        onClick: () => setRatingDialogOpen(true),
+      },
+      {
+        id: 'delete',
+        label: 'Delete',
+        icon: <DeleteIcon size={14} />,
+        intent: 'danger',
+        disabled: () => deleteLoading,
+        onClick: () => setDeleteDialogOpen(true),
+      },
+    ],
+    [deleteLoading]
+  );
+
+  const selection = useVideoSelection<number>({ actions: selectionActions });
+
+  const handleToggleSelect = (videoId: number) => {
+    selection.toggle(videoId);
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const selectable = videos.filter((v) => !v.removed).map((v) => v.id);
+      selection.set(selectable);
+    } else {
+      selection.clear();
+    }
+  };
+
+  const handleDeleteSingleVideo = (videoId: number) => {
+    selection.set([videoId]);
+    setDeleteDialogOpen(true);
   };
 
   const handleToggleProtection = async (videoId: number) => {
@@ -301,9 +272,7 @@ function VideosPage({ token }: VideosPageProps) {
     }
   };
 
-  const handleOpenModal = (video: VideoData) => {
-    setModalVideo(video);
-  };
+  const handleOpenModal = (video: VideoData) => setModalVideo(video);
 
   const swipeHandlers = useSwipeable({
     onSwipedLeft: () => {
@@ -317,204 +286,206 @@ function VideosPage({ token }: VideosPageProps) {
     trackMouse: true,
   });
 
-  const renderMobileSelectionBar = () => {
-    if (!isMobile || selectedVideos.length === 0 || typeof window === 'undefined') {
-      return null;
-    }
+  const withPageReset = <T,>(setter: (value: T) => void) => (value: T) => {
+    setter(value);
+    setPage(1);
+  };
 
-    return createPortal(
+  const filterConfigs = useMemo<FilterConfig[]>(() => {
+    return [
+      {
+        id: 'dateRangeString',
+        dateFrom,
+        dateTo,
+        onFromChange: withPageReset(setDateFrom),
+        onToChange: withPageReset(setDateTo),
+      },
+      { id: 'maxRating', value: maxRatingFilter, onChange: withPageReset(setMaxRatingFilter) },
+      { id: 'protected', value: protectedFilter, onChange: withPageReset(setProtectedFilter) },
+      {
+        id: 'channel',
+        value: channelFilter,
+        options: uniqueChannels,
+        onChange: withPageReset(setChannelFilter),
+      },
+    ];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateFrom, dateTo, maxRatingFilter, protectedFilter, channelFilter, uniqueChannels]);
+
+  const sortConfig: SortConfig = useMemo(
+    () => ({
+      options: [
+        { key: 'published', label: 'Published' },
+        { key: 'added', label: 'Downloaded' },
+      ],
+      activeKey: orderBy,
+      direction: sortOrder,
+      onChange: (key, direction) => {
+        setOrderBy(key as 'published' | 'added');
+        setSortOrder(direction);
+      },
+    }),
+    [orderBy, sortOrder]
+  );
+
+  const headerSlot = (
+    <div style={{ padding: '12px 16px 0 16px' }}>
+      <Typography variant={isMobile ? 'h6' : 'h5'} component="h2" gutterBottom align="center">
+        Library ({totalVideos} total)
+      </Typography>
+    </div>
+  );
+
+  const paginationNode = !useInfiniteScroll && totalPages > 1 ? (
+    <Grid
+      container
+      spacing={2}
+      style={{
+        marginTop: 8,
+        marginBottom: 8,
+        display: 'flex',
+        justifyContent: 'center',
+      }}
+    >
+      <PageControls
+        page={page}
+        totalPages={totalPages}
+        onPageChange={(newPage) => setPage(newPage)}
+        compact={isMobile}
+      />
+    </Grid>
+  ) : null;
+
+  const infiniteSentinel = useInfiniteScroll ? (
+    <>
       <div
-        style={{
-          position: 'fixed',
-          left: 8,
-          right: 8,
-          bottom: 'calc(var(--mobile-nav-total-offset, 0px) + 8px)',
-          zIndex: 1399,
-        }}
-      >
-        <ActionBar
-          variant={themeMode}
-          compact
-          style={{
-            justifyContent: 'space-between',
-            gap: 8,
-            padding: '10px 12px',
-            borderRadius: 'var(--radius-ui)',
-            border: 'var(--nav-border)',
-            backgroundColor: 'var(--card)',
-            boxShadow: 'var(--shadow-hard)',
-          }}
-        >
-          <Typography variant="body2" style={{ fontWeight: 700 }}>
-            {selectedVideos.length} video{selectedVideos.length !== 1 ? 's' : ''} selected
+        ref={loadMoreRef}
+        style={{ height: 24, width: '100%', marginTop: 12, marginBottom: 16 }}
+      />
+      {loading && videos.length > 0 && page < totalPages && (
+        <Box style={{ display: 'flex', justifyContent: 'center', padding: '8px 0 16px 0' }}>
+          <Typography variant="caption" color="text.secondary">
+            Loading more videos...
           </Typography>
-          <Box className="flex gap-2 flex-wrap justify-end" style={{ marginLeft: 'auto' }}>
-            <Button size="small" onClick={handleChangeRatingClick} className="intent-warning">
-              Rating
-            </Button>
-            <Button
-              size="small"
-              onClick={handleDeleteClick}
-              className="intent-danger"
-              startIcon={<DeleteIcon size={14} />}
-            >
-              Delete
-            </Button>
-            <Button
-              size="small"
-              onClick={() => setSelectedVideos([])}
-              className="intent-base"
-              startIcon={<ClearIcon size={14} />}
-            >
-              Clear
-            </Button>
-          </Box>
-        </ActionBar>
-      </div>,
-      document.body
+        </Box>
+      )}
+      {!loading && page >= totalPages && videos.length > 0 && (
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          align="center"
+          style={{ display: 'block', paddingBottom: 12 }}
+        >
+          You&apos;re all caught up.
+        </Typography>
+      )}
+    </>
+  ) : null;
+
+  const renderContent = (mode: VideoListViewMode) => {
+    if (mode === 'grid') {
+      return (
+        <Grid container spacing={2}>
+          {videos.map((video) => (
+            <Grid item xs={12} sm={6} md={4} lg={3} key={video.id}>
+              <VideoCard
+                video={video}
+                selected={selection.isSelected(video.id)}
+                enabledChannels={enabledChannels}
+                imageErrored={Boolean(imageErrors[video.youtubeId])}
+                deleteDisabled={deleteLoading}
+                onToggleSelect={handleToggleSelect}
+                onOpenModal={handleOpenModal}
+                onToggleProtection={handleToggleProtection}
+                onDeleteSingle={handleDeleteSingleVideo}
+                onImageError={handleImageError}
+              />
+            </Grid>
+          ))}
+        </Grid>
+      );
+    }
+    if (mode === 'list') {
+      return (
+        <VideosListMobile
+          videos={videos}
+          selectedVideos={selection.selectedIds}
+          enabledChannels={enabledChannels}
+          imageErrors={imageErrors}
+          onToggleSelect={handleToggleSelect}
+          onOpenModal={handleOpenModal}
+          onToggleProtection={handleToggleProtection}
+          onImageError={handleImageError}
+        />
+      );
+    }
+    return (
+      <VideosTable
+        videos={videos}
+        selectedVideos={selection.selectedIds}
+        enabledChannels={enabledChannels}
+        imageErrors={imageErrors}
+        orderBy={orderBy}
+        sortOrder={sortOrder}
+        deleteDisabled={deleteLoading}
+        onSelectAll={handleSelectAll}
+        onToggleSelect={handleToggleSelect}
+        onSortChange={handleSortChange}
+        onOpenModal={handleOpenModal}
+        onToggleProtection={handleToggleProtection}
+        onDeleteSingle={handleDeleteSingleVideo}
+        onImageError={handleImageError}
+      />
     );
   };
 
+  // Hide Sort in table view (table has column sort)
+  const activeSort = listState.viewMode === 'table' && !isMobile ? undefined : sortConfig;
+
+  const availableViewModes: VideoListViewMode[] = isMobile
+    ? ['grid', 'list']
+    : ['grid', 'table'];
+
+  useEffect(() => {
+    if (!availableViewModes.includes(listState.viewMode)) {
+      listState.setViewMode(isMobile ? 'list' : 'table');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMobile, listState.viewMode]);
+
   return (
-    <Box className="mb-4">
-      <VideosHeader
-        totalVideos={totalVideos}
+    <Box>
+      <VideoListContainer
+        state={listState}
+        selection={selection}
+        viewModes={availableViewModes}
+        filters={filterConfigs}
+        sort={activeSort}
+        searchPlaceholder="Search videos by name or channel..."
+        headerSlot={headerSlot}
+        itemCount={videos.length}
+        isLoading={loading}
+        isError={Boolean(loadError)}
+        errorMessage={loadError}
+        renderContent={(mode) => <div {...swipeHandlers}>{renderContent(mode)}</div>}
+        pagination={paginationNode}
+        paginationMode={useInfiniteScroll ? 'infinite' : 'pages'}
+        infiniteScrollSentinel={infiniteSentinel}
         isMobile={isMobile}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        onSearchChange={debouncedSearch}
       />
-
-      {loadError && (
-        <Alert severity="error" className="mb-4">
-          {loadError}
-        </Alert>
-      )}
-
-      <VideosFilters
-        isMobile={isMobile}
-        showSortControls={!(viewMode === 'table' && !isMobile)}
-        channelFilter={channelFilter}
-        uniqueChannels={uniqueChannels}
-        dateFrom={dateFrom}
-        dateTo={dateTo}
-        maxRatingFilter={maxRatingFilter}
-        protectedFilter={protectedFilter}
-        orderBy={orderBy}
-        sortOrder={sortOrder}
-        onChannelFilterChange={handleChannelFilterChange}
-        onDateFromChange={handleDateFromChange}
-        onDateToChange={handleDateToChange}
-        onClearDates={handleClearDates}
-        onMaxRatingChange={handleMaxRatingChange}
-        onProtectedFilterChange={handleProtectedFilterChange}
-        onSortChange={handleSortChange}
-      />
-
-      {selectedVideos.length > 0 && !isMobile && (
-        <Stack direction="row" spacing={2} alignItems="center" className="mb-4">
-          <Typography variant="body2" color="text.secondary">
-            {selectedVideos.length} video{selectedVideos.length !== 1 ? 's' : ''} selected
-          </Typography>
-          <VideoActionsDropdown
-            selectedVideosCount={selectedVideos.length}
-            onContentRating={handleChangeRatingClick}
-            onDelete={handleDeleteClick}
-            disabled={deleteLoading}
-          />
-          <Button
-            variant="outlined"
-            onClick={() => setSelectedVideos([])}
-            className="text-foreground border-border hover:bg-muted hover:border-foreground"
-          >
-            Clear Selection
-          </Button>
-        </Stack>
-      )}
-
-      {!useInfiniteScroll && totalPages > 1 && (
-        <Grid
-          container
-          spacing={2}
-          style={{
-            marginTop: 8,
-            marginBottom: 8,
-            display: 'flex',
-            justifyContent: 'center',
-          }}
-        >
-          <PageControls
-            page={page}
-            totalPages={totalPages}
-            onPageChange={(newPage) => setPage(newPage)}
-            compact={isMobile}
-          />
-        </Grid>
-      )}
-
-      <div {...swipeHandlers}>
-        <VideosResults
-          videos={videos}
-          loading={loading}
-          viewMode={viewMode}
-          isMobile={isMobile}
-          placeholderCount={videosPerPage}
-          selectedVideos={selectedVideos}
-          enabledChannels={enabledChannels}
-          imageErrors={imageErrors}
-          orderBy={orderBy}
-          sortOrder={sortOrder}
-          deleteDisabled={deleteLoading}
-          onSelectAll={handleSelectAll}
-          onToggleSelect={handleSelectVideo}
-          onSortChange={handleSortChange}
-          onOpenModal={handleOpenModal}
-          onToggleProtection={handleToggleProtection}
-          onDeleteSingle={handleDeleteSingleVideo}
-          onImageError={handleImageError}
-        />
-      </div>
-
-      {useInfiniteScroll && (
-        <>
-          <div
-            ref={loadMoreRef}
-            style={{ height: 24, width: '100%', marginTop: 12, marginBottom: 16 }}
-          />
-          {loading && videos.length > 0 && page < totalPages && (
-            <Box style={{ display: 'flex', justifyContent: 'center', padding: '8px 0 16px 0' }}>
-              <Typography variant="caption" color="text.secondary">
-                Loading more videos...
-              </Typography>
-            </Box>
-          )}
-          {!loading && page >= totalPages && videos.length > 0 && (
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              align="center"
-              style={{ display: 'block', paddingBottom: 12 }}
-            >
-              You&apos;re all caught up.
-            </Typography>
-          )}
-        </>
-      )}
-
-      {renderMobileSelectionBar()}
 
       <DeleteVideosDialog
         open={deleteDialogOpen}
-        onClose={handleDeleteCancel}
-        onConfirm={handleDeleteConfirm}
-        videoCount={selectedVideos.length}
+        onClose={() => setDeleteDialogOpen(false)}
+        onConfirm={() => handleDeleteConfirm(selection.selectedIds)}
+        videoCount={selection.count}
       />
 
       <ChangeRatingDialog
         open={ratingDialogOpen}
         onClose={() => setRatingDialogOpen(false)}
-        onApply={handleApplyRating}
-        selectedCount={selectedVideos.length}
+        onApply={(rating) => handleApplyRating(rating, selection.selectedIds)}
+        selectedCount={selection.count}
       />
 
       <Snackbar
