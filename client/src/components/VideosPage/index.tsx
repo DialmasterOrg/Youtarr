@@ -84,6 +84,7 @@ function VideosPage({ token }: VideosPageProps) {
   const [dateTo, setDateTo] = useState<string>('');
   const [maxRatingFilter, setMaxRatingFilter] = useState('');
   const [protectedFilter, setProtectedFilter] = useState(false);
+  const [missingFilter, setMissingFilter] = useState(false);
 
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -128,6 +129,7 @@ function VideosPage({ token }: VideosPageProps) {
     dateTo,
     maxRatingFilter,
     protectedFilter,
+    missingFilter,
     useInfiniteScroll,
   });
 
@@ -302,6 +304,7 @@ function VideosPage({ token }: VideosPageProps) {
       },
       { id: 'maxRating', value: maxRatingFilter, onChange: withPageReset(setMaxRatingFilter) },
       { id: 'protected', value: protectedFilter, onChange: withPageReset(setProtectedFilter) },
+      { id: 'missing', value: missingFilter, onChange: withPageReset(setMissingFilter) },
       {
         id: 'channel',
         value: channelFilter,
@@ -310,7 +313,7 @@ function VideosPage({ token }: VideosPageProps) {
       },
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateFrom, dateTo, maxRatingFilter, protectedFilter, channelFilter, uniqueChannels]);
+  }, [dateFrom, dateTo, maxRatingFilter, protectedFilter, missingFilter, channelFilter, uniqueChannels]);
 
   const sortConfig: SortConfig = useMemo(
     () => ({

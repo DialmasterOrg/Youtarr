@@ -20,6 +20,7 @@ const baseParams = {
   dateTo: '',
   maxRatingFilter: '',
   protectedFilter: false,
+  missingFilter: false,
   useInfiniteScroll: false,
 };
 
@@ -69,6 +70,7 @@ describe('useVideosData', () => {
         dateTo: '2024-02-01',
         maxRatingFilter: 'TV-MA',
         protectedFilter: true,
+        missingFilter: true,
       })
     );
 
@@ -84,6 +86,15 @@ describe('useVideosData', () => {
     expect(url).toContain('dateTo=2024-02-01');
     expect(url).toContain('maxRating=TV-MA');
     expect(url).toContain('protectedFilter=true');
+    expect(url).toContain('missingFilter=true');
+  });
+
+  test('omits missingFilter from query string when false', async () => {
+    axios.get.mockResolvedValueOnce(buildResponse([{ id: 1, youtubeId: 'a' }]));
+    renderHook(() => useVideosData(baseParams));
+    await waitFor(() => expect(axios.get).toHaveBeenCalledTimes(1));
+    const url = axios.get.mock.calls[0][0] as string;
+    expect(url).not.toContain('missingFilter');
   });
 
   test('replaces videos when not using infinite scroll', async () => {

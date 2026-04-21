@@ -1424,6 +1424,70 @@ describe('ChannelModule', () => {
         expect(result[0].ignored).toBeUndefined();
         expect(result[0].ignored_at).toBeUndefined();
       });
+
+      test('missingFilter keeps only videos that are downloaded and removed', async () => {
+        const Video = require('../../models/video');
+        const mockVideos = [
+          { youtube_id: 'video1', title: 'Video 1', publishedAt: '2024-01-03', toJSON() { return this; } },
+          { youtube_id: 'video2', title: 'Video 2', publishedAt: '2024-01-02', toJSON() { return this; } },
+          { youtube_id: 'video3', title: 'Video 3', publishedAt: '2024-01-01', toJSON() { return this; } },
+        ];
+        ChannelVideo.findAll.mockResolvedValue(mockVideos);
+        // video1: added and removed (missing); video2: added and present (downloaded); video3: never added.
+        Video.findAll = jest.fn().mockResolvedValue([
+          { id: 1, youtubeId: 'video1', removed: true, fileSize: null, filePath: '/path' },
+          { id: 2, youtubeId: 'video2', removed: false, fileSize: 1000, filePath: '/path' }
+        ]);
+
+        const result = await ChannelModule.fetchNewestVideosFromDb(
+          'UC123', 50, 0, false, '', 'date', 'desc', false, 'video',
+          null, null, null, null, false, true, false
+        );
+
+        expect(result).toHaveLength(1);
+        expect(result[0].youtube_id).toBe('video1');
+      });
+
+      test('ignoredFilter keeps only videos with ignored=true', async () => {
+        const Video = require('../../models/video');
+        const mockVideos = [
+          { youtube_id: 'video1', title: 'Video 1', ignored: true, publishedAt: '2024-01-02', toJSON() { return this; } },
+          { youtube_id: 'video2', title: 'Video 2', ignored: false, publishedAt: '2024-01-01', toJSON() { return this; } },
+          { youtube_id: 'video3', title: 'Video 3', publishedAt: '2024-01-03', toJSON() { return this; } },
+        ];
+        ChannelVideo.findAll.mockResolvedValue(mockVideos);
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        const result = await ChannelModule.fetchNewestVideosFromDb(
+          'UC123', 50, 0, false, '', 'date', 'desc', false, 'video',
+          null, null, null, null, false, false, true
+        );
+
+        expect(result).toHaveLength(1);
+        expect(result[0].youtube_id).toBe('video1');
+      });
+
+      test('missingFilter and ignoredFilter combine with AND semantics', async () => {
+        const Video = require('../../models/video');
+        const mockVideos = [
+          { youtube_id: 'video1', title: 'Missing + ignored', ignored: true, publishedAt: '2024-01-04', toJSON() { return this; } },
+          { youtube_id: 'video2', title: 'Missing only', ignored: false, publishedAt: '2024-01-03', toJSON() { return this; } },
+          { youtube_id: 'video3', title: 'Ignored only', ignored: true, publishedAt: '2024-01-02', toJSON() { return this; } },
+        ];
+        ChannelVideo.findAll.mockResolvedValue(mockVideos);
+        Video.findAll = jest.fn().mockResolvedValue([
+          { id: 1, youtubeId: 'video1', removed: true, fileSize: null, filePath: '/path' },
+          { id: 2, youtubeId: 'video2', removed: true, fileSize: null, filePath: '/path' }
+        ]);
+
+        const result = await ChannelModule.fetchNewestVideosFromDb(
+          'UC123', 50, 0, false, '', 'date', 'desc', false, 'video',
+          null, null, null, null, false, true, true
+        );
+
+        expect(result).toHaveLength(1);
+        expect(result[0].youtube_id).toBe('video1');
+      });
     });
 
     describe('extractPublishedDate', () => {

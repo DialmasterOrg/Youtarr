@@ -97,6 +97,8 @@ describe('VideoListFilterChips', () => {
     const onToChange = jest.fn();
     const onRating = jest.fn();
     const onProtected = jest.fn();
+    const onMissing = jest.fn();
+    const onIgnored = jest.fn();
 
     const filters: FilterConfig[] = [
       {
@@ -117,6 +119,8 @@ describe('VideoListFilterChips', () => {
       },
       { id: 'maxRating', value: 'PG', onChange: onRating },
       { id: 'protected', value: true, onChange: onProtected },
+      { id: 'missing', value: true, onChange: onMissing },
+      { id: 'ignored', value: true, onChange: onIgnored },
     ];
 
     clearAllFilters(filters);
@@ -126,5 +130,48 @@ describe('VideoListFilterChips', () => {
     expect(onToChange).toHaveBeenCalledWith(null);
     expect(onRating).toHaveBeenCalledWith('');
     expect(onProtected).toHaveBeenCalledWith(false);
+    expect(onMissing).toHaveBeenCalledWith(false);
+    expect(onIgnored).toHaveBeenCalledWith(false);
+  });
+
+  test('renders missing and ignored chips when active', () => {
+    const filters: FilterConfig[] = [
+      { id: 'missing', value: true, onChange: jest.fn() },
+      { id: 'ignored', value: true, onChange: jest.fn() },
+    ];
+    renderWithProviders(<VideoListFilterChips filters={filters} />);
+    expect(screen.getByText(/Missing only/i)).toBeInTheDocument();
+    expect(screen.getByText(/Ignored only/i)).toBeInTheDocument();
+  });
+
+  test('clicking the delete icon on a missing chip clears it', async () => {
+    const user = userEvent.setup();
+    const onMissingChange = jest.fn();
+    const filters: FilterConfig[] = [
+      { id: 'missing', value: true, onChange: onMissingChange },
+    ];
+    renderWithProviders(<VideoListFilterChips filters={filters} />);
+    const deleteIcon = screen.getByTestId('CancelIcon');
+    await user.click(deleteIcon);
+    expect(onMissingChange).toHaveBeenCalledWith(false);
+  });
+
+  test('countActiveFilters counts missing and ignored', () => {
+    const filters: FilterConfig[] = [
+      { id: 'protected', value: true, onChange: jest.fn() },
+      { id: 'missing', value: true, onChange: jest.fn() },
+      { id: 'ignored', value: true, onChange: jest.fn() },
+    ];
+    expect(countActiveFilters(filters)).toBe(3);
+    expect(hasActiveFilters(filters)).toBe(true);
+  });
+
+  test('countActiveFilters ignores missing and ignored when off', () => {
+    const filters: FilterConfig[] = [
+      { id: 'missing', value: false, onChange: jest.fn() },
+      { id: 'ignored', value: false, onChange: jest.fn() },
+    ];
+    expect(countActiveFilters(filters)).toBe(0);
+    expect(hasActiveFilters(filters)).toBe(false);
   });
 });

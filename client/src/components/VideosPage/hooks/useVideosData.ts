@@ -14,6 +14,7 @@ export interface UseVideosDataParams {
   dateTo: string;
   maxRatingFilter: string;
   protectedFilter: boolean;
+  missingFilter: boolean;
   useInfiniteScroll: boolean;
 }
 
@@ -51,6 +52,7 @@ export function useVideosData({
   dateTo,
   maxRatingFilter,
   protectedFilter,
+  missingFilter,
   useInfiniteScroll,
 }: UseVideosDataParams): UseVideosDataResult {
   const [videos, setVideos] = useState<VideoData[]>([]);
@@ -80,6 +82,7 @@ export function useVideosData({
     if (dateTo) params.append('dateTo', dateTo);
     if (maxRatingFilter) params.append('maxRating', maxRatingFilter);
     if (protectedFilter) params.append('protectedFilter', 'true');
+    if (missingFilter) params.append('missingFilter', 'true');
 
     try {
       const response = await axios.get<PaginatedVideosResponse>(
@@ -131,6 +134,7 @@ export function useVideosData({
     dateTo,
     maxRatingFilter,
     protectedFilter,
+    missingFilter,
     useInfiniteScroll,
   ]);
 

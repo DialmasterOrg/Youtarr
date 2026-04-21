@@ -8,8 +8,16 @@ import DateRangeFilter from './filters/DateRangeFilter';
 import DateRangeStringFilter from './filters/DateRangeStringFilter';
 import MaxRatingFilter from './filters/MaxRatingFilter';
 import ProtectedFilter from './filters/ProtectedFilter';
+import MissingFilter from './filters/MissingFilter';
+import IgnoredFilter from './filters/IgnoredFilter';
 import ChannelFilter from './filters/ChannelFilter';
 import { hasActiveFilters, clearAllFilters } from './VideoListFilterChips';
+
+const STATUS_FILTER_IDS = ['protected', 'missing', 'ignored'] as const;
+
+function isStatusFilter(filter: FilterConfig): boolean {
+  return (STATUS_FILTER_IDS as readonly string[]).includes(filter.id);
+}
 
 export interface VideoListFilterPanelProps {
   filters: FilterConfig[];
@@ -70,6 +78,12 @@ function renderFilter(filter: FilterConfig, compact: boolean): React.ReactNode {
   if (filter.id === 'protected') {
     return <ProtectedFilter value={filter.value} onChange={filter.onChange} />;
   }
+  if (filter.id === 'missing') {
+    return <MissingFilter value={filter.value} onChange={filter.onChange} />;
+  }
+  if (filter.id === 'ignored') {
+    return <IgnoredFilter value={filter.value} onChange={filter.onChange} />;
+  }
   if (filter.id === 'channel') {
     return (
       <ChannelFilter value={filter.value} options={filter.options} onChange={filter.onChange} />
@@ -88,6 +102,8 @@ function filterLabel(filter: FilterConfig): string {
     case 'maxRating':
       return 'Max Rating';
     case 'protected':
+    case 'missing':
+    case 'ignored':
       return 'Status';
     case 'channel':
       return 'Channel';
@@ -233,14 +249,36 @@ function DrawerPanel({
           </div>
           <Divider style={{ marginBottom: 10 }} />
 
-          {filters.map((filter, index) => (
-            <div key={filter.id + '-' + index} style={{ marginBottom: 14 }}>
-              <Typography variant="subtitle2" style={{ marginBottom: 4 }}>
-                {filterLabel(filter)}
-              </Typography>
-              {renderFilter(filter, true)}
-            </div>
-          ))}
+          {(() => {
+            const statusFilters = filters.filter(isStatusFilter);
+            let statusGroupRendered = false;
+            return filters.map((filter, index) => {
+              if (isStatusFilter(filter)) {
+                if (statusGroupRendered) return null;
+                statusGroupRendered = true;
+                return (
+                  <div key="status-group" style={{ marginBottom: 14 }}>
+                    <Typography variant="subtitle2" style={{ marginBottom: 4 }}>
+                      Status
+                    </Typography>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {statusFilters.map((sf) => (
+                        <React.Fragment key={sf.id}>{renderFilter(sf, true)}</React.Fragment>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <div key={filter.id + '-' + index} style={{ marginBottom: 14 }}>
+                  <Typography variant="subtitle2" style={{ marginBottom: 4 }}>
+                    {filterLabel(filter)}
+                  </Typography>
+                  {renderFilter(filter, true)}
+                </div>
+              );
+            });
+          })()}
           {customFilters && <div style={{ marginBottom: 14 }}>{customFilters}</div>}
 
           <Divider style={{ marginBottom: 10 }} />

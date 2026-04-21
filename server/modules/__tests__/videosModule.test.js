@@ -360,6 +360,39 @@ describe('VideosModule', () => {
       expect(replacements.channelFilter).toBe('Test Channel');
     });
 
+    test('should apply protectedFilter to the WHERE clause', async () => {
+      mockSequelize.query.mockResolvedValueOnce([{ total: 0 }]);
+      mockSequelize.query.mockResolvedValueOnce([]);
+      mockSequelize.query.mockResolvedValueOnce([]);
+
+      await VideosModule.getVideosPaginated({ protectedFilter: true });
+
+      const query = mockSequelize.query.mock.calls[0][0];
+      expect(query).toContain('Videos.protected = 1');
+    });
+
+    test('should apply missingFilter to the WHERE clause', async () => {
+      mockSequelize.query.mockResolvedValueOnce([{ total: 0 }]);
+      mockSequelize.query.mockResolvedValueOnce([]);
+      mockSequelize.query.mockResolvedValueOnce([]);
+
+      await VideosModule.getVideosPaginated({ missingFilter: true });
+
+      const query = mockSequelize.query.mock.calls[0][0];
+      expect(query).toContain('Videos.removed = 1');
+    });
+
+    test('should omit missingFilter from the WHERE clause by default', async () => {
+      mockSequelize.query.mockResolvedValueOnce([{ total: 0 }]);
+      mockSequelize.query.mockResolvedValueOnce([]);
+      mockSequelize.query.mockResolvedValueOnce([]);
+
+      await VideosModule.getVideosPaginated();
+
+      const query = mockSequelize.query.mock.calls[0][0];
+      expect(query).not.toContain('Videos.removed = 1');
+    });
+
     test('should update file metadata when file exists', async () => {
       const mockVideos = [
         {

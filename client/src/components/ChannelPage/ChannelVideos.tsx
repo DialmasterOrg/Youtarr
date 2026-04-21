@@ -130,6 +130,8 @@ function ChannelVideos({
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [maxRating, setMaxRating] = useState('');
   const [protectedFilter, setProtectedFilter] = useState(false);
+  const [missingFilter, setMissingFilter] = useState(false);
+  const [ignoredFilter, setIgnoredFilter] = useState(false);
 
   const [selectedTab, setSelectedTab] = useState<string | null>(null);
   const [availableTabs, setAvailableTabs] = useState<string[]>([]);
@@ -281,6 +283,8 @@ function ChannelVideos({
         filters.dateFrom ? filters.dateFrom.toISOString() : '',
         filters.dateTo ? filters.dateTo.toISOString() : '',
         protectedFilter,
+        missingFilter,
+        ignoredFilter,
         useInfiniteScroll,
       ].join('|'),
     [
@@ -296,6 +300,8 @@ function ChannelVideos({
       filters.dateFrom,
       filters.dateTo,
       protectedFilter,
+      missingFilter,
+      ignoredFilter,
       useInfiniteScroll,
     ]
   );
@@ -326,6 +332,8 @@ function ChannelVideos({
     append: useInfiniteScroll,
     resetKey,
     protectedFilter,
+    missingFilter,
+    ignoredFilter,
   });
 
   useEffect(() => {
@@ -362,6 +370,8 @@ function ChannelVideos({
     listState.search,
     maxRating,
     protectedFilter,
+    missingFilter,
+    ignoredFilter,
     hideDownloaded,
     sortBy,
     sortOrder,
@@ -644,6 +654,8 @@ function ChannelVideos({
     clearAllSelections();
     clearBaseFilters();
     setProtectedFilter(false);
+    setMissingFilter(false);
+    setIgnoredFilter(false);
   };
 
   const handleAutoDownloadChange = async (enabled: boolean) => {
@@ -768,6 +780,8 @@ function ChannelVideos({
       },
       { id: 'maxRating', value: maxRating, onChange: setMaxRating },
       { id: 'protected', value: protectedFilter, onChange: setProtectedFilter },
+      { id: 'missing', value: missingFilter, onChange: setMissingFilter },
+      { id: 'ignored', value: ignoredFilter, onChange: setIgnoredFilter },
     ];
     return configs;
   }, [
@@ -783,6 +797,8 @@ function ChannelVideos({
     setDateTo,
     maxRating,
     protectedFilter,
+    missingFilter,
+    ignoredFilter,
     selectedTab,
   ]);
 

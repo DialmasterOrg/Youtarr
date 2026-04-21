@@ -959,6 +959,8 @@ describe('ChannelVideos Component', () => {
         append: false,
         resetKey: expect.any(String),
         protectedFilter: false,
+        missingFilter: false,
+        ignoredFilter: false,
       }));
     });
 

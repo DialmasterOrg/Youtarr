@@ -38,6 +38,16 @@ export type FilterConfig =
       onChange: (value: boolean) => void;
     }
   | {
+      id: 'missing';
+      value: boolean;
+      onChange: (value: boolean) => void;
+    }
+  | {
+      id: 'ignored';
+      value: boolean;
+      onChange: (value: boolean) => void;
+    }
+  | {
       id: 'duration';
       min: number | null;
       max: number | null;

@@ -19,6 +19,8 @@ interface UseChannelVideosParams {
   dateFrom?: Date | null;
   dateTo?: Date | null;
   protectedFilter?: boolean;
+  missingFilter?: boolean;
+  ignoredFilter?: boolean;
 }
 
 interface UseChannelVideosResult {
@@ -51,6 +53,8 @@ export function useChannelVideos({
   dateFrom,
   dateTo,
   protectedFilter,
+  missingFilter,
+  ignoredFilter,
 }: UseChannelVideosParams): UseChannelVideosResult {
   const [videos, setVideos] = useState<ChannelVideo[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
@@ -99,6 +103,12 @@ export function useChannelVideos({
       if (protectedFilter) {
         queryParams.append('protectedFilter', 'true');
       }
+      if (missingFilter) {
+        queryParams.append('missingFilter', 'true');
+      }
+      if (ignoredFilter) {
+        queryParams.append('ignoredFilter', 'true');
+      }
 
       const response = await fetch(`/getchannelvideos/${channelId}?${queryParams}`, {
         headers: {
@@ -146,7 +156,7 @@ export function useChannelVideos({
     } finally {
       setLoading(false);
     }
-  }, [channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder, tabType, maxRating, token, append, resetKey, minDuration, maxDuration, dateFrom, dateTo, protectedFilter]);
+  }, [channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder, tabType, maxRating, token, append, resetKey, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter]);
 
   useEffect(() => {
     fetchVideos();

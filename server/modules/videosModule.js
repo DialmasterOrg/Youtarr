@@ -20,6 +20,7 @@ class VideosModule {
       sortOrder = 'desc',
       channelFilter = '',
       protectedFilter = false,
+      missingFilter = false,
     } = options;
 
     try {
@@ -51,6 +52,10 @@ class VideosModule {
 
       if (protectedFilter) {
         whereConditions.push('Videos.protected = 1');
+      }
+
+      if (missingFilter) {
+        whereConditions.push('Videos.removed = 1');
       }
 
       const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';

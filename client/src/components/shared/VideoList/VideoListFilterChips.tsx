@@ -5,6 +5,8 @@ import {
   CalendarToday as CalendarIcon,
   Close as CloseIcon,
   Shield as ShieldIcon,
+  CloudOff as CloudOffIcon,
+  Block as BlockIcon,
   ListFilter as FilterIcon,
 } from '../../../lib/icons';
 import { FilterConfig } from './types';
@@ -159,6 +161,40 @@ function VideoListFilterChips({ filters }: VideoListFilterChipsProps) {
       continue;
     }
 
+    if (filter.id === 'missing' && filter.value) {
+      chips.push(
+        <Chip
+          key="missing"
+          icon={<CloudOffIcon size={14} />}
+          label="Missing only"
+          size="small"
+          onDelete={() => filter.onChange(false)}
+          onClick={() => filter.onChange(false)}
+          deleteIcon={<CloseIcon data-testid="CancelIcon" size={14} />}
+          color="primary"
+          variant="outlined"
+        />
+      );
+      continue;
+    }
+
+    if (filter.id === 'ignored' && filter.value) {
+      chips.push(
+        <Chip
+          key="ignored"
+          icon={<BlockIcon size={14} />}
+          label="Ignored only"
+          size="small"
+          onDelete={() => filter.onChange(false)}
+          onClick={() => filter.onChange(false)}
+          deleteIcon={<CloseIcon data-testid="CancelIcon" size={14} />}
+          color="primary"
+          variant="outlined"
+        />
+      );
+      continue;
+    }
+
     if (filter.id === 'channel' && filter.value) {
       chips.push(
         <Chip
@@ -198,6 +234,8 @@ export function countActiveFilters(filters: FilterConfig[]): number {
     else if (filter.id === 'dateRangeString' && !filter.hidden && (filter.dateFrom || filter.dateTo)) count++;
     else if (filter.id === 'maxRating' && filter.value) count++;
     else if (filter.id === 'protected' && filter.value) count++;
+    else if (filter.id === 'missing' && filter.value) count++;
+    else if (filter.id === 'ignored' && filter.value) count++;
     else if (filter.id === 'channel' && filter.value) count++;
   }
   return count;
@@ -221,6 +259,10 @@ export function clearAllFilters(filters: FilterConfig[]): void {
     } else if (filter.id === 'maxRating') {
       filter.onChange('');
     } else if (filter.id === 'protected') {
+      filter.onChange(false);
+    } else if (filter.id === 'missing') {
+      filter.onChange(false);
+    } else if (filter.id === 'ignored') {
       filter.onChange(false);
     } else if (filter.id === 'channel') {
       filter.onChange('');
