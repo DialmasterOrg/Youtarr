@@ -84,7 +84,7 @@ function filterLabel(filter: FilterConfig): string {
       return 'Duration';
     case 'dateRange':
     case 'dateRangeString':
-      return 'Date Range';
+      return 'Published Date';
     case 'maxRating':
       return 'Max Rating';
     case 'protected':

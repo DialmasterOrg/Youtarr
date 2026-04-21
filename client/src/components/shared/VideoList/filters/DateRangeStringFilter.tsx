@@ -19,13 +19,13 @@ function DateRangeStringFilter({
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
       <TextField
-        label={compact ? undefined : 'From Date'}
+        label={compact ? undefined : 'Published From'}
         type="date"
         size="small"
         value={dateFrom}
         onChange={(e) => onFromChange(e.target.value)}
         InputLabelProps={compact ? undefined : { shrink: true }}
-        inputProps={{ 'aria-label': 'From date' }}
+        inputProps={{ 'aria-label': 'Published from date' }}
         variant="outlined"
         style={{ minWidth: compact ? 0 : 180, flex: compact ? 1 : undefined }}
       />
@@ -35,13 +35,13 @@ function DateRangeStringFilter({
         </Typography>
       )}
       <TextField
-        label={compact ? undefined : 'To Date'}
+        label={compact ? undefined : 'Published To'}
         type="date"
         size="small"
         value={dateTo}
         onChange={(e) => onToChange(e.target.value)}
         InputLabelProps={compact ? undefined : { shrink: true }}
-        inputProps={{ 'aria-label': 'To date' }}
+        inputProps={{ 'aria-label': 'Published to date' }}
         variant="outlined"
         style={{ minWidth: compact ? 0 : 180, flex: compact ? 1 : undefined }}
       />

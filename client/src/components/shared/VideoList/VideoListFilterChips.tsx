@@ -26,9 +26,9 @@ function formatDate(d: Date): string {
 }
 
 function formatDateRange(from: Date | null, to: Date | null): string {
-  if (from && to) return `${formatDate(from)} - ${formatDate(to)}`;
-  if (from) return `From ${formatDate(from)}`;
-  if (to) return `Until ${formatDate(to)}`;
+  if (from && to) return `Published: ${formatDate(from)} - ${formatDate(to)}`;
+  if (from) return `Published: From ${formatDate(from)}`;
+  if (to) return `Published: Until ${formatDate(to)}`;
   return '';
 }
 
@@ -40,9 +40,9 @@ function formatDateString(value: string): string {
 }
 
 function formatDateStringRange(from: string, to: string): string {
-  if (from && to) return `${formatDateString(from)} - ${formatDateString(to)}`;
-  if (from) return `From ${formatDateString(from)}`;
-  if (to) return `Until ${formatDateString(to)}`;
+  if (from && to) return `Published: ${formatDateString(from)} - ${formatDateString(to)}`;
+  if (from) return `Published: From ${formatDateString(from)}`;
+  if (to) return `Published: Until ${formatDateString(to)}`;
   return '';
 }
 
