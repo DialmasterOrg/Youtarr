@@ -133,6 +133,7 @@ function DownloadManager({ token }: DownloadManagerProps) {
               currentTime={currentTime}
               isMobile={isMobile}
               token={token}
+              onVideoDeleted={fetchRunningJobs}
             />
           </Grid>
         }
