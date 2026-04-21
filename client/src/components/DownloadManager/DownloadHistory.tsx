@@ -27,6 +27,8 @@ import { useConfig } from '../../hooks/useConfig';
 import PageControls from '../shared/PageControls';
 import VideoModal from '../shared/VideoModal';
 import { VideoModalData } from '../shared/VideoModal/types';
+import VideoThumbnail from './VideoThumbnail';
+import MissingVideoChip from './MissingVideoChip';
 
 interface DownloadHistoryProps {
   jobs: Job[];
@@ -35,6 +37,7 @@ interface DownloadHistoryProps {
   handleExpandCell: (id: string) => void;
   isMobile: boolean;
   token?: string | null;
+  onVideoDeleted?: () => void;
 }
 
 function cleanJobTypeLabel(jobType: string): string {
@@ -84,9 +87,11 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
   handleExpandCell,
   isMobile,
   token = null,
+  onVideoDeleted,
 }) => {
   const [modalVideo, setModalVideo] = useState<VideoData | null>(null);
   const [showNoVideoJobs, setShowNoVideoJobs] = useState(false);
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(12);
@@ -94,6 +99,10 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const { config } = useConfig(token);
   const useInfiniteScroll = config.channelVideosHotLoad ?? false;
+
+  const handleImageError = (youtubeId: string) => {
+    setImageErrors((prev) => ({ ...prev, [youtubeId]: true }));
+  };
 
   const jobsToDisplay = jobs
     .filter((job) => !job.jobType?.includes('Import Subscriptions'))
@@ -168,6 +177,10 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
         onClose={() => setModalVideo(null)}
         video={jobVideoToModalData(modalVideo)}
         token={token}
+        onVideoDeleted={() => {
+          setModalVideo(null);
+          onVideoDeleted?.();
+        }}
       />
     ) : null;
 
@@ -235,9 +248,8 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                     const hasMultiple = videos.length > 1;
                     const titleText = singleVideo?.youTubeVideoName || (hasMultiple ? `Multiple (${videos.length})` : cleanJobTypeLabel(job.jobType));
                     const channelText = !hasMultiple ? singleVideo?.youTubeChannelName : undefined;
-                    const thumbnailSrc = !hasMultiple && singleVideo?.youtubeId
-                      ? `https://i.ytimg.com/vi/${singleVideo.youtubeId}/mqdefault.jpg`
-                      : null;
+                    const showThumbnail = !hasMultiple && !!singleVideo;
+                    const missingCount = videos.filter((v: VideoData) => v.removed).length;
 
                     return (
                       <Box
@@ -246,22 +258,30 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                         className="p-3"
                       >
                         <Box className="flex items-start justify-between gap-2">
-                          <Typography variant="subtitle2" className="font-semibold">
-                            {hasMultiple ? (
-                              `Multiple (${videos.length})`
-                            ) : singleVideo ? (
-                              <Link
-                                component="button"
-                                type="button"
-                                onClick={() => setModalVideo(singleVideo)}
-                                style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left' }}
-                              >
-                                {singleVideo.youTubeVideoName}
-                              </Link>
-                            ) : (
-                              titleText
+                          <Box className="flex items-center gap-2 flex-wrap min-w-0">
+                            <Typography variant="subtitle2" className="font-semibold">
+                              {hasMultiple ? (
+                                `Multiple (${videos.length})`
+                              ) : singleVideo ? (
+                                <Link
+                                  component="button"
+                                  type="button"
+                                  onClick={() => setModalVideo(singleVideo)}
+                                  style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left' }}
+                                >
+                                  {singleVideo.youTubeVideoName}
+                                </Link>
+                              ) : (
+                                titleText
+                              )}
+                            </Typography>
+                            {hasMultiple && missingCount > 0 && (
+                              <MissingVideoChip
+                                label={`${missingCount} missing`}
+                                tooltip={`${missingCount} of ${videos.length} video files not found on disk`}
+                              />
                             )}
-                          </Typography>
+                          </Box>
                           {hasMultiple && (
                             <IconButton size="small" onClick={() => handleExpandCell(job.id)}>
                               {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
@@ -276,46 +296,57 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                         )}
 
                         <Box className="mt-2 flex items-start gap-3">
-                          {thumbnailSrc && (
-                            <Box
-                              onClick={singleVideo ? () => setModalVideo(singleVideo) : undefined}
-                              style={{
-                                width: 96,
-                                height: 72,
-                                borderRadius: 'var(--radius-thumb)',
-                                overflow: 'hidden',
-                                backgroundColor: 'rgb(17 24 39)',
-                                flexShrink: 0,
-                                cursor: singleVideo ? 'pointer' : 'default',
-                              }}
-                            >
-                              <img
-                                src={thumbnailSrc}
-                                alt={titleText}
-                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                loading="lazy"
-                              />
-                            </Box>
+                          {showThumbnail && singleVideo && (
+                            <VideoThumbnail
+                              video={singleVideo}
+                              width={96}
+                              height={72}
+                              onClick={() => setModalVideo(singleVideo)}
+                              hasError={!!imageErrors[singleVideo.youtubeId]}
+                              onError={() => handleImageError(singleVideo.youtubeId)}
+                              iconSize={24}
+                            />
                           )}
 
-                          <Box className="min-w-0 flex flex-1 flex-col gap-0.5">
-                            <Typography variant="caption" color="secondary">
-                              Date: {formattedTimeCreated}
-                            </Typography>
-                            {formattedJobType && (
+                          {hasMultiple ? (
+                            <Box className="min-w-0 flex flex-1 flex-col gap-0.5">
+                              <Box className="flex items-baseline gap-1 flex-wrap">
+                                <Typography variant="caption" color="secondary">Date:</Typography>
+                                <Typography variant="caption" className="font-medium">{formattedTimeCreated}</Typography>
+                              </Box>
+                              <Box className="flex items-baseline gap-x-4 gap-y-0.5 flex-wrap">
+                                {formattedJobType && (
+                                  <Box className="flex items-baseline gap-1">
+                                    <Typography variant="caption" color="secondary">Source:</Typography>
+                                    <Typography variant="caption" className="font-medium">{formattedJobType}</Typography>
+                                  </Box>
+                                )}
+                                <Box className="flex items-baseline gap-1">
+                                  <Typography variant="caption" color="secondary">Status:</Typography>
+                                  <Typography variant="caption" className="font-medium">{durationString}</Typography>
+                                </Box>
+                              </Box>
+                            </Box>
+                          ) : (
+                            <Box className="min-w-0 flex flex-1 flex-col gap-0.5">
                               <Typography variant="caption" color="secondary">
-                                Source: {formattedJobType}
+                                Date: {formattedTimeCreated}
                               </Typography>
-                            )}
-                            <Typography variant="caption" color="secondary">
-                              Status: {durationString}
-                            </Typography>
-                          </Box>
+                              {formattedJobType && (
+                                <Typography variant="caption" color="secondary">
+                                  Source: {formattedJobType}
+                                </Typography>
+                              )}
+                              <Typography variant="caption" color="secondary">
+                                Status: {durationString}
+                              </Typography>
+                            </Box>
+                          )}
                         </Box>
 
                         {hasMultiple && (
                           <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                            <Box className="mt-1.5 flex flex-col gap-1">
+                            <Box className="mt-1.5 flex flex-col gap-1.5">
                               {videos.map((video: VideoData) => (
                                 <Box key={video.youtubeId} className="flex flex-col">
                                   <Link
@@ -326,9 +357,12 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                                   >
                                     {video.youTubeVideoName}
                                   </Link>
-                                  <Typography variant="caption" color="secondary">
-                                    {video.youTubeChannelName}
-                                  </Typography>
+                                  <Box className="flex items-center gap-2 flex-wrap">
+                                    <Typography variant="caption" color="secondary">
+                                      {video.youTubeChannelName}
+                                    </Typography>
+                                    {video.removed && <MissingVideoChip />}
+                                  </Box>
                                 </Box>
                               ))}
                             </Box>
@@ -424,11 +458,22 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                     const formattedTimeCreated = `${month}-${day} ${hours}:${minutes} ${period}`;
 
                     if (videos.length > 1) {
+                      const missingCount = videos.filter((v: VideoData) => v.removed).length;
                       return (
                         <React.Fragment key={job.id}>
                           <TableRow hover onClick={() => handleExpandCell(job.id)}>
                             <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>{formattedTimeCreated}</TableCell>
-                            <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>Multiple ({videos.length})</TableCell>
+                            <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>
+                              <Box className="flex items-center gap-2 flex-wrap">
+                                <span>Multiple ({videos.length})</span>
+                                {missingCount > 0 && (
+                                  <MissingVideoChip
+                                    label={`${missingCount} missing`}
+                                    tooltip={`${missingCount} of ${videos.length} video files not found on disk`}
+                                  />
+                                )}
+                              </Box>
+                            </TableCell>
                             <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>{formattedJobType}</TableCell>
                             <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>{job.status}</TableCell>
                             <TableCell align="right">
@@ -448,14 +493,17 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                                         <TableRow key={video.youtubeId}>
                                           <TableCell style={{ width: 180 }}>{formattedTimeCreated}</TableCell>
                                           <TableCell>
-                                            <Link
-                                              component="button"
-                                              type="button"
-                                              onClick={(e: React.MouseEvent) => { e.stopPropagation(); setModalVideo(video); }}
-                                              style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left' }}
-                                            >
-                                              {video.youTubeVideoName}
-                                            </Link>
+                                            <Box className="flex items-start gap-2 flex-wrap">
+                                              <Link
+                                                component="button"
+                                                type="button"
+                                                onClick={(e: React.MouseEvent) => { e.stopPropagation(); setModalVideo(video); }}
+                                                style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left' }}
+                                              >
+                                                {video.youTubeVideoName}
+                                              </Link>
+                                              {video.removed && <MissingVideoChip />}
+                                            </Box>
                                             <Typography variant="caption" color="secondary" className="block">{video.youTubeChannelName}</Typography>
                                           </TableCell>
                                           <TableCell>{formattedJobType}</TableCell>
@@ -479,18 +527,29 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                         <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>{formattedTimeCreated}</TableCell>
                         <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>
                           {singleVideo ? (
-                            <>
+                            <Box className="flex items-start gap-3">
                               <span aria-hidden="true" style={{ display: 'none' }}>1</span>
-                              <Link
-                                component="button"
-                                type="button"
+                              <VideoThumbnail
+                                video={singleVideo}
+                                width={128}
+                                height={72}
                                 onClick={() => setModalVideo(singleVideo)}
-                                style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left' }}
-                              >
-                                {singleVideo.youTubeVideoName}
-                              </Link>
-                              <Typography variant="caption" color="secondary" className="block">{singleVideo.youTubeChannelName}</Typography>
-                            </>
+                                hasError={!!imageErrors[singleVideo.youtubeId]}
+                                onError={() => handleImageError(singleVideo.youtubeId)}
+                                iconSize={32}
+                              />
+                              <Box className="min-w-0 flex-1">
+                                <Link
+                                  component="button"
+                                  type="button"
+                                  onClick={() => setModalVideo(singleVideo)}
+                                  style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left' }}
+                                >
+                                  {singleVideo.youTubeVideoName}
+                                </Link>
+                                <Typography variant="caption" color="secondary" className="block">{singleVideo.youTubeChannelName}</Typography>
+                              </Box>
+                            </Box>
                           ) : job.status === 'In Progress' ? (
                             <span>---</span>
                           ) : (
