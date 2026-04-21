@@ -8,8 +8,6 @@ import {
   Tabs,
   Tab,
   Button,
-  Select,
-  MenuItem,
   FormControlLabel,
   Switch,
   LinearProgress,
@@ -39,17 +37,16 @@ import { useChannelFetchStatus } from './hooks/useChannelFetchStatus';
 import { useChannelVideoFilters } from './hooks/useChannelVideoFilters';
 import {
   useChannelVideosPageSize,
-  ALLOWED_PAGE_SIZES,
   type PageSize,
 } from './hooks/useChannelVideosPageSize';
 import { useConfig } from '../../hooks/useConfig';
 import { useTriggerDownloads } from '../../hooks/useTriggerDownloads';
-import PageControls from '../shared/PageControls';
 import VideoModal from '../shared/VideoModal';
 import { VideoModalData } from '../shared/VideoModal/types';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import {
   VideoListContainer,
+  VideoListPaginationBar,
   useVideoListState,
   useVideoSelection,
   type FilterConfig,
@@ -881,74 +878,19 @@ function ChannelVideos({
       ? syncedDeleteSelection
       : undefined;
 
-  // Pagination bar (shared between top and bottom placement).
-  const renderPaginationBar = (placement: 'top' | 'bottom') => {
-    if (totalCount === 0) return null;
-    const borderStyle =
-      placement === 'top'
-        ? { borderBottom: '1px solid var(--border)' }
-        : { borderTop: '1px solid var(--border)' };
-    return (
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 8,
-          padding: '12px 16px',
-          ...borderStyle,
-          position: 'relative',
-          minHeight: 48,
-        }}
-      >
-        {!useInfiniteScroll && totalPages > 1 && (
-          <PageControls
-            page={page}
-            totalPages={totalPages}
-            onPageChange={(newPage) => {
-              handlePageChange(newPage);
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
-            compact={isMobile}
-          />
-        )}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            position: isMobile ? undefined : 'absolute',
-            right: isMobile ? undefined : 16,
-          }}
-        >
-          {!isMobile && (
-            <Typography variant="body2" style={{ color: 'var(--muted-foreground)' }}>
-              Per page:
-            </Typography>
-          )}
-          <Select
-            size="small"
-            value={pageSize}
-            onChange={(e) => {
-              const val = Number(e.target.value);
-              if ((ALLOWED_PAGE_SIZES as readonly number[]).includes(val)) {
-                handlePageSizeChange(val as PageSize);
-              }
-            }}
-            aria-label="videos per page"
-            className="min-w-[64px]"
-          >
-            {ALLOWED_PAGE_SIZES.map((size) => (
-              <MenuItem key={size} value={size}>
-                {size}
-              </MenuItem>
-            ))}
-          </Select>
-        </div>
-      </div>
-    );
-  };
+  const renderPaginationBar = (placement: 'top' | 'bottom') => (
+    <VideoListPaginationBar
+      placement={placement}
+      hasContent={totalCount > 0}
+      useInfiniteScroll={useInfiniteScroll}
+      page={page}
+      totalPages={totalPages}
+      onPageChange={handlePageChange}
+      pageSize={pageSize}
+      onPageSizeChange={handlePageSizeChange}
+      isMobile={isMobile}
+    />
+  );
 
   const paginationTopNode = renderPaginationBar('top');
   const paginationNode = renderPaginationBar('bottom');

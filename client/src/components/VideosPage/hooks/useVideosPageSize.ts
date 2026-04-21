@@ -6,7 +6,7 @@ import {
   type PageSize,
 } from '../../shared/VideoList/pageSizes';
 
-const STORAGE_KEY = 'youtarr.channelVideos.pageSize';
+const STORAGE_KEY = 'youtarr.videosPage.pageSize';
 
 function readStoredPageSize(): PageSize {
   try {
@@ -21,7 +21,7 @@ function readStoredPageSize(): PageSize {
   }
 }
 
-export function useChannelVideosPageSize(): [PageSize, (next: PageSize) => void] {
+export function useVideosPageSize(): [PageSize, (next: PageSize) => void] {
   const [pageSize, setPageSizeState] = useState<PageSize>(readStoredPageSize);
 
   const setPageSize = useCallback((next: PageSize) => {

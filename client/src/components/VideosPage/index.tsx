@@ -9,7 +9,6 @@ import { VideoData } from '../../types/VideoData';
 import DeleteVideosDialog from '../shared/DeleteVideosDialog';
 import { useVideoDeletion } from '../shared/useVideoDeletion';
 import ChangeRatingDialog from '../shared/ChangeRatingDialog';
-import PageControls from '../shared/PageControls';
 import { useVideoProtection } from '../shared/useVideoProtection';
 import VideoModal from '../shared/VideoModal';
 import { VideoModalData } from '../shared/VideoModal/types';
@@ -19,7 +18,12 @@ import VideosListMobile from './components/VideosListMobile';
 import { useVideosData } from './hooks/useVideosData';
 import { useVideosViewMode, type VideosViewMode } from './hooks/useVideosViewMode';
 import {
+  useVideosPageSize,
+  type PageSize,
+} from './hooks/useVideosPageSize';
+import {
   VideoListContainer,
+  VideoListPaginationBar,
   useVideoListState,
   useVideoSelection,
   type FilterConfig,
@@ -105,7 +109,12 @@ function VideosPage({ token }: VideosPageProps) {
     clearMessages: clearProtectionMessages,
   } = useVideoProtection(token);
 
-  const videosPerPage = isMobile ? 6 : 12;
+  const [videosPerPage, setVideosPerPage] = useVideosPageSize();
+
+  const handlePageSizeChange = (newSize: PageSize) => {
+    setVideosPerPage(newSize);
+    setPage(1);
+  };
 
   const {
     videos,
@@ -339,26 +348,19 @@ function VideosPage({ token }: VideosPageProps) {
     </div>
   );
 
-  const renderPageControls = (placement: 'top' | 'bottom') =>
-    !useInfiniteScroll && totalPages > 1 ? (
-      <Grid
-        container
-        spacing={2}
-        style={{
-          marginTop: placement === 'top' ? 4 : 8,
-          marginBottom: placement === 'top' ? 8 : 8,
-          display: 'flex',
-          justifyContent: 'center',
-        }}
-      >
-        <PageControls
-          page={page}
-          totalPages={totalPages}
-          onPageChange={(newPage) => setPage(newPage)}
-          compact={isMobile}
-        />
-      </Grid>
-    ) : null;
+  const renderPageControls = (placement: 'top' | 'bottom') => (
+    <VideoListPaginationBar
+      placement={placement}
+      hasContent={totalVideos > 0}
+      useInfiniteScroll={useInfiniteScroll}
+      page={page}
+      totalPages={totalPages}
+      onPageChange={(newPage) => setPage(newPage)}
+      pageSize={videosPerPage}
+      onPageSizeChange={handlePageSizeChange}
+      isMobile={isMobile}
+    />
+  );
 
   const paginationNode = renderPageControls('bottom');
   const paginationTopNode = renderPageControls('top');
