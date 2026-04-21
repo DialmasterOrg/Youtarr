@@ -696,7 +696,7 @@ describe('ChannelVideos Component', () => {
 
       renderChannelVideos();
 
-      expect(screen.getByRole('button', { name: '16' })).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: '16' }).length).toBeGreaterThan(0);
     });
 
     test('does not render page size selector when no videos', () => {
@@ -744,8 +744,9 @@ describe('ChannelVideos Component', () => {
 
       renderChannelVideos();
 
-      const select = screen.getByRole('button', { name: '16' });
-      expect(select).toHaveTextContent('16');
+      const selects = screen.getAllByRole('button', { name: '16' });
+      expect(selects.length).toBeGreaterThan(0);
+      expect(selects[0]).toHaveTextContent('16');
     });
 
     test('selector reads stored value from localStorage', () => {
@@ -800,8 +801,8 @@ describe('ChannelVideos Component', () => {
       // MUI Select (non-native) opens on mouseDown on the inner trigger div.
       // The "Per page:" label precedes the Select, and the Select displays "16".
       // Use within() on the labeled container to find the trigger by its text content.
-      const selectContainer = screen.getByRole('button', { name: '16' });
-      const trigger = within(selectContainer).getByText('16');
+      const selectContainers = screen.getAllByRole('button', { name: '16' });
+      const trigger = within(selectContainers[0]).getByText('16');
       fireEvent.mouseDown(trigger);
 
       // Choose 32
@@ -831,7 +832,7 @@ describe('ChannelVideos Component', () => {
       renderChannelVideos();
 
       // Selector should be present
-      expect(screen.getByRole('button', { name: '16' })).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: '16' }).length).toBeGreaterThan(0);
 
       // Only 1 page total (3 videos < 16 per page), so no page 2 button should exist
       expect(screen.queryByRole('button', { name: 'go to page 2' })).not.toBeInTheDocument();
@@ -851,7 +852,7 @@ describe('ChannelVideos Component', () => {
       renderChannelVideos();
 
       // Both should be present
-      expect(screen.getByRole('button', { name: '16' })).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: '16' }).length).toBeGreaterThan(0);
       expect(screen.getAllByRole('navigation').length).toBeGreaterThan(0);
     });
   });

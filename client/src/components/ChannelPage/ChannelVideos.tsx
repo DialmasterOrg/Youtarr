@@ -881,67 +881,77 @@ function ChannelVideos({
       ? syncedDeleteSelection
       : undefined;
 
-  // Pagination UI
-  const paginationNode = totalCount > 0 ? (
-    <div
-      style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: 8,
-        padding: '12px 16px',
-        borderTop: '1px solid var(--border)',
-        position: 'relative',
-        minHeight: 48,
-      }}
-    >
-      {!useInfiniteScroll && totalPages > 1 && (
-        <PageControls
-          page={page}
-          totalPages={totalPages}
-          onPageChange={(newPage) => {
-            handlePageChange(newPage);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
-          compact={isMobile}
-        />
-      )}
+  // Pagination bar (shared between top and bottom placement).
+  const renderPaginationBar = (placement: 'top' | 'bottom') => {
+    if (totalCount === 0) return null;
+    const borderStyle =
+      placement === 'top'
+        ? { borderBottom: '1px solid var(--border)' }
+        : { borderTop: '1px solid var(--border)' };
+    return (
       <div
         style={{
           display: 'flex',
+          justifyContent: 'center',
           alignItems: 'center',
-          gap: 4,
-          position: isMobile ? undefined : 'absolute',
-          right: isMobile ? undefined : 16,
+          flexWrap: 'wrap',
+          gap: 8,
+          padding: '12px 16px',
+          ...borderStyle,
+          position: 'relative',
+          minHeight: 48,
         }}
       >
-        {!isMobile && (
-          <Typography variant="body2" style={{ color: 'var(--muted-foreground)' }}>
-            Per page:
-          </Typography>
+        {!useInfiniteScroll && totalPages > 1 && (
+          <PageControls
+            page={page}
+            totalPages={totalPages}
+            onPageChange={(newPage) => {
+              handlePageChange(newPage);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            compact={isMobile}
+          />
         )}
-        <Select
-          size="small"
-          value={pageSize}
-          onChange={(e) => {
-            const val = Number(e.target.value);
-            if ((ALLOWED_PAGE_SIZES as readonly number[]).includes(val)) {
-              handlePageSizeChange(val as PageSize);
-            }
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            position: isMobile ? undefined : 'absolute',
+            right: isMobile ? undefined : 16,
           }}
-          aria-label="videos per page"
-          className="min-w-[64px]"
         >
-          {ALLOWED_PAGE_SIZES.map((size) => (
-            <MenuItem key={size} value={size}>
-              {size}
-            </MenuItem>
-          ))}
-        </Select>
+          {!isMobile && (
+            <Typography variant="body2" style={{ color: 'var(--muted-foreground)' }}>
+              Per page:
+            </Typography>
+          )}
+          <Select
+            size="small"
+            value={pageSize}
+            onChange={(e) => {
+              const val = Number(e.target.value);
+              if ((ALLOWED_PAGE_SIZES as readonly number[]).includes(val)) {
+                handlePageSizeChange(val as PageSize);
+              }
+            }}
+            aria-label="videos per page"
+            className="min-w-[64px]"
+          >
+            {ALLOWED_PAGE_SIZES.map((size) => (
+              <MenuItem key={size} value={size}>
+                {size}
+              </MenuItem>
+            ))}
+          </Select>
+        </div>
       </div>
-    </div>
-  ) : null;
+    );
+  };
+
+  const paginationTopNode = renderPaginationBar('top');
+  const paginationNode = renderPaginationBar('bottom');
 
   const infiniteSentinel = useInfiniteScroll ? (
     <>
@@ -1296,6 +1306,7 @@ function ChannelVideos({
           renderContent={renderContent}
           loadingSkeleton={videosLoading && videos.length === 0 ? loadingSkeleton : undefined}
           pagination={paginationNode}
+          paginationTop={paginationTopNode}
           paginationMode={useInfiniteScroll ? 'infinite' : 'pages'}
           infiniteScrollSentinel={infiniteSentinel}
           isMobile={isMobile}

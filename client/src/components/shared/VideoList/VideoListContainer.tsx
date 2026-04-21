@@ -38,6 +38,7 @@ export interface VideoListContainerProps<IdType extends string | number> {
 
   paginationMode?: PaginationMode;
   pagination?: React.ReactNode;
+  paginationTop?: React.ReactNode;
   infiniteScrollSentinel?: React.ReactNode;
 
   isMobile: boolean;
@@ -63,6 +64,7 @@ function VideoListContainer<IdType extends string | number>({
   loadingSkeleton,
   customEmptyMessage,
   pagination,
+  paginationTop,
   infiniteScrollSentinel,
   isMobile,
 }: VideoListContainerProps<IdType>) {
@@ -114,6 +116,8 @@ function VideoListContainer<IdType extends string | number>({
       />
 
       {tabsSlot && <div>{tabsSlot}</div>}
+
+      {hasContent && paginationTop}
 
       <div
         style={{

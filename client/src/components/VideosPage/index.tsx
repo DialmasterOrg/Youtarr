@@ -339,25 +339,29 @@ function VideosPage({ token }: VideosPageProps) {
     </div>
   );
 
-  const paginationNode = !useInfiniteScroll && totalPages > 1 ? (
-    <Grid
-      container
-      spacing={2}
-      style={{
-        marginTop: 8,
-        marginBottom: 8,
-        display: 'flex',
-        justifyContent: 'center',
-      }}
-    >
-      <PageControls
-        page={page}
-        totalPages={totalPages}
-        onPageChange={(newPage) => setPage(newPage)}
-        compact={isMobile}
-      />
-    </Grid>
-  ) : null;
+  const renderPageControls = (placement: 'top' | 'bottom') =>
+    !useInfiniteScroll && totalPages > 1 ? (
+      <Grid
+        container
+        spacing={2}
+        style={{
+          marginTop: placement === 'top' ? 4 : 8,
+          marginBottom: placement === 'top' ? 8 : 8,
+          display: 'flex',
+          justifyContent: 'center',
+        }}
+      >
+        <PageControls
+          page={page}
+          totalPages={totalPages}
+          onPageChange={(newPage) => setPage(newPage)}
+          compact={isMobile}
+        />
+      </Grid>
+    ) : null;
+
+  const paginationNode = renderPageControls('bottom');
+  const paginationTopNode = renderPageControls('top');
 
   const infiniteSentinel = useInfiniteScroll ? (
     <>
@@ -472,6 +476,7 @@ function VideosPage({ token }: VideosPageProps) {
         errorMessage={loadError}
         renderContent={(mode) => <div {...swipeHandlers}>{renderContent(mode)}</div>}
         pagination={paginationNode}
+        paginationTop={paginationTopNode}
         paginationMode={useInfiniteScroll ? 'infinite' : 'pages'}
         infiniteScrollSentinel={infiniteSentinel}
         isMobile={isMobile}
