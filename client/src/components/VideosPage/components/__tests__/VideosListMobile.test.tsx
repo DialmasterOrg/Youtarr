@@ -82,4 +82,18 @@ describe('VideosListMobile', () => {
     expect(screen.queryByRole('button', { name: /Compact Row Video/ })).not.toBeInTheDocument();
     expect(onToggleSelect).not.toHaveBeenCalled();
   });
+
+  test('allows selection for audio-only downloads with no video fileSize', () => {
+    const { onToggleSelect } = renderList({
+      videos: [{
+        ...sampleVideo,
+        filePath: null,
+        fileSize: null,
+        audioFilePath: '/data/audio.mp3',
+        audioFileSize: '5242880',
+      }],
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Compact Row Video/ }));
+    expect(onToggleSelect).toHaveBeenCalledWith(1);
+  });
 });

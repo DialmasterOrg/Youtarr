@@ -94,7 +94,7 @@ function VideoCard({
   onDeleteSingle,
   onImageError,
 }: VideoCardProps) {
-  const isSelectable = !video.removed && Boolean(video.fileSize);
+  const isSelectable = !video.removed;
   const channelId = getEnabledChannelId(video.youTubeChannelName, video.channel_id, enabledChannels);
   const mediaTypeInfo = getMediaTypeInfo(video.media_type);
   const fileSizeNumber = video.fileSize

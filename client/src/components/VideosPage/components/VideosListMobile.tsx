@@ -111,7 +111,7 @@ function VideosListMobile({
   return (
     <Box>
       {videos.map((video) => {
-        const isSelectable = !video.removed && Boolean(video.fileSize);
+        const isSelectable = !video.removed;
         const isSelected = selectedVideos.includes(video.id);
         const channelId = getEnabledChannelId(
           video.youTubeChannelName,

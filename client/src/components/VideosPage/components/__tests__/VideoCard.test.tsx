@@ -95,9 +95,19 @@ describe('VideoCard', () => {
     expect(onToggleSelect).toHaveBeenCalledWith(1);
   });
 
-  test('omits selection checkbox when video has no fileSize', () => {
-    renderCard({ video: { ...baseVideo, fileSize: null } });
-    expect(screen.queryByRole('checkbox', { name: /Select Test Video/ })).not.toBeInTheDocument();
+  test('renders selection checkbox for audio-only downloads with no video fileSize', () => {
+    const { onToggleSelect } = renderCard({
+      video: {
+        ...baseVideo,
+        filePath: null,
+        fileSize: null,
+        audioFilePath: '/data/audio.mp3',
+        audioFileSize: '5242880',
+      },
+    });
+    const checkbox = screen.getByRole('checkbox', { name: /Select Test Video/ });
+    fireEvent.click(checkbox);
+    expect(onToggleSelect).toHaveBeenCalledWith(1);
   });
 
   test('omits selection checkbox when video is removed', () => {

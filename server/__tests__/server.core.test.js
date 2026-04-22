@@ -482,6 +482,7 @@ describe('server initialization', () => {
       sortOrder: 'asc',
       channelFilter: 'channel123',
       protectedFilter: false,
+      missingFilter: false,
     });
 
     expect(res.statusCode).toBe(200);
@@ -577,6 +578,7 @@ describe('server initialization', () => {
       sortOrder: 'desc',
       channelFilter: '',
       protectedFilter: false,
+      missingFilter: false,
     });
 
     expect(res.statusCode).toBe(200);
