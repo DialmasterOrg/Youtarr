@@ -3,22 +3,23 @@ import { Link as RouterLink } from 'react-router-dom';
 import { Card, Typography, Chip, Box, Checkbox, IconButton, Tooltip } from '../../ui';
 import {
   AlertCircle as ErrorOutlineIcon,
-  CheckCircle as CheckCircleIcon,
   HardDrive as StorageIcon,
   Trash2 as DeleteIcon,
   Download as DownloadIcon,
   Clock as ScheduleIcon,
   AlarmCheck as AlarmOnIcon,
-  Video as VideoLibraryIcon,
 } from 'lucide-react';
 import { formatDuration, formatYTDate } from '../../../utils';
 import { formatAddedDateTime, formatFileSize } from '../../../utils/formatters';
+import { getMediaTypeInfo } from '../../../utils/videoStatus';
+import { getEnabledChannelId } from '../../../utils/enabledChannels';
 import { VideoData, EnabledChannel } from '../../../types/VideoData';
 import RatingBadge from '../../shared/RatingBadge';
 import DownloadFormatIndicator from '../../shared/DownloadFormatIndicator';
 import ProtectionShieldButton from '../../shared/ProtectionShieldButton';
 import ThumbnailClickOverlay from '../../shared/ThumbnailClickOverlay';
-import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_THEMED_CHIP_SMALL_STYLE } from '../../shared/chipStyles';
+import AvailabilityChip from '../../shared/AvailabilityChip';
+import { SHARED_STATUS_CHIP_SMALL_STYLE } from '../../shared/chipStyles';
 
 export interface VideoCardProps {
   video: VideoData;
@@ -31,44 +32,6 @@ export interface VideoCardProps {
   onToggleProtection: (videoId: number) => void;
   onDeleteSingle: (videoId: number) => void;
   onImageError: (youtubeId: string) => void;
-}
-
-const chipStyle = {
-  available: {
-    ...SHARED_THEMED_CHIP_SMALL_STYLE,
-    backgroundColor: 'var(--success)',
-    color: 'var(--success-foreground)',
-  } as React.CSSProperties,
-  missing: {
-    ...SHARED_THEMED_CHIP_SMALL_STYLE,
-    backgroundColor: 'var(--destructive)',
-    color: 'var(--destructive-foreground)',
-  } as React.CSSProperties,
-};
-
-function getMediaTypeInfo(mediaType?: string) {
-  switch (mediaType) {
-    case 'short':
-      return { label: 'Short', color: 'secondary' as const, icon: <ScheduleIcon /> };
-    case 'livestream':
-      return { label: 'Live', color: 'error' as const, icon: <VideoLibraryIcon /> };
-    case 'video':
-    default:
-      return null;
-  }
-}
-
-function getEnabledChannelId(
-  channelName: string,
-  videoChannelId: string | null | undefined,
-  enabledChannels: EnabledChannel[]
-): string | null {
-  if (videoChannelId) {
-    const match = enabledChannels.find((ch) => ch.channel_id === videoChannelId);
-    if (match) return match.channel_id;
-  }
-  const match = enabledChannels.find((ch) => ch.uploader === channelName);
-  return match ? match.channel_id : null;
 }
 
 function VideoCard({
@@ -346,27 +309,9 @@ function VideoCard({
               size="small"
             />
             {video.removed ? (
-              <Tooltip title="Video file not found on disk" enterTouchDelay={0}>
-                <Chip
-                  size="small"
-                  icon={<ErrorOutlineIcon size={12} />}
-                  label="Missing"
-                  color="error"
-                  variant="filled"
-                  style={chipStyle.missing}
-                />
-              </Tooltip>
+              <AvailabilityChip isAvailable={false} />
             ) : video.fileSize ? (
-              <Tooltip title="Video file exists on disk" enterTouchDelay={0}>
-                <Chip
-                  size="small"
-                  icon={<CheckCircleIcon size={12} />}
-                  label="Available"
-                  color="success"
-                  variant="filled"
-                  style={chipStyle.available}
-                />
-              </Tooltip>
+              <AvailabilityChip isAvailable={true} />
             ) : null}
           </Box>
           {!video.removed && (

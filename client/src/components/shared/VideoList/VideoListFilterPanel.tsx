@@ -1,17 +1,38 @@
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Button, Divider, Typography } from '../../ui';
-import { Close as CloseIcon } from '../../../lib/icons';
+import {
+  Close as CloseIcon,
+  Shield as ShieldIcon,
+  CloudOff as CloudOffIcon,
+  Block as BlockIcon,
+} from '../../../lib/icons';
 import { FilterConfig } from './types';
 import DurationFilter from './filters/DurationFilter';
 import DateRangeFilter from './filters/DateRangeFilter';
 import DateRangeStringFilter from './filters/DateRangeStringFilter';
 import MaxRatingFilter from './filters/MaxRatingFilter';
-import ProtectedFilter from './filters/ProtectedFilter';
-import MissingFilter from './filters/MissingFilter';
-import IgnoredFilter from './filters/IgnoredFilter';
+import ToggleChipFilter from './filters/ToggleChipFilter';
 import ChannelFilter from './filters/ChannelFilter';
 import { hasActiveFilters, clearAllFilters } from './VideoListFilterChips';
+
+const TOGGLE_CHIP_CONFIG = {
+  protected: {
+    icon: <ShieldIcon size={16} />,
+    inactiveLabel: 'Protected',
+    activeLabel: 'Protected Only',
+  },
+  missing: {
+    icon: <CloudOffIcon size={16} />,
+    inactiveLabel: 'Missing',
+    activeLabel: 'Missing Only',
+  },
+  ignored: {
+    icon: <BlockIcon size={16} />,
+    inactiveLabel: 'Ignored',
+    activeLabel: 'Ignored Only',
+  },
+} as const;
 
 const STATUS_FILTER_IDS = ['protected', 'missing', 'ignored'] as const;
 
@@ -75,14 +96,17 @@ function renderFilter(filter: FilterConfig, compact: boolean): React.ReactNode {
   if (filter.id === 'maxRating') {
     return <MaxRatingFilter value={filter.value} onChange={filter.onChange} compact={compact} />;
   }
-  if (filter.id === 'protected') {
-    return <ProtectedFilter value={filter.value} onChange={filter.onChange} />;
-  }
-  if (filter.id === 'missing') {
-    return <MissingFilter value={filter.value} onChange={filter.onChange} />;
-  }
-  if (filter.id === 'ignored') {
-    return <IgnoredFilter value={filter.value} onChange={filter.onChange} />;
+  if (filter.id === 'protected' || filter.id === 'missing' || filter.id === 'ignored') {
+    const config = TOGGLE_CHIP_CONFIG[filter.id];
+    return (
+      <ToggleChipFilter
+        value={filter.value}
+        onChange={filter.onChange}
+        icon={config.icon}
+        inactiveLabel={config.inactiveLabel}
+        activeLabel={config.activeLabel}
+      />
+    );
   }
   if (filter.id === 'channel') {
     return (

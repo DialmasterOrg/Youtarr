@@ -142,11 +142,22 @@ jest.mock('../../shared/VideoList', () => {
               ...(props.selection.actions || []).map((action: any) =>
                 React.createElement(
                   'li',
-                  { key: action.id, role: 'menuitem' },
+                  {
+                    key: action.id,
+                    role: 'menuitem',
+                    onClick: () => action.onClick?.(props.selection.selectedIds),
+                  },
                   `${action.label} Selected`
                 )
               ),
-              React.createElement('li', { role: 'menuitem' }, 'Clear Selection')
+              React.createElement(
+                'li',
+                {
+                  role: 'menuitem',
+                  onClick: () => props.selection.clear?.(),
+                },
+                'Clear Selection'
+              )
             )
           )
         : null;
@@ -660,6 +671,52 @@ describe('ChannelVideos Component', () => {
       await user.click(floatingAction);
       expect(screen.getByRole('menuitem', { name: /Download Selected/i })).toBeInTheDocument();
       expect(screen.queryByRole('menuitem', { name: /Delete Selected/i })).not.toBeInTheDocument();
+    });
+
+    test('pill "Clear Selection" wipes both download and delete selection arrays', async () => {
+      // Pins the cross-clear invariant of syncedDownload/DeleteSelection.clear:
+      // clearing one mode via the pill must also clear the other mode's array,
+      // so a previously-stuck selection in the non-active mode can't linger.
+      const user = userEvent.setup();
+
+      useChannelVideos.mockReturnValue({
+        videos: mockVideos,
+        totalCount: 3,
+        oldestVideoDate: '2023-01-01',
+        videoFailed: false,
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      // Populate both selection arrays via the force-select-delete escape hatch
+      // so clearing via the pill must zero both.
+      await user.click(screen.getByTestId('select-video-video1'));
+      await user.click(screen.getByTestId('force-select-delete-video2'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-selection-mode', 'download');
+      });
+
+      const floatingAction = await screen.findByRole('button', {
+        name: /Actions for 1 selected video/i,
+      });
+      await user.click(floatingAction);
+
+      const clearItem = screen.getByRole('menuitem', { name: /Clear Selection/i });
+      await user.click(clearItem);
+
+      // Pill disappears -> hasSelection is false on both hooks, meaning both
+      // selection arrays went back to empty.
+      await waitFor(() => {
+        expect(screen.queryByTestId('video-list-selection-pill')).not.toBeInTheDocument();
+      });
+
+      // Neither card still advertises a locked selectionMode.
+      expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-selection-mode', 'null');
+      expect(screen.getByTestId('video-card-video2')).toHaveAttribute('data-selection-mode', 'null');
     });
   });
 

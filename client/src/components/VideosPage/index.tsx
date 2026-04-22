@@ -16,17 +16,14 @@ import VideoCard from './components/VideoCard';
 import VideosTable from './components/VideosTable';
 import VideosListMobile from './components/VideosListMobile';
 import { useVideosData } from './hooks/useVideosData';
-import { useVideosViewMode, type VideosViewMode } from './hooks/useVideosViewMode';
-import {
-  useVideosPageSize,
-  type PageSize,
-} from './hooks/useVideosPageSize';
 import {
   VideoListContainer,
   VideoListPaginationBar,
+  useListPageSize,
   useVideoListState,
   useVideoSelection,
   type FilterConfig,
+  type PageSize,
   type SelectionAction,
   type VideoListViewMode,
   type SortConfig,
@@ -65,20 +62,11 @@ function videoDataToModalData(video: VideoData): VideoModalData {
 
 function VideosPage({ token }: VideosPageProps) {
   const isMobile = useMediaQuery('(max-width: 767px)');
-  const [viewMode, setViewModeLegacy] = useVideosViewMode(isMobile);
 
   const listState = useVideoListState({
     initialViewMode: (isMobile ? 'list' : 'table') as VideoListViewMode,
     viewModeStorageKey: VIEW_MODE_STORAGE_KEY,
   });
-
-  // Sync shared list state to the legacy hook (so persistence and viewMode stay aligned).
-  useEffect(() => {
-    if (listState.viewMode !== viewMode) {
-      setViewModeLegacy(listState.viewMode as VideosViewMode);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listState.viewMode]);
 
   const [page, setPage] = useState(1);
   const [channelFilter, setChannelFilter] = useState('');
@@ -109,7 +97,7 @@ function VideosPage({ token }: VideosPageProps) {
     clearMessages: clearProtectionMessages,
   } = useVideoProtection(token);
 
-  const [videosPerPage, setVideosPerPage] = useVideosPageSize();
+  const [videosPerPage, setVideosPerPage] = useListPageSize('youtarr.videosPage.pageSize');
 
   const handlePageSizeChange = (newSize: PageSize) => {
     setVideosPerPage(newSize);

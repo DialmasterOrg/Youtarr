@@ -24,3 +24,4 @@ export type {
 export { default as VideoListPaginationBar } from './VideoListPaginationBar';
 export { ALLOWED_PAGE_SIZES, DEFAULT_PAGE_SIZE, isPageSize } from './pageSizes';
 export type { PageSize } from './pageSizes';
+export { useListPageSize } from './useListPageSize';

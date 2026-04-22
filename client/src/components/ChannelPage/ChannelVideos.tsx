@@ -35,10 +35,6 @@ import { useChannelVideos } from './hooks/useChannelVideos';
 import { useRefreshChannelVideos } from './hooks/useRefreshChannelVideos';
 import { useChannelFetchStatus } from './hooks/useChannelFetchStatus';
 import { useChannelVideoFilters } from './hooks/useChannelVideoFilters';
-import {
-  useChannelVideosPageSize,
-  type PageSize,
-} from './hooks/useChannelVideosPageSize';
 import { useConfig } from '../../hooks/useConfig';
 import { useTriggerDownloads } from '../../hooks/useTriggerDownloads';
 import VideoModal from '../shared/VideoModal';
@@ -47,9 +43,11 @@ import { ChannelVideo } from '../../types/ChannelVideo';
 import {
   VideoListContainer,
   VideoListPaginationBar,
+  useListPageSize,
   useVideoListState,
   useVideoSelection,
   type FilterConfig,
+  type PageSize,
   type SelectionAction,
   type VideoListViewMode,
 } from '../shared/VideoList';
@@ -135,7 +133,7 @@ function ChannelVideos({
   const [tabsLoading, setTabsLoading] = useState<boolean>(true);
   const [tabAutoDownloadStatus, setTabAutoDownloadStatus] = useState<Record<string, boolean>>({});
 
-  const [pageSize, setPageSize] = useChannelVideosPageSize();
+  const [pageSize, setPageSize] = useListPageSize('youtarr.channelVideos.pageSize');
   const [page, setPage] = useState(1);
   const [hideDownloaded, setHideDownloaded] = useState(false);
   const [mobileTooltip, setMobileTooltip] = useState<string | null>(null);
@@ -799,40 +797,36 @@ function ChannelVideos({
     selectedTab,
   ]);
 
-  // Build selection actions dynamically per mode
-  const downloadActions = useMemo<SelectionAction<string>[]>(
-    () => [
-      {
-        id: 'download',
-        label: 'Download',
-        icon: <DownloadIcon size={14} />,
-        intent: 'success',
-        onClick: handleDownloadClick,
-      },
-      {
-        id: 'ignore',
-        label: 'Ignore',
-        icon: <BlockIcon size={14} />,
-        intent: 'warning',
-        onClick: () => handleBulkIgnore(),
-      },
-    ],
-    [handleDownloadClick, handleBulkIgnore]
-  );
+  // Build selection actions per render. Memoizing here is a lie because the
+  // closures capture handleBulkIgnore / handleDeleteClick, which are created
+  // fresh each render; the useMemo cache would just hand back a stale closure.
+  const downloadActions: SelectionAction<string>[] = [
+    {
+      id: 'download',
+      label: 'Download',
+      icon: <DownloadIcon size={14} />,
+      intent: 'success',
+      onClick: handleDownloadClick,
+    },
+    {
+      id: 'ignore',
+      label: 'Ignore',
+      icon: <BlockIcon size={14} />,
+      intent: 'warning',
+      onClick: () => handleBulkIgnore(),
+    },
+  ];
 
-  const deleteActions = useMemo<SelectionAction<string>[]>(
-    () => [
-      {
-        id: 'delete',
-        label: 'Delete',
-        icon: <DeleteIcon size={14} />,
-        intent: 'danger',
-        disabled: () => deleteLoading,
-        onClick: () => handleDeleteClick(),
-      },
-    ],
-    [deleteLoading]
-  );
+  const deleteActions: SelectionAction<string>[] = [
+    {
+      id: 'delete',
+      label: 'Delete',
+      icon: <DeleteIcon size={14} />,
+      intent: 'danger',
+      disabled: () => deleteLoading,
+      onClick: () => handleDeleteClick(),
+    },
+  ];
 
   const downloadSelection = useVideoSelection<string>({ actions: downloadActions });
   const deleteSelection = useVideoSelection<string>({ actions: deleteActions });

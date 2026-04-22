@@ -1,18 +1,27 @@
 import React from 'react';
 import { Chip } from '../../../ui';
-import { Block as BlockIcon } from '../../../../lib/icons';
 
-export interface IgnoredFilterProps {
+export interface ToggleChipFilterProps {
   value: boolean;
   onChange: (value: boolean) => void;
+  icon: React.ReactNode;
+  inactiveLabel: string;
+  activeLabel: string;
   size?: 'small' | 'medium';
 }
 
-function IgnoredFilter({ value, onChange, size = 'small' }: IgnoredFilterProps) {
+function ToggleChipFilter({
+  value,
+  onChange,
+  icon,
+  inactiveLabel,
+  activeLabel,
+  size = 'small',
+}: ToggleChipFilterProps) {
   return (
     <Chip
-      icon={<BlockIcon size={16} />}
-      label={value ? 'Ignored Only' : 'Ignored'}
+      icon={icon}
+      label={value ? activeLabel : inactiveLabel}
       variant={value ? 'filled' : 'outlined'}
       color={value ? 'primary' : 'default'}
       size={size}
@@ -23,4 +32,4 @@ function IgnoredFilter({ value, onChange, size = 'small' }: IgnoredFilterProps) 
   );
 }
 
-export default IgnoredFilter;
+export default ToggleChipFilter;
