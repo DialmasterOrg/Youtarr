@@ -22,6 +22,7 @@ import {
   useListPageSize,
   useVideoListState,
   useVideoSelection,
+  type ChipFilterMode,
   type FilterConfig,
   type PageSize,
   type SelectionAction,
@@ -75,8 +76,8 @@ function VideosPage({ token }: VideosPageProps) {
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
   const [maxRatingFilter, setMaxRatingFilter] = useState('');
-  const [protectedFilter, setProtectedFilter] = useState(false);
-  const [missingFilter, setMissingFilter] = useState(false);
+  const [protectedFilter, setProtectedFilter] = useState<ChipFilterMode>('off');
+  const [missingFilter, setMissingFilter] = useState<ChipFilterMode>('off');
 
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);

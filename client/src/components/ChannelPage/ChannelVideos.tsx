@@ -46,6 +46,7 @@ import {
   useListPageSize,
   useVideoListState,
   useVideoSelection,
+  type ChipFilterMode,
   type FilterConfig,
   type PageSize,
   type SelectionAction,
@@ -124,9 +125,9 @@ function ChannelVideos({
   const [sortBy, setSortBy] = useState<SortBy>('date');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [maxRating, setMaxRating] = useState('');
-  const [protectedFilter, setProtectedFilter] = useState(false);
-  const [missingFilter, setMissingFilter] = useState(false);
-  const [ignoredFilter, setIgnoredFilter] = useState(false);
+  const [protectedFilter, setProtectedFilter] = useState<ChipFilterMode>('off');
+  const [missingFilter, setMissingFilter] = useState<ChipFilterMode>('off');
+  const [ignoredFilter, setIgnoredFilter] = useState<ChipFilterMode>('off');
 
   const [selectedTab, setSelectedTab] = useState<string | null>(null);
   const [availableTabs, setAvailableTabs] = useState<string[]>([]);
@@ -648,9 +649,9 @@ function ChannelVideos({
     setPage(1);
     clearAllSelections();
     clearBaseFilters();
-    setProtectedFilter(false);
-    setMissingFilter(false);
-    setIgnoredFilter(false);
+    setProtectedFilter('off');
+    setMissingFilter('off');
+    setIgnoredFilter('off');
   };
 
   const handleAutoDownloadChange = async (enabled: boolean) => {

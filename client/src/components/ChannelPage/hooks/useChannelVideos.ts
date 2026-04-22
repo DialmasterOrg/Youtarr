@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChannelVideo } from '../../../types/ChannelVideo';
+import { ChipFilterMode } from '../../shared/VideoList/types';
 
 interface UseChannelVideosParams {
   channelId: string | undefined;
@@ -18,9 +19,9 @@ interface UseChannelVideosParams {
   maxDuration?: number | null;
   dateFrom?: Date | null;
   dateTo?: Date | null;
-  protectedFilter?: boolean;
-  missingFilter?: boolean;
-  ignoredFilter?: boolean;
+  protectedFilter?: ChipFilterMode;
+  missingFilter?: ChipFilterMode;
+  ignoredFilter?: ChipFilterMode;
 }
 
 interface UseChannelVideosResult {
@@ -100,14 +101,14 @@ export function useChannelVideos({
       if (dateTo) {
         queryParams.append('dateTo', dateTo.toISOString().split('T')[0]);
       }
-      if (protectedFilter) {
-        queryParams.append('protectedFilter', 'true');
+      if (protectedFilter && protectedFilter !== 'off') {
+        queryParams.append('protectedFilter', protectedFilter);
       }
-      if (missingFilter) {
-        queryParams.append('missingFilter', 'true');
+      if (missingFilter && missingFilter !== 'off') {
+        queryParams.append('missingFilter', missingFilter);
       }
-      if (ignoredFilter) {
-        queryParams.append('ignoredFilter', 'true');
+      if (ignoredFilter && ignoredFilter !== 'off') {
+        queryParams.append('ignoredFilter', ignoredFilter);
       }
 
       const response = await fetch(`/getchannelvideos/${channelId}?${queryParams}`, {

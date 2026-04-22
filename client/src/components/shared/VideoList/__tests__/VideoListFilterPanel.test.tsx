@@ -3,21 +3,21 @@ import { fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import VideoListFilterPanel from '../VideoListFilterPanel';
-import { FilterConfig } from '../types';
+import { ChipFilterMode, FilterConfig } from '../types';
 import { renderWithProviders } from '../../../../test-utils';
 
 function statusFilters(overrides: Partial<{
-  protectedValue: boolean;
-  missingValue: boolean;
-  ignoredValue: boolean;
+  protectedValue: ChipFilterMode;
+  missingValue: ChipFilterMode;
+  ignoredValue: ChipFilterMode;
   onProtected: jest.Mock;
   onMissing: jest.Mock;
   onIgnored: jest.Mock;
 }> = {}): FilterConfig[] {
   return [
-    { id: 'protected', value: overrides.protectedValue ?? false, onChange: overrides.onProtected ?? jest.fn() },
-    { id: 'missing', value: overrides.missingValue ?? false, onChange: overrides.onMissing ?? jest.fn() },
-    { id: 'ignored', value: overrides.ignoredValue ?? false, onChange: overrides.onIgnored ?? jest.fn() },
+    { id: 'protected', value: overrides.protectedValue ?? 'off', onChange: overrides.onProtected ?? jest.fn() },
+    { id: 'missing', value: overrides.missingValue ?? 'off', onChange: overrides.onMissing ?? jest.fn() },
+    { id: 'ignored', value: overrides.ignoredValue ?? 'off', onChange: overrides.onIgnored ?? jest.fn() },
   ];
 }
 
@@ -54,8 +54,8 @@ describe('VideoListFilterPanel - inline variant', () => {
     renderWithProviders(
       <VideoListFilterPanel
         filters={statusFilters({
-          protectedValue: true,
-          missingValue: true,
+          protectedValue: 'only',
+          missingValue: 'exclude',
           onProtected,
           onMissing,
         })}
@@ -65,8 +65,8 @@ describe('VideoListFilterPanel - inline variant', () => {
     );
     const clearAll = screen.getByTestId('video-list-clear-filters');
     await user.click(clearAll);
-    expect(onProtected).toHaveBeenCalledWith(false);
-    expect(onMissing).toHaveBeenCalledWith(false);
+    expect(onProtected).toHaveBeenCalledWith('off');
+    expect(onMissing).toHaveBeenCalledWith('off');
   });
 
   test('renders customFilters node alongside filter controls', () => {
@@ -182,7 +182,7 @@ describe('VideoListFilterPanel - drawer variant', () => {
     const onProtected = jest.fn();
     renderWithProviders(
       <VideoListFilterPanel
-        filters={statusFilters({ protectedValue: true, onProtected })}
+        filters={statusFilters({ protectedValue: 'only', onProtected })}
         variant="drawer"
         open
         onClose={jest.fn()}
@@ -191,7 +191,7 @@ describe('VideoListFilterPanel - drawer variant', () => {
     const clearAll = screen.getByRole('button', { name: /clear all/i });
     expect(clearAll).not.toBeDisabled();
     await user.click(clearAll);
-    expect(onProtected).toHaveBeenCalledWith(false);
+    expect(onProtected).toHaveBeenCalledWith('off');
   });
 
   test('renders explanatory text when a date-range filter is hidden with a reason', () => {

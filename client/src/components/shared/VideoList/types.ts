@@ -2,6 +2,8 @@ import type React from 'react';
 
 export type VideoListViewMode = 'grid' | 'list' | 'table';
 
+export type ChipFilterMode = 'off' | 'only' | 'exclude';
+
 export interface DateRangeFilterValue {
   dateFrom: string | null;
   dateTo: string | null;
@@ -34,18 +36,18 @@ export type FilterConfig =
     }
   | {
       id: 'protected';
-      value: boolean;
-      onChange: (value: boolean) => void;
+      value: ChipFilterMode;
+      onChange: (value: ChipFilterMode) => void;
     }
   | {
       id: 'missing';
-      value: boolean;
-      onChange: (value: boolean) => void;
+      value: ChipFilterMode;
+      onChange: (value: ChipFilterMode) => void;
     }
   | {
       id: 'ignored';
-      value: boolean;
-      onChange: (value: boolean) => void;
+      value: ChipFilterMode;
+      onChange: (value: ChipFilterMode) => void;
     }
   | {
       id: 'duration';

@@ -144,51 +144,51 @@ function VideoListFilterChips({ filters }: VideoListFilterChipsProps) {
       continue;
     }
 
-    if (filter.id === 'protected' && filter.value) {
+    if (filter.id === 'protected' && filter.value !== 'off') {
       chips.push(
         <Chip
           key="protected"
           icon={<ShieldIcon size={14} />}
-          label="Protected only"
+          label={filter.value === 'only' ? 'Only: Protected' : 'Hide: Protected'}
           size="small"
-          onDelete={() => filter.onChange(false)}
-          onClick={() => filter.onChange(false)}
+          onDelete={() => filter.onChange('off')}
+          onClick={() => filter.onChange('off')}
           deleteIcon={<CloseIcon data-testid="CancelIcon" size={14} />}
-          color="primary"
+          color={filter.value === 'only' ? 'primary' : 'warning'}
           variant="outlined"
         />
       );
       continue;
     }
 
-    if (filter.id === 'missing' && filter.value) {
+    if (filter.id === 'missing' && filter.value !== 'off') {
       chips.push(
         <Chip
           key="missing"
           icon={<CloudOffIcon size={14} />}
-          label="Missing only"
+          label={filter.value === 'only' ? 'Only: Missing' : 'Hide: Missing'}
           size="small"
-          onDelete={() => filter.onChange(false)}
-          onClick={() => filter.onChange(false)}
+          onDelete={() => filter.onChange('off')}
+          onClick={() => filter.onChange('off')}
           deleteIcon={<CloseIcon data-testid="CancelIcon" size={14} />}
-          color="primary"
+          color={filter.value === 'only' ? 'primary' : 'warning'}
           variant="outlined"
         />
       );
       continue;
     }
 
-    if (filter.id === 'ignored' && filter.value) {
+    if (filter.id === 'ignored' && filter.value !== 'off') {
       chips.push(
         <Chip
           key="ignored"
           icon={<BlockIcon size={14} />}
-          label="Ignored only"
+          label={filter.value === 'only' ? 'Only: Ignored' : 'Hide: Ignored'}
           size="small"
-          onDelete={() => filter.onChange(false)}
-          onClick={() => filter.onChange(false)}
+          onDelete={() => filter.onChange('off')}
+          onClick={() => filter.onChange('off')}
           deleteIcon={<CloseIcon data-testid="CancelIcon" size={14} />}
-          color="primary"
+          color={filter.value === 'only' ? 'primary' : 'warning'}
           variant="outlined"
         />
       );
@@ -233,9 +233,9 @@ export function countActiveFilters(filters: FilterConfig[]): number {
     else if (filter.id === 'dateRange' && !filter.hidden && (filter.dateFrom !== null || filter.dateTo !== null)) count++;
     else if (filter.id === 'dateRangeString' && !filter.hidden && (filter.dateFrom || filter.dateTo)) count++;
     else if (filter.id === 'maxRating' && filter.value) count++;
-    else if (filter.id === 'protected' && filter.value) count++;
-    else if (filter.id === 'missing' && filter.value) count++;
-    else if (filter.id === 'ignored' && filter.value) count++;
+    else if (filter.id === 'protected' && filter.value !== 'off') count++;
+    else if (filter.id === 'missing' && filter.value !== 'off') count++;
+    else if (filter.id === 'ignored' && filter.value !== 'off') count++;
     else if (filter.id === 'channel' && filter.value) count++;
   }
   return count;
@@ -259,11 +259,11 @@ export function clearAllFilters(filters: FilterConfig[]): void {
     } else if (filter.id === 'maxRating') {
       filter.onChange('');
     } else if (filter.id === 'protected') {
-      filter.onChange(false);
+      filter.onChange('off');
     } else if (filter.id === 'missing') {
-      filter.onChange(false);
+      filter.onChange('off');
     } else if (filter.id === 'ignored') {
-      filter.onChange(false);
+      filter.onChange('off');
     } else if (filter.id === 'channel') {
       filter.onChange('');
     }

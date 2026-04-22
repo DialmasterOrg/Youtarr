@@ -915,9 +915,9 @@ describe('server routes - channels', () => {
         null, // default maxDuration
         null, // default dateFrom
         null, // default dateTo
-        false, // default protectedFilter
-        false, // default missingFilter
-        false // default ignoredFilter
+        'off', // default protectedFilter
+        'off', // default missingFilter
+        'off' // default ignoredFilter
       );
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
@@ -984,9 +984,9 @@ describe('server routes - channels', () => {
         null, // default maxDuration
         null, // default dateFrom
         null, // default dateTo
-        false, // default protectedFilter
-        false, // default missingFilter
-        false // default ignoredFilter
+        'off', // default protectedFilter
+        'off', // default missingFilter
+        'off' // default ignoredFilter
       );
       expect(res.statusCode).toBe(200);
     });
@@ -1026,9 +1026,9 @@ describe('server routes - channels', () => {
         null, // default maxDuration
         null, // default dateFrom
         null, // default dateTo
-        false, // default protectedFilter
-        false, // default missingFilter
-        false // default ignoredFilter
+        'off', // default protectedFilter
+        'off', // default missingFilter
+        'off' // default ignoredFilter
       );
       expect(res.statusCode).toBe(200);
     });
@@ -1308,8 +1308,8 @@ describe('server routes - videos', () => {
         sortBy: 'added',
         sortOrder: 'desc',
         channelFilter: '',
-        protectedFilter: false,
-        missingFilter: false,
+        protectedFilter: 'off',
+        missingFilter: 'off',
       });
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
@@ -1357,8 +1357,8 @@ describe('server routes - videos', () => {
         sortBy: 'title',
         sortOrder: 'asc',
         channelFilter: 'channel123',
-        protectedFilter: false,
-        missingFilter: false,
+        protectedFilter: 'off',
+        missingFilter: 'off',
       });
       expect(res.statusCode).toBe(200);
     });

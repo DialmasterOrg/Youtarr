@@ -710,9 +710,10 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
     const maxDuration = (parsedMaxDuration !== null && !isNaN(parsedMaxDuration)) ? parsedMaxDuration : null;
     const dateFrom = req.query.dateFrom || null;
     const dateTo = req.query.dateTo || null;
-    const protectedFilter = req.query.protectedFilter === 'true';
-    const missingFilter = req.query.missingFilter === 'true';
-    const ignoredFilter = req.query.ignoredFilter === 'true';
+    const parseFilterMode = (value) => (value === 'only' || value === 'exclude' ? value : 'off');
+    const protectedFilter = parseFilterMode(req.query.protectedFilter);
+    const missingFilter = parseFilterMode(req.query.missingFilter);
+    const ignoredFilter = parseFilterMode(req.query.ignoredFilter);
     const result = await channelModule.getChannelVideos(channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder, tabType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter);
 
     if (Array.isArray(result)) {

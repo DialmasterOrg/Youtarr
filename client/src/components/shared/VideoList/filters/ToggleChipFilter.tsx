@@ -1,32 +1,45 @@
 import React from 'react';
 import { Chip } from '../../../ui';
+import type { ChipFilterMode } from '../types';
 
 export interface ToggleChipFilterProps {
-  value: boolean;
-  onChange: (value: boolean) => void;
+  value: ChipFilterMode;
+  onChange: (value: ChipFilterMode) => void;
   icon: React.ReactNode;
   inactiveLabel: string;
-  activeLabel: string;
+  onlyLabel: string;
+  excludeLabel: string;
   size?: 'small' | 'medium';
 }
+
+const NEXT_MODE: Record<ChipFilterMode, ChipFilterMode> = {
+  off: 'only',
+  only: 'exclude',
+  exclude: 'off',
+};
 
 function ToggleChipFilter({
   value,
   onChange,
   icon,
   inactiveLabel,
-  activeLabel,
+  onlyLabel,
+  excludeLabel,
   size = 'small',
 }: ToggleChipFilterProps) {
+  const label = value === 'only' ? onlyLabel : value === 'exclude' ? excludeLabel : inactiveLabel;
+  const color = value === 'only' ? 'primary' : value === 'exclude' ? 'warning' : 'default';
+  const variant = value === 'off' ? 'outlined' : 'filled';
+
   return (
     <Chip
       icon={icon}
-      label={value ? activeLabel : inactiveLabel}
-      variant={value ? 'filled' : 'outlined'}
-      color={value ? 'primary' : 'default'}
+      label={label}
+      variant={variant}
+      color={color}
       size={size}
-      onClick={() => onChange(!value)}
-      onDelete={value ? () => onChange(false) : undefined}
+      onClick={() => onChange(NEXT_MODE[value])}
+      onDelete={value === 'off' ? undefined : () => onChange('off')}
       style={{ cursor: 'pointer' }}
     />
   );

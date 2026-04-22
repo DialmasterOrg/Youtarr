@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { EnabledChannel, PaginatedVideosResponse, VideoData } from '../../../types/VideoData';
+import { ChipFilterMode } from '../../shared/VideoList/types';
 
 export interface UseVideosDataParams {
   token: string | null;
@@ -13,8 +14,8 @@ export interface UseVideosDataParams {
   dateFrom: string;
   dateTo: string;
   maxRatingFilter: string;
-  protectedFilter: boolean;
-  missingFilter: boolean;
+  protectedFilter: ChipFilterMode;
+  missingFilter: ChipFilterMode;
   useInfiniteScroll: boolean;
 }
 
@@ -81,8 +82,8 @@ export function useVideosData({
     if (dateFrom) params.append('dateFrom', dateFrom);
     if (dateTo) params.append('dateTo', dateTo);
     if (maxRatingFilter) params.append('maxRating', maxRatingFilter);
-    if (protectedFilter) params.append('protectedFilter', 'true');
-    if (missingFilter) params.append('missingFilter', 'true');
+    if (protectedFilter !== 'off') params.append('protectedFilter', protectedFilter);
+    if (missingFilter !== 'off') params.append('missingFilter', missingFilter);
 
     try {
       const response = await axios.get<PaginatedVideosResponse>(

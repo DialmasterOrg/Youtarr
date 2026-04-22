@@ -13,6 +13,7 @@ export type { VideoSelectionState, UseVideoSelectionOptions } from './hooks/useV
 
 export type {
   VideoListViewMode,
+  ChipFilterMode,
   FilterConfig,
   SortConfig,
   SortOption,

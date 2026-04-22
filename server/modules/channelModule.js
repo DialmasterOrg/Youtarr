@@ -1446,6 +1446,40 @@ class ChannelModule {
   }
 
   /**
+   * Apply tri-state status filters (protected / missing / ignored).
+   * Mode is 'off' (no filtering), 'only' (keep matches), or 'exclude' (drop matches).
+   * Missing is "previously downloaded, file no longer present".
+   * @param {Array} videos - Array of enriched videos
+   * @param {string} protectedMode - 'off' | 'only' | 'exclude'
+   * @param {string} missingMode - 'off' | 'only' | 'exclude'
+   * @param {string} ignoredMode - 'off' | 'only' | 'exclude'
+   * @returns {Array} - Filtered array of videos
+   */
+  _applyStatusFilters(videos, protectedMode, missingMode, ignoredMode) {
+    let filtered = videos;
+
+    if (protectedMode === 'only') {
+      filtered = filtered.filter(video => video.protected);
+    } else if (protectedMode === 'exclude') {
+      filtered = filtered.filter(video => !video.protected);
+    }
+
+    if (missingMode === 'only') {
+      filtered = filtered.filter(video => video.added === true && video.removed === true);
+    } else if (missingMode === 'exclude') {
+      filtered = filtered.filter(video => !(video.added === true && video.removed === true));
+    }
+
+    if (ignoredMode === 'only') {
+      filtered = filtered.filter(video => video.ignored === true);
+    } else if (ignoredMode === 'exclude') {
+      filtered = filtered.filter(video => video.ignored !== true);
+    }
+
+    return filtered;
+  }
+
+  /**
    * Fetch the newest videos for a channel from the database with search and sort.
    * Returns videos with download status.
    * @param {string} channelId - Channel ID to fetch videos for
@@ -1463,7 +1497,7 @@ class ChannelModule {
    * @param {string|null} dateTo - Filter videos to this date (ISO string, default null)
    * @returns {Promise<Array>} - Array of video objects with download status
    */
-  async fetchNewestVideosFromDb(channelId, limit = 50, offset = 0, excludeDownloaded = false, searchQuery = '', sortBy = 'date', sortOrder = 'desc', checkFiles = false, mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = false, missingFilter = false, ignoredFilter = false) {
+  async fetchNewestVideosFromDb(channelId, limit = 50, offset = 0, excludeDownloaded = false, searchQuery = '', sortBy = 'date', sortOrder = 'desc', checkFiles = false, mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = 'off', missingFilter = 'off', ignoredFilter = 'off') {
     // First get all videos to enrich with download status
     const allChannelVideos = await ChannelVideo.findAll({
       where: {
@@ -1494,20 +1528,7 @@ class ChannelModule {
     // Apply duration and date filters
     filteredVideos = this._applyDurationAndDateFilters(filteredVideos, minDuration, maxDuration, dateFrom, dateTo);
 
-    // Apply protected filter
-    if (protectedFilter) {
-      filteredVideos = filteredVideos.filter(video => video.protected);
-    }
-
-    // Apply missing filter (previously downloaded, file no longer present)
-    if (missingFilter) {
-      filteredVideos = filteredVideos.filter(video => video.added === true && video.removed === true);
-    }
-
-    // Apply ignored filter
-    if (ignoredFilter) {
-      filteredVideos = filteredVideos.filter(video => video.ignored === true);
-    }
+    filteredVideos = this._applyStatusFilters(filteredVideos, protectedFilter, missingFilter, ignoredFilter);
 
     // Apply sorting
     filteredVideos.sort((a, b) => {
@@ -1585,9 +1606,9 @@ class ChannelModule {
    * @param {string|null} dateTo - Filter videos to this date (ISO string, default null)
    * @returns {Promise<Object>} - Object with totalCount and oldestVideoDate
    */
-  async getChannelVideoStats(channelId, excludeDownloaded = false, searchQuery = '', mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = false, missingFilter = false, ignoredFilter = false) {
+  async getChannelVideoStats(channelId, excludeDownloaded = false, searchQuery = '', mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = 'off', missingFilter = 'off', ignoredFilter = 'off') {
     // If we have search or filter, we need to get all videos
-    if (excludeDownloaded || searchQuery || minDuration !== null || maxDuration !== null || dateFrom || dateTo || protectedFilter || missingFilter || ignoredFilter) {
+    if (excludeDownloaded || searchQuery || minDuration !== null || maxDuration !== null || dateFrom || dateTo || protectedFilter !== 'off' || missingFilter !== 'off' || ignoredFilter !== 'off') {
       // Need to filter by download status and/or search
       const allChannelVideos = await ChannelVideo.findAll({
         where: {
@@ -1617,20 +1638,7 @@ class ChannelModule {
       // Apply duration and date filters
       filteredVideos = this._applyDurationAndDateFilters(filteredVideos, minDuration, maxDuration, dateFrom, dateTo);
 
-      // Apply protected filter
-      if (protectedFilter) {
-        filteredVideos = filteredVideos.filter(video => video.protected);
-      }
-
-      // Apply missing filter (previously downloaded, file no longer present)
-      if (missingFilter) {
-        filteredVideos = filteredVideos.filter(video => video.added === true && video.removed === true);
-      }
-
-      // Apply ignored filter
-      if (ignoredFilter) {
-        filteredVideos = filteredVideos.filter(video => video.ignored === true);
-      }
+      filteredVideos = this._applyStatusFilters(filteredVideos, protectedFilter, missingFilter, ignoredFilter);
 
       return {
         totalCount: filteredVideos.length,
@@ -2256,7 +2264,7 @@ class ChannelModule {
    * @param {string|null} dateTo - Filter videos to this date (ISO string, default null)
    * @returns {Promise<Object>} - Response object with videos and metadata
    */
-  async getChannelVideos(channelId, page = 1, pageSize = 50, hideDownloaded = false, searchQuery = '', sortBy = 'date', sortOrder = 'desc', tabType = TAB_TYPES.VIDEOS, minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = false, missingFilter = false, ignoredFilter = false) {
+  async getChannelVideos(channelId, page = 1, pageSize = 50, hideDownloaded = false, searchQuery = '', sortBy = 'date', sortOrder = 'desc', tabType = TAB_TYPES.VIDEOS, minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = 'off', missingFilter = 'off', ignoredFilter = 'off') {
     const channel = await Channel.findOne({
       where: { channel_id: channelId },
     });

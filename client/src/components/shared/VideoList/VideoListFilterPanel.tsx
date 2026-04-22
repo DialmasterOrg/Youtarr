@@ -20,17 +20,20 @@ const TOGGLE_CHIP_CONFIG = {
   protected: {
     icon: <ShieldIcon size={16} />,
     inactiveLabel: 'Protected',
-    activeLabel: 'Protected Only',
+    onlyLabel: 'Only: Protected',
+    excludeLabel: 'Hide: Protected',
   },
   missing: {
     icon: <CloudOffIcon size={16} />,
     inactiveLabel: 'Missing',
-    activeLabel: 'Missing Only',
+    onlyLabel: 'Only: Missing',
+    excludeLabel: 'Hide: Missing',
   },
   ignored: {
     icon: <BlockIcon size={16} />,
     inactiveLabel: 'Ignored',
-    activeLabel: 'Ignored Only',
+    onlyLabel: 'Only: Ignored',
+    excludeLabel: 'Hide: Ignored',
   },
 } as const;
 
@@ -104,7 +107,8 @@ function renderFilter(filter: FilterConfig, compact: boolean): React.ReactNode {
         onChange={filter.onChange}
         icon={config.icon}
         inactiveLabel={config.inactiveLabel}
-        activeLabel={config.activeLabel}
+        onlyLabel={config.onlyLabel}
+        excludeLabel={config.excludeLabel}
       />
     );
   }

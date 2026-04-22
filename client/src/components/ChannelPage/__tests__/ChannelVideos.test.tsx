@@ -1016,9 +1016,9 @@ describe('ChannelVideos Component', () => {
         maxRating: '',
         append: false,
         resetKey: expect.any(String),
-        protectedFilter: false,
-        missingFilter: false,
-        ignoredFilter: false,
+        protectedFilter: 'off',
+        missingFilter: 'off',
+        ignoredFilter: 'off',
       }));
     });
 
