@@ -264,6 +264,7 @@ function VideosTable({
                             alignItems: 'center',
                             justifyContent: 'center',
                             zIndex: 1,
+                            pointerEvents: 'none',
                           }}
                         >
                           <ErrorOutlineIcon

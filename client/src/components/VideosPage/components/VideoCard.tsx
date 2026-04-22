@@ -317,59 +317,61 @@ function VideoCard({
         </Box>
 
         <Box
-          className="flex flex-wrap items-center gap-1"
+          className="flex items-start gap-1"
           style={{ marginTop: 'auto' }}
         >
-          {!video.removed && (video.filePath || video.audioFilePath) && (
-            <DownloadFormatIndicator
-              filePath={video.filePath}
-              audioFilePath={video.audioFilePath}
-              fileSize={video.fileSize}
-              audioFileSize={video.audioFileSize}
-            />
-          )}
-          {mediaTypeInfo && (
-            <Chip
+          <Box className="flex flex-wrap items-center gap-1" style={{ flex: 1, minWidth: 0 }}>
+            {!video.removed && (video.filePath || video.audioFilePath) && (
+              <DownloadFormatIndicator
+                filePath={video.filePath}
+                audioFilePath={video.audioFilePath}
+                fileSize={video.fileSize}
+                audioFileSize={video.audioFileSize}
+              />
+            )}
+            {mediaTypeInfo && (
+              <Chip
+                size="small"
+                icon={mediaTypeInfo.icon}
+                label={mediaTypeInfo.label}
+                color={mediaTypeInfo.color}
+                variant="outlined"
+                style={SHARED_STATUS_CHIP_SMALL_STYLE}
+              />
+            )}
+            <RatingBadge
+              rating={video.normalized_rating}
+              ratingSource={video.rating_source}
+              showNA
               size="small"
-              icon={mediaTypeInfo.icon}
-              label={mediaTypeInfo.label}
-              color={mediaTypeInfo.color}
-              variant="outlined"
-              style={SHARED_STATUS_CHIP_SMALL_STYLE}
             />
-          )}
-          <RatingBadge
-            rating={video.normalized_rating}
-            ratingSource={video.rating_source}
-            showNA
-            size="small"
-          />
-          {video.removed ? (
-            <Tooltip title="Video file not found on disk" enterTouchDelay={0}>
-              <Chip
-                size="small"
-                icon={<ErrorOutlineIcon size={12} />}
-                label="Missing"
-                color="error"
-                variant="filled"
-                style={chipStyle.missing}
-              />
-            </Tooltip>
-          ) : video.fileSize ? (
-            <Tooltip title="Video file exists on disk" enterTouchDelay={0}>
-              <Chip
-                size="small"
-                icon={<CheckCircleIcon size={12} />}
-                label="Available"
-                color="success"
-                variant="filled"
-                style={chipStyle.available}
-              />
-            </Tooltip>
-          ) : null}
+            {video.removed ? (
+              <Tooltip title="Video file not found on disk" enterTouchDelay={0}>
+                <Chip
+                  size="small"
+                  icon={<ErrorOutlineIcon size={12} />}
+                  label="Missing"
+                  color="error"
+                  variant="filled"
+                  style={chipStyle.missing}
+                />
+              </Tooltip>
+            ) : video.fileSize ? (
+              <Tooltip title="Video file exists on disk" enterTouchDelay={0}>
+                <Chip
+                  size="small"
+                  icon={<CheckCircleIcon size={12} />}
+                  label="Available"
+                  color="success"
+                  variant="filled"
+                  style={chipStyle.available}
+                />
+              </Tooltip>
+            ) : null}
+          </Box>
           {!video.removed && (
             <Tooltip title="Delete video from disk">
-              <span style={{ marginLeft: 'auto' }}>
+              <span style={{ flexShrink: 0 }}>
                 <IconButton
                   color="error"
                   size="small"
