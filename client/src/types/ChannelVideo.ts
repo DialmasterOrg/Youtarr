@@ -28,4 +28,5 @@ export interface ChannelVideo {
   normalized_rating?: string | null;
   rating_source?: string | null;
   protected?: boolean;
+  timeCreated?: string | null;
 }

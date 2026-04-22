@@ -232,6 +232,18 @@ describe('VideoModal', () => {
     expect(screen.getByRole('button', { name: /delete/i })).toBeInTheDocument();
   });
 
+  test('hides delete button when the video is not downloaded', () => {
+    renderModal({ video: neverDownloadedVideo });
+    expect(screen.queryByRole('button', { name: /delete video/i })).not.toBeInTheDocument();
+  });
+
+  test('hides delete button when the video file is missing', () => {
+    renderModal({
+      video: { ...baseVideo, status: 'missing' },
+    });
+    expect(screen.queryByRole('button', { name: /delete video/i })).not.toBeInTheDocument();
+  });
+
   test('renders ignore button for non-downloaded videos', () => {
     renderModal({ video: neverDownloadedVideo });
     expect(screen.getByRole('button', { name: /ignore/i })).toBeInTheDocument();

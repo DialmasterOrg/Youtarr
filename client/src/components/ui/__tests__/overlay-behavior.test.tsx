@@ -50,6 +50,36 @@ describe('overlay positioning guards', () => {
     expect(screen.getByRole('menu').style.maxHeight).toBe('468px');
   });
 
+  test('menu with tall content stays anchored below the button when a PaperProps maxHeight is set', async () => {
+    anchor = document.createElement('button');
+    document.body.appendChild(anchor);
+    anchor.getBoundingClientRect = jest.fn(() =>
+      mockAnchorRect({ top: 200, left: 40, right: 160, bottom: 236, width: 120, height: 36 })
+    );
+
+    render(
+      <Menu
+        open
+        anchorEl={anchor}
+        onClose={jest.fn()}
+        PaperProps={{ style: { maxHeight: 400, width: 300 } }}
+      >
+        <PlainMenuItem>First</PlainMenuItem>
+      </Menu>
+    );
+
+    const menu = screen.getByRole('menu');
+    // Simulate tall natural content (hundreds of channels) that exceeds the viewport.
+    // Without capping the measured height at PaperProps.maxHeight, the placement
+    // math's clamp would pin the menu to viewportTop.
+    Object.defineProperty(menu, 'scrollHeight', { configurable: true, value: 1500 });
+    fireEvent.scroll(window);
+
+    await waitFor(() => {
+      expect(Number.parseFloat(menu.style.top)).toBeGreaterThan(200);
+    });
+  });
+
   test('menu flips above the anchor before it would render off screen', async () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 800 });
 
