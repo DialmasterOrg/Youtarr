@@ -49,3 +49,48 @@ export function formatDateTime(dateStr: string | null | undefined): string | nul
   }
   return `${date.toLocaleDateString()} ${date.toLocaleTimeString(undefined, DATE_TIME_OPTIONS)}`;
 }
+
+const ADDED_DATE_SHORT_OPTIONS: Intl.DateTimeFormatOptions = {
+  month: 'short',
+  day: 'numeric',
+  year: '2-digit',
+};
+
+const ADDED_TIME_OPTIONS: Intl.DateTimeFormatOptions = {
+  hour: '2-digit',
+  minute: '2-digit',
+};
+
+export function formatAddedDateParts(
+  iso: string | null | undefined
+): { date: string; time: string } | null {
+  if (!iso) {
+    return null;
+  }
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return {
+    date: date.toLocaleDateString(),
+    time: date.toLocaleTimeString([], ADDED_TIME_OPTIONS),
+  };
+}
+
+export function formatAddedDateTime(iso: string | null | undefined): string {
+  const parts = formatAddedDateParts(iso);
+  return parts ? `${parts.date} ${parts.time}` : '';
+}
+
+export function formatAddedDate(iso: string | null | undefined): string {
+  if (!iso) {
+    return '';
+  }
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+  const day = date.toLocaleDateString(undefined, ADDED_DATE_SHORT_OPTIONS);
+  const time = date.toLocaleTimeString([], ADDED_TIME_OPTIONS);
+  return `${day} ${time}`;
+}

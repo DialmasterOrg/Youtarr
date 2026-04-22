@@ -9,7 +9,7 @@ import ProtectionShieldButton from '../shared/ProtectionShieldButton';
 import ThumbnailClickOverlay from '../shared/ThumbnailClickOverlay';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
-import { decodeHtml } from '../../utils/formatters';
+import { decodeHtml, formatAddedDateParts } from '../../utils/formatters';
 import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo, getStatusChipVariant, getStatusChipStyle } from '../../utils/videoStatus';
 import StillLiveDot from './StillLiveDot';
 import RatingBadge from '../shared/RatingBadge';
@@ -84,7 +84,7 @@ function VideoTableView({
               />
             </th>
             <th style={{ width: 140, padding: '8px 4px', textAlign: 'left' }}>Thumbnail</th>
-            <th style={{ cursor: 'pointer', width: '36%', padding: '8px 4px', textAlign: 'left' }} onClick={() => onSortChange('title')}>
+            <th style={{ cursor: 'pointer', width: '30%', padding: '8px 4px', textAlign: 'left' }} onClick={() => onSortChange('title')}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 Title
                 {sortBy === 'title' && (
@@ -100,6 +100,7 @@ function VideoTableView({
                 )}
               </div>
             </th>
+            <th style={{ whiteSpace: 'nowrap', width: 120, padding: '8px 4px', textAlign: 'left' }}>Downloaded</th>
             <th style={{ cursor: 'pointer', whiteSpace: 'nowrap', width: 90, padding: '8px 4px', textAlign: 'left' }} onClick={() => onSortChange('duration')}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 Duration
@@ -269,7 +270,7 @@ function VideoTableView({
                     )}
                   </div>
                 </td>
-                <td style={{ width: '36%', padding: '8px 4px' }}>
+                <td style={{ width: '30%', padding: '8px 4px' }}>
                   <Typography
                     variant="body2"
                     onClick={onVideoClick ? (e: React.MouseEvent) => {
@@ -294,6 +295,25 @@ function VideoTableView({
                   {video.media_type === 'short' || !video.publishedAt
                     ? 'N/A'
                     : new Date(video.publishedAt).toLocaleDateString()}
+                </td>
+                <td style={{ whiteSpace: 'nowrap', padding: '8px 4px' }}>
+                  {(() => {
+                    const parts =
+                      video.added && video.timeCreated
+                        ? formatAddedDateParts(video.timeCreated)
+                        : null;
+                    if (!parts) {
+                      return '-';
+                    }
+                    return (
+                      <>
+                        <div>{parts.date}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)' }}>
+                          {parts.time}
+                        </div>
+                      </>
+                    );
+                  })()}
                 </td>
                 <td style={{ whiteSpace: 'nowrap', padding: '8px 4px' }}>
                   {video.media_type === 'short' ? 'N/A' : formatDuration(video.duration)}

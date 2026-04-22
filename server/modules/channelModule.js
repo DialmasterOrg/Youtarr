@@ -1316,7 +1316,8 @@ class ChannelModule {
         'audioFileSize',
         'normalized_rating',
         'rating_source',
-        'protected'
+        'protected',
+        'last_downloaded_at'
       ]
     });
 
@@ -1334,7 +1335,8 @@ class ChannelModule {
         audioFilePath: v.audioFilePath,
         audioFileSize: v.audioFileSize,
         normalized_rating: v.normalized_rating,
-        protected: v.protected
+        protected: v.protected,
+        last_downloaded_at: v.last_downloaded_at
       });
 
       // Collect videos that need file checking (only if checkFiles is true and have any file path)
@@ -1381,6 +1383,9 @@ class ChannelModule {
         }
         plainVideoObject.id = status.id;
         plainVideoObject.protected = status.protected;
+        plainVideoObject.timeCreated = status.last_downloaded_at
+          ? new Date(status.last_downloaded_at).toISOString()
+          : null;
       } else {
         // Video never downloaded
         plainVideoObject.added = false;

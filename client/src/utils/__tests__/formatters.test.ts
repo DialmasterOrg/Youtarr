@@ -1,4 +1,11 @@
-import { parseDate, formatDate, formatDateTime } from '../formatters';
+import {
+  parseDate,
+  formatDate,
+  formatDateTime,
+  formatAddedDate,
+  formatAddedDateTime,
+  formatAddedDateParts,
+} from '../formatters';
 
 describe('formatters date helpers', () => {
   describe('parseDate', () => {
@@ -76,6 +83,65 @@ describe('formatters date helpers', () => {
     test('YYYYMMDD input produces 12:00 AM time (midnight local)', () => {
       const result = formatDateTime('20260420');
       expect(result).toBe('4/20/2026 12:00 AM');
+    });
+  });
+
+  describe('formatAddedDateTime', () => {
+    test('returns empty string for null input', () => {
+      expect(formatAddedDateTime(null)).toBe('');
+    });
+
+    test('returns empty string for undefined input', () => {
+      expect(formatAddedDateTime(undefined)).toBe('');
+    });
+
+    test('returns empty string for unparseable input', () => {
+      expect(formatAddedDateTime('garbage')).toBe('');
+    });
+
+    test('formats ISO string with long date and 12-hour time', () => {
+      const local = new Date(2026, 3, 20, 16, 20, 0);
+      const result = formatAddedDateTime(local.toISOString());
+      expect(result).toMatch(/^\d{1,2}\/\d{1,2}\/\d{4} \d{2}:\d{2} (AM|PM)$/);
+    });
+  });
+
+  describe('formatAddedDateParts', () => {
+    test('returns null for null input', () => {
+      expect(formatAddedDateParts(null)).toBeNull();
+    });
+
+    test('returns null for undefined input', () => {
+      expect(formatAddedDateParts(undefined)).toBeNull();
+    });
+
+    test('returns null for unparseable input', () => {
+      expect(formatAddedDateParts('garbage')).toBeNull();
+    });
+
+    test('returns separate date and time strings', () => {
+      const local = new Date(2026, 3, 20, 16, 20, 0);
+      const parts = formatAddedDateParts(local.toISOString());
+      expect(parts).not.toBeNull();
+      expect(parts!.date).toMatch(/^\d{1,2}\/\d{1,2}\/\d{4}$/);
+      expect(parts!.time).toMatch(/^\d{2}:\d{2} (AM|PM)$/);
+    });
+  });
+
+  describe('formatAddedDate', () => {
+    test('returns empty string for null input', () => {
+      expect(formatAddedDate(null)).toBe('');
+    });
+
+    test('returns empty string for unparseable input', () => {
+      expect(formatAddedDate('garbage')).toBe('');
+    });
+
+    test('formats ISO string with short date and 12-hour time', () => {
+      const local = new Date(2026, 3, 20, 16, 20, 0);
+      const result = formatAddedDate(local.toISOString());
+      // e.g. "Apr 20, 26 04:20 PM"
+      expect(result).toMatch(/^[A-Za-z]{3} \d{1,2}, \d{2} \d{2}:\d{2} (AM|PM)$/);
     });
   });
 });

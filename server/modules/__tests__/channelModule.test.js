@@ -956,7 +956,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2', 'video3']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at']
         });
         expect(result[0].added).toBe(true);
         expect(result[0].removed).toBe(false);
@@ -985,7 +985,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at']
         });
         expect(result[0].added).toBe(true);
         expect(result[0].removed).toBe(false);
@@ -1042,7 +1042,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at']
         });
         expect(result[0].added).toBe(true);
         expect(result[0].removed).toBe(false);
@@ -1071,7 +1071,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2', 'video3']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at']
         });
 
         // Video1 - not downloaded
@@ -1099,7 +1099,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: []
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at']
         });
         expect(result).toEqual([]);
       });
@@ -1179,6 +1179,29 @@ describe('ChannelModule', () => {
 
         expect(result[0].fileSize).toBe(5000);
       });
+
+      test('should expose timeCreated from last_downloaded_at for downloaded videos and omit it for others', async () => {
+        const Video = require('../../models/video');
+
+        const videos = [
+          { youtube_id: 'video1', toJSON: () => ({ youtube_id: 'video1' }) },
+          { youtube_id: 'video2', toJSON: () => ({ youtube_id: 'video2' }) },
+          { youtube_id: 'video3', toJSON: () => ({ youtube_id: 'video3' }) }
+        ];
+
+        const downloadedAt = new Date('2026-04-20T16:20:00Z');
+
+        Video.findAll = jest.fn().mockResolvedValue([
+          { id: 1, youtubeId: 'video1', removed: false, last_downloaded_at: downloadedAt },
+          { id: 2, youtubeId: 'video2', removed: false, last_downloaded_at: null }
+        ]);
+
+        const result = await ChannelModule.enrichVideosWithDownloadStatus(videos);
+
+        expect(result[0].timeCreated).toBe(downloadedAt.toISOString());
+        expect(result[1].timeCreated).toBeNull();
+        expect(result[2].timeCreated).toBeUndefined();
+      });
     });
 
     describe('fetchNewestVideosFromDb', () => {
@@ -1205,7 +1228,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at']
         });
         expect(result[0].added).toBe(true);
         expect(result[0].removed).toBe(false);

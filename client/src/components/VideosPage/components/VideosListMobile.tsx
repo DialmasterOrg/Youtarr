@@ -8,7 +8,7 @@ import {
   Video as VideoLibraryIcon,
 } from 'lucide-react';
 import { formatDuration, formatYTDate } from '../../../utils';
-import { formatFileSize } from '../../../utils/formatters';
+import { formatAddedDate, formatFileSize } from '../../../utils/formatters';
 import { VideoData, EnabledChannel } from '../../../types/VideoData';
 import RatingBadge from '../../shared/RatingBadge';
 import DownloadFormatIndicator from '../../shared/DownloadFormatIndicator';
@@ -81,21 +81,6 @@ function getEnabledChannelId(
   }
   const match = enabledChannels.find((ch) => ch.uploader === channelName);
   return match ? match.channel_id : null;
-}
-
-function formatAddedDate(iso: string): string {
-  try {
-    const date = new Date(iso);
-    const day = date.toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      year: '2-digit',
-    });
-    const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    return `${day} ${time}`;
-  } catch {
-    return '';
-  }
 }
 
 function VideosListMobile({
