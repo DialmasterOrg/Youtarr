@@ -10,6 +10,7 @@ import {
   DialogTitle,
   Divider,
   Grid,
+  LinearProgress,
   List,
   Menu,
   MenuItem,
@@ -53,7 +54,12 @@ import {
 } from '../utils/channelHelpers';
 import HelpDialog from './ChannelManager/HelpDialog';
 import PendingSaveBanner from './ChannelManager/components/PendingSaveBanner';
-import PageControls from './shared/PageControls';
+import {
+  INFINITE_SCROLL_FETCH_SIZE,
+  VideoListPaginationBar,
+  useListPageSize,
+  type PageSize,
+} from './shared/VideoList';
 import ActiveImportBanner from './ChannelManager/components/ActiveImportBanner';
 import { useActiveImport } from '../hooks/useActiveImport';
 
@@ -94,25 +100,25 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   const [folderMenuAnchor, setFolderMenuAnchor] = useState<null | HTMLElement>(null);
   const [mobileActionsAnchorEl, setMobileActionsAnchorEl] = useState<null | HTMLElement>(null);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
-  const channelsContainerRef = useRef<HTMLDivElement | null>(null);
 
-  const pageSize = useMemo(() => {
-    if (isMobile) {
-      return 16;
-    }
-    return viewMode === 'grid' ? 27 : 20;
-  }, [isMobile, viewMode]);
+  const [pageSize, setPageSize] = useListPageSize('youtarr.channelManager.pageSize');
+  const effectivePageSize = useInfiniteScroll ? INFINITE_SCROLL_FETCH_SIZE : pageSize;
+
+  const handlePageSizeChange = useCallback((newSize: PageSize) => {
+    setPageSize(newSize);
+    setPage(1);
+  }, [setPageSize]);
 
   // Senior State Architect: Memoize params to kill identity-based re-fetch loops
   const channelListParams = useMemo(() => ({
     token,
     page,
-    pageSize,
+    pageSize: effectivePageSize,
     searchTerm: filterValue,
     sortOrder,
     subFolder: selectedSubFolder || undefined,
     append: useInfiniteScroll,
-  }), [token, page, pageSize, filterValue, sortOrder, selectedSubFolder, useInfiniteScroll]);
+  }), [token, page, effectivePageSize, filterValue, sortOrder, selectedSubFolder, useInfiniteScroll]);
 
   const {
     channels: serverChannels,
@@ -211,13 +217,6 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   useEffect(() => {
     setPage(1);
   }, [useInfiniteScroll]);
-
-  // Scroll to channels container when page changes (from pagination controls)
-  useEffect(() => {
-    if (page > 1 && channelsContainerRef.current && !useInfiniteScroll) {
-      channelsContainerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }, [page, useInfiniteScroll]);
 
   useEffect(() => {
     if (!useInfiniteScroll) {
@@ -602,10 +601,22 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
           </div>
           )}
 
-          <Divider style={{ marginBottom: 8 }} />
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }} ref={channelsContainerRef}>
-            {loading ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <VideoListPaginationBar
+              placement="top"
+              hasContent={displayChannels.length > 0}
+              useInfiniteScroll={useInfiniteScroll}
+              page={page}
+              totalPages={pageCount}
+              onPageChange={setPage}
+              pageSize={pageSize}
+              onPageSizeChange={handlePageSizeChange}
+              isMobile={isMobile}
+            />
+            {loading && displayChannels.length > 0 && !useInfiniteScroll && (
+              <LinearProgress height={2} style={{ marginBottom: 4 }} />
+            )}
+            {loading && displayChannels.length === 0 ? (
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', paddingTop: 24, paddingBottom: 24 }}>
                 <CircularProgress />
               </div>
@@ -692,19 +703,22 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
                 )}
               </>
             ) : (
-              <div
-                style={{
-                  paddingTop: isMobile ? 4 : 8,
-                  paddingBottom: 0,
-                }}
-              >
-                <PageControls
+              <>
+                {loading && displayChannels.length > 0 && (
+                  <LinearProgress height={2} style={{ marginTop: 4 }} />
+                )}
+                <VideoListPaginationBar
+                  placement="bottom"
+                  hasContent={displayChannels.length > 0}
+                  useInfiniteScroll={useInfiniteScroll}
                   page={page}
                   totalPages={pageCount}
                   onPageChange={setPage}
-                  compact={isMobile}
+                  pageSize={pageSize}
+                  onPageSizeChange={handlePageSizeChange}
+                  isMobile={isMobile}
                 />
-              </div>
+              </>
             )}
           </div>
         </div>

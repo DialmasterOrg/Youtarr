@@ -30,6 +30,8 @@ function ToggleChipFilter({
   const label = value === 'only' ? onlyLabel : value === 'exclude' ? excludeLabel : inactiveLabel;
   const color = value === 'only' ? 'primary' : value === 'exclude' ? 'warning' : 'default';
   const variant = value === 'off' ? 'outlined' : 'filled';
+  const ariaPressed: boolean | 'mixed' =
+    value === 'off' ? false : value === 'only' ? true : 'mixed';
 
   return (
     <Chip
@@ -41,6 +43,7 @@ function ToggleChipFilter({
       onClick={() => onChange(NEXT_MODE[value])}
       onDelete={value === 'off' ? undefined : () => onChange('off')}
       style={{ cursor: 'pointer' }}
+      aria-pressed={ariaPressed}
     />
   );
 }

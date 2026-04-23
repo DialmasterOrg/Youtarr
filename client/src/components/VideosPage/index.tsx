@@ -17,6 +17,7 @@ import VideosTable from './components/VideosTable';
 import VideosListMobile from './components/VideosListMobile';
 import { useVideosData } from './hooks/useVideosData';
 import {
+  INFINITE_SCROLL_FETCH_SIZE,
   VideoListContainer,
   VideoListPaginationBar,
   useListPageSize,
@@ -99,6 +100,7 @@ function VideosPage({ token }: VideosPageProps) {
   } = useVideoProtection(token);
 
   const [videosPerPage, setVideosPerPage] = useListPageSize('youtarr.videosPage.pageSize');
+  const effectivePageSize = useInfiniteScroll ? INFINITE_SCROLL_FETCH_SIZE : videosPerPage;
 
   const handlePageSizeChange = (newSize: PageSize) => {
     setVideosPerPage(newSize);
@@ -118,7 +120,7 @@ function VideosPage({ token }: VideosPageProps) {
   } = useVideosData({
     token,
     page,
-    videosPerPage,
+    videosPerPage: effectivePageSize,
     orderBy,
     sortOrder,
     search: listState.search,
@@ -241,6 +243,22 @@ function VideosPage({ token }: VideosPageProps) {
   );
 
   const selection = useVideoSelection<number>({ actions: selectionActions });
+
+  // Clear selection when a filter changes so bulk actions can't fire on IDs that
+  // are no longer in the filtered dataset. Sort and pagination are deliberately
+  // excluded: they do not remove videos from the selection's eligible set.
+  useEffect(() => {
+    selection.clear();
+  }, [
+    listState.search,
+    channelFilter,
+    dateFrom,
+    dateTo,
+    maxRatingFilter,
+    protectedFilter,
+    missingFilter,
+    selection.clear,
+  ]);
 
   const handleToggleSelect = (videoId: number) => {
     selection.toggle(videoId);
