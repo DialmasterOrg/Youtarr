@@ -300,7 +300,7 @@ describe('ChannelVideos Component', () => {
       videos: [],
       totalCount: 0,
       oldestVideoDate: null,
-      videoFailed: false,
+      error: null,
       autoDownloadsEnabled: false,
       loading: false,
       refetch: mockRefetchVideos,
@@ -343,7 +343,6 @@ describe('ChannelVideos Component', () => {
         videos: [],
         totalCount: 0,
         oldestVideoDate: null,
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: true,
         refetch: mockRefetchVideos,
@@ -359,7 +358,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -380,7 +378,7 @@ describe('ChannelVideos Component', () => {
         videos: [],
         totalCount: 0,
         oldestVideoDate: null,
-        videoFailed: true,
+        error: new Error('Network error'),
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -388,6 +386,28 @@ describe('ChannelVideos Component', () => {
 
       renderChannelVideos();
       expect(screen.getByText('Failed to fetch channel videos. Please try again later.')).toBeInTheDocument();
+    });
+
+    test('shows filtered empty message when an active filter returns no videos', () => {
+      // No thrown error, just zero results. ChannelVideos must not treat
+      // this as an error; the shared VideoListEmptyState surfaces the
+      // filter-aware empty copy when the user has an active filter.
+      useChannelVideos.mockReturnValue({
+        videos: [],
+        totalCount: 0,
+        oldestVideoDate: null,
+        error: null,
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+      expect(
+        screen.queryByText('Failed to fetch channel videos. Please try again later.')
+      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.getByTestId('video-list-empty-state')).toBeInTheDocument();
     });
   });
 
@@ -495,7 +515,6 @@ describe('ChannelVideos Component', () => {
         videos: [],
         totalCount: 0,
         oldestVideoDate: null,
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: true,
         refetch: mockRefetchVideos,
@@ -524,7 +543,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -542,7 +560,6 @@ describe('ChannelVideos Component', () => {
         videos: [mockVideos[0]],
         totalCount: 1,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -575,7 +592,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -606,7 +622,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -637,7 +652,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -683,7 +697,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -726,7 +739,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 32,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -745,7 +757,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -761,7 +772,6 @@ describe('ChannelVideos Component', () => {
         videos: [],
         totalCount: 0,
         oldestVideoDate: null,
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -777,7 +787,6 @@ describe('ChannelVideos Component', () => {
         videos: [],
         totalCount: 0,
         oldestVideoDate: null,
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: true,
         refetch: mockRefetchVideos,
@@ -793,7 +802,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -813,7 +821,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -835,7 +842,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 48, // enough for multiple pages at size 16
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -880,7 +886,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -900,7 +905,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 32,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -1003,7 +1007,7 @@ describe('ChannelVideos Component', () => {
         channelId: 'UC123456',
         page: 1,
         pageSize: 16, // Desktop default
-        hideDownloaded: false,
+        downloadedFilter: 'off',
         searchQuery: '',
         sortBy: 'date',
         sortOrder: 'desc',
@@ -1030,7 +1034,7 @@ describe('ChannelVideos Component', () => {
         'UC123456',
         1, // page
         16, // pageSize
-        false, // hideDownloaded
+        'off', // downloadedFilter
         null, // tabType - null until tabs are loaded
         mockToken
       );
@@ -1146,7 +1150,6 @@ describe('ChannelVideos Component', () => {
         videos: [],
         totalCount: 0,
         oldestVideoDate: null,
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: true,
         refetch: mockRefetchVideos,
@@ -1179,7 +1182,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -1216,7 +1218,6 @@ describe('ChannelVideos Component', () => {
         videos: [mockVideos[0]],
         totalCount: 1,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -1245,7 +1246,6 @@ describe('ChannelVideos Component', () => {
         videos: [ignoredVideo],
         totalCount: 1,
         oldestVideoDate: '2023-01-04',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -1271,7 +1271,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -1301,7 +1300,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -1324,7 +1322,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -1352,7 +1349,6 @@ describe('ChannelVideos Component', () => {
         videos: [mockVideos[0]],
         totalCount: 1,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -1381,7 +1377,6 @@ describe('ChannelVideos Component', () => {
         videos: [mockVideos[0]],
         totalCount: 1,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -1402,7 +1397,6 @@ describe('ChannelVideos Component', () => {
         videos: [mockVideos[0]],
         totalCount: 1,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -1426,7 +1420,6 @@ describe('ChannelVideos Component', () => {
         ],
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,

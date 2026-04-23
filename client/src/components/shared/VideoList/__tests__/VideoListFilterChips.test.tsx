@@ -99,6 +99,7 @@ describe('VideoListFilterChips', () => {
     const onProtected = jest.fn();
     const onMissing = jest.fn();
     const onIgnored = jest.fn();
+    const onDownloaded = jest.fn();
 
     const filters: FilterConfig[] = [
       {
@@ -121,6 +122,7 @@ describe('VideoListFilterChips', () => {
       { id: 'protected', value: 'only', onChange: onProtected },
       { id: 'missing', value: 'exclude', onChange: onMissing },
       { id: 'ignored', value: 'only', onChange: onIgnored },
+      { id: 'downloaded', value: 'exclude', onChange: onDownloaded },
     ];
 
     clearAllFilters(filters);
@@ -132,6 +134,7 @@ describe('VideoListFilterChips', () => {
     expect(onProtected).toHaveBeenCalledWith('off');
     expect(onMissing).toHaveBeenCalledWith('off');
     expect(onIgnored).toHaveBeenCalledWith('off');
+    expect(onDownloaded).toHaveBeenCalledWith('off');
   });
 
   test('renders missing and ignored chips in only mode', () => {
@@ -183,5 +186,49 @@ describe('VideoListFilterChips', () => {
     ];
     expect(countActiveFilters(filters)).toBe(0);
     expect(hasActiveFilters(filters)).toBe(false);
+  });
+
+  test('renders downloaded chip with "Only: Downloaded" label in only mode', () => {
+    const filters: FilterConfig[] = [
+      { id: 'downloaded', value: 'only', onChange: jest.fn() },
+    ];
+    renderWithProviders(<VideoListFilterChips filters={filters} />);
+    expect(screen.getByText(/Only: Downloaded/i)).toBeInTheDocument();
+  });
+
+  test('renders downloaded chip with "Hide: Downloaded" label in exclude mode', () => {
+    const filters: FilterConfig[] = [
+      { id: 'downloaded', value: 'exclude', onChange: jest.fn() },
+    ];
+    renderWithProviders(<VideoListFilterChips filters={filters} />);
+    expect(screen.getByText(/Hide: Downloaded/i)).toBeInTheDocument();
+  });
+
+  test('downloaded chip is not rendered when value is off', () => {
+    const filters: FilterConfig[] = [
+      { id: 'downloaded', value: 'off', onChange: jest.fn() },
+    ];
+    renderWithProviders(<VideoListFilterChips filters={filters} />);
+    expect(screen.queryByText(/Downloaded/i)).not.toBeInTheDocument();
+  });
+
+  test('clicking the delete icon on the downloaded chip clears it', async () => {
+    const user = userEvent.setup();
+    const onDownloadedChange = jest.fn();
+    const filters: FilterConfig[] = [
+      { id: 'downloaded', value: 'exclude', onChange: onDownloadedChange },
+    ];
+    renderWithProviders(<VideoListFilterChips filters={filters} />);
+    const deleteIcon = screen.getByTestId('CancelIcon');
+    await user.click(deleteIcon);
+    expect(onDownloadedChange).toHaveBeenCalledWith('off');
+  });
+
+  test('countActiveFilters counts downloaded when active', () => {
+    const filters: FilterConfig[] = [
+      { id: 'downloaded', value: 'only', onChange: jest.fn() },
+    ];
+    expect(countActiveFilters(filters)).toBe(1);
+    expect(hasActiveFilters(filters)).toBe(true);
   });
 });

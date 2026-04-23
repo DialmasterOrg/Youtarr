@@ -1,12 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Button, Divider, Typography } from '../../ui';
-import {
-  Close as CloseIcon,
-  Shield as ShieldIcon,
-  CloudOff as CloudOffIcon,
-  Block as BlockIcon,
-} from '../../../lib/icons';
+import { Close as CloseIcon } from '../../../lib/icons';
 import { FilterConfig } from './types';
 import DurationFilter from './filters/DurationFilter';
 import DateRangeFilter from './filters/DateRangeFilter';
@@ -15,33 +10,11 @@ import MaxRatingFilter from './filters/MaxRatingFilter';
 import ToggleChipFilter from './filters/ToggleChipFilter';
 import ChannelFilter from './filters/ChannelFilter';
 import { hasActiveFilters, clearAllFilters } from './VideoListFilterChips';
-
-const TOGGLE_CHIP_CONFIG = {
-  protected: {
-    icon: <ShieldIcon size={16} />,
-    inactiveLabel: 'Protected',
-    onlyLabel: 'Only: Protected',
-    excludeLabel: 'Hide: Protected',
-  },
-  missing: {
-    icon: <CloudOffIcon size={16} />,
-    inactiveLabel: 'Missing',
-    onlyLabel: 'Only: Missing',
-    excludeLabel: 'Hide: Missing',
-  },
-  ignored: {
-    icon: <BlockIcon size={16} />,
-    inactiveLabel: 'Ignored',
-    onlyLabel: 'Only: Ignored',
-    excludeLabel: 'Hide: Ignored',
-  },
-} as const;
-
-const STATUS_FILTER_IDS = ['protected', 'missing', 'ignored'] as const;
-
-function isStatusFilter(filter: FilterConfig): boolean {
-  return (STATUS_FILTER_IDS as readonly string[]).includes(filter.id);
-}
+import {
+  STATUS_CHIP_DESCRIPTORS,
+  isStatusChipId,
+  isStatusFilter,
+} from './statusFilters';
 
 export interface VideoListFilterPanelProps {
   filters: FilterConfig[];
@@ -99,16 +72,16 @@ function renderFilter(filter: FilterConfig, compact: boolean): React.ReactNode {
   if (filter.id === 'maxRating') {
     return <MaxRatingFilter value={filter.value} onChange={filter.onChange} compact={compact} />;
   }
-  if (filter.id === 'protected' || filter.id === 'missing' || filter.id === 'ignored') {
-    const config = TOGGLE_CHIP_CONFIG[filter.id];
+  if (isStatusFilter(filter)) {
+    const { Icon, noun } = STATUS_CHIP_DESCRIPTORS[filter.id];
     return (
       <ToggleChipFilter
         value={filter.value}
         onChange={filter.onChange}
-        icon={config.icon}
-        inactiveLabel={config.inactiveLabel}
-        onlyLabel={config.onlyLabel}
-        excludeLabel={config.excludeLabel}
+        icon={<Icon size={16} />}
+        inactiveLabel={noun}
+        onlyLabel={`Only: ${noun}`}
+        excludeLabel={`Hide: ${noun}`}
       />
     );
   }
@@ -121,6 +94,7 @@ function renderFilter(filter: FilterConfig, compact: boolean): React.ReactNode {
 }
 
 function filterLabel(filter: FilterConfig): string {
+  if (isStatusChipId(filter.id)) return 'Status';
   switch (filter.id) {
     case 'duration':
       return 'Duration';
@@ -129,28 +103,32 @@ function filterLabel(filter: FilterConfig): string {
       return 'Published Date';
     case 'maxRating':
       return 'Max Rating';
-    case 'protected':
-    case 'missing':
-    case 'ignored':
-      return 'Status';
     case 'channel':
       return 'Channel';
   }
+  return '';
 }
 
 function InlinePanel({ filters, open, customFilters }: { filters: FilterConfig[]; open: boolean; customFilters?: React.ReactNode }) {
   if (!open) return null;
+  const nonStatusFilters = filters.filter((f) => !isStatusFilter(f));
+  const statusFiltersList = filters.filter(isStatusFilter);
   return (
     <div
       data-testid="video-list-filter-panel-inline"
+      // Scoped override: make the floating label notch blend with the panel
+      // bg instead of punching through with --card. The matching
+      // --input-border / input bg / min-height rules live in index.css,
+      // keyed off this data-testid -- keep the two in sync if renaming.
       style={{
         padding: '12px 16px',
         borderBottom: '1px solid var(--border)',
         backgroundColor: 'var(--muted)',
+        ['--field-label-background' as string]: 'var(--muted)',
       }}
     >
-      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
-        {filters.map((filter, index) => (
+      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        {nonStatusFilters.map((filter, index) => (
           <div key={filter.id + '-' + index}>{renderFilter(filter, false)}</div>
         ))}
         {customFilters}
@@ -163,6 +141,26 @@ function InlinePanel({ filters, open, customFilters }: { filters: FilterConfig[]
           >
             Clear All
           </Button>
+        )}
+        {statusFiltersList.length > 0 && (
+          <div
+            key="status-group"
+            data-testid="video-list-filter-status-group-inline"
+            // flexBasis 100% forces this item to a row by itself so toggling
+            // a chip's label length can't shuffle the non-status filters on
+            // the row above.
+            style={{
+              flexBasis: '100%',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 8,
+              alignItems: 'center',
+            }}
+          >
+            {statusFiltersList.map((sf) => (
+              <React.Fragment key={sf.id}>{renderFilter(sf, false)}</React.Fragment>
+            ))}
+          </div>
         )}
       </div>
     </div>

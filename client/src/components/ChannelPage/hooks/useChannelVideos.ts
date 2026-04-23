@@ -6,7 +6,7 @@ interface UseChannelVideosParams {
   channelId: string | undefined;
   page: number;
   pageSize: number;
-  hideDownloaded: boolean;
+  downloadedFilter: ChipFilterMode;
   searchQuery: string;
   sortBy: string;
   sortOrder: string;
@@ -28,7 +28,6 @@ interface UseChannelVideosResult {
   videos: ChannelVideo[];
   totalCount: number;
   oldestVideoDate: string | null;
-  videoFailed: boolean;
   loading: boolean;
   error: Error | null;
   autoDownloadsEnabled: boolean;
@@ -40,7 +39,7 @@ export function useChannelVideos({
   channelId,
   page,
   pageSize,
-  hideDownloaded,
+  downloadedFilter,
   searchQuery,
   sortBy,
   sortOrder,
@@ -60,7 +59,6 @@ export function useChannelVideos({
   const [videos, setVideos] = useState<ChannelVideo[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [oldestVideoDate, setOldestVideoDate] = useState<string | null>(null);
-  const [videoFailed, setVideoFailed] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
   const [autoDownloadsEnabled, setAutoDownloadsEnabled] = useState<boolean>(false);
@@ -77,12 +75,15 @@ export function useChannelVideos({
       const queryParams = new URLSearchParams({
         page: page.toString(),
         pageSize: pageSize.toString(),
-        hideDownloaded: hideDownloaded.toString(),
         searchQuery: searchQuery,
         sortBy: sortBy,
         sortOrder: sortOrder,
         tabType: tabType,
       });
+
+      if (downloadedFilter && downloadedFilter !== 'off') {
+        queryParams.set('downloadedFilter', downloadedFilter);
+      }
 
       if (maxRating) {
         queryParams.set('maxRating', maxRating);
@@ -96,10 +97,15 @@ export function useChannelVideos({
         queryParams.append('maxDuration', (maxDuration * 60).toString());
       }
       if (dateFrom) {
-        queryParams.append('dateFrom', dateFrom.toISOString().split('T')[0]);
+        // dateFrom is a local-midnight Date for the picked day; send as a full ISO
+        // timestamp so the server compares against publishedAt in the viewer's
+        // timezone, not UTC (avoids off-by-one near midnight).
+        queryParams.append('dateFrom', dateFrom.toISOString());
       }
       if (dateTo) {
-        queryParams.append('dateTo', dateTo.toISOString().split('T')[0]);
+        const endOfDay = new Date(dateTo);
+        endOfDay.setHours(23, 59, 59, 999);
+        queryParams.append('dateTo', endOfDay.toISOString());
       }
       if (protectedFilter && protectedFilter !== 'off') {
         queryParams.append('protectedFilter', protectedFilter);
@@ -146,18 +152,23 @@ export function useChannelVideos({
       } else if (isReset) {
         setVideos([]);
       }
-      setVideoFailed(data.videoFail || false);
       setTotalCount(data.totalCount || 0);
       setOldestVideoDate(data.oldestVideoDate || null);
       setAutoDownloadsEnabled(data.autoDownloadsEnabled || false);
       setAvailableTabs(data.availableTabs || []);
+      // Server sets fetchError when the upstream YouTube fetch failed and
+      // no cached fallback was available. Surface it as an error so the UI
+      // distinguishes "fetch failed" from "filter matched nothing".
+      if (data.fetchError) {
+        setError(new Error('Failed to fetch channel videos'));
+      }
     } catch (err) {
       console.error('Error fetching channel videos:', err);
       setError(err instanceof Error ? err : new Error('Unknown error'));
     } finally {
       setLoading(false);
     }
-  }, [channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder, tabType, maxRating, token, append, resetKey, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter]);
+  }, [channelId, page, pageSize, downloadedFilter, searchQuery, sortBy, sortOrder, tabType, maxRating, token, append, resetKey, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter]);
 
   useEffect(() => {
     fetchVideos();
@@ -167,7 +178,6 @@ export function useChannelVideos({
     videos,
     totalCount,
     oldestVideoDate,
-    videoFailed,
     loading,
     error,
     autoDownloadsEnabled,

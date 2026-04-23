@@ -25,7 +25,6 @@ const meta: Meta<typeof ChannelVideos> = {
             videos: [],
             totalCount: 0,
             oldestVideoDate: null,
-            videoFail: false,
             autoDownloadsEnabled: false,
             availableTabs: ['videos'],
           })

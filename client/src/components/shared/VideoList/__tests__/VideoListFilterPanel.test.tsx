@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import VideoListFilterPanel from '../VideoListFilterPanel';
@@ -80,6 +80,51 @@ describe('VideoListFilterPanel - inline variant', () => {
     );
     expect(screen.getByTestId('custom-filter')).toBeInTheDocument();
   });
+
+  test('renders a consistent label above each labelled filter in the inline panel', () => {
+    const filters: FilterConfig[] = [
+      {
+        id: 'duration',
+        min: null,
+        max: null,
+        inputMin: null,
+        inputMax: null,
+        onMinChange: jest.fn(),
+        onMaxChange: jest.fn(),
+      },
+      {
+        id: 'dateRangeString',
+        dateFrom: '',
+        dateTo: '',
+        onFromChange: jest.fn(),
+        onToChange: jest.fn(),
+      },
+      { id: 'maxRating', value: '', onChange: jest.fn() },
+    ];
+    renderWithProviders(
+      <VideoListFilterPanel filters={filters} variant="inline" open />
+    );
+    const panel = screen.getByTestId('video-list-filter-panel-inline');
+    expect(within(panel).getByText('Duration (min)')).toBeInTheDocument();
+    expect(within(panel).getByText('Published')).toBeInTheDocument();
+    expect(within(panel).getByText('Max Rating')).toBeInTheDocument();
+  });
+
+  test('groups all status chips (including downloaded) into a single inline flex container', () => {
+    const filters: FilterConfig[] = [
+      ...statusFilters(),
+      { id: 'downloaded', value: 'off', onChange: jest.fn() },
+    ];
+    renderWithProviders(
+      <VideoListFilterPanel filters={filters} variant="inline" open />
+    );
+    const group = screen.getByTestId('video-list-filter-status-group-inline');
+    for (const name of ['Protected', 'Missing', 'Ignored', 'Downloaded']) {
+      expect(
+        within(group).getByRole('button', { name: new RegExp(`^${name}$`, 'i') })
+      ).toBeInTheDocument();
+    }
+  });
 });
 
 describe('VideoListFilterPanel - drawer variant', () => {
@@ -119,6 +164,31 @@ describe('VideoListFilterPanel - drawer variant', () => {
       />
     );
     expect(screen.getAllByText('Status')).toHaveLength(1);
+  });
+
+  test('groups the downloaded filter under the same Status heading as other status chips', () => {
+    const filters: FilterConfig[] = [
+      ...statusFilters(),
+      { id: 'downloaded', value: 'off', onChange: jest.fn() },
+    ];
+    renderWithProviders(
+      <VideoListFilterPanel filters={filters} variant="drawer" open onClose={jest.fn()} />
+    );
+    expect(screen.getAllByText('Status')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /^Downloaded$/i })).toBeInTheDocument();
+  });
+
+  test('cycles the downloaded chip through off → only → exclude when clicked in the panel', async () => {
+    const user = userEvent.setup();
+    const onDownloaded = jest.fn();
+    const filters: FilterConfig[] = [
+      { id: 'downloaded', value: 'off', onChange: onDownloaded },
+    ];
+    renderWithProviders(
+      <VideoListFilterPanel filters={filters} variant="inline" open />
+    );
+    await user.click(screen.getByRole('button', { name: /^Downloaded$/i }));
+    expect(onDownloaded).toHaveBeenCalledWith('only');
   });
 
   test('close button calls onClose', async () => {

@@ -8,8 +8,6 @@ import {
   Tabs,
   Tab,
   Button,
-  FormControlLabel,
-  Switch,
   LinearProgress,
   Tooltip,
   Chip,
@@ -133,11 +131,10 @@ function ChannelVideos({
   const [selectedTab, setSelectedTab] = useState<string | null>(null);
   const [availableTabs, setAvailableTabs] = useState<string[]>([]);
   const [tabsLoading, setTabsLoading] = useState<boolean>(true);
-  const [tabAutoDownloadStatus, setTabAutoDownloadStatus] = useState<Record<string, boolean>>({});
 
   const [pageSize, setPageSize] = useListPageSize('youtarr.channelVideos.pageSize');
   const [page, setPage] = useState(1);
-  const [hideDownloaded, setHideDownloaded] = useState(false);
+  const [downloadedFilter, setDownloadedFilter] = useState<ChipFilterMode>('off');
   const [mobileTooltip, setMobileTooltip] = useState<string | null>(null);
   const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
   const [hoveredVideo, setHoveredVideo] = useState<string | null>(null);
@@ -236,27 +233,25 @@ function ChannelVideos({
     return () => clearInterval(pollInterval);
   }, [channelId, token, tabsLoading]);
 
-  useEffect(() => {
-    if (!channelAutoDownloadTabs) {
-      setTabAutoDownloadStatus({});
-      return;
-    }
+  // Derived: map each tab to whether auto-download is enabled for its media
+  // type. Derived (not state) so that saving new settings via the dialog --
+  // which updates channelAutoDownloadTabs upstream -- always refreshes the
+  // indicator dots without requiring a reload.
+  const tabAutoDownloadStatus = useMemo<Record<string, boolean>>(() => {
     const mediaTypeMap: Record<string, string> = {
       videos: 'video',
       shorts: 'short',
       streams: 'livestream',
     };
-    const enabledTabs = channelAutoDownloadTabs.split(',').map((t) => t.trim());
-    setTabAutoDownloadStatus((prevStatus) => {
-      const newStatus: Record<string, boolean> = { ...prevStatus };
-      availableTabs.forEach((tabType) => {
-        if (!(tabType in newStatus)) {
-          const mediaType = mediaTypeMap[tabType];
-          newStatus[tabType] = mediaType ? enabledTabs.includes(mediaType) : false;
-        }
-      });
-      return newStatus;
+    const enabled = channelAutoDownloadTabs
+      ? channelAutoDownloadTabs.split(',').map((t) => t.trim())
+      : [];
+    const status: Record<string, boolean> = {};
+    availableTabs.forEach((tabType) => {
+      const mediaType = mediaTypeMap[tabType];
+      status[tabType] = mediaType ? enabled.includes(mediaType) : false;
     });
+    return status;
   }, [channelAutoDownloadTabs, availableTabs]);
 
   const { config } = useConfig(token);
@@ -271,7 +266,7 @@ function ChannelVideos({
       [
         channelId || '',
         selectedTab || '',
-        hideDownloaded,
+        downloadedFilter,
         listState.search,
         sortBy,
         sortOrder,
@@ -288,7 +283,7 @@ function ChannelVideos({
     [
       channelId,
       selectedTab,
-      hideDownloaded,
+      downloadedFilter,
       listState.search,
       sortBy,
       sortOrder,
@@ -308,7 +303,7 @@ function ChannelVideos({
     videos,
     totalCount,
     oldestVideoDate,
-    videoFailed,
+    error: fetchError,
     availableTabs: availableTabsFromVideos,
     loading: videosLoading,
     refetch: refetchVideos,
@@ -316,7 +311,7 @@ function ChannelVideos({
     channelId,
     page,
     pageSize: effectivePageSize,
-    hideDownloaded,
+    downloadedFilter,
     searchQuery: listState.search,
     sortBy,
     sortOrder,
@@ -356,7 +351,7 @@ function ChannelVideos({
   useEffect(() => {
     setLocalIgnoreStatus({});
     setLocalProtectedStatus({});
-  }, [page, selectedTab, hideDownloaded, listState.search, sortBy, sortOrder, filters]);
+  }, [page, selectedTab, downloadedFilter, listState.search, sortBy, sortOrder, filters]);
 
   useEffect(() => {
     setPage(1);
@@ -370,7 +365,7 @@ function ChannelVideos({
     protectedFilter,
     missingFilter,
     ignoredFilter,
-    hideDownloaded,
+    downloadedFilter,
     sortBy,
     sortOrder,
     selectedTab,
@@ -391,7 +386,7 @@ function ChannelVideos({
     loading: localFetchingAllVideos,
     error: fetchAllError,
     clearError: clearFetchAllError,
-  } = useRefreshChannelVideos(channelId, page, effectivePageSize, hideDownloaded, selectedTab, token);
+  } = useRefreshChannelVideos(channelId, page, effectivePageSize, downloadedFilter, selectedTab, token);
 
   const {
     isFetching: backgroundFetching,
@@ -465,7 +460,7 @@ function ChannelVideos({
     protectedFilter,
     missingFilter,
     ignoredFilter,
-    hideDownloaded,
+    downloadedFilter,
     clearAllSelections,
   ]);
 
@@ -674,26 +669,7 @@ function ChannelVideos({
     setProtectedFilter('off');
     setMissingFilter('off');
     setIgnoredFilter('off');
-  };
-
-  const handleAutoDownloadChange = async (enabled: boolean) => {
-    if (!channelId || !token || !selectedTab) return;
-    const currentTab = selectedTab;
-    try {
-      const response = await fetch(
-        `/api/channels/${channelId}/tabs/${currentTab}/auto-download`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'x-access-token': token },
-          body: JSON.stringify({ enabled }),
-        }
-      );
-      if (!response.ok) throw new Error('Failed to update auto download setting');
-      setTabAutoDownloadStatus((prev) => ({ ...prev, [currentTab]: enabled }));
-    } catch (error) {
-      console.error('Error updating auto download setting:', error);
-      setErrorMessage('Failed to update auto download setting');
-    }
+    setDownloadedFilter('off');
   };
 
   const handlePageChange = (value: number) => setPage(value);
@@ -800,6 +776,7 @@ function ChannelVideos({
       { id: 'protected', value: protectedFilter, onChange: setProtectedFilter },
       { id: 'missing', value: missingFilter, onChange: setMissingFilter },
       { id: 'ignored', value: ignoredFilter, onChange: setIgnoredFilter },
+      { id: 'downloaded', value: downloadedFilter, onChange: setDownloadedFilter },
     ];
     return configs;
   }, [
@@ -817,6 +794,7 @@ function ChannelVideos({
     protectedFilter,
     missingFilter,
     ignoredFilter,
+    downloadedFilter,
     selectedTab,
   ]);
 
@@ -1080,32 +1058,6 @@ function ChannelVideos({
     </div>
   );
 
-  const toolbarExtras = (
-    <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-      <FormControlLabel
-        control={
-          <Switch
-            checked={hideDownloaded}
-            onChange={(e) => setHideDownloaded(e.target.checked)}
-            size="small"
-          />
-        }
-        label="Hide Downloaded"
-      />
-      <FormControlLabel
-        control={
-          <Switch
-            checked={isTabAutoDownloadEnabled(selectedTab || 'videos')}
-            onChange={(e) => handleAutoDownloadChange(e.target.checked)}
-            size="small"
-            aria-label="Enable Channel Downloads"
-          />
-        }
-        label="Auto-download"
-      />
-    </div>
-  );
-
   const tabsSlot =
     availableTabs.length > 0 ? (
       <div
@@ -1225,11 +1177,10 @@ function ChannelVideos({
     </div>
   ) : null;
 
-  const itemCount = videoFailed && videos.length === 0 ? 0 : paginatedVideos.length;
-  const customEmptyMessage =
-    videoFailed && videos.length === 0
-      ? 'Failed to fetch channel videos. Please try again later.'
-      : undefined;
+  const itemCount = paginatedVideos.length;
+  const fetchErrorMessage = fetchError
+    ? 'Failed to fetch channel videos. Please try again later.'
+    : undefined;
 
   const availableViewModes: VideoListViewMode[] = isMobile
     ? ['grid', 'list']
@@ -1255,13 +1206,12 @@ function ChannelVideos({
           filters={filterConfigs}
           searchPlaceholder="Search videos..."
           headerSlot={headerSlot}
-          toolbarExtras={toolbarExtras}
           toolbarRightActions={toolbarRightActions}
           tabsSlot={tabsSlot}
           itemCount={itemCount}
           isLoading={videosLoading}
-          isError={Boolean(customEmptyMessage)}
-          errorMessage={customEmptyMessage}
+          isError={Boolean(fetchError)}
+          errorMessage={fetchErrorMessage}
           renderContent={renderContent}
           loadingSkeleton={videosLoading && videos.length === 0 ? loadingSkeleton : undefined}
           pagination={paginationNode}
