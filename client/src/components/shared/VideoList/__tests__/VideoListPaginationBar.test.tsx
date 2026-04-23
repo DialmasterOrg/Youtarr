@@ -32,13 +32,13 @@ describe('VideoListPaginationBar', () => {
     expect(screen.getByRole('navigation', { name: /pagination/i })).toBeInTheDocument();
   });
 
-  test('hides page controls in infinite scroll mode but still shows the page size selector', () => {
+  test('renders nothing in infinite scroll mode', () => {
     renderWithProviders(
       <VideoListPaginationBar {...defaultProps()} useInfiniteScroll />
     );
+    expect(screen.queryByTestId('video-list-pagination-bar-bottom')).not.toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: /pagination/i })).not.toBeInTheDocument();
-    expect(screen.getByText('Per page:')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '16' })).toBeInTheDocument();
+    expect(screen.queryByText('Per page:')).not.toBeInTheDocument();
   });
 
   test('hides page controls when only one page exists but still shows the selector', () => {

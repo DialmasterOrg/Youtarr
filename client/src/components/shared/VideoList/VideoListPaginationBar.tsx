@@ -29,13 +29,14 @@ function VideoListPaginationBar({
   allowedPageSizes = ALLOWED_PAGE_SIZES,
 }: VideoListPaginationBarProps) {
   if (!hasContent) return null;
+  if (useInfiniteScroll) return null;
 
   const borderStyle =
     placement === 'top'
       ? { borderBottom: '1px solid var(--border)' }
       : { borderTop: '1px solid var(--border)' };
 
-  const showPageControls = !useInfiniteScroll && totalPages > 1;
+  const showPageControls = totalPages > 1;
 
   return (
     <div

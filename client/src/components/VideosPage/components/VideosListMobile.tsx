@@ -3,7 +3,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { Box, Typography, Chip, Checkbox, Stack } from '../../ui';
 import { AlertCircle as ErrorOutlineIcon } from 'lucide-react';
 import { formatDuration, formatYTDate } from '../../../utils';
-import { formatAddedDate, formatFileSize } from '../../../utils/formatters';
+import { formatAddedDateTime, formatFileSize } from '../../../utils/formatters';
 import { getMediaTypeInfo } from '../../../utils/videoStatus';
 import { getEnabledChannelId } from '../../../utils/enabledChannels';
 import { VideoData, EnabledChannel } from '../../../types/VideoData';
@@ -320,7 +320,7 @@ function VideosListMobile({
                 color="text.secondary"
                 style={{ fontSize: '0.65rem', lineHeight: 1.3 }}
               >
-                Downloaded: {formatAddedDate(video.timeCreated)}
+                Downloaded: {formatAddedDateTime(video.timeCreated)}
                 {fileSizeNumber && !(video.filePath || video.audioFilePath)
                   ? ` • ${formatFileSize(fileSizeNumber)}`
                   : ''}

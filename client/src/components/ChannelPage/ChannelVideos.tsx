@@ -41,6 +41,7 @@ import VideoModal from '../shared/VideoModal';
 import { VideoModalData } from '../shared/VideoModal/types';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import {
+  INFINITE_SCROLL_FETCH_SIZE,
   VideoListContainer,
   VideoListPaginationBar,
   useListPageSize,
@@ -263,6 +264,7 @@ function ChannelVideos({
   const defaultResolution = channelVideoQuality || config.preferredResolution || '1080';
   const defaultResolutionSource: 'channel' | 'global' = hasChannelOverride ? 'channel' : 'global';
   const useInfiniteScroll = config.channelVideosHotLoad ?? false;
+  const effectivePageSize = useInfiniteScroll ? INFINITE_SCROLL_FETCH_SIZE : pageSize;
 
   const resetKey = useMemo(
     () =>
@@ -313,7 +315,7 @@ function ChannelVideos({
   } = useChannelVideos({
     channelId,
     page,
-    pageSize,
+    pageSize: effectivePageSize,
     hideDownloaded,
     searchQuery: listState.search,
     sortBy,
@@ -389,7 +391,7 @@ function ChannelVideos({
     loading: localFetchingAllVideos,
     error: fetchAllError,
     clearError: clearFetchAllError,
-  } = useRefreshChannelVideos(channelId, page, pageSize, hideDownloaded, selectedTab, token);
+  } = useRefreshChannelVideos(channelId, page, effectivePageSize, hideDownloaded, selectedTab, token);
 
   const {
     isFetching: backgroundFetching,
@@ -428,7 +430,7 @@ function ChannelVideos({
   }, [videos, localIgnoreStatus, localProtectedStatus]);
 
   const paginatedVideos = videosWithOverrides;
-  const totalPages = Math.ceil(totalCount / pageSize) || 1;
+  const totalPages = Math.ceil(totalCount / effectivePageSize) || 1;
   const hasNextPage = page < totalPages;
 
   const selectionMode: 'download' | 'delete' | null =
@@ -446,6 +448,26 @@ function ChannelVideos({
     setCheckedBoxes([]);
     setSelectedForDeletion([]);
   }, []);
+
+  // Clear selection when a filter changes so bulk actions can't fire on IDs
+  // that are no longer in the filtered dataset. Sort and pagination are
+  // deliberately excluded: they do not remove videos from the selection's
+  // eligible set. Tab changes are handled separately in handleTabChange.
+  useEffect(() => {
+    clearAllSelections();
+  }, [
+    filters.minDuration,
+    filters.maxDuration,
+    filters.dateFrom,
+    filters.dateTo,
+    listState.search,
+    maxRating,
+    protectedFilter,
+    missingFilter,
+    ignoredFilter,
+    hideDownloaded,
+    clearAllSelections,
+  ]);
 
   const handleSelectAll = useCallback(() => {
     if (selectionMode === 'delete') {
@@ -925,7 +947,7 @@ function ChannelVideos({
         Loading and fetching/indexing new videos for this channel tab...
       </Typography>
       <Grid container spacing={2} style={{ marginTop: 16 }}>
-        {[...Array(pageSize)].map((_, index) => (
+        {[...Array(effectivePageSize)].map((_, index) => (
           <Grid item xs={12} sm={6} md={4} lg={3} key={`skeleton-${index}`}>
             <Skeleton variant="rectangular" height={200} />
             <Skeleton variant="text" style={{ marginTop: 8 }} />
@@ -1237,7 +1259,7 @@ function ChannelVideos({
           toolbarRightActions={toolbarRightActions}
           tabsSlot={tabsSlot}
           itemCount={itemCount}
-          isLoading={videosLoading && videos.length === 0}
+          isLoading={videosLoading}
           isError={Boolean(customEmptyMessage)}
           errorMessage={customEmptyMessage}
           renderContent={renderContent}

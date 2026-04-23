@@ -1,4 +1,5 @@
 import React from 'react';
+import { LinearProgress } from '../../ui';
 import VideoListToolbar from './VideoListToolbar';
 import VideoListFilterChips, { countActiveFilters } from './VideoListFilterChips';
 import VideoListFilterPanel from './VideoListFilterPanel';
@@ -63,6 +64,7 @@ function VideoListContainer<IdType extends string | number>({
   renderContent,
   loadingSkeleton,
   customEmptyMessage,
+  paginationMode = 'pages',
   pagination,
   paginationTop,
   infiniteScrollSentinel,
@@ -119,6 +121,15 @@ function VideoListContainer<IdType extends string | number>({
 
       {hasContent && paginationTop}
 
+      {isLoading && hasContent && paginationMode === 'pages' && (
+        <div
+          data-testid="video-list-loading-bar-top"
+          style={{ padding: isMobile ? '0 10px' : '0 16px' }}
+        >
+          <LinearProgress height={2} />
+        </div>
+      )}
+
       <div
         style={{
           padding: isMobile ? 10 : 12,
@@ -144,6 +155,15 @@ function VideoListContainer<IdType extends string | number>({
 
         {infiniteScrollSentinel}
       </div>
+
+      {isLoading && hasContent && paginationMode === 'pages' && (
+        <div
+          data-testid="video-list-loading-bar-bottom"
+          style={{ padding: isMobile ? '0 10px' : '0 16px' }}
+        >
+          <LinearProgress height={2} />
+        </div>
+      )}
 
       {pagination}
 
