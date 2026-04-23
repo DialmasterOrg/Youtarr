@@ -4,12 +4,13 @@ import {
   AccessTime as DurationIcon,
   CalendarToday as CalendarIcon,
   Close as CloseIcon,
-  Shield as ShieldIcon,
-  CloudOff as CloudOffIcon,
-  Block as BlockIcon,
   ListFilter as FilterIcon,
 } from '../../../lib/icons';
 import { FilterConfig } from './types';
+import {
+  STATUS_CHIP_DESCRIPTORS,
+  isStatusFilter,
+} from './statusFilters';
 import { RATING_OPTIONS } from '../../../utils/ratings';
 
 export interface VideoListFilterChipsProps {
@@ -36,7 +37,13 @@ function formatDateRange(from: Date | null, to: Date | null): string {
 
 function formatDateString(value: string): string {
   if (!value) return '';
-  const parsed = new Date(value);
+  // Parse YYYY-MM-DD as a local date. `new Date(value)` treats the string as
+  // UTC midnight, which renders as the previous day in any timezone west of
+  // UTC when formatted with toLocaleDateString.
+  const parts = value.split('-').map(Number);
+  if (parts.length !== 3 || parts.some((p) => Number.isNaN(p))) return value;
+  const [year, month, day] = parts;
+  const parsed = new Date(year, month - 1, day);
   if (Number.isNaN(parsed.getTime())) return value;
   return parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
@@ -50,7 +57,7 @@ function formatDateStringRange(from: string, to: string): string {
 
 function ratingLabel(value: string): string {
   const option = RATING_OPTIONS.find((opt) => opt.value === value);
-  return option ? option.label.split(' — ')[0] : value;
+  return option ? option.shortLabel : value;
 }
 
 function VideoListFilterChips({ filters }: VideoListFilterChipsProps) {
@@ -144,46 +151,14 @@ function VideoListFilterChips({ filters }: VideoListFilterChipsProps) {
       continue;
     }
 
-    if (filter.id === 'protected' && filter.value !== 'off') {
+    if (isStatusFilter(filter)) {
+      if (filter.value === 'off') continue;
+      const { Icon, noun } = STATUS_CHIP_DESCRIPTORS[filter.id];
       chips.push(
         <Chip
-          key="protected"
-          icon={<ShieldIcon size={14} />}
-          label={filter.value === 'only' ? 'Only: Protected' : 'Hide: Protected'}
-          size="small"
-          onDelete={() => filter.onChange('off')}
-          onClick={() => filter.onChange('off')}
-          deleteIcon={<CloseIcon data-testid="CancelIcon" size={14} />}
-          color={filter.value === 'only' ? 'primary' : 'warning'}
-          variant="outlined"
-        />
-      );
-      continue;
-    }
-
-    if (filter.id === 'missing' && filter.value !== 'off') {
-      chips.push(
-        <Chip
-          key="missing"
-          icon={<CloudOffIcon size={14} />}
-          label={filter.value === 'only' ? 'Only: Missing' : 'Hide: Missing'}
-          size="small"
-          onDelete={() => filter.onChange('off')}
-          onClick={() => filter.onChange('off')}
-          deleteIcon={<CloseIcon data-testid="CancelIcon" size={14} />}
-          color={filter.value === 'only' ? 'primary' : 'warning'}
-          variant="outlined"
-        />
-      );
-      continue;
-    }
-
-    if (filter.id === 'ignored' && filter.value !== 'off') {
-      chips.push(
-        <Chip
-          key="ignored"
-          icon={<BlockIcon size={14} />}
-          label={filter.value === 'only' ? 'Only: Ignored' : 'Hide: Ignored'}
+          key={filter.id}
+          icon={<Icon size={14} />}
+          label={filter.value === 'only' ? `Only: ${noun}` : `Hide: ${noun}`}
           size="small"
           onDelete={() => filter.onChange('off')}
           onClick={() => filter.onChange('off')}
@@ -233,9 +208,7 @@ export function countActiveFilters(filters: FilterConfig[]): number {
     else if (filter.id === 'dateRange' && !filter.hidden && (filter.dateFrom !== null || filter.dateTo !== null)) count++;
     else if (filter.id === 'dateRangeString' && !filter.hidden && (filter.dateFrom || filter.dateTo)) count++;
     else if (filter.id === 'maxRating' && filter.value) count++;
-    else if (filter.id === 'protected' && filter.value !== 'off') count++;
-    else if (filter.id === 'missing' && filter.value !== 'off') count++;
-    else if (filter.id === 'ignored' && filter.value !== 'off') count++;
+    else if (isStatusFilter(filter) && filter.value !== 'off') count++;
     else if (filter.id === 'channel' && filter.value) count++;
   }
   return count;
@@ -258,11 +231,7 @@ export function clearAllFilters(filters: FilterConfig[]): void {
       filter.onToChange('');
     } else if (filter.id === 'maxRating') {
       filter.onChange('');
-    } else if (filter.id === 'protected') {
-      filter.onChange('off');
-    } else if (filter.id === 'missing') {
-      filter.onChange('off');
-    } else if (filter.id === 'ignored') {
+    } else if (isStatusFilter(filter)) {
       filter.onChange('off');
     } else if (filter.id === 'channel') {
       filter.onChange('');

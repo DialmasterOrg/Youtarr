@@ -1,5 +1,6 @@
 import React from 'react';
-import { TextField, Typography } from '../../../ui';
+import { FormControl, InputLabel, Typography } from '../../../ui';
+import DatePickerButton from './DatePickerButton';
 
 export interface DateRangeFilterProps {
   dateFrom: Date | null;
@@ -33,36 +34,54 @@ function DateRangeFilter({
   onToChange,
   compact = false,
 }: DateRangeFilterProps) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-      <TextField
-        label={compact ? undefined : 'Published From'}
-        type="date"
-        size="small"
-        value={toInputValue(dateFrom)}
-        onChange={(e) => onFromChange(fromInputValue(e.target.value))}
-        InputLabelProps={compact ? undefined : { shrink: true }}
-        inputProps={{ 'aria-label': 'Published from date' }}
-        variant="outlined"
-        style={{ minWidth: compact ? 0 : 180, flex: compact ? 1 : undefined }}
-      />
-      {compact && (
+  if (compact) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <DatePickerButton
+          value={toInputValue(dateFrom)}
+          onChange={(v) => onFromChange(fromInputValue(v))}
+          placeholder="From"
+          ariaLabel="Published from date"
+          clearAriaLabel="Clear published from date"
+        />
         <Typography variant="body2" color="text.secondary">
           to
         </Typography>
-      )}
-      <TextField
-        label={compact ? undefined : 'Published To'}
-        type="date"
-        size="small"
-        value={toInputValue(dateTo)}
-        onChange={(e) => onToChange(fromInputValue(e.target.value))}
-        InputLabelProps={compact ? undefined : { shrink: true }}
-        inputProps={{ 'aria-label': 'Published to date' }}
-        variant="outlined"
-        style={{ minWidth: compact ? 0 : 180, flex: compact ? 1 : undefined }}
-      />
-    </div>
+        <DatePickerButton
+          value={toInputValue(dateTo)}
+          onChange={(v) => onToChange(fromInputValue(v))}
+          placeholder="To"
+          ariaLabel="Published to date"
+          clearAriaLabel="Clear published to date"
+        />
+      </div>
+    );
+  }
+  return (
+    <FormControl>
+      <InputLabel shrink>Published</InputLabel>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <DatePickerButton
+          value={toInputValue(dateFrom)}
+          onChange={(v) => onFromChange(fromInputValue(v))}
+          placeholder="From"
+          ariaLabel="Published from date"
+          clearAriaLabel="Clear published from date"
+          minWidth={160}
+        />
+        <Typography variant="body2" color="text.secondary">
+          to
+        </Typography>
+        <DatePickerButton
+          value={toInputValue(dateTo)}
+          onChange={(v) => onToChange(fromInputValue(v))}
+          placeholder="To"
+          ariaLabel="Published to date"
+          clearAriaLabel="Clear published to date"
+          minWidth={160}
+        />
+      </div>
+    </FormControl>
   );
 }
 

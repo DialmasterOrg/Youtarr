@@ -12,7 +12,7 @@ export interface MaxRatingFilterProps {
 function MaxRatingFilter({ value, onChange, label = 'Max Rating', compact = false }: MaxRatingFilterProps) {
   return (
     <FormControl
-      style={compact ? { width: '100%' } : { minWidth: 180 }}
+      style={compact ? { width: '100%' } : { minWidth: 110 }}
     >
       {!compact && <InputLabel shrink>{label}</InputLabel>}
       <Select
@@ -24,7 +24,7 @@ function MaxRatingFilter({ value, onChange, label = 'Max Rating', compact = fals
       >
         {RATING_OPTIONS.map((option) => (
           <MenuItem key={option.value} value={option.value}>
-            {option.label}
+            {option.shortLabel}
           </MenuItem>
         ))}
       </Select>

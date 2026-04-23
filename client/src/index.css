@@ -523,3 +523,58 @@ html {
   background-color: transparent;
   padding: 0;
 }
+
+/*
+ * VideoList inline filter panel scoped styles.
+ * The panel root is identified by data-testid="video-list-filter-panel-inline"
+ * (see client/src/components/shared/VideoList/VideoListFilterPanel.tsx).
+ * Both sides key off that testid -- if you rename it, rename it here too.
+ *
+ * Why these rules live here and not inline on the JSX:
+ *   - @supports guards let us upgrade to color-mix when available and fall
+ *     back to var(--border) otherwise (inline style attrs can't do that).
+ *   - input background/min-height target descendant <input> elements, which
+ *     inline style on the panel root can't address.
+ *
+ * The panel sits on --muted. Two problems the defaults don't solve:
+ *   1. TextFields default to bg-transparent, and in several themes (Dark
+ *      Modern, Bold Flat light) --input equals --muted, so bg-input can't
+ *      provide contrast either. Paint number fields with --card which
+ *      always contrasts with --muted across themes.
+ *   2. --input-border often equals --muted hue-for-hue in dark themes,
+ *      leaving the default border invisible. Override it with a foreground
+ *      mix that's theme-agnostic; fall back to --border on older browsers.
+ *
+ * Mobile drawer sits on --card already and doesn't need these overrides.
+ */
+[data-testid="video-list-filter-panel-inline"] {
+  --input-border: var(--border);
+}
+@supports (color: color-mix(in oklab, black, white)) {
+  [data-testid="video-list-filter-panel-inline"] {
+    --input-border: color-mix(in oklab, var(--foreground) 25%, transparent);
+  }
+}
+/*
+ * Applies to any number input inside the inline panel by design, so new
+ * filters that render a number field (e.g. future size/byte-count filters)
+ * inherit the same 36px height as DatePickerButton and the duration inputs.
+ * If a filter needs a different height, override it with a more specific
+ * selector rather than narrowing this one.
+ */
+[data-testid="video-list-filter-panel-inline"] input[type="number"] {
+  background-color: var(--card);
+  min-height: 36px;
+}
+
+/*
+ * Mirror the app's color mode to the native UA, so browser-rendered widgets
+ * (number spinners, native scrollbars) render in the matching light/dark
+ * palette. ThemeEngineContext sets data-theme="light" or "dark" on <html>.
+ */
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+html[data-theme="light"] {
+  color-scheme: light;
+}
