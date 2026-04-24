@@ -1,5 +1,58 @@
 # Changelog
 
+## [v1.67.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.67.0) - 2026-04-24
+
+## [1.67.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.66.4...v1.67.0) (2026-04-24)
+
+
+### Features
+
+* add downloaded filter chip to video lists ([f63432d](https://github.com/DialmasterOrg/Youtarr/commit/f63432de2b78e3ded2a446e0f9c9a6ce439d2cb7))
+* add Missing and Ignored video filters ([9e01949](https://github.com/DialmasterOrg/Youtarr/commit/9e01949c2e1db80577aab3c943c40c5f471eba10))
+* add per-page selector to library and extract shared pagination bar ([551651c](https://github.com/DialmasterOrg/Youtarr/commit/551651c4ef5f3d3f6fb414aa4ca97a0ca42a31ba))
+* let protected/missing/ignored chips filter in either direction ([420a556](https://github.com/DialmasterOrg/Youtarr/commit/420a55668710a51c50e2ecad16e8b27ee84db681))
+* redesign library page with table and grid views ([fdbb30d](https://github.com/DialmasterOrg/Youtarr/commit/fdbb30d324151858aff9b74fd43f79e11823d065))
+* show downloaded date on channel page video views ([a189b2d](https://github.com/DialmasterOrg/Youtarr/commit/a189b2dbd877808288374644aa7aa40e39920ac8))
+* show pagination controls at top and bottom of video lists ([e473ec0](https://github.com/DialmasterOrg/Youtarr/commit/e473ec08f8aea93f9871e411d1c216c68db69f3f))
+* show thumbnails and missing indicators in download history ([8561611](https://github.com/DialmasterOrg/Youtarr/commit/8561611141445e2d8b090670069d690d3107ff49))
+* unify channel and library video lists with shared VideoList ([7149db4](https://github.com/DialmasterOrg/Youtarr/commit/7149db4bacb68b102ab938324f83c8413dd4ddb0))
+* unify pagination and inline loading on lists ([d78469b](https://github.com/DialmasterOrg/Youtarr/commit/d78469bd7ba354d36855f123137b47898180115e))
+
+
+### Bug Fixes
+
+* address code review on video list selection and route tests ([c9d4519](https://github.com/DialmasterOrg/Youtarr/commit/c9d45197d2d5dd05a2781d93384d6a448877c54c))
+* pin delete icon right on mobile grid and restore thumbnail clicks for missing videos ([d27d42a](https://github.com/DialmasterOrg/Youtarr/commit/d27d42aee0e00fe403ae9c10738cc1ee65018ab1))
+* return 404 instead of 500 for unsubscribed channel settings ([e81b61b](https://github.com/DialmasterOrg/Youtarr/commit/e81b61bc07ac6d19a0fe4a503a8bc44607a59691))
+* set group-writable umask and protect config.json secrets ([d0c04b8](https://github.com/DialmasterOrg/Youtarr/commit/d0c04b8e5b886f95b82af2ecf8fc85eeee056b09))
+* use native date picker and clarify "published" in video date filters ([28e8e04](https://github.com/DialmasterOrg/Youtarr/commit/28e8e0485a888234cb1b526bd2cdc63afbf4efa6))
+
+
+### Continuous Integration
+
+* gate pr on claude verdict, not infra errors ([2a81dad](https://github.com/DialmasterOrg/Youtarr/commit/2a81dade577cdfa9a2bf99ff1e0180cc2d251b8a))
+
+
+### Code Refactoring
+
+* extract shared video list chips, filters, and pagination hook ([02003e5](https://github.com/DialmasterOrg/Youtarr/commit/02003e5cf3254576e181700981fa9b17187f6744))
+
+
+### Tests
+
+* cover shared VideoList filter panel, toolbar, and selection pill ([ebf6c74](https://github.com/DialmasterOrg/Youtarr/commit/ebf6c74d82ba33493e7c779068b484af0ddfc53b))
+
+
+### Documentation
+
+* add component extraction, placement, and test authoring rules ([7bcfd86](https://github.com/DialmasterOrg/Youtarr/commit/7bcfd86317d2b550c3ab74fba079a823d198b694))
+* expand comparison doc to cover Pinchflat and Tube Archivist ([59cf253](https://github.com/DialmasterOrg/Youtarr/commit/59cf25326216db619f7bdea8604af10496969fbc))
+* update CHANGELOG for v1.66.4 [skip ci] ([a4dd486](https://github.com/DialmasterOrg/Youtarr/commit/a4dd486894f993434b8c733fa82fda292518475b))
+
+
+
+
+
 ## [v1.66.4](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.66.4) - 2026-04-20
 
 ### [1.66.4](https://github.com/DialmasterOrg/Youtarr/compare/vv1.66.3...v1.66.4) (2026-04-20)
