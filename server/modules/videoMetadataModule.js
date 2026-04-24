@@ -4,6 +4,7 @@ const path = require('path');
 const configModule = require('./configModule');
 const ytDlpRunner = require('./ytDlpRunner');
 const logger = require('../logger');
+const youtubeApi = require('./youtubeApi');
 
 const NULL_METADATA = {
   description: null,
@@ -63,6 +64,48 @@ class VideoMetadataModule {
    * @returns {Promise<Object>} Curated metadata object (all null on failure)
    */
   async getVideoMetadata(youtubeId) {
+    // API-first path: when a key is configured and quota is available, try the API.
+    // Any failure falls through silently to the yt-dlp path below.
+    if (youtubeApi.isAvailable()) {
+      try {
+        const apiKey = youtubeApi.getApiKey();
+        const [apiResult] = await youtubeApi.client.getVideoMetadata(apiKey, [youtubeId]);
+        if (apiResult) {
+          logger.info({ youtubeId, source: 'youtube-api' }, 'Fetched video metadata via YouTube API');
+          // Silently backfill originalDate on the DB row, matching the yt-dlp path.
+          if (apiResult.uploadDate) {
+            try {
+              const video = await Video.findOne({ where: { youtubeId } });
+              if (video && (!video.originalDate || video.originalDate !== apiResult.uploadDate)) {
+                await video.update({ originalDate: apiResult.uploadDate });
+              }
+            } catch (backfillErr) {
+              logger.warn({ err: backfillErr, youtubeId }, 'Failed to backfill originalDate (API path)');
+            }
+          }
+
+          return {
+            ...NULL_METADATA,
+            description: apiResult.description,
+            viewCount: apiResult.viewCount,
+            likeCount: apiResult.likeCount,
+            commentCount: apiResult.commentCount,
+            tags: apiResult.tags,
+            categories: apiResult.categories,
+            uploadDate: apiResult.uploadDate,
+            availability: apiResult.availability,
+            webpageUrl: `https://www.youtube.com/watch?v=${youtubeId}`,
+            isLive: apiResult.liveBroadcastContent === 'live',
+          };
+        }
+      } catch (apiErr) {
+        logger.warn(
+          { err: apiErr, youtubeId, code: apiErr?.code },
+          'YouTube API getVideoMetadata failed, falling back to yt-dlp'
+        );
+      }
+    }
+
     try {
       const infoDir = path.join(configModule.getJobsPath(), 'info');
       const infoPath = path.join(infoDir, `${youtubeId}.info.json`);

@@ -216,6 +216,7 @@ const initialize = async () => {
     const archiveModule = require('./modules/archiveModule');
     const subscriptionImportModule = require('./modules/subscriptionImport');
     const videoSearchModule = require('./modules/videoSearchModule');
+    const youtubeApi = require('./modules/youtubeApi');
     const messageEmitter = require('./modules/messageEmitter');
     const { Channel } = require('./models');
     const { registerRoutes } = require('./routes');
@@ -536,6 +537,7 @@ const initialize = async () => {
       archiveModule,
       subscriptionImportModule,
       videoSearchModule,
+      youtubeApi,
       getCachedYtDlpVersion,
       refreshYtDlpVersionCache,
       validateEnvAuthCredentials,

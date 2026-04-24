@@ -40,6 +40,9 @@ export const CONFIG_FIELDS = {
   plexPort: { default: '32400', trackChanges: true },
   plexViaHttps: { default: false, trackChanges: true },
 
+  // YouTube Data API
+  youtubeApiKey: { default: '', trackChanges: true },
+
   // SponsorBlock
   sponsorblockEnabled: { default: false, trackChanges: true },
   sponsorblockAction: { default: 'remove' as 'remove' | 'mark', trackChanges: true },
@@ -133,6 +136,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   plexIP: CONFIG_FIELDS.plexIP.default,
   plexPort: CONFIG_FIELDS.plexPort.default,
   plexViaHttps: CONFIG_FIELDS.plexViaHttps.default,
+  youtubeApiKey: CONFIG_FIELDS.youtubeApiKey.default,
   sponsorblockEnabled: CONFIG_FIELDS.sponsorblockEnabled.default,
   sponsorblockAction: CONFIG_FIELDS.sponsorblockAction.default,
   sponsorblockCategories: CONFIG_FIELDS.sponsorblockCategories.default,

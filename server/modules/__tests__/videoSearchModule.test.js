@@ -9,6 +9,14 @@ jest.mock('../../logger', () => ({
   info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn(),
   child: jest.fn(() => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() })),
 }));
+jest.mock('../youtubeApi', () => ({
+  isAvailable: jest.fn(() => false),
+  getApiKey: jest.fn(() => null),
+  client: {
+    searchVideos: jest.fn(),
+  },
+  YoutubeApiErrorCode: { QUOTA_EXCEEDED: 'QUOTA_EXCEEDED' },
+}));
 
 describe('videoSearchModule', () => {
   let videoSearchModule;
@@ -246,5 +254,98 @@ describe('videoSearchModule', () => {
       const results = await videoSearchModule.searchVideos('test', 10, {});
       expect(results.map(r => r.youtubeId)).toEqual(['new', 'mid', 'old', 'nodate']);
     });
+  });
+});
+
+describe('videoSearchModule.searchVideos - API-first path', () => {
+  let videoSearchModule;
+  let youtubeApi;
+
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+
+    jest.doMock('../youtubeApi', () => ({
+      isAvailable: jest.fn(() => true),
+      getApiKey: jest.fn(() => 'test-key'),
+      client: {
+        searchVideos: jest.fn(),
+      },
+      YoutubeApiErrorCode: { QUOTA_EXCEEDED: 'QUOTA_EXCEEDED' },
+    }));
+
+    jest.doMock('../ytDlpRunner', () => ({
+      run: jest.fn(),
+    }));
+    jest.doMock('../download/ytdlpCommandBuilder', () => ({
+      buildSearchArgs: jest.fn(() => ['--some-arg']),
+    }));
+    jest.doMock('../configModule', () => ({ getCookiesPath: jest.fn(() => null) }));
+    jest.doMock('../../models', () => ({
+      Video: { findAll: jest.fn().mockResolvedValue([]) },
+    }));
+    jest.doMock('../../logger', () => ({
+      info: jest.fn(), warn: jest.fn(), debug: jest.fn(), error: jest.fn(),
+    }));
+
+    youtubeApi = require('../youtubeApi');
+    videoSearchModule = require('../videoSearchModule');
+  });
+
+  test('uses API when available; yt-dlp is not called', async () => {
+    const ytDlpRunner = require('../ytDlpRunner');
+    youtubeApi.client.searchVideos.mockResolvedValueOnce([
+      {
+        youtubeId: 'abc',
+        title: 'T',
+        channelName: 'C',
+        channelId: 'UCxxx',
+        duration: null,
+        thumbnailUrl: 'u',
+        publishedAt: '2024-01-01T00:00:00.000Z',
+        viewCount: null,
+        status: 'never_downloaded',
+      },
+    ]);
+
+    const results = await videoSearchModule.searchVideos('test', 10);
+
+    expect(results).toHaveLength(1);
+    expect(results[0].youtubeId).toBe('abc');
+    expect(ytDlpRunner.run).not.toHaveBeenCalled();
+    expect(youtubeApi.client.searchVideos).toHaveBeenCalledWith('test-key', 'test', 10);
+  });
+
+  test('falls back to yt-dlp when API throws, logs warn', async () => {
+    const ytDlpRunner = require('../ytDlpRunner');
+    const apiErr = new Error('boom');
+    apiErr.name = 'YoutubeApiError';
+    apiErr.code = 'QUOTA_EXCEEDED';
+    youtubeApi.client.searchVideos.mockRejectedValueOnce(apiErr);
+
+    ytDlpRunner.run.mockResolvedValueOnce(
+      JSON.stringify({ id: 'ytdlp-id', title: 'from yt-dlp', channel: 'C', upload_date: '20240101' }) + '\n'
+    );
+    const logger = require('../../logger');
+
+    const results = await videoSearchModule.searchVideos('q', 10);
+
+    expect(youtubeApi.client.searchVideos).toHaveBeenCalledTimes(1);
+    expect(ytDlpRunner.run).toHaveBeenCalledTimes(1);
+    expect(results[0].youtubeId).toBe('ytdlp-id');
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'QUOTA_EXCEEDED' }),
+      expect.stringContaining('falling back to yt-dlp')
+    );
+  });
+
+  test('does not call API when key is unavailable', async () => {
+    youtubeApi.isAvailable.mockReturnValue(false);
+    const ytDlpRunner = require('../ytDlpRunner');
+    ytDlpRunner.run.mockResolvedValueOnce('');
+
+    await videoSearchModule.searchVideos('q', 10);
+
+    expect(youtubeApi.client.searchVideos).not.toHaveBeenCalled();
   });
 });

@@ -12,6 +12,7 @@ const { Op, fn, col, where } = require('sequelize');
 const fileCheckModule = require('./fileCheckModule');
 const logger = require('../logger');
 const { sanitizeNameLikeYtDlp } = require('./filesystem');
+const youtubeApi = require('./youtubeApi');
 const ratingMapper = require('./ratingMapper');
 const tempPathManager = require('./download/tempPathManager');
 
@@ -612,6 +613,37 @@ class ChannelModule {
    * @returns {Promise<Object>} - Channel metadata with folder_name property
    */
   async fetchChannelMetadata(channelUrl) {
+    if (youtubeApi.isAvailable()) {
+      try {
+        const apiKey = youtubeApi.getApiKey();
+        const info = await youtubeApi.client.getChannelInfo(apiKey, channelUrl);
+        if (info && info.channelId) {
+          logger.info({ channelId: info.channelId, source: 'youtube-api' }, 'Fetched channel metadata via YouTube API');
+          const unsanitizedFolderName = info.title || info.customUrl || info.channelId;
+          const sanitizedFolderName = sanitizeNameLikeYtDlp(unsanitizedFolderName);
+          return {
+            channel_id: info.channelId,
+            id: info.channelId,
+            title: info.title,
+            description: info.description,
+            uploader: info.title,
+            uploader_id: info.customUrl || info.channelId,
+            uploads_playlist_id: info.uploadsPlaylistId,
+            thumbnails: info.thumbnailUrl
+              ? [{ id: 'avatar_uncropped', url: info.thumbnailUrl, width: 800, height: 800 }]
+              : [],
+            folder_name: sanitizedFolderName,
+          };
+        }
+        logger.info({ channelUrl }, 'YouTube API getChannelInfo returned no items, falling back to yt-dlp');
+      } catch (apiErr) {
+        logger.warn(
+          { err: apiErr, channelUrl, code: apiErr?.code },
+          'YouTube API fetchChannelMetadata failed, falling back to yt-dlp'
+        );
+      }
+    }
+
     const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
     return await this.withTempFile('channel', async (outputFilePath) => {
       const args = YtdlpCommandBuilder.buildMetadataWithFolderNameArgs(channelUrl, {
@@ -1821,6 +1853,45 @@ class ChannelModule {
       }
     }
 
+    // API-first path: videos tab only. Shorts/streams stay on yt-dlp because
+    // the uploads playlist does not segregate by media type and duration-based
+    // Shorts classification is unreliable.
+    const TAB_VIDEOS = 'videos';
+    if (tabType === TAB_VIDEOS && youtubeApi.isAvailable()) {
+      try {
+        const apiKey = youtubeApi.getApiKey();
+        const channelUrl = channel.url || this.resolveChannelUrlFromId(channelId);
+        const apiResult = await youtubeApi.client.listChannelVideos(apiKey, channelUrl, {
+          maxVideos: videoCount,
+          includeMetadata: true,
+        });
+
+        const videos = apiResult.videos.map((v) => ({
+          title: v.title || 'Untitled',
+          youtube_id: v.id,
+          publishedAt: v.uploadDate
+            ? new Date(`${v.uploadDate.slice(0, 4)}-${v.uploadDate.slice(4, 6)}-${v.uploadDate.slice(6, 8)}T00:00:00Z`).toISOString()
+            : null,
+          thumbnail: v.thumbnailUrl || null,
+          duration: v.duration || 0,
+          availability: v.availability || null,
+          media_type: 'video',
+          live_status: null,
+        }));
+
+        logger.info(
+          { channelId, source: 'youtube-api', videoCount: videos.length },
+          'Listed channel videos via YouTube API'
+        );
+        return { videos, currentChannelUrl: apiResult.currentChannelUrl };
+      } catch (apiErr) {
+        logger.warn(
+          { err: apiErr, channelId, code: apiErr?.code },
+          'YouTube API listChannelVideos failed, falling back to yt-dlp'
+        );
+      }
+    }
+
     // Always use canonical URL based on channel ID for yt-dlp
     // This ensures stability even when channel handles change
     const canonicalUrl = `${this.resolveChannelUrlFromId(channelId)}/${tabType}`;
@@ -2500,23 +2571,63 @@ class ChannelModule {
         logger.info({ channelId, channelTitle: channel.title, tabType }, 'Starting full video fetch for channel');
         const startTime = Date.now();
 
-        // Fetch videos from YouTube (limited to MAX_LOAD_MORE_VIDEOS to prevent hanging on large channels)
-        const canonicalUrl = `${this.resolveChannelUrlFromId(channelId)}/${tabType}`;
+        // API-first path: videos tab only. Shorts/streams stay on yt-dlp because
+        // the uploads playlist does not segregate by media type.
+        const TAB_VIDEOS = 'videos';
+        let result = null;
+        if (tabType === TAB_VIDEOS && youtubeApi.isAvailable()) {
+          try {
+            const apiKey = youtubeApi.getApiKey();
+            const channelUrl = channel.url || this.resolveChannelUrlFromId(channelId);
+            const apiResult = await youtubeApi.client.listChannelVideos(apiKey, channelUrl, {
+              maxVideos: MAX_LOAD_MORE_VIDEOS,
+              includeMetadata: true,
+            });
 
-        const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
-        const result = await this.withTempFile('channel-all-videos', async (outputFilePath) => {
-          const args = YtdlpCommandBuilder.buildMetadataFetchArgs(canonicalUrl, {
-            flatPlaylist: true,
-            extractorArgs: 'youtubetab:approximate_date',
-            playlistEnd: MAX_LOAD_MORE_VIDEOS
+            const videos = apiResult.videos.map((v) => ({
+              title: v.title || 'Untitled',
+              youtube_id: v.id,
+              publishedAt: v.uploadDate
+                ? new Date(`${v.uploadDate.slice(0, 4)}-${v.uploadDate.slice(4, 6)}-${v.uploadDate.slice(6, 8)}T00:00:00Z`).toISOString()
+                : null,
+              thumbnail: v.thumbnailUrl || null,
+              duration: v.duration || 0,
+              availability: v.availability || null,
+              media_type: 'video',
+              live_status: null,
+            }));
+
+            logger.info(
+              { channelId, source: 'youtube-api', videoCount: videos.length },
+              'Fetched all channel videos via YouTube API'
+            );
+            result = { videos, currentChannelUrl: apiResult.currentChannelUrl };
+          } catch (apiErr) {
+            logger.warn(
+              { err: apiErr, channelId, code: apiErr?.code },
+              'YouTube API listChannelVideos (full fetch) failed, falling back to yt-dlp'
+            );
+          }
+        }
+
+        // yt-dlp fallback path (also used for shorts/streams tabs unconditionally)
+        if (result === null) {
+          const canonicalUrl = `${this.resolveChannelUrlFromId(channelId)}/${tabType}`;
+          const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
+          result = await this.withTempFile('channel-all-videos', async (outputFilePath) => {
+            const args = YtdlpCommandBuilder.buildMetadataFetchArgs(canonicalUrl, {
+              flatPlaylist: true,
+              extractorArgs: 'youtubetab:approximate_date',
+              playlistEnd: MAX_LOAD_MORE_VIDEOS
+            });
+            const content = await this.executeYtDlpCommand(args, outputFilePath);
+
+            const jsonOutput = JSON.parse(content);
+            const videos = this.extractVideosFromYtDlpResponse(jsonOutput, channel.default_rating);
+            const currentChannelUrl = jsonOutput.uploader_url || jsonOutput.channel_url || jsonOutput.url;
+            return { videos, currentChannelUrl };
           });
-          const content = await this.executeYtDlpCommand(args, outputFilePath);
-
-          const jsonOutput = JSON.parse(content);
-          const videos = this.extractVideosFromYtDlpResponse(jsonOutput, channel.default_rating);
-          const currentChannelUrl = jsonOutput.uploader_url || jsonOutput.channel_url || jsonOutput.url;
-          return { videos, currentChannelUrl };
-        });
+        }
 
         const fetchDuration = (Date.now() - startTime) / 1000;
         logger.info({

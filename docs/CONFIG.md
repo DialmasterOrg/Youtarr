@@ -7,6 +7,7 @@ These settings can be changed from the Configuration page in the web UI.
 - [Configuration File Location](#configuration-file-location)
 - [Core Settings](#core-settings)
 - [Plex Integration](#plex-integration)
+- [YouTube Data API](#youtube-data-api-optional)
 - [SponsorBlock Settings](#sponsorblock-settings)
 - [Kodi, Emby and Jellyfin Compatibility](#kodi-emby-and-jellyfin-compatibility)
 - [Cookie Config](#cookie-config)
@@ -192,6 +193,20 @@ Configuration can be modified through:
 - **Description**: Optional full Plex base URL (e.g., `https://plex.example.com:32400`)
 - **Usage**: Not configurable via the web UI. Edit `config/config.json` manually or set the `PLEX_URL` environment variable to populate it.
 - **Note**: When this field is set it takes precedence over the `plexIP`, `plexPort`, and `plexViaHttps` values shown in the UI.
+
+## YouTube Data API (Optional)
+
+### YouTube API Key
+- **Config Key**: `youtubeApiKey`
+- **Type**: `string`
+- **Default**: `""` (empty)
+- **Description**: Optional YouTube Data API v3 key. When set, Youtarr uses the API for faster channel metadata, video metadata, and search fetches. On any failure (invalid key, quota exhausted, API disabled, network error), Youtarr silently falls back to yt-dlp with no user-visible error.
+- **Notes**:
+  - API keys do not expire. The configuration page shows "last validated" timestamp instead of an expiration.
+  - Default quota is 10,000 units per day per Google Cloud project, resetting at midnight Pacific time. Search calls cost 100 units; metadata and channel/playlist calls cost 1 unit per call.
+  - On a 403 `quotaExceeded` response, Youtarr enters an in-memory cooldown until the next Pacific-midnight reset and uses yt-dlp exclusively during that window.
+  - Channel `shorts` / `streams` tab listing and channel tab auto-detection stay on yt-dlp (the API has no viable equivalent).
+  - Set up instructions and a test button are in the Configuration page under Integrations.
 
 ## SponsorBlock Settings
 

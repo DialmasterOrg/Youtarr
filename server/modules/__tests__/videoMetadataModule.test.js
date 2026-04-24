@@ -7,6 +7,7 @@ describe('VideoMetadataModule', () => {
   let mockLogger;
   let mockConfigModule;
   let mockYtDlpRunner;
+  let mockYoutubeApi;
 
   beforeEach(() => {
     jest.resetModules();
@@ -47,11 +48,21 @@ describe('VideoMetadataModule', () => {
       fetchMetadata: jest.fn(),
     };
 
+    mockYoutubeApi = {
+      isAvailable: jest.fn(() => false),
+      getApiKey: jest.fn(() => null),
+      client: {
+        getVideoMetadata: jest.fn(),
+      },
+      YoutubeApiErrorCode: { QUOTA_EXCEEDED: 'QUOTA_EXCEEDED' },
+    };
+
     jest.doMock('fs', () => ({ promises: mockFs }));
     jest.doMock('../../models', () => ({ Video: mockVideo }));
     jest.doMock('../configModule', () => mockConfigModule);
     jest.doMock('../../logger', () => mockLogger);
     jest.doMock('../ytDlpRunner', () => mockYtDlpRunner);
+    jest.doMock('../youtubeApi', () => mockYoutubeApi);
 
     videoMetadataModule = require('../videoMetadataModule');
   });
@@ -566,6 +577,98 @@ describe('VideoMetadataModule', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].fileName).toBe('Video [statfail1].nfo');
+    });
+  });
+
+  describe('getVideoMetadata - API-first path', () => {
+    test('uses yt-dlp when API is unavailable (unchanged legacy behavior)', async () => {
+      // isAvailable returns false in default beforeEach setup
+      mockFs.access.mockRejectedValueOnce(new Error('not cached'));
+      mockYtDlpRunner.fetchMetadata.mockResolvedValueOnce({});
+      mockFs.mkdir.mockResolvedValueOnce(undefined);
+      mockFs.writeFile.mockResolvedValueOnce(undefined);
+
+      await videoMetadataModule.getVideoMetadata('abc12345678');
+
+      expect(mockYoutubeApi.client.getVideoMetadata).not.toHaveBeenCalled();
+    });
+
+    test('uses API when available and returns normalized result', async () => {
+      mockYoutubeApi.isAvailable.mockReturnValue(true);
+      mockYoutubeApi.getApiKey.mockReturnValue('test-key');
+      mockYoutubeApi.client.getVideoMetadata.mockResolvedValueOnce([{
+        id: 'abc12345678',
+        title: 'From API',
+        description: 'desc',
+        duration: 300,
+        viewCount: 10,
+        likeCount: 2,
+        commentCount: 1,
+        uploadDate: '20240101',
+        channelId: 'UCxxx',
+        channelTitle: 'Chan',
+        tags: ['t'],
+        categories: ['22'],
+        availability: 'public',
+        liveBroadcastContent: 'none',
+      }]);
+      mockVideo.findOne.mockResolvedValueOnce(null);
+
+      const result = await videoMetadataModule.getVideoMetadata('abc12345678');
+
+      expect(mockYoutubeApi.client.getVideoMetadata).toHaveBeenCalledWith('test-key', ['abc12345678']);
+      expect(result).toMatchObject({
+        description: 'desc',
+        viewCount: 10,
+        likeCount: 2,
+        commentCount: 1,
+        uploadDate: '20240101',
+        tags: ['t'],
+        categories: ['22'],
+        availability: 'public',
+      });
+      expect(mockYtDlpRunner.fetchMetadata).not.toHaveBeenCalled();
+    });
+
+    test('falls back to yt-dlp silently when API throws', async () => {
+      mockYoutubeApi.isAvailable.mockReturnValue(true);
+      mockYoutubeApi.getApiKey.mockReturnValue('test-key');
+      const apiErr = new Error('boom');
+      apiErr.name = 'YoutubeApiError';
+      apiErr.code = 'QUOTA_EXCEEDED';
+      mockYoutubeApi.client.getVideoMetadata.mockRejectedValueOnce(apiErr);
+
+      // yt-dlp fallback path: no cached .info.json, fetch fresh
+      mockFs.access.mockRejectedValueOnce(new Error('not cached'));
+      mockYtDlpRunner.fetchMetadata.mockResolvedValueOnce({ description: 'from yt-dlp' });
+      mockFs.mkdir.mockResolvedValueOnce(undefined);
+      mockFs.writeFile.mockResolvedValueOnce(undefined);
+
+      const result = await videoMetadataModule.getVideoMetadata('abc12345678');
+
+      expect(mockYoutubeApi.client.getVideoMetadata).toHaveBeenCalledTimes(1);
+      expect(mockYtDlpRunner.fetchMetadata).toHaveBeenCalledTimes(1);
+      expect(result.description).toBe('from yt-dlp');
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'QUOTA_EXCEEDED' }),
+        expect.stringContaining('falling back to yt-dlp')
+      );
+    });
+
+    test('backfills originalDate from API uploadDate when DB has no date', async () => {
+      mockYoutubeApi.isAvailable.mockReturnValue(true);
+      mockYoutubeApi.getApiKey.mockReturnValue('test-key');
+      mockYoutubeApi.client.getVideoMetadata.mockResolvedValueOnce([{
+        id: 'abc12345678',
+        uploadDate: '20240101',
+        availability: 'public',
+      }]);
+      const updateMock = jest.fn();
+      mockVideo.findOne.mockResolvedValueOnce({ originalDate: null, update: updateMock });
+
+      await videoMetadataModule.getVideoMetadata('abc12345678');
+
+      expect(updateMock).toHaveBeenCalledWith({ originalDate: '20240101' });
     });
   });
 });
