@@ -8,10 +8,10 @@ import {
   Tooltip,
   Checkbox,
 } from '../ui';
-import { CalendarToday as CalendarTodayIcon, Block as BlockIcon, CheckCircleOutline as CheckCircleOutlineIcon, Delete as DeleteIcon } from '../../lib/icons';
+import { CalendarToday as CalendarTodayIcon, Block as BlockIcon, CheckCircleOutline as CheckCircleOutlineIcon, Delete as DeleteIcon, Download as DownloadIcon } from '../../lib/icons';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
-import { decodeHtml } from '../../utils/formatters';
+import { decodeHtml, formatAddedDateTime } from '../../utils/formatters';
 import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo, getStatusChipVariant, getStatusChipStyle } from '../../utils/videoStatus';
 import StillLiveDot from './StillLiveDot';
 import RatingBadge from '../shared/RatingBadge';
@@ -354,6 +354,16 @@ function VideoCard({
                   />
                 )}
               </div>
+              {video.added && video.timeCreated && (
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  style={{ display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
+                >
+                  <DownloadIcon size={12} />
+                  Downloaded: {formatAddedDateTime(video.timeCreated)}
+                </Typography>
+              )}
 
               {/* Media type, rating, and status chips on same line */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>

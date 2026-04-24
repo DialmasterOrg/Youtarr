@@ -232,7 +232,9 @@ class ConfigModule extends EventEmitter {
 
     // Write the config file and provide actionable guidance if permissions fail
     try {
-      fs.writeFileSync(this.configPath, JSON.stringify(defaultConfig, null, 2));
+      // mode 0o640 keeps plexApiKey and other secrets out of world-readable (umask is 0o002 → 0o664 default)
+      fs.writeFileSync(this.configPath, JSON.stringify(defaultConfig, null, 2), { mode: 0o640 });
+      this.tightenConfigPermissions();
       logger.info({ configPath: this.configPath }, 'Created config.json from template');
     } catch (error) {
       if (error.code === 'EACCES') {
@@ -347,12 +349,26 @@ class ConfigModule extends EventEmitter {
     this.isSaving = true;
     const configContent = JSON.stringify(configToSave, null, 2);
     this.lastConfigContent = configContent;
-    fs.writeFileSync(this.configPath, configContent);
+    fs.writeFileSync(this.configPath, configContent, { mode: 0o640 });
+    this.tightenConfigPermissions();
 
     // Clear the flag after a short delay to account for fs.watch() firing
     setTimeout(() => {
       this.isSaving = false;
     }, 200);
+  }
+
+  // chmod fails with EPERM if the file is owned by a different UID (common on upgrades
+  // from older Youtarr versions). Best-effort only — the content is already saved.
+  tightenConfigPermissions() {
+    try {
+      fs.chmodSync(this.configPath, 0o640);
+    } catch (error) {
+      logger.warn(
+        { err: error, configPath: this.configPath },
+        'Could not tighten config.json permissions to 0640; file content is saved but mode may be permissive. Run `chmod 640` on the file manually if it contains secrets.'
+      );
+    }
   }
 
   watchConfig() {

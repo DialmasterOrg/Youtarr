@@ -566,7 +566,7 @@ class ChannelSettingsModule {
     });
 
     if (!channel) {
-      throw new Error('Channel not found');
+      return null;
     }
 
     const detectedTabs = parseTabCsv(channel.available_tabs);

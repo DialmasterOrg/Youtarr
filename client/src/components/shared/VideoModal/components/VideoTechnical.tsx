@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Typography, Skeleton, Tooltip, Chip, Accordion, AccordionSummary, AccordionDetails } from '../../../ui';
+import { formatDate } from '../../../../utils/formatters';
 import { VideoModalData, VideoExtendedMetadata } from '../types';
 
 interface VideoTechnicalProps {
@@ -38,12 +39,6 @@ function getOrientationLabel(ratio: number): string {
   if (ratio > 1) return 'Landscape';
   if (ratio < 1) return 'Portrait';
   return 'Square';
-}
-
-function formatAddedDate(dateStr: string | null): string | null {
-  if (!dateStr) return null;
-  const date = new Date(dateStr);
-  return isNaN(date.getTime()) ? null : date.toLocaleDateString();
 }
 
 function formatDownloadedResolution(
@@ -151,7 +146,7 @@ function VideoTechnical({ video, metadata, loading }: VideoTechnicalProps) {
   const hasVideoFile = video.filePath !== null;
   const hasAudioFile = video.audioFilePath !== null;
   const relatedFiles = !loading ? (metadata?.relatedFiles ?? null) : null;
-  const addedDate = formatAddedDate(video.addedAt);
+  const addedDate = formatDate(video.addedAt);
   const showFileDetails = video.isDownloaded || video.status === 'missing';
 
   return (

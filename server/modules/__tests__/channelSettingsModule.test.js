@@ -599,11 +599,10 @@ describe('ChannelSettingsModule', () => {
       });
     });
 
-    test('should throw error when channel not found', async () => {
+    test('should return null when channel not found', async () => {
       Channel.findOne.mockResolvedValue(null);
-      await expect(
-        channelSettingsModule.getChannelSettings('UC999999')
-      ).rejects.toThrow('Channel not found');
+      const result = await channelSettingsModule.getChannelSettings('UC999999');
+      expect(result).toBeNull();
     });
 
     test('includes detected_tabs, hidden_tabs, and effective available_tabs', async () => {

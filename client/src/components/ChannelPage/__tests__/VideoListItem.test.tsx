@@ -703,6 +703,41 @@ describe('VideoListItem Component', () => {
     });
   });
 
+  describe('Downloaded Date Display', () => {
+    test('renders "Downloaded" date for downloaded videos with timeCreated', () => {
+      const downloadedVideo = {
+        ...mockVideo,
+        added: true,
+        removed: false,
+        timeCreated: new Date(2026, 3, 20, 16, 20, 0).toISOString(),
+      };
+      renderWithProviders(<VideoListItem {...defaultProps} video={downloadedVideo} />);
+      expect(screen.getByText(/Downloaded:/)).toBeInTheDocument();
+    });
+
+    test('does not render "Downloaded" text when video is not downloaded', () => {
+      renderWithProviders(<VideoListItem {...defaultProps} />);
+      expect(screen.queryByText(/Downloaded:/)).not.toBeInTheDocument();
+    });
+
+    test('does not render "Downloaded" text when timeCreated is missing', () => {
+      const downloadedVideo = { ...mockVideo, added: true, removed: false };
+      renderWithProviders(<VideoListItem {...defaultProps} video={downloadedVideo} />);
+      expect(screen.queryByText(/Downloaded:/)).not.toBeInTheDocument();
+    });
+
+    test('renders "Downloaded" text for missing videos that were downloaded in the past', () => {
+      const missingVideo = {
+        ...mockVideo,
+        added: true,
+        removed: true,
+        timeCreated: new Date(2026, 3, 20, 16, 20, 0).toISOString(),
+      };
+      renderWithProviders(<VideoListItem {...defaultProps} video={missingVideo} />);
+      expect(screen.getByText(/Downloaded:/)).toBeInTheDocument();
+    });
+  });
+
   describe('Status Icon Rendering', () => {
     test('renders CheckCircleIcon for downloaded videos', () => {
       const downloadedVideo = { ...mockVideo, added: true, removed: false };

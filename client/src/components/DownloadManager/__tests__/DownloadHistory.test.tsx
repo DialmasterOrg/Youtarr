@@ -25,7 +25,59 @@ jest.mock('../../../hooks/useConfig', () => ({
   useConfig: jest.fn(),
 }));
 
+// Mock VideoModal: render a visible wrapper with a button that fires onVideoDeleted,
+// so tests can drive the deletion wiring without the real modal's async flow.
+jest.mock('../../shared/VideoModal', () => ({
+  __esModule: true,
+  default: function MockVideoModal(props: {
+    open: boolean;
+    onVideoDeleted?: (youtubeId: string) => void;
+    video: { youtubeId: string };
+  }) {
+    const React = require('react');
+    if (!props.open) return null;
+    return React.createElement(
+      'div',
+      { 'data-testid': 'mock-video-modal' },
+      React.createElement(
+        'button',
+        {
+          'data-testid': 'mock-delete-video',
+          onClick: () => props.onVideoDeleted?.(props.video.youtubeId),
+        },
+        'Mock Delete'
+      )
+    );
+  },
+}));
+
 const mockUseConfig = useConfig as jest.MockedFunction<typeof useConfig>;
+
+function makeVideo(overrides: Partial<VideoData> = {}): VideoData {
+  return {
+    id: 1,
+    youtubeId: 'video1',
+    youTubeChannelName: 'Test Channel',
+    youTubeVideoName: 'Test Video 1',
+    duration: 120,
+    timeCreated: '2024-01-15T09:00:00Z',
+    originalDate: null,
+    description: null,
+    ...overrides,
+  };
+}
+
+function makeMultiVideoJob(id: string, videos: VideoData[]): Job {
+  return {
+    id,
+    jobType: 'Channel Downloads',
+    status: 'Completed',
+    output: '',
+    timeCreated: new Date('2024-01-15T09:00:00Z').getTime(),
+    timeInitiated: new Date('2024-01-15T09:00:30Z').getTime(),
+    data: { videos },
+  };
+}
 
 describe('DownloadHistory', () => {
   const mockHandleExpandCell = jest.fn();
@@ -568,6 +620,126 @@ describe('DownloadHistory', () => {
       const tableCells = screen.getAllByRole('cell');
       const cellTexts = tableCells.map(cell => cell.textContent || '');
       expect(cellTexts.some(text => text === 'API: iPhone Shortcut #1')).toBe(true);
+    });
+  });
+
+  describe('Missing video indicators (multi-video jobs)', () => {
+    test('desktop summary row shows "N missing" chip when at least one video is removed', () => {
+      const job = makeMultiVideoJob('job-multi', [
+        makeVideo({ id: 1, youtubeId: 'v1', youTubeVideoName: 'Video A' }),
+        makeVideo({ id: 2, youtubeId: 'v2', youTubeVideoName: 'Video B', removed: true }),
+        makeVideo({ id: 3, youtubeId: 'v3', youTubeVideoName: 'Video C' }),
+      ]);
+
+      render(<DownloadHistory {...defaultProps} jobs={[job]} />);
+
+      expect(screen.getByText('Multiple (3)')).toBeInTheDocument();
+      expect(screen.getByText('1 missing')).toBeInTheDocument();
+    });
+
+    test('desktop summary row hides the aggregate chip when no videos are removed', () => {
+      const job = makeMultiVideoJob('job-multi-none', [
+        makeVideo({ id: 1, youtubeId: 'v1' }),
+        makeVideo({ id: 2, youtubeId: 'v2' }),
+      ]);
+
+      render(<DownloadHistory {...defaultProps} jobs={[job]} />);
+
+      expect(screen.getByText('Multiple (2)')).toBeInTheDocument();
+      expect(screen.queryByText(/missing/i)).not.toBeInTheDocument();
+    });
+
+    test('desktop expanded row shows "Missing" chip next to removed videos only', () => {
+      const job = makeMultiVideoJob('job-multi-expanded', [
+        makeVideo({ id: 1, youtubeId: 'v1', youTubeVideoName: 'Kept Video' }),
+        makeVideo({ id: 2, youtubeId: 'v2', youTubeVideoName: 'Gone Video', removed: true }),
+      ]);
+
+      render(
+        <DownloadHistory
+          {...defaultProps}
+          jobs={[job]}
+          expanded={{ 'job-multi-expanded': true }}
+        />
+      );
+
+      expect(screen.getByRole('button', { name: 'Gone Video' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Kept Video' })).toBeInTheDocument();
+      expect(screen.getByText('Missing')).toBeInTheDocument();
+    });
+
+    test('mobile summary card shows "N missing" chip when at least one video is removed', () => {
+      const job = makeMultiVideoJob('job-mobile-multi', [
+        makeVideo({ id: 1, youtubeId: 'v1' }),
+        makeVideo({ id: 2, youtubeId: 'v2', removed: true }),
+      ]);
+
+      render(<DownloadHistory {...defaultProps} jobs={[job]} isMobile />);
+
+      expect(screen.getByText('Multiple (2)')).toBeInTheDocument();
+      expect(screen.getByText('1 missing')).toBeInTheDocument();
+    });
+
+    test('mobile summary card hides the aggregate chip when no videos are removed', () => {
+      const job = makeMultiVideoJob('job-mobile-multi-clean', [
+        makeVideo({ id: 1, youtubeId: 'v1' }),
+        makeVideo({ id: 2, youtubeId: 'v2' }),
+      ]);
+
+      render(<DownloadHistory {...defaultProps} jobs={[job]} isMobile />);
+
+      expect(screen.getByText('Multiple (2)')).toBeInTheDocument();
+      expect(screen.queryByText(/missing/i)).not.toBeInTheDocument();
+    });
+
+    test('mobile expanded card shows per-video "Missing" chip only for removed videos', () => {
+      const job = makeMultiVideoJob('job-mobile-expanded', [
+        makeVideo({ id: 1, youtubeId: 'v1', youTubeVideoName: 'Present Video' }),
+        makeVideo({ id: 2, youtubeId: 'v2', youTubeVideoName: 'Removed Video', removed: true }),
+      ]);
+
+      render(
+        <DownloadHistory
+          {...defaultProps}
+          jobs={[job]}
+          isMobile
+          expanded={{ 'job-mobile-expanded': true }}
+        />
+      );
+
+      expect(screen.getByRole('button', { name: 'Present Video' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Removed Video' })).toBeInTheDocument();
+      expect(screen.getByText('Missing')).toBeInTheDocument();
+    });
+  });
+
+  describe('Video deletion wiring', () => {
+    test('invokes onVideoDeleted after a video is deleted via the modal', async () => {
+      const user = userEvent.setup();
+      const onVideoDeleted = jest.fn();
+      const job = makeMultiVideoJob('job-delete', [
+        makeVideo({ id: 1, youtubeId: 'del-1', youTubeVideoName: 'Deletable Video' }),
+        makeVideo({ id: 2, youtubeId: 'del-2', youTubeVideoName: 'Other Video' }),
+      ]);
+
+      render(
+        <DownloadHistory
+          {...defaultProps}
+          jobs={[job]}
+          expanded={{ 'job-delete': true }}
+          onVideoDeleted={onVideoDeleted}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Deletable Video' }));
+      expect(screen.getByTestId('mock-video-modal')).toBeInTheDocument();
+
+      await user.click(screen.getByTestId('mock-delete-video'));
+
+      expect(onVideoDeleted).toHaveBeenCalledTimes(1);
+      await waitFor(() => {
+        expect(screen.queryByTestId('mock-video-modal')).not.toBeInTheDocument();
+      });
     });
   });
 });

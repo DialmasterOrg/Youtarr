@@ -8,7 +8,9 @@ import {
   AccessTime as AccessTimeIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
+  FileDownload as DownloadedIcon,
 } from '../../../../lib/icons';
+import { formatDate, formatDateTime } from '../../../../utils/formatters';
 import { VideoModalData, VideoExtendedMetadata } from '../types';
 
 interface VideoMetadataProps {
@@ -40,26 +42,6 @@ function formatDuration(seconds: number): string {
   return `${minutes}:${String(secs).padStart(2, '0')}`;
 }
 
-function parseDate(dateStr: string): Date | null {
-  // Handle YYYYMMDD format from yt-dlp
-  if (/^\d{8}$/.test(dateStr)) {
-    const year = parseInt(dateStr.substring(0, 4), 10);
-    const month = parseInt(dateStr.substring(4, 6), 10) - 1;
-    const day = parseInt(dateStr.substring(6, 8), 10);
-    return new Date(year, month, day);
-  }
-  // Handle ISO strings and other formats
-  const parsed = new Date(dateStr);
-  return isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function formatDate(dateStr: string | null): string | null {
-  if (!dateStr) return null;
-  const date = parseDate(dateStr);
-  if (!date) return null;
-  return date.toLocaleDateString();
-}
-
 function VideoMetadata({ video, metadata, loading }: VideoMetadataProps) {
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const [tagsExpanded, setTagsExpanded] = useState(false);
@@ -68,6 +50,11 @@ function VideoMetadata({ video, metadata, loading }: VideoMetadataProps) {
   const publishDate = useMemo(
     () => formatDate(metadata?.uploadDate ?? video.publishedAt),
     [metadata?.uploadDate, video.publishedAt]
+  );
+
+  const downloadedAt = useMemo(
+    () => (video.isDownloaded ? formatDateTime(video.addedAt) : null),
+    [video.isDownloaded, video.addedAt]
   );
 
   const description = metadata?.description ?? null;
@@ -96,6 +83,18 @@ function VideoMetadata({ video, metadata, loading }: VideoMetadataProps) {
             <Box style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <CalendarTodayIcon size={14} color="var(--muted-foreground)" />
               <Typography variant="body2" color="text.secondary">{publishDate}</Typography>
+            </Box>
+          </>
+        )}
+
+        {downloadedAt && (
+          <>
+            <Typography variant="caption" color="text.disabled" sx={{ lineHeight: 1 }}>·</Typography>
+            <Box style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <DownloadedIcon size={14} color="var(--muted-foreground)" />
+              <Typography variant="body2" color="text.secondary">
+                Downloaded: {downloadedAt}
+              </Typography>
             </Box>
           </>
         )}

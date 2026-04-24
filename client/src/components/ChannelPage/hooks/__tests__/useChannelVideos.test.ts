@@ -1,6 +1,7 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { useChannelVideos } from '../useChannelVideos';
 import { ChannelVideo } from '../../../../types/ChannelVideo';
+import type { ChipFilterMode } from '../../../shared/VideoList/types';
 
 // Mock fetch
 const mockFetch = jest.fn();
@@ -14,7 +15,7 @@ describe('useChannelVideos', () => {
     channelId: mockChannelId,
     page: 1,
     pageSize: 16,
-    hideDownloaded: false,
+    downloadedFilter: 'off' as ChipFilterMode,
     searchQuery: '',
     sortBy: 'date',
     sortOrder: 'desc',
@@ -51,7 +52,6 @@ describe('useChannelVideos', () => {
     videos: mockVideos,
     totalCount: 2,
     oldestVideoDate: '2023-01-01T00:00:00Z',
-    videoFail: false,
     autoDownloadsEnabled: true,
   };
 
@@ -69,7 +69,6 @@ describe('useChannelVideos', () => {
       expect(result.current.videos).toEqual([]);
       expect(result.current.totalCount).toBe(0);
       expect(result.current.oldestVideoDate).toBeNull();
-      expect(result.current.videoFailed).toBe(false);
       expect(result.current.loading).toBe(true);
       expect(result.current.error).toBeNull();
       expect(result.current.autoDownloadsEnabled).toBe(false);
@@ -93,7 +92,6 @@ describe('useChannelVideos', () => {
       expect(result.current.videos).toEqual(mockVideos);
       expect(result.current.totalCount).toBe(2);
       expect(result.current.oldestVideoDate).toBe('2023-01-01T00:00:00Z');
-      expect(result.current.videoFailed).toBe(false);
       expect(result.current.autoDownloadsEnabled).toBe(true);
       expect(result.current.error).toBeNull();
     });
@@ -109,7 +107,7 @@ describe('useChannelVideos', () => {
           ...defaultParams,
           page: 2,
           pageSize: 8,
-          hideDownloaded: true,
+          downloadedFilter: 'exclude',
           searchQuery: 'test query',
           sortBy: 'title',
           sortOrder: 'asc',
@@ -127,11 +125,48 @@ describe('useChannelVideos', () => {
       expect(url).toContain(`/getchannelvideos/${mockChannelId}`);
       expect(url).toContain('page=2');
       expect(url).toContain('pageSize=8');
-      expect(url).toContain('hideDownloaded=true');
+      expect(url).toContain('downloadedFilter=exclude');
       expect(url).toContain('searchQuery=test+query');
       expect(url).toContain('sortBy=title');
       expect(url).toContain('sortOrder=asc');
       expect(url).toContain('tabType=shorts');
+    });
+
+    test('sends downloadedFilter=only when mode is only', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(mockResponse),
+      });
+
+      renderHook(() =>
+        useChannelVideos({
+          ...defaultParams,
+          downloadedFilter: 'only',
+        })
+      );
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+      });
+
+      const url = mockFetch.mock.calls[0][0];
+      expect(url).toContain('downloadedFilter=only');
+    });
+
+    test('omits downloadedFilter param when mode is off', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(mockResponse),
+      });
+
+      renderHook(() => useChannelVideos(defaultParams));
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+      });
+
+      const url = mockFetch.mock.calls[0][0];
+      expect(url).not.toContain('downloadedFilter');
     });
 
     test('includes correct authentication header', async () => {
@@ -163,7 +198,6 @@ describe('useChannelVideos', () => {
           videos: [],
           totalCount: 0,
           oldestVideoDate: null,
-          videoFail: false,
           autoDownloadsEnabled: false,
         }),
       });
@@ -184,7 +218,6 @@ describe('useChannelVideos', () => {
         ok: true,
         json: jest.fn().mockResolvedValueOnce({
           totalCount: 0,
-          videoFail: false,
         }),
       });
 
@@ -204,7 +237,6 @@ describe('useChannelVideos', () => {
         json: jest.fn().mockResolvedValueOnce({
           videos: null,
           totalCount: 0,
-          videoFail: false,
         }),
       });
 
@@ -234,7 +266,6 @@ describe('useChannelVideos', () => {
       expect(result.current.videos).toEqual(mockVideos);
       expect(result.current.totalCount).toBe(0);
       expect(result.current.oldestVideoDate).toBeNull();
-      expect(result.current.videoFailed).toBe(false);
       expect(result.current.autoDownloadsEnabled).toBe(false);
     });
   });
@@ -298,6 +329,50 @@ describe('useChannelVideos', () => {
       expect(result.current.error?.message).toBe('Unknown error');
 
       consoleErrorSpy.mockRestore();
+    });
+
+    test('surfaces an error when response body has fetchError=true', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({
+          videos: [],
+          totalCount: 0,
+          oldestVideoDate: null,
+          autoDownloadsEnabled: false,
+          fetchError: true,
+        }),
+      });
+
+      const { result } = renderHook(() => useChannelVideos(defaultParams));
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      expect(result.current.error).toBeInstanceOf(Error);
+      expect(result.current.error?.message).toBe('Failed to fetch channel videos');
+      expect(result.current.videos).toEqual([]);
+    });
+
+    test('does not surface an error when fetchError is absent (filter returned no results)', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({
+          videos: [],
+          totalCount: 0,
+          oldestVideoDate: null,
+          autoDownloadsEnabled: false,
+        }),
+      });
+
+      const { result } = renderHook(() => useChannelVideos(defaultParams));
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      expect(result.current.error).toBeNull();
+      expect(result.current.videos).toEqual([]);
     });
 
     test('clears previous error on successful refetch', async () => {
@@ -475,7 +550,7 @@ describe('useChannelVideos', () => {
       });
     });
 
-    test('refetches when hideDownloaded changes', async () => {
+    test('refetches when downloadedFilter changes', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         json: jest.fn().mockResolvedValue(mockResponse),
@@ -492,7 +567,7 @@ describe('useChannelVideos', () => {
         expect(mockFetch).toHaveBeenCalledTimes(1);
       });
 
-      rerender({ params: { ...defaultParams, hideDownloaded: true } });
+      rerender({ params: { ...defaultParams, downloadedFilter: 'exclude' as ChipFilterMode } });
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledTimes(2);
@@ -743,7 +818,6 @@ describe('useChannelVideos', () => {
           videos: pageOneVideos,
           totalCount: 3,
           oldestVideoDate: '2023-03-01T00:00:00Z',
-          videoFail: false,
           autoDownloadsEnabled: false,
         }),
       });
@@ -768,7 +842,6 @@ describe('useChannelVideos', () => {
           videos: pageTwoVideos,
           totalCount: 3,
           oldestVideoDate: '2023-03-01T00:00:00Z',
-          videoFail: false,
           autoDownloadsEnabled: false,
         }),
       });
@@ -792,7 +865,6 @@ describe('useChannelVideos', () => {
           videos: pageOneVideos,
           totalCount: 3,
           oldestVideoDate: '2023-03-01T00:00:00Z',
-          videoFail: false,
           autoDownloadsEnabled: false,
         }),
       });
@@ -818,7 +890,6 @@ describe('useChannelVideos', () => {
           videos: pageTwoVideos,
           totalCount: 3,
           oldestVideoDate: '2023-03-01T00:00:00Z',
-          videoFail: false,
           autoDownloadsEnabled: false,
         }),
       });
@@ -852,7 +923,6 @@ describe('useChannelVideos', () => {
           videos: afterResetVideos,
           totalCount: 1,
           oldestVideoDate: '2023-04-01T00:00:00Z',
-          videoFail: false,
           autoDownloadsEnabled: false,
         }),
       });
@@ -871,40 +941,4 @@ describe('useChannelVideos', () => {
     });
   });
 
-  describe('VideoFailed Flag', () => {
-    test('sets videoFailed to true when response indicates failure', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({
-          ...mockResponse,
-          videoFail: true,
-        }),
-      });
-
-      const { result } = renderHook(() => useChannelVideos(defaultParams));
-
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
-
-      expect(result.current.videoFailed).toBe(true);
-    });
-
-    test('sets videoFailed to false when not in response', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({
-          videos: mockVideos,
-        }),
-      });
-
-      const { result } = renderHook(() => useChannelVideos(defaultParams));
-
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
-
-      expect(result.current.videoFailed).toBe(false);
-    });
-  });
 });

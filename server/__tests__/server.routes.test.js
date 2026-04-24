@@ -180,8 +180,7 @@ const createServerModule = ({
           writeChannels: jest.fn().mockResolvedValue(),
           getChannelInfo: jest.fn().mockResolvedValue({ id: 'channel-1', title: 'Channel' }),
           getChannelVideos: jest.fn().mockResolvedValue({
-            videos: [{ id: 'video-1', title: 'Video 1' }],
-            videoFail: false
+            videos: [{ id: 'video-1', title: 'Video 1' }]
           }),
           fetchAllChannelVideos: jest.fn().mockResolvedValue({
             success: true,
@@ -906,7 +905,7 @@ describe('server routes - channels', () => {
         'channel-1',
         1,    // default page
         50,   // default pageSize
-        false, // default hideDownloaded
+        'off', // default downloadedFilter
         '',   // default searchQuery
         'date', // default sortBy
         'desc', // default sortOrder
@@ -915,12 +914,13 @@ describe('server routes - channels', () => {
         null, // default maxDuration
         null, // default dateFrom
         null, // default dateTo
-        false // default protectedFilter
+        'off', // default protectedFilter
+        'off', // default missingFilter
+        'off' // default ignoredFilter
       );
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
-        videos: [{ id: 'video-1', title: 'Video 1' }],
-        videoFail: false
+        videos: [{ id: 'video-1', title: 'Video 1' }]
       });
     });
 
@@ -943,8 +943,7 @@ describe('server routes - channels', () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
-        videos: [{ id: 'video-1', title: 'Video 1' }],
-        videoFail: false
+        videos: [{ id: 'video-1', title: 'Video 1' }]
       });
     });
 
@@ -959,7 +958,7 @@ describe('server routes - channels', () => {
         query: {
           page: '2',
           pageSize: '25',
-          hideDownloaded: 'true',
+          downloadedFilter: 'exclude',
           searchQuery: 'test search',
           sortBy: 'title',
           sortOrder: 'asc'
@@ -973,7 +972,7 @@ describe('server routes - channels', () => {
         'channel-1',
         2,
         25,
-        true,
+        'exclude',
         'test search',
         'title',
         'asc',
@@ -982,7 +981,9 @@ describe('server routes - channels', () => {
         null, // default maxDuration
         null, // default dateFrom
         null, // default dateTo
-        false // default protectedFilter
+        'off', // default protectedFilter
+        'off', // default missingFilter
+        'off' // default ignoredFilter
       );
       expect(res.statusCode).toBe(200);
     });
@@ -998,7 +999,7 @@ describe('server routes - channels', () => {
         query: {
           page: '1',
           pageSize: '50',
-          hideDownloaded: 'false',
+          downloadedFilter: 'off',
           searchQuery: '',
           sortBy: 'date',
           sortOrder: 'desc',
@@ -1013,7 +1014,7 @@ describe('server routes - channels', () => {
         'channel-1',
         1,
         50,
-        false,
+        'off',
         '',
         'date',
         'desc',
@@ -1022,7 +1023,9 @@ describe('server routes - channels', () => {
         null, // default maxDuration
         null, // default dateFrom
         null, // default dateTo
-        false // default protectedFilter
+        'off', // default protectedFilter
+        'off', // default missingFilter
+        'off' // default ignoredFilter
       );
       expect(res.statusCode).toBe(200);
     });
@@ -1047,7 +1050,7 @@ describe('server routes - channels', () => {
         'channel-1',
         1,    // default page
         50,   // default pageSize
-        false, // default hideDownloaded
+        'off', // default downloadedFilter
         'videos' // default tabType
       );
       expect(res.statusCode).toBe(200);
@@ -1069,7 +1072,7 @@ describe('server routes - channels', () => {
         query: {
           page: '3',
           pageSize: '100',
-          hideDownloaded: 'true'
+          downloadedFilter: 'exclude'
         }
       });
       const res = createMockResponse();
@@ -1080,7 +1083,7 @@ describe('server routes - channels', () => {
         'channel-1',
         3,
         100,
-        true,
+        'exclude',
         'videos' // default tabType
       );
       expect(res.statusCode).toBe(200);
@@ -1097,7 +1100,7 @@ describe('server routes - channels', () => {
         query: {
           page: '1',
           pageSize: '50',
-          hideDownloaded: 'false',
+          downloadedFilter: 'off',
           tabType: 'streams'
         }
       });
@@ -1109,7 +1112,7 @@ describe('server routes - channels', () => {
         'channel-1',
         1,
         50,
-        false,
+        'off',
         'streams'
       );
       expect(res.statusCode).toBe(200);
@@ -1302,7 +1305,8 @@ describe('server routes - videos', () => {
         sortBy: 'added',
         sortOrder: 'desc',
         channelFilter: '',
-        protectedFilter: false,
+        protectedFilter: 'off',
+        missingFilter: 'off',
       });
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
@@ -1350,7 +1354,8 @@ describe('server routes - videos', () => {
         sortBy: 'title',
         sortOrder: 'asc',
         channelFilter: 'channel123',
-        protectedFilter: false,
+        protectedFilter: 'off',
+        missingFilter: 'off',
       });
       expect(res.statusCode).toBe(200);
     });

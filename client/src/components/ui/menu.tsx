@@ -35,6 +35,9 @@ type MenuPlacement = {
 const MENU_GAP = 4;
 const VIEWPORT_GUTTER = 12;
 
+const DEFAULT_ANCHOR_ORIGIN: OverlayOrigin = { vertical: 'bottom', horizontal: 'left' };
+const DEFAULT_TRANSFORM_ORIGIN: OverlayOrigin = { vertical: 'top', horizontal: 'left' };
+
 function flipVerticalOrigin(origin: OverlayOrigin['vertical']) {
   if (origin === 'top') return 'bottom';
   if (origin === 'bottom') return 'top';
@@ -71,8 +74,14 @@ function getMenuSize(menuElement: HTMLElement | null): MenuSize {
 
   const rect = menuElement.getBoundingClientRect();
   const computedStyle = window.getComputedStyle(menuElement);
-  const width = rect.width || Number.parseFloat(computedStyle.width) || menuElement.scrollWidth || 0;
-  const height = rect.height || Number.parseFloat(computedStyle.height) || menuElement.scrollHeight || 0;
+  // Prefer scrollHeight (natural content height) over rect.height. rect.height
+  // is capped by the maxHeight we applied last frame; feeding that back into
+  // placement math creates a two-state oscillation on real mobile devices
+  // where keyboard open/resize events keep firing updatePosition.
+  // jsdom always returns 0 for scrollHeight, so fall back to computed style
+  // (explicit width/height set via PaperProps) and finally rect.
+  const width = menuElement.scrollWidth || rect.width || Number.parseFloat(computedStyle.width) || 0;
+  const height = menuElement.scrollHeight || Number.parseFloat(computedStyle.height) || rect.height || 0;
 
   return { width, height };
 }
@@ -107,7 +116,13 @@ function buildPlacement(
   const viewportLeft = VIEWPORT_GUTTER;
   const viewportRight = window.innerWidth - VIEWPORT_GUTTER;
 
-  const availableHeight = transformOrigin.vertical === 'bottom' ? top - viewportTop : viewportBottom - top;
+  // Available height is a function of the anchor and viewport only, never of
+  // the menu's own height. Above placement gets space from viewport top up to
+  // the anchor; below placement gets space from the anchor to viewport bottom.
+  const availableHeight =
+    transformOrigin.vertical === 'bottom'
+      ? anchorPoint.top - viewportTop - MENU_GAP
+      : viewportBottom - top;
   const maxHeight = Math.max(availableHeight, 0);
 
   return {
@@ -143,20 +158,32 @@ const Menu: React.FC<MenuProps> = (props) => {
     children,
     className,
     PaperProps,
-    anchorOrigin = { vertical: 'bottom', horizontal: 'left' },
-    transformOrigin = { vertical: 'top', horizontal: 'left' },
+    anchorOrigin = DEFAULT_ANCHOR_ORIGIN,
+    transformOrigin = DEFAULT_TRANSFORM_ORIGIN,
     keepMounted = false,
   } = props;
 
   const [pos, setPos] = React.useState<MenuPlacement | null>(null);
   const menuRef = React.useRef<HTMLDivElement | null>(null);
-  const overlayInsets = getOverlayInsets();
+
+  const paperPropsMax =
+    typeof PaperProps?.style?.maxHeight === 'number' ? PaperProps.style.maxHeight : undefined;
 
   const updatePosition = React.useCallback(() => {
     if (!open || !anchorEl || !menuRef.current || typeof window === 'undefined') return;
 
+    const overlayInsets = getOverlayInsets();
     const anchorRect = anchorEl.getBoundingClientRect();
-    const menuSize = getMenuSize(menuRef.current);
+    const rawMenuSize = getMenuSize(menuRef.current);
+    // scrollHeight is the natural (unconstrained) content height. When a
+    // maxHeight is set via PaperProps, the rendered menu will be capped at
+    // that value, so the placement math must use the capped height; otherwise
+    // the "space available" calculation blows up and the clamp below pins the
+    // menu to viewportTop (the "stuck at the top" bug).
+    const menuSize: MenuSize =
+      paperPropsMax !== undefined && rawMenuSize.height > paperPropsMax
+        ? { ...rawMenuSize, height: paperPropsMax }
+        : rawMenuSize;
 
     const originVariants: Array<{ anchorOrigin: OverlayOrigin; transformOrigin: OverlayOrigin; flipCount: number }> = [
       { anchorOrigin, transformOrigin, flipCount: 0 },
@@ -241,7 +268,7 @@ const Menu: React.FC<MenuProps> = (props) => {
 
       return nextPlacement;
     });
-  }, [anchorEl, anchorOrigin, open, overlayInsets.bottom, overlayInsets.top, transformOrigin]);
+  }, [anchorEl, anchorOrigin, open, transformOrigin, paperPropsMax]);
 
   React.useLayoutEffect(() => {
     if (!open) return;
@@ -260,8 +287,6 @@ const Menu: React.FC<MenuProps> = (props) => {
   const viewportMax = pos
     ? pos.maxHeight
     : undefined;
-  const paperPropsMax =
-    typeof PaperProps?.style?.maxHeight === 'number' ? PaperProps.style.maxHeight : undefined;
   const resolvedMaxHeight =
     viewportMax !== undefined
       ? paperPropsMax !== undefined
