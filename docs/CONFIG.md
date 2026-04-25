@@ -205,7 +205,7 @@ Configuration can be modified through:
   - API keys do not expire. The configuration page shows "last validated" timestamp instead of an expiration.
   - Default quota is 10,000 units per day per Google Cloud project, resetting at midnight Pacific time. Search calls cost 100 units; metadata and channel/playlist calls cost 1 unit per call.
   - On a 403 `quotaExceeded` response, Youtarr enters an in-memory cooldown until the next Pacific-midnight reset and uses yt-dlp exclusively during that window.
-  - Channel `shorts` / `streams` tab listing and channel tab auto-detection stay on yt-dlp (the API has no viable equivalent).
+  - When a key is configured, channel video listing and tab auto-detection use the API for all three tabs (Videos, Shorts, Streams) via the per-tab auto-generated playlist IDs (`UULF`/`UUSH`/`UULV`). yt-dlp remains the fallback.
   - Set up instructions and a test button are in the Configuration page under Integrations.
 
 ## SponsorBlock Settings

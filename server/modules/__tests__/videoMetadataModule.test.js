@@ -580,39 +580,43 @@ describe('VideoMetadataModule', () => {
     });
   });
 
-  describe('getVideoMetadata - API-first path', () => {
-    test('uses yt-dlp when API is unavailable (unchanged legacy behavior)', async () => {
-      // isAvailable returns false in default beforeEach setup
-      mockFs.access.mockRejectedValueOnce(new Error('not cached'));
-      mockYtDlpRunner.fetchMetadata.mockResolvedValueOnce({});
-      mockFs.mkdir.mockResolvedValueOnce(undefined);
-      mockFs.writeFile.mockResolvedValueOnce(undefined);
-
-      await videoMetadataModule.getVideoMetadata('abc12345678');
-
-      expect(mockYoutubeApi.client.getVideoMetadata).not.toHaveBeenCalled();
+  describe('getVideoMetadata - API fallback when yt-dlp fails', () => {
+    // All tests here simulate the same baseline: no cached .info.json, yt-dlp errors.
+    beforeEach(() => {
+      mockFs.access.mockRejectedValue(new Error('not cached'));
+      mockYtDlpRunner.fetchMetadata.mockRejectedValue(new Error('yt-dlp bot-blocked'));
+      // No related files on disk in these scenarios.
+      mockVideo.findOne.mockResolvedValue(null);
+      mockFs.readdir.mockResolvedValue([]);
     });
 
-    test('uses API when available and returns normalized result', async () => {
+    test('returns NULL_METADATA when yt-dlp fails and no API key is configured', async () => {
+      // isAvailable defaults to false from beforeEach
+      const result = await videoMetadataModule.getVideoMetadata('abc12345678');
+
+      expect(mockYoutubeApi.client.getVideoMetadata).not.toHaveBeenCalled();
+      expect(result.description).toBeNull();
+      expect(result.viewCount).toBeNull();
+      expect(result.fps).toBeNull();
+    });
+
+    test('returns partial metadata from API when yt-dlp fails and a key is configured', async () => {
       mockYoutubeApi.isAvailable.mockReturnValue(true);
       mockYoutubeApi.getApiKey.mockReturnValue('test-key');
       mockYoutubeApi.client.getVideoMetadata.mockResolvedValueOnce([{
         id: 'abc12345678',
-        title: 'From API',
+        title: 'Video',
         description: 'desc',
         duration: 300,
         viewCount: 10,
         likeCount: 2,
         commentCount: 1,
         uploadDate: '20240101',
-        channelId: 'UCxxx',
-        channelTitle: 'Chan',
         tags: ['t'],
         categories: ['22'],
         availability: 'public',
         liveBroadcastContent: 'none',
       }]);
-      mockVideo.findOne.mockResolvedValueOnce(null);
 
       const result = await videoMetadataModule.getVideoMetadata('abc12345678');
 
@@ -626,36 +630,32 @@ describe('VideoMetadataModule', () => {
         tags: ['t'],
         categories: ['22'],
         availability: 'public',
+        isLive: false,
+        webpageUrl: 'https://www.youtube.com/watch?v=abc12345678',
       });
-      expect(mockYtDlpRunner.fetchMetadata).not.toHaveBeenCalled();
+      // File-detail fields the API cannot provide must remain null.
+      expect(result.fps).toBeNull();
+      expect(result.aspectRatio).toBeNull();
+      expect(result.width).toBeNull();
+      expect(result.height).toBeNull();
+      expect(result.availableResolutions).toBeNull();
     });
 
-    test('falls back to yt-dlp silently when API throws', async () => {
+    test('marks currently-live videos as isLive=true via API fallback', async () => {
       mockYoutubeApi.isAvailable.mockReturnValue(true);
       mockYoutubeApi.getApiKey.mockReturnValue('test-key');
-      const apiErr = new Error('boom');
-      apiErr.name = 'YoutubeApiError';
-      apiErr.code = 'QUOTA_EXCEEDED';
-      mockYoutubeApi.client.getVideoMetadata.mockRejectedValueOnce(apiErr);
+      mockYoutubeApi.client.getVideoMetadata.mockResolvedValueOnce([{
+        id: 'livevid',
+        liveBroadcastContent: 'live',
+        availability: 'public',
+      }]);
 
-      // yt-dlp fallback path: no cached .info.json, fetch fresh
-      mockFs.access.mockRejectedValueOnce(new Error('not cached'));
-      mockYtDlpRunner.fetchMetadata.mockResolvedValueOnce({ description: 'from yt-dlp' });
-      mockFs.mkdir.mockResolvedValueOnce(undefined);
-      mockFs.writeFile.mockResolvedValueOnce(undefined);
+      const result = await videoMetadataModule.getVideoMetadata('livevid');
 
-      const result = await videoMetadataModule.getVideoMetadata('abc12345678');
-
-      expect(mockYoutubeApi.client.getVideoMetadata).toHaveBeenCalledTimes(1);
-      expect(mockYtDlpRunner.fetchMetadata).toHaveBeenCalledTimes(1);
-      expect(result.description).toBe('from yt-dlp');
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        expect.objectContaining({ code: 'QUOTA_EXCEEDED' }),
-        expect.stringContaining('falling back to yt-dlp')
-      );
+      expect(result.isLive).toBe(true);
     });
 
-    test('backfills originalDate from API uploadDate when DB has no date', async () => {
+    test('backfills originalDate from API uploadDate in fallback path', async () => {
       mockYoutubeApi.isAvailable.mockReturnValue(true);
       mockYoutubeApi.getApiKey.mockReturnValue('test-key');
       mockYoutubeApi.client.getVideoMetadata.mockResolvedValueOnce([{
@@ -664,11 +664,43 @@ describe('VideoMetadataModule', () => {
         availability: 'public',
       }]);
       const updateMock = jest.fn();
-      mockVideo.findOne.mockResolvedValueOnce({ originalDate: null, update: updateMock });
+      mockVideo.findOne.mockResolvedValue({ originalDate: null, update: updateMock });
 
       await videoMetadataModule.getVideoMetadata('abc12345678');
 
       expect(updateMock).toHaveBeenCalledWith({ originalDate: '20240101' });
     });
+
+    test('returns NULL_METADATA when both yt-dlp and API fail', async () => {
+      mockYoutubeApi.isAvailable.mockReturnValue(true);
+      mockYoutubeApi.getApiKey.mockReturnValue('test-key');
+      const apiErr = new Error('quota');
+      apiErr.name = 'YoutubeApiError';
+      apiErr.code = 'QUOTA_EXCEEDED';
+      mockYoutubeApi.client.getVideoMetadata.mockRejectedValueOnce(apiErr);
+
+      const result = await videoMetadataModule.getVideoMetadata('abc12345678');
+
+      expect(result.description).toBeNull();
+      expect(result.viewCount).toBeNull();
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'QUOTA_EXCEEDED' }),
+        expect.stringContaining('fallback also failed')
+      );
+    });
+
+    test('does not call API fallback when yt-dlp succeeds (cached .info.json)', async () => {
+      // Override: cached file exists and parses
+      mockFs.access.mockResolvedValue(undefined);
+      mockFs.readFile.mockResolvedValue(JSON.stringify({ description: 'cached', fps: 60 }));
+      mockYoutubeApi.isAvailable.mockReturnValue(true);
+
+      const result = await videoMetadataModule.getVideoMetadata('abc12345678');
+
+      expect(mockYoutubeApi.client.getVideoMetadata).not.toHaveBeenCalled();
+      expect(result.description).toBe('cached');
+      expect(result.fps).toBe(60);
+    });
   });
+
 });

@@ -85,6 +85,7 @@ jest.mock('../youtubeApi', () => ({
   client: {
     getChannelInfo: jest.fn(),
     listChannelVideos: jest.fn(),
+    detectAvailableTabs: jest.fn(),
   },
   YoutubeApiErrorCode: { QUOTA_EXCEEDED: 'QUOTA_EXCEEDED' },
 }));
@@ -2729,19 +2730,22 @@ describe('ChannelModule', () => {
         expect(result.videosFound).toBe(1);
       });
 
-      test('skips API for shorts tab (full fetch), uses yt-dlp', async () => {
+      test('uses API for shorts tab (full fetch) with short media_type', async () => {
         const Video = require('../../models/video');
-        const mockChannel = { ...mockChannelData, save: jest.fn(), reload: jest.fn() };
+        const mockChannel = { ...mockChannelData, save: jest.fn(), reload: jest.fn(), url: 'https://www.youtube.com/@test' };
 
         Channel.findOne.mockResolvedValue(mockChannel);
 
+        const executeSpy = jest.spyOn(ChannelModule, 'executeYtDlpCommand');
+
         youtubeApi.isAvailable.mockReturnValue(true);
         youtubeApi.getApiKey.mockReturnValue('key');
-
-        jest.spyOn(ChannelModule, 'executeYtDlpCommand').mockResolvedValue(JSON.stringify({
-          entries: [{ id: 'short-v1', title: 'Short', timestamp: 1704067200 }],
-          uploader_url: 'https://www.youtube.com/@test',
-        }));
+        youtubeApi.client.listChannelVideos.mockResolvedValue({
+          videos: [
+            { id: 'short-v1', title: 'Short', duration: 30, uploadDate: '20240501', thumbnailUrl: 'https://t/s.jpg', availability: 'public' },
+          ],
+          currentChannelUrl: 'https://www.youtube.com/@test',
+        });
 
         ChannelVideo.findOrCreate.mockResolvedValue([{}, true]);
         ChannelVideo.findAll.mockResolvedValue([{ youtube_id: 'short-v1', toJSON() { return this; } }]);
@@ -2750,7 +2754,46 @@ describe('ChannelModule', () => {
 
         await ChannelModule.fetchAllChannelVideos('UC123', 1, 50, 'off', 'shorts');
 
-        expect(youtubeApi.client.listChannelVideos).not.toHaveBeenCalled();
+        expect(youtubeApi.client.listChannelVideos).toHaveBeenCalledTimes(1);
+        expect(youtubeApi.client.listChannelVideos).toHaveBeenCalledWith(
+          'key',
+          expect.any(String),
+          expect.objectContaining({ tabType: 'shorts' })
+        );
+        expect(executeSpy).not.toHaveBeenCalled();
+      });
+
+      test('uses API for streams tab (full fetch) with livestream media_type', async () => {
+        const Video = require('../../models/video');
+        const mockChannel = { ...mockChannelData, save: jest.fn(), reload: jest.fn(), url: 'https://www.youtube.com/@test' };
+
+        Channel.findOne.mockResolvedValue(mockChannel);
+
+        const executeSpy = jest.spyOn(ChannelModule, 'executeYtDlpCommand');
+
+        youtubeApi.isAvailable.mockReturnValue(true);
+        youtubeApi.getApiKey.mockReturnValue('key');
+        youtubeApi.client.listChannelVideos.mockResolvedValue({
+          videos: [
+            { id: 'stream-v1', title: 'Live', duration: 3600, uploadDate: '20240501', thumbnailUrl: 'https://t/l.jpg', availability: 'public' },
+          ],
+          currentChannelUrl: 'https://www.youtube.com/@test',
+        });
+
+        ChannelVideo.findOrCreate.mockResolvedValue([{}, true]);
+        ChannelVideo.findAll.mockResolvedValue([{ youtube_id: 'stream-v1', toJSON() { return this; } }]);
+        ChannelVideo.count.mockResolvedValue(1);
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        await ChannelModule.fetchAllChannelVideos('UC123', 1, 50, 'off', 'streams');
+
+        expect(youtubeApi.client.listChannelVideos).toHaveBeenCalledTimes(1);
+        expect(youtubeApi.client.listChannelVideos).toHaveBeenCalledWith(
+          'key',
+          expect.any(String),
+          expect.objectContaining({ tabType: 'streams' })
+        );
+        expect(executeSpy).not.toHaveBeenCalled();
       });
 
       test('falls back to yt-dlp on API error (full fetch, videos tab)', async () => {
@@ -3824,7 +3867,7 @@ describe('ChannelModule', () => {
       channelModule = require('../channelModule');
     });
 
-    test('uses API when available and returns yt-dlp-shaped metadata', async () => {
+    test('uses API when available and returns yt-dlp-shaped metadata with entries', async () => {
       youtubeApi.isAvailable.mockReturnValue(true);
       youtubeApi.getApiKey.mockReturnValue('key');
       youtubeApi.client.getChannelInfo.mockResolvedValue({
@@ -3833,6 +3876,7 @@ describe('ChannelModule', () => {
         description: 'desc',
         customUrl: '@my',
         uploadsPlaylistId: 'UUxxx',
+        videoCount: 42,
         thumbnailUrl: 'https://yt3.ggpht.com/a',
       });
 
@@ -3846,7 +3890,47 @@ describe('ChannelModule', () => {
         uploads_playlist_id: 'UUxxx',
         folder_name: 'My Channel',
       });
+      // Caller checks entries.length > 0 to reject empty channels - a channel
+      // with uploads must synthesize a non-empty entries array.
+      expect(Array.isArray(result.entries)).toBe(true);
+      expect(result.entries.length).toBeGreaterThan(0);
       expect(childProcess.spawn).not.toHaveBeenCalled();
+    });
+
+    test('returns empty entries when API reports videoCount=0', async () => {
+      youtubeApi.isAvailable.mockReturnValue(true);
+      youtubeApi.getApiKey.mockReturnValue('key');
+      youtubeApi.client.getChannelInfo.mockResolvedValue({
+        channelId: 'UCxxx',
+        title: 'Empty Channel',
+        description: '',
+        customUrl: '@empty',
+        uploadsPlaylistId: 'UUxxx',
+        videoCount: 0,
+        thumbnailUrl: null,
+      });
+
+      const result = await channelModule.fetchChannelMetadata('https://www.youtube.com/@empty');
+
+      expect(result.entries).toEqual([]);
+    });
+
+    test('assumes entries when videoCount is null (owner hid count)', async () => {
+      youtubeApi.isAvailable.mockReturnValue(true);
+      youtubeApi.getApiKey.mockReturnValue('key');
+      youtubeApi.client.getChannelInfo.mockResolvedValue({
+        channelId: 'UCxxx',
+        title: 'Hidden Count',
+        description: '',
+        customUrl: '@hidden',
+        uploadsPlaylistId: 'UUxxx',
+        videoCount: null,
+        thumbnailUrl: null,
+      });
+
+      const result = await channelModule.fetchChannelMetadata('https://www.youtube.com/@hidden');
+
+      expect(result.entries.length).toBeGreaterThan(0);
     });
 
     test('falls back to yt-dlp silently when API throws', async () => {
@@ -3876,7 +3960,7 @@ describe('ChannelModule', () => {
     });
   });
 
-  describe('fetchChannelVideosViaYtDlp - API-first (videos tab only)', () => {
+  describe('fetchChannelVideosViaYtDlp - API-first', () => {
     let channelModule;
 
     beforeEach(() => {
@@ -3910,27 +3994,76 @@ describe('ChannelModule', () => {
       expect(youtubeApi.client.listChannelVideos).toHaveBeenCalledWith(
         'key',
         expect.any(String),
-        expect.objectContaining({ includeMetadata: true })
+        expect.objectContaining({ tabType: 'videos', includeMetadata: true })
       );
     });
 
-    test('skips API for shorts tab and uses yt-dlp directly', async () => {
+    test('uses API for shorts tab and tags videos media_type=short', async () => {
       youtubeApi.isAvailable.mockReturnValue(true);
       youtubeApi.getApiKey.mockReturnValue('key');
+      youtubeApi.client.listChannelVideos.mockResolvedValue({
+        videos: [
+          { id: 's1id', title: 'S1', duration: 30, uploadDate: '20240501', thumbnailUrl: 'https://t.jpg', availability: 'public' },
+        ],
+        currentChannelUrl: 'https://www.youtube.com/@chan',
+      });
 
-      // Don't set up the yt-dlp spawn mock for real - just assert API was not called.
-      await channelModule.fetchChannelVideosViaYtDlp('UCxxx', null, 'shorts').catch(() => {});
+      const result = await channelModule.fetchChannelVideosViaYtDlp('UCxxx', null, 'shorts');
 
-      expect(youtubeApi.client.listChannelVideos).not.toHaveBeenCalled();
+      expect(result.videos[0]).toMatchObject({
+        youtube_id: 's1id',
+        media_type: 'short',
+        live_status: null,
+      });
+      expect(youtubeApi.client.listChannelVideos).toHaveBeenCalledWith(
+        'key',
+        expect.any(String),
+        expect.objectContaining({ tabType: 'shorts' })
+      );
     });
 
-    test('skips API for streams tab and uses yt-dlp directly', async () => {
+    test('uses API for streams tab and tags videos media_type=livestream with was_live', async () => {
       youtubeApi.isAvailable.mockReturnValue(true);
       youtubeApi.getApiKey.mockReturnValue('key');
+      youtubeApi.client.listChannelVideos.mockResolvedValue({
+        videos: [
+          { id: 'l1id', title: 'L1', duration: 3600, uploadDate: '20240501', thumbnailUrl: 'https://t.jpg', availability: 'public', liveBroadcastContent: 'none' },
+        ],
+        currentChannelUrl: 'https://www.youtube.com/@chan',
+      });
 
-      await channelModule.fetchChannelVideosViaYtDlp('UCxxx', null, 'streams').catch(() => {});
+      const result = await channelModule.fetchChannelVideosViaYtDlp('UCxxx', null, 'streams');
 
-      expect(youtubeApi.client.listChannelVideos).not.toHaveBeenCalled();
+      // Past livestreams on the streams tab must get live_status='was_live' so
+      // the frontend's isStillLive check (truthy && !== 'was_live') does NOT
+      // block the download button on finished streams.
+      expect(result.videos[0]).toMatchObject({
+        youtube_id: 'l1id',
+        media_type: 'livestream',
+        live_status: 'was_live',
+      });
+      expect(youtubeApi.client.listChannelVideos).toHaveBeenCalledWith(
+        'key',
+        expect.any(String),
+        expect.objectContaining({ tabType: 'streams' })
+      );
+    });
+
+    test('maps liveBroadcastContent=live to live_status=is_live (blocks download UI)', async () => {
+      youtubeApi.isAvailable.mockReturnValue(true);
+      youtubeApi.getApiKey.mockReturnValue('key');
+      youtubeApi.client.listChannelVideos.mockResolvedValue({
+        videos: [
+          { id: 'live1', title: 'Live', duration: 0, uploadDate: '20240501', thumbnailUrl: 'https://t.jpg', availability: 'public', liveBroadcastContent: 'live' },
+          { id: 'soon1', title: 'Upcoming', duration: 0, uploadDate: '20240501', thumbnailUrl: 'https://t.jpg', availability: 'public', liveBroadcastContent: 'upcoming' },
+        ],
+        currentChannelUrl: 'https://www.youtube.com/@chan',
+      });
+
+      const result = await channelModule.fetchChannelVideosViaYtDlp('UCxxx', null, 'videos');
+
+      expect(result.videos[0]).toMatchObject({ youtube_id: 'live1', live_status: 'is_live' });
+      expect(result.videos[1]).toMatchObject({ youtube_id: 'soon1', live_status: 'is_upcoming' });
     });
 
     test('falls back to yt-dlp on API error for videos tab', async () => {
@@ -3954,6 +4087,99 @@ describe('ChannelModule', () => {
       // isAvailable defaults to false from beforeEach
       await channelModule.fetchChannelVideosViaYtDlp('UCxxx', null, 'videos').catch(() => {});
       expect(youtubeApi.client.listChannelVideos).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('tab detection - API-first', () => {
+    let channelModule;
+
+    beforeEach(() => {
+      channelModule = require('../channelModule');
+    });
+
+    test('detectAndSaveChannelTabs uses API when available, does not invoke yt-dlp probe', async () => {
+      Channel.findOne.mockResolvedValue({
+        channel_id: 'UCxxx',
+        title: 'Chan',
+        available_tabs: null,
+        auto_download_enabled_tabs: null,
+      });
+      Channel.update.mockResolvedValue([1]);
+
+      youtubeApi.isAvailable.mockReturnValue(true);
+      youtubeApi.getApiKey.mockReturnValue('key');
+      youtubeApi.client.detectAvailableTabs.mockResolvedValue({
+        availableTabs: ['videos', 'shorts'],
+        channelInfo: { channelId: 'UCxxx' },
+      });
+
+      const ytdlpSpy = jest.spyOn(channelModule, 'checkTabExistsViaYtdlp');
+
+      const result = await channelModule.detectAndSaveChannelTabs('UCxxx');
+
+      expect(youtubeApi.client.detectAvailableTabs).toHaveBeenCalledTimes(1);
+      expect(ytdlpSpy).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        availableTabs: ['videos', 'shorts'],
+        autoDownloadEnabledTabs: 'video',
+      });
+    });
+
+    test('detectAndSaveChannelTabs falls back to yt-dlp when API throws', async () => {
+      Channel.findOne.mockResolvedValue({
+        channel_id: 'UCxxx',
+        title: 'Chan',
+        available_tabs: null,
+        auto_download_enabled_tabs: null,
+      });
+      Channel.update.mockResolvedValue([1]);
+
+      youtubeApi.isAvailable.mockReturnValue(true);
+      youtubeApi.getApiKey.mockReturnValue('key');
+      const apiErr = new Error('boom');
+      apiErr.name = 'YoutubeApiError';
+      apiErr.code = 'QUOTA_EXCEEDED';
+      youtubeApi.client.detectAvailableTabs.mockRejectedValue(apiErr);
+
+      const ytdlpSpy = jest
+        .spyOn(channelModule, 'checkTabExistsViaYtdlp')
+        .mockImplementation(async (_id, tabType) => tabType === 'videos');
+
+      const result = await channelModule.detectAndSaveChannelTabs('UCxxx');
+
+      expect(youtubeApi.client.detectAvailableTabs).toHaveBeenCalledTimes(1);
+      expect(ytdlpSpy).toHaveBeenCalled();
+      expect(result.availableTabs).toEqual(['videos']);
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'QUOTA_EXCEEDED' }),
+        expect.stringContaining('falling back to yt-dlp')
+      );
+    });
+
+    test('detectAndSaveChannelTabs falls back to yt-dlp when API returns no tabs', async () => {
+      Channel.findOne.mockResolvedValue({
+        channel_id: 'UCxxx',
+        title: 'Chan',
+        available_tabs: null,
+        auto_download_enabled_tabs: null,
+      });
+      Channel.update.mockResolvedValue([1]);
+
+      youtubeApi.isAvailable.mockReturnValue(true);
+      youtubeApi.getApiKey.mockReturnValue('key');
+      youtubeApi.client.detectAvailableTabs.mockResolvedValue({
+        availableTabs: [],
+        channelInfo: null,
+      });
+
+      const ytdlpSpy = jest
+        .spyOn(channelModule, 'checkTabExistsViaYtdlp')
+        .mockImplementation(async (_id, tabType) => tabType === 'videos');
+
+      const result = await channelModule.detectAndSaveChannelTabs('UCxxx');
+
+      expect(ytdlpSpy).toHaveBeenCalled();
+      expect(result.availableTabs).toEqual(['videos']);
     });
   });
 });

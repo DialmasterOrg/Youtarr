@@ -29,6 +29,24 @@ const { TAB_TYPES, MEDIA_TAB_TYPE_MAP, parseTabCsv } = require('./tabsUtils');
 // Unfortunately, yt-dlp ALWAYS starts a fetch with the newest video, so there is no way to "page" through
 const MAX_LOAD_MORE_VIDEOS = 5000;
 
+// Translate the API's snippet.liveBroadcastContent into the yt-dlp-style
+// live_status string stored on channelvideos.live_status. The frontend uses
+// `live_status && live_status !== 'was_live'` to block the download button
+// on currently-live and upcoming streams, so getting this right prevents users
+// from selecting videos that would fail to download via yt-dlp's `!is_live`
+// and `live_status!=is_upcoming` filters.
+//
+// The API's "none" is ambiguous (regular video vs. past livestream), so we
+// disambiguate by the tab the video came from: on the Live tab it means the
+// stream has ended ("was_live"); on Videos/Shorts it means not-a-livestream
+// (null, matching yt-dlp's treatment for regular uploads).
+function deriveLiveStatusFromApi(liveBroadcastContent, tabType) {
+  if (liveBroadcastContent === 'live') return 'is_live';
+  if (liveBroadcastContent === 'upcoming') return 'is_upcoming';
+  if (tabType === TAB_TYPES.LIVE) return 'was_live';
+  return null;
+}
+
 class ChannelModule {
   constructor() {
     this.channelAutoDownload = this.channelAutoDownload.bind(this);
@@ -621,6 +639,13 @@ class ChannelModule {
           logger.info({ channelId: info.channelId, source: 'youtube-api' }, 'Fetched channel metadata via YouTube API');
           const unsanitizedFolderName = info.title || info.customUrl || info.channelId;
           const sanitizedFolderName = sanitizeNameLikeYtDlp(unsanitizedFolderName);
+
+          // Callers rely on entries.length > 0 as a "channel has uploads" signal.
+          // When videoCount is null (owner hid the count), assume uploads exist;
+          // yt-dlp will catch truly-empty channels later if the API is wrong.
+          const hasVideos = info.videoCount === null || info.videoCount > 0;
+          const entries = hasVideos ? [{ id: info.channelId }] : [];
+
           return {
             channel_id: info.channelId,
             id: info.channelId,
@@ -633,6 +658,7 @@ class ChannelModule {
               ? [{ id: 'avatar_uncropped', url: info.thumbnailUrl, width: 800, height: 800 }]
               : [],
             folder_name: sanitizedFolderName,
+            entries,
           };
         }
         logger.info({ channelUrl }, 'YouTube API getChannelInfo returned no items, falling back to yt-dlp');
@@ -1853,18 +1879,19 @@ class ChannelModule {
       }
     }
 
-    // API-first path: videos tab only. Shorts/streams stay on yt-dlp because
-    // the uploads playlist does not segregate by media type and duration-based
-    // Shorts classification is unreliable.
-    const TAB_VIDEOS = 'videos';
-    if (tabType === TAB_VIDEOS && youtubeApi.isAvailable()) {
+    // API-first path: all tabs (videos/shorts/streams) use the per-tab
+    // auto-generated playlists (UULF/UUSH/UULV) when a key is configured.
+    if (youtubeApi.isAvailable()) {
       try {
         const apiKey = youtubeApi.getApiKey();
         const channelUrl = channel.url || this.resolveChannelUrlFromId(channelId);
         const apiResult = await youtubeApi.client.listChannelVideos(apiKey, channelUrl, {
+          tabType,
           maxVideos: videoCount,
           includeMetadata: true,
         });
+
+        const mediaType = MEDIA_TAB_TYPE_MAP[tabType] || 'video';
 
         const videos = apiResult.videos.map((v) => ({
           title: v.title || 'Untitled',
@@ -1875,18 +1902,18 @@ class ChannelModule {
           thumbnail: v.thumbnailUrl || null,
           duration: v.duration || 0,
           availability: v.availability || null,
-          media_type: 'video',
-          live_status: null,
+          media_type: mediaType,
+          live_status: deriveLiveStatusFromApi(v.liveBroadcastContent, tabType),
         }));
 
         logger.info(
-          { channelId, source: 'youtube-api', videoCount: videos.length },
+          { channelId, tabType, source: 'youtube-api', videoCount: videos.length },
           'Listed channel videos via YouTube API'
         );
         return { videos, currentChannelUrl: apiResult.currentChannelUrl };
       } catch (apiErr) {
         logger.warn(
-          { err: apiErr, channelId, code: apiErr?.code },
+          { err: apiErr, channelId, tabType, code: apiErr?.code },
           'YouTube API listChannelVideos failed, falling back to yt-dlp'
         );
       }
@@ -2024,6 +2051,44 @@ class ChannelModule {
   }
 
   /**
+   * Detect available tabs for a channel. Prefers the YouTube Data API
+   * (3 quota units) when a key is configured; falls back to yt-dlp probes
+   * on any API failure or when the API returns no tabs. Return shape matches
+   * _probeTabsViaYtdlp for drop-in compatibility.
+   * @param {string} channelId - Channel ID to probe
+   * @returns {Promise<string[]>} - Detected tab types
+   * @private
+   */
+  async _probeTabs(channelId) {
+    if (youtubeApi.isAvailable()) {
+      try {
+        const apiKey = youtubeApi.getApiKey();
+        const channelUrl = this.resolveChannelUrlFromId(channelId);
+        const { availableTabs } = await youtubeApi.client.detectAvailableTabs(apiKey, channelUrl);
+
+        if (availableTabs.length > 0) {
+          logger.info(
+            { channelId, source: 'youtube-api', availableTabs },
+            'Detected channel tabs via YouTube API'
+          );
+          return availableTabs;
+        }
+        logger.info(
+          { channelId },
+          'YouTube API tab detection returned no tabs, falling back to yt-dlp'
+        );
+      } catch (apiErr) {
+        logger.warn(
+          { err: apiErr, channelId, code: apiErr?.code },
+          'YouTube API tab detection failed, falling back to yt-dlp'
+        );
+      }
+    }
+
+    return this._probeTabsViaYtdlp(channelId);
+  }
+
+  /**
    * Probe yt-dlp for each known tab type in parallel and return the list
    * of detected tabs. Falls back to [TAB_TYPES.VIDEOS] if all probes fail
    * so the channel stays usable. Shared by detectAndSaveChannelTabs and
@@ -2092,11 +2157,11 @@ class ChannelModule {
         };
       }
 
-      logger.info({ channelId, channelTitle: channel.title }, 'Starting tab detection for channel (via yt-dlp)');
+      logger.info({ channelId, channelTitle: channel.title }, 'Starting tab detection for channel');
 
-      // Probe every tab type in parallel via yt-dlp. Helper handles the
-      // fallback-to-videos behavior if all probes fail.
-      const availableTabs = await this._probeTabsViaYtdlp(channelId);
+      // Probe every tab type via API (if available) or yt-dlp. Helper handles
+      // the fallback-to-videos behavior if all probes fail.
+      const availableTabs = await this._probeTabs(channelId);
 
       // Determine auto_download_enabled_tabs: preserve existing user choice if set,
       // otherwise pick a smart default based on available tabs
@@ -2196,9 +2261,9 @@ class ChannelModule {
       throw new Error('Channel not found in database');
     }
 
-    logger.info({ channelId, channelTitle: channel.title }, 'Forcing tab re-detection for channel (via yt-dlp)');
+    logger.info({ channelId, channelTitle: channel.title }, 'Forcing tab re-detection for channel');
 
-    const detectedTabs = await this._probeTabsViaYtdlp(channelId);
+    const detectedTabs = await this._probeTabs(channelId);
     const hiddenTabs = parseTabCsv(channel.hidden_tabs);
 
     // Compute effective tabs (what the user actually sees)
@@ -2571,18 +2636,20 @@ class ChannelModule {
         logger.info({ channelId, channelTitle: channel.title, tabType }, 'Starting full video fetch for channel');
         const startTime = Date.now();
 
-        // API-first path: videos tab only. Shorts/streams stay on yt-dlp because
-        // the uploads playlist does not segregate by media type.
-        const TAB_VIDEOS = 'videos';
+        // API-first path: all tabs use per-tab auto-generated playlists when a
+        // key is configured (UULF/UUSH/UULV for videos/shorts/streams).
         let result = null;
-        if (tabType === TAB_VIDEOS && youtubeApi.isAvailable()) {
+        if (youtubeApi.isAvailable()) {
           try {
             const apiKey = youtubeApi.getApiKey();
             const channelUrl = channel.url || this.resolveChannelUrlFromId(channelId);
             const apiResult = await youtubeApi.client.listChannelVideos(apiKey, channelUrl, {
+              tabType,
               maxVideos: MAX_LOAD_MORE_VIDEOS,
               includeMetadata: true,
             });
+
+            const apiMediaType = MEDIA_TAB_TYPE_MAP[tabType] || 'video';
 
             const videos = apiResult.videos.map((v) => ({
               title: v.title || 'Untitled',
@@ -2593,24 +2660,24 @@ class ChannelModule {
               thumbnail: v.thumbnailUrl || null,
               duration: v.duration || 0,
               availability: v.availability || null,
-              media_type: 'video',
-              live_status: null,
+              media_type: apiMediaType,
+              live_status: deriveLiveStatusFromApi(v.liveBroadcastContent, tabType),
             }));
 
             logger.info(
-              { channelId, source: 'youtube-api', videoCount: videos.length },
+              { channelId, tabType, source: 'youtube-api', videoCount: videos.length },
               'Fetched all channel videos via YouTube API'
             );
             result = { videos, currentChannelUrl: apiResult.currentChannelUrl };
           } catch (apiErr) {
             logger.warn(
-              { err: apiErr, channelId, code: apiErr?.code },
+              { err: apiErr, channelId, tabType, code: apiErr?.code },
               'YouTube API listChannelVideos (full fetch) failed, falling back to yt-dlp'
             );
           }
         }
 
-        // yt-dlp fallback path (also used for shorts/streams tabs unconditionally)
+        // yt-dlp fallback path (no key, or API error)
         if (result === null) {
           const canonicalUrl = `${this.resolveChannelUrlFromId(channelId)}/${tabType}`;
           const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
