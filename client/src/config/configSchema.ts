@@ -105,6 +105,15 @@ export const CONFIG_FIELDS = {
   // API Keys
   apiKeyRateLimit: { default: 10, trackChanges: true },
 
+  // yt-dlp auto-update
+  autoUpdateYtdlp: { default: false, trackChanges: true },
+  ytdlpLastChecked: { default: null as string | null, trackChanges: false },
+  ytdlpLastUpdated: { default: null as string | null, trackChanges: false },
+  ytdlpLastResult: {
+    default: null as { status: 'updated' | 'up-to-date' | 'skipped' | 'error'; message?: string; version?: string } | null,
+    trackChanges: false,
+  },
+
   // System/internal fields (not tracked for changes)
   youtubeOutputDirectory: { default: '', trackChanges: false },
   uuid: { default: '', trackChanges: false },
@@ -165,6 +174,10 @@ export const DEFAULT_CONFIG: ConfigState = {
   darkModeEnabled: CONFIG_FIELDS.darkModeEnabled.default,
   channelVideosHotLoad: CONFIG_FIELDS.channelVideosHotLoad.default,
   apiKeyRateLimit: CONFIG_FIELDS.apiKeyRateLimit.default,
+  autoUpdateYtdlp: CONFIG_FIELDS.autoUpdateYtdlp.default,
+  ytdlpLastChecked: CONFIG_FIELDS.ytdlpLastChecked.default,
+  ytdlpLastUpdated: CONFIG_FIELDS.ytdlpLastUpdated.default,
+  ytdlpLastResult: CONFIG_FIELDS.ytdlpLastResult.default,
   youtubeOutputDirectory: CONFIG_FIELDS.youtubeOutputDirectory.default,
   uuid: CONFIG_FIELDS.uuid.default,
   envAuthApplied: CONFIG_FIELDS.envAuthApplied.default,

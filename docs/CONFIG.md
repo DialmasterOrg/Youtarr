@@ -16,6 +16,7 @@ These settings can be changed from the Configuration page in the web UI.
 - [Advanced Settings](#advanced-settings)
 - [Auto-Removal Settings](#auto-removal-settings)
 - [API Keys & External Access](#api-keys--external-access)
+- [yt-dlp Auto-Update](#yt-dlp-auto-update)
 - [Account & Security](#account--security)
 - [System Fields](#system-fields)
 - [Configuration Examples](#configuration-examples)
@@ -538,6 +539,47 @@ Settings for API key authentication used by bookmarklets, mobile shortcuts, and 
 - **Note**: Helps prevent abuse from external integrations. Each API key is rate-limited independently.
 
 For detailed information on creating and using API keys, see [API Integration Guide](API_INTEGRATION.md).
+
+## yt-dlp Auto-Update
+
+Youtarr can optionally check for and install yt-dlp updates on a nightly schedule. The toggle and its status display live next to the manual yt-dlp update button on the Core Settings page.
+
+### Auto-Update Enabled
+- **Config Key**: `autoUpdateYtdlp`
+- **Type**: `boolean`
+- **Default**: `false`
+- **Description**: When `true`, Youtarr runs `yt-dlp -U` at 4:00 AM (server local time, controlled by the `TZ` env var) every night.
+- **Behavior**:
+  - The update is skipped while any download job is in progress and is retried the next night.
+  - If the update process itself fails (e.g., permission denied on managed platforms, network error, timeout), the failure is logged and Youtarr continues to run on the previous yt-dlp version.
+  - On success, the in-process yt-dlp version cache is refreshed without requiring a server restart.
+
+### Last Checked Timestamp
+- **Config Key**: `ytdlpLastChecked`
+- **Type**: `string | null` (ISO 8601 timestamp)
+- **Default**: `null`
+- **Description**: Set automatically every time the nightly job runs (regardless of outcome). Surfaced in the UI as "Last checked: ...".
+- **Note**: Managed by the application; do not edit by hand.
+
+### Last Updated Timestamp
+- **Config Key**: `ytdlpLastUpdated`
+- **Type**: `string | null` (ISO 8601 timestamp)
+- **Default**: `null`
+- **Description**: Set automatically when the nightly job successfully installs a new yt-dlp version. Not updated when the check finds yt-dlp is already current.
+- **Note**: Managed by the application; do not edit by hand.
+
+### Last Run Result
+- **Config Key**: `ytdlpLastResult`
+- **Type**: `object | null`
+- **Default**: `null`
+- **Shape**: `{ status: 'updated' | 'up-to-date' | 'skipped' | 'error', message?: string, version?: string }`
+- **Description**: Records the outcome of the most recent nightly run. The UI uses this to render an inline status next to "Last checked".
+- **Statuses**:
+  - `updated` — a new version was installed; `version` holds the new version string.
+  - `up-to-date` — yt-dlp was already current.
+  - `skipped` — the run was deferred (for example, a download was in progress); `message` describes why.
+  - `error` — `yt-dlp -U` failed; `message` holds a short error description.
+- **Note**: Managed by the application; do not edit by hand.
 
 ## Account & Security
 

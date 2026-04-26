@@ -71,6 +71,7 @@ export interface PlatformManagedState {
   plexUrl: boolean;
   authEnabled: boolean;
   useTmpForDownloads: boolean;
+  ytdlpUpdates: boolean;
 }
 
 export interface DeploymentEnvironment {

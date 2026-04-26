@@ -50,5 +50,9 @@
   "subtitleLanguage": "en",
   "darkModeEnabled": false,
   "uuid": "",
-  "apiKeyRateLimit": 10
+  "apiKeyRateLimit": 10,
+  "autoUpdateYtdlp": false,
+  "ytdlpLastChecked": null,
+  "ytdlpLastUpdated": null,
+  "ytdlpLastResult": null
 }

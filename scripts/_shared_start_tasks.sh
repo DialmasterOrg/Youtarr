@@ -20,6 +20,10 @@ Usage: $START_SCRIPT_NAME [--no-auth] [--debug] [--headless-auth] [--pull-latest
                      Warning: Dev builds contain unreleased features and may be unstable
   --arm              Force ARM compose file selection (useful for Apple Silicon / Raspberry Pi)
   --external-db      Use external database compose file (docker-compose.external-db.yml)
+  --as-elfhosted     (Dev only) Spoof an Elfhosted deployment by exporting PLATFORM=elfhosted
+                     and AUTH_ENABLED=false for this run. Implies --no-auth. Does not set
+                     DATA_PATH or PLEX_URL; add those to .env if you need to test code paths
+                     that depend on them. See docs/development/ELFHOSTED.md.
 EOF
 }
 
@@ -34,6 +38,21 @@ get_compose_command() {
         echo "Please install Docker Compose." >&2
         exit 1
     fi
+}
+
+get_env_or_dotenv_value() {
+  local key="$1"
+  local value="${!key:-}"
+
+  if [ -n "$value" ]; then
+    printf '%s' "$value"
+    return
+  fi
+
+  if [ -f ./.env ]; then
+    value=$(grep -E "^[[:space:]]*${key}[[:space:]]*=" ./.env | tail -n 1 | sed -E "s/^[[:space:]]*${key}[[:space:]]*=[[:space:]]*//" | sed -E 's/[[:space:]]+#.*$//' | sed -E 's/^"(.*)"$/\1/' | sed -E "s/^'(.*)'$/\1/")
+    printf '%s' "$value"
+  fi
 }
 
 # Get the appropriate compose command
@@ -74,6 +93,10 @@ while [[ $# -gt 0 ]]; do
       USE_EXTERNAL_DB=true
       shift
       ;;
+    --as-elfhosted)
+      AS_ELFHOSTED=true
+      shift
+      ;;
     --help)
       print_usage
       exit 0
@@ -87,6 +110,31 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Command line flag overrides .env settings
+if [ "$AS_ELFHOSTED" = true ]; then
+  if [ "$DEV_MODE" != "true" ]; then
+    yt_error "--as-elfhosted is only supported by ./scripts/start-dev.sh."
+    exit 1
+  fi
+  export PLATFORM=elfhosted
+  export AUTH_ENABLED=false
+  yt_warn "Spoofing Elfhosted deployment for this run."
+  yt_detail "Exported: PLATFORM=elfhosted, AUTH_ENABLED=false (these overrides do not persist)."
+  yt_detail "Covers: yt-dlp update gating, auth bypass, Elfhosted UI chips, version-banner suppression."
+  DATA_PATH_FOR_SPOOF=$(get_env_or_dotenv_value "DATA_PATH")
+  PLEX_URL_FOR_SPOOF=$(get_env_or_dotenv_value "PLEX_URL")
+  if [ -z "$DATA_PATH_FOR_SPOOF" ] && [ -z "$PLEX_URL_FOR_SPOOF" ]; then
+    yt_detail "Not spoofed: DATA_PATH and PLEX_URL are unset, so persistent-data relocation"
+    yt_detail "  and Plex-URL locking will not be exercised. Set them in .env to test those paths."
+  elif [ -z "$DATA_PATH_FOR_SPOOF" ]; then
+    yt_detail "Not spoofed: DATA_PATH is unset (persistent-data relocation will not be exercised)."
+  elif [ -z "$PLEX_URL_FOR_SPOOF" ]; then
+    yt_detail "Not spoofed: PLEX_URL is unset (Plex-URL locking will not be exercised)."
+  else
+    yt_detail "Detected DATA_PATH and PLEX_URL from the shell or .env for full platform spoofing."
+  fi
+  yt_detail "A local spoof cannot replicate Cloudflare Access or rclone-backed storage."
+fi
+
 if [ "$NO_AUTH" = true ]; then
   export AUTH_ENABLED=false
   yt_warn "Authentication disabled via --no-auth flag."

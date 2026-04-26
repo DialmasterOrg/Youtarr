@@ -70,7 +70,8 @@ describe('ChannelSettingsDialog', () => {
       isPlatformManaged: {
         plexUrl: false,
         authEnabled: true,
-        useTmpForDownloads: false
+        useTmpForDownloads: false,
+        ytdlpUpdates: false
       },
       deploymentEnvironment: {
         platform: null,
@@ -354,7 +355,8 @@ describe('ChannelSettingsDialog', () => {
         isPlatformManaged: {
           plexUrl: false,
           authEnabled: true,
-          useTmpForDownloads: false
+          useTmpForDownloads: false,
+          ytdlpUpdates: false
         },
         deploymentEnvironment: {
           platform: null,

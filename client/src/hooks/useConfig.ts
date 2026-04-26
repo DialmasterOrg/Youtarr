@@ -28,7 +28,8 @@ export function useConfig(token: string | null): UseConfigResult {
   const [isPlatformManaged, setIsPlatformManaged] = useState<PlatformManagedState>({
     plexUrl: false,
     authEnabled: true,
-    useTmpForDownloads: false
+    useTmpForDownloads: false,
+    ytdlpUpdates: false
   });
   const [deploymentEnvironment, setDeploymentEnvironment] = useState<DeploymentEnvironment>({
     platform: null,

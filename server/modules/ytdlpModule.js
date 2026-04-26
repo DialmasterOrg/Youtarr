@@ -146,13 +146,14 @@ function isDownloadInProgress() {
 
 /**
  * Performs yt-dlp self-update
- * @returns {Promise<{success: boolean, message: string, newVersion?: string}>}
+ * @returns {Promise<{success: boolean, reason: 'updated'|'up-to-date'|'skipped'|'error', message: string, newVersion?: string}>}
  */
 function performUpdate() {
   // Prevent concurrent updates
   if (updateInProgress) {
     return Promise.resolve({
       success: false,
+      reason: 'skipped',
       message: 'An update is already in progress',
     });
   }
@@ -161,6 +162,7 @@ function performUpdate() {
   if (isDownloadInProgress()) {
     return Promise.resolve({
       success: false,
+      reason: 'skipped',
       message: 'Cannot update while downloads are in progress. Please wait for downloads to complete.',
     });
   }
@@ -200,6 +202,7 @@ function performUpdate() {
           logger.warn({ output }, 'yt-dlp update failed: permission denied');
           resolve({
             success: false,
+            reason: 'error',
             message:
               'Update failed: Permission denied. On managed platforms, yt-dlp may be updated by the platform operator.',
           });
@@ -209,6 +212,7 @@ function performUpdate() {
         logger.error({ code, output }, 'yt-dlp update failed');
         resolve({
           success: false,
+          reason: 'error',
           message: `Update failed with exit code ${code}`,
         });
         return;
@@ -218,6 +222,7 @@ function performUpdate() {
         logger.info('yt-dlp is already up to date');
         resolve({
           success: true,
+          reason: 'up-to-date',
           message: 'yt-dlp is already up to date',
         });
         return;
@@ -232,6 +237,7 @@ function performUpdate() {
       logger.info({ newVersion, output }, 'yt-dlp updated successfully');
       resolve({
         success: true,
+        reason: 'updated',
         message: newVersion ? `Successfully updated to ${newVersion}` : 'Update completed successfully',
         newVersion,
       });
@@ -243,6 +249,7 @@ function performUpdate() {
       logger.error({ err }, 'Failed to spawn yt-dlp update process');
       resolve({
         success: false,
+        reason: 'error',
         message: 'Failed to start update process',
       });
     });
@@ -254,6 +261,7 @@ function performUpdate() {
       logger.warn('yt-dlp update timed out');
       resolve({
         success: false,
+        reason: 'error',
         message: 'Update timed out. Please try again later.',
       });
     }, timeout);

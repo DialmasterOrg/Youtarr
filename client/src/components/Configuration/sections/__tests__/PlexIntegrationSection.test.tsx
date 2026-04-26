@@ -18,6 +18,7 @@ const createPlatformManagedState = (
   plexUrl: false,
   authEnabled: false,
   useTmpForDownloads: false,
+  ytdlpUpdates: false,
   ...overrides,
 });
 
