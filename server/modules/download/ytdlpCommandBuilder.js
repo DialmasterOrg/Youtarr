@@ -1,6 +1,8 @@
 const path = require('path');
 const configModule = require('../configModule');
 const tempPathManager = require('./tempPathManager');
+const logger = require('../../logger');
+const customArgsParser = require('./customArgsParser');
 const {
   CHANNEL_TEMPLATE,
   VIDEO_FOLDER_TEMPLATE,
@@ -187,28 +189,42 @@ class YtdlpCommandBuilder {
   }
 
   /**
-   * Build arguments that ALWAYS apply to any yt-dlp invocation
-   * Includes: IPv4 enforcement, proxy, sleep-requests, cookies, and temp path
-   * @param {Object} config - Configuration object
-   * @param {Object} options - Options for building args
-   * @param {boolean} options.skipSleepRequests - Skip adding --sleep-requests (for single metadata fetches)
-   * @returns {string[]} - Array of common arguments
+   * Build the managed common flags that every yt-dlp invocation needs.
+   * NOTE: custom user args are NOT included here. Each builder is responsible
+   * for appending `buildCustomArgs(config)` at the end, after all managed
+   * flags but before the URL operand, so yt-dlp's last-wins semantics let
+   * users override managed defaults like --retries / --fragment-retries.
+   *
+   * @param {Object} config
+   * @param {Object} options
+   * @param {boolean} options.skipSleepRequests - Skip --sleep-requests for single metadata fetches
+   * @returns {string[]}
    */
   static buildCommonArgs(config, options = {}) {
     const { skipSleepRequests = false } = options;
     const args = [];
 
-    // Always use IPv4
-    // Note, I have found that this greatly improves reliability downloading from YouTube
-    args.push('-4');
+    // IP family (replaces previously-hardcoded -4)
+    // Default 'ipv4' preserves backwards compat for any config missing the field.
+    const ipFamily = config.ytdlpIpFamily || 'ipv4';
+    if (ipFamily === 'ipv4') {
+      args.push('-4');
+    } else if (ipFamily === 'ipv6') {
+      args.push('-6');
+    }
+    // 'auto' adds neither
 
-    // Add proxy if configured
+    // Proxy
     if (config.proxy && config.proxy.trim()) {
       args.push('--proxy', config.proxy.trim());
     }
 
-    // Add sleep between requests (configurable)
-    // Skip for single metadata fetches where rate limiting isn't needed
+    // Download rate limit
+    if (config.ytdlpDownloadRateLimit && config.ytdlpDownloadRateLimit.trim()) {
+      args.push('--limit-rate', config.ytdlpDownloadRateLimit.trim());
+    }
+
+    // Sleep between requests (configurable, skipped for single metadata fetches)
     if (!skipSleepRequests) {
       const sleepRequests = config.sleepRequests ?? 1;
       if (sleepRequests > 0) {
@@ -216,17 +232,53 @@ class YtdlpCommandBuilder {
       }
     }
 
-    // Add cookies if configured
+    // Cookies
     const cookiesPath = configModule.getCookiesPath();
     if (cookiesPath) {
       args.push('--cookies', cookiesPath);
     }
 
-    // Add temp path for yt-dlp's internal temp files
-    // This fixes permission errors on Docker setups where /tmp may not be writable
+    // Temp paths for yt-dlp's internal temp files
     args.push(...this.buildTempPathArgs());
 
     return args;
+  }
+
+  /**
+   * Tokenize and validate the user's custom yt-dlp args. Returns a token
+   * array suitable for spreading at the END of a command (after managed
+   * flags, before URL operands) so yt-dlp's last-wins semantics let the
+   * user override managed defaults.
+   *
+   * Defense-in-depth: re-validates against the denylist in case config.json
+   * was hand-edited after the route-level gate. Invalid args are silently
+   * dropped with a warn log; never crashes yt-dlp.
+   *
+   * @param {Object} config
+   * @returns {string[]}
+   */
+  static buildCustomArgs(config) {
+    if (!config.ytdlpCustomArgs || !config.ytdlpCustomArgs.trim()) {
+      return [];
+    }
+    try {
+      const tokens = customArgsParser.tokenize(config.ytdlpCustomArgs);
+      const validation = customArgsParser.validate(tokens);
+      if (!validation.ok) {
+        logger.warn(
+          { reason: validation.error },
+          'Skipping invalid custom yt-dlp args (denylist)'
+        );
+        return [];
+      }
+      return tokens;
+    } catch (err) {
+      logger.warn(
+        { err: err.message },
+        'Failed to parse custom yt-dlp args; ignoring'
+      );
+      return [];
+    }
   }
 
   /**
@@ -262,6 +314,9 @@ class YtdlpCommandBuilder {
       args.push('--extractor-args', options.extractorArgs);
     }
 
+    // Custom user args last (yt-dlp last-wins) but before URL operand
+    args.push(...this.buildCustomArgs(config));
+
     args.push(url);
     return args;
   }
@@ -287,6 +342,9 @@ class YtdlpCommandBuilder {
 
     args.push(...this.buildCommonArgs(config, { skipSleepRequests: options.skipSleepRequests }));
 
+    // Custom user args last (yt-dlp last-wins) but before URL operand
+    args.push(...this.buildCustomArgs(config));
+
     args.push(url);
     return args;
   }
@@ -307,9 +365,13 @@ class YtdlpCommandBuilder {
       '--playlist-end', '1',
       '--playlist-items', '0',
       '--convert-thumbnails', 'jpg',
-      '-o', outputPath,
-      url
+      '-o', outputPath
     );
+
+    // Custom user args last (yt-dlp last-wins) but before URL operand
+    args.push(...this.buildCustomArgs(config));
+
+    args.push(url);
 
     return args;
   }
@@ -397,6 +459,8 @@ class YtdlpCommandBuilder {
       '--no-warnings',
       '--extractor-args', 'youtubetab:approximate_date',
       '--default-search', 'ytsearch',
+      // Custom user args last (yt-dlp last-wins) but before the search operand
+      ...this.buildCustomArgs(config),
       `ytsearch${count}:${query}`,
     ];
     return args;
@@ -487,6 +551,11 @@ class YtdlpCommandBuilder {
     const sponsorblockArgs = this.buildSponsorblockArgs(config);
     args.push(...sponsorblockArgs);
 
+    // Custom user args MUST be appended last so yt-dlp's last-wins semantics
+    // let users override managed defaults like --retries / --fragment-retries.
+    // The URL list (-a tempChannelsFile) is appended later by downloadModule.
+    args.push(...this.buildCustomArgs(config));
+
     return args;
   }
 
@@ -563,6 +632,11 @@ class YtdlpCommandBuilder {
     // Add Sponsorblock args if configured
     const sponsorblockArgs = this.buildSponsorblockArgs(config);
     args.push(...sponsorblockArgs);
+
+    // Custom user args MUST be appended last so yt-dlp's last-wins semantics
+    // let users override managed defaults like --retries / --fragment-retries.
+    // URL operands are appended later by downloadModule.
+    args.push(...this.buildCustomArgs(config));
 
     return args;
   }

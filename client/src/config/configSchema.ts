@@ -114,6 +114,11 @@ export const CONFIG_FIELDS = {
     trackChanges: false,
   },
 
+  // yt-dlp options (custom args, IP family, rate limit)
+  ytdlpIpFamily: { default: 'ipv4' as 'ipv4' | 'ipv6' | 'auto', trackChanges: true },
+  ytdlpDownloadRateLimit: { default: '', trackChanges: true },
+  ytdlpCustomArgs: { default: '', trackChanges: true },
+
   // System/internal fields (not tracked for changes)
   youtubeOutputDirectory: { default: '', trackChanges: false },
   uuid: { default: '', trackChanges: false },
@@ -178,6 +183,9 @@ export const DEFAULT_CONFIG: ConfigState = {
   ytdlpLastChecked: CONFIG_FIELDS.ytdlpLastChecked.default,
   ytdlpLastUpdated: CONFIG_FIELDS.ytdlpLastUpdated.default,
   ytdlpLastResult: CONFIG_FIELDS.ytdlpLastResult.default,
+  ytdlpIpFamily: CONFIG_FIELDS.ytdlpIpFamily.default,
+  ytdlpDownloadRateLimit: CONFIG_FIELDS.ytdlpDownloadRateLimit.default,
+  ytdlpCustomArgs: CONFIG_FIELDS.ytdlpCustomArgs.default,
   youtubeOutputDirectory: CONFIG_FIELDS.youtubeOutputDirectory.default,
   uuid: CONFIG_FIELDS.uuid.default,
   envAuthApplied: CONFIG_FIELDS.envAuthApplied.default,

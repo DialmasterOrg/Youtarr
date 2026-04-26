@@ -31,9 +31,9 @@ For multi-part requests (e.g., "review this PR AND explain WebSocket handling"),
 ### Backend (server/)
 - `server.js`: Express entry point. `db.js`: Sequelize setup. `logger.js`: Pino logger with request correlation.
 - `models/`: Sequelize models (channel, video, job, jobvideo, jobvideodownload, channelvideo, session, apikey). Associations: Channel hasMany Videos, Job hasMany JobVideos.
-- `routes/`: API handlers (auth, channels, videos, videoDetail, videoSearch, config, jobs, plex, setup, subscriptions, apikeys, health). All use the dependency injection factory pattern; wiring lives in `server/routes/index.js`.
+- `routes/`: API handlers (auth, channels, videos, videoDetail, videoSearch, config, jobs, plex, setup, subscriptions, apikeys, ytdlpOptions, health). All use the dependency injection factory pattern; wiring lives in `server/routes/index.js`.
 - `modules/`: class-based singletons holding business logic. Top-level modules include `channelModule`, `downloadModule`, `plexModule`, `jobModule`, `configModule`, `videosModule`, `videoMetadataModule`, `videoSearchModule`, `webSocketServer`, `databaseHealthModule`, `notificationModule`, `channelSettingsModule`, `videoDeletionModule`, `nfoGenerator`, `cronJobs`, `apiKeyModule`, `ytdlpModule`, `messageEmitter`.
-- `modules/download/`: download orchestration (`downloadExecutor`, `ytdlpCommandBuilder`, `DownloadProgressMonitor`, `tempPathManager`, `videoMetadataProcessor`).
+- `modules/download/`: download orchestration (`downloadExecutor`, `ytdlpCommandBuilder`, `DownloadProgressMonitor`, `tempPathManager`, `videoMetadataProcessor`, `customArgsParser`, `ytdlpValidator`).
 - `modules/filesystem/`: path/file abstraction (`pathBuilder`, `directoryManager`, `fileOperations`, `sanitizer`, `constants`). Good example of the sub-module aggregator pattern.
 - `modules/notifications/`: multi-service notifications via Apprise (`serviceRegistry`, `formatters/`, `senders/`). Good example of a pluggable service registry.
 - `modules/subscriptionImport/`: bulk channel import (`importJobRunner`, `takeoutParser`, `cookiesFetcher`, `thumbnailEnricher`, `concurrencyLimiter`, `errorClassifier`).
