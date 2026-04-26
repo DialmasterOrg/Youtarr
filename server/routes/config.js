@@ -65,7 +65,8 @@ module.exports = function createConfigRoutes({ verifyToken, configModule, valida
       youtubeOutputDirectory: !!process.env.DATA_PATH,
       plexUrl: !!process.env.PLEX_URL,
       authEnabled: process.env.AUTH_ENABLED === 'false' ? false : true,
-      useTmpForDownloads: configModule.isElfhostedPlatform()
+      useTmpForDownloads: configModule.isElfhostedPlatform(),
+      ytdlpUpdates: configModule.isElfhostedPlatform()
     };
 
     safeConfig.deploymentEnvironment = {
@@ -129,6 +130,9 @@ module.exports = function createConfigRoutes({ verifyToken, configModule, valida
 
     updateData.passwordHash = currentConfig.passwordHash;
     updateData.username = currentConfig.username;
+    updateData.ytdlpLastChecked = currentConfig.ytdlpLastChecked;
+    updateData.ytdlpLastUpdated = currentConfig.ytdlpLastUpdated;
+    updateData.ytdlpLastResult = currentConfig.ytdlpLastResult;
 
     configModule.updateConfig(updateData);
 
@@ -388,4 +392,3 @@ module.exports = function createConfigRoutes({ verifyToken, configModule, valida
 
   return router;
 };
-

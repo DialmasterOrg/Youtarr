@@ -42,7 +42,7 @@ function registerRoutes(app, deps) {
   } = deps;
 
   // Health routes (no auth required for health checks, but yt-dlp endpoints are authenticated)
-  app.use(createHealthRoutes({ getCachedYtDlpVersion, refreshYtDlpVersionCache, verifyToken }));
+  app.use(createHealthRoutes({ getCachedYtDlpVersion, refreshYtDlpVersionCache, verifyToken, configModule }));
 
   // Auth routes
   app.use(createAuthRoutes({ verifyToken, loginLimiter, configModule }));
@@ -82,4 +82,3 @@ function registerRoutes(app, deps) {
 }
 
 module.exports = { registerRoutes };
-

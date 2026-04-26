@@ -11,9 +11,10 @@ const ytdlpModule = require('../modules/ytdlpModule');
  * @param {Function} deps.getCachedYtDlpVersion - Function to get cached yt-dlp version
  * @param {Function} deps.refreshYtDlpVersionCache - Function to refresh yt-dlp version cache
  * @param {Function} deps.verifyToken - Authentication middleware
+ * @param {Object} deps.configModule - Configuration module
  * @returns {express.Router}
  */
-module.exports = function createHealthRoutes({ getCachedYtDlpVersion, refreshYtDlpVersionCache, verifyToken }) {
+module.exports = function createHealthRoutes({ getCachedYtDlpVersion, refreshYtDlpVersionCache, verifyToken, configModule }) {
   /**
    * @swagger
    * /api/health:
@@ -238,6 +239,13 @@ module.exports = function createHealthRoutes({ getCachedYtDlpVersion, refreshYtD
    */
   router.post('/api/ytdlp/update', verifyToken, async (req, res) => {
     try {
+      if (configModule.isElfhostedPlatform()) {
+        return res.status(403).json({
+          success: false,
+          message: 'yt-dlp is managed by the platform and cannot be updated from Youtarr.',
+        });
+      }
+
       const result = await ytdlpModule.performUpdate();
 
       // Refresh the cached version after update
@@ -257,4 +265,3 @@ module.exports = function createHealthRoutes({ getCachedYtDlpVersion, refreshYtD
 
   return router;
 };
-

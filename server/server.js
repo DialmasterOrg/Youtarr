@@ -580,7 +580,7 @@ const initialize = async () => {
         if (databaseHealth.isDatabaseHealthy()) {
           // Initialize cron jobs
           const cronJobs = require('./modules/cronJobs');
-          cronJobs.initialize();
+          cronJobs.initialize({ refreshYtDlpVersionCache });
 
           // Run folder_name migration for existing channels asynchronously
           // This populates folder_name from Video.filePath for channels that don't have it set

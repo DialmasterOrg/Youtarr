@@ -4,12 +4,18 @@ const logger = require('../logger');
 /**
  * Initialize all scheduled cron jobs for the application
  * This module centralizes all cron job definitions for better maintainability
+ *
+ * @param {Object} [deps]
+ * @param {Function} [deps.refreshYtDlpVersionCache] - Refreshes the cached yt-dlp version after a successful auto-update
  */
-function initialize() {
+function initialize(deps = {}) {
   const db = require('../db');
   const videosModule = require('./videosModule');
   const videoDeletionModule = require('./videoDeletionModule');
   const notificationModule = require('./notificationModule');
+  const ytdlpModule = require('./ytdlpModule');
+  const configModule = require('./configModule');
+  const { refreshYtDlpVersionCache } = deps;
 
   logger.info('Initializing scheduled cron jobs');
 
@@ -101,10 +107,71 @@ function initialize() {
     }
   });
 
+  // ============================================================================
+  // YT-DLP AUTO-UPDATE - 4:00 AM Daily (only when enabled in config)
+  // ============================================================================
+  schedule.schedule('0 4 * * *', async () => {
+    try {
+      // Skip on platforms that manage yt-dlp themselves (e.g., Elfhosted)
+      if (configModule.isElfhostedPlatform()) {
+        return;
+      }
+
+      const config = configModule.getConfig();
+      if (!config.autoUpdateYtdlp) {
+        return;
+      }
+
+      logger.info('Running nightly yt-dlp auto-update');
+      const checkedAt = new Date().toISOString();
+      const result = await ytdlpModule.performUpdate();
+
+      const updatedConfig = { ...configModule.getConfig(), ytdlpLastChecked: checkedAt };
+
+      const resultStatus = result.reason || (result.success ? (result.newVersion ? 'updated' : 'up-to-date') : 'error');
+
+      if (result.success) {
+        if (resultStatus === 'updated') {
+          updatedConfig.ytdlpLastUpdated = checkedAt;
+          updatedConfig.ytdlpLastResult = {
+            status: 'updated',
+            ...(result.newVersion ? { version: result.newVersion } : {})
+          };
+          logger.info({ newVersion: result.newVersion }, 'Nightly yt-dlp auto-update installed new version');
+        } else {
+          updatedConfig.ytdlpLastResult = { status: 'up-to-date' };
+          logger.info('Nightly yt-dlp auto-update: already up to date');
+        }
+        if (typeof refreshYtDlpVersionCache === 'function') {
+          try {
+            refreshYtDlpVersionCache();
+          } catch (err) {
+            logger.warn({ err }, 'Failed to refresh yt-dlp version cache after auto-update');
+          }
+        }
+      } else {
+        updatedConfig.ytdlpLastResult = {
+          status: resultStatus === 'skipped' ? 'skipped' : 'error',
+          message: result.message || 'Unknown error'
+        };
+        if (resultStatus === 'skipped') {
+          logger.info({ message: result.message }, 'Nightly yt-dlp auto-update skipped');
+        } else {
+          logger.warn({ message: result.message }, 'Nightly yt-dlp auto-update failed');
+        }
+      }
+
+      configModule.updateConfig(updatedConfig);
+    } catch (error) {
+      logger.error({ err: error }, 'Unexpected error in nightly yt-dlp auto-update');
+    }
+  });
+
   logger.info('Scheduled cron jobs initialized successfully');
   logger.info('  - Automatic video cleanup: 2:00 AM daily');
   logger.info('  - Session cleanup: 3:00 AM daily');
   logger.info('  - Video metadata backfill: 3:30 AM daily');
+  logger.info('  - yt-dlp auto-update: 4:00 AM daily (when enabled)');
 }
 
 module.exports = {
