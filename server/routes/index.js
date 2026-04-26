@@ -23,6 +23,7 @@ function registerRoutes(app, deps) {
   const {
     verifyToken,
     loginLimiter,
+    youtubeApiKeyTestLimiter,
     configModule,
     channelModule,
     plexModule,
@@ -62,7 +63,7 @@ function registerRoutes(app, deps) {
   app.use(createVideoSearchRoutes({ verifyToken, videoSearchModule }));
 
   // YouTube API key test route
-  app.use(createYoutubeApiKeyRoutes({ verifyToken, youtubeApi, configModule }));
+  app.use(createYoutubeApiKeyRoutes({ verifyToken, youtubeApiKeyTestLimiter, youtubeApi, configModule }));
 
   // Job routes
   app.use(createJobRoutes({ verifyToken, jobModule, downloadModule }));

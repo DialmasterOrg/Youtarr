@@ -20,12 +20,20 @@ const REASON_BY_CODE = {
  * Creates YouTube API key test routes
  * @param {Object} deps - Dependencies
  * @param {Function} deps.verifyToken - Token verification middleware
+ * @param {Function} [deps.youtubeApiKeyTestLimiter] - Rate-limit middleware (optional)
  * @param {Object} deps.youtubeApi - youtubeApi aggregator module
  * @param {Object} deps.configModule - Config module
  * @returns {express.Router}
  */
-module.exports = function createYoutubeApiKeyRoutes({ verifyToken, youtubeApi, configModule }) {
+module.exports = function createYoutubeApiKeyRoutes({
+  verifyToken,
+  youtubeApiKeyTestLimiter,
+  youtubeApi,
+  configModule,
+}) {
   const router = express.Router();
+  const passthrough = (_req, _res, next) => next();
+  const limiter = youtubeApiKeyTestLimiter || passthrough;
 
   /**
    * @swagger
@@ -49,7 +57,10 @@ module.exports = function createYoutubeApiKeyRoutes({ verifyToken, youtubeApi, c
    *       400:
    *         description: apiKey missing or empty
    */
-  router.post('/testYoutubeApiKey', verifyToken, async (req, res) => {
+  // verifyToken first, then limiter: unauthenticated requests get rejected at
+  // the auth gate and must not consume the IP bucket of a legitimate signed-in
+  // user sharing the source IP.
+  router.post('/testYoutubeApiKey', verifyToken, limiter, async (req, res) => {
     try {
       const apiKey = typeof req.body?.apiKey === 'string' ? req.body.apiKey.trim() : '';
       if (apiKey.length === 0) {

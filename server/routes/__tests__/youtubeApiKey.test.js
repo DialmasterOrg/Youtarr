@@ -20,7 +20,7 @@ const createYoutubeApiKeyRoutes = require('../youtubeApiKey');
 
 let configModule;
 
-function makeApp() {
+function makeApp({ limiter } = {}) {
   const app = express();
   app.use(express.json());
   const verifyToken = (req, _res, next) => next();
@@ -29,7 +29,12 @@ function makeApp() {
     getConfig: jest.fn(function () { return this._config; }),
     updateConfig: jest.fn(function (next) { this._config = next; }),
   };
-  app.use(createYoutubeApiKeyRoutes({ verifyToken, youtubeApi, configModule }));
+  app.use(createYoutubeApiKeyRoutes({
+    verifyToken,
+    youtubeApiKeyTestLimiter: limiter,
+    youtubeApi,
+    configModule,
+  }));
   return app;
 }
 
@@ -106,5 +111,18 @@ describe('POST /testYoutubeApiKey', () => {
     const res = await supertest(makeApp()).post('/testYoutubeApiKey').send({ apiKey: 'x' });
     expect(res.status).toBe(500);
     expect(res.body.error).toBeTruthy();
+  });
+
+  test('applies the rate limiter when one is wired in', async () => {
+    const limiter = jest.fn((_req, res) =>
+      res.status(429).json({ error: 'Too many key tests.' })
+    );
+    const res = await supertest(makeApp({ limiter }))
+      .post('/testYoutubeApiKey')
+      .send({ apiKey: 'x' });
+
+    expect(limiter).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe(429);
+    expect(youtubeApi.client.testKey).not.toHaveBeenCalled();
   });
 });

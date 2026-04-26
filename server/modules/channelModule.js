@@ -29,6 +29,19 @@ const { TAB_TYPES, MEDIA_TAB_TYPE_MAP, parseTabCsv } = require('./tabsUtils');
 // Unfortunately, yt-dlp ALWAYS starts a fetch with the newest video, so there is no way to "page" through
 const MAX_LOAD_MORE_VIDEOS = 5000;
 
+// Log API-fallback events at the right level: warn for genuine failures
+// (network/quota/etc), debug for "we knew the API path couldn't handle this
+// channel" cases like a non-UC channel ID. Keeps warn-level signal high.
+function logApiFallback(apiErr, fields, message) {
+  const isShape = apiErr?.code === youtubeApi.YoutubeApiErrorCode.INVALID_CHANNEL_ID;
+  const payload = { err: apiErr, ...fields, code: apiErr?.code };
+  if (isShape) {
+    logger.debug(payload, message);
+  } else {
+    logger.warn(payload, message);
+  }
+}
+
 // Translate the API's snippet.liveBroadcastContent into the yt-dlp-style
 // live_status string stored on channelvideos.live_status. The frontend uses
 // `live_status && live_status !== 'was_live'` to block the download button
@@ -45,6 +58,48 @@ function deriveLiveStatusFromApi(liveBroadcastContent, tabType) {
   if (liveBroadcastContent === 'upcoming') return 'is_upcoming';
   if (tabType === TAB_TYPES.LIVE) return 'was_live';
   return null;
+}
+
+function mapApiVideoToChannelVideo(video, tabType, defaultRating = null) {
+  const mediaType = MEDIA_TAB_TYPE_MAP[tabType] || 'video';
+  const effectiveRating = ratingMapper.determineEffectiveRating(
+    {
+      content_rating: video.contentRating || null,
+      age_limit: video.ageLimit ?? null,
+    },
+    defaultRating
+  );
+
+  const out = {
+    title: video.title || 'Untitled',
+    youtube_id: video.id,
+    publishedAt: video.uploadDate
+      ? new Date(`${video.uploadDate.slice(0, 4)}-${video.uploadDate.slice(4, 6)}-${video.uploadDate.slice(6, 8)}T00:00:00Z`).toISOString()
+      : null,
+    thumbnail: video.thumbnailUrl || null,
+    duration: video.duration || 0,
+    availability: video.availability || null,
+    media_type: mediaType,
+    live_status: deriveLiveStatusFromApi(video.liveBroadcastContent, tabType),
+  };
+
+  if (effectiveRating.normalized_rating != null) {
+    out.normalized_rating = effectiveRating.normalized_rating;
+  }
+
+  if (effectiveRating.rating_source != null) {
+    out.rating_source = effectiveRating.rating_source;
+  }
+
+  if (video.contentRating != null) {
+    out.content_rating = video.contentRating;
+  }
+
+  if (video.ageLimit != null) {
+    out.age_limit = video.ageLimit;
+  }
+
+  return out;
 }
 
 class ChannelModule {
@@ -663,8 +718,9 @@ class ChannelModule {
         }
         logger.info({ channelUrl }, 'YouTube API getChannelInfo returned no items, falling back to yt-dlp');
       } catch (apiErr) {
-        logger.warn(
-          { err: apiErr, channelUrl, code: apiErr?.code },
+        logApiFallback(
+          apiErr,
+          { channelUrl },
           'YouTube API fetchChannelMetadata failed, falling back to yt-dlp'
         );
       }
@@ -1850,16 +1906,18 @@ class ChannelModule {
   }
 
   /**
-   * Fetch channel videos from specific tab using yt-dlp.
-   * Retrieves metadata for recent videos from YouTube.
-   * Uses canonical channel URL for stability when handles change.
+   * Fetch channel videos from a specific tab.
+   * Tries the YouTube Data API first when a key is configured (per-tab
+   * UULF/UUSH/UULV playlists), then falls back to yt-dlp on any API failure
+   * or when no key is configured. Uses canonical channel URL for stability
+   * when handles change.
    * @param {string} channelId - Channel ID to fetch videos for
    * @param {Date|null} mostRecentVideoDate - Date of the most recent video we have
    * @param {string} tabType - Type of tab to fetch videos from
    * @returns {Promise<Object>} - Object with videos array and current channel URL
    * @throws {Error} - If channel not found in database
    */
-  async fetchChannelVideosViaYtDlp(channelId, mostRecentVideoDate = null, tabType) {
+  async fetchChannelVideos(channelId, mostRecentVideoDate = null, tabType) {
     const channel = await Channel.findOne({
       where: { channel_id: channelId },
     });
@@ -1891,20 +1949,7 @@ class ChannelModule {
           includeMetadata: true,
         });
 
-        const mediaType = MEDIA_TAB_TYPE_MAP[tabType] || 'video';
-
-        const videos = apiResult.videos.map((v) => ({
-          title: v.title || 'Untitled',
-          youtube_id: v.id,
-          publishedAt: v.uploadDate
-            ? new Date(`${v.uploadDate.slice(0, 4)}-${v.uploadDate.slice(4, 6)}-${v.uploadDate.slice(6, 8)}T00:00:00Z`).toISOString()
-            : null,
-          thumbnail: v.thumbnailUrl || null,
-          duration: v.duration || 0,
-          availability: v.availability || null,
-          media_type: mediaType,
-          live_status: deriveLiveStatusFromApi(v.liveBroadcastContent, tabType),
-        }));
+        const videos = apiResult.videos.map((v) => mapApiVideoToChannelVideo(v, tabType, channel.default_rating));
 
         logger.info(
           { channelId, tabType, source: 'youtube-api', videoCount: videos.length },
@@ -1912,8 +1957,9 @@ class ChannelModule {
         );
         return { videos, currentChannelUrl: apiResult.currentChannelUrl };
       } catch (apiErr) {
-        logger.warn(
-          { err: apiErr, channelId, tabType, code: apiErr?.code },
+        logApiFallback(
+          apiErr,
+          { channelId, tabType },
           'YouTube API listChannelVideos failed, falling back to yt-dlp'
         );
       }
@@ -2078,8 +2124,9 @@ class ChannelModule {
           'YouTube API tab detection returned no tabs, falling back to yt-dlp'
         );
       } catch (apiErr) {
-        logger.warn(
-          { err: apiErr, channelId, code: apiErr?.code },
+        logApiFallback(
+          apiErr,
+          { channelId },
           'YouTube API tab detection failed, falling back to yt-dlp'
         );
       }
@@ -2566,7 +2613,7 @@ class ChannelModule {
    */
   async fetchAndSaveVideosViaYtDlp(channel, channelId, tabType, mostRecentVideoDate = null) {
     try {
-      const result = await this.fetchChannelVideosViaYtDlp(channelId, mostRecentVideoDate, tabType);
+      const result = await this.fetchChannelVideos(channelId, mostRecentVideoDate, tabType);
       const { videos, currentChannelUrl } = result;
 
       const mediaType = MEDIA_TAB_TYPE_MAP[tabType];
@@ -2649,20 +2696,7 @@ class ChannelModule {
               includeMetadata: true,
             });
 
-            const apiMediaType = MEDIA_TAB_TYPE_MAP[tabType] || 'video';
-
-            const videos = apiResult.videos.map((v) => ({
-              title: v.title || 'Untitled',
-              youtube_id: v.id,
-              publishedAt: v.uploadDate
-                ? new Date(`${v.uploadDate.slice(0, 4)}-${v.uploadDate.slice(4, 6)}-${v.uploadDate.slice(6, 8)}T00:00:00Z`).toISOString()
-                : null,
-              thumbnail: v.thumbnailUrl || null,
-              duration: v.duration || 0,
-              availability: v.availability || null,
-              media_type: apiMediaType,
-              live_status: deriveLiveStatusFromApi(v.liveBroadcastContent, tabType),
-            }));
+            const videos = apiResult.videos.map((v) => mapApiVideoToChannelVideo(v, tabType, channel.default_rating));
 
             logger.info(
               { channelId, tabType, source: 'youtube-api', videoCount: videos.length },
@@ -2670,8 +2704,9 @@ class ChannelModule {
             );
             result = { videos, currentChannelUrl: apiResult.currentChannelUrl };
           } catch (apiErr) {
-            logger.warn(
-              { err: apiErr, channelId, tabType, code: apiErr?.code },
+            logApiFallback(
+              apiErr,
+              { channelId, tabType },
               'YouTube API listChannelVideos (full fetch) failed, falling back to yt-dlp'
             );
           }

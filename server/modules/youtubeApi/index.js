@@ -10,7 +10,7 @@ const configModule = require('../configModule');
 function isAvailable() {
   const key = configModule.getConfig().youtubeApiKey;
   if (!key || typeof key !== 'string' || key.length === 0) return false;
-  if (quotaTracker.isInCooldown()) return false;
+  if (quotaTracker.isInCooldown(key)) return false;
   return true;
 }
 

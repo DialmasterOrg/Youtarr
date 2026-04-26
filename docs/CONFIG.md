@@ -206,6 +206,7 @@ Configuration can be modified through:
   - Default quota is 10,000 units per day per Google Cloud project, resetting at midnight Pacific time. Search calls cost 100 units; metadata and channel/playlist calls cost 1 unit per call.
   - On a 403 `quotaExceeded` response, Youtarr enters an in-memory cooldown until the next Pacific-midnight reset and uses yt-dlp exclusively during that window.
   - When a key is configured, channel video listing and tab auto-detection use the API for all three tabs (Videos, Shorts, Streams) via the per-tab auto-generated playlist IDs (`UULF`/`UUSH`/`UULV`). yt-dlp remains the fallback.
+  - Search results filter out live/upcoming broadcasts and Shorts under 60s to match yt-dlp's behavior. The Shorts filter requires a follow-up `videos.list` enrichment call to read each result's duration; if that enrichment fails (e.g., quota burned mid-search), the search returns the un-enriched results and a small number of Shorts may slip through. Live/upcoming filtering still applies in that fallback path.
   - Set up instructions and a test button are in the Configuration page under Integrations.
 
 ## SponsorBlock Settings

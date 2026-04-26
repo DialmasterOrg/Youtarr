@@ -196,7 +196,7 @@ export function Settings({ token }: SettingsProps) {
     }
 
     const changed = TRACKABLE_CONFIG_KEYS.some((k) => {
-      return !isEqual((config as any)[k], (initialConfig as any)[k]);
+      return !isEqual(config[k], initialConfig[k]);
     });
     setHasUnsavedChanges(changed);
   }, [config, initialConfig]);

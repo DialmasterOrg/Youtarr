@@ -7,6 +7,11 @@ const YoutubeApiErrorCode = Object.freeze({
   NOT_FOUND: 'NOT_FOUND',
   SERVER_ERROR: 'SERVER_ERROR',
   NETWORK_ERROR: 'NETWORK_ERROR',
+  CANCELED: 'CANCELED',
+  // Channel ID shape we don't recognize (e.g. legacy/topic channels that don't
+  // start with "UC..."). Not an API failure - just signals "skip the API path
+  // and fall back to yt-dlp" without warn-level noise.
+  INVALID_CHANNEL_ID: 'INVALID_CHANNEL_ID',
   UNKNOWN: 'UNKNOWN',
 });
 
@@ -24,6 +29,10 @@ function messageContains(errorResponse, needle) {
 }
 
 function classifyYoutubeApiError(err) {
+  if (err && (err.name === 'AbortError' || err.name === 'CanceledError' || err.code === 'ERR_CANCELED')) {
+    return YoutubeApiErrorCode.CANCELED;
+  }
+
   if (err && err.response && typeof err.response.status === 'number') {
     const status = err.response.status;
     const data = err.response.data;

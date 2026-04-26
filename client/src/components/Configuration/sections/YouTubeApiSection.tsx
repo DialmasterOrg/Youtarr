@@ -5,9 +5,9 @@ import {
   Box,
   Button,
   Alert,
-  AlertTitle,
   Typography,
 } from '../../ui';
+import { Gauge, ShieldCheck } from '../../../lib/icons';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
 import { ConfigState, YouTubeApiKeyStatus } from '../types';
 
@@ -64,6 +64,19 @@ function getChipColor(status: YouTubeApiKeyStatus): ChipColor {
   }
 }
 
+const benefitItems = [
+  {
+    title: 'Faster, more accurate YouTube lookups',
+    description: 'Use the YouTube Data API for channel discovery, channel video lists, video metadata, and YouTube searches. These lookup paths can be significantly faster than relying on yt-dlp alone, and channel video lists can include precise published dates instead of approximate dates.',
+    icon: <Gauge size={18} />,
+  },
+  {
+    title: 'Safe fallback',
+    description: 'If the key is invalid, restricted, or out of quota, Youtarr falls back to yt-dlp automatically.',
+    icon: <ShieldCheck size={18} />,
+  },
+];
+
 export const YouTubeApiSection: React.FC<YouTubeApiSectionProps> = ({
   config,
   status,
@@ -86,20 +99,31 @@ export const YouTubeApiSection: React.FC<YouTubeApiSectionProps> = ({
       chipColor={getChipColor(status)}
       defaultExpanded={false}
     >
-      <Alert severity="info" className="mb-4">
-        <AlertTitle>Optional: speed up data fetching</AlertTitle>
-        <Typography variant="body2">
-          Youtarr can use a YouTube Data API v3 key to fetch channel metadata,
-          video metadata, and search results faster than yt-dlp. The key is
-          optional. If something goes wrong (key invalid, quota exhausted, etc.),
-          Youtarr automatically falls back to yt-dlp with no loss of functionality.
-        </Typography>
-      </Alert>
+      <Box className="mb-4 grid gap-3 md:grid-cols-2">
+        {benefitItems.map((item) => (
+          <Box
+            key={item.title}
+            className="rounded-[var(--radius-ui)] border border-[var(--border-strong)] bg-muted/30 p-3"
+          >
+            <Box className="mb-2 flex items-center gap-2 text-info">
+              {item.icon}
+              <Typography variant="subtitle2" className="text-foreground">
+                {item.title}
+              </Typography>
+            </Box>
+            <Typography variant="body2" color="secondary">
+              {item.description}
+            </Typography>
+          </Box>
+        ))}
+      </Box>
 
-      <Alert severity="info" className="mb-4">
-        <AlertTitle>How to get a key</AlertTitle>
+      <Box className="mb-4 rounded-[var(--radius-ui)] border border-[var(--border-strong)] bg-card/70 p-4">
+        <Typography variant="subtitle2" className="mb-2">
+          Setup checklist
+        </Typography>
         <Typography variant="body2" component="div">
-          <ol className="ml-4 list-decimal space-y-1">
+          <ol className="ml-4 list-decimal space-y-1 text-muted-foreground">
             <li>
               Sign in to the{' '}
               <a
@@ -132,12 +156,12 @@ export const YouTubeApiSection: React.FC<YouTubeApiSectionProps> = ({
               Paste the key below and click <b>Test Key</b>.
             </li>
           </ol>
-          <Typography variant="caption" color="secondary" className="mt-2 block">
+          <Typography variant="caption" color="secondary" className="mt-3 block">
             Quota: 10,000 units per day, resets at midnight Pacific time. Search
-            operations cost 100 units; everything else is 1 unit per call.
+            operations cost 100 units; metadata lookups are typically 1 unit per call.
           </Typography>
         </Typography>
-      </Alert>
+      </Box>
 
       {(status === 'invalid' || status === 'api_not_enabled' || status === 'key_restricted') && lastReason && (
         <Alert severity="error" className="mb-4">{lastReason}</Alert>
@@ -159,7 +183,7 @@ export const YouTubeApiSection: React.FC<YouTubeApiSectionProps> = ({
               value={config.youtubeApiKey}
               onChange={handleInputChange}
               type="password"
-              inputProps={{ 'data-testid': 'youtube-api-key-input', autoComplete: 'off' }}
+              inputProps={{ 'data-testid': 'youtube-api-key-input', autoComplete: 'new-password' }}
             />
             <Button
               variant="contained"

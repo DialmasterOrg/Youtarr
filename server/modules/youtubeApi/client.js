@@ -46,10 +46,21 @@ const CHANNEL_ID_PATTERN = /^UC[A-Za-z0-9_-]{22}$/;
 function derivePlaylistIdForTab(channelId, tabType) {
   const prefix = TAB_PLAYLIST_PREFIX[tabType];
   if (!prefix) {
+    // Programmer error, not a YouTube API issue. Surface as a real error.
     throw new Error(`Unsupported tabType for API playlist derivation: ${tabType}`);
   }
   if (typeof channelId !== 'string' || !CHANNEL_ID_PATTERN.test(channelId)) {
-    throw new Error(`Unexpected channel ID shape: ${channelId}`);
+    // Legacy/topic channels can have non-UC IDs; the API path can't handle
+    // them. Log at debug so callers can fall back to yt-dlp without flooding
+    // the warn channel on every refresh.
+    logger.debug(
+      { channelId, tabType },
+      'Channel ID does not match expected UC[22] shape, API path will be skipped'
+    );
+    throw new YoutubeApiError(
+      YoutubeApiErrorCode.INVALID_CHANNEL_ID,
+      new Error(`Unexpected channel ID shape: ${channelId}`)
+    );
   }
   return `${prefix}${channelId.slice(2)}`;
 }
@@ -67,8 +78,8 @@ function buildUrl(endpoint) {
   return `${YOUTUBE_API_BASE_URL}${endpoint}`;
 }
 
-async function apiGet(apiKey, endpoint, extraParams) {
-  if (quotaTracker.isInCooldown()) {
+async function apiGet(apiKey, endpoint, extraParams, { signal } = {}) {
+  if (quotaTracker.isInCooldown(apiKey)) {
     throw new YoutubeApiError(YoutubeApiErrorCode.QUOTA_EXCEEDED);
   }
 
@@ -76,12 +87,13 @@ async function apiGet(apiKey, endpoint, extraParams) {
     const response = await axios.get(buildUrl(endpoint), {
       params: { key: apiKey, ...extraParams },
       timeout: YOUTUBE_API_TIMEOUT_MS,
+      signal,
     });
     return response.data;
   } catch (err) {
     const code = classifyYoutubeApiError(err);
     if (code === YoutubeApiErrorCode.QUOTA_EXCEEDED) {
-      quotaTracker.markExhausted();
+      quotaTracker.markExhausted(apiKey);
     }
     throw new YoutubeApiError(code, err);
   }
@@ -126,6 +138,7 @@ function normalizeVideoItem(item) {
     channelTitle: snippet.channelTitle || null,
     tags: Array.isArray(snippet.tags) ? snippet.tags : null,
     categories: snippet.categoryId ? [snippet.categoryId] : null,
+    contentRating: contentDetails.contentRating || null,
     availability: status.privacyStatus || 'public',
     liveBroadcastContent: snippet.liveBroadcastContent || null,
     thumbnailUrl: snippet.thumbnails?.maxres?.url
@@ -148,7 +161,7 @@ async function testKey(apiKey) {
   }
 }
 
-async function getVideoMetadata(apiKey, videoIds) {
+async function getVideoMetadata(apiKey, videoIds, { signal } = {}) {
   if (!Array.isArray(videoIds) || videoIds.length === 0) return [];
 
   const parts = 'snippet,contentDetails,statistics,status';
@@ -156,10 +169,15 @@ async function getVideoMetadata(apiKey, videoIds) {
   const items = [];
 
   for (const batch of batches) {
-    const data = await apiGet(apiKey, ENDPOINTS.videos, {
-      id: batch.join(','),
-      part: parts,
-    });
+    const data = await apiGet(
+      apiKey,
+      ENDPOINTS.videos,
+      {
+        id: batch.join(','),
+        part: parts,
+      },
+      { signal }
+    );
     if (Array.isArray(data.items)) items.push(...data.items);
   }
 
@@ -193,12 +211,17 @@ function parseChannelUrl(url) {
   throw new Error(`Unrecognized YouTube channel URL: ${url}`);
 }
 
-async function getChannelInfo(apiKey, channelUrl) {
+async function getChannelInfo(apiKey, channelUrl, { signal } = {}) {
   const selector = parseChannelUrl(channelUrl);
-  const data = await apiGet(apiKey, ENDPOINTS.channels, {
-    ...selector,
-    part: 'snippet,contentDetails,statistics',
-  });
+  const data = await apiGet(
+    apiKey,
+    ENDPOINTS.channels,
+    {
+      ...selector,
+      part: 'snippet,contentDetails,statistics',
+    },
+    { signal }
+  );
 
   if (!Array.isArray(data.items) || data.items.length === 0) return null;
   const item = data.items[0];
@@ -227,13 +250,18 @@ async function getChannelInfo(apiKey, channelUrl) {
   };
 }
 
-async function searchVideos(apiKey, query, maxResults) {
-  const data = await apiGet(apiKey, ENDPOINTS.search, {
-    q: query,
-    type: 'video',
-    part: 'snippet',
-    maxResults: SEARCH_LIST_MAX_RESULTS,
-  });
+async function searchVideos(apiKey, query, maxResults, { signal } = {}) {
+  const data = await apiGet(
+    apiKey,
+    ENDPOINTS.search,
+    {
+      q: query,
+      type: 'video',
+      part: 'snippet',
+      maxResults: SEARCH_LIST_MAX_RESULTS,
+    },
+    { signal }
+  );
 
   if (!Array.isArray(data.items)) return [];
 
@@ -271,7 +299,7 @@ async function searchVideos(apiKey, query, maxResults) {
   // filtered out) rather than failing the whole search.
   try {
     const videoIds = baseResults.map((r) => r.youtubeId);
-    const metadata = await getVideoMetadata(apiKey, videoIds);
+    const metadata = await getVideoMetadata(apiKey, videoIds, { signal });
     const byId = new Map(metadata.map((m) => [m.id, m]));
     const enriched = baseResults.map((r) => {
       const m = byId.get(r.youtubeId);
@@ -285,6 +313,9 @@ async function searchVideos(apiKey, query, maxResults) {
     );
     return filtered.slice(0, maxResults);
   } catch (err) {
+    if (err && err.code === YoutubeApiErrorCode.CANCELED) {
+      throw err;
+    }
     logger.warn({ err, code: err?.code }, 'YouTube API searchVideos metadata enrichment failed');
     return baseResults.slice(0, maxResults);
   }

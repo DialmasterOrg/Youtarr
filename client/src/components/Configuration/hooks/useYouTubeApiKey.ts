@@ -74,7 +74,19 @@ export function useYouTubeApiKey({
           severity: 'error',
         });
       }
-    } catch {
+    } catch (error) {
+      // Server-side rate limit (10/min) returns 429 with a human message.
+      // Without this branch, every rejection collapses to "network error",
+      // which is misleading when the user is actually being throttled.
+      if (axios.isAxiosError(error) && error.response?.status === 429) {
+        const message =
+          (error.response.data as { error?: string } | undefined)?.error
+          || 'Too many key tests. Please wait a minute before trying again.';
+        setStatus('rate_limited');
+        setLastReason(message);
+        setSnackbar({ open: true, message, severity: 'error' });
+        return;
+      }
       setStatus('network_error');
       setSnackbar({
         open: true,

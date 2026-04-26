@@ -476,6 +476,22 @@ const initialize = async () => {
       validate: { trustProxy: false }, // Suppress trust proxy warning - we run in Docker with proxy
     });
 
+    // Rate limiter for YouTube API key validation. Each test round-trips to
+    // Google; users mistyping a key shouldn't burn quota or our outbound rate.
+    const youtubeApiKeyTestLimiter = rateLimit({
+      windowMs: 1 * 60 * 1000,
+      max: 10,
+      message: { error: 'Too many key tests. Please wait a minute before trying again.' },
+      standardHeaders: true,
+      legacyHeaders: false,
+      validate: { trustProxy: false },
+      handler: (_req, res) => {
+        res.status(429).json({
+          error: 'Too many key tests. Please wait a minute before trying again.',
+        });
+      },
+    });
+
     /**** ONLY ROUTES BELOW THIS LINE *********/
 
     // Setup Swagger documentation at /swagger
@@ -528,6 +544,7 @@ const initialize = async () => {
     registerRoutes(app, {
       verifyToken,
       loginLimiter,
+      youtubeApiKeyTestLimiter,
       configModule,
       channelModule,
       plexModule,

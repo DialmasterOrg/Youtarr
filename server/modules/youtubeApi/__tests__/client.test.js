@@ -68,7 +68,7 @@ describe('youtubeApi/client', () => {
       const result = await client.testKey('some-key');
 
       expect(result).toEqual({ ok: false, code: YoutubeApiErrorCode.QUOTA_EXCEEDED });
-      expect(quotaTracker.markExhausted).toHaveBeenCalledTimes(1);
+      expect(quotaTracker.markExhausted).toHaveBeenCalledWith('some-key');
     });
 
     test('returns QUOTA_EXCEEDED immediately when tracker is in cooldown', async () => {
@@ -77,6 +77,7 @@ describe('youtubeApi/client', () => {
       const result = await client.testKey('some-key');
 
       expect(result).toEqual({ ok: false, code: YoutubeApiErrorCode.QUOTA_EXCEEDED });
+      expect(quotaTracker.isInCooldown).toHaveBeenCalledWith('some-key');
       expect(axios.get).not.toHaveBeenCalled();
     });
   });
@@ -398,7 +399,10 @@ describe('youtubeApi/client', () => {
 
       await expect(
         client.listChannelVideos('api-key', 'https://www.youtube.com/@chan', { tabType: 'videos' })
-      ).rejects.toThrow(/Unexpected channel ID shape/);
+      ).rejects.toMatchObject({
+        name: 'YoutubeApiError',
+        code: YoutubeApiErrorCode.INVALID_CHANNEL_ID,
+      });
     });
   });
 
@@ -767,6 +771,23 @@ describe('youtubeApi/client', () => {
 
       expect(results).toHaveLength(3);
       expect(results.every((r) => r.duration === null)).toBe(true);
+    });
+
+    test('passes abort signal to API calls and propagates cancellation', async () => {
+      const controller = new AbortController();
+      axios.get.mockRejectedValueOnce({ name: 'CanceledError', code: 'ERR_CANCELED' });
+
+      await expect(
+        client.searchVideos('api-key', 'q', 10, { signal: controller.signal })
+      ).rejects.toMatchObject({
+        name: 'YoutubeApiError',
+        code: YoutubeApiErrorCode.CANCELED,
+      });
+
+      expect(axios.get).toHaveBeenCalledWith(
+        'https://www.googleapis.com/youtube/v3/search',
+        expect.objectContaining({ signal: controller.signal })
+      );
     });
   });
 });

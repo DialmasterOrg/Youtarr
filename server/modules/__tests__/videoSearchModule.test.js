@@ -271,7 +271,7 @@ describe('videoSearchModule.searchVideos - API-first path', () => {
       client: {
         searchVideos: jest.fn(),
       },
-      YoutubeApiErrorCode: { QUOTA_EXCEEDED: 'QUOTA_EXCEEDED' },
+      YoutubeApiErrorCode: { QUOTA_EXCEEDED: 'QUOTA_EXCEEDED', CANCELED: 'CANCELED' },
     }));
 
     jest.doMock('../ytDlpRunner', () => ({
@@ -313,7 +313,7 @@ describe('videoSearchModule.searchVideos - API-first path', () => {
     expect(results).toHaveLength(1);
     expect(results[0].youtubeId).toBe('abc');
     expect(ytDlpRunner.run).not.toHaveBeenCalled();
-    expect(youtubeApi.client.searchVideos).toHaveBeenCalledWith('test-key', 'test', 10);
+    expect(youtubeApi.client.searchVideos).toHaveBeenCalledWith('test-key', 'test', 10, { signal: undefined });
   });
 
   test('falls back to yt-dlp when API throws, logs warn', async () => {
@@ -337,6 +337,27 @@ describe('videoSearchModule.searchVideos - API-first path', () => {
       expect.objectContaining({ code: 'QUOTA_EXCEEDED' }),
       expect.stringContaining('falling back to yt-dlp')
     );
+  });
+
+  test('throws SearchCanceledError when API search is canceled instead of falling back', async () => {
+    const ytDlpRunner = require('../ytDlpRunner');
+    const controller = new AbortController();
+    const apiErr = new Error('canceled');
+    apiErr.name = 'YoutubeApiError';
+    apiErr.code = 'CANCELED';
+    youtubeApi.client.searchVideos.mockRejectedValueOnce(apiErr);
+
+    await expect(
+      videoSearchModule.searchVideos('q', 10, { signal: controller.signal })
+    ).rejects.toMatchObject({ name: 'SearchCanceledError' });
+
+    expect(youtubeApi.client.searchVideos).toHaveBeenCalledWith(
+      'test-key',
+      'q',
+      10,
+      { signal: controller.signal }
+    );
+    expect(ytDlpRunner.run).not.toHaveBeenCalled();
   });
 
   test('does not call API when key is unavailable', async () => {

@@ -28,6 +28,15 @@ describe('YouTubeApiSection', () => {
     expect(screen.getByText(/Google Cloud Console/i)).toBeInTheDocument();
   });
 
+  test('explains why a YouTube API key is useful', () => {
+    render(<YouTubeApiSection {...defaultProps} />);
+    expect(screen.getByText(/Faster, more accurate YouTube lookups/i)).toBeInTheDocument();
+    expect(screen.getByText(/channel video lists/i)).toBeInTheDocument();
+    expect(screen.getByText(/significantly faster/i)).toBeInTheDocument();
+    expect(screen.getByText(/precise published dates/i)).toBeInTheDocument();
+    expect(screen.getByText(/falls back to yt-dlp automatically/i)).toBeInTheDocument();
+  });
+
   test('shows Not Tested chip when status is not_tested', () => {
     render(<YouTubeApiSection {...defaultProps} />);
     expect(screen.getByText('Not Tested')).toBeInTheDocument();

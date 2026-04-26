@@ -26,10 +26,13 @@ class VideoSearchModule {
     if (youtubeApi.isAvailable()) {
       try {
         const apiKey = youtubeApi.getApiKey();
-        const apiResults = await youtubeApi.client.searchVideos(apiKey, query, count);
+        const apiResults = await youtubeApi.client.searchVideos(apiKey, query, count, { signal });
         results = apiResults;
         source = 'youtube-api';
       } catch (apiErr) {
+        if (apiErr?.code === youtubeApi.YoutubeApiErrorCode.CANCELED) {
+          throw new SearchCanceledError();
+        }
         logger.warn(
           { err: apiErr, query, code: apiErr?.code },
           'YouTube API searchVideos failed, falling back to yt-dlp'

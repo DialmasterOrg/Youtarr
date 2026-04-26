@@ -3960,7 +3960,7 @@ describe('ChannelModule', () => {
     });
   });
 
-  describe('fetchChannelVideosViaYtDlp - API-first', () => {
+  describe('fetchChannelVideos - API-first', () => {
     let channelModule;
 
     beforeEach(() => {
@@ -3977,12 +3977,21 @@ describe('ChannelModule', () => {
       youtubeApi.getApiKey.mockReturnValue('key');
       youtubeApi.client.listChannelVideos.mockResolvedValue({
         videos: [
-          { id: 'v1id', title: 'V1', duration: 300, uploadDate: '20240501', thumbnailUrl: 'https://t.jpg', availability: 'public' },
+          {
+            id: 'v1id',
+            title: 'V1',
+            duration: 300,
+            uploadDate: '20240501',
+            thumbnailUrl: 'https://t.jpg',
+            availability: 'public',
+            contentRating: { mpaaRating: 'mpaaPg13' },
+            ageLimit: 13,
+          },
         ],
         currentChannelUrl: 'https://www.youtube.com/@chan',
       });
 
-      const result = await channelModule.fetchChannelVideosViaYtDlp('UCxxx', null, 'videos');
+      const result = await channelModule.fetchChannelVideos('UCxxx', null, 'videos');
 
       expect(result.videos).toHaveLength(1);
       expect(result.videos[0]).toMatchObject({
@@ -3998,6 +4007,41 @@ describe('ChannelModule', () => {
       );
     });
 
+    test('applies channel default rating on API-fetched videos', async () => {
+      Channel.findOne.mockResolvedValue({
+        channel_id: 'UCxxx',
+        default_rating: 'PG',
+        url: 'https://www.youtube.com/@chan',
+      });
+      youtubeApi.isAvailable.mockReturnValue(true);
+      youtubeApi.getApiKey.mockReturnValue('key');
+      youtubeApi.client.listChannelVideos.mockResolvedValue({
+        videos: [
+          {
+            id: 'v1id',
+            title: 'V1',
+            duration: 300,
+            uploadDate: '20240501',
+            thumbnailUrl: 'https://t.jpg',
+            availability: 'public',
+            contentRating: { mpaaRating: 'mpaaPg13' },
+            ageLimit: 13,
+          },
+        ],
+        currentChannelUrl: 'https://www.youtube.com/@chan',
+      });
+
+      const result = await channelModule.fetchChannelVideos('UCxxx', null, 'videos');
+
+      expect(result.videos[0]).toMatchObject({
+        youtube_id: 'v1id',
+        normalized_rating: 'PG',
+        rating_source: 'Channel Default',
+        content_rating: { mpaaRating: 'mpaaPg13' },
+        age_limit: 13,
+      });
+    });
+
     test('uses API for shorts tab and tags videos media_type=short', async () => {
       youtubeApi.isAvailable.mockReturnValue(true);
       youtubeApi.getApiKey.mockReturnValue('key');
@@ -4008,7 +4052,7 @@ describe('ChannelModule', () => {
         currentChannelUrl: 'https://www.youtube.com/@chan',
       });
 
-      const result = await channelModule.fetchChannelVideosViaYtDlp('UCxxx', null, 'shorts');
+      const result = await channelModule.fetchChannelVideos('UCxxx', null, 'shorts');
 
       expect(result.videos[0]).toMatchObject({
         youtube_id: 's1id',
@@ -4032,7 +4076,7 @@ describe('ChannelModule', () => {
         currentChannelUrl: 'https://www.youtube.com/@chan',
       });
 
-      const result = await channelModule.fetchChannelVideosViaYtDlp('UCxxx', null, 'streams');
+      const result = await channelModule.fetchChannelVideos('UCxxx', null, 'streams');
 
       // Past livestreams on the streams tab must get live_status='was_live' so
       // the frontend's isStillLive check (truthy && !== 'was_live') does NOT
@@ -4060,7 +4104,7 @@ describe('ChannelModule', () => {
         currentChannelUrl: 'https://www.youtube.com/@chan',
       });
 
-      const result = await channelModule.fetchChannelVideosViaYtDlp('UCxxx', null, 'videos');
+      const result = await channelModule.fetchChannelVideos('UCxxx', null, 'videos');
 
       expect(result.videos[0]).toMatchObject({ youtube_id: 'live1', live_status: 'is_live' });
       expect(result.videos[1]).toMatchObject({ youtube_id: 'soon1', live_status: 'is_upcoming' });
@@ -4074,7 +4118,7 @@ describe('ChannelModule', () => {
       apiErr.code = 'QUOTA_EXCEEDED';
       youtubeApi.client.listChannelVideos.mockRejectedValue(apiErr);
 
-      await channelModule.fetchChannelVideosViaYtDlp('UCxxx', null, 'videos').catch(() => {});
+      await channelModule.fetchChannelVideos('UCxxx', null, 'videos').catch(() => {});
 
       expect(youtubeApi.client.listChannelVideos).toHaveBeenCalledTimes(1);
       expect(logger.warn).toHaveBeenCalledWith(
@@ -4085,7 +4129,7 @@ describe('ChannelModule', () => {
 
     test('does not call API when key is unavailable', async () => {
       // isAvailable defaults to false from beforeEach
-      await channelModule.fetchChannelVideosViaYtDlp('UCxxx', null, 'videos').catch(() => {});
+      await channelModule.fetchChannelVideos('UCxxx', null, 'videos').catch(() => {});
       expect(youtubeApi.client.listChannelVideos).not.toHaveBeenCalled();
     });
   });

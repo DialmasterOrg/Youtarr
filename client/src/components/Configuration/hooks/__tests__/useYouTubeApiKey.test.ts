@@ -2,6 +2,8 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 
 jest.mock('axios', () => ({
   post: jest.fn(),
+  isAxiosError: (err: unknown): boolean =>
+    typeof err === 'object' && err !== null && (err as { isAxiosError?: boolean }).isAxiosError === true,
 }));
 
 import axios from 'axios';
@@ -132,6 +134,31 @@ describe('useYouTubeApiKey', () => {
     });
 
     await waitFor(() => expect(result.current.status).toBe('network_error'));
+  });
+
+  test('shows the server message and rate_limited status on 429', async () => {
+    mockedAxiosPost.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: {
+        status: 429,
+        data: { error: 'Too many key tests. Please wait a minute before trying again.' },
+      },
+    });
+
+    const { result } = renderHook(() =>
+      useYouTubeApiKey({ token: 't', apiKey: 'k', setInitialConfig, setSnackbar })
+    );
+
+    await act(async () => {
+      await result.current.testKey();
+    });
+
+    await waitFor(() => expect(result.current.status).toBe('rate_limited'));
+    expect(result.current.lastReason).toBe('Too many key tests. Please wait a minute before trying again.');
+    expect(setSnackbar).toHaveBeenCalledWith(expect.objectContaining({
+      severity: 'error',
+      message: 'Too many key tests. Please wait a minute before trying again.',
+    }));
   });
 
   test('clear() resets to not_tested', async () => {
