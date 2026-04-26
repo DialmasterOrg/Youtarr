@@ -17,6 +17,7 @@ import { SponsorBlockSection } from '../Configuration/sections/SponsorBlockSecti
 import { CookieConfigSection } from '../Configuration/sections/CookieConfigSection';
 import { NotificationsSection } from '../Configuration/sections/NotificationsSection';
 import { DownloadPerformanceSection } from '../Configuration/sections/DownloadPerformanceSection';
+import { YtdlpOptionsSection } from '../Configuration/sections/YtdlpOptionsSection';
 import { AutoRemovalSection } from '../Configuration/sections/AutoRemovalSection';
 import { AccountSecuritySection } from '../Configuration/sections/AccountSecuritySection';
 import ApiKeysSection from '../Configuration/sections/ApiKeysSection';
@@ -311,11 +312,19 @@ export function Settings({ token }: SettingsProps) {
           <Route
             path="downloading"
             element={
-              <DownloadPerformanceSection
-                config={config}
-                onConfigChange={handleConfigChange}
-                onMobileTooltipClick={setMobileTooltip}
-              />
+              <>
+                <DownloadPerformanceSection
+                  config={config}
+                  onConfigChange={handleConfigChange}
+                  onMobileTooltipClick={setMobileTooltip}
+                />
+                <YtdlpOptionsSection
+                  config={config}
+                  onConfigChange={handleConfigChange}
+                  onMobileTooltipClick={setMobileTooltip}
+                  token={token}
+                />
+              </>
             }
           />
           <Route path="performance" element={<Navigate to="/settings/downloading" replace />} />

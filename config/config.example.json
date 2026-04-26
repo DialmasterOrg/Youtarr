@@ -54,5 +54,8 @@
   "autoUpdateYtdlp": false,
   "ytdlpLastChecked": null,
   "ytdlpLastUpdated": null,
-  "ytdlpLastResult": null
+  "ytdlpLastResult": null,
+  "ytdlpIpFamily": "ipv4",
+  "ytdlpDownloadRateLimit": "",
+  "ytdlpCustomArgs": ""
 }

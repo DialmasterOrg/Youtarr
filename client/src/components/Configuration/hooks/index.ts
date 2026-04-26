@@ -6,3 +6,4 @@ export { useAutoRemovalDryRun } from './useAutoRemovalDryRun';
 export { useYtDlpUpdate } from './useYtDlpUpdate';
 export { useUnsavedChangesGuard } from './useUnsavedChangesGuard';
 export { useYouTubeApiKey } from './useYouTubeApiKey';
+export { useYtdlpArgsValidation } from './useYtdlpArgsValidation';

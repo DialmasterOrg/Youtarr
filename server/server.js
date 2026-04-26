@@ -492,6 +492,22 @@ const initialize = async () => {
       },
     });
 
+    // Rate limiter for the /api/ytdlp/validate-args endpoint. Each request
+    // spawns yt-dlp; a UI bug or malicious user could otherwise spam validation.
+    const ytdlpValidationRateLimiter = rateLimit({
+      windowMs: 1 * 60 * 1000,
+      max: 5,
+      message: { error: 'Too many validation requests. Please wait a minute before trying again.' },
+      standardHeaders: true,
+      legacyHeaders: false,
+      validate: { trustProxy: false },
+      handler: (_req, res) => {
+        res.status(429).json({
+          error: 'Too many validation requests. Please wait a minute before trying again.',
+        });
+      },
+    });
+
     /**** ONLY ROUTES BELOW THIS LINE *********/
 
     // Setup Swagger documentation at /swagger
@@ -545,6 +561,7 @@ const initialize = async () => {
       verifyToken,
       loginLimiter,
       youtubeApiKeyTestLimiter,
+      ytdlpValidationRateLimiter,
       configModule,
       channelModule,
       plexModule,

@@ -450,6 +450,31 @@ The old `discordWebhookUrl` and `notificationService` fields are automatically r
 - **Format**: `"http://proxy:port"` or `"socks5://proxy:port"`
 - **Note**: The proxy is used by yt-dlp for all YouTube requests (downloads, metadata, thumbnails). Some operations like thumbnail downloads and RSS feed checks first attempt a direct HTTP request with a 15-second timeout before falling back to yt-dlp. SOCKS5 proxy users may notice brief delays (~15 seconds) during these fallbacks when adding or refreshing channels, but the operations will complete successfully via yt-dlp.
 
+### IP Family
+- **Config Key**: `ytdlpIpFamily`
+- **Type**: `string` (one of `"ipv4"`, `"ipv6"`, `"auto"`)
+- **Default**: `"ipv4"`
+- **Description**: IP family preference applied to every yt-dlp invocation.
+  - `"ipv4"` adds `-4` (force IPv4) — recommended for YouTube reliability and the historical default.
+  - `"ipv6"` adds `-6` (force IPv6).
+  - `"auto"` adds neither flag and lets the OS decide.
+- **Note**: Force IPv6 or Auto can make YouTube downloads less reliable. Use only if your network requires it.
+
+### Download Rate Limit
+- **Config Key**: `ytdlpDownloadRateLimit`
+- **Type**: `string`
+- **Default**: `""` (empty — no limit)
+- **Description**: Maximum download rate, passed to yt-dlp as `--limit-rate`. Format: digits with optional decimal and optional `K`/`M`/`G` suffix (e.g. `"5M"`, `"500K"`, `"1.5M"`). Empty disables the limit.
+
+### Custom yt-dlp Arguments
+- **Config Key**: `ytdlpCustomArgs`
+- **Type**: `string`
+- **Default**: `""` (empty)
+- **Description**: Free-form yt-dlp arguments appended to every invocation. Tokenized shell-style (single/double quotes and backslash-escapes supported). Maximum length: 2000 characters.
+- **Blocked flags**: For safety, several flags are rejected at save time and silently dropped at command-build time. The full list is in `server/modules/download/customArgsParser.js`; it includes (among others) `--exec`, `--netrc-cmd`, `-o`/`--output`, `-P`/`--paths`, `--print-to-file`, `--external-downloader`/`--downloader`, `--external-downloader-args`/`--downloader-args`, `--cookies`/`--cookies-from-browser`, `--ffmpeg-location`, `--config-location`, `--batch-file`, `--load-info-json`, `--download-archive`, plus the flags that have dedicated config fields (`--proxy`, `-4`/`-6`, `--limit-rate`, `--sleep-requests`).
+- **Order**: Custom args are appended LAST in the yt-dlp command, after Youtarr's managed flags. Per yt-dlp's last-wins semantics, your flags can override managed ones (e.g. `--retries 5` overrides Youtarr's default `--retries 2`).
+- **Note**: Power-user feature. Incorrect flags can prevent downloads from working entirely or break Youtarr's behavior in unexpected ways. Use the "Validate Arguments" button in the UI to argparse-check your args against yt-dlp before saving. The validation does not gate save — invalid args can still be saved and will only surface failures at download time.
+
 ### Use External Temporary Directory
 - **Config Key**: `useTmpForDownloads`
 - **Type**: `boolean`

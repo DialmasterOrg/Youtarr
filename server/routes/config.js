@@ -1,6 +1,10 @@
 const express = require('express');
-const router = express.Router();
 const multer = require('multer');
+const customArgsParser = require('../modules/download/customArgsParser');
+
+// Mirror of the frontend RATE_LIMIT_REGEX. Matches yt-dlp's --limit-rate
+// format: digits with optional decimal, optional K/M/G suffix.
+const RATE_LIMIT_REGEX = /^\d+(\.\d+)?[KkMmGg]?$/;
 
 // Configure multer for cookie file upload
 const cookieUpload = multer({
@@ -24,6 +28,8 @@ const cookieUpload = multer({
  * @returns {express.Router}
  */
 module.exports = function createConfigRoutes({ verifyToken, configModule, validateEnvAuthCredentials, isWslEnvironment }) {
+  const router = express.Router();
+
   /**
    * @swagger
    * /getconfig:
@@ -124,6 +130,35 @@ module.exports = function createConfigRoutes({ verifyToken, configModule, valida
     req.log.info('Updating application configuration');
     const currentConfig = configModule.getConfig();
     const updateData = { ...req.body };
+
+    // Custom args denylist gate (defense-in-depth; buildCustomArgs also re-validates)
+    if (typeof updateData.ytdlpCustomArgs === 'string' && updateData.ytdlpCustomArgs.trim()) {
+      if (updateData.ytdlpCustomArgs.length > customArgsParser.MAX_CUSTOM_ARGS_LENGTH) {
+        return res.status(400).json({
+          error: `Custom args exceed ${customArgsParser.MAX_CUSTOM_ARGS_LENGTH} character limit`,
+        });
+      }
+      let tokens;
+      try {
+        tokens = customArgsParser.tokenize(updateData.ytdlpCustomArgs);
+      } catch (err) {
+        return res.status(400).json({ error: `Custom args parse error: ${err.message}` });
+      }
+      const validation = customArgsParser.validate(tokens);
+      if (!validation.ok) {
+        return res.status(400).json({ error: validation.error });
+      }
+    }
+
+    // Rate-limit format gate. yt-dlp rejects malformed values at runtime,
+    // which would break every download until config is hand-fixed.
+    if (typeof updateData.ytdlpDownloadRateLimit === 'string' && updateData.ytdlpDownloadRateLimit.trim()) {
+      if (!RATE_LIMIT_REGEX.test(updateData.ytdlpDownloadRateLimit.trim())) {
+        return res.status(400).json({
+          error: 'Invalid download rate limit format. Use e.g. 5M, 500K, 1.5G',
+        });
+      }
+    }
 
     delete updateData.passwordHash;
     delete updateData.username;
