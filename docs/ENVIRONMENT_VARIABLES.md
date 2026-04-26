@@ -92,7 +92,7 @@ To use an external database:
 **Required**: No
 **Default**: None
 **Description**: Pre-configured admin username for automated deployments
-**Validation**: 3-32 characters, no leading/trailing spaces
+**Validation**: 1-32 characters, no leading/trailing spaces
 
 ### AUTH_PRESET_PASSWORD
 **Required**: No
