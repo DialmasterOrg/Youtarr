@@ -376,7 +376,7 @@ if [ "$AUTH_ENABLED" = true ]; then
       yt_info "Provide initial admin credentials for this headless deployment."
       yt_detail "Values will be written to .env as AUTH_PRESET_USERNAME and AUTH_PRESET_PASSWORD."
       while true; do
-      prompt_with_label "Initial admin username (3-32 characters) [admin]"
+      prompt_with_label "Initial admin username (1-32 characters) [admin]"
       read -r INITIAL_USERNAME
       INITIAL_USERNAME=${INITIAL_USERNAME:-admin}
       # Trim leading/trailing whitespace
@@ -387,11 +387,6 @@ if [ "$AUTH_ENABLED" = true ]; then
       fi
       if [ ${#INITIAL_USERNAME} -gt 32 ]; then
           yt_error "Username must be 32 characters or fewer."
-          continue
-      fi
-      # Must be 3 characters or more
-      if [ ${#INITIAL_USERNAME} -lt 3 ]; then
-          yt_error "Username must be 3 characters or more."
           continue
       fi
       break

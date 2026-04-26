@@ -93,7 +93,7 @@ const databaseHealth = require('./modules/databaseHealthModule');
 const http = require('http');
 const bcrypt = require('bcrypt');
 const userNameMaxLength = 32;
-const userNameMinLength = 3;
+const userNameMinLength = 1;
 const passwordMaxLength = 64;
 const passwordMinLength = 8;
 
@@ -239,7 +239,7 @@ const initialize = async () => {
       logger.info('Applied ENV AUTH credentials and saved to config.json');
     } else if (process.env.AUTH_PRESET_USERNAME || process.env.AUTH_PRESET_PASSWORD) {
       // Credentials were provided but failed validation
-      logger.warn('Ignoring ENV AUTH credentials: both AUTH_PRESET_USERNAME and AUTH_PRESET_PASSWORD must be set and meet requirements (username: 3-32 chars, password: 8-64 chars)');
+      logger.warn('Ignoring ENV AUTH credentials: both AUTH_PRESET_USERNAME and AUTH_PRESET_PASSWORD must be set and meet requirements (username: 1-32 chars, password: 8-64 chars)');
     }
 
     channelModule.subscribe();

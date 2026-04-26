@@ -612,7 +612,7 @@ Youtarr can optionally check for and install yt-dlp updates on a nightly schedul
 - **Type**: `string`
 - **Default**: Not set (must be configured)
 - **Description**: Login username for the web interface
-- **Validation**: 3-32 characters, no leading/trailing spaces
+- **Validation**: 1-32 characters, no leading/trailing spaces
 - **Note**: Set during initial setup or via AUTH_PRESET_USERNAME environment variable
 
 ### passwordHash
