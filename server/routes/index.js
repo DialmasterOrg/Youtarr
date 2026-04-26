@@ -10,6 +10,7 @@ const createApiKeyRoutes = require('./apikeys');
 const createSubscriptionRoutes = require('./subscriptions');
 const createVideoDetailRoutes = require('./videoDetail');
 const createVideoSearchRoutes = require('./videoSearch');
+const createYoutubeApiKeyRoutes = require('./youtubeApiKey');
 const videoMetadataModule = require('../modules/videoMetadataModule');
 const videoOembedEnricher = require('../modules/videoOembedEnricher');
 
@@ -22,6 +23,7 @@ function registerRoutes(app, deps) {
   const {
     verifyToken,
     loginLimiter,
+    youtubeApiKeyTestLimiter,
     configModule,
     channelModule,
     plexModule,
@@ -31,6 +33,7 @@ function registerRoutes(app, deps) {
     archiveModule,
     subscriptionImportModule,
     videoSearchModule,
+    youtubeApi,
     getCachedYtDlpVersion,
     refreshYtDlpVersionCache,
     validateEnvAuthCredentials,
@@ -58,6 +61,9 @@ function registerRoutes(app, deps) {
 
   // Video search routes
   app.use(createVideoSearchRoutes({ verifyToken, videoSearchModule }));
+
+  // YouTube API key test route
+  app.use(createYoutubeApiKeyRoutes({ verifyToken, youtubeApiKeyTestLimiter, youtubeApi, configModule }));
 
   // Job routes
   app.use(createJobRoutes({ verifyToken, jobModule, downloadModule }));

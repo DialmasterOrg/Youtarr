@@ -2,6 +2,7 @@ const ytDlpRunner = require('./ytDlpRunner');
 const ytdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const logger = require('../logger');
 const { Video } = require('../models');
+const youtubeApi = require('./youtubeApi');
 
 const SEARCH_TIMEOUT_MS = 60_000;
 const ALLOWED_COUNTS = [10, 25, 50];
@@ -19,21 +20,43 @@ class VideoSearchModule {
       throw new Error(`count must be one of ${ALLOWED_COUNTS.join(', ')}`);
     }
 
-    const args = ytdlpCommandBuilder.buildSearchArgs(query, count);
+    let results = null;
+    let source = null;
 
-    let stdout;
-    try {
-      stdout = await ytDlpRunner.run(args, { timeoutMs: SEARCH_TIMEOUT_MS, signal });
-    } catch (err) {
-      if (err.name === 'AbortError') throw new SearchCanceledError();
-      if (err.code === 'YTDLP_TIMEOUT') throw new SearchTimeoutError();
-      throw err;
+    if (youtubeApi.isAvailable()) {
+      try {
+        const apiKey = youtubeApi.getApiKey();
+        const apiResults = await youtubeApi.client.searchVideos(apiKey, query, count, { signal });
+        results = apiResults;
+        source = 'youtube-api';
+      } catch (apiErr) {
+        if (apiErr?.code === youtubeApi.YoutubeApiErrorCode.CANCELED) {
+          throw new SearchCanceledError();
+        }
+        logger.warn(
+          { err: apiErr, query, code: apiErr?.code },
+          'YouTube API searchVideos failed, falling back to yt-dlp'
+        );
+      }
     }
 
-    const results = this._parseNdjson(stdout, query);
+    if (results === null) {
+      const args = ytdlpCommandBuilder.buildSearchArgs(query, count);
+      let stdout;
+      try {
+        stdout = await ytDlpRunner.run(args, { timeoutMs: SEARCH_TIMEOUT_MS, signal });
+      } catch (err) {
+        if (err.name === 'AbortError') throw new SearchCanceledError();
+        if (err.code === 'YTDLP_TIMEOUT') throw new SearchTimeoutError();
+        throw err;
+      }
+      results = this._parseNdjson(stdout, query);
+      source = 'yt-dlp';
+    }
+
     if (results.length > 0) await this._applyLocalStatus(results);
     this._sortByPublishedAtDesc(results);
-    logger.info({ query, count, resultCount: results.length }, 'video search complete');
+    logger.info({ query, count, resultCount: results.length, source }, 'video search complete');
     return results;
   }
 
