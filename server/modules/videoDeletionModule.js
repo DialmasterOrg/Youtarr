@@ -2,7 +2,7 @@ const { Video } = require('../models');
 const fs = require('fs').promises;
 const path = require('path');
 const logger = require('../logger');
-const { isVideoDirectory, cleanupEmptyChannelDirectory, cleanupEmptyParents, isSubfolderDir, listSubdirectories } = require('./filesystem');
+const { isVideoDirectory, cleanupEmptyChannelDirectory, cleanupEmptyParents, isSubfolderDir, listSubdirectories, removeDirectoryResilient } = require('./filesystem');
 
 class VideoDeletionModule {
   constructor() {}
@@ -148,8 +148,10 @@ class VideoDeletionModule {
             }
           }
         } else {
-          // Nested structure: delete the entire video directory
-          await fs.rm(videoDirectory, { recursive: true, force: true });
+          // Nested structure: delete the entire video directory.
+          // Uses the resilient remover so SMB AppleDouble race conditions
+          // don't strand the directory with an ENOTEMPTY error (issue #370).
+          await removeDirectoryResilient(videoDirectory);
           logger.info({ videoId, videoDirectory }, 'Deleted video directory');
         }
       } catch (fsError) {

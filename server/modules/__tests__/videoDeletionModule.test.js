@@ -8,6 +8,7 @@ describe('VideoDeletionModule', () => {
   let mockVideo;
   let mockFs;
   let mockLogger;
+  let mockFilesystem;
 
   beforeEach(() => {
     jest.resetModules();
@@ -22,11 +23,24 @@ describe('VideoDeletionModule', () => {
       findOne: jest.fn()
     };
 
-    // Mock fs.promises
+    // Mock fs.promises (only the methods videoDeletionModule still calls directly,
+    // i.e. flat-mode readdir/unlink). The nested-mode rm path now goes through
+    // filesystem.removeDirectoryResilient and is mocked there.
     mockFs = {
-      rm: jest.fn(),
       readdir: jest.fn().mockResolvedValue([]),
       unlink: jest.fn()
+    };
+
+    // Mock the filesystem module (isVideoDirectory, cleanupEmptyChannelDirectory, etc.).
+    // removeDirectoryResilient defaults to success so existing tests don't need to
+    // wire it up explicitly; tests that need a failure path override per-test.
+    mockFilesystem = {
+      isVideoDirectory: jest.fn(() => true),
+      cleanupEmptyChannelDirectory: jest.fn().mockResolvedValue(false),
+      cleanupEmptyParents: jest.fn().mockResolvedValue(),
+      isSubfolderDir: jest.fn((name) => name.startsWith('__')),
+      listSubdirectories: jest.fn().mockResolvedValue([]),
+      removeDirectoryResilient: jest.fn().mockResolvedValue()
     };
 
     // Mock the models
@@ -39,15 +53,7 @@ describe('VideoDeletionModule', () => {
       promises: mockFs
     }));
 
-    // Mock the filesystem module (isVideoDirectory, cleanupEmptyChannelDirectory, cleanupEmptyParents, etc.)
-    // Default to true (nested structure) for backwards compatibility with existing tests
-    jest.doMock('../filesystem', () => ({
-      isVideoDirectory: jest.fn(() => true),
-      cleanupEmptyChannelDirectory: jest.fn().mockResolvedValue(false),
-      cleanupEmptyParents: jest.fn().mockResolvedValue(),
-      isSubfolderDir: jest.fn((name) => name.startsWith('__')),
-      listSubdirectories: jest.fn().mockResolvedValue([])
-    }));
+    jest.doMock('../filesystem', () => mockFilesystem);
 
     // Mock configModule for _tryCleanupChannelDirectory
     jest.doMock('../configModule', () => ({
@@ -69,14 +75,12 @@ describe('VideoDeletionModule', () => {
       };
 
       mockVideo.findByPk.mockResolvedValue(mockVideoRecord);
-      mockFs.rm.mockResolvedValue();
 
       const result = await VideoDeletionModule.deleteVideoById(1);
 
       expect(mockVideo.findByPk).toHaveBeenCalledWith(1);
-      expect(mockFs.rm).toHaveBeenCalledWith(
-        '/test/output/Channel Name/Channel Name - Video Title - abc123',
-        { recursive: true, force: true }
+      expect(mockFilesystem.removeDirectoryResilient).toHaveBeenCalledWith(
+        '/test/output/Channel Name/Channel Name - Video Title - abc123'
       );
       expect(mockVideoRecord.update).toHaveBeenCalledWith({ removed: true });
       expect(result).toEqual({
@@ -100,7 +104,7 @@ describe('VideoDeletionModule', () => {
         videoId: 999,
         error: 'Video not found in database'
       });
-      expect(mockFs.rm).not.toHaveBeenCalled();
+      expect(mockFilesystem.removeDirectoryResilient).not.toHaveBeenCalled();
     });
 
     test('should return error when video already marked as removed', async () => {
@@ -120,7 +124,7 @@ describe('VideoDeletionModule', () => {
         videoId: 1,
         error: 'Video is already marked as removed'
       });
-      expect(mockFs.rm).not.toHaveBeenCalled();
+      expect(mockFilesystem.removeDirectoryResilient).not.toHaveBeenCalled();
     });
 
     test('should mark video as removed when no file path exists', async () => {
@@ -137,7 +141,7 @@ describe('VideoDeletionModule', () => {
       const result = await VideoDeletionModule.deleteVideoById(1);
 
       expect(mockVideoRecord.update).toHaveBeenCalledWith({ removed: true });
-      expect(mockFs.rm).not.toHaveBeenCalled();
+      expect(mockFilesystem.removeDirectoryResilient).not.toHaveBeenCalled();
       expect(result).toEqual({
         success: true,
         videoId: 1,
@@ -166,10 +170,12 @@ describe('VideoDeletionModule', () => {
         videoId: 1,
         error: 'Safety check failed: invalid file path'
       });
-      expect(mockFs.rm).not.toHaveBeenCalled();
+      expect(mockFilesystem.removeDirectoryResilient).not.toHaveBeenCalled();
     });
 
-    test('should handle ENOENT error when directory already deleted', async () => {
+    test('should report success when removeDirectoryResilient handles missing dir internally', async () => {
+      // removeDirectoryResilient swallows ENOENT and resolves cleanly, so
+      // videoDeletionModule still completes the DB update and reports success.
       const mockVideoRecord = {
         id: 1,
         youtubeId: 'abc123',
@@ -179,16 +185,12 @@ describe('VideoDeletionModule', () => {
       };
 
       mockVideo.findByPk.mockResolvedValue(mockVideoRecord);
-
-      const enoentError = new Error('ENOENT: no such file or directory');
-      enoentError.code = 'ENOENT';
-      mockFs.rm.mockRejectedValue(enoentError);
+      mockFilesystem.removeDirectoryResilient.mockResolvedValue();
 
       const result = await VideoDeletionModule.deleteVideoById(1);
 
-      expect(mockLogger.info).toHaveBeenCalledWith(
-        expect.objectContaining({ videoId: 1 }),
-        'Files already removed'
+      expect(mockFilesystem.removeDirectoryResilient).toHaveBeenCalledWith(
+        '/test/output/Channel/Channel - Video - abc123'
       );
       expect(mockVideoRecord.update).toHaveBeenCalledWith({ removed: true });
       expect(result).toEqual({
@@ -210,7 +212,7 @@ describe('VideoDeletionModule', () => {
 
       const permissionError = new Error('EACCES: permission denied');
       permissionError.code = 'EACCES';
-      mockFs.rm.mockRejectedValue(permissionError);
+      mockFilesystem.removeDirectoryResilient.mockRejectedValue(permissionError);
 
       const result = await VideoDeletionModule.deleteVideoById(1);
 
@@ -225,6 +227,29 @@ describe('VideoDeletionModule', () => {
       });
     });
 
+    test('delegates nested-mode directory removal to removeDirectoryResilient', async () => {
+      // The retry / AppleDouble sweep behavior is covered in directoryManager tests.
+      // Here we just verify videoDeletionModule routes through the helper instead
+      // of calling fs.rm directly.
+      const mockVideoRecord = {
+        id: 1,
+        youtubeId: 'abc123',
+        filePath: '/test/output/Channel/Channel - Video - abc123/video.mp4',
+        removed: false,
+        update: jest.fn().mockResolvedValue()
+      };
+
+      mockVideo.findByPk.mockResolvedValue(mockVideoRecord);
+
+      const result = await VideoDeletionModule.deleteVideoById(1);
+
+      expect(mockFilesystem.removeDirectoryResilient).toHaveBeenCalledTimes(1);
+      expect(mockFilesystem.removeDirectoryResilient).toHaveBeenCalledWith(
+        '/test/output/Channel/Channel - Video - abc123'
+      );
+      expect(result.success).toBe(true);
+    });
+
     test('should handle database update errors', async () => {
       const mockVideoRecord = {
         id: 1,
@@ -235,7 +260,6 @@ describe('VideoDeletionModule', () => {
       };
 
       mockVideo.findByPk.mockResolvedValue(mockVideoRecord);
-      mockFs.rm.mockResolvedValue();
 
       const result = await VideoDeletionModule.deleteVideoById(1);
 
@@ -280,12 +304,6 @@ describe('VideoDeletionModule', () => {
   });
 
   describe('_tryCleanupChannelDirectory', () => {
-    let mockFilesystem;
-
-    beforeEach(() => {
-      mockFilesystem = require('../filesystem');
-    });
-
     test('should call cleanupEmptyChannelDirectory with grandparent path for nested deletion', async () => {
       const mockVideoRecord = {
         id: 1,
@@ -296,7 +314,6 @@ describe('VideoDeletionModule', () => {
       };
 
       mockVideo.findByPk.mockResolvedValue(mockVideoRecord);
-      mockFs.rm.mockResolvedValue();
 
       await VideoDeletionModule.deleteVideoById(1);
 
@@ -359,7 +376,7 @@ describe('VideoDeletionModule', () => {
 
       const permissionError = new Error('EACCES');
       permissionError.code = 'EACCES';
-      mockFs.rm.mockRejectedValue(permissionError);
+      mockFilesystem.removeDirectoryResilient.mockRejectedValue(permissionError);
 
       await VideoDeletionModule.deleteVideoById(1);
 
@@ -378,7 +395,6 @@ describe('VideoDeletionModule', () => {
       };
 
       mockVideo.findByPk.mockResolvedValue(mockVideoRecord);
-      mockFs.rm.mockResolvedValue();
 
       const result = await VideoDeletionModule.deleteVideoById(1);
 
@@ -401,7 +417,6 @@ describe('VideoDeletionModule', () => {
       };
 
       mockVideo.findByPk.mockResolvedValue(mockVideoRecord);
-      mockFs.rm.mockResolvedValue();
 
       await VideoDeletionModule.deleteVideoById(1);
 
@@ -423,7 +438,6 @@ describe('VideoDeletionModule', () => {
       };
 
       mockVideo.findByPk.mockResolvedValue(mockVideoRecord);
-      mockFs.rm.mockResolvedValue();
 
       await VideoDeletionModule.deleteVideoById(1);
 
@@ -452,7 +466,6 @@ describe('VideoDeletionModule', () => {
       mockVideo.findByPk
         .mockResolvedValueOnce(mockVideo1)
         .mockResolvedValueOnce(mockVideo2);
-      mockFs.rm.mockResolvedValue();
 
       const result = await VideoDeletionModule.deleteVideos([1, 2]);
 
@@ -475,7 +488,6 @@ describe('VideoDeletionModule', () => {
       mockVideo.findByPk
         .mockResolvedValueOnce(mockVideo1)
         .mockResolvedValueOnce(null); // Second video not found
-      mockFs.rm.mockResolvedValue();
 
       const result = await VideoDeletionModule.deleteVideos([1, 2]);
 
@@ -547,7 +559,7 @@ describe('VideoDeletionModule', () => {
           return id === 1 ? mockVideo1 : mockVideo2;
         });
 
-      mockFs.rm.mockImplementation(async () => {
+      mockFilesystem.removeDirectoryResilient.mockImplementation(async () => {
         callOrder.push('rm');
       });
 
@@ -604,8 +616,6 @@ describe('VideoDeletionModule', () => {
         .mockResolvedValueOnce(mockVideo1)
         .mockResolvedValueOnce(mockVideo2);
 
-      mockFs.rm.mockResolvedValue();
-
       const result = await VideoDeletionModule.deleteVideosByYoutubeIds(['abc123', 'def456']);
 
       expect(mockVideo.findOne).toHaveBeenCalledWith({
@@ -653,8 +663,6 @@ describe('VideoDeletionModule', () => {
 
       // Mock findByPk for the successful deletion
       mockVideo.findByPk.mockResolvedValueOnce(mockVideo1);
-
-      mockFs.rm.mockResolvedValue();
 
       const result = await VideoDeletionModule.deleteVideosByYoutubeIds(['abc123', 'notfound456']);
 
@@ -1127,7 +1135,6 @@ describe('VideoDeletionModule', () => {
       };
 
       mockVideo.findByPk.mockResolvedValue(mockVideoRecord);
-      mockFs.rm.mockResolvedValue();
 
       const result = await VideoDeletionModule.performAutomaticCleanup({ dryRun: false });
 
@@ -1136,7 +1143,7 @@ describe('VideoDeletionModule', () => {
       expect(result.deletedByAge).toBe(1);
       expect(result.freedBytes).toBeGreaterThan(0);
       expect(result.plan.ageStrategy.deletedCount).toBe(1);
-      expect(mockFs.rm).toHaveBeenCalled();
+      expect(mockFilesystem.removeDirectoryResilient).toHaveBeenCalled();
     });
 
     test('should perform space-based cleanup in dry-run mode', async () => {
@@ -1339,8 +1346,6 @@ describe('VideoDeletionModule', () => {
         .mockResolvedValueOnce(mockVideoRecord1)
         .mockResolvedValueOnce(null); // Second video not found
 
-      mockFs.rm.mockResolvedValue();
-
       const result = await VideoDeletionModule.performAutomaticCleanup();
 
       expect(result.totalDeleted).toBe(1);
@@ -1351,12 +1356,6 @@ describe('VideoDeletionModule', () => {
   });
 
   describe('cleanupOrphanDirectories', () => {
-    let mockFilesystem;
-
-    beforeEach(() => {
-      mockFilesystem = require('../filesystem');
-    });
-
     test('should skip when no output directory is configured', async () => {
       jest.resetModules();
       jest.clearAllMocks();
@@ -1369,7 +1368,8 @@ describe('VideoDeletionModule', () => {
         cleanupEmptyChannelDirectory: jest.fn().mockResolvedValue(false),
         cleanupEmptyParents: jest.fn().mockResolvedValue(),
         isSubfolderDir: jest.fn((name) => name.startsWith('__')),
-        listSubdirectories: jest.fn().mockResolvedValue([])
+        listSubdirectories: jest.fn().mockResolvedValue([]),
+        removeDirectoryResilient: jest.fn().mockResolvedValue()
       }));
       jest.doMock('../configModule', () => ({
         directoryPath: null

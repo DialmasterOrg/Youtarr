@@ -8,6 +8,7 @@ jest.mock('fs', () => ({
   promises: {
     readdir: jest.fn(),
     rmdir: jest.fn(),
+    rm: jest.fn(),
     access: jest.fn(),
     unlink: jest.fn()
   }
@@ -32,6 +33,8 @@ const {
   isChannelDirectory,
   isSubfolderDir,
   cleanupEmptyChannelDirectory,
+  removeDirectoryResilient,
+  isIgnorableEntry,
   listDirectory,
   listSubdirectories,
   isMainVideoFile
@@ -214,6 +217,57 @@ describe('filesystem/directoryManager', () => {
       const result = await isDirectoryEffectivelyEmpty('/path/channel');
 
       expect(result).toBe(false);
+    });
+
+    it('should return true for directory containing only AppleDouble sidecars', async () => {
+      fsPromises.readdir.mockResolvedValueOnce(['._video.mp4', '._poster.jpg']);
+
+      const result = await isDirectoryEffectivelyEmpty('/path/channel');
+
+      expect(result).toBe(true);
+    });
+
+    it('should return true for directory mixing AppleDouble and standard ignorables', async () => {
+      fsPromises.readdir.mockResolvedValueOnce(['._video.mp4', 'poster.jpg', '.DS_Store']);
+
+      const result = await isDirectoryEffectivelyEmpty('/path/channel');
+
+      expect(result).toBe(true);
+    });
+
+    it('should return false when AppleDouble files coexist with real video', async () => {
+      fsPromises.readdir.mockResolvedValueOnce(['._video.mp4', 'video.mp4']);
+
+      const result = await isDirectoryEffectivelyEmpty('/path/channel');
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('isIgnorableEntry', () => {
+    it('returns true for entries in the ignorable list (case-insensitive)', () => {
+      expect(isIgnorableEntry('poster.jpg')).toBe(true);
+      expect(isIgnorableEntry('Poster.JPG')).toBe(true);
+      expect(isIgnorableEntry('.DS_Store')).toBe(true);
+      expect(isIgnorableEntry('Thumbs.db')).toBe(true);
+      expect(isIgnorableEntry('desktop.ini')).toBe(true);
+    });
+
+    it('returns true for AppleDouble sidecars', () => {
+      expect(isIgnorableEntry('._video.mp4')).toBe(true);
+      expect(isIgnorableEntry('._poster.jpg')).toBe(true);
+      expect(isIgnorableEntry('._.DS_Store')).toBe(true);
+    });
+
+    it('returns false for real video files', () => {
+      expect(isIgnorableEntry('video.mp4')).toBe(false);
+      expect(isIgnorableEntry('Channel - Title [abc123].mp4')).toBe(false);
+    });
+
+    it('returns false for null/undefined/empty', () => {
+      expect(isIgnorableEntry(null)).toBe(false);
+      expect(isIgnorableEntry(undefined)).toBe(false);
+      expect(isIgnorableEntry('')).toBe(false);
     });
   });
 
@@ -406,6 +460,135 @@ describe('filesystem/directoryManager', () => {
 
       expect(fsPromises.rmdir).not.toHaveBeenCalled();
       expect(result).toBe(false);
+    });
+
+    describe('with includeIgnorableFiles: true (race-safety + AppleDouble)', () => {
+      it('only unlinks ignorable entries even if a real file appears between reads', async () => {
+        fsPromises.access.mockResolvedValueOnce();
+        // First readdir for isDirectoryEffectivelyEmpty — only ignorables
+        fsPromises.readdir.mockResolvedValueOnce(['poster.jpg', '._poster.jpg']);
+        // Second readdir for the unlink loop — race: a real video file appeared
+        fsPromises.readdir.mockResolvedValueOnce(['poster.jpg', '._poster.jpg', 'real-video.mp4']);
+        fsPromises.unlink.mockResolvedValue();
+        fsPromises.rmdir.mockResolvedValueOnce();
+
+        await cleanupEmptyChannelDirectory('/videos/ChannelName', baseDir, {
+          includeIgnorableFiles: true
+        });
+
+        // The real video file must NOT be unlinked
+        expect(fsPromises.unlink).toHaveBeenCalledWith('/videos/ChannelName/poster.jpg');
+        expect(fsPromises.unlink).toHaveBeenCalledWith('/videos/ChannelName/._poster.jpg');
+        expect(fsPromises.unlink).not.toHaveBeenCalledWith('/videos/ChannelName/real-video.mp4');
+      });
+
+      it('sweeps AppleDouble files before rmdir', async () => {
+        fsPromises.access.mockResolvedValueOnce();
+        fsPromises.readdir.mockResolvedValueOnce(['._video.mp4', '._poster.jpg']);
+        fsPromises.readdir.mockResolvedValueOnce(['._video.mp4', '._poster.jpg']);
+        fsPromises.unlink.mockResolvedValue();
+        fsPromises.rmdir.mockResolvedValueOnce();
+
+        const result = await cleanupEmptyChannelDirectory('/videos/ChannelName', baseDir, {
+          includeIgnorableFiles: true
+        });
+
+        expect(fsPromises.unlink).toHaveBeenCalledWith('/videos/ChannelName/._video.mp4');
+        expect(fsPromises.unlink).toHaveBeenCalledWith('/videos/ChannelName/._poster.jpg');
+        expect(fsPromises.rmdir).toHaveBeenCalledWith('/videos/ChannelName');
+        expect(result).toBe(true);
+      });
+    });
+  });
+
+  describe('removeDirectoryResilient', () => {
+    const dirPath = '/videos/Channel/Channel - Video - abc123';
+
+    it('resolves on the first attempt when fs.rm succeeds', async () => {
+      fsPromises.rm.mockResolvedValueOnce();
+
+      await expect(removeDirectoryResilient(dirPath)).resolves.toBeUndefined();
+
+      expect(fsPromises.rm).toHaveBeenCalledTimes(1);
+      expect(fsPromises.rm).toHaveBeenCalledWith(dirPath, { recursive: true, force: true });
+      expect(fsPromises.readdir).not.toHaveBeenCalled();
+    });
+
+    it('resolves cleanly when the directory is already gone (ENOENT)', async () => {
+      const enoent = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      fsPromises.rm.mockRejectedValueOnce(enoent);
+
+      await expect(removeDirectoryResilient(dirPath)).resolves.toBeUndefined();
+
+      expect(fsPromises.rm).toHaveBeenCalledTimes(1);
+    });
+
+    it('sweeps AppleDouble entries on ENOTEMPTY and retries successfully', async () => {
+      const enotempty = Object.assign(new Error('ENOTEMPTY'), { code: 'ENOTEMPTY' });
+      fsPromises.rm
+        .mockRejectedValueOnce(enotempty)
+        .mockResolvedValueOnce();
+      fsPromises.readdir.mockResolvedValueOnce(['._video.mp4', '._poster.jpg', 'real.mp4']);
+      fsPromises.unlink.mockResolvedValue();
+
+      await expect(removeDirectoryResilient(dirPath, { delayMs: 1 })).resolves.toBeUndefined();
+
+      expect(fsPromises.rm).toHaveBeenCalledTimes(2);
+      // Sweep only touches AppleDouble entries, not the real file
+      expect(fsPromises.unlink).toHaveBeenCalledWith(`${dirPath}/._video.mp4`);
+      expect(fsPromises.unlink).toHaveBeenCalledWith(`${dirPath}/._poster.jpg`);
+      expect(fsPromises.unlink).not.toHaveBeenCalledWith(`${dirPath}/real.mp4`);
+    });
+
+    it('treats ENOENT during the post-ENOTEMPTY readdir as already-gone', async () => {
+      const enotempty = Object.assign(new Error('ENOTEMPTY'), { code: 'ENOTEMPTY' });
+      const enoent = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      fsPromises.rm.mockRejectedValueOnce(enotempty);
+      fsPromises.readdir.mockRejectedValueOnce(enoent);
+
+      await expect(removeDirectoryResilient(dirPath, { delayMs: 1 })).resolves.toBeUndefined();
+
+      // No retry of fs.rm — we returned cleanly
+      expect(fsPromises.rm).toHaveBeenCalledTimes(1);
+      expect(fsPromises.unlink).not.toHaveBeenCalled();
+    });
+
+    it('rejects with the original error after exhausting retries on persistent ENOTEMPTY', async () => {
+      const enotempty = Object.assign(new Error('ENOTEMPTY'), { code: 'ENOTEMPTY' });
+      fsPromises.rm.mockRejectedValue(enotempty);
+      fsPromises.readdir.mockResolvedValue([]);
+
+      await expect(
+        removeDirectoryResilient(dirPath, { retries: 2, delayMs: 1 })
+      ).rejects.toMatchObject({ code: 'ENOTEMPTY' });
+
+      // initial attempt + 2 retries = 3 fs.rm calls
+      expect(fsPromises.rm).toHaveBeenCalledTimes(3);
+    });
+
+    it('rejects immediately for non-retryable errors (EACCES)', async () => {
+      const eacces = Object.assign(new Error('EACCES'), { code: 'EACCES' });
+      fsPromises.rm.mockRejectedValueOnce(eacces);
+
+      await expect(removeDirectoryResilient(dirPath, { delayMs: 1 })).rejects.toMatchObject({
+        code: 'EACCES'
+      });
+
+      expect(fsPromises.rm).toHaveBeenCalledTimes(1);
+      expect(fsPromises.readdir).not.toHaveBeenCalled();
+    });
+
+    it('propagates non-ENOENT readdir errors during sweep', async () => {
+      const enotempty = Object.assign(new Error('ENOTEMPTY'), { code: 'ENOTEMPTY' });
+      const eacces = Object.assign(new Error('EACCES'), { code: 'EACCES' });
+      fsPromises.rm.mockRejectedValueOnce(enotempty);
+      fsPromises.readdir.mockRejectedValueOnce(eacces);
+
+      await expect(removeDirectoryResilient(dirPath, { delayMs: 1 })).rejects.toMatchObject({
+        code: 'EACCES'
+      });
+
+      expect(fsPromises.rm).toHaveBeenCalledTimes(1);
     });
   });
 
