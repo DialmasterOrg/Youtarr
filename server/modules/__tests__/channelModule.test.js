@@ -79,6 +79,17 @@ jest.mock('../filesystem', () => ({
   sanitizeNameLikeYtDlp: jest.fn((name) => name) // Pass through by default
 }));
 
+jest.mock('../youtubeApi', () => ({
+  isAvailable: jest.fn(() => false),
+  getApiKey: jest.fn(() => null),
+  client: {
+    getChannelInfo: jest.fn(),
+    listChannelVideos: jest.fn(),
+    detectAvailableTabs: jest.fn(),
+  },
+  YoutubeApiErrorCode: { QUOTA_EXCEEDED: 'QUOTA_EXCEEDED' },
+}));
+
 jest.mock('../../db', () => {
   const mockSequelize = {
     query: jest.fn().mockResolvedValue([]),
@@ -111,6 +122,7 @@ describe('ChannelModule', () => {
   let uuid;
   let logger;
   let filesystem;
+  let youtubeApi;
 
   const mockChannelData = {
     channel_id: 'UC123456',
@@ -186,6 +198,10 @@ describe('ChannelModule', () => {
     logger = require('../../logger');
 
     filesystem = require('../filesystem');
+
+    youtubeApi = require('../youtubeApi');
+    youtubeApi.isAvailable.mockReturnValue(false);
+    youtubeApi.getApiKey.mockReturnValue(null);
 
     ChannelModule = require('../channelModule');
   });
@@ -1019,7 +1035,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2', 'video3']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at']
         });
         expect(result[0].added).toBe(true);
         expect(result[0].removed).toBe(false);
@@ -1048,7 +1064,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at']
         });
         expect(result[0].added).toBe(true);
         expect(result[0].removed).toBe(false);
@@ -1105,7 +1121,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at']
         });
         expect(result[0].added).toBe(true);
         expect(result[0].removed).toBe(false);
@@ -1134,7 +1150,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2', 'video3']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at']
         });
 
         // Video1 - not downloaded
@@ -1162,7 +1178,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: []
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at']
         });
         expect(result).toEqual([]);
       });
@@ -1242,6 +1258,29 @@ describe('ChannelModule', () => {
 
         expect(result[0].fileSize).toBe(5000);
       });
+
+      test('should expose timeCreated from last_downloaded_at for downloaded videos and omit it for others', async () => {
+        const Video = require('../../models/video');
+
+        const videos = [
+          { youtube_id: 'video1', toJSON: () => ({ youtube_id: 'video1' }) },
+          { youtube_id: 'video2', toJSON: () => ({ youtube_id: 'video2' }) },
+          { youtube_id: 'video3', toJSON: () => ({ youtube_id: 'video3' }) }
+        ];
+
+        const downloadedAt = new Date('2026-04-20T16:20:00Z');
+
+        Video.findAll = jest.fn().mockResolvedValue([
+          { id: 1, youtubeId: 'video1', removed: false, last_downloaded_at: downloadedAt },
+          { id: 2, youtubeId: 'video2', removed: false, last_downloaded_at: null }
+        ]);
+
+        const result = await ChannelModule.enrichVideosWithDownloadStatus(videos);
+
+        expect(result[0].timeCreated).toBe(downloadedAt.toISOString());
+        expect(result[1].timeCreated).toBeNull();
+        expect(result[2].timeCreated).toBeUndefined();
+      });
     });
 
     describe('fetchNewestVideosFromDb', () => {
@@ -1268,7 +1307,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at']
         });
         expect(result[0].added).toBe(true);
         expect(result[0].removed).toBe(false);
@@ -1309,7 +1348,7 @@ describe('ChannelModule', () => {
         expect(result[0].youtube_id).toBe('video20');
       });
 
-      test('should filter out downloaded videos when excludeDownloaded=true', async () => {
+      test('should filter out downloaded videos when downloadedFilter="exclude"', async () => {
         const Video = require('../../models/video');
         const mockVideos = [
           { youtube_id: 'video1', title: 'Video 1', toJSON() { return this; } },
@@ -1322,11 +1361,31 @@ describe('ChannelModule', () => {
           { id: 2, youtubeId: 'video2', removed: true, fileSize: null, filePath: '/path' }
         ]);
 
-        const result = await ChannelModule.fetchNewestVideosFromDb('UC123', 50, 0, true);
+        const result = await ChannelModule.fetchNewestVideosFromDb('UC123', 50, 0, 'exclude');
 
         // Should only return video2 (removed) and video3 (not downloaded)
         expect(result).toHaveLength(2);
         expect(result.find(v => v.youtube_id === 'video1')).toBeUndefined();
+      });
+
+      test('should keep only downloaded videos when downloadedFilter="only"', async () => {
+        const Video = require('../../models/video');
+        const mockVideos = [
+          { youtube_id: 'video1', title: 'Video 1', toJSON() { return this; } },
+          { youtube_id: 'video2', title: 'Video 2', toJSON() { return this; } },
+          { youtube_id: 'video3', title: 'Video 3', toJSON() { return this; } }
+        ];
+        ChannelVideo.findAll.mockResolvedValue(mockVideos);
+        Video.findAll = jest.fn().mockResolvedValue([
+          { id: 1, youtubeId: 'video1', removed: false, fileSize: 1000, filePath: '/path' },
+          { id: 2, youtubeId: 'video2', removed: true, fileSize: null, filePath: '/path' }
+        ]);
+
+        const result = await ChannelModule.fetchNewestVideosFromDb('UC123', 50, 0, 'only');
+
+        // Should only return video1 (downloaded and not removed)
+        expect(result).toHaveLength(1);
+        expect(result[0].youtube_id).toBe('video1');
       });
 
       test('should filter by search query', async () => {
@@ -1339,7 +1398,7 @@ describe('ChannelModule', () => {
         ChannelVideo.findAll.mockResolvedValue(mockVideos);
         Video.findAll = jest.fn().mockResolvedValue([]);
 
-        const result = await ChannelModule.fetchNewestVideosFromDb('UC123', 50, 0, false, 'cook');
+        const result = await ChannelModule.fetchNewestVideosFromDb('UC123', 50, 0, 'off', 'cook');
 
         expect(result).toHaveLength(2);
         expect(result.every(v => v.title.toLowerCase().includes('cook'))).toBe(true);
@@ -1355,7 +1414,7 @@ describe('ChannelModule', () => {
         ChannelVideo.findAll.mockResolvedValue(mockVideos);
         Video.findAll = jest.fn().mockResolvedValue([]);
 
-        const result = await ChannelModule.fetchNewestVideosFromDb('UC123', 50, 0, false, '', 'title', 'asc');
+        const result = await ChannelModule.fetchNewestVideosFromDb('UC123', 50, 0, 'off', '', 'title', 'asc');
 
         expect(result[0].title).toBe('Apple');
         expect(result[1].title).toBe('Banana');
@@ -1486,6 +1545,130 @@ describe('ChannelModule', () => {
         expect(result).toHaveLength(1);
         expect(result[0].ignored).toBeUndefined();
         expect(result[0].ignored_at).toBeUndefined();
+      });
+
+      test('missingFilter=only keeps only videos that are downloaded and removed', async () => {
+        const Video = require('../../models/video');
+        const mockVideos = [
+          { youtube_id: 'video1', title: 'Video 1', publishedAt: '2024-01-03', toJSON() { return this; } },
+          { youtube_id: 'video2', title: 'Video 2', publishedAt: '2024-01-02', toJSON() { return this; } },
+          { youtube_id: 'video3', title: 'Video 3', publishedAt: '2024-01-01', toJSON() { return this; } },
+        ];
+        ChannelVideo.findAll.mockResolvedValue(mockVideos);
+        // video1: added and removed (missing); video2: added and present (downloaded); video3: never added.
+        Video.findAll = jest.fn().mockResolvedValue([
+          { id: 1, youtubeId: 'video1', removed: true, fileSize: null, filePath: '/path' },
+          { id: 2, youtubeId: 'video2', removed: false, fileSize: 1000, filePath: '/path' }
+        ]);
+
+        const result = await ChannelModule.fetchNewestVideosFromDb(
+          'UC123', 50, 0, false, '', 'date', 'desc', false, 'video',
+          null, null, null, null, 'off', 'only', 'off'
+        );
+
+        expect(result).toHaveLength(1);
+        expect(result[0].youtube_id).toBe('video1');
+      });
+
+      test('missingFilter=exclude drops videos that are downloaded and removed', async () => {
+        const Video = require('../../models/video');
+        const mockVideos = [
+          { youtube_id: 'video1', title: 'Missing', publishedAt: '2024-01-03', toJSON() { return this; } },
+          { youtube_id: 'video2', title: 'Downloaded', publishedAt: '2024-01-02', toJSON() { return this; } },
+          { youtube_id: 'video3', title: 'Never added', publishedAt: '2024-01-01', toJSON() { return this; } },
+        ];
+        ChannelVideo.findAll.mockResolvedValue(mockVideos);
+        Video.findAll = jest.fn().mockResolvedValue([
+          { id: 1, youtubeId: 'video1', removed: true, fileSize: null, filePath: '/path' },
+          { id: 2, youtubeId: 'video2', removed: false, fileSize: 1000, filePath: '/path' }
+        ]);
+
+        const result = await ChannelModule.fetchNewestVideosFromDb(
+          'UC123', 50, 0, false, '', 'date', 'desc', false, 'video',
+          null, null, null, null, 'off', 'exclude', 'off'
+        );
+
+        expect(result.map(v => v.youtube_id)).toEqual(['video2', 'video3']);
+      });
+
+      test('ignoredFilter=only keeps only videos with ignored=true', async () => {
+        const Video = require('../../models/video');
+        const mockVideos = [
+          { youtube_id: 'video1', title: 'Video 1', ignored: true, publishedAt: '2024-01-02', toJSON() { return this; } },
+          { youtube_id: 'video2', title: 'Video 2', ignored: false, publishedAt: '2024-01-01', toJSON() { return this; } },
+          { youtube_id: 'video3', title: 'Video 3', publishedAt: '2024-01-03', toJSON() { return this; } },
+        ];
+        ChannelVideo.findAll.mockResolvedValue(mockVideos);
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        const result = await ChannelModule.fetchNewestVideosFromDb(
+          'UC123', 50, 0, false, '', 'date', 'desc', false, 'video',
+          null, null, null, null, 'off', 'off', 'only'
+        );
+
+        expect(result).toHaveLength(1);
+        expect(result[0].youtube_id).toBe('video1');
+      });
+
+      test('ignoredFilter=exclude drops videos with ignored=true', async () => {
+        const Video = require('../../models/video');
+        const mockVideos = [
+          { youtube_id: 'video1', title: 'Video 1', ignored: true, publishedAt: '2024-01-02', toJSON() { return this; } },
+          { youtube_id: 'video2', title: 'Video 2', ignored: false, publishedAt: '2024-01-01', toJSON() { return this; } },
+          { youtube_id: 'video3', title: 'Video 3', publishedAt: '2024-01-03', toJSON() { return this; } },
+        ];
+        ChannelVideo.findAll.mockResolvedValue(mockVideos);
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        const result = await ChannelModule.fetchNewestVideosFromDb(
+          'UC123', 50, 0, false, '', 'date', 'desc', false, 'video',
+          null, null, null, null, 'off', 'off', 'exclude'
+        );
+
+        expect(result.map(v => v.youtube_id).sort()).toEqual(['video2', 'video3']);
+      });
+
+      test('protectedFilter=exclude drops videos marked protected', async () => {
+        const Video = require('../../models/video');
+        const mockVideos = [
+          { youtube_id: 'video1', title: 'Protected', publishedAt: '2024-01-02', toJSON() { return this; } },
+          { youtube_id: 'video2', title: 'Unprotected', publishedAt: '2024-01-01', toJSON() { return this; } },
+        ];
+        ChannelVideo.findAll.mockResolvedValue(mockVideos);
+        Video.findAll = jest.fn().mockResolvedValue([
+          { id: 1, youtubeId: 'video1', removed: false, fileSize: 1000, filePath: '/path', protected: true },
+          { id: 2, youtubeId: 'video2', removed: false, fileSize: 1000, filePath: '/path', protected: false }
+        ]);
+
+        const result = await ChannelModule.fetchNewestVideosFromDb(
+          'UC123', 50, 0, false, '', 'date', 'desc', false, 'video',
+          null, null, null, null, 'exclude', 'off', 'off'
+        );
+
+        expect(result).toHaveLength(1);
+        expect(result[0].youtube_id).toBe('video2');
+      });
+
+      test('missingFilter=only and ignoredFilter=only combine with AND semantics', async () => {
+        const Video = require('../../models/video');
+        const mockVideos = [
+          { youtube_id: 'video1', title: 'Missing + ignored', ignored: true, publishedAt: '2024-01-04', toJSON() { return this; } },
+          { youtube_id: 'video2', title: 'Missing only', ignored: false, publishedAt: '2024-01-03', toJSON() { return this; } },
+          { youtube_id: 'video3', title: 'Ignored only', ignored: true, publishedAt: '2024-01-02', toJSON() { return this; } },
+        ];
+        ChannelVideo.findAll.mockResolvedValue(mockVideos);
+        Video.findAll = jest.fn().mockResolvedValue([
+          { id: 1, youtubeId: 'video1', removed: true, fileSize: null, filePath: '/path' },
+          { id: 2, youtubeId: 'video2', removed: true, fileSize: null, filePath: '/path' }
+        ]);
+
+        const result = await ChannelModule.fetchNewestVideosFromDb(
+          'UC123', 50, 0, false, '', 'date', 'desc', false, 'video',
+          null, null, null, null, 'off', 'only', 'only'
+        );
+
+        expect(result).toHaveLength(1);
+        expect(result[0].youtube_id).toBe('video1');
       });
     });
 
@@ -1667,7 +1850,7 @@ describe('ChannelModule', () => {
         ChannelVideo.count.mockResolvedValue(25);
         ChannelVideo.findOne.mockResolvedValue({ publishedAt: '2024-01-01' });
 
-        await ChannelModule.getChannelVideoStats('UC123', false, '', 'short');
+        await ChannelModule.getChannelVideoStats('UC123', 'off', '', 'short');
 
         expect(ChannelVideo.count).toHaveBeenCalledWith({
           where: { channel_id: 'UC123', media_type: 'short' }
@@ -1679,7 +1862,7 @@ describe('ChannelModule', () => {
         });
       });
 
-      test('should filter by excludeDownloaded when specified', async () => {
+      test('should filter by downloadedFilter="exclude" when specified', async () => {
         const Video = require('../../models/video');
         // Videos should be in DESC order (newest first) as returned by the database
         const mockVideos = [
@@ -1692,10 +1875,28 @@ describe('ChannelModule', () => {
           { id: 1, youtubeId: 'video1', removed: false, fileSize: 1000, filePath: '/path' }
         ]);
 
-        const result = await ChannelModule.getChannelVideoStats('UC123', true);
+        const result = await ChannelModule.getChannelVideoStats('UC123', 'exclude');
 
         expect(result.totalCount).toBe(2); // video2 and video3 are not downloaded
         expect(result.oldestVideoDate).toBe('2024-01-02');
+      });
+
+      test('should filter by downloadedFilter="only" when specified', async () => {
+        const Video = require('../../models/video');
+        const mockVideos = [
+          { youtube_id: 'video3', publishedAt: '2024-01-03', toJSON() { return this; } },
+          { youtube_id: 'video2', publishedAt: '2024-01-02', toJSON() { return this; } },
+          { youtube_id: 'video1', publishedAt: '2024-01-01', toJSON() { return this; } }
+        ];
+        ChannelVideo.findAll.mockResolvedValue(mockVideos);
+        Video.findAll = jest.fn().mockResolvedValue([
+          { id: 1, youtubeId: 'video1', removed: false, fileSize: 1000, filePath: '/path' }
+        ]);
+
+        const result = await ChannelModule.getChannelVideoStats('UC123', 'only');
+
+        expect(result.totalCount).toBe(1); // Only video1 is downloaded and not removed
+        expect(result.oldestVideoDate).toBe('2024-01-01');
       });
 
       test('should filter by search query', async () => {
@@ -1708,12 +1909,12 @@ describe('ChannelModule', () => {
         ChannelVideo.findAll.mockResolvedValue(mockVideos);
         Video.findAll = jest.fn().mockResolvedValue([]);
 
-        const result = await ChannelModule.getChannelVideoStats('UC123', false, 'cook');
+        const result = await ChannelModule.getChannelVideoStats('UC123', 'off', 'cook');
 
         expect(result.totalCount).toBe(2); // Only videos with 'cook' in title
       });
 
-      test('should combine excludeDownloaded and search filters', async () => {
+      test('should combine downloadedFilter="exclude" and search filters', async () => {
         const Video = require('../../models/video');
         const mockVideos = [
           { youtube_id: 'video1', title: 'How to cook', publishedAt: '2024-01-01', toJSON() { return this; } },
@@ -1725,7 +1926,7 @@ describe('ChannelModule', () => {
           { id: 1, youtubeId: 'video1', removed: false, fileSize: 1000, filePath: '/path' }
         ]);
 
-        const result = await ChannelModule.getChannelVideoStats('UC123', true, 'cook');
+        const result = await ChannelModule.getChannelVideoStats('UC123', 'exclude', 'cook');
 
         expect(result.totalCount).toBe(1); // Only video3 matches both filters
         expect(result.oldestVideoDate).toBe('2024-01-03');
@@ -2325,8 +2526,6 @@ describe('ChannelModule', () => {
 
         expect(result).toEqual({
           videos: videos,
-          videoFail: false,
-          failureReason: null,
           dataSource: 'yt_dlp',
           lastFetched: new Date('2024-01-01'),
           totalCount: videos.length,
@@ -2336,13 +2535,11 @@ describe('ChannelModule', () => {
         });
       });
 
-      test('should build failure response when no videos', () => {
+      test('should build response with empty videos array', () => {
         const result = ChannelModule.buildChannelVideosResponse([], mockChannelData, 'cache', null, false, 'video');
 
         expect(result).toEqual({
           videos: [],
-          videoFail: true,
-          failureReason: 'fetch_error',
           dataSource: 'cache',
           lastFetched: new Date('2024-01-01'),
           totalCount: 0,
@@ -2374,15 +2571,15 @@ describe('ChannelModule', () => {
         expect(result.oldestVideoDate).toBe('2023-01-01T00:00:00Z');
       });
 
-      test('should not fail when videos empty but stats show totalCount > 0', () => {
+      test('should reflect stats totalCount when videos are empty', () => {
         const stats = {
           totalCount: 50,
           oldestVideoDate: '2023-01-01T00:00:00Z'
         };
         const result = ChannelModule.buildChannelVideosResponse([], mockChannelData, 'cache', stats);
 
-        expect(result.videoFail).toBe(false);
-        expect(result.failureReason).toBeNull();
+        expect(result.totalCount).toBe(50);
+        expect(result.oldestVideoDate).toBe('2023-01-01T00:00:00Z');
       });
 
       test('should include autoDownloadsEnabled parameter', () => {
@@ -2470,6 +2667,8 @@ describe('ChannelModule', () => {
         const result = await ChannelModule.getChannelVideos('UC123');
 
         expect(result.videos).toBeDefined();
+        // Cached fallback has content, so no user-visible error.
+        expect(result.fetchError).toBeUndefined();
         expect(logger.error).toHaveBeenCalledWith(
           expect.objectContaining({
             err: expect.any(Error),
@@ -2477,6 +2676,23 @@ describe('ChannelModule', () => {
           }),
           'Error fetching channel videos'
         );
+      });
+
+      test('should set fetchError=true when catch path yields no cached videos', async () => {
+        const Video = require('../../models/video');
+        const mockChannel = { ...mockChannelData, auto_download_enabled_tabs: 'video' };
+
+        Channel.findOne.mockResolvedValue(mockChannel);
+        ChannelVideo.findAll.mockResolvedValue([]);
+        ChannelVideo.count.mockResolvedValue(0);
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        jest.spyOn(ChannelModule, 'fetchAndSaveVideosViaYtDlp').mockRejectedValue(new Error('Network error'));
+
+        const result = await ChannelModule.getChannelVideos('UC123');
+
+        expect(result.videos).toEqual([]);
+        expect(result.fetchError).toBe(true);
       });
     });
 
@@ -2543,6 +2759,135 @@ describe('ChannelModule', () => {
 
         // Verify activeFetches was cleaned up
         expect(ChannelModule.activeFetches.has('UC123')).toBe(false);
+      });
+
+      test('uses API when available for videos tab (full fetch)', async () => {
+        const Video = require('../../models/video');
+        const mockChannel = { ...mockChannelData, save: jest.fn(), reload: jest.fn(), url: 'https://www.youtube.com/@test' };
+
+        Channel.findOne.mockResolvedValue(mockChannel);
+
+        const executeSpy = jest.spyOn(ChannelModule, 'executeYtDlpCommand');
+
+        youtubeApi.isAvailable.mockReturnValue(true);
+        youtubeApi.getApiKey.mockReturnValue('key');
+        youtubeApi.client.listChannelVideos.mockResolvedValue({
+          videos: [
+            { id: 'api-v1', title: 'API V1', duration: 300, uploadDate: '20240501', thumbnailUrl: 'https://t/1.jpg', availability: 'public' },
+          ],
+          currentChannelUrl: 'https://www.youtube.com/@test',
+        });
+
+        ChannelVideo.findOrCreate.mockResolvedValue([{}, true]);
+        ChannelVideo.findAll.mockResolvedValue([
+          { youtube_id: 'api-v1', title: 'API V1', toJSON() { return this; } },
+        ]);
+        ChannelVideo.count.mockResolvedValue(1);
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        const result = await ChannelModule.fetchAllChannelVideos('UC123', 1, 50, 'off', 'videos');
+
+        expect(youtubeApi.client.listChannelVideos).toHaveBeenCalledTimes(1);
+        expect(executeSpy).not.toHaveBeenCalled();
+        expect(result.success).toBe(true);
+        expect(result.videosFound).toBe(1);
+      });
+
+      test('uses API for shorts tab (full fetch) with short media_type', async () => {
+        const Video = require('../../models/video');
+        const mockChannel = { ...mockChannelData, save: jest.fn(), reload: jest.fn(), url: 'https://www.youtube.com/@test' };
+
+        Channel.findOne.mockResolvedValue(mockChannel);
+
+        const executeSpy = jest.spyOn(ChannelModule, 'executeYtDlpCommand');
+
+        youtubeApi.isAvailable.mockReturnValue(true);
+        youtubeApi.getApiKey.mockReturnValue('key');
+        youtubeApi.client.listChannelVideos.mockResolvedValue({
+          videos: [
+            { id: 'short-v1', title: 'Short', duration: 30, uploadDate: '20240501', thumbnailUrl: 'https://t/s.jpg', availability: 'public' },
+          ],
+          currentChannelUrl: 'https://www.youtube.com/@test',
+        });
+
+        ChannelVideo.findOrCreate.mockResolvedValue([{}, true]);
+        ChannelVideo.findAll.mockResolvedValue([{ youtube_id: 'short-v1', toJSON() { return this; } }]);
+        ChannelVideo.count.mockResolvedValue(1);
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        await ChannelModule.fetchAllChannelVideos('UC123', 1, 50, 'off', 'shorts');
+
+        expect(youtubeApi.client.listChannelVideos).toHaveBeenCalledTimes(1);
+        expect(youtubeApi.client.listChannelVideos).toHaveBeenCalledWith(
+          'key',
+          expect.any(String),
+          expect.objectContaining({ tabType: 'shorts' })
+        );
+        expect(executeSpy).not.toHaveBeenCalled();
+      });
+
+      test('uses API for streams tab (full fetch) with livestream media_type', async () => {
+        const Video = require('../../models/video');
+        const mockChannel = { ...mockChannelData, save: jest.fn(), reload: jest.fn(), url: 'https://www.youtube.com/@test' };
+
+        Channel.findOne.mockResolvedValue(mockChannel);
+
+        const executeSpy = jest.spyOn(ChannelModule, 'executeYtDlpCommand');
+
+        youtubeApi.isAvailable.mockReturnValue(true);
+        youtubeApi.getApiKey.mockReturnValue('key');
+        youtubeApi.client.listChannelVideos.mockResolvedValue({
+          videos: [
+            { id: 'stream-v1', title: 'Live', duration: 3600, uploadDate: '20240501', thumbnailUrl: 'https://t/l.jpg', availability: 'public' },
+          ],
+          currentChannelUrl: 'https://www.youtube.com/@test',
+        });
+
+        ChannelVideo.findOrCreate.mockResolvedValue([{}, true]);
+        ChannelVideo.findAll.mockResolvedValue([{ youtube_id: 'stream-v1', toJSON() { return this; } }]);
+        ChannelVideo.count.mockResolvedValue(1);
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        await ChannelModule.fetchAllChannelVideos('UC123', 1, 50, 'off', 'streams');
+
+        expect(youtubeApi.client.listChannelVideos).toHaveBeenCalledTimes(1);
+        expect(youtubeApi.client.listChannelVideos).toHaveBeenCalledWith(
+          'key',
+          expect.any(String),
+          expect.objectContaining({ tabType: 'streams' })
+        );
+        expect(executeSpy).not.toHaveBeenCalled();
+      });
+
+      test('falls back to yt-dlp on API error (full fetch, videos tab)', async () => {
+        const Video = require('../../models/video');
+        const mockChannel = { ...mockChannelData, save: jest.fn(), reload: jest.fn() };
+
+        Channel.findOne.mockResolvedValue(mockChannel);
+
+        youtubeApi.isAvailable.mockReturnValue(true);
+        youtubeApi.getApiKey.mockReturnValue('key');
+        const apiErr = Object.assign(new Error('boom'), { name: 'YoutubeApiError', code: 'QUOTA_EXCEEDED' });
+        youtubeApi.client.listChannelVideos.mockRejectedValue(apiErr);
+
+        jest.spyOn(ChannelModule, 'executeYtDlpCommand').mockResolvedValue(JSON.stringify({
+          entries: [{ id: 'fallback-v1', title: 'V', timestamp: 1704067200 }],
+          uploader_url: 'https://www.youtube.com/@test',
+        }));
+
+        ChannelVideo.findOrCreate.mockResolvedValue([{}, true]);
+        ChannelVideo.findAll.mockResolvedValue([{ youtube_id: 'fallback-v1', toJSON() { return this; } }]);
+        ChannelVideo.count.mockResolvedValue(1);
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        await ChannelModule.fetchAllChannelVideos('UC123', 1, 50, 'off', 'videos');
+
+        expect(youtubeApi.client.listChannelVideos).toHaveBeenCalledTimes(1);
+        expect(ChannelModule.executeYtDlpCommand).toHaveBeenCalled();
+        expect(logger.warn).toHaveBeenCalledWith(
+          expect.objectContaining({ code: 'QUOTA_EXCEEDED' }),
+          expect.stringContaining('falling back to yt-dlp')
+        );
       });
 
       test('should update channel URL if changed', async () => {
@@ -3575,6 +3920,373 @@ describe('ChannelModule', () => {
       await expect(promise).rejects.toThrow('ECONNREFUSED');
       expect(mockWriteStream.close).toHaveBeenCalled();
       expect(fsExtra.unlinkSync).toHaveBeenCalled();
+    });
+  });
+
+  describe('fetchChannelMetadata - API-first path', () => {
+    let channelModule;
+
+    beforeEach(() => {
+      channelModule = require('../channelModule');
+    });
+
+    test('uses API when available and returns yt-dlp-shaped metadata with entries', async () => {
+      youtubeApi.isAvailable.mockReturnValue(true);
+      youtubeApi.getApiKey.mockReturnValue('key');
+      youtubeApi.client.getChannelInfo.mockResolvedValue({
+        channelId: 'UCxxx',
+        title: 'My Channel',
+        description: 'desc',
+        customUrl: '@my',
+        uploadsPlaylistId: 'UUxxx',
+        videoCount: 42,
+        thumbnailUrl: 'https://yt3.ggpht.com/a',
+      });
+
+      const result = await channelModule.fetchChannelMetadata('https://www.youtube.com/@my');
+
+      expect(result).toMatchObject({
+        channel_id: 'UCxxx',
+        title: 'My Channel',
+        description: 'desc',
+        uploader: 'My Channel',
+        uploads_playlist_id: 'UUxxx',
+        folder_name: 'My Channel',
+      });
+      // Caller checks entries.length > 0 to reject empty channels - a channel
+      // with uploads must synthesize a non-empty entries array.
+      expect(Array.isArray(result.entries)).toBe(true);
+      expect(result.entries.length).toBeGreaterThan(0);
+      expect(childProcess.spawn).not.toHaveBeenCalled();
+    });
+
+    test('returns empty entries when API reports videoCount=0', async () => {
+      youtubeApi.isAvailable.mockReturnValue(true);
+      youtubeApi.getApiKey.mockReturnValue('key');
+      youtubeApi.client.getChannelInfo.mockResolvedValue({
+        channelId: 'UCxxx',
+        title: 'Empty Channel',
+        description: '',
+        customUrl: '@empty',
+        uploadsPlaylistId: 'UUxxx',
+        videoCount: 0,
+        thumbnailUrl: null,
+      });
+
+      const result = await channelModule.fetchChannelMetadata('https://www.youtube.com/@empty');
+
+      expect(result.entries).toEqual([]);
+    });
+
+    test('assumes entries when videoCount is null (owner hid count)', async () => {
+      youtubeApi.isAvailable.mockReturnValue(true);
+      youtubeApi.getApiKey.mockReturnValue('key');
+      youtubeApi.client.getChannelInfo.mockResolvedValue({
+        channelId: 'UCxxx',
+        title: 'Hidden Count',
+        description: '',
+        customUrl: '@hidden',
+        uploadsPlaylistId: 'UUxxx',
+        videoCount: null,
+        thumbnailUrl: null,
+      });
+
+      const result = await channelModule.fetchChannelMetadata('https://www.youtube.com/@hidden');
+
+      expect(result.entries.length).toBeGreaterThan(0);
+    });
+
+    test('falls back to yt-dlp silently when API throws', async () => {
+      youtubeApi.isAvailable.mockReturnValue(true);
+      youtubeApi.getApiKey.mockReturnValue('key');
+      const apiErr = new Error('boom');
+      apiErr.name = 'YoutubeApiError';
+      apiErr.code = 'QUOTA_EXCEEDED';
+      youtubeApi.client.getChannelInfo.mockRejectedValue(apiErr);
+
+      // Expect the yt-dlp fallback path to try to spawn. The spawn mock will stay
+      // in its default (no-op) state which will cause yt-dlp to hang; we catch the error.
+      // For this test we only need to verify that (a) API was called and (b) logger warned.
+      await channelModule.fetchChannelMetadata('https://www.youtube.com/@my').catch(() => {});
+
+      expect(youtubeApi.client.getChannelInfo).toHaveBeenCalledTimes(1);
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'QUOTA_EXCEEDED' }),
+        expect.stringContaining('falling back to yt-dlp')
+      );
+    });
+
+    test('does not call API when key is unavailable', async () => {
+      // default: isAvailable returns false
+      await channelModule.fetchChannelMetadata('https://www.youtube.com/@my').catch(() => {});
+      expect(youtubeApi.client.getChannelInfo).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('fetchChannelVideos - API-first', () => {
+    let channelModule;
+
+    beforeEach(() => {
+      channelModule = require('../channelModule');
+      Channel.findOne.mockResolvedValue({
+        channel_id: 'UCxxx',
+        default_rating: null,
+        url: 'https://www.youtube.com/@chan',
+      });
+    });
+
+    test('uses API for videos tab', async () => {
+      youtubeApi.isAvailable.mockReturnValue(true);
+      youtubeApi.getApiKey.mockReturnValue('key');
+      youtubeApi.client.listChannelVideos.mockResolvedValue({
+        videos: [
+          {
+            id: 'v1id',
+            title: 'V1',
+            duration: 300,
+            uploadDate: '20240501',
+            thumbnailUrl: 'https://t.jpg',
+            availability: 'public',
+            contentRating: { mpaaRating: 'mpaaPg13' },
+            ageLimit: 13,
+          },
+        ],
+        currentChannelUrl: 'https://www.youtube.com/@chan',
+      });
+
+      const result = await channelModule.fetchChannelVideos('UCxxx', null, 'videos');
+
+      expect(result.videos).toHaveLength(1);
+      expect(result.videos[0]).toMatchObject({
+        youtube_id: 'v1id',
+        title: 'V1',
+        duration: 300,
+        media_type: 'video',
+      });
+      expect(youtubeApi.client.listChannelVideos).toHaveBeenCalledWith(
+        'key',
+        expect.any(String),
+        expect.objectContaining({ tabType: 'videos', includeMetadata: true })
+      );
+    });
+
+    test('applies channel default rating on API-fetched videos', async () => {
+      Channel.findOne.mockResolvedValue({
+        channel_id: 'UCxxx',
+        default_rating: 'PG',
+        url: 'https://www.youtube.com/@chan',
+      });
+      youtubeApi.isAvailable.mockReturnValue(true);
+      youtubeApi.getApiKey.mockReturnValue('key');
+      youtubeApi.client.listChannelVideos.mockResolvedValue({
+        videos: [
+          {
+            id: 'v1id',
+            title: 'V1',
+            duration: 300,
+            uploadDate: '20240501',
+            thumbnailUrl: 'https://t.jpg',
+            availability: 'public',
+            contentRating: { mpaaRating: 'mpaaPg13' },
+            ageLimit: 13,
+          },
+        ],
+        currentChannelUrl: 'https://www.youtube.com/@chan',
+      });
+
+      const result = await channelModule.fetchChannelVideos('UCxxx', null, 'videos');
+
+      expect(result.videos[0]).toMatchObject({
+        youtube_id: 'v1id',
+        normalized_rating: 'PG',
+        rating_source: 'Channel Default',
+        content_rating: { mpaaRating: 'mpaaPg13' },
+        age_limit: 13,
+      });
+    });
+
+    test('uses API for shorts tab and tags videos media_type=short', async () => {
+      youtubeApi.isAvailable.mockReturnValue(true);
+      youtubeApi.getApiKey.mockReturnValue('key');
+      youtubeApi.client.listChannelVideos.mockResolvedValue({
+        videos: [
+          { id: 's1id', title: 'S1', duration: 30, uploadDate: '20240501', thumbnailUrl: 'https://t.jpg', availability: 'public' },
+        ],
+        currentChannelUrl: 'https://www.youtube.com/@chan',
+      });
+
+      const result = await channelModule.fetchChannelVideos('UCxxx', null, 'shorts');
+
+      expect(result.videos[0]).toMatchObject({
+        youtube_id: 's1id',
+        media_type: 'short',
+        live_status: null,
+      });
+      expect(youtubeApi.client.listChannelVideos).toHaveBeenCalledWith(
+        'key',
+        expect.any(String),
+        expect.objectContaining({ tabType: 'shorts' })
+      );
+    });
+
+    test('uses API for streams tab and tags videos media_type=livestream with was_live', async () => {
+      youtubeApi.isAvailable.mockReturnValue(true);
+      youtubeApi.getApiKey.mockReturnValue('key');
+      youtubeApi.client.listChannelVideos.mockResolvedValue({
+        videos: [
+          { id: 'l1id', title: 'L1', duration: 3600, uploadDate: '20240501', thumbnailUrl: 'https://t.jpg', availability: 'public', liveBroadcastContent: 'none' },
+        ],
+        currentChannelUrl: 'https://www.youtube.com/@chan',
+      });
+
+      const result = await channelModule.fetchChannelVideos('UCxxx', null, 'streams');
+
+      // Past livestreams on the streams tab must get live_status='was_live' so
+      // the frontend's isStillLive check (truthy && !== 'was_live') does NOT
+      // block the download button on finished streams.
+      expect(result.videos[0]).toMatchObject({
+        youtube_id: 'l1id',
+        media_type: 'livestream',
+        live_status: 'was_live',
+      });
+      expect(youtubeApi.client.listChannelVideos).toHaveBeenCalledWith(
+        'key',
+        expect.any(String),
+        expect.objectContaining({ tabType: 'streams' })
+      );
+    });
+
+    test('maps liveBroadcastContent=live to live_status=is_live (blocks download UI)', async () => {
+      youtubeApi.isAvailable.mockReturnValue(true);
+      youtubeApi.getApiKey.mockReturnValue('key');
+      youtubeApi.client.listChannelVideos.mockResolvedValue({
+        videos: [
+          { id: 'live1', title: 'Live', duration: 0, uploadDate: '20240501', thumbnailUrl: 'https://t.jpg', availability: 'public', liveBroadcastContent: 'live' },
+          { id: 'soon1', title: 'Upcoming', duration: 0, uploadDate: '20240501', thumbnailUrl: 'https://t.jpg', availability: 'public', liveBroadcastContent: 'upcoming' },
+        ],
+        currentChannelUrl: 'https://www.youtube.com/@chan',
+      });
+
+      const result = await channelModule.fetchChannelVideos('UCxxx', null, 'videos');
+
+      expect(result.videos[0]).toMatchObject({ youtube_id: 'live1', live_status: 'is_live' });
+      expect(result.videos[1]).toMatchObject({ youtube_id: 'soon1', live_status: 'is_upcoming' });
+    });
+
+    test('falls back to yt-dlp on API error for videos tab', async () => {
+      youtubeApi.isAvailable.mockReturnValue(true);
+      youtubeApi.getApiKey.mockReturnValue('key');
+      const apiErr = new Error('x');
+      apiErr.name = 'YoutubeApiError';
+      apiErr.code = 'QUOTA_EXCEEDED';
+      youtubeApi.client.listChannelVideos.mockRejectedValue(apiErr);
+
+      await channelModule.fetchChannelVideos('UCxxx', null, 'videos').catch(() => {});
+
+      expect(youtubeApi.client.listChannelVideos).toHaveBeenCalledTimes(1);
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'QUOTA_EXCEEDED' }),
+        expect.stringContaining('falling back to yt-dlp')
+      );
+    });
+
+    test('does not call API when key is unavailable', async () => {
+      // isAvailable defaults to false from beforeEach
+      await channelModule.fetchChannelVideos('UCxxx', null, 'videos').catch(() => {});
+      expect(youtubeApi.client.listChannelVideos).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('tab detection - API-first', () => {
+    let channelModule;
+
+    beforeEach(() => {
+      channelModule = require('../channelModule');
+    });
+
+    test('detectAndSaveChannelTabs uses API when available, does not invoke yt-dlp probe', async () => {
+      Channel.findOne.mockResolvedValue({
+        channel_id: 'UCxxx',
+        title: 'Chan',
+        available_tabs: null,
+        auto_download_enabled_tabs: null,
+      });
+      Channel.update.mockResolvedValue([1]);
+
+      youtubeApi.isAvailable.mockReturnValue(true);
+      youtubeApi.getApiKey.mockReturnValue('key');
+      youtubeApi.client.detectAvailableTabs.mockResolvedValue({
+        availableTabs: ['videos', 'shorts'],
+        channelInfo: { channelId: 'UCxxx' },
+      });
+
+      const ytdlpSpy = jest.spyOn(channelModule, 'checkTabExistsViaYtdlp');
+
+      const result = await channelModule.detectAndSaveChannelTabs('UCxxx');
+
+      expect(youtubeApi.client.detectAvailableTabs).toHaveBeenCalledTimes(1);
+      expect(ytdlpSpy).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        availableTabs: ['videos', 'shorts'],
+        autoDownloadEnabledTabs: 'video',
+      });
+    });
+
+    test('detectAndSaveChannelTabs falls back to yt-dlp when API throws', async () => {
+      Channel.findOne.mockResolvedValue({
+        channel_id: 'UCxxx',
+        title: 'Chan',
+        available_tabs: null,
+        auto_download_enabled_tabs: null,
+      });
+      Channel.update.mockResolvedValue([1]);
+
+      youtubeApi.isAvailable.mockReturnValue(true);
+      youtubeApi.getApiKey.mockReturnValue('key');
+      const apiErr = new Error('boom');
+      apiErr.name = 'YoutubeApiError';
+      apiErr.code = 'QUOTA_EXCEEDED';
+      youtubeApi.client.detectAvailableTabs.mockRejectedValue(apiErr);
+
+      const ytdlpSpy = jest
+        .spyOn(channelModule, 'checkTabExistsViaYtdlp')
+        .mockImplementation(async (_id, tabType) => tabType === 'videos');
+
+      const result = await channelModule.detectAndSaveChannelTabs('UCxxx');
+
+      expect(youtubeApi.client.detectAvailableTabs).toHaveBeenCalledTimes(1);
+      expect(ytdlpSpy).toHaveBeenCalled();
+      expect(result.availableTabs).toEqual(['videos']);
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'QUOTA_EXCEEDED' }),
+        expect.stringContaining('falling back to yt-dlp')
+      );
+    });
+
+    test('detectAndSaveChannelTabs falls back to yt-dlp when API returns no tabs', async () => {
+      Channel.findOne.mockResolvedValue({
+        channel_id: 'UCxxx',
+        title: 'Chan',
+        available_tabs: null,
+        auto_download_enabled_tabs: null,
+      });
+      Channel.update.mockResolvedValue([1]);
+
+      youtubeApi.isAvailable.mockReturnValue(true);
+      youtubeApi.getApiKey.mockReturnValue('key');
+      youtubeApi.client.detectAvailableTabs.mockResolvedValue({
+        availableTabs: [],
+        channelInfo: null,
+      });
+
+      const ytdlpSpy = jest
+        .spyOn(channelModule, 'checkTabExistsViaYtdlp')
+        .mockImplementation(async (_id, tabType) => tabType === 'videos');
+
+      const result = await channelModule.detectAndSaveChannelTabs('UCxxx');
+
+      expect(ytdlpSpy).toHaveBeenCalled();
+      expect(result.availableTabs).toEqual(['videos']);
     });
   });
 });

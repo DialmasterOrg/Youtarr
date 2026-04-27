@@ -57,6 +57,9 @@ downloads/*
 # Backup archive location
 backups/
 
+# Superpowers brainstorming session artifacts (local-only, ephemeral mockups)
+.superpowers/
+
 # Storybook outputs and caches
 storybook-static/
 build-storybook/

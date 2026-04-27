@@ -112,16 +112,81 @@ jest.mock('../VideoTableView', () => ({
   }
 }));
 
-jest.mock('../ChannelVideosHeader', () => ({
-  __esModule: true,
-  default: function MockChannelVideosHeader(props: any) {
-    const React = require('react');
-    return React.createElement('div', {
-      'data-testid': 'channel-videos-header',
-      'data-view-mode': props.viewMode
-    }, 'Header');
-  }
-}));
+// The old ChannelVideosHeader / ChannelVideosFilters components have been replaced
+// by the shared VideoList module. We mock that module with a minimal passthrough
+// so tests can continue to focus on ChannelVideos' data flow and selection logic.
+jest.mock('../../shared/VideoList', () => {
+  const React = require('react');
+  const actual = jest.requireActual('../../shared/VideoList');
+  return {
+    ...actual,
+    VideoListContainer: function MockVideoListContainer(props: any) {
+      const selectionCount = props.selection?.count ?? 0;
+      const empty = (props.itemCount ?? 0) === 0;
+      const selectionPill = props.selection?.hasSelection
+        ? React.createElement(
+            'div',
+            null,
+            React.createElement(
+              'button',
+              {
+                type: 'button',
+                'data-testid': 'video-list-selection-pill',
+                'aria-label': `Actions for ${props.selection.count} selected video${props.selection.count !== 1 ? 's' : ''}`,
+              },
+              'Selection FAB'
+            ),
+            React.createElement(
+              'ul',
+              { role: 'menu' },
+              ...(props.selection.actions || []).map((action: any) =>
+                React.createElement(
+                  'li',
+                  {
+                    key: action.id,
+                    role: 'menuitem',
+                    onClick: () => action.onClick?.(props.selection.selectedIds),
+                  },
+                  `${action.label} Selected`
+                )
+              ),
+              React.createElement(
+                'li',
+                {
+                  role: 'menuitem',
+                  onClick: () => props.selection.clear?.(),
+                },
+                'Clear Selection'
+              )
+            )
+          )
+        : null;
+      const content = empty
+        ? props.isError
+          ? React.createElement('div', { role: 'alert' }, props.errorMessage || 'error')
+          : props.isLoading
+            ? (props.loadingSkeleton || React.createElement('div', { 'data-testid': 'loading' }, 'Loading...'))
+            : React.createElement('div', { 'data-testid': 'video-list-empty-state' }, 'No videos found')
+        : (typeof props.renderContent === 'function'
+            ? props.renderContent(props.state?.viewMode ?? 'grid')
+            : null);
+      return React.createElement(
+        'div',
+        {
+          'data-testid': 'video-list-container',
+          'data-view-mode': props.state?.viewMode,
+          'data-selection-count': selectionCount,
+        },
+        props.headerSlot,
+        props.tabsSlot,
+        content,
+        props.infiniteScrollSentinel,
+        props.pagination,
+        selectionPill
+      );
+    },
+  };
+});
 
 jest.mock('../ChannelVideosDialogs', () => ({
   __esModule: true,
@@ -225,13 +290,17 @@ describe('ChannelVideos Component', () => {
     (useMediaQuery as jest.Mock).mockReturnValue(false);
     mockNavigate.mockClear();
     localStorage.removeItem('youtarr.channelVideos.pageSize');
+    // Pin the view so tests asserting VideoCard selection/ignore behavior keep
+    // rendering the grid. The "default is table on desktop" test below clears
+    // this to exercise the real default.
+    localStorage.setItem('youtarr:channelVideosViewMode', 'grid');
 
     // Default mock responses
     useChannelVideos.mockReturnValue({
       videos: [],
       totalCount: 0,
       oldestVideoDate: null,
-      videoFailed: false,
+      error: null,
       autoDownloadsEnabled: false,
       loading: false,
       refetch: mockRefetchVideos,
@@ -274,7 +343,6 @@ describe('ChannelVideos Component', () => {
         videos: [],
         totalCount: 0,
         oldestVideoDate: null,
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: true,
         refetch: mockRefetchVideos,
@@ -284,21 +352,20 @@ describe('ChannelVideos Component', () => {
       expect(screen.getByText('Loading and fetching/indexing new videos for this channel tab...')).toBeInTheDocument();
     });
 
-    test('renders videos in grid view by default on desktop', () => {
+    test('renders videos in table view by default on desktop', () => {
+      localStorage.removeItem('youtarr:channelVideosViewMode');
       useChannelVideos.mockReturnValue({
         videos: mockVideos,
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
       });
 
       renderChannelVideos();
-      expect(screen.getByTestId('video-card-video1')).toBeInTheDocument();
-      expect(screen.getByTestId('video-card-video2')).toBeInTheDocument();
-      expect(screen.getByTestId('video-card-short1')).toBeInTheDocument();
+      expect(screen.getByTestId('video-table-view')).toBeInTheDocument();
+      expect(screen.getByText('Table with 3 videos')).toBeInTheDocument();
     });
 
     test('shows no videos message when empty', () => {
@@ -311,7 +378,7 @@ describe('ChannelVideos Component', () => {
         videos: [],
         totalCount: 0,
         oldestVideoDate: null,
-        videoFailed: true,
+        error: new Error('Network error'),
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -319,6 +386,28 @@ describe('ChannelVideos Component', () => {
 
       renderChannelVideos();
       expect(screen.getByText('Failed to fetch channel videos. Please try again later.')).toBeInTheDocument();
+    });
+
+    test('shows filtered empty message when an active filter returns no videos', () => {
+      // No thrown error, just zero results. ChannelVideos must not treat
+      // this as an error; the shared VideoListEmptyState surfaces the
+      // filter-aware empty copy when the user has an active filter.
+      useChannelVideos.mockReturnValue({
+        videos: [],
+        totalCount: 0,
+        oldestVideoDate: null,
+        error: null,
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+      expect(
+        screen.queryByText('Failed to fetch channel videos. Please try again later.')
+      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.getByTestId('video-list-empty-state')).toBeInTheDocument();
     });
   });
 
@@ -426,7 +515,6 @@ describe('ChannelVideos Component', () => {
         videos: [],
         totalCount: 0,
         oldestVideoDate: null,
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: true,
         refetch: mockRefetchVideos,
@@ -448,13 +536,13 @@ describe('ChannelVideos Component', () => {
 
   describe('View Modes', () => {
     test('renders in list view on mobile by default', () => {
+      localStorage.removeItem('youtarr:channelVideosViewMode');
       (useMediaQuery as jest.Mock).mockReturnValue(true);
 
       useChannelVideos.mockReturnValue({
         videos: mockVideos,
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -472,7 +560,6 @@ describe('ChannelVideos Component', () => {
         videos: [mockVideos[0]],
         totalCount: 1,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -487,7 +574,7 @@ describe('ChannelVideos Component', () => {
       });
 
       expect(floatingAction).toBeInTheDocument();
-      expect(screen.getByTestId('selection-action-count')).toHaveTextContent('1');
+      expect(screen.getByTestId('video-list-selection-pill')).toHaveAccessibleName(/1 selected video/i);
 
       await user.click(floatingAction);
 
@@ -505,7 +592,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -536,7 +622,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -567,7 +652,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -602,6 +686,51 @@ describe('ChannelVideos Component', () => {
       expect(screen.getByRole('menuitem', { name: /Download Selected/i })).toBeInTheDocument();
       expect(screen.queryByRole('menuitem', { name: /Delete Selected/i })).not.toBeInTheDocument();
     });
+
+    test('pill "Clear Selection" wipes both download and delete selection arrays', async () => {
+      // Pins the cross-clear invariant of syncedDownload/DeleteSelection.clear:
+      // clearing one mode via the pill must also clear the other mode's array,
+      // so a previously-stuck selection in the non-active mode can't linger.
+      const user = userEvent.setup();
+
+      useChannelVideos.mockReturnValue({
+        videos: mockVideos,
+        totalCount: 3,
+        oldestVideoDate: '2023-01-01',
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      // Populate both selection arrays via the force-select-delete escape hatch
+      // so clearing via the pill must zero both.
+      await user.click(screen.getByTestId('select-video-video1'));
+      await user.click(screen.getByTestId('force-select-delete-video2'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-selection-mode', 'download');
+      });
+
+      const floatingAction = await screen.findByRole('button', {
+        name: /Actions for 1 selected video/i,
+      });
+      await user.click(floatingAction);
+
+      const clearItem = screen.getByRole('menuitem', { name: /Clear Selection/i });
+      await user.click(clearItem);
+
+      // Pill disappears -> hasSelection is false on both hooks, meaning both
+      // selection arrays went back to empty.
+      await waitFor(() => {
+        expect(screen.queryByTestId('video-list-selection-pill')).not.toBeInTheDocument();
+      });
+
+      // Neither card still advertises a locked selectionMode.
+      expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-selection-mode', 'null');
+      expect(screen.getByTestId('video-card-video2')).toHaveAttribute('data-selection-mode', 'null');
+    });
   });
 
   describe('Pagination', () => {
@@ -610,7 +739,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 32,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -629,7 +757,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -637,7 +764,7 @@ describe('ChannelVideos Component', () => {
 
       renderChannelVideos();
 
-      expect(screen.getByRole('button', { name: '16' })).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: '16' }).length).toBeGreaterThan(0);
     });
 
     test('does not render page size selector when no videos', () => {
@@ -645,7 +772,6 @@ describe('ChannelVideos Component', () => {
         videos: [],
         totalCount: 0,
         oldestVideoDate: null,
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -661,7 +787,6 @@ describe('ChannelVideos Component', () => {
         videos: [],
         totalCount: 0,
         oldestVideoDate: null,
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: true,
         refetch: mockRefetchVideos,
@@ -677,7 +802,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -685,8 +809,9 @@ describe('ChannelVideos Component', () => {
 
       renderChannelVideos();
 
-      const select = screen.getByRole('button', { name: '16' });
-      expect(select).toHaveTextContent('16');
+      const selects = screen.getAllByRole('button', { name: '16' });
+      expect(selects.length).toBeGreaterThan(0);
+      expect(selects[0]).toHaveTextContent('16');
     });
 
     test('selector reads stored value from localStorage', () => {
@@ -696,7 +821,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -718,7 +842,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 48, // enough for multiple pages at size 16
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -741,8 +864,8 @@ describe('ChannelVideos Component', () => {
       // MUI Select (non-native) opens on mouseDown on the inner trigger div.
       // The "Per page:" label precedes the Select, and the Select displays "16".
       // Use within() on the labeled container to find the trigger by its text content.
-      const selectContainer = screen.getByRole('button', { name: '16' });
-      const trigger = within(selectContainer).getByText('16');
+      const selectContainers = screen.getAllByRole('button', { name: '16' });
+      const trigger = within(selectContainers[0]).getByText('16');
       fireEvent.mouseDown(trigger);
 
       // Choose 32
@@ -763,7 +886,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -772,7 +894,7 @@ describe('ChannelVideos Component', () => {
       renderChannelVideos();
 
       // Selector should be present
-      expect(screen.getByRole('button', { name: '16' })).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: '16' }).length).toBeGreaterThan(0);
 
       // Only 1 page total (3 videos < 16 per page), so no page 2 button should exist
       expect(screen.queryByRole('button', { name: 'go to page 2' })).not.toBeInTheDocument();
@@ -783,7 +905,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 32,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -792,7 +913,7 @@ describe('ChannelVideos Component', () => {
       renderChannelVideos();
 
       // Both should be present
-      expect(screen.getByRole('button', { name: '16' })).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: '16' }).length).toBeGreaterThan(0);
       expect(screen.getAllByRole('navigation').length).toBeGreaterThan(0);
     });
   });
@@ -886,7 +1007,7 @@ describe('ChannelVideos Component', () => {
         channelId: 'UC123456',
         page: 1,
         pageSize: 16, // Desktop default
-        hideDownloaded: false,
+        downloadedFilter: 'off',
         searchQuery: '',
         sortBy: 'date',
         sortOrder: 'desc',
@@ -899,7 +1020,9 @@ describe('ChannelVideos Component', () => {
         maxRating: '',
         append: false,
         resetKey: expect.any(String),
-        protectedFilter: false,
+        protectedFilter: 'off',
+        missingFilter: 'off',
+        ignoredFilter: 'off',
       }));
     });
 
@@ -911,7 +1034,7 @@ describe('ChannelVideos Component', () => {
         'UC123456',
         1, // page
         16, // pageSize
-        false, // hideDownloaded
+        'off', // downloadedFilter
         null, // tabType - null until tabs are loaded
         mockToken
       );
@@ -1027,7 +1150,6 @@ describe('ChannelVideos Component', () => {
         videos: [],
         totalCount: 0,
         oldestVideoDate: null,
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: true,
         refetch: mockRefetchVideos,
@@ -1055,11 +1177,11 @@ describe('ChannelVideos Component', () => {
     });
 
     test('renders list view by default on mobile', () => {
+      localStorage.removeItem('youtarr:channelVideosViewMode');
       useChannelVideos.mockReturnValue({
         videos: mockVideos,
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -1096,7 +1218,6 @@ describe('ChannelVideos Component', () => {
         videos: [mockVideos[0]],
         totalCount: 1,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -1125,7 +1246,6 @@ describe('ChannelVideos Component', () => {
         videos: [ignoredVideo],
         totalCount: 1,
         oldestVideoDate: '2023-01-04',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -1151,7 +1271,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -1181,7 +1300,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -1204,7 +1322,6 @@ describe('ChannelVideos Component', () => {
         videos: mockVideos,
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -1232,7 +1349,6 @@ describe('ChannelVideos Component', () => {
         videos: [mockVideos[0]],
         totalCount: 1,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -1261,7 +1377,6 @@ describe('ChannelVideos Component', () => {
         videos: [mockVideos[0]],
         totalCount: 1,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -1282,7 +1397,6 @@ describe('ChannelVideos Component', () => {
         videos: [mockVideos[0]],
         totalCount: 1,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,
@@ -1306,7 +1420,6 @@ describe('ChannelVideos Component', () => {
         ],
         totalCount: 3,
         oldestVideoDate: '2023-01-01',
-        videoFailed: false,
         autoDownloadsEnabled: false,
         loading: false,
         refetch: mockRefetchVideos,

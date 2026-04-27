@@ -97,6 +97,7 @@ describe('VideoTableView Component', () => {
       expect(screen.getByText('Thumbnail')).toBeInTheDocument();
       expect(screen.getByText('Title')).toBeInTheDocument();
       expect(screen.getByText('Published')).toBeInTheDocument();
+      expect(screen.getByText('Downloaded')).toBeInTheDocument();
       expect(screen.getByText('Duration')).toBeInTheDocument();
       expect(screen.getByText('Size')).toBeInTheDocument();
       expect(screen.getByText('Status')).toBeInTheDocument();
@@ -185,7 +186,8 @@ describe('VideoTableView Component', () => {
     test('renders dash when no file path exists', () => {
       const videoNoFile = { ...mockVideo, filePath: undefined };
       renderWithProviders(<VideoTableView {...defaultProps} videos={[videoNoFile]} />);
-      expect(screen.getByText('-')).toBeInTheDocument();
+      // Two dashes on a never-downloaded row: Downloaded column and Size column
+      expect(screen.getAllByText('-').length).toBeGreaterThan(0);
     });
   });
 
@@ -918,6 +920,51 @@ describe('VideoTableView Component', () => {
     });
   });
 
+  describe('Downloaded Date Column', () => {
+    test('renders stacked Downloaded date and time for downloaded videos with timeCreated', () => {
+      const downloadedVideo = {
+        ...mockVideo,
+        added: true,
+        removed: false,
+        timeCreated: new Date(2026, 3, 20, 16, 20, 0).toISOString(),
+      };
+      renderWithProviders(
+        <VideoTableView {...defaultProps} videos={[downloadedVideo]} />
+      );
+      // Downloaded cell stacks date above time. Time format is unique to this cell
+      // (Published has no time); date regex also matches Published so use getAllByText.
+      expect(screen.getByText(/^\d{2}:\d{2} (AM|PM)$/)).toBeInTheDocument();
+      expect(screen.getAllByText(/^\d{1,2}\/\d{1,2}\/\d{4}$/).length).toBeGreaterThanOrEqual(2);
+    });
+
+    test('renders "-" for never downloaded videos', () => {
+      renderWithProviders(<VideoTableView {...defaultProps} />);
+      // One "-" per Downloaded column of the single video row
+      expect(screen.getAllByText('-').length).toBeGreaterThan(0);
+    });
+
+    test('renders "-" when downloaded video lacks timeCreated', () => {
+      const downloadedVideo = { ...mockVideo, added: true, removed: false };
+      renderWithProviders(
+        <VideoTableView {...defaultProps} videos={[downloadedVideo]} />
+      );
+      expect(screen.getAllByText('-').length).toBeGreaterThan(0);
+    });
+
+    test('renders Downloaded date for missing videos that were downloaded in the past', () => {
+      const removedVideo = {
+        ...mockVideo,
+        added: true,
+        removed: true,
+        timeCreated: new Date(2026, 3, 20, 16, 20, 0).toISOString(),
+      };
+      renderWithProviders(
+        <VideoTableView {...defaultProps} videos={[removedVideo]} />
+      );
+      expect(screen.getByText(/^\d{2}:\d{2} (AM|PM)$/)).toBeInTheDocument();
+    });
+  });
+
   describe('Table Structure', () => {
     test('renders table with correct structure', () => {
       renderWithProviders(<VideoTableView {...defaultProps} />);
@@ -928,8 +975,8 @@ describe('VideoTableView Component', () => {
     test('renders table head with correct number of columns', () => {
       renderWithProviders(<VideoTableView {...defaultProps} />);
       const headerCells = screen.getAllByRole('columnheader');
-      // Checkbox, Thumbnail, Title, Published, Duration, Size, Rating, Status
-      expect(headerCells).toHaveLength(8);
+      // Checkbox, Thumbnail, Title, Published, Downloaded, Duration, Rating, Size, Status
+      expect(headerCells).toHaveLength(9);
     });
 
     test('renders table rows for each video', () => {

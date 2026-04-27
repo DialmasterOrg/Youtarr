@@ -44,6 +44,11 @@ services:
       - AUTH_ENABLED=${AUTH_ENABLED:-true}
       - AUTH_PRESET_USERNAME=${AUTH_PRESET_USERNAME:-}
       - AUTH_PRESET_PASSWORD=${AUTH_PRESET_PASSWORD:-}
+      # Platform-spoof env vars (used by ./scripts/start-dev.sh --as-elfhosted and full Elfhosted spoofs).
+      # Empty when unset on the host, so non-Elfhosted dev runs are unaffected.
+      - PLATFORM=${PLATFORM:-}
+      - DATA_PATH=${DATA_PATH:-}
+      - PLEX_URL=${PLEX_URL:-}
     depends_on:
       - youtarr-db
     # Use Node 18+'s built-in watch mode for auto-restart on server changes

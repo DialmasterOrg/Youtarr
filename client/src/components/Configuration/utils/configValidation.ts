@@ -1,4 +1,5 @@
 import { ConfigState } from '../types';
+import { validateRateLimit } from '../sections/ytdlpOptionsHelpers';
 
 /**
  * Validate proxy URL format
@@ -52,6 +53,12 @@ export const validateConfig = (config: ConfigState): string | null => {
     if (proxyError) {
       return `Cannot save: ${proxyError}`;
     }
+  }
+
+  // yt-dlp download rate limit validation
+  const rateLimitError = validateRateLimit(config.ytdlpDownloadRateLimit);
+  if (rateLimitError) {
+    return `Cannot save: ${rateLimitError}`;
   }
 
   return null;

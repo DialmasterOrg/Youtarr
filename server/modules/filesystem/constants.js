@@ -118,6 +118,15 @@ const CHANNEL_CLEANUP_IGNORABLE_FILES = [
   'desktop.ini',
 ];
 
+/**
+ * AppleDouble metadata files written by macOS SMB clients (e.g., "._video.mp4").
+ * These are sidecar metadata for an underlying file; once the underlying file
+ * is gone, the sidecar is orphaned junk and safe to remove. Mac SMB also tends
+ * to write these into a directory in response to other operations, which can
+ * race with rmdir and cause spurious ENOTEMPTY (issue #370).
+ */
+const APPLEDOUBLE_FILE_PATTERN = /^\._/;
+
 module.exports = {
   SUBFOLDER_PREFIX,
   GLOBAL_DEFAULT_SENTINEL,
@@ -135,5 +144,6 @@ module.exports = {
   MAIN_AUDIO_FILE_PATTERN,
   MAIN_MEDIA_FILE_PATTERN,
   FRAGMENT_FILE_PATTERN,
-  CHANNEL_CLEANUP_IGNORABLE_FILES
+  CHANNEL_CLEANUP_IGNORABLE_FILES,
+  APPLEDOUBLE_FILE_PATTERN
 };

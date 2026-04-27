@@ -15,6 +15,7 @@ jest.mock('../../../../../lib/icons', () => {
     AccessTime: make('IconAccessTime'),
     ExpandMore: make('IconExpandMore'),
     ExpandLess: make('IconExpandLess'),
+    FileDownload: make('IconDownloaded'),
   };
 });
 
@@ -123,6 +124,28 @@ describe('VideoMetadata', () => {
   test('hides date row when date string is unparseable', () => {
     renderMetadata({ publishedAt: 'not-a-date' });
     expect(screen.queryByTestId('IconCalendar')).not.toBeInTheDocument();
+  });
+
+  test('renders Downloaded pill when isDownloaded and addedAt are set', () => {
+    renderMetadata({ isDownloaded: true, addedAt: '2026-04-20T16:20:00Z' });
+    expect(screen.getByTestId('IconDownloaded')).toBeInTheDocument();
+    expect(screen.getByText(/^Downloaded:/)).toBeInTheDocument();
+  });
+
+  test('hides Downloaded pill when video is not downloaded even if addedAt is set', () => {
+    renderMetadata({ isDownloaded: false, addedAt: '2026-04-20T16:20:00Z' });
+    expect(screen.queryByTestId('IconDownloaded')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Downloaded:/)).not.toBeInTheDocument();
+  });
+
+  test('hides Downloaded pill when addedAt is null', () => {
+    renderMetadata({ isDownloaded: true, addedAt: null });
+    expect(screen.queryByTestId('IconDownloaded')).not.toBeInTheDocument();
+  });
+
+  test('hides Downloaded pill when addedAt is unparseable', () => {
+    renderMetadata({ isDownloaded: true, addedAt: 'garbage' });
+    expect(screen.queryByTestId('IconDownloaded')).not.toBeInTheDocument();
   });
 
   test('formats view counts under 1000 with locale separators', () => {

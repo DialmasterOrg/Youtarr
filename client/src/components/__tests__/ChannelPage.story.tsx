@@ -105,7 +105,6 @@ export const Default: Story = {
             totalPages: 1,
             page: 1,
             limit: 12,
-            videoFail: false,
             oldestVideoDate: '2024-01-15',
             autoDownloadsEnabled: true,
             availableTabs: ['videos'],

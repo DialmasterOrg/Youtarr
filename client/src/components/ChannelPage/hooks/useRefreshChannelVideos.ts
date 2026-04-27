@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { ChannelVideo } from '../../../types/ChannelVideo';
+import { ChipFilterMode } from '../../shared/VideoList/types';
 
 interface RefreshResult {
   videos: ChannelVideo[];
@@ -18,7 +19,7 @@ export function useRefreshChannelVideos(
   channelId: string | undefined,
   page: number,
   pageSize: number,
-  hideDownloaded: boolean,
+  downloadedFilter: ChipFilterMode,
   tabType: string | null,
   token: string | null
 ): UseRefreshChannelVideosResult {
@@ -38,8 +39,16 @@ export function useRefreshChannelVideos(
     setError(null);
 
     try {
+      const queryParams = new URLSearchParams({
+        page: page.toString(),
+        pageSize: pageSize.toString(),
+        tabType: tabType,
+      });
+      if (downloadedFilter && downloadedFilter !== 'off') {
+        queryParams.set('downloadedFilter', downloadedFilter);
+      }
       const response = await fetch(
-        `/fetchallchannelvideos/${channelId}?page=${page}&pageSize=${pageSize}&hideDownloaded=${hideDownloaded}&tabType=${tabType}`,
+        `/fetchallchannelvideos/${channelId}?${queryParams}`,
         {
           method: 'POST',
           headers: {
@@ -69,7 +78,7 @@ export function useRefreshChannelVideos(
     } finally {
       setLoading(false);
     }
-  }, [channelId, page, pageSize, hideDownloaded, tabType, token]);
+  }, [channelId, page, pageSize, downloadedFilter, tabType, token]);
 
   const clearError = useCallback(() => {
     setError(null);

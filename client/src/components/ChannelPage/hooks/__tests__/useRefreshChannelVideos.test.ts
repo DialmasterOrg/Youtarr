@@ -49,7 +49,7 @@ describe('useRefreshChannelVideos', () => {
   describe('Initial State', () => {
     test('returns default state values on initialization', () => {
       const { result } = renderHook(() =>
-        useRefreshChannelVideos(mockChannelId, 1, 16, false, 'videos', mockToken)
+        useRefreshChannelVideos(mockChannelId, 1, 16, 'off', 'videos', mockToken)
       );
 
       expect(result.current.loading).toBe(false);
@@ -67,7 +67,7 @@ describe('useRefreshChannelVideos', () => {
       });
 
       const { result } = renderHook(() =>
-        useRefreshChannelVideos(mockChannelId, 1, 16, false, 'videos', mockToken)
+        useRefreshChannelVideos(mockChannelId, 1, 16, 'off', 'videos', mockToken)
       );
 
       let refreshResult;
@@ -91,7 +91,7 @@ describe('useRefreshChannelVideos', () => {
       });
 
       const { result } = renderHook(() =>
-        useRefreshChannelVideos(mockChannelId, 2, 8, true, 'shorts', mockToken)
+        useRefreshChannelVideos(mockChannelId, 2, 8, 'exclude', 'shorts', mockToken)
       );
 
       await act(async () => {
@@ -104,7 +104,7 @@ describe('useRefreshChannelVideos', () => {
       expect(url).toContain(`/fetchallchannelvideos/${mockChannelId}`);
       expect(url).toContain('page=2');
       expect(url).toContain('pageSize=8');
-      expect(url).toContain('hideDownloaded=true');
+      expect(url).toContain('downloadedFilter=exclude');
       expect(url).toContain('tabType=shorts');
     });
 
@@ -115,7 +115,7 @@ describe('useRefreshChannelVideos', () => {
       });
 
       const { result } = renderHook(() =>
-        useRefreshChannelVideos(mockChannelId, 1, 16, false, 'videos', mockToken)
+        useRefreshChannelVideos(mockChannelId, 1, 16, 'off', 'videos', mockToken)
       );
 
       await act(async () => {
@@ -145,7 +145,7 @@ describe('useRefreshChannelVideos', () => {
       });
 
       const { result } = renderHook(() =>
-        useRefreshChannelVideos(mockChannelId, 1, 16, false, 'videos', mockToken)
+        useRefreshChannelVideos(mockChannelId, 1, 16, 'off', 'videos', mockToken)
       );
 
       let refreshResult;
@@ -169,7 +169,7 @@ describe('useRefreshChannelVideos', () => {
       });
 
       const { result } = renderHook(() =>
-        useRefreshChannelVideos(mockChannelId, 1, 16, false, 'videos', mockToken)
+        useRefreshChannelVideos(mockChannelId, 1, 16, 'off', 'videos', mockToken)
       );
 
       let refreshResult;
@@ -199,7 +199,7 @@ describe('useRefreshChannelVideos', () => {
       });
 
       const { result } = renderHook(() =>
-        useRefreshChannelVideos(mockChannelId, 1, 16, false, 'videos', mockToken)
+        useRefreshChannelVideos(mockChannelId, 1, 16, 'off', 'videos', mockToken)
       );
 
       let refreshResult;
@@ -229,7 +229,7 @@ describe('useRefreshChannelVideos', () => {
       });
 
       const { result } = renderHook(() =>
-        useRefreshChannelVideos(mockChannelId, 1, 16, false, 'videos', mockToken)
+        useRefreshChannelVideos(mockChannelId, 1, 16, 'off', 'videos', mockToken)
       );
 
       let refreshResult;
@@ -258,7 +258,7 @@ describe('useRefreshChannelVideos', () => {
       });
 
       const { result } = renderHook(() =>
-        useRefreshChannelVideos(mockChannelId, 1, 16, false, 'videos', mockToken)
+        useRefreshChannelVideos(mockChannelId, 1, 16, 'off', 'videos', mockToken)
       );
 
       let refreshResult;
@@ -284,7 +284,7 @@ describe('useRefreshChannelVideos', () => {
       });
 
       const { result } = renderHook(() =>
-        useRefreshChannelVideos(mockChannelId, 1, 16, false, 'videos', mockToken)
+        useRefreshChannelVideos(mockChannelId, 1, 16, 'off', 'videos', mockToken)
       );
 
       let refreshResult;
@@ -305,7 +305,7 @@ describe('useRefreshChannelVideos', () => {
       mockFetch.mockRejectedValueOnce(networkError);
 
       const { result } = renderHook(() =>
-        useRefreshChannelVideos(mockChannelId, 1, 16, false, 'videos', mockToken)
+        useRefreshChannelVideos(mockChannelId, 1, 16, 'off', 'videos', mockToken)
       );
 
       let refreshResult;
@@ -329,7 +329,7 @@ describe('useRefreshChannelVideos', () => {
       mockFetch.mockRejectedValueOnce({ status: 500 });
 
       const { result } = renderHook(() =>
-        useRefreshChannelVideos(mockChannelId, 1, 16, false, 'videos', mockToken)
+        useRefreshChannelVideos(mockChannelId, 1, 16, 'off', 'videos', mockToken)
       );
 
       let refreshResult;
@@ -350,7 +350,7 @@ describe('useRefreshChannelVideos', () => {
       mockFetch.mockRejectedValueOnce(new Error('First error'));
 
       const { result } = renderHook(() =>
-        useRefreshChannelVideos(mockChannelId, 1, 16, false, 'videos', mockToken)
+        useRefreshChannelVideos(mockChannelId, 1, 16, 'off', 'videos', mockToken)
       );
 
       await act(async () => {
@@ -378,7 +378,7 @@ describe('useRefreshChannelVideos', () => {
   describe('Conditional Refresh', () => {
     test('returns null when channelId is undefined', async () => {
       const { result } = renderHook(() =>
-        useRefreshChannelVideos(undefined, 1, 16, false, 'videos', mockToken)
+        useRefreshChannelVideos(undefined, 1, 16, 'off', 'videos', mockToken)
       );
 
       let refreshResult;
@@ -392,7 +392,7 @@ describe('useRefreshChannelVideos', () => {
 
     test('returns null when token is null', async () => {
       const { result } = renderHook(() =>
-        useRefreshChannelVideos(mockChannelId, 1, 16, false, 'videos', null)
+        useRefreshChannelVideos(mockChannelId, 1, 16, 'off', 'videos', null)
       );
 
       let refreshResult;
@@ -406,7 +406,7 @@ describe('useRefreshChannelVideos', () => {
 
     test('returns null when both channelId and token are missing', async () => {
       const { result } = renderHook(() =>
-        useRefreshChannelVideos(undefined, 1, 16, false, 'videos', null)
+        useRefreshChannelVideos(undefined, 1, 16, 'off', 'videos', null)
       );
 
       let refreshResult;
@@ -429,7 +429,7 @@ describe('useRefreshChannelVideos', () => {
       mockFetch.mockReturnValueOnce(promise);
 
       const { result } = renderHook(() =>
-        useRefreshChannelVideos(mockChannelId, 1, 16, false, 'videos', mockToken)
+        useRefreshChannelVideos(mockChannelId, 1, 16, 'off', 'videos', mockToken)
       );
 
       expect(result.current.loading).toBe(false);
@@ -461,7 +461,7 @@ describe('useRefreshChannelVideos', () => {
       });
 
       const { result } = renderHook(() =>
-        useRefreshChannelVideos(mockChannelId, 1, 16, false, 'videos', mockToken)
+        useRefreshChannelVideos(mockChannelId, 1, 16, 'off', 'videos', mockToken)
       );
 
       let refreshResult;
@@ -483,7 +483,7 @@ describe('useRefreshChannelVideos', () => {
       mockFetch.mockRejectedValueOnce(new Error('Fetch error'));
 
       const { result } = renderHook(() =>
-        useRefreshChannelVideos(mockChannelId, 1, 16, false, 'videos', mockToken)
+        useRefreshChannelVideos(mockChannelId, 1, 16, 'off', 'videos', mockToken)
       );
 
       await act(async () => {
@@ -504,7 +504,7 @@ describe('useRefreshChannelVideos', () => {
       mockFetch.mockRejectedValueOnce(new Error('Test error'));
 
       const { result } = renderHook(() =>
-        useRefreshChannelVideos(mockChannelId, 1, 16, false, 'videos', mockToken)
+        useRefreshChannelVideos(mockChannelId, 1, 16, 'off', 'videos', mockToken)
       );
 
       let refreshResult;
@@ -526,7 +526,7 @@ describe('useRefreshChannelVideos', () => {
 
     test('clearError does nothing when no error exists', () => {
       const { result } = renderHook(() =>
-        useRefreshChannelVideos(mockChannelId, 1, 16, false, 'videos', mockToken)
+        useRefreshChannelVideos(mockChannelId, 1, 16, 'off', 'videos', mockToken)
       );
 
       expect(result.current.error).toBeNull();
@@ -542,14 +542,14 @@ describe('useRefreshChannelVideos', () => {
   describe('Callback Stability', () => {
     test('refreshVideos function changes when dependencies change', () => {
       const { result, rerender } = renderHook(
-        ({ channelId, page, pageSize, hideDownloaded, tabType, token }) =>
-          useRefreshChannelVideos(channelId, page, pageSize, hideDownloaded, tabType, token),
+        ({ channelId, page, pageSize, downloadedFilter, tabType, token }) =>
+          useRefreshChannelVideos(channelId, page, pageSize, downloadedFilter, tabType, token),
         {
           initialProps: {
             channelId: mockChannelId,
             page: 1,
             pageSize: 16,
-            hideDownloaded: false,
+            downloadedFilter: 'off' as const,
             tabType: 'videos',
             token: mockToken,
           },
@@ -562,7 +562,7 @@ describe('useRefreshChannelVideos', () => {
         channelId: mockChannelId,
         page: 2,
         pageSize: 16,
-        hideDownloaded: false,
+        downloadedFilter: 'off' as const,
         tabType: 'videos',
         token: mockToken,
       });
@@ -573,7 +573,7 @@ describe('useRefreshChannelVideos', () => {
     test('clearError function remains stable across rerenders', () => {
       const { result, rerender } = renderHook(
         ({ channelId, page }) =>
-          useRefreshChannelVideos(channelId, page, 16, false, 'videos', mockToken),
+          useRefreshChannelVideos(channelId, page, 16, 'off', 'videos', mockToken),
         {
           initialProps: { channelId: mockChannelId, page: 1 },
         }
@@ -595,7 +595,7 @@ describe('useRefreshChannelVideos', () => {
       });
 
       const { result } = renderHook(() =>
-        useRefreshChannelVideos(mockChannelId, 1, 16, false, 'videos', mockToken)
+        useRefreshChannelVideos(mockChannelId, 1, 16, 'off', 'videos', mockToken)
       );
 
       let refreshResult1;

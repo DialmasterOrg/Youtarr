@@ -5,6 +5,7 @@ import { useThemeEngine } from '../../contexts/ThemeEngineContext';
 import { NavHeader } from './NavHeader';
 import { NavSidebar } from './NavSidebar';
 import { BackgroundDecorations } from './BackgroundDecorations';
+import UpdateAvailableBanner from './UpdateAvailableBanner';
 import { NavItem } from './navigation';
 import { getThemeById, getThemeLayoutCssVars, resolveThemeLayoutPolicy } from '../../themes';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
@@ -22,6 +23,7 @@ interface AppShellProps {
   onLogout?: () => void;
   updateAvailable?: boolean;
   updateTooltip?: string;
+  serverVersion?: string;
   ytDlpUpdateAvailable?: boolean;
   ytDlpUpdateTooltip?: string;
   children: React.ReactNode;
@@ -37,6 +39,7 @@ export function AppShell({
   onLogout,
   updateAvailable = false,
   updateTooltip,
+  serverVersion,
   ytDlpUpdateAvailable = false,
   ytDlpUpdateTooltip,
   children,
@@ -285,6 +288,8 @@ export function AppShell({
           {children}
         </div>
       </main>
+
+      <UpdateAvailableBanner show={updateAvailable} serverVersion={serverVersion} />
     </div>
   );
 }

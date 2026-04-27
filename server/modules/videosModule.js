@@ -19,7 +19,8 @@ class VideosModule {
       sortBy = 'added',
       sortOrder = 'desc',
       channelFilter = '',
-      protectedFilter = false,
+      protectedFilter = 'off',
+      missingFilter = 'off',
     } = options;
 
     try {
@@ -49,8 +50,16 @@ class VideosModule {
         replacements.dateTo = dateTo.replace(/-/g, '');
       }
 
-      if (protectedFilter) {
+      if (protectedFilter === 'only') {
         whereConditions.push('Videos.protected = 1');
+      } else if (protectedFilter === 'exclude') {
+        whereConditions.push('Videos.protected = 0');
+      }
+
+      if (missingFilter === 'only') {
+        whereConditions.push('Videos.removed = 1');
+      } else if (missingFilter === 'exclude') {
+        whereConditions.push('Videos.removed = 0');
       }
 
       const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';

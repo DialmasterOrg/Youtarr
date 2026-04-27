@@ -36,6 +36,7 @@ import { useSubfolders } from '../../../hooks/useSubfolders';
 import { ConfigState, DeploymentEnvironment, PlatformManagedState } from '../types';
 import { reverseFrequencyMapping, getChannelFilesOptions } from '../helpers';
 import { FREQUENCY_MAPPING } from '../constants';
+import { formatDateTime } from '../../../utils/formatters';
 
 interface CoreSettingsSectionProps {
   config: ConfigState;
@@ -317,10 +318,15 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                         <MenuItem value="360">360p</MenuItem>
                       </Select>
                       <InfoTooltip
-                        text="The resolution we will try to download from YouTube. Note that this is not guaranteed as YouTube may not have your preferred resolution available."
+                        text="The resolution we will try to download from YouTube. Note that this is not guaranteed as YouTube may not have your preferred resolution available. YouTube only provides H.264 MP4 up to 1080p. Selecting 1440p or 2160p (4K) will use VP9 or AV1 (remuxed into MP4), which older Plex clients (Apple TV HD, iOS, older Rokus) may need to transcode."
                         onMobileClick={onMobileTooltipClick}
                       />
                     </Box>
+                    {(config.preferredResolution === '1440' || config.preferredResolution === '2160') && (
+                      <Box component="span" className="text-xs text-muted-foreground">
+                        1440p+ uses VP9/AV1 (remuxed into MP4). Older Plex clients without native VP9/AV1 decode may transcode. Select H.264 codec below for best compatibility (caps at 1080p).
+                      </Box>
+                    )}
                   </FormControl>
                 </Grid>
 
@@ -341,12 +347,12 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                         <MenuItem value="h265">H.265/HEVC (Balanced)</MenuItem>
                       </Select>
                       <InfoTooltip
-                        text="Select your preferred video codec. Youtarr will download this codec when available, and fall back to other codecs if your preference is not available for a video. H.264 is recommended for Apple TV and maximum device compatibility. VP9 is the default codec for most YouTube videos."
+                        text="Select your preferred video codec. Youtarr will download this codec when available, and fall back if it is not. H.264 is recommended for Apple TV and maximum device compatibility, but YouTube does not provide H.264 above 1080p so selecting it effectively caps downloads at 1080p regardless of the resolution preference above. Default lets YouTube pick the best codec (typically VP9 or AV1 at 1440p+)."
                         onMobileClick={onMobileTooltipClick}
                       />
                     </Box>
                     <Box component="span" className="text-xs text-muted-foreground">
-                      Note: H.264 produces larger file sizes but offers maximum compatibility for Apple TV. This is a preference and will fall back to available codecs.
+                      Note: H.264 offers maximum compatibility (Apple TV HD, iOS, older Rokus direct-play) but YouTube caps H.264 at 1080p, so it will override any 1440p/2160p preference.
                     </Box>
                   </FormControl>
                 </Grid>
@@ -531,7 +537,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
               >
                 {ytDlpVersionInfo.currentVersion}
               </Typography>
-              {ytDlpVersionInfo.updateAvailable && ytDlpVersionInfo.latestVersion ? (
+              {!isPlatformManaged.ytdlpUpdates && ytDlpVersionInfo.updateAvailable && ytDlpVersionInfo.latestVersion ? (
                 <>
                   <ArrowForwardIcon style={{ fontSize: 16 }} className="text-muted-foreground" />
                   <Typography
@@ -557,13 +563,68 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                     {ytDlpUpdateStatus === 'updating' ? 'Updating...' : 'Update'}
                   </Button>
                 </>
-              ) : (
+              ) : !isPlatformManaged.ytdlpUpdates ? (
                 <CheckCircleIcon color="success" fontSize="small" />
+              ) : null}
+              {isPlatformManaged.ytdlpUpdates && (
+                <Chip
+                  label={deploymentEnvironment.platform?.toLowerCase() === 'elfhosted' ? 'Managed by Elfhosted' : 'Platform Managed'}
+                  size="small"
+                />
               )}
             </Box>
-            <Typography variant="caption" color="text.secondary">
-              yt-dlp is the video download engine. If downloads are failing, try updating yt-dlp to the latest version.
-            </Typography>
+            {isPlatformManaged.ytdlpUpdates ? (
+              <Typography variant="caption" color="text.secondary">
+                yt-dlp is managed by {deploymentEnvironment.platform?.toLowerCase() === 'elfhosted' ? 'Elfhosted' : 'the platform'} and cannot be updated from Youtarr. Updates are applied automatically by the platform.
+              </Typography>
+            ) : (
+              <>
+                <Typography variant="caption" color="text.secondary">
+                  yt-dlp is the video download engine. If downloads are failing, try updating yt-dlp to the latest version.
+                </Typography>
+
+                <Box className="mt-4 flex items-center">
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        name="autoUpdateYtdlp"
+                        checked={!!config.autoUpdateYtdlp}
+                        onChange={handleCheckboxChange}
+                      />
+                    }
+                    label="Automatically update yt-dlp nightly"
+                  />
+                  <InfoTooltip
+                    text="Checks for a new yt-dlp release each night at 4:00 AM (server local time) and installs it automatically. Updates are skipped while a download is in progress and will be retried the following night. If an update fails, Youtarr keeps running on the previous version."
+                    onMobileClick={onMobileTooltipClick}
+                  />
+                </Box>
+
+                {(config.ytdlpLastChecked || config.ytdlpLastResult || config.ytdlpLastUpdated) && (
+                  <Box className="mt-1">
+                    {config.ytdlpLastChecked && (
+                      <Typography
+                        variant="caption"
+                        className="block"
+                        style={{ color: config.ytdlpLastResult?.status === 'error' ? 'var(--warning)' : undefined }}
+                        color={config.ytdlpLastResult?.status === 'error' ? undefined : 'text.secondary'}
+                      >
+                        Last checked: {formatDateTime(config.ytdlpLastChecked)}
+                        {config.ytdlpLastResult?.status === 'up-to-date' && ' — already up to date'}
+                        {config.ytdlpLastResult?.status === 'updated' && config.ytdlpLastResult.version && ` — updated to ${config.ytdlpLastResult.version}`}
+                        {config.ytdlpLastResult?.status === 'skipped' && ` — skipped: ${config.ytdlpLastResult.message || 'reason unknown'}`}
+                        {config.ytdlpLastResult?.status === 'error' && ` — update failed: ${config.ytdlpLastResult.message || 'reason unknown'}`}
+                      </Typography>
+                    )}
+                    {config.ytdlpLastUpdated && (
+                      <Typography variant="caption" color="text.secondary" className="block">
+                        Last updated: {formatDateTime(config.ytdlpLastUpdated)}
+                      </Typography>
+                    )}
+                  </Box>
+                )}
+              </>
+            )}
           </Box>
         </>
       )}

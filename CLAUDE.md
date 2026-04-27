@@ -31,9 +31,9 @@ For multi-part requests (e.g., "review this PR AND explain WebSocket handling"),
 ### Backend (server/)
 - `server.js`: Express entry point. `db.js`: Sequelize setup. `logger.js`: Pino logger with request correlation.
 - `models/`: Sequelize models (channel, video, job, jobvideo, jobvideodownload, channelvideo, session, apikey, playlist, playlistvideo, playlistsyncstate). Associations: Channel hasMany Videos, Job hasMany JobVideos, Playlist hasMany PlaylistVideos and hasMany PlaylistSyncStates.
-- `routes/`: API handlers (auth, channels, videos, videoDetail, videoSearch, config, jobs, plex, setup, subscriptions, apikeys, health, playlists, mediaServers). All use the dependency injection factory pattern; wiring lives in `server/routes/index.js`.
+- `routes/`: API handlers (auth, channels, videos, videoDetail, videoSearch, config, jobs, plex, setup, subscriptions, apikeys, ytdlpOptions, health, playlists, mediaServers). All use the dependency injection factory pattern; wiring lives in `server/routes/index.js`.
 - `modules/`: class-based singletons holding business logic. Top-level modules include `channelModule`, `downloadModule`, `plexModule`, `jobModule`, `configModule`, `videosModule`, `videoMetadataModule`, `videoSearchModule`, `webSocketServer`, `databaseHealthModule`, `notificationModule`, `channelSettingsModule`, `videoDeletionModule`, `nfoGenerator`, `cronJobs`, `apiKeyModule`, `ytdlpModule`, `messageEmitter`, `playlistModule` (YouTube playlist lifecycle + auto-create source channels), `m3uGenerator` (writes `__playlists__/*.m3u` fallback files).
-- `modules/download/`: download orchestration (`downloadExecutor`, `ytdlpCommandBuilder`, `DownloadProgressMonitor`, `tempPathManager`, `videoMetadataProcessor`).
+- `modules/download/`: download orchestration (`downloadExecutor`, `ytdlpCommandBuilder`, `DownloadProgressMonitor`, `tempPathManager`, `videoMetadataProcessor`, `customArgsParser`, `ytdlpValidator`).
 - `modules/filesystem/`: path/file abstraction (`pathBuilder`, `directoryManager`, `fileOperations`, `sanitizer`, `constants`). Good example of the sub-module aggregator pattern.
 - `modules/notifications/`: multi-service notifications via Apprise (`serviceRegistry`, `formatters/`, `senders/`). Good example of a pluggable service registry.
 - `modules/mediaServers/`: pluggable adapter registry for native playlist sync (`serverRegistry`, `mediaServerSync` orchestrator, `adapters/{plexAdapter,jellyfinAdapter,embyAdapter,baseAdapter}`). Adapters wrap server-specific REST APIs; `mediaServerSync` decides which adapters apply for a given playlist and updates `playlist_sync_state`.
@@ -78,7 +78,10 @@ These standards apply when you are authoring new code or doing an explicit rewri
 ### General Principles
 - **DRY when writing the third copy**: if you find yourself writing the same logic a third time in your own new code, extract it.
 - **Single responsibility**: each module, class, or function should have one clear purpose. If a function name requires "and" to describe it, split it.
-- **Right-size your extractions**: do not create helpers, components, or hooks for one-time operations. Three similar lines of code is better than a premature abstraction. If a helper is used in exactly one place, inline it.
+- **Extract deliberately, inline small snippets**:
+  - **Extract** when a block is substantial and has a clear external interface. Rough threshold: ~30+ lines of JSX/logic with its own props or state, or two usages in structurally different parents (e.g. mobile card vs desktop table row). Size and interface clarity matter more than copy count.
+  - **Inline** one-off snippets used in a single place. Three similar lines of code is better than a premature abstraction. The "three copies" rule applies to small repeated patterns, not to substantial blocks.
+  - Before creating a new component/module file, answer: (1) is this substantial enough to extract, or should it stay inline? (2) which directory -- feature-local, `shared/`, or `ui/` -- and why? (3) what test file am I adding alongside it?
 - **File size targets for new files**: backend modules under ~500 lines, frontend components under ~300 lines. Several legacy files exceed these limits (notably `channelModule.js`, `jobModule.js`, `channelSettingsModule.js`, `videoDeletionModule.js`, `VideosPage.tsx`, `ChannelVideos.tsx`, `DownloadProgress.tsx`) - do not use them as examples. The codebase is migrating toward these targets over time.
 - **Named constants for magic values**: in new code, timeouts, retry counts, limits, and defaults should be named constants at the top of the file or in a shared constants module.
 - **Early returns** for error and edge cases, to keep happy-path nesting shallow.
@@ -133,6 +136,11 @@ These standards apply when you are authoring new code or doing an explicit rewri
 
 #### Component Structure
 - **When authoring or rewriting a component**: aim for fewer than 10 `useState` calls and under 300 lines. If you cross that threshold while writing new code, extract logic into custom hooks and UI into child components.
+- **Placement of new components and modules** (prescriptive, not just descriptive -- `shared/` is not the default):
+  - **Feature-local** (used by a single feature/page): place in the feature directory, e.g. `components/DownloadManager/VideoThumbnail.tsx`. This is the default.
+  - **Cross-feature** (imported by 2+ feature directories *today*, not hypothetically): place in `components/shared/`.
+  - **Theme-neutral UI primitive** (Button-like, Card-like, no business logic): place in `components/ui/`.
+  - Promote to `shared/` later when a second feature actually imports it -- do not speculatively place in `shared/` "in case" it gets reused.
 - **Feature directory layout** for new complex features, either of these is acceptable:
   ```
   # Sibling-file layout (most common in this repo)
@@ -200,6 +208,9 @@ npm run test:backend -- server/modules/__tests__/foo.test.js # one backend test
 npm run lint                                                  # lint front + back
 npm run lint:ts                                               # TypeScript typecheck
 ```
+
+### Tests Accompany New Files
+**New component/module files ship with tests in the same change.** When you create a new `.tsx`/`.ts` component, hook, or backend module, add its test file in the same commit. Co-locate in the nearest `__tests__/` directory. Cover externally-observable behavior: renders with required props, responds to interactions, handles the missing/error/loading states the component declares. The `write-tests` and `write-tests-react` slash commands scaffold these. Trivial pure-display components (no props, no logic) are the only exception.
 
 ### Test Execution Policy
 **NEVER skip tests.** No `test.skip()`, no `describe.skip()`, no commented-out failing tests. Fix failing tests or delete them if obsolete. If a test is written, it must run and pass in CI.

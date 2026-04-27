@@ -7,6 +7,7 @@ These settings can be changed from the Configuration page in the web UI.
 - [Configuration File Location](#configuration-file-location)
 - [Core Settings](#core-settings)
 - [Plex Integration](#plex-integration)
+- [YouTube Data API](#youtube-data-api-optional)
 - [SponsorBlock Settings](#sponsorblock-settings)
 - [Kodi, Emby and Jellyfin Compatibility](#kodi-emby-and-jellyfin-compatibility)
 - [Cookie Config](#cookie-config)
@@ -15,6 +16,7 @@ These settings can be changed from the Configuration page in the web UI.
 - [Advanced Settings](#advanced-settings)
 - [Auto-Removal Settings](#auto-removal-settings)
 - [API Keys & External Access](#api-keys--external-access)
+- [yt-dlp Auto-Update](#yt-dlp-auto-update)
 - [Account & Security](#account--security)
 - [System Fields](#system-fields)
 - [Configuration Examples](#configuration-examples)
@@ -83,13 +85,14 @@ Configuration can be modified through:
 - **Options**: `"4320"`, `"2160"`, `"1440"`, `"1080"`, `"720"`, `"480"`, `"360"`, `"240"`, `"144"`
 - **Description**: Global setting for preferred download resolution
 - **Note**: Downloads from YouTube at best available quality up to this limit
+- **Codec implication**: YouTube only provides H.264 in MP4 up to 1080p. Selecting 1440p or 2160p forces Youtarr to pick a VP9 or AV1 source stream (YouTube does not offer H.264 at those resolutions) and remux it into MP4 via `--merge-output-format mp4`. The remux is lossless (no re-encode), but Plex clients without native VP9/AV1 hardware decode (Apple TV HD, older Apple TV 4K, iOS, older Rokus) will transcode at playback. If direct-play compatibility matters more than resolution, keep this at 1080p or set `videoCodec` to `h264`.
 
 ### Preferred Video Codec
 - **Config Key**: `videoCodec`
 - **Type**: `string`
 - **Default**: `"default"`
 - **Options**: `"default"`, `"h264"`, `"h265"`
-- **Description**: Preferred video codec for downloads, default generally downloads as vp9 or av1
+- **Description**: Preferred video codec for downloads. `"default"` picks the best stream YouTube offers at the requested resolution (typically VP9 or AV1 above 1080p). `"h264"` forces H.264/AVC, which maximizes client compatibility but effectively caps resolution at 1080p because YouTube does not serve H.264 above that height. `"h265"` prefers HEVC but YouTube rarely provides it, so it almost always falls back to H.264 MP4.
 - **Compatibility**:
   - `h264`: Best compatibility with all devices
   - `h265`: Better compression, requires modern devices
@@ -247,6 +250,21 @@ Mirror of the Jellyfin section, with `emby*` field names. See [Media Server Play
 | `embyApiKey` | `string` | `""` (redacted in logs) |
 | `embyUserId` | `string` | `""` |
 | `embyVideoLibraryIds` | `array<string>` | `[]` |
+
+## YouTube Data API (Optional)
+
+### YouTube API Key
+- **Config Key**: `youtubeApiKey`
+- **Type**: `string`
+- **Default**: `""` (empty)
+- **Description**: Optional YouTube Data API v3 key. When set, Youtarr uses the API for faster channel metadata, video metadata, and search fetches. On any failure (invalid key, quota exhausted, API disabled, network error), Youtarr silently falls back to yt-dlp with no user-visible error.
+- **Notes**:
+  - API keys do not expire. The configuration page shows "last validated" timestamp instead of an expiration.
+  - Default quota is 10,000 units per day per Google Cloud project, resetting at midnight Pacific time. Search calls cost 100 units; metadata and channel/playlist calls cost 1 unit per call.
+  - On a 403 `quotaExceeded` response, Youtarr enters an in-memory cooldown until the next Pacific-midnight reset and uses yt-dlp exclusively during that window.
+  - When a key is configured, channel video listing and tab auto-detection use the API for all three tabs (Videos, Shorts, Streams) via the per-tab auto-generated playlist IDs (`UULF`/`UUSH`/`UULV`). yt-dlp remains the fallback.
+  - Search results filter out live/upcoming broadcasts and Shorts under 60s to match yt-dlp's behavior. The Shorts filter requires a follow-up `videos.list` enrichment call to read each result's duration; if that enrichment fails (e.g., quota burned mid-search), the search returns the un-enriched results and a small number of Shorts may slip through. Live/upcoming filtering still applies in that fallback path.
+  - Set up instructions and a test button are in the Configuration page under Integrations.
 
 ## SponsorBlock Settings
 
@@ -488,6 +506,31 @@ The old `discordWebhookUrl` and `notificationService` fields are automatically r
 - **Format**: `"http://proxy:port"` or `"socks5://proxy:port"`
 - **Note**: The proxy is used by yt-dlp for all YouTube requests (downloads, metadata, thumbnails). Some operations like thumbnail downloads and RSS feed checks first attempt a direct HTTP request with a 15-second timeout before falling back to yt-dlp. SOCKS5 proxy users may notice brief delays (~15 seconds) during these fallbacks when adding or refreshing channels, but the operations will complete successfully via yt-dlp.
 
+### IP Family
+- **Config Key**: `ytdlpIpFamily`
+- **Type**: `string` (one of `"ipv4"`, `"ipv6"`, `"auto"`)
+- **Default**: `"ipv4"`
+- **Description**: IP family preference applied to every yt-dlp invocation.
+  - `"ipv4"` adds `-4` (force IPv4) — recommended for YouTube reliability and the historical default.
+  - `"ipv6"` adds `-6` (force IPv6).
+  - `"auto"` adds neither flag and lets the OS decide.
+- **Note**: Force IPv6 or Auto can make YouTube downloads less reliable. Use only if your network requires it.
+
+### Download Rate Limit
+- **Config Key**: `ytdlpDownloadRateLimit`
+- **Type**: `string`
+- **Default**: `""` (empty — no limit)
+- **Description**: Maximum download rate, passed to yt-dlp as `--limit-rate`. Format: digits with optional decimal and optional `K`/`M`/`G` suffix (e.g. `"5M"`, `"500K"`, `"1.5M"`). Empty disables the limit.
+
+### Custom yt-dlp Arguments
+- **Config Key**: `ytdlpCustomArgs`
+- **Type**: `string`
+- **Default**: `""` (empty)
+- **Description**: Free-form yt-dlp arguments appended to every invocation. Tokenized shell-style (single/double quotes and backslash-escapes supported). Maximum length: 2000 characters.
+- **Blocked flags**: For safety, several flags are rejected at save time and silently dropped at command-build time. The full list is in `server/modules/download/customArgsParser.js`; it includes (among others) `--exec`, `--netrc-cmd`, `-o`/`--output`, `-P`/`--paths`, `--print-to-file`, `--external-downloader`/`--downloader`, `--external-downloader-args`/`--downloader-args`, `--cookies`/`--cookies-from-browser`, `--ffmpeg-location`, `--config-location`, `--batch-file`, `--load-info-json`, `--download-archive`, plus the flags that have dedicated config fields (`--proxy`, `-4`/`-6`, `--limit-rate`, `--sleep-requests`).
+- **Order**: Custom args are appended LAST in the yt-dlp command, after Youtarr's managed flags. Per yt-dlp's last-wins semantics, your flags can override managed ones (e.g. `--retries 5` overrides Youtarr's default `--retries 2`).
+- **Note**: Power-user feature. Incorrect flags can prevent downloads from working entirely or break Youtarr's behavior in unexpected ways. Use the "Validate Arguments" button in the UI to argparse-check your args against yt-dlp before saving. The validation does not gate save — invalid args can still be saved and will only surface failures at download time.
+
 ### Use External Temporary Directory
 - **Config Key**: `useTmpForDownloads`
 - **Type**: `boolean`
@@ -578,13 +621,54 @@ Settings for API key authentication used by bookmarklets, mobile shortcuts, and 
 
 For detailed information on creating and using API keys, see [API Integration Guide](API_INTEGRATION.md).
 
+## yt-dlp Auto-Update
+
+Youtarr can optionally check for and install yt-dlp updates on a nightly schedule. The toggle and its status display live next to the manual yt-dlp update button on the Core Settings page.
+
+### Auto-Update Enabled
+- **Config Key**: `autoUpdateYtdlp`
+- **Type**: `boolean`
+- **Default**: `false`
+- **Description**: When `true`, Youtarr runs `yt-dlp -U` at 4:00 AM (server local time, controlled by the `TZ` env var) every night.
+- **Behavior**:
+  - The update is skipped while any download job is in progress and is retried the next night.
+  - If the update process itself fails (e.g., permission denied on managed platforms, network error, timeout), the failure is logged and Youtarr continues to run on the previous yt-dlp version.
+  - On success, the in-process yt-dlp version cache is refreshed without requiring a server restart.
+
+### Last Checked Timestamp
+- **Config Key**: `ytdlpLastChecked`
+- **Type**: `string | null` (ISO 8601 timestamp)
+- **Default**: `null`
+- **Description**: Set automatically every time the nightly job runs (regardless of outcome). Surfaced in the UI as "Last checked: ...".
+- **Note**: Managed by the application; do not edit by hand.
+
+### Last Updated Timestamp
+- **Config Key**: `ytdlpLastUpdated`
+- **Type**: `string | null` (ISO 8601 timestamp)
+- **Default**: `null`
+- **Description**: Set automatically when the nightly job successfully installs a new yt-dlp version. Not updated when the check finds yt-dlp is already current.
+- **Note**: Managed by the application; do not edit by hand.
+
+### Last Run Result
+- **Config Key**: `ytdlpLastResult`
+- **Type**: `object | null`
+- **Default**: `null`
+- **Shape**: `{ status: 'updated' | 'up-to-date' | 'skipped' | 'error', message?: string, version?: string }`
+- **Description**: Records the outcome of the most recent nightly run. The UI uses this to render an inline status next to "Last checked".
+- **Statuses**:
+  - `updated` — a new version was installed; `version` holds the new version string.
+  - `up-to-date` — yt-dlp was already current.
+  - `skipped` — the run was deferred (for example, a download was in progress); `message` describes why.
+  - `error` — `yt-dlp -U` failed; `message` holds a short error description.
+- **Note**: Managed by the application; do not edit by hand.
+
 ## Account & Security
 
 ### username
 - **Type**: `string`
 - **Default**: Not set (must be configured)
 - **Description**: Login username for the web interface
-- **Validation**: 3-32 characters, no leading/trailing spaces
+- **Validation**: 1-32 characters, no leading/trailing spaces
 - **Note**: Set during initial setup or via AUTH_PRESET_USERNAME environment variable
 
 ### passwordHash

@@ -19,9 +19,11 @@ import { SponsorBlockSection } from '../Configuration/sections/SponsorBlockSecti
 import { CookieConfigSection } from '../Configuration/sections/CookieConfigSection';
 import { NotificationsSection } from '../Configuration/sections/NotificationsSection';
 import { DownloadPerformanceSection } from '../Configuration/sections/DownloadPerformanceSection';
+import { YtdlpOptionsSection } from '../Configuration/sections/YtdlpOptionsSection';
 import { AutoRemovalSection } from '../Configuration/sections/AutoRemovalSection';
 import { AccountSecuritySection } from '../Configuration/sections/AccountSecuritySection';
 import ApiKeysSection from '../Configuration/sections/ApiKeysSection';
+import { YouTubeApiSection } from '../Configuration/sections/YouTubeApiSection';
 import { SaveBar } from '../Configuration/sections/SaveBar';
 import { UnsavedChangesDialog } from '../Configuration/sections/UnsavedChangesDialog';
 import {
@@ -30,6 +32,7 @@ import {
   useYtDlpUpdate,
   useUnsavedChangesGuard,
 } from '../Configuration/hooks';
+import { useYouTubeApiKey } from '../Configuration/hooks/useYouTubeApiKey';
 import { useStorageStatus } from '../../hooks/useStorageStatus';
 import { useConfig } from '../../hooks/useConfig';
 import { TRACKABLE_CONFIG_KEYS } from '../../config/configSchema';
@@ -97,6 +100,19 @@ export function Settings({ token }: SettingsProps) {
     setSnackbar,
     hasPlexServerConfigured,
     checkPlexConnection,
+  });
+
+  const {
+    status: youtubeApiStatus,
+    lastValidatedAt: youtubeApiLastValidatedAt,
+    lastReason: youtubeApiLastReason,
+    testKey: testYoutubeApiKey,
+    clear: clearYoutubeApiStatus,
+  } = useYouTubeApiKey({
+    token,
+    apiKey: config.youtubeApiKey,
+    setInitialConfig,
+    setSnackbar,
   });
 
   const shouldBlockNav = useCallback(
@@ -170,6 +186,10 @@ export function Settings({ token }: SettingsProps) {
     if (plexConnectionKeys.some((key) => key in updates)) {
       setPlexConnectionStatus('not_tested');
     }
+
+    if ('youtubeApiKey' in updates) {
+      clearYoutubeApiStatus();
+    }
   };
 
   useEffect(() => {
@@ -179,7 +199,7 @@ export function Settings({ token }: SettingsProps) {
     }
 
     const changed = TRACKABLE_CONFIG_KEYS.some((k) => {
-      return !isEqual((config as any)[k], (initialConfig as any)[k]);
+      return !isEqual(config[k], initialConfig[k]);
     });
     setHasUnsavedChanges(changed);
   }, [config, initialConfig]);
@@ -314,11 +334,19 @@ export function Settings({ token }: SettingsProps) {
           <Route
             path="downloading"
             element={
-              <DownloadPerformanceSection
-                config={config}
-                onConfigChange={handleConfigChange}
-                onMobileTooltipClick={setMobileTooltip}
-              />
+              <>
+                <DownloadPerformanceSection
+                  config={config}
+                  onConfigChange={handleConfigChange}
+                  onMobileTooltipClick={setMobileTooltip}
+                />
+                <YtdlpOptionsSection
+                  config={config}
+                  onConfigChange={handleConfigChange}
+                  onMobileTooltipClick={setMobileTooltip}
+                  token={token}
+                />
+              </>
             }
           />
           <Route path="performance" element={<Navigate to="/settings/downloading" replace />} />
@@ -353,6 +381,19 @@ export function Settings({ token }: SettingsProps) {
                 token={token}
                 apiKeyRateLimit={config.apiKeyRateLimit}
                 onRateLimitChange={(value) => handleConfigChange({ apiKeyRateLimit: value })}
+              />
+            }
+          />
+          <Route
+            path="youtube-api"
+            element={
+              <YouTubeApiSection
+                config={config}
+                status={youtubeApiStatus}
+                lastValidatedAt={youtubeApiLastValidatedAt}
+                lastReason={youtubeApiLastReason}
+                onConfigChange={handleConfigChange}
+                onTestKey={testYoutubeApiKey}
               />
             }
           />

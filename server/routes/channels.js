@@ -1,6 +1,11 @@
 const express = require('express');
 const router = express.Router();
 
+// Tri-state filter query params ('off' | 'only' | 'exclude'). Any other
+// value (missing, empty string, garbage) falls back to 'off'.
+const parseFilterMode = (value) =>
+  value === 'only' || value === 'exclude' ? value : 'off';
+
 /**
  * Creates channel routes
  * @param {Object} deps - Dependencies
@@ -476,12 +481,17 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *     responses:
    *       200:
    *         description: Channel settings
+   *       404:
+   *         description: Channel not found (e.g. not subscribed)
    *       500:
    *         description: Failed to get settings
    */
   router.get('/api/channels/:channelId/settings', verifyToken, async (req, res) => {
     try {
       const settings = await channelSettingsModule.getChannelSettings(req.params.channelId);
+      if (!settings) {
+        return res.status(404).json({ error: 'Channel not found' });
+      }
       res.json(settings);
     } catch (error) {
       console.error('Error getting channel settings:', error);
@@ -659,10 +669,12 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *           type: integer
    *           default: 50
    *       - in: query
-   *         name: hideDownloaded
+   *         name: downloadedFilter
    *         schema:
-   *           type: boolean
-   *           default: false
+   *           type: string
+   *           enum: [off, only, exclude]
+   *           default: off
+   *         description: Tri-state filter on download status. `only` keeps downloaded videos, `exclude` hides them, `off` returns everything.
    *       - in: query
    *         name: searchQuery
    *         schema:
@@ -693,7 +705,6 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
     const channelId = req.params.channelId;
     const page = parseInt(req.query.page) || 1;
     const pageSize = parseInt(req.query.pageSize) || 50;
-    const hideDownloaded = req.query.hideDownloaded === 'true';
     const searchQuery = req.query.searchQuery || '';
     const sortBy = req.query.sortBy || 'date';
     const sortOrder = req.query.sortOrder || 'desc';
@@ -705,14 +716,14 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
     const maxDuration = (parsedMaxDuration !== null && !isNaN(parsedMaxDuration)) ? parsedMaxDuration : null;
     const dateFrom = req.query.dateFrom || null;
     const dateTo = req.query.dateTo || null;
-    const protectedFilter = req.query.protectedFilter === 'true';
-    const result = await channelModule.getChannelVideos(channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder, tabType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter);
+    const downloadedFilter = parseFilterMode(req.query.downloadedFilter);
+    const protectedFilter = parseFilterMode(req.query.protectedFilter);
+    const missingFilter = parseFilterMode(req.query.missingFilter);
+    const ignoredFilter = parseFilterMode(req.query.ignoredFilter);
+    const result = await channelModule.getChannelVideos(channelId, page, pageSize, downloadedFilter, searchQuery, sortBy, sortOrder, tabType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter);
 
     if (Array.isArray(result)) {
-      res.status(200).json({
-        videos: result,
-        videoFail: result.length === 0,
-      });
+      res.status(200).json({ videos: result });
     } else {
       res.status(200).json(result);
     }
@@ -743,10 +754,12 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *           type: integer
    *           default: 50
    *       - in: query
-   *         name: hideDownloaded
+   *         name: downloadedFilter
    *         schema:
-   *           type: boolean
-   *           default: false
+   *           type: string
+   *           enum: [off, only, exclude]
+   *           default: off
+   *         description: Tri-state filter on download status. `only` keeps downloaded videos, `exclude` hides them, `off` returns everything.
    *       - in: query
    *         name: tabType
    *         schema:
@@ -766,11 +779,11 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
     const channelId = req.params.channelId;
     const page = parseInt(req.query.page) || 1;
     const pageSize = parseInt(req.query.pageSize) || 50;
-    const hideDownloaded = req.query.hideDownloaded === 'true';
+    const downloadedFilter = parseFilterMode(req.query.downloadedFilter);
     const tabType = req.query.tabType || 'videos';
 
     try {
-      const result = await channelModule.fetchAllChannelVideos(channelId, page, pageSize, hideDownloaded, tabType);
+      const result = await channelModule.fetchAllChannelVideos(channelId, page, pageSize, downloadedFilter, tabType);
       res.status(200).json(result);
     } catch (error) {
       req.log.error({ err: error, channelId }, 'Failed to fetch all channel videos');

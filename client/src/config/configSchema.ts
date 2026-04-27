@@ -55,6 +55,9 @@ export const CONFIG_FIELDS = {
   embyUserId: { default: '', trackChanges: true },
   embyVideoLibraryIds: { default: [] as string[], trackChanges: true },
 
+  // YouTube Data API
+  youtubeApiKey: { default: '', trackChanges: true },
+
   // SponsorBlock
   sponsorblockEnabled: { default: false, trackChanges: true },
   sponsorblockAction: { default: 'remove' as 'remove' | 'mark', trackChanges: true },
@@ -117,6 +120,20 @@ export const CONFIG_FIELDS = {
   // API Keys
   apiKeyRateLimit: { default: 10, trackChanges: true },
 
+  // yt-dlp auto-update
+  autoUpdateYtdlp: { default: false, trackChanges: true },
+  ytdlpLastChecked: { default: null as string | null, trackChanges: false },
+  ytdlpLastUpdated: { default: null as string | null, trackChanges: false },
+  ytdlpLastResult: {
+    default: null as { status: 'updated' | 'up-to-date' | 'skipped' | 'error'; message?: string; version?: string } | null,
+    trackChanges: false,
+  },
+
+  // yt-dlp options (custom args, IP family, rate limit)
+  ytdlpIpFamily: { default: 'ipv4' as 'ipv4' | 'ipv6' | 'auto', trackChanges: true },
+  ytdlpDownloadRateLimit: { default: '', trackChanges: true },
+  ytdlpCustomArgs: { default: '', trackChanges: true },
+
   // System/internal fields (not tracked for changes)
   youtubeOutputDirectory: { default: '', trackChanges: false },
   uuid: { default: '', trackChanges: false },
@@ -159,6 +176,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   embyApiKey: CONFIG_FIELDS.embyApiKey.default,
   embyUserId: CONFIG_FIELDS.embyUserId.default,
   embyVideoLibraryIds: CONFIG_FIELDS.embyVideoLibraryIds.default,
+  youtubeApiKey: CONFIG_FIELDS.youtubeApiKey.default,
   sponsorblockEnabled: CONFIG_FIELDS.sponsorblockEnabled.default,
   sponsorblockAction: CONFIG_FIELDS.sponsorblockAction.default,
   sponsorblockCategories: CONFIG_FIELDS.sponsorblockCategories.default,
@@ -187,6 +205,13 @@ export const DEFAULT_CONFIG: ConfigState = {
   darkModeEnabled: CONFIG_FIELDS.darkModeEnabled.default,
   channelVideosHotLoad: CONFIG_FIELDS.channelVideosHotLoad.default,
   apiKeyRateLimit: CONFIG_FIELDS.apiKeyRateLimit.default,
+  autoUpdateYtdlp: CONFIG_FIELDS.autoUpdateYtdlp.default,
+  ytdlpLastChecked: CONFIG_FIELDS.ytdlpLastChecked.default,
+  ytdlpLastUpdated: CONFIG_FIELDS.ytdlpLastUpdated.default,
+  ytdlpLastResult: CONFIG_FIELDS.ytdlpLastResult.default,
+  ytdlpIpFamily: CONFIG_FIELDS.ytdlpIpFamily.default,
+  ytdlpDownloadRateLimit: CONFIG_FIELDS.ytdlpDownloadRateLimit.default,
+  ytdlpCustomArgs: CONFIG_FIELDS.ytdlpCustomArgs.default,
   youtubeOutputDirectory: CONFIG_FIELDS.youtubeOutputDirectory.default,
   uuid: CONFIG_FIELDS.uuid.default,
   envAuthApplied: CONFIG_FIELDS.envAuthApplied.default,

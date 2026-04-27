@@ -11,7 +11,7 @@ import {
 import { CalendarToday as CalendarTodayIcon, Block as BlockIcon, CheckCircleOutline as CheckCircleOutlineIcon, Delete as DeleteIcon } from '../../lib/icons';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
-import { decodeHtml } from '../../utils/formatters';
+import { decodeHtml, formatAddedDate } from '../../utils/formatters';
 import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_THEMED_CHIP_SMALL_STYLE } from '../shared/chipStyles';
 import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo, getStatusChipVariant, getStatusChipStyle } from '../../utils/videoStatus';
 import StillLiveDot from './StillLiveDot';
@@ -329,6 +329,15 @@ function VideoListItem({
               {new Date(video.publishedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' })}
             </Typography>
           )}
+            {video.added && video.timeCreated && (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                style={{ fontSize: '0.7rem', whiteSpace: 'nowrap' }}
+              >
+                Downloaded: {formatAddedDate(video.timeCreated)}
+              </Typography>
+            )}
             {video.added && !video.removed && (
               <DownloadFormatIndicator
                 filePath={video.filePath}

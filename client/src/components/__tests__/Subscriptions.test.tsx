@@ -210,6 +210,23 @@ describe('Subscriptions Component', () => {
       expect(screen.getByRole('progressbar')).toBeInTheDocument();
     });
 
+    test('keeps channel list rendered during a refetch when items already loaded', () => {
+      useChannelList.mockReturnValue({
+        channels: mockChannels,
+        total: 2,
+        totalPages: 1,
+        loading: true,
+        error: null,
+        refetch: mockRefetchChannels,
+        subFolders: [],
+      });
+
+      renderSubscriptions();
+      expect(screen.getByTestId(`channel-row-${mockChannels[0].url}`)).toBeInTheDocument();
+      expect(screen.getByTestId(`channel-row-${mockChannels[1].url}`)).toBeInTheDocument();
+      expect(screen.getAllByRole('progressbar').length).toBeGreaterThan(0);
+    });
+
     test('shows error message when channel fetch fails', () => {
       useChannelList.mockReturnValue({
         channels: [],
@@ -974,7 +991,7 @@ describe('Subscriptions Component', () => {
       });
 
       renderSubscriptions();
-      expect(screen.getByRole('navigation')).toBeInTheDocument();
+      expect(screen.getAllByRole('navigation', { name: /pagination/i }).length).toBeGreaterThan(0);
     });
 
     test('changes page when pagination button clicked', async () => {
@@ -991,7 +1008,7 @@ describe('Subscriptions Component', () => {
 
       renderSubscriptions();
 
-      const nextButton = screen.getByRole('button', { name: /go to page 2/i });
+      const [nextButton] = screen.getAllByRole('button', { name: /go to page 2/i });
       await user.click(nextButton);
 
       await waitFor(() => {
@@ -1192,34 +1209,12 @@ describe('Subscriptions Component', () => {
   });
 
   describe('Responsive Behavior', () => {
-    test('uses mobile page size on mobile', () => {
-      (useMediaQuery as jest.Mock).mockReturnValue(true);
+    test('uses the default persisted page size on initial render', () => {
       renderSubscriptions();
 
       expect(useChannelList).toHaveBeenCalledWith(
         expect.objectContaining({ pageSize: 16 })
       );
-    });
-
-    test('uses desktop page size on desktop in list view', () => {
-      renderSubscriptions();
-
-      expect(useChannelList).toHaveBeenCalledWith(
-        expect.objectContaining({ pageSize: 20 })
-      );
-    });
-
-    test('uses grid page size on desktop in grid view', async () => {
-      const user = userEvent.setup();
-      renderSubscriptions();
-
-      await user.click(screen.getByLabelText('Grid view'));
-
-      await waitFor(() => {
-        expect(useChannelList).toHaveBeenCalledWith(
-          expect.objectContaining({ pageSize: 27 })
-        );
-      });
     });
   });
 

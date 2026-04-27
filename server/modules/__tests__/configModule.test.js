@@ -86,7 +86,8 @@ describe('ConfigModule', () => {
       // Assert
       expect(fs.writeFileSync).toHaveBeenCalledWith(
         expect.stringContaining('config.json'),
-        expect.stringContaining('test-uuid-1234')
+        expect.stringContaining('test-uuid-1234'),
+        { mode: 0o640 }
       );
       expect(logger.info).toHaveBeenCalledWith(
         'Auto-creating config.json from config.example.json template'
@@ -566,6 +567,67 @@ describe('ConfigModule', () => {
       const savedConfig = JSON.parse(fs.writeFileSync.mock.calls[fs.writeFileSync.mock.calls.length - 1][1]);
       expect(savedConfig.useTmpForDownloads).toBeUndefined();
       expect(savedConfig.tmpFilePath).toBeUndefined();
+    });
+
+    test('should create config.json with mode 0o640 and tighten permissions', () => {
+      // Arrange
+      fs.existsSync.mockImplementation((filePath) => {
+        if (filePath.includes('config.json') && !filePath.includes('example')) return false;
+        if (filePath.includes('config.example.json')) return true;
+        return true;
+      });
+      fs.readFileSync.mockReturnValue(JSON.stringify(defaultTemplate));
+
+      // Act
+      ConfigModule = require('../configModule');
+
+      // Assert
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        expect.stringContaining('config.json'),
+        expect.any(String),
+        { mode: 0o640 }
+      );
+      expect(fs.chmodSync).toHaveBeenCalledWith(
+        expect.stringContaining('config.json'),
+        0o640
+      );
+    });
+
+    test('saveConfig writes with mode 0o640 and chmods the file', () => {
+      // Arrange
+      ConfigModule = require('../configModule');
+      fs.writeFileSync.mockClear();
+      fs.chmodSync.mockClear();
+
+      // Act
+      ConfigModule.saveConfig();
+
+      // Assert
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        expect.stringContaining('config.json'),
+        expect.any(String),
+        { mode: 0o640 }
+      );
+      expect(fs.chmodSync).toHaveBeenCalledWith(
+        expect.stringContaining('config.json'),
+        0o640
+      );
+    });
+
+    test('saveConfig does not throw if chmod fails (EPERM on legacy-owned file)', () => {
+      // Arrange
+      ConfigModule = require('../configModule');
+      const chmodError = Object.assign(new Error('chmod EPERM'), { code: 'EPERM' });
+      fs.chmodSync.mockImplementationOnce(() => {
+        throw chmodError;
+      });
+
+      // Act + Assert
+      expect(() => ConfigModule.saveConfig()).not.toThrow();
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ err: chmodError, configPath: expect.stringContaining('config.json') }),
+        expect.stringContaining('Could not tighten config.json permissions')
+      );
     });
   });
 

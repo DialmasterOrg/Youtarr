@@ -17,6 +17,7 @@ export const SETTINGS_PAGES = [
   { key: 'emby', title: 'Emby', description: 'Emby connection for native playlist sync.' },
   { key: 'security', title: 'Account Security', description: 'Authentication and password management.' },
   { key: 'sponsorblock', title: 'SponsorBlock', description: 'Skip segments and SponsorBlock settings.' },
+  { key: 'youtube-api', title: 'YouTube API', description: 'Optional YouTube Data API v3 key for faster metadata fetches.' },
 ];
 
 export function SettingsIndex() {

@@ -44,10 +44,10 @@ curl -L https://raw.githubusercontent.com/DialmasterOrg/unraid-templates/main/Yo
   - Ensure that your MariaDB instance is setup with a database name, user and password matching what you set in the Youtarr configuration
   - Use the LAN IP of your Unraid server as DB_HOST (eg `192.168.1.100`)
     - Do not use `127.0.0.1` or `localhost`, as those refer to the container itself, not the Unraid host.
-  - Map your persistent paths (for example `/mnt/user/appdata/youtarr/config` for `/app/config` and `/mnt/user/media/youtube` for `/data`) and supply the MariaDB connection variables before deploying.
+  - Map your persistent paths (for example `/mnt/user/appdata/youtarr` for `/app/config` and `/mnt/user/media/youtube` for `/data`) and supply the MariaDB connection variables before deploying.
   - Set both `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` to set credentials for login to Youtarr
   - **IMPORTANT**: `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` must meet these rules or they’ll be ignored:
-    - `AUTH_PRESET_USERNAME`: 3-32 characters in length
+    - `AUTH_PRESET_USERNAME`: 1-32 characters in length
     - `AUTH_PRESET_PASSWORD`: 8-64 characters in length
   Leaving them blank requires completing the setup wizard from the Unraid host's localhost (e.g., via SSH port forwarding), which most headless installs won't have handy.
 6. Click the "Apply" button to start Youtarr
@@ -68,11 +68,10 @@ By default, Youtarr runs as root inside the container. This works fine for most 
 
 2. **Set correct ownership on your directories** by opening an Unraid terminal and running:
    ```bash
-   chown -R 99:100 /mnt/user/appdata/youtarr/config
-   chown -R 99:100 /mnt/user/appdata/youtarr/jobs
+   chown -R 99:100 /mnt/user/appdata/youtarr
    chown -R 99:100 /path/to/your/youtube_videos
    ```
-   Replace the paths with your actual mapped directories. The `99:100` corresponds to the `nobody:users` user/group on Unraid.
+   Replace the paths with your actual mapped directories. The `99:100` corresponds to the `nobody:users` user/group on Unraid. The `/app/config` volume is mapped to `/mnt/user/appdata/youtarr` (not a `/config` subfolder), so recursing from the top picks up `config.json`, `jobs/`, and `images/` in one shot.
 
 3. **Add the user parameter to your container**:
    - Edit your Youtarr container in Unraid
@@ -87,3 +86,17 @@ By default, Youtarr runs as root inside the container. This works fine for most 
    You should see `uid=99(nobody) gid=100(users)` instead of `uid=0(root)`.
 
 After this setup, Youtarr will create files with `nobody:users` ownership, which matches the default permissions that Plex and other media apps use on Unraid, allowing them to delete files as needed.
+
+## Troubleshooting file permissions over SMB (Windows, macOS)
+
+If you can see Youtarr's downloaded videos on a Windows or macOS SMB share but can't move, rename, or delete them ("You require permission from TOWER\nobody to make changes to this file" on Windows, or a padlock icon on macOS), the cause is almost always the file mode, not the ownership.
+
+Older versions of Youtarr wrote files with mode `644` (`rw-r--r--`), which means only the file owner (`nobody`) could modify them. If your SMB client authenticated as any other user, access was read-only. Current versions write downloads as `664` / directories as `775` by default, so **new downloads do not need any repair**.
+
+**One-time repair for files downloaded before this change:**
+```bash
+find /path/to/your/youtube_videos -type f -exec chmod 664 {} \;
+find /path/to/your/youtube_videos -type d -exec chmod 775 {} \;
+```
+
+Separately, your SMB share must be configured so the connecting user is either mapped to `nobody` or is a member of the `users` group, otherwise even group-writable files will still appear read-only. On Unraid, the simplest path is Shares -> edit the share -> SMB Security Settings -> set to `Public`, which maps all SMB users to `nobody`.
