@@ -2,7 +2,17 @@
  * Plain text notification formatter
  */
 
-const { formatDuration, buildTitle, getSubtitle, buildAutoRemovalTitle, formatBytes, groupVideosByChannel } = require('../utils');
+const {
+  formatDuration,
+  buildTitle,
+  getFailedCount,
+  buildFailedCountLabel,
+  formatFailedVideoLine,
+  getSubtitle,
+  buildAutoRemovalTitle,
+  formatBytes,
+  groupVideosByChannel
+} = require('../utils');
 
 /**
  * Format download notification as plain text
@@ -12,9 +22,22 @@ const { formatDuration, buildTitle, getSubtitle, buildAutoRemovalTitle, formatBy
  */
 function formatDownloadMessage(finalSummary, videoData) {
   const { totalDownloaded, jobType } = finalSummary;
+  const failedCount = getFailedCount(finalSummary);
 
   const title = buildTitle(totalDownloaded);
   let body = `${getSubtitle(jobType)}:\n`;
+
+  if (failedCount > 0) {
+    body += `\n⚠️ ${buildFailedCountLabel(failedCount)}.\n`;
+    const failedVideosToShow = (finalSummary.failedVideos || []).slice(0, 5);
+    failedVideosToShow.forEach(failedVideo => {
+      body += `• ${formatFailedVideoLine(failedVideo)}\n`;
+    });
+    if (failedCount > failedVideosToShow.length) {
+      body += `...and ${failedCount - failedVideosToShow.length} more failed\n`;
+    }
+    body += '\n';
+  }
 
   if (videoData && videoData.length > 0) {
     const videosToShow = videoData.slice(0, 10);
@@ -98,4 +121,3 @@ module.exports = {
   formatTestMessage,
   formatAutoRemovalMessage
 };
-

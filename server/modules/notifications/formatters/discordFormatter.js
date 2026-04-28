@@ -2,7 +2,29 @@
  * Discord embed notification formatter
  */
 
-const { formatDuration, buildTitle, getSubtitle, buildAutoRemovalTitle, formatBytes, groupVideosByChannel } = require('../utils');
+const {
+  formatDuration,
+  buildTitle,
+  getFailedCount,
+  buildFailedCountLabel,
+  formatFailedVideoLine,
+  getSubtitle,
+  buildAutoRemovalTitle,
+  formatBytes,
+  groupVideosByChannel
+} = require('../utils');
+
+const DISCORD_FIELD_VALUE_LIMIT = 1024;
+
+function truncateFieldValueAtLineBoundary(value, limit = DISCORD_FIELD_VALUE_LIMIT) {
+  if (!value || value.length <= limit) {
+    return value;
+  }
+
+  const truncated = value.substring(0, limit);
+  const lastNewline = truncated.lastIndexOf('\n');
+  return lastNewline > 0 ? truncated.substring(0, lastNewline) : truncated;
+}
 
 /**
  * Format download notification as Discord embed
@@ -12,6 +34,7 @@ const { formatDuration, buildTitle, getSubtitle, buildAutoRemovalTitle, formatBy
  */
 function formatDownloadMessage(finalSummary, videoData) {
   const { totalDownloaded, jobType } = finalSummary;
+  const failedCount = getFailedCount(finalSummary);
 
   const title = buildTitle(totalDownloaded);
   let description = `**${getSubtitle(jobType)}:**\n`;
@@ -41,11 +64,25 @@ function formatDownloadMessage(finalSummary, videoData) {
     }
   }
 
+  if (failedCount > 0) {
+    description += `\n⚠️ **${buildFailedCountLabel(failedCount)}.**`;
+    const failedVideosToShow = (finalSummary.failedVideos || []).slice(0, 5);
+    const failedValue = failedVideosToShow.length > 0
+      ? truncateFieldValueAtLineBoundary(failedVideosToShow.map(formatFailedVideoLine).join('\n'))
+      : 'See Youtarr download history for details.';
+
+    fields.push({
+      name: '⚠️ Failed downloads',
+      value: failedValue,
+      inline: false
+    });
+  }
+
   return {
     embeds: [{
       title,
       description,
-      color: 0x00ff00, // Green for success
+      color: failedCount > 0 ? 0xffa500 : 0x00ff00, // Orange for partial success, green for success
       fields,
       timestamp: new Date().toISOString(),
       footer: {
@@ -170,4 +207,3 @@ module.exports = {
   formatPlainMessage,
   formatAutoRemovalMessage
 };
-

@@ -169,6 +169,9 @@ describe('DownloadExecutor', () => {
 
     // Setup VideoMetadataProcessor mock
     VideoMetadataProcessor.processVideoMetadata = jest.fn().mockResolvedValue([]);
+    jobModule.getJob.mockReturnValue(undefined);
+    jobModule.updateJob.mockResolvedValue();
+    jobModule.saveJobOnly.mockResolvedValue();
 
     // Setup health check mocks (succeed by default so existing tests pass)
     mockFsPromises.writeFile.mockResolvedValue();
@@ -470,6 +473,25 @@ describe('DownloadExecutor', () => {
         'Error reading directory'
       );
     });
+
+    it('should not log an error when the partial file directory was already moved', async () => {
+      const files = ['/output/video.mp4'];
+      const enoent = new Error('No such file or directory');
+      enoent.code = 'ENOENT';
+      mockFsPromises.access.mockRejectedValue(new Error('Access error'));
+      mockFsPromises.readdir.mockRejectedValue(enoent);
+
+      await executor.cleanupPartialFiles(files);
+
+      expect(logger.debug).toHaveBeenCalledWith(
+        { err: enoent, dir: '/output' },
+        'Partial file directory already removed'
+      );
+      expect(logger.error).not.toHaveBeenCalledWith(
+        expect.objectContaining({ dir: '/output' }),
+        'Error reading directory'
+      );
+    });
   });
 
   describe('checkOutputDirectoryHealth', () => {
@@ -675,6 +697,71 @@ describe('DownloadExecutor', () => {
         mockJobId,
         expect.objectContaining({
           status: 'Error'
+        })
+      );
+    });
+
+    it('should persist successful videos before terminal update when yt-dlp exits non-zero', async () => {
+      const mockVideoData = [
+        { youtubeId: 'success1234', filePath: '/output/video.mp4', fileSize: '1024' }
+      ];
+      const mockJob = { data: {} };
+
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue(mockVideoData);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/success1234']);
+      jobModule.getJob.mockReturnValue(mockJob);
+
+      setTimeout(() => {
+        mockProcess.emit('exit', 1, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(jobModule.saveJobOnly).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          data: expect.objectContaining({
+            videos: mockVideoData,
+            failedVideos: []
+          })
+        })
+      );
+
+      const saveJobOnlyCallIndex = jobModule.saveJobOnly.mock.invocationCallOrder[0];
+      const terminalUpdateCallIndex = jobModule.updateJob.mock.invocationCallOrder.find(
+        (order, idx) => jobModule.updateJob.mock.calls[idx][1]?.status === 'Complete with Warnings'
+      );
+
+      expect(saveJobOnlyCallIndex).toBeLessThan(terminalUpdateCallIndex);
+      expect(jobModule.updateJob).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          status: 'Complete with Warnings',
+          notes: 'Some videos failed (exit 1)',
+          data: expect.objectContaining({
+            videos: mockVideoData,
+            failedVideos: []
+          })
+        })
+      );
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
+        'broadcast',
+        null,
+        'download',
+        'downloadProgress',
+        expect.objectContaining({
+          warning: true,
+          finalSummary: expect.objectContaining({
+            totalDownloaded: 1
+          })
+        })
+      );
+      expect(notificationModule.sendDownloadNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          finalSummary: expect.objectContaining({
+            totalDownloaded: 1
+          }),
+          videoData: mockVideoData
         })
       );
     });
@@ -1099,6 +1186,115 @@ describe('DownloadExecutor', () => {
           })
         })
       );
+    });
+
+    it('should accumulate and persist grouped videos when yt-dlp exits non-zero', async () => {
+      const existingVideo = { youtubeId: 'existing123', filePath: '/output/existing.mp4', fileSize: '2048' };
+      const newVideo = { youtubeId: 'success1234', filePath: '/output/new.mp4', fileSize: '1024' };
+      const existingFailedVideo = { youtubeId: 'oldfailed1', error: 'Old failure' };
+      const mockJob = {
+        data: {
+          videos: [existingVideo],
+          failedVideos: [existingFailedVideo],
+          cumulativeSkipped: 2
+        }
+      };
+
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([newVideo]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue([
+        'https://youtu.be/success1234',
+        'https://youtu.be/failed12345'
+      ]);
+      jobModule.getJob.mockReturnValue(mockJob);
+      jobModule.updateJob.mockImplementationOnce(async (_jobId, fields) => {
+        Object.assign(mockJob, fields);
+      });
+
+      setTimeout(() => {
+        mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://youtube.com/watch?v=failed12345\n');
+        mockProcess.stdout.emit('data', 'ERROR: This video is members-only\n');
+        mockProcess.emit('exit', 1, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, true);
+
+      expect(jobModule.updateJob).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          data: expect.objectContaining({
+            videos: [existingVideo, newVideo],
+            failedVideos: expect.arrayContaining([
+              existingFailedVideo,
+              expect.objectContaining({
+                youtubeId: 'failed12345',
+                error: 'This video is members-only'
+              })
+            ]),
+            cumulativeSkipped: 2
+          })
+        })
+      );
+      expect(jobModule.updateJob).not.toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({ status: 'Error' })
+      );
+      expect(jobModule.saveJobOnly).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          data: expect.objectContaining({
+            videos: [existingVideo, newVideo]
+          })
+        })
+      );
+      expect(notificationModule.sendDownloadNotification).not.toHaveBeenCalled();
+    });
+
+    it('should preserve notes and error code for grouped 403 failures', async () => {
+      const mockJob = {
+        data: {
+          videos: [],
+          failedVideos: [],
+          cumulativeSkipped: 0
+        }
+      };
+
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue([]);
+      jobModule.getJob.mockReturnValue(mockJob);
+
+      setTimeout(() => {
+        mockProcess.stdout.emit('data', 'ERROR: HTTP Error 403: Forbidden\n');
+        mockProcess.emit('exit', 1, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, true);
+
+      expect(jobModule.updateJob).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          notes: 'YouTube denied access (HTTP 403). Configure cookies in Settings to resolve this issue.',
+          error: 'COOKIES_RECOMMENDED'
+        })
+      );
+    });
+
+    it('should warn when intermediate group results cannot find the job', async () => {
+      jobModule.getJob.mockReturnValue(undefined);
+
+      await executor.saveIntermediateGroupResults(
+        mockJobId,
+        '1 videos.',
+        [{ youtubeId: 'success1234', filePath: '/output/new.mp4', fileSize: '1024' }],
+        [],
+        0
+      );
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        { jobId: mockJobId },
+        'Unable to merge intermediate group results; job not found'
+      );
+      expect(jobModule.updateJob).not.toHaveBeenCalled();
+      expect(jobModule.saveJobOnly).not.toHaveBeenCalled();
     });
 
     it('should not persist to database when no videos were downloaded', async () => {

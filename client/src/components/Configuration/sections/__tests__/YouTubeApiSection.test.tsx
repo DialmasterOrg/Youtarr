@@ -31,9 +31,8 @@ describe('YouTubeApiSection', () => {
   test('explains why a YouTube API key is useful', () => {
     render(<YouTubeApiSection {...defaultProps} />);
     expect(screen.getByText(/Faster, more accurate YouTube lookups/i)).toBeInTheDocument();
-    expect(screen.getByText(/channel video lists/i)).toBeInTheDocument();
+    expect(screen.getByText(/channel discovery, video metadata, and YouTube searches/i)).toBeInTheDocument();
     expect(screen.getByText(/significantly faster/i)).toBeInTheDocument();
-    expect(screen.getByText(/precise published dates/i)).toBeInTheDocument();
     expect(screen.getByText(/falls back to yt-dlp automatically/i)).toBeInTheDocument();
   });
 
