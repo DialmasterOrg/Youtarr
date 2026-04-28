@@ -223,11 +223,59 @@ class DownloadExecutor {
             }
           }
         } catch (readDirError) {
-          logger.error({ err: readDirError, dir }, 'Error reading directory');
+          if (readDirError.code === 'ENOENT') {
+            logger.debug({ err: readDirError, dir }, 'Partial file directory already removed');
+          } else {
+            logger.error({ err: readDirError, dir }, 'Error reading directory');
+          }
         }
       } catch (error) {
         logger.error({ err: error, file }, 'Error cleaning up partial files');
       }
+    }
+  }
+
+  async persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, failedVideosList) {
+    if (!videoData || videoData.length === 0) {
+      return;
+    }
+
+    const currentJob = jobModule.getJob(jobId);
+    if (!currentJob) {
+      logger.warn({ jobId }, 'Unable to persist completed videos before terminal update; job not found');
+      return;
+    }
+
+    currentJob.data = currentJob.data || {};
+    currentJob.data.videos = videoData;
+    currentJob.data.failedVideos = failedVideosList || [];
+    await jobModule.saveJobOnly(jobId, currentJob);
+  }
+
+  async saveIntermediateGroupResults(jobId, output, videoData, failedVideosList, skippedCount, extraFields = {}) {
+    const currentJob = jobModule.getJob(jobId);
+    if (!currentJob) {
+      logger.warn({ jobId }, 'Unable to merge intermediate group results; job not found');
+      return;
+    }
+
+    const existingVideos = currentJob.data?.videos || [];
+    const existingFailedVideos = currentJob.data?.failedVideos || [];
+    const existingSkippedCount = currentJob.data?.cumulativeSkipped || 0;
+
+    await jobModule.updateJob(jobId, {
+      output: output,
+      ...extraFields,
+      data: {
+        videos: [...existingVideos, ...(videoData || [])],
+        failedVideos: [...existingFailedVideos, ...(failedVideosList || [])],
+        cumulativeSkipped: existingSkippedCount + (skippedCount || 0)
+      },
+    });
+
+    const updatedJob = jobModule.getJob(jobId);
+    if (updatedJob && updatedJob.data && updatedJob.data.videos) {
+      await jobModule.saveJobOnly(jobId, updatedJob);
     }
   }
 
@@ -1003,6 +1051,7 @@ class DownloadExecutor {
           status = 'Error';
           output = 'Bot detection encountered. Please set cookies in your Configuration.';
 
+          await this.persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, failedVideosList);
           await jobModule.updateJob(jobId, {
             status: status,
             endDate: Date.now(),
@@ -1029,15 +1078,7 @@ class DownloadExecutor {
 
           // Persist videos to DB BEFORE calling updateJob
           // This ensures videos are in DB before updateJob reloads from DB
-          if (videoData && videoData.length > 0) {
-            const currentJob = jobModule.getJob(jobId);
-            if (currentJob) {
-              currentJob.data = currentJob.data || {};
-              currentJob.data.videos = videoData;
-              currentJob.data.failedVideos = failedVideosList || [];
-              await jobModule.saveJobOnly(jobId, currentJob);
-            }
-          }
+          await this.persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, failedVideosList);
 
           await jobModule.updateJob(jobId, {
             status: status,
@@ -1058,37 +1099,54 @@ class DownloadExecutor {
           const failureDetails = monitor.lastParsed || null;
 
           status = signal === 'SIGKILL' ? 'Killed' : 'Error';
+          const hasPartialSuccess = code === 1 && videoData.length > 0;
+          let notes;
+          let errorCode;
 
           // Provide more helpful error messages based on what we detected
           if (httpForbiddenDetected) {
             // Failed with 403 errors - likely authentication issue
             output = `${videoCount} videos. Error: YouTube returned HTTP 403 (Forbidden)`;
-            const notes = 'YouTube denied access (HTTP 403). Configure cookies in Settings to resolve this issue.';
-            await jobModule.updateJob(jobId, {
-              status: status,
-              endDate: Date.now(),
-              output: output,
-              data: {
-                videos: videoData || [],
-                failedVideos: failedVideosList || []
-              },
-              notes: notes,
-              error: 'COOKIES_RECOMMENDED'
-            });
-            jobErrorCode = 'COOKIES_RECOMMENDED';
+            notes = 'YouTube denied access (HTTP 403). Configure cookies in Settings to resolve this issue.';
+            errorCode = 'COOKIES_RECOMMENDED';
           } else {
             // Failed with other error
             output = `${videoCount} videos. Error: Command exited with code ${code}`;
 
             // Add stall detection note if applicable
-            const notes = failureDetails && failureDetails.stalled
-              ? `Stall detected at ${failureDetails.progress.percent.toFixed(1)}% (${Math.round(
+            const failureReason = failureDetails && failureDetails.stalled
+              ? `stall detected at ${failureDetails.progress.percent.toFixed(1)}% (${Math.round(
                 failureDetails.progress.speedBytesPerSecond / 1024
               )} KiB/s)`
-              : `Download failed (${signal || `exit ${code}`})`;
+              : signal || `exit ${code}`;
+            notes = hasPartialSuccess
+              ? `Some videos failed (${failureReason})`
+              : `Download failed (${failureReason})`;
+          }
 
+          if (errorCode) {
+            jobErrorCode = errorCode;
+          }
+
+          if (skipJobTransition) {
+            await this.saveIntermediateGroupResults(
+              jobId,
+              output,
+              videoData,
+              failedVideosList,
+              monitor.videoCount.skipped || 0,
+              {
+                notes: notes,
+                ...(errorCode ? { error: errorCode } : {})
+              }
+            );
+          } else {
+            await this.persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, failedVideosList);
+            const terminalStatus = hasPartialSuccess
+              ? 'Complete with Warnings'
+              : status;
             await jobModule.updateJob(jobId, {
-              status: status,
+              status: terminalStatus,
               endDate: Date.now(),
               output: output,
               data: {
@@ -1096,6 +1154,7 @@ class DownloadExecutor {
                 failedVideos: failedVideosList || []
               },
               notes: notes,
+              ...(errorCode ? { error: errorCode } : {})
             });
           }
         } else if (stderrBuffer && !monitor.hasError) {
@@ -1104,38 +1163,17 @@ class DownloadExecutor {
           // When skipJobTransition is true, we're processing multiple groups
           // Don't mark as complete yet - just save the videos
           if (skipJobTransition) {
-            // For multi-group downloads, accumulate videos, failedVideos and skipped counts
-            const currentJob = jobModule.getJob(jobId);
-            const existingVideos = currentJob?.data?.videos || [];
-            const existingFailedVideos = currentJob?.data?.failedVideos || [];
-            const existingSkippedCount = currentJob?.data?.cumulativeSkipped || 0;
-
-            await jobModule.updateJob(jobId, {
-              output: output,
-              data: {
-                videos: [...existingVideos, ...videoData],
-                failedVideos: [...existingFailedVideos, ...(failedVideosList || [])],
-                cumulativeSkipped: existingSkippedCount + (monitor.videoCount.skipped || 0)
-              },
-            });
-
-            // Persist accumulated videos to DB immediately for resilience
-            const updatedJob = jobModule.getJob(jobId);
-            if (updatedJob && updatedJob.data && updatedJob.data.videos) {
-              await jobModule.saveJobOnly(jobId, updatedJob);
-            }
+            await this.saveIntermediateGroupResults(
+              jobId,
+              output,
+              videoData,
+              failedVideosList,
+              monitor.videoCount.skipped || 0
+            );
           } else {
             // For manual/single downloads, persist to DB BEFORE calling updateJob
             // This ensures videos are in DB before updateJob reloads from DB
-            if (videoData && videoData.length > 0) {
-              const currentJob = jobModule.getJob(jobId);
-              if (currentJob) {
-                currentJob.data = currentJob.data || {};
-                currentJob.data.videos = videoData;
-                currentJob.data.failedVideos = failedVideosList || [];
-                await jobModule.saveJobOnly(jobId, currentJob);
-              }
-            }
+            await this.persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, failedVideosList);
 
             await jobModule.updateJob(jobId, {
               status: status,
@@ -1152,38 +1190,17 @@ class DownloadExecutor {
           // When skipJobTransition is true, we're processing multiple groups
           // Don't mark as complete yet - just save the videos
           if (skipJobTransition) {
-            // For multi-group downloads, accumulate videos, failedVideos and skipped counts
-            const currentJob = jobModule.getJob(jobId);
-            const existingVideos = currentJob?.data?.videos || [];
-            const existingFailedVideos = currentJob?.data?.failedVideos || [];
-            const existingSkippedCount = currentJob?.data?.cumulativeSkipped || 0;
-
-            await jobModule.updateJob(jobId, {
-              output: output,
-              data: {
-                videos: [...existingVideos, ...videoData],
-                failedVideos: [...existingFailedVideos, ...(failedVideosList || [])],
-                cumulativeSkipped: existingSkippedCount + (monitor.videoCount.skipped || 0)
-              },
-            });
-
-            // Persist accumulated videos to DB immediately for resilience
-            const updatedJob = jobModule.getJob(jobId);
-            if (updatedJob && updatedJob.data && updatedJob.data.videos) {
-              await jobModule.saveJobOnly(jobId, updatedJob);
-            }
+            await this.saveIntermediateGroupResults(
+              jobId,
+              output,
+              videoData,
+              failedVideosList,
+              monitor.videoCount.skipped || 0
+            );
           } else {
             // For manual/single downloads, persist to DB BEFORE calling updateJob
             // This ensures videos are in DB before updateJob reloads from DB
-            if (videoData && videoData.length > 0) {
-              const currentJob = jobModule.getJob(jobId);
-              if (currentJob) {
-                currentJob.data = currentJob.data || {};
-                currentJob.data.videos = videoData;
-                currentJob.data.failedVideos = failedVideosList || [];
-                await jobModule.saveJobOnly(jobId, currentJob);
-              }
-            }
+            await this.persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, failedVideosList);
 
             await jobModule.updateJob(jobId, {
               status: status,
@@ -1208,11 +1225,12 @@ class DownloadExecutor {
         // If videos failed but some succeeded, treat as warning rather than complete error
         const hasFailures = failedVideosList.length > 0;
         const hasSuccesses = videoData.length > 0;
+        const hasNonFatalPartialSuccess = code === 1 && hasSuccesses;
 
         let finalState;
-        if (code === 0 || isWarningOnly) {
+        if (code === 0 || isWarningOnly || hasNonFatalPartialSuccess) {
           // Exit code was successful, but check for partial failures
-          finalState = hasFailures ? 'warning' : 'complete';
+          finalState = (hasFailures || code !== 0) ? 'warning' : 'complete';
         } else {
           finalState = 'error';
         }
@@ -1225,6 +1243,7 @@ class DownloadExecutor {
           hasError: monitor.hasError,
           hasFailures,
           hasSuccesses,
+          hasNonFatalPartialSuccess,
           successCount: videoData.length,
           failureCount: failedVideosList.length,
           finalState
@@ -1326,7 +1345,7 @@ class DownloadExecutor {
 
         // Send notification if download was successful and notifications are enabled
         // Skip notifications for intermediate groups (only send for final completion)
-        if (finalState === 'complete' && !isFinalError && !skipJobTransition) {
+        if ((finalState === 'complete' || finalState === 'warning') && !isFinalError && !skipJobTransition) {
           const notificationModule = require('../notificationModule');
           notificationModule.sendDownloadNotification({
             finalSummary: finalPayload.finalSummary,

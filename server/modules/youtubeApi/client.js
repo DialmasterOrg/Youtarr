@@ -8,7 +8,6 @@ const {
   YOUTUBE_API_TIMEOUT_MS,
   ENDPOINTS,
   VIDEOS_LIST_BATCH_SIZE,
-  PLAYLIST_ITEMS_PAGE_SIZE,
 } = require('./constants');
 
 // Reference video for key validation: a permanently public, well-known video.
@@ -321,81 +320,6 @@ async function searchVideos(apiKey, query, maxResults, { signal } = {}) {
   }
 }
 
-async function listPlaylistItems(apiKey, playlistId, maxVideos) {
-  const videoIds = [];
-  const playlistItemsLight = [];
-  let pageToken = null;
-
-  while (videoIds.length < maxVideos) {
-    const remaining = maxVideos - videoIds.length;
-    const pageSize = Math.min(PLAYLIST_ITEMS_PAGE_SIZE, remaining);
-
-    const params = {
-      playlistId,
-      part: 'snippet',
-      maxResults: pageSize,
-    };
-    if (pageToken) params.pageToken = pageToken;
-
-    const data = await apiGet(apiKey, ENDPOINTS.playlistItems, params);
-
-    const items = Array.isArray(data.items) ? data.items : [];
-    for (const item of items) {
-      const vid = item?.snippet?.resourceId?.videoId;
-      if (!vid) continue;
-      videoIds.push(vid);
-      playlistItemsLight.push({
-        id: vid,
-        title: item.snippet.title || null,
-        publishedAt: item.snippet.publishedAt || null,
-      });
-    }
-
-    pageToken = data.nextPageToken || null;
-    if (!pageToken) break;
-  }
-
-  return { videoIds, playlistItemsLight };
-}
-
-async function listChannelVideos(
-  apiKey,
-  channelUrl,
-  { tabType = 'videos', maxVideos = 200, includeMetadata = true } = {}
-) {
-  const channelInfo = await getChannelInfo(apiKey, channelUrl);
-  if (!channelInfo || !channelInfo.channelId) {
-    return { videos: [], currentChannelUrl: channelUrl };
-  }
-
-  const playlistId = derivePlaylistIdForTab(channelInfo.channelId, tabType);
-
-  let videoIds = [];
-  let playlistItemsLight = [];
-  try {
-    ({ videoIds, playlistItemsLight } = await listPlaylistItems(apiKey, playlistId, maxVideos));
-  } catch (err) {
-    // A channel with no Shorts or no Streams will 404 on UUSH/UULV. Treat as
-    // "no content of this type" rather than a hard failure so callers can
-    // render an empty tab without falling back to yt-dlp.
-    if (err && err.code === YoutubeApiErrorCode.NOT_FOUND) {
-      return { videos: [], currentChannelUrl: channelUrl, channelInfo };
-    }
-    throw err;
-  }
-
-  let videos;
-  if (includeMetadata && videoIds.length > 0) {
-    const metadataBatches = await getVideoMetadata(apiKey, videoIds);
-    const byId = new Map(metadataBatches.map((m) => [m.id, m]));
-    videos = playlistItemsLight.map((light) => byId.get(light.id) || light);
-  } else {
-    videos = playlistItemsLight;
-  }
-
-  return { videos, currentChannelUrl: channelUrl, channelInfo };
-}
-
 /**
  * Probe all three channel-tab playlists in parallel. A non-empty response
  * means the tab effectively has content. An empty items array OR a 404
@@ -448,7 +372,6 @@ module.exports = {
   getVideoMetadata,
   getChannelInfo,
   searchVideos,
-  listChannelVideos,
   detectAvailableTabs,
   YoutubeApiError,
 };

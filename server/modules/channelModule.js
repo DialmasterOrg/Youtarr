@@ -42,66 +42,6 @@ function logApiFallback(apiErr, fields, message) {
   }
 }
 
-// Translate the API's snippet.liveBroadcastContent into the yt-dlp-style
-// live_status string stored on channelvideos.live_status. The frontend uses
-// `live_status && live_status !== 'was_live'` to block the download button
-// on currently-live and upcoming streams, so getting this right prevents users
-// from selecting videos that would fail to download via yt-dlp's `!is_live`
-// and `live_status!=is_upcoming` filters.
-//
-// The API's "none" is ambiguous (regular video vs. past livestream), so we
-// disambiguate by the tab the video came from: on the Live tab it means the
-// stream has ended ("was_live"); on Videos/Shorts it means not-a-livestream
-// (null, matching yt-dlp's treatment for regular uploads).
-function deriveLiveStatusFromApi(liveBroadcastContent, tabType) {
-  if (liveBroadcastContent === 'live') return 'is_live';
-  if (liveBroadcastContent === 'upcoming') return 'is_upcoming';
-  if (tabType === TAB_TYPES.LIVE) return 'was_live';
-  return null;
-}
-
-function mapApiVideoToChannelVideo(video, tabType, defaultRating = null) {
-  const mediaType = MEDIA_TAB_TYPE_MAP[tabType] || 'video';
-  const effectiveRating = ratingMapper.determineEffectiveRating(
-    {
-      content_rating: video.contentRating || null,
-      age_limit: video.ageLimit ?? null,
-    },
-    defaultRating
-  );
-
-  const out = {
-    title: video.title || 'Untitled',
-    youtube_id: video.id,
-    publishedAt: video.uploadDate
-      ? new Date(`${video.uploadDate.slice(0, 4)}-${video.uploadDate.slice(4, 6)}-${video.uploadDate.slice(6, 8)}T00:00:00Z`).toISOString()
-      : null,
-    thumbnail: video.thumbnailUrl || null,
-    duration: video.duration || 0,
-    availability: video.availability || null,
-    media_type: mediaType,
-    live_status: deriveLiveStatusFromApi(video.liveBroadcastContent, tabType),
-  };
-
-  if (effectiveRating.normalized_rating != null) {
-    out.normalized_rating = effectiveRating.normalized_rating;
-  }
-
-  if (effectiveRating.rating_source != null) {
-    out.rating_source = effectiveRating.rating_source;
-  }
-
-  if (video.contentRating != null) {
-    out.content_rating = video.contentRating;
-  }
-
-  if (video.ageLimit != null) {
-    out.age_limit = video.ageLimit;
-  }
-
-  return out;
-}
-
 class ChannelModule {
   constructor() {
     this.channelAutoDownload = this.channelAutoDownload.bind(this);
@@ -1906,11 +1846,8 @@ class ChannelModule {
   }
 
   /**
-   * Fetch channel videos from a specific tab.
-   * Tries the YouTube Data API first when a key is configured (per-tab
-   * UULF/UUSH/UULV playlists), then falls back to yt-dlp on any API failure
-   * or when no key is configured. Uses canonical channel URL for stability
-   * when handles change.
+   * Fetch channel videos from a specific tab via yt-dlp.
+   * Uses canonical channel URL for stability when handles change.
    * @param {string} channelId - Channel ID to fetch videos for
    * @param {Date|null} mostRecentVideoDate - Date of the most recent video we have
    * @param {string} tabType - Type of tab to fetch videos from
@@ -1937,36 +1874,8 @@ class ChannelModule {
       }
     }
 
-    // API-first path: all tabs (videos/shorts/streams) use the per-tab
-    // auto-generated playlists (UULF/UUSH/UULV) when a key is configured.
-    if (youtubeApi.isAvailable()) {
-      try {
-        const apiKey = youtubeApi.getApiKey();
-        const channelUrl = channel.url || this.resolveChannelUrlFromId(channelId);
-        const apiResult = await youtubeApi.client.listChannelVideos(apiKey, channelUrl, {
-          tabType,
-          maxVideos: videoCount,
-          includeMetadata: true,
-        });
-
-        const videos = apiResult.videos.map((v) => mapApiVideoToChannelVideo(v, tabType, channel.default_rating));
-
-        logger.info(
-          { channelId, tabType, source: 'youtube-api', videoCount: videos.length },
-          'Listed channel videos via YouTube API'
-        );
-        return { videos, currentChannelUrl: apiResult.currentChannelUrl };
-      } catch (apiErr) {
-        logApiFallback(
-          apiErr,
-          { channelId, tabType },
-          'YouTube API listChannelVideos failed, falling back to yt-dlp'
-        );
-      }
-    }
-
-    // Always use canonical URL based on channel ID for yt-dlp
-    // This ensures stability even when channel handles change
+    // Always use canonical URL based on channel ID for yt-dlp. This avoids the
+    // YouTube API playlist path, which can omit videos that yt-dlp can see.
     const canonicalUrl = `${this.resolveChannelUrlFromId(channelId)}/${tabType}`;
 
     const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
@@ -2683,53 +2592,21 @@ class ChannelModule {
         logger.info({ channelId, channelTitle: channel.title, tabType }, 'Starting full video fetch for channel');
         const startTime = Date.now();
 
-        // API-first path: all tabs use per-tab auto-generated playlists when a
-        // key is configured (UULF/UUSH/UULV for videos/shorts/streams).
-        let result = null;
-        if (youtubeApi.isAvailable()) {
-          try {
-            const apiKey = youtubeApi.getApiKey();
-            const channelUrl = channel.url || this.resolveChannelUrlFromId(channelId);
-            const apiResult = await youtubeApi.client.listChannelVideos(apiKey, channelUrl, {
-              tabType,
-              maxVideos: MAX_LOAD_MORE_VIDEOS,
-              includeMetadata: true,
-            });
-
-            const videos = apiResult.videos.map((v) => mapApiVideoToChannelVideo(v, tabType, channel.default_rating));
-
-            logger.info(
-              { channelId, tabType, source: 'youtube-api', videoCount: videos.length },
-              'Fetched all channel videos via YouTube API'
-            );
-            result = { videos, currentChannelUrl: apiResult.currentChannelUrl };
-          } catch (apiErr) {
-            logApiFallback(
-              apiErr,
-              { channelId, tabType },
-              'YouTube API listChannelVideos (full fetch) failed, falling back to yt-dlp'
-            );
-          }
-        }
-
-        // yt-dlp fallback path (no key, or API error)
-        if (result === null) {
-          const canonicalUrl = `${this.resolveChannelUrlFromId(channelId)}/${tabType}`;
-          const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
-          result = await this.withTempFile('channel-all-videos', async (outputFilePath) => {
-            const args = YtdlpCommandBuilder.buildMetadataFetchArgs(canonicalUrl, {
-              flatPlaylist: true,
-              extractorArgs: 'youtubetab:approximate_date',
-              playlistEnd: MAX_LOAD_MORE_VIDEOS
-            });
-            const content = await this.executeYtDlpCommand(args, outputFilePath);
-
-            const jsonOutput = JSON.parse(content);
-            const videos = this.extractVideosFromYtDlpResponse(jsonOutput, channel.default_rating);
-            const currentChannelUrl = jsonOutput.uploader_url || jsonOutput.channel_url || jsonOutput.url;
-            return { videos, currentChannelUrl };
+        const canonicalUrl = `${this.resolveChannelUrlFromId(channelId)}/${tabType}`;
+        const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
+        const result = await this.withTempFile('channel-all-videos', async (outputFilePath) => {
+          const args = YtdlpCommandBuilder.buildMetadataFetchArgs(canonicalUrl, {
+            flatPlaylist: true,
+            extractorArgs: 'youtubetab:approximate_date',
+            playlistEnd: MAX_LOAD_MORE_VIDEOS
           });
-        }
+          const content = await this.executeYtDlpCommand(args, outputFilePath);
+
+          const jsonOutput = JSON.parse(content);
+          const videos = this.extractVideosFromYtDlpResponse(jsonOutput, channel.default_rating);
+          const currentChannelUrl = jsonOutput.uploader_url || jsonOutput.channel_url || jsonOutput.url;
+          return { videos, currentChannelUrl };
+        });
 
         const fetchDuration = (Date.now() - startTime) / 1000;
         logger.info({
