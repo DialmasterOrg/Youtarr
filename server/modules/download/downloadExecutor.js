@@ -235,6 +235,25 @@ class DownloadExecutor {
     }
   }
 
+  isExpectedYtdlpSkipMessage(message = '') {
+    const normalized = String(message);
+    const expectedPatterns = [
+      /join this channel to get access to members-only content/i,
+      /available to this channel'?s members/i,
+      /members[- ]only/i,
+      /subscriber[_ -]?only/i,
+      /this live event will begin/i,
+      /will begin in (?:a few moments|\d+)/i,
+      /premiere (?:will begin|starts|is upcoming)/i,
+      /premieres? in \d+/i,
+      /pre[- ]release/i,
+      /this video is not yet available/i,
+      /release time of video is not known/i,
+    ];
+
+    return expectedPatterns.some(pattern => pattern.test(normalized));
+  }
+
   async persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, failedVideosList) {
     if (!videoData || videoData.length === 0) {
       return;
@@ -637,8 +656,22 @@ class DownloadExecutor {
 
       // Track failed videos with their error messages
       const failedVideos = new Map(); // youtubeId -> { url, error, youtubeId }
+      // Count of yt-dlp errors that we treat as expected skips (members-only,
+      // upcoming live, premiere, etc.). Only the count drives downstream
+      // behavior; per-skip context goes to the structured log.
+      let expectedSkipCount = 0;
+      // Count of yt-dlp errors that are NOT expected skips. Incremented in
+      // both stdout and stderr handlers regardless of whether currentVideoId
+      // is known, so unassociated errors still block the
+      // "complete with only expected skips" classification.
+      let unexpectedErrorCount = 0;
       let currentVideoId = null; // Track the current video being processed
       let lastErrorMessage = null; // Store the last error message seen
+
+      const recordExpectedSkip = (reason, source) => {
+        expectedSkipCount += 1;
+        logger.info({ youtubeId: currentVideoId, reason, source }, 'Expected video skip from yt-dlp');
+      };
 
       const emitCookiesSuggestionMessage = () => {
         if (cookiesSuggestionEmitted) {
@@ -764,22 +797,33 @@ class DownloadExecutor {
             }
 
             // Detect and track ERROR messages
+            let suppressExpectedSkipLine = false;
             if (line.includes('ERROR:')) {
               const errorMatch = line.match(/ERROR:\s*(.+)/);
               if (errorMatch) {
                 lastErrorMessage = errorMatch[1].trim();
-                logger.warn({ error: lastErrorMessage, currentVideoId }, 'Error detected during download');
+                if (this.isExpectedYtdlpSkipMessage(lastErrorMessage)) {
+                  recordExpectedSkip(lastErrorMessage, 'stdout');
+                  suppressExpectedSkipLine = true;
+                } else {
+                  unexpectedErrorCount += 1;
+                  logger.warn({ error: lastErrorMessage, currentVideoId }, 'Error detected during download');
 
-                // Associate error with current video if we know which video is being processed
-                if (currentVideoId && !failedVideos.has(currentVideoId)) {
-                  failedVideos.set(currentVideoId, {
-                    youtubeId: currentVideoId,
-                    error: lastErrorMessage,
-                    url: null // Will be populated later from urlsToProcess
-                  });
-                  logger.info({ youtubeId: currentVideoId, error: lastErrorMessage }, 'Recorded video failure');
+                  // Associate error with current video if we know which video is being processed
+                  if (currentVideoId && !failedVideos.has(currentVideoId)) {
+                    failedVideos.set(currentVideoId, {
+                      youtubeId: currentVideoId,
+                      error: lastErrorMessage,
+                      url: null // Will be populated later from urlsToProcess
+                    });
+                    logger.info({ youtubeId: currentVideoId, error: lastErrorMessage }, 'Recorded video failure');
+                  }
                 }
               }
+            }
+
+            if (suppressExpectedSkipLine) {
+              return;
             }
 
             // Always try to process for state updates
@@ -821,23 +865,38 @@ class DownloadExecutor {
           emitCookiesSuggestionMessage();
         }
 
-        // Detect and track ERROR messages from stderr
+        // Detect and track ERROR messages from stderr. Node streams can
+        // coalesce multiple lines into one chunk, so iterate per line rather
+        // than running a single regex over the whole chunk (which would only
+        // catch the first ERROR: occurrence).
         if (dataStr.includes('ERROR:')) {
-          const errorMatch = dataStr.match(/ERROR:\s*(.+)/);
-          if (errorMatch) {
-            lastErrorMessage = errorMatch[1].trim();
-            logger.warn({ error: lastErrorMessage, currentVideoId }, 'Error detected in stderr');
+          dataStr
+            .split('\n')
+            .map(line => line.trim())
+            .filter(line => line.includes('ERROR:'))
+            .forEach(line => {
+              const errorMatch = line.match(/ERROR:\s*(.+)/);
+              if (!errorMatch) {
+                return;
+              }
+              lastErrorMessage = errorMatch[1].trim();
+              if (this.isExpectedYtdlpSkipMessage(lastErrorMessage)) {
+                recordExpectedSkip(lastErrorMessage, 'stderr');
+                return;
+              }
+              unexpectedErrorCount += 1;
+              logger.warn({ error: lastErrorMessage, currentVideoId }, 'Error detected in stderr');
 
-            // Associate error with current video if we know which video is being processed
-            if (currentVideoId && !failedVideos.has(currentVideoId)) {
-              failedVideos.set(currentVideoId, {
-                youtubeId: currentVideoId,
-                error: lastErrorMessage,
-                url: null // Will be populated later from urlsToProcess
-              });
-              logger.info({ youtubeId: currentVideoId, error: lastErrorMessage }, 'Recorded video failure from stderr');
-            }
-          }
+              // Associate error with current video if we know which video is being processed
+              if (currentVideoId && !failedVideos.has(currentVideoId)) {
+                failedVideos.set(currentVideoId, {
+                  youtubeId: currentVideoId,
+                  error: lastErrorMessage,
+                  url: null // Will be populated later from urlsToProcess
+                });
+                logger.info({ youtubeId: currentVideoId, error: lastErrorMessage }, 'Recorded video failure from stderr');
+              }
+            });
         }
 
         // Check for bot detection message (handle different quote types and patterns)
@@ -1042,6 +1101,19 @@ class DownloadExecutor {
 
         logger.info({ jobType, jobId }, 'Job complete (with or without errors)');
 
+        // yt-dlp exited with code 1 only because every error it emitted was an
+        // expected skip (members-only, upcoming live, premiere, etc.). Treat
+        // these as a clean completion rather than a failure. unexpectedErrorCount
+        // catches real ERRORs that miss failedVideosList because currentVideoId
+        // was null (covers both stdout and stderr). monitor.hasError on its own
+        // would only catch the stdout path.
+        const hasOnlyExpectedSkips = code === 1 &&
+          expectedSkipCount > 0 &&
+          failedVideosList.length === 0 &&
+          unexpectedErrorCount === 0 &&
+          !botDetected &&
+          !httpForbiddenDetected;
+
         let status = '';
         let output = '';
         let jobErrorCode;
@@ -1104,7 +1176,10 @@ class DownloadExecutor {
           let errorCode;
 
           // Provide more helpful error messages based on what we detected
-          if (httpForbiddenDetected) {
+          if (hasOnlyExpectedSkips) {
+            status = 'Complete';
+            output = `${videoCount} videos.`;
+          } else if (httpForbiddenDetected) {
             // Failed with 403 errors - likely authentication issue
             output = `${videoCount} videos. Error: YouTube returned HTTP 403 (Forbidden)`;
             notes = 'YouTube denied access (HTTP 403). Configure cookies in Settings to resolve this issue.';
@@ -1142,9 +1217,12 @@ class DownloadExecutor {
             );
           } else {
             await this.persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, failedVideosList);
-            const terminalStatus = hasPartialSuccess
-              ? 'Complete with Warnings'
-              : status;
+            let terminalStatus = status;
+            if (hasOnlyExpectedSkips) {
+              terminalStatus = 'Complete';
+            } else if (hasPartialSuccess) {
+              terminalStatus = 'Complete with Warnings';
+            }
             await jobModule.updateJob(jobId, {
               status: terminalStatus,
               endDate: Date.now(),
@@ -1228,9 +1306,10 @@ class DownloadExecutor {
         const hasNonFatalPartialSuccess = code === 1 && hasSuccesses;
 
         let finalState;
-        if (code === 0 || isWarningOnly || hasNonFatalPartialSuccess) {
-          // Exit code was successful, but check for partial failures
-          finalState = (hasFailures || code !== 0) ? 'warning' : 'complete';
+        if (code === 0 || hasOnlyExpectedSkips) {
+          finalState = hasFailures ? 'warning' : 'complete';
+        } else if (isWarningOnly || hasNonFatalPartialSuccess) {
+          finalState = 'warning';
         } else {
           finalState = 'error';
         }
@@ -1244,6 +1323,9 @@ class DownloadExecutor {
           hasFailures,
           hasSuccesses,
           hasNonFatalPartialSuccess,
+          expectedSkipCount,
+          unexpectedErrorCount,
+          hasOnlyExpectedSkips,
           successCount: videoData.length,
           failureCount: failedVideosList.length,
           finalState
