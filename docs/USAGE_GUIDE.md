@@ -353,10 +353,11 @@ Search YouTube from inside Youtarr and see which results you already have, which
 1. **Open Find on YouTube**
    - In the sidebar, expand **Videos** and click **Find on YouTube**
    - Enter a search query (up to 200 characters)
-   - Pick a result count (10, 25, or 50) and click Search
+   - Pick a result count (10, 25, 50, or 100), optionally choose a minimum duration, and click Search
 
 2. **Results**
    - Sorted newest-to-oldest by YouTube's approximate publish date (accurate to within a day or two, same fidelity as the channel videos page)
+   - If a minimum duration is selected, shorter results are hidden in the browser and the page shows how many results were filtered out
    - Each card shows the channel, duration, upload date, and a status chip:
      - **Downloaded**: already in your library
      - **Missing**: previously downloaded but removed from disk

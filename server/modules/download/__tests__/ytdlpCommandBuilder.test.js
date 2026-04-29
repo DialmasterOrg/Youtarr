@@ -14,6 +14,8 @@ jest.mock('../tempPathManager', () => ({
   getTempBasePath: jest.fn()
 }));
 
+jest.mock('../../../logger', () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }));
+
 const YtdlpCommandBuilder = require('../ytdlpCommandBuilder');
 const configModule = require('../../configModule');
 const tempPathManager = require('../tempPathManager');
@@ -33,7 +35,10 @@ describe('YtdlpCommandBuilder', () => {
       sponsorblockEnabled: false,
       sponsorblockCategories: {},
       sponsorblockAction: null,
-      sponsorblockApiUrl: null
+      sponsorblockApiUrl: null,
+      ytdlpIpFamily: 'ipv4',
+      ytdlpDownloadRateLimit: '',
+      ytdlpCustomArgs: ''
     };
 
     configModule.getConfig.mockReturnValue(mockConfig);
@@ -1045,6 +1050,177 @@ describe('YtdlpCommandBuilder', () => {
 
       expect(result).toContain('45');
       expect(result).toContain('3');
+    });
+  });
+
+  describe('buildCommonArgs — IP family', () => {
+    test('adds -4 when ytdlpIpFamily is "ipv4"', () => {
+      configModule.getConfig.mockReturnValue({ ...mockConfig, ytdlpIpFamily: 'ipv4' });
+      const args = YtdlpCommandBuilder.buildCommonArgs(configModule.getConfig());
+      expect(args).toContain('-4');
+      expect(args).not.toContain('-6');
+    });
+
+    test('adds -6 when ytdlpIpFamily is "ipv6"', () => {
+      configModule.getConfig.mockReturnValue({ ...mockConfig, ytdlpIpFamily: 'ipv6' });
+      const args = YtdlpCommandBuilder.buildCommonArgs(configModule.getConfig());
+      expect(args).toContain('-6');
+      expect(args).not.toContain('-4');
+    });
+
+    test('adds neither -4 nor -6 when ytdlpIpFamily is "auto"', () => {
+      configModule.getConfig.mockReturnValue({ ...mockConfig, ytdlpIpFamily: 'auto' });
+      const args = YtdlpCommandBuilder.buildCommonArgs(configModule.getConfig());
+      expect(args).not.toContain('-4');
+      expect(args).not.toContain('-6');
+    });
+
+    test('defaults to -4 when ytdlpIpFamily is undefined (backwards compat)', () => {
+      const cfg = { ...mockConfig };
+      delete cfg.ytdlpIpFamily;
+      const args = YtdlpCommandBuilder.buildCommonArgs(cfg);
+      expect(args).toContain('-4');
+    });
+  });
+
+  describe('buildCommonArgs — download rate limit', () => {
+    test('appends --limit-rate when ytdlpDownloadRateLimit is set', () => {
+      configModule.getConfig.mockReturnValue({ ...mockConfig, ytdlpDownloadRateLimit: '5M' });
+      const args = YtdlpCommandBuilder.buildCommonArgs(configModule.getConfig());
+      const i = args.indexOf('--limit-rate');
+      expect(i).toBeGreaterThanOrEqual(0);
+      expect(args[i + 1]).toBe('5M');
+    });
+
+    test('omits --limit-rate when ytdlpDownloadRateLimit is empty', () => {
+      configModule.getConfig.mockReturnValue({ ...mockConfig, ytdlpDownloadRateLimit: '' });
+      const args = YtdlpCommandBuilder.buildCommonArgs(configModule.getConfig());
+      expect(args).not.toContain('--limit-rate');
+    });
+
+    test('omits --limit-rate when ytdlpDownloadRateLimit is undefined', () => {
+      const cfg = { ...mockConfig };
+      delete cfg.ytdlpDownloadRateLimit;
+      const args = YtdlpCommandBuilder.buildCommonArgs(cfg);
+      expect(args).not.toContain('--limit-rate');
+    });
+  });
+
+  describe('buildCommonArgs — custom args isolation', () => {
+    test('does NOT include custom args (they are appended by each builder, not by buildCommonArgs)', () => {
+      configModule.getConfig.mockReturnValue({
+        ...mockConfig,
+        ytdlpCustomArgs: '--concurrent-fragments 4',
+      });
+      const args = YtdlpCommandBuilder.buildCommonArgs(configModule.getConfig());
+      expect(args).not.toContain('--concurrent-fragments');
+    });
+  });
+
+  describe('buildCustomArgs', () => {
+    test('returns empty array when ytdlpCustomArgs is empty / unset', () => {
+      expect(YtdlpCommandBuilder.buildCustomArgs({ ytdlpCustomArgs: '' })).toEqual([]);
+      expect(YtdlpCommandBuilder.buildCustomArgs({})).toEqual([]);
+    });
+
+    test('returns tokenized args when valid', () => {
+      expect(
+        YtdlpCommandBuilder.buildCustomArgs({ ytdlpCustomArgs: '--concurrent-fragments 4' })
+      ).toEqual(['--concurrent-fragments', '4']);
+    });
+
+    test('silently drops a denylisted flag and logs a warning', () => {
+      const logger = require('../../../logger');
+      const warnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => {});
+      const result = YtdlpCommandBuilder.buildCustomArgs({ ytdlpCustomArgs: '--exec rm' });
+      expect(result).toEqual([]);
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    test('silently drops args with unterminated quote and logs a warning', () => {
+      const logger = require('../../../logger');
+      const warnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => {});
+      const result = YtdlpCommandBuilder.buildCustomArgs({
+        ytdlpCustomArgs: '--user-agent \'unterminated',
+      });
+      expect(result).toEqual([]);
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    test('silently drops args that bypass the denylist via --flag=value form', () => {
+      const logger = require('../../../logger');
+      const warnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => {});
+      const result = YtdlpCommandBuilder.buildCustomArgs({
+        ytdlpCustomArgs: '--exec=evil',
+      });
+      expect(result).toEqual([]);
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+  });
+
+  describe('custom args ordering — yt-dlp last-wins', () => {
+    test('getBaseCommandArgs appends custom args AFTER managed --retries so user override wins', () => {
+      mockConfig.downloadRetryCount = 2;
+      mockConfig.ytdlpCustomArgs = '--retries 5';
+      const args = YtdlpCommandBuilder.getBaseCommandArgs();
+
+      // Both --retries should appear; the user's value must be the LAST one
+      const retriesIndices = args.reduce((acc, a, i) => (a === '--retries' ? [...acc, i] : acc), []);
+      expect(retriesIndices.length).toBe(2);
+      const lastRetriesIdx = retriesIndices[retriesIndices.length - 1];
+      expect(args[lastRetriesIdx + 1]).toBe('5');
+    });
+
+    test('getBaseCommandArgs appends custom args AFTER managed --fragment-retries so user override wins', () => {
+      mockConfig.downloadRetryCount = 2;
+      mockConfig.ytdlpCustomArgs = '--fragment-retries 10';
+      const args = YtdlpCommandBuilder.getBaseCommandArgs();
+
+      const idxs = args.reduce((acc, a, i) => (a === '--fragment-retries' ? [...acc, i] : acc), []);
+      expect(idxs.length).toBe(2);
+      expect(args[idxs[idxs.length - 1] + 1]).toBe('10');
+    });
+
+    test('getBaseCommandArgsForManualDownload appends custom args AFTER managed --retries', () => {
+      mockConfig.downloadRetryCount = 2;
+      mockConfig.ytdlpCustomArgs = '--retries 7';
+      const args = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload();
+
+      const idxs = args.reduce((acc, a, i) => (a === '--retries' ? [...acc, i] : acc), []);
+      expect(idxs.length).toBe(2);
+      expect(args[idxs[idxs.length - 1] + 1]).toBe('7');
+    });
+
+    test('getBaseCommandArgs ends with custom args (last tokens in array)', () => {
+      mockConfig.ytdlpCustomArgs = '--concurrent-fragments 4';
+      const args = YtdlpCommandBuilder.getBaseCommandArgs();
+      expect(args.slice(-2)).toEqual(['--concurrent-fragments', '4']);
+    });
+
+    test('buildSearchArgs places custom args before the search operand', () => {
+      mockConfig.ytdlpCustomArgs = '--concurrent-fragments 4';
+      const args = YtdlpCommandBuilder.buildSearchArgs('test', 5);
+      // Last token must still be the search operand
+      expect(args[args.length - 1]).toBe('ytsearch5:test');
+      // Custom args must appear, and immediately before the operand
+      expect(args.slice(-3, -1)).toEqual(['--concurrent-fragments', '4']);
+    });
+
+    test('buildThumbnailDownloadArgs places custom args before the URL operand', () => {
+      mockConfig.ytdlpCustomArgs = '--concurrent-fragments 4';
+      const args = YtdlpCommandBuilder.buildThumbnailDownloadArgs('https://x/y', '/tmp/out');
+      expect(args[args.length - 1]).toBe('https://x/y');
+      expect(args.slice(-3, -1)).toEqual(['--concurrent-fragments', '4']);
+    });
+
+    test('buildMetadataFetchArgs places custom args before the URL operand', () => {
+      mockConfig.ytdlpCustomArgs = '--concurrent-fragments 4';
+      const args = YtdlpCommandBuilder.buildMetadataFetchArgs('https://x/y');
+      expect(args[args.length - 1]).toBe('https://x/y');
+      expect(args.slice(-3, -1)).toEqual(['--concurrent-fragments', '4']);
     });
   });
 });

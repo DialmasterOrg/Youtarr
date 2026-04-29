@@ -48,6 +48,35 @@ function buildTitle(totalDownloaded) {
 }
 
 /**
+ * Get failed download count from a final summary.
+ * @param {Object} finalSummary - Summary object from downloadExecutor
+ * @returns {number} Number of failed videos
+ */
+function getFailedCount(finalSummary = {}) {
+  return finalSummary.totalFailed || finalSummary.failedVideos?.length || 0;
+}
+
+/**
+ * Build a concise failed download label.
+ * @param {number} count - Number of failed videos
+ * @returns {string} Human-readable failed count
+ */
+function buildFailedCountLabel(count) {
+  return `${count} ${count === 1 ? 'video' : 'videos'} failed`;
+}
+
+/**
+ * Format a failed video for notification bodies.
+ * @param {Object} failedVideo - Failed video metadata
+ * @returns {string} Human-readable failure line
+ */
+function formatFailedVideoLine(failedVideo = {}) {
+  const label = failedVideo.channel || failedVideo.title || failedVideo.youtubeId || failedVideo.url || 'Unknown video';
+  const error = failedVideo.error || 'Unknown error';
+  return `${label}: ${error}`;
+}
+
+/**
  * Get subtitle based on job type
  * @param {string} jobType - The job type string
  * @returns {string} Subtitle string
@@ -130,9 +159,11 @@ module.exports = {
   escapeHtml,
   formatDuration,
   buildTitle,
+  getFailedCount,
+  buildFailedCountLabel,
+  formatFailedVideoLine,
   getSubtitle,
   buildAutoRemovalTitle,
   formatBytes,
   groupVideosByChannel
 };
-

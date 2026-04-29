@@ -73,6 +73,7 @@ const createPlatformManagedState = (
   plexUrl: false,
   authEnabled: false,
   useTmpForDownloads: false,
+  ytdlpUpdates: false,
   ...overrides,
 });
 
@@ -1049,6 +1050,191 @@ describe('CoreSettingsSection Component', () => {
       await screen.findByText('No tracked channels are currently using Default Subfolder.');
 
       consoleSpy.mockRestore();
+    });
+  });
+
+  describe('yt-dlp Auto-Update Toggle', () => {
+    const ytDlpVersionInfo = {
+      currentVersion: '2026.04.10',
+      latestVersion: '2026.04.10',
+      updateAvailable: false,
+    };
+
+    test('does not render auto-update toggle when no yt-dlp version is available', () => {
+      const props = createSectionProps();
+      renderWithProviders(<CoreSettingsSection {...props} />);
+      expect(
+        screen.queryByRole('checkbox', { name: /Automatically update yt-dlp nightly/i })
+      ).not.toBeInTheDocument();
+    });
+
+    test('renders auto-update toggle when yt-dlp version info is provided', () => {
+      const props = createSectionProps({ ytDlpVersionInfo });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+      expect(
+        screen.getByRole('checkbox', { name: /Automatically update yt-dlp nightly/i })
+      ).toBeInTheDocument();
+    });
+
+    test('toggle reflects autoUpdateYtdlp false', () => {
+      const props = createSectionProps({
+        config: createConfig({ autoUpdateYtdlp: false }),
+        ytDlpVersionInfo,
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+      const toggle = screen.getByRole('checkbox', { name: /Automatically update yt-dlp nightly/i });
+      expect(toggle).not.toBeChecked();
+    });
+
+    test('toggle reflects autoUpdateYtdlp true', () => {
+      const props = createSectionProps({
+        config: createConfig({ autoUpdateYtdlp: true }),
+        ytDlpVersionInfo,
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+      const toggle = screen.getByRole('checkbox', { name: /Automatically update yt-dlp nightly/i });
+      expect(toggle).toBeChecked();
+    });
+
+    test('calls onConfigChange when toggled', async () => {
+      const user = userEvent.setup();
+      const onConfigChange = jest.fn();
+      const props = createSectionProps({
+        config: createConfig({ autoUpdateYtdlp: false }),
+        onConfigChange,
+        ytDlpVersionInfo,
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+
+      const toggle = screen.getByRole('checkbox', { name: /Automatically update yt-dlp nightly/i });
+      await user.click(toggle);
+
+      expect(onConfigChange).toHaveBeenCalledWith({ autoUpdateYtdlp: true });
+    });
+
+    test('does not render the status caption when no checks have run yet', () => {
+      const props = createSectionProps({ ytDlpVersionInfo });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+      expect(screen.queryByText(/Last checked:/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Last updated:/i)).not.toBeInTheDocument();
+    });
+
+    test('renders "already up to date" caption after a successful no-op check', () => {
+      const props = createSectionProps({
+        config: createConfig({
+          ytdlpLastChecked: '2026-04-25T04:00:00.000Z',
+          ytdlpLastResult: { status: 'up-to-date' },
+        }),
+        ytDlpVersionInfo,
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+      expect(screen.getByText(/Last checked:.*already up to date/i)).toBeInTheDocument();
+    });
+
+    test('renders "updated to <version>" caption and the last updated timestamp on a real update', () => {
+      const props = createSectionProps({
+        config: createConfig({
+          ytdlpLastChecked: '2026-04-25T04:00:00.000Z',
+          ytdlpLastUpdated: '2026-04-25T04:00:00.000Z',
+          ytdlpLastResult: { status: 'updated', version: '2026.04.20' },
+        }),
+        ytDlpVersionInfo,
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+      expect(screen.getByText(/updated to 2026\.04\.20/i)).toBeInTheDocument();
+      expect(screen.getByText(/Last updated:/i)).toBeInTheDocument();
+    });
+
+    test('renders "skipped" caption when an auto-update was skipped', () => {
+      const props = createSectionProps({
+        config: createConfig({
+          ytdlpLastChecked: '2026-04-25T04:00:00.000Z',
+          ytdlpLastResult: { status: 'skipped', message: 'Cannot update while downloads are in progress.' },
+        }),
+        ytDlpVersionInfo,
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+      expect(
+        screen.getByText(/skipped:.*downloads are in progress/i)
+      ).toBeInTheDocument();
+    });
+
+    test('renders "update failed" caption with message on error', () => {
+      const props = createSectionProps({
+        config: createConfig({
+          ytdlpLastChecked: '2026-04-25T04:00:00.000Z',
+          ytdlpLastResult: { status: 'error', message: 'Permission denied' },
+        }),
+        ytDlpVersionInfo,
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+      expect(screen.getByText(/update failed: Permission denied/i)).toBeInTheDocument();
+    });
+  });
+
+  describe('yt-dlp Section on Platform-Managed Deployments', () => {
+    const ytDlpVersionInfo = {
+      currentVersion: '2026.04.10',
+      latestVersion: '2026.04.20',
+      updateAvailable: true,
+    };
+
+    test('hides the manual Update button when yt-dlp is platform-managed', () => {
+      const props = createSectionProps({
+        ytDlpVersionInfo,
+        isPlatformManaged: createPlatformManagedState({ ytdlpUpdates: true }),
+        deploymentEnvironment: createDeploymentEnvironment({ platform: 'elfhosted' }),
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+      expect(screen.queryByRole('button', { name: /^Update$/i })).not.toBeInTheDocument();
+    });
+
+    test('hides the auto-update toggle when yt-dlp is platform-managed', () => {
+      const props = createSectionProps({
+        ytDlpVersionInfo,
+        isPlatformManaged: createPlatformManagedState({ ytdlpUpdates: true }),
+        deploymentEnvironment: createDeploymentEnvironment({ platform: 'elfhosted' }),
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+      expect(
+        screen.queryByRole('checkbox', { name: /Automatically update yt-dlp nightly/i })
+      ).not.toBeInTheDocument();
+    });
+
+    test('shows the Elfhosted-specific managed message and chip', () => {
+      const props = createSectionProps({
+        ytDlpVersionInfo,
+        isPlatformManaged: createPlatformManagedState({ ytdlpUpdates: true }),
+        deploymentEnvironment: createDeploymentEnvironment({ platform: 'elfhosted' }),
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+      expect(screen.getByText('Managed by Elfhosted')).toBeInTheDocument();
+      expect(
+        screen.getByText(/yt-dlp is managed by Elfhosted and cannot be updated from Youtarr/i)
+      ).toBeInTheDocument();
+    });
+
+    test('shows a generic platform-managed message when platform is not Elfhosted', () => {
+      const props = createSectionProps({
+        ytDlpVersionInfo,
+        isPlatformManaged: createPlatformManagedState({ ytdlpUpdates: true }),
+        deploymentEnvironment: createDeploymentEnvironment({ platform: null }),
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+      expect(screen.getByText('Platform Managed')).toBeInTheDocument();
+      expect(
+        screen.getByText(/yt-dlp is managed by the platform and cannot be updated from Youtarr/i)
+      ).toBeInTheDocument();
+    });
+
+    test('still shows the current yt-dlp version when platform-managed', () => {
+      const props = createSectionProps({
+        ytDlpVersionInfo,
+        isPlatformManaged: createPlatformManagedState({ ytdlpUpdates: true }),
+        deploymentEnvironment: createDeploymentEnvironment({ platform: 'elfhosted' }),
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+      expect(screen.getByText('2026.04.10')).toBeInTheDocument();
     });
   });
 });

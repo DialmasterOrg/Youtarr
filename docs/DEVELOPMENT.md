@@ -775,3 +775,9 @@ app.use((req, res, next) => {
 ### Frontend Profiling
 
 Use React DevTools Profiler to identify performance bottlenecks.
+
+## Platform-Specific Development
+
+When working on changes that interact with platform-managed deployments, see the dedicated developer guides:
+
+- [Elfhosted](development/ELFHOSTED.md) - environment variables, behavior switches, and how to spoof an Elfhosted deployment locally for testing.

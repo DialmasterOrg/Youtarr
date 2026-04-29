@@ -43,6 +43,8 @@ const pinoConfig = {
       'plexAuthToken',
       'session_token',
       'plexApiKey',
+      'youtubeApiKey',
+      'req.body.apiKey',
       'req.headers.authorization',
       'req.headers["x-access-token"]',
       'req.headers["x-api-key"]',

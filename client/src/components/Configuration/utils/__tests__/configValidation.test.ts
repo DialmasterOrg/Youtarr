@@ -67,4 +67,22 @@ describe('validateConfig', () => {
 
     expect(validateConfig(config)).toBeNull();
   });
+
+  test.each(['', '5M', '500K', '1.5G', '1500'])(
+    'accepts valid ytdlpDownloadRateLimit %s',
+    (value) => {
+      const config = createConfig({ ytdlpDownloadRateLimit: value });
+      expect(validateConfig(config)).toBeNull();
+    }
+  );
+
+  test.each(['5MB', '5 M', 'fast', '5.M'])(
+    'rejects invalid ytdlpDownloadRateLimit %s with a Cannot save error',
+    (value) => {
+      const config = createConfig({ ytdlpDownloadRateLimit: value });
+      const result = validateConfig(config);
+      expect(result).not.toBeNull();
+      expect(result).toMatch(/Cannot save:.*Invalid rate format/);
+    }
+  );
 });

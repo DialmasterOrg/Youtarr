@@ -37,7 +37,7 @@ On first launch, Youtarr requires authentication setup from `localhost` for secu
    ```
 
 2. Complete the setup wizard:
-   - Enter desired username (3-32 characters)
+   - Enter desired username (1-32 characters)
    - Enter password (8-64 characters)
    - Confirm password
 
@@ -51,7 +51,7 @@ For remote or automated deployments:
 
 1. Add to `.env` file:
    ```bash
-   AUTH_PRESET_USERNAME=admin                 # Min 3 characters
+   AUTH_PRESET_USERNAME=admin                 # Min 1 character
    AUTH_PRESET_PASSWORD=your-secure-password  # Min 8 characters
    ```
 

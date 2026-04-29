@@ -15,6 +15,7 @@ export const SETTINGS_PAGES = [
   { key: 'plex', title: 'Plex', description: 'Plex integration and library configuration.' },
   { key: 'security', title: 'Account Security', description: 'Authentication and password management.' },
   { key: 'sponsorblock', title: 'SponsorBlock', description: 'Skip segments and SponsorBlock settings.' },
+  { key: 'youtube-api', title: 'YouTube API', description: 'Optional YouTube Data API v3 key for faster metadata fetches.' },
 ];
 
 export function SettingsIndex() {

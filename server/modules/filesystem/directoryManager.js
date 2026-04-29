@@ -7,8 +7,22 @@ const fs = require('fs-extra');
 const fsPromises = require('fs').promises;
 const path = require('path');
 const logger = require('../../logger');
-const { YOUTUBE_ID_PATTERN, SUBFOLDER_PREFIX, MAIN_VIDEO_FILE_PATTERN, FRAGMENT_FILE_PATTERN, CHANNEL_CLEANUP_IGNORABLE_FILES } = require('./constants');
+const { YOUTUBE_ID_PATTERN, SUBFOLDER_PREFIX, MAIN_VIDEO_FILE_PATTERN, FRAGMENT_FILE_PATTERN, CHANNEL_CLEANUP_IGNORABLE_FILES, APPLEDOUBLE_FILE_PATTERN } = require('./constants');
 const { sleep } = require('./fileOperations');
+
+/**
+ * Decide whether a directory entry can be ignored when judging emptiness or
+ * sweeping junk before rmdir. Covers both the explicit ignore list (poster.jpg,
+ * .DS_Store, etc.) and AppleDouble sidecar files written by macOS SMB clients.
+ *
+ * @param {string} entryName - Bare file name (no path)
+ * @returns {boolean}
+ */
+function isIgnorableEntry(entryName) {
+  if (!entryName) return false;
+  if (APPLEDOUBLE_FILE_PATTERN.test(entryName)) return true;
+  return CHANNEL_CLEANUP_IGNORABLE_FILES.includes(entryName.toLowerCase());
+}
 
 /**
  * Ensure a directory exists, creating it if necessary
@@ -84,9 +98,7 @@ async function isDirectoryEffectivelyEmpty(dirPath) {
   try {
     const entries = await fsPromises.readdir(dirPath);
     if (entries.length === 0) return true;
-    return entries.every(entry =>
-      CHANNEL_CLEANUP_IGNORABLE_FILES.includes(entry.toLowerCase())
-    );
+    return entries.every(isIgnorableEntry);
   } catch (error) {
     logger.debug({ err: error, dirPath }, 'Cannot read directory (may not exist)');
     return false;
@@ -237,10 +249,13 @@ async function cleanupEmptyChannelDirectory(channelDir, baseDir, options = {}) {
       return false;
     }
 
-    // When includeIgnorableFiles is true, delete ignorable files before rmdir
+    // When includeIgnorableFiles is true, delete ignorable files before rmdir.
+    // Filter the second readdir explicitly via isIgnorableEntry so a real video
+    // file appearing between the emptiness check and this read isn't deleted.
     if (includeIgnorableFiles) {
       const entries = await fsPromises.readdir(channelDir);
       for (const entry of entries) {
+        if (!isIgnorableEntry(entry)) continue;
         const filePath = path.join(channelDir, entry);
         try {
           await fsPromises.unlink(filePath);
@@ -261,6 +276,66 @@ async function cleanupEmptyChannelDirectory(channelDir, baseDir, options = {}) {
     logger.error({ err: error, channelDir }, 'Error cleaning up empty channel directory');
     // Don't throw - this is a best-effort cleanup
     return false;
+  }
+}
+
+/**
+ * Recursively remove a directory and its contents, with resilience for
+ * macOS SMB shares that race-create AppleDouble (._*) sidecar files.
+ *
+ * Strategy: try fs.rm with recursive+force. If rmdir fails with ENOTEMPTY
+ * because junk reappeared after the recursive walk, sweep ignorable entries
+ * (AppleDouble + the standard ignore list) and retry with backoff.
+ *
+ * Behavior:
+ * - ENOENT (already gone): resolves cleanly.
+ * - ENOTEMPTY: sweep ignorable entries, retry up to `retries` times.
+ * - Other errors (EACCES, EPERM, etc.): rejects immediately, no retry.
+ *
+ * @param {string} dirPath - Directory to remove
+ * @param {Object} [options]
+ * @param {number} [options.retries=3] - Number of retry attempts after the initial try
+ * @param {number} [options.delayMs=150] - Base delay in ms; doubles each retry
+ * @returns {Promise<void>}
+ */
+async function removeDirectoryResilient(dirPath, { retries = 3, delayMs = 150 } = {}) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      await fsPromises.rm(dirPath, { recursive: true, force: true });
+      return;
+    } catch (err) {
+      if (err.code === 'ENOENT') {
+        return;
+      }
+      if (err.code !== 'ENOTEMPTY' || attempt === retries) {
+        throw err;
+      }
+
+      // ENOTEMPTY: sweep junk that appeared after the recursive walk, then retry.
+      // The directory may also have disappeared by now, so tolerate ENOENT here.
+      try {
+        const entries = await fsPromises.readdir(dirPath);
+        for (const entry of entries) {
+          if (!isIgnorableEntry(entry)) continue;
+          try {
+            await fsPromises.unlink(path.join(dirPath, entry));
+          } catch (unlinkErr) {
+            if (unlinkErr.code !== 'ENOENT') {
+              logger.debug({ err: unlinkErr, dirPath, entry }, 'Failed to sweep ignorable entry before rmdir retry');
+            }
+          }
+        }
+      } catch (readErr) {
+        if (readErr.code === 'ENOENT') {
+          return;
+        }
+        throw readErr;
+      }
+
+      const backoff = delayMs * Math.pow(2, attempt);
+      logger.debug({ dirPath, attempt, backoff }, 'rmdir hit ENOTEMPTY, swept ignorable entries, retrying after backoff');
+      await sleep(backoff);
+    }
   }
 }
 
@@ -354,6 +429,8 @@ module.exports = {
   isSubfolderDir,
   cleanupEmptyChannelDirectory,
   cleanupEmptyParents,
+  removeDirectoryResilient,
+  isIgnorableEntry,
   listDirectory,
   listSubdirectories,
   isMainVideoFile

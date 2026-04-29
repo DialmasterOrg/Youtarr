@@ -71,6 +71,7 @@ export interface PlatformManagedState {
   plexUrl: boolean;
   authEnabled: boolean;
   useTmpForDownloads: boolean;
+  ytdlpUpdates: boolean;
 }
 
 export interface DeploymentEnvironment {
@@ -91,3 +92,20 @@ export interface SnackbarState {
 }
 
 export type PlexConnectionStatus = 'connected' | 'not_connected' | 'not_tested' | 'testing';
+
+export type YouTubeApiKeyStatus =
+  | 'not_tested'
+  | 'testing'
+  | 'valid'
+  | 'invalid'
+  | 'quota_exhausted'
+  | 'rate_limited'
+  | 'api_not_enabled'
+  | 'key_restricted'
+  | 'network_error';
+
+export interface YouTubeApiKeyTestResult {
+  ok: boolean;
+  code?: string;
+  reason?: string;
+}

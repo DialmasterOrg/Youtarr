@@ -2,7 +2,18 @@
  * HTML email notification formatter
  */
 
-const { escapeHtml, formatDuration, buildTitle, getSubtitle, buildAutoRemovalTitle, formatBytes, groupVideosByChannel } = require('../utils');
+const {
+  escapeHtml,
+  formatDuration,
+  buildTitle,
+  getFailedCount,
+  buildFailedCountLabel,
+  formatFailedVideoLine,
+  getSubtitle,
+  buildAutoRemovalTitle,
+  formatBytes,
+  groupVideosByChannel
+} = require('../utils');
 
 const DEFAULT_HEADER_GRADIENT = 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)';
 const AUTO_REMOVAL_HEADER_GRADIENT = 'linear-gradient(135deg, #f57c00 0%, #e65100 100%)';
@@ -25,6 +36,8 @@ function getStyles({ headerGradient = DEFAULT_HEADER_GRADIENT } = {}) {
     .channel-name { font-weight: 600; color: #333; margin-bottom: 4px; }
     .video-title { color: #555; margin-bottom: 4px; }
     .duration { color: #888; font-size: 13px; }
+    .warning-card { background: #fff8e1; border-radius: 6px; padding: 16px; margin-bottom: 16px; border-left: 4px solid #f57c00; color: #5d4037; }
+    .warning-card ul { margin: 8px 0 0; padding-left: 20px; }
     .footer { padding: 16px 24px; background: #f8f9fa; text-align: center; color: #888; font-size: 12px; }
     .more-videos { color: #666; font-style: italic; padding: 12px 0; }
   `;
@@ -69,11 +82,29 @@ function buildEmailHtml(title, subtitle, content) {
  */
 function formatDownloadMessage(finalSummary, videoData) {
   const { totalDownloaded, jobType } = finalSummary;
+  const failedCount = getFailedCount(finalSummary);
 
   const title = buildTitle(totalDownloaded);
   const subtitle = getSubtitle(jobType);
 
   let content = '';
+
+  if (failedCount > 0) {
+    const failedVideosToShow = (finalSummary.failedVideos || []).slice(0, 5);
+    const failedItems = failedVideosToShow.map(failedVideo =>
+      `<li>${escapeHtml(formatFailedVideoLine(failedVideo))}</li>`
+    ).join('');
+    const moreFailures = failedCount > failedVideosToShow.length
+      ? `<p class="more-videos">...and ${failedCount - failedVideosToShow.length} more failed</p>`
+      : '';
+
+    content += `
+      <div class="warning-card">
+        <strong>⚠️ ${escapeHtml(buildFailedCountLabel(failedCount))}.</strong>
+        ${failedItems ? `<ul>${failedItems}</ul>` : '<p>See Youtarr download history for details.</p>'}
+        ${moreFailures}
+      </div>`;
+  }
 
   if (videoData && videoData.length > 0) {
     const videosToShow = videoData.slice(0, 10);
@@ -216,4 +247,3 @@ module.exports = {
   formatTestMessage,
   formatAutoRemovalMessage
 };
-

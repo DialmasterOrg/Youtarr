@@ -363,6 +363,11 @@ const createServerModule = ({
         jest.doMock('../modules/notificationModule', () => ({
           sendTestNotification: jest.fn().mockResolvedValue({ success: true })
         }));
+        jest.doMock('../modules/ytdlpModule', () => ({
+          getLatestVersion: jest.fn().mockResolvedValue('2026.04.20'),
+          isUpdateAvailable: jest.fn(() => false),
+          performUpdate: jest.fn().mockResolvedValue({ success: true, reason: 'up-to-date', message: 'yt-dlp is already up to date' })
+        }));
         jest.doMock('../models/channelvideo', () => ({
           update: jest.fn().mockResolvedValue([1])
         }));
@@ -618,6 +623,36 @@ describe('server routes - configuration', () => {
       expect(res.body.isPlatformManaged).toBeDefined();
       expect(res.body.isPlatformManaged.useTmpForDownloads).toBe(true);
     });
+
+    test('includes ytdlpUpdates in isPlatformManaged when not elfhosted', async () => {
+      const { app, configModuleMock } = await createServerModule();
+      configModuleMock.isElfhostedPlatform.mockReturnValue(false);
+
+      const handlers = findRouteHandlers(app, 'get', '/getconfig');
+      const getConfigHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({ username: 'tester' });
+      const res = createMockResponse();
+
+      await getConfigHandler(req, res);
+
+      expect(res.body.isPlatformManaged.ytdlpUpdates).toBe(false);
+    });
+
+    test('includes ytdlpUpdates in isPlatformManaged when elfhosted', async () => {
+      const { app, configModuleMock } = await createServerModule();
+      configModuleMock.isElfhostedPlatform.mockReturnValue(true);
+
+      const handlers = findRouteHandlers(app, 'get', '/getconfig');
+      const getConfigHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({ username: 'tester' });
+      const res = createMockResponse();
+
+      await getConfigHandler(req, res);
+
+      expect(res.body.isPlatformManaged.ytdlpUpdates).toBe(true);
+    });
   });
 
   describe('POST /updateconfig', () => {
@@ -687,6 +722,38 @@ describe('server routes - configuration', () => {
       // The route preserves existing passwordHash and username
       expect(updateCall.passwordHash).toBe('hashed-password');
       expect(updateCall.username).toBe('tester');
+    });
+
+    test('preserves server-managed yt-dlp auto-update status fields', async () => {
+      const { app, configModuleMock } = await createServerModule({
+        configOverrides: {
+          ytdlpLastChecked: '2026-04-26T04:00:00.000Z',
+          ytdlpLastUpdated: '2026-04-26T04:00:00.000Z',
+          ytdlpLastResult: { status: 'updated', version: '2026.04.26' }
+        }
+      });
+
+      const handlers = findRouteHandlers(app, 'post', '/updateconfig');
+      const updateConfigHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: {
+          plexApiKey: 'new-key',
+          ytdlpLastChecked: '2026-04-25T04:00:00.000Z',
+          ytdlpLastUpdated: null,
+          ytdlpLastResult: { status: 'error', message: 'stale client state' }
+        }
+      });
+      const res = createMockResponse();
+
+      await updateConfigHandler(req, res);
+
+      expect(configModuleMock.updateConfig).toHaveBeenCalled();
+      const updateCall = configModuleMock.updateConfig.mock.calls[0][0];
+      expect(updateCall.plexApiKey).toBe('new-key');
+      expect(updateCall.ytdlpLastChecked).toBe('2026-04-26T04:00:00.000Z');
+      expect(updateCall.ytdlpLastUpdated).toBe('2026-04-26T04:00:00.000Z');
+      expect(updateCall.ytdlpLastResult).toEqual({ status: 'updated', version: '2026.04.26' });
     });
   });
 });
@@ -1930,5 +1997,40 @@ describe('server routes - version', () => {
     expect(res.body.version).not.toMatch(/^dev/);
     // Should not return 'latest' tag
     expect(res.body.version).not.toBe('latest');
+  });
+});
+
+describe('server routes - yt-dlp update', () => {
+  test('POST /api/ytdlp/update returns 403 when on Elfhosted', async () => {
+    const { app, configModuleMock } = await createServerModule();
+    configModuleMock.isElfhostedPlatform.mockReturnValue(true);
+
+    const handlers = findRouteHandlers(app, 'post', '/api/ytdlp/update');
+    const updateHandler = handlers[handlers.length - 1];
+
+    const req = createMockRequest({ username: 'tester' });
+    const res = createMockResponse();
+
+    await updateHandler(req, res);
+
+    expect(res.statusCode).toBe(403);
+    expect(res.body.success).toBe(false);
+    expect(res.body.message).toMatch(/managed by the platform/i);
+  });
+
+  test('POST /api/ytdlp/update proceeds when not on Elfhosted', async () => {
+    const { app, configModuleMock } = await createServerModule();
+    configModuleMock.isElfhostedPlatform.mockReturnValue(false);
+
+    const handlers = findRouteHandlers(app, 'post', '/api/ytdlp/update');
+    const updateHandler = handlers[handlers.length - 1];
+
+    const req = createMockRequest({ username: 'tester' });
+    const res = createMockResponse();
+
+    await updateHandler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
   });
 });

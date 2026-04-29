@@ -2,7 +2,18 @@
  * Telegram HTML notification formatter
  */
 
-const { escapeHtml, formatDuration, buildTitle, getSubtitle, buildAutoRemovalTitle, formatBytes, groupVideosByChannel } = require('../utils');
+const {
+  escapeHtml,
+  formatDuration,
+  buildTitle,
+  getFailedCount,
+  buildFailedCountLabel,
+  formatFailedVideoLine,
+  getSubtitle,
+  buildAutoRemovalTitle,
+  formatBytes,
+  groupVideosByChannel
+} = require('../utils');
 
 /**
  * Format download notification as Telegram HTML message
@@ -12,9 +23,22 @@ const { escapeHtml, formatDuration, buildTitle, getSubtitle, buildAutoRemovalTit
  */
 function formatDownloadMessage(finalSummary, videoData) {
   const { totalDownloaded, jobType } = finalSummary;
+  const failedCount = getFailedCount(finalSummary);
 
   const title = buildTitle(totalDownloaded);
   let body = `<b>${getSubtitle(jobType)}:</b>\n\n`;
+
+  if (failedCount > 0) {
+    body += `⚠️ <b>${escapeHtml(buildFailedCountLabel(failedCount))}.</b>\n`;
+    const failedVideosToShow = (finalSummary.failedVideos || []).slice(0, 5);
+    failedVideosToShow.forEach(failedVideo => {
+      body += `• ${escapeHtml(formatFailedVideoLine(failedVideo))}\n`;
+    });
+    if (failedCount > failedVideosToShow.length) {
+      body += `<i>...and ${failedCount - failedVideosToShow.length} more failed</i>\n`;
+    }
+    body += '\n';
+  }
 
   if (videoData && videoData.length > 0) {
     const videosToShow = videoData.slice(0, 10);
@@ -102,4 +126,3 @@ module.exports = {
   formatTestMessage,
   formatAutoRemovalMessage
 };
-
