@@ -13,18 +13,17 @@ const {
 // Reference video for key validation: a permanently public, well-known video.
 const TEST_VIDEO_ID = 'dQw4w9WgXcQ';
 
-// searchVideos filters client-side to approximate yt-dlp's ytsearch behavior,
-// which uses YouTube's "Videos" result filter and excludes Shorts/live streams.
-// The Data API has no equivalent query-side filter, so:
-//   - We always request the API's max page size (cost is flat at 100 units
-//     regardless of maxResults), giving headroom to drop Shorts/live and still
-//     satisfy the caller's requested count.
-//   - Live/upcoming broadcasts are identified by snippet.liveBroadcastContent
-//     on the raw search response, so this filter applies even if enrichment fails.
-//   - Shorts are identified by duration strictly under 60s. Past-livestreams
-//     return 'none' in liveBroadcastContent and will pass through.
+// search.list caps maxResults at 50 per page. To support caller counts above 50
+// (or simply to fill a 50 result page after server-side filters drop a few),
+// we paginate via nextPageToken. Each page costs 100 quota units flat regardless
+// of maxResults, so we always request the max page size.
+//
+// We do NOT filter Shorts server-side; the frontend exposes a user-controlled
+// minimum-duration filter so users can opt into long-form-only when they want
+// it. Live/upcoming broadcasts are still dropped here because they have no
+// playable file and would surface a useless result card.
 const SEARCH_LIST_MAX_RESULTS = 50;
-const SEARCH_MIN_DURATION_SECONDS = 60;
+const SEARCH_LIST_EXTRA_PAGE_BUFFER = 1;
 
 // Per-tab auto-generated playlist prefixes. UU is all uploads combined;
 // UULF/UUSH/UULV are the same content partitioned by media type and correspond
@@ -250,73 +249,80 @@ async function getChannelInfo(apiKey, channelUrl, { signal } = {}) {
 }
 
 async function searchVideos(apiKey, query, maxResults, { signal } = {}) {
-  const data = await apiGet(
-    apiKey,
-    ENDPOINTS.search,
-    {
+  const baseResults = [];
+  // YouTube's search.list can return the same videoId across pages when
+  // paginated, so we dedupe defensively to avoid showing the same card twice.
+  const seenIds = new Set();
+  let pageToken;
+  let pagesFetched = 0;
+  const maxPages = Math.ceil(maxResults / SEARCH_LIST_MAX_RESULTS) + SEARCH_LIST_EXTRA_PAGE_BUFFER;
+
+  while (baseResults.length < maxResults && pagesFetched < maxPages) {
+    const params = {
       q: query,
       type: 'video',
       part: 'snippet',
       maxResults: SEARCH_LIST_MAX_RESULTS,
-    },
-    { signal }
-  );
+    };
+    if (pageToken) params.pageToken = pageToken;
 
-  if (!Array.isArray(data.items)) return [];
+    // eslint-disable-next-line no-await-in-loop
+    const data = await apiGet(apiKey, ENDPOINTS.search, params, { signal });
+    pagesFetched += 1;
 
-  const baseResults = data.items
-    .filter((item) => item?.id?.kind === 'youtube#video' && item?.id?.videoId)
-    .filter((item) => {
-      const live = item?.snippet?.liveBroadcastContent;
-      return live !== 'live' && live !== 'upcoming';
-    })
-    .map((item) => {
-      const snippet = item.snippet || {};
-      return {
-        youtubeId: item.id.videoId,
-        title: snippet.title || '',
-        channelId: snippet.channelId || null,
-        channelName: snippet.channelTitle || '',
-        publishedAt: snippet.publishedAt ? new Date(snippet.publishedAt).toISOString() : null,
-        thumbnailUrl: snippet.thumbnails?.high?.url
-          || snippet.thumbnails?.medium?.url
-          || snippet.thumbnails?.default?.url
-          || null,
-        duration: null,
-        viewCount: null,
-        status: 'never_downloaded',
-      };
-    });
+    if (Array.isArray(data.items)) {
+      for (const item of data.items) {
+        if (item?.id?.kind !== 'youtube#video' || !item?.id?.videoId) continue;
+        if (seenIds.has(item.id.videoId)) continue;
+        const live = item?.snippet?.liveBroadcastContent;
+        if (live === 'live' || live === 'upcoming') continue;
+        const snippet = item.snippet || {};
+        seenIds.add(item.id.videoId);
+        baseResults.push({
+          youtubeId: item.id.videoId,
+          title: snippet.title || '',
+          channelId: snippet.channelId || null,
+          channelName: snippet.channelTitle || '',
+          publishedAt: snippet.publishedAt ? new Date(snippet.publishedAt).toISOString() : null,
+          thumbnailUrl: snippet.thumbnails?.high?.url
+            || snippet.thumbnails?.medium?.url
+            || snippet.thumbnails?.default?.url
+            || null,
+          duration: null,
+          viewCount: null,
+          status: 'never_downloaded',
+        });
+      }
+    }
+
+    if (!data.nextPageToken) break;
+    pageToken = data.nextPageToken;
+  }
 
   if (baseResults.length === 0) return baseResults;
 
+  const trimmed = baseResults.slice(0, maxResults);
+
   // search.list returns snippet only - duration and view count are not in it.
   // A follow-up videos.list batch (1 unit per 50 IDs, vs the 100-unit search
-  // call above) fills them in so result cards and the VideoModal can render
-  // duration, and lets us drop Shorts by duration. If enrichment fails, fall
-  // back to the pre-enrichment results (which have already had live/upcoming
-  // filtered out) rather than failing the whole search.
+  // call above) fills them in so result cards can render duration. Batching
+  // happens inside getVideoMetadata. If enrichment fails, fall back to the
+  // pre-enrichment results rather than failing the whole search.
   try {
-    const videoIds = baseResults.map((r) => r.youtubeId);
+    const videoIds = trimmed.map((r) => r.youtubeId);
     const metadata = await getVideoMetadata(apiKey, videoIds, { signal });
     const byId = new Map(metadata.map((m) => [m.id, m]));
-    const enriched = baseResults.map((r) => {
+    return trimmed.map((r) => {
       const m = byId.get(r.youtubeId);
       if (!m) return r;
       return { ...r, duration: m.duration ?? null, viewCount: m.viewCount ?? null };
     });
-    // Keep videos with unknown duration (enrichment gap) so a missing item
-    // never silently disappears; drop only videos we know are Shorts.
-    const filtered = enriched.filter(
-      (r) => r.duration === null || r.duration >= SEARCH_MIN_DURATION_SECONDS
-    );
-    return filtered.slice(0, maxResults);
   } catch (err) {
     if (err && err.code === YoutubeApiErrorCode.CANCELED) {
       throw err;
     }
     logger.warn({ err, code: err?.code }, 'YouTube API searchVideos metadata enrichment failed');
-    return baseResults.slice(0, maxResults);
+    return trimmed;
   }
 }
 

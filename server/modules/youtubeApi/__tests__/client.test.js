@@ -512,7 +512,7 @@ describe('youtubeApi/client', () => {
       );
     });
 
-    test('filters out Shorts shorter than 60 seconds after enrichment', async () => {
+    test('does not drop Shorts; frontend filter owns that policy now', async () => {
       axios.get.mockResolvedValueOnce({
         status: 200,
         data: {
@@ -536,8 +536,138 @@ describe('youtubeApi/client', () => {
 
       const results = await client.searchVideos('api-key', 'q', 10);
 
-      // 60s is kept (boundary), 45s is dropped, 10m is kept.
-      expect(results.map((r) => r.youtubeId)).toEqual(['exact60sss1', 'longvideo01']);
+      expect(results.map((r) => r.youtubeId)).toEqual(['short000001', 'exact60sss1', 'longvideo01']);
+      expect(results.map((r) => r.duration)).toEqual([45, 60, 600]);
+    });
+
+    test('paginates search.list when caller requests more than one page', async () => {
+      const firstPageItems = Array.from({ length: 50 }, (_, i) => ({
+        id: { kind: 'youtube#video', videoId: `firstpag${String(i).padStart(3, '0')}` },
+        snippet: { title: `P1-${i}`, publishedAt: '2024-01-01T00:00:00Z' },
+      }));
+      const secondPageItems = Array.from({ length: 50 }, (_, i) => ({
+        id: { kind: 'youtube#video', videoId: `secondpg${String(i).padStart(3, '0')}` },
+        snippet: { title: `P2-${i}`, publishedAt: '2024-01-01T00:00:00Z' },
+      }));
+
+      axios.get.mockResolvedValueOnce({
+        status: 200,
+        data: { items: firstPageItems, nextPageToken: 'TOKEN-2' },
+      });
+      axios.get.mockResolvedValueOnce({
+        status: 200,
+        data: { items: secondPageItems },
+      });
+      // videos.list batches: 50 per call, so 100 IDs = 2 batches.
+      const allIds = [...firstPageItems, ...secondPageItems].map((it) => it.id.videoId);
+      axios.get.mockResolvedValueOnce({
+        status: 200,
+        data: {
+          items: allIds.slice(0, 50).map((id) => ({
+            id,
+            contentDetails: { duration: 'PT5M' },
+            statistics: { viewCount: '10' },
+          })),
+        },
+      });
+      axios.get.mockResolvedValueOnce({
+        status: 200,
+        data: {
+          items: allIds.slice(50).map((id) => ({
+            id,
+            contentDetails: { duration: 'PT5M' },
+            statistics: { viewCount: '10' },
+          })),
+        },
+      });
+
+      const results = await client.searchVideos('api-key', 'q', 100);
+
+      expect(results).toHaveLength(100);
+      // Second search.list call carries the pageToken from the first response.
+      expect(axios.get).toHaveBeenNthCalledWith(
+        2,
+        'https://www.googleapis.com/youtube/v3/search',
+        expect.objectContaining({
+          params: expect.objectContaining({ pageToken: 'TOKEN-2' }),
+        })
+      );
+    });
+
+    test('deduplicates videoIds that appear on multiple search.list pages', async () => {
+      const sharedItem = {
+        id: { kind: 'youtube#video', videoId: 'sharedid001' },
+        snippet: { title: 'Shared', publishedAt: '2024-01-01T00:00:00Z' },
+      };
+      const uniqueItem = {
+        id: { kind: 'youtube#video', videoId: 'uniqueid002' },
+        snippet: { title: 'Unique', publishedAt: '2024-01-01T00:00:00Z' },
+      };
+      axios.get.mockResolvedValueOnce({
+        status: 200,
+        data: { items: [sharedItem], nextPageToken: 'TOKEN-2' },
+      });
+      axios.get.mockResolvedValueOnce({
+        status: 200,
+        data: { items: [sharedItem, uniqueItem] },
+      });
+      axios.get.mockResolvedValueOnce({
+        status: 200,
+        data: {
+          items: [
+            { id: 'sharedid001', contentDetails: { duration: 'PT5M' }, statistics: { viewCount: '10' } },
+            { id: 'uniqueid002', contentDetails: { duration: 'PT5M' }, statistics: { viewCount: '10' } },
+          ],
+        },
+      });
+
+      const results = await client.searchVideos('api-key', 'q', 100);
+
+      expect(results.map((r) => r.youtubeId)).toEqual(['sharedid001', 'uniqueid002']);
+    });
+
+    test('stops paginating when nextPageToken is missing even if below requested count', async () => {
+      const items = Array.from({ length: 30 }, (_, i) => ({
+        id: { kind: 'youtube#video', videoId: `onlypage${String(i).padStart(3, '0')}` },
+        snippet: { title: `O-${i}`, publishedAt: '2024-01-01T00:00:00Z' },
+      }));
+      axios.get.mockResolvedValueOnce({ status: 200, data: { items } });
+      axios.get.mockResolvedValueOnce({
+        status: 200,
+        data: {
+          items: items.map((it) => ({
+            id: it.id.videoId,
+            contentDetails: { duration: 'PT5M' },
+            statistics: { viewCount: '10' },
+          })),
+        },
+      });
+
+      const results = await client.searchVideos('api-key', 'q', 100);
+
+      expect(results).toHaveLength(30);
+      // Only 1 search.list call + 1 videos.list call = 2 axios calls.
+      expect(axios.get).toHaveBeenCalledTimes(2);
+    });
+
+    test('caps pagination when pages contain no usable video results', async () => {
+      axios.get
+        .mockResolvedValueOnce({ status: 200, data: { items: [], nextPageToken: 'TOKEN-2' } })
+        .mockResolvedValueOnce({ status: 200, data: { items: [], nextPageToken: 'TOKEN-3' } })
+        .mockResolvedValueOnce({ status: 200, data: { items: [], nextPageToken: 'TOKEN-4' } })
+        .mockResolvedValueOnce({ status: 200, data: { items: [], nextPageToken: 'TOKEN-5' } });
+
+      const results = await client.searchVideos('api-key', 'q', 100);
+
+      expect(results).toEqual([]);
+      expect(axios.get).toHaveBeenCalledTimes(3);
+      expect(axios.get).toHaveBeenNthCalledWith(
+        3,
+        'https://www.googleapis.com/youtube/v3/search',
+        expect.objectContaining({
+          params: expect.objectContaining({ pageToken: 'TOKEN-3' }),
+        })
+      );
     });
 
     test('keeps items whose enrichment row is missing so gaps do not silently drop videos', async () => {
