@@ -36,6 +36,7 @@ import { useSubfolders } from '../../../hooks/useSubfolders';
 import { ConfigState, DeploymentEnvironment, PlatformManagedState } from '../types';
 import { reverseFrequencyMapping, getChannelFilesOptions } from '../helpers';
 import { FREQUENCY_MAPPING } from '../constants';
+import { formatDateTime } from '../../../utils/formatters';
 
 interface CoreSettingsSectionProps {
   config: ConfigState;
@@ -536,7 +537,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
               >
                 {ytDlpVersionInfo.currentVersion}
               </Typography>
-              {ytDlpVersionInfo.updateAvailable && ytDlpVersionInfo.latestVersion ? (
+              {!isPlatformManaged.ytdlpUpdates && ytDlpVersionInfo.updateAvailable && ytDlpVersionInfo.latestVersion ? (
                 <>
                   <ArrowForwardIcon style={{ fontSize: 16 }} className="text-muted-foreground" />
                   <Typography
@@ -562,13 +563,68 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                     {ytDlpUpdateStatus === 'updating' ? 'Updating...' : 'Update'}
                   </Button>
                 </>
-              ) : (
+              ) : !isPlatformManaged.ytdlpUpdates ? (
                 <CheckCircleIcon color="success" fontSize="small" />
+              ) : null}
+              {isPlatformManaged.ytdlpUpdates && (
+                <Chip
+                  label={deploymentEnvironment.platform?.toLowerCase() === 'elfhosted' ? 'Managed by Elfhosted' : 'Platform Managed'}
+                  size="small"
+                />
               )}
             </Box>
-            <Typography variant="caption" color="text.secondary">
-              yt-dlp is the video download engine. If downloads are failing, try updating yt-dlp to the latest version.
-            </Typography>
+            {isPlatformManaged.ytdlpUpdates ? (
+              <Typography variant="caption" color="text.secondary">
+                yt-dlp is managed by {deploymentEnvironment.platform?.toLowerCase() === 'elfhosted' ? 'Elfhosted' : 'the platform'} and cannot be updated from Youtarr. Updates are applied automatically by the platform.
+              </Typography>
+            ) : (
+              <>
+                <Typography variant="caption" color="text.secondary">
+                  yt-dlp is the video download engine. If downloads are failing, try updating yt-dlp to the latest version.
+                </Typography>
+
+                <Box className="mt-4 flex items-center">
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        name="autoUpdateYtdlp"
+                        checked={!!config.autoUpdateYtdlp}
+                        onChange={handleCheckboxChange}
+                      />
+                    }
+                    label="Automatically update yt-dlp nightly"
+                  />
+                  <InfoTooltip
+                    text="Checks for a new yt-dlp release each night at 4:00 AM (server local time) and installs it automatically. Updates are skipped while a download is in progress and will be retried the following night. If an update fails, Youtarr keeps running on the previous version."
+                    onMobileClick={onMobileTooltipClick}
+                  />
+                </Box>
+
+                {(config.ytdlpLastChecked || config.ytdlpLastResult || config.ytdlpLastUpdated) && (
+                  <Box className="mt-1">
+                    {config.ytdlpLastChecked && (
+                      <Typography
+                        variant="caption"
+                        className="block"
+                        style={{ color: config.ytdlpLastResult?.status === 'error' ? 'var(--warning)' : undefined }}
+                        color={config.ytdlpLastResult?.status === 'error' ? undefined : 'text.secondary'}
+                      >
+                        Last checked: {formatDateTime(config.ytdlpLastChecked)}
+                        {config.ytdlpLastResult?.status === 'up-to-date' && ' — already up to date'}
+                        {config.ytdlpLastResult?.status === 'updated' && config.ytdlpLastResult.version && ` — updated to ${config.ytdlpLastResult.version}`}
+                        {config.ytdlpLastResult?.status === 'skipped' && ` — skipped: ${config.ytdlpLastResult.message || 'reason unknown'}`}
+                        {config.ytdlpLastResult?.status === 'error' && ` — update failed: ${config.ytdlpLastResult.message || 'reason unknown'}`}
+                      </Typography>
+                    )}
+                    {config.ytdlpLastUpdated && (
+                      <Typography variant="caption" color="text.secondary" className="block">
+                        Last updated: {formatDateTime(config.ytdlpLastUpdated)}
+                      </Typography>
+                    )}
+                  </Box>
+                )}
+              </>
+            )}
           </Box>
         </>
       )}

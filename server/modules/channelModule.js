@@ -12,6 +12,7 @@ const { Op, fn, col, where } = require('sequelize');
 const fileCheckModule = require('./fileCheckModule');
 const logger = require('../logger');
 const { sanitizeNameLikeYtDlp } = require('./filesystem');
+const youtubeApi = require('./youtubeApi');
 const ratingMapper = require('./ratingMapper');
 const tempPathManager = require('./download/tempPathManager');
 
@@ -27,6 +28,19 @@ const { TAB_TYPES, MEDIA_TAB_TYPE_MAP, parseTabCsv } = require('./tabsUtils');
 // which effectively is not "loadable", so we had to set some reasonable limit.
 // Unfortunately, yt-dlp ALWAYS starts a fetch with the newest video, so there is no way to "page" through
 const MAX_LOAD_MORE_VIDEOS = 5000;
+
+// Log API-fallback events at the right level: warn for genuine failures
+// (network/quota/etc), debug for "we knew the API path couldn't handle this
+// channel" cases like a non-UC channel ID. Keeps warn-level signal high.
+function logApiFallback(apiErr, fields, message) {
+  const isShape = apiErr?.code === youtubeApi.YoutubeApiErrorCode.INVALID_CHANNEL_ID;
+  const payload = { err: apiErr, ...fields, code: apiErr?.code };
+  if (isShape) {
+    logger.debug(payload, message);
+  } else {
+    logger.warn(payload, message);
+  }
+}
 
 class ChannelModule {
   constructor() {
@@ -612,6 +626,46 @@ class ChannelModule {
    * @returns {Promise<Object>} - Channel metadata with folder_name property
    */
   async fetchChannelMetadata(channelUrl) {
+    if (youtubeApi.isAvailable()) {
+      try {
+        const apiKey = youtubeApi.getApiKey();
+        const info = await youtubeApi.client.getChannelInfo(apiKey, channelUrl);
+        if (info && info.channelId) {
+          logger.info({ channelId: info.channelId, source: 'youtube-api' }, 'Fetched channel metadata via YouTube API');
+          const unsanitizedFolderName = info.title || info.customUrl || info.channelId;
+          const sanitizedFolderName = sanitizeNameLikeYtDlp(unsanitizedFolderName);
+
+          // Callers rely on entries.length > 0 as a "channel has uploads" signal.
+          // When videoCount is null (owner hid the count), assume uploads exist;
+          // yt-dlp will catch truly-empty channels later if the API is wrong.
+          const hasVideos = info.videoCount === null || info.videoCount > 0;
+          const entries = hasVideos ? [{ id: info.channelId }] : [];
+
+          return {
+            channel_id: info.channelId,
+            id: info.channelId,
+            title: info.title,
+            description: info.description,
+            uploader: info.title,
+            uploader_id: info.customUrl || info.channelId,
+            uploads_playlist_id: info.uploadsPlaylistId,
+            thumbnails: info.thumbnailUrl
+              ? [{ id: 'avatar_uncropped', url: info.thumbnailUrl, width: 800, height: 800 }]
+              : [],
+            folder_name: sanitizedFolderName,
+            entries,
+          };
+        }
+        logger.info({ channelUrl }, 'YouTube API getChannelInfo returned no items, falling back to yt-dlp');
+      } catch (apiErr) {
+        logApiFallback(
+          apiErr,
+          { channelUrl },
+          'YouTube API fetchChannelMetadata failed, falling back to yt-dlp'
+        );
+      }
+    }
+
     const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
     return await this.withTempFile('channel', async (outputFilePath) => {
       const args = YtdlpCommandBuilder.buildMetadataWithFolderNameArgs(channelUrl, {
@@ -1792,8 +1846,7 @@ class ChannelModule {
   }
 
   /**
-   * Fetch channel videos from specific tab using yt-dlp.
-   * Retrieves metadata for recent videos from YouTube.
+   * Fetch channel videos from a specific tab via yt-dlp.
    * Uses canonical channel URL for stability when handles change.
    * @param {string} channelId - Channel ID to fetch videos for
    * @param {Date|null} mostRecentVideoDate - Date of the most recent video we have
@@ -1801,7 +1854,7 @@ class ChannelModule {
    * @returns {Promise<Object>} - Object with videos array and current channel URL
    * @throws {Error} - If channel not found in database
    */
-  async fetchChannelVideosViaYtDlp(channelId, mostRecentVideoDate = null, tabType) {
+  async fetchChannelVideos(channelId, mostRecentVideoDate = null, tabType) {
     const channel = await Channel.findOne({
       where: { channel_id: channelId },
     });
@@ -1821,8 +1874,8 @@ class ChannelModule {
       }
     }
 
-    // Always use canonical URL based on channel ID for yt-dlp
-    // This ensures stability even when channel handles change
+    // Always use canonical URL based on channel ID for yt-dlp. This avoids the
+    // YouTube API playlist path, which can omit videos that yt-dlp can see.
     const canonicalUrl = `${this.resolveChannelUrlFromId(channelId)}/${tabType}`;
 
     const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
@@ -1953,6 +2006,45 @@ class ChannelModule {
   }
 
   /**
+   * Detect available tabs for a channel. Prefers the YouTube Data API
+   * (3 quota units) when a key is configured; falls back to yt-dlp probes
+   * on any API failure or when the API returns no tabs. Return shape matches
+   * _probeTabsViaYtdlp for drop-in compatibility.
+   * @param {string} channelId - Channel ID to probe
+   * @returns {Promise<string[]>} - Detected tab types
+   * @private
+   */
+  async _probeTabs(channelId) {
+    if (youtubeApi.isAvailable()) {
+      try {
+        const apiKey = youtubeApi.getApiKey();
+        const channelUrl = this.resolveChannelUrlFromId(channelId);
+        const { availableTabs } = await youtubeApi.client.detectAvailableTabs(apiKey, channelUrl);
+
+        if (availableTabs.length > 0) {
+          logger.info(
+            { channelId, source: 'youtube-api', availableTabs },
+            'Detected channel tabs via YouTube API'
+          );
+          return availableTabs;
+        }
+        logger.info(
+          { channelId },
+          'YouTube API tab detection returned no tabs, falling back to yt-dlp'
+        );
+      } catch (apiErr) {
+        logApiFallback(
+          apiErr,
+          { channelId },
+          'YouTube API tab detection failed, falling back to yt-dlp'
+        );
+      }
+    }
+
+    return this._probeTabsViaYtdlp(channelId);
+  }
+
+  /**
    * Probe yt-dlp for each known tab type in parallel and return the list
    * of detected tabs. Falls back to [TAB_TYPES.VIDEOS] if all probes fail
    * so the channel stays usable. Shared by detectAndSaveChannelTabs and
@@ -2021,11 +2113,11 @@ class ChannelModule {
         };
       }
 
-      logger.info({ channelId, channelTitle: channel.title }, 'Starting tab detection for channel (via yt-dlp)');
+      logger.info({ channelId, channelTitle: channel.title }, 'Starting tab detection for channel');
 
-      // Probe every tab type in parallel via yt-dlp. Helper handles the
-      // fallback-to-videos behavior if all probes fail.
-      const availableTabs = await this._probeTabsViaYtdlp(channelId);
+      // Probe every tab type via API (if available) or yt-dlp. Helper handles
+      // the fallback-to-videos behavior if all probes fail.
+      const availableTabs = await this._probeTabs(channelId);
 
       // Determine auto_download_enabled_tabs: preserve existing user choice if set,
       // otherwise pick a smart default based on available tabs
@@ -2125,9 +2217,9 @@ class ChannelModule {
       throw new Error('Channel not found in database');
     }
 
-    logger.info({ channelId, channelTitle: channel.title }, 'Forcing tab re-detection for channel (via yt-dlp)');
+    logger.info({ channelId, channelTitle: channel.title }, 'Forcing tab re-detection for channel');
 
-    const detectedTabs = await this._probeTabsViaYtdlp(channelId);
+    const detectedTabs = await this._probeTabs(channelId);
     const hiddenTabs = parseTabCsv(channel.hidden_tabs);
 
     // Compute effective tabs (what the user actually sees)
@@ -2430,7 +2522,7 @@ class ChannelModule {
    */
   async fetchAndSaveVideosViaYtDlp(channel, channelId, tabType, mostRecentVideoDate = null) {
     try {
-      const result = await this.fetchChannelVideosViaYtDlp(channelId, mostRecentVideoDate, tabType);
+      const result = await this.fetchChannelVideos(channelId, mostRecentVideoDate, tabType);
       const { videos, currentChannelUrl } = result;
 
       const mediaType = MEDIA_TAB_TYPE_MAP[tabType];
@@ -2500,9 +2592,7 @@ class ChannelModule {
         logger.info({ channelId, channelTitle: channel.title, tabType }, 'Starting full video fetch for channel');
         const startTime = Date.now();
 
-        // Fetch videos from YouTube (limited to MAX_LOAD_MORE_VIDEOS to prevent hanging on large channels)
         const canonicalUrl = `${this.resolveChannelUrlFromId(channelId)}/${tabType}`;
-
         const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
         const result = await this.withTempFile('channel-all-videos', async (outputFilePath) => {
           const args = YtdlpCommandBuilder.buildMetadataFetchArgs(canonicalUrl, {

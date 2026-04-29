@@ -4,6 +4,7 @@ const path = require('path');
 const configModule = require('./configModule');
 const ytDlpRunner = require('./ytDlpRunner');
 const logger = require('../logger');
+const youtubeApi = require('./youtubeApi');
 
 const NULL_METADATA = {
   description: null,
@@ -59,6 +60,21 @@ class VideoMetadataModule {
    * Get extended video metadata from cached .info.json or by fetching via yt-dlp.
    * Returns a curated subset of fields. Silently backfills originalDate when
    * the .info.json has a more accurate upload_date than the existing DB record.
+   *
+   * Source priority:
+   *   1. cached .info.json on disk (fast path, always has fileDetails)
+   *   2. yt-dlp fresh fetch (populates cache, always has fileDetails)
+   *   3. YouTube Data API v3 fallback when yt-dlp fails (no file details)
+   *
+   * The API is only a fallback: third-party callers cannot request the
+   * `fileDetails` part, which is where the API exposes FPS, numeric aspect
+   * ratio, pixel dimensions, and the format/resolution list. yt-dlp has all
+   * of those plus description/views/etc, so it stays primary. When yt-dlp
+   * fails outright (rate-limited, bot-blocked, network error), the API
+   * fallback lets the video modal still show something useful (description,
+   * view/like counts, upload date, availability, live status) instead of a
+   * completely empty state.
+   *
    * @param {string} youtubeId - YouTube video ID
    * @returns {Promise<Object>} Curated metadata object (all null on failure)
    */
@@ -93,7 +109,10 @@ class VideoMetadataModule {
           }
         } catch (fetchErr) {
           logger.warn({ err: fetchErr, youtubeId }, 'Failed to fetch metadata via yt-dlp');
-          return NULL_METADATA;
+          // Try API fallback so the UI isn't left completely empty. File
+          // detail fields will be null (API can't provide them), but text
+          // fields are still useful.
+          return this._getApiFallbackMetadata(youtubeId);
         }
       }
 
@@ -159,6 +178,69 @@ class VideoMetadataModule {
       };
     } catch (err) {
       logger.error({ err, youtubeId }, 'Unexpected error in getVideoMetadata');
+      return NULL_METADATA;
+    }
+  }
+
+  /**
+   * Fallback when yt-dlp fails: pull the fields the public API can provide
+   * (description, view/like/comment counts, tags, categories, uploadDate,
+   * availability, live broadcast state) and return them in the same shape
+   * as the primary path, with the file-detail fields set to null.
+   *
+   * Returns NULL_METADATA when no API key is configured or the API call
+   * also fails, so the caller's contract is unchanged.
+   */
+  async _getApiFallbackMetadata(youtubeId) {
+    if (!youtubeApi.isAvailable()) {
+      return NULL_METADATA;
+    }
+
+    try {
+      const apiKey = youtubeApi.getApiKey();
+      const [apiResult] = await youtubeApi.client.getVideoMetadata(apiKey, [youtubeId]);
+      if (!apiResult) {
+        return NULL_METADATA;
+      }
+
+      logger.info(
+        { youtubeId, source: 'youtube-api-fallback' },
+        'yt-dlp failed, serving partial metadata from YouTube API (no file details)'
+      );
+
+      // Silently backfill originalDate on the DB row, matching the yt-dlp path.
+      if (apiResult.uploadDate) {
+        try {
+          const video = await Video.findOne({ where: { youtubeId } });
+          if (video && (!video.originalDate || video.originalDate !== apiResult.uploadDate)) {
+            await video.update({ originalDate: apiResult.uploadDate });
+          }
+        } catch (backfillErr) {
+          logger.warn({ err: backfillErr, youtubeId }, 'Failed to backfill originalDate (API fallback path)');
+        }
+      }
+
+      const relatedFiles = await this._getVideoRelatedFiles(youtubeId);
+
+      return {
+        ...NULL_METADATA,
+        description: apiResult.description,
+        viewCount: apiResult.viewCount,
+        likeCount: apiResult.likeCount,
+        commentCount: apiResult.commentCount,
+        tags: apiResult.tags,
+        categories: apiResult.categories,
+        uploadDate: apiResult.uploadDate,
+        availability: apiResult.availability,
+        isLive: apiResult.liveBroadcastContent === 'live',
+        webpageUrl: `https://www.youtube.com/watch?v=${youtubeId}`,
+        relatedFiles,
+      };
+    } catch (apiErr) {
+      logger.warn(
+        { err: apiErr, youtubeId, code: apiErr?.code },
+        'YouTube API fallback also failed'
+      );
       return NULL_METADATA;
     }
   }

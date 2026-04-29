@@ -275,6 +275,7 @@ describe('ytdlpModule', () => {
 
       const result = await updatePromise;
       expect(result.success).toBe(true);
+      expect(result.reason).toBe('updated');
       expect(result.message).toBe('Successfully updated to 2024.01.20');
       expect(result.newVersion).toBe('2024.01.20');
     });
@@ -290,6 +291,7 @@ describe('ytdlpModule', () => {
 
       const result = await updatePromise;
       expect(result.success).toBe(true);
+      expect(result.reason).toBe('up-to-date');
       expect(result.message).toBe('yt-dlp is already up to date');
     });
 
@@ -304,6 +306,7 @@ describe('ytdlpModule', () => {
 
       const result = await updatePromise;
       expect(result.success).toBe(false);
+      expect(result.reason).toBe('error');
       expect(result.message).toContain('Permission denied');
     });
 
@@ -318,6 +321,7 @@ describe('ytdlpModule', () => {
 
       const result = await updatePromise;
       expect(result.success).toBe(false);
+      expect(result.reason).toBe('error');
       expect(result.message).toContain('Permission denied');
     });
 
@@ -332,6 +336,7 @@ describe('ytdlpModule', () => {
 
       const result = await updatePromise;
       expect(result.success).toBe(false);
+      expect(result.reason).toBe('error');
       expect(result.message).toContain('exit code 1');
     });
 
@@ -345,6 +350,7 @@ describe('ytdlpModule', () => {
 
       const result = await updatePromise;
       expect(result.success).toBe(false);
+      expect(result.reason).toBe('error');
       expect(result.message).toBe('Failed to start update process');
     });
 
@@ -361,6 +367,7 @@ describe('ytdlpModule', () => {
 
       const result = await updatePromise;
       expect(result.success).toBe(false);
+      expect(result.reason).toBe('error');
       expect(result.message).toBe('Update timed out. Please try again later.');
       expect(mockProcess.kill).toHaveBeenCalled();
 
@@ -378,6 +385,7 @@ describe('ytdlpModule', () => {
       const result2 = await ytdlpModule.performUpdate();
 
       expect(result2.success).toBe(false);
+      expect(result2.reason).toBe('skipped');
       expect(result2.message).toBe('An update is already in progress');
 
       // Complete the first update
@@ -394,6 +402,7 @@ describe('ytdlpModule', () => {
       const result = await ytdlpModule.performUpdate();
 
       expect(result.success).toBe(false);
+      expect(result.reason).toBe('skipped');
       expect(result.message).toBe('Cannot update while downloads are in progress. Please wait for downloads to complete.');
       expect(spawn).not.toHaveBeenCalled();
     });

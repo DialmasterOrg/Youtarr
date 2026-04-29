@@ -93,7 +93,7 @@ const databaseHealth = require('./modules/databaseHealthModule');
 const http = require('http');
 const bcrypt = require('bcrypt');
 const userNameMaxLength = 32;
-const userNameMinLength = 3;
+const userNameMinLength = 1;
 const passwordMaxLength = 64;
 const passwordMinLength = 8;
 
@@ -216,6 +216,7 @@ const initialize = async () => {
     const archiveModule = require('./modules/archiveModule');
     const subscriptionImportModule = require('./modules/subscriptionImport');
     const videoSearchModule = require('./modules/videoSearchModule');
+    const youtubeApi = require('./modules/youtubeApi');
     const messageEmitter = require('./modules/messageEmitter');
     const { Channel } = require('./models');
     const { registerRoutes } = require('./routes');
@@ -238,7 +239,7 @@ const initialize = async () => {
       logger.info('Applied ENV AUTH credentials and saved to config.json');
     } else if (process.env.AUTH_PRESET_USERNAME || process.env.AUTH_PRESET_PASSWORD) {
       // Credentials were provided but failed validation
-      logger.warn('Ignoring ENV AUTH credentials: both AUTH_PRESET_USERNAME and AUTH_PRESET_PASSWORD must be set and meet requirements (username: 3-32 chars, password: 8-64 chars)');
+      logger.warn('Ignoring ENV AUTH credentials: both AUTH_PRESET_USERNAME and AUTH_PRESET_PASSWORD must be set and meet requirements (username: 1-32 chars, password: 8-64 chars)');
     }
 
     channelModule.subscribe();
@@ -475,6 +476,38 @@ const initialize = async () => {
       validate: { trustProxy: false }, // Suppress trust proxy warning - we run in Docker with proxy
     });
 
+    // Rate limiter for YouTube API key validation. Each test round-trips to
+    // Google; users mistyping a key shouldn't burn quota or our outbound rate.
+    const youtubeApiKeyTestLimiter = rateLimit({
+      windowMs: 1 * 60 * 1000,
+      max: 10,
+      message: { error: 'Too many key tests. Please wait a minute before trying again.' },
+      standardHeaders: true,
+      legacyHeaders: false,
+      validate: { trustProxy: false },
+      handler: (_req, res) => {
+        res.status(429).json({
+          error: 'Too many key tests. Please wait a minute before trying again.',
+        });
+      },
+    });
+
+    // Rate limiter for the /api/ytdlp/validate-args endpoint. Each request
+    // spawns yt-dlp; a UI bug or malicious user could otherwise spam validation.
+    const ytdlpValidationRateLimiter = rateLimit({
+      windowMs: 1 * 60 * 1000,
+      max: 5,
+      message: { error: 'Too many validation requests. Please wait a minute before trying again.' },
+      standardHeaders: true,
+      legacyHeaders: false,
+      validate: { trustProxy: false },
+      handler: (_req, res) => {
+        res.status(429).json({
+          error: 'Too many validation requests. Please wait a minute before trying again.',
+        });
+      },
+    });
+
     /**** ONLY ROUTES BELOW THIS LINE *********/
 
     // Setup Swagger documentation at /swagger
@@ -527,6 +560,8 @@ const initialize = async () => {
     registerRoutes(app, {
       verifyToken,
       loginLimiter,
+      youtubeApiKeyTestLimiter,
+      ytdlpValidationRateLimiter,
       configModule,
       channelModule,
       plexModule,
@@ -536,6 +571,7 @@ const initialize = async () => {
       archiveModule,
       subscriptionImportModule,
       videoSearchModule,
+      youtubeApi,
       getCachedYtDlpVersion,
       refreshYtDlpVersionCache,
       validateEnvAuthCredentials,
@@ -561,7 +597,7 @@ const initialize = async () => {
         if (databaseHealth.isDatabaseHealthy()) {
           // Initialize cron jobs
           const cronJobs = require('./modules/cronJobs');
-          cronJobs.initialize();
+          cronJobs.initialize({ refreshYtDlpVersionCache });
 
           // Run folder_name migration for existing channels asynchronously
           // This populates folder_name from Video.filePath for channels that don't have it set

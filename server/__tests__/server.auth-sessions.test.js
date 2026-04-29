@@ -328,6 +328,21 @@ describe('auth preset bootstrap', () => {
     expect(bcryptMock.hash).not.toHaveBeenCalled();
     expect(configModuleMock.updateConfig).not.toHaveBeenCalledWith(expect.objectContaining({ username: 'admin' }));
   });
+
+  test('applies preset credentials when username is a single character', async () => {
+    const presetPassword = 'supersecret!';
+    const { configModuleMock, bcryptMock } = await createServerModule({
+      passwordHash: null,
+      configOverrides: { username: null },
+      authPreset: { username: 'a', password: presetPassword }
+    });
+
+    expect(bcryptMock.hash).toHaveBeenCalledWith(presetPassword, 10);
+    expect(configModuleMock.updateConfig).toHaveBeenCalledWith(expect.objectContaining({
+      username: 'a',
+      passwordHash: 'new-hashed-password'
+    }));
+  });
 });
 
 describe('server routes - cookies', () => {

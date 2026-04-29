@@ -39,7 +39,7 @@ const meta: Meta<typeof CoreSettingsSection> = {
   args: {
     token: 'storybook-token',
     deploymentEnvironment: { platform: null, isWsl: false },
-    isPlatformManaged: { plexUrl: false, authEnabled: true, useTmpForDownloads: false },
+    isPlatformManaged: { plexUrl: false, authEnabled: true, useTmpForDownloads: false, ytdlpUpdates: false },
     onMobileTooltipClick: fn(),
   },
 };

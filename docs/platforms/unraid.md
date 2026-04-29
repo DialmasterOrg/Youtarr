@@ -47,7 +47,7 @@ curl -L https://raw.githubusercontent.com/DialmasterOrg/unraid-templates/main/Yo
   - Map your persistent paths (for example `/mnt/user/appdata/youtarr` for `/app/config` and `/mnt/user/media/youtube` for `/data`) and supply the MariaDB connection variables before deploying.
   - Set both `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` to set credentials for login to Youtarr
   - **IMPORTANT**: `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` must meet these rules or they’ll be ignored:
-    - `AUTH_PRESET_USERNAME`: 3-32 characters in length
+    - `AUTH_PRESET_USERNAME`: 1-32 characters in length
     - `AUTH_PRESET_PASSWORD`: 8-64 characters in length
   Leaving them blank requires completing the setup wizard from the Unraid host's localhost (e.g., via SSH port forwarding), which most headless installs won't have handy.
 6. Click the "Apply" button to start Youtarr

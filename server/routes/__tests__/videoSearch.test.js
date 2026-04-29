@@ -14,7 +14,7 @@ class SearchCanceledError extends Error {
 
 function buildApp({ verifyToken, searchVideos }) {
   const videoSearchModule = {
-    ALLOWED_COUNTS: [10, 25, 50],
+    ALLOWED_COUNTS: [10, 25, 50, 100],
     SearchTimeoutError,
     SearchCanceledError,
     searchVideos: searchVideos || jest.fn(),

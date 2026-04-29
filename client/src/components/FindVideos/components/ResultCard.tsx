@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Card, CardActionArea, Typography, Chip } from '../../ui';
+import { Box, Card, CardActionArea, Checkbox, Typography, Chip } from '../../ui';
 import { CalendarToday as CalendarTodayIcon } from '../../../lib/icons';
 import {
   getStatusColor,
@@ -11,16 +11,19 @@ import {
 } from '../../../utils/videoStatus';
 import { SHARED_THEMED_CHIP_SMALL_STYLE } from '../../shared/chipStyles';
 import { formatDurationClock } from '../../../utils';
-import { SearchResult } from '../types';
+import { isSelectableForDownload, ResultSelection, SearchResult } from '../types';
 
 interface ResultCardProps {
   result: SearchResult;
   onClick: () => void;
+  selection?: ResultSelection;
 }
 
-export default function ResultCard({ result, onClick }: ResultCardProps) {
+export default function ResultCard({ result, onClick, selection }: ResultCardProps) {
   const status: VideoStatus = result.status;
   const durationLabel = formatDurationClock(result.duration);
+  const selectable = Boolean(selection) && isSelectableForDownload(result.status);
+  const checked = selectable && selection!.isChecked(result.youtubeId);
 
   return (
     <Card className="cursor-pointer overflow-hidden hover:shadow-md transition-shadow">
@@ -36,6 +39,29 @@ export default function ResultCard({ result, onClick }: ResultCardProps) {
               className="w-full h-full object-cover"
               loading="lazy"
             />
+          )}
+          {selectable && (
+            <Box
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                position: 'absolute',
+                top: 4,
+                left: 4,
+                padding: 4,
+                borderRadius: 'var(--radius-ui)',
+                backgroundColor: 'var(--media-overlay-background)',
+                zIndex: 3,
+              }}
+            >
+              <Checkbox
+                checked={checked}
+                onChange={() => selection!.toggle(result.youtubeId)}
+                inputProps={{
+                  'aria-label': `Select ${result.title} for download`,
+                  'data-testid': `select-${result.youtubeId}`,
+                }}
+              />
+            </Box>
           )}
           {durationLabel && (
             <Chip
