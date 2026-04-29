@@ -1,0 +1,113 @@
+const axios = require('axios');
+const BaseAdapter = require('./baseAdapter');
+const { extractBasename } = require('./baseAdapter');
+const logger = require('../../../logger');
+
+class EmbyAdapter extends BaseAdapter {
+  constructor(config) {
+    super(config);
+    this.url = config.embyUrl;
+    this.apiKey = config.embyApiKey;
+    this.userId = config.embyUserId;
+  }
+
+  _headers() { return { 'X-Emby-Token': this.apiKey }; }
+
+  async testConnection() {
+    try {
+      const res = await axios.get(`${this.url}/System/Info/Public`, { headers: this._headers() });
+      return { ok: true, version: res.data?.Version };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  }
+
+  async listUsers() {
+    try {
+      const res = await axios.get(`${this.url}/Users`, { headers: this._headers() });
+      return (res.data || []).map((u) => ({ id: u.Id, name: u.Name }));
+    } catch (err) {
+      logger.error({ err }, 'emby listUsers failed');
+      return [];
+    }
+  }
+
+  async triggerLibraryScan() {
+    try {
+      await axios.post(`${this.url}/Library/Refresh`, null, { headers: this._headers() });
+    } catch (err) {
+      logger.error({ err }, 'emby triggerLibraryScan failed');
+    }
+  }
+
+  async resolveItemIdByFilepath(filepath) {
+    // Match by filename across different mount views — see plexAdapter/jellyfinAdapter.
+    const target = extractBasename(filepath);
+    try {
+      const params = {
+        userId: this.userId,
+        includeItemTypes: 'Video,Movie,Episode',
+        recursive: true,
+        fields: 'Path',
+      };
+      const res = await axios.get(`${this.url}/Items`, { headers: this._headers(), params });
+      const items = res.data?.Items || [];
+      const match = items.find((i) => i.Path && extractBasename(i.Path) === target);
+      return match ? match.Id : null;
+    } catch (err) {
+      logger.error({ err, filepath }, 'emby resolveItemIdByFilepath failed');
+      return null;
+    }
+  }
+
+  async getPlaylistByName(name) {
+    try {
+      const params = { userId: this.userId, includeItemTypes: 'Playlist', recursive: true };
+      const res = await axios.get(`${this.url}/Items`, { headers: this._headers(), params });
+      const items = res.data?.Items || [];
+      const found = items.find((i) => i.Name === name);
+      return found ? { id: found.Id, itemIds: [] } : null;
+    } catch (err) {
+      logger.error({ err }, 'emby getPlaylistByName failed');
+      return null;
+    }
+  }
+
+  async createPlaylist(name, itemIds /*, opts */) {
+    // Emby differs from Jellyfin: it expects query params with Ids as a
+    // comma-delimited string, not a JSON body with an array. Sending a JSON
+    // body shape (what Jellyfin accepts) yields a 500 from Emby.
+    // Note: Emby doesn't expose IsPublic on the create endpoint; playlists
+    // default to owner-only. Sharing would be a separate follow-up call.
+    const params = {
+      Name: name,
+      Ids: itemIds.join(','),
+      UserId: this.userId,
+      MediaType: 'Video',
+    };
+    const res = await axios.post(`${this.url}/Playlists`, null, {
+      headers: this._headers(),
+      params,
+    });
+    return { id: res.data?.Id };
+  }
+
+  async replacePlaylistItems(playlistId, itemIds, opts = {}) {
+    if (!opts.name) {
+      throw new Error('replacePlaylistItems requires opts.name to recreate the playlist');
+    }
+    // Mirrors jellyfinAdapter: delete the whole playlist and recreate, since
+    // the per-item delete endpoint is version-flaky. Tolerate a stale
+    // playlistId (manually deleted or server state drifted) — log and
+    // fall through to create-fresh.
+    try {
+      await axios.delete(`${this.url}/Items/${playlistId}`, { headers: this._headers() });
+    } catch (err) {
+      const status = err.response?.status;
+      logger.warn({ status, playlistId }, 'emby replacePlaylistItems: delete failed, creating fresh');
+    }
+    return this.createPlaylist(opts.name, itemIds, { public: !!opts.public });
+  }
+}
+
+module.exports = EmbyAdapter;

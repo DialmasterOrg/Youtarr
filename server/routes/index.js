@@ -10,10 +10,16 @@ const createApiKeyRoutes = require('./apikeys');
 const createSubscriptionRoutes = require('./subscriptions');
 const createVideoDetailRoutes = require('./videoDetail');
 const createVideoSearchRoutes = require('./videoSearch');
+const createPlaylistRoutes = require('./playlists');
+const createMediaServerRoutes = require('./mediaServers');
 const createYoutubeApiKeyRoutes = require('./youtubeApiKey');
 const createYtdlpOptionsRoutes = require('./ytdlpOptions');
 const videoMetadataModule = require('../modules/videoMetadataModule');
 const videoOembedEnricher = require('../modules/videoOembedEnricher');
+const playlistModule = require('../modules/playlistModule');
+const m3uGenerator = require('../modules/m3uGenerator');
+const mediaServers = require('../modules/mediaServers');
+const models = require('../models');
 
 /**
  * Registers all route modules with the Express app
@@ -84,6 +90,16 @@ function registerRoutes(app, deps) {
 
   // Video detail routes (metadata and streaming)
   app.use(createVideoDetailRoutes({ verifyToken, videoMetadataModule }));
+
+  // Playlist routes
+  app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models }));
+
+  // Media server routes
+  app.use(createMediaServerRoutes({ verifyToken, configModule, mediaServers }));
+
+  // Defensive redirect: /channels -> /subscriptions (frontend handles client-side routing,
+  // this fallback covers direct server-side hits during the transition period)
+  app.get('/channels', (req, res) => res.redirect(301, '/subscriptions'));
 }
 
 module.exports = { registerRoutes };

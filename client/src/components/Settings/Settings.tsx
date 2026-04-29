@@ -13,6 +13,8 @@ import ConfigurationSkeleton from '../Configuration/common/ConfigurationSkeleton
 import { CoreSettingsSection } from '../Configuration/sections/CoreSettingsSection';
 import AppearanceSettingsSection from '../Configuration/sections/AppearanceSettingsSection';
 import { PlexIntegrationSection } from '../Configuration/sections/PlexIntegrationSection';
+import JellyfinSection from '../Configuration/sections/JellyfinSection';
+import EmbySection from '../Configuration/sections/EmbySection';
 import { SponsorBlockSection } from '../Configuration/sections/SponsorBlockSection';
 import { CookieConfigSection } from '../Configuration/sections/CookieConfigSection';
 import { NotificationsSection } from '../Configuration/sections/NotificationsSection';
@@ -271,6 +273,26 @@ export function Settings({ token }: SettingsProps) {
                 onOpenPlexAuthDialog={() => setOpenPlexAuthDialog(true)}
                 onMobileTooltipClick={setMobileTooltip}
                 token={token}
+              />
+            }
+          />
+          <Route
+            path="jellyfin"
+            element={
+              <JellyfinSection
+                config={config}
+                token={token}
+                onConfigChange={handleConfigChange}
+              />
+            }
+          />
+          <Route
+            path="emby"
+            element={
+              <EmbySection
+                config={config}
+                token={token}
+                onConfigChange={handleConfigChange}
               />
             }
           />

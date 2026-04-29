@@ -557,6 +557,73 @@ class DownloadModule {
     }
   }
 
+  async doPlaylistDownloads(playlist) {
+    const PlaylistVideo = require('../models/playlistvideo');
+    const Video = require('../models/video');
+    const Channel = require('../models/channel');
+    const playlistModule = require('./playlistModule');
+
+    const entries = await PlaylistVideo.findAll({
+      where: { playlist_id: playlist.playlist_id, ignored: false },
+      order: [['position', 'ASC']],
+      attributes: ['youtube_id', 'channel_id'],
+    });
+
+    if (!entries.length) return;
+
+    const toDownload = [];
+    for (const entry of entries) {
+      const already = await Video.findOne({ where: { youtubeId: entry.youtube_id } });
+      if (already) continue;
+
+      if (entry.channel_id) {
+        const channelExists = await Channel.findOne({ where: { channel_id: entry.channel_id } });
+        if (!channelExists) {
+          await playlistModule.ensureSourceChannel({ channel_id: entry.channel_id }, playlist);
+        }
+      }
+
+      toDownload.push(entry.youtube_id);
+    }
+
+    if (!toDownload.length) return;
+
+    const urls = toDownload.map((id) => `https://www.youtube.com/watch?v=${id}`);
+    // doSpecificDownloads expects either an Express request (with .body) or a job-data
+    // object (with .data). Wrap urls under .body to match the Express-request shape.
+    await this.doSpecificDownloads({ body: { urls } });
+  }
+
+  async afterDownloadHook(downloadedYoutubeIds) {
+    if (!downloadedYoutubeIds?.length) return;
+
+    const PlaylistVideo = require('../models/playlistvideo');
+    const Playlist = require('../models/playlist');
+    const m3uGenerator = require('./m3uGenerator');
+    const { mediaServerSync } = require('./mediaServers');
+
+    const rows = await PlaylistVideo.findAll({
+      where: { youtube_id: downloadedYoutubeIds },
+      attributes: ['playlist_id'],
+    });
+
+    const playlistIds = [...new Set(rows.map((r) => r.playlist_id))];
+    if (playlistIds.length === 0) return;
+
+    const playlists = await Playlist.findAll({
+      where: { playlist_id: playlistIds, enabled: true },
+    });
+
+    for (const p of playlists) {
+      try {
+        await m3uGenerator.generatePlaylistM3U(p.id);
+        await mediaServerSync.syncPlaylist(p.id);
+      } catch (err) {
+        logger.error({ err, playlist_id: p.playlist_id }, 'afterDownloadHook failed for playlist');
+      }
+    }
+  }
+
   terminateCurrentDownload() {
     const terminatedJobId = this.downloadExecutor.terminateCurrentJob('User requested termination');
     return terminatedJobId;

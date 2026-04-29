@@ -159,6 +159,20 @@ describe('ChannelSettingsModule', () => {
       const result = channelSettingsModule.validateSubFolder('  ValidFolder  ');
       expect(result.valid).toBe(true);
     });
+
+    test('rejects reserved name "playlists" case-insensitively', () => {
+      const lower = channelSettingsModule.validateSubFolder('playlists');
+      expect(lower.valid).toBe(false);
+      expect(lower.error).toMatch(/reserved/i);
+
+      const upper = channelSettingsModule.validateSubFolder('PLAYLISTS');
+      expect(upper.valid).toBe(false);
+      expect(upper.error).toMatch(/reserved/i);
+
+      const mixed = channelSettingsModule.validateSubFolder('Playlists');
+      expect(mixed.valid).toBe(false);
+      expect(mixed.error).toMatch(/reserved/i);
+    });
   });
 
   describe('validateVideoQuality', () => {

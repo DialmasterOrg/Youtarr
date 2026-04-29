@@ -5,8 +5,8 @@ import { ReviewChannel, RowState } from '../../../types/subscriptionImport';
 import { ImportFlowAction } from '../hooks/useImportFlow';
 import ChannelThumbnail from './ChannelThumbnail';
 import RowSettingsPopover from './RowSettingsPopover';
-import SubFolderChip from '../../ChannelManager/components/chips/SubFolderChip';
-import QualityChip from '../../ChannelManager/components/chips/QualityChip';
+import SubFolderChip from '../../Subscriptions/components/chips/SubFolderChip';
+import QualityChip from '../../Subscriptions/components/chips/QualityChip';
 import RatingBadge from '../../shared/RatingBadge';
 
 interface ReviewTableRowProps {

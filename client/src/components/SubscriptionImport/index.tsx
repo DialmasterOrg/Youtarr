@@ -113,7 +113,7 @@ const ImportSubscriptionsPage: React.FC<ImportSubscriptionsPageProps> = ({ token
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-start gap-3">
-        <Button variant="outlined" size="small" onClick={() => navigate('/channels')}>
+        <Button variant="outlined" size="small" onClick={() => navigate('/subscriptions')}>
           Back to channels
         </Button>
         <div className="space-y-1">
