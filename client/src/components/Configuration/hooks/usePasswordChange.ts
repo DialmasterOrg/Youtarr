@@ -71,7 +71,7 @@ export const usePasswordChange = ({
     } catch (error: any) {
       setSnackbar({
         open: true,
-        message: error.response?.data?.error || 'Failed to update password',
+        message: 'Failed to update password',
         severity: 'error'
       });
     }
