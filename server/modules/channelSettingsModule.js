@@ -66,6 +66,12 @@ class ChannelSettingsModule {
 
     const trimmed = subFolder.trim();
 
+    // Check for reserved names
+    const RESERVED_SUB_FOLDERS = ['playlists'];
+    if (RESERVED_SUB_FOLDERS.includes(trimmed.toLowerCase())) {
+      return { valid: false, error: `Subfolder name "${trimmed}" is reserved by Youtarr and cannot be used` };
+    }
+
     // Check length
     if (trimmed.length > 100) {
       return { valid: false, error: 'Subfolder name must be 100 characters or less' };

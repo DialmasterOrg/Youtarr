@@ -751,6 +751,69 @@ describe('ChannelModule', () => {
           sub_folder: 'CustomFolder'
         });
       });
+
+      test('should seed min_duration, max_duration, title_filter_regex, audio_format on create', async () => {
+        const mockChannel = { ...mockChannelData };
+        Channel.findOne.mockResolvedValueOnce(null);
+        Channel.findOne.mockResolvedValueOnce(null);
+        Channel.create.mockResolvedValue(mockChannel);
+
+        const channelData = {
+          id: 'UC_SEED',
+          title: 'Seed Channel',
+          description: '',
+          uploader: 'Seeder',
+          url: 'https://youtube.com/@seed',
+        };
+
+        const initialSettings = {
+          min_duration: 60,
+          max_duration: 3600,
+          title_filter_regex: '^Tutorial',
+          audio_format: 'mp3',
+        };
+
+        await ChannelModule.upsertChannel(channelData, false, null, initialSettings);
+
+        expect(Channel.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            min_duration: 60,
+            max_duration: 3600,
+            title_filter_regex: '^Tutorial',
+            audio_format: 'mp3',
+          })
+        );
+      });
+
+      test('should not apply new seed fields when channel already exists', async () => {
+        const mockChannel = {
+          ...mockChannelData,
+          update: jest.fn(),
+        };
+        Channel.findOne.mockResolvedValueOnce(mockChannel);
+
+        const channelData = {
+          id: 'UC123',
+          title: 'Existing',
+          description: '',
+          uploader: 'Uploader',
+          url: 'https://youtube.com/@existing',
+        };
+
+        const initialSettings = {
+          min_duration: 60,
+          max_duration: 3600,
+          title_filter_regex: '^Tutorial',
+          audio_format: 'mp3',
+        };
+
+        await ChannelModule.upsertChannel(channelData, false, null, initialSettings);
+
+        expect(mockChannel.update).toHaveBeenCalledWith(
+          expect.not.objectContaining({ min_duration: 60 })
+        );
+        expect(Channel.create).not.toHaveBeenCalled();
+      });
     });
 
     describe('insertVideosIntoDb', () => {

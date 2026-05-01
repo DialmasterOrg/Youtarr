@@ -1489,6 +1489,17 @@ class DownloadExecutor {
           }
         }
 
+        // Trigger playlist M3U regeneration and media-server sync for any playlists
+        // that contain videos from this download batch.
+        if (videoData && videoData.length > 0) {
+          const downloadedIds = videoData.map((v) => v.youtubeId).filter(Boolean);
+          if (downloadedIds.length > 0) {
+            require('../downloadModule').afterDownloadHook(downloadedIds).catch((err) => {
+              logger.error({ err }, 'afterDownloadHook failed');
+            });
+          }
+        }
+
         // Only refresh Plex and start next job if not processing multiple groups
         if (!skipJobTransition) {
           // Derive the set of subfolders from where each video actually ended up

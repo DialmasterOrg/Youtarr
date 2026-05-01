@@ -18,8 +18,12 @@ export interface NavItem {
 }
 
 export const isNavItemSelected = (path: string, item: NavItem) => {
-  if (item.to === '/channels') {
-    return path === item.to || (item.key === 'channels' && path.startsWith('/channel/'));
+  if (item.to === '/subscriptions') {
+    return (
+      path === item.to ||
+      (item.key === 'subscriptions' &&
+        (path.startsWith('/channel/') || path.startsWith('/playlist/')))
+    );
   }
 
   return path === item.to || path.startsWith(`${item.to}/`);
@@ -38,7 +42,10 @@ export const isChannelsSectionActive = (path: string, basePath: string, key: App
     return true;
   }
 
-  return key === 'channels' && path.startsWith('/channel/');
+  return (
+    key === 'subscriptions' &&
+    (path.startsWith('/channel/') || path.startsWith('/playlist/'))
+  );
 };
 
 export const isNavPathActive = (path: string, targetPath: string) => {

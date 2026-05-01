@@ -39,6 +39,21 @@ export const CONFIG_FIELDS = {
   plexIP: { default: '', trackChanges: true },
   plexPort: { default: '32400', trackChanges: true },
   plexViaHttps: { default: false, trackChanges: true },
+  plexPlaylistToken: { default: '', trackChanges: true },
+
+  // Jellyfin integration
+  jellyfinEnabled: { default: false, trackChanges: true },
+  jellyfinUrl: { default: '', trackChanges: true },
+  jellyfinApiKey: { default: '', trackChanges: true },
+  jellyfinUserId: { default: '', trackChanges: true },
+  jellyfinVideoLibraryIds: { default: [] as string[], trackChanges: true },
+
+  // Emby integration
+  embyEnabled: { default: false, trackChanges: true },
+  embyUrl: { default: '', trackChanges: true },
+  embyApiKey: { default: '', trackChanges: true },
+  embyUserId: { default: '', trackChanges: true },
+  embyVideoLibraryIds: { default: [] as string[], trackChanges: true },
 
   // YouTube Data API
   youtubeApiKey: { default: '', trackChanges: true },
@@ -150,6 +165,17 @@ export const DEFAULT_CONFIG: ConfigState = {
   plexIP: CONFIG_FIELDS.plexIP.default,
   plexPort: CONFIG_FIELDS.plexPort.default,
   plexViaHttps: CONFIG_FIELDS.plexViaHttps.default,
+  plexPlaylistToken: CONFIG_FIELDS.plexPlaylistToken.default,
+  jellyfinEnabled: CONFIG_FIELDS.jellyfinEnabled.default,
+  jellyfinUrl: CONFIG_FIELDS.jellyfinUrl.default,
+  jellyfinApiKey: CONFIG_FIELDS.jellyfinApiKey.default,
+  jellyfinUserId: CONFIG_FIELDS.jellyfinUserId.default,
+  jellyfinVideoLibraryIds: CONFIG_FIELDS.jellyfinVideoLibraryIds.default,
+  embyEnabled: CONFIG_FIELDS.embyEnabled.default,
+  embyUrl: CONFIG_FIELDS.embyUrl.default,
+  embyApiKey: CONFIG_FIELDS.embyApiKey.default,
+  embyUserId: CONFIG_FIELDS.embyUserId.default,
+  embyVideoLibraryIds: CONFIG_FIELDS.embyVideoLibraryIds.default,
   youtubeApiKey: CONFIG_FIELDS.youtubeApiKey.default,
   sponsorblockEnabled: CONFIG_FIELDS.sponsorblockEnabled.default,
   sponsorblockAction: CONFIG_FIELDS.sponsorblockAction.default,

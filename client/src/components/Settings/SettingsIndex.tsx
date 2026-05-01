@@ -13,6 +13,8 @@ export const SETTINGS_PAGES = [
   { key: 'cookies', title: 'Cookies', description: 'Cookie configuration and login helpers.' },
   { key: 'notifications', title: 'Notifications', description: 'Toast notifications and alert behavior.' },
   { key: 'plex', title: 'Plex', description: 'Plex integration and library configuration.' },
+  { key: 'jellyfin', title: 'Jellyfin', description: 'Jellyfin connection for native playlist sync.' },
+  { key: 'emby', title: 'Emby', description: 'Emby connection for native playlist sync.' },
   { key: 'security', title: 'Account Security', description: 'Authentication and password management.' },
   { key: 'sponsorblock', title: 'SponsorBlock', description: 'Skip segments and SponsorBlock settings.' },
   { key: 'youtube-api', title: 'YouTube API', description: 'Optional YouTube Data API v3 key for faster metadata fetches.' },

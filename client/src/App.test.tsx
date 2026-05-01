@@ -33,9 +33,9 @@ jest.mock('./components/Configuration', () => {
   };
 });
 
-jest.mock('./components/ChannelManager', () => {
-  return function ChannelManager({ token }: { token: string }) {
-    return <div data-testid="channel-manager-page">Channel Manager Component - Token: {token}</div>;
+jest.mock('./components/Subscriptions', () => {
+  return function Subscriptions({ token }: { token: string }) {
+    return <div data-testid="subscriptions-page">Subscriptions Component - Token: {token}</div>;
   };
 });
 
@@ -251,7 +251,7 @@ describe('App Component', () => {
     });
 
     expect(screen.getByText('Settings')).toBeInTheDocument();
-    expect(screen.getByText('Channels')).toBeInTheDocument();
+    expect(screen.getByText('Channels & Playlists')).toBeInTheDocument();
     expect(screen.getByText('Downloads')).toBeInTheDocument();
     expect(screen.getByText('Videos')).toBeInTheDocument();
   });
@@ -462,7 +462,7 @@ describe('App Component', () => {
       expect(screen.getByText('Settings')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Channels')).toBeInTheDocument();
+    expect(screen.getByText('Channels & Playlists')).toBeInTheDocument();
     expect(screen.getByText('Downloads')).toBeInTheDocument();
     expect(screen.getByText('Videos')).toBeInTheDocument();
   });

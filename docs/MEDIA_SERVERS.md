@@ -110,6 +110,10 @@ See [Youtarr Downloads Folder Structure](YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md)
 | `comment`            | Link to video on YouTube                  |
 | `Content Create Date`| Original upload/release date              |
 
+## Native Playlist Sync
+
+Youtarr can mirror subscribed YouTube playlists into Plex, Jellyfin, and Emby as native playlists, plus emit a universal `.m3u` fallback. Per-server setup, visibility model, and replace semantics are documented separately in [Media Server Playlists](MEDIA_SERVER_PLAYLISTS.md).
+
 ## Quick Start Guides
 
 ### For New Users

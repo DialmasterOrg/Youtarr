@@ -82,6 +82,10 @@ jest.mock('../../../models/channel', () => ({
   findAll: jest.fn().mockResolvedValue([])
 }));
 
+jest.mock('../../downloadModule', () => ({
+  afterDownloadHook: jest.fn().mockResolvedValue(),
+}));
+
 // Mock filesystem module
 jest.mock('../../filesystem', () => {
   const actualPathBuilder = jest.requireActual('../../filesystem/pathBuilder');
