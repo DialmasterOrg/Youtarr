@@ -1,5 +1,7 @@
-# Override file for ARM-based systems (Apple Silicon, Raspberry Pi, etc.)
-# This uses a named volume for MariaDB to work around virtiofs bugs on ARM
+# Named-volume database override.
+# The filename is historical: it was originally added for ARM systems, but it is
+# also useful on Docker Desktop and NAS/virtualized filesystems where bind-mounted
+# MariaDB data can corrupt during schema migrations.
 
 services:
   youtarr-db:
@@ -8,4 +10,3 @@ services:
 
 volumes:
   youtarr-db-data:
-

@@ -57,6 +57,8 @@ You'll need Docker, Docker Compose, Git, and a Bash shell (Git Bash on Windows).
 
 > Want to try unreleased features? See [Using Development Builds](docs/DEVELOPMENT.md#using-development-builds) for the bleeding-edge `dev-latest` image.
 
+> **Database note for Docker Desktop/ARM/NAS users:** Fresh installs started with `./start.sh` use Docker named-volume storage for MariaDB. Existing bind-mounted installs and plain `docker compose up -d` installs may use `./database`; on virtualized filesystems this can be risky for MariaDB schema migrations. If you see `Table ... doesn't exist in engine` or `Incorrect information in file` errors, or if you want to proactively migrate, see [Database Management](docs/DATABASE.md#migrating-from-bind-mount-to-named-volume).
+
 ## Documentation
 
 ### Setup & Configuration

@@ -45,15 +45,8 @@ fi
 # shellcheck source=scripts/_shared_start_tasks.sh
 source "$SCRIPT_DIR/_shared_start_tasks.sh" "$@"
 
-# Detect ARM architecture (Apple Silicon, Raspberry Pi, etc.)
-ARCH=$(uname -m)
-IS_ARM=false
-if [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]]; then
-  IS_ARM=true
-  yt_info "Detected ARM architecture ($ARCH) - using named volume for MariaDB"
-fi
-
 # Bring up the stack using the selected compose files (COMPOSE_FILES is set in _shared_start_tasks.sh)
+# shellcheck disable=SC2086 # COMPOSE_CMD and COMPOSE_FILES intentionally expand into command/flag words.
 $COMPOSE_CMD $COMPOSE_FILES up -d
 
 yt_section "Environment"
