@@ -11,11 +11,15 @@ Youtarr has not yet been accepted into the Community Templates store, but has be
   - See [External Database Guide](external-db.md) for more information about external DB setup since this uses a DB instance that is not directly bundled with Youtarr.
 
 #### If this is the first time you've installed the MariaDB Official docker container
-Set the following configuration options and make note of them as you will need to set the same values in your Youtarr configuration:
+Set the following configuration options and make note of them, you'll need the same values in your Youtarr configuration:
 - `Database Name`: `youtarr` is recommended
 - `Database User`: `youtarr` is recommended
-- `Port`: Leaving as default of `3306` is recommended
+- `Port`: Leave as the default of `3306`
 - `Database Password`: Choose something secure
+- `MYSQL_ROOT_PASSWORD`: Choose something secure and write it down, you'll need it any time you have to log into MariaDB directly
+- `MARIADB_RANDOM_ROOT_PASSWORD`: **Leave this field completely blank.** It's a boolean, and *any* value in it (even the literal string "No") tells MariaDB to ignore your `MYSQL_ROOT_PASSWORD` and generate a random one instead, which you'll never see unless you grep it out of the container logs.
+
+> **Important**: These env vars only take effect the *first time* MariaDB initializes its data directory. If you set them wrong, start the container, and then change them, the changes are silently ignored. The only fix at that point is to stop MariaDB, wipe whatever data path you mapped in the template (e.g. `/mnt/user/appdata/mariadb-official/`), and let it re-initialize from scratch.
 
 The first time MariaDB runs it will automatically create the database and user for Youtarr.
 
@@ -42,8 +46,9 @@ curl -L https://raw.githubusercontent.com/DialmasterOrg/unraid-templates/main/Yo
 4. Select "Youtarr" from "User Templates"
 5. Fill in all configuration details
   - Ensure that your MariaDB instance is setup with a database name, user and password matching what you set in the Youtarr configuration
-  - Use the LAN IP of your Unraid server as DB_HOST (eg `192.168.1.100`)
-    - Do not use `127.0.0.1` or `localhost`, as those refer to the container itself, not the Unraid host.
+  - Use the LAN IP of your Unraid server as `DB_HOST` (eg `192.168.1.100`)
+    - Just the bare IP. No `http://` prefix, no trailing slash. `DB_HOST` is a hostname, not a URL.
+    - Do not use `127.0.0.1` or `localhost`, those refer to the container itself, not the Unraid host.
   - Map your persistent paths (for example `/mnt/user/appdata/youtarr` for `/app/config` and `/mnt/user/media/youtube` for `/data`) and supply the MariaDB connection variables before deploying.
   - Set both `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` to set credentials for login to Youtarr
   - **IMPORTANT**: `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` must meet these rules or they’ll be ignored:
@@ -55,6 +60,20 @@ curl -L https://raw.githubusercontent.com/DialmasterOrg/unraid-templates/main/Yo
 Once the container is running, open http://<your-unraid-ip>:3087 in your browser to access Youtarr.
 
 - **Note** Until the template is accepted into the main Community Applications feed, it is available directly from the repository above.
+
+## Troubleshooting MariaDB connection issues
+
+If Youtarr can't connect to MariaDB on startup, check the MariaDB container logs first. The common ones:
+
+- **`Access denied for user 'youtarr'@'172.17.0.1' (using password: YES)`** in the MariaDB log: the password Youtarr is sending doesn't match what MariaDB has stored. Either there's a typo between the two containers, or you set MariaDB up earlier with different credentials and the data dir still has the old ones. Env var changes are ignored after first init (see the warning in the setup section above).
+- **`Can't connect to MariaDB server`** in the Youtarr log: `DB_HOST` is wrong. Use the Unraid LAN IP, no `http://` prefix, no trailing slash, and not `127.0.0.1`/`localhost`.
+- **You can't even log in to MariaDB as root with the password you set**: the data dir was initialized with a random root password, almost certainly because `MARIADB_RANDOM_ROOT_PASSWORD` had a value in it on first start. Check the container logs from that first startup:
+  ```
+  docker logs MariaDB 2>&1 | grep -i "GENERATED ROOT PASSWORD"
+  ```
+  If you find it, log in with `docker exec -it MariaDB mariadb -uroot -p` and reset everything from there. If the logs have rotated and grep finds nothing, the only path forward is to stop MariaDB, wipe the mapped data directory, and start it again with `MARIADB_RANDOM_ROOT_PASSWORD` blank.
+
+> Newer MariaDB images use `mariadb` as the client binary, not `mysql`. If `docker exec ... mysql` returns "executable file not found in $PATH", use `mariadb` instead.
 
 ## Running as Non-Root User
 
