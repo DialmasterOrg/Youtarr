@@ -6,6 +6,8 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # shellcheck source=scripts/_console_output.sh
 source "$SCRIPT_DIR/_console_output.sh"
+# shellcheck source=scripts/_env_helpers.sh
+source "$SCRIPT_DIR/_env_helpers.sh"
 
 # Default configuration
 FORCE=false
@@ -136,9 +138,7 @@ yt_info "Docker compose command: $COMPOSE_CMD"
 
 # Detect ARM architecture
 ARCH=$(uname -m)
-IS_ARM=false
 if [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]]; then
-    IS_ARM=true
     yt_info "Detected ARM architecture ($ARCH)"
 fi
 
@@ -318,17 +318,37 @@ elif [[ -f "$BACKUP_DIR/database/youtarr.sql" ]]; then
     DB_PORT=$(get_env_value "$PROJECT_DIR/.env" "DB_PORT" "3321")
 
     # Need YOUTUBE_OUTPUT_DIR for compose to work
-    export YOUTUBE_OUTPUT_DIR=$(get_env_value "$PROJECT_DIR/.env" "YOUTUBE_OUTPUT_DIR" "/tmp")
+    YOUTUBE_OUTPUT_DIR=$(get_env_value "$PROJECT_DIR/.env" "YOUTUBE_OUTPUT_DIR" "/tmp")
+    export YOUTUBE_OUTPUT_DIR
 
-    # Determine compose args based on architecture
-    if [[ "$IS_ARM" == "true" ]]; then
-        COMPOSE_ARGS="-f $PROJECT_DIR/docker-compose.yml -f $PROJECT_DIR/docker-compose.arm.yml"
-    else
-        COMPOSE_ARGS="-f $PROJECT_DIR/docker-compose.yml"
+    DB_STORAGE_MODE=$(youtarr_detect_bundled_db_storage_mode "$PROJECT_DIR")
+    if [[ "$DB_STORAGE_MODE" == "ambiguous" ]]; then
+        yt_error "Ambiguous database storage: both ./database/ and the Docker named volume exist."
+        yt_detail "Refusing to restore because that could overwrite the wrong database."
+        yt_detail "Remove the unused storage, then re-run restore."
+        rm -rf "$EXTRACT_DIR"
+        exit 1
     fi
 
+    if [[ "$DB_STORAGE_MODE" == "named-volume" ]]; then
+        yt_info "Restore storage mode: named-volume database."
+        if youtarr_pin_named_volume_in_env "$PROJECT_DIR/.env"; then
+            yt_detail "Pinned named-volume override in restored .env."
+        else
+            PIN_RC=$?
+            if [[ "$PIN_RC" -ne 2 ]]; then
+                yt_warn "Could not pin named-volume override in restored .env."
+                yt_detail "Start future runs with ./start.sh, or add docker-compose.arm.yml to COMPOSE_FILE manually."
+            fi
+        fi
+    else
+        yt_info "Restore storage mode: bind-mounted ./database/."
+    fi
+
+    COMPOSE_ARGS=$(youtarr_compose_args_for_storage_mode "$PROJECT_DIR" "$DB_STORAGE_MODE")
+
     # Clear existing database directory for fresh import (only for bind mount, not named volume)
-    if [[ "$IS_ARM" != "true" ]] && [[ -d "$PROJECT_DIR/database" ]]; then
+    if [[ "$DB_STORAGE_MODE" == "bind-mount" ]] && [[ -d "$PROJECT_DIR/database" ]]; then
         yt_info "Clearing existing database directory..."
         sudo rm -rf "$PROJECT_DIR/database"
         mkdir -p "$PROJECT_DIR/database"
@@ -336,6 +356,7 @@ elif [[ -f "$BACKUP_DIR/database/youtarr.sql" ]]; then
 
     # Start database container
     yt_info "Starting database container..."
+    # shellcheck disable=SC2086 # COMPOSE_CMD and COMPOSE_ARGS intentionally expand into command/flag words.
     (cd "$PROJECT_DIR" && $COMPOSE_CMD $COMPOSE_ARGS up -d youtarr-db)
 
     # Wait for database to be healthy
@@ -357,6 +378,7 @@ elif [[ -f "$BACKUP_DIR/database/youtarr.sql" ]]; then
     if [[ $WAITED -ge $MAX_WAIT ]]; then
         yt_error "Database failed to become ready within ${MAX_WAIT}s"
         yt_detail "Try starting Youtarr normally with ./start.sh"
+        # shellcheck disable=SC2086 # COMPOSE_CMD and COMPOSE_ARGS intentionally expand into command/flag words.
         (cd "$PROJECT_DIR" && $COMPOSE_CMD $COMPOSE_ARGS down)
         rm -rf "$EXTRACT_DIR"
         exit 1
@@ -386,6 +408,7 @@ elif [[ -f "$BACKUP_DIR/database/youtarr.sql" ]]; then
     else
         yt_error "Database import failed"
         yt_detail "Error: $IMPORT_ERROR"
+        # shellcheck disable=SC2086 # COMPOSE_CMD and COMPOSE_ARGS intentionally expand into command/flag words.
         (cd "$PROJECT_DIR" && $COMPOSE_CMD $COMPOSE_ARGS down)
         rm -rf "$EXTRACT_DIR"
         exit 1
@@ -393,6 +416,7 @@ elif [[ -f "$BACKUP_DIR/database/youtarr.sql" ]]; then
 
     # Stop containers - let user start manually
     yt_info "Stopping database container..."
+    # shellcheck disable=SC2086 # COMPOSE_CMD and COMPOSE_ARGS intentionally expand into command/flag words.
     (cd "$PROJECT_DIR" && $COMPOSE_CMD $COMPOSE_ARGS down)
     yt_success "Database container stopped"
 else

@@ -51,46 +51,96 @@ volumes:
   - ./database:/var/lib/mysql
 ```
 - Data stored in `./database` directory on the host
-- May have permission issues on Synology/QNAP and or virtiofs issues on Apple Silicon macOS, leading to database issues/corruption
+- Kept for backwards compatibility with existing bind-mounted installs and plain `docker compose up -d` users
+- Works well on native Linux Docker hosts
+- Can have permission issues on Synology/QNAP
+- Can corrupt during MariaDB schema migrations on Docker Desktop for Windows/macOS, ARM hosts, and some virtualized filesystems
 
-#### Option 2: Named Volume (Recommended for Synology/Apple)
+#### Option 2: Named Volume (Recommended for Docker Desktop/ARM/NAS)
 ```yaml
 volumes:
   - youtarr-db-data:/var/lib/mysql
 ```
 - Better compatibility with Synology/QNAP
-- Avoids permission issues
-- Required for macOS Apple Silicon
-- Not easily visible on host
+- Avoids the virtualized-filesystem write semantics problem that can affect bind-mounted MariaDB
+- Used automatically for fresh installs started with `./start.sh` on every platform (Linux included, since v1.69)
+- Recommended for Docker Desktop on Windows/macOS, ARM systems, and NAS setups
+- Not easily visible on host: data lives under `/var/lib/docker/volumes/<project>_youtarr-db-data/_data` rather than `./database/`. `./scripts/backup.sh` dumps from the running MariaDB container when it is already up; when it has to start MariaDB for a backup, it detects whether this install uses the bind mount or named volume first.
 
-### Switching to Named Volume
+### Migrating from Bind Mount to Named Volume
 
-If experiencing permission errors on Synology/QNAP or corruption on Apple Silicon:
+If you already have Youtarr data in `./database/`, do **not** switch the compose mount by hand unless you intentionally want to start with an empty database. Use the migration helper instead:
 
-**IMPORTANT**: Changing your DB volume mount will *not* migrate your existing database! If you are not experiencing problems, leave this setting alone!
+```bash
+./scripts/migrate-to-named-volume.sh
+```
+
+What the script does (in this order, so any failure leaves the simplest possible recovery state):
+1. Runs a pre-flight permissions check so it fails fast (instead of stalling on an interactive `sudo` prompt) if it cannot write to the project directory.
+2. Stops Youtarr.
+3. Starts the existing bind-mounted MariaDB long enough to run `mysqldump` and to capture per-table row counts.
+4. Renames `./database/` to `./database.bind-mount-backup.<timestamp>/` so the original files are preserved.
+5. Starts a fresh named-volume MariaDB and imports the dump.
+6. Verifies that the table set matches the source **and** that every table has the same row count as the source.
+7. **Only after verification succeeds**, snapshots `.env` to `./.env.bak.<timestamp>` and pins `COMPOSE_PATH_SEPARATOR=:` and `COMPOSE_FILE=docker-compose.yml:docker-compose.arm.yml` in `.env`. This means a failure during step 5 or 6 leaves `.env` untouched, and recovery is just `mv ./database.bind-mount-backup.<timestamp> ./database` plus removing the partial named volume.
+8. Brings the full stack (app + database) back up so Youtarr is immediately usable.
+
+**What the migration does *not* copy**: `mysqldump` runs with `--single-transaction --routines --triggers --events`. Schema, data, stored routines, triggers, and events all migrate. MariaDB users and `GRANT` statements (anything in `mysql.user` / `mysql.db`) do **not**. The default Youtarr install only uses the bundled `root` user, so this is a no-op for almost everyone. If you have created additional database users on the bundled MariaDB, recreate them after the migration completes.
+
+**Password note**: for the bundled `root` database user, `DB_ROOT_PASSWORD` seeds the root password when a fresh MariaDB data directory is initialized, while Youtarr connects with `DB_PASSWORD`. The migration requires those two values to match before it creates the new named-volume database.
+
+After it completes, the stack is already running. Subsequent restarts can use any of:
+
+```bash
+./start.sh                                                       # recommended
+docker compose up -d                                             # the script pins COMPOSE_FILE in .env
+docker compose -f docker-compose.yml -f docker-compose.arm.yml up -d  # explicit override
+```
+
+### Reverting to Bind Mount
+
+The migration is reversible:
 
 1. Stop the stack:
-   `docker compose down` or `./stop.sh`
-
-2. Edit `docker-compose.yml`:
-   ```yaml
-   # Change from:
-   volumes:
-     - ./database:/var/lib/mysql
-
-   # To:
-   volumes:
-     - youtarr-db-data:/var/lib/mysql
+   ```bash
+   ./stop.sh
+   ```
+2. Restore the `.env` snapshot:
+   ```bash
+   mv ./.env.bak.<timestamp> .env
+   ```
+3. Remove the named volume for this install. The name is usually `<project>_youtarr-db-data`:
+   ```bash
+   docker volume ls --format '{{.Name}}' | grep -E '(^|_)youtarr-db-data$'
+   docker volume rm <volume-name>
+   ```
+4. Restore the original bind-mounted database directory:
+   ```bash
+   mv ./database.bind-mount-backup.<timestamp> ./database
+   ```
+5. Start Youtarr:
+   ```bash
+   ./start.sh
    ```
 
-3. Add volume definition at bottom of file:
-   ```yaml
-   volumes:
-     youtarr-db-data:
-   ```
+Changes made while running on the named volume are not present in the old bind-mounted backup. If you have used the named volume for a while and want to keep those newer changes, take a backup first with `./scripts/backup.sh`.
 
-4. Restart:
-   `docker compose up -d` or `./start.sh`
+### Fresh Installs with Named Volume
+
+For a new install with no data to preserve, you can start directly with the named-volume override:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.arm.yml up -d
+```
+
+Or pin the override in `.env` so plain `docker compose up -d` uses it:
+
+```env
+COMPOSE_PATH_SEPARATOR=:
+COMPOSE_FILE=docker-compose.yml:docker-compose.arm.yml
+```
+
+`COMPOSE_PATH_SEPARATOR=:` is important on Windows so Compose parses the file list consistently.
 
 ### Security Considerations
 
@@ -214,11 +264,11 @@ npm run db:create-migration -- --name my-migration-name
 
 #### Common Causes
 1. **Synology/QNAP NAS**: MariaDB runs as UID 999, which may not exist
-2. **macOS Apple Silicon**: virtiofs incompatibility with MariaDB 10.3
+2. **Docker Desktop/ARM/NAS**: virtualized filesystem or permission issues with bind-mounted MariaDB data
 3. **Wrong ownership**: Database files owned by incorrect user
 
 #### Solutions
-1. **Switch to named volume** (see above)
+1. **Migrate to named volume** (see above)
 2. **Fix permissions**:
    ```bash
    # Check current ownership

@@ -360,50 +360,42 @@ ERROR 1396 (HY000) at line 21: Operation CREATE USER failed for 'root'@'%'
    - Exit MySQL and restart the stack.
 4. Once the stack is back online, verify the latest schema under **Configuration → System → Database Health**.
 
-Tip: run with a named volume (see Apple Silicon/Synology sections) so filesystem corruption is less likely to recur.
+Tip: run with a named volume (see Docker Desktop/ARM/Synology sections) so filesystem corruption is less likely to recur.
 
-### Apple Silicon / ARM: `Incorrect information in file` errors
+### Docker Desktop / ARM: `Incorrect information in file` errors
 
-**Problem**: On Apple Silicon (M1/M2/M3/M4) or other ARM systems running Docker Desktop, MariaDB logs errors like:
+**Problem**: MariaDB logs errors like:
 ```
 ERROR 1033 (HY000): Incorrect information in file: './youtarr/videos.frm'
 ```
-This happens whenever MariaDB touches tables stored on a bind-mounted host directory (our default `./database:/var/lib/mysql`). Docker Desktop shares bind mounts over `virtiofs`, and MariaDB 10.3 cannot reliably reopen InnoDB tables on that filesystem ([MariaDB issue #447](https://github.com/MariaDB/mariadb-docker/issues/447), [#481](https://github.com/MariaDB/mariadb-docker/issues/481)). Linux and WSL users are unaffected.
-
-**Solution A: Use the start scripts (Recommended)**
-
-The `./start.sh` and `./start-dev.sh` scripts automatically detect ARM architecture and apply the fix:
-```bash
-./start.sh
+or:
 ```
-No manual configuration needed—the scripts use `docker-compose.arm.yml` as an override on ARM systems.
+errno 1932 - Table 'youtarr.videos' doesn't exist in engine
+```
 
-**Solution B: Manual docker compose (if not using start scripts)**
+This can happen when MariaDB data lives on the bind-mounted host directory (`./database:/var/lib/mysql`) and Docker proxies that directory through a virtualized filesystem, most often Docker Desktop on Windows/macOS, ARM hosts, or some NAS setups. During DDL operations such as `CREATE TABLE` or `ALTER TABLE`, InnoDB can end up out of sync with MariaDB's table metadata. Native Linux Docker hosts are usually unaffected.
 
-If you run `docker compose up` directly, use the ARM override file:
+**Existing install with data to preserve**
+
+Use the migration helper. It dumps the bind-mounted DB, preserves `./database/` as a timestamped backup directory, pins the named-volume override in `.env`, and imports the dump into a fresh named-volume MariaDB:
+```bash
+./scripts/migrate-to-named-volume.sh
+```
+
+See [Database Management](DATABASE.md#migrating-from-bind-mount-to-named-volume) for the full migration and revert details.
+
+**Fresh install with no data to preserve**
+
+Start with the named-volume override:
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.arm.yml up -d
 ```
 
-Or manually edit `docker-compose.yml` to use a named volume:
-
-**NOTE:** Existing data will *not* be migrated!
-1. Stop the stack: `docker compose down`
-2. Edit `docker-compose.yml`:
-   ```yaml
-   services:
-     youtarr-db:
-       volumes:
-         # Comment out the bind mount:
-         # - ./database:/var/lib/mysql
-         # Use named volume instead:
-         - youtarr-db-data:/var/lib/mysql
-
-   # Add at the bottom of the file:
-   volumes:
-     youtarr-db-data:
-   ```
-3. Start Youtarr: `docker compose up -d`
+Or add this to `.env` before plain `docker compose up -d`:
+```env
+COMPOSE_PATH_SEPARATOR=:
+COMPOSE_FILE=docker-compose.yml:docker-compose.arm.yml
+```
 
 **Alternatives**:
 - Point Youtarr at an external MariaDB/MySQL instance via `./start-with-external-db.sh`.
