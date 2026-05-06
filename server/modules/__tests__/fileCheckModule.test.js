@@ -42,7 +42,7 @@ describe('FileCheckModule', () => {
         }
       ];
 
-      mockFs.stat.mockRejectedValueOnce({ code: 'ENOENT' });
+      mockFs.stat.mockRejectedValue({ code: 'ENOENT' });
 
       const result = await fileCheckModule.checkVideoFiles(videos);
 
@@ -189,10 +189,16 @@ describe('FileCheckModule', () => {
         }
       ];
 
-      mockFs.stat
-        .mockRejectedValueOnce({ code: 'ENOENT' }) // video1 not found
-        .mockResolvedValueOnce({ size: 2000 })     // video2 exists, size unchanged
-        .mockResolvedValueOnce({ size: 4000 });    // video4 exists, size changed
+      mockFs.stat.mockImplementation((p) => {
+        if (p === '/videos/channel/video2.mp4') {
+          return Promise.resolve({ size: 2000 });
+        }
+        if (p === '/videos/channel/video4.mp4') {
+          return Promise.resolve({ size: 4000 });
+        }
+        // video1 (and any same-dir extension fallbacks) all ENOENT
+        return Promise.reject({ code: 'ENOENT' });
+      });
 
       const result = await fileCheckModule.checkVideoFiles(videos);
 
@@ -229,7 +235,6 @@ describe('FileCheckModule', () => {
         { id: 2, removed: false },
         { id: 4, fileSize: 4000 }
       ]);
-      expect(mockFs.stat).toHaveBeenCalledTimes(3);
     });
 
     test('should handle non-ENOENT errors by not updating', async () => {
@@ -340,6 +345,105 @@ describe('FileCheckModule', () => {
       expect(result.updates).toEqual([
         { id: 1, fileSize: largeSize }
       ]);
+    });
+
+    test('should swap extension and update path when stored .mp4 is now .mkv at same dir', async () => {
+      const videos = [
+        {
+          id: 1,
+          youtubeId: 'abc123',
+          filePath: '/videos/channel/video [abc123].mp4',
+          fileSize: '1000',
+          removed: false
+        }
+      ];
+
+      // Original .mp4 is gone; .webm fails too; .mkv is found
+      mockFs.stat.mockImplementation((p) => {
+        if (p === '/videos/channel/video [abc123].mp4') {
+          return Promise.reject({ code: 'ENOENT' });
+        }
+        if (p === '/videos/channel/video [abc123].webm') {
+          return Promise.reject({ code: 'ENOENT' });
+        }
+        if (p === '/videos/channel/video [abc123].mkv') {
+          return Promise.resolve({ size: 5000 });
+        }
+        return Promise.reject({ code: 'ENOENT' });
+      });
+
+      const result = await fileCheckModule.checkVideoFiles(videos);
+
+      expect(result.updates).toEqual([
+        {
+          id: 1,
+          filePath: '/videos/channel/video [abc123].mkv',
+          fileSize: 5000
+        }
+      ]);
+    });
+
+    test('should leave filePath untouched when no extension variant exists', async () => {
+      const videos = [
+        {
+          id: 1,
+          youtubeId: 'abc123',
+          filePath: '/videos/channel/video [abc123].mp4',
+          fileSize: '1000',
+          removed: false
+        }
+      ];
+
+      mockFs.stat.mockRejectedValue({ code: 'ENOENT' });
+
+      const result = await fileCheckModule.checkVideoFiles(videos);
+
+      // Marked removed, but filePath/fileSize must NOT appear in the update
+      expect(result.updates).toHaveLength(1);
+      expect(result.updates[0]).toEqual({ id: 1, removed: true });
+      expect(result.updates[0].filePath).toBeUndefined();
+      expect(result.updates[0].fileSize).toBeUndefined();
+    });
+
+    test('should not flip removed status when stat fails with non-ENOENT error', async () => {
+      const videos = [
+        {
+          id: 1,
+          youtubeId: 'abc123',
+          filePath: '/videos/channel/video [abc123].mp4',
+          fileSize: '1000',
+          removed: false
+        }
+      ];
+
+      mockFs.stat.mockRejectedValue({ code: 'EACCES' });
+
+      const result = await fileCheckModule.checkVideoFiles(videos);
+
+      expect(result.updates).toEqual([]);
+    });
+
+    test('should mark removed when stored .mp3 is missing and no audio variant exists', async () => {
+      const videos = [
+        {
+          id: 1,
+          youtubeId: 'abc123',
+          audioFilePath: '/videos/channel/audio [abc123].mp3',
+          audioFileSize: '500',
+          removed: false
+        }
+      ];
+
+      // Today AUDIO_EXTENSIONS = ['.mp3'] only, so this test verifies that with a
+      // single-entry audio list, a missing .mp3 with no replacement marks removed
+      // without altering audioFilePath. (It also exercises the audio code path.)
+      mockFs.stat.mockRejectedValue({ code: 'ENOENT' });
+
+      const result = await fileCheckModule.checkVideoFiles(videos);
+
+      expect(result.updates).toHaveLength(1);
+      expect(result.updates[0]).toEqual({ id: 1, removed: true });
+      expect(result.updates[0].audioFilePath).toBeUndefined();
     });
   });
 
@@ -540,6 +644,21 @@ describe('FileCheckModule', () => {
       ).rejects.toThrow('Database connection failed');
     });
 
+    test('should set filePath and fileSize when both provided', async () => {
+      const updates = [
+        { id: 1, filePath: '/videos/channel/video [abc123].mkv', fileSize: 5000, removed: false }
+      ];
+
+      await fileCheckModule.applyVideoUpdates(mockSequelize, mockSequelizeLib, updates);
+
+      expect(mockSequelize.query).toHaveBeenCalledWith(
+        'UPDATE Videos SET filePath = ?, fileSize = ?, removed = ? WHERE id = ?',
+        expect.objectContaining({
+          replacements: ['/videos/channel/video [abc123].mkv', 5000, 0, 1]
+        })
+      );
+    });
+
     test('should continue with remaining updates if one fails', async () => {
       const updates = [
         { id: 1, fileSize: 2000 },
@@ -576,9 +695,13 @@ describe('FileCheckModule', () => {
         }
       ];
 
-      mockFs.stat
-        .mockResolvedValueOnce({ size: 1500 })     // video1 size changed
-        .mockRejectedValueOnce({ code: 'ENOENT' }); // video2 not found
+      mockFs.stat.mockImplementation((p) => {
+        if (p === '/videos/channel/video1.mp4') {
+          return Promise.resolve({ size: 1500 });
+        }
+        // video2 and any extension fallbacks all ENOENT
+        return Promise.reject({ code: 'ENOENT' });
+      });
 
       const mockSequelize = {
         query: jest.fn()

@@ -1,19 +1,57 @@
 const fs = require('fs').promises;
+const path = require('path');
+const { VIDEO_EXTENSIONS, AUDIO_EXTENSIONS } = require('./filesystem/constants');
 
 /**
  * Check file existence and update video metadata.
- * This shared module provides file existence checking for videos,
- * updating their 'removed' status and file size in real-time.
+ * Real-time per-page check: stats the stored path, falls back to same-dir
+ * same-basename files with any supported extension if the original is missing.
  */
 class FileCheckModule {
   /**
-   * Check file existence for an array of videos and prepare updates.
-   * Checks both video files (filePath) and audio files (audioFilePath).
-   * Only checks files that have a path stored to avoid incorrect marking.
+   * Try the original path; if missing, try same-dir variants with every
+   * extension in `extensionList`.
    *
-   * @param {Array} videos - Array of video objects with filePath and audioFilePath properties
-   * @returns {Promise<Object>} - Object with updated videos array and database updates array
+   * Returns:
+   *   { exists: true, replaced: false, path, size }     - original found
+   *   { exists: true, replaced: true,  path, size }     - variant found
+   *   { exists: false, statusKnown: true }              - definitively missing
+   *   { exists: false, statusKnown: false }             - non-ENOENT error
    */
+  async _findExistingMediaFile(originalPath, extensionList) {
+    try {
+      const stats = await fs.stat(originalPath);
+      return { exists: true, replaced: false, path: originalPath, size: stats.size };
+    } catch (err) {
+      if (err.code !== 'ENOENT') {
+        return { exists: false, statusKnown: false };
+      }
+      // ENOENT on the stored path; fall through to the same-dir extension scan.
+    }
+
+    const dir = path.dirname(originalPath);
+    const ext = path.extname(originalPath);
+    const extLower = ext.toLowerCase();
+    const base = path.basename(originalPath, ext);
+
+    for (const candidateExt of extensionList) {
+      if (candidateExt.toLowerCase() === extLower) {
+        continue;
+      }
+      const candidatePath = path.join(dir, base + candidateExt);
+      try {
+        const stats = await fs.stat(candidatePath);
+        return { exists: true, replaced: true, path: candidatePath, size: stats.size };
+      } catch (err) {
+        if (err.code !== 'ENOENT') {
+          return { exists: false, statusKnown: false };
+        }
+      }
+    }
+
+    return { exists: false, statusKnown: true };
+  }
+
   async checkVideoFiles(videos) {
     const updates = [];
     const updatedVideos = [...videos];
@@ -24,69 +62,58 @@ class FileCheckModule {
       let hasUpdates = false;
       let videoFileExists = false;
       let audioFileExists = false;
-      // Track if we could definitively determine file status (not blocked by permission errors, etc.)
-      let videoFileStatusKnown = !video.filePath; // If no path, status is "known" (not applicable)
-      let audioFileStatusKnown = !video.audioFilePath; // If no path, status is "known" (not applicable)
+      let videoFileStatusKnown = !video.filePath;
+      let audioFileStatusKnown = !video.audioFilePath;
 
-      // Check video file (filePath)
       if (video.filePath) {
-        try {
-          const stats = await fs.stat(video.filePath);
+        const result = await this._findExistingMediaFile(video.filePath, VIDEO_EXTENSIONS);
+        if (result.exists) {
           videoFileExists = true;
           videoFileStatusKnown = true;
 
-          // File exists - update if size changed
-          if (video.fileSize !== stats.size.toString()) {
-            update.fileSize = stats.size;
+          if (result.replaced) {
+            update.filePath = result.path;
+            update.fileSize = result.size;
+            hasUpdates = true;
+          } else if (video.fileSize !== result.size.toString()) {
+            update.fileSize = result.size;
             hasUpdates = true;
           }
-        } catch (err) {
-          if (err.code === 'ENOENT') {
-            // Video file doesn't exist - definitively known
-            videoFileExists = false;
-            videoFileStatusKnown = true;
-          }
-          // For non-ENOENT errors (permissions, etc.), we can't determine status
-          // videoFileStatusKnown remains false, so we won't change removed status
+        } else {
+          videoFileExists = false;
+          videoFileStatusKnown = result.statusKnown;
         }
       }
 
-      // Check audio file (audioFilePath)
       if (video.audioFilePath) {
-        try {
-          const stats = await fs.stat(video.audioFilePath);
+        const result = await this._findExistingMediaFile(video.audioFilePath, AUDIO_EXTENSIONS);
+        if (result.exists) {
           audioFileExists = true;
           audioFileStatusKnown = true;
 
-          // File exists - update if size changed
-          if (video.audioFileSize !== stats.size.toString()) {
-            update.audioFileSize = stats.size;
+          if (result.replaced) {
+            update.audioFilePath = result.path;
+            update.audioFileSize = result.size;
+            hasUpdates = true;
+          } else if (video.audioFileSize !== result.size.toString()) {
+            update.audioFileSize = result.size;
             hasUpdates = true;
           }
-        } catch (err) {
-          if (err.code === 'ENOENT') {
-            // Audio file doesn't exist - definitively known
-            audioFileExists = false;
-            audioFileStatusKnown = true;
-          }
-          // For non-ENOENT errors (permissions, etc.), we can't determine status
-          // audioFileStatusKnown remains false, so we won't change removed status
+        } else {
+          audioFileExists = false;
+          audioFileStatusKnown = result.statusKnown;
         }
       }
 
-      // Determine removed status: removed only if NO files exist (both video and audio missing)
-      // Only update if we could definitively determine status for all paths
       const hasAnyPath = video.filePath || video.audioFilePath;
       const hasAnyFile = videoFileExists || audioFileExists;
       const canDetermineRemovedStatus = videoFileStatusKnown && audioFileStatusKnown;
 
       if (hasAnyPath && canDetermineRemovedStatus) {
         if (hasAnyFile && video.removed) {
-          // At least one file exists, mark as not removed
           update.removed = false;
           hasUpdates = true;
         } else if (!hasAnyFile && !video.removed) {
-          // No files exist, mark as removed
           update.removed = true;
           hasUpdates = true;
         }
@@ -94,30 +121,20 @@ class FileCheckModule {
 
       if (hasUpdates) {
         updates.push(update);
-        // Update the video object for immediate response
         updatedVideos[i] = {
           ...video,
+          ...(update.filePath !== undefined && { filePath: update.filePath }),
           ...(update.fileSize !== undefined && { fileSize: update.fileSize.toString() }),
+          ...(update.audioFilePath !== undefined && { audioFilePath: update.audioFilePath }),
           ...(update.audioFileSize !== undefined && { audioFileSize: update.audioFileSize.toString() }),
           ...(update.removed !== undefined && { removed: update.removed })
         };
       }
     }
-    // Intentionally NOT searching for videos without a filePath or audioFilePath
-    // This prevents incorrectly marking videos as removed when we can't find them quickly
-    // The backfill process will handle finding and updating these videos
 
     return { videos: updatedVideos, updates };
   }
 
-  /**
-   * Apply database updates for video file status changes.
-   *
-   * @param {Object} sequelize - Sequelize instance
-   * @param {Object} Sequelize - Sequelize library
-   * @param {Array} updates - Array of update objects with id, fileSize, audioFileSize, and/or removed properties
-   * @returns {Promise<void>}
-   */
   async applyVideoUpdates(sequelize, Sequelize, updates) {
     if (updates.length === 0) {
       return;
@@ -127,9 +144,17 @@ class FileCheckModule {
       const setClauses = [];
       const values = [];
 
+      if (update.filePath !== undefined) {
+        setClauses.push('filePath = ?');
+        values.push(update.filePath);
+      }
       if (update.fileSize !== undefined) {
         setClauses.push('fileSize = ?');
         values.push(update.fileSize);
+      }
+      if (update.audioFilePath !== undefined) {
+        setClauses.push('audioFilePath = ?');
+        values.push(update.audioFilePath);
       }
       if (update.audioFileSize !== undefined) {
         setClauses.push('audioFileSize = ?');

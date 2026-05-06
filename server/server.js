@@ -612,7 +612,7 @@ const initialize = async () => {
           // Run video metadata backfill asynchronously after server starts
           setTimeout(() => {
             logger.info('Starting async video metadata backfill');
-            videosModule.backfillVideoMetadata()
+            videosModule.backfillVideoMetadata({ trigger: 'startup' })
               .then(() => {
                 logger.info('Video metadata backfill completed successfully');
               })

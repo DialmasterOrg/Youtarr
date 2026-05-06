@@ -12,6 +12,7 @@ const createVideoDetailRoutes = require('./videoDetail');
 const createVideoSearchRoutes = require('./videoSearch');
 const createYoutubeApiKeyRoutes = require('./youtubeApiKey');
 const createYtdlpOptionsRoutes = require('./ytdlpOptions');
+const createMaintenanceRoutes = require('./maintenance');
 const videoMetadataModule = require('../modules/videoMetadataModule');
 const videoOembedEnricher = require('../modules/videoOembedEnricher');
 
@@ -84,6 +85,9 @@ function registerRoutes(app, deps) {
 
   // Video detail routes (metadata and streaming)
   app.use(createVideoDetailRoutes({ verifyToken, videoMetadataModule }));
+
+  // Maintenance routes
+  app.use(createMaintenanceRoutes({ verifyToken, videosModule, configModule }));
 }
 
 module.exports = { registerRoutes };

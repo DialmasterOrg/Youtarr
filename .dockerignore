@@ -1,4 +1,5 @@
 # Ignore database files
 database/
 database/*
+database.bind-mount-backup.*
 

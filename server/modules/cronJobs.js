@@ -91,7 +91,7 @@ function initialize(deps = {}) {
     logger.info('Starting scheduled video metadata backfill');
     try {
       // Run asynchronously without blocking - the method handles its own async flow
-      videosModule.backfillVideoMetadata()
+      videosModule.backfillVideoMetadata({ trigger: 'scheduled' })
         .then(result => {
           if (result && result.timedOut) {
             logger.info('Video metadata backfill reached time limit, will continue tomorrow');

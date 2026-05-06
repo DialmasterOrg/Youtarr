@@ -606,6 +606,31 @@ Youtarr can optionally check for and install yt-dlp updates on a nightly schedul
   - `error` — `yt-dlp -U` failed; `message` holds a short error description.
 - **Note**: Managed by the application; do not edit by hand.
 
+## Filesystem Rescan
+
+For user-facing documentation on when and how to use the filesystem rescan (moving files, converting formats, supported extensions), see [Rescan Files on Disk](USAGE_GUIDE.md#rescan-files-on-disk).
+
+### Last Rescan Result
+- **Config Key**: `rescanLastRun`
+- **Type**: `object | null`
+- **Default**: `null`
+- **Shape**:
+  ```json
+  {
+    "startedAt": "2026-05-04T15:13:00.000Z",
+    "completedAt": "2026-05-04T15:14:32.000Z",
+    "trigger": "manual | scheduled | startup",
+    "status": "completed | timed-out | error",
+    "videosUpdated": 12,
+    "videosMarkedMissing": 3,
+    "videosScanned": 8421,
+    "filesFoundOnDisk": 8423,
+    "errorMessage": null
+  }
+  ```
+- **Description**: Records the outcome of the most recent filesystem reconciliation pass (the `backfillVideoMetadata` run). Written by the daily cron, the server-startup pass, and the manual "Rescan files on disk" action on the Maintenance settings page. Surfaced read-only on that page so users can see when the last scan ran and what it found or fixed.
+- **Note**: Managed by the application; do not edit by hand.
+
 ## Account & Security
 
 ### username

@@ -55,6 +55,7 @@
   "ytdlpLastChecked": null,
   "ytdlpLastUpdated": null,
   "ytdlpLastResult": null,
+  "rescanLastRun": null,
   "ytdlpIpFamily": "ipv4",
   "ytdlpDownloadRateLimit": "",
   "ytdlpCustomArgs": ""

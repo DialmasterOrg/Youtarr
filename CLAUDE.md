@@ -31,7 +31,7 @@ For multi-part requests (e.g., "review this PR AND explain WebSocket handling"),
 ### Backend (server/)
 - `server.js`: Express entry point. `db.js`: Sequelize setup. `logger.js`: Pino logger with request correlation.
 - `models/`: Sequelize models (channel, video, job, jobvideo, jobvideodownload, channelvideo, session, apikey). Associations: Channel hasMany Videos, Job hasMany JobVideos.
-- `routes/`: API handlers (auth, channels, videos, videoDetail, videoSearch, config, jobs, plex, setup, subscriptions, apikeys, ytdlpOptions, health). All use the dependency injection factory pattern; wiring lives in `server/routes/index.js`.
+- `routes/`: API handlers (auth, channels, videos, videoDetail, videoSearch, config, jobs, plex, setup, subscriptions, apikeys, ytdlpOptions, health, maintenance). All use the dependency injection factory pattern; wiring lives in `server/routes/index.js`.
 - `modules/`: class-based singletons holding business logic. Top-level modules include `channelModule`, `downloadModule`, `plexModule`, `jobModule`, `configModule`, `videosModule`, `videoMetadataModule`, `videoSearchModule`, `webSocketServer`, `databaseHealthModule`, `notificationModule`, `channelSettingsModule`, `videoDeletionModule`, `nfoGenerator`, `cronJobs`, `apiKeyModule`, `ytdlpModule`, `messageEmitter`.
 - `modules/download/`: download orchestration (`downloadExecutor`, `ytdlpCommandBuilder`, `DownloadProgressMonitor`, `tempPathManager`, `videoMetadataProcessor`, `customArgsParser`, `ytdlpValidator`).
 - `modules/filesystem/`: path/file abstraction (`pathBuilder`, `directoryManager`, `fileOperations`, `sanitizer`, `constants`). Good example of the sub-module aggregator pattern.
@@ -44,7 +44,7 @@ For multi-part requests (e.g., "review this PR AND explain WebSocket handling"),
 - `components/shared/`: reusable components used across multiple features (e.g. `VideoModal/` for the video detail modal, `ThumbnailClickOverlay` for clickable thumbnail hotspots, `DeleteVideosDialog`).
 - `components/ui/`: theme-neutral UI primitives (Button, Card, Dialog, Select, etc.) built on Radix and styled via CSS variables + Tailwind. Use these instead of Material-UI imports in new code.
 - `components/layout/`: app shell and navigation chrome. `AppShell.tsx` is the outer frame; `NavSidebar.tsx` / `NavHeader.tsx` own desktop and mobile nav; `navLayoutConstants.ts` holds shared sidebar/header sizing constants; `layoutFallback.css` provides fallback CSS variables for themes that skip layout overrides.
-- `components/Settings/`: Settings page wrapper and splash index (`SettingsIndex.tsx`) listing the per-section routes under `/settings/<key>`.
+- `components/Settings/`: Settings page wrapper and splash index (`SettingsIndex.tsx`) listing the per-section routes under `/settings/<key>`. `MaintenanceSection.tsx` hosts the manual filesystem rescan trigger.
 - `themes/`: theme definitions (`playful`, `linear`, `flat`), shared layout policy (`layoutPolicy.ts`), and the `ALL_THEMES` registry. New themes add an entry here and implement the required token surface.
 - `hooks/`: app-wide custom hooks for data fetching and state.
 - `contexts/` and `providers/`: React Context for cross-cutting concerns (auth token, WebSocket, theme). `contexts/ThemeEngineContext.tsx` owns the active theme mode, resolves the layout policy for the current viewport, and injects theme CSS variables onto the document root.

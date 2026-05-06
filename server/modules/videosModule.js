@@ -5,9 +5,13 @@ const path = require('path');
 const configModule = require('./configModule');
 const fileCheckModule = require('./fileCheckModule');
 const logger = require('../logger');
+const messageEmitter = require('./messageEmitter');
+const { AUDIO_EXTENSIONS, MEDIA_EXTENSIONS } = require('./filesystem/constants');
 
 class VideosModule {
-  constructor() {}
+  constructor() {
+    this._backfillRunning = false;
+  }
 
   async getVideosPaginated(options = {}) {
     const {
@@ -349,51 +353,60 @@ class VideosModule {
         const fullPath = path.join(dir, entry.name);
 
         if (entry.isDirectory()) {
-          // Recursively scan subdirectories
           await this.scanForVideoFiles(fullPath, fileMap, duplicates);
-        } else if (entry.isFile() && (entry.name.endsWith('.mp4') || entry.name.endsWith('.mp3'))) {
-          // Extract YouTube ID from filename - matches files ending with [youtube_id].mp4 or [youtube_id].mp3
-          // Accepts ANY characters before the final [id].ext pattern
-          const match = entry.name.match(/\[([^[\]]+)\]\.(mp4|mp3)$/);
-          if (match) {
-            const youtubeId = match[1];
-            const ext = match[2]; // 'mp4' or 'mp3'
-            const isAudio = ext === 'mp3';
-            const stats = await fs.stat(fullPath);
+          continue;
+        }
 
-            // Get or create entry for this youtubeId
-            if (!fileMap.has(youtubeId)) {
-              fileMap.set(youtubeId, {
-                videoFilePath: null,
-                videoFileSize: null,
-                audioFilePath: null,
-                audioFileSize: null
-              });
-            }
+        if (!entry.isFile()) {
+          continue;
+        }
 
-            const existing = fileMap.get(youtubeId);
-            const pathKey = isAudio ? 'audioFilePath' : 'videoFilePath';
-            const sizeKey = isAudio ? 'audioFileSize' : 'videoFileSize';
+        const ext = path.extname(entry.name).toLowerCase();
+        if (!MEDIA_EXTENSIONS.includes(ext)) {
+          continue;
+        }
 
-            // Check for duplicates of the same type
-            if (existing[pathKey]) {
-              // Track duplicate for logging
-              if (!duplicates.has(youtubeId)) {
-                duplicates.set(youtubeId, []);
-              }
-              duplicates.get(youtubeId).push(fullPath);
+        // Match files ending with [<id>].<ext>; <id> is whatever yt-dlp wrote
+        // between the brackets at the end of the filename.
+        const match = entry.name.match(/\[([^[\]]+)\]\.[a-z0-9]+$/i);
+        if (!match) {
+          continue;
+        }
 
-              // Keep the larger file (likely the more complete download)
-              if (stats.size > existing[sizeKey]) {
-                logger.warn({ youtubeId, filePath: fullPath, size: stats.size, type: ext }, 'Duplicate found: keeping larger file');
-                existing[pathKey] = fullPath;
-                existing[sizeKey] = stats.size;
-              }
-            } else {
-              existing[pathKey] = fullPath;
-              existing[sizeKey] = stats.size;
-            }
+        const youtubeId = match[1];
+        const isAudio = AUDIO_EXTENSIONS.includes(ext);
+        const stats = await fs.stat(fullPath);
+
+        if (!fileMap.has(youtubeId)) {
+          fileMap.set(youtubeId, {
+            videoFilePath: null,
+            videoFileSize: null,
+            audioFilePath: null,
+            audioFileSize: null
+          });
+        }
+
+        const existing = fileMap.get(youtubeId);
+        const pathKey = isAudio ? 'audioFilePath' : 'videoFilePath';
+        const sizeKey = isAudio ? 'audioFileSize' : 'videoFileSize';
+
+        if (existing[pathKey]) {
+          if (!duplicates.has(youtubeId)) {
+            duplicates.set(youtubeId, []);
           }
+          duplicates.get(youtubeId).push(fullPath);
+
+          if (stats.size > existing[sizeKey]) {
+            logger.warn(
+              { youtubeId, filePath: fullPath, size: stats.size, type: ext },
+              'Duplicate found: keeping larger file'
+            );
+            existing[pathKey] = fullPath;
+            existing[sizeKey] = stats.size;
+          }
+        } else {
+          existing[pathKey] = fullPath;
+          existing[sizeKey] = stats.size;
         }
       }
     } catch (err) {
@@ -403,14 +416,38 @@ class VideosModule {
     return { fileMap, duplicates };
   }
 
-  async backfillVideoMetadata(timeLimit = 5 * 60 * 1000) { // Default 5 minutes
+  async backfillVideoMetadata(arg = {}) {
+    const opts = typeof arg === 'number' ? { timeLimit: arg } : arg;
+    const timeLimit = opts.timeLimit ?? 5 * 60 * 1000;
+    const trigger = opts.trigger ?? 'scheduled';
+
+    if (this._backfillRunning) {
+      logger.info({ trigger }, 'Backfill already running, skipping');
+      return { skipped: true, reason: 'already-running' };
+    }
+    this._backfillRunning = true;
+
     const startTime = Date.now();
+    const startedAtIso = new Date(startTime).toISOString();
     const logProgress = (message) => {
       const elapsed = Math.round((Date.now() - startTime) / 1000);
       logger.info({ elapsed, context: 'backfill' }, message);
     };
 
+    let totalProcessed = 0;
+    let totalUpdated = 0;
+    let totalRemoved = 0;
+    let fileMapSize = 0;
+    let result;
+
     try {
+      // Emit inside the try so a synchronous emit failure still triggers the
+      // finally block and clears the lock.
+      messageEmitter.emitMessage('broadcast', null, 'server', 'rescanStatus', {
+        running: true,
+        trigger
+      });
+
       logProgress('Starting video metadata backfill...');
       const outputDir = configModule.directoryPath;
 
@@ -429,6 +466,7 @@ class VideosModule {
       // First, scan filesystem for all video files
       logProgress('Scanning filesystem for video files...');
       const { fileMap, duplicates } = await this.scanForVideoFiles(outputDir);
+      fileMapSize = fileMap.size;
       logProgress(`Found ${fileMap.size} video files on disk`);
 
 
@@ -444,9 +482,6 @@ class VideosModule {
       // Process videos in chunks to avoid memory issues
       const VIDEO_CHUNK_SIZE = 1000; // Process 1000 videos at a time
       let offset = 0;
-      let totalProcessed = 0;
-      let totalUpdated = 0;
-      let totalRemoved = 0;
 
       // Get total count first
       const totalCount = await Video.count();
@@ -500,8 +535,10 @@ class VideosModule {
               // Check if we need to clear video fields (video file was deleted but audio exists)
               const videoFileRemoved = !hasVideoFile && hasAudioFile && (video.filePath || video.fileSize);
 
+              // Sequelize BOOLEAN columns come back as 0/1 in raw mode, so use a
+              // truthy check; `=== true` would never match the raw integer.
               if (videoPathChanged || videoSizeChanged || audioPathChanged || audioSizeChanged ||
-                  audioFileRemoved || videoFileRemoved || video.removed === true) {
+                  audioFileRemoved || videoFileRemoved || video.removed) {
                 const update = {
                   id: video.id,
                   removed: false
@@ -624,27 +661,111 @@ class VideosModule {
       logger.info({
         elapsed,
         totalProcessed,
-        filesOnDisk: fileMap.size,
+        filesOnDisk: fileMapSize,
         updated: totalUpdated,
         removed: totalRemoved
       }, 'Video metadata backfill completed');
 
-      return {
+      result = {
         processed: totalProcessed,
-        filesOnDisk: fileMap.size,
+        filesOnDisk: fileMapSize,
         updated: totalUpdated,
         removed: totalRemoved,
-        timeElapsed: elapsed
+        timeElapsed: elapsed,
+        trigger,
+        startedAt: startedAtIso,
+        completedAt: new Date().toISOString(),
+        status: 'completed'
       };
+      return result;
     } catch (err) {
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
       if (err.message && err.message.includes('Time limit exceeded')) {
-        const elapsed = Math.round((Date.now() - startTime) / 1000);
         logger.info({ elapsed }, 'Video metadata backfill stopped (time limit reached), will continue at next scheduled run');
-        return { timedOut: true, timeElapsed: elapsed };
+        result = {
+          timedOut: true,
+          timeElapsed: elapsed,
+          trigger,
+          startedAt: startedAtIso,
+          completedAt: new Date().toISOString(),
+          status: 'timed-out',
+          processed: totalProcessed,
+          filesOnDisk: fileMapSize,
+          updated: totalUpdated,
+          removed: totalRemoved
+        };
+        return result;
       }
       logger.error({ err }, 'Error during video metadata backfill');
+      result = {
+        trigger,
+        startedAt: startedAtIso,
+        completedAt: new Date().toISOString(),
+        status: 'error',
+        errorMessage: err.message || 'Unknown error',
+        processed: totalProcessed,
+        filesOnDisk: fileMapSize,
+        updated: totalUpdated,
+        removed: totalRemoved
+      };
       throw err;
+    } finally {
+      let lastRun = null;
+
+      if (result) {
+        lastRun = {
+          startedAt: result.startedAt,
+          completedAt: result.completedAt,
+          trigger: result.trigger,
+          status: result.status,
+          videosUpdated: result.updated || 0,
+          videosMarkedMissing: result.removed || 0,
+          videosScanned: result.processed || 0,
+          filesFoundOnDisk: result.filesOnDisk || 0,
+          errorMessage: result.errorMessage || null
+        };
+
+        try {
+          const currentConfig = configModule.getConfig();
+          configModule.updateConfig({ ...currentConfig, rescanLastRun: lastRun });
+        } catch (persistErr) {
+          logger.error({ err: persistErr }, 'Failed to persist rescanLastRun');
+        }
+      }
+
+      this._backfillRunning = false;
+
+      try {
+        messageEmitter.emitMessage('broadcast', null, 'server', 'rescanStatus', {
+          running: false,
+          lastRun
+        });
+      } catch (emitErr) {
+        logger.error({ err: emitErr }, 'Failed to emit rescanStatus completion');
+      }
     }
+  }
+
+  /**
+   * Atomically check the lock and kick off a backfill. Returns synchronously
+   * with `started: true` (caller should respond 202) or `started: false`
+   * (caller should respond 409). The actual backfill runs as a fire-and-forget
+   * task; errors are logged inside `backfillVideoMetadata` itself.
+   */
+  tryStartBackfill({ trigger = 'manual' } = {}) {
+    if (this._backfillRunning) {
+      return { started: false, reason: 'already-running' };
+    }
+    // backfillVideoMetadata sets the flag synchronously before its first await,
+    // so launching it here is race-free for in-process callers.
+    this.backfillVideoMetadata({ trigger }).catch((err) => {
+      logger.error({ err }, 'Manual backfill run failed');
+    });
+    return { started: true };
+  }
+
+  isBackfillRunning() {
+    return this._backfillRunning;
   }
 
   async setVideoProtection(id, protectedState) {

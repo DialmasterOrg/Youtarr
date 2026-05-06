@@ -72,3 +72,14 @@ YouTube Downloads/
 │       ├── Channel - Video [id].[lang].srt
 │       └── Channel - Video [id].jpg
 ```
+
+## Supported File Extensions (Reads vs. Writes)
+
+Youtarr **writes** downloaded media as `.mp4` for video and `.mp3` for audio-only downloads.
+
+Youtarr **reads** a wider set of extensions when reconciling the database with disk (during the daily scheduled scan, the server-startup scan, and the manual **Settings -> Maintenance -> Rescan files on disk** action):
+
+- **Video**: `.mp4`, `.webm`, `.mkv`, `.m4v`, `.avi`
+- **Audio**: `.mp3`
+
+This means you can safely convert downloaded videos to a different supported container outside Youtarr (for example, transcoding `.mp4` to `.mkv`) without losing track of them, as long as the `[<youtube-id>]` segment remains in the filename. Run a rescan from the Maintenance settings page after making changes to update Youtarr's view immediately, or wait for the next scheduled scan. See the [Usage Guide](USAGE_GUIDE.md#rescan-files-on-disk) for details.
