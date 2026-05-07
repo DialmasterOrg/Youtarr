@@ -45,7 +45,7 @@ Youtarr uses MariaDB/MySQL for storing:
 
 ### Storage Options
 
-#### Option 1: Bind Mount (Default)
+#### Option 1: Bind Mount (legacy / pre-existing installs)
 ```yaml
 volumes:
   - ./database:/var/lib/mysql

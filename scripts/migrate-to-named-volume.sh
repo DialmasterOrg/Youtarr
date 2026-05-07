@@ -357,6 +357,37 @@ if [[ "$SOURCE_TABLE_COUNT" -lt 1 ]]; then
   exit 0
 fi
 
+# Capture the source database's default charset/collation so we can preserve it
+# on the target. mysqldump emits per-table CHARSET/COLLATE, but any future
+# migrations or ALTER TABLE ... CONVERT TO operations inherit the DB-level
+# default; silently switching it can change sort/compare semantics. If the
+# source default is not utf8mb4_*, fall back to utf8mb4_unicode_ci and warn.
+TARGET_DB_CHARSET="utf8mb4"
+TARGET_DB_COLLATION="utf8mb4_unicode_ci"
+
+: > "$ERROR_LOG"
+SOURCE_DB_DEFAULTS=$(docker exec youtarr-db mysql -N -B -h 127.0.0.1 -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" \
+  -e "SELECT DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='$DB_NAME';" 2>"$ERROR_LOG") || {
+  yt_error "Could not read source database default charset/collation."
+  print_error_log "$ERROR_LOG"
+  stop_started_db "-f docker-compose.yml"
+  exit 1
+}
+
+SOURCE_DB_CHARSET=""
+SOURCE_DB_COLLATION=""
+if [[ -n "$SOURCE_DB_DEFAULTS" ]]; then
+  read -r SOURCE_DB_CHARSET SOURCE_DB_COLLATION <<<"$SOURCE_DB_DEFAULTS"
+fi
+
+if [[ "$SOURCE_DB_CHARSET" == "utf8mb4" && "$SOURCE_DB_COLLATION" == utf8mb4_* ]]; then
+  TARGET_DB_COLLATION="$SOURCE_DB_COLLATION"
+  yt_info "Source database default: $SOURCE_DB_CHARSET / $SOURCE_DB_COLLATION (will reuse on target)"
+else
+  yt_warn "Source database default is '${SOURCE_DB_CHARSET:-unknown}' / '${SOURCE_DB_COLLATION:-unknown}'; target will use $TARGET_DB_CHARSET / $TARGET_DB_COLLATION."
+  yt_detail "Per-table CHARSET/COLLATE in the dump is preserved verbatim, so existing tables keep their column collations. This only affects the DB-level default used by future ALTERs or new tables."
+fi
+
 : > "$ERROR_LOG"
 if ! docker exec youtarr-db mysqldump \
   --single-transaction \
@@ -451,7 +482,7 @@ fi
 
 : > "$ERROR_LOG"
 if ! docker exec youtarr-db mysql -h 127.0.0.1 -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" \
-  -e "DROP DATABASE IF EXISTS \`$DB_NAME\`; CREATE DATABASE \`$DB_NAME\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>"$ERROR_LOG"; then
+  -e "DROP DATABASE IF EXISTS \`$DB_NAME\`; CREATE DATABASE \`$DB_NAME\` CHARACTER SET $TARGET_DB_CHARSET COLLATE $TARGET_DB_COLLATION;" 2>"$ERROR_LOG"; then
   yt_error "Failed to prepare named-volume database for import."
   print_error_log "$ERROR_LOG"
   print_post_rename_failure_help
