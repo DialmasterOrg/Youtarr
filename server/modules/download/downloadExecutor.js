@@ -46,26 +46,7 @@ class DownloadExecutor {
   // Helper function to extract YouTube ID from file path
   // Expects format: "...Channel - Title [VideoID].ext" or "...Channel - Title - VideoID/..."
   extractYoutubeIdFromPath(filePath) {
-    try {
-      const filename = path.basename(filePath);
-      // Try to extract from [VideoID].ext pattern
-      const bracketMatch = filename.match(/\[([a-zA-Z0-9_-]{10,12})\]/);
-      if (bracketMatch) {
-        return bracketMatch[1];
-      }
-
-      // Try to extract from directory name ending with " - VideoID"
-      const dirname = path.basename(path.dirname(filePath));
-      const dashMatch = dirname.match(/ - ([a-zA-Z0-9_-]{10,12})$/);
-      if (dashMatch) {
-        return dashMatch[1];
-      }
-
-      return null;
-    } catch (error) {
-      logger.error({ err: error, filePath }, 'Error extracting youtube ID from path');
-      return null;
-    }
+    return filesystem.extractYoutubeIdFromPath(filePath);
   }
 
   // Helper function to remove a channel directory if it's empty

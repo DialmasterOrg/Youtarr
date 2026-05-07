@@ -136,7 +136,8 @@ class ChannelDownloadGrouper {
    * @returns {string} - Path template for yt-dlp -o argument
    */
   buildOutputPathTemplate(subFolder) {
-    return buildOutputTemplate(configModule.directoryPath, subFolder);
+    const prefix = configModule.getConfig().videoFilenamePrefix;
+    return buildOutputTemplate(configModule.directoryPath, subFolder, prefix);
   }
 
   /**
@@ -145,7 +146,8 @@ class ChannelDownloadGrouper {
    * @returns {string} - Thumbnail path template for yt-dlp
    */
   buildThumbnailPathTemplate(subFolder) {
-    return buildThumbnailTemplate(configModule.directoryPath, subFolder);
+    const prefix = configModule.getConfig().videoFilenamePrefix;
+    return buildThumbnailTemplate(configModule.directoryPath, subFolder, prefix);
   }
 
   /**

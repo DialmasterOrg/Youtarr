@@ -65,7 +65,7 @@ describe('filesystem/constants', () => {
     });
 
     it('should match IDs with underscores and hyphens', () => {
-      // YouTube IDs are exactly 11 characters
+      // This parser accepts the same defensive 10-12 character window as YOUTUBE_ID_PATTERN.
       const match = 'Video [a_b-c_d-e_f].mp4'.match(YOUTUBE_ID_BRACKET_PATTERN);
       expect(match).not.toBeNull();
       expect(match[1]).toBe('a_b-c_d-e_f');
@@ -156,6 +156,108 @@ describe('filesystem/constants', () => {
       expect(CHANNEL_CLEANUP_IGNORABLE_FILES).toContain('.ds_store');
       expect(CHANNEL_CLEANUP_IGNORABLE_FILES).toContain('thumbs.db');
       expect(CHANNEL_CLEANUP_IGNORABLE_FILES).toContain('desktop.ini');
+    });
+  });
+
+  const {
+    DEFAULT_VIDEO_FILENAME_PREFIX,
+    VIDEO_FILENAME_SUFFIX,
+    composeVideoFileTemplate,
+    composeThumbnailFilename,
+    composeVideoFolderName,
+  } = require('../constants');
+
+  describe('DEFAULT_VIDEO_FILENAME_PREFIX', () => {
+    it('matches the legacy file template prefix exactly', () => {
+      expect(DEFAULT_VIDEO_FILENAME_PREFIX).toBe('%(uploader,channel,uploader_id).80B - %(title).76B');
+    });
+  });
+
+  describe('VIDEO_FILENAME_SUFFIX', () => {
+    it('is the locked id+ext suffix', () => {
+      expect(VIDEO_FILENAME_SUFFIX).toBe('[%(id)s].%(ext)s');
+    });
+  });
+
+  describe('composeVideoFileTemplate', () => {
+    it('produces the legacy template when given the default prefix', () => {
+      expect(composeVideoFileTemplate(DEFAULT_VIDEO_FILENAME_PREFIX))
+        .toBe('%(uploader,channel,uploader_id).80B - %(title).76B [%(id)s].%(ext)s');
+    });
+
+    it('inserts a single space between non-empty prefix and suffix', () => {
+      expect(composeVideoFileTemplate('%(title)s'))
+        .toBe('%(title)s [%(id)s].%(ext)s');
+    });
+
+    it('omits the leading space when the prefix is empty as defensive fallback behavior', () => {
+      expect(composeVideoFileTemplate('')).toBe('[%(id)s].%(ext)s');
+    });
+
+    it('treats whitespace-only prefix as empty as defensive fallback behavior', () => {
+      expect(composeVideoFileTemplate('   ')).toBe('[%(id)s].%(ext)s');
+    });
+
+    it('falls back to default when prefix is null or undefined', () => {
+      expect(composeVideoFileTemplate(null))
+        .toBe('%(uploader,channel,uploader_id).80B - %(title).76B [%(id)s].%(ext)s');
+      expect(composeVideoFileTemplate(undefined))
+        .toBe('%(uploader,channel,uploader_id).80B - %(title).76B [%(id)s].%(ext)s');
+    });
+  });
+
+  describe('composeThumbnailFilename', () => {
+    it('produces the legacy thumbnail template when given the default prefix', () => {
+      expect(composeThumbnailFilename(DEFAULT_VIDEO_FILENAME_PREFIX))
+        .toBe('%(uploader,channel,uploader_id).80B - %(title).76B [%(id)s]');
+    });
+
+    it('drops the .%(ext)s tail relative to the file template', () => {
+      expect(composeThumbnailFilename('%(title)s')).toBe('%(title)s [%(id)s]');
+    });
+
+    it('omits the leading space when the prefix is empty as defensive fallback behavior', () => {
+      expect(composeThumbnailFilename('')).toBe('[%(id)s]');
+    });
+  });
+
+  describe('VIDEO_FILE_TEMPLATE backward compatibility', () => {
+    it('still equals the composed default (legacy callers keep working)', () => {
+      const { VIDEO_FILE_TEMPLATE } = require('../constants');
+      expect(VIDEO_FILE_TEMPLATE).toBe(composeVideoFileTemplate(DEFAULT_VIDEO_FILENAME_PREFIX));
+    });
+  });
+
+  describe('composeVideoFolderName', () => {
+    it('produces the legacy folder template when given the default prefix', () => {
+      expect(composeVideoFolderName(DEFAULT_VIDEO_FILENAME_PREFIX))
+        .toBe('%(uploader,channel,uploader_id).80B - %(title).76B - %(id)s');
+    });
+
+    it('inserts " - " between non-empty prefix and id', () => {
+      expect(composeVideoFolderName('%(title)s')).toBe('%(title)s - %(id)s');
+    });
+
+    it('omits the leading " - " when the prefix is empty as defensive fallback behavior', () => {
+      expect(composeVideoFolderName('')).toBe('%(id)s');
+    });
+
+    it('treats whitespace-only prefix as empty as defensive fallback behavior', () => {
+      expect(composeVideoFolderName('   ')).toBe('%(id)s');
+    });
+
+    it('falls back to default when prefix is null or undefined', () => {
+      expect(composeVideoFolderName(null))
+        .toBe('%(uploader,channel,uploader_id).80B - %(title).76B - %(id)s');
+      expect(composeVideoFolderName(undefined))
+        .toBe('%(uploader,channel,uploader_id).80B - %(title).76B - %(id)s');
+    });
+  });
+
+  describe('VIDEO_FOLDER_TEMPLATE backward compatibility', () => {
+    it('still equals the composed default folder name (legacy callers keep working)', () => {
+      const { VIDEO_FOLDER_TEMPLATE } = require('../constants');
+      expect(VIDEO_FOLDER_TEMPLATE).toBe(composeVideoFolderName(DEFAULT_VIDEO_FILENAME_PREFIX));
     });
   });
 });

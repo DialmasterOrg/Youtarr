@@ -5,6 +5,30 @@ const customArgsParser = require('../modules/download/customArgsParser');
 // Mirror of the frontend RATE_LIMIT_REGEX. Matches yt-dlp's --limit-rate
 // format: digits with optional decimal, optional K/M/G suffix.
 const RATE_LIMIT_REGEX = /^\d+(\.\d+)?[KkMmGg]?$/;
+const MAX_VIDEO_FILENAME_PREFIX_LENGTH = 160;
+const TRUNCATION_WITHOUT_CONVERSION_RE = /%\([^)]*\)\.\d+(?![\dBsdjlqUDS])/;
+// Keep in sync with client/src/utils/filenameTemplate/validate.ts and renderer.ts TOKEN_RE.
+const TEMPLATE_TOKEN_AT_START_RE = /^%\([^)]+\)(?:(?:\.\d+B)|(?:(?:\.\d+)?[sdjlqUDS]))/;
+
+function validateTemplatePercentSyntax(prefix) {
+  for (let i = 0; i < prefix.length; i++) {
+    if (prefix[i] !== '%') continue;
+    if (prefix[i + 1] === '%') {
+      i++;
+      continue;
+    }
+
+    const match = prefix.slice(i).match(TEMPLATE_TOKEN_AT_START_RE);
+    if (match) {
+      i += match[0].length - 1;
+      continue;
+    }
+
+    return 'Invalid yt-dlp template syntax. Use tokens like %(title)s or escape literal percent signs as %%.';
+  }
+
+  return null;
+}
 
 // Configure multer for cookie file upload
 const cookieUpload = multer({
@@ -158,6 +182,54 @@ module.exports = function createConfigRoutes({ verifyToken, configModule, valida
           error: 'Invalid download rate limit format. Use e.g. 5M, 500K, 1.5G',
         });
       }
+    }
+
+    // Video filename template prefix validation
+    if (Object.prototype.hasOwnProperty.call(updateData, 'videoFilenamePrefix')) {
+      if (typeof updateData.videoFilenamePrefix !== 'string') {
+        return res.status(400).json({
+          error: 'videoFilenamePrefix must be a string.',
+        });
+      }
+      const prefix = updateData.videoFilenamePrefix;
+      const trimmedPrefix = prefix.replace(/\s+$/, '');
+      if (trimmedPrefix.trim().length === 0) {
+        return res.status(400).json({
+          error: 'videoFilenamePrefix may not be empty.',
+        });
+      }
+      if (trimmedPrefix.length > MAX_VIDEO_FILENAME_PREFIX_LENGTH) {
+        return res.status(400).json({
+          error: `videoFilenamePrefix may not exceed ${MAX_VIDEO_FILENAME_PREFIX_LENGTH} characters.`,
+        });
+      }
+      if (trimmedPrefix.includes('/') || trimmedPrefix.includes('\\')) {
+        return res.status(400).json({
+          error: 'videoFilenamePrefix may not contain path separators (/ or \\).',
+        });
+      }
+      if (trimmedPrefix.includes('..')) {
+        return res.status(400).json({
+          error: 'videoFilenamePrefix may not contain ".." (path traversal).',
+        });
+      }
+      // eslint-disable-next-line no-control-regex
+      if (/[\x00-\x1f]/.test(trimmedPrefix)) {
+        return res.status(400).json({
+          error: 'videoFilenamePrefix may not contain ASCII control characters.',
+        });
+      }
+      if (TRUNCATION_WITHOUT_CONVERSION_RE.test(trimmedPrefix)) {
+        return res.status(400).json({
+          error: 'videoFilenamePrefix truncation must use yt-dlp syntax like %(title).76B or %(title).40s.',
+        });
+      }
+      const syntaxError = validateTemplatePercentSyntax(trimmedPrefix);
+      if (syntaxError) {
+        return res.status(400).json({ error: syntaxError });
+      }
+      // Trim trailing whitespace before persisting
+      updateData.videoFilenamePrefix = trimmedPrefix;
     }
 
     delete updateData.passwordHash;

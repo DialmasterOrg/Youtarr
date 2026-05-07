@@ -99,6 +99,7 @@ jest.mock('../../filesystem', () => {
       if (subfolder && subfolder.trim() !== '') return subfolder.trim();
       return null;
     }),
+    extractYoutubeIdFromPath: jest.fn(actualPathBuilder.extractYoutubeIdFromPath),
     extractSubfolderFromAbsPath: jest.fn(actualPathBuilder.extractSubfolderFromAbsPath),
   };
 });
