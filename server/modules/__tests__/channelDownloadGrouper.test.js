@@ -14,6 +14,7 @@ jest.mock('../configModule', () => ({
   config: {
     preferredResolution: '1080'
   },
+  getConfig: jest.fn().mockReturnValue({}),
   getDefaultSubfolder: jest.fn().mockReturnValue(null)
 }));
 
@@ -25,6 +26,8 @@ const path = require('path');
 describe('ChannelDownloadGrouper', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    configModule.getConfig.mockReturnValue({});
+    configModule.config.preferredResolution = '1080';
   });
 
   describe('ChannelFilterConfig', () => {
@@ -616,6 +619,17 @@ describe('ChannelDownloadGrouper', () => {
 
       expect(template).toContain('/mock/youtube/output');
     });
+
+    it('uses configured videoFilenamePrefix for grouped output paths', () => {
+      configModule.getConfig.mockReturnValue({
+        videoFilenamePrefix: '%(upload_date>%Y-%m-%d)s - %(title).76B'
+      });
+
+      const template = channelDownloadGrouper.buildOutputPathTemplate(null);
+
+      expect(template).toContain('%(upload_date>%Y-%m-%d)s - %(title).76B - %(id)s');
+      expect(template).toContain('%(upload_date>%Y-%m-%d)s - %(title).76B [%(id)s].%(ext)s');
+    });
   });
 
   describe('buildThumbnailPathTemplate', () => {
@@ -651,6 +665,17 @@ describe('ChannelDownloadGrouper', () => {
     it('should end path with poster folder', () => {
       const template = channelDownloadGrouper.buildThumbnailPathTemplate('Gaming');
 
+      expect(template).toMatch(/poster$/);
+    });
+
+    it('uses configured videoFilenamePrefix for grouped thumbnail folder paths', () => {
+      configModule.getConfig.mockReturnValue({
+        videoFilenamePrefix: '%(upload_date>%Y-%m-%d)s - %(title).76B'
+      });
+
+      const template = channelDownloadGrouper.buildThumbnailPathTemplate(null);
+
+      expect(template).toContain('%(upload_date>%Y-%m-%d)s - %(title).76B - %(id)s');
       expect(template).toMatch(/poster$/);
     });
   });
@@ -808,6 +833,29 @@ describe('ChannelDownloadGrouper', () => {
       expect(groups[0].outputPath).toContain('__Tech');
       expect(groups[0].thumbnailPath).toContain('__Tech');
       expect(groups[0].thumbnailPath).toMatch(/poster$/);
+    });
+
+    it('includes configured videoFilenamePrefix in generated group paths', async () => {
+      const mockChannels = [
+        {
+          channel_id: 'channel1',
+          video_quality: '1080',
+          sub_folder: null,
+          min_duration: null,
+          max_duration: null,
+          title_filter_regex: null
+        }
+      ];
+
+      Channel.findAll.mockResolvedValue(mockChannels);
+      configModule.getConfig.mockReturnValue({
+        videoFilenamePrefix: '%(upload_date>%Y-%m-%d)s - %(title).76B'
+      });
+
+      const groups = await channelDownloadGrouper.generateDownloadGroups();
+
+      expect(groups[0].outputPath).toContain('%(upload_date>%Y-%m-%d)s - %(title).76B [%(id)s].%(ext)s');
+      expect(groups[0].thumbnailPath).toContain('%(upload_date>%Y-%m-%d)s - %(title).76B - %(id)s');
     });
 
     it('should handle empty channels array', async () => {

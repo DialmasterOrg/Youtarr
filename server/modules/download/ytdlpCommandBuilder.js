@@ -5,8 +5,9 @@ const logger = require('../../logger');
 const customArgsParser = require('./customArgsParser');
 const {
   CHANNEL_TEMPLATE,
-  VIDEO_FOLDER_TEMPLATE,
-  VIDEO_FILE_TEMPLATE
+  composeVideoFileTemplate,
+  composeThumbnailFilename,
+  composeVideoFolderName,
 } = require('../filesystem/constants');
 
 class YtdlpCommandBuilder {
@@ -20,12 +21,15 @@ class YtdlpCommandBuilder {
   static buildOutputPath(subFolder = null, skipVideoFolder = false) {
     // Always use temp path - downloads are staged before moving to final location
     const baseOutputPath = tempPathManager.getTempBasePath();
+    const prefix = configModule.getConfig().videoFilenamePrefix;
+    const videoFolderName = composeVideoFolderName(prefix);
+    const videoFileTemplate = composeVideoFileTemplate(prefix);
 
     const segments = [baseOutputPath];
     if (subFolder) segments.push(subFolder);
     segments.push(CHANNEL_TEMPLATE);
-    if (!skipVideoFolder) segments.push(VIDEO_FOLDER_TEMPLATE);
-    segments.push(VIDEO_FILE_TEMPLATE);
+    if (!skipVideoFolder) segments.push(videoFolderName);
+    segments.push(videoFileTemplate);
 
     return path.join(...segments);
   }
@@ -40,14 +44,14 @@ class YtdlpCommandBuilder {
   static buildThumbnailPath(subFolder = null, skipVideoFolder = false) {
     // Always use temp path - thumbnails are staged with videos
     const baseOutputPath = tempPathManager.getTempBasePath();
-
-    // Use same filename as video file (without extension - yt-dlp adds .jpg)
-    const thumbnailFilename = `${CHANNEL_TEMPLATE} - %(title).76B [%(id)s]`;
+    const prefix = configModule.getConfig().videoFilenamePrefix;
+    const videoFolderName = composeVideoFolderName(prefix);
+    const thumbnailFilename = composeThumbnailFilename(prefix);
 
     const segments = [baseOutputPath];
     if (subFolder) segments.push(subFolder);
     segments.push(CHANNEL_TEMPLATE);
-    if (!skipVideoFolder) segments.push(VIDEO_FOLDER_TEMPLATE);
+    if (!skipVideoFolder) segments.push(videoFolderName);
     segments.push(thumbnailFilename);
 
     return path.join(...segments);

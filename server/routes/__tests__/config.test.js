@@ -140,3 +140,130 @@ describe('POST /updateconfig', () => {
     );
   });
 });
+
+describe('POST /updateconfig - videoFilenamePrefix validation', () => {
+  test('accepts the default prefix', async () => {
+    const { app } = makeApp();
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ videoFilenamePrefix: '%(uploader,channel,uploader_id).80B - %(title).76B' });
+    expect(res.status).toBe(200);
+  });
+
+  test('rejects an empty prefix with 400', async () => {
+    const { app } = makeApp();
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ videoFilenamePrefix: '' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/empty/i);
+  });
+
+  test('rejects a whitespace-only prefix with 400', async () => {
+    const { app } = makeApp();
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ videoFilenamePrefix: '   ' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/empty/i);
+  });
+
+  test('trims trailing whitespace before persisting', async () => {
+    const { app, configModule } = makeApp();
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ videoFilenamePrefix: '%(title).76B   ' });
+    expect(res.status).toBe(200);
+    expect(configModule.updateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ videoFilenamePrefix: '%(title).76B' })
+    );
+  });
+
+  test('rejects forward slash with 400', async () => {
+    const { app } = makeApp();
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ videoFilenamePrefix: '%(uploader)s/%(title)s' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/path separator/i);
+  });
+
+  test('rejects backslash with 400', async () => {
+    const { app } = makeApp();
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ videoFilenamePrefix: 'a\\b' });
+    expect(res.status).toBe(400);
+  });
+
+  test('rejects path traversal .. with 400', async () => {
+    const { app } = makeApp();
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ videoFilenamePrefix: '..%(title)s' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/traversal/i);
+  });
+
+  test('rejects ASCII control characters with 400', async () => {
+    const { app } = makeApp();
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ videoFilenamePrefix: 'hello\x07world' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/control/i);
+  });
+
+  test('rejects non-string values with 400', async () => {
+    const { app } = makeApp();
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ videoFilenamePrefix: {} });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/string/i);
+  });
+
+  test('rejects overlong values with 400', async () => {
+    const { app } = makeApp();
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ videoFilenamePrefix: 'a'.repeat(161) });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/160/);
+  });
+
+  test('rejects invalid yt-dlp truncation syntax with 400', async () => {
+    const { app } = makeApp();
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ videoFilenamePrefix: '%(title).40' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/truncation/i);
+  });
+
+  test('rejects incomplete yt-dlp tokens with 400', async () => {
+    const { app } = makeApp();
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ videoFilenamePrefix: '%(title)' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/syntax/i);
+  });
+
+  test('rejects unescaped literal percent signs with 400', async () => {
+    const { app } = makeApp();
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ videoFilenamePrefix: '100% done - %(title).76B' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/syntax/i);
+  });
+
+  test('accepts escaped literal percent signs', async () => {
+    const { app } = makeApp();
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ videoFilenamePrefix: '100%% done - %(title).76B' });
+    expect(res.status).toBe(200);
+  });
+});

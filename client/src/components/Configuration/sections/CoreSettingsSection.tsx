@@ -31,6 +31,7 @@ import { YtDlpVersionInfo, YtDlpUpdateStatus } from '../hooks/useYtDlpUpdate';
 import { ConfigurationCard } from '../common/ConfigurationCard';
 import { InfoTooltip } from '../common/InfoTooltip';
 import SubtitleLanguageSelector from '../SubtitleLanguageSelector';
+import { VideoFilenameTemplate } from './components/VideoFilenameTemplate';
 import { SubfolderAutocomplete } from '../../shared/SubfolderAutocomplete';
 import { useSubfolders } from '../../../hooks/useSubfolders';
 import { ConfigState, DeploymentEnvironment, PlatformManagedState } from '../types';
@@ -513,6 +514,15 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                           : 'Controls where downloads are staged before moving to final location. When enabled, uses external /tmp path (useful for slow network storage). When disabled, uses a hidden .youtarr_tmp/ folder in your output directory (faster for local/SSD storage). Both options hide in-progress files from media servers.'
                       }
                       onMobileClick={onMobileTooltipClick}
+                    />
+                  </Box>
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Box className="border-t pt-3">
+                    <VideoFilenameTemplate
+                      value={config.videoFilenamePrefix}
+                      onChange={(newValue) => onConfigChange({ videoFilenamePrefix: newValue })}
                     />
                   </Box>
                 </Grid>

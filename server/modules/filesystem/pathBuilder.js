@@ -9,8 +9,8 @@ const {
   GLOBAL_DEFAULT_SENTINEL,
   ROOT_SENTINEL,
   CHANNEL_TEMPLATE,
-  VIDEO_FOLDER_TEMPLATE,
-  VIDEO_FILE_TEMPLATE,
+  composeVideoFolderName,
+  composeVideoFileTemplate,
   YOUTUBE_ID_BRACKET_PATTERN,
   YOUTUBE_ID_DASH_PATTERN,
   YOUTUBE_ID_PATTERN
@@ -126,28 +126,37 @@ function buildVideoPath(baseDir, subfolder, channelFolderName, videoFolderName) 
  * Build yt-dlp output template for video files
  * @param {string} baseDir - The base output directory
  * @param {string|null} subfolder - The subfolder name (without prefix) or null
+ * @param {string|null} videoFilenamePrefix - User-supplied prefix for the
+ *   per-video folder and file names. When null, the default legacy template
+ *   is used (byte-identical to the pre-customization output).
  * @returns {string} - Path template for yt-dlp -o argument
  */
-function buildOutputTemplate(baseDir, subfolder) {
+function buildOutputTemplate(baseDir, subfolder, videoFilenamePrefix = null) {
+  const folderName = composeVideoFolderName(videoFilenamePrefix);
+  const fileTemplate = composeVideoFileTemplate(videoFilenamePrefix);
   if (subfolder) {
     const subfolderSegment = buildSubfolderSegment(subfolder);
-    return path.join(baseDir, subfolderSegment, CHANNEL_TEMPLATE, VIDEO_FOLDER_TEMPLATE, VIDEO_FILE_TEMPLATE);
+    return path.join(baseDir, subfolderSegment, CHANNEL_TEMPLATE, folderName, fileTemplate);
   }
-  return path.join(baseDir, CHANNEL_TEMPLATE, VIDEO_FOLDER_TEMPLATE, VIDEO_FILE_TEMPLATE);
+  return path.join(baseDir, CHANNEL_TEMPLATE, folderName, fileTemplate);
 }
 
 /**
  * Build yt-dlp thumbnail output template
  * @param {string} baseDir - The base output directory
  * @param {string|null} subfolder - The subfolder name (without prefix) or null
+ * @param {string|null} videoFilenamePrefix - User-supplied prefix for the
+ *   per-video folder name. The thumbnail filename itself is always 'poster'
+ *   in this code path. When null, the default legacy folder template is used.
  * @returns {string} - Thumbnail path template for yt-dlp
  */
-function buildThumbnailTemplate(baseDir, subfolder) {
+function buildThumbnailTemplate(baseDir, subfolder, videoFilenamePrefix = null) {
+  const folderName = composeVideoFolderName(videoFilenamePrefix);
   if (subfolder) {
     const subfolderSegment = buildSubfolderSegment(subfolder);
-    return path.join(baseDir, subfolderSegment, CHANNEL_TEMPLATE, VIDEO_FOLDER_TEMPLATE, 'poster');
+    return path.join(baseDir, subfolderSegment, CHANNEL_TEMPLATE, folderName, 'poster');
   }
-  return path.join(baseDir, CHANNEL_TEMPLATE, VIDEO_FOLDER_TEMPLATE, 'poster');
+  return path.join(baseDir, CHANNEL_TEMPLATE, folderName, 'poster');
 }
 
 /**

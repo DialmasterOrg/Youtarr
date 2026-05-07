@@ -303,6 +303,32 @@ describe('YtdlpCommandBuilder', () => {
       expect(result).toContain('/tmp/downloads');
       expect(result).toContain('GameChannel');
     });
+
+    it('uses configured videoFilenamePrefix when provided', () => {
+      tempPathManager.getTempBasePath.mockReturnValue('/mock/youtube/output/.youtarr_tmp');
+      configModule.getConfig.mockReturnValue({
+        videoFilenamePrefix: '%(upload_date>%Y-%m-%d)s - %(title).76B',
+      });
+      const result = YtdlpCommandBuilder.buildOutputPath();
+      expect(result).toContain('%(upload_date>%Y-%m-%d)s - %(title).76B [%(id)s].%(ext)s');
+    });
+
+    it('falls back to default prefix when config is missing the field', () => {
+      tempPathManager.getTempBasePath.mockReturnValue('/mock/youtube/output/.youtarr_tmp');
+      configModule.getConfig.mockReturnValue({});
+      const result = YtdlpCommandBuilder.buildOutputPath();
+      expect(result).toContain('%(uploader,channel,uploader_id).80B - %(title).76B [%(id)s].%(ext)s');
+    });
+
+    it('uses configured videoFilenamePrefix for the per-video folder name as well', () => {
+      tempPathManager.getTempBasePath.mockReturnValue('/mock/youtube/output/.youtarr_tmp');
+      configModule.getConfig.mockReturnValue({
+        videoFilenamePrefix: '%(upload_date>%Y-%m-%d)s - %(title).76B',
+      });
+      const result = YtdlpCommandBuilder.buildOutputPath();
+      // Folder portion uses " - %(id)s" suffix (no brackets)
+      expect(result).toContain('%(upload_date>%Y-%m-%d)s - %(title).76B - %(id)s');
+    });
   });
 
   describe('buildThumbnailPath', () => {
@@ -347,6 +373,25 @@ describe('YtdlpCommandBuilder', () => {
       // Thumbnail should have the same pattern as video file but without the .%(ext)s
       expect(outputPath).toContain('%(uploader,channel,uploader_id).80B - %(title).76B [%(id)s].%(ext)s');
       expect(thumbnailPath).toContain('%(uploader,channel,uploader_id).80B - %(title).76B [%(id)s]');
+    });
+
+    it('uses configured videoFilenamePrefix for the thumbnail stem', () => {
+      tempPathManager.getTempBasePath.mockReturnValue('/mock/youtube/output/.youtarr_tmp');
+      configModule.getConfig.mockReturnValue({
+        videoFilenamePrefix: '%(upload_date>%Y-%m-%d)s - %(title).76B',
+      });
+      const result = YtdlpCommandBuilder.buildThumbnailPath();
+      expect(result).toContain('%(upload_date>%Y-%m-%d)s - %(title).76B [%(id)s]');
+      expect(result).not.toMatch(/\.%\(ext\)s$/);
+    });
+
+    it('uses configured videoFilenamePrefix for the per-video folder name as well', () => {
+      tempPathManager.getTempBasePath.mockReturnValue('/mock/youtube/output/.youtarr_tmp');
+      configModule.getConfig.mockReturnValue({
+        videoFilenamePrefix: '%(upload_date>%Y-%m-%d)s - %(title).76B',
+      });
+      const result = YtdlpCommandBuilder.buildThumbnailPath();
+      expect(result).toContain('%(upload_date>%Y-%m-%d)s - %(title).76B - %(id)s');
     });
   });
 
