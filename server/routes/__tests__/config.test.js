@@ -20,6 +20,7 @@ function makeApp() {
       ytdlpLastChecked: null,
       ytdlpLastUpdated: null,
       ytdlpLastResult: null,
+      rescanLastRun: null,
     },
     getConfig: jest.fn(function () { return this._config; }),
     updateConfig: jest.fn(function (next) { this._config = next; }),
@@ -56,6 +57,31 @@ describe('POST /updateconfig', () => {
       .send({ ytdlpCustomArgs: '--no-mtime --concurrent-fragments 4' });
     expect(res.status).toBe(200);
     expect(configModule.updateConfig).toHaveBeenCalled();
+  });
+
+  test('preserves managed rescanLastRun when saving settings', async () => {
+    const { app, configModule } = makeApp();
+    const rescanLastRun = {
+      startedAt: '2026-05-04T15:00:00.000Z',
+      completedAt: '2026-05-04T15:01:00.000Z',
+      trigger: 'manual',
+      status: 'completed',
+      videosUpdated: 4,
+      videosMarkedMissing: 1,
+      videosScanned: 20,
+      filesFoundOnDisk: 19,
+      errorMessage: null
+    };
+    configModule._config.rescanLastRun = rescanLastRun;
+
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ ytdlpCustomArgs: '', rescanLastRun: null });
+
+    expect(res.status).toBe(200);
+    expect(configModule.updateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ rescanLastRun })
+    );
   });
 
   test('returns 400 with the offending flag when ytdlpCustomArgs contains a denylisted flag', async () => {

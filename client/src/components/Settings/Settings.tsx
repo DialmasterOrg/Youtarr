@@ -37,6 +37,7 @@ import { TRACKABLE_CONFIG_KEYS } from '../../config/configSchema';
 import { ConfigState, SnackbarState } from '../Configuration/types';
 import { validateConfig } from '../Configuration/utils/configValidation';
 import { SETTINGS_PAGES, SettingsIndex } from './SettingsIndex';
+import { MaintenanceSection } from './MaintenanceSection';
 
 interface SettingsProps {
   token: string | null;
@@ -374,6 +375,10 @@ export function Settings({ token }: SettingsProps) {
                 onTestKey={testYoutubeApiKey}
               />
             }
+          />
+          <Route
+            path="maintenance"
+            element={<MaintenanceSection token={token} />}
           />
 
           <Route path="*" element={<Navigate to="/settings" replace />} />

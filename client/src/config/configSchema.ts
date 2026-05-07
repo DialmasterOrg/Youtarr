@@ -113,6 +113,20 @@ export const CONFIG_FIELDS = {
     default: null as { status: 'updated' | 'up-to-date' | 'skipped' | 'error'; message?: string; version?: string } | null,
     trackChanges: false,
   },
+  rescanLastRun: {
+    default: null as {
+      startedAt: string;
+      completedAt: string;
+      trigger: 'manual' | 'scheduled' | 'startup';
+      status: 'completed' | 'timed-out' | 'error';
+      videosUpdated: number;
+      videosMarkedMissing: number;
+      videosScanned: number;
+      filesFoundOnDisk: number;
+      errorMessage: string | null;
+    } | null,
+    trackChanges: false,
+  },
 
   // yt-dlp options (custom args, IP family, rate limit)
   ytdlpIpFamily: { default: 'ipv4' as 'ipv4' | 'ipv6' | 'auto', trackChanges: true },
@@ -183,6 +197,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   ytdlpLastChecked: CONFIG_FIELDS.ytdlpLastChecked.default,
   ytdlpLastUpdated: CONFIG_FIELDS.ytdlpLastUpdated.default,
   ytdlpLastResult: CONFIG_FIELDS.ytdlpLastResult.default,
+  rescanLastRun: CONFIG_FIELDS.rescanLastRun.default,
   ytdlpIpFamily: CONFIG_FIELDS.ytdlpIpFamily.default,
   ytdlpDownloadRateLimit: CONFIG_FIELDS.ytdlpDownloadRateLimit.default,
   ytdlpCustomArgs: CONFIG_FIELDS.ytdlpCustomArgs.default,

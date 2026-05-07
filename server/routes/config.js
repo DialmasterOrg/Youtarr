@@ -168,6 +168,7 @@ module.exports = function createConfigRoutes({ verifyToken, configModule, valida
     updateData.ytdlpLastChecked = currentConfig.ytdlpLastChecked;
     updateData.ytdlpLastUpdated = currentConfig.ytdlpLastUpdated;
     updateData.ytdlpLastResult = currentConfig.ytdlpLastResult;
+    updateData.rescanLastRun = currentConfig.rescanLastRun ?? null;
 
     configModule.updateConfig(updateData);
 

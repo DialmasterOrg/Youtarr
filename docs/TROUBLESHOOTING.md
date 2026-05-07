@@ -151,6 +151,22 @@ This creates a secure tunnel between your local machine's port 3087 and the serv
 - Check server logs around 2:00 AM for messages prefixed with `[CRON]` or `[Auto-Removal]` to confirm the job is executing (`docker compose logs -f youtarr`).
 - If errors appear in the logs (e.g., permission issues deleting files), resolve those first—the cron job will skip files it cannot delete.
 
+## Library / File Issues
+
+### Videos Show as "Missing" After I Moved or Renamed Files
+
+**Problem**: After moving downloaded files to a new location, renaming a folder, or restoring from backup, videos display with a cloud-off icon as if they were deleted.
+
+**Solution**: Open **Settings -> Maintenance** and click **Rescan files on disk**. Youtarr walks the downloads folder, matches files by the `[<youtube-id>]` segment in each filename, and updates the stored paths and "missing" flags. The same scan also runs daily on a schedule and at server startup.
+
+The rescan recognizes `.mp4`, `.webm`, `.mkv`, `.m4v`, `.avi`, and `.mp3`. Files that no longer have the `[<youtube-id>]` segment in their name (for example, if you renamed `Channel - Video [abc123XYZ01].mp4` to `My Movie.mp4`) cannot be matched and will continue to show as missing.
+
+### I Converted Videos to a Different Format and Youtarr Lost Them
+
+**Problem**: You used ffmpeg or another tool to convert downloaded `.mp4` videos to `.mkv` (or another container), and Youtarr now lists those videos as missing.
+
+**Solution**: Run **Settings -> Maintenance -> Rescan files on disk**. As long as the converted file kept the original `[<youtube-id>]` segment in its filename and uses one of the supported extensions (`.mp4`, `.webm`, `.mkv`, `.m4v`, `.avi`, `.mp3`), Youtarr will detect the new file, update the stored path, and clear the "missing" flag. See [Rescan Files on Disk](USAGE_GUIDE.md#rescan-files-on-disk) for full details on supported formats and limitations.
+
 ## Docker Issues
 
 ### "Empty section between colons" Error

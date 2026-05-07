@@ -36,6 +36,7 @@ https://github.com/user-attachments/assets/a80548fc-bcf9-4ad0-889c-dbd5aac250ee
 - **Metadata Generation**: NFO files, poster images and embedded MP4 metadata for all media servers
 - **Scheduled Downloads**: Configure automatic downloads on your schedule (cron-based)
 - **Auto-Cleanup**: Age and space-based removal of videos with dry-run previews
+- **Filesystem Rescan**: Move, rename, or convert downloaded files outside Youtarr (e.g., `.mp4` to `.mkv`) and trigger a rescan from Settings -> Maintenance to reconcile the database; daily and startup scans pick up changes automatically
 - **Discord Notifications**: Optional webhook alerts for new downloads
 - **Web Interface**: Manage everything through a responsive (PC or mobile) web UI
 - **Secure Access**: Built-in authentication with admin controls
