@@ -14,11 +14,11 @@ The `dev-latest` tag always points at the most recent dev build. Each commit als
 
 This pulls `dialmaster/youtarr:dev-latest` and starts the stack. On later runs, drop `--pull-latest` if you want to stay on the image you already have locally.
 
-### Alternative: bypass `./start.sh` (safer for existing installs on ARM)
+### Alternative: bypass `./start.sh`
 
-`./start.sh` auto-detects ARM hosts (Apple Silicon, Raspberry Pi, ARM Linux) and layers `docker-compose.arm.yml` on top of the default compose file. That override switches MariaDB from the bind mount at `./database/` to a named volume. If you already have data in `./database/` and you run `./start.sh` on ARM for the first time, the container boots against an empty database and it looks like all your channels and videos disappeared. The data is fine, it's still sitting in `./database/`, but the running container isn't pointing at it.
+`./start.sh` layers `docker-compose.arm.yml` on top of the default compose file for fresh installs so MariaDB uses a named volume. Existing installs with real MariaDB data in `./database/` keep using the bind mount and print a migration warning instead. ARM installs continue to use the named-volume override.
 
-To pull the dev image without letting `./start.sh` touch your compose file selection, use docker directly:
+To pull the dev image while managing compose file selection yourself, use docker directly:
 
 ```bash
 ./stop.sh

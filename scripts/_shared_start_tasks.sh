@@ -5,6 +5,8 @@ START_SCRIPT_NAME=$(basename "$0")
 
 # shellcheck source=scripts/_console_output.sh
 source "$SHARED_SCRIPT_DIR/_console_output.sh"
+# shellcheck source=scripts/_env_helpers.sh
+source "$SHARED_SCRIPT_DIR/_env_helpers.sh"
 
 print_usage() {
   cat <<EOF
@@ -200,21 +202,115 @@ else
   DETECTED_ARM=false
 fi
 
+DATABASE_HAS_CONTENT=false
+if [[ -f ./database/ibdata1 || -d ./database/mysql ]]; then
+  DATABASE_HAS_CONTENT=true
+fi
+
+# Detect a pre-existing MariaDB named volume for THIS install only. We scope by
+# Compose project name so a sibling Youtarr checkout's volume on the same host
+# does not falsely trigger named-volume mode here.
+NAMED_VOLUME_EXISTS=false
+if youtarr_named_volume_exists "$(pwd)"; then
+  NAMED_VOLUME_EXISTS=true
+fi
+
+prepare_named_volume_compose_selection() {
+  if [[ -n "${COMPOSE_FILE:-}" ]] && [[ "$COMPOSE_FILE" != *"docker-compose.arm.yml"* ]]; then
+    yt_error "COMPOSE_FILE is set in your shell environment but does not include docker-compose.arm.yml."
+    yt_detail "This run needs named-volume database storage, but shell COMPOSE_FILE overrides .env."
+    yt_detail "Unset COMPOSE_FILE or include docker-compose.arm.yml before starting Youtarr."
+    exit 1
+  fi
+
+  youtarr_pin_named_volume_in_env "$(pwd)/.env"
+  PIN_RC=$?
+  if [ "$PIN_RC" -eq 0 ]; then
+    yt_detail "Pinned named-volume override in .env so plain 'docker compose up -d' uses the same storage."
+  elif [ "$PIN_RC" -eq 1 ]; then
+    yt_warn "Could not pin named-volume override in .env."
+    yt_detail "Use ./start.sh for future restarts, or add docker-compose.arm.yml to COMPOSE_FILE manually."
+  fi
+
+  COMPOSE_FILES=$(youtarr_compose_args_for_storage_mode "$(pwd)" "named-volume")
+}
+
 if [ "$USE_DOCKER_COMPOSE_DEV" == "true" ]; then
   # Dev flow uses the dev compose (standalone file for developer workflows)
   COMPOSE_FILES="-f docker-compose.dev.yml"
 elif [ "$USE_EXTERNAL_DB" == "true" ]; then
   # External DB uses the base compose with the external-db override
   COMPOSE_FILES="-f docker-compose.yml -f docker-compose.external-db.yml"
-elif [ "$USE_ARM" == "true" ] || [ "$DETECTED_ARM" == "true" ]; then
-  # ARM uses the base compose with the ARM override
-  COMPOSE_FILES="-f docker-compose.yml -f docker-compose.arm.yml"
 else
-  # Default - use standard docker-compose.yml
-  unset COMPOSE_FILES
+  # Refuse to auto-pick storage when both bind mount and named volume exist.
+  # Picking the wrong one would make the user's data appear to vanish; we'd
+  # rather fail loudly than silently switch them.
+  if [ "$DATABASE_HAS_CONTENT" == "true" ] && [ "$NAMED_VOLUME_EXISTS" == "true" ]; then
+    yt_error "Ambiguous database storage: both ./database/ and a Docker named volume for MariaDB exist."
+    yt_detail "Refusing to choose automatically because the wrong choice would make your data appear to vanish."
+    yt_detail ""
+    yt_detail "Inspect what you have:"
+    yt_detail "  Named volumes:  docker volume ls --format '{{.Name}}' | grep youtarr-db-data"
+    yt_detail "  Bind mount:     ls -la ./database/"
+    yt_detail ""
+    yt_detail "Then keep one and remove the other:"
+    yt_detail "  Keep the bind mount:   docker volume rm <volume-name>"
+    yt_detail "  Keep the named volume: mv ./database ./database.unused.\$(date +%Y%m%d)"
+    yt_detail ""
+    yt_detail "If you are migrating from the bind mount to a named volume for the first time,"
+    yt_detail "use the helper instead: ./scripts/migrate-to-named-volume.sh"
+    exit 1
+  fi
+
+  if [ "$USE_ARM" == "true" ]; then
+    if [ "$DATABASE_HAS_CONTENT" == "true" ]; then
+      # Existing bind-mounted installs keep using their current database even
+      # when --arm is passed. Silently switching would make their data appear
+      # to vanish behind an empty named volume.
+      unset COMPOSE_FILES
+      yt_warn "--arm requested, but bind-mounted MariaDB data was detected in ./database/."
+      yt_warn "Keeping the existing bind-mounted database for this run."
+      yt_detail "To move this install to named-volume storage, run:"
+      yt_detail "  ./scripts/migrate-to-named-volume.sh"
+    else
+      # Explicit --arm uses the named-volume override when there is no bind data to preserve.
+      prepare_named_volume_compose_selection
+    fi
+  elif [ "$DETECTED_ARM" == "true" ]; then
+    if [ "$DATABASE_HAS_CONTENT" == "true" ]; then
+      # Existing bind-mounted installs keep using their current database on ARM.
+      unset COMPOSE_FILES
+      yt_warn "ARM host detected, but bind-mounted MariaDB data was detected in ./database/."
+      yt_warn "Keeping the existing bind-mounted database for this run."
+      yt_detail "To move this install to named-volume storage, run:"
+      yt_detail "  ./scripts/migrate-to-named-volume.sh"
+    else
+      # ARM fresh installs use the named-volume override.
+      prepare_named_volume_compose_selection
+      yt_info "ARM host detected; using named-volume database storage."
+    fi
+  elif [ "$NAMED_VOLUME_EXISTS" == "true" ]; then
+    # An existing named volume with no bind-mount data: keep using the named volume.
+    # This is the common case after a successful migration, or after the user manually
+    # switched to the named-volume override on a previous run.
+    prepare_named_volume_compose_selection
+    yt_info "Existing named-volume database detected; using named-volume storage."
+  elif [ "$DATABASE_HAS_CONTENT" != "true" ]; then
+    # Fresh bundled-DB installs use the named-volume override on every platform.
+    prepare_named_volume_compose_selection
+    yt_info "Fresh install detected; using named-volume database storage."
+  else
+    # Default - use standard docker-compose.yml (existing bind-mounted install).
+    unset COMPOSE_FILES
+    yt_warn "Bind-mounted MariaDB data detected in ./database/."
+    yt_detail "Docker Desktop on Windows/Mac and some NAS/virtualized filesystems can corrupt bind-mounted MariaDB during schema migrations."
+    yt_detail "Linux native Docker hosts are usually unaffected. To migrate to a named volume, run:"
+    yt_detail "  ./scripts/migrate-to-named-volume.sh"
+  fi
 fi
 
 yt_section "Docker"
 
+# shellcheck disable=SC2086 # COMPOSE_CMD and COMPOSE_FILES intentionally expand into command/flag words.
 $COMPOSE_CMD $COMPOSE_FILES down
 yt_success "Existing containers stopped."
