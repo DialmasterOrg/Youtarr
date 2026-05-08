@@ -849,6 +849,32 @@ describe('ChannelPage Component', () => {
       });
     });
 
+    test('does not include trailing punctuation in description links', async () => {
+      const channelWithUrl = {
+        ...mockChannel,
+        description: 'Check out https://example.com).'
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(channelWithUrl)
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await screen.findByText('Tech Channel');
+
+      await waitFor(() => {
+        const link = screen.getByRole('link', { name: 'https://example.com' });
+        expect(link).toHaveAttribute('href', 'https://example.com');
+      });
+      expect(document.body).toHaveTextContent('Check out https://example.com).');
+    });
+
     test('converts newlines to br tags in description', async () => {
       const channelWithNewlines = {
         ...mockChannel,
@@ -1062,7 +1088,7 @@ describe('ChannelPage Component', () => {
     });
   });
 
-  describe('textToHTML Helper Function', () => {
+  describe('description rendering', () => {
     test('handles complex text transformations', async () => {
       const complexDescription = {
         ...mockChannel,
@@ -1090,6 +1116,29 @@ describe('ChannelPage Component', () => {
 
       const link2 = screen.getByRole('link', { name: 'http://test.org' });
       expect(link2).toHaveAttribute('href', 'http://test.org');
+    });
+
+    test('renders HTML-like channel descriptions as text, not executable markup', async () => {
+      const maliciousDescription = {
+        ...mockChannel,
+        description: '<img src=x onerror="window.__xss=true"> https://example.com'
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(maliciousDescription)
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await screen.findByText('Tech Channel');
+
+      expect(screen.getByText(/<img src=x onerror=/)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'https://example.com' })).toHaveAttribute('href', 'https://example.com');
     });
 
     test('handles empty description gracefully', async () => {

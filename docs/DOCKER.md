@@ -219,7 +219,8 @@ vim .env  # or nano, or your preferred editor
 
 **Optional settings:**
 - `TZ` - Your timezone (e.g., `America/New_York`, `Europe/London`). Defaults to `UTC`. Set this if scheduled downloads and nightly cleanup should run in your local time.
-- `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` - For headless setups where you cannot reach the initial-setup wizard via localhost.
+- `YOUTARR_HOST_PORT` - Host port for the web interface. Defaults to `3087`; change this if another service already uses that port.
+- `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` - Seed login credentials and skip the setup-token wizard for headless or automated deployments.
 - `YOUTARR_UID` / `YOUTARR_GID` - Run the container as a non-root user (recommended for security, see step 5 below).
 - **Changing bundled-database credentials?** If you want to customize the MariaDB password, set BOTH `DB_PASSWORD` **and** `DB_ROOT_PASSWORD` to the same value. Setting only one of them will cause the app to fail to connect because the app uses `DB_PASSWORD` while MariaDB's root account is initialized from `DB_ROOT_PASSWORD`. This only applies to the bundled database; external-DB users set `DB_PASSWORD` to match their existing database.
 - See [ENVIRONMENT_VARIABLES.md](ENVIRONMENT_VARIABLES.md) for the full reference.
@@ -517,7 +518,7 @@ See: [ENVIRONMENT_VARIABLES](ENVIRONMENT_VARIABLES.md) for more details
 
 ### Platform Deployment Configuration
 
-Youtarr supports platform-managed deployments (Elfhosted, Kubernetes, etc.) with three special environment variables:
+Youtarr supports platform-managed deployments (Elfhosted, Kubernetes, etc.) with four special environment variables:
 
 #### Environment Variables
 
@@ -525,18 +526,19 @@ Youtarr supports platform-managed deployments (Elfhosted, Kubernetes, etc.) with
 |----------|-------------|---------|
 | `DATA_PATH` | Video storage path inside container (only really needed for Elfhosted) | `/storage/rclone/storagebox/youtube` |
 | `AUTH_ENABLED` | Set to `false` to bypass internal authentication | `false` |
+| `TRUST_PROXY` | Controls whether Youtarr trusts proxy headers. Set `false` for direct exposure without a reverse proxy. | `false` |
 | `PLEX_URL` | Pre-configured Plex server URL, overrides plexIp and plexPort from config.json | `http://plex:32400` |
 
 ### Preset Credentials for Headless Deployments
 
-For platforms where you cannot access `http://localhost:3087` (Unraid, Kubernetes, etc.), you can seed the initial login without touching the UI by setting both environment variables below. These values will override and overwrite existing values in config.json
+For platforms where you cannot access `http://localhost:3087` (Unraid, Kubernetes, etc.), you can either use the one-time setup token from container logs or seed the initial login without touching the UI by setting both environment variables below. These values will override and overwrite existing values in config.json
 
 | Variable | Description |
 |----------|-------------|
 | `AUTH_PRESET_USERNAME` | Initial admin username. Trimmed and must be ≤ 32 characters. |
 | `AUTH_PRESET_PASSWORD` | Initial admin password (8–64 characters). Stored as a hash on first boot. |
 
-If only one variable is present, or the values fall outside the validation rules, the preset is ignored and the localhost-only setup wizard remains active.
+If only one variable is present, or the values fall outside the validation rules, the preset is ignored and the setup-token wizard remains active.
 
 #### What Happens in Platform Mode
 

@@ -309,7 +309,7 @@ Edit the file to configure your settings. At minimum, set the `YOUTUBE_OUTPUT_DI
 YOUTUBE_OUTPUT_DIR=/volume1/media/youtube
 
 # Optional: Set initial admin credentials
-# Recommended for headless setup since you must otherwise set your initial login credentials via localhost
+# Use this when you want to skip the setup-token wizard
 AUTH_PRESET_USERNAME=admin
 AUTH_PRESET_PASSWORD=YourSecurePassword123
 
@@ -384,7 +384,7 @@ http://your-nas-ip:3087
 
 **First-time setup**:
 - If you set `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` in `.env`, log in with those credentials
-- If you didn't set credentials, you'll be prompted to create an admin account (only accessible from localhost - requires SSH port forwarding)
+- If you didn't set credentials, you'll be prompted to create an admin account with the one-time token from `docker compose logs youtarr` or `config/setup-token`
 
 **After logging in**:
 1. Navigate to **Configuration** page
@@ -641,11 +641,22 @@ docker ps
 
 ### Cannot Login - Setup Wizard Required
 
-**Symptom**: Browser shows "Initial setup required" but you can't access from remote IP.
+**Symptom**: Browser shows "Initial setup required" and asks for a setup token.
 
-**Cause**: Initial setup must be completed from localhost for security.
+**Cause**: Initial credentials have not been configured yet.
 
-**Solution A: Set preset credentials** (recommended):
+**Solution A: Use the setup token**:
+```bash
+cd /volume1/docker/Youtarr
+docker compose logs youtarr | grep -A5 "initial setup required"
+
+# Or read the token file directly:
+cat config/setup-token
+```
+
+Paste the token into the setup wizard and create your admin account.
+
+**Solution B: Set preset credentials**:
 ```bash
 # Edit .env file
 vi /volume1/docker/Youtarr/.env
@@ -660,15 +671,6 @@ docker compose up -d
 ```
 
 > **Tip**: If you prefer `nano` and have installed it, replace `vi` with `nano` in the command above. In `vi`, press `Esc`, type `:wq`, then press `Enter` to save and exit.
-
-**Solution B: SSH port forwarding**:
-```bash
-# From your local computer, create SSH tunnel:
-ssh -L 3087:localhost:3087 yourusername@your-nas-ip
-
-# Then access http://localhost:3087 on your computer
-# Complete setup wizard
-```
 
 ### Database Connection Errors
 

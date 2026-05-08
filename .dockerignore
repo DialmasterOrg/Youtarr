@@ -3,3 +3,5 @@ database/
 database/*
 database.bind-mount-backup.*
 
+# Ignore local setup secrets
+config/setup-token

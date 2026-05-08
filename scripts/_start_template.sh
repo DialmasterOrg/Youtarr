@@ -53,3 +53,5 @@ yt_section "Environment"
 yt_info "Youtarr services are starting."
 yt_detail "Follow logs : $COMPOSE_CMD logs -f"
 yt_detail "Stop stack  : $COMPOSE_CMD down"
+
+print_setup_guidance_if_needed

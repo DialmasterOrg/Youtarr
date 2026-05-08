@@ -10,6 +10,7 @@ config/jobs.json
 config/config.json
 config/config.json.*
 config/cookies.user.txt
+config/setup-token
 config/*.env
 database
 server/images

@@ -178,6 +178,29 @@ describe('AuthSplash', () => {
     });
   });
 
+  test('shows password reset disclosure after invalid credentials', async () => {
+    axios.isAxiosError.mockReturnValue(true);
+    axios.post.mockRejectedValueOnce({ response: { status: 401, data: {} } });
+    render(<AuthSplash setToken={setToken} />);
+
+    expect(screen.queryByText(/forgot your password/i)).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/username/i), { target: { value: 'a' } });
+    fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'b' } });
+    fireEvent.click(screen.getByRole('button', { name: /login/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/forgot your password/i)).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText(/forgot your password/i));
+
+    expect(screen.getByText(/AUTH_PRESET_USERNAME/)).toBeInTheDocument();
+    expect(screen.getByText(/AUTH_PRESET_PASSWORD/)).toBeInTheDocument();
+    expect(screen.getByText(/passwordHash/)).toBeInTheDocument();
+    expect(screen.getByText(/one-time setup token/i)).toBeInTheDocument();
+  });
+
   test('shows server-provided error message when response.data.error is present', async () => {
     axios.isAxiosError.mockReturnValue(true);
     axios.post.mockRejectedValueOnce({

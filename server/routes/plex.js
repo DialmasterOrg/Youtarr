@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const logger = require('../logger');
+const { isAuthConfigured } = require('../modules/authState');
 
 /**
  * Creates Plex routes
@@ -150,7 +151,7 @@ module.exports = function createPlexRoutes({ verifyToken, plexModule, configModu
   router.get('/plex/auth-url', async (req, res) => {
     const config = configModule.getConfig();
 
-    if (process.env.AUTH_ENABLED !== 'false' && !config.passwordHash) {
+    if (process.env.AUTH_ENABLED !== 'false' && !isAuthConfigured(config)) {
       return res.status(503).json({
         error: 'Authentication not configured',
         requiresSetup: true,
@@ -202,7 +203,7 @@ module.exports = function createPlexRoutes({ verifyToken, plexModule, configModu
   router.get('/plex/check-pin/:pinId', async (req, res) => {
     const config = configModule.getConfig();
 
-    if (process.env.AUTH_ENABLED !== 'false' && !config.passwordHash) {
+    if (process.env.AUTH_ENABLED !== 'false' && !isAuthConfigured(config)) {
       return res.status(503).json({
         error: 'Authentication not configured',
         requiresSetup: true,
@@ -221,4 +222,3 @@ module.exports = function createPlexRoutes({ verifyToken, plexModule, configModu
 
   return router;
 };
-

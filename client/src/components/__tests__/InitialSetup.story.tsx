@@ -12,10 +12,7 @@ const meta: Meta<typeof InitialSetup> = {
   parameters: {
     msw: {
       handlers: [
-        http.get('/setup/status', () =>
-          HttpResponse.json({ requiresSetup: true, isLocalhost: true })
-        ),
-        http.post('/setup/create-auth', () => HttpResponse.json({ token: 'setup-token' })),
+        http.post('/setup/create-auth', () => HttpResponse.json({ token: 'session-token' })),
       ],
     },
   },
@@ -28,10 +25,7 @@ export const PasswordMismatch: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    await waitFor(() =>
-      expect(canvas.getByRole('button', { name: /complete setup/i })).toBeEnabled()
-    );
-
+    await userEvent.type(canvas.getByLabelText(/setup token/i), 'sample-setup-token');
     await userEvent.type(canvas.getByLabelText(/^password/i), 'password123');
     await userEvent.type(canvas.getByLabelText(/confirm password/i), 'password456');
 
@@ -45,20 +39,12 @@ export const SuccessfulSetup: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
 
-    await waitFor(() =>
-      expect(canvas.getByRole('button', { name: /complete setup/i })).toBeEnabled()
-    );
-
-    const password = canvas.getByLabelText(/^password/i);
-    const confirmPassword = canvas.getByLabelText(/confirm password/i);
-
-    await userEvent.clear(password);
-    await userEvent.type(password, 'password123');
-    await userEvent.clear(confirmPassword);
-    await userEvent.type(confirmPassword, 'password123');
+    await userEvent.type(canvas.getByLabelText(/setup token/i), 'sample-setup-token');
+    await userEvent.type(canvas.getByLabelText(/^password/i), 'password123');
+    await userEvent.type(canvas.getByLabelText(/confirm password/i), 'password123');
 
     await userEvent.click(canvas.getByRole('button', { name: /complete setup/i }));
 
-    await waitFor(() => expect(args.onSetupComplete).toHaveBeenCalledWith('setup-token'));
+    await waitFor(() => expect(args.onSetupComplete).toHaveBeenCalledWith('session-token'));
   },
 };

@@ -17,10 +17,10 @@ services:
       dockerfile: Dockerfile
     image: ${YOUTARR_IMAGE:-youtarr-dev:latest}
     container_name: youtarr-dev
-    # Expose backend on host port 3087 (container still listens on 3011).
+    # Expose backend on host port 3087 by default (container still listens on 3011).
     # The Vite dev server proxies to http://127.0.0.1:3087 by default.
     ports:
-      - "3087:3011"
+      - "${YOUTARR_HOST_PORT:-3087}:3011"
     volumes:
       - ${YOUTUBE_OUTPUT_DIR:-./downloads}:/usr/src/app/data
       - ./server/images:/app/server/images
@@ -44,6 +44,7 @@ services:
       - AUTH_ENABLED=${AUTH_ENABLED:-true}
       - AUTH_PRESET_USERNAME=${AUTH_PRESET_USERNAME:-}
       - AUTH_PRESET_PASSWORD=${AUTH_PRESET_PASSWORD:-}
+      - TRUST_PROXY=${TRUST_PROXY:-}
       # Platform-spoof env vars (used by ./scripts/start-dev.sh --as-elfhosted and full Elfhosted spoofs).
       # Empty when unset on the host, so non-Elfhosted dev runs are unaffected.
       - PLATFORM=${PLATFORM:-}

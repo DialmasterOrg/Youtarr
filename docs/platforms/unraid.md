@@ -54,7 +54,7 @@ curl -L https://raw.githubusercontent.com/DialmasterOrg/unraid-templates/main/Yo
   - **IMPORTANT**: `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` must meet these rules or they’ll be ignored:
     - `AUTH_PRESET_USERNAME`: 1-32 characters in length
     - `AUTH_PRESET_PASSWORD`: 8-64 characters in length
-  Leaving them blank requires completing the setup wizard from the Unraid host's localhost (e.g., via SSH port forwarding), which most headless installs won't have handy.
+  Leaving them blank uses the setup-token wizard; retrieve the token from the container logs or the mapped `config/setup-token` file.
 6. Click the "Apply" button to start Youtarr
 
 Once the container is running, open http://<your-unraid-ip>:3087 in your browser to access Youtarr.

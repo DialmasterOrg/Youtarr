@@ -25,6 +25,7 @@ function registerRoutes(app, deps) {
   const {
     verifyToken,
     loginLimiter,
+    setupCreateAuthLimiter,
     youtubeApiKeyTestLimiter,
     ytdlpValidationRateLimiter,
     configModule,
@@ -40,7 +41,8 @@ function registerRoutes(app, deps) {
     getCachedYtDlpVersion,
     refreshYtDlpVersionCache,
     validateEnvAuthCredentials,
-    isLocalhostIP,
+    setupTokenModule,
+    getClientAddress,
     isWslEnvironment,
   } = deps;
 
@@ -48,10 +50,10 @@ function registerRoutes(app, deps) {
   app.use(createHealthRoutes({ getCachedYtDlpVersion, refreshYtDlpVersionCache, verifyToken, configModule }));
 
   // Auth routes
-  app.use(createAuthRoutes({ verifyToken, loginLimiter, configModule }));
+  app.use(createAuthRoutes({ verifyToken, loginLimiter, configModule, getClientAddress }));
 
   // Setup routes
-  app.use(createSetupRoutes({ configModule, isLocalhostIP }));
+  app.use(createSetupRoutes({ configModule, setupTokenModule, setupCreateAuthLimiter, getClientAddress }));
 
   // Config routes
   app.use(createConfigRoutes({ verifyToken, configModule, validateEnvAuthCredentials, isWslEnvironment }));

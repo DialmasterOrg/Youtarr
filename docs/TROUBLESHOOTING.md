@@ -2,38 +2,11 @@
 
 ## Login Issues
 
-### Cannot Access Initial Setup
+### Cannot Find the Setup Token
 
-**Problem**: Unable to access the initial setup page or getting "Initial setup can only be performed from localhost" error.
+**Problem**: First-time setup wizard asks for a token and you don't know where to find it.
 
-**Solution**:
-- Initial setup must be done from the same machine running Youtarr unless you seed credentials via environment variables
-- For headless/remote setups, run `./start.sh --headless-auth` which will prompt for credentials and save them to your `.env` file
-- Alternatively, manually add `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` to your `.env` file before first startup
-- If you prefer to use the UI wizard, access the setup using `http://localhost:3087` (not the machine's IP address)
-- When running in Docker, make sure you browse from the host machine or forward the port securely as described below
-
-#### Accessing from a Headless/Remote Server
-
-If you're running Youtarr on a headless server (no GUI) or remote machine, you can use SSH port forwarding to access the initial setup:
-
-**From Windows:**
-```bash
-# Open an elevated Command Prompt or PowerShell
-ssh -L 3087:localhost:3087 username@<server-ip-address>
-# Then open http://localhost:3087 in your browser
-```
-
-**From Linux/Mac:**
-```bash
-# In terminal
-ssh -L 3087:localhost:3087 username@<server-ip-address>
-# Then open http://localhost:3087 in your browser
-```
-
-This creates a secure tunnel between your local machine's port 3087 and the server's port 3087, allowing you to complete the initial setup as if you were on localhost. After completing the setup, you can access Youtarr normally using the server's IP address.
-
-> Tip: If you cannot use SSH port forwarding, provide `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` in your container environment (or via `./start.sh`) before the first boot. Youtarr will hash the password and skip the localhost-only wizard.
+See [Authentication - Cannot Find the Setup Token](AUTHENTICATION.md#cannot-find-the-setup-token) for the full list of solutions.
 
 ### Forgotten Admin Password {#reset-admin-password}
 
@@ -73,9 +46,7 @@ This creates a secure tunnel between your local machine's port 3087 and the serv
    ./start.sh
    ```
 
-4. Access `http://localhost:3087` to create new credentials via the UI setup wizard
-   - **Important**: This must be done from localhost (or via SSH port forwarding as described above)
-   - You will be prompted to create a new admin account on first access
+4. Open Youtarr in any browser. You will be prompted to create a new admin account using the one-time setup token from `docker logs youtarr` or `config/setup-token`.
 
 ### Session Expired
 

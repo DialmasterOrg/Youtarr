@@ -110,6 +110,35 @@ describe('LocalLogin Component', () => {
     });
   });
 
+  test('shows password reset disclosure only after invalid credentials', async () => {
+    const user = userEvent.setup();
+
+    axios.post.mockRejectedValueOnce({
+      response: {
+        status: 401,
+        data: { error: 'Unauthorized' }
+      }
+    });
+
+    render(<LocalLogin setToken={mockSetToken} />);
+
+    expect(screen.queryByText(/forgot your password/i)).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText(/username/i), 'wronguser');
+    await user.type(screen.getByLabelText(/password/i), 'wrongpass');
+    await user.click(screen.getByRole('button', { name: /login/i }));
+
+    const summary = await screen.findByText(/forgot your password/i);
+    expect(summary).toBeInTheDocument();
+
+    await user.click(summary);
+
+    expect(screen.getByText(/AUTH_PRESET_USERNAME/)).toBeInTheDocument();
+    expect(screen.getByText(/AUTH_PRESET_PASSWORD/)).toBeInTheDocument();
+    expect(screen.getByText(/passwordHash/)).toBeInTheDocument();
+    expect(screen.getByText(/one-time setup token/i)).toBeInTheDocument();
+  });
+
   test('displays rate limit error (429)', async () => {
     const user = userEvent.setup();
     
