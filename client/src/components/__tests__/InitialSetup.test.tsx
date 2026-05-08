@@ -4,15 +4,15 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import InitialSetup from '../InitialSetup';
 
-// Mock axios
+// Mock axios. Include isAxiosError so the component's narrowing works.
 jest.mock('axios', () => ({
   get: jest.fn(),
-  post: jest.fn()
+  post: jest.fn(),
+  isAxiosError: jest.fn((err: unknown) => Boolean((err as { isAxiosError?: boolean })?.isAxiosError)),
 }));
 
 const axios = require('axios');
 
-// Mock localStorage
 const localStorageMock = {
   getItem: jest.fn(),
   setItem: jest.fn(),
@@ -31,391 +31,217 @@ describe('InitialSetup Component', () => {
     jest.clearAllMocks();
   });
 
-  describe('Initial Status Check', () => {
-    test('checks setup status on component mount', async () => {
-      axios.get.mockResolvedValueOnce({
-        data: { isLocalhost: true }
-      });
-
+  describe('Setup form rendering', () => {
+    test('renders all required fields including the setup token field', () => {
       render(<InitialSetup onSetupComplete={mockOnSetupComplete} />);
 
-      await waitFor(() => {
-        expect(axios.get).toHaveBeenCalledWith('/setup/status');
-      });
-    });
-
-    test('handles setup status check failure gracefully', async () => {
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-      axios.get.mockRejectedValueOnce(new Error('Network error'));
-
-      render(<InitialSetup onSetupComplete={mockOnSetupComplete} />);
-
-      await waitFor(() => {
-        expect(consoleErrorSpy).toHaveBeenCalledWith(
-          'Setup status check failed:',
-          expect.any(Error)
-        );
-      });
-
-      consoleErrorSpy.mockRestore();
-    });
-  });
-
-  describe('Non-localhost Access', () => {
-    test('displays security warning when accessing from non-localhost', async () => {
-      axios.get.mockResolvedValueOnce({
-        data: { isLocalhost: false }
-      });
-
-      render(<InitialSetup onSetupComplete={mockOnSetupComplete} />);
-
-      await waitFor(() => {
-        expect(screen.getByText('🔒 Security Protection Active')).toBeInTheDocument();
-      });
-
-      expect(screen.getByText(/initial password setup must be performed from the server itself/i)).toBeInTheDocument();
-      expect(screen.getByText('http://localhost:3087')).toBeInTheDocument();
-      expect(screen.getByText(/this security measure prevents unauthorized users/i)).toBeInTheDocument();
-    });
-
-    test('does not show setup form when not on localhost', async () => {
-      axios.get.mockResolvedValueOnce({
-        data: { isLocalhost: false }
-      });
-
-      render(<InitialSetup onSetupComplete={mockOnSetupComplete} />);
-
-      await waitFor(() => {
-        expect(screen.getByText('🔒 Security Protection Active')).toBeInTheDocument();
-      });
-
-      expect(screen.queryByLabelText(/username/i)).not.toBeInTheDocument();
-      expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /complete setup/i })).not.toBeInTheDocument();
-    });
-  });
-
-  describe('Localhost Setup Form', () => {
-    beforeEach(() => {
-      axios.get.mockResolvedValueOnce({
-        data: { isLocalhost: true }
-      });
-    });
-
-    test('renders setup form with all required fields', async () => {
-      render(<InitialSetup onSetupComplete={mockOnSetupComplete} />);
-
-      // Wait for the form to be rendered after axios call
-      await waitFor(() => {
-        expect(screen.getByText('Welcome to Youtarr Setup')).toBeInTheDocument();
-      });
-
-      // Check all form fields are present
-      expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
-      expect(screen.getByLabelText(/^Password/i)).toBeInTheDocument();
+      expect(screen.getByText('Welcome to Youtarr Setup')).toBeInTheDocument();
+      expect(screen.getByLabelText(/setup token/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/^username/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/^password/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/confirm password/i)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /complete setup/i })).toBeInTheDocument();
     });
 
-    test('shows important changes alert with information', async () => {
+    test('displays setup-token alert with reference to logs and config file', () => {
       render(<InitialSetup onSetupComplete={mockOnSetupComplete} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Important')).toBeInTheDocument();
-      });
-
-      expect(screen.getByText(/youtarr uses local authentication by default/i)).toBeInTheDocument();
-      expect(screen.getByText(/initial setup requires access via localhost/i)).toBeInTheDocument();
+      expect(screen.getByText('Setup token required')).toBeInTheDocument();
+      expect(screen.getAllByText(/docker logs youtarr/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/config\/setup-token/).length).toBeGreaterThan(0);
+      expect(screen.getByText(/AUTH_PRESET_USERNAME/)).toBeInTheDocument();
+      expect(screen.getByText(/AUTH_PRESET_PASSWORD/)).toBeInTheDocument();
+      expect(screen.getByText(/restart Youtarr/i)).toBeInTheDocument();
     });
 
-    test('has admin as default username', async () => {
+    test('uses admin as the default username', () => {
       render(<InitialSetup onSetupComplete={mockOnSetupComplete} />);
 
-      await waitFor(() => {
-        const usernameInput = screen.getByLabelText(/username/i);
-        expect(usernameInput).toHaveValue('admin');
-      });
+      expect(screen.getByLabelText(/^username/i)).toHaveValue('admin');
     });
 
-    test('updates input values when user types', async () => {
-      const user = userEvent.setup();
+    test('does not call /setup/status', () => {
       render(<InitialSetup onSetupComplete={mockOnSetupComplete} />);
 
-      // Wait for form to render
-      await waitFor(() => {
-        expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
-      });
-
-      const usernameInput = screen.getByLabelText(/username/i);
-      const passwordInput = screen.getByLabelText(/^Password/i);
-      const confirmPasswordInput = screen.getByLabelText(/confirm password/i);
-
-      await user.clear(usernameInput);
-      await user.type(usernameInput, 'newuser');
-      await user.type(passwordInput, 'testpassword123');
-      await user.type(confirmPasswordInput, 'testpassword123');
-
-      expect(usernameInput).toHaveValue('newuser');
-      expect(passwordInput).toHaveValue('testpassword123');
-      expect(confirmPasswordInput).toHaveValue('testpassword123');
+      expect(axios.get).not.toHaveBeenCalled();
     });
 
-    test('submit button is disabled while checking localhost status', () => {
-      axios.get.mockImplementationOnce(() => new Promise(() => {})); // Never resolves
-
+    test('all four input fields are marked as required', () => {
       render(<InitialSetup onSetupComplete={mockOnSetupComplete} />);
 
-      const submitButton = screen.getByRole('button', { name: /complete setup/i });
-      expect(submitButton).toBeDisabled();
+      expect(screen.getByLabelText(/setup token/i)).toHaveAttribute('required');
+      expect(screen.getByLabelText(/^username/i)).toHaveAttribute('required');
+      expect(screen.getByLabelText(/^password/i)).toHaveAttribute('required');
+      expect(screen.getByLabelText(/confirm password/i)).toHaveAttribute('required');
+    });
+
+    test('submit button is enabled by default', () => {
+      render(<InitialSetup onSetupComplete={mockOnSetupComplete} />);
+
+      expect(screen.getByRole('button', { name: /complete setup/i })).toBeEnabled();
     });
   });
 
-  describe('Password Strength Indicator', () => {
-    beforeEach(() => {
-      axios.get.mockResolvedValueOnce({
-        data: { isLocalhost: true }
-      });
-    });
-
-    test('shows password strength as "Too short" for passwords under 8 characters', async () => {
+  describe('Password strength indicator', () => {
+    test('shows "Too short" for passwords under 8 characters', async () => {
       const user = userEvent.setup();
       render(<InitialSetup onSetupComplete={mockOnSetupComplete} />);
 
-      // Wait for form to render
-      await waitFor(() => {
-        expect(screen.getByText('Welcome to Youtarr Setup')).toBeInTheDocument();
-      });
-
-      const passwordInput = screen.getByLabelText(/^Password/i);
-      await user.type(passwordInput, 'short');
+      await user.type(screen.getByLabelText(/^password/i), 'short');
 
       expect(screen.getByText(/password strength: too short/i)).toBeInTheDocument();
     });
 
-    test('shows password strength as "Fair" for 8-11 character passwords', async () => {
+    test('shows "Fair" for 8-11 character passwords', async () => {
       const user = userEvent.setup();
       render(<InitialSetup onSetupComplete={mockOnSetupComplete} />);
 
-      // Wait for form to render
-      await waitFor(() => {
-        expect(screen.getByText('Welcome to Youtarr Setup')).toBeInTheDocument();
-      });
-
-      const passwordInput = screen.getByLabelText(/^Password/i);
-      await user.type(passwordInput, 'fairpass');
+      await user.type(screen.getByLabelText(/^password/i), 'fairpass');
 
       expect(screen.getByText(/password strength: fair/i)).toBeInTheDocument();
     });
 
-    test('shows password strength as "Good" for 12-15 character passwords', async () => {
+    test('shows "Good" for 12-15 character passwords', async () => {
       const user = userEvent.setup();
       render(<InitialSetup onSetupComplete={mockOnSetupComplete} />);
 
-      // Wait for form to render
-      await waitFor(() => {
-        expect(screen.getByText('Welcome to Youtarr Setup')).toBeInTheDocument();
-      });
-
-      const passwordInput = screen.getByLabelText(/^Password/i);
-      await user.type(passwordInput, 'goodpassword');
+      await user.type(screen.getByLabelText(/^password/i), 'goodpassword');
 
       expect(screen.getByText(/password strength: good/i)).toBeInTheDocument();
     });
 
-    test('shows password strength as "Strong" for 16+ character passwords', async () => {
+    test('shows "Strong" for 16+ character passwords', async () => {
       const user = userEvent.setup();
       render(<InitialSetup onSetupComplete={mockOnSetupComplete} />);
 
-      // Wait for form to render
-      await waitFor(() => {
-        expect(screen.getByText('Welcome to Youtarr Setup')).toBeInTheDocument();
-      });
-
-      const passwordInput = screen.getByLabelText(/^Password/i);
-      await user.type(passwordInput, 'verystrongpassword123');
+      await user.type(screen.getByLabelText(/^password/i), 'verystrongpassword123');
 
       expect(screen.getByText(/password strength: strong/i)).toBeInTheDocument();
     });
 
-    test('shows "Enter password" when password field is empty', async () => {
+    test('shows "Enter password" when the password field is empty', () => {
       render(<InitialSetup onSetupComplete={mockOnSetupComplete} />);
 
-      await waitFor(() => {
-        expect(screen.getByText(/password strength: enter password/i)).toBeInTheDocument();
-      });
+      expect(screen.getByText(/password strength: enter password/i)).toBeInTheDocument();
     });
   });
 
-  describe('Form Validation', () => {
-    beforeEach(() => {
-      axios.get.mockResolvedValueOnce({
-        data: { isLocalhost: true }
-      });
+  describe('Form validation', () => {
+    const fillTokenAndPasswords = async (user: ReturnType<typeof userEvent.setup>) => {
+      await user.type(screen.getByLabelText(/setup token/i), 'sample-token');
+    };
+
+    test('does not submit when token is only whitespace', async () => {
+      const user = userEvent.setup();
+      render(<InitialSetup onSetupComplete={mockOnSetupComplete} />);
+
+      await user.type(screen.getByLabelText(/setup token/i), '   ');
+      await user.type(screen.getByLabelText(/^password/i), 'password123');
+      await user.type(screen.getByLabelText(/confirm password/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /complete setup/i }));
+
+      expect(await screen.findByText('Setup token is required')).toBeInTheDocument();
+      expect(axios.post).not.toHaveBeenCalled();
+      expect(mockOnSetupComplete).not.toHaveBeenCalled();
     });
 
     test('shows error when passwords do not match', async () => {
       const user = userEvent.setup();
       render(<InitialSetup onSetupComplete={mockOnSetupComplete} />);
 
-      // Wait for form to render
-      await waitFor(() => {
-        expect(screen.getByText('Welcome to Youtarr Setup')).toBeInTheDocument();
-      });
+      await fillTokenAndPasswords(user);
+      await user.type(screen.getByLabelText(/^password/i), 'password123');
+      await user.type(screen.getByLabelText(/confirm password/i), 'different');
+      await user.click(screen.getByRole('button', { name: /complete setup/i }));
 
-      const passwordInput = screen.getByLabelText(/^Password/i);
-      const confirmPasswordInput = screen.getByLabelText(/confirm password/i);
-      const submitButton = screen.getByRole('button', { name: /complete setup/i });
-
-      await user.type(passwordInput, 'password123');
-      await user.type(confirmPasswordInput, 'differentpassword');
-      await user.click(submitButton);
-
-      await waitFor(() => {
-        expect(screen.getByText('Passwords do not match')).toBeInTheDocument();
-      });
-
+      expect(await screen.findByText(/passwords do not match/i)).toBeInTheDocument();
       expect(axios.post).not.toHaveBeenCalled();
     });
 
-    test('shows error when password is less than 8 characters', async () => {
+    test('shows error when password is shorter than 8 chars', async () => {
       const user = userEvent.setup();
       render(<InitialSetup onSetupComplete={mockOnSetupComplete} />);
 
-      // Wait for form to render
-      await waitFor(() => {
-        expect(screen.getByText('Welcome to Youtarr Setup')).toBeInTheDocument();
-      });
+      await fillTokenAndPasswords(user);
+      await user.type(screen.getByLabelText(/^password/i), 'short');
+      await user.type(screen.getByLabelText(/confirm password/i), 'short');
+      await user.click(screen.getByRole('button', { name: /complete setup/i }));
 
-      const passwordInput = screen.getByLabelText(/^Password/i);
-      const confirmPasswordInput = screen.getByLabelText(/confirm password/i);
-      const submitButton = screen.getByRole('button', { name: /complete setup/i });
-
-      await user.type(passwordInput, 'short');
-      await user.type(confirmPasswordInput, 'short');
-      await user.click(submitButton);
-
-      await waitFor(() => {
-        expect(screen.getByText('Password must be at least 8 characters')).toBeInTheDocument();
-      });
-
+      expect(await screen.findByText(/password must be at least 8 characters/i)).toBeInTheDocument();
       expect(axios.post).not.toHaveBeenCalled();
     });
 
-    test('clears error when submitting again', async () => {
+    test('clears the inline error when the next submission succeeds', async () => {
       const user = userEvent.setup();
       render(<InitialSetup onSetupComplete={mockOnSetupComplete} />);
 
-      // Wait for form to render
-      await waitFor(() => {
-        expect(screen.getByText('Welcome to Youtarr Setup')).toBeInTheDocument();
-      });
+      await fillTokenAndPasswords(user);
+      await user.type(screen.getByLabelText(/^password/i), 'short');
+      await user.type(screen.getByLabelText(/confirm password/i), 'short');
+      await user.click(screen.getByRole('button', { name: /complete setup/i }));
 
-      const passwordInput = screen.getByLabelText(/^Password/i);
-      const confirmPasswordInput = screen.getByLabelText(/confirm password/i);
-      const submitButton = screen.getByRole('button', { name: /complete setup/i });
+      await screen.findByText(/password must be at least 8 characters/i);
 
-      // First submission with error
-      await user.type(passwordInput, 'short');
-      await user.type(confirmPasswordInput, 'short');
-      await user.click(submitButton);
+      await user.clear(screen.getByLabelText(/^password/i));
+      await user.clear(screen.getByLabelText(/confirm password/i));
+      await user.type(screen.getByLabelText(/^password/i), 'validpassword123');
+      await user.type(screen.getByLabelText(/confirm password/i), 'validpassword123');
 
-      await waitFor(() => {
-        expect(screen.getByText('Password must be at least 8 characters')).toBeInTheDocument();
-      });
+      axios.post.mockResolvedValueOnce({ data: { token: 'session-token' } });
 
-      // Second submission with valid data
-      await user.clear(passwordInput);
-      await user.clear(confirmPasswordInput);
-      await user.type(passwordInput, 'validpassword123');
-      await user.type(confirmPasswordInput, 'validpassword123');
-
-      axios.post.mockResolvedValueOnce({
-        data: { token: 'test-token' }
-      });
-
-      await user.click(submitButton);
+      await user.click(screen.getByRole('button', { name: /complete setup/i }));
 
       await waitFor(() => {
-        expect(screen.queryByText('Password must be at least 8 characters')).not.toBeInTheDocument();
+        expect(screen.queryByText(/password must be at least 8 characters/i)).not.toBeInTheDocument();
       });
     });
   });
 
-  describe('Successful Setup', () => {
-    beforeEach(() => {
-      axios.get.mockResolvedValueOnce({
-        data: { isLocalhost: true }
-      });
-    });
-
-    test('handles successful setup and calls onSetupComplete', async () => {
+  describe('Successful setup', () => {
+    test('posts the token, username, and password and calls onSetupComplete', async () => {
       const user = userEvent.setup();
-      const mockToken = 'test-auth-token';
+      const sessionToken = 'returned-session-token';
 
-      axios.post.mockResolvedValueOnce({
-        data: { token: mockToken }
-      });
+      axios.post.mockResolvedValueOnce({ data: { token: sessionToken } });
 
       render(<InitialSetup onSetupComplete={mockOnSetupComplete} />);
 
-      await waitFor(() => {
-        expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
-      });
-
-      const usernameInput = screen.getByLabelText(/username/i);
-      const passwordInput = screen.getByLabelText(/^Password/i);
-      const confirmPasswordInput = screen.getByLabelText(/confirm password/i);
-      const submitButton = screen.getByRole('button', { name: /complete setup/i });
-
-      await user.clear(usernameInput);
-      await user.type(usernameInput, 'testuser');
-      await user.type(passwordInput, 'testpassword123');
-      await user.type(confirmPasswordInput, 'testpassword123');
-      await user.click(submitButton);
+      await user.type(screen.getByLabelText(/setup token/i), '  my-setup-token  ');
+      await user.clear(screen.getByLabelText(/^username/i));
+      await user.type(screen.getByLabelText(/^username/i), 'newuser');
+      await user.type(screen.getByLabelText(/^password/i), 'password123');
+      await user.type(screen.getByLabelText(/confirm password/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /complete setup/i }));
 
       await waitFor(() => {
         expect(axios.post).toHaveBeenCalledWith('/setup/create-auth', {
-          username: 'testuser',
-          password: 'testpassword123'
+          token: 'my-setup-token',
+          username: 'newuser',
+          password: 'password123',
         });
       });
 
-      expect(localStorageMock.setItem).toHaveBeenCalledWith('authToken', mockToken);
-      expect(mockOnSetupComplete).toHaveBeenCalledWith(mockToken);
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('authToken', sessionToken);
+      expect(mockOnSetupComplete).toHaveBeenCalledWith(sessionToken);
     });
 
-    test('shows loading state during setup', async () => {
+    test('shows the loading state while the request is in flight', async () => {
       const user = userEvent.setup();
-
-      // Create a promise we can control
-      let resolveSetup: any;
-      const setupPromise = new Promise((resolve) => {
-        resolveSetup = resolve;
-      });
-
+      let resolveSetup: (value: unknown) => void = () => {};
+      const setupPromise = new Promise((resolve) => { resolveSetup = resolve; });
       axios.post.mockReturnValueOnce(setupPromise);
 
       render(<InitialSetup onSetupComplete={mockOnSetupComplete} />);
 
-      // Wait for form to render
-      await waitFor(() => {
-        expect(screen.getByText('Welcome to Youtarr Setup')).toBeInTheDocument();
-      });
+      await user.type(screen.getByLabelText(/setup token/i), 'token');
+      await user.type(screen.getByLabelText(/^password/i), 'password123');
+      await user.type(screen.getByLabelText(/confirm password/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /complete setup/i }));
 
-      const passwordInput = screen.getByLabelText(/^Password/i);
-      const confirmPasswordInput = screen.getByLabelText(/confirm password/i);
-      const submitButton = screen.getByRole('button', { name: /complete setup/i });
-
-      await user.type(passwordInput, 'testpassword123');
-      await user.type(confirmPasswordInput, 'testpassword123');
-      await user.click(submitButton);
-
-      // Check loading state
       expect(screen.getByRole('button', { name: /setting up/i })).toBeDisabled();
       expect(screen.getByRole('progressbar')).toBeInTheDocument();
 
-      // Resolve the setup
-      resolveSetup({ data: { token: 'test-token' } });
+      resolveSetup({ data: { token: 'tok' } });
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /complete setup/i })).not.toBeDisabled();
@@ -423,137 +249,72 @@ describe('InitialSetup Component', () => {
     });
   });
 
-  describe('Setup Failure', () => {
-    beforeEach(() => {
-      axios.get.mockResolvedValueOnce({
-        data: { isLocalhost: true }
-      });
-    });
-
-    test('displays server error message when setup fails', async () => {
+  describe('Setup failure', () => {
+    test('surfaces the server "Invalid setup token" error', async () => {
       const user = userEvent.setup();
-
-      axios.post.mockRejectedValueOnce({
-        response: {
-          data: { error: 'Database connection failed' }
-        }
-      });
+      const axiosError = { isAxiosError: true, response: { status: 401, data: { error: 'Invalid setup token' } } };
+      axios.isAxiosError.mockImplementation((err: unknown) => Boolean((err as typeof axiosError)?.isAxiosError));
+      axios.post.mockRejectedValueOnce(axiosError);
 
       render(<InitialSetup onSetupComplete={mockOnSetupComplete} />);
 
-      // Wait for form to render
-      await waitFor(() => {
-        expect(screen.getByText('Welcome to Youtarr Setup')).toBeInTheDocument();
-      });
+      await user.type(screen.getByLabelText(/setup token/i), 'wrong-token');
+      await user.type(screen.getByLabelText(/^password/i), 'password123');
+      await user.type(screen.getByLabelText(/confirm password/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /complete setup/i }));
 
-      const passwordInput = screen.getByLabelText(/^Password/i);
-      const confirmPasswordInput = screen.getByLabelText(/confirm password/i);
-      const submitButton = screen.getByRole('button', { name: /complete setup/i });
-
-      await user.type(passwordInput, 'testpassword123');
-      await user.type(confirmPasswordInput, 'testpassword123');
-      await user.click(submitButton);
-
-      await waitFor(() => {
-        expect(screen.getByText('Database connection failed')).toBeInTheDocument();
-      });
-
+      expect(await screen.findByText('Invalid setup token')).toBeInTheDocument();
       expect(mockOnSetupComplete).not.toHaveBeenCalled();
       expect(localStorageMock.setItem).not.toHaveBeenCalled();
     });
 
-    test('displays generic error message for unknown errors', async () => {
+    test('surfaces a generic "Setup failed" message for non-axios errors', async () => {
       const user = userEvent.setup();
-
       axios.post.mockRejectedValueOnce(new Error('Network error'));
 
       render(<InitialSetup onSetupComplete={mockOnSetupComplete} />);
 
-      // Wait for form to render
-      await waitFor(() => {
-        expect(screen.getByText('Welcome to Youtarr Setup')).toBeInTheDocument();
-      });
+      await user.type(screen.getByLabelText(/setup token/i), 'token');
+      await user.type(screen.getByLabelText(/^password/i), 'password123');
+      await user.type(screen.getByLabelText(/confirm password/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /complete setup/i }));
 
-      const passwordInput = screen.getByLabelText(/^Password/i);
-      const confirmPasswordInput = screen.getByLabelText(/confirm password/i);
-      const submitButton = screen.getByRole('button', { name: /complete setup/i });
-
-      await user.type(passwordInput, 'testpassword123');
-      await user.type(confirmPasswordInput, 'testpassword123');
-      await user.click(submitButton);
-
-      await waitFor(() => {
-        expect(screen.getByText('Setup failed')).toBeInTheDocument();
-      });
-
+      expect(await screen.findByText('Setup failed')).toBeInTheDocument();
       expect(mockOnSetupComplete).not.toHaveBeenCalled();
     });
 
-    test('re-enables button after failed setup', async () => {
+    test('re-enables the submit button after a failed attempt', async () => {
       const user = userEvent.setup();
-
-      axios.post.mockRejectedValueOnce({
-        response: {
-          data: { error: 'Setup error' }
-        }
-      });
+      const axiosError = { isAxiosError: true, response: { status: 500, data: { error: 'Server error' } } };
+      axios.isAxiosError.mockImplementation((err: unknown) => Boolean((err as typeof axiosError)?.isAxiosError));
+      axios.post.mockRejectedValueOnce(axiosError);
 
       render(<InitialSetup onSetupComplete={mockOnSetupComplete} />);
 
-      // Wait for form to render
-      await waitFor(() => {
-        expect(screen.getByText('Welcome to Youtarr Setup')).toBeInTheDocument();
-      });
+      await user.type(screen.getByLabelText(/setup token/i), 'token');
+      await user.type(screen.getByLabelText(/^password/i), 'password123');
+      await user.type(screen.getByLabelText(/confirm password/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /complete setup/i }));
 
-      const passwordInput = screen.getByLabelText(/^Password/i);
-      const confirmPasswordInput = screen.getByLabelText(/confirm password/i);
-      const submitButton = screen.getByRole('button', { name: /complete setup/i });
+      await screen.findByText('Server error');
 
-      await user.type(passwordInput, 'testpassword123');
-      await user.type(confirmPasswordInput, 'testpassword123');
-      await user.click(submitButton);
-
-      await waitFor(() => {
-        expect(screen.getByText('Setup error')).toBeInTheDocument();
-      });
-
-      expect(submitButton).not.toBeDisabled();
-      expect(submitButton).toHaveTextContent('Complete Setup');
+      const button = screen.getByRole('button', { name: /complete setup/i });
+      expect(button).not.toBeDisabled();
+      expect(button).toHaveTextContent('Complete Setup');
     });
   });
 
-  describe('UI Elements', () => {
-    beforeEach(() => {
-      axios.get.mockResolvedValueOnce({
-        data: { isLocalhost: true }
-      });
-    });
-
-    test('displays helper text for username field', async () => {
+  describe('Helper UI text', () => {
+    test('displays the username helper text', () => {
       render(<InitialSetup onSetupComplete={mockOnSetupComplete} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Choose a username for login')).toBeInTheDocument();
-      });
+      expect(screen.getByText('Choose a username for login')).toBeInTheDocument();
     });
 
-    test('displays footer message about post-setup access', async () => {
+    test('displays the post-setup access footer', () => {
       render(<InitialSetup onSetupComplete={mockOnSetupComplete} />);
 
-      await waitFor(() => {
-        expect(screen.getByText(/after setup, you can access youtarr from anywhere/i)).toBeInTheDocument();
-      });
-    });
-
-    test('all input fields are marked as required', async () => {
-      render(<InitialSetup onSetupComplete={mockOnSetupComplete} />);
-
-      await waitFor(() => {
-        expect(screen.getByLabelText(/username/i)).toHaveAttribute('required');
-      });
-
-      expect(screen.getByLabelText(/^Password/i)).toHaveAttribute('required');
-      expect(screen.getByLabelText(/confirm password/i)).toHaveAttribute('required');
+      expect(screen.getByText(/after setup, you can access youtarr normally/i)).toBeInTheDocument();
     });
   });
 });

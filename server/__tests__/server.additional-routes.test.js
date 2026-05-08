@@ -319,6 +319,21 @@ const createServerModule = ({
         jest.doMock('child_process', () => childProcessMock);
         jest.doMock('pino-http', () => pinoHttpMock);
 
+        const setupTokenModuleMock = {
+          setTokenPath: jest.fn(),
+          reset: jest.fn(),
+          getToken: jest.fn(() => 'mock-token-value'),
+          ensureToken: jest.fn(),
+          verify: jest.fn((provided) => provided === 'mock-token-value'),
+          consume: jest.fn(),
+          claimForSetup: jest.fn((provided) => provided === 'mock-token-value'),
+          releaseSetupClaim: jest.fn(),
+          clearStaleFile: jest.fn(),
+          logBanner: jest.fn()
+        };
+
+        jest.doMock('../modules/setupTokenModule', () => setupTokenModuleMock);
+
         const serverModule = require('../server');
 
         state.app = serverModule.app;
@@ -332,6 +347,7 @@ const createServerModule = ({
         state.videosModuleMock = videosModuleMock;
         state.httpsMock = httpsMock;
         state.bcryptMock = bcryptMock;
+        state.setupTokenModuleMock = setupTokenModuleMock;
         state.sessionUpdateMock = effectiveSession?.update || defaultSessionUpdate;
 
         const finalize = () => resolve(state);
