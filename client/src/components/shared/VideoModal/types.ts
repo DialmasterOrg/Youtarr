@@ -33,6 +33,7 @@ export interface VideoModalProps {
   onIgnoreChanged?: (youtubeId: string, isIgnored: boolean) => void;
   onDownloadQueued?: (youtubeId: string) => void;
   onRatingChanged?: (youtubeId: string, rating: string | null) => void;
+  onAvailabilityDetected?: (youtubeId: string, availability: string) => void;
   allowIgnore?: boolean;
 }
 

@@ -13,11 +13,16 @@ export const useVideoMetadata = (
   token: string | null
 ): UseVideoMetadataReturn => {
   const [metadata, setMetadata] = useState<VideoExtendedMetadata | null>(null);
+  const [metadataYoutubeId, setMetadataYoutubeId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!youtubeId || !token) {
+      setMetadata(null);
+      setMetadataYoutubeId(null);
+      setLoading(false);
+      setError(null);
       return;
     }
 
@@ -25,6 +30,8 @@ export const useVideoMetadata = (
 
     const fetchMetadata = async () => {
       setLoading(true);
+      setMetadata(null);
+      setMetadataYoutubeId(youtubeId);
       setError(null);
 
       try {
@@ -35,6 +42,7 @@ export const useVideoMetadata = (
 
         if (!cancelled) {
           setMetadata(response.data);
+          setMetadataYoutubeId(youtubeId);
         }
       } catch (err: unknown) {
         if (!cancelled) {
@@ -57,5 +65,9 @@ export const useVideoMetadata = (
     };
   }, [youtubeId, token]);
 
-  return { metadata, loading, error };
+  return {
+    metadata: Boolean(token) && metadataYoutubeId === youtubeId ? metadata : null,
+    loading,
+    error,
+  };
 };

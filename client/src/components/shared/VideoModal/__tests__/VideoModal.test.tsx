@@ -205,6 +205,10 @@ describe('VideoModal', () => {
     jest.clearAllMocks();
     protectionReturn.error = null;
     mockTriggerDownloads.mockResolvedValue(true);
+    // Reset shared metadata mock so tests don't bleed
+    videoMetadataReturn.metadata = null;
+    videoMetadataReturn.loading = false;
+    videoMetadataReturn.error = null;
   });
 
   test('renders video title when open', () => {
@@ -215,6 +219,95 @@ describe('VideoModal', () => {
   test('renders status chip', () => {
     renderModal();
     expect(screen.getByText('Available')).toBeInTheDocument();
+  });
+
+  test('promotes status to Members Only when metadata reports subscriber_only', () => {
+    // Simulate the first-open case: video prop has stale availability (the
+    // channelvideos row hadn't been stamped yet), but the metadata fetch
+    // detected members-only and the backend overrode the response.
+    videoMetadataReturn.metadata = {
+      availability: 'subscriber_only',
+    } as unknown as typeof videoMetadataReturn.metadata;
+
+    renderModal({ video: neverDownloadedVideo });
+
+    // The members_only status chip label is "Members Only"
+    expect(screen.getByText('Members Only')).toBeInTheDocument();
+    // And the original 'Not Downloaded' label should NOT be shown
+    expect(screen.queryByText('Not Downloaded')).not.toBeInTheDocument();
+  });
+
+  test('does not promote when metadata reports public availability', () => {
+    videoMetadataReturn.metadata = {
+      availability: 'public',
+    } as unknown as typeof videoMetadataReturn.metadata;
+
+    renderModal({ video: neverDownloadedVideo });
+
+    expect(screen.queryByText('Members Only')).not.toBeInTheDocument();
+    expect(screen.getByText('Not Downloaded')).toBeInTheDocument();
+  });
+
+  test('fires onAvailabilityDetected once when promoting to members_only', async () => {
+    videoMetadataReturn.metadata = {
+      availability: 'subscriber_only',
+    } as unknown as typeof videoMetadataReturn.metadata;
+    const onAvailabilityDetected = jest.fn();
+
+    const { rerender } = renderModal({
+      video: neverDownloadedVideo,
+      onAvailabilityDetected,
+    });
+
+    await waitFor(() => {
+      expect(onAvailabilityDetected).toHaveBeenCalledWith(
+        neverDownloadedVideo.youtubeId,
+        'subscriber_only',
+      );
+    });
+    expect(onAvailabilityDetected).toHaveBeenCalledTimes(1);
+
+    // A re-render with the same video must not refire.
+    rerender(
+      <MemoryRouter>
+        <VideoModal
+          open
+          onClose={jest.fn()}
+          video={neverDownloadedVideo}
+          token="test-token"
+          onAvailabilityDetected={onAvailabilityDetected}
+        />
+      </MemoryRouter>
+    );
+    expect(onAvailabilityDetected).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not fire onAvailabilityDetected when video is already members_only', () => {
+    videoMetadataReturn.metadata = {
+      availability: 'subscriber_only',
+    } as unknown as typeof videoMetadataReturn.metadata;
+    const onAvailabilityDetected = jest.fn();
+
+    renderModal({
+      video: { ...neverDownloadedVideo, status: 'members_only' },
+      onAvailabilityDetected,
+    });
+
+    expect(onAvailabilityDetected).not.toHaveBeenCalled();
+  });
+
+  test('does not fire onAvailabilityDetected for non-members-only availability', () => {
+    videoMetadataReturn.metadata = {
+      availability: 'public',
+    } as unknown as typeof videoMetadataReturn.metadata;
+    const onAvailabilityDetected = jest.fn();
+
+    renderModal({
+      video: neverDownloadedVideo,
+      onAvailabilityDetected,
+    });
+
+    expect(onAvailabilityDetected).not.toHaveBeenCalled();
   });
 
   test('renders a clickable rating chip when rating exists', () => {

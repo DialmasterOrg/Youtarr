@@ -1327,11 +1327,16 @@ class ChannelModule {
           title: video.title,
           thumbnail: video.thumbnail,
           duration: video.duration,
-          availability: video.availability || null,
           media_type: mediaType,
-          live_status: video.live_status || null,
           publishedAt: video.publishedAt || syntheticPublishedAt,
         };
+
+        // Only overwrite availability/live_status when yt-dlp returned a real value.
+        // yt-dlp's flat-playlist mode currently omits these for lockupViewModel
+        // entries, so an empty refresh must not wipe known-good values that other
+        // code paths (modal open, download error, URL validation) populated.
+        if (video.availability) updates.availability = video.availability;
+        if (video.live_status) updates.live_status = video.live_status;
 
         if (video.content_rating != null) updates.content_rating = video.content_rating;
         if (video.age_limit != null) updates.age_limit = video.age_limit;
