@@ -77,6 +77,7 @@ interface FinalSummary {
   totalDownloaded: number;
   totalSkipped: number;
   totalFailed?: number;
+  totalMembersOnly?: number;
   failedVideos?: FailedVideo[];
   jobType: string;
   completedAt?: string;
@@ -509,13 +510,23 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
         )}
 
         {/* Show final summary if available */}
-        {finalSummary && !currentProgress && !errorDetails && (
+        {finalSummary && !currentProgress && !errorDetails && (() => {
+          // Treat members-only skips as "warning"-shaped too: not a hard failure
+          // but the user couldn't actually download what they queued.
+          const hasIssue =
+            (finalSummary.totalFailed != null && finalSummary.totalFailed > 0)
+            || (finalSummary.totalMembersOnly != null && finalSummary.totalMembersOnly > 0);
+          // text-{success,warning}-foreground is meant for solid bg pairing;
+          // on /10 tinted bg we want the saturated colour token itself.
+          const bgClass = hasIssue ? 'bg-warning/10' : 'bg-success/10';
+          const textClass = hasIssue ? 'text-warning' : 'text-success';
+          return (
           <Box className="px-4 pb-4">
-            <Box className={`p-2 rounded-[var(--radius-ui)] text-center ${(finalSummary.totalFailed && finalSummary.totalFailed > 0) ? 'bg-warning/10' : 'bg-success/10'}`}>
-              <Typography variant="h6" className={(finalSummary.totalFailed && finalSummary.totalFailed > 0) ? 'text-warning-foreground' : 'text-success-foreground'}>
+            <Box className={`p-2 rounded-[var(--radius-ui)] text-center ${bgClass}`}>
+              <Typography variant="h6" className={textClass}>
                 Summary of last job
               </Typography>
-              <Typography variant="body1" className={(finalSummary.totalFailed && finalSummary.totalFailed > 0) ? 'text-warning-foreground' : 'text-success-foreground'}>
+              <Typography variant="body1" className={textClass}>
                 {(() => {
                   const parts: string[] = [];
                   if (finalSummary.totalDownloaded > 0) {
@@ -523,6 +534,9 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                   }
                   if (finalSummary.totalFailed && finalSummary.totalFailed > 0) {
                     parts.push(`✗ ${finalSummary.totalFailed} failed`);
+                  }
+                  if (finalSummary.totalMembersOnly && finalSummary.totalMembersOnly > 0) {
+                    parts.push(`${finalSummary.totalMembersOnly} members-only video${finalSummary.totalMembersOnly !== 1 ? 's' : ''} skipped`);
                   }
                   if (finalSummary.totalSkipped > 0) {
                     parts.push(`${finalSummary.totalSkipped} skipped (already downloaded or filtered)`);
@@ -533,7 +547,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                   return parts.join(', ');
                 })()}
               </Typography>
-              <Typography variant="caption" className={`mt-1 block ${(finalSummary.totalFailed && finalSummary.totalFailed > 0) ? 'text-warning-foreground' : 'text-success-foreground'}`}>
+              <Typography variant="caption" className={`mt-1 block ${textClass}`}>
                 {(() => {
                   let jobTypeLabel: string;
                   if (finalSummary.jobType.includes('Channel Downloads')) {
@@ -592,7 +606,8 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
               </Box>
             )}
           </Box>
-        )}
+          );
+        })()}
 
         {/* Show progress when active */}
         {currentProgress && showProgress && (

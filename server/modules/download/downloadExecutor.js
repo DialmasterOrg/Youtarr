@@ -7,8 +7,10 @@ const MessageEmitter = require('../messageEmitter');
 const DownloadProgressMonitor = require('./DownloadProgressMonitor');
 const VideoMetadataProcessor = require('./videoMetadataProcessor');
 const tempPathManager = require('./tempPathManager');
+const ytDlpRunner = require('../ytDlpRunner');
 const { JobVideoDownload } = require('../../models');
 const Channel = require('../../models/channel');
+const ChannelVideo = require('../../models/channelvideo');
 const logger = require('../../logger');
 const filesystem = require('../filesystem');
 
@@ -218,11 +220,10 @@ class DownloadExecutor {
 
   isExpectedYtdlpSkipMessage(message = '') {
     const normalized = String(message);
+    if (ytDlpRunner.isMembersOnlyError(normalized)) {
+      return true;
+    }
     const expectedPatterns = [
-      /join this channel to get access to members-only content/i,
-      /available to this channel'?s members/i,
-      /members[- ]only/i,
-      /subscriber[_ -]?only/i,
       /this live event will begin/i,
       /will begin in (?:a few moments|\d+)/i,
       /premiere (?:will begin|starts|is upcoming)/i,
@@ -233,6 +234,34 @@ class DownloadExecutor {
     ];
 
     return expectedPatterns.some(pattern => pattern.test(normalized));
+  }
+
+  // Narrower predicate than isExpectedYtdlpSkipMessage: only matches members-only
+  // patterns, not upcoming-premiere or pre-release ones. Used to decide whether
+  // to stamp channelvideos.availability with 'subscriber_only', which would be
+  // wrong for premiere/pre-release skips (those are temporary states).
+  isMembersOnlyMessage(message = '') {
+    return ytDlpRunner.isMembersOnlyError(message);
+  }
+
+  extractYoutubeIdFromYtdlpError(message = '') {
+    const match = String(message).match(/\[youtube\]\s+([a-zA-Z0-9_-]{11}):/);
+    return match ? match[1] : null;
+  }
+
+  // Fire-and-forget persistence so we don't block the stdout/stderr stream
+  // handlers. Internal try/catch ensures the returned Promise always resolves,
+  // so callers don't trigger unhandledRejection warnings when they don't await.
+  async persistMembersOnlyAvailability(youtubeId) {
+    if (!youtubeId) return;
+    try {
+      await ChannelVideo.update(
+        { availability: 'subscriber_only' },
+        { where: { youtube_id: youtubeId } },
+      );
+    } catch (err) {
+      logger.warn({ err, youtubeId }, 'Failed to persist subscriber_only availability after download error');
+    }
   }
 
   async persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, failedVideosList) {
@@ -641,6 +670,12 @@ class DownloadExecutor {
       // upcoming live, premiere, etc.). Only the count drives downstream
       // behavior; per-skip context goes to the structured log.
       let expectedSkipCount = 0;
+      // Set of youtube_id values that yt-dlp specifically rejected as
+      // members-only. Tracked separately from expectedSkipCount so the final
+      // summary can call out membership-gated skips (the user can't fix
+      // those by waiting like with premieres). Set semantics dedupe across
+      // stdout+stderr emitting the same error for one video.
+      const membersOnlyVideoIds = new Set();
       // Count of yt-dlp errors that are NOT expected skips. Incremented in
       // both stdout and stderr handlers regardless of whether currentVideoId
       // is known, so unassociated errors still block the
@@ -785,6 +820,13 @@ class DownloadExecutor {
                 lastErrorMessage = errorMatch[1].trim();
                 if (this.isExpectedYtdlpSkipMessage(lastErrorMessage)) {
                   recordExpectedSkip(lastErrorMessage, 'stdout');
+                  if (this.isMembersOnlyMessage(lastErrorMessage)) {
+                    const membersOnlyVideoId = this.extractYoutubeIdFromYtdlpError(lastErrorMessage) || currentVideoId;
+                    if (membersOnlyVideoId) {
+                      membersOnlyVideoIds.add(membersOnlyVideoId);
+                      this.persistMembersOnlyAvailability(membersOnlyVideoId);
+                    }
+                  }
                   suppressExpectedSkipLine = true;
                 } else {
                   unexpectedErrorCount += 1;
@@ -863,6 +905,13 @@ class DownloadExecutor {
               lastErrorMessage = errorMatch[1].trim();
               if (this.isExpectedYtdlpSkipMessage(lastErrorMessage)) {
                 recordExpectedSkip(lastErrorMessage, 'stderr');
+                if (this.isMembersOnlyMessage(lastErrorMessage)) {
+                  const membersOnlyVideoId = this.extractYoutubeIdFromYtdlpError(lastErrorMessage) || currentVideoId;
+                  if (membersOnlyVideoId) {
+                    membersOnlyVideoIds.add(membersOnlyVideoId);
+                    this.persistMembersOnlyAvailability(membersOnlyVideoId);
+                  }
+                }
                 return;
               }
               unexpectedErrorCount += 1;
@@ -1374,6 +1423,7 @@ class DownloadExecutor {
             totalDownloaded: videoData.length,
             totalSkipped: monitor.videoCount.skipped || 0,
             totalFailed: failedVideosList.length,
+            totalMembersOnly: membersOnlyVideoIds.size,
             failedVideos: failedVideosList,
             jobType: jobType,
             completedAt: new Date().toISOString()

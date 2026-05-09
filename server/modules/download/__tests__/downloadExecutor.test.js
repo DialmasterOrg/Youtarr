@@ -82,6 +82,10 @@ jest.mock('../../../models/channel', () => ({
   findAll: jest.fn().mockResolvedValue([])
 }));
 
+jest.mock('../../../models/channelvideo', () => ({
+  update: jest.fn().mockResolvedValue([1]),
+}));
+
 // Mock filesystem module
 jest.mock('../../filesystem', () => {
   const actualPathBuilder = jest.requireActual('../../filesystem/pathBuilder');
@@ -118,6 +122,7 @@ const VideoMetadataProcessor = require('../videoMetadataProcessor');
 const tempPathManager = require('../tempPathManager');
 const { JobVideoDownload } = require('../../../models');
 const Channel = require('../../../models/channel');
+const ChannelVideo = require('../../../models/channelvideo');
 const logger = require('../../../logger');
 
 describe('DownloadExecutor', () => {
@@ -2135,6 +2140,77 @@ describe('DownloadExecutor', () => {
       'ERROR: [youtube] abc123: The following content is not available on this app.'
     ])('should not classify real failures as expected skips: %s', (message) => {
       expect(executor.isExpectedYtdlpSkipMessage(message)).toBe(false);
+    });
+  });
+
+  describe('isMembersOnlyMessage', () => {
+    it.each([
+      'ERROR: [youtube] abc123: Join this channel to get access to members-only content like this video, and other exclusive perks.',
+      'ERROR: [youtube] abc123: This video is available to this channel\'s members on level: Assistant (or any higher level).',
+      'ERROR: [youtube] abc123: members-only content',
+      'ERROR: [youtube] abc123: subscriber_only',
+    ])('should match members-only patterns: %s', (message) => {
+      expect(executor.isMembersOnlyMessage(message)).toBe(true);
+    });
+
+    it.each([
+      'ERROR: [youtube] abc123: This live event will begin in 21 hours.',
+      'WARNING: [youtube] This live event will begin in a few moments.',
+      'ERROR: [youtube] abc123: Premiere will begin shortly.',
+      'ERROR: [youtube] abc123: This pre-release video is not yet available.',
+      'ERROR: [youtube] abc123: Release time of video is not known.',
+      'ERROR: [youtube] abc123: Sign in to confirm you are not a bot.',
+    ])('should NOT match premiere, pre-release, or unrelated patterns: %s', (message) => {
+      expect(executor.isMembersOnlyMessage(message)).toBe(false);
+    });
+  });
+
+  describe('extractYoutubeIdFromYtdlpError', () => {
+    it('should extract the authoritative youtube id from yt-dlp error text', () => {
+      const message = 'ERROR: [youtube] OOUclRI0Ae4: Join this channel to get access to members-only content.';
+
+      expect(executor.extractYoutubeIdFromYtdlpError(message)).toBe('OOUclRI0Ae4');
+    });
+
+    it('should return null when yt-dlp error text has no video id', () => {
+      expect(executor.extractYoutubeIdFromYtdlpError('members-only content')).toBeNull();
+    });
+  });
+
+  describe('persistMembersOnlyAvailability', () => {
+    beforeEach(() => {
+      ChannelVideo.update.mockClear();
+      ChannelVideo.update.mockResolvedValue([1]);
+    });
+
+    it('should update channelvideos with subscriber_only when youtubeId provided', async () => {
+      await executor.persistMembersOnlyAvailability('abc12345678');
+
+      expect(ChannelVideo.update).toHaveBeenCalledWith(
+        { availability: 'subscriber_only' },
+        { where: { youtube_id: 'abc12345678' } },
+      );
+    });
+
+    it('should be a no-op when youtubeId is null', async () => {
+      await executor.persistMembersOnlyAvailability(null);
+      await executor.persistMembersOnlyAvailability(undefined);
+      await executor.persistMembersOnlyAvailability('');
+
+      expect(ChannelVideo.update).not.toHaveBeenCalled();
+    });
+
+    it('should swallow update errors and log a warning', async () => {
+      const dbErr = new Error('db down');
+      ChannelVideo.update.mockRejectedValueOnce(dbErr);
+
+      // Must not throw
+      await expect(executor.persistMembersOnlyAvailability('errvid1')).resolves.toBeUndefined();
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ youtubeId: 'errvid1' }),
+        'Failed to persist subscriber_only availability after download error',
+      );
     });
   });
 

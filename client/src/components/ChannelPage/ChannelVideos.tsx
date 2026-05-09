@@ -149,6 +149,7 @@ function ChannelVideos({
   const [modalVideo, setModalVideo] = useState<ChannelVideo | null>(null);
   const [localIgnoreStatus, setLocalIgnoreStatus] = useState<Record<string, boolean>>({});
   const [localProtectedStatus, setLocalProtectedStatus] = useState<Record<string, boolean>>({});
+  const [localAvailabilityStatus, setLocalAvailabilityStatus] = useState<Record<string, string>>({});
 
   const {
     filters,
@@ -408,7 +409,8 @@ function ChannelVideos({
     return videos.map((video) => {
       const hasIgnoreOverride = video.youtube_id in localIgnoreStatus;
       const hasProtectedOverride = video.youtube_id in localProtectedStatus;
-      if (!hasIgnoreOverride && !hasProtectedOverride) return video;
+      const hasAvailabilityOverride = video.youtube_id in localAvailabilityStatus;
+      if (!hasIgnoreOverride && !hasProtectedOverride && !hasAvailabilityOverride) return video;
       return {
         ...video,
         ...(hasIgnoreOverride
@@ -420,9 +422,12 @@ function ChannelVideos({
         ...(hasProtectedOverride
           ? { protected: localProtectedStatus[video.youtube_id] }
           : {}),
+        ...(hasAvailabilityOverride
+          ? { availability: localAvailabilityStatus[video.youtube_id] }
+          : {}),
       };
     });
-  }, [videos, localIgnoreStatus, localProtectedStatus]);
+  }, [videos, localIgnoreStatus, localProtectedStatus, localAvailabilityStatus]);
 
   const paginatedVideos = videosWithOverrides;
   const totalPages = Math.ceil(totalCount / effectivePageSize) || 1;
@@ -1270,6 +1275,9 @@ function ChannelVideos({
           }}
           onDownloadQueued={() => setModalVideo(null)}
           onRatingChanged={() => refetchVideos()}
+          onAvailabilityDetected={(youtubeId, availability) => {
+            setLocalAvailabilityStatus((prev) => ({ ...prev, [youtubeId]: availability }));
+          }}
         />
       )}
     </>

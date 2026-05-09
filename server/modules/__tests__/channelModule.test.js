@@ -794,8 +794,54 @@ describe('ChannelModule', () => {
           media_type: 'video',
           publishedAt: mockVideoData.publishedAt,
           availability: mockVideoData.availability,
-          live_status: null
         });
+      });
+
+      test('should preserve existing availability when refresh has no availability', async () => {
+        const mockVideo = { update: jest.fn() };
+        ChannelVideo.findOrCreate.mockResolvedValue([mockVideo, false]);
+
+        const videoWithoutAvailability = { ...mockVideoData };
+        delete videoWithoutAvailability.availability;
+
+        await ChannelModule.insertVideosIntoDb([videoWithoutAvailability], 'UC123');
+
+        const updateArgs = mockVideo.update.mock.calls[0][0];
+        expect(updateArgs).not.toHaveProperty('availability');
+      });
+
+      test('should preserve existing live_status when refresh has no live_status', async () => {
+        const mockVideo = { update: jest.fn() };
+        ChannelVideo.findOrCreate.mockResolvedValue([mockVideo, false]);
+
+        await ChannelModule.insertVideosIntoDb([mockVideoData], 'UC123');
+
+        const updateArgs = mockVideo.update.mock.calls[0][0];
+        expect(updateArgs).not.toHaveProperty('live_status');
+      });
+
+      test('should overwrite availability when refresh has a real value (real demotion still works)', async () => {
+        const mockVideo = { update: jest.fn() };
+        ChannelVideo.findOrCreate.mockResolvedValue([mockVideo, false]);
+
+        const videoWithPublic = { ...mockVideoData, availability: 'public' };
+        await ChannelModule.insertVideosIntoDb([videoWithPublic], 'UC123');
+
+        expect(mockVideo.update).toHaveBeenCalledWith(
+          expect.objectContaining({ availability: 'public' })
+        );
+      });
+
+      test('should overwrite live_status when refresh has a real value', async () => {
+        const mockVideo = { update: jest.fn() };
+        ChannelVideo.findOrCreate.mockResolvedValue([mockVideo, false]);
+
+        const videoWithLive = { ...mockVideoData, live_status: 'is_live' };
+        await ChannelModule.insertVideosIntoDb([videoWithLive], 'UC123');
+
+        expect(mockVideo.update).toHaveBeenCalledWith(
+          expect.objectContaining({ live_status: 'is_live' })
+        );
       });
 
       test('should insert videos with live_status field', async () => {
