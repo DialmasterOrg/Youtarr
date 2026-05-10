@@ -299,7 +299,7 @@ describe('useConfigSave', () => {
       });
       expect(mockSetSnackbar).toHaveBeenCalledWith({
         open: true,
-        message: 'Failed to save configuration',
+        message: 'Internal server error',
         severity: 'error',
       });
     });
@@ -413,7 +413,7 @@ describe('useConfigSave', () => {
       });
       expect(mockSetSnackbar).toHaveBeenCalledWith({
         open: true,
-        message: 'Failed to save configuration',
+        message: 'Unauthorized',
         severity: 'error',
       });
     });
@@ -444,7 +444,7 @@ describe('useConfigSave', () => {
       });
       expect(mockSetSnackbar).toHaveBeenCalledWith({
         open: true,
-        message: 'Failed to save configuration',
+        message: 'Access forbidden',
         severity: 'error',
       });
     });

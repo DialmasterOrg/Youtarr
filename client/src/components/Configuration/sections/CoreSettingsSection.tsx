@@ -46,6 +46,8 @@ interface CoreSettingsSectionProps {
   onConfigChange: (updates: Partial<ConfigState>) => void;
   onMobileTooltipClick?: (text: string) => void;
   token: string | null;
+  filenameTemplateSaveRequirement?: string | null;
+  onFilenameTemplatePreviewSuccess?: (prefix: string) => void;
   ytDlpVersionInfo?: YtDlpVersionInfo;
   ytDlpUpdateStatus?: YtDlpUpdateStatus;
   onYtDlpUpdate?: () => void;
@@ -58,6 +60,8 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
   onConfigChange,
   onMobileTooltipClick,
   token,
+  filenameTemplateSaveRequirement,
+  onFilenameTemplatePreviewSuccess,
   ytDlpVersionInfo,
   ytDlpUpdateStatus,
   onYtDlpUpdate,
@@ -523,6 +527,9 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                     <VideoFilenameTemplate
                       value={config.videoFilenamePrefix}
                       onChange={(newValue) => onConfigChange({ videoFilenamePrefix: newValue })}
+                      token={token}
+                      saveRequirement={filenameTemplateSaveRequirement}
+                      onPreviewSuccess={onFilenameTemplatePreviewSuccess}
                     />
                   </Box>
                 </Grid>
