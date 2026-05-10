@@ -1328,7 +1328,6 @@ class ChannelModule {
           thumbnail: video.thumbnail,
           duration: video.duration,
           media_type: mediaType,
-          publishedAt: video.publishedAt || syntheticPublishedAt,
         };
 
         // Only overwrite availability/live_status when yt-dlp returned a real value.
@@ -1337,6 +1336,18 @@ class ChannelModule {
         // code paths (modal open, download error, URL validation) populated.
         if (video.availability) updates.availability = video.availability;
         if (video.live_status) updates.live_status = video.live_status;
+
+        // Same logic for publishedAt: yt-dlp's youtubetab:approximate_date is
+        // non-deterministic for lockupViewModel entries (sometimes returns
+        // timestamp, sometimes upload_date, sometimes neither), so a refresh
+        // that comes back empty must not clobber a previously-stored real
+        // date with a synthetic Date.now() value. Only stamp synthetic when
+        // the row had no date to begin with.
+        if (video.publishedAt) {
+          updates.publishedAt = video.publishedAt;
+        } else if (!videoRecord.publishedAt) {
+          updates.publishedAt = syntheticPublishedAt;
+        }
 
         if (video.content_rating != null) updates.content_rating = video.content_rating;
         if (video.age_limit != null) updates.age_limit = video.age_limit;
