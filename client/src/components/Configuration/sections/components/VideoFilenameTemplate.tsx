@@ -5,9 +5,8 @@ import {
   Typography,
   Button,
   Link,
+  CircularProgress,
 } from '../../../ui';
-import { renderForPreview } from '../../../../utils/filenameTemplate/renderer';
-import { SAMPLE_VIDEO_METADATA } from '../../../../utils/filenameTemplate/sampleInfoJson';
 import { FILENAME_PRESETS } from '../../../../utils/filenameTemplate/presets';
 import {
   validatePrefix,
@@ -16,10 +15,14 @@ import {
   hasLockedSuffixToken,
   hasOversizedTitleTruncation,
 } from '../../../../utils/filenameTemplate/validate';
+import { useFilenamePreview } from '../../hooks/useFilenamePreview';
 
 interface VideoFilenameTemplateProps {
   value: string;
   onChange: (newValue: string) => void;
+  token: string | null;
+  saveRequirement?: string | null;
+  onPreviewSuccess?: (prefix: string) => void;
 }
 
 const SEVERITY_TEXT: Record<'warn' | 'danger', string> = {
@@ -32,23 +35,38 @@ const SEVERITY_TEXT: Record<'warn' | 'danger', string> = {
 export const VideoFilenameTemplate: React.FC<VideoFilenameTemplateProps> = ({
   value,
   onChange,
+  token,
+  saveRequirement,
+  onPreviewSuccess,
 }) => {
   const validation = useMemo(() => validatePrefix(value), [value]);
-  const preview = useMemo(
-    () => renderForPreview(value, SAMPLE_VIDEO_METADATA),
-    [value]
-  );
-  // The full path includes both the per-video folder AND the file name; warn on the longer one.
-  const longerLength = Math.max(preview.fileLineLength, preview.folderLineLength);
-  const severity = lengthSeverity(longerLength);
+  const preview = useFilenamePreview(token);
+  const isStale = preview.isStale(value);
+
+  // Length severity reflects the rendered preview when available; without a
+  // preview yet (or on error) we have no rendered length to compare against,
+  // so we hide the warning rather than guess.
+  const longerLength = preview.data
+    ? Math.max(preview.data.fileLineLength, preview.data.folderLineLength)
+    : 0;
+  const severity = preview.data ? lengthSeverity(longerLength) : 'ok';
+
   const showStructural = hasUntruncatedTitle(value);
   const showOversizedTitle = hasOversizedTitleTruncation(value);
   const showLockedSuffixWarning = hasLockedSuffixToken(value);
-  const previewWarning = preview.warnings[0];
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     onChange(event.target.value);
   };
+
+  const handlePreviewClick = async () => {
+    const result = await preview.run(value);
+    if (result) {
+      onPreviewSuccess?.(value);
+    }
+  };
+
+  const previewDisabled = !validation.ok || preview.loading;
 
   return (
     <Box className="flex flex-col gap-3">
@@ -99,64 +117,86 @@ export const VideoFilenameTemplate: React.FC<VideoFilenameTemplateProps> = ({
         ))}
       </Box>
 
-      <Box className="rounded p-3 bg-muted">
+      <Box className="flex items-center gap-3">
+        <Button
+          data-testid="filename-preview-button"
+          variant="contained"
+          size="small"
+          onClick={handlePreviewClick}
+          disabled={previewDisabled}
+          startIcon={preview.loading ? <CircularProgress size={14} /> : undefined}
+        >
+          {preview.loading ? 'Rendering...' : 'Preview'}
+        </Button>
         <Typography variant="caption" color="text.secondary">
-          Preview (sample video)
+          Renders this template against a sample video using yt-dlp.
         </Typography>
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          className="mt-2 block font-semibold"
-        >
-          Folder
-        </Typography>
-        <Typography
-          data-testid="filename-preview-folder"
-          variant="body2"
-          className="font-mono break-all"
-        >
-          {preview.folderLine}
-        </Typography>
-        <Typography variant="caption" color="text.secondary" className="block">
-          {preview.folderLineLength} characters
-        </Typography>
-
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          className="mt-2 block font-semibold"
-        >
-          File
-        </Typography>
-        <Typography
-          data-testid="filename-preview-file"
-          variant="body2"
-          className="font-mono break-all"
-        >
-          {preview.fileLine}
-        </Typography>
-        <Typography variant="caption" color="text.secondary" className="block">
-          {preview.fileLineLength} characters
-        </Typography>
-
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          className="mt-2 block italic"
-        >
-          Simulated against a sample video; actual filenames may vary slightly.
-        </Typography>
-        {previewWarning && (
-          <Typography
-            data-testid="filename-preview-warning"
-            variant="caption"
-            color="warning"
-            className="mt-2 block"
-          >
-            {previewWarning}
-          </Typography>
-        )}
       </Box>
+
+      {saveRequirement && (
+        <Box
+          data-testid="filename-preview-save-requirement"
+          className="rounded p-2 bg-warning/10 text-warning"
+        >
+          <Typography variant="caption">{saveRequirement}</Typography>
+        </Box>
+      )}
+
+      {preview.error && (
+        <Box
+          data-testid="filename-preview-error"
+          className="rounded p-2 bg-destructive/10 text-destructive"
+        >
+          <Typography variant="caption" className="font-mono whitespace-pre-wrap break-words">
+            {preview.error}
+          </Typography>
+        </Box>
+      )}
+
+      {preview.data && (
+        <Box
+          data-testid="filename-preview"
+          className={isStale ? 'rounded p-3 bg-muted opacity-60' : 'rounded p-3 bg-muted'}
+        >
+          <Typography variant="caption" color="text.secondary">
+            Preview (sample video)
+            {isStale && ' • click Preview to refresh'}
+          </Typography>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            className="mt-2 block font-semibold"
+          >
+            Folder
+          </Typography>
+          <pre
+            data-testid="filename-preview-folder"
+            className="m-0 mt-1 px-2 py-1.5 rounded border border-border bg-background text-sm font-mono whitespace-pre-wrap break-all"
+          >
+            {preview.data.folderLine}
+          </pre>
+          <Typography variant="caption" color="text.secondary" className="block mt-1">
+            {preview.data.folderLineLength} characters
+          </Typography>
+
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            className="mt-2 block font-semibold"
+          >
+            File
+          </Typography>
+          <pre
+            data-testid="filename-preview-file"
+            className="m-0 mt-1 px-2 py-1.5 rounded border border-border bg-background text-sm font-mono whitespace-pre-wrap break-all"
+          >
+            {preview.data.fileLine}
+          </pre>
+          <Typography variant="caption" color="text.secondary" className="block mt-1">
+            {preview.data.fileLineLength} characters
+          </Typography>
+        </Box>
+      )}
 
       {severity !== 'ok' && (
         <Box

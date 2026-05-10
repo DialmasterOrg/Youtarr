@@ -28,6 +28,7 @@ function registerRoutes(app, deps) {
     setupCreateAuthLimiter,
     youtubeApiKeyTestLimiter,
     ytdlpValidationRateLimiter,
+    filenamePreviewRateLimiter,
     configModule,
     channelModule,
     plexModule,
@@ -56,7 +57,7 @@ function registerRoutes(app, deps) {
   app.use(createSetupRoutes({ configModule, setupTokenModule, setupCreateAuthLimiter, getClientAddress }));
 
   // Config routes
-  app.use(createConfigRoutes({ verifyToken, configModule, validateEnvAuthCredentials, isWslEnvironment }));
+  app.use(createConfigRoutes({ verifyToken, configModule, validateEnvAuthCredentials, isWslEnvironment, filenamePreviewRateLimiter }));
 
   // Channel routes
   app.use(createChannelRoutes({ verifyToken, channelModule, archiveModule }));
