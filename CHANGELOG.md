@@ -1,5 +1,36 @@
 # Changelog
 
+## [v1.69.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.69.0) - 2026-05-11
+
+## [1.69.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.68.0...v1.69.0) (2026-05-11)
+
+
+### Features
+
+* add customizable video filename template ([8e1600a](https://github.com/DialmasterOrg/Youtarr/commit/8e1600a2d96d3db04849e9e05af5e25ea9a945aa)), closes [#369](https://github.com/DialmasterOrg/Youtarr/issues/369)
+* add manual rescan and recognize more formats ([851e593](https://github.com/DialmasterOrg/Youtarr/commit/851e593106f5a6c3804495b848f43867866cc9fb))
+* **config:** render filename preview via yt-dlp ([24aad30](https://github.com/DialmasterOrg/Youtarr/commit/24aad30c5c89fff2817f03f22b7ce75a7f3a5bdd)), closes [#369](https://github.com/DialmasterOrg/Youtarr/issues/369)
+
+
+### Bug Fixes
+
+* reduce bind-mount mariadb corruption risk ([9ce4ef7](https://github.com/DialmasterOrg/Youtarr/commit/9ce4ef7609ef4686d157bc5b2dc1e4aefe69f975))
+* **deps:** bump axios to clear high-sev advisory ([6f01c15](https://github.com/DialmasterOrg/Youtarr/commit/6f01c154e572e7d9dd276d22dc91803827ab9a26))
+* **migrate:** preserve source db collation ([f6c0664](https://github.com/DialmasterOrg/Youtarr/commit/f6c066413c45ea3fcc56d9ba93a595b6d4f880cb)), closes [#598](https://github.com/DialmasterOrg/Youtarr/issues/598)
+* **setup:** replace localhost gate with one-time token ([4e1b423](https://github.com/DialmasterOrg/Youtarr/commit/4e1b423f0cf988355ab4280ed6eecc4a520a8755)), closes [#431](https://github.com/DialmasterOrg/Youtarr/issues/431)
+* restore members-only video detection ([e0ed879](https://github.com/DialmasterOrg/Youtarr/commit/e0ed8798bdeafebce3ceb7030f2b2df5f4cf043d)), closes [yt-dlp/yt-dlp#16665](https://github.com/yt-dlp/yt-dlp/issues/16665)
+* stop clobbering channelvideo publishedAt on empty refresh ([1af2022](https://github.com/DialmasterOrg/Youtarr/commit/1af2022fe551178904e1aa73979dd1c8034b100a)), closes [#608](https://github.com/DialmasterOrg/Youtarr/issues/608)
+
+
+### Documentation
+
+* update CHANGELOG for v1.68.0 [skip ci] ([99e7f6b](https://github.com/DialmasterOrg/Youtarr/commit/99e7f6b0c2ff37c2f6005167fb572389232e11da))
+* **unraid:** expand mariadb setup guidance ([38a0e1a](https://github.com/DialmasterOrg/Youtarr/commit/38a0e1a297625cc1ccccbf8a726d2564abc30b0c))
+
+
+
+
+
 ## [v1.68.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.68.0) - 2026-04-29
 
 ## [1.68.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.67.0...v1.68.0) (2026-04-29)
