@@ -255,6 +255,12 @@ const createServerModule = ({
         jest.doMock('../modules/notificationModule', () => ({
           sendTestNotification: jest.fn().mockResolvedValue({ success: true })
         }));
+        // Mocked to avoid pulling fs-extra (via ytDlpRunner -> tempPathManager),
+        // which the minimal `fs` stub above can't satisfy.
+        jest.doMock('../modules/filenamePreview', () => ({
+          previewTemplate: jest.fn(),
+          validateTemplate: jest.fn().mockResolvedValue({ ok: true })
+        }));
         jest.doMock('../models/channelvideo', () => ({
           update: jest.fn().mockResolvedValue([1])
         }));
@@ -263,8 +269,22 @@ const createServerModule = ({
         jest.doMock('express-rate-limit', () => jest.fn(() => (req, res, next) => next()));
         jest.doMock('https', () => ({ get: jest.fn() }));
 
+        const setupTokenModuleMock = {
+          setTokenPath: jest.fn(),
+          reset: jest.fn(),
+          getToken: jest.fn(() => 'mock-token-value'),
+          ensureToken: jest.fn(),
+          verify: jest.fn((provided) => provided === 'mock-token-value'),
+          consume: jest.fn(),
+          claimForSetup: jest.fn((provided) => provided === 'mock-token-value'),
+          releaseSetupClaim: jest.fn(),
+          clearStaleFile: jest.fn(),
+          logBanner: jest.fn()
+        };
+
         jest.doMock('../db', () => dbMock);
         jest.doMock('../modules/configModule', () => configModuleMock);
+        jest.doMock('../modules/setupTokenModule', () => setupTokenModuleMock);
         jest.doMock('bcrypt', () => bcryptMock);
         jest.doMock('uuid', () => uuidMock);
         jest.doMock('fs', () => fsMock);
@@ -276,6 +296,7 @@ const createServerModule = ({
         state.serverModule = serverModule;
         state.dbMock = dbMock;
         state.configModuleMock = configModuleMock;
+        state.setupTokenModuleMock = setupTokenModuleMock;
         state.bcryptMock = bcryptMock;
         state.uuidMock = uuidMock;
         state.fsMock = fsMock;
@@ -300,6 +321,7 @@ afterEach(() => {
   delete process.env.AUTH_ENABLED;
   delete process.env.AUTH_PRESET_USERNAME;
   delete process.env.AUTH_PRESET_PASSWORD;
+  delete process.env.TRUST_PROXY;
 });
 
 describe('auth preset bootstrap', () => {
@@ -662,80 +684,77 @@ describe('server routes - session management', () => {
 
 describe('server routes - setup', () => {
   describe('GET /setup/status', () => {
-    test('returns setup required when not configured', async () => {
+    test('returns requiresSetup=true with no isLocalhost field when unconfigured', async () => {
       const { app } = await createServerModule({ passwordHash: null });
-
       const handlers = findRouteHandlers(app, 'get', '/setup/status');
-      const statusHandler = handlers[handlers.length - 1];
+      const handler = handlers[handlers.length - 1];
 
-      const req = createMockRequest({
-        ip: '127.0.0.1'
-      });
+      const req = createMockRequest({});
       const res = createMockResponse();
 
-      await statusHandler(req, res);
+      await handler(req, res);
 
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
         requiresSetup: true,
-        isLocalhost: true,
+        platformManaged: false,
         message: null
       });
+      expect(res.body).not.toHaveProperty('isLocalhost');
     });
 
-    test('returns setup not required when configured', async () => {
+    test('returns requiresSetup=false when configured', async () => {
       const { app } = await createServerModule();
-
       const handlers = findRouteHandlers(app, 'get', '/setup/status');
-      const statusHandler = handlers[handlers.length - 1];
+      const handler = handlers[handlers.length - 1];
 
       const req = createMockRequest({});
       const res = createMockResponse();
 
-      await statusHandler(req, res);
+      await handler(req, res);
 
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
         requiresSetup: false,
-        isLocalhost: true,
+        platformManaged: false,
         message: null
       });
     });
 
-    test('detects non-localhost access', async () => {
-      const { app } = await createServerModule({ passwordHash: null });
-
-      const handlers = findRouteHandlers(app, 'get', '/setup/status');
-      const statusHandler = handlers[handlers.length - 1];
-
-      const req = createMockRequest({
-        ip: '192.168.1.100'
+    test('returns requiresSetup=true when username is missing even if passwordHash exists', async () => {
+      const { app } = await createServerModule({
+        passwordHash: 'existing-hash',
+        configOverrides: { username: null }
       });
-      const res = createMockResponse();
-
-      await statusHandler(req, res);
-
-      expect(res.statusCode).toBe(200);
-      expect(res.body.requiresSetup).toBe(true);
-      // isLocalhost will be falsy but may be undefined depending on the isLocalhostIP implementation
-      expect(res.body.message).toBe('Setup must be performed from localhost');
-    });
-
-    test('handles platform managed auth', async () => {
-      const { app } = await createServerModule({ authEnabled: 'false' });
-
       const handlers = findRouteHandlers(app, 'get', '/setup/status');
-      const statusHandler = handlers[handlers.length - 1];
+      const handler = handlers[handlers.length - 1];
 
       const req = createMockRequest({});
       const res = createMockResponse();
 
-      await statusHandler(req, res);
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual({
+        requiresSetup: true,
+        platformManaged: false,
+        message: null
+      });
+    });
+
+    test('returns platformManaged=true when AUTH_ENABLED=false', async () => {
+      const { app } = await createServerModule({ authEnabled: 'false' });
+      const handlers = findRouteHandlers(app, 'get', '/setup/status');
+      const handler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({});
+      const res = createMockResponse();
+
+      await handler(req, res);
 
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
         requiresSetup: false,
-        isLocalhost: true,
         platformManaged: true,
         message: 'Authentication is managed by the platform'
       });
@@ -743,174 +762,293 @@ describe('server routes - setup', () => {
   });
 
   describe('POST /setup/create-auth', () => {
-    test('creates initial authentication successfully', async () => {
-      const { app, bcryptMock, dbMock, configModuleMock } = await createServerModule({
-        passwordHash: null
-      });
-
+    test('rejects request with no token', async () => {
+      const { app } = await createServerModule({ passwordHash: null });
       const handlers = findRouteHandlers(app, 'post', '/setup/create-auth');
-      const createAuthHandler = handlers[handlers.length - 1];
+      const handler = handlers[handlers.length - 1];
 
       const req = createMockRequest({
-        body: {
-          username: 'newuser',
-          password: 'password123'
-        },
-        ip: '127.0.0.1',
-        headers: {
-          'user-agent': 'Mozilla/5.0'
-        }
+        body: { username: 'admin', password: 'password123' }
       });
       const res = createMockResponse();
 
-      await createAuthHandler(req, res);
+      await handler(req, res);
 
+      expect(res.statusCode).toBe(401);
+      expect(res.body).toEqual({ error: 'Invalid setup token' });
+    });
+
+    test('rejects request with wrong token', async () => {
+      const { app, setupTokenModuleMock } = await createServerModule({ passwordHash: null });
+      setupTokenModuleMock.verify.mockReturnValueOnce(false);
+
+      const handlers = findRouteHandlers(app, 'post', '/setup/create-auth');
+      const handler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { token: 'wrong', username: 'admin', password: 'password123' }
+      });
+      const res = createMockResponse();
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(401);
+      expect(res.body).toEqual({ error: 'Invalid setup token' });
+    });
+
+    test('accepts correct token, creates user, consumes token', async () => {
+      const { app, bcryptMock, configModuleMock, dbMock, setupTokenModuleMock } =
+        await createServerModule({ passwordHash: null });
+
+      const handlers = findRouteHandlers(app, 'post', '/setup/create-auth');
+      const handler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { token: 'mock-token-value', username: 'newuser', password: 'password123' },
+        headers: { 'user-agent': 'Mozilla/5.0' }
+      });
+      const res = createMockResponse();
+
+      await handler(req, res);
+
+      expect(setupTokenModuleMock.verify).toHaveBeenCalledWith('mock-token-value');
       expect(bcryptMock.hash).toHaveBeenCalledWith('password123', 10);
       expect(configModuleMock.updateConfig).toHaveBeenCalledWith(
-        expect.objectContaining({
-          username: 'newuser',
-          passwordHash: 'new-hashed-password'
-        })
+        expect.objectContaining({ username: 'newuser', passwordHash: 'new-hashed-password' })
       );
       expect(dbMock.Session.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          session_token: 'test-uuid-token',
-          username: 'newuser'
-        })
+        expect.objectContaining({ username: 'newuser' })
+      );
+      expect(setupTokenModuleMock.claimForSetup).toHaveBeenCalledWith('mock-token-value');
+      expect(setupTokenModuleMock.consume).toHaveBeenCalledTimes(1);
+      expect(dbMock.Session.create.mock.invocationCallOrder[0]).toBeLessThan(
+        setupTokenModuleMock.consume.mock.invocationCallOrder[0]
       );
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
         token: 'test-uuid-token',
-        message: 'Setup complete! You can now access Youtarr from anywhere.',
+        message: 'Setup complete! You can now access Youtarr normally.',
         username: 'newuser'
       });
     });
 
-    test('blocks setup from non-localhost', async () => {
-      const { app } = await createServerModule({ passwordHash: null });
+    test('reports partial setup success when session creation fails after credentials are saved', async () => {
+      const { app, dbMock, setupTokenModuleMock } = await createServerModule({ passwordHash: null });
+      dbMock.Session.create.mockRejectedValueOnce(new Error('database unavailable'));
 
       const handlers = findRouteHandlers(app, 'post', '/setup/create-auth');
-      const createAuthHandler = handlers[handlers.length - 1];
+      const handler = handlers[handlers.length - 1];
 
       const req = createMockRequest({
-        body: {
-          username: 'newuser',
-          password: 'password123'
-        },
-        ip: '192.168.1.100'
+        body: { token: 'mock-token-value', username: 'newuser', password: 'password123' },
+        headers: { 'user-agent': 'Mozilla/5.0' }
       });
       const res = createMockResponse();
 
-      await createAuthHandler(req, res);
+      await handler(req, res);
 
-      expect(res.statusCode).toBe(403);
-      expect(res.body.error).toContain('Initial setup can only be performed from localhost');
+      expect(setupTokenModuleMock.claimForSetup).toHaveBeenCalledWith('mock-token-value');
+      expect(setupTokenModuleMock.consume).toHaveBeenCalledTimes(1);
+      expect(setupTokenModuleMock.releaseSetupClaim).not.toHaveBeenCalled();
+      expect(res.statusCode).toBe(500);
+      expect(res.body).toEqual({
+        error: 'Setup saved your credentials but the session could not be created. Please log in with the credentials you just entered.'
+      });
     });
 
-    test('prevents setup when already configured', async () => {
-      const { app } = await createServerModule();
+    test('rolls back in-memory auth fields when config persistence fails', async () => {
+      const { app, configModuleMock, setupTokenModuleMock } = await createServerModule({ passwordHash: null });
+      configModuleMock.updateConfig.mockImplementationOnce(() => {
+        throw new Error('disk full');
+      });
 
       const handlers = findRouteHandlers(app, 'post', '/setup/create-auth');
-      const createAuthHandler = handlers[handlers.length - 1];
+      const handler = handlers[handlers.length - 1];
+
+      const firstReq = createMockRequest({
+        body: { token: 'mock-token-value', username: 'newuser', password: 'password123' },
+        headers: { 'user-agent': 'Mozilla/5.0' }
+      });
+      const firstRes = createMockResponse();
+
+      await handler(firstReq, firstRes);
+
+      expect(firstRes.statusCode).toBe(500);
+      expect(firstRes.body).toEqual({ error: 'Setup failed' });
+      expect(configModuleMock.getConfig()).toEqual(
+        expect.objectContaining({ username: null, passwordHash: null })
+      );
+      expect(setupTokenModuleMock.releaseSetupClaim).toHaveBeenCalledTimes(1);
+      expect(setupTokenModuleMock.consume).not.toHaveBeenCalled();
+
+      const secondReq = createMockRequest({
+        body: { token: 'mock-token-value', username: 'newuser', password: 'password123' },
+        headers: { 'user-agent': 'Mozilla/5.0' }
+      });
+      const secondRes = createMockResponse();
+
+      await handler(secondReq, secondRes);
+
+      expect(secondRes.statusCode).toBe(200);
+      expect(configModuleMock.updateConfig).toHaveBeenCalledTimes(2);
+    });
+
+    test('rejects concurrent submit with valid token when setup is already in progress', async () => {
+      const { app, setupTokenModuleMock } = await createServerModule({ passwordHash: null });
+      setupTokenModuleMock.claimForSetup.mockReturnValueOnce(false);
+
+      const handlers = findRouteHandlers(app, 'post', '/setup/create-auth');
+      const handler = handlers[handlers.length - 1];
 
       const req = createMockRequest({
-        body: {
-          username: 'newuser',
-          password: 'password123'
-        },
-        ip: '127.0.0.1'
+        body: { token: 'mock-token-value', username: 'newuser', password: 'password123' },
+        headers: { 'user-agent': 'Mozilla/5.0' }
       });
       const res = createMockResponse();
 
-      await createAuthHandler(req, res);
+      await handler(req, res);
+
+      expect(setupTokenModuleMock.verify).toHaveBeenCalledWith('mock-token-value');
+      expect(setupTokenModuleMock.claimForSetup).toHaveBeenCalledWith('mock-token-value');
+      expect(setupTokenModuleMock.consume).not.toHaveBeenCalled();
+      expect(setupTokenModuleMock.releaseSetupClaim).not.toHaveBeenCalled();
+      expect(res.statusCode).toBe(401);
+      expect(res.body).toEqual({ error: 'Invalid setup token' });
+    });
+
+    test('rejects when already configured', async () => {
+      const { app } = await createServerModule();
+      const handlers = findRouteHandlers(app, 'post', '/setup/create-auth');
+      const handler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { token: 'mock-token-value', username: 'newuser', password: 'password123' }
+      });
+      const res = createMockResponse();
+
+      await handler(req, res);
 
       expect(res.statusCode).toBe(400);
       expect(res.body).toEqual({ error: 'Authentication already configured' });
     });
 
-    test('validates username requirements', async () => {
-      const { app } = await createServerModule({ passwordHash: null });
-
+    test('returns invalid setup token for tokenless probes even when already configured', async () => {
+      const { app } = await createServerModule();
       const handlers = findRouteHandlers(app, 'post', '/setup/create-auth');
-      const createAuthHandler = handlers[handlers.length - 1];
+      const handler = handlers[handlers.length - 1];
 
       const req = createMockRequest({
-        body: {
-          username: '',
-          password: 'password123'
-        },
-        ip: '127.0.0.1'
+        body: { username: 'newuser', password: 'password123' }
       });
       const res = createMockResponse();
 
-      await createAuthHandler(req, res);
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(401);
+      expect(res.body).toEqual({ error: 'Invalid setup token' });
+    });
+
+    test('validates username is required', async () => {
+      const { app } = await createServerModule({ passwordHash: null });
+      const handlers = findRouteHandlers(app, 'post', '/setup/create-auth');
+      const handler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { token: 'mock-token-value', username: '', password: 'password123' }
+      });
+      const res = createMockResponse();
+
+      await handler(req, res);
 
       expect(res.statusCode).toBe(400);
       expect(res.body).toEqual({ error: 'Username is required' });
     });
 
-    test('validates password requirements', async () => {
-      const { app } = await createServerModule({ passwordHash: null });
-
+    test('validates username length after trimming whitespace', async () => {
+      const { app, configModuleMock, dbMock } = await createServerModule({ passwordHash: null });
       const handlers = findRouteHandlers(app, 'post', '/setup/create-auth');
-      const createAuthHandler = handlers[handlers.length - 1];
+      const handler = handlers[handlers.length - 1];
 
       const req = createMockRequest({
-        body: {
-          username: 'newuser',
-          password: 'short'
-        },
-        ip: '127.0.0.1'
+        body: { token: 'mock-token-value', username: `admin${' '.repeat(28)}`, password: 'password123' }
       });
       const res = createMockResponse();
 
-      await createAuthHandler(req, res);
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(configModuleMock.updateConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ username: 'admin' })
+      );
+      expect(dbMock.Session.create).toHaveBeenCalledWith(
+        expect.objectContaining({ username: 'admin' })
+      );
+    });
+
+    test('validates password length', async () => {
+      const { app } = await createServerModule({ passwordHash: null });
+      const handlers = findRouteHandlers(app, 'post', '/setup/create-auth');
+      const handler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { token: 'mock-token-value', username: 'admin', password: 'short' }
+      });
+      const res = createMockResponse();
+
+      await handler(req, res);
 
       expect(res.statusCode).toBe(400);
       expect(res.body).toEqual({ error: 'Password must be at least 8 characters' });
     });
+  });
+});
 
-    test('validates maximum username length', async () => {
-      const { app } = await createServerModule({ passwordHash: null });
+describe('setup token wiring on initialize', () => {
+  test('ensures a token when passwordHash is missing and AUTH_PRESET is not set', async () => {
+    const { setupTokenModuleMock } = await createServerModule({ passwordHash: null });
 
-      const handlers = findRouteHandlers(app, 'post', '/setup/create-auth');
-      const createAuthHandler = handlers[handlers.length - 1];
+    expect(setupTokenModuleMock.ensureToken).toHaveBeenCalledTimes(1);
+    expect(setupTokenModuleMock.logBanner).toHaveBeenCalledTimes(1);
+    expect(setupTokenModuleMock.clearStaleFile).not.toHaveBeenCalled();
+  });
 
-      const req = createMockRequest({
-        body: {
-          username: 'a'.repeat(33),
-          password: 'password123'
-        },
-        ip: '127.0.0.1'
-      });
-      const res = createMockResponse();
-
-      await createAuthHandler(req, res);
-
-      expect(res.statusCode).toBe(400);
-      expect(res.body).toEqual({ error: 'Username is too long (max 32 characters)' });
+  test('clears stale token file when AUTH_PRESET applies', async () => {
+    const { setupTokenModuleMock } = await createServerModule({
+      passwordHash: null,
+      authPreset: { username: 'admin', password: 'longenough' }
     });
 
-    test('validates maximum password length', async () => {
-      const { app } = await createServerModule({ passwordHash: null });
+    expect(setupTokenModuleMock.clearStaleFile).toHaveBeenCalledTimes(1);
+    expect(setupTokenModuleMock.ensureToken).not.toHaveBeenCalled();
+  });
 
-      const handlers = findRouteHandlers(app, 'post', '/setup/create-auth');
-      const createAuthHandler = handlers[handlers.length - 1];
+  test('clears stale token file when passwordHash is already set (defensive cleanup)', async () => {
+    const { setupTokenModuleMock } = await createServerModule({ passwordHash: 'existing-hash' });
 
-      const req = createMockRequest({
-        body: {
-          username: 'newuser',
-          password: 'a'.repeat(65)
-        },
-        ip: '127.0.0.1'
-      });
-      const res = createMockResponse();
+    expect(setupTokenModuleMock.clearStaleFile).toHaveBeenCalledTimes(1);
+    expect(setupTokenModuleMock.ensureToken).not.toHaveBeenCalled();
+  });
 
-      await createAuthHandler(req, res);
-
-      expect(res.statusCode).toBe(400);
-      expect(res.body).toEqual({ error: 'Password is too long' });
+  test('ensures a token when config is partially configured with passwordHash but no username', async () => {
+    const { setupTokenModuleMock } = await createServerModule({
+      passwordHash: 'existing-hash',
+      configOverrides: { username: null }
     });
+
+    expect(setupTokenModuleMock.ensureToken).toHaveBeenCalledTimes(1);
+    expect(setupTokenModuleMock.logBanner).toHaveBeenCalledTimes(1);
+    expect(setupTokenModuleMock.clearStaleFile).not.toHaveBeenCalled();
+  });
+
+  test('does nothing for the token when AUTH_ENABLED=false', async () => {
+    const { setupTokenModuleMock } = await createServerModule({
+      authEnabled: 'false',
+      passwordHash: null
+    });
+
+    expect(setupTokenModuleMock.ensureToken).not.toHaveBeenCalled();
+    expect(setupTokenModuleMock.clearStaleFile).not.toHaveBeenCalled();
+    expect(setupTokenModuleMock.logBanner).not.toHaveBeenCalled();
   });
 });
 

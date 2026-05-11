@@ -47,28 +47,83 @@ const MEDIA_EXTENSIONS = [...VIDEO_EXTENSIONS, ...AUDIO_EXTENSIONS];
 const CHANNEL_TEMPLATE = '%(uploader,channel,uploader_id).80B';
 
 /**
- * yt-dlp output template for video folder name
- * Format: "ChannelName - VideoTitle - VideoID"
- * Title is truncated to 76 bytes (not characters) to avoid path length issues with UTF-8
- * Using .NB syntax for byte-based truncation instead of .Ns for character-based
- * Note: 76 bytes keeps same safety margin as before for Windows path limits (entire path must be <260)
+ * Default prefix for the user-customizable video filename template.
+ * Composed with VIDEO_FILENAME_SUFFIX to produce the full yt-dlp -o template.
+ * Matches the legacy fixed template byte-for-byte so existing installs are
+ * unchanged until the user touches the setting.
  */
-const VIDEO_FOLDER_TEMPLATE = `${CHANNEL_TEMPLATE} - %(title).76B - %(id)s`;
+const DEFAULT_VIDEO_FILENAME_PREFIX = `${CHANNEL_TEMPLATE} - %(title).76B`;
 
 /**
- * yt-dlp output template for video file name
- * Format: "ChannelName - VideoTitle [VideoID].ext"
- * Title is truncated to 76 bytes (not characters) to avoid path length issues with UTF-8
- * Using .NB syntax for byte-based truncation instead of .Ns for character-based
- * Note: 76 bytes keeps same safety margin as before for Windows path limits (entire path must be <260)
+ * Locked suffix appended to every user-customized video filename.
+ * Required for Youtarr's file-to-DB matching (see YOUTUBE_ID_BRACKET_PATTERN).
  */
-const VIDEO_FILE_TEMPLATE = `${CHANNEL_TEMPLATE} - %(title).76B [%(id)s].%(ext)s`;
+const VIDEO_FILENAME_SUFFIX = '[%(id)s].%(ext)s';
+
+/**
+ * Normalize a user-supplied filename prefix: fall back to the default when
+ * null/undefined, then strip trailing whitespace. Shared by the three
+ * filename composers below.
+ */
+function normalizePrefix(prefix) {
+  const effective = prefix == null ? DEFAULT_VIDEO_FILENAME_PREFIX : prefix;
+  return effective.replace(/\s+$/, '');
+}
+
+/**
+ * Compose the full yt-dlp video file template from a user-supplied prefix.
+ * Inserts a single space between non-empty prefix and suffix; emits suffix
+ * alone when the prefix is empty/whitespace as defensive fallback behavior.
+ * User-facing config validation rejects empty prefixes. Null/undefined falls
+ * back to the default prefix so callers without config still produce a valid template.
+ */
+function composeVideoFileTemplate(prefix) {
+  const trimmed = normalizePrefix(prefix);
+  return trimmed.length === 0
+    ? VIDEO_FILENAME_SUFFIX
+    : `${trimmed} ${VIDEO_FILENAME_SUFFIX}`;
+}
+
+/**
+ * Compose the thumbnail filename template (no extension; yt-dlp adds .jpg via
+ * --convert-thumbnails). Mirrors the video file template so the post-processor
+ * can pair thumbnail + video by stem.
+ */
+function composeThumbnailFilename(prefix) {
+  const trimmed = normalizePrefix(prefix);
+  return trimmed.length === 0 ? '[%(id)s]' : `${trimmed} [%(id)s]`;
+}
+
+/**
+ * Compose the per-video directory name from a user-supplied prefix.
+ * Non-empty prefixes get " - %(id)s"; empty prefixes use "%(id)s" alone.
+ * User-facing config validation rejects empty prefixes, so the empty form is
+ * defensive fallback behavior for older/hand-edited configs.
+ * The non-empty form matches YOUTUBE_ID_DASH_PATTERN for directory ID extraction.
+ * Same composition rules as composeVideoFileTemplate.
+ */
+function composeVideoFolderName(prefix) {
+  const trimmed = normalizePrefix(prefix);
+  return trimmed.length === 0 ? '%(id)s' : `${trimmed} - %(id)s`;
+}
+
+/**
+ * Legacy-compatible folder template. Kept so existing imports of
+ * VIDEO_FOLDER_TEMPLATE continue to work byte-identically.
+ */
+const VIDEO_FOLDER_TEMPLATE = composeVideoFolderName(DEFAULT_VIDEO_FILENAME_PREFIX);
+
+/**
+ * Legacy-compatible full template. Kept so existing imports of
+ * VIDEO_FILE_TEMPLATE (e.g. tests, future callers) continue to work.
+ */
+const VIDEO_FILE_TEMPLATE = composeVideoFileTemplate(DEFAULT_VIDEO_FILENAME_PREFIX);
 
 /**
  * Pattern to extract YouTube video ID from filename
- * Matches [VideoID] where VideoID is 11 alphanumeric characters (including - and _)
+ * Matches [VideoID] where VideoID is 10-12 alphanumeric characters (including - and _)
  */
-const YOUTUBE_ID_BRACKET_PATTERN = /\[([a-zA-Z0-9_-]{11})\]/;
+const YOUTUBE_ID_BRACKET_PATTERN = /\[([a-zA-Z0-9_-]{10,12})\]/;
 
 /**
  * Pattern to extract YouTube video ID from directory name
@@ -137,6 +192,11 @@ module.exports = {
   CHANNEL_TEMPLATE,
   VIDEO_FOLDER_TEMPLATE,
   VIDEO_FILE_TEMPLATE,
+  DEFAULT_VIDEO_FILENAME_PREFIX,
+  VIDEO_FILENAME_SUFFIX,
+  composeVideoFileTemplate,
+  composeThumbnailFilename,
+  composeVideoFolderName,
   YOUTUBE_ID_BRACKET_PATTERN,
   YOUTUBE_ID_DASH_PATTERN,
   YOUTUBE_ID_PATTERN,

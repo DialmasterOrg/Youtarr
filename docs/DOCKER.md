@@ -14,7 +14,7 @@ Youtarr ships four Compose files so each supported runtime can layer the right o
 |------|---------|
 | `docker-compose.yml` | Production defaults with the bundled MariaDB container. Used by `./start.sh`. |
 | `docker-compose.dev.yml` | Development mode: mounts `./server/` and migrations into the container, runs the backend with `node --watch` for hot reload, and uses a separate `youtarr-db-dev` database with its own named volume. Used by `./scripts/start-dev.sh`. See [DEVELOPMENT.md](DEVELOPMENT.md). |
-| `docker-compose.arm.yml` | ARM override (Apple Silicon, Raspberry Pi) that switches the MariaDB data directory to a named volume to avoid virtiofs issues. Layered on top of `docker-compose.yml` via `-f`. |
+| `docker-compose.arm.yml` | Named-volume database override. The filename is historical: it was originally added for ARM systems, but it is also useful on Docker Desktop and NAS/virtualized filesystems. Layered on top of `docker-compose.yml` via `-f`. |
 | `docker-compose.external-db.yml` | Runs Youtarr against an external MariaDB/MySQL instance instead of the bundled database. Used by `./start-with-external-db.sh`. |
 
 ## Container Details
@@ -34,10 +34,10 @@ Youtarr ships four Compose files so each supported runtime can layer the right o
 - **Port**: 3321 (both host and container)
 - **Volumes**:
   - `./database:/var/lib/mysql` - Database persistence (default)
-  - `youtarr-db-data:/var/lib/mysql` - Named volume (required for ARM/Synology)
+  - `youtarr-db-data:/var/lib/mysql` - Named volume (recommended for Docker Desktop/ARM/NAS)
 - **Character Set**: utf8mb4 (full Unicode support)
 
-> **ARM Users**: See [ARM Architecture Notes](#arm-architecture-apple-silicon-raspberry-pi) below.
+> **Docker Desktop/ARM/NAS users**: See [Named-Volume Database Override](#named-volume-database-override) below.
 
 ## ⚠️ Important: Do Not Mount the Migrations Directory
 
@@ -62,25 +62,30 @@ volumes:
 
 If your automation creates a migrations directory, remove it from both directory creation and volume mounts.
 
-## ARM Architecture (Apple Silicon, Raspberry Pi)
+## Named-Volume Database Override
 
-ARM-based systems (Apple Silicon Macs, Raspberry Pi, etc.) have known issues with MariaDB bind mounts due to virtiofs bugs. The start scripts automatically detect ARM and apply the fix.
+Docker Desktop on Windows/macOS, ARM hosts, Synology/QNAP, and some virtualized filesystems can have trouble with MariaDB data stored on a bind mount. The named-volume override avoids that class of issue.
 
 ### Using Start Scripts (Recommended)
 
-The `./start.sh` script automatically detects ARM architecture and applies the correct configuration:
+`./start.sh` automatically uses `docker-compose.arm.yml` for fresh installs on every platform. Existing installs with real MariaDB data in `./database/` keep using the bind mount and print a migration warning instead, including on ARM hosts.
 ```bash
 ./start.sh
 ```
 
+For an existing bind-mounted install, migrate with:
+```bash
+./scripts/migrate-to-named-volume.sh
+```
+
 ### Using Docker Compose Directly
 
-If you prefer running `docker compose` commands directly on ARM systems, use the override file:
+For a fresh install, use the override file:
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.arm.yml up -d
 ```
 
-This uses a named Docker volume instead of a bind mount for MariaDB data, avoiding the virtiofs issues.
+This uses a named Docker volume instead of a bind mount for MariaDB data.
 
 ### Manual Configuration
 
@@ -99,7 +104,7 @@ volumes:
   youtarr-db-data:
 ```
 
-See [Troubleshooting](TROUBLESHOOTING.md#apple-silicon--arm-incorrect-information-in-file-errors) for more details on the underlying issue.
+See [Troubleshooting](TROUBLESHOOTING.md#docker-desktop--arm-incorrect-information-in-file-errors) for more details on the underlying issue.
 
 ## Configuration Setup
 - **Create a .env file** to configure environment variables:
@@ -214,7 +219,8 @@ vim .env  # or nano, or your preferred editor
 
 **Optional settings:**
 - `TZ` - Your timezone (e.g., `America/New_York`, `Europe/London`). Defaults to `UTC`. Set this if scheduled downloads and nightly cleanup should run in your local time.
-- `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` - For headless setups where you cannot reach the initial-setup wizard via localhost.
+- `YOUTARR_HOST_PORT` - Host port for the web interface. Defaults to `3087`; change this if another service already uses that port.
+- `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` - Seed login credentials and skip the setup-token wizard for headless or automated deployments.
 - `YOUTARR_UID` / `YOUTARR_GID` - Run the container as a non-root user (recommended for security, see step 5 below).
 - **Changing bundled-database credentials?** If you want to customize the MariaDB password, set BOTH `DB_PASSWORD` **and** `DB_ROOT_PASSWORD` to the same value. Setting only one of them will cause the app to fail to connect because the app uses `DB_PASSWORD` while MariaDB's root account is initialized from `DB_ROOT_PASSWORD`. This only applies to the bundled database; external-DB users set `DB_PASSWORD` to match their existing database.
 - See [ENVIRONMENT_VARIABLES.md](ENVIRONMENT_VARIABLES.md) for the full reference.
@@ -246,7 +252,7 @@ On most Linux hosts, Docker will auto-create `./database` on first run and Maria
 sudo chown -R 999:999 database
 ```
 
-If you hit `InnoDB: Operating system error number 13` at startup, you have hit this case - see [Switching to Named Volume](DATABASE.md#switching-to-named-volume) in the database docs for an alternative that sidesteps bind-mount permission issues entirely.
+If you hit `InnoDB: Operating system error number 13` at startup, you have hit this case - see [Migrating from Bind Mount to Named Volume](DATABASE.md#migrating-from-bind-mount-to-named-volume) in the database docs for an alternative that sidesteps bind-mount permission issues entirely.
 
 #### 5. Set Permissions
 
@@ -512,7 +518,7 @@ See: [ENVIRONMENT_VARIABLES](ENVIRONMENT_VARIABLES.md) for more details
 
 ### Platform Deployment Configuration
 
-Youtarr supports platform-managed deployments (Elfhosted, Kubernetes, etc.) with three special environment variables:
+Youtarr supports platform-managed deployments (Elfhosted, Kubernetes, etc.) with four special environment variables:
 
 #### Environment Variables
 
@@ -520,18 +526,19 @@ Youtarr supports platform-managed deployments (Elfhosted, Kubernetes, etc.) with
 |----------|-------------|---------|
 | `DATA_PATH` | Video storage path inside container (only really needed for Elfhosted) | `/storage/rclone/storagebox/youtube` |
 | `AUTH_ENABLED` | Set to `false` to bypass internal authentication | `false` |
+| `TRUST_PROXY` | Controls whether Youtarr trusts proxy headers. Set `false` for direct exposure without a reverse proxy. | `false` |
 | `PLEX_URL` | Pre-configured Plex server URL, overrides plexIp and plexPort from config.json | `http://plex:32400` |
 
 ### Preset Credentials for Headless Deployments
 
-For platforms where you cannot access `http://localhost:3087` (Unraid, Kubernetes, etc.), you can seed the initial login without touching the UI by setting both environment variables below. These values will override and overwrite existing values in config.json
+For platforms where you cannot access `http://localhost:3087` (Unraid, Kubernetes, etc.), you can either use the one-time setup token from container logs or seed the initial login without touching the UI by setting both environment variables below. These values will override and overwrite existing values in config.json
 
 | Variable | Description |
 |----------|-------------|
 | `AUTH_PRESET_USERNAME` | Initial admin username. Trimmed and must be ≤ 32 characters. |
 | `AUTH_PRESET_PASSWORD` | Initial admin password (8–64 characters). Stored as a hash on first boot. |
 
-If only one variable is present, or the values fall outside the validation rules, the preset is ignored and the localhost-only setup wizard remains active.
+If only one variable is present, or the values fall outside the validation rules, the preset is ignored and the setup-token wizard remains active.
 
 #### What Happens in Platform Mode
 

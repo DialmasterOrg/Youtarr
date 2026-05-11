@@ -10,12 +10,14 @@ config/jobs.json
 config/config.json
 config/config.json.*
 config/cookies.user.txt
+config/setup-token
 config/*.env
 database
 server/images
 
 .env
 .env.dev
+.env.bak.*
 
 # Local dev exclusion
 ffmpeg.exe
@@ -56,6 +58,9 @@ downloads/*
 
 # Backup archive location
 backups/
+
+# Database migration safety backups
+database.bind-mount-backup.*/
 
 # Superpowers brainstorming session artifacts (local-only, ephemeral mockups)
 .superpowers/

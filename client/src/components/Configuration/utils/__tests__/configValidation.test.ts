@@ -85,4 +85,23 @@ describe('validateConfig', () => {
       expect(result).toMatch(/Cannot save:.*Invalid rate format/);
     }
   );
+
+  test('rejects an empty videoFilenamePrefix with a Cannot save error', () => {
+    const config = createConfig({ videoFilenamePrefix: '' });
+    const result = validateConfig(config);
+    expect(result).toMatch(/Cannot save:.*empty/i);
+  });
+
+  test('rejects a videoFilenamePrefix containing path separators', () => {
+    const config = createConfig({ videoFilenamePrefix: '%(uploader)s/%(title)s' });
+    const result = validateConfig(config);
+    expect(result).toMatch(/Cannot save:.*path separator/i);
+  });
+
+  test('accepts the default videoFilenamePrefix', () => {
+    const config = createConfig({
+      videoFilenamePrefix: '%(uploader,channel,uploader_id).80B - %(title).76B',
+    });
+    expect(validateConfig(config)).toBeNull();
+  });
 });

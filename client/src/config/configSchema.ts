@@ -28,6 +28,10 @@ export const CONFIG_FIELDS = {
   preferredResolution: { default: '1080', trackChanges: true },
   videoCodec: { default: 'default', trackChanges: true },
   defaultSubfolder: { default: '', trackChanges: true },
+  videoFilenamePrefix: {
+    default: '%(uploader,channel,uploader_id).80B - %(title).76B',
+    trackChanges: true,
+  },
 
   // Plex integration
   plexApiKey: { default: '', trackChanges: true },
@@ -113,6 +117,20 @@ export const CONFIG_FIELDS = {
     default: null as { status: 'updated' | 'up-to-date' | 'skipped' | 'error'; message?: string; version?: string } | null,
     trackChanges: false,
   },
+  rescanLastRun: {
+    default: null as {
+      startedAt: string;
+      completedAt: string;
+      trigger: 'manual' | 'scheduled' | 'startup';
+      status: 'completed' | 'timed-out' | 'error';
+      videosUpdated: number;
+      videosMarkedMissing: number;
+      videosScanned: number;
+      filesFoundOnDisk: number;
+      errorMessage: string | null;
+    } | null,
+    trackChanges: false,
+  },
 
   // yt-dlp options (custom args, IP family, rate limit)
   ytdlpIpFamily: { default: 'ipv4' as 'ipv4' | 'ipv6' | 'auto', trackChanges: true },
@@ -144,6 +162,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   preferredResolution: CONFIG_FIELDS.preferredResolution.default,
   videoCodec: CONFIG_FIELDS.videoCodec.default,
   defaultSubfolder: CONFIG_FIELDS.defaultSubfolder.default,
+  videoFilenamePrefix: CONFIG_FIELDS.videoFilenamePrefix.default,
   plexApiKey: CONFIG_FIELDS.plexApiKey.default,
   plexYoutubeLibraryId: CONFIG_FIELDS.plexYoutubeLibraryId.default,
   plexSubfolderLibraryMappings: CONFIG_FIELDS.plexSubfolderLibraryMappings.default,
@@ -183,6 +202,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   ytdlpLastChecked: CONFIG_FIELDS.ytdlpLastChecked.default,
   ytdlpLastUpdated: CONFIG_FIELDS.ytdlpLastUpdated.default,
   ytdlpLastResult: CONFIG_FIELDS.ytdlpLastResult.default,
+  rescanLastRun: CONFIG_FIELDS.rescanLastRun.default,
   ytdlpIpFamily: CONFIG_FIELDS.ytdlpIpFamily.default,
   ytdlpDownloadRateLimit: CONFIG_FIELDS.ytdlpDownloadRateLimit.default,
   ytdlpCustomArgs: CONFIG_FIELDS.ytdlpCustomArgs.default,

@@ -10,6 +10,7 @@ describe('VideosModule', () => {
   let mockVideoValidationModule;
   let mockLogger;
   let mockNfoGenerator;
+  let mockMessageEmitter;
 
   beforeEach(() => {
     jest.resetModules();
@@ -43,7 +44,9 @@ describe('VideosModule', () => {
 
     // Mock configModule
     mockConfigModule = {
-      directoryPath: '/test/output/dir'
+      directoryPath: '/test/output/dir',
+      getConfig: jest.fn().mockReturnValue({}),
+      updateConfig: jest.fn()
     };
 
     mockVideoValidationModule = {
@@ -62,6 +65,10 @@ describe('VideosModule', () => {
 
     mockNfoGenerator = {
       writeVideoNfoFile: jest.fn()
+    };
+
+    mockMessageEmitter = {
+      emitMessage: jest.fn()
     };
 
     // Mock the database module
@@ -89,6 +96,8 @@ describe('VideosModule', () => {
     jest.doMock('../videoValidationModule', () => mockVideoValidationModule);
 
     jest.doMock('../nfoGenerator', () => mockNfoGenerator);
+
+    jest.doMock('../messageEmitter', () => mockMessageEmitter);
 
     // Mock logger
     jest.doMock('../../logger', () => mockLogger);
@@ -470,8 +479,9 @@ describe('VideosModule', () => {
       mockSequelize.query.mockResolvedValueOnce(); // Update query
       mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels query
 
-      // Mock file does not exist
-      mockFs.stat.mockRejectedValueOnce({ code: 'ENOENT' });
+      // Mock file does not exist; fileCheckModule's same-dir fallback will
+      // also try .webm/.mkv/.m4v/.avi variants, all of which must ENOENT.
+      mockFs.stat.mockRejectedValue({ code: 'ENOENT' });
 
       const result = await VideosModule.getVideosPaginated();
 
@@ -684,6 +694,51 @@ describe('VideosModule', () => {
         'Error scanning directory'
       );
     });
+
+    test('should detect .mkv files', async () => {
+      mockFs.readdir.mockResolvedValueOnce([
+        { name: 'Channel - Title [vid12345abc].mkv', isDirectory: () => false, isFile: () => true }
+      ]);
+      mockFs.stat.mockResolvedValueOnce({ size: 9000 });
+
+      const { fileMap } = await VideosModule.scanForVideoFiles('/videos');
+
+      expect(fileMap.size).toBe(1);
+      expect(fileMap.get('vid12345abc')).toMatchObject({
+        videoFilePath: expect.stringMatching(/\.mkv$/),
+        videoFileSize: 9000
+      });
+    });
+
+    test('should detect .webm, .m4v, and .avi files', async () => {
+      mockFs.readdir.mockResolvedValueOnce([
+        { name: 'A [aaaaaaaaaaa].webm', isDirectory: () => false, isFile: () => true },
+        { name: 'B [bbbbbbbbbbb].m4v', isDirectory: () => false, isFile: () => true },
+        { name: 'C [ccccccccccc].avi', isDirectory: () => false, isFile: () => true }
+      ]);
+      mockFs.stat
+        .mockResolvedValueOnce({ size: 100 })
+        .mockResolvedValueOnce({ size: 200 })
+        .mockResolvedValueOnce({ size: 300 });
+
+      const { fileMap } = await VideosModule.scanForVideoFiles('/videos');
+
+      expect(fileMap.size).toBe(3);
+      expect(fileMap.get('aaaaaaaaaaa').videoFilePath).toMatch(/\.webm$/);
+      expect(fileMap.get('bbbbbbbbbbb').videoFilePath).toMatch(/\.m4v$/);
+      expect(fileMap.get('ccccccccccc').videoFilePath).toMatch(/\.avi$/);
+    });
+
+    test('should still ignore unsupported extensions like .txt', async () => {
+      mockFs.readdir.mockResolvedValueOnce([
+        { name: 'note [zzzzzzzzzzz].txt', isDirectory: () => false, isFile: () => true }
+      ]);
+
+      const { fileMap } = await VideosModule.scanForVideoFiles('/videos');
+
+      expect(fileMap.size).toBe(0);
+      expect(mockFs.stat).not.toHaveBeenCalled();
+    });
   });
 
   describe('backfillVideoMetadata', () => {
@@ -780,6 +835,34 @@ describe('VideosModule', () => {
       expect(result.updated).toBe(0);
     });
 
+    test('should clear removed flag when a previously-missing file reappears (raw row removed=1)', async () => {
+      // Sequelize raw mode returns BOOLEAN columns as 0/1, not true/false.
+      // This test exercises that path to ensure restoration is detected.
+      mockFs.readdir.mockResolvedValueOnce([
+        { name: 'video [restored1].mp4', isDirectory: () => false, isFile: () => true }
+      ]);
+      mockFs.stat.mockResolvedValueOnce({ size: 1000 });
+
+      mockVideo.count.mockResolvedValueOnce(1);
+
+      mockVideo.findAll.mockResolvedValueOnce([
+        {
+          id: 1,
+          youtubeId: 'restored1',
+          filePath: '/test/output/dir/video [restored1].mp4',
+          fileSize: '1000',
+          removed: 1
+        }
+      ]);
+
+      mockSequelize.query.mockResolvedValueOnce();
+
+      const result = await VideosModule.backfillVideoMetadata();
+
+      expect(result.updated).toBe(1);
+      expect(result.removed).toBe(0);
+    });
+
     test('should process videos in chunks', async () => {
       // Mock filesystem
       mockFs.readdir.mockResolvedValueOnce([]);
@@ -823,6 +906,134 @@ describe('VideosModule', () => {
       expect(mockLogger.error).toHaveBeenCalledWith(
         { err: mockError },
         'Error during video metadata backfill'
+      );
+    });
+
+    test('should accept options object with timeLimit and trigger', async () => {
+      mockFs.readdir.mockResolvedValueOnce([]);
+      mockVideo.count.mockResolvedValueOnce(0);
+
+      const result = await VideosModule.backfillVideoMetadata({ timeLimit: 1000, trigger: 'manual' });
+
+      expect(result).toBeDefined();
+      expect(result.trigger).toBe('manual');
+    });
+
+    test('should still accept legacy positional timeLimit argument', async () => {
+      mockFs.readdir.mockResolvedValueOnce([]);
+      mockVideo.count.mockResolvedValueOnce(0);
+
+      const result = await VideosModule.backfillVideoMetadata(100);
+      expect(result).toBeDefined();
+      expect(result.trigger).toBe('scheduled');
+    });
+
+    test('should return skipped result when a backfill is already in progress', async () => {
+      VideosModule._backfillRunning = true;
+
+      const result = await VideosModule.backfillVideoMetadata({ trigger: 'manual' });
+
+      expect(result).toEqual({ skipped: true, reason: 'already-running' });
+      expect(VideosModule._backfillRunning).toBe(true);
+
+      VideosModule._backfillRunning = false;
+    });
+
+    test('should release lock on success', async () => {
+      mockFs.readdir.mockResolvedValueOnce([]);
+      mockVideo.count.mockResolvedValueOnce(0);
+
+      await VideosModule.backfillVideoMetadata({ trigger: 'manual' });
+
+      expect(VideosModule._backfillRunning).toBe(false);
+    });
+
+    test('should release lock on error', async () => {
+      const error = new Error('boom');
+      mockFs.readdir.mockResolvedValueOnce([]);
+      mockVideo.count.mockRejectedValueOnce(error);
+
+      await expect(VideosModule.backfillVideoMetadata({ trigger: 'manual' })).rejects.toThrow('boom');
+      expect(VideosModule._backfillRunning).toBe(false);
+    });
+
+    test('should write rescanLastRun to config on completion', async () => {
+      mockFs.readdir.mockResolvedValueOnce([]);
+      mockVideo.count.mockResolvedValueOnce(0);
+
+      await VideosModule.backfillVideoMetadata({ trigger: 'manual' });
+
+      expect(mockConfigModule.updateConfig).toHaveBeenCalledWith(
+        expect.objectContaining({
+          rescanLastRun: expect.objectContaining({
+            trigger: 'manual',
+            status: 'completed',
+            videosScanned: 0,
+            filesFoundOnDisk: 0,
+            videosUpdated: 0,
+            videosMarkedMissing: 0
+          })
+        })
+      );
+    });
+
+    test('should still emit completion when rescanLastRun persistence fails', async () => {
+      mockFs.readdir.mockResolvedValueOnce([]);
+      mockVideo.count.mockResolvedValueOnce(0);
+      mockConfigModule.updateConfig.mockImplementation(() => {
+        throw new Error('config write failed');
+      });
+
+      await VideosModule.backfillVideoMetadata({ trigger: 'manual' });
+
+      expect(mockMessageEmitter.emitMessage).toHaveBeenCalledWith(
+        'broadcast',
+        null,
+        'server',
+        'rescanStatus',
+        expect.objectContaining({ running: false, lastRun: expect.any(Object) })
+      );
+      expect(VideosModule._backfillRunning).toBe(false);
+    });
+
+    test('should release lock when no output directory and completion emit fails', async () => {
+      mockConfigModule.directoryPath = '';
+      mockMessageEmitter.emitMessage.mockImplementation((...args) => {
+        const payload = args[4];
+        if (payload?.running === false) {
+          throw new Error('websocket unavailable');
+        }
+      });
+
+      const result = await VideosModule.backfillVideoMetadata({ trigger: 'manual' });
+
+      expect(result).toBeUndefined();
+      expect(VideosModule._backfillRunning).toBe(false);
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        { err: expect.any(Error) },
+        'Failed to emit rescanStatus completion'
+      );
+    });
+
+    test('should emit rescanStatus WebSocket broadcasts on start and completion', async () => {
+      mockFs.readdir.mockResolvedValueOnce([]);
+      mockVideo.count.mockResolvedValueOnce(0);
+
+      await VideosModule.backfillVideoMetadata({ trigger: 'manual' });
+
+      expect(mockMessageEmitter.emitMessage).toHaveBeenCalledWith(
+        'broadcast',
+        null,
+        'server',
+        'rescanStatus',
+        expect.objectContaining({ running: true, trigger: 'manual' })
+      );
+      expect(mockMessageEmitter.emitMessage).toHaveBeenCalledWith(
+        'broadcast',
+        null,
+        'server',
+        'rescanStatus',
+        expect.objectContaining({ running: false, lastRun: expect.any(Object) })
       );
     });
   });
@@ -963,6 +1174,24 @@ describe('VideosModule', () => {
         videoInstance.filePath,
         expect.objectContaining({ normalized_rating: null })
       );
+    });
+  });
+
+  describe('tryStartBackfill', () => {
+    test('returns started: true when not running', () => {
+      VideosModule._backfillRunning = false;
+      const spy = jest.spyOn(VideosModule, 'backfillVideoMetadata').mockResolvedValue();
+      const result = VideosModule.tryStartBackfill({ trigger: 'manual' });
+      expect(result).toEqual({ started: true });
+      expect(spy).toHaveBeenCalledWith({ trigger: 'manual' });
+      spy.mockRestore();
+    });
+
+    test('returns started: false when already running', () => {
+      VideosModule._backfillRunning = true;
+      const result = VideosModule.tryStartBackfill();
+      expect(result).toEqual({ started: false, reason: 'already-running' });
+      VideosModule._backfillRunning = false;
     });
   });
 });

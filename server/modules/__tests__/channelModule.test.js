@@ -794,8 +794,54 @@ describe('ChannelModule', () => {
           media_type: 'video',
           publishedAt: mockVideoData.publishedAt,
           availability: mockVideoData.availability,
-          live_status: null
         });
+      });
+
+      test('should preserve existing availability when refresh has no availability', async () => {
+        const mockVideo = { update: jest.fn() };
+        ChannelVideo.findOrCreate.mockResolvedValue([mockVideo, false]);
+
+        const videoWithoutAvailability = { ...mockVideoData };
+        delete videoWithoutAvailability.availability;
+
+        await ChannelModule.insertVideosIntoDb([videoWithoutAvailability], 'UC123');
+
+        const updateArgs = mockVideo.update.mock.calls[0][0];
+        expect(updateArgs).not.toHaveProperty('availability');
+      });
+
+      test('should preserve existing live_status when refresh has no live_status', async () => {
+        const mockVideo = { update: jest.fn() };
+        ChannelVideo.findOrCreate.mockResolvedValue([mockVideo, false]);
+
+        await ChannelModule.insertVideosIntoDb([mockVideoData], 'UC123');
+
+        const updateArgs = mockVideo.update.mock.calls[0][0];
+        expect(updateArgs).not.toHaveProperty('live_status');
+      });
+
+      test('should overwrite availability when refresh has a real value (real demotion still works)', async () => {
+        const mockVideo = { update: jest.fn() };
+        ChannelVideo.findOrCreate.mockResolvedValue([mockVideo, false]);
+
+        const videoWithPublic = { ...mockVideoData, availability: 'public' };
+        await ChannelModule.insertVideosIntoDb([videoWithPublic], 'UC123');
+
+        expect(mockVideo.update).toHaveBeenCalledWith(
+          expect.objectContaining({ availability: 'public' })
+        );
+      });
+
+      test('should overwrite live_status when refresh has a real value', async () => {
+        const mockVideo = { update: jest.fn() };
+        ChannelVideo.findOrCreate.mockResolvedValue([mockVideo, false]);
+
+        const videoWithLive = { ...mockVideoData, live_status: 'is_live' };
+        await ChannelModule.insertVideosIntoDb([videoWithLive], 'UC123');
+
+        expect(mockVideo.update).toHaveBeenCalledWith(
+          expect.objectContaining({ live_status: 'is_live' })
+        );
       });
 
       test('should insert videos with live_status field', async () => {
@@ -874,7 +920,10 @@ describe('ChannelModule', () => {
         expect(secondCall.defaults.publishedAt).toBe('2024-01-02T00:00:00Z');
       });
 
-      test('should update publishedAt with synthetic date when not provided on existing videos', async () => {
+      test('should preserve existing publishedAt when refresh has no date', async () => {
+        // yt-dlp's youtubetab:approximate_date is non-deterministic for
+        // lockupViewModel entries. An empty refresh must not clobber a
+        // known-good DB date with Date.now().
         const mockVideo = {
           publishedAt: '2024-01-01T00:00:00Z',
           update: jest.fn()
@@ -887,16 +936,10 @@ describe('ChannelModule', () => {
 
         ChannelVideo.findOrCreate.mockResolvedValue([mockVideo, false]);
 
-        const beforeTime = Date.now();
         await ChannelModule.insertVideosIntoDb([videoWithoutDate], 'UC123');
-        const afterTime = Date.now();
 
-        // Should always update publishedAt (with synthetic date if not provided)
         const updateCall = mockVideo.update.mock.calls[0][0];
-        expect(updateCall.publishedAt).toBeDefined();
-        const timestamp = new Date(updateCall.publishedAt).getTime();
-        expect(timestamp).toBeGreaterThanOrEqual(beforeTime - 1000);
-        expect(timestamp).toBeLessThanOrEqual(afterTime + 1000);
+        expect(updateCall).not.toHaveProperty('publishedAt');
       });
 
       test('should set synthetic publishedAt on existing videos without dates', async () => {

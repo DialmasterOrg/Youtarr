@@ -49,7 +49,8 @@ const createServerModule = ({
   passwordHash = 'hashed-password',
   session,
   skipInitialize = false,
-  configOverrides = {}
+  configOverrides = {},
+  trustProxy
 } = {}) => {
   jest.resetModules();
   jest.clearAllMocks();
@@ -64,6 +65,12 @@ const createServerModule = ({
           delete process.env.AUTH_ENABLED;
         } else {
           process.env.AUTH_ENABLED = authEnabled;
+        }
+
+        if (trustProxy === undefined) {
+          delete process.env.TRUST_PROXY;
+        } else {
+          process.env.TRUST_PROXY = trustProxy;
         }
 
         const defaultSessionUpdate = jest.fn().mockResolvedValue();
@@ -277,23 +284,38 @@ const createServerModule = ({
 
 afterEach(() => {
   delete process.env.AUTH_ENABLED;
-});
-
-describe('isLocalhostIP', () => {
-  test.each([
-    ['127.0.0.1', true],
-    ['::1', true],
-    ['::ffff:127.0.0.1', true],
-    ['localhost', true],
-    ['192.168.1.10', false],
-    [null, false]
-  ])('returns %s for %s', async (input, expected) => {
-    const { serverModule } = await createServerModule({ skipInitialize: true });
-    expect(serverModule.isLocalhostIP(input)).toBe(expected);
-  });
+  delete process.env.TRUST_PROXY;
 });
 
 describe('server initialization', () => {
+  test('normalizes named TRUST_PROXY values for Express', async () => {
+    const { serverModule } = await createServerModule({ skipInitialize: true, trustProxy: 'LoOpBack' });
+
+    expect(serverModule.parseTrustProxySetting('LoOpBack')).toBe('loopback');
+  });
+
+  test('parses numeric TRUST_PROXY values as hop counts', async () => {
+    const { serverModule } = await createServerModule({ skipInitialize: true, trustProxy: '1' });
+
+    expect(serverModule.parseTrustProxySetting('1')).toBe(1);
+  });
+
+  test('logs when TRUST_PROXY is unset and backwards-compatible proxy trust is used', async () => {
+    await createServerModule({ skipInitialize: true });
+
+    expect(loggerMock.info).toHaveBeenCalledWith(
+      expect.stringContaining('TRUST_PROXY is unset')
+    );
+  });
+
+  test('does not log about unset TRUST_PROXY when explicitly configured', async () => {
+    await createServerModule({ skipInitialize: true, trustProxy: 'false' });
+
+    expect(loggerMock.info).not.toHaveBeenCalledWith(
+      expect.stringContaining('TRUST_PROXY is unset')
+    );
+  });
+
   test('initializes database and exposes health route', async () => {
     const { app, dbMock, channelModuleMock } = await createServerModule();
 
@@ -422,8 +444,14 @@ describe('server initialization', () => {
     expect(loginOptions.windowMs).toBe(15 * 60 * 1000);
     expect(loginOptions.skipSuccessfulRequests).toBe(true);
 
-    const key = loginOptions.keyGenerator({ ip: '1.2.3.4', body: { username: 'alice' } });
-    expect(key).toBe('1.2.3.4:alice');
+    // With TRUST_PROXY unset, the key generator must ignore req.ip (which can
+    // be spoofed via X-Forwarded-For) and fall back to the direct peer address.
+    const key = loginOptions.keyGenerator({
+      ip: '1.2.3.4',
+      socket: { remoteAddress: '5.6.7.8' },
+      body: { username: 'alice' }
+    });
+    expect(key).toBe('5.6.7.8:alice');
 
     const res = {};
     res.status = jest.fn(() => res);
@@ -433,6 +461,20 @@ describe('server initialization', () => {
     expect(res.json).toHaveBeenCalledWith({
       error: 'Too many failed login attempts. Please wait 15 minutes before trying again.'
     });
+  });
+
+  test('login rate limiter trusts req.ip when TRUST_PROXY is explicitly configured', async () => {
+    const { rateLimitMiddleware } = await createServerModule({ trustProxy: 'true' });
+
+    const loginCall = rateLimitMiddleware.mock.calls.find(([options]) => options.max === 5);
+    const loginOptions = loginCall[0];
+
+    const key = loginOptions.keyGenerator({
+      ip: '1.2.3.4',
+      socket: { remoteAddress: '5.6.7.8' },
+      body: { username: 'alice' }
+    });
+    expect(key).toBe('1.2.3.4:alice');
   });
 
   test('handles paginated /getVideos endpoint with query parameters', async () => {

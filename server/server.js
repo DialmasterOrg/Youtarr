@@ -11,8 +11,12 @@ const { ipKeyGenerator } = require('express-rate-limit');
 const logger = require('./logger');
 const pinoHttp = require('pino-http');
 const { setupSwagger } = require('./swagger');
+const { isAuthConfigured } = require('./modules/authState');
 const app = express();
-app.set('trust proxy', true); // Trust proxy headers for correct IP detection
+app.set('trust proxy', parseTrustProxySetting(process.env.TRUST_PROXY));
+if (process.env.TRUST_PROXY === undefined || process.env.TRUST_PROXY === '') {
+  logger.info('TRUST_PROXY is unset; defaulting Express proxy trust to true for backwards compatibility. Rate limits use the direct peer IP until TRUST_PROXY is explicitly configured.');
+}
 
 // Strip auth tokens from URLs before logging. The video streaming endpoint
 // passes the auth token as ?token=... because <video src> cannot set headers,
@@ -97,31 +101,51 @@ const userNameMinLength = 1;
 const passwordMaxLength = 64;
 const passwordMinLength = 8;
 
-// Helper function to check if IP is localhost
-function isLocalhostIP(ip) {
-  if (!ip) return false;
+function parseTrustProxySetting(value) {
+  if (value === undefined || value === null || value === '') {
+    return true;
+  }
 
-  // Clean up IP address - handle various formats
-  const cleanIP = ip.replace(/^::ffff:/, '').replace(/^::1$/, '::1');
+  const normalized = String(value).trim().toLowerCase();
+  if (['false', '0', 'no', 'off'].includes(normalized)) {
+    return false;
+  }
+  if (/^\d+$/.test(normalized)) {
+    return Number(normalized);
+  }
+  if (['true', 'yes', 'on'].includes(normalized)) {
+    return true;
+  }
 
-  // List of localhost IPs (IPv4 and IPv6)
-  const localhostIPs = [
-    '127.0.0.1',
-    '::1',
-    'localhost',
-    '::ffff:127.0.0.1',
-    '0:0:0:0:0:0:0:1'
-  ];
+  return normalized;
+}
 
-  // Check if IP is localhost
-  const isLocal = localhostIPs.includes(cleanIP) ||
-         localhostIPs.includes(ip) ||
-         cleanIP.startsWith('127.') ||
-         ip.includes('localhost') ||
-         ip === '::' ||
-         ip === '0.0.0.0';
+function hasExplicitTrustedProxyConfig() {
+  const value = process.env.TRUST_PROXY;
+  if (value === undefined || value === null || value === '') {
+    return false;
+  }
 
-  return isLocal;
+  const normalized = String(value).trim().toLowerCase();
+  return !['false', '0', 'no', 'off'].includes(normalized);
+}
+
+function getDirectClientAddress(req) {
+  return req.socket?.remoteAddress ||
+    req.connection?.remoteAddress ||
+    'unknown';
+}
+
+function getClientAddress(req) {
+  return hasExplicitTrustedProxyConfig() ? req.ip : getDirectClientAddress(req);
+}
+
+function getRateLimitAddress(req) {
+  const address = getClientAddress(req);
+  if (!address || address === 'unknown') {
+    return 'unknown';
+  }
+  return ipKeyGenerator(address);
 }
 
 // Helper function to validate ENV auth credentials
@@ -242,6 +266,18 @@ const initialize = async () => {
       logger.warn('Ignoring ENV AUTH credentials: both AUTH_PRESET_USERNAME and AUTH_PRESET_PASSWORD must be set and meet requirements (username: 1-32 chars, password: 8-64 chars)');
     }
 
+    const setupTokenModule = require('./modules/setupTokenModule');
+
+    if (process.env.AUTH_ENABLED !== 'false') {
+      const setupConfig = configModule.getConfig();
+      if (isAuthConfigured(setupConfig)) {
+        setupTokenModule.clearStaleFile();
+      } else {
+        setupTokenModule.ensureToken();
+        setupTokenModule.logBanner();
+      }
+    }
+
     channelModule.subscribe();
 
     subscriptionImportModule.init({
@@ -330,28 +366,14 @@ const initialize = async () => {
 
       const config = configModule.getConfig();
 
-      // If no password hash exists, authentication is not configured
-      // Only allow setup endpoints in this state
-      if (!config.passwordHash) {
-        if (req.path.startsWith('/setup')) {
-          const clientIP = req.ip || req.connection.remoteAddress;
-          const isLocalhost = isLocalhostIP(clientIP);
-
-          if (!isLocalhost) {
-            return res.status(403).json({
-              error: 'Initial setup can only be performed from localhost',
-              instruction: 'Please access from http://localhost:3087'
-            });
-          }
-          return next();
-        } else {
-          // Reject ALL other endpoints if auth not configured
-          return res.status(503).json({
-            error: 'Authentication not configured',
-            requiresSetup: true,
-            message: 'Please complete initial setup first'
-          });
-        }
+      // If authentication is not configured, only allow setup endpoints in
+      // this state; the setup route validates the one-time setup token itself.
+      if (!isAuthConfigured(config)) {
+        return res.status(503).json({
+          error: 'Authentication not configured',
+          requiresSetup: true,
+          message: 'Please complete initial setup first'
+        });
       }
 
       // Check for API key first (x-api-key header)
@@ -453,15 +475,32 @@ const initialize = async () => {
         ip: false, // Disable IP validation - we're using a custom key
       },
       keyGenerator: (req) => {
-        // Use IP + username combination for more granular rate limiting
-        // ipKeyGenerator normalizes IPv6 addresses to prevent bypass
-        const normalizedIp = ipKeyGenerator(req.ip);
+        // Trust forwarded client IPs only when TRUST_PROXY is explicitly
+        // configured; otherwise use the direct peer to avoid spoofable limits.
+        const normalizedIp = getRateLimitAddress(req);
         const username = req.body.username || 'unknown';
         return `${normalizedIp}:${username}`;
       },
       handler: (req, res) => {
         res.status(429).json({
           error: 'Too many failed login attempts. Please wait 15 minutes before trying again.'
+        });
+      }
+    });
+
+    const setupCreateAuthLimiter = rateLimit({
+      windowMs: 15 * 60 * 1000,
+      max: 10,
+      standardHeaders: true,
+      legacyHeaders: false,
+      validate: {
+        trustProxy: false,
+        ip: false,
+      },
+      keyGenerator: (req) => getRateLimitAddress(req),
+      handler: (_req, res) => {
+        res.status(429).json({
+          error: 'Too many setup attempts. Please wait 15 minutes before trying again.'
         });
       }
     });
@@ -473,7 +512,11 @@ const initialize = async () => {
       message: 'Too many requests from this IP, please try again later',
       standardHeaders: true,
       legacyHeaders: false,
-      validate: { trustProxy: false }, // Suppress trust proxy warning - we run in Docker with proxy
+      validate: {
+        trustProxy: false,
+        ip: false,
+      },
+      keyGenerator: (req) => getRateLimitAddress(req),
     });
 
     // Rate limiter for YouTube API key validation. Each test round-trips to
@@ -484,7 +527,11 @@ const initialize = async () => {
       message: { error: 'Too many key tests. Please wait a minute before trying again.' },
       standardHeaders: true,
       legacyHeaders: false,
-      validate: { trustProxy: false },
+      validate: {
+        trustProxy: false,
+        ip: false,
+      },
+      keyGenerator: (req) => getRateLimitAddress(req),
       handler: (_req, res) => {
         res.status(429).json({
           error: 'Too many key tests. Please wait a minute before trying again.',
@@ -500,10 +547,36 @@ const initialize = async () => {
       message: { error: 'Too many validation requests. Please wait a minute before trying again.' },
       standardHeaders: true,
       legacyHeaders: false,
-      validate: { trustProxy: false },
+      validate: {
+        trustProxy: false,
+        ip: false,
+      },
+      keyGenerator: (req) => getRateLimitAddress(req),
       handler: (_req, res) => {
         res.status(429).json({
           error: 'Too many validation requests. Please wait a minute before trying again.',
+        });
+      },
+    });
+
+    // Rate limiter for the /api/config/filename-preview endpoint. Each
+    // request spawns two yt-dlp processes (file template + folder template);
+    // limit is higher than ytdlp validate-args since it's button-driven and
+    // legitimate users can issue several previews per minute while iterating.
+    const filenamePreviewRateLimiter = rateLimit({
+      windowMs: 1 * 60 * 1000,
+      max: 30,
+      message: { error: 'Too many preview requests. Please wait a minute before trying again.' },
+      standardHeaders: true,
+      legacyHeaders: false,
+      validate: {
+        trustProxy: false,
+        ip: false,
+      },
+      keyGenerator: (req) => getRateLimitAddress(req),
+      handler: (_req, res) => {
+        res.status(429).json({
+          error: 'Too many preview requests. Please wait a minute before trying again.',
         });
       },
     });
@@ -560,8 +633,10 @@ const initialize = async () => {
     registerRoutes(app, {
       verifyToken,
       loginLimiter,
+      setupCreateAuthLimiter,
       youtubeApiKeyTestLimiter,
       ytdlpValidationRateLimiter,
+      filenamePreviewRateLimiter,
       configModule,
       channelModule,
       plexModule,
@@ -575,7 +650,8 @@ const initialize = async () => {
       getCachedYtDlpVersion,
       refreshYtDlpVersionCache,
       validateEnvAuthCredentials,
-      isLocalhostIP,
+      setupTokenModule,
+      getClientAddress,
       isWslEnvironment,
     });
 
@@ -612,7 +688,7 @@ const initialize = async () => {
           // Run video metadata backfill asynchronously after server starts
           setTimeout(() => {
             logger.info('Starting async video metadata backfill');
-            videosModule.backfillVideoMetadata()
+            videosModule.backfillVideoMetadata({ trigger: 'startup' })
               .then(() => {
                 logger.info('Video metadata backfill completed successfully');
               })
@@ -664,5 +740,6 @@ if (process.env.NODE_ENV !== 'test') {
 module.exports = {
   app,
   initialize,
-  isLocalhostIP
+  parseTrustProxySetting,
+  getClientAddress
 };

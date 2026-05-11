@@ -5,6 +5,181 @@ START_SCRIPT_NAME=$(basename "$0")
 
 # shellcheck source=scripts/_console_output.sh
 source "$SHARED_SCRIPT_DIR/_console_output.sh"
+# shellcheck source=scripts/_env_helpers.sh
+source "$SHARED_SCRIPT_DIR/_env_helpers.sh"
+
+SETUP_TOKEN_PATTERN='[0-9a-f]{64}'
+
+get_youtarr_host_port() {
+  local host_port="${YOUTARR_HOST_PORT:-}"
+
+  if [ -z "$host_port" ]; then
+    host_port=$(youtarr_get_env_file_value "./.env" "YOUTARR_HOST_PORT" "3087")
+  fi
+
+  printf '%s' "${host_port:-3087}"
+}
+
+extract_setup_token_from_text() {
+  local text="$1"
+
+  printf '%s' "$text" \
+    | grep -Eo "setupToken['\"]?[[:space:]]*[:=][[:space:]]*['\"]?$SETUP_TOKEN_PATTERN['\"]?" \
+    | head -n 1 \
+    | grep -Eo "$SETUP_TOKEN_PATTERN" \
+    | head -n 1
+}
+
+read_setup_token_from_file() {
+  local token_file="./config/setup-token"
+  local token
+
+  if [ ! -r "$token_file" ]; then
+    return 1
+  fi
+
+  token=$(tr -d '[:space:]' < "$token_file" 2>/dev/null || true)
+  if printf '%s' "$token" | grep -Eq "^$SETUP_TOKEN_PATTERN$"; then
+    printf '%s' "$token"
+    return 0
+  fi
+
+  return 1
+}
+
+read_setup_token_from_logs() {
+  local provided_logs="${1:-}"
+  local logs token
+
+  if [ -n "$provided_logs" ]; then
+    token=$(extract_setup_token_from_text "$provided_logs")
+    if [ -n "$token" ]; then
+      printf '%s' "$token"
+      return 0
+    fi
+  fi
+
+  # shellcheck disable=SC2086 # COMPOSE_CMD and COMPOSE_FILES intentionally word-split.
+  logs=$($COMPOSE_CMD $COMPOSE_FILES logs --tail 300 --no-log-prefix youtarr 2>/dev/null || true)
+  token=$(extract_setup_token_from_text "$logs")
+  if [ -n "$token" ]; then
+    printf '%s' "$token"
+    return 0
+  fi
+
+  return 1
+}
+
+read_initial_setup_token() {
+  local provided_logs="${1:-}"
+
+  read_setup_token_from_file && return 0
+  read_setup_token_from_logs "$provided_logs" && return 0
+
+  return 1
+}
+
+print_initial_setup_guidance() {
+  local provided_logs="${1:-}"
+  local setup_token host_port
+  host_port=$(get_youtarr_host_port)
+
+  yt_section "Initial Setup Required"
+  yt_info "Authentication is not yet configured. Complete first-time setup with the one-time token."
+
+  if setup_token=$(read_initial_setup_token "$provided_logs"); then
+    yt_info "Setup token:"
+    yt_detail "$setup_token"
+    yt_warn "Treat this token as sensitive. It is single-use and will be removed after setup."
+  else
+    yt_info "Retrieve the token with:"
+    yt_detail "$COMPOSE_CMD $COMPOSE_FILES logs youtarr | grep -A5 'initial setup required'"
+    yt_detail "Or read config/setup-token in your Youtarr data volume."
+  fi
+
+  yt_info "Open the setup page in any browser and paste the token:"
+  yt_detail "http://localhost:${host_port}/setup     (or http://<your-LAN-IP>:${host_port}/setup)"
+  yt_detail "The token is also written to config/setup-token in your Youtarr data volume."
+  yt_warn "Only use plain HTTP setup on localhost, your trusted LAN, VPN, or SSH tunnel."
+}
+
+has_valid_auth_preset() {
+  local username="$1"
+  local password="$2"
+  local trimmed_username
+
+  trimmed_username=$(printf '%s' "$username" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')
+
+  [ -n "$trimmed_username" ] &&
+    [ "${#trimmed_username}" -le 32 ] &&
+    [ -n "$password" ] &&
+    [ "${#password}" -ge 8 ] &&
+    [ "${#password}" -le 64 ]
+}
+
+print_setup_guidance_if_needed() {
+  local env_file="./.env"
+
+  local auth_enabled auth_preset_username auth_preset_password
+  auth_enabled=$(youtarr_get_env_file_value "$env_file" "AUTH_ENABLED" "true")
+  auth_preset_username=$(youtarr_get_env_file_value "$env_file" "AUTH_PRESET_USERNAME" "")
+  auth_preset_password=$(youtarr_get_env_file_value "$env_file" "AUTH_PRESET_PASSWORD" "")
+
+  # Platform-managed auth: setup wizard is bypassed.
+  if [ "$auth_enabled" = "false" ]; then
+    return 0
+  fi
+
+  # Headless preset will bootstrap creds on container start; no wizard needed.
+  if has_valid_auth_preset "$auth_preset_username" "$auth_preset_password"; then
+    return 0
+  fi
+
+  # Prefer the app's setup-status endpoint once it is reachable. This avoids
+  # racing the startup logs on first boot, where MariaDB/app initialization can
+  # take longer than the shell helper's polling window.
+  local i logs setup_status setup_token host_port
+  host_port=$(get_youtarr_host_port)
+  for i in $(seq 1 60); do
+    if command -v curl >/dev/null 2>&1; then
+      setup_status=$(curl --silent --max-time 1 "http://localhost:${host_port}/setup/status" 2>/dev/null || true)
+      if printf '%s' "$setup_status" | grep -q '"requiresSetup"[[:space:]]*:[[:space:]]*true'; then
+        print_initial_setup_guidance
+        return 0
+      fi
+      if printf '%s' "$setup_status" | grep -q '"requiresSetup"[[:space:]]*:[[:space:]]*false'; then
+        return 0
+      fi
+    fi
+
+    # Fall back to logs for systems without curl or while the HTTP endpoint is
+    # still coming up. Include COMPOSE_FILES so dev/external-db starts inspect
+    # the same stack that was just launched.
+    # shellcheck disable=SC2086 # COMPOSE_CMD and COMPOSE_FILES intentionally word-split.
+    logs=$($COMPOSE_CMD $COMPOSE_FILES logs --tail 300 --no-log-prefix youtarr 2>/dev/null)
+    if printf '%s' "$logs" | grep -q 'initial setup required'; then
+      print_initial_setup_guidance "$logs"
+      return 0
+    fi
+    if ! command -v curl >/dev/null 2>&1 && printf '%s' "$logs" | grep -q 'Server started and listening'; then
+      return 0
+    fi
+    sleep 0.5
+  done
+
+  yt_section "Startup Next Steps"
+  yt_info "Youtarr is still starting or the setup-status endpoint is not reachable yet."
+  yt_info "Open http://localhost:${host_port} after the container finishes starting."
+  yt_detail "If this is a first-time install, the setup page will ask for the one-time token."
+  if setup_token=$(read_initial_setup_token "$logs"); then
+    yt_info "Setup token:"
+    yt_detail "$setup_token"
+    yt_warn "Treat this token as sensitive. It is single-use and will be removed after setup."
+  else
+    yt_detail "Token command: $COMPOSE_CMD $COMPOSE_FILES logs youtarr | grep -A5 'initial setup required'"
+  fi
+  return 0
+}
 
 print_usage() {
   cat <<EOF
@@ -200,21 +375,115 @@ else
   DETECTED_ARM=false
 fi
 
+DATABASE_HAS_CONTENT=false
+if [[ -f ./database/ibdata1 || -d ./database/mysql ]]; then
+  DATABASE_HAS_CONTENT=true
+fi
+
+# Detect a pre-existing MariaDB named volume for THIS install only. We scope by
+# Compose project name so a sibling Youtarr checkout's volume on the same host
+# does not falsely trigger named-volume mode here.
+NAMED_VOLUME_EXISTS=false
+if youtarr_named_volume_exists "$(pwd)"; then
+  NAMED_VOLUME_EXISTS=true
+fi
+
+prepare_named_volume_compose_selection() {
+  if [[ -n "${COMPOSE_FILE:-}" ]] && [[ "$COMPOSE_FILE" != *"docker-compose.arm.yml"* ]]; then
+    yt_error "COMPOSE_FILE is set in your shell environment but does not include docker-compose.arm.yml."
+    yt_detail "This run needs named-volume database storage, but shell COMPOSE_FILE overrides .env."
+    yt_detail "Unset COMPOSE_FILE or include docker-compose.arm.yml before starting Youtarr."
+    exit 1
+  fi
+
+  youtarr_pin_named_volume_in_env "$(pwd)/.env"
+  PIN_RC=$?
+  if [ "$PIN_RC" -eq 0 ]; then
+    yt_detail "Pinned named-volume override in .env so plain 'docker compose up -d' uses the same storage."
+  elif [ "$PIN_RC" -eq 1 ]; then
+    yt_warn "Could not pin named-volume override in .env."
+    yt_detail "Use ./start.sh for future restarts, or add docker-compose.arm.yml to COMPOSE_FILE manually."
+  fi
+
+  COMPOSE_FILES=$(youtarr_compose_args_for_storage_mode "$(pwd)" "named-volume")
+}
+
 if [ "$USE_DOCKER_COMPOSE_DEV" == "true" ]; then
   # Dev flow uses the dev compose (standalone file for developer workflows)
   COMPOSE_FILES="-f docker-compose.dev.yml"
 elif [ "$USE_EXTERNAL_DB" == "true" ]; then
   # External DB uses the base compose with the external-db override
   COMPOSE_FILES="-f docker-compose.yml -f docker-compose.external-db.yml"
-elif [ "$USE_ARM" == "true" ] || [ "$DETECTED_ARM" == "true" ]; then
-  # ARM uses the base compose with the ARM override
-  COMPOSE_FILES="-f docker-compose.yml -f docker-compose.arm.yml"
 else
-  # Default - use standard docker-compose.yml
-  unset COMPOSE_FILES
+  # Refuse to auto-pick storage when both bind mount and named volume exist.
+  # Picking the wrong one would make the user's data appear to vanish; we'd
+  # rather fail loudly than silently switch them.
+  if [ "$DATABASE_HAS_CONTENT" == "true" ] && [ "$NAMED_VOLUME_EXISTS" == "true" ]; then
+    yt_error "Ambiguous database storage: both ./database/ and a Docker named volume for MariaDB exist."
+    yt_detail "Refusing to choose automatically because the wrong choice would make your data appear to vanish."
+    yt_detail ""
+    yt_detail "Inspect what you have:"
+    yt_detail "  Named volumes:  docker volume ls --format '{{.Name}}' | grep youtarr-db-data"
+    yt_detail "  Bind mount:     ls -la ./database/"
+    yt_detail ""
+    yt_detail "Then keep one and remove the other:"
+    yt_detail "  Keep the bind mount:   docker volume rm <volume-name>"
+    yt_detail "  Keep the named volume: mv ./database ./database.unused.\$(date +%Y%m%d)"
+    yt_detail ""
+    yt_detail "If you are migrating from the bind mount to a named volume for the first time,"
+    yt_detail "use the helper instead: ./scripts/migrate-to-named-volume.sh"
+    exit 1
+  fi
+
+  if [ "$USE_ARM" == "true" ]; then
+    if [ "$DATABASE_HAS_CONTENT" == "true" ]; then
+      # Existing bind-mounted installs keep using their current database even
+      # when --arm is passed. Silently switching would make their data appear
+      # to vanish behind an empty named volume.
+      unset COMPOSE_FILES
+      yt_warn "--arm requested, but bind-mounted MariaDB data was detected in ./database/."
+      yt_warn "Keeping the existing bind-mounted database for this run."
+      yt_detail "To move this install to named-volume storage, run:"
+      yt_detail "  ./scripts/migrate-to-named-volume.sh"
+    else
+      # Explicit --arm uses the named-volume override when there is no bind data to preserve.
+      prepare_named_volume_compose_selection
+    fi
+  elif [ "$DETECTED_ARM" == "true" ]; then
+    if [ "$DATABASE_HAS_CONTENT" == "true" ]; then
+      # Existing bind-mounted installs keep using their current database on ARM.
+      unset COMPOSE_FILES
+      yt_warn "ARM host detected, but bind-mounted MariaDB data was detected in ./database/."
+      yt_warn "Keeping the existing bind-mounted database for this run."
+      yt_detail "To move this install to named-volume storage, run:"
+      yt_detail "  ./scripts/migrate-to-named-volume.sh"
+    else
+      # ARM fresh installs use the named-volume override.
+      prepare_named_volume_compose_selection
+      yt_info "ARM host detected; using named-volume database storage."
+    fi
+  elif [ "$NAMED_VOLUME_EXISTS" == "true" ]; then
+    # An existing named volume with no bind-mount data: keep using the named volume.
+    # This is the common case after a successful migration, or after the user manually
+    # switched to the named-volume override on a previous run.
+    prepare_named_volume_compose_selection
+    yt_info "Existing named-volume database detected; using named-volume storage."
+  elif [ "$DATABASE_HAS_CONTENT" != "true" ]; then
+    # Fresh bundled-DB installs use the named-volume override on every platform.
+    prepare_named_volume_compose_selection
+    yt_info "Fresh install detected; using named-volume database storage."
+  else
+    # Default - use standard docker-compose.yml (existing bind-mounted install).
+    unset COMPOSE_FILES
+    yt_warn "Bind-mounted MariaDB data detected in ./database/."
+    yt_detail "Docker Desktop on Windows/Mac and some NAS/virtualized filesystems can corrupt bind-mounted MariaDB during schema migrations."
+    yt_detail "Linux native Docker hosts are usually unaffected. To migrate to a named volume, run:"
+    yt_detail "  ./scripts/migrate-to-named-volume.sh"
+  fi
 fi
 
 yt_section "Docker"
 
+# shellcheck disable=SC2086 # COMPOSE_CMD and COMPOSE_FILES intentionally expand into command/flag words.
 $COMPOSE_CMD $COMPOSE_FILES down
 yt_success "Existing containers stopped."

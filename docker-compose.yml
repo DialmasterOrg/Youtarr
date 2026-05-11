@@ -15,10 +15,12 @@
 # mkdir -p config jobs server/images /path/to/youtube_videos
 # sudo chown -R 1000:1000 config jobs server/images /path/to/youtube_videos
 #
-# 2) Database setup notes for Synology and ARM-based systems (Apple Silicon, Raspberry Pi):
-# There are known issues with using bind mounts for MariaDB data directories due to permission and virtiofs bugs.
-# The start scripts automatically detect ARM architecture and use docker-compose.arm.yml override to switch to named volumes.
-# For Synology or manual override, run: docker compose -f docker-compose.yml -f docker-compose.arm.yml up -d
+# 2) Database setup notes:
+# The default bundled MariaDB uses ./database as a bind mount for backwards compatibility.
+# On Docker Desktop (Windows/macOS), ARM hosts, and some NAS/virtualized filesystems,
+# bind-mounted MariaDB data can corrupt during schema migrations. For a safer named
+# volume, use docker-compose.arm.yml or run ./scripts/migrate-to-named-volume.sh
+# for an existing bind-mounted install.
 
 services:
   youtarr-db:
@@ -70,6 +72,8 @@ services:
       # Optional: Seed initial admin credentials for headless deployments
       AUTH_PRESET_USERNAME: ${AUTH_PRESET_USERNAME:-}
       AUTH_PRESET_PASSWORD: ${AUTH_PRESET_PASSWORD:-}
+      # Optional: Configure Express proxy header trust
+      TRUST_PROXY: ${TRUST_PROXY:-}
       # Logging configuration
       LOG_LEVEL: ${LOG_LEVEL:-info}
       # This is just informational and lets the app know where the videos will be stored on the host
@@ -79,7 +83,7 @@ services:
       # DATA_PATH: /storage/rclone/storagebox/youtube
 
     ports:
-      - "3087:3011"
+      - "${YOUTARR_HOST_PORT:-3087}:3011"
     volumes:
       - ${YOUTUBE_OUTPUT_DIR}:/usr/src/app/data
       - ./server/images:/app/server/images
@@ -96,6 +100,6 @@ networks:
   default:
     name: youtarr-network
 
-# Named volume definition (used by docker-compose.arm.yml override for ARM systems)
+# Named volume definition (used by docker-compose.arm.yml override)
 volumes:
   youtarr-db-data:

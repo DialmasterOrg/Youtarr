@@ -89,11 +89,83 @@ function ChannelPage({ token }: ChannelPageProps) {
     setDescriptionExpanded(false);
   }, [channel?.description]);
 
-  function textToHTML(text: string) {
-    return text
+  function renderDescriptionText(text: string): React.ReactNode[] {
+    const nodes: React.ReactNode[] = [];
+    const tokenPattern = /(https?:\/\/[^\s]+)|(\r\n|\r|\n)/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
 
-      .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1">$1</a>')
-      .replace(/(?:\r\n|\r|\n)/g, '<br />'); // replace newlines with <br />
+    const splitUrlTrailingPunctuation = (rawUrl: string): [string, string] => {
+      let url = rawUrl;
+      let suffix = '';
+
+      const stripFromUrl = (count: number) => {
+        suffix = url.slice(-count) + suffix;
+        url = url.slice(0, -count);
+      };
+
+      const stripTrailingSentencePunctuation = () => {
+        const punctuationMatch = url.match(/[.,!?;:]+$/);
+        if (punctuationMatch) {
+          stripFromUrl(punctuationMatch[0].length);
+        }
+      };
+
+      stripTrailingSentencePunctuation();
+
+      const bracketPairs = [
+        ['(', ')'],
+        ['[', ']'],
+        ['{', '}'],
+      ];
+
+      let strippedBracket = true;
+      while (strippedBracket) {
+        strippedBracket = false;
+
+        for (const [open, close] of bracketPairs) {
+          if (!url.endsWith(close)) continue;
+
+          const openCount = url.split(open).length - 1;
+          const closeCount = url.split(close).length - 1;
+          if (closeCount > openCount) {
+            stripFromUrl(1);
+            stripTrailingSentencePunctuation();
+            strippedBracket = true;
+          }
+        }
+      }
+
+      return [url, suffix];
+    };
+
+    while ((match = tokenPattern.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        nodes.push(text.slice(lastIndex, match.index));
+      }
+
+      if (match[1]) {
+        const [url, suffix] = splitUrlTrailingPunctuation(match[1]);
+        nodes.push(
+          <a key={`link-${match.index}`} href={url} target="_blank" rel="noopener noreferrer">
+            {url}
+          </a>
+        );
+        if (suffix) {
+          nodes.push(suffix);
+        }
+      } else {
+        nodes.push(<br key={`br-${match.index}`} />);
+      }
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < text.length) {
+      nodes.push(text.slice(lastIndex));
+    }
+
+    return nodes;
   }
 
   const chipHeight = isMobile ? 22 : 26;
@@ -333,8 +405,9 @@ function ChannelPage({ token }: ChannelPageProps) {
                     align="left"
                     color="text.secondary"
                     style={{ lineHeight: 1.6 }}
-                    dangerouslySetInnerHTML={{ __html: textToHTML(displayedDescription) }}
-                  />
+                  >
+                    {renderDescriptionText(displayedDescription)}
+                  </Typography>
                 </Box>
                 {shouldShowExpandButton && (
                   <Button

@@ -166,6 +166,12 @@ describe('filesystem/pathBuilder', () => {
       expect(template).toContain('__MyFolder');
       expect(template).toContain('%(uploader,channel,uploader_id).80B');
     });
+
+    it('uses provided videoFilenamePrefix when supplied', () => {
+      const template = buildOutputTemplate(baseDir, null, '%(upload_date>%Y-%m-%d)s - %(title).76B');
+      expect(template).toContain('%(upload_date>%Y-%m-%d)s - %(title).76B - %(id)s');
+      expect(template).toContain('%(upload_date>%Y-%m-%d)s - %(title).76B [%(id)s].%(ext)s');
+    });
   });
 
   describe('buildThumbnailTemplate', () => {
@@ -180,6 +186,12 @@ describe('filesystem/pathBuilder', () => {
     it('should build thumbnail template with subfolder', () => {
       const template = buildThumbnailTemplate(baseDir, 'MyFolder');
       expect(template).toContain('__MyFolder');
+      expect(template).toContain('poster');
+    });
+
+    it('uses provided videoFilenamePrefix for the folder name when supplied', () => {
+      const template = buildThumbnailTemplate(baseDir, null, '%(upload_date>%Y-%m-%d)s - %(title).76B');
+      expect(template).toContain('%(upload_date>%Y-%m-%d)s - %(title).76B - %(id)s');
       expect(template).toContain('poster');
     });
   });

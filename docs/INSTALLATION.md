@@ -33,14 +33,13 @@ Choose your preferred installation method
      - `--pull-latest`: Pull latest code from Github and latest image from DockerHub
      - `--debug`: Set log level to debug
 
-   This automatically creates a `.env` file from the included `.env.example` and starts both the Youtarr application and MariaDB database containers.
+   This automatically creates a `.env` file from the included `.env.example` and starts both the Youtarr application and MariaDB database containers. On a fresh install, `./start.sh` uses Docker named-volume storage for MariaDB. If an existing `./database/` MariaDB directory is present, it preserves that bind-mounted database and prints a migration warning.
 
 3. **Access the web interface**:
    Open your browser and navigate to `http://localhost:3087`
 
 4. **Complete initial setup**:
-   - On first access from localhost, you'll be prompted to create an admin account
-     - **IMPORTANT**: This requires access via `localhost`
+   - On first access, you'll be prompted to create an admin account. Paste the setup token from `docker logs youtarr` or `config/setup-token` in your data volume.
    - Choose a strong password (minimum 8 characters required)
    - This account will be used for all future logins and can be changed in the web UI
 
@@ -70,8 +69,12 @@ If you prefer to use standard `docker compose up` commands:
    ```
 
    Optionally configure other settings:
-   - `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` - For headless deployments (e.g., Unraid)
+   - `YOUTARR_HOST_PORT=3087` - Change this if you need the web interface on a different host port
+   - For **headless deployments** (e.g., Unraid, NAS, remote VPS), you have two options:
+     - **One-time setup token:** open the web UI from localhost, your trusted LAN, VPN, or SSH tunnel and paste the token from `docker logs youtarr` or `config/setup-token`.
+     - **Pre-set credentials via env vars:** set `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` in your `.env` (see [Authentication](AUTHENTICATION.md)).
    - `AUTH_ENABLED=false` - Only if behind external authentication (VPN, reverse proxy)
+   - `TRUST_PROXY=false` - Recommended when exposing Youtarr directly without a reverse proxy. Leave unset for the current backwards-compatible default.
    - `LOG_LEVEL` - Set to `debug` for troubleshooting, `info` for normal/production use (default), `warn` for minimal logging
 
    See: [ENVIRONMENT VARIABLES](ENVIRONMENT_VARIABLES.md) for more details
@@ -81,21 +84,21 @@ If you prefer to use standard `docker compose up` commands:
    docker compose up -d
    ```
 
-   > **ARM Users (Apple Silicon, Raspberry Pi)**: Use the ARM override to avoid MariaDB volume issues:
+   > **Docker Desktop/ARM/NAS users**: For a fresh install, use the named-volume database override to avoid MariaDB bind-mount issues on virtualized filesystems:
    > ```bash
    > docker compose -f docker-compose.yml -f docker-compose.arm.yml up -d
    > ```
-   > See [Troubleshooting](TROUBLESHOOTING.md#apple-silicon--arm-incorrect-information-in-file-errors) for details.
+   > If you already have data in `./database/`, use `./scripts/migrate-to-named-volume.sh` instead. See [Database Management](DATABASE.md#migrating-from-bind-mount-to-named-volume) and [Troubleshooting](TROUBLESHOOTING.md#docker-desktop--arm-incorrect-information-in-file-errors) for details.
 
 5. **Access the web interface**:
-   - Navigate to `http://localhost:3087`
+   - Navigate to `http://localhost:3087` (or your server's LAN IP)
    - If you set preset credentials in .env, use those to log in
-   - If not, you'll create your admin account on first access, which will require access via `localhost`
+   - If not, you'll be prompted to complete the setup wizard using the one-time token from `docker logs youtarr` or `config/setup-token`
    - Configure Plex and other settings from the Configuration page
 
 > **Important**: Ensure the path you assign to `YOUTUBE_OUTPUT_DIR` already exists on the host and is writable before starting the stack. Otherwise Docker will create it as root-owned and the container may not be able to write downloads.
 
-This method is **functionally equivalent** to using the start.sh script, but gives you direct control over environment variables. It's the preferred approach for any Docker-native workflow.
+This method gives you direct control over environment variables and compose files, but it is not identical to `./start.sh`: plain `docker compose up -d` uses the legacy bind-mounted database unless you include or pin `docker-compose.arm.yml`.
 
 ### Method 3: Manual Setup Without Git (Advanced Users Only)
 
@@ -110,7 +113,7 @@ Most users should use Method 1 or 2 above for the best experience and easiest up
 See [AUTHENTICATION.md](AUTHENTICATION.md)
 
 ### Important Notes:
-- Initial setup can **only** be performed from localhost for security reasons
+- Initial setup requires the one-time setup token from `docker logs youtarr` or `config/setup-token`; plain HTTP setup is intended for localhost, private LAN, VPN, or SSH tunnel access only
 - If you need to reset your admin password, see the [Troubleshooting Guide](TROUBLESHOOTING.md#reset-admin-password)
 
 ## Configuration
@@ -185,15 +188,15 @@ Youtarr fully supports platform-managed deployments with automatic configuration
 
 ## Network Access
 
-To access Youtarr from other devices on your network:
+To access Youtarr from other devices on your private network:
 
 1. Configure your firewall to allow port 3087
 2. Access using your server's IP address: `http://[server-ip]:3087`
 
-For external access, you'll need to:
-- Set up port forwarding on your router
-- Consider using a reverse proxy for security
-- Implement HTTPS for secure remote access
+For external access:
+- Do not expose Youtarr directly to the internet over plain HTTP
+- Use a reverse proxy with HTTPS, or use a VPN/SSH tunnel instead of port forwarding the app directly
+- Keep `AUTH_ENABLED=true` unless an upstream authentication layer protects every request
 
 ## Upgrading
 

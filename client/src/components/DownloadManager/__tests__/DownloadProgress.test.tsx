@@ -315,6 +315,62 @@ describe('DownloadProgress', () => {
     expect(screen.getByText(/Manual download/)).toBeInTheDocument();
   });
 
+  test('displays members-only count in final summary when totalMembersOnly > 0', async () => {
+    renderWithContext(
+      <DownloadProgress
+        downloadProgressRef={mockDownloadProgressRef}
+        downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
+        token="test-token"
+      />
+    );
+
+    const [, processCallback] = mockSubscribe.mock.calls[0];
+
+    await act(async () => {
+      processCallback({
+        finalSummary: {
+          totalDownloaded: 0,
+          totalSkipped: 0,
+          totalMembersOnly: 2,
+          jobType: 'Manually Added Urls',
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/2 members-only videos skipped/)).toBeInTheDocument();
+    });
+  });
+
+  test('singular grammar for one members-only video', async () => {
+    renderWithContext(
+      <DownloadProgress
+        downloadProgressRef={mockDownloadProgressRef}
+        downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
+        token="test-token"
+      />
+    );
+
+    const [, processCallback] = mockSubscribe.mock.calls[0];
+
+    await act(async () => {
+      processCallback({
+        finalSummary: {
+          totalDownloaded: 0,
+          totalSkipped: 0,
+          totalMembersOnly: 1,
+          jobType: 'Manually Added Urls',
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/1 members-only video skipped/)).toBeInTheDocument();
+    });
+  });
+
   test('displays error with cookies required', async () => {
     const user = userEvent.setup();
     renderWithContext(

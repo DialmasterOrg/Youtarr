@@ -11,6 +11,7 @@ This guide provides step-by-step instructions for common tasks in Youtarr. After
 - [Configure SponsorBlock](#configure-sponsorblock)
 - [Enable Download Notifications](#enable-download-notifications)
 - [Re-download Missing Videos](#re-download-missing-videos)
+- [Rescan Files on Disk](#rescan-files-on-disk)
 - [Organize Channels with Multi-Library Support](#organize-channels-with-multi-library-support)
 - [Browse and Filter Channel Videos](#browse-and-filter-channel-videos)
 - [Find Videos on YouTube](#find-videos-on-youtube)
@@ -228,7 +229,9 @@ Get Discord notifications when new videos finish downloading.
 
 ## Re-download Missing Videos
 
-Videos can become "missing" if they're manually deleted from disk or moved. This feature helps you recover them.
+Videos can become "missing" if they're manually deleted from disk. This feature helps you recover them by fetching the file from YouTube again.
+
+> **Note**: If the file still exists somewhere (you moved it, renamed its folder, or converted it to a different format), use [Rescan Files on Disk](#rescan-files-on-disk) instead. Rescan reconciles Youtarr's database with what's already on disk without re-downloading.
 
 1. **Identify missing videos**
    - Go to "Downloaded Videos" or a specific channel's video page
@@ -247,6 +250,27 @@ Videos can become "missing" if they're manually deleted from disk or moved. This
    - Click **Download Selected** and enable **Allow re-downloading previously fetched videos** in the dialog
    - Confirm with **Start Download**; the job will run through the normal downloads queue
    - Original metadata (watch status, etc.) is preserved
+
+## Rescan Files on Disk
+
+Use this when you've moved, renamed, or converted downloaded files outside Youtarr and want Youtarr's database to catch up with what's actually on disk. The rescan walks your downloads folder and updates Youtarr's view of which files exist and where; it does not re-download anything.
+
+Common cases:
+- You converted `.mp4` files to `.mkv` (or another supported container) using ffmpeg.
+- You restored a backup of your downloads folder to a different location.
+- You manually moved files between channel or subfolder directories.
+
+1. **Open Settings -> Maintenance**
+2. Click **Rescan files on disk**
+3. The page shows progress in real time and a summary of the last run (videos updated, files marked missing)
+
+A scan also runs daily on a schedule and once at server startup, so changes you make outside Youtarr will eventually be picked up even if you don't trigger a manual rescan.
+
+**Supported file extensions**: `.mp4`, `.webm`, `.mkv`, `.m4v`, `.avi` for video, plus `.mp3` for audio-only downloads. Youtarr only writes `.mp4` (or `.mp3` for audio-only), but the rescan recognizes any of these so transcoding outside Youtarr won't orphan your library. Files must keep the `[<youtube-id>]` segment in their filename (the 11-character ID in brackets that yt-dlp writes by default) for Youtarr to match them back to the database.
+
+**When to use this vs. Re-download Missing Videos**:
+- File is **gone** (deleted): use [Re-download Missing Videos](#re-download-missing-videos).
+- File **still exists somewhere** (moved, renamed, or converted): use Rescan.
 
 ## Organize Channels with Multi-Library Support
 

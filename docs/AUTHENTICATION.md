@@ -27,21 +27,31 @@ Youtarr implements a secure authentication system to protect your instance from 
 
 ## Initial Setup
 
-### Method 1: Web UI Setup (Localhost Only)
+### Method 1: Web UI Setup with One-Time Token
 
-On first launch, Youtarr requires authentication setup from `localhost` for security:
+On first launch, Youtarr generates a one-time setup token and surfaces it through two channels: your container logs and a file in your data volume. You can complete setup from localhost, your trusted LAN, a VPN, or an SSH tunnel.
 
-1. Access Youtarr from the same machine:
-   ```
-   http://localhost:3087
-   ```
+1. Retrieve the setup token. Either:
+   - **From container logs:** `docker logs youtarr` (look for the "Youtarr initial setup required" log entry; the token-bearing entry is emitted at `LOG_LEVEL=info`), or
+   - **From the data volume:** read `config/setup-token` on the host (mounted from the container's `/app/config/setup-token`). The file is written with mode `0600`, so if your container runs as a UID that does not match your host user (for example, the container runs as root or as `YOUTARR_UID=1000` while you log in as a different user), the read will fail with "Permission denied". Use `sudo cat /path/to/youtarr/config/setup-token`, or fall back to the container-logs path above.
 
-2. Complete the setup wizard:
+2. Open Youtarr in a browser, e.g. `http://localhost:3087` or `http://<your-LAN-IP>:3087`.
+
+3. Complete the setup wizard:
+   - Paste the setup token (64 hex characters)
    - Enter desired username (1-32 characters)
    - Enter password (8-64 characters)
    - Confirm password
 
-3. Credentials are saved to `config/config.json`
+4. The token is consumed on success. Credentials are saved to `config/config.json`.
+
+Knowledge of the token requires either Docker access (for the logs) or filesystem access to the data volume (for the file), both of which already imply admin status on the host. The token survives container restarts while setup is incomplete, so you have time to fetch it.
+
+If you wipe or recreate the `config/` volume, Youtarr loses the saved credentials and setup token state; run initial setup again on the next boot.
+
+Plain HTTP is intended for localhost and private LAN/VPN access only. Do not expose Youtarr setup or login directly to the internet over HTTP; put it behind HTTPS and normal network controls first.
+
+Treat startup logs as sensitive while setup is incomplete. If you ship container logs to Loki, Splunk, CloudWatch, or another external system, redact or drop the `setupToken` field/log entry until the one-time setup token has been consumed. When `LOG_LEVEL=warn`, Youtarr logs setup guidance without the token; use `config/setup-token` to retrieve the token in that mode.
 
 ### Method 2: Environment Variables (Headless/Automated)
 
@@ -248,11 +258,13 @@ DELETE FROM Sessions;
 3. Restart:
    `./start.sh` or `docker compose up -d`
 
-4. Access from localhost to set new credentials
+4. Open Youtarr and set new credentials with the one-time setup token from the container logs or `config/setup-token`
 
 ### Remote Access for Initial Setup
 
 #### SSH Port Forwarding
+
+> SSH port forwarding is no longer required for security reasons (the localhost gate has been removed). It remains useful as a way to retrieve the setup token over a secure channel if you don't want to enable HTTPS for your Youtarr instance yet.
 
 **From Windows:**
 ```bash
@@ -329,20 +341,30 @@ If OAuth fails, get token manually:
 
 ### Network Security
 
-1. **Use HTTPS with reverse proxy**:
+1. **Keep HTTP local**:
+   - Plain HTTP is acceptable for localhost, a private LAN, VPN, or SSH tunnel
+   - Do not port-forward Youtarr directly to the internet over HTTP
+
+2. **Use HTTPS with reverse proxy for external access**:
    - Nginx/Caddy/Traefik with SSL
    - Let's Encrypt certificates
 
-2. **Firewall rules**:
+3. **Firewall rules**:
    ```bash
    # Allow only local network
    iptables -A INPUT -p tcp --dport 3087 -s 192.168.0.0/16 -j ACCEPT
    iptables -A INPUT -p tcp --dport 3087 -j DROP
    ```
 
-3. **VPN Access**:
+4. **VPN Access**:
    - Use WireGuard/OpenVPN for remote access
    - Avoid exposing to internet directly
+
+5. **Proxy trust**:
+   - Youtarr keeps the historical `TRUST_PROXY=true` default for compatibility with existing reverse-proxy installs
+   - Youtarr's own rate-limit, session, and setup audit IPs use the direct peer IP until `TRUST_PROXY` is explicitly configured
+   - Set `TRUST_PROXY=false` when exposing the app directly without a reverse proxy
+   - Set `TRUST_PROXY` to a specific hop count or trusted subnet when your reverse proxy setup needs forwarded client IPs
 
 ### Authentication Hardening
 
@@ -356,14 +378,16 @@ If OAuth fails, get token manually:
 
 ## Troubleshooting
 
-### Cannot Access Initial Setup
+### Cannot Find the Setup Token
 
-**Problem**: "Initial setup can only be performed from localhost" error
+**Problem**: First-time setup wizard asks for a token and you don't know where to find it.
 
 **Solutions**:
-1. Use SSH port forwarding (see above)
-2. Use environment variables for headless setup
-3. Access from Docker host machine directly
+1. **Container logs:** `docker logs youtarr | grep -A5 "initial setup required"`. The token-bearing setup log entry is emitted at `LOG_LEVEL=info` on every startup until setup completes.
+2. **Data volume:** the token is also written to `config/setup-token` (mode 0600) in your data volume. From the host: `cat /path/to/youtarr/config/setup-token`. If you see "Permission denied", the container is running as a UID that does not match your host user; use `sudo cat ...` or retrieve the token from the container logs (option 1 above) instead.
+3. **Lost before setup is complete?** Stop Youtarr, delete `config/setup-token`, restart. A new token will be generated and logged.
+4. **Already completed setup and need to reset?** Stop Youtarr, remove `username` and `passwordHash` from `config/config.json`, restart, then complete setup again with the newly generated token.
+5. **Headless without log access?** Use the env-var path instead: set `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` in `.env` (see Method 2 above).
 
 ### Invalid Credentials Error
 

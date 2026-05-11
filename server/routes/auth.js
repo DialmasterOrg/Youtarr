@@ -3,6 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
 const db = require('../db');
+const { isAuthConfigured } = require('../modules/authState');
 
 const userNameMaxLength = 32;
 const passwordMaxLength = 64;
@@ -13,9 +14,14 @@ const passwordMaxLength = 64;
  * @param {Function} deps.verifyToken - Token verification middleware
  * @param {Function} deps.loginLimiter - Login rate limiter middleware
  * @param {Object} deps.configModule - Config module
+ * @param {Function} deps.getClientAddress - Function to resolve the client address
  * @returns {express.Router}
  */
-module.exports = function createAuthRoutes({ verifyToken, loginLimiter, configModule }) {
+module.exports = function createAuthRoutes({ verifyToken, loginLimiter, configModule, getClientAddress }) {
+  if (typeof getClientAddress !== 'function') {
+    throw new Error('getClientAddress dependency is required');
+  }
+
   /**
    * @swagger
    * /validateToken:
@@ -111,7 +117,7 @@ module.exports = function createAuthRoutes({ verifyToken, loginLimiter, configMo
 
     const config = configModule.getConfig();
 
-    if (!config.username || !config.passwordHash) {
+    if (!isAuthConfigured(config)) {
       return res.status(503).json({
         error: 'Authentication not configured',
         requiresSetup: true
@@ -129,7 +135,7 @@ module.exports = function createAuthRoutes({ verifyToken, loginLimiter, configMo
 
     const sessionToken = uuidv4();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    const clientIP = req.ip || req.connection.remoteAddress;
+    const clientIP = getClientAddress(req);
 
     await db.Session.create({
       session_token: sessionToken,
@@ -358,4 +364,3 @@ module.exports = function createAuthRoutes({ verifyToken, loginLimiter, configMo
 
   return router;
 };
-

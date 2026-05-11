@@ -363,6 +363,12 @@ const createServerModule = ({
         jest.doMock('../modules/notificationModule', () => ({
           sendTestNotification: jest.fn().mockResolvedValue({ success: true })
         }));
+        // Mocked to avoid pulling fs-extra (via ytDlpRunner -> tempPathManager),
+        // which the minimal `fs` stub above can't satisfy.
+        jest.doMock('../modules/filenamePreview', () => ({
+          previewTemplate: jest.fn(),
+          validateTemplate: jest.fn().mockResolvedValue({ ok: true })
+        }));
         jest.doMock('../modules/ytdlpModule', () => ({
           getLatestVersion: jest.fn().mockResolvedValue('2026.04.20'),
           isUpdateAvailable: jest.fn(() => false),
@@ -382,6 +388,21 @@ const createServerModule = ({
         jest.doMock('child_process', () => childProcessMock);
         jest.doMock('pino-http', () => pinoHttpMock);
 
+        const setupTokenModuleMock = {
+          setTokenPath: jest.fn(),
+          reset: jest.fn(),
+          getToken: jest.fn(() => 'mock-token-value'),
+          ensureToken: jest.fn(),
+          verify: jest.fn((provided) => provided === 'mock-token-value'),
+          consume: jest.fn(),
+          claimForSetup: jest.fn((provided) => provided === 'mock-token-value'),
+          releaseSetupClaim: jest.fn(),
+          clearStaleFile: jest.fn(),
+          logBanner: jest.fn()
+        };
+
+        jest.doMock('../modules/setupTokenModule', () => setupTokenModuleMock);
+
         const serverModule = require('../server');
 
         state.app = serverModule.app;
@@ -397,6 +418,7 @@ const createServerModule = ({
         state.videoDeletionModuleMock = videoDeletionModuleMock;
         state.videoValidationModuleMock = videoValidationModuleMock;
         state.channelSettingsModuleMock = channelSettingsModuleMock;
+        state.setupTokenModuleMock = setupTokenModuleMock;
         state.bcryptMock = bcryptMock;
         state.uuidMock = uuidMock;
         state.httpsMock = httpsMock;

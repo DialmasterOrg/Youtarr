@@ -3,9 +3,25 @@ const path = require('path');
 const fs = require('fs');
 const tempPathManager = require('./download/tempPathManager');
 
+const MEMBERS_ONLY_PATTERNS = [
+  /join this channel to get access to members-only content/i,
+  /available to this channel'?s members/i,
+  /members[- ]only/i,
+  /subscriber[_ -]?only/i,
+];
+
+function isMembersOnlyError(message = '') {
+  const normalized = String(message);
+  return MEMBERS_ONLY_PATTERNS.some(pattern => pattern.test(normalized));
+}
+
 class YtDlpRunner {
   constructor() {
     this.defaultTimeout = 10000;
+  }
+
+  isMembersOnlyError(message = '') {
+    return isMembersOnlyError(message);
   }
 
   /**

@@ -2,38 +2,11 @@
 
 ## Login Issues
 
-### Cannot Access Initial Setup
+### Cannot Find the Setup Token
 
-**Problem**: Unable to access the initial setup page or getting "Initial setup can only be performed from localhost" error.
+**Problem**: First-time setup wizard asks for a token and you don't know where to find it.
 
-**Solution**:
-- Initial setup must be done from the same machine running Youtarr unless you seed credentials via environment variables
-- For headless/remote setups, run `./start.sh --headless-auth` which will prompt for credentials and save them to your `.env` file
-- Alternatively, manually add `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` to your `.env` file before first startup
-- If you prefer to use the UI wizard, access the setup using `http://localhost:3087` (not the machine's IP address)
-- When running in Docker, make sure you browse from the host machine or forward the port securely as described below
-
-#### Accessing from a Headless/Remote Server
-
-If you're running Youtarr on a headless server (no GUI) or remote machine, you can use SSH port forwarding to access the initial setup:
-
-**From Windows:**
-```bash
-# Open an elevated Command Prompt or PowerShell
-ssh -L 3087:localhost:3087 username@<server-ip-address>
-# Then open http://localhost:3087 in your browser
-```
-
-**From Linux/Mac:**
-```bash
-# In terminal
-ssh -L 3087:localhost:3087 username@<server-ip-address>
-# Then open http://localhost:3087 in your browser
-```
-
-This creates a secure tunnel between your local machine's port 3087 and the server's port 3087, allowing you to complete the initial setup as if you were on localhost. After completing the setup, you can access Youtarr normally using the server's IP address.
-
-> Tip: If you cannot use SSH port forwarding, provide `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` in your container environment (or via `./start.sh`) before the first boot. Youtarr will hash the password and skip the localhost-only wizard.
+See [Authentication - Cannot Find the Setup Token](AUTHENTICATION.md#cannot-find-the-setup-token) for the full list of solutions.
 
 ### Forgotten Admin Password {#reset-admin-password}
 
@@ -73,9 +46,7 @@ This creates a secure tunnel between your local machine's port 3087 and the serv
    ./start.sh
    ```
 
-4. Access `http://localhost:3087` to create new credentials via the UI setup wizard
-   - **Important**: This must be done from localhost (or via SSH port forwarding as described above)
-   - You will be prompted to create a new admin account on first access
+4. Open Youtarr in any browser. You will be prompted to create a new admin account using the one-time setup token from `docker logs youtarr` or `config/setup-token`.
 
 ### Session Expired
 
@@ -150,6 +121,22 @@ This creates a secure tunnel between your local machine's port 3087 and the serv
 - Run the dry-run preview to see how many videos currently match the thresholds and adjust values if needed (for example, lower the free-space threshold or reduce the age requirement).
 - Check server logs around 2:00 AM for messages prefixed with `[CRON]` or `[Auto-Removal]` to confirm the job is executing (`docker compose logs -f youtarr`).
 - If errors appear in the logs (e.g., permission issues deleting files), resolve those first—the cron job will skip files it cannot delete.
+
+## Library / File Issues
+
+### Videos Show as "Missing" After I Moved or Renamed Files
+
+**Problem**: After moving downloaded files to a new location, renaming a folder, or restoring from backup, videos display with a cloud-off icon as if they were deleted.
+
+**Solution**: Open **Settings -> Maintenance** and click **Rescan files on disk**. Youtarr walks the downloads folder, matches files by the `[<youtube-id>]` segment in each filename, and updates the stored paths and "missing" flags. The same scan also runs daily on a schedule and at server startup.
+
+The rescan recognizes `.mp4`, `.webm`, `.mkv`, `.m4v`, `.avi`, and `.mp3`. Files that no longer have the `[<youtube-id>]` segment in their name (for example, if you renamed `Channel - Video [abc123XYZ01].mp4` to `My Movie.mp4`) cannot be matched and will continue to show as missing.
+
+### I Converted Videos to a Different Format and Youtarr Lost Them
+
+**Problem**: You used ffmpeg or another tool to convert downloaded `.mp4` videos to `.mkv` (or another container), and Youtarr now lists those videos as missing.
+
+**Solution**: Run **Settings -> Maintenance -> Rescan files on disk**. As long as the converted file kept the original `[<youtube-id>]` segment in its filename and uses one of the supported extensions (`.mp4`, `.webm`, `.mkv`, `.m4v`, `.avi`, `.mp3`), Youtarr will detect the new file, update the stored path, and clear the "missing" flag. See [Rescan Files on Disk](USAGE_GUIDE.md#rescan-files-on-disk) for full details on supported formats and limitations.
 
 ## Docker Issues
 
@@ -360,50 +347,42 @@ ERROR 1396 (HY000) at line 21: Operation CREATE USER failed for 'root'@'%'
    - Exit MySQL and restart the stack.
 4. Once the stack is back online, verify the latest schema under **Configuration → System → Database Health**.
 
-Tip: run with a named volume (see Apple Silicon/Synology sections) so filesystem corruption is less likely to recur.
+Tip: run with a named volume (see Docker Desktop/ARM/Synology sections) so filesystem corruption is less likely to recur.
 
-### Apple Silicon / ARM: `Incorrect information in file` errors
+### Docker Desktop / ARM: `Incorrect information in file` errors
 
-**Problem**: On Apple Silicon (M1/M2/M3/M4) or other ARM systems running Docker Desktop, MariaDB logs errors like:
+**Problem**: MariaDB logs errors like:
 ```
 ERROR 1033 (HY000): Incorrect information in file: './youtarr/videos.frm'
 ```
-This happens whenever MariaDB touches tables stored on a bind-mounted host directory (our default `./database:/var/lib/mysql`). Docker Desktop shares bind mounts over `virtiofs`, and MariaDB 10.3 cannot reliably reopen InnoDB tables on that filesystem ([MariaDB issue #447](https://github.com/MariaDB/mariadb-docker/issues/447), [#481](https://github.com/MariaDB/mariadb-docker/issues/481)). Linux and WSL users are unaffected.
-
-**Solution A: Use the start scripts (Recommended)**
-
-The `./start.sh` and `./start-dev.sh` scripts automatically detect ARM architecture and apply the fix:
-```bash
-./start.sh
+or:
 ```
-No manual configuration needed—the scripts use `docker-compose.arm.yml` as an override on ARM systems.
+errno 1932 - Table 'youtarr.videos' doesn't exist in engine
+```
 
-**Solution B: Manual docker compose (if not using start scripts)**
+This can happen when MariaDB data lives on the bind-mounted host directory (`./database:/var/lib/mysql`) and Docker proxies that directory through a virtualized filesystem, most often Docker Desktop on Windows/macOS, ARM hosts, or some NAS setups. During DDL operations such as `CREATE TABLE` or `ALTER TABLE`, InnoDB can end up out of sync with MariaDB's table metadata. Native Linux Docker hosts are usually unaffected.
 
-If you run `docker compose up` directly, use the ARM override file:
+**Existing install with data to preserve**
+
+Use the migration helper. It dumps the bind-mounted DB, preserves `./database/` as a timestamped backup directory, pins the named-volume override in `.env`, and imports the dump into a fresh named-volume MariaDB:
+```bash
+./scripts/migrate-to-named-volume.sh
+```
+
+See [Database Management](DATABASE.md#migrating-from-bind-mount-to-named-volume) for the full migration and revert details.
+
+**Fresh install with no data to preserve**
+
+Start with the named-volume override:
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.arm.yml up -d
 ```
 
-Or manually edit `docker-compose.yml` to use a named volume:
-
-**NOTE:** Existing data will *not* be migrated!
-1. Stop the stack: `docker compose down`
-2. Edit `docker-compose.yml`:
-   ```yaml
-   services:
-     youtarr-db:
-       volumes:
-         # Comment out the bind mount:
-         # - ./database:/var/lib/mysql
-         # Use named volume instead:
-         - youtarr-db-data:/var/lib/mysql
-
-   # Add at the bottom of the file:
-   volumes:
-     youtarr-db-data:
-   ```
-3. Start Youtarr: `docker compose up -d`
+Or add this to `.env` before plain `docker compose up -d`:
+```env
+COMPOSE_PATH_SEPARATOR=:
+COMPOSE_FILE=docker-compose.yml:docker-compose.arm.yml
+```
 
 **Alternatives**:
 - Point Youtarr at an external MariaDB/MySQL instance via `./start-with-external-db.sh`.
