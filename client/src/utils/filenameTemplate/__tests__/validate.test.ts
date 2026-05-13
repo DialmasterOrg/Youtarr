@@ -18,6 +18,13 @@ describe('validatePrefix', () => {
     expect(r.error).toMatch(/empty/i);
   });
 
+  // Regression for #611: undefined/null reached validatePrefix and crashed `.replace`.
+  it.each([undefined, null])('rejects %p without crashing', (input) => {
+    const r = validatePrefix(input);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/empty/i);
+  });
+
   it('rejects a whitespace-only prefix', () => {
     const r = validatePrefix('   ');
     expect(r.ok).toBe(false);

@@ -50,6 +50,7 @@
   "subtitlesEnabled": false,
   "subtitleLanguage": "en",
   "darkModeEnabled": false,
+  "channelVideosHotLoad": false,
   "uuid": "",
   "apiKeyRateLimit": 10,
   "autoUpdateYtdlp": false,
