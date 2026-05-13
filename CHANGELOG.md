@@ -1,5 +1,23 @@
 # Changelog
 
+## [v1.69.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.69.1) - 2026-05-13
+
+### [1.69.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.69.0...v1.69.1) (2026-05-13)
+
+
+### Bug Fixes
+
+* stop Settings crash on missing config field ([a891836](https://github.com/DialmasterOrg/Youtarr/commit/a891836248b506319890a7c14f99cbffd8613b8f)), closes [#611](https://github.com/DialmasterOrg/Youtarr/issues/611)
+
+
+### Documentation
+
+* update CHANGELOG for v1.69.0 [skip ci] ([244c571](https://github.com/DialmasterOrg/Youtarr/commit/244c5716bc654aa7c2bc7f5679ed51687cae1d91))
+
+
+
+
+
 ## [v1.69.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.69.0) - 2026-05-11
 
 ## [1.69.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.68.0...v1.69.0) (2026-05-11)
