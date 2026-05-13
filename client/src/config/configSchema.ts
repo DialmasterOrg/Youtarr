@@ -20,9 +20,12 @@ import { SponsorBlockCategories } from '../components/Configuration/types';
  */
 export const CONFIG_FIELDS = {
   // Channel settings
+  // Defaults must match config/config.example.json: useConfig fills missing
+  // server fields from here and save POSTs the full object back.
+  // Enforced by configSchemaAlignment.test.ts.
   channelAutoDownload: { default: false, trackChanges: true },
-  channelDownloadFrequency: { default: '', trackChanges: true },
-  channelFilesToDownload: { default: 3, trackChanges: true },
+  channelDownloadFrequency: { default: '0 * * * *', trackChanges: true },
+  channelFilesToDownload: { default: 5, trackChanges: true },
 
   // Video settings
   preferredResolution: { default: '1080', trackChanges: true },
@@ -104,7 +107,7 @@ export const CONFIG_FIELDS = {
 
   // Appearance
   darkModeEnabled: { default: false, trackChanges: true },
-  channelVideosHotLoad: { default: true, trackChanges: true },
+  channelVideosHotLoad: { default: false, trackChanges: true },
 
   // API Keys
   apiKeyRateLimit: { default: 10, trackChanges: true },

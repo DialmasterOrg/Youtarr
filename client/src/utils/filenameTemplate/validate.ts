@@ -26,7 +26,12 @@ export const MAX_VIDEO_FILENAME_PREFIX_LENGTH = 160;
  * grammar in a regex produced false rejections for valid templates like
  * `%(view_count)05d` and `%(uploader)20s`.
  */
-export function validatePrefix(prefix: string): ValidationResult {
+export function validatePrefix(prefix: string | null | undefined): ValidationResult {
+  // Called with values loaded from /getconfig, which can omit fields at runtime
+  // despite the ConfigState type. Guard so `.replace` doesn't crash on undefined.
+  if (typeof prefix !== 'string') {
+    return { ok: false, error: 'Prefix may not be empty.' };
+  }
   const trimmedPrefix = prefix.replace(/\s+$/, '');
   if (trimmedPrefix.trim().length === 0) {
     return { ok: false, error: 'Prefix may not be empty.' };
