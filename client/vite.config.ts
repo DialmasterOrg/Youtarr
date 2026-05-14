@@ -1,14 +1,27 @@
+import { rmSync } from 'node:fs';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
-export default defineConfig(({ command }) => {
+const buildOutDir = 'build';
+
+function excludeProductionMswWorker() {
+  return {
+    name: 'exclude-production-msw-worker',
+    apply: 'build' as const,
+    closeBundle() {
+      rmSync(`${buildOutDir}/mockServiceWorker.js`, { force: true });
+    },
+  };
+}
+
+export default defineConfig(() => {
   const backendPort = process.env.VITE_BACKEND_PORT || '3087';
   const backendTarget = `http://127.0.0.1:${backendPort}`;
   const devServerHost = process.env.VITE_HOST || '0.0.0.0';
 
   return {
-    plugins: [react(), tsconfigPaths()],
+    plugins: [react(), tsconfigPaths(), excludeProductionMswWorker()],
     envPrefix: ['VITE_', 'REACT_APP_'],
     server: {
       host: devServerHost,
@@ -60,7 +73,7 @@ export default defineConfig(({ command }) => {
       },
     },
     build: {
-      outDir: 'build',
+      outDir: buildOutDir,
       sourcemap: true,
       rollupOptions: {
         output: {
@@ -101,4 +114,3 @@ export default defineConfig(({ command }) => {
     },
   };
 });
-

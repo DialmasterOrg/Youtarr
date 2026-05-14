@@ -4,8 +4,8 @@
  * These provide baseline API responses so stories render without real network
  * requests. Individual stories can override handlers via `parameters.msw`.
  *
- * Regenerate mockServiceWorker.js if it goes missing:
- *   cd client && npx msw init public/ --save
+ * Regenerate mockServiceWorker.js after bumping msw:
+ *   cd client && npm run msw:init
  */
 import { http, HttpResponse } from 'msw';
 import { DEFAULT_CONFIG } from '../../src/config/configSchema';
