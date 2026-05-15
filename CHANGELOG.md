@@ -1,5 +1,18 @@
 # Changelog
 
+## [v1.69.2](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.69.2) - 2026-05-15
+
+### [1.69.2](https://github.com/DialmasterOrg/Youtarr/compare/vv1.69.1...v1.69.2) (2026-05-15)
+
+
+### Documentation
+
+* update CHANGELOG for v1.69.1 [skip ci] ([4594e27](https://github.com/DialmasterOrg/Youtarr/commit/4594e27a4b073c7c7a4c163ab10aec8c38f2292c))
+
+
+
+
+
 ## [v1.69.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.69.1) - 2026-05-13
 
 ### [1.69.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.69.0...v1.69.1) (2026-05-13)
