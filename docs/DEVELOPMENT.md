@@ -84,9 +84,6 @@ cd Youtarr
 
 ### 2. Build Development Environment
 ```bash
-# Install root dependencies
-npm i
-
 # First build (installs dependencies and builds the client)
 ./scripts/build-dev.sh --install-deps
 
@@ -95,7 +92,7 @@ npm i
 ```
 
 Optional flags:
-- `--install-deps` - Runs `npm install` in the root and `client/` before building (required on a clean clone or after dependency changes)
+- `--install-deps` - Runs `npm ci --ignore-scripts` in the root and `client/` before building, then runs `npm run prepare` once to wire up Husky git hooks (Husky's own script only; dependency lifecycle scripts stay disabled). Required on a clean clone or after dependency changes.
 - `--no-cache` - Force rebuild to get latest yt-dlp version
 - `SKIP_DEV_IMAGE_PRUNE=1` - Skip automatic cleanup of old untagged `youtarr-dev` images (pruning is enabled by default to keep Docker storage from filling)
 
@@ -158,10 +155,10 @@ Use Storybook to develop and document components in isolation.
 
 **Prerequisites:** Complete Step 2 (Build Development Environment) first, or at minimum install client dependencies:
 ```bash
-cd client && npm install
+cd client && npm ci --ignore-scripts
 ```
 
-This automatically generates the MSW (Mock Service Worker) file needed for API mocking in stories.
+The MSW (Mock Service Worker) file used for Storybook API mocking is committed at `client/public/mockServiceWorker.js`. After bumping `msw`, regenerate it with `cd client && npm run msw:init` and commit the updated worker.
 
 ```bash
 # Start Storybook Server
@@ -202,7 +199,7 @@ Create your admin account on first access.
 The development setup is a "build-and-test-in-Docker" workflow that ensures your code works in a containerized environment:
 
 **Build Phase** (`./scripts/build-dev.sh`):
-1. Runs `npm install` on your host (if `--install-deps` is used)
+1. Runs `npm ci --ignore-scripts` on your host (if `--install-deps` is used)
 2. Builds the React frontend (`npm run build` in client directory) - creates production build
 3. Builds a Docker image with the pre-built static files
 
