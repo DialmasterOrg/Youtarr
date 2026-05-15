@@ -123,7 +123,7 @@ Build and run the full stack using the pre-built static frontend served by the a
 This starts:
 - **Backend** on http://localhost:3011 (Node.js Express server with `--watch` for auto-restart)
 - **Frontend (static, served by the app container)** on http://localhost:3087
-- **MariaDB** database on port 3321
+- **MariaDB** database on the internal Docker network only
 
 Optional flags:
 - `--no-auth` - Disable authentication (only use behind auth gateway or if not exposed outside your network)
@@ -321,10 +321,7 @@ docker compose logs -f youtarr-db
 ### Database Access
 
 ```bash
-# From host
-mysql -h localhost -P 3321 -u root -p123qweasd youtarr
-
-# From inside container
+# From inside the database container
 docker compose exec youtarr-db mysql -u root -p123qweasd youtarr
 ```
 
@@ -698,7 +695,7 @@ docker compose down
 
 3. Test connection:
    ```bash
-   mysql -h localhost -P 3321 -u root -p123qweasd
+   docker compose exec youtarr-db mysql -u root -p123qweasd youtarr
    ```
 
 ### Code Changes Not Reflected

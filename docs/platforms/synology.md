@@ -236,8 +236,6 @@ vi docker-compose.yml
       # Replace these with your own UID/GID from the `id` command
       PUID: 1026 # Example: Synology default standard user
       PGID: 100  # Example: Synology default users group
-    ports:
-      - "${DB_PORT:-3321}:${DB_PORT:-3321}"
     volumes:
       # Database files will be stored in ./database on the host
       - ./database:/config
@@ -458,9 +456,7 @@ Then restart Youtarr
 
 **Port Requirements**:
 - `3087`: Web UI and API
-- `3321`: MariaDB (exposed on the NAS because `docker-compose.yml` maps `3321:3321`; lock it down with your firewall or remove the port mapping if you only need in-container access)
-
-> **Security tip**: If you do not need MariaDB reachable from the NAS host, remove the `ports` block for `youtarr-db` from `docker-compose.yml` and redeploy (`docker compose down && docker compose up -d`). The `youtarr` container will still connect over the internal Docker network.
+- MariaDB is only reachable inside the Docker network by default
 
 **Firewall**:
 - Ensure port 3087 is accessible on your local network
