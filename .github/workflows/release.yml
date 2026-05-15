@@ -28,7 +28,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: main
           fetch-depth: 0
@@ -41,7 +41,7 @@ jobs:
 
       - name: Calculate next version (dry run)
         id: calculate_version
-        uses: mathieudutour/github-tag-action@v6.2
+        uses: mathieudutour/github-tag-action@a22cf08638b34d5badda920f9daf6e72c477b07b # v6.2
         with:
           github_token: ${{ secrets.ACTION_RUNNER_TOKEN }}
           tag_prefix: v
@@ -55,7 +55,7 @@ jobs:
           echo "No conventional commit changes since last tag (${{ steps.calculate_version.outputs.previous_tag }}). Skipping release."
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
 
@@ -65,18 +65,18 @@ jobs:
       - name: Install client dependencies
         run: |
           cd client
-          npm ci
+          npm ci --ignore-scripts
           cd ..
 
       - name: Set up QEMU (multi-arch)
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Login to Docker Hub
         if: ${{ !inputs.dry_run && steps.calculate_version.outputs.release_type != 'none' }}
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -100,9 +100,18 @@ jobs:
           cd ..
           echo "✅ Client build successful"
 
+      - name: Verify MSW worker excluded from production bundle
+        if: ${{ steps.calculate_version.outputs.release_type != 'none' }}
+        run: |
+          if [ -e client/build/mockServiceWorker.js ]; then
+            echo "❌ client/build/mockServiceWorker.js should not exist in production output"
+            exit 1
+          fi
+          echo "✅ MSW worker correctly excluded from production bundle"
+
       - name: Build Docker image (verification)
         if: ${{ steps.calculate_version.outputs.release_type != 'none' }}
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
         with:
           context: .
           push: false
@@ -118,7 +127,7 @@ jobs:
       - name: Create and push tag
         if: ${{ !inputs.dry_run && steps.calculate_version.outputs.release_type != 'none' }}
         id: tag_version
-        uses: mathieudutour/github-tag-action@v6.2
+        uses: mathieudutour/github-tag-action@a22cf08638b34d5badda920f9daf6e72c477b07b # v6.2
         with:
           github_token: ${{ secrets.ACTION_RUNNER_TOKEN }}
           tag_prefix: v
@@ -130,7 +139,7 @@ jobs:
 
       - name: Create GitHub Release
         if: ${{ !inputs.dry_run && steps.calculate_version.outputs.release_type != 'none' }}
-        uses: ncipollo/release-action@v1
+        uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1
         with:
           tag: ${{ steps.calculate_version.outputs.new_tag }}
           name: Release ${{ steps.calculate_version.outputs.new_tag }}
@@ -197,7 +206,7 @@ jobs:
 
       - name: Build and push Docker images
         if: ${{ !inputs.dry_run && steps.calculate_version.outputs.release_type != 'none' }}
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
         with:
           context: .
           push: true
@@ -281,7 +290,7 @@ jobs:
 
       - name: Cleanup tag and release on failure
         if: ${{ failure() && !inputs.dry_run && steps.calculate_version.outputs.release_type != 'none' }}
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           github-token: ${{ secrets.ACTION_RUNNER_TOKEN }}
           script: |
