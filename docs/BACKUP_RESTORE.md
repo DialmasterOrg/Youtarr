@@ -248,7 +248,7 @@ The database container may take longer to start on some systems:
 
 1. Wait a moment and try again
 2. Check Docker is running: `docker ps`
-3. Check for port conflicts on 3321
+3. Check the database logs: `docker compose logs youtarr-db`
 
 ### "YOUTUBE_OUTPUT_DIR does not exist"
 

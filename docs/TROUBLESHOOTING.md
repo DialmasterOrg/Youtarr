@@ -202,10 +202,9 @@ This is a known Docker Desktop issue on Windows where mount points become corrup
    docker compose logs -f
    ```
 
-2. Ensure ports aren't in use:
+2. Ensure the web port isn't in use:
    ```bash
    netstat -an | grep 3087
-   netstat -an | grep 3321
    ```
 
 ## Database Issues
