@@ -22,7 +22,11 @@ Youtarr provides full Plex integration with:
 
 ## Library Setup
 
-### Step 1: Create a New Library
+There are 2 ways you can add Youtarr content to Plex. Movies "just works", however "TV Shows" tends to work better, but requires specific naming. It is recomended to go with TV Shows for a new setup. However you do need to set the correct file names initially, before you start downloading everything. Or re-download everything after setting the naming.
+
+### Movies
+
+#### Step 1: Create a New Library
 
 1. In Plex, go to Settings → Manage → Libraries
 2. Click "Add Library"
@@ -33,7 +37,7 @@ Youtarr provides full Plex integration with:
 
 <img width="829" height="369" alt="Plex Library Type Selection" src="https://github.com/user-attachments/assets/0a0ee8d1-e049-4a19-9430-5977464e9dde" />
 
-### Step 2: Select Agent
+#### Step 2: Select Agent
 
 Choose the appropriate agent:
 - **Agent**: Personal Media
@@ -41,7 +45,7 @@ Choose the appropriate agent:
 
 <img width="816" height="561" alt="Plex Agent Selection" src="https://github.com/user-attachments/assets/a7650ad5-68d5-495b-957d-e42515154dbf" />
 
-### Step 3: Configure Agent Settings
+#### Step 3: Configure Agent Settings
 
 1. After creating the library, go to its settings
 2. Navigate to the "Agent" tab
@@ -52,11 +56,34 @@ Choose the appropriate agent:
 
 <img width="1288" height="220" alt="Plex Agent Settings" src="https://github.com/user-attachments/assets/6e796c9a-243f-4e98-8d87-1d1283e060cc" />
 
-### Step 4: Add Folder
+#### Step 4: Add Folder
 
 Point the library to your Youtarr download directory:
 - Default: `/path/to/youtube`
 - Or specific subfolder: `/path/to/youtube/__kids`
+
+### TV Shows
+
+#### Step 1: Set Naming convention
+In Youtarr settings go to `Settings -> Core -> Video Filename Template` and select `Plex TV Series`.
+
+This will NOT rename old videos, you are best to do this before downloading, or re-download videos to let them get the new name.
+
+#### Step 2: Create a new Library
+1. In Plex, go to Settings → Manage → Libraries
+2. Click "Add Library"
+3. Configure as follows:
+   - **Type**: TV Shows
+   - **Name**: YouTube (or your preference)
+   - **Language**: Your preferred language
+
+#### Step 3: Advanced Settings
+
+Choose the appropriate agent:
+* **Agent**: Plex Personal Media
+* **Use local assets**: THis MUST be true, to use the local metadata
+
+It is also recomended to settings that scan the shows, like intro detection, credits dection and voice activity detection. They will not work but it will still scan them trying.
 
 ## Youtarr Configuration
 

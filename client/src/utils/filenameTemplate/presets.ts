@@ -23,6 +23,11 @@ export const FILENAME_PRESETS: readonly FilenamePreset[] = [
     description: 'Compatible with Absolute-Series-Scanner / YouTube-Agent.bundle.',
   },
   {
+    label: 'Plex TV Series',
+    prefix: '%(timestamp>S%YE%m%d%H%M)s %(title).76B',
+    description: 'Compatible with Plex TV series naming convention'
+  },
+  {
     label: 'Title only',
     prefix: '%(title).76B',
     description: 'Just the video title.',
