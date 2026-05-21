@@ -432,6 +432,29 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                     />
                   </FormControl>
                 </Grid>
+
+                <Grid item xs={12} md={6} className="mt-3">
+                  <FormControl>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          name="writeVideoFanart"
+                          checked={config.writeVideoFanart}
+                          onChange={handleCheckboxChange}
+                        />
+                      }
+                      label={
+                        <Box className="flex items-center">
+                          Create video fanart files
+                          <InfoTooltip
+                            text="Create -fanart.jpg files for each video with the video thumbnail. Some Plex clients like NVIDIA Shield use this as the background preview instead of the poster."
+                            onMobileClick={onMobileTooltipClick}
+                          />
+                        </Box>
+                      }
+                    />
+                  </FormControl>
+                </Grid>
               </Grid>
             </AccordionDetails>
           </Accordion>

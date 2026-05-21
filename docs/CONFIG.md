@@ -283,6 +283,13 @@ Configuration can be modified through:
 - **Description**: Generate NFO metadata files for Kodi/Jellyfin/Emby
 - **Note**: Creates .nfo XML files with video metadata
 
+### Write Video Fanart
+- **Config Key**: `writeVideoFanart`
+- **Type**: `boolean`
+- **Default**: `true`
+- **Description**: Create fanart image files for video backgrounds in media servers
+- **Note**: Creates a `-fanart.jpg` file alongside each video with the video thumbnail. Some Plex clients (notably NVIDIA Shield) use this as the background preview image instead of or alongside the poster. When enabled with `writeChannelPosters`, videos will display correctly on all Plex clients with both a poster (from channel thumbnail) and background (from video thumbnail).
+
 ## Cookie Config
 
 ### Enable Cookies

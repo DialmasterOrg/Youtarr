@@ -12,6 +12,7 @@ const meta: Meta<typeof KodiCompatibilitySection> = {
       ...DEFAULT_CONFIG,
       writeVideoNfoFiles: true,
       writeChannelPosters: true,
+      writeVideoFanart: true,
     });
     return (
       <KodiCompatibilitySection

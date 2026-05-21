@@ -87,6 +87,7 @@ export const CONFIG_FIELDS = {
   // Kodi compatibility
   writeChannelPosters: { default: true, trackChanges: true },
   writeVideoNfoFiles: { default: true, trackChanges: true },
+  writeVideoFanart: { default: true, trackChanges: true },
 
   // Notifications
   notificationsEnabled: { default: false, trackChanges: true },

@@ -245,6 +245,84 @@ describe('KodiCompatibilitySection Component', () => {
     });
   });
 
+  describe('Create video fanart files Checkbox', () => {
+    test('renders Create video fanart files checkbox', async () => {
+      const user = userEvent.setup();
+      const props = createSectionProps();
+      renderWithProviders(<KodiCompatibilitySection {...props} />);
+
+
+      expect(screen.getByRole('checkbox', { name: /Create video fanart files/i })).toBeInTheDocument();
+    });
+
+    test('checkbox reflects writeVideoFanart state when false', async () => {
+      const user = userEvent.setup();
+      const props = createSectionProps({
+        config: createConfig({ writeVideoFanart: false })
+      });
+      renderWithProviders(<KodiCompatibilitySection {...props} />);
+
+
+      const checkbox = screen.getByRole('checkbox', { name: /Create video fanart files/i });
+      expect(checkbox).not.toBeChecked();
+    });
+
+    test('checkbox reflects writeVideoFanart state when true', async () => {
+      const user = userEvent.setup();
+      const props = createSectionProps({
+        config: createConfig({ writeVideoFanart: true })
+      });
+      renderWithProviders(<KodiCompatibilitySection {...props} />);
+
+
+      const checkbox = screen.getByRole('checkbox', { name: /Create video fanart files/i });
+      expect(checkbox).toBeChecked();
+    });
+
+    test('calls onConfigChange when checkbox is toggled from false to true', async () => {
+      const user = userEvent.setup();
+      const onConfigChange = jest.fn();
+      const props = createSectionProps({
+        config: createConfig({ writeVideoFanart: false }),
+        onConfigChange
+      });
+      renderWithProviders(<KodiCompatibilitySection {...props} />);
+
+
+      const checkbox = screen.getByRole('checkbox', { name: /Create video fanart files/i });
+      await user.click(checkbox);
+
+      expect(onConfigChange).toHaveBeenCalledTimes(1);
+      expect(onConfigChange).toHaveBeenCalledWith({ writeVideoFanart: true });
+    });
+
+    test('calls onConfigChange when checkbox is toggled from true to false', async () => {
+      const user = userEvent.setup();
+      const onConfigChange = jest.fn();
+      const props = createSectionProps({
+        config: createConfig({ writeVideoFanart: true }),
+        onConfigChange
+      });
+      renderWithProviders(<KodiCompatibilitySection {...props} />);
+
+
+      const checkbox = screen.getByRole('checkbox', { name: /Create video fanart files/i });
+      await user.click(checkbox);
+
+      expect(onConfigChange).toHaveBeenCalledTimes(1);
+      expect(onConfigChange).toHaveBeenCalledWith({ writeVideoFanart: false });
+    });
+
+    test('renders helper text for video fanart', async () => {
+      const user = userEvent.setup();
+      const props = createSectionProps();
+      renderWithProviders(<KodiCompatibilitySection {...props} />);
+
+
+      expect(screen.getByText('Improves preview display on all Plex clients, especially NVIDIA Shield.')).toBeInTheDocument();
+    });
+  });
+
   describe('InfoTooltip Integration', () => {
     test('renders InfoTooltip for .nfo files checkbox', async () => {
       const user = userEvent.setup();
@@ -345,12 +423,14 @@ describe('KodiCompatibilitySection Component', () => {
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
 
-      // Default values from schema: both true
+      // Default values from schema: all three true
       const nfoCheckbox = screen.getByRole('checkbox', { name: /Generate video \.nfo files/i });
       const posterCheckbox = screen.getByRole('checkbox', { name: /Copy channel poster\.jpg files/i });
+      const fanartCheckbox = screen.getByRole('checkbox', { name: /Create video fanart files/i });
 
       expect(nfoCheckbox).toBeChecked();
       expect(posterCheckbox).toBeChecked();
+      expect(fanartCheckbox).toBeChecked();
     });
   });
 
@@ -444,6 +524,7 @@ describe('KodiCompatibilitySection Component', () => {
 
       expect(screen.getByRole('checkbox', { name: /Generate video \.nfo files/i })).toBeInTheDocument();
       expect(screen.getByRole('checkbox', { name: /Copy channel poster\.jpg files/i })).toBeInTheDocument();
+      expect(screen.getByRole('checkbox', { name: /Create video fanart files/i })).toBeInTheDocument();
     });
 
     test('checkboxes are keyboard accessible', async () => {
@@ -486,6 +567,7 @@ describe('KodiCompatibilitySection Component', () => {
       // Helper texts should be present and visible
       expect(screen.getByText('Recommended when another media server scans your downloads.')).toBeInTheDocument();
       expect(screen.getByText('Helps Kodi, Emby and Jellyfin display artwork for channel folders.')).toBeInTheDocument();
+      expect(screen.getByText('Improves preview display on all Plex clients, especially NVIDIA Shield.')).toBeInTheDocument();
     });
   });
 
