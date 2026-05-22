@@ -42,6 +42,7 @@
   "customCookiesUploaded": false,
   "writeChannelPosters": true,
   "writeVideoNfoFiles": true,
+  "writeVideoFanart": true,
   "notificationsEnabled": false,
   "appriseUrls": [],
   "autoRemovalEnabled": false,

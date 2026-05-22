@@ -190,6 +190,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   customCookiesUploaded: CONFIG_FIELDS.customCookiesUploaded.default,
   writeChannelPosters: CONFIG_FIELDS.writeChannelPosters.default,
   writeVideoNfoFiles: CONFIG_FIELDS.writeVideoNfoFiles.default,
+  writeVideoFanart: CONFIG_FIELDS.writeVideoFanart.default,
   notificationsEnabled: CONFIG_FIELDS.notificationsEnabled.default,
   appriseUrls: CONFIG_FIELDS.appriseUrls.default,
   autoRemovalEnabled: CONFIG_FIELDS.autoRemovalEnabled.default,
