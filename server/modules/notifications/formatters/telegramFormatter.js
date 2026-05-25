@@ -12,7 +12,13 @@ const {
   getSubtitle,
   buildAutoRemovalTitle,
   formatBytes,
-  groupVideosByChannel
+  groupVideosByChannel,
+  getTerminatedCount,
+  buildTerminatedCountLabel,
+  formatTerminatedChannelLine,
+  getTerminationFailureCount,
+  buildTerminationFailureCountLabel,
+  formatTerminationFailureLine
 } = require('../utils');
 
 /**
@@ -24,9 +30,35 @@ const {
 function formatDownloadMessage(finalSummary, videoData) {
   const { totalDownloaded, jobType } = finalSummary;
   const failedCount = getFailedCount(finalSummary);
+  const terminatedCount = getTerminatedCount(finalSummary);
+  const terminationFailureCount = getTerminationFailureCount(finalSummary);
 
-  const title = buildTitle(totalDownloaded);
+  const title = buildTitle(totalDownloaded, terminatedCount, terminationFailureCount);
   let body = `<b>${getSubtitle(jobType)}:</b>\n\n`;
+
+  if (terminatedCount > 0) {
+    body += `⚠️ <b>${escapeHtml(buildTerminatedCountLabel(terminatedCount))}.</b>\n`;
+    const terminatedChannelsToShow = (finalSummary.terminatedChannels || []).slice(0, 5);
+    terminatedChannelsToShow.forEach(channel => {
+      body += `• ${escapeHtml(formatTerminatedChannelLine(channel))}\n`;
+    });
+    if (terminatedCount > terminatedChannelsToShow.length) {
+      body += `<i>...and ${terminatedCount - terminatedChannelsToShow.length} more</i>\n`;
+    }
+    body += '\n';
+  }
+
+  if (terminationFailureCount > 0) {
+    body += `⚠️ <b>${escapeHtml(buildTerminationFailureCountLabel(terminationFailureCount))}.</b>\n`;
+    const failuresToShow = (finalSummary.terminationFailures || []).slice(0, 5);
+    failuresToShow.forEach(channelId => {
+      body += `• ${escapeHtml(formatTerminationFailureLine(channelId))}\n`;
+    });
+    if (terminationFailureCount > failuresToShow.length) {
+      body += `<i>...and ${terminationFailureCount - failuresToShow.length} more</i>\n`;
+    }
+    body += '\n';
+  }
 
   if (failedCount > 0) {
     body += `⚠️ <b>${escapeHtml(buildFailedCountLabel(failedCount))}.</b>\n`;

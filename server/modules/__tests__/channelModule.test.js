@@ -459,6 +459,7 @@ describe('ChannelModule', () => {
           min_duration: null,
           max_duration: null,
           title_filter_regex: null,
+          terminated_at: null,
         });
       });
 
@@ -2009,6 +2010,7 @@ describe('ChannelModule', () => {
             max_duration: null,
             title_filter_regex: null,
             audio_format: null,
+            terminated_at: null,
           },
           {
             url: 'https://youtube.com/@channel2',
@@ -2022,6 +2024,7 @@ describe('ChannelModule', () => {
             max_duration: null,
             title_filter_regex: null,
             audio_format: null,
+            terminated_at: null,
           }
         ]);
       });
@@ -2108,6 +2111,7 @@ describe('ChannelModule', () => {
               max_duration: null,
               title_filter_regex: null,
               audio_format: null,
+              terminated_at: null,
             }
           ],
           total: 25,
@@ -2494,6 +2498,17 @@ describe('ChannelModule', () => {
         // Short tab has never been fetched, should refresh
         expect(ChannelModule.shouldRefreshChannelVideos(channel, 10, 'short')).toBe(true);
       });
+
+      test('forces a refresh on terminated channels even with a fresh cache', () => {
+        // Without the terminated_at short-circuit, a recent fetch would skip
+        // yt-dlp on page load and the termination notice would persist.
+        const channel = {
+          ...mockChannelData,
+          lastFetchedByTab: JSON.stringify({ video: new Date().toISOString() }),
+          terminated_at: new Date('2026-03-01T00:00:00Z')
+        };
+        expect(ChannelModule.shouldRefreshChannelVideos(channel, 10, 'video')).toBe(true);
+      });
     });
 
     describe('buildChannelVideosResponse', () => {
@@ -2673,6 +2688,82 @@ describe('ChannelModule', () => {
         expect(result.videos).toEqual([]);
         expect(result.fetchError).toBe(true);
       });
+
+      // freshFetchPerformed is the contract the frontend onFirstLoad latch
+      // depends on. It must flip true only when fetchAndSaveVideosViaYtDlp
+      // resolves; the cache and cached-fallback paths must NOT set it true.
+      // freshFetchPerformed videos are flagged as recently-checked so the
+      // post-fetch removal-validation loop short-circuits and we don't hit
+      // the unmocked ChannelVideo.update path.
+      const freshlyChecked = () => ({
+        youtube_id: 'video1',
+        youtube_removed: false,
+        youtube_removed_checked_at: new Date(),
+        toJSON() { return this; }
+      });
+
+      test('returns freshFetchPerformed=true when yt-dlp auto-refresh resolves', async () => {
+        const Video = require('../../models/video');
+        const mockChannel = {
+          ...mockChannelData,
+          // Stale lastFetched forces shouldRefreshChannelVideos to return true.
+          lastFetchedByTab: JSON.stringify({ video: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString() }),
+          auto_download_enabled_tabs: 'video'
+        };
+
+        Channel.findOne.mockResolvedValue(mockChannel);
+        ChannelVideo.findAll.mockResolvedValue([freshlyChecked()]);
+        ChannelVideo.count.mockResolvedValue(1);
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        jest.spyOn(ChannelModule, 'fetchAndSaveVideosViaYtDlp').mockResolvedValue();
+
+        const result = await ChannelModule.getChannelVideos('UC123');
+
+        expect(ChannelModule.fetchAndSaveVideosViaYtDlp).toHaveBeenCalled();
+        expect(result.freshFetchPerformed).toBe(true);
+      });
+
+      test('returns freshFetchPerformed=false when cache is fresh enough to skip yt-dlp', async () => {
+        const Video = require('../../models/video');
+        const mockChannel = {
+          ...mockChannelData,
+          lastFetchedByTab: JSON.stringify({ video: new Date().toISOString() }),
+          auto_download_enabled_tabs: 'video'
+        };
+
+        Channel.findOne.mockResolvedValue(mockChannel);
+        ChannelVideo.findAll.mockResolvedValue([freshlyChecked()]);
+        ChannelVideo.count.mockResolvedValue(1);
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        const ytdlpSpy = jest.spyOn(ChannelModule, 'fetchAndSaveVideosViaYtDlp').mockResolvedValue();
+
+        const result = await ChannelModule.getChannelVideos('UC123');
+
+        expect(ytdlpSpy).not.toHaveBeenCalled();
+        expect(result.freshFetchPerformed).toBe(false);
+      });
+
+      test('does not set freshFetchPerformed=true when yt-dlp throws and cache fallback fires', async () => {
+        const Video = require('../../models/video');
+        const mockChannel = {
+          ...mockChannelData,
+          lastFetchedByTab: JSON.stringify({ video: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString() }),
+          auto_download_enabled_tabs: 'video'
+        };
+
+        Channel.findOne.mockResolvedValue(mockChannel);
+        ChannelVideo.findAll.mockResolvedValue([freshlyChecked()]);
+        ChannelVideo.count.mockResolvedValue(1);
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        jest.spyOn(ChannelModule, 'fetchAndSaveVideosViaYtDlp').mockRejectedValue(new Error('yt-dlp failed'));
+
+        const result = await ChannelModule.getChannelVideos('UC123');
+
+        expect(result.freshFetchPerformed).toBeFalsy();
+      });
     });
 
     describe('fetchAllChannelVideos', () => {
@@ -2738,6 +2829,66 @@ describe('ChannelModule', () => {
 
         // Verify activeFetches was cleaned up
         expect(ChannelModule.activeFetches.has('UC123')).toBe(false);
+      });
+
+      test('clears terminated_at when a full fetch succeeds on a previously terminated channel', async () => {
+        const Video = require('../../models/video');
+        const mockChannel = {
+          ...mockChannelData,
+          save: jest.fn(),
+          reload: jest.fn(),
+          update: jest.fn().mockResolvedValue(),
+          url: 'https://youtube.com/@test',
+          terminated_at: new Date('2026-03-01T00:00:00Z')
+        };
+
+        Channel.findOne.mockResolvedValue(mockChannel);
+
+        jest.spyOn(ChannelModule, 'executeYtDlpCommand').mockResolvedValue(JSON.stringify({
+          entries: [{ id: 'v1', title: 'V1', timestamp: 1704067200 }],
+          uploader_url: 'https://youtube.com/@test'
+        }));
+
+        ChannelVideo.findOrCreate.mockResolvedValue([{}, true]);
+        ChannelVideo.findAll.mockResolvedValue([
+          { youtube_id: 'v1', toJSON() { return this; } }
+        ]);
+        ChannelVideo.count.mockResolvedValue(1);
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        await ChannelModule.fetchAllChannelVideos('UC123', 1, 50);
+
+        expect(mockChannel.update).toHaveBeenCalledWith({ terminated_at: null });
+      });
+
+      test('does not touch terminated_at on a never-terminated channel', async () => {
+        const Video = require('../../models/video');
+        const mockChannel = {
+          ...mockChannelData,
+          save: jest.fn(),
+          reload: jest.fn(),
+          update: jest.fn().mockResolvedValue(),
+          url: 'https://youtube.com/@test',
+          terminated_at: null
+        };
+
+        Channel.findOne.mockResolvedValue(mockChannel);
+
+        jest.spyOn(ChannelModule, 'executeYtDlpCommand').mockResolvedValue(JSON.stringify({
+          entries: [{ id: 'v1', title: 'V1', timestamp: 1704067200 }],
+          uploader_url: 'https://youtube.com/@test'
+        }));
+
+        ChannelVideo.findOrCreate.mockResolvedValue([{}, true]);
+        ChannelVideo.findAll.mockResolvedValue([
+          { youtube_id: 'v1', toJSON() { return this; } }
+        ]);
+        ChannelVideo.count.mockResolvedValue(1);
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        await ChannelModule.fetchAllChannelVideos('UC123', 1, 50);
+
+        expect(mockChannel.update).not.toHaveBeenCalled();
       });
 
       test('uses yt-dlp for full fetch even when YouTube API is available', async () => {
@@ -3119,6 +3270,21 @@ describe('ChannelModule', () => {
         await ChannelModule.updateAutoDownloadForTab('UC123', 'videos', false);
 
         expect(mockChannel.auto_download_enabled_tabs).toBe('');
+        expect(mockChannel.save).toHaveBeenCalled();
+      });
+
+      test('preserves empty-string state when enabling a tab on a previously cleared channel', async () => {
+        // Empty string is the terminated state; '||' coalescing would yield 'video,short'.
+        const mockChannel = {
+          ...mockChannelData,
+          auto_download_enabled_tabs: '',
+          save: jest.fn()
+        };
+        Channel.findOne.mockResolvedValue(mockChannel);
+
+        await ChannelModule.updateAutoDownloadForTab('UC123', 'shorts', true);
+
+        expect(mockChannel.auto_download_enabled_tabs).toBe('short');
         expect(mockChannel.save).toHaveBeenCalled();
       });
     });
@@ -3930,6 +4096,93 @@ describe('ChannelModule', () => {
         media_type: 'video',
       });
       expect(channelModule.executeYtDlpCommand).toHaveBeenCalled();
+    });
+  });
+
+  describe('fetchAndSaveVideosViaYtDlp - terminated_at clearing', () => {
+    let channelModule;
+    const { sequelize } = require('../../db');
+
+    beforeEach(() => {
+      channelModule = require('../channelModule');
+      sequelize.query.mockResolvedValue([]);
+
+      jest.spyOn(channelModule, 'fetchChannelVideos').mockResolvedValue({
+        videos: [],
+        currentChannelUrl: 'https://www.youtube.com/@chan'
+      });
+      jest.spyOn(channelModule, 'insertVideosIntoDb').mockResolvedValue();
+    });
+
+    test('clears terminated_at when fetch succeeds on a previously terminated channel', async () => {
+      const channel = {
+        channel_id: 'UC123',
+        title: 'Test',
+        url: 'https://www.youtube.com/@chan',
+        terminated_at: new Date('2026-03-01T00:00:00Z'),
+        reload: jest.fn(),
+        update: jest.fn().mockResolvedValue()
+      };
+
+      await channelModule.fetchAndSaveVideosViaYtDlp(channel, 'UC123', 'videos', null);
+
+      expect(channel.update).toHaveBeenCalledWith({ terminated_at: null });
+    });
+
+    test('does not touch terminated_at on a channel that was never terminated', async () => {
+      const channel = {
+        channel_id: 'UC123',
+        title: 'Test',
+        url: 'https://www.youtube.com/@chan',
+        terminated_at: null,
+        reload: jest.fn(),
+        update: jest.fn().mockResolvedValue()
+      };
+
+      await channelModule.fetchAndSaveVideosViaYtDlp(channel, 'UC123', 'videos', null);
+
+      expect(channel.update).not.toHaveBeenCalled();
+    });
+
+    test('does not clear terminated_at when fetch throws (channel still unreachable)', async () => {
+      channelModule.fetchChannelVideos.mockRejectedValueOnce(new Error('yt-dlp failed: account terminated'));
+
+      const channel = {
+        channel_id: 'UC123',
+        title: 'Test',
+        url: 'https://www.youtube.com/@chan',
+        terminated_at: new Date('2026-03-01T00:00:00Z'),
+        reload: jest.fn(),
+        update: jest.fn().mockResolvedValue()
+      };
+
+      await expect(
+        channelModule.fetchAndSaveVideosViaYtDlp(channel, 'UC123', 'videos', null)
+      ).rejects.toThrow('yt-dlp failed');
+
+      expect(channel.update).not.toHaveBeenCalled();
+    });
+
+    test('swallows clear failure so the page load is not broken by a stuck UPDATE', async () => {
+      const channel = {
+        channel_id: 'UC123',
+        title: 'Test',
+        url: 'https://www.youtube.com/@chan',
+        terminated_at: new Date('2026-03-01T00:00:00Z'),
+        reload: jest.fn(),
+        update: jest.fn().mockRejectedValue(new Error('db down'))
+      };
+
+      // Fetch and timestamp update both succeed; only the clear fails.
+      await expect(
+        channelModule.fetchAndSaveVideosViaYtDlp(channel, 'UC123', 'videos', null)
+      ).resolves.toBeUndefined();
+
+      expect(channel.update).toHaveBeenCalledWith({ terminated_at: null });
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ channelId: 'UC123' }),
+        'Failed to clear terminated_at after successful video fetch'
+      );
     });
   });
 

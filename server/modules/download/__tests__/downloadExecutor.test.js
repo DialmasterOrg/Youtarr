@@ -79,7 +79,8 @@ jest.mock('../../../models', () => ({
 }));
 
 jest.mock('../../../models/channel', () => ({
-  findAll: jest.fn().mockResolvedValue([])
+  findAll: jest.fn().mockResolvedValue([]),
+  findOne: jest.fn().mockResolvedValue(null)
 }));
 
 jest.mock('../../../models/channelvideo', () => ({
@@ -1304,6 +1305,72 @@ describe('DownloadExecutor', () => {
       expect(jobModule.saveJobOnly).not.toHaveBeenCalled();
     });
 
+    it('merges terminatedChannels across intermediate groups and dedupes by channelId', async () => {
+      const job = {
+        data: {
+          videos: [],
+          failedVideos: [],
+          cumulativeSkipped: 0,
+          terminatedChannels: [
+            { channelId: 'UCdupe000000000000000000', uploader: 'First Wins', url: 'first', terminatedAt: '2026-01-01' }
+          ]
+        }
+      };
+      jobModule.getJob.mockReturnValue(job);
+
+      await executor.saveIntermediateGroupResults(
+        mockJobId,
+        'output',
+        [],
+        [],
+        0,
+        {},
+        [
+          { channelId: 'UCdupe000000000000000000', uploader: 'Should Not Replace', url: 'second', terminatedAt: '2026-02-02' },
+          { channelId: 'UCnew0000000000000000000', uploader: 'New Channel', url: 'newurl', terminatedAt: '2026-02-02' }
+        ]
+      );
+
+      const updateCall = jobModule.updateJob.mock.calls.find(call => call[0] === mockJobId);
+      expect(updateCall).toBeDefined();
+      const merged = updateCall[1].data.terminatedChannels;
+      expect(merged).toHaveLength(2);
+      // First write wins on duplicate
+      expect(merged.find(c => c.channelId === 'UCdupe000000000000000000')).toEqual(
+        expect.objectContaining({ uploader: 'First Wins' })
+      );
+      expect(merged.find(c => c.channelId === 'UCnew0000000000000000000')).toEqual(
+        expect.objectContaining({ uploader: 'New Channel' })
+      );
+    });
+
+    it('merges terminationFailures across intermediate groups and dedupes by channel id', async () => {
+      const job = {
+        data: {
+          videos: [],
+          failedVideos: [],
+          cumulativeSkipped: 0,
+          terminationFailures: ['UCdupe000000000000000000']
+        }
+      };
+      jobModule.getJob.mockReturnValue(job);
+
+      await executor.saveIntermediateGroupResults(
+        mockJobId,
+        'output',
+        [],
+        [],
+        0,
+        {},
+        [],
+        ['UCdupe000000000000000000', 'UCnew0000000000000000000']
+      );
+
+      const updateCall = jobModule.updateJob.mock.calls.find(call => call[0] === mockJobId);
+      const merged = updateCall[1].data.terminationFailures;
+      expect(merged).toEqual(['UCdupe000000000000000000', 'UCnew0000000000000000000']);
+    });
+
     it('should not persist to database when no videos were downloaded', async () => {
       VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
       archiveModule.getNewVideoUrlsSince.mockReturnValue([]);
@@ -2174,6 +2241,297 @@ describe('DownloadExecutor', () => {
 
     it('should return null when yt-dlp error text has no video id', () => {
       expect(executor.extractYoutubeIdFromYtdlpError('members-only content')).toBeNull();
+    });
+  });
+
+  describe('extractChannelIdFromYtdlpError', () => {
+    it('extracts the canonical channel_id from a [youtube:tab] error line', () => {
+      const message = 'ERROR: [youtube:tab] UC1lg-nYUcZ1pjo6EC2Nj5Sw: YouTube said: This account has been terminated for violating Google\'s Terms of Service.';
+      expect(executor.extractChannelIdFromYtdlpError(message)).toBe('UC1lg-nYUcZ1pjo6EC2Nj5Sw');
+    });
+
+    it('returns null when the line is a [youtube] (video) error rather than [youtube:tab]', () => {
+      const message = 'ERROR: [youtube] OOUclRI0Ae4: Join this channel to get access to members-only content.';
+      expect(executor.extractChannelIdFromYtdlpError(message)).toBeNull();
+    });
+
+    it('returns null when no UC... id is present', () => {
+      expect(executor.extractChannelIdFromYtdlpError('account has been terminated for violating')).toBeNull();
+      expect(executor.extractChannelIdFromYtdlpError('')).toBeNull();
+    });
+  });
+
+  describe('persistTerminatedChannel', () => {
+    beforeEach(() => {
+      Channel.findOne.mockReset();
+    });
+
+    it('stamps terminated_at and clears auto_download_enabled_tabs on first detection', async () => {
+      const channelRow = {
+        terminated_at: null,
+        uploader: 'Test Channel',
+        url: 'https://www.youtube.com/channel/UC1234567890123456789012',
+        update: jest.fn().mockResolvedValue()
+      };
+      Channel.findOne.mockResolvedValueOnce(channelRow);
+
+      const result = await executor.persistTerminatedChannel('UC1234567890123456789012');
+
+      expect(Channel.findOne).toHaveBeenCalledWith({ where: { channel_id: 'UC1234567890123456789012' } });
+      expect(channelRow.update).toHaveBeenCalledWith({
+        terminated_at: expect.any(Date),
+        auto_download_enabled_tabs: ''
+      });
+      expect(result).toBe(channelRow);
+    });
+
+    it('preserves the original terminated_at on re-detection but still clears tabs', async () => {
+      const originalDate = new Date('2026-01-15T12:00:00Z');
+      const channelRow = {
+        terminated_at: originalDate,
+        uploader: 'Test Channel',
+        url: 'https://www.youtube.com/channel/UC1234567890123456789012',
+        update: jest.fn().mockResolvedValue()
+      };
+      Channel.findOne.mockResolvedValueOnce(channelRow);
+
+      await executor.persistTerminatedChannel('UC1234567890123456789012');
+
+      expect(channelRow.update).toHaveBeenCalledWith({
+        terminated_at: originalDate,
+        auto_download_enabled_tabs: ''
+      });
+    });
+
+    it('returns null and logs a warning when the channel is not in the database', async () => {
+      Channel.findOne.mockResolvedValueOnce(null);
+
+      const result = await executor.persistTerminatedChannel('UC0000000000000000000000');
+
+      expect(result).toBeNull();
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ channelId: 'UC0000000000000000000000' }),
+        'Terminated channel not in DB; skipping persistence'
+      );
+    });
+
+    it('swallows db errors and returns null', async () => {
+      Channel.findOne.mockRejectedValueOnce(new Error('db down'));
+
+      const result = await executor.persistTerminatedChannel('UC1234567890123456789012');
+
+      expect(result).toBeNull();
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ channelId: 'UC1234567890123456789012' }),
+        'Failed to persist terminated channel state'
+      );
+    });
+
+    it('is a no-op when channelId is falsy', async () => {
+      await expect(executor.persistTerminatedChannel(null)).resolves.toBeNull();
+      await expect(executor.persistTerminatedChannel('')).resolves.toBeNull();
+      await expect(executor.persistTerminatedChannel(undefined)).resolves.toBeNull();
+      expect(Channel.findOne).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('terminated channel handling in doDownload', () => {
+    const mockArgs = ['--format', 'best', 'https://www.youtube.com/channel/UC1234567890123456789012'];
+    const mockJobId = 'job-term-1';
+    const mockJobType = 'Channel Downloads';
+
+    beforeEach(() => {
+      Channel.findOne.mockReset();
+    });
+
+    it('marks termination-only runs as Complete with Warnings and includes terminatedChannels in finalSummary', async () => {
+      const channelRow = {
+        terminated_at: null,
+        uploader: 'Banned Channel',
+        url: 'https://www.youtube.com/channel/UC1234567890123456789012',
+        update: jest.fn().mockResolvedValue()
+      };
+      Channel.findOne.mockResolvedValue(channelRow);
+
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue([]);
+
+      setTimeout(() => {
+        const termLine = 'ERROR: [youtube:tab] UC1234567890123456789012: YouTube said: This account has been terminated for violating Google\'s Terms of Service.\n';
+        mockProcess.stderr.emit('data', Buffer.from(termLine));
+        setTimeout(() => mockProcess.emit('exit', 1, null), 5);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(channelRow.update).toHaveBeenCalledWith({
+        terminated_at: expect.any(Date),
+        auto_download_enabled_tabs: ''
+      });
+
+      const updateJobCalls = jobModule.updateJob.mock.calls.filter(c => c[0] === mockJobId);
+      const terminalCall = updateJobCalls[updateJobCalls.length - 1];
+      expect(terminalCall[1].status).toBe('Complete with Warnings');
+      expect(terminalCall[1].data.terminatedChannels).toEqual([
+        expect.objectContaining({ channelId: 'UC1234567890123456789012', uploader: 'Banned Channel' })
+      ]);
+      expect(terminalCall[1].data.totalTerminatedChannels).toBe(1);
+    });
+
+    it('emits a final WebSocket payload with terminatedChannels under finalSummary', async () => {
+      const channelRow = {
+        terminated_at: null,
+        uploader: 'Banned Channel',
+        url: 'https://www.youtube.com/channel/UC1234567890123456789012',
+        update: jest.fn().mockResolvedValue()
+      };
+      Channel.findOne.mockResolvedValue(channelRow);
+
+      setTimeout(() => {
+        const termLine = 'ERROR: [youtube:tab] UC1234567890123456789012: YouTube said: This account has been terminated for violating Google\'s Terms of Service.\n';
+        mockProcess.stderr.emit('data', Buffer.from(termLine));
+        setTimeout(() => mockProcess.emit('exit', 1, null), 5);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      const finalCall = MessageEmitter.emitMessage.mock.calls.find(call => call[4] && call[4].finalSummary);
+      expect(finalCall).toBeDefined();
+      expect(finalCall[4].finalSummary.terminatedChannels).toEqual([
+        expect.objectContaining({ channelId: 'UC1234567890123456789012', uploader: 'Banned Channel' })
+      ]);
+      expect(finalCall[4].finalSummary.totalTerminatedChannels).toBe(1);
+    });
+
+    it('does not increment unexpectedErrorCount or record a failed video for terminated errors', async () => {
+      const channelRow = {
+        terminated_at: null,
+        uploader: 'Banned Channel',
+        url: 'https://www.youtube.com/channel/UC1234567890123456789012',
+        update: jest.fn().mockResolvedValue()
+      };
+      Channel.findOne.mockResolvedValue(channelRow);
+
+      setTimeout(() => {
+        const termLine = 'ERROR: [youtube:tab] UC1234567890123456789012: YouTube said: This account has been terminated for violating Google\'s Terms of Service.\n';
+        mockProcess.stderr.emit('data', Buffer.from(termLine));
+        setTimeout(() => mockProcess.emit('exit', 1, null), 5);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      const updateJobCalls = jobModule.updateJob.mock.calls.filter(c => c[0] === mockJobId);
+      const terminalCall = updateJobCalls[updateJobCalls.length - 1];
+      expect(terminalCall[1].data.failedVideos).toEqual([]);
+    });
+
+    it('dedupes when the same termination message arrives on both stdout and stderr', async () => {
+      const channelRow = {
+        terminated_at: null,
+        uploader: 'Banned Channel',
+        url: 'https://www.youtube.com/channel/UC1234567890123456789012',
+        update: jest.fn().mockResolvedValue()
+      };
+      Channel.findOne.mockResolvedValue(channelRow);
+
+      setTimeout(() => {
+        const termLine = 'ERROR: [youtube:tab] UC1234567890123456789012: YouTube said: This account has been terminated for violating Google\'s Terms of Service.\n';
+        mockProcess.stdout.emit('data', Buffer.from(termLine));
+        mockProcess.stderr.emit('data', Buffer.from(termLine));
+        setTimeout(() => mockProcess.emit('exit', 1, null), 5);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      // Set dedupe means only one lookup across both stream sources.
+      expect(Channel.findOne).toHaveBeenCalledTimes(1);
+      expect(channelRow.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT mark run as handled when channel cannot be persisted', async () => {
+      // Channel not in DB: persistence returns null, run must surface as a failure.
+      Channel.findOne.mockResolvedValue(null);
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
+
+      setTimeout(() => {
+        const termLine = 'ERROR: [youtube:tab] UC1234567890123456789012: YouTube said: This account has been terminated for violating Google\'s Terms of Service.\n';
+        mockProcess.stderr.emit('data', Buffer.from(termLine));
+        setTimeout(() => mockProcess.emit('exit', 1, null), 5);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      const updateJobCalls = jobModule.updateJob.mock.calls.filter(c => c[0] === mockJobId);
+      const terminalCall = updateJobCalls[updateJobCalls.length - 1];
+      // Not Complete with Warnings: persistence failed, this is a real error.
+      expect(['Error', 'Failed']).toContain(terminalCall[1].status);
+      // No false-positive summary entry.
+      expect(terminalCall[1].data.terminatedChannels).toEqual([]);
+      expect(terminalCall[1].data.totalTerminatedChannels).toBe(0);
+      // The channel id IS recorded as a termination failure for the finalizer.
+      expect(terminalCall[1].data.terminationFailures).toEqual(['UC1234567890123456789012']);
+      expect(terminalCall[1].data.totalTerminationFailures).toBe(1);
+    });
+
+    it('records terminationFailures in the finalSummary broadcast', async () => {
+      Channel.findOne.mockResolvedValue(null);
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
+
+      setTimeout(() => {
+        const termLine = 'ERROR: [youtube:tab] UC1234567890123456789012: YouTube said: This account has been terminated for violating Google\'s Terms of Service.\n';
+        mockProcess.stderr.emit('data', Buffer.from(termLine));
+        setTimeout(() => mockProcess.emit('exit', 1, null), 5);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      const finalCall = MessageEmitter.emitMessage.mock.calls.find(call => call[4] && call[4].finalSummary);
+      expect(finalCall).toBeDefined();
+      expect(finalCall[4].finalSummary.terminationFailures).toEqual(['UC1234567890123456789012']);
+      expect(finalCall[4].finalSummary.totalTerminationFailures).toBe(1);
+    });
+
+    it('does NOT mark run as handled when persistTerminatedChannel throws (db error)', async () => {
+      // Update throws: surface as a real failure, same as the "not in DB" path.
+      const channelRow = {
+        terminated_at: null,
+        uploader: 'Banned Channel',
+        url: 'https://www.youtube.com/channel/UC1234567890123456789012',
+        update: jest.fn().mockRejectedValue(new Error('db down'))
+      };
+      Channel.findOne.mockResolvedValue(channelRow);
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
+
+      setTimeout(() => {
+        const termLine = 'ERROR: [youtube:tab] UC1234567890123456789012: YouTube said: This account has been terminated for violating Google\'s Terms of Service.\n';
+        mockProcess.stderr.emit('data', Buffer.from(termLine));
+        setTimeout(() => mockProcess.emit('exit', 1, null), 5);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      const updateJobCalls = jobModule.updateJob.mock.calls.filter(c => c[0] === mockJobId);
+      const terminalCall = updateJobCalls[updateJobCalls.length - 1];
+      expect(['Error', 'Failed']).toContain(terminalCall[1].status);
+      expect(terminalCall[1].data.terminatedChannels).toEqual([]);
+    });
+
+    it('falls through to unexpected-error branch when termination message has no extractable channel_id', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
+
+      setTimeout(() => {
+        const badLine = 'ERROR: account has been terminated for violating Google\'s Terms of Service.\n';
+        mockProcess.stderr.emit('data', Buffer.from(badLine));
+        setTimeout(() => mockProcess.emit('exit', 1, null), 5);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(Channel.findOne).not.toHaveBeenCalled();
+      const updateJobCalls = jobModule.updateJob.mock.calls.filter(c => c[0] === mockJobId);
+      const terminalCall = updateJobCalls[updateJobCalls.length - 1];
+      // No channel id: generic Error.
+      expect(['Error', 'Failed']).toContain(terminalCall[1].status);
     });
   });
 

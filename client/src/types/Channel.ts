@@ -16,4 +16,5 @@ export interface Channel {
   title_filter_regex?: string | null;
   audio_format?: string | null;
   default_rating?: string | null;
+  terminated_at?: string | null;
 }

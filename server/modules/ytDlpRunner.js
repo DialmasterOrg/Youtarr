@@ -10,9 +10,18 @@ const MEMBERS_ONLY_PATTERNS = [
   /subscriber[_ -]?only/i,
 ];
 
+// YouTube uses two phrasings for terminations:
+//   "account has been terminated ..." (TOS violations)
+//   "channel was removed because it violated ..." (community guidelines)
+const TERMINATED_ACCOUNT_PATTERN = /(account has been terminated|channel was removed because it violated)/i;
+
 function isMembersOnlyError(message = '') {
   const normalized = String(message);
   return MEMBERS_ONLY_PATTERNS.some(pattern => pattern.test(normalized));
+}
+
+function isTerminatedAccountError(message = '') {
+  return TERMINATED_ACCOUNT_PATTERN.test(String(message));
 }
 
 class YtDlpRunner {
@@ -22,6 +31,10 @@ class YtDlpRunner {
 
   isMembersOnlyError(message = '') {
     return isMembersOnlyError(message);
+  }
+
+  isTerminatedAccountError(message = '') {
+    return isTerminatedAccountError(message);
   }
 
   /**
