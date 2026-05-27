@@ -758,7 +758,7 @@ describe('NotificationModule Integration', () => {
       expect(mockLoggerDebug).toHaveBeenCalledWith('Notifications not configured, skipping notification');
     });
 
-    it('should skip notification when no videos downloaded', async () => {
+    it('should skip notification when no videos downloaded and no terminations recorded', async () => {
       const notificationData = {
         ...baseNotificationData,
         finalSummary: { ...baseNotificationData.finalSummary, totalDownloaded: 0 }
@@ -767,7 +767,30 @@ describe('NotificationModule Integration', () => {
       await notificationModule.sendDownloadNotification(notificationData);
 
       expect(mockSpawn).not.toHaveBeenCalled();
-      expect(mockLoggerDebug).toHaveBeenCalledWith('No new videos downloaded, skipping notification');
+      expect(mockLoggerDebug).toHaveBeenCalledWith('No new videos downloaded and no terminations recorded, skipping notification');
+    });
+
+    it('still sends notification when zero videos downloaded but a channel was marked terminated', async () => {
+      const notificationData = {
+        ...baseNotificationData,
+        finalSummary: {
+          ...baseNotificationData.finalSummary,
+          totalDownloaded: 0,
+          terminatedChannels: [
+            { channelId: 'UC1234567890123456789012', uploader: 'Banned Channel' }
+          ]
+        }
+      };
+
+      const sendPromise = notificationModule.sendDownloadNotification(notificationData);
+      // ntfy:// routes through Apprise; close the child so the sender resolves.
+      setImmediate(() => {
+        mockProcess.emit('close', 0);
+      });
+      await sendPromise;
+
+      expect(mockSpawn).toHaveBeenCalled();
+      expect(mockLoggerDebug).not.toHaveBeenCalledWith('No new videos downloaded and no terminations recorded, skipping notification');
     });
 
     it('should use Discord webhook directly for Discord URLs with rich formatting', async () => {

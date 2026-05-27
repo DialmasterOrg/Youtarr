@@ -333,6 +333,7 @@ class ChannelModule {
       min_duration: channel.min_duration || null,
       max_duration: channel.max_duration || null,
       title_filter_regex: channel.title_filter_regex || null,
+      terminated_at: channel.terminated_at || null,
     };
 
     if (channel.default_rating != null) {
@@ -361,6 +362,7 @@ class ChannelModule {
       max_duration: channel.max_duration || null,
       title_filter_regex: channel.title_filter_regex || null,
       audio_format: channel.audio_format || null,
+      terminated_at: channel.terminated_at || null,
     };
 
     if (channel.default_rating != null) {
@@ -1925,6 +1927,12 @@ class ChannelModule {
   shouldRefreshChannelVideos(channel, videoCount, mediaType) {
     if (!channel) return false;
 
+    // Always re-probe terminated channels so a reinstatement is detected on
+    // the very next page load, regardless of cache freshness. Without this,
+    // a terminated channel with recent lastFetched would skip yt-dlp and the
+    // termination notice would stick until cache expiry.
+    if (channel.terminated_at) return true;
+
     const lastFetched = this.getLastFetchedForTab(channel, mediaType);
 
     return !lastFetched ||
@@ -2125,7 +2133,7 @@ class ChannelModule {
         logger.debug({ channelId }, 'Tabs already detected, returning cached');
         return {
           availableTabs: channel.available_tabs.split(','),
-          autoDownloadEnabledTabs: channel.auto_download_enabled_tabs || 'video'
+          autoDownloadEnabledTabs: channel.auto_download_enabled_tabs ?? 'video'
         };
       }
 
@@ -2327,7 +2335,7 @@ class ChannelModule {
     const mediaType = MEDIA_TAB_TYPE_MAP[tabType] || 'video';
 
     // Get current enabled tabs
-    const currentEnabledTabs = (channel.auto_download_enabled_tabs || 'video')
+    const currentEnabledTabs = (channel.auto_download_enabled_tabs ?? 'video')
       .split(',')
       .map(t => t.trim())
       .filter(Boolean);
@@ -2403,6 +2411,11 @@ class ChannelModule {
       }
     }
 
+    // Tracks whether yt-dlp actually ran AND resolved in this request.
+    // Frontends key the "channel state may have changed" signal off this flag,
+    // so it must NOT flip true on cache-only or yt-dlp-failed-with-cache paths.
+    let freshFetchPerformed = false;
+
     try {
       // First check if we need to refresh recent videos from YouTube
       const allVideos = await this.fetchNewestVideosFromDb(channelId, 1, 0, 'off', '', 'date', 'desc', false, mediaType);
@@ -2426,6 +2439,7 @@ class ChannelModule {
           try {
             // Fetch videos for the specified tab type
             await this.fetchAndSaveVideosViaYtDlp(channel, channelId, tabType, mostRecentVideoDate);
+            freshFetchPerformed = true;
           } finally {
             // Clear the active fetch record
             this.activeFetches.delete(fetchKey);
@@ -2507,7 +2521,10 @@ class ChannelModule {
       // Get stats for the response
       const stats = await this.getChannelVideoStats(channelId, downloadedFilter, searchQuery, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter);
 
-      return this.buildChannelVideosResponse(paginatedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType);
+      return {
+        ...this.buildChannelVideosResponse(paginatedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType),
+        freshFetchPerformed
+      };
 
     } catch (error) {
       logger.error({ err: error, channelId }, 'Error fetching channel videos');
@@ -2522,6 +2539,25 @@ class ChannelModule {
         response.fetchError = true;
       }
       return response;
+    }
+  }
+
+  /**
+   * Clear terminated_at on a channel when we've proven it's reachable.
+   * Swallows failures so the calling page-load path can't be broken by a
+   * stuck UPDATE - the marker would just stay set until the next attempt.
+   * @param {Object} channel - Sequelize channel instance
+   * @param {string} channelId - Channel ID for log context
+   * @returns {Promise<void>}
+   * @private
+   */
+  async _clearTerminationMarkerIfSet(channel, channelId) {
+    if (!channel || !channel.terminated_at) return;
+    try {
+      await channel.update({ terminated_at: null });
+      logger.info({ channelId }, 'Channel previously marked terminated is reachable again; clearing termination marker');
+    } catch (clearErr) {
+      logger.warn({ err: clearErr, channelId }, 'Failed to clear terminated_at after successful video fetch');
     }
   }
 
@@ -2561,6 +2597,10 @@ class ChannelModule {
 
         // Update the last fetched timestamp for this specific tab (atomic SQL update)
         await this.setLastFetchedForTab(channel, mediaType, new Date());
+
+        // Reaching this point means yt-dlp returned a valid response, so the
+        // channel is reachable - inverse of persistTerminatedChannel.
+        await this._clearTerminationMarkerIfSet(channel, channelId);
       }
     } catch (ytdlpError) {
       logger.error({ err: ytdlpError, channelId }, 'Error fetching channel videos');
@@ -2649,6 +2689,9 @@ class ChannelModule {
         }
         // Update the last fetched timestamp for this specific tab (atomic SQL update)
         await this.setLastFetchedForTab(channel, mediaType, new Date());
+
+        // yt-dlp returned a valid response, so the channel is reachable.
+        await this._clearTerminationMarkerIfSet(channel, channelId);
 
         // Get the requested page of videos after the full fetch
         const offset = (requestedPage - 1) * requestedPageSize;

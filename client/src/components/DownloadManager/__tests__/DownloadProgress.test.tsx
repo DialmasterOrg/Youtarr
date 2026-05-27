@@ -287,6 +287,102 @@ describe('DownloadProgress', () => {
     expect(screen.getByText(/Channel update.*Completed/)).toBeInTheDocument();
   });
 
+  test('renders termination summary as warning-shaped even with zero downloads', async () => {
+    renderWithContext(
+      <DownloadProgress
+        downloadProgressRef={mockDownloadProgressRef}
+        downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
+        token="test-token"
+      />
+    );
+
+    const [, processCallback] = mockSubscribe.mock.calls[0];
+
+    await act(async () => {
+      processCallback({
+        finalSummary: {
+          totalDownloaded: 0,
+          totalSkipped: 0,
+          totalTerminatedChannels: 1,
+          terminatedChannels: [
+            { channelId: 'UC1234567890123456789012', uploader: 'Banned Channel' },
+          ],
+          jobType: 'Channel Downloads',
+          completedAt: '2026-05-19T12:00:00Z',
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Summary of last job')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/1 channel marked terminated/)).toBeInTheDocument();
+    expect(screen.getByText('Channels Marked Terminated by YouTube')).toBeInTheDocument();
+    expect(screen.getByText(/• Banned Channel/)).toBeInTheDocument();
+  });
+
+  test('renders termination-failure alert when terminationFailures present', async () => {
+    renderWithContext(
+      <DownloadProgress
+        downloadProgressRef={mockDownloadProgressRef}
+        downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
+        token="test-token"
+      />
+    );
+
+    const [, processCallback] = mockSubscribe.mock.calls[0];
+
+    await act(async () => {
+      processCallback({
+        finalSummary: {
+          totalDownloaded: 0,
+          totalSkipped: 0,
+          totalTerminationFailures: 1,
+          terminationFailures: ['UC1234567890123456789012'],
+          jobType: 'Channel Downloads',
+          completedAt: '2026-05-19T12:00:00Z',
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Summary of last job')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/1 termination could not be auto-disabled/)).toBeInTheDocument();
+    expect(screen.getByText('Terminations Could Not Be Auto-Disabled')).toBeInTheDocument();
+    expect(screen.getByText(/• UC1234567890123456789012/)).toBeInTheDocument();
+  });
+
+  test('omits the terminated alert when terminatedChannels is empty', async () => {
+    renderWithContext(
+      <DownloadProgress
+        downloadProgressRef={mockDownloadProgressRef}
+        downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
+        token="test-token"
+      />
+    );
+
+    const [, processCallback] = mockSubscribe.mock.calls[0];
+
+    await act(async () => {
+      processCallback({
+        finalSummary: {
+          totalDownloaded: 3,
+          totalSkipped: 0,
+          jobType: 'Channel Downloads',
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Summary of last job')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Channels Marked Terminated by YouTube')).not.toBeInTheDocument();
+  });
+
   test('displays final summary with single video grammar', async () => {
     renderWithContext(
       <DownloadProgress

@@ -61,6 +61,7 @@ interface ChannelVideosProps {
   channelVideoQuality?: string | null;
   channelAudioFormat?: string | null;
   channelAvailableTabs?: string | null;
+  onVideosLoaded?: (channelId: string) => void;
 }
 
 type SortBy = 'date' | 'title' | 'duration' | 'size';
@@ -106,6 +107,7 @@ function ChannelVideos({
   channelVideoQuality,
   channelAudioFormat,
   channelAvailableTabs,
+  onVideosLoaded,
 }: ChannelVideosProps) {
   const isMobile = useMediaQuery('(max-width: 767px)');
   const initialViewMode: VideoListViewMode = isMobile ? 'list' : 'table';
@@ -328,6 +330,7 @@ function ChannelVideos({
     protectedFilter,
     missingFilter,
     ignoredFilter,
+    onFirstLoad: onVideosLoaded,
   });
 
   useEffect(() => {

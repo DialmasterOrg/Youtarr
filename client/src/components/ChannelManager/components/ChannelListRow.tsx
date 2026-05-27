@@ -9,7 +9,7 @@ import {
 } from '../../ui';
 import { Delete as DeleteIcon } from '../../../lib/icons';
 import { Channel } from '../../../types/Channel';
-import { SubFolderChip, QualityChip, AutoDownloadChips, DurationFilterChip, TitleFilterChip, DownloadFormatConfigIndicator } from './chips';
+import { SubFolderChip, QualityChip, AutoDownloadChips, DurationFilterChip, TitleFilterChip, DownloadFormatConfigIndicator, TerminatedChip } from './chips';
 import RatingBadge from '../../shared/RatingBadge';
 
 interface ChannelListRowProps {
@@ -65,9 +65,12 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
       )}
       <div style={{ minWidth: 0, flex: 1 }}>
         <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, gap: 0 }}>
-          <Typography variant={isMobile ? 'h6' : 'h5'} noWrap style={{ minWidth: 0 }}>
-            {channel.uploader || 'Unknown Channel'}
-          </Typography>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flexWrap: 'wrap' }}>
+            <Typography variant={isMobile ? 'h6' : 'h5'} noWrap style={{ minWidth: 0 }}>
+              {channel.uploader || 'Unknown Channel'}
+            </Typography>
+            <TerminatedChip terminatedAt={channel.terminated_at} />
+          </div>
           {/* On mobile we show folder and quality chips right under the channel name */}
           {isMobile && (
             <div style={{ marginTop: 2, display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
