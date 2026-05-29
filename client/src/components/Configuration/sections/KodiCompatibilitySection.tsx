@@ -100,32 +100,6 @@ export const KodiCompatibilitySection: React.FC<KodiCompatibilitySectionProps> =
             </FormHelperText>
           </FormControl>
         </Grid>
-
-        <Grid item xs={12} md={6}>
-          <FormControl >
-            <FormControlLabel
-              control={
-                <Switch
-                  name="writeVideoFanart"
-                  checked={config.writeVideoFanart}
-                  onChange={handleCheckboxChange}
-                />
-              }
-              label={
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  Create video fanart files
-                  <InfoTooltip
-                    text="Create -fanart.jpg files for each video with the video thumbnail. Some Plex clients like NVIDIA Shield use this as the background preview instead of the poster."
-                    onMobileClick={onMobileTooltipClick}
-                  />
-                </div>
-              }
-            />
-            <FormHelperText>
-              Improves preview display on all Plex clients, especially NVIDIA Shield.
-            </FormHelperText>
-          </FormControl>
-        </Grid>
       </Grid>
     </ConfigurationAccordion>
   );
