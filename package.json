@@ -3,6 +3,10 @@
   "version": "1.69.2",
   "description": "",
   "main": "server/index.js",
+  "engines": {
+    "node": ">=20.19.0",
+    "npm": ">=11.10.0"
+  },
   "scripts": {
     "start": "node server/server.js",
     "lint": "eslint ./client/src/. --ext .ts,.tsx && eslint ./server/. --ext .js",
