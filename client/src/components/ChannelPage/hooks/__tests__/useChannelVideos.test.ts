@@ -941,4 +941,134 @@ describe('useChannelVideos', () => {
     });
   });
 
+  describe('onFirstLoad callback', () => {
+    const freshResponse = { ...mockResponse, freshFetchPerformed: true };
+
+    test('fires once with channelId after the first fresh-fetch response', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(freshResponse),
+      });
+
+      const onFirstLoad = jest.fn();
+      const { result } = renderHook(() =>
+        useChannelVideos({ ...defaultParams, onFirstLoad })
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      expect(onFirstLoad).toHaveBeenCalledTimes(1);
+      expect(onFirstLoad).toHaveBeenCalledWith(mockChannelId);
+    });
+
+    test('does not fire again on subsequent fresh-fetch responses for the same channel', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue(freshResponse),
+      });
+
+      const onFirstLoad = jest.fn();
+      const { result } = renderHook(() =>
+        useChannelVideos({ ...defaultParams, onFirstLoad })
+      );
+
+      await waitFor(() => {
+        expect(onFirstLoad).toHaveBeenCalledTimes(1);
+      });
+
+      await result.current.refetch();
+      await result.current.refetch();
+
+      expect(onFirstLoad).toHaveBeenCalledTimes(1);
+    });
+
+    test('does not fire on a cache-only response (freshFetchPerformed absent or false)', async () => {
+      // mockResponse has no freshFetchPerformed key, simulating the cache path.
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(mockResponse),
+      });
+
+      const onFirstLoad = jest.fn();
+      const { result } = renderHook(() =>
+        useChannelVideos({ ...defaultParams, onFirstLoad })
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      expect(onFirstLoad).not.toHaveBeenCalled();
+    });
+
+    test('fires on a later fresh-fetch response even when earlier responses were cache-only', async () => {
+      // First response: cache-only (no freshFetchPerformed). Latch must stay open.
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(mockResponse),
+      });
+
+      const onFirstLoad = jest.fn();
+      const { result } = renderHook(() =>
+        useChannelVideos({ ...defaultParams, onFirstLoad })
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+      expect(onFirstLoad).not.toHaveBeenCalled();
+
+      // Second response: backend ran yt-dlp this time. Latch fires now.
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(freshResponse),
+      });
+
+      await result.current.refetch();
+
+      await waitFor(() => {
+        expect(onFirstLoad).toHaveBeenCalledTimes(1);
+      });
+      expect(onFirstLoad).toHaveBeenCalledWith(mockChannelId);
+    });
+
+    test('does not fire when the server reports fetchError', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({
+          ...freshResponse,
+          fetchError: true,
+        }),
+      });
+
+      const onFirstLoad = jest.fn();
+      const { result } = renderHook(() =>
+        useChannelVideos({ ...defaultParams, onFirstLoad })
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      expect(onFirstLoad).not.toHaveBeenCalled();
+    });
+
+    test('does not fire when the network request rejects', async () => {
+      mockFetch.mockRejectedValueOnce(new Error('network error'));
+
+      const onFirstLoad = jest.fn();
+      const { result } = renderHook(() =>
+        useChannelVideos({ ...defaultParams, onFirstLoad })
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      expect(onFirstLoad).not.toHaveBeenCalled();
+    });
+  });
+
 });

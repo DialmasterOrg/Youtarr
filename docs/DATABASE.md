@@ -36,7 +36,7 @@ Youtarr uses MariaDB/MySQL for storing:
 ### Container Details
 - **Image**: `mariadb:10.3`
 - **Container Name**: `youtarr-db`
-- **Port**: 3321 (both host and container)
+- **Port**: 3321 inside the Docker network only; the bundled database is not published to the host
 - **Character Set**: `utf8mb4` (full Unicode/emoji support)
 - **Default Credentials**:
   - User: `root`
@@ -161,7 +161,7 @@ COMPOSE_FILE=docker-compose.yml:docker-compose.arm.yml
 
 3. Restart containers for changes to take effect
 
-**Warning**: Never expose port 3321 to the internet without proper security measures.
+**Warning**: The bundled database is not exposed to the host by default. If you manually publish port 3321, keep it restricted to trusted hosts only.
 
 ## External Database Setup
 
@@ -317,12 +317,8 @@ With recent updates, migrations are idempotent and self-healing:
 
 2. **Test connection**:
    ```bash
-   # From host
-   mysql -h localhost -P 3321 -u root -p123qweasd
-
-   # From Youtarr container
-   docker exec -it youtarr bash
-   mysql -h youtarr-db -P 3321 -u root -p123qweasd
+   # From inside the database container
+   docker compose exec youtarr-db mysql -u root -p123qweasd youtarr
    ```
 
 3. **Check logs**:

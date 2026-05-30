@@ -11,7 +11,13 @@ const {
   getSubtitle,
   buildAutoRemovalTitle,
   formatBytes,
-  groupVideosByChannel
+  groupVideosByChannel,
+  getTerminatedCount,
+  buildTerminatedCountLabel,
+  formatTerminatedChannelLine,
+  getTerminationFailureCount,
+  buildTerminationFailureCountLabel,
+  formatTerminationFailureLine
 } = require('../utils');
 
 const DISCORD_FIELD_VALUE_LIMIT = 1024;
@@ -35,12 +41,43 @@ function truncateFieldValueAtLineBoundary(value, limit = DISCORD_FIELD_VALUE_LIM
 function formatDownloadMessage(finalSummary, videoData) {
   const { totalDownloaded, jobType } = finalSummary;
   const failedCount = getFailedCount(finalSummary);
+  const terminatedCount = getTerminatedCount(finalSummary);
+  const terminationFailureCount = getTerminationFailureCount(finalSummary);
 
-  const title = buildTitle(totalDownloaded);
+  const title = buildTitle(totalDownloaded, terminatedCount, terminationFailureCount);
   let description = `**${getSubtitle(jobType)}:**\n`;
 
   // Build fields for each video (up to 10)
   const fields = [];
+
+  if (terminatedCount > 0) {
+    description += `\n⚠️ **${buildTerminatedCountLabel(terminatedCount)}.**`;
+    const terminatedChannelsToShow = (finalSummary.terminatedChannels || []).slice(0, 5);
+    const terminatedValue = terminatedChannelsToShow.length > 0
+      ? truncateFieldValueAtLineBoundary(terminatedChannelsToShow.map(formatTerminatedChannelLine).join('\n'))
+      : 'See Youtarr channels list for details.';
+
+    fields.push({
+      name: '⚠️ Channels marked terminated',
+      value: terminatedValue,
+      inline: false
+    });
+  }
+
+  if (terminationFailureCount > 0) {
+    description += `\n⚠️ **${buildTerminationFailureCountLabel(terminationFailureCount)}.**`;
+    const failuresToShow = (finalSummary.terminationFailures || []).slice(0, 5);
+    const failuresValue = failuresToShow.length > 0
+      ? truncateFieldValueAtLineBoundary(failuresToShow.map(formatTerminationFailureLine).join('\n'))
+      : 'Check Youtarr logs for details.';
+
+    fields.push({
+      name: '⚠️ Terminations not auto-disabled',
+      value: failuresValue,
+      inline: false
+    });
+  }
+
   if (videoData && videoData.length > 0) {
     const videosToShow = videoData.slice(0, 10);
 
@@ -78,11 +115,12 @@ function formatDownloadMessage(finalSummary, videoData) {
     });
   }
 
+  const hasWarning = failedCount > 0 || terminatedCount > 0 || terminationFailureCount > 0;
   return {
     embeds: [{
       title,
       description,
-      color: failedCount > 0 ? 0xffa500 : 0x00ff00, // Orange for partial success, green for success
+      color: hasWarning ? 0xffa500 : 0x00ff00,
       fields,
       timestamp: new Date().toISOString(),
       footer: {

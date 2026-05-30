@@ -52,7 +52,7 @@ When using the bundled MariaDB container, these variables typically use their de
 **Required**: No
 **Default**: `3321` for the internal database (docker-compose.yml), `3306` for external databases (docker-compose.external-db.yml)
 **Description**: Database port number
-**Note**: The bundled MariaDB container listens on 3321 (both inside the container and on the host). When pointing Youtarr at an external MariaDB/MySQL instance, the default drops to the standard 3306; override it in `.env` if your external database listens elsewhere.
+**Note**: The bundled MariaDB container listens on 3321 inside the Docker network only and is not published to the host. When pointing Youtarr at an external MariaDB/MySQL instance, the default drops to the standard 3306; override it in `.env` if your external database listens elsewhere.
 
 ### DB_USER
 **Required**: No
@@ -218,7 +218,7 @@ These variables are used by docker-compose.yml but not directly by the applicati
 ### Network Configuration
 - Network: `youtarr-network` (internal bridge)
 - Application port: 3087 (host) → 3011 (container)
-- Database port: 3321 (both host and container)
+- Database port: 3321 inside the Docker network only
 
 ## Best Practices
 
@@ -261,8 +261,14 @@ If you see "Permission denied" errors:
 3. Fix ownership: `sudo chown -R ${UID}:${GID} ./config ./jobs ./server/images`
 
 ### Database Connection Issues
-1. Verify DB_HOST is reachable: `ping ${DB_HOST}`
-2. Check DB_PORT is open: `telnet ${DB_HOST} ${DB_PORT}`
+For the bundled database:
+1. Check the container is running: `docker compose ps youtarr-db`
+2. Check logs: `docker compose logs youtarr-db`
+3. Confirm credentials from inside the container: `docker compose exec youtarr-db mysql -u ${DB_USER:-root} -p ${DB_NAME:-youtarr}`
+
+For an external database:
+1. Verify `DB_HOST` is reachable from the Youtarr container
+2. Check `DB_PORT` is open between Youtarr and the database host
 3. Confirm credentials with: `mysql -h ${DB_HOST} -P ${DB_PORT} -u ${DB_USER} -p`
 
 ### Authentication Problems

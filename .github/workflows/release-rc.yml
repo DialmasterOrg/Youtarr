@@ -43,6 +43,9 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Pin npm
+        run: npm install -g npm@11.15.0 --ignore-scripts
+
       - name: Install server dependencies
         run: npm ci --ignore-scripts
 
