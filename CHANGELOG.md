@@ -1,5 +1,23 @@
 # Changelog
 
+## [v1.70.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.70.0) - 2026-05-30
+
+## [1.70.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.69.2...v1.70.0) (2026-05-30)
+
+
+### Features
+
+* detect and disable terminated channels ([04fb599](https://github.com/DialmasterOrg/Youtarr/commit/04fb599037b641bebddcd1a8aa16dedf199b2c2c)), closes [#621](https://github.com/DialmasterOrg/Youtarr/issues/621)
+
+
+### Documentation
+
+* update CHANGELOG for v1.69.2 [skip ci] ([6265702](https://github.com/DialmasterOrg/Youtarr/commit/626570272fe212951774423d0fb66bd2e28e20fc))
+
+
+
+
+
 ## [v1.69.2](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.69.2) - 2026-05-15
 
 ### [1.69.2](https://github.com/DialmasterOrg/Youtarr/compare/vv1.69.1...v1.69.2) (2026-05-15)
