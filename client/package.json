@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "proxy": "http://localhost:3011",
+  "engines": {
+    "node": ">=20.19.0",
+    "npm": ">=11.10.0"
+  },
   "dependencies": {
     "@fontsource/archivo": "^5.2.8",
     "@fontsource/ibm-plex-sans": "^5.2.8",
