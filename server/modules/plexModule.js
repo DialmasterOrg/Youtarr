@@ -169,6 +169,34 @@ class PlexModule {
     }
   }
 
+  // Reads /identity to determine whether the Plex server is claimed by a Plex
+  // account. Used by the UI to warn that an unclaimed server needs the
+  // "unclaimed server" playlist scope for playlists to be visible in Plex Web.
+  // claimed is null when the server is unreachable or the response is unexpected.
+  async getServerIdentityWithParams(plexIP, plexApiKey, plexPort, plexViaHttps) {
+    try {
+      const config = configModule.getConfig();
+      const baseUrl = this.getBaseUrl(plexIP, config, plexPort, plexViaHttps);
+      if (!baseUrl) {
+        logger.warn('Missing Plex server URL for identity check');
+        return { claimed: null, machineIdentifier: null };
+      }
+
+      const params = plexApiKey ? { 'X-Plex-Token': plexApiKey } : {};
+      const response = await axios.get(`${baseUrl}/identity`, {
+        params,
+        timeout: PLEX_REQUEST_TIMEOUT_MS,
+      });
+
+      const container = response.data?.MediaContainer || {};
+      const claimed = typeof container.claimed === 'boolean' ? container.claimed : null;
+      return { claimed, machineIdentifier: container.machineIdentifier || null };
+    } catch (error) {
+      logger.warn({ err: error }, 'Failed to read Plex server identity');
+      return { claimed: null, machineIdentifier: null };
+    }
+  }
+
   async getAuthUrl() {
     try {
       const response = await axios.post(

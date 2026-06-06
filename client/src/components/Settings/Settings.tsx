@@ -105,6 +105,7 @@ export function Settings({ token }: SettingsProps) {
   const {
     plexConnectionStatus,
     setPlexConnectionStatus,
+    plexServerClaimed,
     plexLibraries,
     openPlexLibrarySelector,
     openPlexAuthDialog,
@@ -298,6 +299,7 @@ export function Settings({ token }: SettingsProps) {
                 config={config}
                 isPlatformManaged={isPlatformManaged}
                 plexConnectionStatus={plexConnectionStatus}
+                plexServerClaimed={plexServerClaimed}
                 plexLibraries={plexLibraries}
                 hasPlexServerConfigured={hasPlexServerConfigured}
                 onConfigChange={handleConfigChange}

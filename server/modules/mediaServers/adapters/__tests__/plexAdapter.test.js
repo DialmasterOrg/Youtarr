@@ -166,7 +166,12 @@ describe('PlexAdapter', () => {
   });
 
   test('replacePlaylistItems deletes then PUTs and returns the same id (in-place replace)', async () => {
+    // Visibility check: the stored id IS present in the current scope.
+    axios.get.mockResolvedValueOnce({
+      data: { MediaContainer: { Metadata: [{ ratingKey: '100' }] } },
+    });
     axios.delete.mockResolvedValueOnce({});
+    // _getMachineId for the PUT uri
     axios.get.mockResolvedValueOnce({
       data: { MediaContainer: { machineIdentifier: 'MACHINE123' } },
     });
@@ -179,6 +184,10 @@ describe('PlexAdapter', () => {
   });
 
   test('replacePlaylistItems falls back to create-fresh when stored id returns 404', async () => {
+    // Visibility check: id present, so we attempt the in-place replace.
+    axios.get.mockResolvedValueOnce({
+      data: { MediaContainer: { Metadata: [{ ratingKey: 'stale-id' }] } },
+    });
     // DELETE returns 404 — stale id
     axios.delete.mockRejectedValueOnce({ response: { status: 404 } });
     // Fresh create path: identity + POST
@@ -187,5 +196,73 @@ describe('PlexAdapter', () => {
     const adapter = new PlexAdapter(cfg);
     const result = await adapter.replacePlaylistItems('stale-id', ['42'], { name: 'PL' });
     expect(result).toEqual({ id: 'new-id' });
+  });
+
+  test('replacePlaylistItems relocates (deletes stranded + creates fresh) when stored id is not visible', async () => {
+    // Current scope listing does NOT contain the stored id (created under a
+    // different scope, then plexPlaylistToken switched).
+    axios.get.mockResolvedValueOnce({
+      data: { MediaContainer: { Metadata: [{ ratingKey: '999', title: 'Other' }] } },
+    });
+    // Stranded-playlist cleanup: first DELETE candidate succeeds.
+    axios.delete.mockResolvedValueOnce({});
+    // No same-named playlist in scope -> createPlaylist: _getMachineId + POST.
+    axios.get.mockResolvedValueOnce({ data: { MediaContainer: { machineIdentifier: 'MID' } } });
+    axios.post.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [{ ratingKey: 'fresh-id' }] } } });
+
+    const adapter = new PlexAdapter(cfg);
+    const result = await adapter.replacePlaylistItems('stranded-id', ['42'], { name: 'PL' });
+
+    // Deletes the stranded playlist by id (not its items) to remove it from the old scope.
+    expect(axios.delete).toHaveBeenCalledWith(
+      expect.stringContaining('/playlists/stranded-id'),
+      expect.any(Object)
+    );
+    // No in-place item edit on the stranded id.
+    expect(axios.put).not.toHaveBeenCalled();
+    expect(axios.post).toHaveBeenCalled();
+    expect(result).toEqual({ id: 'fresh-id' });
+  });
+
+  test('replacePlaylistItems adopts an existing same-named playlist in scope instead of duplicating', async () => {
+    // Stored id absent, but a playlist named 'PL' already exists in this scope.
+    axios.get.mockResolvedValueOnce({
+      data: { MediaContainer: { Metadata: [{ ratingKey: '555', title: 'PL' }] } },
+    });
+    // Stranded cleanup
+    axios.delete.mockResolvedValueOnce({});
+    // Adopt -> _replaceInPlace('555'): delete items, _getMachineId, put items
+    axios.delete.mockResolvedValueOnce({});
+    axios.get.mockResolvedValueOnce({ data: { MediaContainer: { machineIdentifier: 'MID' } } });
+    axios.put.mockResolvedValueOnce({});
+
+    const adapter = new PlexAdapter(cfg);
+    const result = await adapter.replacePlaylistItems('stranded-id', ['42'], { name: 'PL' });
+
+    // Reused the existing id; did not create a duplicate.
+    expect(axios.post).not.toHaveBeenCalled();
+    expect(result).toEqual({ id: '555' });
+  });
+
+  test('replacePlaylistItems throws when stored id not visible and no name to relocate with', async () => {
+    axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+    const adapter = new PlexAdapter(cfg);
+    await expect(adapter.replacePlaylistItems('stranded-id', ['42'], {})).rejects.toThrow();
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  test('replacePlaylistItems falls back to in-place when the scope listing fails (transient error)', async () => {
+    // Listing the scope errors -> do NOT take the destructive relocate path.
+    axios.get.mockRejectedValueOnce(new Error('network'));
+    // In-place path: delete items, _getMachineId, put items
+    axios.delete.mockResolvedValueOnce({});
+    axios.get.mockResolvedValueOnce({ data: { MediaContainer: { machineIdentifier: 'MID' } } });
+    axios.put.mockResolvedValueOnce({});
+
+    const adapter = new PlexAdapter(cfg);
+    const result = await adapter.replacePlaylistItems('100', ['42'], { name: 'PL' });
+    expect(result).toEqual({ id: '100' });
+    // No relocation create.
+    expect(axios.post).not.toHaveBeenCalled();
   });
 });

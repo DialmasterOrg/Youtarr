@@ -22,11 +22,12 @@ What Youtarr does **not** do for playlists:
 ### Plex
 
 - **API key**: collected during the standard Plex OAuth flow in Settings → Plex.
-- **Optional `plexPlaylistToken` (advanced)**: lets playlist-scoped requests use a different token than `plexApiKey` (used for library scans).
-  - Blank or unset: fall back to `plexApiKey`.
-  - `"UNCLAIMED_SERVER"`: skip the token entirely. Use this for unclaimed-server LAN setups where Plex Web also issues unauthenticated requests.
-  - Any other string: that exact token.
-- **Visibility**: Plex playlists created via the API are admin-only. To share a Plex playlist with another user, open the playlist in Plex Web → menu → Share → pick a user. Youtarr cannot grant per-user access programmatically.
+- **Playlist visibility scope (advanced)**: under Settings → Plex → "Advanced: playlist visibility scope", a selector controls which account owns Youtarr playlists. It maps to the `plexPlaylistToken` config value:
+  - **Use my Plex admin account (default)** — blank/unset; playlist-scoped requests reuse `plexApiKey`. Correct for a normal claimed server.
+  - **Unclaimed server (anonymous LAN access)** — stores the sentinel `"UNCLAIMED_SERVER"`; playlist requests are sent with no token, matching the anonymous session Plex Web uses on an unclaimed server. After a Test Connection detects an unclaimed server, this section auto-expands and shows a hint nudging you to pick this option.
+  - **A specific Plex user account** — stores that exact token; routes playlists through the chosen account.
+- **Visibility / sharing**: on a claimed server, Plex playlists are created under your admin account and are visible only to you. To share one with another user, open the playlist in Plex Web → menu → Share → pick a user. Youtarr cannot grant per-user access programmatically.
+- **Self-healing scope changes**: if you change the visibility scope after playlists already exist, the next sync detects that the stored playlist id is no longer visible in the new scope and relocates the playlist: it deletes the stranded copy from its old scope (best-effort across the scopes it knows — current, anonymous, and admin token), then reconciles by name in the new scope (adopting a same-named playlist if one already exists, otherwise creating it). This makes repeated scope switches idempotent rather than piling up duplicates. If the old copy can't be deleted in any known scope, it is left orphaned and logged.
 
 ### Jellyfin
 
