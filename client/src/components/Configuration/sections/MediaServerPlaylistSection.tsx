@@ -103,9 +103,9 @@ export const MediaServerPlaylistSection: React.FC<MediaServerPlaylistSectionProp
   };
 
   const connectionPayload = () => ({
-    url: url.trim(),
-    apiKey: apiKey.trim(),
-    userId: userId.trim() || undefined,
+    [keys.url]: url.trim(),
+    [keys.apiKey]: apiKey.trim(),
+    [keys.userId]: userId.trim() || undefined,
   });
 
   const handleTest = useCallback(async () => {
