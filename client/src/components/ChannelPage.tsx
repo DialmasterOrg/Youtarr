@@ -9,6 +9,7 @@ import ChannelVideos from './ChannelPage/ChannelVideos';
 import ChannelSettingsDialog from './ChannelPage/ChannelSettingsDialog';
 import TerminatedNotice from './ChannelPage/components/TerminatedNotice';
 import { useConfig } from '../hooks/useConfig';
+import SubscriptionsBackButton from './shared/SubscriptionsBackButton';
 import SubFolderChip from './Subscriptions/components/chips/SubFolderChip';
 import QualityChip from './Subscriptions/components/chips/QualityChip';
 import AutoDownloadChips from './Subscriptions/components/chips/AutoDownloadChips';
@@ -383,6 +384,10 @@ function ChannelPage({ token }: ChannelPageProps) {
 
   return (
     <>
+      <Box className="mb-3">
+        <SubscriptionsBackButton tab="channels" />
+      </Box>
+
       <Card elevation={8} className="mb-4" style={{ borderRadius: 'var(--radius-ui)', overflow: 'hidden' }}>
         <CardContent style={{ paddingLeft: isMobile ? 10 : 16, paddingRight: isMobile ? 10 : 16, paddingTop: isMobile ? 12 : 16, paddingBottom: isMobile ? 12 : 16 }}>
           <Grid container spacing={2} alignItems="stretch">

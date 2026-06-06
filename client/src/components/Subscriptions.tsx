@@ -36,7 +36,7 @@ import {
 import { Undo2 as UndoIcon, FolderOpen as FolderSpecialIcon } from 'lucide-react';
 import { MOBILE_NAV_SAFE_GAP } from './layout/navLayoutConstants';
 import useMediaQuery from '../hooks/useMediaQuery';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import WebSocketContext, { Message } from '../contexts/WebSocketContext';
 import { useConfig } from '../hooks/useConfig';
 import { Channel } from '../types/Channel';
@@ -80,6 +80,7 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
   }
 
   const navigate = useNavigate();
+  const location = useLocation();
   const isMobile = useMediaQuery('(max-width: 767px)');
   const { config } = useConfig(token);
   const useInfiniteScroll = config.channelVideosHotLoad ?? false;
@@ -90,7 +91,10 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
   const [newSubscriptionUrl, setNewSubscriptionUrl] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedSubFolder, setSelectedSubFolder] = useState<string | null>(null);
-  const [typeFilter, setTypeFilter] = useState<SubscriptionsFilterValue>('channels');
+  const [typeFilter, setTypeFilter] = useState<SubscriptionsFilterValue>(() => {
+    const navState = location.state as { tab?: unknown } | null;
+    return navState?.tab === 'playlists' ? 'playlists' : 'channels';
+  });
   const [addPlaylistOpen, setAddPlaylistOpen] = useState(false);
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [page, setPage] = useState(1);

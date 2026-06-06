@@ -23,6 +23,7 @@ import PlaylistSyncChips from './PlaylistPage/components/PlaylistSyncChips';
 import NoMediaServerWarning from './PlaylistPage/components/NoMediaServerWarning';
 import PlaylistVideoTable from './PlaylistPage/components/PlaylistVideoTable';
 import PlaylistSettingsDialog from './PlaylistPage/components/PlaylistSettingsDialog';
+import SubscriptionsBackButton from './shared/SubscriptionsBackButton';
 import VideoModal from './shared/VideoModal';
 import { VideoModalData } from './shared/VideoModal/types';
 
@@ -195,17 +196,27 @@ function PlaylistPage({ token }: PlaylistPageProps) {
 
   if (loading && !playlist) {
     return (
-      <Box className="py-8 flex justify-center">
-        <Typography color="text.secondary">Loading playlist...</Typography>
-      </Box>
+      <div>
+        <Box className="mb-3">
+          <SubscriptionsBackButton tab="playlists" />
+        </Box>
+        <Box className="py-8 flex justify-center">
+          <Typography color="text.secondary">Loading playlist...</Typography>
+        </Box>
+      </div>
     );
   }
 
   if (error || !playlist) {
     return (
-      <Alert severity="error" className="mt-4">
-        {error || 'Playlist not found.'}
-      </Alert>
+      <div>
+        <Box className="mb-3">
+          <SubscriptionsBackButton tab="playlists" />
+        </Box>
+        <Alert severity="error" className="mt-4">
+          {error || 'Playlist not found.'}
+        </Alert>
+      </div>
     );
   }
 
@@ -319,6 +330,10 @@ function PlaylistPage({ token }: PlaylistPageProps) {
 
   return (
     <div>
+      <Box className="mb-3">
+        <SubscriptionsBackButton tab="playlists" />
+      </Box>
+
       {!anyConfigured && <NoMediaServerWarning />}
 
       {renderHeader(playlist)}

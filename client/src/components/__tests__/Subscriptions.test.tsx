@@ -12,9 +12,11 @@ jest.mock('../../hooks/useMediaQuery');
 
 // Mock react-router-dom
 const mockNavigate = jest.fn();
+let mockLocationState: unknown = null;
 jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
   useNavigate: () => mockNavigate,
+  useLocation: () => ({ state: mockLocationState }),
 }));
 
 // Mock custom hooks
@@ -170,6 +172,7 @@ describe('Subscriptions Component', () => {
     jest.clearAllMocks();
     (useMediaQuery as jest.Mock).mockReturnValue(false);
     mockNavigate.mockClear();
+    mockLocationState = null;
 
     // Default mock responses
     useChannelList.mockReturnValue({
@@ -495,6 +498,21 @@ describe('Subscriptions Component', () => {
   });
 
   describe('Channels / Playlists tabs', () => {
+    test('pre-selects the playlists tab when navigated with that location state', () => {
+      mockLocationState = { tab: 'playlists' };
+      renderSubscriptions();
+
+      expect(screen.getByPlaceholderText('Paste a playlist URL')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^playlist$/i })).toBeInTheDocument();
+    });
+
+    test('defaults to the channels tab when no location state is present', () => {
+      renderSubscriptions();
+
+      expect(screen.getByRole('button', { name: /^channel$/i })).toBeInTheDocument();
+      expect(screen.queryByPlaceholderText('Paste a playlist URL')).not.toBeInTheDocument();
+    });
+
     test('switches to the playlist add bar when the Playlists tab is selected', async () => {
       const user = userEvent.setup();
       renderSubscriptions();
