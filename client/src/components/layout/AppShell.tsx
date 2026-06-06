@@ -93,8 +93,8 @@ export function AppShell({
 
   const channelsSubItems = useMemo(
     () => [
-      { key: 'subscriptions-list', label: 'Your Channels', to: '/subscriptions' },
-      { key: 'subscriptions-imports', label: 'Imports', to: '/subscriptions/imports' },
+      { key: 'subscriptions-list', label: 'Channels & Playlists', to: '/subscriptions' },
+      { key: 'subscriptions-imports', label: 'Import Channels', to: '/subscriptions/imports' },
     ],
     []
   );
