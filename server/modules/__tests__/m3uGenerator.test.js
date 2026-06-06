@@ -65,7 +65,7 @@ describe('m3uGenerator', () => {
 
     expect(result).toBe(true);
     expect(fs.mkdirSync).toHaveBeenCalledWith('/youtube/__playlists__', expect.any(Object));
-    const writeCall = fs.writeFileSync.mock.calls[0];
+    const writeCall = fs.writeFileSync.mock.calls.find((c) => String(c[0]).endsWith('.m3u'));
     const filePath = writeCall[0];
     const contents = writeCall[1];
     expect(filePath).toBe('/youtube/__playlists__/My PL.m3u');
@@ -75,6 +75,15 @@ describe('m3uGenerator', () => {
     expect(contents).toMatch(/\n\.\.\/ChanA\/Video 1\/v1\.mp4/);
     expect(contents).not.toContain('v2'); // skipped — not downloaded
     expect(contents).toMatch(/\n\.\.\/ChanC\/Video 3\/v3\.mp4/);
+  });
+
+  test('writes a .ignore marker so Jellyfin/Emby skip the playlists folder', async () => {
+    Playlist.findByPk.mockResolvedValue({ id: 1, playlist_id: 'PL1', title: 'My PL' });
+    PlaylistVideo.findAll.mockResolvedValue([]);
+
+    await m3uGenerator.generatePlaylistM3U(1);
+
+    expect(fs.writeFileSync).toHaveBeenCalledWith('/youtube/__playlists__/.ignore', '', 'utf8');
   });
 
   test('returns false when playlist not found', async () => {

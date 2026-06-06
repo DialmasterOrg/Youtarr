@@ -6,6 +6,11 @@ const { sanitizeNameLikeYtDlp } = require('./filesystem/sanitizer');
 const configModule = require('./configModule');
 
 const M3U_FOLDER_NAME = '__playlists__';
+// Empty marker file that tells the Jellyfin and Emby library scanners to skip
+// this folder. Without it, those servers auto-import the .m3u files as duplicate
+// (and on Jellyfin, empty) playlists alongside the ones created via native API
+// sync. Both servers honor a file literally named ".ignore".
+const SCANNER_IGNORE_FILE = '.ignore';
 
 class M3uGenerator {
   async generatePlaylistM3U(playlistId) {
@@ -24,6 +29,8 @@ class M3uGenerator {
       const outputRoot = configModule.directoryPath;
       const m3uDir = path.join(outputRoot, M3U_FOLDER_NAME);
       fs.mkdirSync(m3uDir, { recursive: true });
+      // Keep Jellyfin/Emby from importing these .m3u files as duplicate playlists.
+      fs.writeFileSync(path.join(m3uDir, SCANNER_IGNORE_FILE), '', 'utf8');
 
       const title = playlist.title || playlist.playlist_id;
       const fileName = sanitizeNameLikeYtDlp(title) + '.m3u';
