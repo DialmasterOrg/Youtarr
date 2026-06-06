@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Alert,
@@ -25,6 +25,7 @@ interface AddPlaylistDialogProps {
   token: string | null;
   onClose: () => void;
   onSubscribed?: (playlist: Playlist) => void;
+  initialUrl?: string;
 }
 
 const AddPlaylistDialog: React.FC<AddPlaylistDialogProps> = ({
@@ -32,6 +33,7 @@ const AddPlaylistDialog: React.FC<AddPlaylistDialogProps> = ({
   token,
   onClose,
   onSubscribed,
+  initialUrl,
 }) => {
   const navigate = useNavigate();
   const { anyConfigured, status } = useMediaServerStatus(token);
@@ -51,17 +53,37 @@ const AddPlaylistDialog: React.FC<AddPlaylistDialogProps> = ({
     onClose();
   };
 
-  const handleFetch = async () => {
-    setLocalError(null);
-    setPreview(null);
-    const trimmed = url.trim();
-    if (!trimmed) {
-      setLocalError('Please paste a YouTube playlist URL.');
-      return;
+  const runFetch = useCallback(
+    async (raw: string) => {
+      setLocalError(null);
+      setPreview(null);
+      const trimmed = raw.trim();
+      if (!trimmed) {
+        setLocalError('Please paste a YouTube playlist URL.');
+        return;
+      }
+      const info = await fetchPlaylistInfo(trimmed);
+      if (info) setPreview(info);
+    },
+    [fetchPlaylistInfo]
+  );
+
+  const handleFetch = () => runFetch(url);
+
+  // Seed the dialog from the caller's URL each time it opens, fetching the
+  // preview immediately when a URL is provided so the user lands on the
+  // confirmation step.
+  useEffect(() => {
+    if (!open) return;
+    const seed = (initialUrl ?? '').trim();
+    setUrl(seed);
+    if (seed) {
+      runFetch(seed);
+    } else {
+      setPreview(null);
+      setLocalError(null);
     }
-    const info = await fetchPlaylistInfo(trimmed);
-    if (info) setPreview(info);
-  };
+  }, [open, initialUrl, runFetch]);
 
   const handleSubscribe = async () => {
     setLocalError(null);

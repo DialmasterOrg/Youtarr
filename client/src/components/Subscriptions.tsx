@@ -23,7 +23,6 @@ import {
   IconButton,
 } from './ui';
 import {
-  Add as AddIcon,
   HelpOutline as HelpOutlineIcon,
   FilterAlt as FilterAltIcon,
   SortByAlpha as SortByAlphaIcon,
@@ -33,7 +32,6 @@ import {
   ViewList as ViewListIcon,
   Save as SaveIcon,
   MoreVert as MoreVertIcon,
-  Upload as UploadIcon,
 } from '../lib/icons';
 import { Undo2 as UndoIcon, FolderOpen as FolderSpecialIcon } from 'lucide-react';
 import { MOBILE_NAV_SAFE_GAP } from './layout/navLayoutConstants';
@@ -62,6 +60,7 @@ import {
 } from './shared/VideoList';
 import ActiveImportBanner from './Subscriptions/components/ActiveImportBanner';
 import SubscriptionsFilter, { SubscriptionsFilterValue } from './Subscriptions/components/SubscriptionsFilter';
+import SubscriptionAddBar from './Subscriptions/components/SubscriptionAddBar';
 import AddPlaylistDialog from './Subscriptions/components/AddPlaylistDialog';
 import PlaylistListBlock from './Subscriptions/components/PlaylistListBlock';
 import { useActiveImport } from '../hooks/useActiveImport';
@@ -88,10 +87,10 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
   const { activeImport } = useActiveImport(token);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
-  const [newChannelUrl, setNewChannelUrl] = useState('');
+  const [newSubscriptionUrl, setNewSubscriptionUrl] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedSubFolder, setSelectedSubFolder] = useState<string | null>(null);
-  const [typeFilter, setTypeFilter] = useState<SubscriptionsFilterValue>('all');
+  const [typeFilter, setTypeFilter] = useState<SubscriptionsFilterValue>('channels');
   const [addPlaylistOpen, setAddPlaylistOpen] = useState(false);
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [page, setPage] = useState(1);
@@ -281,19 +280,24 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
   }, [websocketContext, messageFilter, handleMessage]);
 
   const handleAddChannel = async () => {
-    if (!newChannelUrl.trim()) return;
-    const result = await addChannel(newChannelUrl);
+    if (!newSubscriptionUrl.trim()) return;
+    const result = await addChannel(newSubscriptionUrl);
     if (!result.success) {
       setDialogMessage(result.message || 'Failed to add channel');
       setDialogOpen(true);
       return;
     }
 
-    setNewChannelUrl('');
+    setNewSubscriptionUrl('');
     if (result.message) {
       setDialogMessage(result.message);
       setDialogOpen(true);
     }
+  };
+
+  const handleTypeFilterChange = (next: SubscriptionsFilterValue) => {
+    setTypeFilter(next);
+    setNewSubscriptionUrl('');
   };
 
   const handleSaveChanges = async () => {
@@ -418,66 +422,19 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
             </Alert>
           )}
 
-          <Grid container spacing={2} alignItems="center" style={{ marginBottom: isMobile ? 8 : 16 }}>
-            <Grid item xs={12} md={8}>
-              <TextField
-                fullWidth
-                size="small"
-                label="Add a new channel"
-                placeholder="Paste a channel URL or @handle"
-                value={newChannelUrl}
-                onChange={(e) => setNewChannelUrl(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    if (!isAddingChannel && newChannelUrl.trim()) {
-                      handleAddChannel();
-                    }
-                  }
-                }}
-                disabled={isAddingChannel}
-              />
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <Grid container spacing={1.5}>
-                <Grid item xs={4}>
-                  <Button
-                    fullWidth
-                    variant="contained"
-                    startIcon={isAddingChannel ? <CircularProgress size={16} color="inherit" /> : <AddIcon />}
-                    onClick={handleAddChannel}
-                    disabled={isAddingChannel || !newChannelUrl.trim()}
-                  >
-                    {isAddingChannel ? 'Adding…' : 'Channel'}
-                  </Button>
-                </Grid>
-                <Grid item xs={4}>
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    startIcon={<AddIcon />}
-                    onClick={() => setAddPlaylistOpen(true)}
-                  >
-                    Playlist
-                  </Button>
-                </Grid>
-                <Grid item xs={4}>
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    startIcon={<UploadIcon />}
-                    onClick={handleOpenSubscriptions}
-                  >
-                    Import
-                  </Button>
-                </Grid>
-              </Grid>
-            </Grid>
-          </Grid>
+          <SubscriptionAddBar
+            mode={typeFilter}
+            url={newSubscriptionUrl}
+            onUrlChange={setNewSubscriptionUrl}
+            onAddChannel={handleAddChannel}
+            onAddPlaylist={() => setAddPlaylistOpen(true)}
+            onImport={handleOpenSubscriptions}
+            isAddingChannel={isAddingChannel}
+          />
 
           <SubscriptionsFilter
             value={typeFilter}
-            onChange={setTypeFilter}
+            onChange={handleTypeFilterChange}
             counts={{ channels: total, playlists: playlistTotal }}
           />
 
@@ -930,6 +887,8 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
       <AddPlaylistDialog
         open={addPlaylistOpen}
         token={token}
+        initialUrl={newSubscriptionUrl}
+        onSubscribed={() => setNewSubscriptionUrl('')}
         onClose={() => setAddPlaylistOpen(false)}
       />
 

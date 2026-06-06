@@ -99,9 +99,42 @@ jest.mock('../Subscriptions/HelpDialog', () => ({
   }
 }));
 
+jest.mock('../Subscriptions/components/AddPlaylistDialog', () => ({
+  __esModule: true,
+  default: function MockAddPlaylistDialog({ open, initialUrl, onSubscribed }: any) {
+    const React = require('react');
+    return React.createElement(
+      'div',
+      {
+        'data-testid': 'add-playlist-dialog',
+        'data-open': open ? 'true' : 'false',
+        'data-initial-url': initialUrl ?? '',
+      },
+      React.createElement(
+        'button',
+        { type: 'button', onClick: () => onSubscribed && onSubscribed({ playlist_id: 'PLabc' }) },
+        'mock-subscribe'
+      )
+    );
+  }
+}));
+
+jest.mock('../Subscriptions/components/PlaylistListBlock', () => ({
+  __esModule: true,
+  default: function MockPlaylistListBlock() {
+    const React = require('react');
+    return React.createElement('div', { 'data-testid': 'playlist-list-block' });
+  }
+}));
+
+jest.mock('../../hooks/usePlaylistList', () => ({
+  usePlaylistList: jest.fn(),
+}));
+
 const { useChannelList } = require('../Subscriptions/hooks/useChannelList');
 const { useChannelMutations } = require('../Subscriptions/hooks/useChannelMutations');
 const { useConfig } = require('../../hooks/useConfig');
+const { usePlaylistList } = require('../../hooks/usePlaylistList');
 
 describe('Subscriptions Component', () => {
   const mockToken = 'test-token';
@@ -163,6 +196,14 @@ describe('Subscriptions Component', () => {
 
     useConfig.mockReturnValue({
       config: { preferredResolution: '1080' },
+    });
+
+    usePlaylistList.mockReturnValue({
+      playlists: [],
+      total: 0,
+      loading: false,
+      error: null,
+      refetch: jest.fn(),
     });
   });
 
@@ -450,6 +491,54 @@ describe('Subscriptions Component', () => {
       await user.click(screen.getByRole('button', { name: /import/i }));
 
       expect(mockNavigate).toHaveBeenCalledWith('/subscriptions/imports');
+    });
+  });
+
+  describe('Channels / Playlists tabs', () => {
+    test('switches to the playlist add bar when the Playlists tab is selected', async () => {
+      const user = userEvent.setup();
+      renderSubscriptions();
+
+      await user.click(screen.getByText('Playlists (0)'));
+
+      expect(screen.getByPlaceholderText('Paste a playlist URL')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^playlist$/i })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /import/i })).not.toBeInTheDocument();
+    });
+
+    test('opens the playlist dialog seeded with the typed URL', async () => {
+      const user = userEvent.setup();
+      renderSubscriptions();
+
+      await user.click(screen.getByText('Playlists (0)'));
+      const input = screen.getByPlaceholderText('Paste a playlist URL');
+      await user.type(input, 'https://www.youtube.com/playlist?list=PLabc');
+      await user.click(screen.getByRole('button', { name: /^playlist$/i }));
+
+      const dialog = screen.getByTestId('add-playlist-dialog');
+      expect(dialog).toHaveAttribute('data-open', 'true');
+      expect(dialog).toHaveAttribute('data-initial-url', 'https://www.youtube.com/playlist?list=PLabc');
+    });
+
+    test('clears the input when switching tabs', async () => {
+      const user = userEvent.setup();
+      renderSubscriptions();
+
+      await user.type(screen.getByPlaceholderText('Paste a channel URL or @handle'), 'leftover');
+      await user.click(screen.getByText('Playlists (0)'));
+
+      expect((screen.getByPlaceholderText('Paste a playlist URL') as HTMLInputElement).value).toBe('');
+    });
+
+    test('clears the playlist input after a successful subscribe', async () => {
+      const user = userEvent.setup();
+      renderSubscriptions();
+
+      await user.click(screen.getByText('Playlists (0)'));
+      await user.type(screen.getByPlaceholderText('Paste a playlist URL'), 'https://www.youtube.com/playlist?list=PLabc');
+      await user.click(screen.getByRole('button', { name: /mock-subscribe/i }));
+
+      expect((screen.getByPlaceholderText('Paste a playlist URL') as HTMLInputElement).value).toBe('');
     });
   });
 

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Chip, Stack } from '../../ui';
 
-export type SubscriptionsFilterValue = 'all' | 'channels' | 'playlists';
+export type SubscriptionsFilterValue = 'channels' | 'playlists';
 
 interface SubscriptionsFilterProps {
   value: SubscriptionsFilterValue;
@@ -22,12 +22,6 @@ const SubscriptionsFilter: React.FC<SubscriptionsFilterProps> = ({ value, onChan
       role="group"
       className="my-2 flex-wrap gap-2"
     >
-      <Chip
-        label="All"
-        color={value === 'all' ? 'primary' : 'default'}
-        onClick={() => onChange('all')}
-        aria-pressed={value === 'all'}
-      />
       <Chip
         label={formatLabel('Channels', counts?.channels)}
         color={value === 'channels' ? 'primary' : 'default'}
