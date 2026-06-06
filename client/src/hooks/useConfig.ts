@@ -81,8 +81,10 @@ export function useConfig(token: string | null): UseConfigResult {
         });
       }
 
-      // Apply defaults
+      // Spread DEFAULT_CONFIG first so fields missing from the server response
+      // (stale config pre-dating a new field) fall back to defaults instead of undefined.
       const resolvedConfig = {
+        ...DEFAULT_CONFIG,
         ...data,
         writeChannelPosters: data.writeChannelPosters ?? true,
         writeVideoNfoFiles: data.writeVideoNfoFiles ?? true,

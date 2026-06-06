@@ -73,6 +73,26 @@ describe('useVideoMetadata', () => {
     expect(axios.get).not.toHaveBeenCalled();
   });
 
+  test('clears stale metadata when youtubeId changes', async () => {
+    axios.get.mockResolvedValueOnce({ data: mockMetadata });
+
+    const { result, rerender } = renderHook(
+      ({ youtubeId }) => useVideoMetadata(youtubeId, 'test-token'),
+      { initialProps: { youtubeId: 'testId123' } }
+    );
+
+    await waitFor(() => {
+      expect(result.current.metadata).toEqual(mockMetadata);
+    });
+
+    axios.get.mockReturnValueOnce(new Promise(() => {}));
+    rerender({ youtubeId: 'nextId456' });
+
+    await waitFor(() => {
+      expect(result.current.metadata).toBeNull();
+    });
+  });
+
   test('does not fetch when token is null', () => {
     const { result } = renderHook(() =>
       useVideoMetadata('testId123', null)

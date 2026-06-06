@@ -42,66 +42,6 @@ function logApiFallback(apiErr, fields, message) {
   }
 }
 
-// Translate the API's snippet.liveBroadcastContent into the yt-dlp-style
-// live_status string stored on channelvideos.live_status. The frontend uses
-// `live_status && live_status !== 'was_live'` to block the download button
-// on currently-live and upcoming streams, so getting this right prevents users
-// from selecting videos that would fail to download via yt-dlp's `!is_live`
-// and `live_status!=is_upcoming` filters.
-//
-// The API's "none" is ambiguous (regular video vs. past livestream), so we
-// disambiguate by the tab the video came from: on the Live tab it means the
-// stream has ended ("was_live"); on Videos/Shorts it means not-a-livestream
-// (null, matching yt-dlp's treatment for regular uploads).
-function deriveLiveStatusFromApi(liveBroadcastContent, tabType) {
-  if (liveBroadcastContent === 'live') return 'is_live';
-  if (liveBroadcastContent === 'upcoming') return 'is_upcoming';
-  if (tabType === TAB_TYPES.LIVE) return 'was_live';
-  return null;
-}
-
-function mapApiVideoToChannelVideo(video, tabType, defaultRating = null) {
-  const mediaType = MEDIA_TAB_TYPE_MAP[tabType] || 'video';
-  const effectiveRating = ratingMapper.determineEffectiveRating(
-    {
-      content_rating: video.contentRating || null,
-      age_limit: video.ageLimit ?? null,
-    },
-    defaultRating
-  );
-
-  const out = {
-    title: video.title || 'Untitled',
-    youtube_id: video.id,
-    publishedAt: video.uploadDate
-      ? new Date(`${video.uploadDate.slice(0, 4)}-${video.uploadDate.slice(4, 6)}-${video.uploadDate.slice(6, 8)}T00:00:00Z`).toISOString()
-      : null,
-    thumbnail: video.thumbnailUrl || null,
-    duration: video.duration || 0,
-    availability: video.availability || null,
-    media_type: mediaType,
-    live_status: deriveLiveStatusFromApi(video.liveBroadcastContent, tabType),
-  };
-
-  if (effectiveRating.normalized_rating != null) {
-    out.normalized_rating = effectiveRating.normalized_rating;
-  }
-
-  if (effectiveRating.rating_source != null) {
-    out.rating_source = effectiveRating.rating_source;
-  }
-
-  if (video.contentRating != null) {
-    out.content_rating = video.contentRating;
-  }
-
-  if (video.ageLimit != null) {
-    out.age_limit = video.ageLimit;
-  }
-
-  return out;
-}
-
 class ChannelModule {
   constructor() {
     this.channelAutoDownload = this.channelAutoDownload.bind(this);
@@ -393,6 +333,7 @@ class ChannelModule {
       min_duration: channel.min_duration || null,
       max_duration: channel.max_duration || null,
       title_filter_regex: channel.title_filter_regex || null,
+      terminated_at: channel.terminated_at || null,
     };
 
     if (channel.default_rating != null) {
@@ -421,6 +362,7 @@ class ChannelModule {
       max_duration: channel.max_duration || null,
       title_filter_regex: channel.title_filter_regex || null,
       audio_format: channel.audio_format || null,
+      terminated_at: channel.terminated_at || null,
     };
 
     if (channel.default_rating != null) {
@@ -1400,11 +1342,27 @@ class ChannelModule {
           title: video.title,
           thumbnail: video.thumbnail,
           duration: video.duration,
-          availability: video.availability || null,
           media_type: mediaType,
-          live_status: video.live_status || null,
-          publishedAt: video.publishedAt || syntheticPublishedAt,
         };
+
+        // Only overwrite availability/live_status when yt-dlp returned a real value.
+        // yt-dlp's flat-playlist mode currently omits these for lockupViewModel
+        // entries, so an empty refresh must not wipe known-good values that other
+        // code paths (modal open, download error, URL validation) populated.
+        if (video.availability) updates.availability = video.availability;
+        if (video.live_status) updates.live_status = video.live_status;
+
+        // Same logic for publishedAt: yt-dlp's youtubetab:approximate_date is
+        // non-deterministic for lockupViewModel entries (sometimes returns
+        // timestamp, sometimes upload_date, sometimes neither), so a refresh
+        // that comes back empty must not clobber a previously-stored real
+        // date with a synthetic Date.now() value. Only stamp synthetic when
+        // the row had no date to begin with.
+        if (video.publishedAt) {
+          updates.publishedAt = video.publishedAt;
+        } else if (!videoRecord.publishedAt) {
+          updates.publishedAt = syntheticPublishedAt;
+        }
 
         if (video.content_rating != null) updates.content_rating = video.content_rating;
         if (video.age_limit != null) updates.age_limit = video.age_limit;
@@ -1919,11 +1877,8 @@ class ChannelModule {
   }
 
   /**
-   * Fetch channel videos from a specific tab.
-   * Tries the YouTube Data API first when a key is configured (per-tab
-   * UULF/UUSH/UULV playlists), then falls back to yt-dlp on any API failure
-   * or when no key is configured. Uses canonical channel URL for stability
-   * when handles change.
+   * Fetch channel videos from a specific tab via yt-dlp.
+   * Uses canonical channel URL for stability when handles change.
    * @param {string} channelId - Channel ID to fetch videos for
    * @param {Date|null} mostRecentVideoDate - Date of the most recent video we have
    * @param {string} tabType - Type of tab to fetch videos from
@@ -1950,36 +1905,8 @@ class ChannelModule {
       }
     }
 
-    // API-first path: all tabs (videos/shorts/streams) use the per-tab
-    // auto-generated playlists (UULF/UUSH/UULV) when a key is configured.
-    if (youtubeApi.isAvailable()) {
-      try {
-        const apiKey = youtubeApi.getApiKey();
-        const channelUrl = channel.url || this.resolveChannelUrlFromId(channelId);
-        const apiResult = await youtubeApi.client.listChannelVideos(apiKey, channelUrl, {
-          tabType,
-          maxVideos: videoCount,
-          includeMetadata: true,
-        });
-
-        const videos = apiResult.videos.map((v) => mapApiVideoToChannelVideo(v, tabType, channel.default_rating));
-
-        logger.info(
-          { channelId, tabType, source: 'youtube-api', videoCount: videos.length },
-          'Listed channel videos via YouTube API'
-        );
-        return { videos, currentChannelUrl: apiResult.currentChannelUrl };
-      } catch (apiErr) {
-        logApiFallback(
-          apiErr,
-          { channelId, tabType },
-          'YouTube API listChannelVideos failed, falling back to yt-dlp'
-        );
-      }
-    }
-
-    // Always use canonical URL based on channel ID for yt-dlp
-    // This ensures stability even when channel handles change
+    // Always use canonical URL based on channel ID for yt-dlp. This avoids the
+    // YouTube API playlist path, which can omit videos that yt-dlp can see.
     const canonicalUrl = `${this.resolveChannelUrlFromId(channelId)}/${tabType}`;
 
     const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
@@ -2012,6 +1939,12 @@ class ChannelModule {
    */
   shouldRefreshChannelVideos(channel, videoCount, mediaType) {
     if (!channel) return false;
+
+    // Always re-probe terminated channels so a reinstatement is detected on
+    // the very next page load, regardless of cache freshness. Without this,
+    // a terminated channel with recent lastFetched would skip yt-dlp and the
+    // termination notice would stick until cache expiry.
+    if (channel.terminated_at) return true;
 
     const lastFetched = this.getLastFetchedForTab(channel, mediaType);
 
@@ -2213,7 +2146,7 @@ class ChannelModule {
         logger.debug({ channelId }, 'Tabs already detected, returning cached');
         return {
           availableTabs: channel.available_tabs.split(','),
-          autoDownloadEnabledTabs: channel.auto_download_enabled_tabs || 'video'
+          autoDownloadEnabledTabs: channel.auto_download_enabled_tabs ?? 'video'
         };
       }
 
@@ -2415,7 +2348,7 @@ class ChannelModule {
     const mediaType = MEDIA_TAB_TYPE_MAP[tabType] || 'video';
 
     // Get current enabled tabs
-    const currentEnabledTabs = (channel.auto_download_enabled_tabs || 'video')
+    const currentEnabledTabs = (channel.auto_download_enabled_tabs ?? 'video')
       .split(',')
       .map(t => t.trim())
       .filter(Boolean);
@@ -2491,6 +2424,11 @@ class ChannelModule {
       }
     }
 
+    // Tracks whether yt-dlp actually ran AND resolved in this request.
+    // Frontends key the "channel state may have changed" signal off this flag,
+    // so it must NOT flip true on cache-only or yt-dlp-failed-with-cache paths.
+    let freshFetchPerformed = false;
+
     try {
       // First check if we need to refresh recent videos from YouTube
       const allVideos = await this.fetchNewestVideosFromDb(channelId, 1, 0, 'off', '', 'date', 'desc', false, mediaType);
@@ -2514,6 +2452,7 @@ class ChannelModule {
           try {
             // Fetch videos for the specified tab type
             await this.fetchAndSaveVideosViaYtDlp(channel, channelId, tabType, mostRecentVideoDate);
+            freshFetchPerformed = true;
           } finally {
             // Clear the active fetch record
             this.activeFetches.delete(fetchKey);
@@ -2595,7 +2534,10 @@ class ChannelModule {
       // Get stats for the response
       const stats = await this.getChannelVideoStats(channelId, downloadedFilter, searchQuery, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter);
 
-      return this.buildChannelVideosResponse(paginatedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType);
+      return {
+        ...this.buildChannelVideosResponse(paginatedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType),
+        freshFetchPerformed
+      };
 
     } catch (error) {
       logger.error({ err: error, channelId }, 'Error fetching channel videos');
@@ -2610,6 +2552,25 @@ class ChannelModule {
         response.fetchError = true;
       }
       return response;
+    }
+  }
+
+  /**
+   * Clear terminated_at on a channel when we've proven it's reachable.
+   * Swallows failures so the calling page-load path can't be broken by a
+   * stuck UPDATE - the marker would just stay set until the next attempt.
+   * @param {Object} channel - Sequelize channel instance
+   * @param {string} channelId - Channel ID for log context
+   * @returns {Promise<void>}
+   * @private
+   */
+  async _clearTerminationMarkerIfSet(channel, channelId) {
+    if (!channel || !channel.terminated_at) return;
+    try {
+      await channel.update({ terminated_at: null });
+      logger.info({ channelId }, 'Channel previously marked terminated is reachable again; clearing termination marker');
+    } catch (clearErr) {
+      logger.warn({ err: clearErr, channelId }, 'Failed to clear terminated_at after successful video fetch');
     }
   }
 
@@ -2649,6 +2610,10 @@ class ChannelModule {
 
         // Update the last fetched timestamp for this specific tab (atomic SQL update)
         await this.setLastFetchedForTab(channel, mediaType, new Date());
+
+        // Reaching this point means yt-dlp returned a valid response, so the
+        // channel is reachable - inverse of persistTerminatedChannel.
+        await this._clearTerminationMarkerIfSet(channel, channelId);
       }
     } catch (ytdlpError) {
       logger.error({ err: ytdlpError, channelId }, 'Error fetching channel videos');
@@ -2696,53 +2661,21 @@ class ChannelModule {
         logger.info({ channelId, channelTitle: channel.title, tabType }, 'Starting full video fetch for channel');
         const startTime = Date.now();
 
-        // API-first path: all tabs use per-tab auto-generated playlists when a
-        // key is configured (UULF/UUSH/UULV for videos/shorts/streams).
-        let result = null;
-        if (youtubeApi.isAvailable()) {
-          try {
-            const apiKey = youtubeApi.getApiKey();
-            const channelUrl = channel.url || this.resolveChannelUrlFromId(channelId);
-            const apiResult = await youtubeApi.client.listChannelVideos(apiKey, channelUrl, {
-              tabType,
-              maxVideos: MAX_LOAD_MORE_VIDEOS,
-              includeMetadata: true,
-            });
-
-            const videos = apiResult.videos.map((v) => mapApiVideoToChannelVideo(v, tabType, channel.default_rating));
-
-            logger.info(
-              { channelId, tabType, source: 'youtube-api', videoCount: videos.length },
-              'Fetched all channel videos via YouTube API'
-            );
-            result = { videos, currentChannelUrl: apiResult.currentChannelUrl };
-          } catch (apiErr) {
-            logApiFallback(
-              apiErr,
-              { channelId, tabType },
-              'YouTube API listChannelVideos (full fetch) failed, falling back to yt-dlp'
-            );
-          }
-        }
-
-        // yt-dlp fallback path (no key, or API error)
-        if (result === null) {
-          const canonicalUrl = `${this.resolveChannelUrlFromId(channelId)}/${tabType}`;
-          const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
-          result = await this.withTempFile('channel-all-videos', async (outputFilePath) => {
-            const args = YtdlpCommandBuilder.buildMetadataFetchArgs(canonicalUrl, {
-              flatPlaylist: true,
-              extractorArgs: 'youtubetab:approximate_date',
-              playlistEnd: MAX_LOAD_MORE_VIDEOS
-            });
-            const content = await this.executeYtDlpCommand(args, outputFilePath);
-
-            const jsonOutput = JSON.parse(content);
-            const videos = this.extractVideosFromYtDlpResponse(jsonOutput, channel.default_rating);
-            const currentChannelUrl = jsonOutput.uploader_url || jsonOutput.channel_url || jsonOutput.url;
-            return { videos, currentChannelUrl };
+        const canonicalUrl = `${this.resolveChannelUrlFromId(channelId)}/${tabType}`;
+        const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
+        const result = await this.withTempFile('channel-all-videos', async (outputFilePath) => {
+          const args = YtdlpCommandBuilder.buildMetadataFetchArgs(canonicalUrl, {
+            flatPlaylist: true,
+            extractorArgs: 'youtubetab:approximate_date',
+            playlistEnd: MAX_LOAD_MORE_VIDEOS
           });
-        }
+          const content = await this.executeYtDlpCommand(args, outputFilePath);
+
+          const jsonOutput = JSON.parse(content);
+          const videos = this.extractVideosFromYtDlpResponse(jsonOutput, channel.default_rating);
+          const currentChannelUrl = jsonOutput.uploader_url || jsonOutput.channel_url || jsonOutput.url;
+          return { videos, currentChannelUrl };
+        });
 
         const fetchDuration = (Date.now() - startTime) / 1000;
         logger.info({
@@ -2769,6 +2702,9 @@ class ChannelModule {
         }
         // Update the last fetched timestamp for this specific tab (atomic SQL update)
         await this.setLastFetchedForTab(channel, mediaType, new Date());
+
+        // yt-dlp returned a valid response, so the channel is reachable.
+        await this._clearTerminationMarkerIfSet(channel, channelId);
 
         // Get the requested page of videos after the full fetch
         const offset = (requestedPage - 1) * requestedPageSize;

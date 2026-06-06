@@ -238,174 +238,6 @@ describe('youtubeApi/client', () => {
     });
   });
 
-  describe('listChannelVideos', () => {
-    // Real YouTube channel IDs are always exactly 24 chars (UC + 22). The
-    // client enforces this shape before deriving per-tab playlist IDs.
-    const CHAN_X = 'UCxxxxxxxxxxxxxxxxxxxxxx';
-    const CHAN_Y = 'UCyyyyyyyyyyyyyyyyyyyyyy';
-    const CHAN_Z = 'UCzzzzzzzzzzzzzzzzzzzzzz';
-
-    const mockChannelsListOnce = (channelId = CHAN_X) => {
-      axios.get.mockResolvedValueOnce({
-        status: 200,
-        data: {
-          items: [{
-            id: channelId,
-            snippet: { title: 'Chan', customUrl: '@chan' },
-            contentDetails: { relatedPlaylists: { uploads: `UU${channelId.slice(2)}` } },
-          }],
-        },
-      });
-    };
-
-    test('fetches per-tab playlist and lists videos (videos tab -> UULF)', async () => {
-      mockChannelsListOnce(CHAN_X);
-      // playlistItems.list (single page)
-      axios.get.mockResolvedValueOnce({
-        status: 200,
-        data: {
-          items: [
-            { snippet: { resourceId: { videoId: 'v1aaaaaaaaa' }, title: 'V1', publishedAt: '2024-05-01T00:00:00Z' } },
-            { snippet: { resourceId: { videoId: 'v2bbbbbbbbb' }, title: 'V2', publishedAt: '2024-04-30T00:00:00Z' } },
-          ],
-        },
-      });
-      // videos.list for full metadata
-      axios.get.mockResolvedValueOnce({
-        status: 200,
-        data: {
-          items: [
-            {
-              id: 'v1aaaaaaaaa',
-              snippet: { title: 'V1', publishedAt: '2024-05-01T00:00:00Z' },
-              contentDetails: { duration: 'PT5M' },
-              statistics: { viewCount: '100' },
-              status: { privacyStatus: 'public' },
-            },
-            {
-              id: 'v2bbbbbbbbb',
-              snippet: { title: 'V2', publishedAt: '2024-04-30T00:00:00Z' },
-              contentDetails: { duration: 'PT10M' },
-              statistics: { viewCount: '200' },
-              status: { privacyStatus: 'public' },
-            },
-          ],
-        },
-      });
-
-      const result = await client.listChannelVideos('api-key', 'https://www.youtube.com/@chan', {
-        maxVideos: 100,
-        includeMetadata: true,
-      });
-
-      expect(result.videos).toHaveLength(2);
-      expect(result.videos[0]).toMatchObject({ id: 'v1aaaaaaaaa', duration: 300 });
-      expect(result.currentChannelUrl).toBe('https://www.youtube.com/@chan');
-      // Second axios call is playlistItems.list and MUST target the UULF playlist.
-      expect(axios.get.mock.calls[1][0]).toBe('https://www.googleapis.com/youtube/v3/playlistItems');
-      expect(axios.get.mock.calls[1][1].params.playlistId).toBe(`UULF${CHAN_X.slice(2)}`);
-    });
-
-    test('uses UUSH playlist when tabType=shorts', async () => {
-      mockChannelsListOnce(CHAN_Y);
-      axios.get.mockResolvedValueOnce({ status: 200, data: { items: [] } });
-
-      await client.listChannelVideos('api-key', 'https://www.youtube.com/@chan', {
-        tabType: 'shorts',
-        maxVideos: 50,
-        includeMetadata: false,
-      });
-
-      expect(axios.get.mock.calls[1][1].params.playlistId).toBe(`UUSH${CHAN_Y.slice(2)}`);
-    });
-
-    test('uses UULV playlist when tabType=streams', async () => {
-      mockChannelsListOnce(CHAN_Z);
-      axios.get.mockResolvedValueOnce({ status: 200, data: { items: [] } });
-
-      await client.listChannelVideos('api-key', 'https://www.youtube.com/@chan', {
-        tabType: 'streams',
-        maxVideos: 50,
-        includeMetadata: false,
-      });
-
-      expect(axios.get.mock.calls[1][1].params.playlistId).toBe(`UULV${CHAN_Z.slice(2)}`);
-    });
-
-    test('returns empty videos when playlistItems.list responds 404', async () => {
-      mockChannelsListOnce(CHAN_X);
-      // The per-tab playlist does not exist (channel has no Shorts/Streams).
-      axios.get.mockRejectedValueOnce({
-        response: { status: 404, data: { error: { errors: [{ reason: 'playlistNotFound' }] } } },
-      });
-
-      const result = await client.listChannelVideos('api-key', 'https://www.youtube.com/@chan', {
-        tabType: 'shorts',
-        includeMetadata: false,
-      });
-
-      expect(result.videos).toEqual([]);
-      expect(result.currentChannelUrl).toBe('https://www.youtube.com/@chan');
-      expect(result.channelInfo).toBeTruthy();
-    });
-
-    test('propagates non-NOT_FOUND playlistItems errors', async () => {
-      mockChannelsListOnce(CHAN_X);
-      axios.get.mockRejectedValueOnce({
-        response: { status: 403, data: { error: { errors: [{ reason: 'quotaExceeded' }] } } },
-      });
-
-      await expect(
-        client.listChannelVideos('api-key', 'https://www.youtube.com/@chan', { tabType: 'videos' })
-      ).rejects.toMatchObject({
-        name: 'YoutubeApiError',
-        code: YoutubeApiErrorCode.QUOTA_EXCEEDED,
-      });
-    });
-
-    test('paginates playlistItems until maxVideos reached', async () => {
-      mockChannelsListOnce(CHAN_X);
-      // Two pages of playlistItems (50 + 30)
-      const page1 = Array.from({ length: 50 }, (_, i) => ({ snippet: { resourceId: { videoId: `p1id${i}` }, title: `V${i}` } }));
-      const page2 = Array.from({ length: 30 }, (_, i) => ({ snippet: { resourceId: { videoId: `p2id${i}` }, title: `V${i + 50}` } }));
-      axios.get.mockResolvedValueOnce({ status: 200, data: { items: page1, nextPageToken: 'tok' } });
-      axios.get.mockResolvedValueOnce({ status: 200, data: { items: page2 } });
-
-      const result = await client.listChannelVideos('api-key', `https://www.youtube.com/channel/${CHAN_X}`, {
-        maxVideos: 100,
-        includeMetadata: false,
-      });
-
-      expect(result.videos).toHaveLength(80);
-      expect(axios.get).toHaveBeenCalledTimes(3); // channels + 2x playlistItems
-      expect(axios.get.mock.calls[2][1].params.pageToken).toBe('tok');
-      expect(axios.get.mock.calls[1][1].params.playlistId).toBe(`UULF${CHAN_X.slice(2)}`);
-    });
-
-    test('rejects malformed channel IDs returned by channels.list', async () => {
-      // Simulate a channels.list response with a too-short/odd channel ID.
-      // The strict UC + 22-char shape check is what catches this before we
-      // hit the API with a bogus per-tab playlist ID.
-      axios.get.mockResolvedValueOnce({
-        status: 200,
-        data: {
-          items: [{
-            id: 'UC-too-short',
-            snippet: { title: 'Chan' },
-            contentDetails: { relatedPlaylists: { uploads: 'UU-too-short' } },
-          }],
-        },
-      });
-
-      await expect(
-        client.listChannelVideos('api-key', 'https://www.youtube.com/@chan', { tabType: 'videos' })
-      ).rejects.toMatchObject({
-        name: 'YoutubeApiError',
-        code: YoutubeApiErrorCode.INVALID_CHANNEL_ID,
-      });
-    });
-  });
-
   describe('detectAvailableTabs', () => {
     const CHAN_X = 'UCxxxxxxxxxxxxxxxxxxxxxx';
 
@@ -680,7 +512,7 @@ describe('youtubeApi/client', () => {
       );
     });
 
-    test('filters out Shorts shorter than 60 seconds after enrichment', async () => {
+    test('does not drop Shorts; frontend filter owns that policy now', async () => {
       axios.get.mockResolvedValueOnce({
         status: 200,
         data: {
@@ -704,8 +536,138 @@ describe('youtubeApi/client', () => {
 
       const results = await client.searchVideos('api-key', 'q', 10);
 
-      // 60s is kept (boundary), 45s is dropped, 10m is kept.
-      expect(results.map((r) => r.youtubeId)).toEqual(['exact60sss1', 'longvideo01']);
+      expect(results.map((r) => r.youtubeId)).toEqual(['short000001', 'exact60sss1', 'longvideo01']);
+      expect(results.map((r) => r.duration)).toEqual([45, 60, 600]);
+    });
+
+    test('paginates search.list when caller requests more than one page', async () => {
+      const firstPageItems = Array.from({ length: 50 }, (_, i) => ({
+        id: { kind: 'youtube#video', videoId: `firstpag${String(i).padStart(3, '0')}` },
+        snippet: { title: `P1-${i}`, publishedAt: '2024-01-01T00:00:00Z' },
+      }));
+      const secondPageItems = Array.from({ length: 50 }, (_, i) => ({
+        id: { kind: 'youtube#video', videoId: `secondpg${String(i).padStart(3, '0')}` },
+        snippet: { title: `P2-${i}`, publishedAt: '2024-01-01T00:00:00Z' },
+      }));
+
+      axios.get.mockResolvedValueOnce({
+        status: 200,
+        data: { items: firstPageItems, nextPageToken: 'TOKEN-2' },
+      });
+      axios.get.mockResolvedValueOnce({
+        status: 200,
+        data: { items: secondPageItems },
+      });
+      // videos.list batches: 50 per call, so 100 IDs = 2 batches.
+      const allIds = [...firstPageItems, ...secondPageItems].map((it) => it.id.videoId);
+      axios.get.mockResolvedValueOnce({
+        status: 200,
+        data: {
+          items: allIds.slice(0, 50).map((id) => ({
+            id,
+            contentDetails: { duration: 'PT5M' },
+            statistics: { viewCount: '10' },
+          })),
+        },
+      });
+      axios.get.mockResolvedValueOnce({
+        status: 200,
+        data: {
+          items: allIds.slice(50).map((id) => ({
+            id,
+            contentDetails: { duration: 'PT5M' },
+            statistics: { viewCount: '10' },
+          })),
+        },
+      });
+
+      const results = await client.searchVideos('api-key', 'q', 100);
+
+      expect(results).toHaveLength(100);
+      // Second search.list call carries the pageToken from the first response.
+      expect(axios.get).toHaveBeenNthCalledWith(
+        2,
+        'https://www.googleapis.com/youtube/v3/search',
+        expect.objectContaining({
+          params: expect.objectContaining({ pageToken: 'TOKEN-2' }),
+        })
+      );
+    });
+
+    test('deduplicates videoIds that appear on multiple search.list pages', async () => {
+      const sharedItem = {
+        id: { kind: 'youtube#video', videoId: 'sharedid001' },
+        snippet: { title: 'Shared', publishedAt: '2024-01-01T00:00:00Z' },
+      };
+      const uniqueItem = {
+        id: { kind: 'youtube#video', videoId: 'uniqueid002' },
+        snippet: { title: 'Unique', publishedAt: '2024-01-01T00:00:00Z' },
+      };
+      axios.get.mockResolvedValueOnce({
+        status: 200,
+        data: { items: [sharedItem], nextPageToken: 'TOKEN-2' },
+      });
+      axios.get.mockResolvedValueOnce({
+        status: 200,
+        data: { items: [sharedItem, uniqueItem] },
+      });
+      axios.get.mockResolvedValueOnce({
+        status: 200,
+        data: {
+          items: [
+            { id: 'sharedid001', contentDetails: { duration: 'PT5M' }, statistics: { viewCount: '10' } },
+            { id: 'uniqueid002', contentDetails: { duration: 'PT5M' }, statistics: { viewCount: '10' } },
+          ],
+        },
+      });
+
+      const results = await client.searchVideos('api-key', 'q', 100);
+
+      expect(results.map((r) => r.youtubeId)).toEqual(['sharedid001', 'uniqueid002']);
+    });
+
+    test('stops paginating when nextPageToken is missing even if below requested count', async () => {
+      const items = Array.from({ length: 30 }, (_, i) => ({
+        id: { kind: 'youtube#video', videoId: `onlypage${String(i).padStart(3, '0')}` },
+        snippet: { title: `O-${i}`, publishedAt: '2024-01-01T00:00:00Z' },
+      }));
+      axios.get.mockResolvedValueOnce({ status: 200, data: { items } });
+      axios.get.mockResolvedValueOnce({
+        status: 200,
+        data: {
+          items: items.map((it) => ({
+            id: it.id.videoId,
+            contentDetails: { duration: 'PT5M' },
+            statistics: { viewCount: '10' },
+          })),
+        },
+      });
+
+      const results = await client.searchVideos('api-key', 'q', 100);
+
+      expect(results).toHaveLength(30);
+      // Only 1 search.list call + 1 videos.list call = 2 axios calls.
+      expect(axios.get).toHaveBeenCalledTimes(2);
+    });
+
+    test('caps pagination when pages contain no usable video results', async () => {
+      axios.get
+        .mockResolvedValueOnce({ status: 200, data: { items: [], nextPageToken: 'TOKEN-2' } })
+        .mockResolvedValueOnce({ status: 200, data: { items: [], nextPageToken: 'TOKEN-3' } })
+        .mockResolvedValueOnce({ status: 200, data: { items: [], nextPageToken: 'TOKEN-4' } })
+        .mockResolvedValueOnce({ status: 200, data: { items: [], nextPageToken: 'TOKEN-5' } });
+
+      const results = await client.searchVideos('api-key', 'q', 100);
+
+      expect(results).toEqual([]);
+      expect(axios.get).toHaveBeenCalledTimes(3);
+      expect(axios.get).toHaveBeenNthCalledWith(
+        3,
+        'https://www.googleapis.com/youtube/v3/search',
+        expect.objectContaining({
+          params: expect.objectContaining({ pageToken: 'TOKEN-3' }),
+        })
+      );
     });
 
     test('keeps items whose enrichment row is missing so gaps do not silently drop videos', async () => {

@@ -7,8 +7,10 @@ const MessageEmitter = require('../messageEmitter');
 const DownloadProgressMonitor = require('./DownloadProgressMonitor');
 const VideoMetadataProcessor = require('./videoMetadataProcessor');
 const tempPathManager = require('./tempPathManager');
+const ytDlpRunner = require('../ytDlpRunner');
 const { JobVideoDownload } = require('../../models');
 const Channel = require('../../models/channel');
+const ChannelVideo = require('../../models/channelvideo');
 const logger = require('../../logger');
 const filesystem = require('../filesystem');
 
@@ -46,26 +48,7 @@ class DownloadExecutor {
   // Helper function to extract YouTube ID from file path
   // Expects format: "...Channel - Title [VideoID].ext" or "...Channel - Title - VideoID/..."
   extractYoutubeIdFromPath(filePath) {
-    try {
-      const filename = path.basename(filePath);
-      // Try to extract from [VideoID].ext pattern
-      const bracketMatch = filename.match(/\[([a-zA-Z0-9_-]{10,12})\]/);
-      if (bracketMatch) {
-        return bracketMatch[1];
-      }
-
-      // Try to extract from directory name ending with " - VideoID"
-      const dirname = path.basename(path.dirname(filePath));
-      const dashMatch = dirname.match(/ - ([a-zA-Z0-9_-]{10,12})$/);
-      if (dashMatch) {
-        return dashMatch[1];
-      }
-
-      return null;
-    } catch (error) {
-      logger.error({ err: error, filePath }, 'Error extracting youtube ID from path');
-      return null;
-    }
+    return filesystem.extractYoutubeIdFromPath(filePath);
   }
 
   // Helper function to remove a channel directory if it's empty
@@ -223,11 +206,147 @@ class DownloadExecutor {
             }
           }
         } catch (readDirError) {
-          logger.error({ err: readDirError, dir }, 'Error reading directory');
+          if (readDirError.code === 'ENOENT') {
+            logger.debug({ err: readDirError, dir }, 'Partial file directory already removed');
+          } else {
+            logger.error({ err: readDirError, dir }, 'Error reading directory');
+          }
         }
       } catch (error) {
         logger.error({ err: error, file }, 'Error cleaning up partial files');
       }
+    }
+  }
+
+  isExpectedYtdlpSkipMessage(message = '') {
+    const normalized = String(message);
+    if (ytDlpRunner.isMembersOnlyError(normalized)) {
+      return true;
+    }
+    const expectedPatterns = [
+      /this live event will begin/i,
+      /will begin in (?:a few moments|\d+)/i,
+      /premiere (?:will begin|starts|is upcoming)/i,
+      /premieres? in \d+/i,
+      /pre[- ]release/i,
+      /this video is not yet available/i,
+      /release time of video is not known/i,
+    ];
+
+    return expectedPatterns.some(pattern => pattern.test(normalized));
+  }
+
+  // Narrower predicate than isExpectedYtdlpSkipMessage: only matches members-only
+  // patterns, not upcoming-premiere or pre-release ones. Used to decide whether
+  // to stamp channelvideos.availability with 'subscriber_only', which would be
+  // wrong for premiere/pre-release skips (those are temporary states).
+  isMembersOnlyMessage(message = '') {
+    return ytDlpRunner.isMembersOnlyError(message);
+  }
+
+  extractYoutubeIdFromYtdlpError(message = '') {
+    const match = String(message).match(/\[youtube\]\s+([a-zA-Z0-9_-]{11}):/);
+    return match ? match[1] : null;
+  }
+
+  extractChannelIdFromYtdlpError(message = '') {
+    const match = String(message).match(/\[youtube:tab\]\s+(UC[a-zA-Z0-9_-]{22}):/);
+    return match ? match[1] : null;
+  }
+
+  // Fire-and-forget persistence so we don't block the stdout/stderr stream
+  // handlers. Internal try/catch ensures the returned Promise always resolves,
+  // so callers don't trigger unhandledRejection warnings when they don't await.
+  async persistMembersOnlyAvailability(youtubeId) {
+    if (!youtubeId) return;
+    try {
+      await ChannelVideo.update(
+        { availability: 'subscriber_only' },
+        { where: { youtube_id: youtubeId } },
+      );
+    } catch (err) {
+      logger.warn({ err, youtubeId }, 'Failed to persist subscriber_only availability after download error');
+    }
+  }
+
+  // Stamps terminated_at once and always clears auto_download_enabled_tabs.
+  // Returns null if the channel is missing or the update fails.
+  async persistTerminatedChannel(channelId) {
+    if (!channelId) return null;
+    try {
+      const channel = await Channel.findOne({ where: { channel_id: channelId } });
+      if (!channel) {
+        logger.warn({ channelId }, 'Terminated channel not in DB; skipping persistence');
+        return null;
+      }
+      await channel.update({
+        terminated_at: channel.terminated_at || new Date(),
+        auto_download_enabled_tabs: ''
+      });
+      return channel;
+    } catch (err) {
+      logger.warn({ err, channelId }, 'Failed to persist terminated channel state');
+      return null;
+    }
+  }
+
+  async persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, failedVideosList) {
+    if (!videoData || videoData.length === 0) {
+      return;
+    }
+
+    const currentJob = jobModule.getJob(jobId);
+    if (!currentJob) {
+      logger.warn({ jobId }, 'Unable to persist completed videos before terminal update; job not found');
+      return;
+    }
+
+    currentJob.data = currentJob.data || {};
+    currentJob.data.videos = videoData;
+    currentJob.data.failedVideos = failedVideosList || [];
+    await jobModule.saveJobOnly(jobId, currentJob);
+  }
+
+  async saveIntermediateGroupResults(jobId, output, videoData, failedVideosList, skippedCount, extraFields = {}, terminatedChannelsForGroup = [], terminationFailuresForGroup = []) {
+    const currentJob = jobModule.getJob(jobId);
+    if (!currentJob) {
+      logger.warn({ jobId }, 'Unable to merge intermediate group results; job not found');
+      return;
+    }
+
+    const existingVideos = currentJob.data?.videos || [];
+    const existingFailedVideos = currentJob.data?.failedVideos || [];
+    const existingSkippedCount = currentJob.data?.cumulativeSkipped || 0;
+    const existingTerminated = currentJob.data?.terminatedChannels || [];
+    const existingFailures = currentJob.data?.terminationFailures || [];
+
+    // First write wins so original uploader/url/date stick across groups.
+    const seenChannelIds = new Set(existingTerminated.map(c => c.channelId));
+    const mergedTerminated = [...existingTerminated];
+    for (const entry of (terminatedChannelsForGroup || [])) {
+      if (!entry || !entry.channelId || seenChannelIds.has(entry.channelId)) continue;
+      seenChannelIds.add(entry.channelId);
+      mergedTerminated.push(entry);
+    }
+
+    // Dedupe failures by channel id across groups.
+    const mergedFailures = Array.from(new Set([...existingFailures, ...(terminationFailuresForGroup || [])]));
+
+    await jobModule.updateJob(jobId, {
+      output: output,
+      ...extraFields,
+      data: {
+        videos: [...existingVideos, ...(videoData || [])],
+        failedVideos: [...existingFailedVideos, ...(failedVideosList || [])],
+        cumulativeSkipped: existingSkippedCount + (skippedCount || 0),
+        terminatedChannels: mergedTerminated,
+        terminationFailures: mergedFailures
+      },
+    });
+
+    const updatedJob = jobModule.getJob(jobId);
+    if (updatedJob && updatedJob.data && updatedJob.data.videos) {
+      await jobModule.saveJobOnly(jobId, updatedJob);
     }
   }
 
@@ -589,8 +708,132 @@ class DownloadExecutor {
 
       // Track failed videos with their error messages
       const failedVideos = new Map(); // youtubeId -> { url, error, youtubeId }
+      // Count of yt-dlp errors that we treat as expected skips (members-only,
+      // upcoming live, premiere, etc.). Only the count drives downstream
+      // behavior; per-skip context goes to the structured log.
+      let expectedSkipCount = 0;
+      // Set of youtube_id values that yt-dlp specifically rejected as
+      // members-only. Tracked separately from expectedSkipCount so the final
+      // summary can call out membership-gated skips (the user can't fix
+      // those by waiting like with premieres). Set semantics dedupe across
+      // stdout+stderr emitting the same error for one video.
+      const membersOnlyVideoIds = new Set();
+      // Count of yt-dlp errors that are NOT expected skips. Incremented in
+      // both stdout and stderr handlers regardless of whether currentVideoId
+      // is known, so unassociated errors still block the
+      // "complete with only expected skips" classification.
+      let unexpectedErrorCount = 0;
+      // seenTerminatedChannelIds: sync dedupe across stdout/stderr.
+      // terminatedChannelIds: only successful persists; drives hasOnlyHandledErrors.
+      // terminatedChannels: rich entries for the summary, populated on success only.
+      // terminationFailures: channel ids the executor saw terminated but
+      //   couldn't auto-disable (row missing or update threw). Surfaced
+      //   separately so the multi-group finalizer can warn on them.
+      // terminatedPersistencePromises: awaited by the exit handler before final state.
+      const seenTerminatedChannelIds = new Set();
+      const terminatedChannelIds = new Set();
+      const terminatedChannels = [];
+      const terminationFailures = [];
+      const terminatedPersistencePromises = [];
       let currentVideoId = null; // Track the current video being processed
       let lastErrorMessage = null; // Store the last error message seen
+
+      const recordExpectedSkip = (reason, source) => {
+        expectedSkipCount += 1;
+        logger.info({ youtubeId: currentVideoId, reason, source }, 'Expected video skip from yt-dlp');
+      };
+
+      // Shared by stdout and stderr. Returns true when the line was consumed
+      // by an expected skip or termination, so the caller can suppress it.
+      const handleYtdlpErrorLine = (line, source) => {
+        const errorMatch = line.match(/ERROR:\s*(.+)/);
+        if (!errorMatch) return false;
+
+        lastErrorMessage = errorMatch[1].trim();
+
+        if (this.isExpectedYtdlpSkipMessage(lastErrorMessage)) {
+          recordExpectedSkip(lastErrorMessage, source);
+          if (this.isMembersOnlyMessage(lastErrorMessage)) {
+            const membersOnlyVideoId = this.extractYoutubeIdFromYtdlpError(lastErrorMessage) || currentVideoId;
+            if (membersOnlyVideoId) {
+              membersOnlyVideoIds.add(membersOnlyVideoId);
+              this.persistMembersOnlyAvailability(membersOnlyVideoId);
+            }
+          }
+          return true;
+        }
+
+        if (ytDlpRunner.isTerminatedAccountError(lastErrorMessage)) {
+          const channelId = this.extractChannelIdFromYtdlpError(lastErrorMessage);
+          if (channelId) {
+            if (!seenTerminatedChannelIds.has(channelId)) {
+              seenTerminatedChannelIds.add(channelId);
+              logger.warn({ channelId, source }, 'Detected terminated YouTube channel');
+
+              // Broadcast after the lookup so we can name the uploader, not
+              // the raw ID. Only mark as handled on success; persistence
+              // failure stays in the unexpected-error branch so we don't
+              // tell the user "disabled" when nothing was actually disabled.
+              const lookupPromise = this.persistTerminatedChannel(channelId).then(row => {
+                if (row) {
+                  terminatedChannelIds.add(channelId);
+                  terminatedChannels.push({
+                    channelId,
+                    uploader: row.uploader || null,
+                    url: row.url || null,
+                    terminatedAt: row.terminated_at || null
+                  });
+                  const displayName = row.uploader || channelId;
+                  MessageEmitter.emitMessage(
+                    'broadcast',
+                    null,
+                    'download',
+                    'downloadProgress',
+                    {
+                      text: `Channel "${displayName}" marked terminated by YouTube; scheduled downloads disabled`,
+                      progress: monitor.snapshot('warning'),
+                      warning: true
+                    }
+                  );
+                } else {
+                  unexpectedErrorCount += 1;
+                  terminationFailures.push(channelId);
+                  logger.warn({ channelId, source }, 'Termination detected but could not be auto-disabled; channel will continue to retry');
+                  MessageEmitter.emitMessage(
+                    'broadcast',
+                    null,
+                    'download',
+                    'downloadProgress',
+                    {
+                      text: `Channel ${channelId} reported as terminated by YouTube but could not be auto-disabled`,
+                      progress: monitor.snapshot('warning'),
+                      warning: true
+                    }
+                  );
+                }
+              });
+              terminatedPersistencePromises.push(lookupPromise);
+            }
+            return true;
+          }
+          // No channel id: fall through to the unexpected-error branch.
+        }
+
+        unexpectedErrorCount += 1;
+        const errorLogMessage = source === 'stderr'
+          ? 'Error detected in stderr'
+          : 'Error detected during download';
+        logger.warn({ error: lastErrorMessage, currentVideoId }, errorLogMessage);
+        if (currentVideoId && !failedVideos.has(currentVideoId)) {
+          failedVideos.set(currentVideoId, {
+            youtubeId: currentVideoId,
+            error: lastErrorMessage,
+            url: null
+          });
+          logger.info({ youtubeId: currentVideoId, error: lastErrorMessage }, 'Recorded video failure');
+        }
+        return false;
+      };
 
       const emitCookiesSuggestionMessage = () => {
         if (cookiesSuggestionEmitted) {
@@ -715,23 +958,15 @@ class DownloadExecutor {
               }
             }
 
-            // Detect and track ERROR messages
+            // Suppress the line when handleYtdlpErrorLine consumed it
+            // (expected skip or termination).
+            let suppressErrorLine = false;
             if (line.includes('ERROR:')) {
-              const errorMatch = line.match(/ERROR:\s*(.+)/);
-              if (errorMatch) {
-                lastErrorMessage = errorMatch[1].trim();
-                logger.warn({ error: lastErrorMessage, currentVideoId }, 'Error detected during download');
+              suppressErrorLine = handleYtdlpErrorLine(line, 'stdout');
+            }
 
-                // Associate error with current video if we know which video is being processed
-                if (currentVideoId && !failedVideos.has(currentVideoId)) {
-                  failedVideos.set(currentVideoId, {
-                    youtubeId: currentVideoId,
-                    error: lastErrorMessage,
-                    url: null // Will be populated later from urlsToProcess
-                  });
-                  logger.info({ youtubeId: currentVideoId, error: lastErrorMessage }, 'Recorded video failure');
-                }
-              }
+            if (suppressErrorLine) {
+              return;
             }
 
             // Always try to process for state updates
@@ -773,23 +1008,18 @@ class DownloadExecutor {
           emitCookiesSuggestionMessage();
         }
 
-        // Detect and track ERROR messages from stderr
+        // Detect and track ERROR messages from stderr. Node streams can
+        // coalesce multiple lines into one chunk, so iterate per line rather
+        // than running a single regex over the whole chunk (which would only
+        // catch the first ERROR: occurrence).
         if (dataStr.includes('ERROR:')) {
-          const errorMatch = dataStr.match(/ERROR:\s*(.+)/);
-          if (errorMatch) {
-            lastErrorMessage = errorMatch[1].trim();
-            logger.warn({ error: lastErrorMessage, currentVideoId }, 'Error detected in stderr');
-
-            // Associate error with current video if we know which video is being processed
-            if (currentVideoId && !failedVideos.has(currentVideoId)) {
-              failedVideos.set(currentVideoId, {
-                youtubeId: currentVideoId,
-                error: lastErrorMessage,
-                url: null // Will be populated later from urlsToProcess
-              });
-              logger.info({ youtubeId: currentVideoId, error: lastErrorMessage }, 'Recorded video failure from stderr');
-            }
-          }
+          dataStr
+            .split('\n')
+            .map(line => line.trim())
+            .filter(line => line.includes('ERROR:'))
+            .forEach(line => {
+              handleYtdlpErrorLine(line, 'stderr');
+            });
         }
 
         // Check for bot detection message (handle different quote types and patterns)
@@ -856,6 +1086,12 @@ class DownloadExecutor {
             logger.info('HTTP 403 detected in stderr buffer');
             emitCookiesSuggestionMessage();
           }
+        }
+
+        // Wait for terminated-channel lookups before deriving finalState.
+        // Without this barrier the final broadcast can ship raw channel IDs.
+        if (terminatedPersistencePromises.length > 0) {
+          await Promise.allSettled(terminatedPersistencePromises);
         }
 
         let urlsToProcess;
@@ -994,6 +1230,32 @@ class DownloadExecutor {
 
         logger.info({ jobType, jobId }, 'Job complete (with or without errors)');
 
+        // yt-dlp exited with code 1 only because every error it emitted was an
+        // expected skip (members-only, upcoming live, premiere, etc.). Treat
+        // these as a clean completion rather than a failure. unexpectedErrorCount
+        // catches real ERRORs that miss failedVideosList because currentVideoId
+        // was null (covers both stdout and stderr). monitor.hasError on its own
+        // would only catch the stdout path.
+        const hasOnlyExpectedSkips = code === 1 &&
+          expectedSkipCount > 0 &&
+          failedVideosList.length === 0 &&
+          unexpectedErrorCount === 0 &&
+          !botDetected &&
+          !httpForbiddenDetected;
+
+        // Like hasOnlyExpectedSkips but also admits recognized terminations.
+        // Mixed failure modes still report as an error.
+        const hasOnlyHandledErrors = code === 1 &&
+          (expectedSkipCount > 0 || terminatedChannelIds.size > 0) &&
+          failedVideosList.length === 0 &&
+          unexpectedErrorCount === 0 &&
+          !botDetected &&
+          !httpForbiddenDetected;
+
+        if (terminatedChannelIds.size > 0) {
+          logger.warn({ terminatedChannels }, 'Channels marked terminated during this job');
+        }
+
         let status = '';
         let output = '';
         let jobErrorCode;
@@ -1003,13 +1265,18 @@ class DownloadExecutor {
           status = 'Error';
           output = 'Bot detection encountered. Please set cookies in your Configuration.';
 
+          await this.persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, failedVideosList);
           await jobModule.updateJob(jobId, {
             status: status,
             endDate: Date.now(),
             output: output,
             data: {
               videos: videoData || [],
-              failedVideos: failedVideosList || []
+              failedVideos: failedVideosList || [],
+              terminatedChannels: [...terminatedChannels],
+              totalTerminatedChannels: terminatedChannelIds.size,
+              terminationFailures: [...terminationFailures],
+              totalTerminationFailures: terminationFailures.length
             },
             notes: 'YouTube requires authentication. Enable cookies in Configuration to resolve this issue.',
             error: 'COOKIES_REQUIRED'
@@ -1029,15 +1296,7 @@ class DownloadExecutor {
 
           // Persist videos to DB BEFORE calling updateJob
           // This ensures videos are in DB before updateJob reloads from DB
-          if (videoData && videoData.length > 0) {
-            const currentJob = jobModule.getJob(jobId);
-            if (currentJob) {
-              currentJob.data = currentJob.data || {};
-              currentJob.data.videos = videoData;
-              currentJob.data.failedVideos = failedVideosList || [];
-              await jobModule.saveJobOnly(jobId, currentJob);
-            }
-          }
+          await this.persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, failedVideosList);
 
           await jobModule.updateJob(jobId, {
             status: status,
@@ -1045,7 +1304,11 @@ class DownloadExecutor {
             output: output,
             data: {
               videos: videoData || [],
-              failedVideos: failedVideosList || []
+              failedVideos: failedVideosList || [],
+              terminatedChannels: [...terminatedChannels],
+              totalTerminatedChannels: terminatedChannelIds.size,
+              terminationFailures: [...terminationFailures],
+              totalTerminationFailures: terminationFailures.length
             },
             notes: terminationReason,
           });
@@ -1058,44 +1321,80 @@ class DownloadExecutor {
           const failureDetails = monitor.lastParsed || null;
 
           status = signal === 'SIGKILL' ? 'Killed' : 'Error';
+          const hasPartialSuccess = code === 1 && videoData.length > 0;
+          let notes;
+          let errorCode;
 
           // Provide more helpful error messages based on what we detected
-          if (httpForbiddenDetected) {
+          if (hasOnlyExpectedSkips && terminatedChannelIds.size === 0) {
+            status = 'Complete';
+            output = `${videoCount} videos.`;
+          } else if (hasOnlyHandledErrors && terminatedChannelIds.size > 0) {
+            // Code 1 but every error was recognized: warning-shaped success.
+            output = `${videoCount} videos, ${terminatedChannelIds.size} channel${terminatedChannelIds.size !== 1 ? 's' : ''} marked terminated.`;
+            notes = `${terminatedChannelIds.size} channel${terminatedChannelIds.size !== 1 ? 's' : ''} marked terminated by YouTube`;
+          } else if (httpForbiddenDetected) {
             // Failed with 403 errors - likely authentication issue
             output = `${videoCount} videos. Error: YouTube returned HTTP 403 (Forbidden)`;
-            const notes = 'YouTube denied access (HTTP 403). Configure cookies in Settings to resolve this issue.';
-            await jobModule.updateJob(jobId, {
-              status: status,
-              endDate: Date.now(),
-              output: output,
-              data: {
-                videos: videoData || [],
-                failedVideos: failedVideosList || []
-              },
-              notes: notes,
-              error: 'COOKIES_RECOMMENDED'
-            });
-            jobErrorCode = 'COOKIES_RECOMMENDED';
+            notes = 'YouTube denied access (HTTP 403). Configure cookies in Settings to resolve this issue.';
+            errorCode = 'COOKIES_RECOMMENDED';
           } else {
             // Failed with other error
             output = `${videoCount} videos. Error: Command exited with code ${code}`;
 
             // Add stall detection note if applicable
-            const notes = failureDetails && failureDetails.stalled
-              ? `Stall detected at ${failureDetails.progress.percent.toFixed(1)}% (${Math.round(
+            const failureReason = failureDetails && failureDetails.stalled
+              ? `stall detected at ${failureDetails.progress.percent.toFixed(1)}% (${Math.round(
                 failureDetails.progress.speedBytesPerSecond / 1024
               )} KiB/s)`
-              : `Download failed (${signal || `exit ${code}`})`;
+              : signal || `exit ${code}`;
+            notes = hasPartialSuccess
+              ? `Some videos failed (${failureReason})`
+              : `Download failed (${failureReason})`;
+          }
 
+          if (errorCode) {
+            jobErrorCode = errorCode;
+          }
+
+          if (skipJobTransition) {
+            await this.saveIntermediateGroupResults(
+              jobId,
+              output,
+              videoData,
+              failedVideosList,
+              monitor.videoCount.skipped || 0,
+              {
+                notes: notes,
+                ...(errorCode ? { error: errorCode } : {})
+              },
+              [...terminatedChannels],
+              [...terminationFailures]
+            );
+          } else {
+            await this.persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, failedVideosList);
+            let terminalStatus = status;
+            if (hasOnlyHandledErrors && terminatedChannelIds.size > 0) {
+              terminalStatus = 'Complete with Warnings';
+            } else if (hasOnlyExpectedSkips) {
+              terminalStatus = 'Complete';
+            } else if (hasPartialSuccess) {
+              terminalStatus = 'Complete with Warnings';
+            }
             await jobModule.updateJob(jobId, {
-              status: status,
+              status: terminalStatus,
               endDate: Date.now(),
               output: output,
               data: {
                 videos: videoData || [],
-                failedVideos: failedVideosList || []
+                failedVideos: failedVideosList || [],
+                terminatedChannels: [...terminatedChannels],
+                totalTerminatedChannels: terminatedChannelIds.size,
+                terminationFailures: [...terminationFailures],
+                totalTerminationFailures: terminationFailures.length
               },
               notes: notes,
+              ...(errorCode ? { error: errorCode } : {})
             });
           }
         } else if (stderrBuffer && !monitor.hasError) {
@@ -1104,93 +1403,71 @@ class DownloadExecutor {
           // When skipJobTransition is true, we're processing multiple groups
           // Don't mark as complete yet - just save the videos
           if (skipJobTransition) {
-            // For multi-group downloads, accumulate videos, failedVideos and skipped counts
-            const currentJob = jobModule.getJob(jobId);
-            const existingVideos = currentJob?.data?.videos || [];
-            const existingFailedVideos = currentJob?.data?.failedVideos || [];
-            const existingSkippedCount = currentJob?.data?.cumulativeSkipped || 0;
-
-            await jobModule.updateJob(jobId, {
-              output: output,
-              data: {
-                videos: [...existingVideos, ...videoData],
-                failedVideos: [...existingFailedVideos, ...(failedVideosList || [])],
-                cumulativeSkipped: existingSkippedCount + (monitor.videoCount.skipped || 0)
-              },
-            });
-
-            // Persist accumulated videos to DB immediately for resilience
-            const updatedJob = jobModule.getJob(jobId);
-            if (updatedJob && updatedJob.data && updatedJob.data.videos) {
-              await jobModule.saveJobOnly(jobId, updatedJob);
-            }
+            await this.saveIntermediateGroupResults(
+              jobId,
+              output,
+              videoData,
+              failedVideosList,
+              monitor.videoCount.skipped || 0,
+              {},
+              [...terminatedChannels],
+              [...terminationFailures]
+            );
           } else {
             // For manual/single downloads, persist to DB BEFORE calling updateJob
             // This ensures videos are in DB before updateJob reloads from DB
-            if (videoData && videoData.length > 0) {
-              const currentJob = jobModule.getJob(jobId);
-              if (currentJob) {
-                currentJob.data = currentJob.data || {};
-                currentJob.data.videos = videoData;
-                currentJob.data.failedVideos = failedVideosList || [];
-                await jobModule.saveJobOnly(jobId, currentJob);
-              }
-            }
+            await this.persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, failedVideosList);
 
             await jobModule.updateJob(jobId, {
               status: status,
               output: output,
               data: {
                 videos: videoData,
-                failedVideos: failedVideosList || []
+                failedVideos: failedVideosList || [],
+                terminatedChannels: [...terminatedChannels],
+                totalTerminatedChannels: terminatedChannelIds.size,
+                terminationFailures: [...terminationFailures],
+                totalTerminationFailures: terminationFailures.length
               },
             });
           }
         } else {
-          status = 'Complete';
-          output = `${videoCount} videos.`;
+          // Upgrade to warning shape when terminations were recorded.
+          if (terminatedChannelIds.size > 0) {
+            status = 'Complete with Warnings';
+            output = `${videoCount} videos, ${terminatedChannelIds.size} channel${terminatedChannelIds.size !== 1 ? 's' : ''} marked terminated.`;
+          } else {
+            status = 'Complete';
+            output = `${videoCount} videos.`;
+          }
           // When skipJobTransition is true, we're processing multiple groups
           // Don't mark as complete yet - just save the videos
           if (skipJobTransition) {
-            // For multi-group downloads, accumulate videos, failedVideos and skipped counts
-            const currentJob = jobModule.getJob(jobId);
-            const existingVideos = currentJob?.data?.videos || [];
-            const existingFailedVideos = currentJob?.data?.failedVideos || [];
-            const existingSkippedCount = currentJob?.data?.cumulativeSkipped || 0;
-
-            await jobModule.updateJob(jobId, {
-              output: output,
-              data: {
-                videos: [...existingVideos, ...videoData],
-                failedVideos: [...existingFailedVideos, ...(failedVideosList || [])],
-                cumulativeSkipped: existingSkippedCount + (monitor.videoCount.skipped || 0)
-              },
-            });
-
-            // Persist accumulated videos to DB immediately for resilience
-            const updatedJob = jobModule.getJob(jobId);
-            if (updatedJob && updatedJob.data && updatedJob.data.videos) {
-              await jobModule.saveJobOnly(jobId, updatedJob);
-            }
+            await this.saveIntermediateGroupResults(
+              jobId,
+              output,
+              videoData,
+              failedVideosList,
+              monitor.videoCount.skipped || 0,
+              {},
+              [...terminatedChannels],
+              [...terminationFailures]
+            );
           } else {
             // For manual/single downloads, persist to DB BEFORE calling updateJob
             // This ensures videos are in DB before updateJob reloads from DB
-            if (videoData && videoData.length > 0) {
-              const currentJob = jobModule.getJob(jobId);
-              if (currentJob) {
-                currentJob.data = currentJob.data || {};
-                currentJob.data.videos = videoData;
-                currentJob.data.failedVideos = failedVideosList || [];
-                await jobModule.saveJobOnly(jobId, currentJob);
-              }
-            }
+            await this.persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, failedVideosList);
 
             await jobModule.updateJob(jobId, {
               status: status,
               output: output,
               data: {
                 videos: videoData,
-                failedVideos: failedVideosList || []
+                failedVideos: failedVideosList || [],
+                terminatedChannels: [...terminatedChannels],
+                totalTerminatedChannels: terminatedChannelIds.size,
+                terminationFailures: [...terminationFailures],
+                totalTerminationFailures: terminationFailures.length
               },
             });
           }
@@ -1208,11 +1485,24 @@ class DownloadExecutor {
         // If videos failed but some succeeded, treat as warning rather than complete error
         const hasFailures = failedVideosList.length > 0;
         const hasSuccesses = videoData.length > 0;
+        const hasNonFatalPartialSuccess = code === 1 && hasSuccesses;
+
+        const hasOnlySuccessfulTerminationsOnCleanExit = code === 0 &&
+          terminatedChannelIds.size > 0 &&
+          failedVideosList.length === 0 &&
+          unexpectedErrorCount === 0 &&
+          !botDetected &&
+          !httpForbiddenDetected;
 
         let finalState;
-        if (code === 0 || isWarningOnly) {
-          // Exit code was successful, but check for partial failures
+        if ((hasOnlyHandledErrors && terminatedChannelIds.size > 0) || hasOnlySuccessfulTerminationsOnCleanExit) {
+          // Warning-shaped when the only detected issue is a handled
+          // terminated channel, including when --ignore-errors exits 0.
+          finalState = 'warning';
+        } else if (code === 0 || hasOnlyExpectedSkips) {
           finalState = hasFailures ? 'warning' : 'complete';
+        } else if (isWarningOnly || hasNonFatalPartialSuccess) {
+          finalState = 'warning';
         } else {
           finalState = 'error';
         }
@@ -1225,6 +1515,12 @@ class DownloadExecutor {
           hasError: monitor.hasError,
           hasFailures,
           hasSuccesses,
+          hasNonFatalPartialSuccess,
+          expectedSkipCount,
+          unexpectedErrorCount,
+          hasOnlyExpectedSkips,
+          hasOnlyHandledErrors,
+          terminatedChannelCount: terminatedChannelIds.size,
           successCount: videoData.length,
           failureCount: failedVideosList.length,
           finalState
@@ -1242,13 +1538,17 @@ class DownloadExecutor {
           finalState = 'failed';
           finalErrorCode = 'COOKIES_REQUIRED';
           finalText = 'Download failed: Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.';
-        } else if (monitor.hasError && finalState === 'complete') {
+        } else if (monitor.hasError && finalState === 'complete' && !hasOnlyHandledErrors) {
+          // Don't let a recognized termination flip the state back to error
+          // via DownloadProgressMonitor's broad hasError flag.
           finalState = 'error';
           finalText = 'Download failed';
         } else if (finalState === 'complete' || finalState === 'warning') {
           const actualCount = videoData.length;
           const skippedCount = monitor.videoCount.skipped || 0;
           const failedCount = failedVideosList.length;
+          const terminatedCount = terminatedChannelIds.size;
+          const terminationFailureCount = terminationFailures.length;
 
           // Build message parts
           const parts = [];
@@ -1260,6 +1560,12 @@ class DownloadExecutor {
           }
           if (skippedCount > 0) {
             parts.push(`${skippedCount} already existed`);
+          }
+          if (terminatedCount > 0) {
+            parts.push(`${terminatedCount} channel${terminatedCount !== 1 ? 's' : ''} marked terminated`);
+          }
+          if (terminationFailureCount > 0) {
+            parts.push(`${terminationFailureCount} termination${terminationFailureCount !== 1 ? 's' : ''} could not be auto-disabled`);
           }
 
           if (parts.length > 0) {
@@ -1292,7 +1598,12 @@ class DownloadExecutor {
             totalDownloaded: videoData.length,
             totalSkipped: monitor.videoCount.skipped || 0,
             totalFailed: failedVideosList.length,
+            totalMembersOnly: membersOnlyVideoIds.size,
+            totalTerminatedChannels: terminatedChannelIds.size,
+            totalTerminationFailures: terminationFailures.length,
             failedVideos: failedVideosList,
+            terminatedChannels: [...terminatedChannels],
+            terminationFailures: [...terminationFailures],
             jobType: jobType,
             completedAt: new Date().toISOString()
           };
@@ -1326,7 +1637,7 @@ class DownloadExecutor {
 
         // Send notification if download was successful and notifications are enabled
         // Skip notifications for intermediate groups (only send for final completion)
-        if (finalState === 'complete' && !isFinalError && !skipJobTransition) {
+        if ((finalState === 'complete' || finalState === 'warning') && !isFinalError && !skipJobTransition) {
           const notificationModule = require('../notificationModule');
           notificationModule.sendDownloadNotification({
             finalSummary: finalPayload.finalSummary,

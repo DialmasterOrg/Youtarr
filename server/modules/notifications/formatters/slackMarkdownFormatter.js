@@ -4,7 +4,23 @@
  * Note: Slack uses *bold*, _italic_, ~strike~, `code`
  */
 
-const { formatDuration, buildTitle, getSubtitle, buildAutoRemovalTitle, formatBytes, groupVideosByChannel } = require('../utils');
+const {
+  formatDuration,
+  buildTitle,
+  getFailedCount,
+  buildFailedCountLabel,
+  formatFailedVideoLine,
+  getSubtitle,
+  buildAutoRemovalTitle,
+  formatBytes,
+  groupVideosByChannel,
+  getTerminatedCount,
+  buildTerminatedCountLabel,
+  formatTerminatedChannelLine,
+  getTerminationFailureCount,
+  buildTerminationFailureCountLabel,
+  formatTerminationFailureLine
+} = require('../utils');
 
 /**
  * Format download notification as Slack markdown
@@ -14,9 +30,48 @@ const { formatDuration, buildTitle, getSubtitle, buildAutoRemovalTitle, formatBy
  */
 function formatDownloadMessage(finalSummary, videoData) {
   const { totalDownloaded, jobType } = finalSummary;
+  const failedCount = getFailedCount(finalSummary);
+  const terminatedCount = getTerminatedCount(finalSummary);
+  const terminationFailureCount = getTerminationFailureCount(finalSummary);
 
-  const title = buildTitle(totalDownloaded);
+  const title = buildTitle(totalDownloaded, terminatedCount, terminationFailureCount);
   let body = `*${getSubtitle(jobType)}*\n\n`;
+
+  if (terminatedCount > 0) {
+    body += `⚠️ *${buildTerminatedCountLabel(terminatedCount)}.*\n`;
+    const terminatedChannelsToShow = (finalSummary.terminatedChannels || []).slice(0, 5);
+    terminatedChannelsToShow.forEach(channel => {
+      body += `• ${formatTerminatedChannelLine(channel)}\n`;
+    });
+    if (terminatedCount > terminatedChannelsToShow.length) {
+      body += `_...and ${terminatedCount - terminatedChannelsToShow.length} more_\n`;
+    }
+    body += '\n';
+  }
+
+  if (terminationFailureCount > 0) {
+    body += `⚠️ *${buildTerminationFailureCountLabel(terminationFailureCount)}.*\n`;
+    const failuresToShow = (finalSummary.terminationFailures || []).slice(0, 5);
+    failuresToShow.forEach(channelId => {
+      body += `• ${formatTerminationFailureLine(channelId)}\n`;
+    });
+    if (terminationFailureCount > failuresToShow.length) {
+      body += `_...and ${terminationFailureCount - failuresToShow.length} more_\n`;
+    }
+    body += '\n';
+  }
+
+  if (failedCount > 0) {
+    body += `⚠️ *${buildFailedCountLabel(failedCount)}.*\n`;
+    const failedVideosToShow = (finalSummary.failedVideos || []).slice(0, 5);
+    failedVideosToShow.forEach(failedVideo => {
+      body += `• ${formatFailedVideoLine(failedVideo)}\n`;
+    });
+    if (failedCount > failedVideosToShow.length) {
+      body += `_...and ${failedCount - failedVideosToShow.length} more failed_\n`;
+    }
+    body += '\n';
+  }
 
   // Add video list
   if (videoData && videoData.length > 0) {
@@ -114,4 +169,3 @@ module.exports = {
   formatTestMessage,
   formatAutoRemovalMessage
 };
-

@@ -58,7 +58,7 @@ function createVideoSearchRoutes({ verifyToken, videoSearchModule }) {
    *                 example: "Minecraft"
    *               count:
    *                 type: integer
-   *                 enum: [10, 25, 50]
+   *                 enum: [10, 25, 50, 100]
    *                 default: 25
    *                 description: Number of results to fetch from YouTube.
    *     responses:

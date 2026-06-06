@@ -1,5 +1,116 @@
 # Changelog
 
+## [v1.70.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.70.0) - 2026-05-30
+
+## [1.70.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.69.2...v1.70.0) (2026-05-30)
+
+
+### Features
+
+* detect and disable terminated channels ([04fb599](https://github.com/DialmasterOrg/Youtarr/commit/04fb599037b641bebddcd1a8aa16dedf199b2c2c)), closes [#621](https://github.com/DialmasterOrg/Youtarr/issues/621)
+
+
+### Documentation
+
+* update CHANGELOG for v1.69.2 [skip ci] ([6265702](https://github.com/DialmasterOrg/Youtarr/commit/626570272fe212951774423d0fb66bd2e28e20fc))
+
+
+
+
+
+## [v1.69.2](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.69.2) - 2026-05-15
+
+### [1.69.2](https://github.com/DialmasterOrg/Youtarr/compare/vv1.69.1...v1.69.2) (2026-05-15)
+
+
+### Documentation
+
+* update CHANGELOG for v1.69.1 [skip ci] ([4594e27](https://github.com/DialmasterOrg/Youtarr/commit/4594e27a4b073c7c7a4c163ab10aec8c38f2292c))
+
+
+
+
+
+## [v1.69.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.69.1) - 2026-05-13
+
+### [1.69.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.69.0...v1.69.1) (2026-05-13)
+
+
+### Bug Fixes
+
+* stop Settings crash on missing config field ([a891836](https://github.com/DialmasterOrg/Youtarr/commit/a891836248b506319890a7c14f99cbffd8613b8f)), closes [#611](https://github.com/DialmasterOrg/Youtarr/issues/611)
+
+
+### Documentation
+
+* update CHANGELOG for v1.69.0 [skip ci] ([244c571](https://github.com/DialmasterOrg/Youtarr/commit/244c5716bc654aa7c2bc7f5679ed51687cae1d91))
+
+
+
+
+
+## [v1.69.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.69.0) - 2026-05-11
+
+## [1.69.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.68.0...v1.69.0) (2026-05-11)
+
+
+### Features
+
+* add customizable video filename template ([8e1600a](https://github.com/DialmasterOrg/Youtarr/commit/8e1600a2d96d3db04849e9e05af5e25ea9a945aa)), closes [#369](https://github.com/DialmasterOrg/Youtarr/issues/369)
+* add manual rescan and recognize more formats ([851e593](https://github.com/DialmasterOrg/Youtarr/commit/851e593106f5a6c3804495b848f43867866cc9fb))
+* **config:** render filename preview via yt-dlp ([24aad30](https://github.com/DialmasterOrg/Youtarr/commit/24aad30c5c89fff2817f03f22b7ce75a7f3a5bdd)), closes [#369](https://github.com/DialmasterOrg/Youtarr/issues/369)
+
+
+### Bug Fixes
+
+* reduce bind-mount mariadb corruption risk ([9ce4ef7](https://github.com/DialmasterOrg/Youtarr/commit/9ce4ef7609ef4686d157bc5b2dc1e4aefe69f975))
+* **deps:** bump axios to clear high-sev advisory ([6f01c15](https://github.com/DialmasterOrg/Youtarr/commit/6f01c154e572e7d9dd276d22dc91803827ab9a26))
+* **migrate:** preserve source db collation ([f6c0664](https://github.com/DialmasterOrg/Youtarr/commit/f6c066413c45ea3fcc56d9ba93a595b6d4f880cb)), closes [#598](https://github.com/DialmasterOrg/Youtarr/issues/598)
+* **setup:** replace localhost gate with one-time token ([4e1b423](https://github.com/DialmasterOrg/Youtarr/commit/4e1b423f0cf988355ab4280ed6eecc4a520a8755)), closes [#431](https://github.com/DialmasterOrg/Youtarr/issues/431)
+* restore members-only video detection ([e0ed879](https://github.com/DialmasterOrg/Youtarr/commit/e0ed8798bdeafebce3ceb7030f2b2df5f4cf043d)), closes [yt-dlp/yt-dlp#16665](https://github.com/yt-dlp/yt-dlp/issues/16665)
+* stop clobbering channelvideo publishedAt on empty refresh ([1af2022](https://github.com/DialmasterOrg/Youtarr/commit/1af2022fe551178904e1aa73979dd1c8034b100a)), closes [#608](https://github.com/DialmasterOrg/Youtarr/issues/608)
+
+
+### Documentation
+
+* update CHANGELOG for v1.68.0 [skip ci] ([99e7f6b](https://github.com/DialmasterOrg/Youtarr/commit/99e7f6b0c2ff37c2f6005167fb572389232e11da))
+* **unraid:** expand mariadb setup guidance ([38a0e1a](https://github.com/DialmasterOrg/Youtarr/commit/38a0e1a297625cc1ccccbf8a726d2564abc30b0c))
+
+
+
+
+
+## [v1.68.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.68.0) - 2026-04-29
+
+## [1.68.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.67.0...v1.68.0) (2026-04-29)
+
+
+### Features
+
+* add nightly yt-dlp auto-update ([1402505](https://github.com/DialmasterOrg/Youtarr/commit/1402505e6bb32ffca3a021e80d1b4f73520b3b1e))
+* add yt-dlp ip family, rate limit, custom args ([228ee4e](https://github.com/DialmasterOrg/Youtarr/commit/228ee4e0dd06151eba01b006077676d3bb82321d)), closes [#527](https://github.com/DialmasterOrg/Youtarr/issues/527) [#529](https://github.com/DialmasterOrg/Youtarr/issues/529) [#535](https://github.com/DialmasterOrg/Youtarr/issues/535)
+* expand youtube api coverage to all tabs ([4063f61](https://github.com/DialmasterOrg/Youtarr/commit/4063f618a52fbaeb570c2ac27a89461bdd490442))
+* harden youtube data api integration ([f285feb](https://github.com/DialmasterOrg/Youtarr/commit/f285feba68ad2e03a45de2ea53269053e77059d8))
+* support optional YouTube Data API v3 key with yt-dlp fallback ([2a3ef33](https://github.com/DialmasterOrg/Youtarr/commit/2a3ef338dbca6866b0d1c17ae97c17a8b48c81b2))
+* **auth:** lower username minimum to 1 char ([02996ce](https://github.com/DialmasterOrg/Youtarr/commit/02996ce86dcfb75592ce4121f850457f3a2ef18b)), closes [#581](https://github.com/DialmasterOrg/Youtarr/issues/581)
+* **find-videos:** add filter and bulk download ([e69a01d](https://github.com/DialmasterOrg/Youtarr/commit/e69a01d845ec086511137023862b8ca1102072d3))
+
+
+### Bug Fixes
+
+* **downloads:** persist successful videos when some fail ([ad3e2c1](https://github.com/DialmasterOrg/Youtarr/commit/ad3e2c18152db0f6dfb91e2677c8e8af96c9ebae))
+* **downloads:** tolerate expected yt-dlp skips ([7b8f90a](https://github.com/DialmasterOrg/Youtarr/commit/7b8f90abec5b88fabd36d9acfb04d74474ce6816))
+* **videos:** handle ENOTEMPTY on SMB delete ([1e5c701](https://github.com/DialmasterOrg/Youtarr/commit/1e5c70168b7934ff7518cac7276cf9394d00d568)), closes [#370](https://github.com/DialmasterOrg/Youtarr/issues/370)
+
+
+### Documentation
+
+* update CHANGELOG for v1.67.0 [skip ci] ([4a4e4f2](https://github.com/DialmasterOrg/Youtarr/commit/4a4e4f258c6394722106593363a28d106bd1993a))
+
+
+
+
+
 ## [v1.67.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.67.0) - 2026-04-24
 
 ## [1.67.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.66.4...v1.67.0) (2026-04-24)

@@ -1,6 +1,7 @@
 const ytDlpRunner = require('./ytDlpRunner');
 const archiveModule = require('./archiveModule');
 const logger = require('../logger');
+const ChannelVideo = require('../models/channelvideo');
 
 class VideoValidationModule {
   constructor() {
@@ -106,6 +107,26 @@ class VideoValidationModule {
   }
 
   /**
+   * Backfill ChannelVideo.availability from a validation response.
+   * Fire-and-forget: a write failure should never block the validation reply.
+   * Idempotent: safe to call multiple times for the same video.
+   * Only persists values that came from yt-dlp, not defaulted response values.
+   * @param {Object} response - Validation response with metadata.youtubeId and metadata.availability
+   * @private
+   */
+  _persistAvailabilityFromResponse(response) {
+    const youtubeId = response?.metadata?.youtubeId;
+    const availability = response?.metadata?.availability;
+    if (!youtubeId || !availability || !response?.metadata?.availabilityProvided) return;
+    ChannelVideo.update(
+      { availability },
+      { where: { youtube_id: youtubeId } },
+    ).catch(err => {
+      logger.warn({ err, videoId: youtubeId }, 'Failed to backfill ChannelVideo.availability from validation');
+    });
+  }
+
+  /**
    * Convert metadata to validation response format
    * @param {string} videoId - YouTube video ID
    * @param {Object} metadata - yt-dlp metadata
@@ -114,6 +135,7 @@ class VideoValidationModule {
    */
   toValidationResponse(videoId, metadata, isDuplicate) {
     const isMembersOnly = metadata.availability === 'subscriber_only';
+    const availabilityProvided = Boolean(metadata.availability);
 
     const contentRating = metadata.contentRating || metadata.content_rating || null;
     const ageLimit = metadata.age_limit ?? null;
@@ -139,6 +161,10 @@ class VideoValidationModule {
         media_type: metadata.media_type || 'video',
       }
     };
+    Object.defineProperty(resp.metadata, 'availabilityProvided', {
+      value: availabilityProvided,
+      enumerable: false,
+    });
 
     if (contentRating != null) resp.metadata.content_rating = contentRating;
     if (ageLimit != null) resp.metadata.age_limit = ageLimit;
@@ -257,6 +283,7 @@ class VideoValidationModule {
       }
 
       this.setCachedResponse(videoId, response);
+      this._persistAvailabilityFromResponse(response);
 
       return response;
     } catch (error) {
@@ -270,14 +297,13 @@ class VideoValidationModule {
         };
       }
       // Check for members-only video error
-      else if (error.message.includes('members-only') ||
-          error.message.includes('Join this channel to get access')) {
+      else if (ytDlpRunner.isMembersOnlyError(error.message)) {
         // Extract video ID from error message if possible, or use the one we parsed from URL
         const videoIdMatch = error.message.match(/\[youtube\]\s+([a-zA-Z0-9_-]{11}):/);
         const extractedVideoId = videoIdMatch ? videoIdMatch[1] : videoId;
 
         // Return a valid response indicating it's members-only
-        return {
+        const membersOnlyResponse = {
           isValidUrl: true,
           isAlreadyDownloaded: false,
           isMembersOnly: true,
@@ -292,6 +318,12 @@ class VideoValidationModule {
             media_type: 'video'
           }
         };
+        Object.defineProperty(membersOnlyResponse.metadata, 'availabilityProvided', {
+          value: true,
+          enumerable: false,
+        });
+        this._persistAvailabilityFromResponse(membersOnlyResponse);
+        return membersOnlyResponse;
       } else if (error.message.includes('Invalid YouTube URL')) {
         return {
           isValidUrl: false,

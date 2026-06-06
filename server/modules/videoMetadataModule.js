@@ -5,6 +5,7 @@ const configModule = require('./configModule');
 const ytDlpRunner = require('./ytDlpRunner');
 const logger = require('../logger');
 const youtubeApi = require('./youtubeApi');
+const ChannelVideo = require('../models/channelvideo');
 
 const NULL_METADATA = {
   description: null,
@@ -109,10 +110,37 @@ class VideoMetadataModule {
           }
         } catch (fetchErr) {
           logger.warn({ err: fetchErr, youtubeId }, 'Failed to fetch metadata via yt-dlp');
+
+          // yt-dlp throws "Join this channel..." / "available to this channel's
+          // members..." style errors for members-only videos. The fetch failure
+          // is itself the signal: stamp subscriber_only so the next modal open
+          // short-circuits the failing fetch (VideoModal skips getVideoMetadata
+          // when video.status === 'members_only').
+          const detectedMembersOnly = ytDlpRunner.isMembersOnlyError(fetchErr?.message);
+          if (detectedMembersOnly) {
+            try {
+              await ChannelVideo.update(
+                { availability: 'subscriber_only' },
+                { where: { youtube_id: youtubeId } },
+              );
+            } catch (backfillErr) {
+              logger.warn({ err: backfillErr, youtubeId }, 'Failed to backfill ChannelVideo.availability after members-only fetch error');
+            }
+          }
+
           // Try API fallback so the UI isn't left completely empty. File
           // detail fields will be null (API can't provide them), but text
           // fields are still useful.
-          return this._getApiFallbackMetadata(youtubeId);
+          const fallbackMetadata = { ...(await this._getApiFallbackMetadata(youtubeId)) };
+          // The Data API never reports 'subscriber_only' (it sees the video as
+          // 'public' since the gating is membership-side). When we already
+          // detected members-only from the yt-dlp error, override the response
+          // so the modal renders the Members Only state on first open instead
+          // of treating the video as public until the next refetch.
+          if (detectedMembersOnly) {
+            fallbackMetadata.availability = 'subscriber_only';
+          }
+          return fallbackMetadata;
         }
       }
 
@@ -135,6 +163,23 @@ class VideoMetadataModule {
           }
         } catch (backfillErr) {
           logger.warn({ err: backfillErr, youtubeId }, 'Failed to backfill originalDate');
+        }
+      }
+
+      // Backfill ChannelVideo.availability so members-only videos surfaced via
+      // modal open get marked, even when yt-dlp's flat-playlist channel listing
+      // omits availability for lockupViewModel entries. Same shape as the
+      // originalDate backfill above. Only runs on the yt-dlp path; the API
+      // fallback never reports 'subscriber_only' so backfilling from there
+      // would silently downgrade real values to 'public'.
+      if (rawData.availability) {
+        try {
+          await ChannelVideo.update(
+            { availability: rawData.availability },
+            { where: { youtube_id: youtubeId } },
+          );
+        } catch (backfillErr) {
+          logger.warn({ err: backfillErr, youtubeId }, 'Failed to backfill ChannelVideo.availability');
         }
       }
 

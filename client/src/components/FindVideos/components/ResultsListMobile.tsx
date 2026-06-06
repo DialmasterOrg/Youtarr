@@ -1,5 +1,5 @@
 import React from 'react';
-import { Typography, Chip } from '../../ui';
+import { Checkbox, Typography, Chip } from '../../ui';
 import { CalendarToday as CalendarTodayIcon } from '../../../lib/icons';
 import {
   getStatusColor,
@@ -11,7 +11,13 @@ import {
 } from '../../../utils/videoStatus';
 import { SHARED_THEMED_CHIP_SMALL_STYLE } from '../../shared/chipStyles';
 import { formatDurationClock } from '../../../utils';
-import { SearchResult, THUMB_WIDTH, THUMB_HEIGHT } from '../types';
+import {
+  isSelectableForDownload,
+  ResultSelection,
+  SearchResult,
+  THUMB_WIDTH,
+  THUMB_HEIGHT,
+} from '../types';
 
 function StatusChip({ status }: { status: VideoStatus }) {
   return (
@@ -32,14 +38,17 @@ function StatusChip({ status }: { status: VideoStatus }) {
 interface ResultsListMobileProps {
   results: SearchResult[];
   onResultClick: (result: SearchResult) => void;
+  selection?: ResultSelection;
 }
 
-export default function ResultsListMobile({ results, onResultClick }: ResultsListMobileProps) {
+export default function ResultsListMobile({ results, onResultClick, selection }: ResultsListMobileProps) {
   return (
     <div className="flex flex-col">
       {results.map((result) => {
         const status: VideoStatus = result.status;
         const durationLabel = formatDurationClock(result.duration);
+        const selectable = Boolean(selection) && isSelectableForDownload(result.status);
+        const checked = selectable && selection!.isChecked(result.youtubeId);
         const published = result.publishedAt
           ? new Date(result.publishedAt).toLocaleDateString(undefined, {
               month: 'short',
@@ -62,6 +71,21 @@ export default function ResultsListMobile({ results, onResultClick }: ResultsLis
             }}
             className="flex gap-3 py-2 px-1 border-b border-border cursor-pointer items-start"
           >
+            {selectable && (
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="flex items-center pt-1"
+              >
+                <Checkbox
+                  checked={checked}
+                  onChange={() => selection!.toggle(result.youtubeId)}
+                  inputProps={{
+                    'aria-label': `Select ${result.title} for download`,
+                    'data-testid': `select-mobile-${result.youtubeId}`,
+                  }}
+                />
+              </div>
+            )}
             <div
               className="relative shrink-0 overflow-hidden bg-[var(--media-placeholder-background)] rounded-[var(--radius-thumb)]"
               style={{ width: THUMB_WIDTH, height: THUMB_HEIGHT }}

@@ -31,6 +31,7 @@ import { YtDlpVersionInfo, YtDlpUpdateStatus } from '../hooks/useYtDlpUpdate';
 import { ConfigurationCard } from '../common/ConfigurationCard';
 import { InfoTooltip } from '../common/InfoTooltip';
 import SubtitleLanguageSelector from '../SubtitleLanguageSelector';
+import { VideoFilenameTemplate } from './components/VideoFilenameTemplate';
 import { SubfolderAutocomplete } from '../../shared/SubfolderAutocomplete';
 import { useSubfolders } from '../../../hooks/useSubfolders';
 import { ConfigState, DeploymentEnvironment, PlatformManagedState } from '../types';
@@ -45,6 +46,8 @@ interface CoreSettingsSectionProps {
   onConfigChange: (updates: Partial<ConfigState>) => void;
   onMobileTooltipClick?: (text: string) => void;
   token: string | null;
+  filenameTemplateSaveRequirement?: string | null;
+  onFilenameTemplatePreviewSuccess?: (prefix: string) => void;
   ytDlpVersionInfo?: YtDlpVersionInfo;
   ytDlpUpdateStatus?: YtDlpUpdateStatus;
   onYtDlpUpdate?: () => void;
@@ -57,6 +60,8 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
   onConfigChange,
   onMobileTooltipClick,
   token,
+  filenameTemplateSaveRequirement,
+  onFilenameTemplatePreviewSuccess,
   ytDlpVersionInfo,
   ytDlpUpdateStatus,
   onYtDlpUpdate,
@@ -513,6 +518,18 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                           : 'Controls where downloads are staged before moving to final location. When enabled, uses external /tmp path (useful for slow network storage). When disabled, uses a hidden .youtarr_tmp/ folder in your output directory (faster for local/SSD storage). Both options hide in-progress files from media servers.'
                       }
                       onMobileClick={onMobileTooltipClick}
+                    />
+                  </Box>
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Box className="border-t pt-3">
+                    <VideoFilenameTemplate
+                      value={config.videoFilenamePrefix}
+                      onChange={(newValue) => onConfigChange({ videoFilenamePrefix: newValue })}
+                      token={token}
+                      saveRequirement={filenameTemplateSaveRequirement}
+                      onPreviewSuccess={onFilenameTemplatePreviewSuccess}
                     />
                   </Box>
                 </Grid>

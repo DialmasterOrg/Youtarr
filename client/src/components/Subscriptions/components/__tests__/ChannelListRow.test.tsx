@@ -78,6 +78,18 @@ jest.mock('../chips', () => ({
       'Format'
     );
   },
+  TerminatedChip: function MockTerminatedChip({ terminatedAt }: any) {
+    const React = require('react');
+    if (!terminatedAt) return null;
+    return React.createElement(
+      'div',
+      {
+        'data-testid': 'terminated-chip',
+        'data-terminated-at': terminatedAt,
+      },
+      'Terminated'
+    );
+  },
 }));
 
 describe('ChannelListRow', () => {

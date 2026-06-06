@@ -6,6 +6,8 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # shellcheck source=scripts/_console_output.sh
 source "$SCRIPT_DIR/_console_output.sh"
+# shellcheck source=scripts/_env_helpers.sh
+source "$SCRIPT_DIR/_env_helpers.sh"
 
 # Default configuration
 OUTPUT_DIR="$PROJECT_DIR/backups"
@@ -112,7 +114,8 @@ fi
 COMPOSE_CMD=$(get_compose_command)
 yt_info "Docker compose command: $COMPOSE_CMD"
 
-# Detect ARM architecture
+# Detect ARM architecture for backup metadata only. Database storage selection
+# is based on the configured/actual Youtarr storage mode below.
 ARCH=$(uname -m)
 IS_ARM=false
 if [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]]; then
@@ -209,11 +212,27 @@ fi
 yt_section "Database Backup"
 mkdir -p "$BACKUP_DIR/database"
 
-# Determine compose args based on architecture (needed for starting/stopping db)
-if [[ "$IS_ARM" == "true" ]]; then
-    COMPOSE_ARGS="-f $PROJECT_DIR/docker-compose.yml -f $PROJECT_DIR/docker-compose.arm.yml"
-else
-    COMPOSE_ARGS="-f $PROJECT_DIR/docker-compose.yml"
+DB_STORAGE_MODE=$(youtarr_detect_bundled_db_storage_mode "$PROJECT_DIR")
+if [[ "$DB_STORAGE_MODE" == "ambiguous" ]]; then
+    if [[ "$DB_RUNNING" == "true" ]]; then
+        yt_warn "Both ./database/ and the named MariaDB volume exist; dumping the currently running database container."
+    else
+        yt_error "Ambiguous database storage: both ./database/ and the Docker named volume exist."
+        yt_detail "Refusing to start a database for backup because that could dump the wrong storage."
+        yt_detail "Start Youtarr normally and re-run backup, or remove the unused storage first."
+        exit 1
+    fi
+fi
+
+if [[ "$DB_STORAGE_MODE" == "named-volume" ]]; then
+    yt_info "Backup storage mode: named-volume database."
+elif [[ "$DB_STORAGE_MODE" == "bind-mount" ]]; then
+    yt_info "Backup storage mode: bind-mounted ./database/."
+fi
+
+COMPOSE_ARGS=""
+if [[ "$DB_STORAGE_MODE" != "ambiguous" ]]; then
+    COMPOSE_ARGS=$(youtarr_compose_args_for_storage_mode "$PROJECT_DIR" "$DB_STORAGE_MODE")
 fi
 
 DB_STARTED_FOR_BACKUP=false
@@ -225,6 +244,7 @@ if [[ "$DB_RUNNING" == "false" ]]; then
     export YOUTUBE_OUTPUT_DIR="${YOUTUBE_OUTPUT_DIR:-/tmp}"
 
     # Start only the database container
+    # shellcheck disable=SC2086 # COMPOSE_CMD and COMPOSE_ARGS intentionally expand into command/flag words.
     (cd "$PROJECT_DIR" && $COMPOSE_CMD $COMPOSE_ARGS up -d youtarr-db)
     DB_STARTED_FOR_BACKUP=true
 
@@ -243,6 +263,7 @@ if [[ "$DB_RUNNING" == "false" ]]; then
     if [[ $WAITED -ge $MAX_WAIT ]]; then
         yt_error "Database failed to become ready within ${MAX_WAIT}s"
         # Clean up
+        # shellcheck disable=SC2086 # COMPOSE_CMD and COMPOSE_ARGS intentionally expand into command/flag words.
         (cd "$PROJECT_DIR" && $COMPOSE_CMD $COMPOSE_ARGS down)
         rm -rf "$STAGING_DIR"
         exit 1
@@ -266,6 +287,7 @@ else
     yt_error "Database dump failed"
     # Clean up if we started the container
     if [[ "$DB_STARTED_FOR_BACKUP" == "true" ]]; then
+        # shellcheck disable=SC2086 # COMPOSE_CMD and COMPOSE_ARGS intentionally expand into command/flag words.
         (cd "$PROJECT_DIR" && $COMPOSE_CMD $COMPOSE_ARGS down)
     fi
     rm -rf "$STAGING_DIR"
@@ -275,6 +297,7 @@ fi
 # Stop database if we started it
 if [[ "$DB_STARTED_FOR_BACKUP" == "true" ]]; then
     yt_info "Stopping database container..."
+    # shellcheck disable=SC2086 # COMPOSE_CMD and COMPOSE_ARGS intentionally expand into command/flag words.
     (cd "$PROJECT_DIR" && $COMPOSE_CMD $COMPOSE_ARGS down)
     yt_success "Database container stopped"
 fi

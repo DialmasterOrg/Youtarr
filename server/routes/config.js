@@ -1,10 +1,59 @@
 const express = require('express');
 const multer = require('multer');
 const customArgsParser = require('../modules/download/customArgsParser');
+const filenamePreview = require('../modules/filenamePreview');
 
 // Mirror of the frontend RATE_LIMIT_REGEX. Matches yt-dlp's --limit-rate
 // format: digits with optional decimal, optional K/M/G suffix.
 const RATE_LIMIT_REGEX = /^\d+(\.\d+)?[KkMmGg]?$/;
+const MAX_VIDEO_FILENAME_PREFIX_LENGTH = 160;
+
+/**
+ * Validate the safety/UX rules for a videoFilenamePrefix. Mirrors the client's
+ * validatePrefix in client/src/utils/filenameTemplate/validate.ts.
+ *
+ * Returns null on success, otherwise `{ status, error }`. Template-grammar
+ * validation (conversion chars, format flags, modifiers) is handled by the
+ * filenamePreview module via yt-dlp itself.
+ *
+ * @param {unknown} prefix
+ * @returns {{ trimmed: string } | { status: number, error: string }}
+ */
+function basicValidatePrefix(prefix) {
+  if (typeof prefix !== 'string') {
+    return { status: 400, error: 'videoFilenamePrefix must be a string.' };
+  }
+  const trimmed = prefix.replace(/\s+$/, '');
+  if (trimmed.trim().length === 0) {
+    return { status: 400, error: 'videoFilenamePrefix may not be empty.' };
+  }
+  if (trimmed.length > MAX_VIDEO_FILENAME_PREFIX_LENGTH) {
+    return {
+      status: 400,
+      error: `videoFilenamePrefix may not exceed ${MAX_VIDEO_FILENAME_PREFIX_LENGTH} characters.`,
+    };
+  }
+  if (trimmed.includes('/') || trimmed.includes('\\')) {
+    return {
+      status: 400,
+      error: 'videoFilenamePrefix may not contain path separators (/ or \\).',
+    };
+  }
+  if (trimmed.includes('..')) {
+    return {
+      status: 400,
+      error: 'videoFilenamePrefix may not contain ".." (path traversal).',
+    };
+  }
+  // eslint-disable-next-line no-control-regex
+  if (/[\x00-\x1f]/.test(trimmed)) {
+    return {
+      status: 400,
+      error: 'videoFilenamePrefix may not contain ASCII control characters.',
+    };
+  }
+  return { trimmed };
+}
 
 // Configure multer for cookie file upload
 const cookieUpload = multer({
@@ -27,7 +76,7 @@ const cookieUpload = multer({
  * @param {boolean} deps.isWslEnvironment - Whether running in WSL
  * @returns {express.Router}
  */
-module.exports = function createConfigRoutes({ verifyToken, configModule, validateEnvAuthCredentials, isWslEnvironment }) {
+module.exports = function createConfigRoutes({ verifyToken, configModule, validateEnvAuthCredentials, isWslEnvironment, filenamePreviewRateLimiter }) {
   const router = express.Router();
 
   /**
@@ -126,7 +175,7 @@ module.exports = function createConfigRoutes({ verifyToken, configModule, valida
    *                   type: string
    *                   example: success
    */
-  router.post('/updateconfig', verifyToken, (req, res) => {
+  async function handleUpdateConfig(req, res) {
     req.log.info('Updating application configuration');
     const currentConfig = configModule.getConfig();
     const updateData = { ...req.body };
@@ -160,6 +209,31 @@ module.exports = function createConfigRoutes({ verifyToken, configModule, valida
       }
     }
 
+    // Video filename template prefix validation
+    if (Object.prototype.hasOwnProperty.call(updateData, 'videoFilenamePrefix')) {
+      const basic = basicValidatePrefix(updateData.videoFilenamePrefix);
+      if ('error' in basic) {
+        return res.status(basic.status).json({ error: basic.error });
+      }
+      // If the saved prefix differs from what's currently in config, run
+      // yt-dlp against the canned fixture to confirm it accepts the template.
+      // Any failure here (grammar error, timeout, fixture corruption) is
+      // surfaced as 400 with yt-dlp's own message and blocks the save.
+      // yt-dlp ships inside the Youtarr Docker image, so it can't be
+      // "unavailable"; if it ever truly is, the rest of the app is broken
+      // too and a save error is the correct signal.
+      if (basic.trimmed !== currentConfig.videoFilenamePrefix) {
+        const grammar = await filenamePreview.validateTemplate(basic.trimmed);
+        if (!grammar.ok) {
+          return res.status(400).json({
+            error: `videoFilenamePrefix rejected by yt-dlp: ${grammar.error}`,
+          });
+        }
+      }
+      // Trim trailing whitespace before persisting
+      updateData.videoFilenamePrefix = basic.trimmed;
+    }
+
     delete updateData.passwordHash;
     delete updateData.username;
 
@@ -168,11 +242,78 @@ module.exports = function createConfigRoutes({ verifyToken, configModule, valida
     updateData.ytdlpLastChecked = currentConfig.ytdlpLastChecked;
     updateData.ytdlpLastUpdated = currentConfig.ytdlpLastUpdated;
     updateData.ytdlpLastResult = currentConfig.ytdlpLastResult;
+    updateData.rescanLastRun = currentConfig.rescanLastRun ?? null;
 
     configModule.updateConfig(updateData);
 
     res.json({ status: 'success' });
+  }
+
+  router.post('/updateconfig', verifyToken, (req, res, next) => {
+    handleUpdateConfig(req, res).catch(next);
   });
+
+  /**
+   * @swagger
+   * /api/config/filename-preview:
+   *   post:
+   *     summary: Render a videoFilenamePrefix against a canned sample video
+   *     description: |
+   *       Calls yt-dlp with `--load-info-json` against a bundled sample
+   *       fixture and returns the rendered file and folder names. yt-dlp's
+   *       template engine is the authority on grammar; a syntactically
+   *       invalid template returns 400 with yt-dlp's own error message.
+   *     tags: [Configuration]
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [prefix]
+   *             properties:
+   *               prefix:
+   *                 type: string
+   *     responses:
+   *       200:
+   *         description: Rendered preview
+   *       400:
+   *         description: Prefix failed safety checks or yt-dlp rejected the template
+   *       401:
+   *         description: Missing or invalid auth token
+   *       429:
+   *         description: Rate limit exceeded
+   */
+  router.post(
+    '/api/config/filename-preview',
+    verifyToken,
+    filenamePreviewRateLimiter,
+    async (req, res) => {
+      const { prefix } = req.body || {};
+      const basic = basicValidatePrefix(prefix);
+      if ('error' in basic) {
+        return res.status(basic.status).json({ error: basic.error });
+      }
+
+      try {
+        const preview = await filenamePreview.previewTemplate(basic.trimmed);
+        return res.json(preview);
+      } catch (err) {
+        // yt-dlp ships inside the Youtarr Docker image, so any failure here
+        // is either a template grammar issue (the common case, e.g.
+        // "unsupported format character") or a genuine bug (timeout,
+        // corrupted fixture). Both surface to the user as 400 with the
+        // yt-dlp message; the FE shows it inline next to the Preview button.
+        const message = err && err.message ? err.message : 'yt-dlp failed';
+        req.log.warn({ err }, 'filenamePreview rejected template');
+        return res.status(400).json({
+          error: `Template rejected by yt-dlp: ${message}`,
+        });
+      }
+    }
+  );
 
   /**
    * @swagger

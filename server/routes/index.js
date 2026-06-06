@@ -14,6 +14,7 @@ const createPlaylistRoutes = require('./playlists');
 const createMediaServerRoutes = require('./mediaServers');
 const createYoutubeApiKeyRoutes = require('./youtubeApiKey');
 const createYtdlpOptionsRoutes = require('./ytdlpOptions');
+const createMaintenanceRoutes = require('./maintenance');
 const videoMetadataModule = require('../modules/videoMetadataModule');
 const videoOembedEnricher = require('../modules/videoOembedEnricher');
 const playlistModule = require('../modules/playlistModule');
@@ -30,8 +31,10 @@ function registerRoutes(app, deps) {
   const {
     verifyToken,
     loginLimiter,
+    setupCreateAuthLimiter,
     youtubeApiKeyTestLimiter,
     ytdlpValidationRateLimiter,
+    filenamePreviewRateLimiter,
     configModule,
     channelModule,
     plexModule,
@@ -45,7 +48,8 @@ function registerRoutes(app, deps) {
     getCachedYtDlpVersion,
     refreshYtDlpVersionCache,
     validateEnvAuthCredentials,
-    isLocalhostIP,
+    setupTokenModule,
+    getClientAddress,
     isWslEnvironment,
   } = deps;
 
@@ -53,13 +57,13 @@ function registerRoutes(app, deps) {
   app.use(createHealthRoutes({ getCachedYtDlpVersion, refreshYtDlpVersionCache, verifyToken, configModule }));
 
   // Auth routes
-  app.use(createAuthRoutes({ verifyToken, loginLimiter, configModule }));
+  app.use(createAuthRoutes({ verifyToken, loginLimiter, configModule, getClientAddress }));
 
   // Setup routes
-  app.use(createSetupRoutes({ configModule, isLocalhostIP }));
+  app.use(createSetupRoutes({ configModule, setupTokenModule, setupCreateAuthLimiter, getClientAddress }));
 
   // Config routes
-  app.use(createConfigRoutes({ verifyToken, configModule, validateEnvAuthCredentials, isWslEnvironment }));
+  app.use(createConfigRoutes({ verifyToken, configModule, validateEnvAuthCredentials, isWslEnvironment, filenamePreviewRateLimiter }));
 
   // Channel routes
   app.use(createChannelRoutes({ verifyToken, channelModule, archiveModule }));
@@ -96,6 +100,9 @@ function registerRoutes(app, deps) {
 
   // Media server routes
   app.use(createMediaServerRoutes({ verifyToken, configModule, mediaServers }));
+
+  // Maintenance routes
+  app.use(createMaintenanceRoutes({ verifyToken, videosModule, configModule }));
 
   // Defensive redirect: /channels -> /subscriptions (frontend handles client-side routing,
   // this fallback covers direct server-side hits during the transition period)

@@ -79,7 +79,12 @@ jest.mock('../../../models', () => ({
 }));
 
 jest.mock('../../../models/channel', () => ({
-  findAll: jest.fn().mockResolvedValue([])
+  findAll: jest.fn().mockResolvedValue([]),
+  findOne: jest.fn().mockResolvedValue(null)
+}));
+
+jest.mock('../../../models/channelvideo', () => ({
+  update: jest.fn().mockResolvedValue([1]),
 }));
 
 jest.mock('../../downloadModule', () => ({
@@ -103,6 +108,7 @@ jest.mock('../../filesystem', () => {
       if (subfolder && subfolder.trim() !== '') return subfolder.trim();
       return null;
     }),
+    extractYoutubeIdFromPath: jest.fn(actualPathBuilder.extractYoutubeIdFromPath),
     extractSubfolderFromAbsPath: jest.fn(actualPathBuilder.extractSubfolderFromAbsPath),
   };
 });
@@ -121,6 +127,7 @@ const VideoMetadataProcessor = require('../videoMetadataProcessor');
 const tempPathManager = require('../tempPathManager');
 const { JobVideoDownload } = require('../../../models');
 const Channel = require('../../../models/channel');
+const ChannelVideo = require('../../../models/channelvideo');
 const logger = require('../../../logger');
 
 describe('DownloadExecutor', () => {
@@ -173,6 +180,9 @@ describe('DownloadExecutor', () => {
 
     // Setup VideoMetadataProcessor mock
     VideoMetadataProcessor.processVideoMetadata = jest.fn().mockResolvedValue([]);
+    jobModule.getJob.mockReturnValue(undefined);
+    jobModule.updateJob.mockResolvedValue();
+    jobModule.saveJobOnly.mockResolvedValue();
 
     // Setup health check mocks (succeed by default so existing tests pass)
     mockFsPromises.writeFile.mockResolvedValue();
@@ -474,6 +484,25 @@ describe('DownloadExecutor', () => {
         'Error reading directory'
       );
     });
+
+    it('should not log an error when the partial file directory was already moved', async () => {
+      const files = ['/output/video.mp4'];
+      const enoent = new Error('No such file or directory');
+      enoent.code = 'ENOENT';
+      mockFsPromises.access.mockRejectedValue(new Error('Access error'));
+      mockFsPromises.readdir.mockRejectedValue(enoent);
+
+      await executor.cleanupPartialFiles(files);
+
+      expect(logger.debug).toHaveBeenCalledWith(
+        { err: enoent, dir: '/output' },
+        'Partial file directory already removed'
+      );
+      expect(logger.error).not.toHaveBeenCalledWith(
+        expect.objectContaining({ dir: '/output' }),
+        'Error reading directory'
+      );
+    });
   });
 
   describe('checkOutputDirectoryHealth', () => {
@@ -679,6 +708,71 @@ describe('DownloadExecutor', () => {
         mockJobId,
         expect.objectContaining({
           status: 'Error'
+        })
+      );
+    });
+
+    it('should persist successful videos before terminal update when yt-dlp exits non-zero', async () => {
+      const mockVideoData = [
+        { youtubeId: 'success1234', filePath: '/output/video.mp4', fileSize: '1024' }
+      ];
+      const mockJob = { data: {} };
+
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue(mockVideoData);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/success1234']);
+      jobModule.getJob.mockReturnValue(mockJob);
+
+      setTimeout(() => {
+        mockProcess.emit('exit', 1, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(jobModule.saveJobOnly).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          data: expect.objectContaining({
+            videos: mockVideoData,
+            failedVideos: []
+          })
+        })
+      );
+
+      const saveJobOnlyCallIndex = jobModule.saveJobOnly.mock.invocationCallOrder[0];
+      const terminalUpdateCallIndex = jobModule.updateJob.mock.invocationCallOrder.find(
+        (order, idx) => jobModule.updateJob.mock.calls[idx][1]?.status === 'Complete with Warnings'
+      );
+
+      expect(saveJobOnlyCallIndex).toBeLessThan(terminalUpdateCallIndex);
+      expect(jobModule.updateJob).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          status: 'Complete with Warnings',
+          notes: 'Some videos failed (exit 1)',
+          data: expect.objectContaining({
+            videos: mockVideoData,
+            failedVideos: []
+          })
+        })
+      );
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
+        'broadcast',
+        null,
+        'download',
+        'downloadProgress',
+        expect.objectContaining({
+          warning: true,
+          finalSummary: expect.objectContaining({
+            totalDownloaded: 1
+          })
+        })
+      );
+      expect(notificationModule.sendDownloadNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          finalSummary: expect.objectContaining({
+            totalDownloaded: 1
+          }),
+          videoData: mockVideoData
         })
       );
     });
@@ -1105,6 +1199,182 @@ describe('DownloadExecutor', () => {
       );
     });
 
+    it('should accumulate grouped videos without treating expected skips as failures', async () => {
+      const existingVideo = { youtubeId: 'existing123', filePath: '/output/existing.mp4', fileSize: '2048' };
+      const newVideo = { youtubeId: 'success1234', filePath: '/output/new.mp4', fileSize: '1024' };
+      const existingFailedVideo = { youtubeId: 'oldfailed1', error: 'Old failure' };
+      const mockJob = {
+        data: {
+          videos: [existingVideo],
+          failedVideos: [existingFailedVideo],
+          cumulativeSkipped: 2
+        }
+      };
+
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([newVideo]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue([
+        'https://youtu.be/success1234',
+        'https://youtu.be/failed12345'
+      ]);
+      jobModule.getJob.mockReturnValue(mockJob);
+      jobModule.updateJob.mockImplementationOnce(async (_jobId, fields) => {
+        Object.assign(mockJob, fields);
+      });
+
+      setTimeout(() => {
+        mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://youtube.com/watch?v=failed12345\n');
+        mockProcess.stdout.emit('data', 'ERROR: This video is members-only\n');
+        mockProcess.emit('exit', 1, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, true);
+
+      expect(jobModule.updateJob).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          data: expect.objectContaining({
+            videos: [existingVideo, newVideo],
+            failedVideos: [existingFailedVideo],
+            cumulativeSkipped: 2
+          })
+        })
+      );
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          youtubeId: 'failed12345',
+          source: 'stdout'
+        }),
+        'Expected video skip from yt-dlp'
+      );
+      expect(jobModule.updateJob).not.toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({ status: 'Error' })
+      );
+      expect(jobModule.saveJobOnly).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          data: expect.objectContaining({
+            videos: [existingVideo, newVideo]
+          })
+        })
+      );
+      expect(notificationModule.sendDownloadNotification).not.toHaveBeenCalled();
+    });
+
+    it('should preserve notes and error code for grouped 403 failures', async () => {
+      const mockJob = {
+        data: {
+          videos: [],
+          failedVideos: [],
+          cumulativeSkipped: 0
+        }
+      };
+
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue([]);
+      jobModule.getJob.mockReturnValue(mockJob);
+
+      setTimeout(() => {
+        mockProcess.stdout.emit('data', 'ERROR: HTTP Error 403: Forbidden\n');
+        mockProcess.emit('exit', 1, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, true);
+
+      expect(jobModule.updateJob).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          notes: 'YouTube denied access (HTTP 403). Configure cookies in Settings to resolve this issue.',
+          error: 'COOKIES_RECOMMENDED'
+        })
+      );
+    });
+
+    it('should warn when intermediate group results cannot find the job', async () => {
+      jobModule.getJob.mockReturnValue(undefined);
+
+      await executor.saveIntermediateGroupResults(
+        mockJobId,
+        '1 videos.',
+        [{ youtubeId: 'success1234', filePath: '/output/new.mp4', fileSize: '1024' }],
+        [],
+        0
+      );
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        { jobId: mockJobId },
+        'Unable to merge intermediate group results; job not found'
+      );
+      expect(jobModule.updateJob).not.toHaveBeenCalled();
+      expect(jobModule.saveJobOnly).not.toHaveBeenCalled();
+    });
+
+    it('merges terminatedChannels across intermediate groups and dedupes by channelId', async () => {
+      const job = {
+        data: {
+          videos: [],
+          failedVideos: [],
+          cumulativeSkipped: 0,
+          terminatedChannels: [
+            { channelId: 'UCdupe000000000000000000', uploader: 'First Wins', url: 'first', terminatedAt: '2026-01-01' }
+          ]
+        }
+      };
+      jobModule.getJob.mockReturnValue(job);
+
+      await executor.saveIntermediateGroupResults(
+        mockJobId,
+        'output',
+        [],
+        [],
+        0,
+        {},
+        [
+          { channelId: 'UCdupe000000000000000000', uploader: 'Should Not Replace', url: 'second', terminatedAt: '2026-02-02' },
+          { channelId: 'UCnew0000000000000000000', uploader: 'New Channel', url: 'newurl', terminatedAt: '2026-02-02' }
+        ]
+      );
+
+      const updateCall = jobModule.updateJob.mock.calls.find(call => call[0] === mockJobId);
+      expect(updateCall).toBeDefined();
+      const merged = updateCall[1].data.terminatedChannels;
+      expect(merged).toHaveLength(2);
+      // First write wins on duplicate
+      expect(merged.find(c => c.channelId === 'UCdupe000000000000000000')).toEqual(
+        expect.objectContaining({ uploader: 'First Wins' })
+      );
+      expect(merged.find(c => c.channelId === 'UCnew0000000000000000000')).toEqual(
+        expect.objectContaining({ uploader: 'New Channel' })
+      );
+    });
+
+    it('merges terminationFailures across intermediate groups and dedupes by channel id', async () => {
+      const job = {
+        data: {
+          videos: [],
+          failedVideos: [],
+          cumulativeSkipped: 0,
+          terminationFailures: ['UCdupe000000000000000000']
+        }
+      };
+      jobModule.getJob.mockReturnValue(job);
+
+      await executor.saveIntermediateGroupResults(
+        mockJobId,
+        'output',
+        [],
+        [],
+        0,
+        {},
+        [],
+        ['UCdupe000000000000000000', 'UCnew0000000000000000000']
+      );
+
+      const updateCall = jobModule.updateJob.mock.calls.find(call => call[0] === mockJobId);
+      const merged = updateCall[1].data.terminationFailures;
+      expect(merged).toEqual(['UCdupe000000000000000000', 'UCnew0000000000000000000']);
+    });
+
     it('should not persist to database when no videos were downloaded', async () => {
       VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
       archiveModule.getNewVideoUrlsSince.mockReturnValue([]);
@@ -1278,6 +1548,209 @@ describe('DownloadExecutor', () => {
         { error: 'Private video', currentVideoId: 'def456XYZ' },
         'Error detected in stderr'
       );
+    });
+
+    it('should treat members-only download errors as expected skips', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([
+        {
+          youtubeId: 'success1234',
+          filePath: '/output/video.mp4',
+          fileSize: '1024',
+          youTubeVideoName: 'Downloaded Video',
+          youTubeChannelName: 'Channel'
+        }
+      ]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/success1234']);
+
+      setTimeout(() => {
+        mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://youtube.com/watch?v=member12345\n');
+        mockProcess.stdout.emit('data', 'ERROR: [youtube] member12345: Join this channel to get access to members-only content like this video, and other exclusive perks.\n');
+        mockProcess.emit('exit', 1, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          youtubeId: 'member12345',
+          source: 'stdout'
+        }),
+        'Expected video skip from yt-dlp'
+      );
+      expect(logger.warn).not.toHaveBeenCalledWith(
+        expect.objectContaining({ currentVideoId: 'member12345' }),
+        'Error detected during download'
+      );
+      expect(archiveModule.removeVideoFromArchive).not.toHaveBeenCalledWith('member12345');
+      expect(jobModule.updateJob).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          status: 'Complete',
+          data: expect.objectContaining({
+            videos: expect.arrayContaining([
+              expect.objectContaining({ youtubeId: 'success1234' })
+            ]),
+            failedVideos: []
+          })
+        })
+      );
+
+      const finalProgressCall = MessageEmitter.emitMessage.mock.calls.find(
+        call => call[3] === 'downloadProgress' && call[4]?.finalSummary
+      );
+      expect(finalProgressCall[4]).toEqual(expect.objectContaining({
+        text: 'Download completed: 1 video downloaded',
+        finalSummary: expect.objectContaining({
+          totalDownloaded: 1,
+          totalFailed: 0,
+          failedVideos: []
+        })
+      }));
+      expect(finalProgressCall[4]).not.toHaveProperty('warning');
+      expect(notificationModule.sendDownloadNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          finalSummary: expect.objectContaining({
+            totalFailed: 0,
+            failedVideos: []
+          })
+        })
+      );
+    });
+
+    it('should complete with zero-download summary when only upcoming live videos are skipped', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue([]);
+
+      setTimeout(() => {
+        mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://youtube.com/watch?v=live1234567\n');
+        mockProcess.stdout.emit('data', 'ERROR: [youtube] live1234567: This live event will begin in 21 hours.\n');
+        mockProcess.emit('exit', 1, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(jobModule.updateJob).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          status: 'Complete',
+          data: expect.objectContaining({
+            videos: [],
+            failedVideos: []
+          })
+        })
+      );
+      // Notification module is invoked, but its own totalDownloaded === 0 guard
+      // keeps users from getting a "0 videos downloaded" message.
+      expect(notificationModule.sendDownloadNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          finalSummary: expect.objectContaining({
+            totalDownloaded: 0,
+            totalFailed: 0,
+            failedVideos: []
+          })
+        })
+      );
+
+      const finalProgressCall = MessageEmitter.emitMessage.mock.calls.find(
+        call => call[3] === 'downloadProgress' && call[4]?.finalSummary
+      );
+      expect(finalProgressCall[4]).toEqual(expect.objectContaining({
+        text: 'Download completed: No new videos to download',
+        finalSummary: expect.objectContaining({
+          totalDownloaded: 0,
+          totalFailed: 0,
+          failedVideos: []
+        })
+      }));
+      expect(finalProgressCall[4]).not.toHaveProperty('warning');
+    });
+
+    it('should not mark job Complete when an unassociated stdout error coexists with expected skips', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue([]);
+
+      setTimeout(() => {
+        // Expected skip ERROR - suppressed by isExpectedYtdlpSkipMessage and
+        // does not increment unexpectedErrorCount.
+        mockProcess.stdout.emit('data', 'ERROR: This video is members-only\n');
+        // Real ERROR with no currentVideoId set. failedVideos.set is gated on
+        // currentVideoId so it never enters failedVideosList, but it must
+        // still bump unexpectedErrorCount so the job is not classified as
+        // "expected skips only".
+        mockProcess.stdout.emit('data', 'ERROR: Generic unexpected failure\n');
+        mockProcess.emit('exit', 1, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(jobModule.updateJob).not.toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({ status: 'Complete' })
+      );
+
+      const finalProgressCall = MessageEmitter.emitMessage.mock.calls.find(
+        call => call[3] === 'downloadProgress' && call[4]?.finalSummary
+      );
+      expect(finalProgressCall[4]).not.toHaveProperty('warning');
+      expect(finalProgressCall[4]).toHaveProperty('error', true);
+    });
+
+    it('should not mark job Complete when an unassociated stderr error coexists with expected skips', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue([]);
+
+      setTimeout(() => {
+        // Expected skip ERROR via stderr - matched by isExpectedYtdlpSkipMessage,
+        // increments expectedSkipCount only.
+        mockProcess.stderr.emit('data', 'ERROR: This video is members-only\n');
+        // Real ERROR via stderr with no currentVideoId. The stderr handler
+        // never calls monitor.processProgress, so monitor.hasError alone
+        // would miss this case; unexpectedErrorCount must catch it.
+        mockProcess.stderr.emit('data', 'ERROR: Generic unexpected failure\n');
+        mockProcess.emit('exit', 1, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(jobModule.updateJob).not.toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({ status: 'Complete' })
+      );
+
+      const finalProgressCall = MessageEmitter.emitMessage.mock.calls.find(
+        call => call[3] === 'downloadProgress' && call[4]?.finalSummary
+      );
+      expect(finalProgressCall[4]).not.toHaveProperty('warning');
+      expect(finalProgressCall[4]).toHaveProperty('error', true);
+    });
+
+    it('should classify every ERROR line when a stderr chunk coalesces multiple lines', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue([]);
+
+      setTimeout(() => {
+        // Node streams can deliver multiple newline-separated lines in one
+        // 'data' event. The stderr handler must classify each ERROR: line,
+        // not just the first match in the chunk.
+        mockProcess.stderr.emit(
+          'data',
+          'ERROR: This video is members-only\nERROR: Generic unexpected failure\n'
+        );
+        mockProcess.emit('exit', 1, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(jobModule.updateJob).not.toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({ status: 'Complete' })
+      );
+
+      const finalProgressCall = MessageEmitter.emitMessage.mock.calls.find(
+        call => call[3] === 'downloadProgress' && call[4]?.finalSummary
+      );
+      expect(finalProgressCall[4]).not.toHaveProperty('warning');
+      expect(finalProgressCall[4]).toHaveProperty('error', true);
     });
 
     it('should track currentVideoId from destination path for main video files', async () => {
@@ -1715,6 +2188,391 @@ describe('DownloadExecutor', () => {
       // After exit, references should be cleared
       expect(executor.currentProcess).toBeNull();
       expect(executor.currentJobId).toBeNull();
+    });
+  });
+
+  describe('isExpectedYtdlpSkipMessage', () => {
+    it.each([
+      'ERROR: [youtube] abc123: Join this channel to get access to members-only content like this video, and other exclusive perks.',
+      'ERROR: [youtube] abc123: This video is available to this channel\'s members on level: Assistant (or any higher level).',
+      'ERROR: [youtube] abc123: This live event will begin in 21 hours.',
+      'WARNING: [youtube] This live event will begin in a few moments.',
+      'ERROR: [youtube] abc123: Premiere will begin shortly.',
+      'ERROR: [youtube] abc123: This pre-release video is not yet available.'
+    ])('should identify expected skip text: %s', (message) => {
+      expect(executor.isExpectedYtdlpSkipMessage(message)).toBe(true);
+    });
+
+    it.each([
+      'ERROR: [youtube] abc123: Private video. Sign in if you have been granted access.',
+      'ERROR: [youtube] abc123: Sign in to confirm you are not a bot.',
+      'ERROR: [youtube] abc123: HTTP Error 403: Forbidden',
+      'ERROR: [youtube] abc123: Video unavailable. This content is not available.',
+      'ERROR: [youtube] abc123: The following content is not available on this app.'
+    ])('should not classify real failures as expected skips: %s', (message) => {
+      expect(executor.isExpectedYtdlpSkipMessage(message)).toBe(false);
+    });
+  });
+
+  describe('isMembersOnlyMessage', () => {
+    it.each([
+      'ERROR: [youtube] abc123: Join this channel to get access to members-only content like this video, and other exclusive perks.',
+      'ERROR: [youtube] abc123: This video is available to this channel\'s members on level: Assistant (or any higher level).',
+      'ERROR: [youtube] abc123: members-only content',
+      'ERROR: [youtube] abc123: subscriber_only',
+    ])('should match members-only patterns: %s', (message) => {
+      expect(executor.isMembersOnlyMessage(message)).toBe(true);
+    });
+
+    it.each([
+      'ERROR: [youtube] abc123: This live event will begin in 21 hours.',
+      'WARNING: [youtube] This live event will begin in a few moments.',
+      'ERROR: [youtube] abc123: Premiere will begin shortly.',
+      'ERROR: [youtube] abc123: This pre-release video is not yet available.',
+      'ERROR: [youtube] abc123: Release time of video is not known.',
+      'ERROR: [youtube] abc123: Sign in to confirm you are not a bot.',
+    ])('should NOT match premiere, pre-release, or unrelated patterns: %s', (message) => {
+      expect(executor.isMembersOnlyMessage(message)).toBe(false);
+    });
+  });
+
+  describe('extractYoutubeIdFromYtdlpError', () => {
+    it('should extract the authoritative youtube id from yt-dlp error text', () => {
+      const message = 'ERROR: [youtube] OOUclRI0Ae4: Join this channel to get access to members-only content.';
+
+      expect(executor.extractYoutubeIdFromYtdlpError(message)).toBe('OOUclRI0Ae4');
+    });
+
+    it('should return null when yt-dlp error text has no video id', () => {
+      expect(executor.extractYoutubeIdFromYtdlpError('members-only content')).toBeNull();
+    });
+  });
+
+  describe('extractChannelIdFromYtdlpError', () => {
+    it('extracts the canonical channel_id from a [youtube:tab] error line', () => {
+      const message = 'ERROR: [youtube:tab] UC1lg-nYUcZ1pjo6EC2Nj5Sw: YouTube said: This account has been terminated for violating Google\'s Terms of Service.';
+      expect(executor.extractChannelIdFromYtdlpError(message)).toBe('UC1lg-nYUcZ1pjo6EC2Nj5Sw');
+    });
+
+    it('returns null when the line is a [youtube] (video) error rather than [youtube:tab]', () => {
+      const message = 'ERROR: [youtube] OOUclRI0Ae4: Join this channel to get access to members-only content.';
+      expect(executor.extractChannelIdFromYtdlpError(message)).toBeNull();
+    });
+
+    it('returns null when no UC... id is present', () => {
+      expect(executor.extractChannelIdFromYtdlpError('account has been terminated for violating')).toBeNull();
+      expect(executor.extractChannelIdFromYtdlpError('')).toBeNull();
+    });
+  });
+
+  describe('persistTerminatedChannel', () => {
+    beforeEach(() => {
+      Channel.findOne.mockReset();
+    });
+
+    it('stamps terminated_at and clears auto_download_enabled_tabs on first detection', async () => {
+      const channelRow = {
+        terminated_at: null,
+        uploader: 'Test Channel',
+        url: 'https://www.youtube.com/channel/UC1234567890123456789012',
+        update: jest.fn().mockResolvedValue()
+      };
+      Channel.findOne.mockResolvedValueOnce(channelRow);
+
+      const result = await executor.persistTerminatedChannel('UC1234567890123456789012');
+
+      expect(Channel.findOne).toHaveBeenCalledWith({ where: { channel_id: 'UC1234567890123456789012' } });
+      expect(channelRow.update).toHaveBeenCalledWith({
+        terminated_at: expect.any(Date),
+        auto_download_enabled_tabs: ''
+      });
+      expect(result).toBe(channelRow);
+    });
+
+    it('preserves the original terminated_at on re-detection but still clears tabs', async () => {
+      const originalDate = new Date('2026-01-15T12:00:00Z');
+      const channelRow = {
+        terminated_at: originalDate,
+        uploader: 'Test Channel',
+        url: 'https://www.youtube.com/channel/UC1234567890123456789012',
+        update: jest.fn().mockResolvedValue()
+      };
+      Channel.findOne.mockResolvedValueOnce(channelRow);
+
+      await executor.persistTerminatedChannel('UC1234567890123456789012');
+
+      expect(channelRow.update).toHaveBeenCalledWith({
+        terminated_at: originalDate,
+        auto_download_enabled_tabs: ''
+      });
+    });
+
+    it('returns null and logs a warning when the channel is not in the database', async () => {
+      Channel.findOne.mockResolvedValueOnce(null);
+
+      const result = await executor.persistTerminatedChannel('UC0000000000000000000000');
+
+      expect(result).toBeNull();
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ channelId: 'UC0000000000000000000000' }),
+        'Terminated channel not in DB; skipping persistence'
+      );
+    });
+
+    it('swallows db errors and returns null', async () => {
+      Channel.findOne.mockRejectedValueOnce(new Error('db down'));
+
+      const result = await executor.persistTerminatedChannel('UC1234567890123456789012');
+
+      expect(result).toBeNull();
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ channelId: 'UC1234567890123456789012' }),
+        'Failed to persist terminated channel state'
+      );
+    });
+
+    it('is a no-op when channelId is falsy', async () => {
+      await expect(executor.persistTerminatedChannel(null)).resolves.toBeNull();
+      await expect(executor.persistTerminatedChannel('')).resolves.toBeNull();
+      await expect(executor.persistTerminatedChannel(undefined)).resolves.toBeNull();
+      expect(Channel.findOne).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('terminated channel handling in doDownload', () => {
+    const mockArgs = ['--format', 'best', 'https://www.youtube.com/channel/UC1234567890123456789012'];
+    const mockJobId = 'job-term-1';
+    const mockJobType = 'Channel Downloads';
+
+    beforeEach(() => {
+      Channel.findOne.mockReset();
+    });
+
+    it('marks termination-only runs as Complete with Warnings and includes terminatedChannels in finalSummary', async () => {
+      const channelRow = {
+        terminated_at: null,
+        uploader: 'Banned Channel',
+        url: 'https://www.youtube.com/channel/UC1234567890123456789012',
+        update: jest.fn().mockResolvedValue()
+      };
+      Channel.findOne.mockResolvedValue(channelRow);
+
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue([]);
+
+      setTimeout(() => {
+        const termLine = 'ERROR: [youtube:tab] UC1234567890123456789012: YouTube said: This account has been terminated for violating Google\'s Terms of Service.\n';
+        mockProcess.stderr.emit('data', Buffer.from(termLine));
+        setTimeout(() => mockProcess.emit('exit', 1, null), 5);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(channelRow.update).toHaveBeenCalledWith({
+        terminated_at: expect.any(Date),
+        auto_download_enabled_tabs: ''
+      });
+
+      const updateJobCalls = jobModule.updateJob.mock.calls.filter(c => c[0] === mockJobId);
+      const terminalCall = updateJobCalls[updateJobCalls.length - 1];
+      expect(terminalCall[1].status).toBe('Complete with Warnings');
+      expect(terminalCall[1].data.terminatedChannels).toEqual([
+        expect.objectContaining({ channelId: 'UC1234567890123456789012', uploader: 'Banned Channel' })
+      ]);
+      expect(terminalCall[1].data.totalTerminatedChannels).toBe(1);
+    });
+
+    it('emits a final WebSocket payload with terminatedChannels under finalSummary', async () => {
+      const channelRow = {
+        terminated_at: null,
+        uploader: 'Banned Channel',
+        url: 'https://www.youtube.com/channel/UC1234567890123456789012',
+        update: jest.fn().mockResolvedValue()
+      };
+      Channel.findOne.mockResolvedValue(channelRow);
+
+      setTimeout(() => {
+        const termLine = 'ERROR: [youtube:tab] UC1234567890123456789012: YouTube said: This account has been terminated for violating Google\'s Terms of Service.\n';
+        mockProcess.stderr.emit('data', Buffer.from(termLine));
+        setTimeout(() => mockProcess.emit('exit', 1, null), 5);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      const finalCall = MessageEmitter.emitMessage.mock.calls.find(call => call[4] && call[4].finalSummary);
+      expect(finalCall).toBeDefined();
+      expect(finalCall[4].finalSummary.terminatedChannels).toEqual([
+        expect.objectContaining({ channelId: 'UC1234567890123456789012', uploader: 'Banned Channel' })
+      ]);
+      expect(finalCall[4].finalSummary.totalTerminatedChannels).toBe(1);
+    });
+
+    it('does not increment unexpectedErrorCount or record a failed video for terminated errors', async () => {
+      const channelRow = {
+        terminated_at: null,
+        uploader: 'Banned Channel',
+        url: 'https://www.youtube.com/channel/UC1234567890123456789012',
+        update: jest.fn().mockResolvedValue()
+      };
+      Channel.findOne.mockResolvedValue(channelRow);
+
+      setTimeout(() => {
+        const termLine = 'ERROR: [youtube:tab] UC1234567890123456789012: YouTube said: This account has been terminated for violating Google\'s Terms of Service.\n';
+        mockProcess.stderr.emit('data', Buffer.from(termLine));
+        setTimeout(() => mockProcess.emit('exit', 1, null), 5);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      const updateJobCalls = jobModule.updateJob.mock.calls.filter(c => c[0] === mockJobId);
+      const terminalCall = updateJobCalls[updateJobCalls.length - 1];
+      expect(terminalCall[1].data.failedVideos).toEqual([]);
+    });
+
+    it('dedupes when the same termination message arrives on both stdout and stderr', async () => {
+      const channelRow = {
+        terminated_at: null,
+        uploader: 'Banned Channel',
+        url: 'https://www.youtube.com/channel/UC1234567890123456789012',
+        update: jest.fn().mockResolvedValue()
+      };
+      Channel.findOne.mockResolvedValue(channelRow);
+
+      setTimeout(() => {
+        const termLine = 'ERROR: [youtube:tab] UC1234567890123456789012: YouTube said: This account has been terminated for violating Google\'s Terms of Service.\n';
+        mockProcess.stdout.emit('data', Buffer.from(termLine));
+        mockProcess.stderr.emit('data', Buffer.from(termLine));
+        setTimeout(() => mockProcess.emit('exit', 1, null), 5);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      // Set dedupe means only one lookup across both stream sources.
+      expect(Channel.findOne).toHaveBeenCalledTimes(1);
+      expect(channelRow.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT mark run as handled when channel cannot be persisted', async () => {
+      // Channel not in DB: persistence returns null, run must surface as a failure.
+      Channel.findOne.mockResolvedValue(null);
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
+
+      setTimeout(() => {
+        const termLine = 'ERROR: [youtube:tab] UC1234567890123456789012: YouTube said: This account has been terminated for violating Google\'s Terms of Service.\n';
+        mockProcess.stderr.emit('data', Buffer.from(termLine));
+        setTimeout(() => mockProcess.emit('exit', 1, null), 5);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      const updateJobCalls = jobModule.updateJob.mock.calls.filter(c => c[0] === mockJobId);
+      const terminalCall = updateJobCalls[updateJobCalls.length - 1];
+      // Not Complete with Warnings: persistence failed, this is a real error.
+      expect(['Error', 'Failed']).toContain(terminalCall[1].status);
+      // No false-positive summary entry.
+      expect(terminalCall[1].data.terminatedChannels).toEqual([]);
+      expect(terminalCall[1].data.totalTerminatedChannels).toBe(0);
+      // The channel id IS recorded as a termination failure for the finalizer.
+      expect(terminalCall[1].data.terminationFailures).toEqual(['UC1234567890123456789012']);
+      expect(terminalCall[1].data.totalTerminationFailures).toBe(1);
+    });
+
+    it('records terminationFailures in the finalSummary broadcast', async () => {
+      Channel.findOne.mockResolvedValue(null);
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
+
+      setTimeout(() => {
+        const termLine = 'ERROR: [youtube:tab] UC1234567890123456789012: YouTube said: This account has been terminated for violating Google\'s Terms of Service.\n';
+        mockProcess.stderr.emit('data', Buffer.from(termLine));
+        setTimeout(() => mockProcess.emit('exit', 1, null), 5);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      const finalCall = MessageEmitter.emitMessage.mock.calls.find(call => call[4] && call[4].finalSummary);
+      expect(finalCall).toBeDefined();
+      expect(finalCall[4].finalSummary.terminationFailures).toEqual(['UC1234567890123456789012']);
+      expect(finalCall[4].finalSummary.totalTerminationFailures).toBe(1);
+    });
+
+    it('does NOT mark run as handled when persistTerminatedChannel throws (db error)', async () => {
+      // Update throws: surface as a real failure, same as the "not in DB" path.
+      const channelRow = {
+        terminated_at: null,
+        uploader: 'Banned Channel',
+        url: 'https://www.youtube.com/channel/UC1234567890123456789012',
+        update: jest.fn().mockRejectedValue(new Error('db down'))
+      };
+      Channel.findOne.mockResolvedValue(channelRow);
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
+
+      setTimeout(() => {
+        const termLine = 'ERROR: [youtube:tab] UC1234567890123456789012: YouTube said: This account has been terminated for violating Google\'s Terms of Service.\n';
+        mockProcess.stderr.emit('data', Buffer.from(termLine));
+        setTimeout(() => mockProcess.emit('exit', 1, null), 5);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      const updateJobCalls = jobModule.updateJob.mock.calls.filter(c => c[0] === mockJobId);
+      const terminalCall = updateJobCalls[updateJobCalls.length - 1];
+      expect(['Error', 'Failed']).toContain(terminalCall[1].status);
+      expect(terminalCall[1].data.terminatedChannels).toEqual([]);
+    });
+
+    it('falls through to unexpected-error branch when termination message has no extractable channel_id', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
+
+      setTimeout(() => {
+        const badLine = 'ERROR: account has been terminated for violating Google\'s Terms of Service.\n';
+        mockProcess.stderr.emit('data', Buffer.from(badLine));
+        setTimeout(() => mockProcess.emit('exit', 1, null), 5);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(Channel.findOne).not.toHaveBeenCalled();
+      const updateJobCalls = jobModule.updateJob.mock.calls.filter(c => c[0] === mockJobId);
+      const terminalCall = updateJobCalls[updateJobCalls.length - 1];
+      // No channel id: generic Error.
+      expect(['Error', 'Failed']).toContain(terminalCall[1].status);
+    });
+  });
+
+  describe('persistMembersOnlyAvailability', () => {
+    beforeEach(() => {
+      ChannelVideo.update.mockClear();
+      ChannelVideo.update.mockResolvedValue([1]);
+    });
+
+    it('should update channelvideos with subscriber_only when youtubeId provided', async () => {
+      await executor.persistMembersOnlyAvailability('abc12345678');
+
+      expect(ChannelVideo.update).toHaveBeenCalledWith(
+        { availability: 'subscriber_only' },
+        { where: { youtube_id: 'abc12345678' } },
+      );
+    });
+
+    it('should be a no-op when youtubeId is null', async () => {
+      await executor.persistMembersOnlyAvailability(null);
+      await executor.persistMembersOnlyAvailability(undefined);
+      await executor.persistMembersOnlyAvailability('');
+
+      expect(ChannelVideo.update).not.toHaveBeenCalled();
+    });
+
+    it('should swallow update errors and log a warning', async () => {
+      const dbErr = new Error('db down');
+      ChannelVideo.update.mockRejectedValueOnce(dbErr);
+
+      // Must not throw
+      await expect(executor.persistMembersOnlyAvailability('errvid1')).resolves.toBeUndefined();
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ youtubeId: 'errvid1' }),
+        'Failed to persist subscriber_only availability after download error',
+      );
     });
   });
 

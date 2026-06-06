@@ -1,0 +1,97 @@
+{
+  "id": "Hu4Yvq-g7_Y",
+  "title": "How to Get Your Brain to Focus Even Better All The Time | Chris Bailey | TEDxManchester Series Of TED Talks",
+  "fulltitle": "How to Get Your Brain to Focus Even Better All The Time | Chris Bailey | TEDxManchester Series Of TED Talks",
+  "description": "Productivity researcher Chris Bailey shares evidence-based strategies for sharpening attention in a world of relentless distractions.",
+  "ext": "mp4",
+  "extractor": "youtube",
+  "extractor_key": "Youtube",
+  "_type": "video",
+  "_version": { "version": "2025.10.01", "current_git_head": null, "release_git_head": null, "repository": "yt-dlp/yt-dlp" },
+
+  "uploader": "TEDx Talks",
+  "uploader_id": "@TEDx",
+  "uploader_url": "https://www.youtube.com/@TEDx",
+
+  "channel": "TEDx Talks",
+  "channel_id": "UCsT0YIqwnpJCM-mx7-gSA4Q",
+  "channel_url": "https://www.youtube.com/channel/UCsT0YIqwnpJCM-mx7-gSA4Q",
+  "channel_follower_count": 41200000,
+  "channel_is_verified": true,
+
+  "display_id": "Hu4Yvq-g7_Y",
+  "webpage_url": "https://www.youtube.com/watch?v=Hu4Yvq-g7_Y",
+  "webpage_url_basename": "watch",
+  "webpage_url_domain": "youtube.com",
+  "original_url": "https://www.youtube.com/watch?v=Hu4Yvq-g7_Y",
+
+  "upload_date": "20190405",
+  "release_date": "20190405",
+  "timestamp": 1554422400,
+  "release_timestamp": 1554422400,
+  "epoch": 1554422400,
+
+  "duration": 731,
+  "duration_string": "12:11",
+
+  "view_count": 12345678,
+  "like_count": 123456,
+  "comment_count": 4567,
+
+  "age_limit": 0,
+  "availability": "public",
+  "live_status": "not_live",
+  "was_live": false,
+  "is_live": false,
+  "playable_in_embed": true,
+  "language": "en",
+  "media_type": "video",
+  "normalized_rating": null,
+  "rating_source": null,
+
+  "format": "137 - 1920x1080 (1080p)+140 - audio only (medium)",
+  "format_id": "137+140",
+  "format_note": "1080p+medium",
+  "resolution": "1920x1080",
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "aspect_ratio": 1.78,
+  "vcodec": "avc1.640028",
+  "vbr": 2998.5,
+  "acodec": "mp4a.40.2",
+  "abr": 128.5,
+  "asr": 44100,
+  "audio_channels": 2,
+  "dynamic_range": "SDR",
+  "filesize_approx": 274432000,
+  "tbr": 3127.0,
+  "protocol": "https+https",
+
+  "categories": ["Education"],
+  "tags": ["TEDx", "TEDxTalks", "English", "Manchester", "Brain", "Focus", "Mindfulness", "Productivity"],
+
+  "playlist": null,
+  "playlist_index": null,
+  "playlist_id": null,
+  "playlist_title": null,
+  "playlist_uploader": null,
+  "playlist_uploader_id": null,
+  "playlist_channel": null,
+  "playlist_channel_id": null,
+  "playlist_webpage_url": null,
+  "n_entries": null,
+
+  "formats": [
+    {
+      "format_id": "137+140",
+      "ext": "mp4",
+      "url": "http://example.invalid/video.mp4",
+      "vcodec": "avc1.640028",
+      "acodec": "mp4a.40.2",
+      "width": 1920,
+      "height": 1080,
+      "fps": 30
+    }
+  ]
+}

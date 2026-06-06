@@ -2,7 +2,7 @@ import React from 'react';
 import { Avatar, Card, CardActionArea, CardContent, Chip, Tooltip, Typography } from '../../ui';
 import { Delete as DeleteIcon, Image as ImageIcon, Folder as FolderIcon } from '../../../lib/icons';
 import { Channel } from '../../../types/Channel';
-import { QualityChip, AutoDownloadChips, DurationFilterChip, TitleFilterChip, DownloadFormatConfigIndicator } from './chips';
+import { QualityChip, AutoDownloadChips, DurationFilterChip, TitleFilterChip, DownloadFormatConfigIndicator, TerminatedChip } from './chips';
 
 interface ChannelCardProps {
     channel: Channel;
@@ -141,10 +141,11 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
                 <CardContent style={{ display: 'flex', flexDirection: 'column', gap: 16, width: '100%', flexGrow: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', width: '100%', minWidth: 0 }}>
-                            <div style={{ minWidth: 0, flexGrow: 1 }}>
+                            <div style={{ minWidth: 0, flexGrow: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
                                 <Typography variant="subtitle1" fontWeight={600} noWrap>
                                     {channel.uploader || 'Unknown Channel'}
                                 </Typography>
+                                <TerminatedChip terminatedAt={channel.terminated_at} />
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                                 <FolderIcon size={16} style={{ color: 'var(--muted-foreground)' }} data-testid="FolderIcon" />

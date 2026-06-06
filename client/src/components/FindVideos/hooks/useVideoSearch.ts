@@ -21,11 +21,16 @@ export function useVideoSearch(token: string | null): UseVideoSearchResult {
   }, []);
 
   const search = useCallback(async (query: string, count: PageSize) => {
-    if (controllerRef.current) return;
+    // Cancel any in-flight search so a stale response cannot overwrite a newer
+    // one and leave the prior search's results stuck on the page.
+    if (controllerRef.current) {
+      controllerRef.current.abort();
+    }
     const controller = new AbortController();
     controllerRef.current = controller;
     setLoading(true);
     setError(null);
+    setResults([]);
 
     try {
       const res = await axios.post(
@@ -36,18 +41,22 @@ export function useVideoSearch(token: string | null): UseVideoSearchResult {
           signal: controller.signal,
         }
       );
+      // Late-arriving response from a superseded search: drop it.
+      if (controllerRef.current !== controller) return;
       setResults(res.data.results || []);
     } catch (err: unknown) {
       if (axios.isCancel(err)) {
-        // user canceled; do not surface as error
-      } else {
+        // user canceled or superseded; do not surface as error
+      } else if (controllerRef.current === controller) {
         const message = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
           || 'Search failed';
         setError(message);
       }
     } finally {
-      controllerRef.current = null;
-      setLoading(false);
+      if (controllerRef.current === controller) {
+        controllerRef.current = null;
+        setLoading(false);
+      }
     }
   }, [token]);
 

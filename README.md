@@ -1,6 +1,6 @@
 # Youtarr
 
-![Backend Coverage](https://img.shields.io/badge/Backend_Coverage-81%25-brightgreen)
+![Backend Coverage](https://img.shields.io/badge/Backend_Coverage-83%25-brightgreen)
 ![Frontend Coverage](https://img.shields.io/badge/Frontend_Coverage-86%25-brightgreen)
 ![CI Status](https://github.com/DialmasterOrg/Youtarr/workflows/CI%20-%20Lint%20and%20Test/badge.svg)
 
@@ -36,6 +36,7 @@ https://github.com/user-attachments/assets/a80548fc-bcf9-4ad0-889c-dbd5aac250ee
 - **Metadata Generation**: NFO files, poster images and embedded MP4 metadata for all media servers
 - **Scheduled Downloads**: Configure automatic downloads on your schedule (cron-based)
 - **Auto-Cleanup**: Age and space-based removal of videos with dry-run previews
+- **Filesystem Rescan**: Move, rename, or convert downloaded files outside Youtarr (e.g., `.mp4` to `.mkv`) and trigger a rescan from Settings -> Maintenance to reconcile the database; daily and startup scans pick up changes automatically
 - **Discord Notifications**: Optional webhook alerts for new downloads
 - **Web Interface**: Manage everything through a responsive (PC or mobile) web UI
 - **Secure Access**: Built-in authentication with admin controls
@@ -56,6 +57,8 @@ You'll need Docker, Docker Compose, Git, and a Bash shell (Git Bash on Windows).
 > **Heads up:** Youtarr runs exclusively via Docker; direct `npm start`/Node deployments are unsupported.
 
 > Want to try unreleased features? See [Using Development Builds](docs/DEVELOPMENT.md#using-development-builds) for the bleeding-edge `dev-latest` image.
+
+> **Database note for Docker Desktop/ARM/NAS users:** Fresh installs started with `./start.sh` use Docker named-volume storage for MariaDB. Existing bind-mounted installs and plain `docker compose up -d` installs may use `./database`; on virtualized filesystems this can be risky for MariaDB schema migrations. If you see `Table ... doesn't exist in engine` or `Incorrect information in file` errors, or if you want to proactively migrate, see [Database Management](docs/DATABASE.md#migrating-from-bind-mount-to-named-volume).
 
 ## Documentation
 

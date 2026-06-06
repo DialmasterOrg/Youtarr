@@ -1,4 +1,29 @@
 # Ignore database files
 database/
 database/*
+database.bind-mount-backup.*
 
+# Ignore all local config except the example (keeps cookies, tokens, json
+# backups, and per-host config.json out of the build context)
+config/*
+!config/config.example.json
+.env
+.env.*
+!.env.example
+!.env.dev.example
+
+# Ignore local dependencies and generated outputs
+node_modules/
+client/node_modules/
+client/build-storybook/
+client/storybook-static/
+coverage/
+client/coverage/
+
+# Ignore local caches and logs
+.cache/
+.npm/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

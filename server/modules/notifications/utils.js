@@ -36,15 +36,113 @@ function formatDuration(seconds) {
 }
 
 /**
- * Build notification title based on download count
+ * Build notification title based on download count.
+ * When no videos downloaded but channels were marked terminated or failed
+ * to auto-disable, the headline shifts to the termination event.
  * @param {number} totalDownloaded - Number of videos downloaded
+ * @param {number} [terminatedCount=0] - Number of channels marked terminated
+ * @param {number} [terminationFailureCount=0] - Number of terminations not auto-disabled
  * @returns {string} Title string
  */
-function buildTitle(totalDownloaded) {
+function buildTitle(totalDownloaded, terminatedCount = 0, terminationFailureCount = 0) {
+  if (totalDownloaded === 0 && (terminatedCount + terminationFailureCount) > 0) {
+    const total = terminatedCount + terminationFailureCount;
+    return total === 1
+      ? '⚠️ Channel Termination Detected'
+      : `⚠️ ${total} Channel Terminations Detected`;
+  }
   if (totalDownloaded === 1) {
     return '🎬 New Video Downloaded';
   }
   return `🎬 ${totalDownloaded} New Videos Downloaded`;
+}
+
+/**
+ * Get terminated channel count from a final summary.
+ * @param {Object} finalSummary - Summary object from downloadExecutor
+ * @returns {number} Number of channels marked terminated
+ */
+function getTerminatedCount(finalSummary = {}) {
+  return finalSummary.totalTerminatedChannels
+    || finalSummary.terminatedChannels?.length
+    || 0;
+}
+
+/**
+ * Build a concise terminated channel label.
+ * @param {number} count - Number of terminated channels
+ * @returns {string} Human-readable terminated count
+ */
+function buildTerminatedCountLabel(count) {
+  return `${count} ${count === 1 ? 'channel' : 'channels'} marked terminated`;
+}
+
+/**
+ * Format a terminated channel entry for notification bodies.
+ * @param {Object} channel - Terminated channel entry
+ * @returns {string} Human-readable line
+ */
+function formatTerminatedChannelLine(channel = {}) {
+  const label = channel.uploader || channel.channelId || 'Unknown channel';
+  return `${label}: scheduled downloads disabled`;
+}
+
+/**
+ * Get termination-persistence-failure count from a final summary.
+ * @param {Object} finalSummary - Summary object from downloadExecutor
+ * @returns {number} Number of channels detected as terminated but not auto-disabled
+ */
+function getTerminationFailureCount(finalSummary = {}) {
+  return finalSummary.totalTerminationFailures
+    || finalSummary.terminationFailures?.length
+    || 0;
+}
+
+/**
+ * Build a concise label for termination-persistence failures.
+ * @param {number} count - Number of failures
+ * @returns {string} Human-readable label
+ */
+function buildTerminationFailureCountLabel(count) {
+  return `${count} termination${count === 1 ? '' : 's'} could not be auto-disabled`;
+}
+
+/**
+ * Format a termination-persistence-failure entry for notification bodies.
+ * @param {string} channelId - The channel id
+ * @returns {string} Human-readable line
+ */
+function formatTerminationFailureLine(channelId) {
+  return `${channelId}: detected as terminated but could not be auto-disabled (check the channel manually)`;
+}
+
+/**
+ * Get failed download count from a final summary.
+ * @param {Object} finalSummary - Summary object from downloadExecutor
+ * @returns {number} Number of failed videos
+ */
+function getFailedCount(finalSummary = {}) {
+  return finalSummary.totalFailed || finalSummary.failedVideos?.length || 0;
+}
+
+/**
+ * Build a concise failed download label.
+ * @param {number} count - Number of failed videos
+ * @returns {string} Human-readable failed count
+ */
+function buildFailedCountLabel(count) {
+  return `${count} ${count === 1 ? 'video' : 'videos'} failed`;
+}
+
+/**
+ * Format a failed video for notification bodies.
+ * @param {Object} failedVideo - Failed video metadata
+ * @returns {string} Human-readable failure line
+ */
+function formatFailedVideoLine(failedVideo = {}) {
+  const label = failedVideo.channel || failedVideo.title || failedVideo.youtubeId || failedVideo.url || 'Unknown video';
+  const error = failedVideo.error || 'Unknown error';
+  return `${label}: ${error}`;
 }
 
 /**
@@ -130,9 +228,17 @@ module.exports = {
   escapeHtml,
   formatDuration,
   buildTitle,
+  getFailedCount,
+  buildFailedCountLabel,
+  formatFailedVideoLine,
   getSubtitle,
   buildAutoRemovalTitle,
   formatBytes,
-  groupVideosByChannel
+  groupVideosByChannel,
+  getTerminatedCount,
+  buildTerminatedCountLabel,
+  formatTerminatedChannelLine,
+  getTerminationFailureCount,
+  buildTerminationFailureCountLabel,
+  formatTerminationFailureLine
 };
-

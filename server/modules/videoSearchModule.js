@@ -5,7 +5,7 @@ const { Video } = require('../models');
 const youtubeApi = require('./youtubeApi');
 
 const SEARCH_TIMEOUT_MS = 60_000;
-const ALLOWED_COUNTS = [10, 25, 50];
+const ALLOWED_COUNTS = [10, 25, 50, 100];
 
 class SearchCanceledError extends Error {
   constructor() { super('Search canceled'); this.name = 'SearchCanceledError'; }
@@ -63,12 +63,16 @@ class VideoSearchModule {
   _parseNdjson(stdout, query) {
     const lines = stdout.split('\n');
     const results = [];
+    const seenIds = new Set();
     for (const line of lines) {
       const trimmed = line.trim();
       if (!trimmed) continue;
       try {
         const entry = JSON.parse(trimmed);
-        results.push(this._normalize(entry));
+        const normalized = this._normalize(entry);
+        if (normalized.youtubeId && seenIds.has(normalized.youtubeId)) continue;
+        if (normalized.youtubeId) seenIds.add(normalized.youtubeId);
+        results.push(normalized);
       } catch (err) {
         logger.warn({ err, query, line: trimmed.slice(0, 200) }, 'skipping unparseable yt-dlp line');
       }

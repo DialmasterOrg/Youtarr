@@ -49,7 +49,7 @@ If your platform limits wildcard access, replace `'%'` with the container's IP o
    ./start-with-external-db.sh
    ```
    - Add `--no-auth` if you are fronting Youtarr with your own authentication layer
-   - Provide `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` (either via .env or via your platform's UI) when you need to bypass the localhost-only setup wizard
+   - Provide `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` (either via .env or via your platform's UI) when you need to bypass the setup-token wizard
 
 To revert to the bundled database, simply run `./start.sh` without the flag.
 

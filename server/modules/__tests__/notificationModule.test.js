@@ -35,7 +35,13 @@ jest.mock('../configModule', () => ({
 const notificationModule = require('../notificationModule');
 
 // Also require the formatters and senders for direct testing
-const { plainFormatter, discordFormatter } = require('../notifications/formatters');
+const {
+  plainFormatter,
+  discordFormatter,
+  emailFormatter,
+  telegramFormatter,
+  slackMarkdownFormatter
+} = require('../notifications/formatters');
 const { appriseSender, discordSender } = require('../notifications/senders');
 const { formatDuration, buildAutoRemovalTitle, formatBytes, groupVideosByChannel } = require('../notifications/utils');
 
@@ -318,6 +324,25 @@ describe('Plain Formatter', () => {
 
       expect(message.title).toBe('🎬 2 New Videos Downloaded');
     });
+
+    it('should include failed download details for partial-success notifications', () => {
+      const summary = {
+        ...baseFinalSummary,
+        totalFailed: 1,
+        failedVideos: [
+          {
+            channel: 'Private Channel',
+            title: 'Members Only Video',
+            error: 'This video is members-only'
+          }
+        ]
+      };
+
+      const message = plainFormatter.formatDownloadMessage(summary, baseVideoData);
+
+      expect(message.body).toContain('⚠️ 1 video failed.');
+      expect(message.body).toContain('Private Channel: This video is members-only');
+    });
   });
 });
 
@@ -354,6 +379,75 @@ describe('Discord Formatter', () => {
       expect(message.embeds[0].fields[0].name).toContain('Tech Channel');
       expect(message.embeds[0].fields[0].value).toContain('How to Code');
     });
+
+    it('should include failed download details and warning color for partial-success notifications', () => {
+      const summary = {
+        ...baseFinalSummary,
+        totalFailed: 1,
+        failedVideos: [
+          {
+            channel: 'Private Channel',
+            error: 'This video is members-only'
+          }
+        ]
+      };
+
+      const message = discordFormatter.formatDownloadMessage(summary, baseVideoData);
+
+      expect(message.embeds[0].color).toBe(0xffa500);
+      expect(message.embeds[0].description).toContain('⚠️ **1 video failed.**');
+      expect(message.embeds[0].fields).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            name: '⚠️ Failed downloads',
+            value: expect.stringContaining('Private Channel: This video is members-only')
+          })
+        ])
+      );
+    });
+  });
+});
+
+describe('Rich Notification Formatters', () => {
+  const partialSuccessSummary = {
+    totalDownloaded: 2,
+    totalFailed: 1,
+    jobType: 'Channel Downloads',
+    failedVideos: [
+      {
+        channel: 'Private Channel',
+        error: 'This video is members-only'
+      }
+    ]
+  };
+
+  const videoData = [
+    {
+      youTubeChannelName: 'Tech Channel',
+      youTubeVideoName: 'How to Code',
+      duration: 600
+    }
+  ];
+
+  it('should include failed download details in email notifications', () => {
+    const message = emailFormatter.formatDownloadMessage(partialSuccessSummary, videoData);
+
+    expect(message.body).toContain('⚠️ 1 video failed.');
+    expect(message.body).toContain('Private Channel: This video is members-only');
+  });
+
+  it('should include failed download details in Telegram notifications', () => {
+    const message = telegramFormatter.formatDownloadMessage(partialSuccessSummary, videoData);
+
+    expect(message.body).toContain('⚠️ <b>1 video failed.</b>');
+    expect(message.body).toContain('Private Channel: This video is members-only');
+  });
+
+  it('should include failed download details in Slack notifications', () => {
+    const message = slackMarkdownFormatter.formatDownloadMessage(partialSuccessSummary, videoData);
+
+    expect(message.body).toContain('⚠️ *1 video failed.*');
+    expect(message.body).toContain('Private Channel: This video is members-only');
   });
 });
 
@@ -664,7 +758,7 @@ describe('NotificationModule Integration', () => {
       expect(mockLoggerDebug).toHaveBeenCalledWith('Notifications not configured, skipping notification');
     });
 
-    it('should skip notification when no videos downloaded', async () => {
+    it('should skip notification when no videos downloaded and no terminations recorded', async () => {
       const notificationData = {
         ...baseNotificationData,
         finalSummary: { ...baseNotificationData.finalSummary, totalDownloaded: 0 }
@@ -673,7 +767,30 @@ describe('NotificationModule Integration', () => {
       await notificationModule.sendDownloadNotification(notificationData);
 
       expect(mockSpawn).not.toHaveBeenCalled();
-      expect(mockLoggerDebug).toHaveBeenCalledWith('No new videos downloaded, skipping notification');
+      expect(mockLoggerDebug).toHaveBeenCalledWith('No new videos downloaded and no terminations recorded, skipping notification');
+    });
+
+    it('still sends notification when zero videos downloaded but a channel was marked terminated', async () => {
+      const notificationData = {
+        ...baseNotificationData,
+        finalSummary: {
+          ...baseNotificationData.finalSummary,
+          totalDownloaded: 0,
+          terminatedChannels: [
+            { channelId: 'UC1234567890123456789012', uploader: 'Banned Channel' }
+          ]
+        }
+      };
+
+      const sendPromise = notificationModule.sendDownloadNotification(notificationData);
+      // ntfy:// routes through Apprise; close the child so the sender resolves.
+      setImmediate(() => {
+        mockProcess.emit('close', 0);
+      });
+      await sendPromise;
+
+      expect(mockSpawn).toHaveBeenCalled();
+      expect(mockLoggerDebug).not.toHaveBeenCalledWith('No new videos downloaded and no terminations recorded, skipping notification');
     });
 
     it('should use Discord webhook directly for Discord URLs with rich formatting', async () => {

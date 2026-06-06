@@ -20,14 +20,21 @@ import { SponsorBlockCategories } from '../components/Configuration/types';
  */
 export const CONFIG_FIELDS = {
   // Channel settings
+  // Defaults must match config/config.example.json: useConfig fills missing
+  // server fields from here and save POSTs the full object back.
+  // Enforced by configSchemaAlignment.test.ts.
   channelAutoDownload: { default: false, trackChanges: true },
-  channelDownloadFrequency: { default: '', trackChanges: true },
-  channelFilesToDownload: { default: 3, trackChanges: true },
+  channelDownloadFrequency: { default: '0 * * * *', trackChanges: true },
+  channelFilesToDownload: { default: 5, trackChanges: true },
 
   // Video settings
   preferredResolution: { default: '1080', trackChanges: true },
   videoCodec: { default: 'default', trackChanges: true },
   defaultSubfolder: { default: '', trackChanges: true },
+  videoFilenamePrefix: {
+    default: '%(uploader,channel,uploader_id).80B - %(title).76B',
+    trackChanges: true,
+  },
 
   // Plex integration
   plexApiKey: { default: '', trackChanges: true },
@@ -115,7 +122,7 @@ export const CONFIG_FIELDS = {
 
   // Appearance
   darkModeEnabled: { default: false, trackChanges: true },
-  channelVideosHotLoad: { default: true, trackChanges: true },
+  channelVideosHotLoad: { default: false, trackChanges: true },
 
   // API Keys
   apiKeyRateLimit: { default: 10, trackChanges: true },
@@ -126,6 +133,20 @@ export const CONFIG_FIELDS = {
   ytdlpLastUpdated: { default: null as string | null, trackChanges: false },
   ytdlpLastResult: {
     default: null as { status: 'updated' | 'up-to-date' | 'skipped' | 'error'; message?: string; version?: string } | null,
+    trackChanges: false,
+  },
+  rescanLastRun: {
+    default: null as {
+      startedAt: string;
+      completedAt: string;
+      trigger: 'manual' | 'scheduled' | 'startup';
+      status: 'completed' | 'timed-out' | 'error';
+      videosUpdated: number;
+      videosMarkedMissing: number;
+      videosScanned: number;
+      filesFoundOnDisk: number;
+      errorMessage: string | null;
+    } | null,
     trackChanges: false,
   },
 
@@ -159,6 +180,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   preferredResolution: CONFIG_FIELDS.preferredResolution.default,
   videoCodec: CONFIG_FIELDS.videoCodec.default,
   defaultSubfolder: CONFIG_FIELDS.defaultSubfolder.default,
+  videoFilenamePrefix: CONFIG_FIELDS.videoFilenamePrefix.default,
   plexApiKey: CONFIG_FIELDS.plexApiKey.default,
   plexYoutubeLibraryId: CONFIG_FIELDS.plexYoutubeLibraryId.default,
   plexSubfolderLibraryMappings: CONFIG_FIELDS.plexSubfolderLibraryMappings.default,
@@ -209,6 +231,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   ytdlpLastChecked: CONFIG_FIELDS.ytdlpLastChecked.default,
   ytdlpLastUpdated: CONFIG_FIELDS.ytdlpLastUpdated.default,
   ytdlpLastResult: CONFIG_FIELDS.ytdlpLastResult.default,
+  rescanLastRun: CONFIG_FIELDS.rescanLastRun.default,
   ytdlpIpFamily: CONFIG_FIELDS.ytdlpIpFamily.default,
   ytdlpDownloadRateLimit: CONFIG_FIELDS.ytdlpDownloadRateLimit.default,
   ytdlpCustomArgs: CONFIG_FIELDS.ytdlpCustomArgs.default,

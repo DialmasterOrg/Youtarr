@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { Card, CardContent, Grid, Typography, Box, Tooltip, Chip, Popover, Dialog, DialogTitle, DialogContent, Button } from './ui';
 import { Settings as SettingsIcon, Clock as AccessTimeIcon, Filter as FilterAltIcon } from 'lucide-react';
@@ -7,6 +7,7 @@ import { Channel } from '../types/Channel';
 import RatingBadge from './shared/RatingBadge';
 import ChannelVideos from './ChannelPage/ChannelVideos';
 import ChannelSettingsDialog from './ChannelPage/ChannelSettingsDialog';
+import TerminatedNotice from './ChannelPage/components/TerminatedNotice';
 import { useConfig } from '../hooks/useConfig';
 import SubFolderChip from './Subscriptions/components/chips/SubFolderChip';
 import QualityChip from './Subscriptions/components/chips/QualityChip';
@@ -69,7 +70,15 @@ function ChannelPage({ token }: ChannelPageProps) {
     });
   };
 
-  useEffect(() => {
+  // Monotonic request id keeps a slow in-flight /getChannelInfo from
+  // clobbering a fresher response that already committed. Without this,
+  // the initial fetch (with stale terminated_at) can resolve after the
+  // post-videos-loaded refetch and overwrite the reinstated state.
+  const latestRequestIdRef = useRef(0);
+  const appliedRequestIdRef = useRef(0);
+
+  const fetchAndCommitChannelInfo = useCallback(() => {
+    const requestId = ++latestRequestIdRef.current;
     fetch(`/getChannelInfo/${channel_id}`, {
       headers: {
         'x-access-token': token || '',
@@ -81,19 +90,115 @@ function ChannelPage({ token }: ChannelPageProps) {
         }
         return response.json();
       })
-      .then((data) => setChannel(data))
+      .then((data) => {
+        if (requestId > appliedRequestIdRef.current) {
+          appliedRequestIdRef.current = requestId;
+          setChannel(data);
+        }
+      })
       .catch((error) => console.error(error));
   }, [token, channel_id]);
+
+  useEffect(() => {
+    fetchAndCommitChannelInfo();
+  }, [fetchAndCommitChannelInfo]);
+
+  // Stale-closure shield: handleVideosLoaded fires from a child hook ref,
+  // so we read the latest channel via a ref rather than closing over state.
+  const channelRef = useRef(channel);
+  channelRef.current = channel;
+
+  // The backend clears terminated_at inside the videos fetch when yt-dlp
+  // succeeds, so a successful first videos load is our signal to refetch
+  // /getChannelInfo. Refetch when the channel is currently terminated OR
+  // when the initial info hasn't landed yet - the request-id gate above
+  // protects us from a late stale initial response overwriting this one.
+  const handleVideosLoaded = useCallback(() => {
+    if (channelRef.current && !channelRef.current.terminated_at) return;
+    fetchAndCommitChannelInfo();
+  }, [fetchAndCommitChannelInfo]);
 
   useEffect(() => {
     setDescriptionExpanded(false);
   }, [channel?.description]);
 
-  function textToHTML(text: string) {
-    return text
+  function renderDescriptionText(text: string): React.ReactNode[] {
+    const nodes: React.ReactNode[] = [];
+    const tokenPattern = /(https?:\/\/[^\s]+)|(\r\n|\r|\n)/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
 
-      .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1">$1</a>')
-      .replace(/(?:\r\n|\r|\n)/g, '<br />'); // replace newlines with <br />
+    const splitUrlTrailingPunctuation = (rawUrl: string): [string, string] => {
+      let url = rawUrl;
+      let suffix = '';
+
+      const stripFromUrl = (count: number) => {
+        suffix = url.slice(-count) + suffix;
+        url = url.slice(0, -count);
+      };
+
+      const stripTrailingSentencePunctuation = () => {
+        const punctuationMatch = url.match(/[.,!?;:]+$/);
+        if (punctuationMatch) {
+          stripFromUrl(punctuationMatch[0].length);
+        }
+      };
+
+      stripTrailingSentencePunctuation();
+
+      const bracketPairs = [
+        ['(', ')'],
+        ['[', ']'],
+        ['{', '}'],
+      ];
+
+      let strippedBracket = true;
+      while (strippedBracket) {
+        strippedBracket = false;
+
+        for (const [open, close] of bracketPairs) {
+          if (!url.endsWith(close)) continue;
+
+          const openCount = url.split(open).length - 1;
+          const closeCount = url.split(close).length - 1;
+          if (closeCount > openCount) {
+            stripFromUrl(1);
+            stripTrailingSentencePunctuation();
+            strippedBracket = true;
+          }
+        }
+      }
+
+      return [url, suffix];
+    };
+
+    while ((match = tokenPattern.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        nodes.push(text.slice(lastIndex, match.index));
+      }
+
+      if (match[1]) {
+        const [url, suffix] = splitUrlTrailingPunctuation(match[1]);
+        nodes.push(
+          <a key={`link-${match.index}`} href={url} target="_blank" rel="noopener noreferrer">
+            {url}
+          </a>
+        );
+        if (suffix) {
+          nodes.push(suffix);
+        }
+      } else {
+        nodes.push(<br key={`br-${match.index}`} />);
+      }
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < text.length) {
+      nodes.push(text.slice(lastIndex));
+    }
+
+    return nodes;
   }
 
   const chipHeight = isMobile ? 22 : 26;
@@ -305,6 +410,9 @@ function ChannelPage({ token }: ChannelPageProps) {
                 >
                   {channel ? channel.uploader : 'Loading...'}
                 </Typography>
+                {channel?.terminated_at && (
+                  <TerminatedNotice terminatedAt={channel.terminated_at} isMobile={isMobile} />
+                )}
                 {channel && (
                   <Box className="flex flex-wrap gap-1 items-center">
                     {renderFilterIndicators({ includeRating: false })}
@@ -333,8 +441,9 @@ function ChannelPage({ token }: ChannelPageProps) {
                     align="left"
                     color="text.secondary"
                     style={{ lineHeight: 1.6 }}
-                    dangerouslySetInnerHTML={{ __html: textToHTML(displayedDescription) }}
-                  />
+                  >
+                    {renderDescriptionText(displayedDescription)}
+                  </Typography>
                 </Box>
                 {shouldShowExpandButton && (
                   <Button
@@ -521,6 +630,7 @@ function ChannelPage({ token }: ChannelPageProps) {
         channelVideoQuality={channel?.video_quality || null}
         channelAudioFormat={channel?.audio_format || null}
         channelAvailableTabs={channel?.available_tabs ?? null}
+        onVideosLoaded={handleVideosLoaded}
       />
 
       {channel && channel_id && (

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Typography, Alert, Button, Skeleton } from '../../ui';
 import { useMediaQuery } from '../../../hooks/useMediaQuery';
-import { SearchResult, PageSize, ViewMode } from '../types';
+import { ResultSelection, SearchResult, PageSize, ViewMode } from '../types';
 import ResultCard from './ResultCard';
 import ResultsTable from './ResultsTable';
 import ResultsListMobile from './ResultsListMobile';
@@ -16,10 +16,11 @@ interface ResultsGridProps {
   viewMode: ViewMode;
   onResultClick: (result: SearchResult) => void;
   onRetry: () => void;
+  selection?: ResultSelection;
 }
 
 export default function ResultsGrid({
-  results, loading, error, hasSearched, lastQuery, pageSize, viewMode, onResultClick, onRetry,
+  results, loading, error, hasSearched, lastQuery, pageSize, viewMode, onResultClick, onRetry, selection,
 }: ResultsGridProps) {
   const isMobile = useMediaQuery('(max-width: 767px)');
 
@@ -66,14 +67,19 @@ export default function ResultsGrid({
 
   if (viewMode === 'table') {
     return isMobile
-      ? <ResultsListMobile results={results} onResultClick={onResultClick} />
-      : <ResultsTable results={results} onResultClick={onResultClick} />;
+      ? <ResultsListMobile results={results} onResultClick={onResultClick} selection={selection} />
+      : <ResultsTable results={results} onResultClick={onResultClick} selection={selection} />;
   }
 
   return (
     <Box className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
       {results.map((r) => (
-        <ResultCard key={r.youtubeId} result={r} onClick={() => onResultClick(r)} />
+        <ResultCard
+          key={r.youtubeId}
+          result={r}
+          onClick={() => onResultClick(r)}
+          selection={selection}
+        />
       ))}
     </Box>
   );

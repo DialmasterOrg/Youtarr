@@ -419,9 +419,8 @@ if [ "$AUTH_ENABLED" = true ]; then
       yt_info "Username and password are now managed via .env and cannot be changed via the web UI in headless auth mode."
   else
     if [ "$EXISTING_CONFIG" = false ]; then
-      yt_info "Authentication is enabled. You'll be prompted to create credentials on first web login (localhost required)."
-      yt_info "Your authentication settings will be saved in config/config.json after first login and can be changed via the web UI."
-      yt_detail "For headless setups, set AUTH_PRESET_USERNAME and AUTH_PRESET_PASSWORD manually in .env."
+      yt_info "Authentication is enabled. First-time setup instructions will be shown after services start."
+      yt_detail "For fully headless deployments, set AUTH_PRESET_USERNAME and AUTH_PRESET_PASSWORD in .env to skip the wizard."
     else
       yt_info "Authentication is enabled. Existing config.json will retain existing login credentials."
       yt_detail "If you wish to change credentials, you can do so via the web UI after logging in."

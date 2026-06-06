@@ -252,9 +252,18 @@ class DownloadModule {
     // All groups completed successfully
     logger.info('All download groups completed, marking job as complete');
 
+    // Check terminations and termination-persistence failures before stamping
+    // the status; both feed into the DB record and the WebSocket payload.
+    const inFlightJob = jobModule.getJob(jobId);
+    const terminatedChannelsForJob = (inFlightJob && inFlightJob.data && inFlightJob.data.terminatedChannels) || [];
+    const terminationFailuresForJob = (inFlightJob && inFlightJob.data && inFlightJob.data.terminationFailures) || [];
+    const hasTerminationActivity = terminatedChannelsForJob.length > 0 || terminationFailuresForJob.length > 0;
+    const completedStatus = hasTerminationActivity ? 'Complete with Warnings' : 'Complete';
+    const progressState = hasTerminationActivity ? 'warning' : 'complete';
+
     // Mark the job as complete - this will trigger video reload from DB
     await jobModule.updateJob(jobId, {
-      status: 'Complete',
+      status: completedStatus,
     });
 
     // Get the updated job with all videos reloaded from database
@@ -266,12 +275,18 @@ class DownloadModule {
       const totalVideos = completedJob.data.videos?.length || 0;
       const failedVideos = completedJob.data.failedVideos || [];
       const totalSkipped = completedJob.data.cumulativeSkipped || 0;
+      const terminatedChannels = completedJob.data.terminatedChannels || [];
+      const terminationFailures = completedJob.data.terminationFailures || [];
 
       const finalSummary = {
         totalDownloaded: totalVideos,
         totalSkipped: totalSkipped,
         totalFailed: failedVideos.length,
+        totalTerminatedChannels: terminatedChannels.length,
+        totalTerminationFailures: terminationFailures.length,
         failedVideos: failedVideos,
+        terminatedChannels: terminatedChannels,
+        terminationFailures: terminationFailures,
         jobType: 'Channel Downloads - All Groups',
         completedAt: new Date().toISOString()
       };
@@ -280,13 +295,19 @@ class DownloadModule {
       const messageParts = [`${totalVideos} downloaded`];
       if (totalSkipped > 0) messageParts.push(`${totalSkipped} skipped`);
       if (failedVideos.length > 0) messageParts.push(`${failedVideos.length} failed`);
+      if (terminatedChannels.length > 0) {
+        messageParts.push(`${terminatedChannels.length} channel${terminatedChannels.length !== 1 ? 's' : ''} marked terminated`);
+      }
+      if (terminationFailures.length > 0) {
+        messageParts.push(`${terminationFailures.length} termination${terminationFailures.length !== 1 ? 's' : ''} could not be auto-disabled`);
+      }
       const completionText = `Download completed: ${messageParts.join(', ')} across ${groups.length} groups`;
 
       const finalPayload = {
         text: completionText,
         progress: {
           jobId: jobId,
-          state: 'complete',
+          state: progressState,
           videoCount: {
             completed: totalVideos,
             total: totalVideos,
@@ -296,6 +317,10 @@ class DownloadModule {
         finalSummary: finalSummary
       };
 
+      if (hasTerminationActivity) {
+        finalPayload.warning = true;
+      }
+
       MessageEmitter.emitMessage(
         'broadcast',
         null,
@@ -304,11 +329,12 @@ class DownloadModule {
         finalPayload
       );
 
-      logger.info({ jobId, totalVideos, totalFailed: failedVideos.length, groupCount: groups.length },
+      logger.info({ jobId, totalVideos, totalFailed: failedVideos.length, totalTerminated: terminatedChannels.length, totalTerminationFailures: terminationFailures.length, groupCount: groups.length },
         'Emitted final summary for multi-group download');
 
-      // Send notification for successful multi-group download
-      if (totalVideos > 0) {
+      // Include termination-only runs (zero downloads, one or more terminated
+      // or one or more termination-persistence failures).
+      if (totalVideos > 0 || terminatedChannels.length > 0 || terminationFailures.length > 0) {
         const notificationModule = require('./notificationModule');
         notificationModule.sendDownloadNotification({
           finalSummary: finalSummary,

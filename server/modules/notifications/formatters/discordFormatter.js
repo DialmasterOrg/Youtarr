@@ -2,7 +2,35 @@
  * Discord embed notification formatter
  */
 
-const { formatDuration, buildTitle, getSubtitle, buildAutoRemovalTitle, formatBytes, groupVideosByChannel } = require('../utils');
+const {
+  formatDuration,
+  buildTitle,
+  getFailedCount,
+  buildFailedCountLabel,
+  formatFailedVideoLine,
+  getSubtitle,
+  buildAutoRemovalTitle,
+  formatBytes,
+  groupVideosByChannel,
+  getTerminatedCount,
+  buildTerminatedCountLabel,
+  formatTerminatedChannelLine,
+  getTerminationFailureCount,
+  buildTerminationFailureCountLabel,
+  formatTerminationFailureLine
+} = require('../utils');
+
+const DISCORD_FIELD_VALUE_LIMIT = 1024;
+
+function truncateFieldValueAtLineBoundary(value, limit = DISCORD_FIELD_VALUE_LIMIT) {
+  if (!value || value.length <= limit) {
+    return value;
+  }
+
+  const truncated = value.substring(0, limit);
+  const lastNewline = truncated.lastIndexOf('\n');
+  return lastNewline > 0 ? truncated.substring(0, lastNewline) : truncated;
+}
 
 /**
  * Format download notification as Discord embed
@@ -12,12 +40,44 @@ const { formatDuration, buildTitle, getSubtitle, buildAutoRemovalTitle, formatBy
  */
 function formatDownloadMessage(finalSummary, videoData) {
   const { totalDownloaded, jobType } = finalSummary;
+  const failedCount = getFailedCount(finalSummary);
+  const terminatedCount = getTerminatedCount(finalSummary);
+  const terminationFailureCount = getTerminationFailureCount(finalSummary);
 
-  const title = buildTitle(totalDownloaded);
+  const title = buildTitle(totalDownloaded, terminatedCount, terminationFailureCount);
   let description = `**${getSubtitle(jobType)}:**\n`;
 
   // Build fields for each video (up to 10)
   const fields = [];
+
+  if (terminatedCount > 0) {
+    description += `\n⚠️ **${buildTerminatedCountLabel(terminatedCount)}.**`;
+    const terminatedChannelsToShow = (finalSummary.terminatedChannels || []).slice(0, 5);
+    const terminatedValue = terminatedChannelsToShow.length > 0
+      ? truncateFieldValueAtLineBoundary(terminatedChannelsToShow.map(formatTerminatedChannelLine).join('\n'))
+      : 'See Youtarr channels list for details.';
+
+    fields.push({
+      name: '⚠️ Channels marked terminated',
+      value: terminatedValue,
+      inline: false
+    });
+  }
+
+  if (terminationFailureCount > 0) {
+    description += `\n⚠️ **${buildTerminationFailureCountLabel(terminationFailureCount)}.**`;
+    const failuresToShow = (finalSummary.terminationFailures || []).slice(0, 5);
+    const failuresValue = failuresToShow.length > 0
+      ? truncateFieldValueAtLineBoundary(failuresToShow.map(formatTerminationFailureLine).join('\n'))
+      : 'Check Youtarr logs for details.';
+
+    fields.push({
+      name: '⚠️ Terminations not auto-disabled',
+      value: failuresValue,
+      inline: false
+    });
+  }
+
   if (videoData && videoData.length > 0) {
     const videosToShow = videoData.slice(0, 10);
 
@@ -41,11 +101,26 @@ function formatDownloadMessage(finalSummary, videoData) {
     }
   }
 
+  if (failedCount > 0) {
+    description += `\n⚠️ **${buildFailedCountLabel(failedCount)}.**`;
+    const failedVideosToShow = (finalSummary.failedVideos || []).slice(0, 5);
+    const failedValue = failedVideosToShow.length > 0
+      ? truncateFieldValueAtLineBoundary(failedVideosToShow.map(formatFailedVideoLine).join('\n'))
+      : 'See Youtarr download history for details.';
+
+    fields.push({
+      name: '⚠️ Failed downloads',
+      value: failedValue,
+      inline: false
+    });
+  }
+
+  const hasWarning = failedCount > 0 || terminatedCount > 0 || terminationFailureCount > 0;
   return {
     embeds: [{
       title,
       description,
-      color: 0x00ff00, // Green for success
+      color: hasWarning ? 0xffa500 : 0x00ff00,
       fields,
       timestamp: new Date().toISOString(),
       footer: {
@@ -170,4 +245,3 @@ module.exports = {
   formatPlainMessage,
   formatAutoRemovalMessage
 };
-

@@ -67,7 +67,7 @@ function getChipColor(status: YouTubeApiKeyStatus): ChipColor {
 const benefitItems = [
   {
     title: 'Faster, more accurate YouTube lookups',
-    description: 'Use the YouTube Data API for channel discovery, channel video lists, video metadata, and YouTube searches. These lookup paths can be significantly faster than relying on yt-dlp alone, and channel video lists can include precise published dates instead of approximate dates.',
+    description: 'Use the YouTube Data API for channel discovery, video metadata, and YouTube searches. These lookups can be significantly faster than relying on yt-dlp alone.',
     icon: <Gauge size={18} />,
   },
   {

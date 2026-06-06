@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Checkbox,
   Typography,
   Chip,
   TableContainer,
@@ -20,7 +21,13 @@ import {
 } from '../../../utils/videoStatus';
 import { SHARED_THEMED_CHIP_SMALL_STYLE } from '../../shared/chipStyles';
 import { formatDurationClock } from '../../../utils';
-import { SearchResult, THUMB_WIDTH, THUMB_HEIGHT } from '../types';
+import {
+  isSelectableForDownload,
+  ResultSelection,
+  SearchResult,
+  THUMB_WIDTH,
+  THUMB_HEIGHT,
+} from '../types';
 
 function StatusChip({ status }: { status: VideoStatus }) {
   return (
@@ -41,14 +48,16 @@ function StatusChip({ status }: { status: VideoStatus }) {
 interface ResultsTableProps {
   results: SearchResult[];
   onResultClick: (result: SearchResult) => void;
+  selection?: ResultSelection;
 }
 
-export default function ResultsTable({ results, onResultClick }: ResultsTableProps) {
+export default function ResultsTable({ results, onResultClick, selection }: ResultsTableProps) {
   return (
     <TableContainer>
       <Table size="small" className="table-fixed">
         <TableHead>
           <TableRow>
+            {selection && <TableCell component="th" className="w-[40px]" aria-label="Select" />}
             <TableCell component="th" className="w-[140px]">Thumbnail</TableCell>
             <TableCell component="th" className="w-[40%]">Title</TableCell>
             <TableCell component="th" className="w-[22%]">Channel</TableCell>
@@ -60,6 +69,8 @@ export default function ResultsTable({ results, onResultClick }: ResultsTablePro
         <TableBody>
           {results.map((result) => {
             const status: VideoStatus = result.status;
+            const selectable = Boolean(selection) && isSelectableForDownload(result.status);
+            const checked = selectable && selection!.isChecked(result.youtubeId);
             return (
               <TableRow
                 key={result.youtubeId}
@@ -68,6 +79,20 @@ export default function ResultsTable({ results, onResultClick }: ResultsTablePro
                 className="cursor-pointer"
                 aria-label={`Open ${result.title}`}
               >
+                {selection && (
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    {selectable ? (
+                      <Checkbox
+                        checked={checked}
+                        onChange={() => selection.toggle(result.youtubeId)}
+                        inputProps={{
+                          'aria-label': `Select ${result.title} for download`,
+                          'data-testid': `select-row-${result.youtubeId}`,
+                        }}
+                      />
+                    ) : null}
+                  </TableCell>
+                )}
                 <TableCell>
                   <div
                     className="relative inline-block overflow-hidden bg-[var(--media-placeholder-background)] rounded-[var(--radius-thumb)]"

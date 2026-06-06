@@ -24,23 +24,50 @@ describe('useVideoSearch', () => {
     expect(result.current.error).toBeNull();
   });
 
-  test('single in-flight: second search while loading is ignored', async () => {
-    let resolveFirst: (v: unknown) => void = () => {};
-    axios.post.mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }));
+  test('second search while loading aborts the first and runs the new one', async () => {
+    const firstSignals: AbortSignal[] = [];
+    axios.post.mockImplementationOnce((_url: string, _body: unknown, opts: { signal?: AbortSignal }) => {
+      if (opts.signal) firstSignals.push(opts.signal);
+      return new Promise((_resolve, reject) => {
+        opts.signal?.addEventListener('abort', () => reject(new axios.CanceledError()));
+      });
+    });
+    axios.post.mockResolvedValueOnce({ data: { results: [{ youtubeId: 'b', title: 'B' }] } });
 
     const { result } = renderHook(() => useVideoSearch('token'));
 
     act(() => { result.current.search('first', 25); });
     await waitFor(() => expect(result.current.loading).toBe(true));
 
+    await act(async () => { await result.current.search('second', 25); });
+
+    expect(axios.post).toHaveBeenCalledTimes(2);
+    expect(firstSignals[0].aborted).toBe(true);
+    expect(result.current.results).toEqual([{ youtubeId: 'b', title: 'B' }]);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.error).toBeNull();
+  });
+
+  test('starting a new search clears stale results so they do not persist on screen', async () => {
+    axios.post.mockResolvedValueOnce({ data: { results: [{ youtubeId: 'old', title: 'Old' }] } });
+    let resolveSecond: (v: unknown) => void = () => {};
+    axios.post.mockImplementationOnce(() => new Promise((resolve) => { resolveSecond = resolve; }));
+
+    const { result } = renderHook(() => useVideoSearch('token'));
+    await act(async () => { await result.current.search('first', 25); });
+    expect(result.current.results).toEqual([{ youtubeId: 'old', title: 'Old' }]);
+
     act(() => { result.current.search('second', 25); });
-    expect(axios.post).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(result.current.loading).toBe(true));
+    // While the second search is in flight, the old results must be gone.
+    expect(result.current.results).toEqual([]);
 
     await act(async () => {
-      resolveFirst({ data: { results: [] } });
+      resolveSecond({ data: { results: [{ youtubeId: 'new', title: 'New' }] } });
       await Promise.resolve();
     });
     await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.results).toEqual([{ youtubeId: 'new', title: 'New' }]);
   });
 
   test('cancel aborts the request and clears state without setting error', async () => {

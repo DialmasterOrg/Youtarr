@@ -10,12 +10,14 @@ config/jobs.json
 config/config.json
 config/config.json.*
 config/cookies.user.txt
+config/setup-token
 config/*.env
 database
 server/images
 
 .env
 .env.dev
+.env.bak.*
 
 # Local dev exclusion
 ffmpeg.exe
@@ -57,6 +59,9 @@ downloads/*
 # Backup archive location
 backups/
 
+# Database migration safety backups
+database.bind-mount-backup.*/
+
 # Superpowers brainstorming session artifacts (local-only, ephemeral mockups)
 .superpowers/
 
@@ -69,6 +74,3 @@ client/build-storybook/
 # Storybook test artifacts
 .out_storybook_
 .storyshots
-
-# MSW service worker - regenerate with: cd client && npx msw init public/ --save
-client/public/mockServiceWorker.js

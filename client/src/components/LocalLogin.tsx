@@ -14,11 +14,13 @@ const LocalLogin: React.FC<LocalLoginProps> = ({ setToken }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [showPasswordResetHelp, setShowPasswordResetHelp] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setShowPasswordResetHelp(false);
     setLoading(true);
 
     try {
@@ -40,6 +42,7 @@ const LocalLogin: React.FC<LocalLoginProps> = ({ setToken }) => {
       } else if (err.response?.status === 401) {
         // Invalid credentials
         setError('Invalid username or password');
+        setShowPasswordResetHelp(true);
       } else if (err.response?.data?.error) {
         // Other server errors with specific messages
         setError(err.response.data.error);
@@ -91,6 +94,26 @@ const LocalLogin: React.FC<LocalLoginProps> = ({ setToken }) => {
         >
           {error}
         </div>
+      )}
+
+      {showPasswordResetHelp && (
+        <details className="rounded-md border border-[var(--border)] bg-[var(--muted)] px-3 py-2 text-sm text-[var(--muted-foreground)]">
+          <summary className="cursor-pointer font-medium text-[var(--foreground)]">
+            Forgot your password?
+          </summary>
+          <div className="mt-2 space-y-2">
+            <p>
+              If you have access to the Youtarr host, stop Youtarr, set{' '}
+              <code>AUTH_PRESET_USERNAME</code> and <code>AUTH_PRESET_PASSWORD</code> in your{' '}
+              <code>.env</code> file, then restart Youtarr and log in with those credentials.
+            </p>
+            <p>
+              Advanced fallback: stop Youtarr, remove <code>username</code> and{' '}
+              <code>passwordHash</code> from <code>config/config.json</code>, restart, then complete
+              setup again with the one-time setup token.
+            </p>
+          </div>
+        </details>
       )}
 
       <button

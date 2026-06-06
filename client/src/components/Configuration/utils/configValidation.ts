@@ -1,5 +1,6 @@
 import { ConfigState } from '../types';
 import { validateRateLimit } from '../sections/ytdlpOptionsHelpers';
+import { validatePrefix } from '../../../utils/filenameTemplate/validate';
 
 /**
  * Validate proxy URL format
@@ -59,6 +60,12 @@ export const validateConfig = (config: ConfigState): string | null => {
   const rateLimitError = validateRateLimit(config.ytdlpDownloadRateLimit);
   if (rateLimitError) {
     return `Cannot save: ${rateLimitError}`;
+  }
+
+  // Video filename template prefix validation
+  const filenamePrefixResult = validatePrefix(config.videoFilenamePrefix);
+  if (!filenamePrefixResult.ok) {
+    return `Cannot save: ${filenamePrefixResult.error}`;
   }
 
   return null;

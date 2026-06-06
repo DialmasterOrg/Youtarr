@@ -1132,6 +1132,34 @@ describe('JobModule', () => {
       expect(JobModule.jobs['job-1'].output).toBe('3 videos.');
     });
 
+    test('should preserve Complete with Warnings status for download jobs', async () => {
+      JobModule.jobs = {
+        'job-1': { status: 'In Progress', jobType: 'Channel Downloads', data: { videos: [] } }
+      };
+
+      JobModule.saveJobOnly = jest.fn().mockResolvedValue();
+      const mockVideo = { id: 1, youtubeId: 'video1', dataValues: { id: 1, youtubeId: 'video1' } };
+      JobVideo.findAll.mockResolvedValue([{ job_id: 'job-1', video_id: 1 }]);
+      Video.findOne.mockResolvedValue(mockVideo);
+
+      await JobModule.updateJob('job-1', {
+        status: 'Complete with Warnings',
+        data: { videos: ['video1'] },
+        notes: 'Some videos failed (exit 1)'
+      });
+
+      // Wait for async save operation
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(JobModule.jobs['job-1'].status).toBe('Complete with Warnings');
+      expect(JobModule.jobs['job-1'].output).toBe('1 videos.');
+      expect(JobModule.jobs['job-1'].notes).toBe('Some videos failed (exit 1)');
+      expect(JobModule.saveJobOnly).toHaveBeenCalledWith(
+        'job-1',
+        expect.objectContaining({ status: 'Complete with Warnings' })
+      );
+    });
+
     test('should reload videos from database when job completes', async () => {
       JobModule.jobs = {
         'job-1': {

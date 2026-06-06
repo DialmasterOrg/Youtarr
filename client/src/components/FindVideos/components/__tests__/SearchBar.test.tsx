@@ -5,10 +5,12 @@ import SearchBar from '../SearchBar';
 const baseProps = {
   query: '',
   pageSize: 25 as const,
+  minDuration: 0 as const,
   loading: false,
   viewMode: 'grid' as const,
   onQueryChange: () => {},
   onPageSizeChange: () => {},
+  onMinDurationChange: () => {},
   onViewModeChange: () => {},
   onSearch: () => {},
   onCancel: () => {},

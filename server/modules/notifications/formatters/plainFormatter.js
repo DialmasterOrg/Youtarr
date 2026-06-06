@@ -2,7 +2,23 @@
  * Plain text notification formatter
  */
 
-const { formatDuration, buildTitle, getSubtitle, buildAutoRemovalTitle, formatBytes, groupVideosByChannel } = require('../utils');
+const {
+  formatDuration,
+  buildTitle,
+  getFailedCount,
+  buildFailedCountLabel,
+  formatFailedVideoLine,
+  getSubtitle,
+  buildAutoRemovalTitle,
+  formatBytes,
+  groupVideosByChannel,
+  getTerminatedCount,
+  buildTerminatedCountLabel,
+  formatTerminatedChannelLine,
+  getTerminationFailureCount,
+  buildTerminationFailureCountLabel,
+  formatTerminationFailureLine
+} = require('../utils');
 
 /**
  * Format download notification as plain text
@@ -12,9 +28,48 @@ const { formatDuration, buildTitle, getSubtitle, buildAutoRemovalTitle, formatBy
  */
 function formatDownloadMessage(finalSummary, videoData) {
   const { totalDownloaded, jobType } = finalSummary;
+  const failedCount = getFailedCount(finalSummary);
+  const terminatedCount = getTerminatedCount(finalSummary);
+  const terminationFailureCount = getTerminationFailureCount(finalSummary);
 
-  const title = buildTitle(totalDownloaded);
+  const title = buildTitle(totalDownloaded, terminatedCount, terminationFailureCount);
   let body = `${getSubtitle(jobType)}:\n`;
+
+  if (terminatedCount > 0) {
+    body += `\n⚠️ ${buildTerminatedCountLabel(terminatedCount)}.\n`;
+    const terminatedChannelsToShow = (finalSummary.terminatedChannels || []).slice(0, 5);
+    terminatedChannelsToShow.forEach(channel => {
+      body += `• ${formatTerminatedChannelLine(channel)}\n`;
+    });
+    if (terminatedCount > terminatedChannelsToShow.length) {
+      body += `...and ${terminatedCount - terminatedChannelsToShow.length} more\n`;
+    }
+    body += '\n';
+  }
+
+  if (terminationFailureCount > 0) {
+    body += `\n⚠️ ${buildTerminationFailureCountLabel(terminationFailureCount)}.\n`;
+    const failuresToShow = (finalSummary.terminationFailures || []).slice(0, 5);
+    failuresToShow.forEach(channelId => {
+      body += `• ${formatTerminationFailureLine(channelId)}\n`;
+    });
+    if (terminationFailureCount > failuresToShow.length) {
+      body += `...and ${terminationFailureCount - failuresToShow.length} more\n`;
+    }
+    body += '\n';
+  }
+
+  if (failedCount > 0) {
+    body += `\n⚠️ ${buildFailedCountLabel(failedCount)}.\n`;
+    const failedVideosToShow = (finalSummary.failedVideos || []).slice(0, 5);
+    failedVideosToShow.forEach(failedVideo => {
+      body += `• ${formatFailedVideoLine(failedVideo)}\n`;
+    });
+    if (failedCount > failedVideosToShow.length) {
+      body += `...and ${failedCount - failedVideosToShow.length} more failed\n`;
+    }
+    body += '\n';
+  }
 
   if (videoData && videoData.length > 0) {
     const videosToShow = videoData.slice(0, 10);
@@ -98,4 +153,3 @@ module.exports = {
   formatTestMessage,
   formatAutoRemovalMessage
 };
-

@@ -1116,7 +1116,9 @@ class JobModule {
       if (updatedFields.status !== 'Terminated') {
         let numVideos = updatedFields.data?.videos?.length || 0;
         updatedFields.output = numVideos + ' videos.';
-        updatedFields.status = 'Complete';
+        if (updatedFields.status !== 'Complete with Warnings') {
+          updatedFields.status = 'Complete';
+        }
       }
     }
 

@@ -4,6 +4,7 @@ This document provides a comprehensive reference for all environment variables s
 
 ## Table of Contents
 - [Required Variables](#required-variables)
+- [Application Access](#application-access)
 - [Database Configuration](#database-configuration)
 - [Authentication](#authentication)
 - [User and Permissions](#user-and-permissions)
@@ -27,6 +28,15 @@ This document provides a comprehensive reference for all environment variables s
 - Ensure the directory has appropriate write permissions for the configured UID/GID
 - For network storage, mount the storage before starting Youtarr
 
+## Application Access
+
+### YOUTARR_HOST_PORT
+**Required**: No
+**Default**: `3087`
+**Description**: Host port mapped to the Youtarr web interface. The container still listens on port `3011`.
+**Example**: `YOUTARR_HOST_PORT=8087`
+**Note**: The bundled start scripts use this value when polling `/setup/status` and printing first-time setup URLs.
+
 ## Database Configuration
 
 ### Internal Database (Default)
@@ -42,7 +52,7 @@ When using the bundled MariaDB container, these variables typically use their de
 **Required**: No
 **Default**: `3321` for the internal database (docker-compose.yml), `3306` for external databases (docker-compose.external-db.yml)
 **Description**: Database port number
-**Note**: The bundled MariaDB container listens on 3321 (both inside the container and on the host). When pointing Youtarr at an external MariaDB/MySQL instance, the default drops to the standard 3306; override it in `.env` if your external database listens elsewhere.
+**Note**: The bundled MariaDB container listens on 3321 inside the Docker network only and is not published to the host. When pointing Youtarr at an external MariaDB/MySQL instance, the default drops to the standard 3306; override it in `.env` if your external database listens elsewhere.
 
 ### DB_USER
 **Required**: No
@@ -102,9 +112,20 @@ To use an external database:
 
 **Important Notes**:
 - These override any existing credentials in config.json
-- If not set, credentials must be configured through the web UI on first access via `localhost`
-- Useful for deployment environments where you may not have access to `localhost`
-  via a browser as this removes the requirement to set your initial login credentials via the web UI.
+- If not set, credentials must be configured through the web UI using the one-time setup token from the logs or `config/setup-token`
+- Useful for deployment environments where you want to skip the browser setup wizard entirely.
+
+### TRUST_PROXY
+**Required**: No
+**Default**: `true` (backwards-compatible with existing reverse-proxy deployments)
+**Options**: `true`, `false`, a hop count such as `1`, or an Express trust-proxy value such as `loopback`
+**Description**: Controls whether Express trusts proxy headers such as `X-Forwarded-For`
+
+**Recommendations**:
+- Set `TRUST_PROXY=false` when Youtarr is exposed directly without a reverse proxy
+- Leave unset only if you want the historical Express proxy-header trust behavior; Youtarr's rate-limit, session, and setup audit IPs will still key on the direct peer IP until `TRUST_PROXY` is explicitly configured
+- Set `TRUST_PROXY=1` when Youtarr is behind one trusted reverse proxy and you want per-client rate limits
+- Prefer a specific hop count or trusted subnet over broad `true` when exposing Youtarr through a proxy you control
 
 ## User and Permissions
 
@@ -197,16 +218,18 @@ These variables are used by docker-compose.yml but not directly by the applicati
 ### Network Configuration
 - Network: `youtarr-network` (internal bridge)
 - Application port: 3087 (host) → 3011 (container)
-- Database port: 3321 (both host and container)
+- Database port: 3321 inside the Docker network only
 
 ## Best Practices
 
 ### Security
 1. **Always change default passwords** in production
 2. **Never disable AUTH_ENABLED** for internet-exposed instances
-3. **Use non-root UID/GID** (set YOUTARR_UID=1000)
+3. **Use HTTPS/VPN for remote access**; plain HTTP is intended for localhost and trusted LAN access only
+4. **Set TRUST_PROXY=false** when directly exposing Youtarr without a reverse proxy
+5. **Use non-root UID/GID** (set YOUTARR_UID=1000)
     - Existing Youtarr users that were previously using the default root GID/UID (0:0) will need to completely stop Youtarr and ensure that directory permissions are updated if they want to switch from root UID/GID to non-root
-4. **Secure your .env file** with appropriate permissions:
+6. **Secure your .env file** with appropriate permissions:
    ```bash
    chmod 600 .env
    ```
@@ -238,8 +261,14 @@ If you see "Permission denied" errors:
 3. Fix ownership: `sudo chown -R ${UID}:${GID} ./config ./jobs ./server/images`
 
 ### Database Connection Issues
-1. Verify DB_HOST is reachable: `ping ${DB_HOST}`
-2. Check DB_PORT is open: `telnet ${DB_HOST} ${DB_PORT}`
+For the bundled database:
+1. Check the container is running: `docker compose ps youtarr-db`
+2. Check logs: `docker compose logs youtarr-db`
+3. Confirm credentials from inside the container: `docker compose exec youtarr-db mysql -u ${DB_USER:-root} -p ${DB_NAME:-youtarr}`
+
+For an external database:
+1. Verify `DB_HOST` is reachable from the Youtarr container
+2. Check `DB_PORT` is open between Youtarr and the database host
 3. Confirm credentials with: `mysql -h ${DB_HOST} -P ${DB_PORT} -u ${DB_USER} -p`
 
 ### Authentication Problems

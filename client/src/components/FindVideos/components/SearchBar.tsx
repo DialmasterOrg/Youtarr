@@ -1,23 +1,32 @@
 import React from 'react';
 import { Box, Button, TextField, Select, MenuItem } from '../../ui';
 import { Loader2, LayoutGrid as ViewModuleIcon, Rows as TableChartIcon } from '../../../lib/icons';
-import { PAGE_SIZES, PageSize, ViewMode } from '../types';
+import {
+  PAGE_SIZES,
+  PageSize,
+  ViewMode,
+  MinDuration,
+  MIN_DURATIONS,
+  MIN_DURATION_LABELS,
+} from '../types';
 
 interface SearchBarProps {
   query: string;
   pageSize: PageSize;
+  minDuration: MinDuration;
   loading: boolean;
   viewMode: ViewMode;
   onQueryChange: (q: string) => void;
   onPageSizeChange: (s: PageSize) => void;
+  onMinDurationChange: (d: MinDuration) => void;
   onViewModeChange: (v: ViewMode) => void;
   onSearch: () => void;
   onCancel: () => void;
 }
 
 export default function SearchBar({
-  query, pageSize, loading, viewMode,
-  onQueryChange, onPageSizeChange, onViewModeChange, onSearch, onCancel,
+  query, pageSize, minDuration, loading, viewMode,
+  onQueryChange, onPageSizeChange, onMinDurationChange, onViewModeChange, onSearch, onCancel,
 }: SearchBarProps) {
   const trimmed = query.trim();
   const canSearch = !loading && trimmed.length > 0;
@@ -43,6 +52,16 @@ export default function SearchBar({
       >
         {PAGE_SIZES.map((n) => (
           <MenuItem key={n} value={String(n)}>{n} results</MenuItem>
+        ))}
+      </Select>
+      <Select
+        value={String(minDuration)}
+        onValueChange={(v) => onMinDurationChange(Number(v) as MinDuration)}
+        disabled={loading}
+        aria-label="Minimum duration"
+      >
+        {MIN_DURATIONS.map((d) => (
+          <MenuItem key={d} value={String(d)}>{MIN_DURATION_LABELS[d]}</MenuItem>
         ))}
       </Select>
       {loading ? (

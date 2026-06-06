@@ -6,15 +6,30 @@ jest.mock('../download/tempPathManager', () => ({
   getTempBasePath: jest.fn(() => '/tmp/youtarr-downloads'),
 }));
 
+jest.mock('../../models/channelvideo', () => ({
+  update: jest.fn().mockResolvedValue([1]),
+}));
+
 const videoValidationModule = require('../videoValidationModule');
 const ytDlpRunner = require('../ytDlpRunner');
 const archiveModule = require('../archiveModule');
+const ChannelVideo = require('../../models/channelvideo');
 const logger = require('../../logger');
 
 // Mock dependencies
 jest.mock('../ytDlpRunner');
 jest.mock('../archiveModule');
 jest.mock('../../logger');
+
+const isMembersOnlyMessage = (message = '') => {
+  const normalized = String(message);
+  return [
+    /join this channel to get access to members-only content/i,
+    /available to this channel'?s members/i,
+    /members[- ]only/i,
+    /subscriber[_ -]?only/i,
+  ].some(pattern => pattern.test(normalized));
+};
 
 describe('VideoValidationModule', () => {
   beforeEach(() => {
@@ -27,6 +42,10 @@ describe('VideoValidationModule', () => {
     logger.info.mockClear();
     logger.warn.mockClear();
     logger.error.mockClear();
+    // Reset ChannelVideo mock
+    ChannelVideo.update.mockClear();
+    ChannelVideo.update.mockResolvedValue([1]);
+    ytDlpRunner.isMembersOnlyError.mockImplementation(isMembersOnlyMessage);
   });
 
   describe('normalizeUrlToVideoId', () => {
@@ -332,6 +351,136 @@ describe('VideoValidationModule', () => {
 
       expect(result.isValidUrl).toBe(true);
       expect(result.isMembersOnly).toBe(true);
+    });
+
+    it('should backfill ChannelVideo.availability on fresh fetch path', async () => {
+      const mockMetadata = {
+        title: 'Members Only',
+        channel: 'TestChannel',
+        duration: 300,
+        availability: 'subscriber_only'
+      };
+
+      ytDlpRunner.fetchMetadata.mockResolvedValue(mockMetadata);
+      archiveModule.isVideoInArchive.mockResolvedValue(false);
+
+      await videoValidationModule.validateVideo('https://www.youtube.com/watch?v=OOUclRI0Ae4');
+
+      expect(ChannelVideo.update).toHaveBeenCalledWith(
+        { availability: 'subscriber_only' },
+        { where: { youtube_id: 'OOUclRI0Ae4' } },
+      );
+    });
+
+    it('should not backfill defaulted public availability when yt-dlp omits availability', async () => {
+      const mockMetadata = {
+        title: 'No Availability',
+        channel: 'TestChannel',
+        duration: 300,
+      };
+
+      ytDlpRunner.fetchMetadata.mockResolvedValue(mockMetadata);
+      archiveModule.isVideoInArchive.mockResolvedValue(false);
+
+      const result = await videoValidationModule.validateVideo('https://www.youtube.com/watch?v=OOUclRI0Ae4');
+
+      expect(result.metadata.availability).toBe('public');
+      expect(ChannelVideo.update).not.toHaveBeenCalled();
+    });
+
+    it('should not repeat ChannelVideo.availability backfill on cache hit path', async () => {
+      const mockMetadata = {
+        title: 'Test Video',
+        channel: 'TestChannel',
+        duration: 300,
+        availability: 'public'
+      };
+
+      ytDlpRunner.fetchMetadata.mockResolvedValue(mockMetadata);
+      archiveModule.isVideoInArchive.mockResolvedValue(false);
+
+      // First call populates cache and triggers one update
+      await videoValidationModule.validateVideo('https://www.youtube.com/watch?v=OOUclRI0Ae4');
+      expect(ChannelVideo.update).toHaveBeenCalledTimes(1);
+
+      // Second call hits cache; the original miss already stamped availability.
+      await videoValidationModule.validateVideo('https://www.youtube.com/watch?v=OOUclRI0Ae4');
+      expect(ChannelVideo.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('should backfill ChannelVideo.availability on members-only error catch path', async () => {
+      ytDlpRunner.fetchMetadata.mockRejectedValue(
+        new Error('ERROR: [youtube] OOUclRI0Ae4: Join this channel to get access to members-only content')
+      );
+
+      const result = await videoValidationModule.validateVideo('https://www.youtube.com/watch?v=OOUclRI0Ae4');
+
+      expect(result.isMembersOnly).toBe(true);
+      expect(ChannelVideo.update).toHaveBeenCalledWith(
+        { availability: 'subscriber_only' },
+        { where: { youtube_id: 'OOUclRI0Ae4' } },
+      );
+    });
+  });
+
+  describe('_persistAvailabilityFromResponse', () => {
+    it('should call ChannelVideo.update when response has youtubeId and availability', () => {
+      videoValidationModule._persistAvailabilityFromResponse({
+        metadata: { youtubeId: 'abc12345678', availability: 'subscriber_only', availabilityProvided: true },
+      });
+
+      expect(ChannelVideo.update).toHaveBeenCalledWith(
+        { availability: 'subscriber_only' },
+        { where: { youtube_id: 'abc12345678' } },
+      );
+    });
+
+    it('should be a no-op when response has no metadata', () => {
+      videoValidationModule._persistAvailabilityFromResponse({});
+      videoValidationModule._persistAvailabilityFromResponse(null);
+      videoValidationModule._persistAvailabilityFromResponse(undefined);
+
+      expect(ChannelVideo.update).not.toHaveBeenCalled();
+    });
+
+    it('should be a no-op when youtubeId is missing', () => {
+      videoValidationModule._persistAvailabilityFromResponse({
+        metadata: { availability: 'public' },
+      });
+
+      expect(ChannelVideo.update).not.toHaveBeenCalled();
+    });
+
+    it('should be a no-op when availability was defaulted', () => {
+      videoValidationModule._persistAvailabilityFromResponse({
+        metadata: { youtubeId: 'abc12345678', availability: 'public' },
+      });
+
+      expect(ChannelVideo.update).not.toHaveBeenCalled();
+    });
+
+    it('should be a no-op when availability is missing', () => {
+      videoValidationModule._persistAvailabilityFromResponse({
+        metadata: { youtubeId: 'abc12345678' },
+      });
+
+      expect(ChannelVideo.update).not.toHaveBeenCalled();
+    });
+
+    it('should swallow update errors and log a warning', async () => {
+      ChannelVideo.update.mockRejectedValueOnce(new Error('db down'));
+
+      // The helper itself doesn't await; we have to wait a tick for the
+      // rejection handler to run.
+      videoValidationModule._persistAvailabilityFromResponse({
+        metadata: { youtubeId: 'errvid1', availability: 'subscriber_only', availabilityProvided: true },
+      });
+      await new Promise(resolve => setImmediate(resolve));
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ videoId: 'errvid1' }),
+        'Failed to backfill ChannelVideo.availability from validation',
+      );
     });
   });
 

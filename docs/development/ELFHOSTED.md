@@ -44,7 +44,7 @@ When `PLATFORM=elfhosted`:
 
 Independent of `PLATFORM`. When `AUTH_ENABLED=false`:
 
-- `/setup/status` returns `{ requiresSetup: false, isLocalhost: true, platformManaged: true, message: 'Authentication is managed by the platform' }` (`server/routes/setup.js:42-49`).
+- `/setup/status` returns `{ requiresSetup: false, platformManaged: true, message: 'Authentication is managed by the platform' }` (`server/routes/setup.js`).
 - The frontend auto-logs in with the synthetic token `'platform-managed-auth'` and skips the login screen (`client/src/App.tsx:342-345`).
 - All API endpoints accept requests without a token. The bypass is implemented in two places: `verifyToken` short-circuits when `AUTH_ENABLED === 'false'` (`server/server.js:320`), and the local-login route does the same (`server/routes/auth.js:95`).
 - Login and logout buttons are hidden in the UI; `isPlatformManaged.authEnabled` is `false` in `/getconfig` (`server/routes/config.js:67`). The frontend logout button gates on the App-level `isPlatformManaged` boolean (`client/src/components/layout/NavHeaderActions.tsx:154`), and the Youtarr-version-update tooltip is suppressed by the same flag (`NavHeaderActions.tsx:42`).

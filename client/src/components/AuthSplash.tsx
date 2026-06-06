@@ -57,12 +57,14 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [showPasswordResetHelp, setShowPasswordResetHelp] = useState(false);
   const [loading, setLoading] = useState(false);
   const showPlainTitle = !showHeaderWordmark;
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setShowPasswordResetHelp(false);
     setLoading(true);
 
     try {
@@ -76,9 +78,11 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
       setToken(token);
       window.location.href = '/subscriptions';
     } catch (err: unknown) {
+      const shouldShowPasswordResetHelp = axios.isAxiosError(err) && err.response?.status === 401;
       const nextError = getAxiosErrorMessage(err);
       if (nextError) {
         setError(nextError);
+        setShowPasswordResetHelp(shouldShowPasswordResetHelp);
       }
     } finally {
       setLoading(false);
@@ -177,6 +181,26 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
               >
                 {error}
               </Alert>
+            )}
+
+            {showPasswordResetHelp && (
+              <details className="mt-4 rounded-[var(--radius-ui)] border border-[var(--border)] bg-[var(--muted)] px-3.5 py-3 text-[var(--foreground)]">
+                <summary className="cursor-pointer font-semibold">
+                  Forgot your password?
+                </summary>
+                <div className="mt-2.5">
+                  <Typography variant="body2" className="mb-2">
+                    If you have access to the Youtarr host, stop Youtarr, set{' '}
+                    <code>AUTH_PRESET_USERNAME</code> and <code>AUTH_PRESET_PASSWORD</code> in your{' '}
+                    <code>.env</code> file, then restart Youtarr and log in with those credentials.
+                  </Typography>
+                  <Typography variant="body2">
+                    Advanced fallback: stop Youtarr, remove <code>username</code> and{' '}
+                    <code>passwordHash</code> from <code>config/config.json</code>, restart, then
+                    complete setup again with the one-time setup token.
+                  </Typography>
+                </div>
+              </details>
             )}
 
             <Button

@@ -306,6 +306,12 @@ const createServerModule = ({
         jest.doMock('../modules/notificationModule', () => ({
           sendTestNotification: jest.fn().mockResolvedValue({ success: true })
         }));
+        // Mocked to avoid pulling fs-extra (via ytDlpRunner -> tempPathManager),
+        // which the minimal `fs` stub above can't satisfy.
+        jest.doMock('../modules/filenamePreview', () => ({
+          previewTemplate: jest.fn(),
+          validateTemplate: jest.fn().mockResolvedValue({ ok: true })
+        }));
         jest.doMock('../models/channelvideo', () => ({
           update: jest.fn().mockResolvedValue([1])
         }));
@@ -336,6 +342,21 @@ const createServerModule = ({
           jest.doMock('../modules/apiKeyModule', () => apiKeyModuleMock);
         }
 
+        const setupTokenModuleMock = {
+          setTokenPath: jest.fn(),
+          reset: jest.fn(),
+          getToken: jest.fn(() => 'mock-token-value'),
+          ensureToken: jest.fn(),
+          verify: jest.fn((provided) => provided === 'mock-token-value'),
+          consume: jest.fn(),
+          claimForSetup: jest.fn((provided) => provided === 'mock-token-value'),
+          releaseSetupClaim: jest.fn(),
+          clearStaleFile: jest.fn(),
+          logBanner: jest.fn()
+        };
+
+        jest.doMock('../modules/setupTokenModule', () => setupTokenModuleMock);
+
         const serverModule = require('../server');
 
         state.app = serverModule.app;
@@ -343,6 +364,7 @@ const createServerModule = ({
         state.dbMock = dbMock;
         state.configModuleMock = configModuleMock;
         state.apiKeyModuleMock = apiKeyModuleMock;
+        state.setupTokenModuleMock = setupTokenModuleMock;
         state.sessionUpdateMock = effectiveSession?.update || defaultSessionUpdate;
 
         const finalize = () => resolve(state);

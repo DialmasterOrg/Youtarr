@@ -32,7 +32,6 @@ const meta: Meta<typeof App> = {
         http.get('/setup/status', () => {
           return HttpResponse.json({
             requiresSetup: false,
-            isLocalhost: true,
             platformManaged: false,
           });
         }),
@@ -129,7 +128,6 @@ export const DatabaseError: Story = {
         http.get('/setup/status', () => {
           return HttpResponse.json({
             requiresSetup: false,
-            isLocalhost: true,
             platformManaged: false,
           });
         }),
@@ -186,7 +184,6 @@ export const RequiresSetup: Story = {
         http.get('/setup/status', () => {
           return HttpResponse.json({
             requiresSetup: true,
-            isLocalhost: true,
             platformManaged: false,
           });
         }),
