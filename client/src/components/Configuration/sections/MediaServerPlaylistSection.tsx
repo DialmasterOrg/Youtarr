@@ -1,15 +1,22 @@
-import React, { ChangeEvent, useCallback, useState } from 'react';
+import React, { ChangeEvent, useCallback, useEffect, useId, useRef, useState } from 'react';
 import axios from 'axios';
+import { Eye, EyeOff, Info } from 'lucide-react';
 import {
   Alert,
   AlertTitle,
   Box,
   Button,
-  Chip,
   FormControlLabel,
+  FormHelperText,
   Grid,
+  IconButton,
+  InputLabel,
+  MenuItem,
+  Select,
+  SelectChangeEvent,
   Switch,
   TextField,
+  Tooltip,
   Typography,
 } from '../../ui';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
@@ -33,6 +40,13 @@ const LABEL: Record<MediaServerKind, string> = {
   jellyfin: 'Jellyfin',
   emby: 'Emby',
 };
+
+const ID_PREFIX_LEN = 8;
+const ID_SUFFIX_LEN = 6;
+const truncateId = (id: string): string =>
+  id.length > ID_PREFIX_LEN + ID_SUFFIX_LEN + 1
+    ? `${id.slice(0, ID_PREFIX_LEN)}...${id.slice(-ID_SUFFIX_LEN)}`
+    : id;
 
 type EnabledKey = 'jellyfinEnabled' | 'embyEnabled';
 type UrlKey = 'jellyfinUrl' | 'embyUrl';
@@ -67,12 +81,15 @@ export const MediaServerPlaylistSection: React.FC<MediaServerPlaylistSectionProp
 }) => {
   const keys = fieldKeys(kind);
   const label = LABEL[kind];
+  const userLabelId = useId();
   const [testing, setTesting] = useState(false);
   const [testStatus, setTestStatus] = useState<'untested' | 'ok' | 'error'>('untested');
   const [testMessage, setTestMessage] = useState<string | null>(null);
   const [fetchingUsers, setFetchingUsers] = useState(false);
   const [users, setUsers] = useState<ServerUser[]>([]);
   const [usersError, setUsersError] = useState<string | null>(null);
+  const [manualEntry, setManualEntry] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
 
   const enabled = Boolean(config[keys.enabled]);
   const url = (config[keys.url] as string) || '';
@@ -87,6 +104,9 @@ export const MediaServerPlaylistSection: React.FC<MediaServerPlaylistSectionProp
     if (field === keys.url || field === keys.apiKey) {
       setTestStatus('untested');
       setTestMessage(null);
+      // Credentials changed, so the cached user list is stale.
+      setUsers([]);
+      setUsersError(null);
     }
   };
 
@@ -137,30 +157,67 @@ export const MediaServerPlaylistSection: React.FC<MediaServerPlaylistSectionProp
     }
   }, [token, kind, url, apiKey, userId]);
 
-  const handleFetchUsers = useCallback(async () => {
-    if (!token) return;
-    setFetchingUsers(true);
-    setUsersError(null);
-    try {
-      const res = await axios.post<{ users: ServerUser[] }>(
-        `/api/mediaservers/${kind}/users`,
-        connectionPayload(),
-        { headers: { 'x-access-token': token } }
-      );
-      setUsers(res.data.users || []);
-    } catch (err: unknown) {
-      const message =
-        (axios.isAxiosError(err) && err.response?.data?.error) ||
-        'Failed to fetch users';
-      setUsersError(typeof message === 'string' ? message : 'Failed to fetch users');
-      setUsers([]);
-    } finally {
-      setFetchingUsers(false);
-    }
-  }, [token, kind, url, apiKey]);
+  // `silent` skips the error alert for the background mount fetch, which just
+  // falls back to the truncated id if it fails.
+  const handleFetchUsers = useCallback(
+    async (silent = false) => {
+      if (!token) return;
+      setFetchingUsers(true);
+      setUsersError(null);
+      try {
+        const res = await axios.post<{ users: ServerUser[] }>(
+          `/api/mediaservers/${kind}/users`,
+          connectionPayload(),
+          { headers: { 'x-access-token': token } }
+        );
+        setUsers(res.data.users || []);
+      } catch (err: unknown) {
+        if (!silent) {
+          const message =
+            (axios.isAxiosError(err) && err.response?.data?.error) ||
+            'Failed to fetch users';
+          setUsersError(typeof message === 'string' ? message : 'Failed to fetch users');
+        }
+        setUsers([]);
+      } finally {
+        setFetchingUsers(false);
+      }
+    },
+    [token, kind, url, apiKey]
+  );
 
-  const canTest = Boolean(url.trim() && apiKey.trim() && token);
-  const canFetchUsers = Boolean(url.trim() && apiKey.trim() && token);
+  const hasCredentials = Boolean(url.trim() && apiKey.trim() && token);
+
+  // Refetch the user list each time the dropdown opens so newly added server
+  // accounts show up without re-entering credentials.
+  const handleSelectOpen = useCallback(() => {
+    if (hasCredentials && !fetchingUsers) {
+      handleFetchUsers();
+    }
+  }, [hasCredentials, fetchingUsers, handleFetchUsers]);
+
+  // Resolve a saved user id to its name on load, so the dropdown isn't showing a
+  // raw id. Ref guard fires it once so typing new credentials doesn't refetch per keystroke.
+  const didEagerFetch = useRef(false);
+  useEffect(() => {
+    if (didEagerFetch.current) return;
+    if (enabled && hasCredentials && userId) {
+      didEagerFetch.current = true;
+      handleFetchUsers(true);
+    }
+  }, [enabled, hasCredentials, userId, handleFetchUsers]);
+
+  const handleUserSelect = (event: SelectChangeEvent) => {
+    onConfigChange({ [keys.userId]: String(event.target.value) } as Partial<ConfigState>);
+  };
+
+  const selectedUserInList = users.some((u) => u.id === userId);
+  const userHelperText =
+    !hasCredentials && !manualEntry
+      ? `Enter the ${label} URL and API key above, then open this dropdown to load users.`
+      : userId
+      ? `Account that will own Youtarr-managed playlists. ID: ${truncateId(userId)}`
+      : 'Account that will own Youtarr-managed playlists.';
 
   const chipLabel = !enabled
     ? 'Disabled'
@@ -219,46 +276,106 @@ export const MediaServerPlaylistSection: React.FC<MediaServerPlaylistSectionProp
         </Grid>
 
         <Grid item xs={12} md={6}>
+          {/* Masked with CSS rather than type="password" so the browser's
+              password manager doesn't treat the URL + key as login credentials
+              and prompt to save them. */}
           <TextField
             fullWidth
-            type="password"
+            type="text"
+            autoComplete="off"
             label={`${label} API Key`}
             value={apiKey}
             onChange={handleStringChange(keys.apiKey)}
             helperText={`Create an API key in ${label} under Dashboard → API Keys`}
+            style={
+              { WebkitTextSecurity: showApiKey ? 'none' : 'disc' } as React.CSSProperties
+            }
+            inputProps={{ 'data-testid': `${kind}-api-key-input` }}
+            InputProps={{
+              endAdornment: (
+                <IconButton
+                  type="button"
+                  aria-label={showApiKey ? `Hide ${label} API key` : `Show ${label} API key`}
+                  size="small"
+                  onClick={() => setShowApiKey((prev) => !prev)}
+                  className="h-5 w-5 text-muted-foreground"
+                >
+                  {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </IconButton>
+              ),
+            }}
           />
         </Grid>
 
         <Grid item xs={12} md={6}>
-          <Box className="flex items-end gap-2">
+          <Box className="mb-1.5 flex items-center gap-1">
+            <InputLabel id={userLabelId}>{label} User</InputLabel>
+            <Tooltip
+              title={`Youtarr creates and updates playlists owned by this ${label} account. Open the dropdown to load the accounts on your server, then pick one.`}
+            >
+              <IconButton
+                aria-label={`About the ${label} user setting`}
+                size="small"
+                className="h-5 w-5 text-muted-foreground"
+              >
+                <Info className="h-4 w-4" />
+              </IconButton>
+            </Tooltip>
+          </Box>
+
+          {manualEntry ? (
             <TextField
               fullWidth
-              label={`${label} User ID`}
               value={userId}
               onChange={handleStringChange(keys.userId)}
-              helperText="User account that will own Youtarr-managed playlists"
+              placeholder="Paste the user ID"
+              inputProps={{
+                'aria-labelledby': userLabelId,
+                'data-testid': `${kind}-user-id-input`,
+              }}
             />
-            <Button
-              variant="outlined"
-              onClick={handleFetchUsers}
-              disabled={!canFetchUsers || fetchingUsers}
-              className="whitespace-nowrap"
+          ) : (
+            <Select
+              fullWidth
+              value={userId || undefined}
+              placeholder={
+                <span className="text-muted-foreground">Select a user</span>
+              }
+              disabled={!hasCredentials}
+              onOpen={handleSelectOpen}
+              onChange={handleUserSelect}
+              labelId={userLabelId}
+              inputProps={{ 'data-testid': `${kind}-user-select` }}
             >
-              {fetchingUsers ? 'Fetching…' : 'Fetch Users'}
-            </Button>
-          </Box>
-          {users.length > 0 && (
-            <Box className="mt-2 flex flex-wrap gap-1">
+              {userId && !selectedUserInList && (
+                <MenuItem value={userId}>{truncateId(userId)}</MenuItem>
+              )}
               {users.map((u) => (
-                <Chip
-                  key={u.id}
-                  label={u.name}
-                  color={userId === u.id ? 'primary' : 'default'}
-                  onClick={() => onConfigChange({ [keys.userId]: u.id } as Partial<ConfigState>)}
-                />
+                <MenuItem key={u.id} value={u.id}>
+                  {u.name}
+                </MenuItem>
               ))}
-            </Box>
+              {fetchingUsers && (
+                <Box className="px-3 py-1.5 text-sm text-muted-foreground">Loading users</Box>
+              )}
+              {!fetchingUsers && users.length === 0 && !usersError && (
+                <Box className="px-3 py-1.5 text-sm text-muted-foreground">No users found</Box>
+              )}
+            </Select>
           )}
+
+          <FormHelperText>{userHelperText}</FormHelperText>
+
+          <Button
+            variant="link"
+            size="small"
+            type="button"
+            onClick={() => setManualEntry((prev) => !prev)}
+            className="mt-1 h-auto px-0"
+          >
+            {manualEntry ? 'Choose from list' : 'Enter ID manually'}
+          </Button>
+
           {usersError && (
             <Alert severity="error" className="mt-2">
               {usersError}
@@ -282,7 +399,7 @@ export const MediaServerPlaylistSection: React.FC<MediaServerPlaylistSectionProp
             <Button
               variant="contained"
               onClick={handleTest}
-              disabled={!canTest || testing}
+              disabled={!hasCredentials || testing}
               color={testStatus === 'ok' ? 'success' : 'primary'}
               className="h-10 min-w-[150px] whitespace-nowrap"
             >
