@@ -104,7 +104,15 @@ function resolveChannelFolderName(channel) {
 function buildChannelPath(baseDir, subfolder, channelFolderName) {
   if (subfolder) {
     const subfolderSegment = buildSubfolderSegment(subfolder);
-    return path.join(baseDir, subfolderSegment, channelFolderName);
+    const full = path.join(baseDir, subfolderSegment, channelFolderName);
+    // Last line of defense: a subfolder must never resolve outside baseDir.
+    // Route-level validation should catch traversal first; this guarantees no
+    // caller (current or future) can write outside the output directory.
+    const rel = path.relative(baseDir, full);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+      throw new Error(`Subfolder escapes base directory: ${subfolder}`);
+    }
+    return full;
   }
   return path.join(baseDir, channelFolderName);
 }

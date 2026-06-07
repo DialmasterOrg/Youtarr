@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -15,6 +15,7 @@ import {
   Typography,
 } from './ui';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import { useConfig } from '../hooks/useConfig';
 import { usePlaylistDetail } from '../hooks/usePlaylistDetail';
 import { usePlaylistMutations } from '../hooks/usePlaylistMutations';
 import { useMediaServerStatus } from '../hooks/useMediaServerStatus';
@@ -27,6 +28,8 @@ import VideoListSelectionPill from './shared/VideoList/VideoListSelectionPill';
 import { SelectionAction } from './shared/VideoList/types';
 import { Download as DownloadIcon } from '../lib/icons';
 import PlaylistSettingsDialog from './PlaylistPage/components/PlaylistSettingsDialog';
+import DownloadSettingsDialog from './DownloadManager/ManualDownload/DownloadSettingsDialog';
+import { DownloadSettings } from './DownloadManager/ManualDownload/types';
 import SubscriptionsBackButton from './shared/SubscriptionsBackButton';
 import VideoModal from './shared/VideoModal';
 import { VideoModalData } from './shared/VideoModal/types';
@@ -110,6 +113,14 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     unignoreVideo,
   } = usePlaylistMutations({ token });
 
+  const navigate = useNavigate();
+  const { config } = useConfig(token);
+  const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
+  const [pendingDownload, setPendingDownload] = useState<{ mode: 'all' | 'selected'; ids: string[] }>({
+    mode: 'all',
+    ids: [],
+  });
+
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [confirmPublicOpen, setConfirmPublicOpen] = useState(false);
   const [pendingVideoId, setPendingVideoId] = useState<string | null>(null);
@@ -145,15 +156,39 @@ function PlaylistPage({ token }: PlaylistPageProps) {
 
   const selectionClearRef = useRef<() => void>(() => {});
 
-  const handleDownloadSelected = useCallback(
-    async (ids: string[]) => {
-      if (!ids.length) return;
-      const ok = await handleAction('Download', () => triggerDownload(ids));
-      // Keep the selection intact on failure so the user can retry.
-      if (ok) selectionClearRef.current();
+  const handleDownloadSelected = useCallback((ids: string[]) => {
+    if (!ids.length) return;
+    setPendingDownload({ mode: 'selected', ids });
+    setDownloadDialogOpen(true);
+  }, []);
+
+  const handleConfirmDownload = useCallback(
+    async (settings: DownloadSettings | null) => {
+      setDownloadDialogOpen(false);
+      const overrideSettings = settings
+        ? {
+            resolution: settings.resolution,
+            allowRedownload: settings.allowRedownload,
+            subfolder: settings.subfolder,
+            audioFormat: settings.audioFormat,
+            rating: settings.rating,
+            skipVideoFolder: settings.skipVideoFolder,
+          }
+        : undefined;
+      const ids = pendingDownload.mode === 'selected' ? pendingDownload.ids : undefined;
+      const ok = await handleAction('Download', () => triggerDownload(ids, overrideSettings));
+      if (ok) {
+        if (pendingDownload.mode === 'selected') selectionClearRef.current();
+        navigate('/downloads/activity');
+      }
     },
-    [handleAction, triggerDownload]
+    [pendingDownload, handleAction, triggerDownload, navigate]
   );
+
+  const openDownloadAll = useCallback(() => {
+    setPendingDownload({ mode: 'all', ids: [] });
+    setDownloadDialogOpen(true);
+  }, []);
 
   const downloadActions = useMemo<SelectionAction<string>[]>(
     () => [
@@ -323,7 +358,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
               <Button
                 variant="contained"
                 size="sm"
-                onClick={() => handleAction('Download', () => triggerDownload())}
+                onClick={openDownloadAll}
                 disabled={actionRunning}
               >
                 Download All
@@ -403,6 +438,16 @@ function PlaylistPage({ token }: PlaylistPageProps) {
         token={token}
         onClose={() => setSettingsOpen(false)}
         onSaved={handleSettingsSaved}
+      />
+
+      <DownloadSettingsDialog
+        open={downloadDialogOpen}
+        onClose={() => setDownloadDialogOpen(false)}
+        onConfirm={handleConfirmDownload}
+        mode="manual"
+        token={token}
+        videoCount={pendingDownload.mode === 'selected' ? pendingDownload.ids.length : playlist.video_count}
+        defaultResolution={config.preferredResolution || '1080'}
       />
 
       <Dialog

@@ -46,6 +46,13 @@ const buildDeps = (overrides = {}) => ({
     },
     ...overrides.mediaServers,
   },
+  channelSettingsModule: {
+    validateSubFolder: jest.fn().mockReturnValue({ valid: true }),
+    ...overrides.channelSettingsModule,
+  },
+  // Real ratingMapper: it is a pure module with no DB/IO deps, so route tests
+  // exercise the actual rating validation/normalization.
+  ratingMapper: require('../../modules/ratingMapper'),
   models: {
     Playlist: {
       findAndCountAll: jest.fn(),
@@ -310,6 +317,28 @@ describe('POST /api/playlists', () => {
     expect(deps.playlistModule.getPlaylistInfo).not.toHaveBeenCalled();
   });
 
+  test('rejects a traversal default_sub_folder before subscribing', async () => {
+    const deps = buildDeps({
+      channelSettingsModule: {
+        validateSubFolder: jest.fn().mockReturnValue({ valid: false, error: 'bad' }),
+      },
+    });
+    const handler = getHandler('post', '/api/playlists', deps);
+    const req = {
+      body: { url: 'https://youtube.com/playlist?list=PLtest', settings: { default_sub_folder: '../../etc' } },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.channelSettingsModule.validateSubFolder).toHaveBeenCalledWith('../../etc');
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Invalid default_sub_folder' });
+    expect(deps.playlistModule.getPlaylistInfo).not.toHaveBeenCalled();
+    expect(deps.playlistModule.upsertPlaylist).not.toHaveBeenCalled();
+  });
+
   test('returns 500 on subscribe failure', async () => {
     const deps = buildDeps();
     deps.playlistModule.getPlaylistInfo.mockRejectedValue(new Error('boom'));
@@ -510,6 +539,31 @@ describe('PUT /api/playlists/:playlistId/settings', () => {
 
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith({ error: 'Playlist not found' });
+  });
+
+  test('rejects a traversal default_sub_folder without persisting', async () => {
+    const deps = buildDeps({
+      channelSettingsModule: {
+        validateSubFolder: jest.fn().mockReturnValue({ valid: false, error: 'bad' }),
+      },
+    });
+    const p = makePlaylist();
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+
+    const handler = getHandler('put', '/api/playlists/:playlistId/settings', deps);
+    const req = {
+      params: { playlistId: 'PLtest123' },
+      body: { default_sub_folder: 'a/../../etc' },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.channelSettingsModule.validateSubFolder).toHaveBeenCalledWith('a/../../etc');
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Invalid default_sub_folder' });
+    expect(p.update).not.toHaveBeenCalled();
   });
 });
 
@@ -752,7 +806,10 @@ describe('POST /api/playlists/:playlistId/download', () => {
 
     await handler(req, res);
 
-    expect(deps.downloadModule.doPlaylistDownloads).toHaveBeenCalledWith(p);
+    expect(deps.downloadModule.doPlaylistDownloads).toHaveBeenCalledWith(p, {
+      youtubeIds: undefined,
+      overrideSettings: undefined,
+    });
     expect(res.status).toHaveBeenCalledWith(202);
     expect(res.json).toHaveBeenCalledWith({ status: 'accepted', message: 'Playlist download started' });
   });
@@ -805,6 +862,7 @@ describe('POST /api/playlists/:playlistId/download', () => {
 
     expect(deps.downloadModule.doPlaylistDownloads).toHaveBeenCalledWith(p, {
       youtubeIds: ['vidA', 'vidB'],
+      overrideSettings: undefined,
     });
     expect(res.status).toHaveBeenCalledWith(202);
   });
@@ -855,6 +913,160 @@ describe('POST /api/playlists/:playlistId/download', () => {
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(deps.downloadModule.doPlaylistDownloads).not.toHaveBeenCalled();
+  });
+
+  test('forwards validated overrideSettings to doPlaylistDownloads', async () => {
+    const deps = buildDeps();
+    const p = makePlaylist();
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/download', deps);
+    const req = {
+      params: { playlistId: 'PLtest123' },
+      body: { videoIds: ['vidA'], overrideSettings: { resolution: '720', allowRedownload: true } },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(202);
+    expect(deps.downloadModule.doPlaylistDownloads).toHaveBeenCalledWith(p, {
+      youtubeIds: ['vidA'],
+      overrideSettings: { resolution: '720', allowRedownload: true },
+    });
+  });
+
+  test('rejects malformed overrideSettings with 400', async () => {
+    const deps = buildDeps();
+    const p = makePlaylist();
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/download', deps);
+    const req = {
+      params: { playlistId: 'PLtest123' },
+      body: { overrideSettings: { resolution: 'banana' } },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Invalid overrideSettings' });
+    expect(deps.downloadModule.doPlaylistDownloads).not.toHaveBeenCalled();
+  });
+
+  test('rejects a subfolder override the subfolder validator deems invalid', async () => {
+    const deps = buildDeps({
+      channelSettingsModule: {
+        validateSubFolder: jest.fn().mockReturnValue({ valid: false, error: 'bad' }),
+      },
+    });
+    const p = makePlaylist();
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/download', deps);
+    const req = {
+      params: { playlistId: 'PLtest123' },
+      body: { overrideSettings: { subfolder: 'a/../../etc' } },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.channelSettingsModule.validateSubFolder).toHaveBeenCalledWith('a/../../etc');
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Invalid overrideSettings' });
+    expect(deps.downloadModule.doPlaylistDownloads).not.toHaveBeenCalled();
+  });
+
+  test('forwards a valid subfolder override', async () => {
+    const deps = buildDeps();
+    const p = makePlaylist();
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/download', deps);
+    const req = {
+      params: { playlistId: 'PLtest123' },
+      body: { overrideSettings: { subfolder: 'Movies' } },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.channelSettingsModule.validateSubFolder).toHaveBeenCalledWith('Movies');
+    expect(res.status).toHaveBeenCalledWith(202);
+    expect(deps.downloadModule.doPlaylistDownloads).toHaveBeenCalledWith(p, {
+      youtubeIds: undefined,
+      overrideSettings: { subfolder: 'Movies' },
+    });
+  });
+
+  test('rejects an invalid rating override with 400', async () => {
+    const deps = buildDeps();
+    const p = makePlaylist();
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/download', deps);
+    const req = {
+      params: { playlistId: 'PLtest123' },
+      body: { overrideSettings: { rating: 'banana' } },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Invalid overrideSettings' });
+    expect(deps.downloadModule.doPlaylistDownloads).not.toHaveBeenCalled();
+  });
+
+  test('forwards a valid rating override, normalized', async () => {
+    const deps = buildDeps();
+    const p = makePlaylist();
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/download', deps);
+    const req = {
+      params: { playlistId: 'PLtest123' },
+      body: { overrideSettings: { rating: 'pg-13' } },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(202);
+    expect(deps.downloadModule.doPlaylistDownloads).toHaveBeenCalledWith(p, {
+      youtubeIds: undefined,
+      overrideSettings: { rating: 'PG-13' },
+    });
+  });
+
+  test('normalizes an NR rating override to null', async () => {
+    const deps = buildDeps();
+    const p = makePlaylist();
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/download', deps);
+    const req = {
+      params: { playlistId: 'PLtest123' },
+      body: { overrideSettings: { rating: 'NR' } },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(202);
+    expect(deps.downloadModule.doPlaylistDownloads).toHaveBeenCalledWith(p, {
+      youtubeIds: undefined,
+      overrideSettings: { rating: null },
+    });
   });
 });
 

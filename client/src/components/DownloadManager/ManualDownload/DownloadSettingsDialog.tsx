@@ -167,45 +167,52 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   };
 
   const handleConfirm = () => {
-    // Save settings to localStorage for next time
     try {
       const storageKey = mode === 'channel' ? 'youtarr_channel_settings' : 'youtarr_download_settings';
-      const settingsToSave: any = {
+      const settingsToSave: Record<string, unknown> = {
         useCustom: useCustomSettings,
         resolution: resolution,
         allowRedownload: allowRedownload,
         rating: null,
       };
-
       if (mode === 'channel') {
         settingsToSave.videoCount = channelVideoCount;
       }
-
       localStorage.setItem(storageKey, JSON.stringify(settingsToSave));
     } catch (e) {
-      // localStorage might not be available
       console.error('Failed to save settings to localStorage:', e);
     }
 
-    // Include subfolder override if set (only for manual mode)
-    const hasOverride = useCustomSettings || allowRedownload ||
-      (mode === 'manual' && subfolderOverride !== null) ||
-      (mode === 'manual' && audioFormat !== null) ||
-      (mode === 'manual' && skipVideoFolder);
+    // Emit only fields the user genuinely overrode. Omitted fields fall through
+    // to channel -> playlist -> global on the backend.
+    const override: DownloadSettings = {};
 
-    if (hasOverride) {
-      onConfirm({
-        resolution: useCustomSettings ? resolution : defaultResolution,
-        videoCount: mode === 'channel' ? (useCustomSettings ? channelVideoCount : defaultVideoCount) : 0,
-        allowRedownload,
-        subfolder: mode === 'manual' ? subfolderOverride : undefined,
-        audioFormat: mode === 'manual' ? audioFormat : undefined,
-        rating: useCustomSettings ? (rating === null ? 'NR' : (rating ?? undefined)) : undefined,
-        skipVideoFolder: mode === 'manual' ? (useCustomSettings ? skipVideoFolder : false) : undefined
-      });
-    } else {
-      onConfirm(null); // Use defaults
+    if (useCustomSettings) {
+      override.resolution = resolution;
+      if (mode === 'channel') {
+        override.videoCount = channelVideoCount;
+      }
+      if (mode === 'manual') {
+        if (subfolderOverride !== null) {
+          override.subfolder = subfolderOverride;
+        }
+        if (audioFormat !== null) {
+          override.audioFormat = audioFormat;
+        }
+        if (skipVideoFolder) {
+          override.skipVideoFolder = true;
+        }
+      }
+      if (rating !== null) {
+        override.rating = rating;
+      }
     }
+
+    if (allowRedownload) {
+      override.allowRedownload = true;
+    }
+
+    onConfirm(Object.keys(override).length === 0 ? null : override);
   };
 
   const handleCancel = () => {

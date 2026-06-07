@@ -2,10 +2,10 @@ const fs = require('fs-extra');
 const path = require('path');
 const { execSync, spawnSync } = require('child_process');
 const configModule = require('./configModule');
-const channelSettingsModule = require('./channelSettingsModule');
 const nfoGenerator = require('./nfoGenerator');
 const ratingMapper = require('./ratingMapper');
 const tempPathManager = require('./download/tempPathManager');
+const downloadSettingsResolver = require('./download/downloadSettingsResolver');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const { JobVideoDownload } = require('../models');
 const logger = require('../logger');
@@ -173,6 +173,11 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
     // Check for explicit rating override from manual download
     const ratingOverrideEnv = process.env.YOUTARR_OVERRIDE_RATING;
 
+    // Soft fallbacks (playlist defaults); used only when the real channel has no setting.
+    // A present hard rating override always wins, so suppress the rating fallback in that case.
+    const subfolderFallbackEnv = process.env.YOUTARR_SUBFOLDER_FALLBACK || null;
+    const ratingFallbackEnv = process.env.YOUTARR_OVERRIDE_RATING ? null : (process.env.YOUTARR_RATING_FALLBACK || null);
+
     // Always look up channel to apply default rating (independent of subfolder)
     let channelRecord = null;
     if (jsonData.channel_id) {
@@ -223,7 +228,8 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
     const effectiveRating = ratingMapper.determineEffectiveRating(
       jsonData,
       channelRecord ? channelRecord.default_rating : null,
-      manualOverride
+      manualOverride,
+      ratingFallbackEnv
     );
 
     jsonData.normalized_rating = effectiveRating.normalized_rating;
@@ -236,48 +242,18 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
       logger.info({ source: jsonData.rating_source || 'None' }, 'Post-process no rating applied');
     }
 
-    if (subfolderOverride) {
-      // Manual download with subfolder override
-      const { ROOT_SENTINEL } = require('./filesystem/constants');
-      if (subfolderOverride === ROOT_SENTINEL) {
-        // Explicit root - no subfolder, download directly to output directory
-        channelSubFolder = null;
-        const baseDir = configModule.directoryPath;
-        targetChannelFolder = buildChannelPath(baseDir, null, actualChannelFolderName);
-        logger.info('Post-process using subfolder override: root directory (no subfolder)');
-      } else if (subfolderOverride === channelSettingsModule.getGlobalDefaultSentinel()) {
-        // Use global default subfolder
-        channelSubFolder = channelSettingsModule.resolveEffectiveSubfolder(subfolderOverride);
-        if (channelSubFolder) {
-          const baseDir = configModule.directoryPath;
-          targetChannelFolder = buildChannelPath(baseDir, channelSubFolder, actualChannelFolderName);
-        }
-        logger.info('Post-process using subfolder override: global default');
-      } else {
-        // Specific subfolder override
-        channelSubFolder = subfolderOverride;
-        const baseDir = configModule.directoryPath;
-        targetChannelFolder = buildChannelPath(baseDir, subfolderOverride, actualChannelFolderName);
-        logger.info({ subfolder: subfolderOverride }, 'Post-process using subfolder override');
-      }
-    } else if (channelRecord) {
-      // No subfolder override - use channel's subfolder setting
-      channelSubFolder = channelSettingsModule.resolveEffectiveSubfolder(channelRecord.sub_folder);
-
-      if (channelSubFolder) {
-        const baseDir = configModule.directoryPath;
-        targetChannelFolder = buildChannelPath(baseDir, channelSubFolder, actualChannelFolderName);
-        console.log(`[Post-Process] Channel will use subfolder: ${channelSubFolder}`);
-      }
-    } else {
-      // No channel_id available (rare case) - use global default
-      channelSubFolder = configModule.getDefaultSubfolder();
-      if (channelSubFolder) {
-        const baseDir = configModule.directoryPath;
-        targetChannelFolder = buildChannelPath(baseDir, channelSubFolder, actualChannelFolderName);
-        console.log(`[Post-Process] No channel ID, using global default subfolder: ${channelSubFolder}`);
-      }
+    // Per-video subfolder precedence; see resolveFinalSubfolder for the full contract.
+    channelSubFolder = downloadSettingsResolver.resolveFinalSubfolder({
+      hardOverride: subfolderOverride,
+      channelRecord,
+      softFallback: subfolderFallbackEnv,
+      globalDefault: configModule.getDefaultSubfolder(),
+    });
+    if (channelSubFolder) {
+      const baseDir = configModule.directoryPath;
+      targetChannelFolder = buildChannelPath(baseDir, channelSubFolder, actualChannelFolderName);
     }
+    logger.info({ subfolder: channelSubFolder }, 'Post-process resolved target subfolder');
 
     // Phase 2: Calculate the final path for _actual_filepath with subfolder if applicable
     // Downloads always go to temp first, so we need to store the FINAL path, not the temp path

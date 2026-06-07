@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 
 interface DownloadOverrideSettings {
-  resolution: string;
+  resolution?: string;
   allowRedownload?: boolean;
   subfolder?: string | null;
   audioFormat?: string | null;

@@ -1020,7 +1020,7 @@ describe('DownloadExecutor', () => {
       }, 10);
 
       // skipJobTransition=true (7th positional arg)
-      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, true, 'kids');
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, true, { subfolderOverride: 'kids' });
 
       expect(plexModule.refreshLibrariesForSubfolders).not.toHaveBeenCalled();
     });
@@ -1430,71 +1430,56 @@ describe('DownloadExecutor', () => {
     });
 
     it('should pass subfolderOverride to yt-dlp via environment variable', async () => {
-      setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
-      }, 10);
-
-      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, 'TestSubfolder');
-
+      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, { subfolderOverride: 'TestSubfolder' });
       expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
-        env: expect.objectContaining({
-          YOUTARR_JOB_ID: mockJobId,
-          YOUTARR_SUBFOLDER_OVERRIDE: 'TestSubfolder'
-        })
+        env: expect.objectContaining({ YOUTARR_JOB_ID: mockJobId, YOUTARR_SUBFOLDER_OVERRIDE: 'TestSubfolder' })
       });
     });
 
     it('should pass empty string subfolderOverride to yt-dlp', async () => {
-      setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
-      }, 10);
-
-      // Empty string means "no subfolder" (downloads to root)
-      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, '');
-
+      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, { subfolderOverride: '' });
       expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
-        env: expect.objectContaining({
-          YOUTARR_JOB_ID: mockJobId,
-          YOUTARR_SUBFOLDER_OVERRIDE: ''
-        })
+        env: expect.objectContaining({ YOUTARR_JOB_ID: mockJobId, YOUTARR_SUBFOLDER_OVERRIDE: '' })
       });
     });
 
     it('should not set YOUTARR_SUBFOLDER_OVERRIDE when subfolderOverride is null', async () => {
-      setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
-      }, 10);
-
-      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, null);
-
+      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, { subfolderOverride: null });
       expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
-        env: expect.not.objectContaining({
-          YOUTARR_SUBFOLDER_OVERRIDE: expect.anything()
-        })
+        env: expect.not.objectContaining({ YOUTARR_SUBFOLDER_OVERRIDE: expect.anything() })
       });
     });
 
-    it('should not set YOUTARR_SUBFOLDER_OVERRIDE when subfolderOverride is undefined', async () => {
-      setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
-      }, 10);
-
-      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, undefined);
-
+    it('should not set YOUTARR_SUBFOLDER_OVERRIDE when no directives are passed', async () => {
+      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false);
       expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
-        env: expect.not.objectContaining({
-          YOUTARR_SUBFOLDER_OVERRIDE: expect.anything()
-        })
+        env: expect.not.objectContaining({ YOUTARR_SUBFOLDER_OVERRIDE: expect.anything() })
+      });
+    });
+
+    it('should set YOUTARR_SUBFOLDER_FALLBACK when subfolderFallback is provided', async () => {
+      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, { subfolderFallback: 'PlaylistFolder' });
+      expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
+        env: expect.objectContaining({ YOUTARR_SUBFOLDER_FALLBACK: 'PlaylistFolder' })
+      });
+    });
+
+    it('should set YOUTARR_RATING_FALLBACK when ratingFallback is provided', async () => {
+      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, { ratingFallback: 'PG' });
+      expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
+        env: expect.objectContaining({ YOUTARR_RATING_FALLBACK: 'PG' })
       });
     });
 
     it('should log subfolderOverride in info message', async () => {
-      setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
-      }, 10);
-
-      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, 'MyFolder');
-
+      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, { subfolderOverride: 'MyFolder' });
       expect(logger.info).toHaveBeenCalledWith(
         { jobType: mockJobType, args: mockArgs, subfolderOverride: 'MyFolder' },
         'Running yt-dlp'

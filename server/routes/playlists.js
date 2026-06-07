@@ -1,8 +1,58 @@
 const express = require('express');
 
-function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models }) {
+function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper }) {
   const router = express.Router();
   const { Playlist, PlaylistVideo, Video } = models;
+
+  const ALLOWED_RESOLUTIONS = ['360', '480', '720', '1080', '1440', '2160'];
+  const ALLOWED_AUDIO_FORMATS = ['video_mp3', 'mp3_only'];
+
+  // Returns { ok: true, value } or { ok: false }. value is undefined when input
+  // is absent. Unknown keys are ignored. Rating is validated and normalized here
+  // via ratingMapper (NR/null -> null).
+  function validateOverrideSettings(input) {
+    if (input === undefined) return { ok: true, value: undefined };
+    if (typeof input !== 'object' || input === null || Array.isArray(input)) return { ok: false };
+    const out = {};
+    if ('resolution' in input) {
+      if (!ALLOWED_RESOLUTIONS.includes(String(input.resolution))) return { ok: false };
+      out.resolution = String(input.resolution);
+    }
+    if ('allowRedownload' in input) {
+      if (typeof input.allowRedownload !== 'boolean') return { ok: false };
+      out.allowRedownload = input.allowRedownload;
+    }
+    if ('skipVideoFolder' in input) {
+      if (typeof input.skipVideoFolder !== 'boolean') return { ok: false };
+      out.skipVideoFolder = input.skipVideoFolder;
+    }
+    if ('subfolder' in input) {
+      if (input.subfolder !== null) {
+        if (typeof input.subfolder !== 'string') return { ok: false };
+        if (!channelSettingsModule.validateSubFolder(input.subfolder).valid) return { ok: false };
+      }
+      out.subfolder = input.subfolder;
+    }
+    if ('audioFormat' in input) {
+      if (input.audioFormat !== null && !ALLOWED_AUDIO_FORMATS.includes(input.audioFormat)) return { ok: false };
+      out.audioFormat = input.audioFormat;
+    }
+    if ('rating' in input) {
+      const ratingResult = ratingMapper.validateRating(input.rating);
+      if (!ratingResult.valid) return { ok: false };
+      out.rating = ratingResult.value;
+    }
+    return { ok: true, value: out };
+  }
+
+  // A persisted default_sub_folder feeds the playlist download soft fallback,
+  // which reaches the filesystem path. Validate it with the same traversal-safe
+  // check used for channel subfolders. null/''/absent mean "no subfolder" (root).
+  function defaultSubFolderInvalid(value) {
+    if (value === undefined || value === null || value === '') return false;
+    if (typeof value !== 'string') return true;
+    return !channelSettingsModule.validateSubFolder(value).valid;
+  }
 
   router.get('/api/playlists', verifyToken, async (req, res) => {
     try {
@@ -50,6 +100,9 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
   router.post('/api/playlists', verifyToken, async (req, res) => {
     const { url, settings = {} } = req.body;
     if (!url) return res.status(400).json({ error: 'url is required' });
+    if (defaultSubFolderInvalid(settings.default_sub_folder)) {
+      return res.status(400).json({ error: 'Invalid default_sub_folder' });
+    }
     try {
       const info = await playlistModule.getPlaylistInfo(url);
       const created = await playlistModule.upsertPlaylist(info, { enabled: true, settings });
@@ -113,6 +166,9 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     const allowed = ['default_sub_folder', 'video_quality', 'min_duration', 'max_duration', 'title_filter_regex', 'audio_format', 'default_rating'];
     const updates = {};
     for (const k of allowed) if (k in req.body) updates[k] = req.body[k];
+    if (defaultSubFolderInvalid(updates.default_sub_folder)) {
+      return res.status(400).json({ error: 'Invalid default_sub_folder' });
+    }
     try {
       const p = await Playlist.findOne({ where: { playlist_id: req.params.playlistId } });
       if (!p) return res.status(404).json({ error: 'Playlist not found' });
@@ -232,13 +288,18 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
         }
       }
 
+      const overrideResult = validateOverrideSettings(req.body?.overrideSettings);
+      if (!overrideResult.ok) {
+        return res.status(400).json({ error: 'Invalid overrideSettings' });
+      }
+
       const p = await Playlist.findOne({ where: { playlist_id: req.params.playlistId } });
       if (!p) return res.status(404).json({ error: 'Playlist not found' });
 
-      const download =
-        videoIds !== undefined
-          ? downloadModule.doPlaylistDownloads(p, { youtubeIds: videoIds })
-          : downloadModule.doPlaylistDownloads(p);
+      const download = downloadModule.doPlaylistDownloads(p, {
+        youtubeIds: videoIds,
+        overrideSettings: overrideResult.value,
+      });
       download.catch((err) => {
         req.log.error({ err, playlist_id: p.playlist_id }, 'doPlaylistDownloads failed');
       });

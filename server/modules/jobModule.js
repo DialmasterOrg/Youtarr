@@ -10,6 +10,7 @@ const ChannelVideo = require('../models/channelvideo');
 const cron = require('node-cron');
 const MessageEmitter = require('./messageEmitter.js'); // import the helper function
 const configModule = require('./configModule');
+const { isDownloadJob } = require('./download/jobTypes');
 const logger = require('../logger');
 
 const MAX_SAVE_RETRIES = 3;
@@ -1088,14 +1089,11 @@ class JobModule {
       return;
     }
 
-    // Download-specific completion logic: only for download job types.
     // Non-download jobs (e.g. Import Subscriptions) manage their own output field.
-    const isDownloadJob = job.jobType && (
-      job.jobType.includes('Channel Downloads') || job.jobType.includes('Manually Added Urls')
-    );
+    const jobIsDownload = isDownloadJob(job.jobType);
 
     if (
-      isDownloadJob && (
+      jobIsDownload && (
         updatedFields.status === 'Complete' ||
         updatedFields.status === 'Error' ||
         updatedFields.status === 'Complete with Warnings' ||

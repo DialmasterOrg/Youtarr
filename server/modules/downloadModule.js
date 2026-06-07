@@ -4,6 +4,7 @@ const plexModule = require('./plexModule');
 const DownloadExecutor = require('./download/downloadExecutor');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const tempPathManager = require('./download/tempPathManager');
+const { MANUAL_DOWNLOAD_LABEL, playlistJobLabel } = require('./download/jobTypes');
 const logger = require('../logger');
 
 class DownloadModule {
@@ -429,7 +430,7 @@ class DownloadModule {
       this.downloadExecutor.tempChannelsFile = tempChannelsFile;
 
       // Execute download with skipJobTransition flag
-      await this.downloadExecutor.doDownload(args, jobId, jobType, 0, null, allowRedownload, skipJobTransition, null, undefined, skipVideoFolder);
+      await this.downloadExecutor.doDownload(args, jobId, jobType, 0, null, allowRedownload, skipJobTransition, { skipVideoFolder });
     } catch (err) {
       logger.error({ err, jobType }, 'Error executing group download');
       if (tempChannelsFile) {
@@ -448,10 +449,14 @@ class DownloadModule {
     const jobData = reqOrJobData.body ? reqOrJobData.body : reqOrJobData;
 
     // Build job type with optional source indicator
-    let jobType = 'Manually Added Urls';
+    let jobType = MANUAL_DOWNLOAD_LABEL;
     const initiatedBy = this.getJobDataValue(jobData, 'initiatedBy');
     if (initiatedBy && initiatedBy.type === 'api_key' && initiatedBy.name) {
-      jobType = `Manually Added Urls (via API: ${initiatedBy.name})`;
+      jobType = `${MANUAL_DOWNLOAD_LABEL} (via API: ${initiatedBy.name})`;
+    }
+    const jobLabel = this.getJobDataValue(jobData, 'jobLabel');
+    if (jobLabel && typeof jobLabel === 'string') {
+      jobType = jobLabel;
     }
 
     logger.info({ jobData }, 'Running specific downloads job');
@@ -500,6 +505,8 @@ class DownloadModule {
       const resolution = effectiveQuality || configModule.config.preferredResolution || '1080';
       const allowRedownload = overrideSettings.allowRedownload || false;
       const subfolderOverride = overrideSettings.subfolder !== undefined ? overrideSettings.subfolder : null;
+      const subfolderFallback = overrideSettings.subfolderFallback !== undefined ? overrideSettings.subfolderFallback : null;
+      const ratingFallback = overrideSettings.ratingFallback !== undefined ? overrideSettings.ratingFallback : null;
       // Use override audioFormat if explicitly provided (even if null), otherwise fall back to channel's audio_format setting
       const audioFormat = overrideSettings.audioFormat !== undefined
         ? overrideSettings.audioFormat
@@ -575,10 +582,13 @@ class DownloadModule {
         urls,
         allowRedownload,
         false,
-        subfolderOverride,
-        // Pass rating override from overrideSettings if present
-        overrideSettings.rating !== undefined ? overrideSettings.rating : undefined,
-        skipVideoFolder
+        {
+          subfolderOverride,
+          subfolderFallback,
+          ratingOverride: overrideSettings.rating !== undefined ? overrideSettings.rating : undefined,
+          ratingFallback,
+          skipVideoFolder,
+        }
       );
     }
   }
@@ -588,6 +598,14 @@ class DownloadModule {
     const Video = require('../models/video');
     const Channel = require('../models/channel');
     const playlistModule = require('./playlistModule');
+    const playlistDownloadGrouper = require('./playlistDownloadGrouper');
+    const downloadSettingsResolver = require('./download/downloadSettingsResolver');
+
+    const overrideSettings =
+      options.overrideSettings && typeof options.overrideSettings === 'object'
+        ? options.overrideSettings
+        : {};
+    const allowRedownload = !!overrideSettings.allowRedownload;
 
     const youtubeIds = Array.isArray(options.youtubeIds) ? options.youtubeIds : [];
     // Specific ids: download exactly those, overriding `ignored`. Otherwise
@@ -606,8 +624,10 @@ class DownloadModule {
 
     const toDownload = [];
     for (const entry of entries) {
-      const already = await Video.findOne({ where: { youtubeId: entry.youtube_id } });
-      if (already) continue;
+      if (!allowRedownload) {
+        const already = await Video.findOne({ where: { youtubeId: entry.youtube_id } });
+        if (already) continue;
+      }
 
       if (entry.channel_id) {
         const channelExists = await Channel.findOne({ where: { channel_id: entry.channel_id } });
@@ -616,15 +636,34 @@ class DownloadModule {
         }
       }
 
-      toDownload.push(entry.youtube_id);
+      toDownload.push({ youtube_id: entry.youtube_id, channel_id: entry.channel_id });
     }
 
     if (!toDownload.length) return;
 
-    const urls = toDownload.map((id) => `https://www.youtube.com/watch?v=${id}`);
-    // doSpecificDownloads expects either an Express request (with .body) or a job-data
-    // object (with .data). Wrap urls under .body to match the Express-request shape.
-    await this.doSpecificDownloads({ body: { urls } });
+    const groups = await playlistDownloadGrouper.buildGroups(playlist, toDownload, overrideSettings);
+    const jobLabel = playlistJobLabel(playlist);
+
+    // Routing directives (dialog override + playlist default) are uniform across the
+    // whole download, so resolve them once; channel and global tiers resolve per-video
+    // at finalize. See downloadSettingsResolver.
+    const routing = downloadSettingsResolver.buildRoutingDirectives({ override: overrideSettings, playlist });
+
+    for (const group of groups) {
+      const urls = group.youtubeIds.map((id) => `https://www.youtube.com/watch?v=${id}`);
+      const groupOverride = {
+        resolution: group.resolution,
+        audioFormat: group.audioFormat,
+        skipVideoFolder: group.skipVideoFolder,
+        allowRedownload,
+      };
+      if (routing.subfolderOverride !== undefined) groupOverride.subfolder = routing.subfolderOverride;
+      if (routing.subfolderFallback !== undefined) groupOverride.subfolderFallback = routing.subfolderFallback;
+      if (routing.ratingOverride !== undefined) groupOverride.rating = routing.ratingOverride;
+      if (routing.ratingFallback !== undefined) groupOverride.ratingFallback = routing.ratingFallback;
+      // doSpecificDownloads accepts an Express-request shape (.body).
+      await this.doSpecificDownloads({ body: { urls, overrideSettings: groupOverride, jobLabel } });
+    }
   }
 
   async afterDownloadHook(downloadedYoutubeIds) {

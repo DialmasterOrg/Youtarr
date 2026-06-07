@@ -100,8 +100,11 @@ class PlaylistModule {
         playlist_id: playlist.playlist_id,
         youtube_id: e.id,
         position: idx + 1,
-        channel_id: e.channel_id || null,
-        channel_name: e.uploader || e.channel || null,
+        // yt-dlp omits per-video channel fields for some stripped playlist listings;
+        // fall back to the playlist owner. Only affects pre-download command settings,
+        // not per-video routing.
+        channel_id: e.channel_id || e.playlist_channel_id || null,
+        channel_name: e.uploader || e.channel || e.playlist_channel || null,
         title: e.title || null,
         thumbnail: pickThumbnail(e),
         duration: typeof e.duration === 'number' ? e.duration : null,

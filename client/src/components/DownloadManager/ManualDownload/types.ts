@@ -13,8 +13,8 @@ export interface VideoInfo {
 }
 
 export interface DownloadSettings {
-  resolution: string;
-  videoCount: number;
+  resolution?: string;
+  videoCount?: number;
   allowRedownload?: boolean;
   subfolder?: string | null;
   audioFormat?: string | null;

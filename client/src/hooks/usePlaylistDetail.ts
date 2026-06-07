@@ -2,6 +2,15 @@ import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { Playlist, PlaylistVideo } from '../types/playlist';
 
+export interface DownloadOverrideSettings {
+  resolution?: string;
+  allowRedownload?: boolean;
+  subfolder?: string | null;
+  audioFormat?: string | null;
+  rating?: string | null;
+  skipVideoFolder?: boolean;
+}
+
 interface UsePlaylistDetailParams {
   token: string | null;
   playlistId: string | null;
@@ -108,9 +117,11 @@ export const usePlaylistDetail = ({
   }, [token, playlistId]);
 
   const triggerDownload = useCallback(
-    async (videoIds?: string[]) => {
+    async (videoIds?: string[], overrideSettings?: DownloadOverrideSettings) => {
       if (!token || !playlistId) return;
-      const body = videoIds && videoIds.length > 0 ? { videoIds } : {};
+      const body: { videoIds?: string[]; overrideSettings?: DownloadOverrideSettings } = {};
+      if (videoIds && videoIds.length > 0) body.videoIds = videoIds;
+      if (overrideSettings) body.overrideSettings = overrideSettings;
       await axios.post(
         `/api/playlists/${playlistId}/download`,
         body,

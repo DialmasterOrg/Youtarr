@@ -20,6 +20,8 @@ const videoOembedEnricher = require('../modules/videoOembedEnricher');
 const playlistModule = require('../modules/playlistModule');
 const m3uGenerator = require('../modules/m3uGenerator');
 const mediaServers = require('../modules/mediaServers');
+const channelSettingsModule = require('../modules/channelSettingsModule');
+const ratingMapper = require('../modules/ratingMapper');
 const models = require('../models');
 
 /**
@@ -96,7 +98,7 @@ function registerRoutes(app, deps) {
   app.use(createVideoDetailRoutes({ verifyToken, videoMetadataModule }));
 
   // Playlist routes
-  app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models }));
+  app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper }));
 
   // Media server routes
   app.use(createMediaServerRoutes({ verifyToken, configModule, mediaServers }));

@@ -6,6 +6,7 @@ import { renderWithProviders } from '../../test-utils';
 import { PlaylistVideo } from '../../types/playlist';
 
 const mockTriggerDownload = jest.fn();
+const mockNavigate = jest.fn();
 
 const mockVideo: PlaylistVideo = {
   id: 1,
@@ -41,6 +42,24 @@ const mockPlaylist = {
 jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
   useParams: () => ({ id: 'PL1' }),
+  useNavigate: () => mockNavigate,
+}));
+
+jest.mock('../../hooks/useConfig', () => ({
+  useConfig: () => ({ config: { preferredResolution: '1080' } }),
+}));
+
+jest.mock('../DownloadManager/ManualDownload/DownloadSettingsDialog', () => ({
+  __esModule: true,
+  default: ({ open, onConfirm }: { open: boolean; onConfirm: (s: unknown) => void }) => {
+    const React = require('react');
+    if (!open) return null;
+    return React.createElement(
+      'button',
+      { 'data-testid': 'mock-confirm-download', onClick: () => onConfirm(null) },
+      'confirm'
+    );
+  },
 }));
 
 jest.mock('../../hooks/useMediaQuery', () => ({
@@ -115,15 +134,15 @@ describe('PlaylistPage selected-download selection lifecycle', () => {
     expect(screen.getByText('1 selected')).toBeInTheDocument();
 
     await user.click(screen.getByTestId('selection-action-download'));
+    await user.click(await screen.findByTestId('mock-confirm-download'));
 
-    // Error is surfaced...
     expect(await screen.findByText('download blew up')).toBeInTheDocument();
-    expect(mockTriggerDownload).toHaveBeenCalledWith(['vidA']);
-    // ...and the selection is preserved.
+    expect(mockTriggerDownload).toHaveBeenCalledWith(['vidA'], undefined);
+    expect(mockNavigate).not.toHaveBeenCalled();
     expect(screen.getByText('1 selected')).toBeInTheDocument();
   });
 
-  test('clears the selection after a successful download', async () => {
+  test('clears the selection and navigates after a successful download', async () => {
     const user = userEvent.setup();
     mockTriggerDownload.mockResolvedValue(undefined);
 
@@ -133,10 +152,23 @@ describe('PlaylistPage selected-download selection lifecycle', () => {
     expect(screen.getByText('1 selected')).toBeInTheDocument();
 
     await user.click(screen.getByTestId('selection-action-download'));
+    await user.click(await screen.findByTestId('mock-confirm-download'));
 
-    expect(await screen.findByText('Download succeeded')).toBeInTheDocument();
-    await waitFor(() => {
-      expect(screen.queryByText('1 selected')).not.toBeInTheDocument();
-    });
+    await waitFor(() => expect(mockTriggerDownload).toHaveBeenCalledWith(['vidA'], undefined));
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/downloads/activity'));
+    await waitFor(() => expect(screen.queryByText('1 selected')).not.toBeInTheDocument());
+  });
+
+  test('Download All opens the dialog and downloads all videos on confirm', async () => {
+    const user = userEvent.setup();
+    mockTriggerDownload.mockResolvedValue(undefined);
+
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    await user.click(screen.getByRole('button', { name: 'Download All' }));
+    await user.click(await screen.findByTestId('mock-confirm-download'));
+
+    await waitFor(() => expect(mockTriggerDownload).toHaveBeenCalledWith(undefined, undefined));
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/downloads/activity'));
   });
 });

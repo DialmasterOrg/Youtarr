@@ -778,9 +778,7 @@ describe('DownloadModule', () => {
         null,
         false,
         true,
-        null,
-        undefined,
-        false
+        { skipVideoFolder: false }
       );
     });
 
@@ -845,9 +843,7 @@ describe('DownloadModule', () => {
         null,
         false,
         true, // skipJobTransition
-        null,
-        undefined,
-        false // skipVideoFolder
+        { skipVideoFolder: false }
       );
     });
 
@@ -920,9 +916,7 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=abc123', 'https://youtube.com/watch?v=def456'],
         false,
         false,
-        null,
-        undefined,
-        false
+        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false }
       );
     });
 
@@ -953,9 +947,7 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=xyz789'],
         false,
         false,
-        null,
-        undefined,
-        false
+        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false }
       );
     });
 
@@ -981,9 +973,7 @@ describe('DownloadModule', () => {
         ['-abc123', 'https://youtube.com/watch?v=def456'],
         false,
         false,
-        null,
-        undefined,
-        false
+        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false }
       );
     });
 
@@ -1105,9 +1095,7 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test1', 'https://youtube.com/watch?v=test2'],
         true,
         false,
-        null,
-        undefined,
-        false
+        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false }
       );
       // Verify that --download-archive is NOT in the arguments when allowRedownload is true
       const callArgs = mockDownloadExecutor.doDownload.mock.calls[0][0];
@@ -1142,9 +1130,7 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test'],
         false,
         false,
-        null,
-        undefined,
-        false
+        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false }
       );
     });
 
@@ -1173,9 +1159,7 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=default'],
         false,
         false,
-        null,
-        undefined,
-        false
+        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false }
       );
     });
 
@@ -1203,9 +1187,7 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test'],
         false,
         false,
-        'Movies',
-        undefined,
-        false
+        { subfolderOverride: 'Movies', subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false }
       );
     });
 
@@ -1231,9 +1213,7 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test'],
         false,
         false,
-        null,
-        undefined,
-        false
+        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false }
       );
     });
 
@@ -1258,9 +1238,7 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test'],
         false,
         false,
-        '',
-        undefined,
-        false
+        { subfolderOverride: '', subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false }
       );
     });
 
@@ -1286,9 +1264,7 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test'],
         false,
         false,
-        null,
-        undefined,
-        true
+        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: true }
       );
     });
 
@@ -1314,9 +1290,7 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test'],
         false,
         false,
-        null,
-        undefined,
-        true
+        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: true }
       );
     });
 
@@ -1345,9 +1319,7 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test'],
         false,
         false,
-        null,
-        undefined,
-        false
+        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false }
       );
     });
 
@@ -1405,9 +1377,7 @@ describe('DownloadModule', () => {
         [],
         false,
         false,
-        null,
-        undefined,
-        false
+        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false }
       );
     });
   });
@@ -1417,6 +1387,7 @@ describe('DownloadModule', () => {
     let VideoMock;
     let ChannelMock;
     let playlistModuleMock;
+    let grouperMock;
 
     const mockPlaylist = {
       playlist_id: 'PLtest123',
@@ -1439,11 +1410,19 @@ describe('DownloadModule', () => {
       jest.doMock('../playlistModule', () => ({
         ensureSourceChannel: jest.fn().mockResolvedValue({}),
       }));
+      jest.doMock('../playlistDownloadGrouper', () => ({ buildGroups: jest.fn() }));
 
       PlaylistVideoMock = require('../../models/playlistvideo');
       VideoMock = require('../../models/video');
       ChannelMock = require('../../models/channel');
       playlistModuleMock = require('../playlistModule');
+      grouperMock = require('../playlistDownloadGrouper');
+      // Default: one group containing every entry, preserving order.
+      grouperMock.buildGroups.mockImplementation(async (_playlist, entries) => (
+        entries.length
+          ? [{ resolution: '1080', audioFormat: null, skipVideoFolder: false, youtubeIds: entries.map((e) => e.youtube_id) }]
+          : []
+      ));
     });
 
     it('returns without calling download machinery when no playlist videos exist', async () => {
@@ -1585,6 +1564,98 @@ describe('DownloadModule', () => {
           where: { playlist_id: 'PLtest123', ignored: false },
         })
       );
+    });
+
+    it('dispatches one doSpecificDownloads per command-settings group with no routing when nothing forces it', async () => {
+      PlaylistVideoMock.findAll.mockResolvedValue([
+        { youtube_id: 'a', channel_id: null },
+        { youtube_id: 'b', channel_id: null },
+      ]);
+      VideoMock.findOne.mockResolvedValue(null);
+      grouperMock.buildGroups.mockResolvedValue([
+        { resolution: '720', audioFormat: null, skipVideoFolder: false, youtubeIds: ['a'] },
+        { resolution: '1080', audioFormat: 'mp3_only', skipVideoFolder: true, youtubeIds: ['b'] },
+      ]);
+      const spy = jest.spyOn(downloadModule, 'doSpecificDownloads').mockResolvedValue();
+
+      await downloadModule.doPlaylistDownloads(mockPlaylist, { youtubeIds: ['a', 'b'], overrideSettings: {} });
+
+      expect(spy).toHaveBeenCalledTimes(2);
+      const first = spy.mock.calls[0][0].body;
+      expect(first).toMatchObject({
+        urls: ['https://www.youtube.com/watch?v=a'],
+        jobLabel: 'Playlist: Test Playlist',
+        overrideSettings: { resolution: '720', audioFormat: null, skipVideoFolder: false },
+      });
+      expect(first.overrideSettings).not.toHaveProperty('subfolder');
+      expect(first.overrideSettings).not.toHaveProperty('subfolderFallback');
+      expect(first.overrideSettings).not.toHaveProperty('rating');
+      expect(first.overrideSettings).not.toHaveProperty('ratingFallback');
+      expect(spy.mock.calls[1][0].body.overrideSettings).toMatchObject({
+        resolution: '1080', audioFormat: 'mp3_only', skipVideoFolder: true,
+      });
+    });
+
+    it('passes a playlist default_sub_folder as a soft fallback, not a hard subfolder', async () => {
+      PlaylistVideoMock.findAll.mockResolvedValue([{ youtube_id: 'a', channel_id: null }]);
+      VideoMock.findOne.mockResolvedValue(null);
+      grouperMock.buildGroups.mockResolvedValue([
+        { resolution: '1080', audioFormat: null, skipVideoFolder: false, youtubeIds: ['a'] },
+      ]);
+      const spy = jest.spyOn(downloadModule, 'doSpecificDownloads').mockResolvedValue();
+
+      await downloadModule.doPlaylistDownloads(
+        { ...mockPlaylist, default_sub_folder: 'PLFolder', default_rating: 'PG' },
+        { youtubeIds: ['a'], overrideSettings: {} }
+      );
+
+      const body = spy.mock.calls[0][0].body;
+      expect(body.overrideSettings).toMatchObject({ subfolderFallback: 'PLFolder', ratingFallback: 'PG' });
+      expect(body.overrideSettings).not.toHaveProperty('subfolder');
+      expect(body.overrideSettings).not.toHaveProperty('rating');
+    });
+
+    it('passes a dialog subfolder/rating override as a hard override', async () => {
+      PlaylistVideoMock.findAll.mockResolvedValue([{ youtube_id: 'a', channel_id: null }]);
+      VideoMock.findOne.mockResolvedValue(null);
+      grouperMock.buildGroups.mockResolvedValue([
+        { resolution: '1080', audioFormat: null, skipVideoFolder: false, youtubeIds: ['a'] },
+      ]);
+      const spy = jest.spyOn(downloadModule, 'doSpecificDownloads').mockResolvedValue();
+
+      await downloadModule.doPlaylistDownloads(
+        { ...mockPlaylist, default_sub_folder: 'PLFolder' },
+        { youtubeIds: ['a'], overrideSettings: { subfolder: 'DialogFolder', rating: 'R' } }
+      );
+
+      const body = spy.mock.calls[0][0].body;
+      expect(body.overrideSettings).toMatchObject({ subfolder: 'DialogFolder', rating: 'R', subfolderFallback: 'PLFolder' });
+    });
+
+    it('does not send any rating keys when neither dialog nor playlist set a rating', async () => {
+      PlaylistVideoMock.findAll.mockResolvedValue([{ youtube_id: 'a', channel_id: null }]);
+      VideoMock.findOne.mockResolvedValue(null);
+      grouperMock.buildGroups.mockResolvedValue([
+        { resolution: '1080', audioFormat: null, skipVideoFolder: false, youtubeIds: ['a'] },
+      ]);
+      const spy = jest.spyOn(downloadModule, 'doSpecificDownloads').mockResolvedValue();
+
+      await downloadModule.doPlaylistDownloads(mockPlaylist, { youtubeIds: ['a'], overrideSettings: {} });
+
+      const overrides = spy.mock.calls[0][0].body.overrideSettings;
+      expect(overrides).not.toHaveProperty('rating');
+      expect(overrides).not.toHaveProperty('ratingFallback');
+    });
+
+    it('skips the already-downloaded filter when allowRedownload is set', async () => {
+      PlaylistVideoMock.findAll.mockResolvedValue([{ youtube_id: 'a', channel_id: null }]);
+      VideoMock.findOne.mockResolvedValue({ youtubeId: 'a' }); // already downloaded
+      jest.spyOn(downloadModule, 'doSpecificDownloads').mockResolvedValue();
+
+      await downloadModule.doPlaylistDownloads(mockPlaylist, { youtubeIds: ['a'], overrideSettings: { allowRedownload: true } });
+
+      expect(grouperMock.buildGroups).toHaveBeenCalled();
+      expect(grouperMock.buildGroups.mock.calls[0][1]).toEqual([{ youtube_id: 'a', channel_id: null }]);
     });
   });
 

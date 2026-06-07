@@ -7,6 +7,7 @@ const MessageEmitter = require('../messageEmitter');
 const DownloadProgressMonitor = require('./DownloadProgressMonitor');
 const VideoMetadataProcessor = require('./videoMetadataProcessor');
 const tempPathManager = require('./tempPathManager');
+const { isSpecificUrlDownloadJob } = require('./jobTypes');
 const ytDlpRunner = require('../ytDlpRunner');
 const { JobVideoDownload } = require('../../models');
 const Channel = require('../../models/channel');
@@ -542,7 +543,14 @@ class DownloadExecutor {
     this.pendingProgressMessage = null;
   }
 
-  async doDownload(args, jobId, jobType, urlCount = 0, originalUrls = null, allowRedownload = false, skipJobTransition = false, subfolderOverride = null, ratingOverride = undefined, skipVideoFolder = false) {
+  async doDownload(args, jobId, jobType, urlCount = 0, originalUrls = null, allowRedownload = false, skipJobTransition = false, postProcessDirectives = {}) {
+    const {
+      subfolderOverride = null,
+      subfolderFallback = null,
+      ratingOverride = undefined,
+      ratingFallback = null,
+      skipVideoFolder = false,
+    } = postProcessDirectives || {};
     const initialCount = this.getCountOfDownloadedVideos();
     const config = configModule.getConfig();
     const monitor = new DownloadProgressMonitor(jobId, jobType);
@@ -550,8 +558,10 @@ class DownloadExecutor {
     // Reset activity timeout to default at start of each job
     this.currentActivityTimeout = this.activityTimeoutMs;
 
-    // For manual URL downloads, set the total count upfront
-    if (jobType === 'Manually Added Urls' && urlCount > 0) {
+    // For specific URL-list downloads (manual or playlist), the video count is
+    // known upfront, so seed the progress total instead of letting yt-dlp's
+    // per-URL "item 1 of 1" output drive it.
+    if (isSpecificUrlDownloadJob(jobType) && urlCount > 0) {
       monitor.videoCount.total = urlCount;
     }
 
@@ -607,9 +617,15 @@ class DownloadExecutor {
         TMPDIR: tempPathManager.getTempBasePath()
       };
 
-      // Pass subfolder override to post-processor (empty string means no override)
+      // Pass subfolder override (hard, from dialog) to post-processor
       if (subfolderOverride !== null && subfolderOverride !== undefined) {
         procEnv.YOUTARR_SUBFOLDER_OVERRIDE = subfolderOverride;
+      }
+
+      // Pass subfolder soft fallback (playlist default); post-processor uses it
+      // only when the video's real channel is untracked
+      if (subfolderFallback !== null && subfolderFallback !== undefined) {
+        procEnv.YOUTARR_SUBFOLDER_FALLBACK = subfolderFallback;
       }
 
       // Pass skip video folder flag to post-processor
@@ -617,10 +633,15 @@ class DownloadExecutor {
         procEnv.YOUTARR_SKIP_VIDEO_FOLDER = 'true';
       }
 
-      // Pass explicit rating override if provided
-      // Accept null as an explicit "clear rating" sentinel and map it to 'NR'
+      // Pass explicit rating override (hard). null is the explicit "clear rating" sentinel -> 'NR'
       if (ratingOverride !== undefined) {
         procEnv.YOUTARR_OVERRIDE_RATING = ratingOverride === null ? 'NR' : String(ratingOverride);
+      }
+
+      // Pass rating soft fallback (playlist default); post-processor uses it only
+      // when the real channel has no default rating
+      if (ratingFallback !== null && ratingFallback !== undefined) {
+        procEnv.YOUTARR_RATING_FALLBACK = String(ratingFallback);
       }
 
       const proc = spawn('yt-dlp', args, { env: procEnv });
@@ -1095,7 +1116,7 @@ class DownloadExecutor {
         }
 
         let urlsToProcess;
-        if (jobType === 'Manually Added Urls' && originalUrls) {
+        if (isSpecificUrlDownloadJob(jobType) && originalUrls) {
           urlsToProcess = originalUrls.map(url => {
             // Convert full YouTube URLs to youtu.be format for consistency
             if (url.includes('youtube.com/watch?v=')) {

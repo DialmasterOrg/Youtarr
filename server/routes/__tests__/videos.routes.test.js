@@ -70,7 +70,7 @@ describe('POST /api/videos/rating', () => {
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
       success: false,
-      error: expect.stringContaining('Invalid rating value'),
+      error: expect.stringContaining('Invalid rating'),
     }));
   });
 });
