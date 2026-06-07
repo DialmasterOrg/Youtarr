@@ -583,14 +583,21 @@ class DownloadModule {
     }
   }
 
-  async doPlaylistDownloads(playlist) {
+  async doPlaylistDownloads(playlist, options = {}) {
     const PlaylistVideo = require('../models/playlistvideo');
     const Video = require('../models/video');
     const Channel = require('../models/channel');
     const playlistModule = require('./playlistModule');
 
+    const youtubeIds = Array.isArray(options.youtubeIds) ? options.youtubeIds : [];
+    // Specific ids: download exactly those, overriding `ignored`. Otherwise
+    // all non-ignored videos.
+    const where = youtubeIds.length
+      ? { playlist_id: playlist.playlist_id, youtube_id: youtubeIds }
+      : { playlist_id: playlist.playlist_id, ignored: false };
+
     const entries = await PlaylistVideo.findAll({
-      where: { playlist_id: playlist.playlist_id, ignored: false },
+      where,
       order: [['position', 'ASC']],
       attributes: ['youtube_id', 'channel_id'],
     });

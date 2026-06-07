@@ -212,14 +212,34 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     }
   });
 
+  const MAX_SELECTED_DOWNLOAD_IDS = 1000;
+
   // Manually trigger download of all not-yet-downloaded videos for this playlist.
   // Fire-and-forget; downloads are long-running. Returns 202 immediately. The
   // post-download hook (in downloadModule) handles playlist sync + M3U regen.
+  // Optionally accepts { videoIds: string[] } to download only specific videos.
   router.post('/api/playlists/:playlistId/download', verifyToken, async (req, res) => {
     try {
+      const videoIds = req.body?.videoIds;
+      if (videoIds !== undefined) {
+        const valid =
+          Array.isArray(videoIds) &&
+          videoIds.length > 0 &&
+          videoIds.length <= MAX_SELECTED_DOWNLOAD_IDS &&
+          videoIds.every((id) => typeof id === 'string' && id.length > 0);
+        if (!valid) {
+          return res.status(400).json({ error: 'videoIds must be an array of video ids' });
+        }
+      }
+
       const p = await Playlist.findOne({ where: { playlist_id: req.params.playlistId } });
       if (!p) return res.status(404).json({ error: 'Playlist not found' });
-      downloadModule.doPlaylistDownloads(p).catch((err) => {
+
+      const download =
+        videoIds !== undefined
+          ? downloadModule.doPlaylistDownloads(p, { youtubeIds: videoIds })
+          : downloadModule.doPlaylistDownloads(p);
+      download.catch((err) => {
         req.log.error({ err, playlist_id: p.playlist_id }, 'doPlaylistDownloads failed');
       });
       res.status(202).json({ status: 'accepted', message: 'Playlist download started' });

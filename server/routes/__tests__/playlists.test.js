@@ -787,6 +787,75 @@ describe('POST /api/playlists/:playlistId/download', () => {
     // Response is 202 regardless — error is logged asynchronously
     expect(res.status).toHaveBeenCalledWith(202);
   });
+
+  test('passes videoIds through to doPlaylistDownloads when provided', async () => {
+    const deps = buildDeps();
+    const p = makePlaylist();
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/download', deps);
+    const req = {
+      params: { playlistId: 'PLtest123' },
+      body: { videoIds: ['vidA', 'vidB'] },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.downloadModule.doPlaylistDownloads).toHaveBeenCalledWith(p, {
+      youtubeIds: ['vidA', 'vidB'],
+    });
+    expect(res.status).toHaveBeenCalledWith(202);
+  });
+
+  test('returns 400 when videoIds is not an array of non-empty strings', async () => {
+    const deps = buildDeps();
+    const p = makePlaylist();
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/download', deps);
+    const req = {
+      params: { playlistId: 'PLtest123' },
+      body: { videoIds: ['ok', ''] },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'videoIds must be an array of video ids' });
+    expect(deps.downloadModule.doPlaylistDownloads).not.toHaveBeenCalled();
+  });
+
+  test('returns 400 when videoIds is not an array', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(makePlaylist());
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/download', deps);
+    const req = { params: { playlistId: 'PLtest123' }, body: { videoIds: 'notanarray' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(deps.downloadModule.doPlaylistDownloads).not.toHaveBeenCalled();
+  });
+
+  test('returns 400 when videoIds is an empty array', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(makePlaylist());
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/download', deps);
+    const req = { params: { playlistId: 'PLtest123' }, body: { videoIds: [] }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(deps.downloadModule.doPlaylistDownloads).not.toHaveBeenCalled();
+  });
 });
 
 describe('POST /api/playlists/:playlistId/regenerate-m3u', () => {

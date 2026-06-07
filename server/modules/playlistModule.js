@@ -2,6 +2,7 @@ const { spawn } = require('child_process');
 const logger = require('../logger');
 const { Playlist, PlaylistVideo } = require('../models');
 const { GLOBAL_DEFAULT_SENTINEL } = require('./filesystem/constants');
+const youtubeApi = require('./youtubeApi');
 
 class PlaylistModule {
   async getPlaylistInfo(url) {
@@ -110,6 +111,9 @@ class PlaylistModule {
       .filter(({ entry }) => passes(entry))
       .map(({ row }) => row);
 
+    await this._preserveExistingPublishedDates(playlist.playlist_id, rows);
+    await this._backfillPublishedDates(rows);
+
     await PlaylistVideo.bulkCreate(rows, {
       updateOnDuplicate: [
         'position',
@@ -135,6 +139,53 @@ class PlaylistModule {
     }
     await playlist.update(update);
     return rows.length;
+  }
+
+  // The flat-playlist refresh rebuilds every row with a null published_at, and
+  // published_at is in bulkCreate's updateOnDuplicate list. Without this, a
+  // re-fetch while the API is unavailable would overwrite a previously-stored
+  // date with null. Carry forward any date we already have in the DB so we only
+  // ever fall back to the API for genuinely-new videos.
+  async _preserveExistingPublishedDates(playlistId, rows) {
+    const missing = rows.filter((r) => !r.published_at && r.youtube_id);
+    if (!missing.length) return;
+    const existing = await PlaylistVideo.findAll({
+      where: { playlist_id: playlistId, youtube_id: missing.map((r) => r.youtube_id) },
+      attributes: ['youtube_id', 'published_at'],
+    });
+    const byId = new Map(
+      (existing || [])
+        .filter((r) => r.published_at)
+        .map((r) => [r.youtube_id, r.published_at])
+    );
+    for (const row of missing) {
+      const date = byId.get(row.youtube_id);
+      if (date) row.published_at = date;
+    }
+  }
+
+  // yt-dlp flat-playlist omits upload_date for YouTube, so most not-yet-downloaded
+  // videos have a null published_at. When a YouTube Data API key is configured, fill
+  // those in via the batched videos.list endpoint (1 quota unit per 50 ids). Any
+  // failure leaves the dates null.
+  async _backfillPublishedDates(rows) {
+    const apiKey = youtubeApi.getApiKey();
+    if (!apiKey || !youtubeApi.isAvailable()) return;
+    const missing = rows.filter((r) => !r.published_at && r.youtube_id);
+    if (!missing.length) return;
+    try {
+      const meta = await youtubeApi.client.getVideoMetadata(
+        apiKey,
+        missing.map((r) => r.youtube_id)
+      );
+      const byId = new Map((meta || []).map((m) => [m.id, m.uploadDate]));
+      for (const row of missing) {
+        const date = byId.get(row.youtube_id);
+        if (date) row.published_at = date;
+      }
+    } catch (err) {
+      logger.warn({ err }, 'published_at backfill via YouTube API failed; leaving dates null');
+    }
   }
 
   _spawnFlatPlaylist(url) {

@@ -12,6 +12,11 @@ jest.mock('../channelModule', () => ({
 jest.mock('../downloadModule', () => ({
   doPlaylistDownloads: jest.fn().mockResolvedValue(undefined),
 }));
+jest.mock('../youtubeApi', () => ({
+  isAvailable: jest.fn(() => false),
+  getApiKey: jest.fn(() => null),
+  client: { getVideoMetadata: jest.fn() },
+}));
 
 const { EventEmitter } = require('events');
 
@@ -22,6 +27,7 @@ describe('playlistModule', () => {
   let channelModule;
   let downloadModule;
   let childProcess;
+  let youtubeApi;
 
   beforeEach(() => {
     jest.resetModules();
@@ -36,6 +42,7 @@ describe('playlistModule', () => {
     ({ Playlist, PlaylistVideo } = require('../../models'));
     channelModule = require('../channelModule');
     downloadModule = require('../downloadModule');
+    youtubeApi = require('../youtubeApi');
   });
 
   describe('getPlaylistInfo', () => {
@@ -352,6 +359,120 @@ describe('playlistModule', () => {
       ]);
       await playlistModule.playlistAutoDownload();
       expect(downloadModule.doPlaylistDownloads).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('fetchAllPlaylistVideos published_at backfill', () => {
+    function mockFlatPlaylist(entries) {
+      const child = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      childProcess.spawn.mockReturnValue(child);
+      setImmediate(() => {
+        entries.forEach((e) => child.stdout.emit('data', JSON.stringify(e) + '\n'));
+        child.emit('close', 0);
+      });
+    }
+
+    beforeEach(() => {
+      Playlist.findOne.mockResolvedValue({
+        playlist_id: 'PL1',
+        url: 'https://youtube.com/playlist?list=PL1',
+        title_filter_regex: null,
+        min_duration: null,
+        max_duration: null,
+        thumbnail: 'x',
+        update: jest.fn().mockResolvedValue(undefined),
+      });
+      PlaylistVideo.findAll.mockResolvedValue([]);
+      PlaylistVideo.bulkCreate.mockResolvedValue([]);
+    });
+
+    test('fills published_at from the YouTube API for videos missing a date', async () => {
+      youtubeApi.isAvailable.mockReturnValue(true);
+      youtubeApi.getApiKey.mockReturnValue('key123');
+      youtubeApi.client.getVideoMetadata.mockResolvedValue([
+        { id: 'a', uploadDate: '20240115' },
+      ]);
+      mockFlatPlaylist([{ id: 'a', title: 'A' }]);
+
+      await playlistModule.fetchAllPlaylistVideos('PL1');
+
+      expect(youtubeApi.client.getVideoMetadata).toHaveBeenCalledWith('key123', ['a']);
+      const rows = PlaylistVideo.bulkCreate.mock.calls[0][0];
+      expect(rows.find((r) => r.youtube_id === 'a').published_at).toBe('20240115');
+    });
+
+    test('does not call the API when it is unavailable', async () => {
+      const logger = require('../../logger');
+      youtubeApi.isAvailable.mockReturnValue(false);
+      mockFlatPlaylist([{ id: 'a', title: 'A' }]);
+
+      await playlistModule.fetchAllPlaylistVideos('PL1');
+
+      expect(youtubeApi.client.getVideoMetadata).not.toHaveBeenCalled();
+      expect(logger.warn).not.toHaveBeenCalled();
+      const rows = PlaylistVideo.bulkCreate.mock.calls[0][0];
+      expect(rows.find((r) => r.youtube_id === 'a').published_at).toBeNull();
+    });
+
+    test('does not call the API for videos that already have a published date', async () => {
+      youtubeApi.isAvailable.mockReturnValue(true);
+      youtubeApi.getApiKey.mockReturnValue('key123');
+      mockFlatPlaylist([{ id: 'a', title: 'A', upload_date: '20231201' }]);
+
+      await playlistModule.fetchAllPlaylistVideos('PL1');
+
+      expect(youtubeApi.client.getVideoMetadata).not.toHaveBeenCalled();
+      const rows = PlaylistVideo.bulkCreate.mock.calls[0][0];
+      expect(rows.find((r) => r.youtube_id === 'a').published_at).toBe('20231201');
+    });
+
+    test('proceeds with null dates when the API call throws', async () => {
+      youtubeApi.isAvailable.mockReturnValue(true);
+      youtubeApi.getApiKey.mockReturnValue('key123');
+      youtubeApi.client.getVideoMetadata.mockRejectedValue(new Error('quota'));
+      mockFlatPlaylist([{ id: 'a', title: 'A' }]);
+
+      await expect(playlistModule.fetchAllPlaylistVideos('PL1')).resolves.toBeDefined();
+      const rows = PlaylistVideo.bulkCreate.mock.calls[0][0];
+      expect(rows.find((r) => r.youtube_id === 'a').published_at).toBeNull();
+    });
+
+    test('preserves a stored published_at instead of overwriting it with null when the API is unavailable', async () => {
+      youtubeApi.isAvailable.mockReturnValue(false);
+      PlaylistVideo.findAll.mockResolvedValue([
+        { youtube_id: 'a', published_at: '20240115' },
+      ]);
+      mockFlatPlaylist([{ id: 'a', title: 'A' }]);
+
+      await playlistModule.fetchAllPlaylistVideos('PL1');
+
+      expect(youtubeApi.client.getVideoMetadata).not.toHaveBeenCalled();
+      const rows = PlaylistVideo.bulkCreate.mock.calls[0][0];
+      expect(rows.find((r) => r.youtube_id === 'a').published_at).toBe('20240115');
+    });
+
+    test('only queries the API for ids still missing after the DB preserve step', async () => {
+      youtubeApi.isAvailable.mockReturnValue(true);
+      youtubeApi.getApiKey.mockReturnValue('key123');
+      PlaylistVideo.findAll.mockResolvedValue([
+        { youtube_id: 'a', published_at: '20240115' },
+      ]);
+      youtubeApi.client.getVideoMetadata.mockResolvedValue([
+        { id: 'b', uploadDate: '20240220' },
+      ]);
+      mockFlatPlaylist([
+        { id: 'a', title: 'A' },
+        { id: 'b', title: 'B' },
+      ]);
+
+      await playlistModule.fetchAllPlaylistVideos('PL1');
+
+      expect(youtubeApi.client.getVideoMetadata).toHaveBeenCalledWith('key123', ['b']);
+      const rows = PlaylistVideo.bulkCreate.mock.calls[0][0];
+      expect(rows.find((r) => r.youtube_id === 'a').published_at).toBe('20240115');
+      expect(rows.find((r) => r.youtube_id === 'b').published_at).toBe('20240220');
     });
   });
 });

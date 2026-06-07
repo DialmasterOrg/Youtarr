@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Alert,
@@ -21,7 +21,11 @@ import { useMediaServerStatus } from '../hooks/useMediaServerStatus';
 import { MediaServerType, Playlist, PlaylistSubscribeSettings, PlaylistVideo } from '../types/playlist';
 import PlaylistSyncChips from './PlaylistPage/components/PlaylistSyncChips';
 import NoMediaServerWarning from './PlaylistPage/components/NoMediaServerWarning';
-import PlaylistVideoTable from './PlaylistPage/components/PlaylistVideoTable';
+import PlaylistVideoList from './PlaylistPage/components/PlaylistVideoList';
+import { useVideoSelection } from './shared/VideoList/hooks/useVideoSelection';
+import VideoListSelectionPill from './shared/VideoList/VideoListSelectionPill';
+import { SelectionAction } from './shared/VideoList/types';
+import { Download as DownloadIcon } from '../lib/icons';
 import PlaylistSettingsDialog from './PlaylistPage/components/PlaylistSettingsDialog';
 import SubscriptionsBackButton from './shared/SubscriptionsBackButton';
 import VideoModal from './shared/VideoModal';
@@ -122,20 +126,55 @@ function PlaylistPage({ token }: PlaylistPageProps) {
   }, []);
 
   const handleAction = useCallback(
-    async (label: string, action: () => Promise<unknown>) => {
+    async (label: string, action: () => Promise<unknown>): Promise<boolean> => {
       setActionRunning(true);
       try {
         await action();
         showSnackbar(`${label} succeeded`);
+        return true;
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : `${label} failed`;
         showSnackbar(msg, 'error');
+        return false;
       } finally {
         setActionRunning(false);
       }
     },
     [showSnackbar]
   );
+
+  const selectionClearRef = useRef<() => void>(() => {});
+
+  const handleDownloadSelected = useCallback(
+    async (ids: string[]) => {
+      if (!ids.length) return;
+      const ok = await handleAction('Download', () => triggerDownload(ids));
+      // Keep the selection intact on failure so the user can retry.
+      if (ok) selectionClearRef.current();
+    },
+    [handleAction, triggerDownload]
+  );
+
+  const downloadActions = useMemo<SelectionAction<string>[]>(
+    () => [
+      {
+        id: 'download',
+        label: 'Download Selected',
+        intent: 'success',
+        icon: <DownloadIcon size={14} />,
+        onClick: (ids) => {
+          void handleDownloadSelected(ids);
+        },
+      },
+    ],
+    [handleDownloadSelected]
+  );
+
+  const selection = useVideoSelection<string>({ actions: downloadActions });
+
+  useEffect(() => {
+    selectionClearRef.current = selection.clear;
+  }, [selection.clear]);
 
   const handleToggleSync = useCallback(
     async (server: MediaServerType, enabled: boolean) => {
@@ -284,10 +323,10 @@ function PlaylistPage({ token }: PlaylistPageProps) {
               <Button
                 variant="contained"
                 size="sm"
-                onClick={() => handleAction('Download', triggerDownload)}
+                onClick={() => handleAction('Download', () => triggerDownload())}
                 disabled={actionRunning}
               >
-                Download
+                Download All
               </Button>
               <Button
                 variant="outlined"
@@ -343,13 +382,17 @@ function PlaylistPage({ token }: PlaylistPageProps) {
           <Typography variant="h6" style={{ fontWeight: 600, marginBottom: 8 }}>
             Videos (in playlist order)
           </Typography>
-          <PlaylistVideoTable
+          <PlaylistVideoList
             videos={videos}
             loading={loading}
             onIgnore={handleIgnoreVideo}
             onUnignore={handleUnignoreVideo}
             onVideoClick={(v) => setModalVideo(toModalData(v))}
             pendingId={pendingVideoId}
+            isSelected={selection.isSelected}
+            onToggle={selection.toggle}
+            onSelectAll={(ids) => selection.selectAll(ids)}
+            onClearSelection={selection.clear}
           />
         </CardContent>
       </Card>
@@ -411,6 +454,8 @@ function PlaylistPage({ token }: PlaylistPageProps) {
           allowIgnore={false}
         />
       )}
+
+      <VideoListSelectionPill selection={selection} isMobile={isMobile} />
     </div>
   );
 }

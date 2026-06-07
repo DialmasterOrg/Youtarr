@@ -107,14 +107,18 @@ export const usePlaylistDetail = ({
     );
   }, [token, playlistId]);
 
-  const triggerDownload = useCallback(async () => {
-    if (!token || !playlistId) return;
-    await axios.post(
-      `/api/playlists/${playlistId}/download`,
-      {},
-      { headers: authHeaders(token) }
-    );
-  }, [token, playlistId]);
+  const triggerDownload = useCallback(
+    async (videoIds?: string[]) => {
+      if (!token || !playlistId) return;
+      const body = videoIds && videoIds.length > 0 ? { videoIds } : {};
+      await axios.post(
+        `/api/playlists/${playlistId}/download`,
+        body,
+        { headers: authHeaders(token) }
+      );
+    },
+    [token, playlistId]
+  );
 
   return {
     playlist,

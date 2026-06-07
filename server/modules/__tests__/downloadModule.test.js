@@ -1540,6 +1540,52 @@ describe('DownloadModule', () => {
 
       expect(spy).not.toHaveBeenCalled();
     });
+
+    it('queries only the requested ids and drops the ignored filter when youtubeIds is provided', async () => {
+      PlaylistVideoMock.findAll.mockResolvedValue([
+        { youtube_id: 'vidSel1', channel_id: 'UC1' },
+      ]);
+      VideoMock.findOne.mockResolvedValue(null);
+      ChannelMock.findOne.mockResolvedValue({ channel_id: 'UC1' });
+      const spy = jest.spyOn(downloadModule, 'doSpecificDownloads').mockResolvedValue();
+
+      await downloadModule.doPlaylistDownloads(mockPlaylist, { youtubeIds: ['vidSel1'] });
+
+      expect(PlaylistVideoMock.findAll).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { playlist_id: 'PLtest123', youtube_id: ['vidSel1'] },
+        })
+      );
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy.mock.calls[0][0].body.urls).toEqual([
+        'https://www.youtube.com/watch?v=vidSel1',
+      ]);
+    });
+
+    it('keeps the all-non-ignored behavior when youtubeIds is omitted or empty', async () => {
+      PlaylistVideoMock.findAll.mockResolvedValue([
+        { youtube_id: 'vid001', channel_id: 'UC1' },
+      ]);
+      VideoMock.findOne.mockResolvedValue(null);
+      ChannelMock.findOne.mockResolvedValue({ channel_id: 'UC1' });
+      jest.spyOn(downloadModule, 'doSpecificDownloads').mockResolvedValue();
+
+      await downloadModule.doPlaylistDownloads(mockPlaylist, { youtubeIds: [] });
+
+      expect(PlaylistVideoMock.findAll).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { playlist_id: 'PLtest123', ignored: false },
+        })
+      );
+
+      await downloadModule.doPlaylistDownloads(mockPlaylist);
+
+      expect(PlaylistVideoMock.findAll).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          where: { playlist_id: 'PLtest123', ignored: false },
+        })
+      );
+    });
   });
 
   describe('afterDownloadHook', () => {
