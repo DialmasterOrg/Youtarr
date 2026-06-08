@@ -1247,7 +1247,7 @@ describe('JobModule', () => {
 
     test('should not reload videos for Terminated jobs', async () => {
       JobModule.jobs = {
-        'job-1': { status: 'In Progress', data: { videos: [] } }
+        'job-1': { status: 'In Progress', jobType: 'Channel Downloads', data: { videos: [] } }
       };
 
       JobModule.saveJobOnly = jest.fn().mockResolvedValue();
@@ -1271,6 +1271,32 @@ describe('JobModule', () => {
       expect(JobVideo.findAll).toHaveBeenCalled();
       // But output should not be modified for Terminated status
       expect(JobModule.jobs['job-1'].output).toBe('Job terminated by user');
+    });
+
+    test('should preserve output for completed non-download jobs (Import Subscriptions)', async () => {
+      const importResults = JSON.stringify([
+        { channelId: 'UC1', title: 'Channel One', state: 'success' },
+        { channelId: 'UC2', title: 'Channel Two', state: 'success' }
+      ]);
+      JobModule.jobs = {
+        'job-1': { status: 'In Progress', jobType: 'Import Subscriptions' }
+      };
+
+      JobModule.saveJobOnly = jest.fn().mockResolvedValue();
+
+      await JobModule.updateJob('job-1', {
+        status: 'Complete',
+        output: importResults
+      });
+
+      // Wait for async save operation
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // The import job's JSON results must survive: the download-only video
+      // reload block must not run and overwrite output with "N videos."
+      expect(JobModule.jobs['job-1'].output).toBe(importResults);
+      expect(JobModule.jobs['job-1'].output).not.toMatch(/^\d+ videos\.$/);
+      expect(JobModule.saveJobOnly).toHaveBeenCalledWith('job-1', expect.any(Object));
     });
   });
 

@@ -1132,7 +1132,7 @@ class JobModule {
                            updatedFields.status === 'Terminated' ||
                            updatedFields.status === 'Killed';
 
-    if (isCompletedJob && isDownloadJob) {
+    if (isCompletedJob && jobIsDownload) {
       // For completed download jobs, reload videos from DB to ensure accurate counts
       // This is especially important for multi-group downloads where each group
       // updates the job with only its own videos, potentially losing earlier videos
