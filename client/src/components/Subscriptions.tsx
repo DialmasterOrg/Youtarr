@@ -51,6 +51,7 @@ import {
   formatSubFolderLabel,
 } from '../utils/channelHelpers';
 import HelpDialog from './Subscriptions/HelpDialog';
+import PlaylistHelpDialog from './Subscriptions/PlaylistHelpDialog';
 import PendingSaveBanner from './Subscriptions/components/PendingSaveBanner';
 import {
   INFINITE_SCROLL_FETCH_SIZE,
@@ -105,6 +106,7 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
   const [dialogMessage, setDialogMessage] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [helpDialogOpen, setHelpDialogOpen] = useState(false);
+  const [playlistHelpDialogOpen, setPlaylistHelpDialogOpen] = useState(false);
   const [regexPopoverAnchor, setRegexPopoverAnchor] = useState<{ el: HTMLElement; regex: string } | null>(null);
   const [folderMenuAnchor, setFolderMenuAnchor] = useState<null | HTMLElement>(null);
   const [mobileActionsAnchorEl, setMobileActionsAnchorEl] = useState<null | HTMLElement>(null);
@@ -400,11 +402,19 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
           title="Channels & Playlists"
           action={
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Tooltip title="Learn how channel downloads work" disableTouchListener>
-                <IconButton aria-label="Learn how channel downloads work" onClick={() => setHelpDialogOpen(true)}>
-                  <HelpOutlineIcon size={18} />
-                </IconButton>
-              </Tooltip>
+              {typeFilter === 'playlists' ? (
+                <Tooltip title="Learn how playlists work" disableTouchListener>
+                  <IconButton aria-label="Learn how playlists work" onClick={() => setPlaylistHelpDialogOpen(true)}>
+                    <HelpOutlineIcon size={18} />
+                  </IconButton>
+                </Tooltip>
+              ) : (
+                <Tooltip title="Learn how channel downloads work" disableTouchListener>
+                  <IconButton aria-label="Learn how channel downloads work" onClick={() => setHelpDialogOpen(true)}>
+                    <HelpOutlineIcon size={18} />
+                  </IconButton>
+                </Tooltip>
+              )}
             </div>
           }
           className="px-0 pt-0"
@@ -887,6 +897,12 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
       </Dialog>
 
       <HelpDialog open={helpDialogOpen} onClose={() => setHelpDialogOpen(false)} isMobile={isMobile} />
+
+      <PlaylistHelpDialog
+        open={playlistHelpDialogOpen}
+        onClose={() => setPlaylistHelpDialogOpen(false)}
+        isMobile={isMobile}
+      />
 
       <AddPlaylistDialog
         open={addPlaylistOpen}
