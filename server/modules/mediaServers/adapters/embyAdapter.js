@@ -73,18 +73,24 @@ class EmbyAdapter extends BaseAdapter {
     }
   }
 
-  async createPlaylist(name, itemIds /*, opts */) {
+  async createPlaylist(name, itemIds, opts = {}) {
     // Emby differs from Jellyfin: it expects query params with Ids as a
     // comma-delimited string, not a JSON body with an array. Sending a JSON
     // body shape (what Jellyfin accepts) yields a 500 from Emby.
-    // Note: Emby doesn't expose IsPublic on the create endpoint; playlists
-    // default to owner-only. Sharing would be a separate follow-up call.
+    //
+    // Visibility is set at creation, not via a follow-up call: the
+    // Make{Public,Private} and /Items/Access endpoints need a user session and
+    // fail (500) under a server API key. So: with a UserId the playlist is
+    // owner-only (private); without one it's server-global, visible to all
+    // users.
     const params = {
       Name: name,
       Ids: itemIds.join(','),
-      UserId: this.userId,
       MediaType: 'Video',
     };
+    if (!opts.public) {
+      params.UserId = this.userId;
+    }
     const res = await axios.post(`${this.url}/Playlists`, null, {
       headers: this._headers(),
       params,

@@ -50,7 +50,9 @@ The Emby flow mirrors Jellyfin. The two API surfaces share lineage but differ en
 
 Note: Emby's `POST /Playlists` accepts query params with comma-separated `Ids`; Jellyfin's accepts a JSON body with an array. Youtarr's adapter handles both — you don't have to do anything special.
 
-**Visibility**: Emby distinguishes per-user visibility on playlists. Public playlists appear for all users; private ones are visible only to the configured user.
+**Visibility**: a **Public** Youtarr playlist is visible to all users on the Emby server; a **Private** one is visible only to the configured user account.
+
+One thing to expect with Public playlists: Emby shows them as read-only and hides the per-user visibility control. That is normal. Youtarr owns these playlists and rewrites them on every sync, so any manual edits would be overwritten anyway.
 
 ## Replace semantics
 

@@ -46,6 +46,36 @@ describe('EmbyAdapter', () => {
     );
   });
 
+  const playlistsCall = () =>
+    axios.post.mock.calls.find((c) => String(c[0]).includes('/Playlists'));
+
+  test('createPlaylist with public:false is owner-scoped (UserId present)', async () => {
+    axios.post.mockResolvedValueOnce({ data: { Id: 'pl-2' } });
+    const adapter = new EmbyAdapter(cfg);
+    await adapter.createPlaylist('My PL', ['item1'], { public: false });
+    expect(axios.post).toHaveBeenCalledWith(
+      expect.stringContaining('/Playlists'),
+      null,
+      expect.objectContaining({ params: expect.objectContaining({ UserId: 'USR' }) }),
+    );
+  });
+
+  test('createPlaylist with public:true omits UserId (server-global playlist)', async () => {
+    axios.post.mockResolvedValueOnce({ data: { Id: 'pl-1' } });
+    const adapter = new EmbyAdapter(cfg);
+    await adapter.createPlaylist('My PL', ['item1'], { public: true });
+    expect(playlistsCall()[2].params).not.toHaveProperty('UserId');
+  });
+
+  test('replacePlaylistItems with public:true recreates as a server-global playlist', async () => {
+    axios.delete.mockResolvedValueOnce({});
+    axios.post.mockResolvedValueOnce({ data: { Id: 'recreated-id' } });
+    const adapter = new EmbyAdapter(cfg);
+    const result = await adapter.replacePlaylistItems('old-id', ['i1'], { name: 'YT: PL', public: true });
+    expect(playlistsCall()[2].params).not.toHaveProperty('UserId');
+    expect(result).toEqual({ id: 'recreated-id' });
+  });
+
   test('resolveItemIdByFilepath matches by Path field', async () => {
     axios.get.mockResolvedValueOnce({
       data: {
