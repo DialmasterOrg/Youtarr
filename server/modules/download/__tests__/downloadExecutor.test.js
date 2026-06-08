@@ -845,6 +845,45 @@ describe('DownloadExecutor', () => {
       );
     });
 
+    it('marks job Complete (not "with Warnings") when stderr contains only benign yt-dlp warnings', async () => {
+      setTimeout(() => {
+        // Both benign warnings observed on real playlist/manual downloads.
+        mockProcess.stderr.emit(
+          'data',
+          'WARNING: --paths is ignored since an absolute path is given in output template\n'
+        );
+        mockProcess.stderr.emit(
+          'data',
+          'WARNING: The extractor specified to use impersonation for this download, but no impersonate target is available. If you encounter errors, then see https://github.com/yt-dlp/yt-dlp#impersonation for information on installing the required dependencies\n'
+        );
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, 'Manually Added Urls', 1);
+
+      const statuses = jobModule.updateJob.mock.calls
+        .map((call) => call[1] && call[1].status)
+        .filter(Boolean);
+      expect(statuses).toContain('Complete');
+      expect(statuses).not.toContain('Complete with Warnings');
+    });
+
+    it('still marks job "Complete with Warnings" when stderr contains a non-benign warning', async () => {
+      setTimeout(() => {
+        mockProcess.stderr.emit('data', 'WARNING: Some unexpected non-whitelisted warning\n');
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, 'Manually Added Urls', 1);
+
+      expect(jobModule.updateJob).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          status: 'Complete with Warnings',
+        })
+      );
+    });
+
     it('should track destination files for cleanup', async () => {
       setTimeout(() => {
         mockProcess.stdout.emit('data', '[download] Destination: /output/Channel - Title [abc123XYZ_d].mp4\n');

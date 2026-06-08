@@ -15,6 +15,18 @@ const ChannelVideo = require('../../models/channelvideo');
 const logger = require('../../logger');
 const filesystem = require('../filesystem');
 
+// yt-dlp writes certain warnings to stderr that do not indicate a problem with
+// the download: the media still downloads and yt-dlp exits 0. These must not
+// flip a successful job to "Complete with Warnings".
+const BENIGN_STDERR_WARNING_PATTERNS = [
+  // Emitted while fetching subtitles when no curl_cffi impersonation target is
+  // installed. The subtitle still downloads; the message is purely advisory.
+  /WARNING:.*extractor specified to use impersonation/i,
+  // Emitted because our output template (-o) is an absolute temp path, so
+  // yt-dlp ignores the --paths temp: redirect. The download still succeeds.
+  /WARNING:.*--paths is ignored since an absolute path is given/i,
+];
+
 class DownloadExecutor {
   constructor() {
     this.tempChannelsFile = null;
@@ -235,6 +247,25 @@ class DownloadExecutor {
     ];
 
     return expectedPatterns.some(pattern => pattern.test(normalized));
+  }
+
+  // True when everything yt-dlp wrote to stderr is known-benign warnings (or
+  // whitespace). Used to avoid flagging a clean, exit-0 download as "Complete
+  // with Warnings" over informational noise like the subtitle impersonation
+  // notice. Returns false for empty stderr so callers keep their own guard.
+  stderrHasOnlyBenignWarnings(stderrBuffer = '') {
+    const lines = String(stderrBuffer)
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+
+    if (lines.length === 0) {
+      return false;
+    }
+
+    return lines.every((line) =>
+      BENIGN_STDERR_WARNING_PATTERNS.some((pattern) => pattern.test(line))
+    );
   }
 
   // Narrower predicate than isExpectedYtdlpSkipMessage: only matches members-only
@@ -1418,7 +1449,7 @@ class DownloadExecutor {
               ...(errorCode ? { error: errorCode } : {})
             });
           }
-        } else if (stderrBuffer && !monitor.hasError) {
+        } else if (stderrBuffer && !monitor.hasError && !this.stderrHasOnlyBenignWarnings(stderrBuffer)) {
           status = 'Complete with Warnings';
           output = `${videoCount} videos.`;
           // When skipJobTransition is true, we're processing multiple groups

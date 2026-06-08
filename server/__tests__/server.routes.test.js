@@ -208,7 +208,7 @@ const createServerModule = ({
 
         const downloadModuleMock = {
           doSpecificDownloads: jest.fn(),
-          doChannelDownloads: jest.fn()
+          doChannelAndPlaylistDownloads: jest.fn().mockResolvedValue(undefined)
         };
 
         const jobModuleMock = {
@@ -1951,7 +1951,7 @@ describe('server routes - downloads', () => {
 
       await downloadHandler(req, res);
 
-      expect(downloadModuleMock.doChannelDownloads).toHaveBeenCalledWith({
+      expect(downloadModuleMock.doChannelAndPlaylistDownloads).toHaveBeenCalledWith({
         overrideSettings: { resolution: '720', videoCount: 5 }
       });
       expect(res.statusCode).toBe(200);
