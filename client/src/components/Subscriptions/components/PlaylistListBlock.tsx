@@ -3,8 +3,10 @@ import { Link as RouterLink } from 'react-router-dom';
 import {
   CircularProgress,
   List,
+  Tooltip,
   Typography,
 } from '../../ui';
+import { Download as DownloadIcon } from '../../../lib/icons';
 import { Playlist } from '../../../types/playlist';
 
 interface PlaylistListBlockProps {
@@ -68,6 +70,32 @@ const PlaylistListBlock: React.FC<PlaylistListBlockProps> = ({ playlists, loadin
                   {p.uploader || '-'} • {p.video_count} videos
                 </Typography>
               </div>
+              <Tooltip
+                title={
+                  p.auto_download
+                    ? 'Auto-download is on'
+                    : 'Auto-download is off'
+                }
+              >
+                <span
+                  className="flex items-center flex-shrink-0"
+                  role="img"
+                  aria-label={
+                    p.auto_download
+                      ? 'Auto-download on'
+                      : 'Auto-download off'
+                  }
+                >
+                  <DownloadIcon
+                    size={18}
+                    className={
+                      p.auto_download
+                        ? 'text-success'
+                        : 'text-muted-foreground opacity-40'
+                    }
+                  />
+                </span>
+              </Tooltip>
             </div>
           </RouterLink>
         );

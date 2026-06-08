@@ -7,6 +7,7 @@ import { PlaylistVideo } from '../../types/playlist';
 
 const mockTriggerDownload = jest.fn();
 const mockNavigate = jest.fn();
+const mockToggleAutoDownload = jest.fn();
 
 const mockVideo: PlaylistVideo = {
   id: 1,
@@ -37,6 +38,7 @@ const mockPlaylist = {
   lastFetched: null,
   thumbnail: null,
   public_on_servers: false,
+  auto_download: false,
 };
 
 jest.mock('react-router-dom', () => ({
@@ -82,9 +84,10 @@ jest.mock('../../hooks/usePlaylistDetail', () => ({
 
 jest.mock('../../hooks/usePlaylistMutations', () => ({
   usePlaylistMutations: () => ({
-    pending: {},
+    pending: false,
     toggleSyncTarget: jest.fn(),
     togglePublic: jest.fn(),
+    toggleAutoDownload: (...args: unknown[]) => mockToggleAutoDownload(...args),
     ignoreVideo: jest.fn(),
     unignoreVideo: jest.fn(),
   }),
@@ -170,5 +173,18 @@ describe('PlaylistPage selected-download selection lifecycle', () => {
 
     await waitFor(() => expect(mockTriggerDownload).toHaveBeenCalledWith(undefined, undefined));
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/downloads/activity'));
+  });
+
+  test('clicking the auto-download chip toggles the playlist setting on', async () => {
+    const user = userEvent.setup();
+    mockToggleAutoDownload.mockResolvedValue({ ...mockPlaylist, auto_download: true });
+
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    await user.click(screen.getByText('Auto-download'));
+
+    await waitFor(() =>
+      expect(mockToggleAutoDownload).toHaveBeenCalledWith('PL1', true)
+    );
   });
 });

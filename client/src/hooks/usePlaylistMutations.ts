@@ -169,6 +169,13 @@ export const usePlaylistMutations = ({ token }: UsePlaylistMutationsParams) => {
     [patchPlaylist]
   );
 
+  const toggleAutoDownload = useCallback(
+    async (playlistId: string, enabled: boolean): Promise<Playlist | null> => {
+      return patchPlaylist(playlistId, { auto_download: enabled });
+    },
+    [patchPlaylist]
+  );
+
   const ignoreVideo = useCallback(
     async (playlistId: string, ytId: string): Promise<boolean> => {
       if (!token) return false;
@@ -223,6 +230,7 @@ export const usePlaylistMutations = ({ token }: UsePlaylistMutationsParams) => {
     patchPlaylist,
     toggleSyncTarget,
     togglePublic,
+    toggleAutoDownload,
     ignoreVideo,
     unignoreVideo,
   };

@@ -21,6 +21,7 @@ import { usePlaylistMutations } from '../hooks/usePlaylistMutations';
 import { useMediaServerStatus } from '../hooks/useMediaServerStatus';
 import { MediaServerType, Playlist, PlaylistSubscribeSettings, PlaylistVideo } from '../types/playlist';
 import PlaylistSyncChips from './PlaylistPage/components/PlaylistSyncChips';
+import AutoDownloadChip from './PlaylistPage/components/AutoDownloadChip';
 import NoMediaServerWarning from './PlaylistPage/components/NoMediaServerWarning';
 import PlaylistVideoList from './PlaylistPage/components/PlaylistVideoList';
 import { useVideoSelection } from './shared/VideoList/hooks/useVideoSelection';
@@ -109,6 +110,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     pending,
     toggleSyncTarget,
     togglePublic,
+    toggleAutoDownload,
     ignoreVideo,
     unignoreVideo,
   } = usePlaylistMutations({ token });
@@ -220,6 +222,18 @@ function PlaylistPage({ token }: PlaylistPageProps) {
       }
     },
     [playlist, toggleSyncTarget, refetch]
+  );
+
+  const handleToggleAutoDownload = useCallback(
+    async (enabled: boolean) => {
+      if (!playlist) return;
+      const updated = await toggleAutoDownload(playlist.playlist_id, enabled);
+      if (updated) {
+        await refetch();
+        showSnackbar(enabled ? 'Auto-download enabled' : 'Auto-download disabled');
+      }
+    },
+    [playlist, toggleAutoDownload, refetch, showSnackbar]
   );
 
   const handleConfirmPublic = useCallback(
@@ -339,12 +353,19 @@ function PlaylistPage({ token }: PlaylistPageProps) {
               </Typography>
             </Stack>
 
-            <PlaylistSyncChips
-              playlist={p}
-              serverStatus={serverStatus}
-              onToggle={handleToggleSync}
-              disabled={pending}
-            />
+            <Stack direction="row" spacing={1} className="flex-wrap gap-2 items-center">
+              <AutoDownloadChip
+                enabled={p.auto_download}
+                onToggle={handleToggleAutoDownload}
+                disabled={pending}
+              />
+              <PlaylistSyncChips
+                playlist={p}
+                serverStatus={serverStatus}
+                onToggle={handleToggleSync}
+                disabled={pending}
+              />
+            </Stack>
 
             <Stack direction="row" spacing={1} className="flex-wrap gap-2">
               <Button

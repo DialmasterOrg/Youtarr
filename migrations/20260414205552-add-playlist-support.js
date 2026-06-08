@@ -17,7 +17,7 @@ module.exports = {
       thumbnail: { type: Sequelize.STRING, allowNull: true },
       video_count: { type: Sequelize.INTEGER, allowNull: true, defaultValue: 0 },
       enabled: { type: Sequelize.BOOLEAN, allowNull: false, defaultValue: false },
-      auto_download: { type: Sequelize.BOOLEAN, allowNull: false, defaultValue: true },
+      auto_download: { type: Sequelize.BOOLEAN, allowNull: false, defaultValue: false },
       sync_to_plex: { type: Sequelize.BOOLEAN, allowNull: false, defaultValue: true },
       sync_to_jellyfin: { type: Sequelize.BOOLEAN, allowNull: false, defaultValue: true },
       sync_to_emby: { type: Sequelize.BOOLEAN, allowNull: false, defaultValue: true },
