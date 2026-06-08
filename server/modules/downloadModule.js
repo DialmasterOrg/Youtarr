@@ -654,12 +654,12 @@ class DownloadModule {
       ? {
         where: { playlist_id: playlist.playlist_id, youtube_id: youtubeIds },
         order: [['position', 'ASC']],
-        attributes: ['youtube_id', 'channel_id', 'channel_name'],
+        attributes: ['youtube_id', 'channel_id', 'channel_name', 'title'],
       }
       : {
         where: { playlist_id: playlist.playlist_id, ignored: false },
         order: bulkOrder,
-        attributes: ['youtube_id', 'channel_id', 'channel_name'],
+        attributes: ['youtube_id', 'channel_id', 'channel_name', 'title'],
       };
 
     if (isBulk && options.limitToRecent) {
@@ -672,6 +672,10 @@ class DownloadModule {
 
     const toDownload = [];
     for (const entry of entries) {
+      // A row that went private since the last refresh would fail in yt-dlp and
+      // show up as a confusing failed download. Skip it; the next refresh prunes it.
+      if (playlistModule.isUnavailableTitle(entry.title)) continue;
+
       if (!allowRedownload) {
         const already = await Video.findOne({ where: { youtubeId: entry.youtube_id } });
         if (already) continue;

@@ -1,5 +1,6 @@
 import React from 'react';
-import { Box, Card, CardContent, Stack, Typography } from '../../ui';
+import { Box, Card, CardContent, Stack, Tooltip, Typography } from '../../ui';
+import { Info as InfoIcon } from '../../../lib/icons';
 import { MediaServerStatus, MediaServerType, Playlist } from '../../../types/playlist';
 import LibraryDownloadsGroup from './LibraryDownloadsGroup';
 import MediaServerSyncGroup from './MediaServerSyncGroup';
@@ -79,8 +80,16 @@ const PlaylistHeader: React.FC<PlaylistHeaderProps> = ({
                 </Typography>
               )}
               <Stack direction="row" spacing={2} className="flex-wrap gap-2 mt-1">
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" color="text.secondary" className="inline-flex items-center gap-1">
                   {playlist.video_count} videos
+                  <Tooltip title="Private and members-only videos can't be accessed, so they're excluded from this list and never downloaded.">
+                    <span
+                      className="inline-flex items-center cursor-help"
+                      aria-label="Why some videos may be missing"
+                    >
+                      <InfoIcon size={14} />
+                    </span>
+                  </Tooltip>
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   Last fetched: {formatTimestamp(playlist.lastFetched)}

@@ -1461,6 +1461,7 @@ describe('DownloadModule', () => {
       jest.doMock('../playlistModule', () => ({
         ensureSourceChannel: jest.fn().mockResolvedValue({}),
         fetchAllPlaylistVideos: jest.fn().mockResolvedValue(0),
+        isUnavailableTitle: jest.fn(() => false),
       }));
       jest.doMock('../playlistDownloadGrouper', () => ({ buildGroups: jest.fn() }));
 
@@ -1606,6 +1607,26 @@ describe('DownloadModule', () => {
       expect(spy).toHaveBeenCalledTimes(1);
       expect(spy.mock.calls[0][0].body.urls).toEqual([
         'https://www.youtube.com/watch?v=vidSel1',
+      ]);
+    });
+
+    it('skips private/unavailable rows so they are never queued for download', async () => {
+      PlaylistVideoMock.findAll.mockResolvedValue([
+        { youtube_id: 'goodVid', channel_id: 'UC1', title: 'A Real Title' },
+        { youtube_id: 'privateVid', channel_id: 'UC1', title: '[Private video]' },
+      ]);
+      VideoMock.findOne.mockResolvedValue(null);
+      ChannelMock.findOne.mockResolvedValue({ channel_id: 'UC1' });
+      playlistModuleMock.isUnavailableTitle.mockImplementation(
+        (t) => !t || t === '[Private video]'
+      );
+      const spy = jest.spyOn(downloadModule, 'doSpecificDownloads').mockResolvedValue();
+
+      await downloadModule.doPlaylistDownloads(mockPlaylist);
+
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy.mock.calls[0][0].body.urls).toEqual([
+        'https://www.youtube.com/watch?v=goodVid',
       ]);
     });
 

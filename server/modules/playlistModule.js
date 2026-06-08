@@ -1,9 +1,23 @@
 const { spawn } = require('child_process');
+const { Op } = require('sequelize');
 const logger = require('../logger');
 const { Playlist, PlaylistVideo } = require('../models');
 const youtubeApi = require('./youtubeApi');
 
+// yt-dlp's flat-playlist listing still returns private/deleted/members-only
+// videos but strips their metadata: the title comes back null (current yt-dlp)
+// or as a "[Private video]" / "[Deleted video]" placeholder (older versions).
+// Title is the only reliable signal in flat mode; availability/channel_id come
+// back null for every entry.
+const UNAVAILABLE_TITLE_RE = /^\[(private|deleted|unavailable)\b[^\]]*\]$/i;
+
 class PlaylistModule {
+  isUnavailableTitle(title) {
+    if (title == null) return true;
+    const trimmed = String(title).trim();
+    if (!trimmed) return true;
+    return UNAVAILABLE_TITLE_RE.test(trimmed);
+  }
   async getPlaylistInfo(url) {
     return new Promise((resolve, reject) => {
       const args = [
@@ -77,6 +91,8 @@ class PlaylistModule {
 
     const entries = await this._spawnFlatPlaylist(playlist.url);
 
+    const available = entries.filter((e) => !this.isUnavailableTitle(e.title));
+
     const regex = playlist.title_filter_regex ? new RegExp(playlist.title_filter_regex, 'i') : null;
     const passes = (e) => {
       if (playlist.min_duration != null && (e.duration || 0) < playlist.min_duration) return false;
@@ -94,7 +110,7 @@ class PlaylistModule {
       return e.id ? `https://i.ytimg.com/vi/${e.id}/hqdefault.jpg` : null;
     };
 
-    const rows = entries
+    const rows = available
       .map((e, idx) => ({ entry: e, row: {
         playlist_id: playlist.playlist_id,
         youtube_id: e.id,
@@ -130,14 +146,28 @@ class PlaylistModule {
       ],
     });
 
-    // Backfill the playlist's own thumbnail from the first entry's video id when
-    // it is missing. yt-dlp's `--playlist-items 0` mode used by getPlaylistInfo
-    // does not return a playlist-level thumbnail, leaving the column null on
-    // initial subscribe. The first video's hqdefault is what YouTube itself
-    // renders as the playlist cover.
-    const update = { lastFetched: new Date(), video_count: entries.length };
-    if (!playlist.thumbnail && entries[0]?.id) {
-      update.thumbnail = `https://i.ytimg.com/vi/${entries[0].id}/hqdefault.jpg`;
+    // Prune rows that are no longer in the live playlist (went private, or were
+    // removed on YouTube) so they stop showing in Youtarr and stop being queued.
+    // Skip pruning on a partial or empty fetch: yt-dlp reports the full count per
+    // entry, so fewer entries than reported means a glitch, not real deletions.
+    const reportedCount = Number(entries[0]?.playlist_count ?? entries[0]?.n_entries) || null;
+    const fetchLooksComplete =
+      entries.length > 0 && (reportedCount == null || entries.length >= reportedCount);
+    if (fetchLooksComplete) {
+      const keepIds = available.map((e) => e.id).filter(Boolean);
+      const where = { playlist_id: playlist.playlist_id };
+      if (keepIds.length) where.youtube_id = { [Op.notIn]: keepIds };
+      await PlaylistVideo.destroy({ where });
+    }
+
+    // Backfill the playlist's own thumbnail from the first available entry's video
+    // id when it is missing. yt-dlp's `--playlist-items 0` mode used by
+    // getPlaylistInfo does not return a playlist-level thumbnail, leaving the
+    // column null on initial subscribe. The first video's hqdefault is what
+    // YouTube itself renders as the playlist cover.
+    const update = { lastFetched: new Date(), video_count: available.length };
+    if (!playlist.thumbnail && available[0]?.id) {
+      update.thumbnail = `https://i.ytimg.com/vi/${available[0].id}/hqdefault.jpg`;
     }
     await playlist.update(update);
     return rows.length;

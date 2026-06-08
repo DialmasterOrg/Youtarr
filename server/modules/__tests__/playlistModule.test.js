@@ -199,8 +199,8 @@ describe('playlistModule', () => {
       await new Promise((resolve) => setImmediate(resolve));
 
       const lines = [
-        JSON.stringify({ id: 'v1', duration: 100 }),
-        JSON.stringify({ id: 'v2', duration: 300 }),
+        JSON.stringify({ id: 'v1', title: 'Short Video', duration: 100 }),
+        JSON.stringify({ id: 'v2', title: 'Long Video', duration: 300 }),
       ].join('\n') + '\n';
       mockChild.stdout.emit('data', lines);
       mockChild.emit('close', 0);
@@ -327,6 +327,166 @@ describe('playlistModule', () => {
         channel_id: 'UCreal',
         channel_name: 'RealName',
       });
+    });
+
+    test('excludes private/unavailable entries from the stored rows', async () => {
+      Playlist.findOne.mockResolvedValue({
+        id: 1, playlist_id: 'PLabc', url: 'https://u',
+        min_duration: null, max_duration: null, title_filter_regex: null,
+        update: jest.fn().mockResolvedValue(true),
+      });
+      PlaylistVideo.findAll.mockResolvedValue([]);
+      PlaylistVideo.bulkCreate.mockResolvedValue([]);
+
+      const mockChild = new EventEmitter();
+      mockChild.stdout = new EventEmitter();
+      mockChild.stderr = new EventEmitter();
+      childProcess.spawn.mockReturnValue(mockChild);
+      const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const lines = [
+        JSON.stringify({ id: 'v1', title: 'Public Video', duration: 300, playlist_count: 4 }),
+        JSON.stringify({ id: 'v2', title: null, duration: null, playlist_count: 4 }),
+        JSON.stringify({ id: 'v3', title: '[Private video]', duration: null, playlist_count: 4 }),
+        JSON.stringify({ id: 'v4', title: '[Deleted video]', duration: null, playlist_count: 4 }),
+      ].join('\n') + '\n';
+      mockChild.stdout.emit('data', lines);
+      mockChild.emit('close', 0);
+      await promise;
+
+      const rows = PlaylistVideo.bulkCreate.mock.calls[0][0];
+      expect(rows.map((r) => r.youtube_id)).toEqual(['v1']);
+    });
+
+    test('prunes tracked rows that are now private or removed from the playlist', async () => {
+      const { Op } = require('sequelize');
+      Playlist.findOne.mockResolvedValue({
+        id: 1, playlist_id: 'PLabc', url: 'https://u',
+        min_duration: null, max_duration: null, title_filter_regex: null,
+        update: jest.fn().mockResolvedValue(true),
+      });
+      PlaylistVideo.findAll.mockResolvedValue([]);
+      PlaylistVideo.bulkCreate.mockResolvedValue([]);
+      PlaylistVideo.destroy.mockResolvedValue(0);
+
+      const mockChild = new EventEmitter();
+      mockChild.stdout = new EventEmitter();
+      mockChild.stderr = new EventEmitter();
+      childProcess.spawn.mockReturnValue(mockChild);
+      const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      // YouTube now reports a 2-video playlist: v1 public, v2 went private.
+      // v3 (previously tracked) is fully removed and absent from the fetch.
+      const lines = [
+        JSON.stringify({ id: 'v1', title: 'Public Video', duration: 300, playlist_count: 2 }),
+        JSON.stringify({ id: 'v2', title: null, duration: null, playlist_count: 2 }),
+      ].join('\n') + '\n';
+      mockChild.stdout.emit('data', lines);
+      mockChild.emit('close', 0);
+      await promise;
+
+      expect(PlaylistVideo.destroy).toHaveBeenCalledWith({
+        where: { playlist_id: 'PLabc', youtube_id: { [Op.notIn]: ['v1'] } },
+      });
+    });
+
+    test('does not prune when the fetch looks incomplete (fewer entries than reported)', async () => {
+      Playlist.findOne.mockResolvedValue({
+        id: 1, playlist_id: 'PLabc', url: 'https://u',
+        min_duration: null, max_duration: null, title_filter_regex: null,
+        update: jest.fn().mockResolvedValue(true),
+      });
+      PlaylistVideo.findAll.mockResolvedValue([]);
+      PlaylistVideo.bulkCreate.mockResolvedValue([]);
+      PlaylistVideo.destroy.mockResolvedValue(0);
+
+      const mockChild = new EventEmitter();
+      mockChild.stdout = new EventEmitter();
+      mockChild.stderr = new EventEmitter();
+      childProcess.spawn.mockReturnValue(mockChild);
+      const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      // Only 1 of 10 entries came back: a partial fetch must not delete anything.
+      mockChild.stdout.emit('data', JSON.stringify({ id: 'v1', title: 'Public Video', duration: 300, playlist_count: 10 }) + '\n');
+      mockChild.emit('close', 0);
+      await promise;
+
+      expect(PlaylistVideo.destroy).not.toHaveBeenCalled();
+    });
+
+    test('does not prune when the fetch returns no entries', async () => {
+      Playlist.findOne.mockResolvedValue({
+        id: 1, playlist_id: 'PLabc', url: 'https://u',
+        min_duration: null, max_duration: null, title_filter_regex: null,
+        update: jest.fn().mockResolvedValue(true),
+      });
+      PlaylistVideo.findAll.mockResolvedValue([]);
+      PlaylistVideo.bulkCreate.mockResolvedValue([]);
+      PlaylistVideo.destroy.mockResolvedValue(0);
+
+      const mockChild = new EventEmitter();
+      mockChild.stdout = new EventEmitter();
+      mockChild.stderr = new EventEmitter();
+      childProcess.spawn.mockReturnValue(mockChild);
+      const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      mockChild.emit('close', 0);
+      await promise;
+
+      expect(PlaylistVideo.destroy).not.toHaveBeenCalled();
+    });
+
+    test('sets playlist video_count to the available (non-private) count', async () => {
+      const update = jest.fn().mockResolvedValue(true);
+      Playlist.findOne.mockResolvedValue({
+        id: 1, playlist_id: 'PLabc', url: 'https://u',
+        thumbnail: 'https://existing.example/thumb.jpg',
+        min_duration: null, max_duration: null, title_filter_regex: null,
+        update,
+      });
+      PlaylistVideo.findAll.mockResolvedValue([]);
+      PlaylistVideo.bulkCreate.mockResolvedValue([]);
+      PlaylistVideo.destroy.mockResolvedValue(0);
+
+      const mockChild = new EventEmitter();
+      mockChild.stdout = new EventEmitter();
+      mockChild.stderr = new EventEmitter();
+      childProcess.spawn.mockReturnValue(mockChild);
+      const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const lines = [
+        JSON.stringify({ id: 'v1', title: 'Public Video', duration: 300, playlist_count: 2 }),
+        JSON.stringify({ id: 'v2', title: null, duration: null, playlist_count: 2 }),
+      ].join('\n') + '\n';
+      mockChild.stdout.emit('data', lines);
+      mockChild.emit('close', 0);
+      await promise;
+
+      expect(update).toHaveBeenCalledWith(expect.objectContaining({ video_count: 1 }));
+    });
+  });
+
+  describe('isUnavailableTitle', () => {
+    test('treats null, empty, and placeholder titles as unavailable', () => {
+      expect(playlistModule.isUnavailableTitle(null)).toBe(true);
+      expect(playlistModule.isUnavailableTitle('')).toBe(true);
+      expect(playlistModule.isUnavailableTitle('   ')).toBe(true);
+      expect(playlistModule.isUnavailableTitle('[Private video]')).toBe(true);
+      expect(playlistModule.isUnavailableTitle('[Deleted video]')).toBe(true);
+    });
+
+    test('treats a real title as available', () => {
+      expect(playlistModule.isUnavailableTitle('I survived 100 days as a shapeshifter')).toBe(false);
     });
   });
 

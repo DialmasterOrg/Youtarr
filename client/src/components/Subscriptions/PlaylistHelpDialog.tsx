@@ -70,6 +70,10 @@ function PlaylistHelpDialog({ open, onClose, isMobile }: PlaylistHelpDialogProps
               tracks the playlist, pulls in its list of videos, and keeps that list in sync when the
               playlist changes on YouTube.
             </p>
+            <p>
+              Private and members-only videos can&apos;t be accessed, so they&apos;re left out of the
+              list and never downloaded. The video count reflects only the videos Youtarr can see.
+            </p>
           </Section>
 
           <Section icon={<FolderIcon size={16} style={iconColor} />} title="Where the videos are saved">
