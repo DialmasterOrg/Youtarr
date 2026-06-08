@@ -280,6 +280,16 @@ describe('DownloadSettingsDialog', () => {
       expect(screen.getByText(/Videos per channel:/)).toBeInTheDocument();
       expect(screen.getByText('5')).toBeInTheDocument();
     });
+
+    test('shows per channel/playlist quality with global fallback in channel mode', () => {
+      render(<DownloadSettingsDialog {...defaultProps} mode="channel" defaultResolution="720" />);
+
+      const summaryBox = screen.getByTestId('settings-summary');
+      // Channel mode resolves quality per channel/playlist; the global is only a fallback,
+      // so it must not be presented as the single quality value.
+      expect(within(summaryBox).getByText('Per channel/playlist (global 720p)')).toBeInTheDocument();
+      expect(within(summaryBox).queryByText('720p (HD)')).not.toBeInTheDocument();
+    });
   });
 
   describe('Custom Settings Toggle', () => {

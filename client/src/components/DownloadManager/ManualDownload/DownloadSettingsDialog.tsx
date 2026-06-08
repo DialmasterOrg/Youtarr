@@ -268,7 +268,10 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
               <Box className="flex items-center gap-2 mb-2">
                 <QualityIcon size={16} className="text-muted-foreground" />
                 <Typography variant="body2">
-                  <strong>Quality:</strong> {defaultQualityLabel}
+                  <strong>Quality:</strong>{' '}
+                  {mode === 'channel'
+                    ? `Per channel/playlist (global ${defaultResolution}p)`
+                    : defaultQualityLabel}
                 </Typography>
               </Box>
 
