@@ -902,6 +902,21 @@ describe('DownloadSettingsDialog', () => {
     });
   });
 
+  describe('Large Batch Warning', () => {
+    const renderDialog = (props: { videoCount?: number }) =>
+      render(<DownloadSettingsDialog {...defaultProps} mode="manual" {...props} />);
+
+    test('warns when the batch exceeds the large-download threshold', () => {
+      renderDialog({ videoCount: 51 });
+      expect(screen.getByText(/large batch/i)).toBeInTheDocument();
+    });
+
+    test('does not warn for a small batch', () => {
+      renderDialog({ videoCount: 10 });
+      expect(screen.queryByText(/large batch/i)).not.toBeInTheDocument();
+    });
+  });
+
   describe('Edge Cases', () => {
     test('handles undefined videoCount in manual mode', () => {
       render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);

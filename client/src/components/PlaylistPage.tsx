@@ -10,8 +10,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Grid,
-  Stack,
   Typography,
 } from './ui';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -19,9 +17,8 @@ import { useConfig } from '../hooks/useConfig';
 import { usePlaylistDetail } from '../hooks/usePlaylistDetail';
 import { usePlaylistMutations } from '../hooks/usePlaylistMutations';
 import { useMediaServerStatus } from '../hooks/useMediaServerStatus';
-import { MediaServerType, Playlist, PlaylistSubscribeSettings, PlaylistVideo } from '../types/playlist';
-import PlaylistSyncChips from './PlaylistPage/components/PlaylistSyncChips';
-import AutoDownloadChip from './PlaylistPage/components/AutoDownloadChip';
+import { MediaServerType, PlaylistSubscribeSettings, PlaylistVideo } from '../types/playlist';
+import PlaylistHeader from './PlaylistPage/components/PlaylistHeader';
 import NoMediaServerWarning from './PlaylistPage/components/NoMediaServerWarning';
 import PlaylistVideoList from './PlaylistPage/components/PlaylistVideoList';
 import { useVideoSelection } from './shared/VideoList/hooks/useVideoSelection';
@@ -43,15 +40,6 @@ interface SnackbarState {
   open: boolean;
   message: string;
   severity: 'success' | 'error' | 'info';
-}
-
-function formatTimestamp(value: string | null): string {
-  if (!value) return '-';
-  try {
-    return new Date(value).toLocaleString();
-  } catch {
-    return value;
-  }
 }
 
 function toModalData(v: PlaylistVideo): VideoModalData {
@@ -92,6 +80,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
   const {
     playlist,
     videos,
+    notDownloadedCount,
     loading,
     error,
     refetch,
@@ -312,117 +301,6 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     playlist.thumbnail ||
     (videos[0]?.youtube_id ? `https://i.ytimg.com/vi/${videos[0].youtube_id}/hqdefault.jpg` : '');
 
-  const renderHeader = (p: Playlist) => (
-    <Card elevation={8} className="mb-4" style={{ borderRadius: 'var(--radius-ui)', overflow: 'hidden' }}>
-      <CardContent
-        style={{
-          paddingLeft: isMobile ? 10 : 16,
-          paddingRight: isMobile ? 10 : 16,
-          paddingTop: isMobile ? 12 : 16,
-          paddingBottom: isMobile ? 12 : 16,
-        }}
-      >
-        <Grid container spacing={2} alignItems="stretch">
-          <Grid item xs={12} sm={4}>
-            <Box
-              component="img"
-              src={playlistThumbUrl}
-              alt="Playlist thumbnail"
-              className="w-full h-full object-cover rounded-xl bg-muted block"
-              style={{ border: '1px solid var(--border)', minHeight: 120 }}
-            />
-          </Grid>
-          <Grid item xs={12} sm={8} className="flex flex-col gap-3">
-            <div>
-              <Typography variant="h5" style={{ fontWeight: 700 }}>
-                {p.title}
-              </Typography>
-              {p.uploader && (
-                <Typography variant="body2" color="text.secondary">
-                  By {p.uploader}
-                </Typography>
-              )}
-            </div>
-
-            <Stack direction="row" spacing={2} className="flex-wrap gap-2">
-              <Typography variant="body2" color="text.secondary">
-                {p.video_count} videos
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Last fetched: {formatTimestamp(p.lastFetched)}
-              </Typography>
-            </Stack>
-
-            <Stack direction="row" spacing={1} className="flex-wrap gap-2 items-center">
-              <AutoDownloadChip
-                enabled={p.auto_download}
-                onToggle={handleToggleAutoDownload}
-                disabled={pending}
-              />
-              <PlaylistSyncChips
-                playlist={p}
-                serverStatus={serverStatus}
-                onToggle={handleToggleSync}
-                disabled={pending}
-              />
-            </Stack>
-
-            <Stack direction="row" spacing={1} className="flex-wrap gap-2">
-              <Button
-                variant="contained"
-                size="sm"
-                onClick={() => handleAction('Refresh', refresh)}
-                disabled={actionRunning}
-              >
-                Refresh
-              </Button>
-              <Button
-                variant="contained"
-                size="sm"
-                onClick={openDownloadAll}
-                disabled={actionRunning}
-              >
-                Download All
-              </Button>
-              <Button
-                variant="outlined"
-                size="sm"
-                onClick={() => handleAction('Sync', sync)}
-                disabled={actionRunning || !anyConfigured}
-              >
-                Sync now
-              </Button>
-              <Button
-                variant="outlined"
-                size="sm"
-                onClick={() => handleAction('M3U regen', regenerateM3U)}
-                disabled={actionRunning}
-              >
-                Regen M3U
-              </Button>
-              <Button
-                variant="outlined"
-                size="sm"
-                onClick={() => setSettingsOpen(true)}
-                disabled={actionRunning}
-              >
-                Settings
-              </Button>
-              <Button
-                variant={p.public_on_servers ? 'contained' : 'outlined'}
-                size="sm"
-                onClick={() => setConfirmPublicOpen(true)}
-                disabled={actionRunning || !anyConfigured}
-              >
-                {p.public_on_servers ? 'Public' : 'Private'}
-              </Button>
-            </Stack>
-          </Grid>
-        </Grid>
-      </CardContent>
-    </Card>
-  );
-
   return (
     <div>
       <Box className="mb-3">
@@ -431,7 +309,24 @@ function PlaylistPage({ token }: PlaylistPageProps) {
 
       {!anyConfigured && <NoMediaServerWarning />}
 
-      {renderHeader(playlist)}
+      <PlaylistHeader
+        playlist={playlist}
+        thumbnailUrl={playlistThumbUrl}
+        isMobile={isMobile}
+        serverStatus={serverStatus}
+        anyConfigured={anyConfigured}
+        newCount={notDownloadedCount}
+        togglePending={pending}
+        actionRunning={actionRunning}
+        onRefresh={() => handleAction('Refresh', refresh)}
+        onDownloadAll={openDownloadAll}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onToggleAutoDownload={handleToggleAutoDownload}
+        onToggleSync={handleToggleSync}
+        onChangePublic={() => setConfirmPublicOpen(true)}
+        onSyncNow={() => handleAction('Sync', sync)}
+        onRegenerateM3U={() => handleAction('M3U regen', regenerateM3U)}
+      />
 
       <Card style={{ borderRadius: 'var(--radius-ui)' }}>
         <CardContent>
@@ -467,7 +362,11 @@ function PlaylistPage({ token }: PlaylistPageProps) {
         onConfirm={handleConfirmDownload}
         mode="manual"
         token={token}
-        videoCount={pendingDownload.mode === 'selected' ? pendingDownload.ids.length : playlist.video_count}
+        videoCount={
+          pendingDownload.mode === 'selected'
+            ? pendingDownload.ids.length
+            : notDownloadedCount ?? playlist.video_count
+        }
         defaultResolution={config.preferredResolution || '1080'}
       />
 
@@ -483,9 +382,10 @@ function PlaylistPage({ token }: PlaylistPageProps) {
         <DialogContent>
           <Typography variant="body2">
             {playlist.public_on_servers
-              ? 'Other users on your media servers will no longer see this playlist.'
-              : 'This playlist will become visible to other users on your media servers. ' +
-                'On Plex, visibility may also require per-user access grants in the Plex admin UI.'}
+              ? 'On Jellyfin and Emby, this playlist will no longer be visible to other users. ' +
+                'Plex playlists are shared manually, so this setting does not affect them.'
+              : 'On Jellyfin and Emby, this playlist will become visible to other users. ' +
+                'Plex has no automatic public setting; share Plex playlists with each user inside Plex.'}
           </Typography>
         </DialogContent>
         <DialogActions>

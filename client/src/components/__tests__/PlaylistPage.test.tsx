@@ -72,6 +72,7 @@ jest.mock('../../hooks/usePlaylistDetail', () => ({
   usePlaylistDetail: () => ({
     playlist: mockPlaylist,
     videos: [mockVideo],
+    notDownloadedCount: 1,
     loading: false,
     error: null,
     refetch: jest.fn(),
@@ -162,26 +163,26 @@ describe('PlaylistPage selected-download selection lifecycle', () => {
     await waitFor(() => expect(screen.queryByText('1 selected')).not.toBeInTheDocument());
   });
 
-  test('Download All opens the dialog and downloads all videos on confirm', async () => {
+  test('Download new opens the dialog and downloads all videos on confirm', async () => {
     const user = userEvent.setup();
     mockTriggerDownload.mockResolvedValue(undefined);
 
     renderWithProviders(<PlaylistPage token="t" />);
 
-    await user.click(screen.getByRole('button', { name: 'Download All' }));
+    await user.click(screen.getByRole('button', { name: /Download 1 new/i }));
     await user.click(await screen.findByTestId('mock-confirm-download'));
 
     await waitFor(() => expect(mockTriggerDownload).toHaveBeenCalledWith(undefined, undefined));
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/downloads/activity'));
   });
 
-  test('clicking the auto-download chip toggles the playlist setting on', async () => {
+  test('toggling the auto-download switch turns the playlist setting on', async () => {
     const user = userEvent.setup();
     mockToggleAutoDownload.mockResolvedValue({ ...mockPlaylist, auto_download: true });
 
     renderWithProviders(<PlaylistPage token="t" />);
 
-    await user.click(screen.getByText('Auto-download'));
+    await user.click(screen.getByRole('checkbox', { name: /Auto-download new videos/i }));
 
     await waitFor(() =>
       expect(mockToggleAutoDownload).toHaveBeenCalledWith('PL1', true)

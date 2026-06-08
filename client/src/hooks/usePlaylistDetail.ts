@@ -20,6 +20,7 @@ interface UsePlaylistDetailParams {
 
 interface PlaylistDetailResponse {
   playlist: Playlist;
+  not_downloaded_count?: number;
 }
 
 interface PlaylistVideosResponse {
@@ -40,6 +41,7 @@ export const usePlaylistDetail = ({
   const [playlist, setPlaylist] = useState<Playlist | null>(null);
   const [videos, setVideos] = useState<PlaylistVideo[]>([]);
   const [videoTotal, setVideoTotal] = useState(0);
+  const [notDownloadedCount, setNotDownloadedCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(!!(token && playlistId));
   const [error, setError] = useState<string | null>(null);
 
@@ -48,6 +50,7 @@ export const usePlaylistDetail = ({
       setPlaylist(null);
       setVideos([]);
       setVideoTotal(0);
+      setNotDownloadedCount(null);
       setLoading(false);
       return;
     }
@@ -66,6 +69,11 @@ export const usePlaylistDetail = ({
         }),
       ]);
       setPlaylist(playlistRes.data.playlist || null);
+      setNotDownloadedCount(
+        typeof playlistRes.data.not_downloaded_count === 'number'
+          ? playlistRes.data.not_downloaded_count
+          : null
+      );
       setVideos(videosRes.data.videos || []);
       setVideoTotal(videosRes.data.total || 0);
     } catch (err: unknown) {
@@ -135,6 +143,7 @@ export const usePlaylistDetail = ({
     playlist,
     videos,
     videoTotal,
+    notDownloadedCount,
     loading,
     error,
     refetch: fetchPlaylist,

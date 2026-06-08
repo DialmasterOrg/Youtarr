@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import { Chip, Stack, Tooltip } from '../../ui';
 import { MediaServerStatus, MediaServerType, Playlist } from '../../../types/playlist';
 
@@ -38,21 +39,36 @@ const PlaylistSyncChips: React.FC<PlaylistSyncChipsProps> = ({
     >
       {SERVERS.map((server) => {
         const configured = serverStatus[server];
-        const enabled = !!playlist[SYNC_KEY[server]];
 
-        const tooltip = configured
-          ? enabled
-            ? `Click to disable sync to ${SERVER_LABEL[server]}`
-            : `Click to enable sync to ${SERVER_LABEL[server]}`
-          : `${SERVER_LABEL[server]} is not configured. Add a connection in Settings.`;
+        if (!configured) {
+          return (
+            <RouterLink
+              key={server}
+              to="/settings"
+              aria-label={`${SERVER_LABEL[server]} is not connected. Connect in Settings.`}
+              className="no-underline"
+            >
+              <Chip
+                label={`+ ${SERVER_LABEL[server]}`}
+                variant="outlined"
+                className="border-dashed text-muted-foreground cursor-pointer"
+              />
+            </RouterLink>
+          );
+        }
+
+        const enabled = !!playlist[SYNC_KEY[server]];
+        const tooltip = enabled
+          ? `Click to disable sync to ${SERVER_LABEL[server]}`
+          : `Click to enable sync to ${SERVER_LABEL[server]}`;
 
         const chip = (
           <Chip
             label={SERVER_LABEL[server]}
-            color={enabled && configured ? 'success' : 'default'}
-            variant={enabled && configured ? 'filled' : 'outlined'}
-            onClick={configured && !disabled ? () => onToggle(server, !enabled) : undefined}
-            disabled={!configured || disabled}
+            color={enabled ? 'success' : 'default'}
+            variant={enabled ? 'filled' : 'outlined'}
+            onClick={disabled ? undefined : () => onToggle(server, !enabled)}
+            disabled={disabled}
             aria-pressed={enabled}
           />
         );

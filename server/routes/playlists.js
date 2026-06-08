@@ -75,7 +75,26 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     try {
       const p = await Playlist.findOne({ where: { playlist_id: req.params.playlistId } });
       if (!p) return res.status(404).json({ error: 'Playlist not found' });
-      res.json({ playlist: p });
+
+      // Mirrors the "download new" selection in downloadModule.doPlaylistDownloads:
+      // non-ignored playlist videos with no matching Video row yet.
+      const candidates = await PlaylistVideo.findAll({
+        where: { playlist_id: req.params.playlistId, ignored: false },
+        attributes: ['youtube_id'],
+      });
+      const candidateIds = candidates.map((c) => c.youtube_id).filter(Boolean);
+      let downloadedExisting = 0;
+      if (candidateIds.length > 0 && Video) {
+        const existing = await Video.findAll({
+          where: { youtubeId: candidateIds },
+          attributes: ['youtubeId'],
+        });
+        const existingIds = new Set(existing.map((v) => v.youtubeId));
+        downloadedExisting = candidateIds.filter((id) => existingIds.has(id)).length;
+      }
+      const not_downloaded_count = candidateIds.length - downloadedExisting;
+
+      res.json({ playlist: p, not_downloaded_count });
     } catch (err) {
       req.log.error({ err }, 'GET /api/playlists/:playlistId failed');
       res.status(500).json({ error: 'Failed to fetch playlist' });

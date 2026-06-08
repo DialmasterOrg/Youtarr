@@ -80,3 +80,46 @@ describe('usePlaylistDetail.triggerDownload', () => {
     );
   });
 });
+
+describe('usePlaylistDetail.notDownloadedCount', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('exposes notDownloadedCount from the playlist response', async () => {
+    axios.get.mockImplementation((url: string) => {
+      if (url.endsWith('/videos')) {
+        return Promise.resolve({ data: { total: 0, videos: [] } });
+      }
+      return Promise.resolve({
+        data: { playlist: { playlist_id: 'PL1' }, not_downloaded_count: 7 },
+      });
+    });
+
+    const { result } = renderHook(() =>
+      usePlaylistDetail({ token: 't', playlistId: 'PL1' })
+    );
+
+    await waitFor(() => {
+      expect(result.current.notDownloadedCount).toBe(7);
+    });
+  });
+
+  test('notDownloadedCount is null when the field is absent', async () => {
+    axios.get.mockImplementation((url: string) => {
+      if (url.endsWith('/videos')) {
+        return Promise.resolve({ data: { total: 0, videos: [] } });
+      }
+      return Promise.resolve({ data: { playlist: { playlist_id: 'PL1' } } });
+    });
+
+    const { result } = renderHook(() =>
+      usePlaylistDetail({ token: 't', playlistId: 'PL1' })
+    );
+
+    await waitFor(() => {
+      expect(result.current.playlist).not.toBeNull();
+    });
+    expect(result.current.notDownloadedCount).toBeNull();
+  });
+});

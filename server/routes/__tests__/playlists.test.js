@@ -61,6 +61,7 @@ const buildDeps = (overrides = {}) => ({
     },
     PlaylistVideo: {
       findAndCountAll: jest.fn(),
+      findAll: jest.fn().mockResolvedValue([]),
       update: jest.fn(),
       ...overrides.PlaylistVideo,
     },
@@ -164,7 +165,7 @@ describe('GET /api/playlists/:playlistId', () => {
     expect(deps.models.Playlist.findOne).toHaveBeenCalledWith({
       where: { playlist_id: 'PLtest123' },
     });
-    expect(res.json).toHaveBeenCalledWith({ playlist });
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ playlist }));
   });
 
   test('returns 404 when playlist not found', async () => {
@@ -193,6 +194,42 @@ describe('GET /api/playlists/:playlistId', () => {
 
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: 'Failed to fetch playlist' });
+  });
+});
+
+describe('GET /api/playlists/:playlistId not_downloaded_count', () => {
+  test('returns count of non-ignored videos without a Video row', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(makePlaylist({ video_count: 3 }));
+    deps.models.PlaylistVideo.findAll.mockResolvedValue([
+      { youtube_id: 'a' },
+      { youtube_id: 'b' },
+      { youtube_id: 'c' },
+    ]);
+    deps.models.Video.findAll.mockResolvedValue([{ youtubeId: 'b' }]);
+
+    const handler = getHandler('get', '/api/playlists/:playlistId', deps);
+    const req = { params: { playlistId: 'PLtest123' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.models.PlaylistVideo.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { playlist_id: 'PLtest123', ignored: false } })
+    );
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ not_downloaded_count: 2 })
+    );
+  });
+
+  test('returns 404 when playlist missing', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(null);
+    const handler = getHandler('get', '/api/playlists/:playlistId', deps);
+    const req = { params: { playlistId: 'missing' }, log: loggerMock };
+    const res = createResponse();
+    await handler(req, res);
+    expect(res.status).toHaveBeenCalledWith(404);
   });
 });
 

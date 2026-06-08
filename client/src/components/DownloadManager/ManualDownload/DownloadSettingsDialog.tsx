@@ -33,6 +33,8 @@ import { RatingSelect } from '../../shared/RatingSelect';
 import { useSubfolders } from '../../../hooks/useSubfolders';
 import { RESOLUTION_OPTIONS } from '../../../utils/downloadOptions';
 
+const LARGE_DOWNLOAD_WARNING_THRESHOLD = 50;
+
 interface DownloadSettingsDialogProps {
   open: boolean;
   onClose: () => void;
@@ -236,6 +238,15 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                 : `You are about to download ${videoCount} videos.`}
             </Typography>
           </Alert>
+
+          {typeof videoCount === 'number' && videoCount > LARGE_DOWNLOAD_WARNING_THRESHOLD && (
+            <Alert severity="warning" className="mb-4">
+              <Typography variant="body2">
+                That is a large batch ({videoCount} videos). It may take a while and use
+                significant disk space.
+              </Typography>
+            </Alert>
+          )}
 
           {/* Warning for previously downloaded */}
           {missingVideoCount > 0 && (

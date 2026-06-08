@@ -130,9 +130,9 @@ function PlaylistHelpDialog({ open, onClose, isMobile }: PlaylistHelpDialogProps
                 you&apos;d expect, public playlists included.
               </li>
               <li>
-                <strong className="text-foreground font-medium">Emby:</strong> playlists are
-                owner-only. Emby&apos;s API won&apos;t let Youtarr make them public, so only the
-                account that owns it will see it.
+                <strong className="text-foreground font-medium">Emby:</strong> supports shared
+                playlists (Emby calls these &quot;collaborative&quot;), so turning on the public
+                setting makes the playlist visible to other users.
               </li>
             </ul>
             <p>
