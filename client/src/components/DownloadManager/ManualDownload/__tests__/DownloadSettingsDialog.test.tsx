@@ -47,7 +47,7 @@ describe('DownloadSettingsDialog', () => {
     test('renders channel mode alert', () => {
       render(<DownloadSettingsDialog {...defaultProps} mode="channel" />);
 
-      expect(screen.getByText('Downloading new videos from auto-download enabled channels/tabs. Channel settings and filters will be applied per channel.')).toBeInTheDocument();
+      expect(screen.getByText('Downloading new videos from auto-download enabled channels/tabs and playlists. Channel and playlist settings and filters will be applied per channel/playlist.')).toBeInTheDocument();
     });
 
     test('renders custom settings toggle', () => {

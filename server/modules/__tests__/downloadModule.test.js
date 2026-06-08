@@ -439,6 +439,57 @@ describe('DownloadModule', () => {
     });
   });
 
+  describe('doChannelAndPlaylistDownloads', () => {
+    it('runs channel downloads first, then triggers playlist auto-downloads', async () => {
+      const order = [];
+      jest.spyOn(downloadModule, 'doChannelDownloads').mockImplementation(async () => {
+        order.push('channels');
+      });
+      jest.doMock('../playlistModule', () => ({
+        playlistAutoDownload: jest.fn().mockImplementation(async () => {
+          order.push('playlists');
+        }),
+      }));
+      const playlistModule = require('../playlistModule');
+
+      await downloadModule.doChannelAndPlaylistDownloads({ some: 'data' });
+
+      expect(downloadModule.doChannelDownloads).toHaveBeenCalledWith({ some: 'data' });
+      expect(playlistModule.playlistAutoDownload).toHaveBeenCalledTimes(1);
+      expect(playlistModule.playlistAutoDownload).toHaveBeenCalledWith({});
+      expect(order).toEqual(['channels', 'playlists']);
+    });
+
+    it('threads manual override settings through to playlist auto-download', async () => {
+      jest.spyOn(downloadModule, 'doChannelDownloads').mockResolvedValue();
+      jest.doMock('../playlistModule', () => ({
+        playlistAutoDownload: jest.fn().mockResolvedValue(),
+      }));
+      const playlistModule = require('../playlistModule');
+
+      await downloadModule.doChannelAndPlaylistDownloads({
+        overrideSettings: { resolution: '480', videoCount: 7 },
+      });
+
+      expect(playlistModule.playlistAutoDownload).toHaveBeenCalledWith({
+        resolution: '480',
+        videoCount: 7,
+      });
+    });
+
+    it('still resolves (channels already ran) even if playlist auto-download throws', async () => {
+      jest.spyOn(downloadModule, 'doChannelDownloads').mockResolvedValue();
+      jest.doMock('../playlistModule', () => ({
+        playlistAutoDownload: jest.fn().mockRejectedValue(new Error('boom')),
+      }));
+
+      await expect(
+        downloadModule.doChannelAndPlaylistDownloads({})
+      ).resolves.not.toThrow();
+      expect(downloadModule.doChannelDownloads).toHaveBeenCalled();
+    });
+  });
+
   describe('doSingleChannelDownloadJob', () => {
     const mockJobId = 'job-123';
     const mockTempFile = '/tmp/channels-abc123.txt';
@@ -1409,6 +1460,7 @@ describe('DownloadModule', () => {
       }));
       jest.doMock('../playlistModule', () => ({
         ensureSourceChannel: jest.fn().mockResolvedValue({}),
+        fetchAllPlaylistVideos: jest.fn().mockResolvedValue(0),
       }));
       jest.doMock('../playlistDownloadGrouper', () => ({ buildGroups: jest.fn() }));
 
@@ -1675,6 +1727,61 @@ describe('DownloadModule', () => {
 
       expect(grouperMock.buildGroups).toHaveBeenCalled();
       expect(grouperMock.buildGroups.mock.calls[0][1]).toEqual([{ youtube_id: 'a', channel_id: null }]);
+    });
+
+    it('refreshes from YouTube before selecting videos when refreshFirst is set', async () => {
+      PlaylistVideoMock.findAll.mockResolvedValue([
+        { youtube_id: 'vid001', channel_id: 'UC1', channel_name: 'C' },
+      ]);
+      VideoMock.findOne.mockResolvedValue(null);
+      ChannelMock.findOne.mockResolvedValue({ channel_id: 'UC1' });
+      jest.spyOn(downloadModule, 'doSpecificDownloads').mockResolvedValue();
+
+      await downloadModule.doPlaylistDownloads(mockPlaylist, { refreshFirst: true });
+
+      expect(playlistModuleMock.fetchAllPlaylistVideos).toHaveBeenCalledWith('PLtest123');
+    });
+
+    it('does NOT refresh from YouTube by default', async () => {
+      PlaylistVideoMock.findAll.mockResolvedValue([]);
+      jest.spyOn(downloadModule, 'doSpecificDownloads').mockResolvedValue();
+
+      await downloadModule.doPlaylistDownloads(mockPlaylist);
+
+      expect(playlistModuleMock.fetchAllPlaylistVideos).not.toHaveBeenCalled();
+    });
+
+    it('applies the channelFilesToDownload limit (newest X by position) when limitToRecent is set', async () => {
+      PlaylistVideoMock.findAll.mockResolvedValue([]);
+      jest.spyOn(downloadModule, 'doSpecificDownloads').mockResolvedValue();
+
+      await downloadModule.doPlaylistDownloads(mockPlaylist, { limitToRecent: true });
+
+      const callArgs = PlaylistVideoMock.findAll.mock.calls[0][0];
+      expect(callArgs.order).toEqual([['position', 'DESC']]);
+      expect(callArgs.limit).toBe(3);
+    });
+
+    it('uses ASC order on unlimited bulk runs (no limitToRecent)', async () => {
+      PlaylistVideoMock.findAll.mockResolvedValue([]);
+      jest.spyOn(downloadModule, 'doSpecificDownloads').mockResolvedValue();
+
+      await downloadModule.doPlaylistDownloads(mockPlaylist);
+
+      const callArgs = PlaylistVideoMock.findAll.mock.calls[0][0];
+      expect(callArgs.order).toEqual([['position', 'ASC']]);
+      expect(callArgs.limit).toBeUndefined();
+    });
+
+    it('does NOT apply a limit for explicit youtubeIds downloads', async () => {
+      PlaylistVideoMock.findAll.mockResolvedValue([]);
+      jest.spyOn(downloadModule, 'doSpecificDownloads').mockResolvedValue();
+
+      await downloadModule.doPlaylistDownloads(mockPlaylist, { youtubeIds: ['a', 'b'], limitToRecent: true });
+
+      const callArgs = PlaylistVideoMock.findAll.mock.calls[0][0];
+      expect(callArgs.limit).toBeUndefined();
+      expect(playlistModuleMock.fetchAllPlaylistVideos).not.toHaveBeenCalled();
     });
   });
 

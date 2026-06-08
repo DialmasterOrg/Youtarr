@@ -874,7 +874,11 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
       }
     }
 
-    downloadModule.doChannelDownloads(req.body || {});
+    downloadModule
+      .doChannelAndPlaylistDownloads(req.body || {})
+      .catch((err) => {
+        req.log.error({ err }, 'Manual channel + playlist downloads failed');
+      });
     res.json({ status: 'success' });
   });
 

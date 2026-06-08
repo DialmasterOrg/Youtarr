@@ -7,6 +7,8 @@ const tempPathManager = require('./download/tempPathManager');
 const { MANUAL_DOWNLOAD_LABEL, playlistJobLabel } = require('./download/jobTypes');
 const logger = require('../logger');
 
+const DEFAULT_FILES_TO_DOWNLOAD = 5;
+
 class DownloadModule {
   constructor() {
     this.config = configModule.getConfig(); // Get the initial configuration
@@ -125,6 +127,27 @@ class DownloadModule {
     } catch (err) {
       console.error('Error generating channel download groups, falling back to single job:', err);
       return await this.doSingleChannelDownloadJob(jobData, isNextJob);
+    }
+  }
+
+  /**
+   * Trigger channel downloads, then enqueue auto-download for every enabled
+   * playlist so playlist downloads always queue behind channel downloads.
+   * Ungrouped channel downloads return after spawning yt-dlp (not on completion),
+   * so the playlist YouTube refresh can overlap an active channel download; the
+   * job queue still serializes the actual downloads. Manual override settings
+   * (resolution, videoCount, allowRedownload) carry through to playlists too.
+   * @param {Object} jobData - optional override settings payload
+   * @returns {Promise<void>}
+   */
+  async doChannelAndPlaylistDownloads(jobData = {}) {
+    await this.doChannelDownloads(jobData);
+    try {
+      const playlistModule = require('./playlistModule');
+      const overrideSettings = this.getOverrideSettings(jobData);
+      await playlistModule.playlistAutoDownload(overrideSettings);
+    } catch (err) {
+      logger.error({ err }, 'playlistAutoDownload failed after channel downloads');
     }
   }
 
@@ -608,17 +631,42 @@ class DownloadModule {
     const allowRedownload = !!overrideSettings.allowRedownload;
 
     const youtubeIds = Array.isArray(options.youtubeIds) ? options.youtubeIds : [];
-    // Specific ids: download exactly those, overriding `ignored`. Otherwise
-    // all non-ignored videos.
-    const where = youtubeIds.length
-      ? { playlist_id: playlist.playlist_id, youtube_id: youtubeIds }
-      : { playlist_id: playlist.playlist_id, ignored: false };
+    const isBulk = youtubeIds.length === 0;
 
-    const entries = await PlaylistVideo.findAll({
-      where,
-      order: [['position', 'ASC']],
-      attributes: ['youtube_id', 'channel_id', 'channel_name'],
-    });
+    // Bulk "download new" runs refresh from YouTube first so newly-added videos
+    // are discovered; explicit-id downloads never refresh.
+    if (isBulk && options.refreshFirst) {
+      try {
+        await playlistModule.fetchAllPlaylistVideos(playlist.playlist_id);
+      } catch (err) {
+        logger.error({ err, playlist_id: playlist.playlist_id }, 'Playlist refresh before download failed');
+      }
+    }
+
+    // Specific ids: download exactly those, overriding `ignored`. Otherwise
+    // all non-ignored videos. When limiting, order DESC so the newest X
+    // (tail = newest-added) are selected; otherwise preserve ASC order.
+    const bulkOrder = (isBulk && options.limitToRecent)
+      ? [['position', 'DESC']]
+      : [['position', 'ASC']];
+
+    const query = youtubeIds.length
+      ? {
+        where: { playlist_id: playlist.playlist_id, youtube_id: youtubeIds },
+        order: [['position', 'ASC']],
+        attributes: ['youtube_id', 'channel_id', 'channel_name'],
+      }
+      : {
+        where: { playlist_id: playlist.playlist_id, ignored: false },
+        order: bulkOrder,
+        attributes: ['youtube_id', 'channel_id', 'channel_name'],
+      };
+
+    if (isBulk && options.limitToRecent) {
+      query.limit = overrideSettings.videoCount || configModule.config.channelFilesToDownload || DEFAULT_FILES_TO_DOWNLOAD;
+    }
+
+    const entries = await PlaylistVideo.findAll(query);
 
     if (!entries.length) return;
 

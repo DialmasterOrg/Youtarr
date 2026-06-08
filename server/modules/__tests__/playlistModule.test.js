@@ -454,6 +454,48 @@ describe('playlistModule', () => {
       await playlistModule.playlistAutoDownload();
       expect(downloadModule.doPlaylistDownloads).toHaveBeenCalledTimes(2);
     });
+
+    test('downloads each enabled auto_download playlist with refresh + recent limit', async () => {
+      const pl1 = { playlist_id: 'PL1', title: 'One' };
+      const pl2 = { playlist_id: 'PL2', title: 'Two' };
+      Playlist.findAll.mockResolvedValue([pl1, pl2]);
+
+      await playlistModule.playlistAutoDownload();
+
+      expect(Playlist.findAll).toHaveBeenCalledWith({
+        where: { enabled: true, auto_download: true },
+      });
+      expect(downloadModule.doPlaylistDownloads).toHaveBeenCalledTimes(2);
+      expect(downloadModule.doPlaylistDownloads).toHaveBeenNthCalledWith(
+        1,
+        pl1,
+        { refreshFirst: true, limitToRecent: true, overrideSettings: {} }
+      );
+      expect(downloadModule.doPlaylistDownloads).toHaveBeenNthCalledWith(
+        2,
+        pl2,
+        { refreshFirst: true, limitToRecent: true, overrideSettings: {} }
+      );
+    });
+
+    test('threads manual override settings through to each playlist download', async () => {
+      const pl1 = { playlist_id: 'PL1', title: 'One' };
+      const pl2 = { playlist_id: 'PL2', title: 'Two' };
+      Playlist.findAll.mockResolvedValue([pl1, pl2]);
+
+      await playlistModule.playlistAutoDownload({ resolution: '720', videoCount: 3 });
+
+      expect(downloadModule.doPlaylistDownloads).toHaveBeenNthCalledWith(
+        1,
+        pl1,
+        { refreshFirst: true, limitToRecent: true, overrideSettings: { resolution: '720', videoCount: 3 } }
+      );
+      expect(downloadModule.doPlaylistDownloads).toHaveBeenNthCalledWith(
+        2,
+        pl2,
+        { refreshFirst: true, limitToRecent: true, overrideSettings: { resolution: '720', videoCount: 3 } }
+      );
+    });
   });
 
   describe('fetchAllPlaylistVideos published_at backfill', () => {

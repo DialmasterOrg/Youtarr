@@ -609,9 +609,9 @@ class ChannelModule {
    * Trigger automatic channel video downloads.
    * Called by cron scheduler based on configured frequency.
    * Skips execution if a Channel Downloads job is already running to prevent queue backup.
-   * @returns {void}
+   * @returns {Promise<void>}
    */
-  channelAutoDownload() {
+  async channelAutoDownload() {
     logger.info({
       currentTime: new Date(),
       interval: configModule.getConfig().channelDownloadFrequency
@@ -632,15 +632,10 @@ class ChannelModule {
       return;
     }
 
-    downloadModule.doChannelDownloads();
-
     try {
-      const playlistModule = require('./playlistModule');
-      playlistModule.playlistAutoDownload().catch(err => {
-        logger.error({ err }, 'playlistAutoDownload failed in cron');
-      });
+      await downloadModule.doChannelAndPlaylistDownloads();
     } catch (err) {
-      logger.error({ err }, 'playlistAutoDownload failed in cron');
+      logger.error({ err }, 'Scheduled channel + playlist downloads failed');
     }
   }
 

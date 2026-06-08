@@ -59,7 +59,8 @@ jest.mock('../configModule', () => {
 });
 
 jest.mock('../downloadModule', () => ({
-  doChannelDownloads: jest.fn()
+  doChannelDownloads: jest.fn(),
+  doChannelAndPlaylistDownloads: jest.fn()
 }));
 
 jest.mock('../fileCheckModule', () => ({
@@ -2507,15 +2508,16 @@ describe('ChannelModule', () => {
       beforeEach(() => {
         jobModule = require('../jobModule');
         jobModule.getAllJobs.mockReturnValue({});
-        downloadModule.doChannelDownloads.mockClear();
+        downloadModule.doChannelAndPlaylistDownloads.mockClear();
+        downloadModule.doChannelAndPlaylistDownloads.mockResolvedValue(undefined);
       });
 
-      test('should trigger channel downloads when no job is running', () => {
+      test('runs channel + playlist downloads via the combined orchestration when none is running', async () => {
         jobModule.getAllJobs.mockReturnValue({});
 
-        ChannelModule.channelAutoDownload();
+        await ChannelModule.channelAutoDownload();
 
-        expect(downloadModule.doChannelDownloads).toHaveBeenCalled();
+        expect(downloadModule.doChannelAndPlaylistDownloads).toHaveBeenCalledTimes(1);
         expect(logger.info).toHaveBeenCalledWith(
           expect.objectContaining({
             currentTime: expect.any(Date),
@@ -2525,36 +2527,49 @@ describe('ChannelModule', () => {
         );
       });
 
-      test('should skip channel downloads when job is in progress', () => {
+      test('skips when a channel download is already running (In Progress)', async () => {
         jobModule.getAllJobs.mockReturnValue({
           'job-123': { jobType: 'Channel Downloads', status: 'In Progress' }
         });
 
-        ChannelModule.channelAutoDownload();
+        await ChannelModule.channelAutoDownload();
 
-        expect(downloadModule.doChannelDownloads).not.toHaveBeenCalled();
+        expect(downloadModule.doChannelAndPlaylistDownloads).not.toHaveBeenCalled();
         expect(logger.warn).toHaveBeenCalledWith('Skipping scheduled channel download - previous download still in progress');
       });
 
-      test('should skip channel downloads when job is pending', () => {
+      test('skips when a channel download is already running (Pending)', async () => {
         jobModule.getAllJobs.mockReturnValue({
           'job-456': { jobType: 'Channel Downloads', status: 'Pending' }
         });
 
-        ChannelModule.channelAutoDownload();
+        await ChannelModule.channelAutoDownload();
 
-        expect(downloadModule.doChannelDownloads).not.toHaveBeenCalled();
+        expect(downloadModule.doChannelAndPlaylistDownloads).not.toHaveBeenCalled();
         expect(logger.warn).toHaveBeenCalledWith('Skipping scheduled channel download - previous download still in progress');
       });
 
-      test('should trigger downloads when other job types are running', () => {
+      test('triggers orchestration when other job types are running', async () => {
         jobModule.getAllJobs.mockReturnValue({
           'job-789': { jobType: 'Manually Added Urls', status: 'In Progress' }
         });
 
-        ChannelModule.channelAutoDownload();
+        await ChannelModule.channelAutoDownload();
 
-        expect(downloadModule.doChannelDownloads).toHaveBeenCalled();
+        expect(downloadModule.doChannelAndPlaylistDownloads).toHaveBeenCalledTimes(1);
+      });
+
+      test('logs error when orchestration throws', async () => {
+        jobModule.getAllJobs.mockReturnValue({});
+        const err = new Error('orchestration failed');
+        downloadModule.doChannelAndPlaylistDownloads.mockRejectedValueOnce(err);
+
+        await ChannelModule.channelAutoDownload();
+
+        expect(logger.error).toHaveBeenCalledWith(
+          expect.objectContaining({ err }),
+          'Scheduled channel + playlist downloads failed'
+        );
       });
     });
   });

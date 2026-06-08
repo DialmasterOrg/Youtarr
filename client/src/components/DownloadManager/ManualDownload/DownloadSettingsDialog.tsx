@@ -230,7 +230,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
           <Alert severity="info" className="mb-4">
             <Typography variant="body2">
               {mode === 'channel'
-                ? 'Downloading new videos from auto-download enabled channels/tabs. Channel settings and filters will be applied per channel.'
+                ? 'Downloading new videos from auto-download enabled channels/tabs and playlists. Channel and playlist settings and filters will be applied per channel/playlist.'
                 : videoCount === 1
                 ? 'You are about to download 1 video.'
                 : `You are about to download ${videoCount} videos.`}

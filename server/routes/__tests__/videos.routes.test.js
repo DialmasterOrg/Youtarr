@@ -2,6 +2,11 @@ const express = require('express');
 const createVideoRoutes = require('../../routes/videos');
 const { findRouteHandler } = require('../../__tests__/testUtils');
 
+jest.mock('../../modules/jobModule', () => ({
+  getRunningJobs: jest.fn().mockReturnValue([]),
+}));
+const jobModuleShared = require('../../modules/jobModule');
+
 describe('POST /api/videos/rating', () => {
   const loggerMock = {
     info: jest.fn(),
@@ -296,5 +301,75 @@ describe('PATCH /api/videos/:id/protected', () => {
 
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: 'Failed to update protection status' });
+  });
+});
+
+describe('POST /triggerchanneldownloads', () => {
+  const loggerMock = {
+    info: jest.fn(),
+    error: jest.fn(),
+  };
+
+  const createResponse = () => {
+    const res = {};
+    res.status = jest.fn(() => res);
+    res.json = jest.fn(() => res);
+    return res;
+  };
+
+  let downloadModuleMock;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jobModuleShared.getRunningJobs.mockReturnValue([]);
+
+    downloadModuleMock = {
+      doChannelAndPlaylistDownloads: jest.fn().mockResolvedValue(undefined),
+    };
+  });
+
+  const getHandler = () => {
+    const router = createVideoRoutes({
+      verifyToken: (req, res, next) => next(),
+      videosModule: {},
+      downloadModule: downloadModuleMock,
+    });
+    const app = express();
+    app.use(express.json());
+    app.use(router);
+    return findRouteHandler(app, 'post', '/triggerchanneldownloads');
+  };
+
+  it('triggers combined channel + playlist downloads', () => {
+    const handler = getHandler();
+    const req = {
+      body: {},
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    handler(req, res);
+
+    expect(res.json).toHaveBeenCalledWith({ status: 'success' });
+    expect(downloadModuleMock.doChannelAndPlaylistDownloads).toHaveBeenCalled();
+  });
+
+  it('returns 400 when a channel download job is already running', () => {
+    jobModuleShared.getRunningJobs.mockReturnValue([
+      { jobType: 'Channel Downloads', status: 'In Progress' },
+    ]);
+
+    const handler = getHandler();
+    const req = {
+      body: {},
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Job Already Running' });
+    expect(downloadModuleMock.doChannelAndPlaylistDownloads).not.toHaveBeenCalled();
   });
 });
