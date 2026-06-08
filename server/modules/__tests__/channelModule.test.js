@@ -76,7 +76,8 @@ jest.mock('../ytDlpRunner', () => ({
 }));
 
 jest.mock('../filesystem', () => ({
-  sanitizeNameLikeYtDlp: jest.fn((name) => name) // Pass through by default
+  sanitizeNameLikeYtDlp: jest.fn((name) => name), // Pass through by default
+  GLOBAL_DEFAULT_SENTINEL: '##USE_GLOBAL_DEFAULT##'
 }));
 
 jest.mock('../youtubeApi', () => ({
@@ -518,9 +519,55 @@ describe('ChannelModule', () => {
           description: channelData.description,
           uploader: channelData.uploader,
           url: channelData.url,
-          enabled: false
+          enabled: false,
+          sub_folder: '##USE_GLOBAL_DEFAULT##'
         });
         expect(result).toBe(mockChannel);
+      });
+
+      test('should default sub_folder to global-default sentinel when no initialSettings provided', async () => {
+        const mockChannel = { ...mockChannelData };
+        Channel.findOne.mockResolvedValueOnce(null); // Not found by channel_id
+        Channel.findOne.mockResolvedValueOnce(null); // Not found by URL
+        Channel.create.mockResolvedValue(mockChannel);
+
+        const channelData = {
+          id: 'UC_DEFAULT',
+          title: 'Default Channel',
+          description: 'Default Description',
+          uploader: 'Default Uploader',
+          url: 'https://youtube.com/@defaultchannel'
+        };
+
+        await ChannelModule.upsertChannel(channelData);
+
+        expect(Channel.create).toHaveBeenCalledWith(
+          expect.objectContaining({ sub_folder: '##USE_GLOBAL_DEFAULT##' })
+        );
+      });
+
+      test('should persist an explicit null sub_folder as root (not coerce to sentinel)', async () => {
+        const mockChannel = { ...mockChannelData };
+        Channel.findOne.mockResolvedValueOnce(null); // Not found by channel_id
+        Channel.findOne.mockResolvedValueOnce(null); // Not found by URL
+        Channel.create.mockResolvedValue(mockChannel);
+
+        const channelData = {
+          id: 'UC_ROOT',
+          title: 'Root Channel',
+          description: 'Root Description',
+          uploader: 'Root Uploader',
+          url: 'https://youtube.com/@rootchannel'
+        };
+
+        // User explicitly selected "No Subfolder (root)" -> null
+        const initialSettings = { sub_folder: null };
+
+        await ChannelModule.upsertChannel(channelData, false, null, initialSettings);
+
+        expect(Channel.create).toHaveBeenCalledWith(
+          expect.objectContaining({ sub_folder: null })
+        );
       });
 
       test('should update existing channel found by channel_id', async () => {
@@ -716,7 +763,8 @@ describe('ChannelModule', () => {
           description: channelData.description,
           uploader: channelData.uploader,
           url: channelData.url,
-          enabled: true
+          enabled: true,
+          sub_folder: '##USE_GLOBAL_DEFAULT##'
         });
         expect(result).toBe(mockChannel);
       });

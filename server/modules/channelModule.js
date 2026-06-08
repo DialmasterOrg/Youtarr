@@ -11,7 +11,7 @@ const MessageEmitter = require('./messageEmitter.js');
 const { Op, fn, col, where } = require('sequelize');
 const fileCheckModule = require('./fileCheckModule');
 const logger = require('../logger');
-const { sanitizeNameLikeYtDlp } = require('./filesystem');
+const { sanitizeNameLikeYtDlp, GLOBAL_DEFAULT_SENTINEL } = require('./filesystem');
 const youtubeApi = require('./youtubeApi');
 const ratingMapper = require('./ratingMapper');
 const tempPathManager = require('./download/tempPathManager');
@@ -477,7 +477,17 @@ class ChannelModule {
     if (!channel) {
       // Apply initial settings only for new channels
       if (initialSettings.video_quality != null) updateData.video_quality = initialSettings.video_quality;
-      if (initialSettings.sub_folder != null) updateData.sub_folder = initialSettings.sub_folder;
+      // Three sub_folder states must stay distinct:
+      //   absent          -> global-default sentinel (falls through to global default)
+      //   explicit null   -> filesystem root (user chose "No Subfolder")
+      //   explicit value  -> that value
+      // hasOwnProperty, not a null check, keeps explicit-null distinct from absent.
+      // Mirrors playlistModule.ensureSourceChannel.
+      if (Object.prototype.hasOwnProperty.call(initialSettings, 'sub_folder')) {
+        updateData.sub_folder = initialSettings.sub_folder;
+      } else {
+        updateData.sub_folder = GLOBAL_DEFAULT_SENTINEL;
+      }
       if (initialSettings.default_rating != null) updateData.default_rating = initialSettings.default_rating;
       if (initialSettings.min_duration != null) updateData.min_duration = initialSettings.min_duration;
       if (initialSettings.max_duration != null) updateData.max_duration = initialSettings.max_duration;
@@ -915,7 +925,7 @@ class ChannelModule {
       url: channelUrl,
       auto_download_enabled_tabs: tabResult?.autoDownloadEnabledTabs || 'video',
       available_tabs: tabResult?.availableTabs?.join(',') || null,
-      sub_folder: null,
+      sub_folder: GLOBAL_DEFAULT_SENTINEL,
       video_quality: null,
     };
   }

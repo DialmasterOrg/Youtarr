@@ -138,6 +138,49 @@ describe('importJobRunner.runImport', () => {
     );
   });
 
+  test('forwards an explicit null subFolder (No Subfolder / root) to initialSettings', async () => {
+    const channels = [
+      {
+        channelId: 'UC_root_test',
+        url: 'https://www.youtube.com/channel/UC_root_test',
+        title: 'Root Channel',
+        // User selected "No Subfolder (root)" -> subFolder: null
+        settings: { subFolder: null, autoDownloadEnabled: true, downloadType: 'videos' },
+      },
+    ];
+    activeJob = makeActiveJob(1);
+    await runImport(deps, activeJob, channels);
+
+    expect(deps.channelModule.getChannelInfo).toHaveBeenCalledWith(
+      channels[0].url,
+      false,
+      true,
+      expect.objectContaining({ sub_folder: null }),
+      { skipTabDetection: true }
+    );
+  });
+
+  test('forwards the global-default sentinel subFolder to initialSettings', async () => {
+    const channels = [
+      {
+        channelId: 'UC_default_test',
+        url: 'https://www.youtube.com/channel/UC_default_test',
+        title: 'Default Subfolder Channel',
+        settings: { subFolder: '##USE_GLOBAL_DEFAULT##', autoDownloadEnabled: true, downloadType: 'videos' },
+      },
+    ];
+    activeJob = makeActiveJob(1);
+    await runImport(deps, activeJob, channels);
+
+    expect(deps.channelModule.getChannelInfo).toHaveBeenCalledWith(
+      channels[0].url,
+      false,
+      true,
+      expect.objectContaining({ sub_folder: '##USE_GLOBAL_DEFAULT##' }),
+      { skipTabDetection: true }
+    );
+  });
+
   test('always enables channel even when autoDownloadEnabled is false', async () => {
     const channels = [
       {
