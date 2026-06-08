@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { Playlist, PlaylistVideo } from '../types/playlist';
 
@@ -11,11 +11,15 @@ export interface DownloadOverrideSettings {
   skipVideoFolder?: boolean;
 }
 
+export type PlaylistSortOrder = 'asc' | 'desc';
+
+const DEFAULT_PAGE_SIZE = 50;
+
 interface UsePlaylistDetailParams {
   token: string | null;
   playlistId: string | null;
-  videoPage?: number;
-  videoPageSize?: number;
+  pageSize?: number;
+  sortOrder?: PlaylistSortOrder;
 }
 
 interface PlaylistDetailResponse {
@@ -32,29 +36,49 @@ function authHeaders(token: string | null): Record<string, string> | undefined {
   return token ? { 'x-access-token': token } : undefined;
 }
 
+function mergeUniqueById(existing: PlaylistVideo[], incoming: PlaylistVideo[]): PlaylistVideo[] {
+  const seen = new Set(existing.map((v) => v.id));
+  const merged = [...existing];
+  for (const video of incoming) {
+    if (seen.has(video.id)) continue;
+    seen.add(video.id);
+    merged.push(video);
+  }
+  return merged;
+}
+
 export const usePlaylistDetail = ({
   token,
   playlistId,
-  videoPage = 1,
-  videoPageSize = 50,
+  pageSize = DEFAULT_PAGE_SIZE,
+  sortOrder = 'desc',
 }: UsePlaylistDetailParams) => {
   const [playlist, setPlaylist] = useState<Playlist | null>(null);
   const [videos, setVideos] = useState<PlaylistVideo[]>([]);
   const [videoTotal, setVideoTotal] = useState(0);
   const [notDownloadedCount, setNotDownloadedCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(!!(token && playlistId));
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchPlaylist = useCallback(async () => {
+  // Tracks the highest video page currently loaded; a request-id guard drops
+  // stale responses when a sort change or reset races with an in-flight fetch.
+  const pageRef = useRef(1);
+  const requestIdRef = useRef(0);
+
+  const loadInitial = useCallback(async () => {
     if (!token || !playlistId) {
       setPlaylist(null);
       setVideos([]);
       setVideoTotal(0);
       setNotDownloadedCount(null);
       setLoading(false);
+      setError(null);
       return;
     }
 
+    const requestId = ++requestIdRef.current;
+    pageRef.current = 1;
     setLoading(true);
     setError(null);
 
@@ -65,9 +89,10 @@ export const usePlaylistDetail = ({
         axios.get<PlaylistDetailResponse>(`/api/playlists/${playlistId}`, { headers }),
         axios.get<PlaylistVideosResponse>(`/api/playlists/${playlistId}/videos`, {
           headers,
-          params: { page: videoPage, pageSize: videoPageSize },
+          params: { page: 1, pageSize, sortOrder },
         }),
       ]);
+      if (requestId !== requestIdRef.current) return;
       setPlaylist(playlistRes.data.playlist || null);
       setNotDownloadedCount(
         typeof playlistRes.data.not_downloaded_count === 'number'
@@ -77,6 +102,7 @@ export const usePlaylistDetail = ({
       setVideos(videosRes.data.videos || []);
       setVideoTotal(videosRes.data.total || 0);
     } catch (err: unknown) {
+      if (requestId !== requestIdRef.current) return;
       const status = axios.isAxiosError(err) ? err.response?.status : undefined;
       if (status === 404) {
         setError('Playlist not found');
@@ -87,13 +113,74 @@ export const usePlaylistDetail = ({
         setError(typeof message === 'string' ? message : 'Failed to load playlist');
       }
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [token, playlistId, videoPage, videoPageSize]);
+  }, [token, playlistId, pageSize, sortOrder]);
 
   useEffect(() => {
-    fetchPlaylist();
-  }, [fetchPlaylist]);
+    loadInitial();
+  }, [loadInitial]);
+
+  const hasMore = videos.length < videoTotal;
+
+  const loadMore = useCallback(async () => {
+    if (!token || !playlistId) return;
+    if (loading || loadingMore) return;
+    if (videos.length >= videoTotal) return;
+
+    const requestId = requestIdRef.current;
+    const nextPage = pageRef.current + 1;
+    setLoadingMore(true);
+
+    try {
+      const res = await axios.get<PlaylistVideosResponse>(
+        `/api/playlists/${playlistId}/videos`,
+        {
+          headers: authHeaders(token),
+          params: { page: nextPage, pageSize, sortOrder },
+        }
+      );
+      // A reset (sort change / refetch) happened mid-flight; discard this page.
+      if (requestId !== requestIdRef.current) return;
+      pageRef.current = nextPage;
+      setVideos((prev) => mergeUniqueById(prev, res.data.videos || []));
+      setVideoTotal(res.data.total || 0);
+    } catch {
+      // Keep the videos already loaded; a failed "load more" should not wipe them.
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [token, playlistId, pageSize, sortOrder, loading, loadingMore, videos.length, videoTotal]);
+
+  // Refreshes only playlist meta + the not-downloaded count without reloading
+  // the (paginated) video list, so scroll position is preserved.
+  const refetchMeta = useCallback(async () => {
+    if (!token || !playlistId) return;
+    try {
+      const res = await axios.get<PlaylistDetailResponse>(
+        `/api/playlists/${playlistId}`,
+        { headers: authHeaders(token) }
+      );
+      setPlaylist(res.data.playlist || null);
+      setNotDownloadedCount(
+        typeof res.data.not_downloaded_count === 'number'
+          ? res.data.not_downloaded_count
+          : null
+      );
+    } catch {
+      // Keep existing meta on failure.
+    }
+  }, [token, playlistId]);
+
+  const markVideoIgnored = useCallback((youtubeId: string, ignored: boolean) => {
+    setVideos((prev) =>
+      prev.map((v) =>
+        v.youtube_id === youtubeId
+          ? { ...v, ignored, ignored_at: ignored ? new Date().toISOString() : null }
+          : v
+      )
+    );
+  }, []);
 
   const refresh = useCallback(async () => {
     if (!token || !playlistId) return;
@@ -102,8 +189,8 @@ export const usePlaylistDetail = ({
       {},
       { headers: authHeaders(token) }
     );
-    await fetchPlaylist();
-  }, [token, playlistId, fetchPlaylist]);
+    await loadInitial();
+  }, [token, playlistId, loadInitial]);
 
   const sync = useCallback(async () => {
     if (!token || !playlistId) return;
@@ -112,8 +199,8 @@ export const usePlaylistDetail = ({
       {},
       { headers: authHeaders(token) }
     );
-    await fetchPlaylist();
-  }, [token, playlistId, fetchPlaylist]);
+    await loadInitial();
+  }, [token, playlistId, loadInitial]);
 
   const regenerateM3U = useCallback(async () => {
     if (!token || !playlistId) return;
@@ -145,8 +232,13 @@ export const usePlaylistDetail = ({
     videoTotal,
     notDownloadedCount,
     loading,
+    loadingMore,
+    hasMore,
     error,
-    refetch: fetchPlaylist,
+    loadMore,
+    refetch: loadInitial,
+    refetchMeta,
+    markVideoIgnored,
     refresh,
     sync,
     regenerateM3U,

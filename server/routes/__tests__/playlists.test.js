@@ -722,6 +722,36 @@ describe('GET /api/playlists/:playlistId/videos', () => {
     });
   });
 
+  test('orders by position DESC when sortOrder=desc', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue({ count: 0, rows: [] });
+
+    const handler = getHandler('get', '/api/playlists/:playlistId/videos', deps);
+    const req = { params: { playlistId: 'PLtest123' }, query: { sortOrder: 'desc' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.models.PlaylistVideo.findAndCountAll).toHaveBeenCalledWith(
+      expect.objectContaining({ order: [['position', 'DESC']] })
+    );
+  });
+
+  test('falls back to position ASC for an invalid sortOrder', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue({ count: 0, rows: [] });
+
+    const handler = getHandler('get', '/api/playlists/:playlistId/videos', deps);
+    const req = { params: { playlistId: 'PLtest123' }, query: { sortOrder: 'sideways' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.models.PlaylistVideo.findAndCountAll).toHaveBeenCalledWith(
+      expect.objectContaining({ order: [['position', 'ASC']] })
+    );
+  });
+
   test('caps pageSize at 200', async () => {
     const deps = buildDeps();
     deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue({ count: 0, rows: [] });

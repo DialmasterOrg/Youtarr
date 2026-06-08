@@ -6,6 +6,8 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
 
   const ALLOWED_RESOLUTIONS = ['360', '480', '720', '1080', '1440', '2160'];
   const ALLOWED_AUDIO_FORMATS = ['video_mp3', 'mp3_only'];
+  const VIDEO_SORT_DIRECTIONS = { asc: 'ASC', desc: 'DESC' };
+  const DEFAULT_VIDEO_SORT_DIRECTION = 'ASC';
 
   // Returns { ok: true, value } or { ok: false }. value is undefined when input
   // is absent. Unknown keys are ignored. Rating is validated and normalized here
@@ -203,11 +205,14 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     try {
       const page = parseInt(req.query.page || '1', 10);
       const pageSize = Math.min(parseInt(req.query.pageSize || '50', 10), 200);
+      const sortDirection =
+        VIDEO_SORT_DIRECTIONS[String(req.query.sortOrder || '').toLowerCase()] ||
+        DEFAULT_VIDEO_SORT_DIRECTION;
       const { count, rows } = await PlaylistVideo.findAndCountAll({
         where: { playlist_id: req.params.playlistId },
         limit: pageSize,
         offset: (page - 1) * pageSize,
-        order: [['position', 'ASC']],
+        order: [['position', sortDirection]],
       });
 
       const youtubeIds = rows.map((r) => r.youtube_id).filter(Boolean);

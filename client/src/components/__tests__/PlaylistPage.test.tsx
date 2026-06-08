@@ -74,8 +74,13 @@ jest.mock('../../hooks/usePlaylistDetail', () => ({
     videos: [mockVideo],
     notDownloadedCount: 1,
     loading: false,
+    loadingMore: false,
+    hasMore: false,
     error: null,
+    loadMore: jest.fn(),
     refetch: jest.fn(),
+    refetchMeta: jest.fn(),
+    markVideoIgnored: jest.fn(),
     refresh: jest.fn(),
     sync: jest.fn(),
     regenerateM3U: jest.fn(),
@@ -187,5 +192,12 @@ describe('PlaylistPage selected-download selection lifecycle', () => {
     await waitFor(() =>
       expect(mockToggleAutoDownload).toHaveBeenCalledWith('PL1', true)
     );
+  });
+
+  test('renders the sort control defaulting to newest first', () => {
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    const sortControl = screen.getByRole('button', { name: 'Sort' });
+    expect(sortControl).toHaveTextContent('Newest first');
   });
 });

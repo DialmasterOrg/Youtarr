@@ -14,13 +14,14 @@ import {
 } from './ui';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useConfig } from '../hooks/useConfig';
-import { usePlaylistDetail } from '../hooks/usePlaylistDetail';
+import { usePlaylistDetail, PlaylistSortOrder } from '../hooks/usePlaylistDetail';
 import { usePlaylistMutations } from '../hooks/usePlaylistMutations';
 import { useMediaServerStatus } from '../hooks/useMediaServerStatus';
 import { MediaServerType, PlaylistSubscribeSettings, PlaylistVideo } from '../types/playlist';
 import PlaylistHeader from './PlaylistPage/components/PlaylistHeader';
 import NoMediaServerWarning from './PlaylistPage/components/NoMediaServerWarning';
 import PlaylistVideoList from './PlaylistPage/components/PlaylistVideoList';
+import PlaylistSortControl from './PlaylistPage/components/PlaylistSortControl';
 import { useVideoSelection } from './shared/VideoList/hooks/useVideoSelection';
 import VideoListSelectionPill from './shared/VideoList/VideoListSelectionPill';
 import { SelectionAction } from './shared/VideoList/types';
@@ -77,18 +78,25 @@ function PlaylistPage({ token }: PlaylistPageProps) {
   const playlistId = playlistIdParam || null;
   const isMobile = useMediaQuery('(max-width: 767px)');
 
+  const [sortOrder, setSortOrder] = useState<PlaylistSortOrder>('desc');
+
   const {
     playlist,
     videos,
     notDownloadedCount,
     loading,
+    loadingMore,
+    hasMore,
     error,
+    loadMore,
     refetch,
+    refetchMeta,
+    markVideoIgnored,
     refresh,
     sync,
     regenerateM3U,
     triggerDownload,
-  } = usePlaylistDetail({ token, playlistId });
+  } = usePlaylistDetail({ token, playlistId, sortOrder });
 
   const {
     status: serverStatus,
@@ -146,6 +154,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
   );
 
   const selectionClearRef = useRef<() => void>(() => {});
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const handleDownloadSelected = useCallback((ids: string[]) => {
     if (!ids.length) return;
@@ -202,6 +211,22 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     selectionClearRef.current = selection.clear;
   }, [selection.clear]);
 
+  useEffect(() => {
+    if (!loadMoreRef.current) return;
+    if (loading || loadingMore || !hasMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          void loadMore();
+        }
+      },
+      { root: null, rootMargin: '0px 0px 160px 0px', threshold: 0 }
+    );
+    observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [loading, loadingMore, hasMore, loadMore]);
+
   const handleToggleSync = useCallback(
     async (server: MediaServerType, enabled: boolean) => {
       if (!playlist) return;
@@ -244,9 +269,14 @@ function PlaylistPage({ token }: PlaylistPageProps) {
       setPendingVideoId(ytId);
       const ok = await ignoreVideo(playlist.playlist_id, ytId);
       setPendingVideoId(null);
-      if (ok) await refetch();
+      if (ok) {
+        // Update the row in place and refresh only the count, so the user's
+        // scroll position in a long (paginated) list is preserved.
+        markVideoIgnored(ytId, true);
+        await refetchMeta();
+      }
     },
-    [playlist, ignoreVideo, refetch]
+    [playlist, ignoreVideo, markVideoIgnored, refetchMeta]
   );
 
   const handleUnignoreVideo = useCallback(
@@ -255,9 +285,12 @@ function PlaylistPage({ token }: PlaylistPageProps) {
       setPendingVideoId(ytId);
       const ok = await unignoreVideo(playlist.playlist_id, ytId);
       setPendingVideoId(null);
-      if (ok) await refetch();
+      if (ok) {
+        markVideoIgnored(ytId, false);
+        await refetchMeta();
+      }
     },
-    [playlist, unignoreVideo, refetch]
+    [playlist, unignoreVideo, markVideoIgnored, refetchMeta]
   );
 
   const handleSettingsSaved = useCallback(
@@ -330,9 +363,16 @@ function PlaylistPage({ token }: PlaylistPageProps) {
 
       <Card style={{ borderRadius: 'var(--radius-ui)' }}>
         <CardContent>
-          <Typography variant="h6" style={{ fontWeight: 600, marginBottom: 8 }}>
-            Videos (in playlist order)
-          </Typography>
+          <Box className="flex items-center justify-between gap-3 flex-wrap mb-2">
+            <Typography variant="h6" style={{ fontWeight: 600 }}>
+              Videos
+            </Typography>
+            <PlaylistSortControl
+              value={sortOrder}
+              onChange={setSortOrder}
+              disabled={loading && videos.length === 0}
+            />
+          </Box>
           <PlaylistVideoList
             videos={videos}
             loading={loading}
@@ -345,6 +385,15 @@ function PlaylistPage({ token }: PlaylistPageProps) {
             onSelectAll={(ids) => selection.selectAll(ids)}
             onClearSelection={selection.clear}
           />
+          {hasMore && (
+            <div ref={loadMoreRef} className="flex justify-center py-3">
+              {loadingMore && (
+                <Typography variant="body2" color="text.secondary">
+                  Loading more...
+                </Typography>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
