@@ -617,7 +617,7 @@ class DownloadModule {
     const entries = await PlaylistVideo.findAll({
       where,
       order: [['position', 'ASC']],
-      attributes: ['youtube_id', 'channel_id'],
+      attributes: ['youtube_id', 'channel_id', 'channel_name'],
     });
 
     if (!entries.length) return;
@@ -632,7 +632,10 @@ class DownloadModule {
       if (entry.channel_id) {
         const channelExists = await Channel.findOne({ where: { channel_id: entry.channel_id } });
         if (!channelExists) {
-          await playlistModule.ensureSourceChannel({ channel_id: entry.channel_id }, playlist);
+          await playlistModule.ensureSourceChannel(
+            { channel_id: entry.channel_id, uploader: entry.channel_name || null },
+            playlist
+          );
         }
       }
 

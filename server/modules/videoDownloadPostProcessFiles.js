@@ -188,24 +188,32 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
         const channelId = jsonData.channel_id.trim();
         channelRecord = await Channel.findOne({
           where: { channel_id: channelId },
-          attributes: ['id', 'sub_folder', 'uploader', 'folder_name', 'default_rating'] // Ensure default_rating is fetched
+          attributes: ['id', 'sub_folder', 'title', 'uploader', 'folder_name', 'default_rating']
         });
 
         logger.info({ channelId, found: !!channelRecord }, 'Post-process channel lookup');
         if (channelRecord) {
           logger.info({ channelId, defaultRating: channelRecord.default_rating }, 'Post-process channel default rating');
 
-          // Update folder_name if channel exists but name changed
+          // Backfill channel metadata learned from the download. folder_name is the
+          // yt-dlp-sanitized directory name; title/uploader use the raw channel name
+          // and are only filled when currently empty (e.g. a channel auto-seeded from
+          // a playlist with just a channel_id, before the playlist sync captured a
+          // channel_name), so an activated/refreshed channel is never clobbered.
+          const realChannelName = jsonData.uploader || jsonData.channel || null;
+          const channelPatch = {};
           if (actualChannelFolderName && channelRecord.folder_name !== actualChannelFolderName) {
+            channelPatch.folder_name = actualChannelFolderName;
+          }
+          if (realChannelName && !channelRecord.title) channelPatch.title = realChannelName;
+          if (realChannelName && !channelRecord.uploader) channelPatch.uploader = realChannelName;
+          if (Object.keys(channelPatch).length > 0) {
             try {
-              await Channel.update(
-                { folder_name: actualChannelFolderName },
-                { where: { id: channelRecord.id } }
-              );
-              channelRecord.folder_name = actualChannelFolderName;
-              logger.info({ folderName: actualChannelFolderName }, 'Post-process updated channel folder_name');
+              await Channel.update(channelPatch, { where: { id: channelRecord.id } });
+              Object.assign(channelRecord, channelPatch);
+              logger.info({ channelId, patch: channelPatch }, 'Post-process backfilled channel metadata');
             } catch (updateErr) {
-              logger.error({ err: updateErr }, 'Post-process error updating folder_name');
+              logger.error({ err: updateErr }, 'Post-process error updating channel metadata');
             }
           }
         } else {

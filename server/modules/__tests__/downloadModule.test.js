@@ -1447,10 +1447,10 @@ describe('DownloadModule', () => {
       expect(spy).not.toHaveBeenCalled();
     });
 
-    it('calls ensureSourceChannel for videos whose source channel is missing', async () => {
+    it('calls ensureSourceChannel for videos whose source channel is missing, forwarding the stored channel name', async () => {
       PlaylistVideoMock.findAll.mockResolvedValue([
-        { youtube_id: 'vid001', channel_id: 'UCmissing' },
-        { youtube_id: 'vid002', channel_id: 'UCpresent' },
+        { youtube_id: 'vid001', channel_id: 'UCmissing', channel_name: 'Little Mix' },
+        { youtube_id: 'vid002', channel_id: 'UCpresent', channel_name: 'Present Co' },
       ]);
       // vid001 not downloaded, vid002 not downloaded
       VideoMock.findOne.mockResolvedValue(null);
@@ -1464,7 +1464,23 @@ describe('DownloadModule', () => {
 
       expect(playlistModuleMock.ensureSourceChannel).toHaveBeenCalledTimes(1);
       expect(playlistModuleMock.ensureSourceChannel).toHaveBeenCalledWith(
-        { channel_id: 'UCmissing' },
+        { channel_id: 'UCmissing', uploader: 'Little Mix' },
+        mockPlaylist
+      );
+    });
+
+    it('seeds a null uploader when the playlist row has no stored channel name', async () => {
+      PlaylistVideoMock.findAll.mockResolvedValue([
+        { youtube_id: 'vid001', channel_id: 'UCmissing', channel_name: null },
+      ]);
+      VideoMock.findOne.mockResolvedValue(null);
+      ChannelMock.findOne.mockResolvedValueOnce(null);
+      jest.spyOn(downloadModule, 'doSpecificDownloads').mockResolvedValue();
+
+      await downloadModule.doPlaylistDownloads(mockPlaylist);
+
+      expect(playlistModuleMock.ensureSourceChannel).toHaveBeenCalledWith(
+        { channel_id: 'UCmissing', uploader: null },
         mockPlaylist
       );
     });
@@ -1566,7 +1582,8 @@ describe('DownloadModule', () => {
       );
     });
 
-    it('dispatches one doSpecificDownloads per command-settings group with no routing when nothing forces it', async () => {
+    it('dispatches one doSpecificDownloads per command-settings group, forwarding the playlist root choice as the soft fallback', async () => {
+      const { ROOT_SENTINEL } = require('../filesystem/constants');
       PlaylistVideoMock.findAll.mockResolvedValue([
         { youtube_id: 'a', channel_id: null },
         { youtube_id: 'b', channel_id: null },
@@ -1587,8 +1604,10 @@ describe('DownloadModule', () => {
         jobLabel: 'Playlist: Test Playlist',
         overrideSettings: { resolution: '720', audioFormat: null, skipVideoFolder: false },
       });
+      // mockPlaylist.default_sub_folder is null (explicit "root") -> forwarded as
+      // a soft fallback sentinel, never as a hard subfolder override.
       expect(first.overrideSettings).not.toHaveProperty('subfolder');
-      expect(first.overrideSettings).not.toHaveProperty('subfolderFallback');
+      expect(first.overrideSettings.subfolderFallback).toBe(ROOT_SENTINEL);
       expect(first.overrideSettings).not.toHaveProperty('rating');
       expect(first.overrideSettings).not.toHaveProperty('ratingFallback');
       expect(spy.mock.calls[1][0].body.overrideSettings).toMatchObject({

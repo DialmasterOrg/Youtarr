@@ -63,7 +63,8 @@ const mockJobVideoDownload = {
 };
 
 const mockChannel = {
-  findOne: jest.fn(() => Promise.resolve(null))
+  findOne: jest.fn(() => Promise.resolve(null)),
+  update: jest.fn(() => Promise.resolve([1]))
 };
 
 jest.mock('../../models/channel', () => mockChannel);
@@ -219,6 +220,62 @@ describe('videoDownloadPostProcessFiles', () => {
     expect(nfoGenerator.writeVideoNfoFile).toHaveBeenCalledWith(videoPath, expect.any(Object));
     expect(configModule.stopWatchingConfig).toHaveBeenCalled();
     expect(process.exit).not.toHaveBeenCalled();
+  });
+
+  it('backfills title and uploader for a nameless seeded channel from the info json', async () => {
+    Channel.findOne.mockResolvedValue({
+      id: 7,
+      sub_folder: '##USE_GLOBAL_DEFAULT##',
+      title: null,
+      uploader: null,
+      folder_name: null,
+      default_rating: null
+    });
+    fs.readFileSync.mockReturnValue(JSON.stringify({
+      id: 'abc123',
+      upload_date: '20240131',
+      title: 'Video Title',
+      uploader: 'Little Mix',
+      channel_id: 'channel123',
+      categories: ['Education'],
+      tags: ['tag1']
+    }));
+
+    await loadModule();
+    await settleAsync();
+
+    expect(Channel.update).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Little Mix', uploader: 'Little Mix' }),
+      { where: { id: 7 } }
+    );
+  });
+
+  it('does not overwrite an existing channel title/uploader during post-process', async () => {
+    Channel.findOne.mockResolvedValue({
+      id: 7,
+      sub_folder: null,
+      title: 'Existing Name',
+      uploader: 'Existing Name',
+      folder_name: 'Existing Name',
+      default_rating: null
+    });
+    fs.readFileSync.mockReturnValue(JSON.stringify({
+      id: 'abc123',
+      upload_date: '20240131',
+      title: 'Video Title',
+      uploader: 'Different Name',
+      channel_id: 'channel123',
+      categories: ['Education'],
+      tags: ['tag1']
+    }));
+
+    await loadModule();
+    await settleAsync();
+
+    const titleClobbered = Channel.update.mock.calls.some(
+      ([patch]) => patch && (patch.title !== undefined || patch.uploader !== undefined)
+    );
+    expect(titleClobbered).toBe(false);
   });
 
   it('gracefully skips processing when info json is missing', async () => {

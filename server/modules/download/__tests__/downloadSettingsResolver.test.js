@@ -3,7 +3,7 @@ jest.mock('../../configModule', () => ({
 }));
 
 const resolver = require('../downloadSettingsResolver');
-const { ROOT_SENTINEL } = require('../../filesystem/constants');
+const { ROOT_SENTINEL, GLOBAL_DEFAULT_SENTINEL } = require('../../filesystem/constants');
 
 describe('resolveCommandSettings', () => {
   const playlist = { video_quality: '720', audio_format: 'mp3_only' };
@@ -61,6 +61,16 @@ describe('buildRoutingDirectives', () => {
       playlist: { default_sub_folder: 'PL', default_rating: 'PG' },
     });
     expect(out).toEqual({ subfolderOverride: 'Dialog', subfolderFallback: 'PL', ratingFallback: 'PG' });
+  });
+
+  test('forwards an explicit null playlist subfolder as ROOT_SENTINEL', () => {
+    const out = resolver.buildRoutingDirectives({ override: {}, playlist: { default_sub_folder: null } });
+    expect(out).toEqual({ subfolderFallback: ROOT_SENTINEL });
+  });
+
+  test('passes the global-default sentinel through unchanged', () => {
+    const out = resolver.buildRoutingDirectives({ override: {}, playlist: { default_sub_folder: GLOBAL_DEFAULT_SENTINEL } });
+    expect(out).toEqual({ subfolderFallback: GLOBAL_DEFAULT_SENTINEL });
   });
 });
 

@@ -350,7 +350,7 @@ describe('playlistModule', () => {
       );
 
       expect(channelModule.upsertChannel).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 'UC9', uploader: 'Creator X', url: 'https://www.youtube.com/channel/UC9' }),
+        expect.objectContaining({ id: 'UC9', title: 'Creator X', uploader: 'Creator X', url: 'https://www.youtube.com/channel/UC9' }),
         false,
         null,
         expect.objectContaining({
@@ -359,6 +359,22 @@ describe('playlistModule', () => {
           min_duration: 60,
           default_rating: 'PG-13',
         })
+      );
+    });
+
+    test('seeds title and uploader from the channel name so the row is not left nameless', async () => {
+      channelModule.upsertChannel.mockResolvedValue({ id: 9, channel_id: 'UCabc' });
+
+      await playlistModule.ensureSourceChannel(
+        { channel_id: 'UCabc', uploader: 'Little Mix' },
+        {}
+      );
+
+      expect(channelModule.upsertChannel).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'UCabc', title: 'Little Mix', uploader: 'Little Mix' }),
+        false,
+        null,
+        expect.any(Object)
       );
     });
 
@@ -379,13 +395,29 @@ describe('playlistModule', () => {
       );
     });
 
-    test('seeds GLOBAL_DEFAULT_SENTINEL when playlist has no default_sub_folder', async () => {
-      const { GLOBAL_DEFAULT_SENTINEL } = require('../filesystem/constants');
+    test('seeds null (explicit root) when the playlist subfolder is null', async () => {
       channelModule.upsertChannel.mockResolvedValue({ id: 9, channel_id: 'UCabc' });
 
       await playlistModule.ensureSourceChannel(
         { channel_id: 'UCabc' },
         { default_sub_folder: null }
+      );
+
+      expect(channelModule.upsertChannel).toHaveBeenCalledWith(
+        expect.any(Object),
+        false,
+        null,
+        expect.objectContaining({ sub_folder: null })
+      );
+    });
+
+    test('passes the global-default sentinel through to the seeded channel', async () => {
+      const { GLOBAL_DEFAULT_SENTINEL } = require('../filesystem/constants');
+      channelModule.upsertChannel.mockResolvedValue({ id: 9, channel_id: 'UCabc' });
+
+      await playlistModule.ensureSourceChannel(
+        { channel_id: 'UCabc' },
+        { default_sub_folder: GLOBAL_DEFAULT_SENTINEL }
       );
 
       expect(channelModule.upsertChannel).toHaveBeenCalledWith(

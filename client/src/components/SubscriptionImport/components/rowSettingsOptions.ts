@@ -1,18 +1,22 @@
+import { RESOLUTION_OPTIONS } from '../../../utils/downloadOptions';
+import { RATING_OPTIONS as SHARED_RATING_OPTIONS } from '../../../utils/ratings';
+
+const USE_GLOBAL_DEFAULT = { value: '', label: 'Use global default' };
+
+// Resolution values come from the shared list (single source of truth); the
+// compact row UI keeps its own bare "Np" labels, high -> low, with a leading
+// "use global default" entry.
 export const QUALITY_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: '', label: 'Use global default' },
-  { value: '2160', label: '2160p' },
-  { value: '1440', label: '1440p' },
-  { value: '1080', label: '1080p' },
-  { value: '720', label: '720p' },
-  { value: '480', label: '480p' },
-  { value: '360', label: '360p' },
+  USE_GLOBAL_DEFAULT,
+  ...[...RESOLUTION_OPTIONS].reverse().map((option) => ({ value: option.value, label: `${option.value}p` })),
 ];
 
+// Curated subset of the shared rating list for the import row UI (short codes).
+const IMPORT_RATING_VALUES = ['G', 'PG', 'PG-13', 'R', 'NC-17'];
+
 export const RATING_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: '', label: 'Use global default' },
-  { value: 'G', label: 'G' },
-  { value: 'PG', label: 'PG' },
-  { value: 'PG-13', label: 'PG-13' },
-  { value: 'R', label: 'R' },
-  { value: 'NC-17', label: 'NC-17' },
+  USE_GLOBAL_DEFAULT,
+  ...SHARED_RATING_OPTIONS.filter((option) => IMPORT_RATING_VALUES.includes(option.value)).map(
+    (option) => ({ value: option.value, label: option.shortLabel })
+  ),
 ];

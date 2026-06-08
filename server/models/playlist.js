@@ -1,5 +1,6 @@
 const { Model, DataTypes } = require('sequelize');
 const { sequelize } = require('../db');
+const { GLOBAL_DEFAULT_SENTINEL } = require('../modules/filesystem/constants');
 
 class Playlist extends Model {}
 
@@ -19,7 +20,10 @@ Playlist.init(
     sync_to_jellyfin: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     sync_to_emby: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     public_on_servers: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
-    default_sub_folder: { type: DataTypes.STRING, allowNull: true },
+    // New playlists default to the global default subfolder (the sentinel
+    // resolves to config's default subfolder at download time). NULL is a
+    // deliberate "download to root" choice from the settings dialog.
+    default_sub_folder: { type: DataTypes.STRING, allowNull: true, defaultValue: GLOBAL_DEFAULT_SENTINEL },
     video_quality: { type: DataTypes.TEXT, allowNull: true },
     min_duration: { type: DataTypes.INTEGER, allowNull: true },
     max_duration: { type: DataTypes.INTEGER, allowNull: true },

@@ -6,7 +6,6 @@ import {
   DialogActions,
   Button,
   FormControl,
-  FormHelperText,
   InputLabel,
   Select,
   MenuItem,
@@ -28,8 +27,11 @@ import {
 } from '../../../lib/icons';
 import { DownloadSettings } from './types';
 import { SubfolderAutocomplete } from '../../shared/SubfolderAutocomplete';
-import RatingBadge from '../../shared/RatingBadge';
+import { ResolutionSelect } from '../../shared/ResolutionSelect';
+import { AudioFormatSelect } from '../../shared/AudioFormatSelect';
+import { RatingSelect } from '../../shared/RatingSelect';
 import { useSubfolders } from '../../../hooks/useSubfolders';
+import { RESOLUTION_OPTIONS } from '../../../utils/downloadOptions';
 
 interface DownloadSettingsDialogProps {
   open: boolean;
@@ -46,15 +48,6 @@ interface DownloadSettingsDialogProps {
   defaultRating?: string | null;
   token?: string | null; // For fetching subfolders
 }
-
-const RESOLUTION_OPTIONS = [
-  { value: '360', label: '360p' },
-  { value: '480', label: '480p' },
-  { value: '720', label: '720p (HD)' },
-  { value: '1080', label: '1080p (Full HD)' },
-  { value: '1440', label: '1440p (2K)' },
-  { value: '2160', label: '2160p (4K)' }
-];
 
 const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   open,
@@ -136,11 +129,6 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
         }
       }
     }
-  };
-
-  const handleResolutionChange = (event: SelectChangeEvent<string>) => {
-    setResolution(event.target.value);
-    setHasUserInteracted(true);
   };
 
   const handleVideoCountChange = (event: SelectChangeEvent<string>) => {
@@ -356,25 +344,15 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                 Maximum Resolution
               </Typography>
 
-              <FormControl fullWidth className="mb-4">
-                <InputLabel id="resolution-select-label">Maximum Resolution</InputLabel>
-                <Select
-                  labelId="resolution-select-label"
-                  id="resolution-select"
-                  value={resolution}
-                  label="Maximum Resolution"
-                  onChange={handleResolutionChange}
-                >
-                  {RESOLUTION_OPTIONS.map(option => (
-                    <MenuItem key={option.value} value={option.value}>
-                      {option.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-                <FormHelperText>
-                  YouTube will provide the best available quality up to your selected resolution.
-                </FormHelperText>
-              </FormControl>
+              <ResolutionSelect
+                className="mb-4"
+                value={resolution}
+                onChange={(value) => {
+                  if (value) setResolution(value);
+                  setHasUserInteracted(true);
+                }}
+                helperText="YouTube will provide the best available quality up to your selected resolution."
+              />
 
               {(resolution === '2160' || resolution === '1440') && (
                 <Alert severity="warning" className="mb-4">
@@ -437,64 +415,29 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                     Download Type
                   </Typography>
 
-                  <FormControl fullWidth className="mb-4 audio-control audio-control--download-type">
-                    <InputLabel id="audio-format-select-label" shrink>Download Type</InputLabel>
-                    <Select
-                      labelId="audio-format-select-label"
-                      id="audio-format-select"
-                      value={audioFormat || ''}
-                      label="Download Type"
-                      displayEmpty
-                      notched
-                      onChange={(e) => {
-                        setAudioFormat(e.target.value || null);
-                        setHasUserInteracted(true);
-                      }}
-                    >
-                      <MenuItem value=""><em>Video Only (default)</em></MenuItem>
-                      <MenuItem value="video_mp3">Video + MP3</MenuItem>
-                      <MenuItem value="mp3_only">MP3 Only</MenuItem>
-                    </Select>
-                    {audioFormat && (
-                      <FormHelperText>
-                        MP3 files are saved at 192kbps in the same folder as videos.
-                      </FormHelperText>
-                    )}
-                  </FormControl>
+                  <AudioFormatSelect
+                    className="mb-4 audio-control audio-control--download-type"
+                    value={audioFormat}
+                    onChange={(value) => {
+                      setAudioFormat(value);
+                      setHasUserInteracted(true);
+                    }}
+                    helperText={audioFormat ? 'MP3 files are saved at 192kbps in the same folder as videos.' : undefined}
+                  />
                     <Typography variant="subtitle2" color="text.secondary" className="mb-2 mt-4">
                     Content Rating Override
                   </Typography>
 
-                    <FormControl fullWidth className="mb-4">
-                    <InputLabel id="rating-select-label" shrink>Content Rating</InputLabel>
-                    <Select
-                      labelId="rating-select-label"
-                      id="rating-select"
-                      value={rating || ''}
-                      label="Content Rating"
-                      displayEmpty
-                      onChange={(e) => {
-                        const val = e.target.value as string;
-                        setRating(val === '' ? null : val);
-                        setHasUserInteracted(true);
-                      }}
-                    >
-                      <MenuItem value="">
-                        <em>No Rating</em>
-                      </MenuItem>
-                      <MenuItem value="G"><RatingBadge rating="G" size="small" style={{ marginRight: 8 }} /> G</MenuItem>
-                      <MenuItem value="PG"><RatingBadge rating="PG" size="small" style={{ marginRight: 8 }} /> PG</MenuItem>
-                      <MenuItem value="PG-13"><RatingBadge rating="PG-13" size="small" style={{ marginRight: 8 }} /> PG-13</MenuItem>
-                      <MenuItem value="R"><RatingBadge rating="R" size="small" style={{ marginRight: 8 }} /> R</MenuItem>
-                      <MenuItem value="NC-17"><RatingBadge rating="NC-17" size="small" style={{ marginRight: 8 }} /> NC-17</MenuItem>
-                      <MenuItem value="TV-Y"><RatingBadge rating="TV-Y" size="small" style={{ marginRight: 8 }} /> TV-Y</MenuItem>
-                      <MenuItem value="TV-Y7"><RatingBadge rating="TV-Y7" size="small" style={{ marginRight: 8 }} /> TV-Y7</MenuItem>
-                      <MenuItem value="TV-G"><RatingBadge rating="TV-G" size="small" style={{ marginRight: 8 }} /> TV-G</MenuItem>
-                      <MenuItem value="TV-PG"><RatingBadge rating="TV-PG" size="small" style={{ marginRight: 8 }} /> TV-PG</MenuItem>
-                      <MenuItem value="TV-14"><RatingBadge rating="TV-14" size="small" style={{ marginRight: 8 }} /> TV-14</MenuItem>
-                      <MenuItem value="TV-MA"><RatingBadge rating="TV-MA" size="small" style={{ marginRight: 8 }} /> TV-MA</MenuItem>
-                    </Select>
-                  </FormControl>
+                  <RatingSelect
+                    className="mb-4"
+                    value={rating}
+                    onChange={(value) => {
+                      setRating(value);
+                      setHasUserInteracted(true);
+                    }}
+                    emptyLabel="No Rating"
+                    showBadge
+                  />
 
                   <FormControlLabel
                     control={

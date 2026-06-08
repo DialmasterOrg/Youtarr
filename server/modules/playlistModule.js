@@ -1,7 +1,6 @@
 const { spawn } = require('child_process');
 const logger = require('../logger');
 const { Playlist, PlaylistVideo } = require('../models');
-const { GLOBAL_DEFAULT_SENTINEL } = require('./filesystem/constants');
 const youtubeApi = require('./youtubeApi');
 
 class PlaylistModule {
@@ -216,13 +215,12 @@ class PlaylistModule {
 
   async ensureSourceChannel(uploaderInfo, playlist) {
     const channelModule = require('./channelModule');
-    // When the playlist itself doesn't specify a default_sub_folder, seed the
-    // auto-created channel with GLOBAL_DEFAULT_SENTINEL so downloads land in
-    // the configured global default subfolder — users who have a media-server
-    // library pointed at that subfolder will see the videos. A bare null
-    // would route to the filesystem root, which is rarely what the user wants.
+    // Seed the auto-created channel with the playlist's subfolder choice as-is:
+    // the sentinel (the default for new playlists) -> global default subfolder,
+    // null -> explicit root, a name -> that folder. This keeps the seeded
+    // channel consistent with the playlist's settings dialog.
     const seed = {
-      sub_folder: playlist.default_sub_folder || GLOBAL_DEFAULT_SENTINEL,
+      sub_folder: playlist.default_sub_folder,
       video_quality: playlist.video_quality,
       min_duration: playlist.min_duration,
       max_duration: playlist.max_duration,
@@ -232,13 +230,15 @@ class PlaylistModule {
     };
     // upsertChannel expects the YouTube channel ID under `id` (matches yt-dlp's
     // metadata shape). When the caller only has a channel_id (as in
-    // doPlaylistDownloads), synthesize a canonical channel URL — yt-dlp resolves
-    // `https://www.youtube.com/channel/<UCxxx>` correctly, and uploader is
-    // populated later when the user activates or refreshes the channel.
+    // doPlaylistDownloads), synthesize a canonical channel URL; yt-dlp resolves
+    // `https://www.youtube.com/channel/<UCxxx>` correctly. Seed title and uploader
+    // from the playlist's stored channel_name so the hidden channel isn't left
+    // nameless; they are refined when the user activates or refreshes the channel.
     const channelId = uploaderInfo.id || uploaderInfo.channel_id;
+    const name = uploaderInfo.uploader || null;
     const url = uploaderInfo.url || (channelId ? `https://www.youtube.com/channel/${channelId}` : null);
     return channelModule.upsertChannel(
-      { id: channelId, uploader: uploaderInfo.uploader || null, url },
+      { id: channelId, title: name, uploader: name, url },
       false,
       null,
       seed

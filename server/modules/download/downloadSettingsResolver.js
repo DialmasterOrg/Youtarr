@@ -1,5 +1,5 @@
 const configModule = require('../configModule');
-const { resolveEffectiveSubfolder } = require('../filesystem');
+const { resolveEffectiveSubfolder, ROOT_SENTINEL } = require('../filesystem');
 
 const DEFAULT_RESOLUTION = '1080';
 
@@ -54,8 +54,12 @@ class DownloadSettingsResolver {
     if (ov.subfolder !== undefined && ov.subfolder !== null) {
       directives.subfolderOverride = ov.subfolder;
     }
-    if (pl.default_sub_folder) {
-      directives.subfolderFallback = pl.default_sub_folder;
+    // When a playlist is in context, always express its subfolder choice so it
+    // survives the env round-trip to the finalizer. An explicit null/'' (root)
+    // is forwarded as ROOT_SENTINEL; a bare {} (no playlist) emits nothing and
+    // lets the finalizer fall through to channel -> global.
+    if (pl.default_sub_folder !== undefined) {
+      directives.subfolderFallback = pl.default_sub_folder || ROOT_SENTINEL;
     }
     if (ov.rating !== undefined && ov.rating !== null) {
       directives.ratingOverride = ov.rating;
