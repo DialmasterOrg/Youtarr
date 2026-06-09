@@ -712,6 +712,47 @@ describe('DownloadExecutor', () => {
       );
     });
 
+    it('reports to the run tracker using the runId captured at entry, even after job.data is stripped', async () => {
+      // Regression: terminal updateJob() replaces job.data with an object that
+      // omits runId. doDownload must capture runId at entry, not re-read it at
+      // completion, or the job never joins its run's aggregated summary.
+      const downloadRunTracker = require('../downloadRunTracker');
+      const runId = downloadRunTracker.startRun();
+      const recordSpy = jest.spyOn(downloadRunTracker, 'recordJobResult');
+
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([
+        { youtubeId: 'abc123', filePath: '/output/video.mp4', fileSize: '1024' }
+      ]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/abc123']);
+
+      // First getJob (doDownload entry) still has runId; later calls model the
+      // stripped data left behind by terminal updateJob().
+      jobModule.getJob
+        .mockReturnValueOnce({ data: { runId } })
+        .mockReturnValue({ data: {} });
+
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(recordSpy).toHaveBeenCalledWith(
+        runId,
+        mockJobId,
+        expect.objectContaining({ totalDownloaded: 1, jobType: mockJobType })
+      );
+
+      // The run owns the summary, so no per-job finalSummary should be emitted.
+      const emittedFinalSummary = MessageEmitter.emitMessage.mock.calls.some(
+        (call) => call[4] && call[4].finalSummary
+      );
+      expect(emittedFinalSummary).toBe(false);
+
+      downloadRunTracker.seal(runId);
+      recordSpy.mockRestore();
+    });
+
     it('should persist successful videos before terminal update when yt-dlp exits non-zero', async () => {
       const mockVideoData = [
         { youtubeId: 'success1234', filePath: '/output/video.mp4', fileSize: '1024' }

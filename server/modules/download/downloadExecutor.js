@@ -8,6 +8,7 @@ const DownloadProgressMonitor = require('./DownloadProgressMonitor');
 const VideoMetadataProcessor = require('./videoMetadataProcessor');
 const tempPathManager = require('./tempPathManager');
 const { isSpecificUrlDownloadJob } = require('./jobTypes');
+const downloadRunTracker = require('./downloadRunTracker');
 const ytDlpRunner = require('../ytDlpRunner');
 const { JobVideoDownload } = require('../../models');
 const Channel = require('../../models/channel');
@@ -585,6 +586,12 @@ class DownloadExecutor {
     const initialCount = this.getCountOfDownloadedVideos();
     const config = configModule.getConfig();
     const monitor = new DownloadProgressMonitor(jobId, jobType);
+
+    // Capture the run id up front: terminal updateJob() calls replace job.data
+    // with a fresh object that omits runId, so reading it at completion would
+    // always be undefined. The run owns the aggregated summary for its jobs.
+    const ownerJob = jobModule.getJob(jobId);
+    const runId = ownerJob && ownerJob.data ? ownerJob.data.runId : null;
 
     // Reset activity timeout to default at start of each job
     this.currentActivityTimeout = this.activityTimeoutMs;
@@ -1642,9 +1649,12 @@ class DownloadExecutor {
           progress: finalProgress
         };
 
+        // When this job belongs to a run, the run owns the summary and notification.
+        const runActive = !skipJobTransition && downloadRunTracker.isActive(runId);
+
         // Only include finalSummary if this is the final completion (not an intermediate group)
         // For multi-group downloads, skipJobTransition=true means more groups are coming
-        if (!skipJobTransition) {
+        if (!skipJobTransition && !runActive) {
           finalPayload.finalSummary = {
             // Use actual videoData.length for successful downloads
             totalDownloaded: videoData.length,
@@ -1687,9 +1697,24 @@ class DownloadExecutor {
           finalPayload
         );
 
+        // Fold this job's totals into the run; it emits one aggregated summary + notification when its last job finishes.
+        if (runActive) {
+          downloadRunTracker.recordJobResult(runId, jobId, {
+            totalDownloaded: videoData.length,
+            totalSkipped: monitor.videoCount.skipped || 0,
+            totalFailed: failedVideosList.length,
+            totalMembersOnly: membersOnlyVideoIds.size,
+            failedVideos: failedVideosList,
+            terminatedChannels: [...terminatedChannels],
+            terminationFailures: [...terminationFailures],
+            videoData: videoData,
+            jobType,
+          });
+        }
+
         // Send notification if download was successful and notifications are enabled
         // Skip notifications for intermediate groups (only send for final completion)
-        if ((finalState === 'complete' || finalState === 'warning') && !isFinalError && !skipJobTransition) {
+        if ((finalState === 'complete' || finalState === 'warning') && !isFinalError && !skipJobTransition && !runActive) {
           const notificationModule = require('../notificationModule');
           notificationModule.sendDownloadNotification({
             finalSummary: finalPayload.finalSummary,

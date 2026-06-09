@@ -454,9 +454,9 @@ describe('DownloadModule', () => {
 
       await downloadModule.doChannelAndPlaylistDownloads({ some: 'data' });
 
-      expect(downloadModule.doChannelDownloads).toHaveBeenCalledWith({ some: 'data' });
+      expect(downloadModule.doChannelDownloads).toHaveBeenCalledWith({ some: 'data', runId: expect.any(String) });
       expect(playlistModule.playlistAutoDownload).toHaveBeenCalledTimes(1);
-      expect(playlistModule.playlistAutoDownload).toHaveBeenCalledWith({});
+      expect(playlistModule.playlistAutoDownload).toHaveBeenCalledWith({}, expect.any(String));
       expect(order).toEqual(['channels', 'playlists']);
     });
 
@@ -474,7 +474,7 @@ describe('DownloadModule', () => {
       expect(playlistModule.playlistAutoDownload).toHaveBeenCalledWith({
         resolution: '480',
         videoCount: 7,
-      });
+      }, expect.any(String));
     });
 
     it('still resolves (channels already ran) even if playlist auto-download throws', async () => {

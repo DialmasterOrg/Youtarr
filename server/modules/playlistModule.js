@@ -275,14 +275,14 @@ class PlaylistModule {
     );
   }
 
-  async playlistAutoDownload(overrideSettings = {}) {
+  async playlistAutoDownload(overrideSettings = {}, runId) {
     const downloadModule = require('./downloadModule');
     const playlists = await Playlist.findAll({
       where: { enabled: true, auto_download: true },
     });
     for (const p of playlists) {
       try {
-        await downloadModule.doPlaylistDownloads(p, { refreshFirst: true, limitToRecent: true, overrideSettings });
+        await downloadModule.doPlaylistDownloads(p, { refreshFirst: true, limitToRecent: true, overrideSettings, runId });
       } catch (err) {
         logger.error({ err, playlist_id: p.playlist_id }, 'playlistAutoDownload failed for playlist');
       }

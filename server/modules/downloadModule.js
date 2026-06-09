@@ -82,6 +82,20 @@ class DownloadModule {
     return direct && typeof direct === 'object' ? direct : {};
   }
 
+  /**
+   * Associate a freshly-created job with its download run (if any) so the run
+   * can aggregate a single summary across all its jobs. No-op when the job is
+   * not part of a run (e.g. a standalone manual download).
+   * @param {Object} jobData - job payload that may carry a runId
+   * @param {string} jobId - id returned from jobModule.addOrUpdateJob
+   */
+  registerJobWithRun(jobData, jobId) {
+    const runId = this.getJobDataValue(jobData, 'runId');
+    if (!runId || !jobId) return;
+    const downloadRunTracker = require('./download/downloadRunTracker');
+    downloadRunTracker.registerJob(runId, jobId);
+  }
+
   async doChannelDownloads(jobData = {}, isNextJob = false) {
     const overrideSettings = this.getOverrideSettings(jobData);
     const overrideResolution = overrideSettings.resolution || null;
@@ -141,13 +155,23 @@ class DownloadModule {
    * @returns {Promise<void>}
    */
   async doChannelAndPlaylistDownloads(jobData = {}) {
-    await this.doChannelDownloads(jobData);
+    const downloadRunTracker = require('./download/downloadRunTracker');
+    const runId = downloadRunTracker.startRun();
+    this.setJobDataValue(jobData, 'runId', runId);
+
     try {
-      const playlistModule = require('./playlistModule');
-      const overrideSettings = this.getOverrideSettings(jobData);
-      await playlistModule.playlistAutoDownload(overrideSettings);
-    } catch (err) {
-      logger.error({ err }, 'playlistAutoDownload failed after channel downloads');
+      await this.doChannelDownloads(jobData);
+      try {
+        const playlistModule = require('./playlistModule');
+        const overrideSettings = this.getOverrideSettings(jobData);
+        await playlistModule.playlistAutoDownload(overrideSettings, runId);
+      } catch (err) {
+        logger.error({ err }, 'playlistAutoDownload failed after channel downloads');
+      }
+    } finally {
+      // Seal once every job is enqueued so the run can emit one aggregated
+      // summary as soon as its last job finishes.
+      downloadRunTracker.seal(runId);
     }
   }
 
@@ -166,6 +190,8 @@ class DownloadModule {
       },
       isNextJob
     );
+
+    this.registerJobWithRun(jobData, jobId);
 
     if (jobModule.getJob(jobId).status === 'In Progress') {
       let tempChannelsFile = null;
@@ -232,6 +258,8 @@ class DownloadModule {
       logger.warn({ jobType }, 'Failed to create grouped channel download job');
       return;
     }
+
+    this.registerJobWithRun(jobData, jobId);
 
     const job = jobModule.getJob(jobId);
     if (!job || job.status !== 'In Progress') {
@@ -345,28 +373,46 @@ class DownloadModule {
         finalPayload.warning = true;
       }
 
-      MessageEmitter.emitMessage(
-        'broadcast',
-        null,
-        'download',
-        'downloadProgress',
-        finalPayload
-      );
-
-      logger.info({ jobId, totalVideos, totalFailed: failedVideos.length, totalTerminated: terminatedChannels.length, totalTerminationFailures: terminationFailures.length, groupCount: groups.length },
-        'Emitted final summary for multi-group download');
-
-      // Include termination-only runs (zero downloads, one or more terminated
-      // or one or more termination-persistence failures).
-      if (totalVideos > 0 || terminatedChannels.length > 0 || terminationFailures.length > 0) {
-        const notificationModule = require('./notificationModule');
-        notificationModule.sendDownloadNotification({
-          finalSummary: finalSummary,
+      // When this grouped job is part of a run, hand its totals to the run
+      // tracker, which emits one aggregated summary and notification once the
+      // run's last job finishes. Otherwise emit/notify per-job.
+      const downloadRunTracker = require('./download/downloadRunTracker');
+      const runId = this.getJobDataValue(jobData, 'runId');
+      if (downloadRunTracker.isActive(runId)) {
+        downloadRunTracker.recordJobResult(runId, jobId, {
+          totalDownloaded: totalVideos,
+          totalSkipped: totalSkipped,
+          totalFailed: failedVideos.length,
+          failedVideos: failedVideos,
+          terminatedChannels: terminatedChannels,
+          terminationFailures: terminationFailures,
           videoData: completedJob.data.videos || [],
-          channelName: `${groups.length} groups`
-        }).catch(err => {
-          logger.error({ err }, 'Failed to send notification for multi-group download');
+          jobType: 'Channel Downloads',
         });
+      } else {
+        MessageEmitter.emitMessage(
+          'broadcast',
+          null,
+          'download',
+          'downloadProgress',
+          finalPayload
+        );
+
+        logger.info({ jobId, totalVideos, totalFailed: failedVideos.length, totalTerminated: terminatedChannels.length, totalTerminationFailures: terminationFailures.length, groupCount: groups.length },
+          'Emitted final summary for multi-group download');
+
+        // Include termination-only runs (zero downloads, one or more terminated
+        // or one or more termination-persistence failures).
+        if (totalVideos > 0 || terminatedChannels.length > 0 || terminationFailures.length > 0) {
+          const notificationModule = require('./notificationModule');
+          notificationModule.sendDownloadNotification({
+            finalSummary: finalSummary,
+            videoData: completedJob.data.videos || [],
+            channelName: `${groups.length} groups`
+          }).catch(err => {
+            logger.error({ err }, 'Failed to send notification for multi-group download');
+          });
+        }
       }
     }
 
@@ -498,6 +544,8 @@ class DownloadModule {
       },
       isNextJob
     );
+
+    this.registerJobWithRun(jobData, jobId);
 
     if (jobModule.getJob(jobId).status === 'In Progress') {
       // Use override settings if provided, otherwise use defaults
@@ -716,8 +764,9 @@ class DownloadModule {
       if (routing.subfolderFallback !== undefined) groupOverride.subfolderFallback = routing.subfolderFallback;
       if (routing.ratingOverride !== undefined) groupOverride.rating = routing.ratingOverride;
       if (routing.ratingFallback !== undefined) groupOverride.ratingFallback = routing.ratingFallback;
-      // doSpecificDownloads accepts an Express-request shape (.body).
-      await this.doSpecificDownloads({ body: { urls, overrideSettings: groupOverride, jobLabel } });
+      // doSpecificDownloads accepts an Express-request shape (.body). runId ties
+      // these jobs into the parent run so its summary aggregates them.
+      await this.doSpecificDownloads({ body: { urls, overrideSettings: groupOverride, jobLabel, runId: options.runId } });
     }
   }
 
