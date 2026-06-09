@@ -65,7 +65,7 @@ describe('ImportSummary', () => {
 
     const link = screen.getByRole('link', { name: /back to channels/i });
     expect(link).toBeInTheDocument();
-    expect(link).toHaveAttribute('href', '/channels');
+    expect(link).toHaveAttribute('href', '/subscriptions');
   });
 
   test('shows cancelled notice when status is Cancelled', () => {

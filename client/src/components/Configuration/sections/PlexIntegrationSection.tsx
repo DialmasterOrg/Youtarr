@@ -1,4 +1,4 @@
-import React, { ChangeEvent } from 'react';
+import React, { ChangeEvent, useEffect, useState } from 'react';
 import {
   TextField,
   Grid,
@@ -17,6 +17,7 @@ import { ConfigState, PlatformManagedState, PlexConnectionStatus } from '../type
 import { PlexSubfolderMappings } from './PlexSubfolderMappings';
 import { PlexLibrary } from '../../../utils/plexLibraries';
 import { DefaultPlexLibraryDisplay } from './components/DefaultPlexLibraryDisplay';
+import { PlexPlaylistScopeControl } from './components/PlexPlaylistScopeControl';
 
 interface PlexIntegrationSectionProps {
   config: ConfigState;
@@ -24,6 +25,7 @@ interface PlexIntegrationSectionProps {
   plexConnectionStatus: PlexConnectionStatus;
   plexLibraries: PlexLibrary[];
   hasPlexServerConfigured: boolean;
+  plexServerClaimed?: boolean | null;
   onConfigChange: (updates: Partial<ConfigState>) => void;
   onTestConnection: () => void;
   onOpenLibrarySelector: () => void;
@@ -38,6 +40,7 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
   plexConnectionStatus,
   plexLibraries,
   hasPlexServerConfigured,
+  plexServerClaimed = null,
   onConfigChange,
   onTestConnection,
   onOpenLibrarySelector,
@@ -45,6 +48,13 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
   onMobileTooltipClick,
   token = null,
 }) => {
+  // Auto-expand the playlist-scope disclosure when a test reveals an unclaimed
+  // server, since those users must change the scope for playlists to appear.
+  const [scopeOpen, setScopeOpen] = useState(false);
+  useEffect(() => {
+    if (plexServerClaimed === false) setScopeOpen(true);
+  }, [plexServerClaimed]);
+
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
     let parsedValue: string = value;
@@ -111,6 +121,7 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
         <Typography variant="body2">
           • Automatic library refresh after downloads
           <br />• Direct library selection from Plex server
+          <br />• Required for Youtarr-managed YouTube playlists to appear as native playlists in Plex
           <br />
           If you don't use Plex, your videos will still download to your specified directory.
           <br />
@@ -309,6 +320,31 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
             plexConnectionStatus={plexConnectionStatus}
             plexLibraries={plexLibraries}
           />
+        </Grid>
+
+        <Grid item xs={12}>
+          <details
+            open={scopeOpen}
+            onToggle={(e) => setScopeOpen((e.currentTarget as HTMLDetailsElement).open)}
+          >
+            <summary
+              style={{
+                cursor: 'pointer',
+                fontSize: '0.85rem',
+                color: 'var(--muted-foreground)',
+                paddingBottom: 6,
+              }}
+            >
+              Advanced: playlist visibility scope
+            </summary>
+            <Box className="mt-2">
+              <PlexPlaylistScopeControl
+                value={config.plexPlaylistToken || ''}
+                onChange={(value) => onConfigChange({ plexPlaylistToken: value })}
+                serverClaimed={plexServerClaimed}
+              />
+            </Box>
+          </details>
         </Grid>
       </Grid>
     </ConfigurationAccordion>

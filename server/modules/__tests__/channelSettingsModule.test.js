@@ -159,6 +159,20 @@ describe('ChannelSettingsModule', () => {
       const result = channelSettingsModule.validateSubFolder('  ValidFolder  ');
       expect(result.valid).toBe(true);
     });
+
+    test('rejects reserved name "playlists" case-insensitively', () => {
+      const lower = channelSettingsModule.validateSubFolder('playlists');
+      expect(lower.valid).toBe(false);
+      expect(lower.error).toMatch(/reserved/i);
+
+      const upper = channelSettingsModule.validateSubFolder('PLAYLISTS');
+      expect(upper.valid).toBe(false);
+      expect(upper.error).toMatch(/reserved/i);
+
+      const mixed = channelSettingsModule.validateSubFolder('Playlists');
+      expect(mixed.valid).toBe(false);
+      expect(mixed.error).toMatch(/reserved/i);
+    });
   });
 
   describe('validateVideoQuality', () => {
@@ -747,6 +761,35 @@ describe('ChannelSettingsModule', () => {
           title_filter_regex: 'a'.repeat(501)
         })
       ).rejects.toThrow('Title filter regex must be 500 characters or less');
+    });
+
+    test('should update default rating, normalized to uppercase', async () => {
+      const channel = await Channel.findOne();
+
+      const result = await channelSettingsModule.updateChannelSettings('UC123456', {
+        default_rating: 'pg-13'
+      });
+
+      expect(result.settings.default_rating).toBe('PG-13');
+      expect(channel.update).toHaveBeenCalledWith({ default_rating: 'PG-13' });
+    });
+
+    test('should store NR default rating as null', async () => {
+      const channel = await Channel.findOne();
+
+      await channelSettingsModule.updateChannelSettings('UC123456', {
+        default_rating: 'NR'
+      });
+
+      expect(channel.update).toHaveBeenCalledWith({ default_rating: null });
+    });
+
+    test('should reject an invalid default rating', async () => {
+      await expect(
+        channelSettingsModule.updateChannelSettings('UC123456', {
+          default_rating: 'banana'
+        })
+      ).rejects.toThrow('Invalid rating');
     });
 
     test('should move folder when subfolder changes', async () => {

@@ -49,16 +49,6 @@ jest.mock('../nfoGenerator', () => ({
   writeVideoNfoFile: jest.fn(),
 }));
 
-jest.mock('../channelSettingsModule', () => ({
-  getGlobalDefaultSentinel: jest.fn(() => '##USE_GLOBAL_DEFAULT##'),
-  resolveEffectiveSubfolder: jest.fn((subFolder) => {
-    // Simulate the real logic: GLOBAL_DEFAULT_SENTINEL uses global default, null/empty -> root
-    if (subFolder === '##USE_GLOBAL_DEFAULT##') return null; // Mock: assume no global default
-    if (subFolder && subFolder.trim() !== '') return subFolder.trim();
-    return null; // null/empty = root (backwards compatible)
-  }),
-}));
-
 const mockTempPathManager = {
   isEnabled: jest.fn(() => true),
   isTempPath: jest.fn(() => true),
@@ -73,7 +63,8 @@ const mockJobVideoDownload = {
 };
 
 const mockChannel = {
-  findOne: jest.fn(() => Promise.resolve(null))
+  findOne: jest.fn(() => Promise.resolve(null)),
+  update: jest.fn(() => Promise.resolve([1]))
 };
 
 jest.mock('../../models/channel', () => mockChannel);
@@ -85,6 +76,8 @@ jest.mock('../../models', () => ({
 
 jest.mock('../../logger');
 
+// downloadSettingsResolver is intentionally not mocked: it is a pure function, so these
+// tests exercise the real subfolder precedence (override > channel > fallback > global).
 jest.mock('../filesystem', () => ({
   ...jest.requireActual('../filesystem'),
   cleanupEmptyParents: jest.fn(() => Promise.resolve()),
@@ -227,6 +220,62 @@ describe('videoDownloadPostProcessFiles', () => {
     expect(nfoGenerator.writeVideoNfoFile).toHaveBeenCalledWith(videoPath, expect.any(Object));
     expect(configModule.stopWatchingConfig).toHaveBeenCalled();
     expect(process.exit).not.toHaveBeenCalled();
+  });
+
+  it('backfills title and uploader for a nameless seeded channel from the info json', async () => {
+    Channel.findOne.mockResolvedValue({
+      id: 7,
+      sub_folder: '##USE_GLOBAL_DEFAULT##',
+      title: null,
+      uploader: null,
+      folder_name: null,
+      default_rating: null
+    });
+    fs.readFileSync.mockReturnValue(JSON.stringify({
+      id: 'abc123',
+      upload_date: '20240131',
+      title: 'Video Title',
+      uploader: 'Little Mix',
+      channel_id: 'channel123',
+      categories: ['Education'],
+      tags: ['tag1']
+    }));
+
+    await loadModule();
+    await settleAsync();
+
+    expect(Channel.update).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Little Mix', uploader: 'Little Mix' }),
+      { where: { id: 7 } }
+    );
+  });
+
+  it('does not overwrite an existing channel title/uploader during post-process', async () => {
+    Channel.findOne.mockResolvedValue({
+      id: 7,
+      sub_folder: null,
+      title: 'Existing Name',
+      uploader: 'Existing Name',
+      folder_name: 'Existing Name',
+      default_rating: null
+    });
+    fs.readFileSync.mockReturnValue(JSON.stringify({
+      id: 'abc123',
+      upload_date: '20240131',
+      title: 'Video Title',
+      uploader: 'Different Name',
+      channel_id: 'channel123',
+      categories: ['Education'],
+      tags: ['tag1']
+    }));
+
+    await loadModule();
+    await settleAsync();
+
+    const titleClobbered = Channel.update.mock.calls.some(
+      ([patch]) => patch && (patch.title !== undefined || patch.uploader !== undefined)
+    );
+    expect(titleClobbered).toBe(false);
   });
 
   it('gracefully skips processing when info json is missing', async () => {
@@ -543,6 +592,103 @@ describe('videoDownloadPostProcessFiles', () => {
           finalVideoPath: expect.stringContaining('/library/Channel')
         }),
         'Marked video as completed in tracking'
+      );
+    });
+  });
+
+  describe('playlist soft fallback routing', () => {
+    afterEach(() => {
+      delete process.env.YOUTARR_SUBFOLDER_FALLBACK;
+      delete process.env.YOUTARR_RATING_FALLBACK;
+      delete process.env.YOUTARR_SUBFOLDER_OVERRIDE;
+      delete process.env.YOUTARR_OVERRIDE_RATING;
+    });
+
+    it('routes untracked channel video into playlist soft fallback subfolder', async () => {
+      // Channel not tracked in DB (findOne returns null); soft fallback env set; no hard override
+      Channel.findOne.mockResolvedValue(null);
+      process.env.YOUTARR_SUBFOLDER_FALLBACK = 'PLFolder';
+      delete process.env.YOUTARR_SUBFOLDER_OVERRIDE;
+
+      const tempVideoPath = '/tmp/youtarr-downloads/Channel/Video Title [abc123]/Video Title [abc123].mp4';
+      const tempVideoDir = '/tmp/youtarr-downloads/Channel/Video Title [abc123]';
+      process.argv = ['node', 'script', tempVideoPath];
+
+      tempPathManager.isEnabled.mockReturnValue(true);
+      tempPathManager.isTempPath.mockReturnValue(true);
+      tempPathManager.convertTempToFinal.mockImplementation((p) => p.replace('/tmp/youtarr-downloads', '/library'));
+
+      const tempJsonPath = '/tmp/youtarr-downloads/Channel/Video Title [abc123]/Video Title [abc123].info.json';
+      fs.existsSync.mockImplementation((p) => {
+        return p === tempJsonPath || p.includes('/library/__PLFolder/Channel');
+      });
+      fs.pathExists.mockResolvedValue(false);
+
+      await loadModule();
+      await settleAsync();
+
+      // Should move into __PLFolder subfolder (buildChannelPath adds __ prefix)
+      expect(fs.move).toHaveBeenCalledWith(
+        tempVideoDir,
+        expect.stringContaining('/library/__PLFolder/Channel/Video Title [abc123]')
+      );
+    });
+
+    it('tracked channel with its own sub_folder beats the soft fallback subfolder', async () => {
+      Channel.findOne.mockResolvedValue({
+        id: 1,
+        sub_folder: 'Kids',
+        uploader: 'Channel',
+        folder_name: 'Channel',
+        default_rating: null
+      });
+      process.env.YOUTARR_SUBFOLDER_FALLBACK = 'PLFolder';
+      delete process.env.YOUTARR_SUBFOLDER_OVERRIDE;
+
+      const tempVideoPath = '/tmp/youtarr-downloads/Channel/Video Title [abc123]/Video Title [abc123].mp4';
+      const tempVideoDir = '/tmp/youtarr-downloads/Channel/Video Title [abc123]';
+      process.argv = ['node', 'script', tempVideoPath];
+
+      tempPathManager.isEnabled.mockReturnValue(true);
+      tempPathManager.isTempPath.mockReturnValue(true);
+      tempPathManager.convertTempToFinal.mockImplementation((p) => p.replace('/tmp/youtarr-downloads', '/library'));
+
+      const tempJsonPath = '/tmp/youtarr-downloads/Channel/Video Title [abc123]/Video Title [abc123].info.json';
+      fs.existsSync.mockImplementation((p) => {
+        return p === tempJsonPath || p.includes('/library/__Kids/Channel');
+      });
+      fs.pathExists.mockResolvedValue(false);
+
+      await loadModule();
+      await settleAsync();
+
+      // Should route to Kids, not PLFolder
+      expect(fs.move).toHaveBeenCalledWith(
+        tempVideoDir,
+        expect.stringContaining('/library/__Kids/Channel/Video Title [abc123]')
+      );
+      expect(fs.move).not.toHaveBeenCalledWith(
+        tempVideoDir,
+        expect.stringContaining('PLFolder')
+      );
+    });
+
+    it('applies rating soft fallback when channel has no default rating', async () => {
+      // Untracked channel; rating fallback env set; no hard rating override
+      Channel.findOne.mockResolvedValue(null);
+      process.env.YOUTARR_RATING_FALLBACK = 'PG';
+      delete process.env.YOUTARR_OVERRIDE_RATING;
+
+      await loadModule();
+      await settleAsync();
+
+      // The soft fallback rating PG should be embedded via iTunEXTC
+      expect(childProcess.spawnSync).toHaveBeenCalledWith(
+        '/usr/bin/AtomicParsley',
+        expect.arrayContaining([
+          '--rDNSatom', 'mpaa|PG|', 'name=iTunEXTC', 'domain=com.apple.iTunes'
+        ]),
+        expect.any(Object)
       );
     });
   });

@@ -88,7 +88,9 @@ async function processOneChannel(deps, activeJob, ch) {
     const frontendSettings = ch.settings || {};
     const initialSettings = {};
     if (frontendSettings.videoQuality) initialSettings.video_quality = frontendSettings.videoQuality;
-    if (frontendSettings.subFolder) initialSettings.sub_folder = frontendSettings.subFolder;
+    // Forward subFolder when present, including explicit null (user chose "No Subfolder").
+    // Only undefined (older clients) stays absent, so upsertChannel applies the fallback.
+    if (frontendSettings.subFolder !== undefined) initialSettings.sub_folder = frontendSettings.subFolder;
     if (frontendSettings.defaultRating) initialSettings.default_rating = frontendSettings.defaultRating;
 
     // Imported channels are always visible (enabled = true).

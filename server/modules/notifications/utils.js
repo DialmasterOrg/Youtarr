@@ -146,13 +146,22 @@ function formatFailedVideoLine(failedVideo = {}) {
 }
 
 /**
- * Get subtitle based on job type
+ * Get subtitle based on job type. Handles per-job labels (channel, manual,
+ * `Playlist: <title>`) as well as the aggregated download-run labels
+ * (`Channel Downloads`, `Playlist downloads`, `Channel & playlist update`).
  * @param {string} jobType - The job type string
  * @returns {string} Subtitle string
  */
-function getSubtitle(jobType) {
-  const isChannelDownload = jobType.includes('Channel Downloads');
-  return isChannelDownload ? 'Channel Video Downloads' : 'Manually Selected Downloads';
+function getSubtitle(jobType = '') {
+  const type = jobType || '';
+  const isChannel = type.includes('Channel Downloads') || type.includes('Channel & playlist');
+  const isPlaylist =
+    type.startsWith('Playlist: ') || type === 'Playlist downloads' || type.includes('Channel & playlist');
+
+  if (isChannel && isPlaylist) return 'Channel & Playlist Downloads';
+  if (isPlaylist) return 'Playlist Downloads';
+  if (isChannel) return 'Channel Video Downloads';
+  return 'Manually Selected Downloads';
 }
 
 /**

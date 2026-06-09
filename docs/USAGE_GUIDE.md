@@ -7,6 +7,7 @@ This guide provides step-by-step instructions for common tasks in Youtarr. After
 - [Download Individual Videos](#download-individual-videos)
 - [Subscribe to Channels](#subscribe-to-channels)
 - [Import YouTube Subscriptions](#import-youtube-subscriptions)
+- [Subscribe to Playlists](#subscribe-to-playlists)
 - [Configure Automation](#configure-automation)
 - [Configure SponsorBlock](#configure-sponsorblock)
 - [Enable Download Notifications](#enable-download-notifications)
@@ -44,8 +45,8 @@ Download specific YouTube videos manually without subscribing to channels.
 
 Subscribe to YouTube channels to automatically download new videos as they're published.
 
-1. **Go to the Channels page**
-   - Click "Channels" in the navigation menu
+1. **Go to the Channels & Playlists page**
+   - Click "Channels & Playlists" in the navigation menu
 
 2. **Add a channel**
    - Click the "Add Channel" button
@@ -76,7 +77,7 @@ Subscribe to YouTube channels to automatically download new videos as they're pu
 Bulk-import channels from your existing YouTube subscriptions instead of adding them one at a time. Youtarr supports two import methods: a Google Takeout CSV file or a one-time cookies file upload.
 
 1. **Open the import page**
-   - Go to the Channels page
+   - Go to the Channels & Playlists page
    - Click the **Import Channels** button
 
 ### Method 1: Google Takeout CSV
@@ -138,11 +139,67 @@ Once the import starts, Youtarr processes the selected channels as a background 
 - A progress bar and per-channel status list update in real time
 - Each channel shows a success, error, or skipped icon as it completes
 - You can click **Cancel Import** at any time to stop the job; channels already imported are kept
-- If you navigate away from the import page, a banner appears at the top of the Channels page showing overall progress with a **View details** link to return to the full progress view
+- If you navigate away from the import page, a banner appears at the top of the Channels & Playlists page showing overall progress with a **View details** link to return to the full progress view
 
 ### Error Handling
 
 Individual channel errors (for example, bot detection or network timeouts) are displayed inline next to the affected channel. They do not stop the rest of the import. After the job finishes, the final status will read "Complete with Warnings" if some channels failed, so you can review which ones need attention.
+
+## Subscribe to Playlists
+
+Subscribe to a YouTube playlist and Youtarr tracks its videos, downloads them, and mirrors the playlist into Plex, Jellyfin, and Emby as a native playlist. It also writes a standard `.m3u` file so any other player can open the list.
+
+### Add a playlist
+
+1. **Go to the Channels & Playlists page**
+   - Click "Channels & Playlists" in the navigation menu
+   - Switch to the **Playlists** tab
+
+2. **Paste a playlist URL**
+   - Paste a playlist link such as `https://www.youtube.com/playlist?list=...` into the field, then click the **Playlist** button (or press Enter)
+   - The **Add playlist** dialog opens and fetches a preview: the title, channel, thumbnail, and video count
+   - If you opened the dialog without a URL first, paste the link inside it and click **Fetch info**
+
+3. **Subscribe**
+   - The dialog shows which media servers the playlist will sync to. If you haven't connected any, the videos still download and a `.m3u` file is still written; you just won't get a native server playlist.
+   - Click **Subscribe**. Youtarr pulls in the video list and opens the playlist's detail page.
+
+> Click the **?** icon on the Playlists tab for an in-app summary of how playlists work.
+
+### Where the videos are saved
+
+Playlists don't get their own folder. Each video is saved under the channel that uploaded it, so a playlist that pulls from five channels lands in five channel folders.
+
+- If you're already subscribed to that channel, the video uses that channel's subfolder and quality settings.
+- If you're not, the video uses the playlist's default subfolder (your global default unless you change it), and Youtarr creates a hidden channel record behind the scenes to keep future downloads organized.
+
+The same video never downloads twice just because it shows up in a playlist.
+
+Private, deleted, and members-only videos can't be accessed, so Youtarr leaves them out of the list and never downloads them. The video count reflects only the videos Youtarr can see.
+
+### The playlist detail page
+
+Open a playlist to manage it:
+
+- **Refresh from YouTube**: re-fetches the live playlist, updates the video list, then re-syncs and rewrites the `.m3u`. It doesn't download anything.
+- **Download new**: downloads every tracked video you don't already have. A settings dialog lets you confirm resolution and other options first.
+- **Auto-download new videos**: turn this on and Youtarr keeps the playlist current on your regular download schedule (see [Configure Automation](#configure-automation)).
+- **Download settings**: set a subfolder, resolution, download type, and default rating for this playlist. A video's own channel settings take precedence; these apply when the channel has no override.
+- **Sync chips**: one per media server. Click to enable or disable sync for that server, or click an unconfigured server to jump to its settings.
+- **Public on media servers**: makes the playlist visible to other users on Jellyfin and Emby. Plex playlists are always created under one account and shared manually, so this setting doesn't affect Plex.
+- **Sync now** and **Rebuild .m3u file**: push the current state to your servers or regenerate the `.m3u` on demand.
+
+In the video list you can sort newest- or oldest-first, ignore videos you don't want, and select specific videos to download with **Download Selected**.
+
+### Playlist files (.m3u)
+
+For every playlist you subscribe to, Youtarr writes a `.m3u` file into a `__playlists__` folder next to your videos. It uses relative paths, so it keeps working if you move your library, and it's written whether or not you've connected a media server. The file lists the videos you've actually downloaded, in playlist order. Any player that reads `.m3u` (VLC, mpv, Kodi, and most media servers) can open it.
+
+### Syncing to Plex, Jellyfin, and Emby
+
+Connect a media server under Settings first, then turn on sync for the playlists you want. A video has to be in your media server's library before it can be added to the synced playlist, so a fresh download might take a scan cycle to show up.
+
+For per-server setup (API keys, user IDs, the Plex playlist visibility scope), the public/private model, and how Youtarr handles playlist changes, see [Media Server Playlists](MEDIA_SERVER_PLAYLISTS.md).
 
 ## Configure Automation
 
@@ -295,7 +352,7 @@ Create separate media server libraries for different content types (e.g., kids c
      - `__gaming` - Gaming content
 
 2. **Assign channels to subfolders**
-   - Go to Channels page
+   - Go to the Channels & Playlists page
    - Click on a channel
    - Click the settings icon (gear)
    - Enter the subfolder name in the "Custom Subfolder" field
@@ -322,7 +379,7 @@ Explore all videos available from your subscribed channels, even if you haven't 
 **Note:** *By default Youtarr only fetches the most recent 50 videos data per tab. To fetch ALL video data, click the `Refresh All` button.*
 
 1. **Navigate to a channel**
-   - Go to Channels page
+   - Go to the Channels & Playlists page
    - Click on any subscribed channel
 
 2. **Browse by content type**
@@ -521,6 +578,7 @@ Now that you know how to use Youtarr's features, check out these guides for adva
 - [Configuration Reference](CONFIG.md) - Detailed explanation of all settings
 - [API Integration Guide](API_INTEGRATION.md) - Bookmarklets, mobile shortcuts, and automation
 - [Media Server Setup](MEDIA_SERVERS.md) - Configure Plex, Kodi, Jellyfin, or Emby
+- [Media Server Playlists](MEDIA_SERVER_PLAYLISTS.md) - Sync subscribed playlists to Plex, Jellyfin, and Emby
 - [Troubleshooting Guide](TROUBLESHOOTING.md) - Solutions to common issues
 - [Database Management](DATABASE.md) - Advanced database operations
 

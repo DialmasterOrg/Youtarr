@@ -210,6 +210,62 @@ Configuration can be modified through:
 - **Usage**: Not configurable via the web UI. Edit `config/config.json` manually or set the `PLEX_URL` environment variable to populate it.
 - **Note**: When this field is set it takes precedence over the `plexIP`, `plexPort`, and `plexViaHttps` values shown in the UI.
 
+### Plex Playlist Token (advanced)
+- **Config Key**: `plexPlaylistToken`
+- **Type**: `string`
+- **Default**: `""` (empty)
+- **Description**: Optional override for the token used on playlist-scoped Plex API calls.
+- **Values**:
+  - `""` / unset: fall back to `plexApiKey`. This is the standard claimed-server case; playlists are visible to the authenticated user.
+  - `"UNCLAIMED_SERVER"`: send playlist requests with no `X-Plex-Token` header. Use this for unclaimed-server LAN setups where Plex Web also accepts unauthenticated calls.
+  - Any other string: use that exact token (route Youtarr-managed playlists through a specific Plex user account other than the admin).
+- **Usage**: Surface in the UI as an "Advanced" toggle inside the Plex Settings section. Most users do not need to set this.
+
+## Jellyfin Integration
+
+These fields are required only when you want Youtarr to mirror playlists to Jellyfin as native playlists. Channel downloads work without them.
+
+### Enable Jellyfin
+- **Config Key**: `jellyfinEnabled`
+- **Type**: `boolean`
+- **Default**: `false`
+
+### Jellyfin URL
+- **Config Key**: `jellyfinUrl`
+- **Type**: `string`
+- **Default**: `""`
+- **Description**: Base URL of your Jellyfin server (e.g., `http://192.168.1.100:8096`).
+
+### Jellyfin API Key
+- **Config Key**: `jellyfinApiKey`
+- **Type**: `string`
+- **Default**: `""`
+- **Description**: Created in Jellyfin under **Dashboard -> API Keys**. Redacted in logs.
+
+### Jellyfin User ID
+- **Config Key**: `jellyfinUserId`
+- **Type**: `string`
+- **Default**: `""`
+- **Description**: User account that will own Youtarr-managed playlists. In the UI, open the **Jellyfin User** dropdown to load accounts from your server and pick one, or use **Enter ID manually** to paste the ID.
+
+### Jellyfin Video Library IDs
+- **Config Key**: `jellyfinVideoLibraryIds`
+- **Type**: `array<string>`
+- **Default**: `[]`
+- **Description**: Library IDs that contain your Youtarr videos. Optional and safe to leave blank; Youtarr matches downloaded videos to Jellyfin items across all of your libraries.
+
+## Emby Integration
+
+These fields work like the Jellyfin fields above, with `emby*` names. They're required only when you want Youtarr to mirror playlists to Emby as native playlists; channel downloads work without them. See [Media Server Playlists](MEDIA_SERVER_PLAYLISTS.md) for setup details.
+
+| Config Key | Type | Default | Description |
+| :--------- | :--- | :------ | :---------- |
+| `embyEnabled` | `boolean` | `false` | Turn Emby playlist sync on or off. |
+| `embyUrl` | `string` | `""` | Base URL of your Emby server (e.g., `http://192.168.1.100:8096`). |
+| `embyApiKey` | `string` | `""` | Created in Emby under **Settings -> Advanced -> API Keys**. Redacted in logs. |
+| `embyUserId` | `string` | `""` | User account that will own Youtarr-managed playlists. Open the **Emby User** dropdown in the UI to load accounts from your server and pick one. |
+| `embyVideoLibraryIds` | `array<string>` | `[]` | Library IDs that contain your Youtarr videos. Optional and safe to leave blank; Youtarr matches videos across all of your libraries. |
+
 ## YouTube Data API (Optional)
 
 ### YouTube API Key

@@ -47,7 +47,7 @@ describe('DownloadSettingsDialog', () => {
     test('renders channel mode alert', () => {
       render(<DownloadSettingsDialog {...defaultProps} mode="channel" />);
 
-      expect(screen.getByText('Downloading new videos from auto-download enabled channels/tabs. Channel settings and filters will be applied per channel.')).toBeInTheDocument();
+      expect(screen.getByText('Downloading new videos from auto-download enabled channels/tabs and playlists. Channel and playlist settings and filters will be applied per channel/playlist.')).toBeInTheDocument();
     });
 
     test('renders custom settings toggle', () => {
@@ -279,6 +279,16 @@ describe('DownloadSettingsDialog', () => {
       expect(screen.getByTestId('settings-summary')).toBeInTheDocument();
       expect(screen.getByText(/Videos per channel:/)).toBeInTheDocument();
       expect(screen.getByText('5')).toBeInTheDocument();
+    });
+
+    test('shows per channel/playlist quality with global fallback in channel mode', () => {
+      render(<DownloadSettingsDialog {...defaultProps} mode="channel" defaultResolution="720" />);
+
+      const summaryBox = screen.getByTestId('settings-summary');
+      // Channel mode resolves quality per channel/playlist; the global is only a fallback,
+      // so it must not be presented as the single quality value.
+      expect(within(summaryBox).getByText('Per channel/playlist (global 720p)')).toBeInTheDocument();
+      expect(within(summaryBox).queryByText('720p (HD)')).not.toBeInTheDocument();
     });
   });
 
@@ -513,15 +523,7 @@ describe('DownloadSettingsDialog', () => {
       const confirmButton = screen.getByRole('button', { name: /Start Download/i });
       fireEvent.click(confirmButton);
 
-      expect(mockOnConfirm).toHaveBeenCalledWith({
-        resolution: '720',
-        videoCount: 0,
-        allowRedownload: false,
-        subfolder: null,
-        audioFormat: null,
-        skipVideoFolder: false,
-        rating: 'NR',
-      });
+      expect(mockOnConfirm).toHaveBeenCalledWith({ resolution: '720' });
     });
 
     test('calls onConfirm with null when custom settings disabled', () => {
@@ -546,14 +548,21 @@ describe('DownloadSettingsDialog', () => {
       const confirmButton = screen.getByRole('button', { name: /Start Download/i });
       fireEvent.click(confirmButton);
 
-      expect(mockOnConfirm).toHaveBeenCalledWith({
-        resolution: '1080',
-        videoCount: 7,
-        allowRedownload: false,
-        subfolder: undefined,
-        audioFormat: undefined,
-        rating: 'NR',
-      });
+      expect(mockOnConfirm).toHaveBeenCalledWith({ resolution: '1080', videoCount: 7 });
+    });
+
+    test('omits default-valued fields when custom settings enabled but untouched', () => {
+      render(<DownloadSettingsDialog {...defaultProps} mode="manual" defaultResolution="1080" />);
+
+      fireEvent.click(screen.getByRole('checkbox', { name: /Use custom settings/i }));
+      fireEvent.click(screen.getByRole('button', { name: /Start Download/i }));
+
+      const payload = mockOnConfirm.mock.calls[0][0];
+      expect(payload).toEqual({ resolution: '1080' });
+      expect(payload).not.toHaveProperty('subfolder');
+      expect(payload).not.toHaveProperty('audioFormat');
+      expect(payload).not.toHaveProperty('rating');
+      expect(payload).not.toHaveProperty('skipVideoFolder');
     });
   });
 
@@ -642,15 +651,7 @@ describe('DownloadSettingsDialog', () => {
       const confirmButton = screen.getByRole('button', { name: /Start Download/i });
       fireEvent.click(confirmButton);
 
-      expect(mockOnConfirm).toHaveBeenCalledWith({
-        resolution: '1080',
-        videoCount: 0,
-        allowRedownload: true,
-        subfolder: null,
-        audioFormat: null,
-        skipVideoFolder: false,
-        rating: 'NR',
-      });
+      expect(mockOnConfirm).toHaveBeenCalledWith({ resolution: '1080', allowRedownload: true });
     });
 
     test('calls onConfirm with settings when custom settings enabled', () => {
@@ -667,15 +668,7 @@ describe('DownloadSettingsDialog', () => {
       const confirmButton = screen.getByRole('button', { name: /Start Download/i });
       fireEvent.click(confirmButton);
 
-      expect(mockOnConfirm).toHaveBeenCalledWith({
-        resolution: '720',
-        videoCount: 0,
-        allowRedownload: true,
-        subfolder: null,
-        audioFormat: null,
-        skipVideoFolder: false,
-        rating: 'NR',
-      });
+      expect(mockOnConfirm).toHaveBeenCalledWith({ resolution: '720', allowRedownload: true });
     });
 
     test('saves allowRedownload state to localStorage', () => {
@@ -858,34 +851,28 @@ describe('DownloadSettingsDialog', () => {
       );
     });
 
-    test('sends skipVideoFolder false when custom settings are disabled', () => {
+    test('omits skipVideoFolder when custom settings are disabled', () => {
       render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
 
-      // Enable custom settings to access toggle
       const customToggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
       fireEvent.click(customToggle);
 
-      // Toggle skipVideoFolder on
       const skipToggle = screen.getByRole('checkbox', { name: /Flat file structure/i });
       fireEvent.click(skipToggle);
       expect(skipToggle).toBeChecked();
 
-      // Also enable re-download so hasOverride is true even with custom off
       const redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
       fireEvent.click(redownloadToggle);
 
-      // Disable custom settings
+      // Disable custom settings again
       fireEvent.click(customToggle);
 
       const confirmButton = screen.getByRole('button', { name: /Start Download/i });
       fireEvent.click(confirmButton);
 
-      // Payload should have skipVideoFolder: false when custom settings are off
-      expect(mockOnConfirm).toHaveBeenCalledWith(
-        expect.objectContaining({
-          skipVideoFolder: false,
-        })
-      );
+      const payload = mockOnConfirm.mock.calls[0][0];
+      expect(payload).toEqual({ allowRedownload: true });
+      expect(payload).not.toHaveProperty('skipVideoFolder');
     });
 
     test('resets skipVideoFolder when dialog is closed and reopened', () => {
@@ -912,6 +899,21 @@ describe('DownloadSettingsDialog', () => {
       // skipVideoFolder should be reset to false
       const newSkipToggle = screen.getByRole('checkbox', { name: /Flat file structure/i });
       expect(newSkipToggle).not.toBeChecked();
+    });
+  });
+
+  describe('Large Batch Warning', () => {
+    const renderDialog = (props: { videoCount?: number }) =>
+      render(<DownloadSettingsDialog {...defaultProps} mode="manual" {...props} />);
+
+    test('warns when the batch exceeds the large-download threshold', () => {
+      renderDialog({ videoCount: 51 });
+      expect(screen.getByText(/large batch/i)).toBeInTheDocument();
+    });
+
+    test('does not warn for a small batch', () => {
+      renderDialog({ videoCount: 10 });
+      expect(screen.queryByText(/large batch/i)).not.toBeInTheDocument();
     });
   });
 

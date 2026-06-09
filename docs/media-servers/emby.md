@@ -6,6 +6,7 @@ Complete guide for integrating Youtarr with Emby Media Server.
 - [Overview](#overview)
 - [Library Setup](#library-setup)
 - [Metadata Configuration](#metadata-configuration)
+- [Native Playlist Sync](#native-playlist-sync)
 - [Multi-Library Organization](#multi-library-organization)
 - [Advanced Settings](#advanced-settings)
 - [Troubleshooting](#troubleshooting)
@@ -18,6 +19,7 @@ Youtarr provides comprehensive Emby support through:
 - Embedded MP4 metadata
 - Multi-library support for content organization
 - Compatible folder structure
+- Native playlist sync: subscribed YouTube playlists appear as Emby playlists (see [Native Playlist Sync](#native-playlist-sync))
 
 ## Library Setup
 
@@ -85,6 +87,29 @@ MP4 files include:
 - Channel information
 - Genre/category tags
 - Ensures basic info even without NFO
+
+## Native Playlist Sync
+
+The library and metadata setup above is all you need for downloaded videos to show up in Emby. Playlist sync is separate: connect it only if you want your subscribed YouTube playlists to appear as native Emby playlists.
+
+### Step 1: Create an Emby API key
+
+1. In Emby, go to **Settings -> Advanced -> API Keys**
+2. Create a new key for Youtarr and copy it
+
+### Step 2: Connect Emby in Youtarr
+
+1. In Youtarr, open **Settings -> Emby Integration**
+2. Enter the **Emby URL** and the **API key** from Step 1
+3. Open the **Emby User** dropdown and pick the account that should own the playlists. (Youtarr loads the user list from your server; you can also enter the user ID by hand.)
+4. (Optional) Leave **Video Library IDs** blank. Youtarr matches downloaded videos to Emby items across all your libraries.
+5. Click **Test Connection**, then turn on **Enable Emby integration**
+
+Once connected, open a playlist in Youtarr and turn on its Emby sync chip. See [Media Server Playlists](../MEDIA_SERVER_PLAYLISTS.md) for how syncing, ordering, and updates work.
+
+### Visibility
+
+A playlist marked **Public** in Youtarr is created as a server-wide (shared) Emby playlist that all users can see; a **Private** one is owned by the configured user account only. Emby sets this when the playlist is created, so changing Public/Private for a playlist that already exists takes effect on the next sync that recreates it. Emby also shows shared playlists as read-only, which is expected: Youtarr owns these playlists and rewrites them on every sync.
 
 ## Multi-Library Organization
 

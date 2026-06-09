@@ -79,6 +79,7 @@ const setupServer = async ({ authEnabled = 'false', passwordHash = null } = {}) 
   const plexModuleMock = {
     getLibrariesWithParams: jest.fn().mockResolvedValue([]),
     getLibraries: jest.fn().mockResolvedValue([]),
+    getServerIdentityWithParams: jest.fn().mockResolvedValue({ claimed: true, machineIdentifier: 'MID' }),
     refreshLibrary: jest.fn().mockResolvedValue(),
     getAuthUrl: jest.fn().mockResolvedValue({ url: 'https://plex.example/auth' }),
     checkPin: jest.fn().mockResolvedValue({ authenticated: true })
@@ -370,5 +371,47 @@ describe('Plex authentication routes', () => {
     expect(updatedConfig.plexApiKey).toBe('fresh-token');
     expect(updatedConfig.plexPort).toBe('32400');
     expect(updatedConfig.plexViaHttps).toBeUndefined();
+  });
+});
+
+describe('Plex server-identity route', () => {
+  afterEach(() => {
+    delete process.env.AUTH_ENABLED;
+    jest.restoreAllMocks();
+  });
+
+  test('uses test credentials when provided and returns identity', async () => {
+    const { app, plexModuleMock } = await setupServer({ authEnabled: 'false', passwordHash: 'hash' });
+    plexModuleMock.getServerIdentityWithParams.mockResolvedValue({ claimed: false, machineIdentifier: 'ABC' });
+
+    const handler = findRouteHandler(app, 'get', '/plex/server-identity');
+    const req = createMockRequest({
+      path: '/plex/server-identity',
+      query: { testIP: '192.168.1.10', testApiKey: 'tok', testPort: '32400', testUseHttps: 'true' }
+    });
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(plexModuleMock.getServerIdentityWithParams).toHaveBeenCalledWith('192.168.1.10', 'tok', '32400', true);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ claimed: false, machineIdentifier: 'ABC' });
+  });
+
+  test('falls back to saved config when no test credentials supplied', async () => {
+    const { app, configModuleMock, plexModuleMock } = await setupServer({ authEnabled: 'false', passwordHash: 'hash' });
+    configModuleMock.getConfig.mockReturnValue({
+      plexIP: '10.0.0.5', plexApiKey: 'saved-tok', plexPort: '32401', plexViaHttps: false
+    });
+
+    const handler = findRouteHandler(app, 'get', '/plex/server-identity');
+    const req = createMockRequest({ path: '/plex/server-identity', query: {} });
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(plexModuleMock.getServerIdentityWithParams).toHaveBeenCalledWith('10.0.0.5', 'saved-tok', '32401', false);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ claimed: true, machineIdentifier: 'MID' });
   });
 });

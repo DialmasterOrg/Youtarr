@@ -102,14 +102,14 @@ describe('storybook router configuration validation', () => {
 
   test('Key router-dependent components have story wrappers', () => {
     // Components that use router hooks:
-    // - ChannelManager, ChannelPage, DownloadManager (main pages)
+    // - Subscriptions, ChannelPage, DownloadManager (main pages)
     // - ChannelVideos, DownloadProgress (components within pages)
-    
+
     // These should all have stories with MemoryRouter setup
     // This test serves as documentation of which stories require routing
     const routerDependentComponents = [
-      'ChannelManager',
-      'ChannelPage', 
+      'Subscriptions',
+      'ChannelPage',
       'DownloadManager',
       'ChannelVideos',
       'DownloadProgress'

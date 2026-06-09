@@ -87,6 +87,10 @@ jest.mock('../../../models/channelvideo', () => ({
   update: jest.fn().mockResolvedValue([1]),
 }));
 
+jest.mock('../../downloadModule', () => ({
+  afterDownloadHook: jest.fn().mockResolvedValue(),
+}));
+
 // Mock filesystem module
 jest.mock('../../filesystem', () => {
   const actualPathBuilder = jest.requireActual('../../filesystem/pathBuilder');
@@ -708,6 +712,47 @@ describe('DownloadExecutor', () => {
       );
     });
 
+    it('reports to the run tracker using the runId captured at entry, even after job.data is stripped', async () => {
+      // Regression: terminal updateJob() replaces job.data with an object that
+      // omits runId. doDownload must capture runId at entry, not re-read it at
+      // completion, or the job never joins its run's aggregated summary.
+      const downloadRunTracker = require('../downloadRunTracker');
+      const runId = downloadRunTracker.startRun();
+      const recordSpy = jest.spyOn(downloadRunTracker, 'recordJobResult');
+
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([
+        { youtubeId: 'abc123', filePath: '/output/video.mp4', fileSize: '1024' }
+      ]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/abc123']);
+
+      // First getJob (doDownload entry) still has runId; later calls model the
+      // stripped data left behind by terminal updateJob().
+      jobModule.getJob
+        .mockReturnValueOnce({ data: { runId } })
+        .mockReturnValue({ data: {} });
+
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(recordSpy).toHaveBeenCalledWith(
+        runId,
+        mockJobId,
+        expect.objectContaining({ totalDownloaded: 1, jobType: mockJobType })
+      );
+
+      // The run owns the summary, so no per-job finalSummary should be emitted.
+      const emittedFinalSummary = MessageEmitter.emitMessage.mock.calls.some(
+        (call) => call[4] && call[4].finalSummary
+      );
+      expect(emittedFinalSummary).toBe(false);
+
+      downloadRunTracker.seal(runId);
+      recordSpy.mockRestore();
+    });
+
     it('should persist successful videos before terminal update when yt-dlp exits non-zero', async () => {
       const mockVideoData = [
         { youtubeId: 'success1234', filePath: '/output/video.mp4', fileSize: '1024' }
@@ -837,6 +882,45 @@ describe('DownloadExecutor', () => {
         'downloadProgress',
         expect.objectContaining({
           text: expect.stringContaining('[download]')
+        })
+      );
+    });
+
+    it('marks job Complete (not "with Warnings") when stderr contains only benign yt-dlp warnings', async () => {
+      setTimeout(() => {
+        // Both benign warnings observed on real playlist/manual downloads.
+        mockProcess.stderr.emit(
+          'data',
+          'WARNING: --paths is ignored since an absolute path is given in output template\n'
+        );
+        mockProcess.stderr.emit(
+          'data',
+          'WARNING: The extractor specified to use impersonation for this download, but no impersonate target is available. If you encounter errors, then see https://github.com/yt-dlp/yt-dlp#impersonation for information on installing the required dependencies\n'
+        );
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, 'Manually Added Urls', 1);
+
+      const statuses = jobModule.updateJob.mock.calls
+        .map((call) => call[1] && call[1].status)
+        .filter(Boolean);
+      expect(statuses).toContain('Complete');
+      expect(statuses).not.toContain('Complete with Warnings');
+    });
+
+    it('still marks job "Complete with Warnings" when stderr contains a non-benign warning', async () => {
+      setTimeout(() => {
+        mockProcess.stderr.emit('data', 'WARNING: Some unexpected non-whitelisted warning\n');
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, 'Manually Added Urls', 1);
+
+      expect(jobModule.updateJob).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          status: 'Complete with Warnings',
         })
       );
     });
@@ -1016,7 +1100,7 @@ describe('DownloadExecutor', () => {
       }, 10);
 
       // skipJobTransition=true (7th positional arg)
-      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, true, 'kids');
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, true, { subfolderOverride: 'kids' });
 
       expect(plexModule.refreshLibrariesForSubfolders).not.toHaveBeenCalled();
     });
@@ -1426,71 +1510,56 @@ describe('DownloadExecutor', () => {
     });
 
     it('should pass subfolderOverride to yt-dlp via environment variable', async () => {
-      setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
-      }, 10);
-
-      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, 'TestSubfolder');
-
+      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, { subfolderOverride: 'TestSubfolder' });
       expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
-        env: expect.objectContaining({
-          YOUTARR_JOB_ID: mockJobId,
-          YOUTARR_SUBFOLDER_OVERRIDE: 'TestSubfolder'
-        })
+        env: expect.objectContaining({ YOUTARR_JOB_ID: mockJobId, YOUTARR_SUBFOLDER_OVERRIDE: 'TestSubfolder' })
       });
     });
 
     it('should pass empty string subfolderOverride to yt-dlp', async () => {
-      setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
-      }, 10);
-
-      // Empty string means "no subfolder" (downloads to root)
-      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, '');
-
+      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, { subfolderOverride: '' });
       expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
-        env: expect.objectContaining({
-          YOUTARR_JOB_ID: mockJobId,
-          YOUTARR_SUBFOLDER_OVERRIDE: ''
-        })
+        env: expect.objectContaining({ YOUTARR_JOB_ID: mockJobId, YOUTARR_SUBFOLDER_OVERRIDE: '' })
       });
     });
 
     it('should not set YOUTARR_SUBFOLDER_OVERRIDE when subfolderOverride is null', async () => {
-      setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
-      }, 10);
-
-      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, null);
-
+      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, { subfolderOverride: null });
       expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
-        env: expect.not.objectContaining({
-          YOUTARR_SUBFOLDER_OVERRIDE: expect.anything()
-        })
+        env: expect.not.objectContaining({ YOUTARR_SUBFOLDER_OVERRIDE: expect.anything() })
       });
     });
 
-    it('should not set YOUTARR_SUBFOLDER_OVERRIDE when subfolderOverride is undefined', async () => {
-      setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
-      }, 10);
-
-      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, undefined);
-
+    it('should not set YOUTARR_SUBFOLDER_OVERRIDE when no directives are passed', async () => {
+      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false);
       expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
-        env: expect.not.objectContaining({
-          YOUTARR_SUBFOLDER_OVERRIDE: expect.anything()
-        })
+        env: expect.not.objectContaining({ YOUTARR_SUBFOLDER_OVERRIDE: expect.anything() })
+      });
+    });
+
+    it('should set YOUTARR_SUBFOLDER_FALLBACK when subfolderFallback is provided', async () => {
+      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, { subfolderFallback: 'PlaylistFolder' });
+      expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
+        env: expect.objectContaining({ YOUTARR_SUBFOLDER_FALLBACK: 'PlaylistFolder' })
+      });
+    });
+
+    it('should set YOUTARR_RATING_FALLBACK when ratingFallback is provided', async () => {
+      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, { ratingFallback: 'PG' });
+      expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
+        env: expect.objectContaining({ YOUTARR_RATING_FALLBACK: 'PG' })
       });
     });
 
     it('should log subfolderOverride in info message', async () => {
-      setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
-      }, 10);
-
-      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, 'MyFolder');
-
+      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, { subfolderOverride: 'MyFolder' });
       expect(logger.info).toHaveBeenCalledWith(
         { jobType: mockJobType, args: mockArgs, subfolderOverride: 'MyFolder' },
         'Running yt-dlp'

@@ -5,6 +5,7 @@ const {
   determineEffectiveRating,
   mapToNumericRating,
   mapToITunEXTC,
+  validateRating,
 } = require('../ratingMapper');
 
 describe('ratingMapper', () => {
@@ -167,6 +168,37 @@ describe('ratingMapper', () => {
     });
   });
 
+  describe('determineEffectiveRating - playlist soft fallback', () => {
+    test('channel default beats playlist fallback', () => {
+      const out = determineEffectiveRating({}, 'TV-Y', undefined, 'PG');
+      expect(out.normalized_rating).toBe('TV-Y');
+      expect(out.rating_source).toBe('Channel Default');
+    });
+
+    test('playlist fallback applies when no channel default', () => {
+      const out = determineEffectiveRating({}, null, undefined, 'PG');
+      expect(out.normalized_rating).toBe('PG');
+      expect(out.rating_source).toBe('Playlist Default');
+    });
+
+    test('manual override beats playlist fallback', () => {
+      const out = determineEffectiveRating({}, null, 'R', 'PG');
+      expect(out.normalized_rating).toBe('R');
+      expect(out.rating_source).toBe('Manual Override');
+    });
+
+    test('playlist fallback beats metadata-mapped rating', () => {
+      const out = determineEffectiveRating({ age_limit: 18 }, null, undefined, 'PG');
+      expect(out.normalized_rating).toBe('PG');
+      expect(out.rating_source).toBe('Playlist Default');
+    });
+
+    test('omitting the fallback preserves existing behavior (metadata used)', () => {
+      const out = determineEffectiveRating({ age_limit: 18 }, null, undefined);
+      expect(out.normalized_rating).toBe('R');
+    });
+  });
+
   describe('mapToITunEXTC', () => {
     it('maps MPAA ratings to mpaa| format', () => {
       expect(mapToITunEXTC('G')).toBe('mpaa|G|');
@@ -191,6 +223,43 @@ describe('ratingMapper', () => {
       expect(mapToITunEXTC('')).toBe(null);
       expect(mapToITunEXTC('NR')).toBe(null);
       expect(mapToITunEXTC('unknown')).toBe(null);
+    });
+  });
+
+  describe('validateRating', () => {
+    it('treats null and undefined as "no rating"', () => {
+      expect(validateRating(null)).toEqual({ valid: true, value: null });
+      expect(validateRating(undefined)).toEqual({ valid: true, value: null });
+    });
+
+    it('normalizes NR (case-insensitive) to null', () => {
+      expect(validateRating('NR')).toEqual({ valid: true, value: null });
+      expect(validateRating('nr')).toEqual({ valid: true, value: null });
+      expect(validateRating('  Nr  ')).toEqual({ valid: true, value: null });
+    });
+
+    it('accepts and normalizes valid ratings (trim + uppercase)', () => {
+      expect(validateRating('pg-13')).toEqual({ valid: true, value: 'PG-13' });
+      expect(validateRating('  tv-ma ')).toEqual({ valid: true, value: 'TV-MA' });
+      expect(validateRating('G')).toEqual({ valid: true, value: 'G' });
+    });
+
+    it('rejects empty string', () => {
+      const out = validateRating('');
+      expect(out.valid).toBe(false);
+      expect(out.error).toMatch(/Invalid rating/);
+    });
+
+    it('rejects unknown rating strings', () => {
+      const out = validateRating('banana');
+      expect(out.valid).toBe(false);
+      expect(out.error).toMatch(/Invalid rating/);
+    });
+
+    it('rejects non-string, non-null input', () => {
+      const out = validateRating(42);
+      expect(out.valid).toBe(false);
+      expect(out.error).toMatch(/must be a string or null/);
     });
   });
 });

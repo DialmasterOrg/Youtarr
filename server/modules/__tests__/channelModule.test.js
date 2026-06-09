@@ -59,7 +59,8 @@ jest.mock('../configModule', () => {
 });
 
 jest.mock('../downloadModule', () => ({
-  doChannelDownloads: jest.fn()
+  doChannelDownloads: jest.fn(),
+  doChannelAndPlaylistDownloads: jest.fn()
 }));
 
 jest.mock('../fileCheckModule', () => ({
@@ -76,7 +77,8 @@ jest.mock('../ytDlpRunner', () => ({
 }));
 
 jest.mock('../filesystem', () => ({
-  sanitizeNameLikeYtDlp: jest.fn((name) => name) // Pass through by default
+  sanitizeNameLikeYtDlp: jest.fn((name) => name), // Pass through by default
+  GLOBAL_DEFAULT_SENTINEL: '##USE_GLOBAL_DEFAULT##'
 }));
 
 jest.mock('../youtubeApi', () => ({
@@ -518,9 +520,55 @@ describe('ChannelModule', () => {
           description: channelData.description,
           uploader: channelData.uploader,
           url: channelData.url,
-          enabled: false
+          enabled: false,
+          sub_folder: '##USE_GLOBAL_DEFAULT##'
         });
         expect(result).toBe(mockChannel);
+      });
+
+      test('should default sub_folder to global-default sentinel when no initialSettings provided', async () => {
+        const mockChannel = { ...mockChannelData };
+        Channel.findOne.mockResolvedValueOnce(null); // Not found by channel_id
+        Channel.findOne.mockResolvedValueOnce(null); // Not found by URL
+        Channel.create.mockResolvedValue(mockChannel);
+
+        const channelData = {
+          id: 'UC_DEFAULT',
+          title: 'Default Channel',
+          description: 'Default Description',
+          uploader: 'Default Uploader',
+          url: 'https://youtube.com/@defaultchannel'
+        };
+
+        await ChannelModule.upsertChannel(channelData);
+
+        expect(Channel.create).toHaveBeenCalledWith(
+          expect.objectContaining({ sub_folder: '##USE_GLOBAL_DEFAULT##' })
+        );
+      });
+
+      test('should persist an explicit null sub_folder as root (not coerce to sentinel)', async () => {
+        const mockChannel = { ...mockChannelData };
+        Channel.findOne.mockResolvedValueOnce(null); // Not found by channel_id
+        Channel.findOne.mockResolvedValueOnce(null); // Not found by URL
+        Channel.create.mockResolvedValue(mockChannel);
+
+        const channelData = {
+          id: 'UC_ROOT',
+          title: 'Root Channel',
+          description: 'Root Description',
+          uploader: 'Root Uploader',
+          url: 'https://youtube.com/@rootchannel'
+        };
+
+        // User explicitly selected "No Subfolder (root)" -> null
+        const initialSettings = { sub_folder: null };
+
+        await ChannelModule.upsertChannel(channelData, false, null, initialSettings);
+
+        expect(Channel.create).toHaveBeenCalledWith(
+          expect.objectContaining({ sub_folder: null })
+        );
       });
 
       test('should update existing channel found by channel_id', async () => {
@@ -716,7 +764,8 @@ describe('ChannelModule', () => {
           description: channelData.description,
           uploader: channelData.uploader,
           url: channelData.url,
-          enabled: true
+          enabled: true,
+          sub_folder: '##USE_GLOBAL_DEFAULT##'
         });
         expect(result).toBe(mockChannel);
       });
@@ -751,6 +800,69 @@ describe('ChannelModule', () => {
           enabled: false,
           sub_folder: 'CustomFolder'
         });
+      });
+
+      test('should seed min_duration, max_duration, title_filter_regex, audio_format on create', async () => {
+        const mockChannel = { ...mockChannelData };
+        Channel.findOne.mockResolvedValueOnce(null);
+        Channel.findOne.mockResolvedValueOnce(null);
+        Channel.create.mockResolvedValue(mockChannel);
+
+        const channelData = {
+          id: 'UC_SEED',
+          title: 'Seed Channel',
+          description: '',
+          uploader: 'Seeder',
+          url: 'https://youtube.com/@seed',
+        };
+
+        const initialSettings = {
+          min_duration: 60,
+          max_duration: 3600,
+          title_filter_regex: '^Tutorial',
+          audio_format: 'mp3',
+        };
+
+        await ChannelModule.upsertChannel(channelData, false, null, initialSettings);
+
+        expect(Channel.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            min_duration: 60,
+            max_duration: 3600,
+            title_filter_regex: '^Tutorial',
+            audio_format: 'mp3',
+          })
+        );
+      });
+
+      test('should not apply new seed fields when channel already exists', async () => {
+        const mockChannel = {
+          ...mockChannelData,
+          update: jest.fn(),
+        };
+        Channel.findOne.mockResolvedValueOnce(mockChannel);
+
+        const channelData = {
+          id: 'UC123',
+          title: 'Existing',
+          description: '',
+          uploader: 'Uploader',
+          url: 'https://youtube.com/@existing',
+        };
+
+        const initialSettings = {
+          min_duration: 60,
+          max_duration: 3600,
+          title_filter_regex: '^Tutorial',
+          audio_format: 'mp3',
+        };
+
+        await ChannelModule.upsertChannel(channelData, false, null, initialSettings);
+
+        expect(mockChannel.update).toHaveBeenCalledWith(
+          expect.not.objectContaining({ min_duration: 60 })
+        );
+        expect(Channel.create).not.toHaveBeenCalled();
       });
     });
 
@@ -2396,15 +2508,16 @@ describe('ChannelModule', () => {
       beforeEach(() => {
         jobModule = require('../jobModule');
         jobModule.getAllJobs.mockReturnValue({});
-        downloadModule.doChannelDownloads.mockClear();
+        downloadModule.doChannelAndPlaylistDownloads.mockClear();
+        downloadModule.doChannelAndPlaylistDownloads.mockResolvedValue(undefined);
       });
 
-      test('should trigger channel downloads when no job is running', () => {
+      test('runs channel + playlist downloads via the combined orchestration when none is running', async () => {
         jobModule.getAllJobs.mockReturnValue({});
 
-        ChannelModule.channelAutoDownload();
+        await ChannelModule.channelAutoDownload();
 
-        expect(downloadModule.doChannelDownloads).toHaveBeenCalled();
+        expect(downloadModule.doChannelAndPlaylistDownloads).toHaveBeenCalledTimes(1);
         expect(logger.info).toHaveBeenCalledWith(
           expect.objectContaining({
             currentTime: expect.any(Date),
@@ -2414,36 +2527,49 @@ describe('ChannelModule', () => {
         );
       });
 
-      test('should skip channel downloads when job is in progress', () => {
+      test('skips when a channel download is already running (In Progress)', async () => {
         jobModule.getAllJobs.mockReturnValue({
           'job-123': { jobType: 'Channel Downloads', status: 'In Progress' }
         });
 
-        ChannelModule.channelAutoDownload();
+        await ChannelModule.channelAutoDownload();
 
-        expect(downloadModule.doChannelDownloads).not.toHaveBeenCalled();
+        expect(downloadModule.doChannelAndPlaylistDownloads).not.toHaveBeenCalled();
         expect(logger.warn).toHaveBeenCalledWith('Skipping scheduled channel download - previous download still in progress');
       });
 
-      test('should skip channel downloads when job is pending', () => {
+      test('skips when a channel download is already running (Pending)', async () => {
         jobModule.getAllJobs.mockReturnValue({
           'job-456': { jobType: 'Channel Downloads', status: 'Pending' }
         });
 
-        ChannelModule.channelAutoDownload();
+        await ChannelModule.channelAutoDownload();
 
-        expect(downloadModule.doChannelDownloads).not.toHaveBeenCalled();
+        expect(downloadModule.doChannelAndPlaylistDownloads).not.toHaveBeenCalled();
         expect(logger.warn).toHaveBeenCalledWith('Skipping scheduled channel download - previous download still in progress');
       });
 
-      test('should trigger downloads when other job types are running', () => {
+      test('triggers orchestration when other job types are running', async () => {
         jobModule.getAllJobs.mockReturnValue({
           'job-789': { jobType: 'Manually Added Urls', status: 'In Progress' }
         });
 
-        ChannelModule.channelAutoDownload();
+        await ChannelModule.channelAutoDownload();
 
-        expect(downloadModule.doChannelDownloads).toHaveBeenCalled();
+        expect(downloadModule.doChannelAndPlaylistDownloads).toHaveBeenCalledTimes(1);
+      });
+
+      test('logs error when orchestration throws', async () => {
+        jobModule.getAllJobs.mockReturnValue({});
+        const err = new Error('orchestration failed');
+        downloadModule.doChannelAndPlaylistDownloads.mockRejectedValueOnce(err);
+
+        await ChannelModule.channelAutoDownload();
+
+        expect(logger.error).toHaveBeenCalledWith(
+          expect.objectContaining({ err }),
+          'Scheduled channel + playlist downloads failed'
+        );
       });
     });
   });

@@ -11,6 +11,7 @@
   "plexPort": "32400",
   "plexViaHttps": false,
   "plexApiKey": "",
+  "plexPlaylistToken": "",
   "plexYoutubeLibraryId": "",
   "youtubeApiKey": "",
   "plexSubfolderLibraryMappings": [],
@@ -60,5 +61,15 @@
   "rescanLastRun": null,
   "ytdlpIpFamily": "ipv4",
   "ytdlpDownloadRateLimit": "",
-  "ytdlpCustomArgs": ""
+  "ytdlpCustomArgs": "",
+  "jellyfinEnabled": false,
+  "jellyfinUrl": "",
+  "jellyfinApiKey": "",
+  "jellyfinUserId": "",
+  "jellyfinVideoLibraryIds": [],
+  "embyEnabled": false,
+  "embyUrl": "",
+  "embyApiKey": "",
+  "embyUserId": "",
+  "embyVideoLibraryIds": []
 }

@@ -73,6 +73,23 @@ YouTube Downloads/
 │       └── Channel - Video [id].jpg
 ```
 
+## The `__playlists__` Folder
+
+If you subscribe to any YouTube playlists, Youtarr creates a `__playlists__` folder at the top of your download directory and writes one `.m3u` file per playlist into it. The videos themselves still live in their channel folders; the `.m3u` is just a list that points at them.
+
+```
+<YOUTUBE_OUTPUT_DIR>/
+├── __playlists__/
+│   ├── My Favorite Talks.m3u
+│   └── Workout Mix.m3u
+├── Channel Name/
+│   └── [videos]
+```
+
+The `.m3u` files use relative paths, so they keep working if you move your library to a different location. Each one lists only the videos you've actually downloaded, in playlist order.
+
+`playlists` is a reserved subfolder name, so Youtarr won't let you assign a channel to a subfolder called `playlists`. Channel subfolders also can't start with `__`, so they never collide with the `__playlists__` folder itself. See [Media Server Playlists](MEDIA_SERVER_PLAYLISTS.md) for how playlists download and sync.
+
 ## Supported File Extensions (Reads vs. Writes)
 
 Youtarr **writes** downloaded media as `.mp4` for video and `.mp3` for audio-only downloads.

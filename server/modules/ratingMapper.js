@@ -173,19 +173,20 @@ function mapFromEntry(contentRating, ageLimit, priority = 'mpaa,tvpg,ytrating,ag
  * Determine the effective rating based on priority:
  * 1. Manual Override (if provided and valid)
  * 2. Channel Default (if configured)
- * 3. Mapped Metadata (from yt-dlp)
- * 4. NR (null)
- * 
+ * 3. Playlist Default (soft fallback; only when the real channel has no default)
+ * 4. Mapped Metadata (from yt-dlp)
+ * 5. NR (null)
+ *
  * @param {Object} jsonData - The full .info.json object from yt-dlp
  * @param {string} channelDefaultRating - Default rating from channel settings (e.g. 'TV-Y')
  * @param {string} manualOverrideRating - Manual override from download settings (e.g. 'G', 'NR', or null)
+ * @param {string} playlistFallbackRating - Soft fallback rating from the source playlist (e.g. 'PG'); applied only when no channel default is set
  * @returns {Object} - { normalized_rating: string|null, rating_source: string|null }
  */
-function determineEffectiveRating(jsonData, channelDefaultRating, manualOverrideRating) {
+function determineEffectiveRating(jsonData, channelDefaultRating, manualOverrideRating, playlistFallbackRating = null) {
   // 1. Manual Override
   if (manualOverrideRating !== undefined && manualOverrideRating !== '') {
-    // If user explicitly chose "NR" (represented as NOT_RATED string or specific null sentinel), treat as null.
-    // However, since it is an *override*, it should be treated as the effective rating even if null.
+    // Explicit "NR" override is valid - collapses to null but still short-circuits lower tiers.
     const val = manualOverrideRating === NOT_RATED ? null : manualOverrideRating;
     return {
       normalized_rating: val,
@@ -203,7 +204,16 @@ function determineEffectiveRating(jsonData, channelDefaultRating, manualOverride
     };
   }
 
-  // 3. Rating parsed from ytdlp/metadata
+  // 3. Playlist Default (soft fallback; only when the real channel has no default)
+  if (playlistFallbackRating && playlistFallbackRating !== NOT_RATED) {
+    return {
+      normalized_rating: playlistFallbackRating,
+      numeric_rating: mapToNumericRating(playlistFallbackRating),
+      rating_source: 'Playlist Default'
+    };
+  }
+
+  // 4. Rating parsed from ytdlp/metadata
   const mapped = mapFromEntry(jsonData.content_rating, jsonData.age_limit);
   if (mapped.normalized_rating && mapped.normalized_rating !== NOT_RATED) {
     return {
@@ -213,7 +223,7 @@ function determineEffectiveRating(jsonData, channelDefaultRating, manualOverride
     };
   }
 
-  // 4. Fallback: NR
+  // 5. Fallback: NR
   return {
     normalized_rating: null,
     numeric_rating: null,
@@ -299,6 +309,39 @@ function getValidNormalizedRatings() {
   return VALID_NORMALIZED_RATINGS;
 }
 
+/**
+ * Canonical rating validator/normalizer. Single source of truth for every place
+ * that accepts a user-supplied rating (channel default, bulk video update, manual
+ * and playlist download overrides).
+ *
+ * null/undefined and the NR sentinel (case-insensitive) both normalize to null
+ * ("no rating"). Other values are trimmed, upper-cased, and checked against the
+ * valid set. Empty string is rejected (not treated as "no rating").
+ *
+ * @param {string|null|undefined} input - Raw rating value
+ * @returns {{ valid: boolean, value: (string|null), error?: string }} - On success,
+ *   `value` is the normalized rating (or null). On failure, `error` is a message.
+ */
+function validateRating(input) {
+  if (input === null || input === undefined) {
+    return { valid: true, value: null };
+  }
+  if (typeof input !== 'string') {
+    return { valid: false, error: 'rating must be a string or null' };
+  }
+  const normalized = input.trim().toUpperCase();
+  if (normalized === NOT_RATED) {
+    return { valid: true, value: null };
+  }
+  if (!VALID_NORMALIZED_RATINGS.includes(normalized)) {
+    return {
+      valid: false,
+      error: `Invalid rating. Valid values: ${VALID_NORMALIZED_RATINGS.join(', ')}, ${NOT_RATED}, or null`,
+    };
+  }
+  return { valid: true, value: normalized };
+}
+
 module.exports = {
   normalizeRating,
   mapAgeLimit,
@@ -307,6 +350,7 @@ module.exports = {
   mapToNumericRating,
   mapToITunEXTC,
   getValidNormalizedRatings,
+  validateRating,
   NOT_RATED,
   MPAA_RATINGS,
   TVPG_RATINGS,

@@ -7,12 +7,26 @@ const MessageEmitter = require('../messageEmitter');
 const DownloadProgressMonitor = require('./DownloadProgressMonitor');
 const VideoMetadataProcessor = require('./videoMetadataProcessor');
 const tempPathManager = require('./tempPathManager');
+const { isSpecificUrlDownloadJob } = require('./jobTypes');
+const downloadRunTracker = require('./downloadRunTracker');
 const ytDlpRunner = require('../ytDlpRunner');
 const { JobVideoDownload } = require('../../models');
 const Channel = require('../../models/channel');
 const ChannelVideo = require('../../models/channelvideo');
 const logger = require('../../logger');
 const filesystem = require('../filesystem');
+
+// yt-dlp writes certain warnings to stderr that do not indicate a problem with
+// the download: the media still downloads and yt-dlp exits 0. These must not
+// flip a successful job to "Complete with Warnings".
+const BENIGN_STDERR_WARNING_PATTERNS = [
+  // Emitted while fetching subtitles when no curl_cffi impersonation target is
+  // installed. The subtitle still downloads; the message is purely advisory.
+  /WARNING:.*extractor specified to use impersonation/i,
+  // Emitted because our output template (-o) is an absolute temp path, so
+  // yt-dlp ignores the --paths temp: redirect. The download still succeeds.
+  /WARNING:.*--paths is ignored since an absolute path is given/i,
+];
 
 class DownloadExecutor {
   constructor() {
@@ -234,6 +248,25 @@ class DownloadExecutor {
     ];
 
     return expectedPatterns.some(pattern => pattern.test(normalized));
+  }
+
+  // True when everything yt-dlp wrote to stderr is known-benign warnings (or
+  // whitespace). Used to avoid flagging a clean, exit-0 download as "Complete
+  // with Warnings" over informational noise like the subtitle impersonation
+  // notice. Returns false for empty stderr so callers keep their own guard.
+  stderrHasOnlyBenignWarnings(stderrBuffer = '') {
+    const lines = String(stderrBuffer)
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+
+    if (lines.length === 0) {
+      return false;
+    }
+
+    return lines.every((line) =>
+      BENIGN_STDERR_WARNING_PATTERNS.some((pattern) => pattern.test(line))
+    );
   }
 
   // Narrower predicate than isExpectedYtdlpSkipMessage: only matches members-only
@@ -542,16 +575,31 @@ class DownloadExecutor {
     this.pendingProgressMessage = null;
   }
 
-  async doDownload(args, jobId, jobType, urlCount = 0, originalUrls = null, allowRedownload = false, skipJobTransition = false, subfolderOverride = null, ratingOverride = undefined, skipVideoFolder = false) {
+  async doDownload(args, jobId, jobType, urlCount = 0, originalUrls = null, allowRedownload = false, skipJobTransition = false, postProcessDirectives = {}) {
+    const {
+      subfolderOverride = null,
+      subfolderFallback = null,
+      ratingOverride = undefined,
+      ratingFallback = null,
+      skipVideoFolder = false,
+    } = postProcessDirectives || {};
     const initialCount = this.getCountOfDownloadedVideos();
     const config = configModule.getConfig();
     const monitor = new DownloadProgressMonitor(jobId, jobType);
 
+    // Capture the run id up front: terminal updateJob() calls replace job.data
+    // with a fresh object that omits runId, so reading it at completion would
+    // always be undefined. The run owns the aggregated summary for its jobs.
+    const ownerJob = jobModule.getJob(jobId);
+    const runId = ownerJob && ownerJob.data ? ownerJob.data.runId : null;
+
     // Reset activity timeout to default at start of each job
     this.currentActivityTimeout = this.activityTimeoutMs;
 
-    // For manual URL downloads, set the total count upfront
-    if (jobType === 'Manually Added Urls' && urlCount > 0) {
+    // For specific URL-list downloads (manual or playlist), the video count is
+    // known upfront, so seed the progress total instead of letting yt-dlp's
+    // per-URL "item 1 of 1" output drive it.
+    if (isSpecificUrlDownloadJob(jobType) && urlCount > 0) {
       monitor.videoCount.total = urlCount;
     }
 
@@ -607,9 +655,15 @@ class DownloadExecutor {
         TMPDIR: tempPathManager.getTempBasePath()
       };
 
-      // Pass subfolder override to post-processor (empty string means no override)
+      // Pass subfolder override (hard, from dialog) to post-processor
       if (subfolderOverride !== null && subfolderOverride !== undefined) {
         procEnv.YOUTARR_SUBFOLDER_OVERRIDE = subfolderOverride;
+      }
+
+      // Pass subfolder soft fallback (playlist default); post-processor uses it
+      // only when the video's real channel is untracked
+      if (subfolderFallback !== null && subfolderFallback !== undefined) {
+        procEnv.YOUTARR_SUBFOLDER_FALLBACK = subfolderFallback;
       }
 
       // Pass skip video folder flag to post-processor
@@ -617,10 +671,15 @@ class DownloadExecutor {
         procEnv.YOUTARR_SKIP_VIDEO_FOLDER = 'true';
       }
 
-      // Pass explicit rating override if provided
-      // Accept null as an explicit "clear rating" sentinel and map it to 'NR'
+      // Pass explicit rating override (hard). null is the explicit "clear rating" sentinel -> 'NR'
       if (ratingOverride !== undefined) {
         procEnv.YOUTARR_OVERRIDE_RATING = ratingOverride === null ? 'NR' : String(ratingOverride);
+      }
+
+      // Pass rating soft fallback (playlist default); post-processor uses it only
+      // when the real channel has no default rating
+      if (ratingFallback !== null && ratingFallback !== undefined) {
+        procEnv.YOUTARR_RATING_FALLBACK = String(ratingFallback);
       }
 
       const proc = spawn('yt-dlp', args, { env: procEnv });
@@ -1095,7 +1154,7 @@ class DownloadExecutor {
         }
 
         let urlsToProcess;
-        if (jobType === 'Manually Added Urls' && originalUrls) {
+        if (isSpecificUrlDownloadJob(jobType) && originalUrls) {
           urlsToProcess = originalUrls.map(url => {
             // Convert full YouTube URLs to youtu.be format for consistency
             if (url.includes('youtube.com/watch?v=')) {
@@ -1397,7 +1456,7 @@ class DownloadExecutor {
               ...(errorCode ? { error: errorCode } : {})
             });
           }
-        } else if (stderrBuffer && !monitor.hasError) {
+        } else if (stderrBuffer && !monitor.hasError && !this.stderrHasOnlyBenignWarnings(stderrBuffer)) {
           status = 'Complete with Warnings';
           output = `${videoCount} videos.`;
           // When skipJobTransition is true, we're processing multiple groups
@@ -1590,9 +1649,12 @@ class DownloadExecutor {
           progress: finalProgress
         };
 
+        // When this job belongs to a run, the run owns the summary and notification.
+        const runActive = !skipJobTransition && downloadRunTracker.isActive(runId);
+
         // Only include finalSummary if this is the final completion (not an intermediate group)
         // For multi-group downloads, skipJobTransition=true means more groups are coming
-        if (!skipJobTransition) {
+        if (!skipJobTransition && !runActive) {
           finalPayload.finalSummary = {
             // Use actual videoData.length for successful downloads
             totalDownloaded: videoData.length,
@@ -1635,9 +1697,24 @@ class DownloadExecutor {
           finalPayload
         );
 
+        // Fold this job's totals into the run; it emits one aggregated summary + notification when its last job finishes.
+        if (runActive) {
+          downloadRunTracker.recordJobResult(runId, jobId, {
+            totalDownloaded: videoData.length,
+            totalSkipped: monitor.videoCount.skipped || 0,
+            totalFailed: failedVideosList.length,
+            totalMembersOnly: membersOnlyVideoIds.size,
+            failedVideos: failedVideosList,
+            terminatedChannels: [...terminatedChannels],
+            terminationFailures: [...terminationFailures],
+            videoData: videoData,
+            jobType,
+          });
+        }
+
         // Send notification if download was successful and notifications are enabled
         // Skip notifications for intermediate groups (only send for final completion)
-        if ((finalState === 'complete' || finalState === 'warning') && !isFinalError && !skipJobTransition) {
+        if ((finalState === 'complete' || finalState === 'warning') && !isFinalError && !skipJobTransition && !runActive) {
           const notificationModule = require('../notificationModule');
           notificationModule.sendDownloadNotification({
             finalSummary: finalPayload.finalSummary,
@@ -1696,6 +1773,17 @@ class DownloadExecutor {
           } catch (err) {
             logger.error({ err }, 'Error backfilling channel posters');
             // Don't fail the job if poster backfill fails
+          }
+        }
+
+        // Trigger playlist M3U regeneration and media-server sync for any playlists
+        // that contain videos from this download batch.
+        if (videoData && videoData.length > 0) {
+          const downloadedIds = videoData.map((v) => v.youtubeId).filter(Boolean);
+          if (downloadedIds.length > 0) {
+            require('../downloadModule').afterDownloadHook(downloadedIds).catch((err) => {
+              logger.error({ err }, 'afterDownloadHook failed');
+            });
           }
         }
 
