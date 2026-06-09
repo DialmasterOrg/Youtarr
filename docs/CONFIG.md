@@ -240,31 +240,31 @@ These fields are required only when you want Youtarr to mirror playlists to Jell
 - **Config Key**: `jellyfinApiKey`
 - **Type**: `string`
 - **Default**: `""`
-- **Description**: Created in Jellyfin under **Dashboard → API Keys**. Redacted in logs.
+- **Description**: Created in Jellyfin under **Dashboard -> API Keys**. Redacted in logs.
 
 ### Jellyfin User ID
 - **Config Key**: `jellyfinUserId`
 - **Type**: `string`
 - **Default**: `""`
-- **Description**: User account that will own Youtarr-managed playlists. Use the **Fetch Users** helper in the UI to populate this.
+- **Description**: User account that will own Youtarr-managed playlists. In the UI, open the **Jellyfin User** dropdown to load accounts from your server and pick one, or use **Enter ID manually** to paste the ID.
 
 ### Jellyfin Video Library IDs
 - **Config Key**: `jellyfinVideoLibraryIds`
 - **Type**: `array<string>`
 - **Default**: `[]`
-- **Description**: Library IDs that contain your Youtarr videos. Optional; narrows the per-item lookup that resolves a downloaded video to a Jellyfin item.
+- **Description**: Library IDs that contain your Youtarr videos. Optional and safe to leave blank; Youtarr matches downloaded videos to Jellyfin items across all of your libraries.
 
 ## Emby Integration
 
-Mirror of the Jellyfin section, with `emby*` field names. See [Media Server Playlists](MEDIA_SERVER_PLAYLISTS.md) for setup details.
+These fields work like the Jellyfin fields above, with `emby*` names. They're required only when you want Youtarr to mirror playlists to Emby as native playlists; channel downloads work without them. See [Media Server Playlists](MEDIA_SERVER_PLAYLISTS.md) for setup details.
 
-| Config Key | Type | Default |
-| :--------- | :--- | :------ |
-| `embyEnabled` | `boolean` | `false` |
-| `embyUrl` | `string` | `""` |
-| `embyApiKey` | `string` | `""` (redacted in logs) |
-| `embyUserId` | `string` | `""` |
-| `embyVideoLibraryIds` | `array<string>` | `[]` |
+| Config Key | Type | Default | Description |
+| :--------- | :--- | :------ | :---------- |
+| `embyEnabled` | `boolean` | `false` | Turn Emby playlist sync on or off. |
+| `embyUrl` | `string` | `""` | Base URL of your Emby server (e.g., `http://192.168.1.100:8096`). |
+| `embyApiKey` | `string` | `""` | Created in Emby under **Settings -> Advanced -> API Keys**. Redacted in logs. |
+| `embyUserId` | `string` | `""` | User account that will own Youtarr-managed playlists. Open the **Emby User** dropdown in the UI to load accounts from your server and pick one. |
+| `embyVideoLibraryIds` | `array<string>` | `[]` | Library IDs that contain your Youtarr videos. Optional and safe to leave blank; Youtarr matches videos across all of your libraries. |
 
 ## YouTube Data API (Optional)
 

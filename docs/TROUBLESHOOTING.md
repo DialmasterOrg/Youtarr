@@ -475,6 +475,32 @@ YouTube is blocking your downloads.
 3. Check firewall isn't blocking local connections
 4. Verify Plex is accessible at the configured IP and port
 
+## Playlist Sync Issues
+
+For how playlist sync works across Plex, Jellyfin, and Emby, see [Media Server Playlists](MEDIA_SERVER_PLAYLISTS.md). The most common issues:
+
+### Videos Missing from a Synced Playlist
+
+**Problem**: A playlist syncs, but some videos aren't in it.
+
+**Checklist**:
+1. Confirm the videos are actually downloaded. Youtarr only adds videos that exist on disk; a video still showing as "Tracked" on the playlist page hasn't downloaded yet.
+2. A video has to be indexed in your media server's library before it can be added. Trigger a library scan and use **Sync now** on the playlist page.
+3. Check that the video isn't marked **Ignored** on the playlist page.
+
+### Playlist Not Created on Jellyfin or Emby
+
+**Problem**: You enabled sync but no native playlist appears.
+
+**Checklist**:
+1. Open **Settings -> Jellyfin Integration** (or **Settings -> Emby Integration**) and click **Test Connection**. A stale API key or changed server URL is the usual cause.
+2. Confirm the configured **User** still exists on the server.
+3. Youtarr won't create the playlist until at least one of its videos is downloaded and indexed. Download a video, then **Sync now**.
+
+### Playlist Not Visible to Other Users (Plex)
+
+This is by design. Plex playlists are owned by a single account, and Youtarr can't grant per-user access. To share one, open the playlist in Plex Web and share it (playlist menu -> Share). See the [Plex playlist visibility scope](MEDIA_SERVER_PLAYLISTS.md#plex) notes for unclaimed-server setups.
+
 ## Channel Import Issues
 
 ### Cookies Upload Fails or Returns No Channels

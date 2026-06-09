@@ -14,6 +14,7 @@ This document provides comprehensive information about Youtarr's database setup,
 
 Youtarr uses MariaDB/MySQL for storing:
 - Channel subscriptions and metadata
+- Playlist subscriptions and per-server sync state
 - Video information and download history
 - Job queues and processing state
 - Session data for authentication

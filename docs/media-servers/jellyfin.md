@@ -6,6 +6,7 @@ Complete guide for integrating Youtarr with Jellyfin Media Server.
 - [Overview](#overview)
 - [Library Setup](#library-setup)
 - [Metadata Configuration](#metadata-configuration)
+- [Native Playlist Sync](#native-playlist-sync)
 - [Multi-Library Organization](#multi-library-organization)
 - [Troubleshooting](#troubleshooting)
 
@@ -17,6 +18,7 @@ Youtarr provides full Jellyfin support through:
 - Proper folder structure for organization
 - Multi-library support for content separation
 - Real-time monitoring capability
+- Native playlist sync: subscribed YouTube playlists appear as Jellyfin playlists (see [Native Playlist Sync](#native-playlist-sync))
 
 ## Library Setup
 
@@ -80,6 +82,29 @@ Youtarr provides:
 - **`poster.jpg`**: Channel artwork in each channel folder
 - **`<VIDEO NAME>.jpg`**: Video thumbnail in each video folder
 - Proper image naming for Jellyfin recognition
+
+## Native Playlist Sync
+
+The library and metadata setup above is all you need for downloaded videos to show up in Jellyfin. Playlist sync is separate: connect it only if you want your subscribed YouTube playlists to appear as native Jellyfin playlists.
+
+### Step 1: Create a Jellyfin API key
+
+1. In Jellyfin, go to **Dashboard -> API Keys**
+2. Create a new key for Youtarr and copy it
+
+### Step 2: Connect Jellyfin in Youtarr
+
+1. In Youtarr, open **Settings -> Jellyfin Integration**
+2. Enter the **Jellyfin URL** (e.g., `http://192.168.1.100:8096`) and the **API key** from Step 1
+3. Open the **Jellyfin User** dropdown and pick the account that should own the playlists. (Youtarr loads the user list from your server; you can also enter the user ID by hand.)
+4. (Optional) Leave **Video Library IDs** blank. Youtarr matches downloaded videos to Jellyfin items across all your libraries.
+5. Click **Test Connection**, then turn on **Enable Jellyfin integration**
+
+Once connected, open a playlist in Youtarr and turn on its Jellyfin sync chip. See [Media Server Playlists](../MEDIA_SERVER_PLAYLISTS.md) for how syncing, ordering, and updates work.
+
+### Visibility
+
+A playlist marked **Public** in Youtarr is visible to all users on the server; a **Private** one is visible only to the configured user account.
 
 ## Multi-Library Organization
 

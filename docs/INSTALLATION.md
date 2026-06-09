@@ -94,7 +94,7 @@ If you prefer to use standard `docker compose up` commands:
    - Navigate to `http://localhost:3087` (or your server's LAN IP)
    - If you set preset credentials in .env, use those to log in
    - If not, you'll be prompted to complete the setup wizard using the one-time token from `docker logs youtarr` or `config/setup-token`
-   - Configure Plex and other settings from the Configuration page
+   - Configure Plex (and optionally Jellyfin or Emby for playlist sync) and other settings from the Configuration page
 
 > **Important**: Ensure the path you assign to `YOUTUBE_OUTPUT_DIR` already exists on the host and is writable before starting the stack. Otherwise Docker will create it as root-owned and the container may not be able to write downloads.
 
@@ -263,7 +263,7 @@ If you use standard Docker Compose commands:
 - Your database and all downloaded videos
 - Configuration settings in `config/config.json`
 - Download history in `config/complete.list`
-- Channel subscriptions and settings
+- Channel and playlist subscriptions and settings
 
 **Updated**:
 - Application code and features
