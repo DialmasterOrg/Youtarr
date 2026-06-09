@@ -55,9 +55,13 @@ class MediaServerSync {
 
     await adapter.triggerLibraryScan();
 
+    const resolvedByPath = await this._resolveAllWithBackoff(
+      adapter,
+      filepaths.map((entry) => entry.filePath)
+    );
     const itemIds = [];
     for (const entry of filepaths) {
-      const id = await this._resolveWithBackoff(adapter, entry.filePath);
+      const id = resolvedByPath.get(entry.filePath);
       if (id) itemIds.push(id);
       else logger.warn({ youtube_id: entry.youtube_id, serverType }, 'unresolved on media server, skipping');
     }
@@ -114,15 +118,30 @@ class MediaServerSync {
     }
   }
 
-  async _resolveWithBackoff(adapter, filepath) {
-    let resolved = await adapter.resolveItemIdByFilepath(filepath);
-    if (resolved) return resolved;
+  // Resolve the whole batch per polling round rather than per file: each round
+  // re-queries the server so files indexed by the in-flight library scan are
+  // picked up, and only still-missing paths are retried. With a bulk adapter
+  // (Plex) this costs (sections x rounds) listing fetches instead of
+  // (sections x files x rounds). Returns Map<filePath, itemId> for resolved
+  // paths only.
+  async _resolveAllWithBackoff(adapter, filepaths) {
+    const resolved = new Map();
+    let pending = [...new Set(filepaths)];
+    const collect = (results) => {
+      for (const [filepath, id] of results) {
+        if (id) resolved.set(filepath, id);
+      }
+      pending = pending.filter((filepath) => !resolved.has(filepath));
+    };
+
+    if (!pending.length) return resolved;
+    collect(await adapter.resolveItemIdsByFilepaths(pending));
     for (const delay of POLL_BACKOFFS_MS) {
+      if (!pending.length) break;
       await new Promise((r) => setTimeout(r, delay));
-      resolved = await adapter.resolveItemIdByFilepath(filepath);
-      if (resolved) return resolved;
+      collect(await adapter.resolveItemIdsByFilepaths(pending));
     }
-    return null;
+    return resolved;
   }
 
   async _recordError(playlistId, serverType, message) {

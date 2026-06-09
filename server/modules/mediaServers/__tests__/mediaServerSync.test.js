@@ -35,6 +35,17 @@ describe('mediaServerSync', () => {
       replacePlaylistItems: jest.fn(),
       ...impl,
     };
+    // Mirror BaseAdapter's default batch resolution so per-file mock
+    // implementations keep working with the batch-based sync.
+    if (!adapter.resolveItemIdsByFilepaths) {
+      adapter.resolveItemIdsByFilepaths = jest.fn(async (filepaths) => {
+        const results = new Map();
+        for (const filepath of filepaths) {
+          results.set(filepath, await adapter.resolveItemIdByFilepath(filepath));
+        }
+        return results;
+      });
+    }
     Object.defineProperty(adapter, 'constructor', { value: { name } });
     return adapter;
   }
@@ -68,6 +79,51 @@ describe('mediaServerSync', () => {
 
     expect(plexAdapter.createPlaylist).toHaveBeenCalledWith('YT: My PL', ['rk1', 'rk3'], { public: false });
     expect(plexAdapter.replacePlaylistItems).not.toHaveBeenCalled();
+  });
+
+  test('retries only the still-unresolved paths in later backoff rounds', async () => {
+    Playlist.findByPk.mockResolvedValue({
+      id: 1, playlist_id: 'PL1', title: 'PL',
+      sync_to_plex: true, sync_to_jellyfin: false, sync_to_emby: false,
+      public_on_servers: false,
+    });
+    PlaylistVideo.findAll.mockResolvedValue([
+      { youtube_id: 'v1', position: 1, ignored: false },
+      { youtube_id: 'v2', position: 2, ignored: false },
+    ]);
+    Video.findOne.mockImplementation(({ where }) => {
+      if (where.youtubeId === 'v1') return Promise.resolve({ filePath: '/youtube/A/v1.mp4' });
+      if (where.youtubeId === 'v2') return Promise.resolve({ filePath: '/youtube/B/v2.mp4' });
+      return Promise.resolve(null);
+    });
+    PlaylistSyncState.findOne.mockResolvedValue(null);
+    PlaylistSyncState.create.mockResolvedValue({ id: 1 });
+
+    // Round 1: v2 not yet indexed by the scan. Round 2: it appears.
+    const batchResolve = jest.fn()
+      .mockResolvedValueOnce(new Map([['/youtube/A/v1.mp4', 'rk1'], ['/youtube/B/v2.mp4', null]]))
+      .mockResolvedValueOnce(new Map([['/youtube/B/v2.mp4', 'rk2']]));
+    const plexAdapter = makeAdapter('PlexAdapter', {
+      resolveItemIdsByFilepaths: batchResolve,
+      createPlaylist: jest.fn().mockResolvedValue({ id: 'pid' }),
+    });
+    serverRegistry.getEnabledAdapters.mockReturnValue([plexAdapter]);
+
+    // Collapse the backoff sleeps so the test runs instantly.
+    const setTimeoutSpy = jest.spyOn(global, 'setTimeout').mockImplementation((cb) => {
+      cb();
+      return 0;
+    });
+    try {
+      await mediaServerSync.syncPlaylist(1);
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
+
+    expect(batchResolve).toHaveBeenCalledTimes(2);
+    expect(batchResolve).toHaveBeenNthCalledWith(1, ['/youtube/A/v1.mp4', '/youtube/B/v2.mp4']);
+    expect(batchResolve).toHaveBeenNthCalledWith(2, ['/youtube/B/v2.mp4']);
+    expect(plexAdapter.createPlaylist).toHaveBeenCalledWith('YT: PL', ['rk1', 'rk2'], { public: false });
   });
 
   test('replaces items when sync state already exists', async () => {
