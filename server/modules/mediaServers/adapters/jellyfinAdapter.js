@@ -1,6 +1,6 @@
 const axios = require('axios');
 const BaseAdapter = require('./baseAdapter');
-const { extractBasename } = require('./baseAdapter');
+const { extractBasename, REQUEST_TIMEOUT_MS } = require('./baseAdapter');
 const logger = require('../../../logger');
 
 class JellyfinAdapter extends BaseAdapter {
@@ -15,7 +15,7 @@ class JellyfinAdapter extends BaseAdapter {
 
   async testConnection() {
     try {
-      const res = await axios.get(`${this.url}/System/Info/Public`, { headers: this._headers() });
+      const res = await axios.get(`${this.url}/System/Info/Public`, { headers: this._headers(), timeout: REQUEST_TIMEOUT_MS });
       return { ok: true, version: res.data?.Version };
     } catch (err) {
       return { ok: false, error: err.message };
@@ -24,7 +24,7 @@ class JellyfinAdapter extends BaseAdapter {
 
   async listUsers() {
     try {
-      const res = await axios.get(`${this.url}/Users`, { headers: this._headers() });
+      const res = await axios.get(`${this.url}/Users`, { headers: this._headers(), timeout: REQUEST_TIMEOUT_MS });
       return (res.data || []).map((u) => ({ id: u.Id, name: u.Name }));
     } catch (err) {
       logger.error({ err }, 'jellyfin listUsers failed');
@@ -34,7 +34,7 @@ class JellyfinAdapter extends BaseAdapter {
 
   async triggerLibraryScan() {
     try {
-      await axios.post(`${this.url}/Library/Refresh`, null, { headers: this._headers() });
+      await axios.post(`${this.url}/Library/Refresh`, null, { headers: this._headers(), timeout: REQUEST_TIMEOUT_MS });
     } catch (err) {
       logger.error({ err }, 'jellyfin triggerLibraryScan failed');
     }
@@ -51,7 +51,7 @@ class JellyfinAdapter extends BaseAdapter {
         recursive: true,
         fields: 'Path',
       };
-      const res = await axios.get(`${this.url}/Items`, { headers: this._headers(), params });
+      const res = await axios.get(`${this.url}/Items`, { headers: this._headers(), params, timeout: REQUEST_TIMEOUT_MS });
       const items = res.data?.Items || [];
       const match = items.find((i) => i.Path && extractBasename(i.Path) === target);
       return match ? match.Id : null;
@@ -64,7 +64,7 @@ class JellyfinAdapter extends BaseAdapter {
   async getPlaylistByName(name) {
     try {
       const params = { userId: this.userId, includeItemTypes: 'Playlist', recursive: true };
-      const res = await axios.get(`${this.url}/Items`, { headers: this._headers(), params });
+      const res = await axios.get(`${this.url}/Items`, { headers: this._headers(), params, timeout: REQUEST_TIMEOUT_MS });
       const items = res.data?.Items || [];
       const found = items.find((i) => i.Name === name);
       return found ? { id: found.Id, itemIds: [] } : null;
@@ -82,7 +82,7 @@ class JellyfinAdapter extends BaseAdapter {
       MediaType: 'Video',
       IsPublic: !!opts.public,
     };
-    const res = await axios.post(`${this.url}/Playlists`, body, { headers: this._headers() });
+    const res = await axios.post(`${this.url}/Playlists`, body, { headers: this._headers(), timeout: REQUEST_TIMEOUT_MS });
     return { id: res.data?.Id };
   }
 
@@ -96,7 +96,7 @@ class JellyfinAdapter extends BaseAdapter {
     // Tolerate a stale playlistId (e.g. user deleted the playlist manually or
     // the server state drifted) — log and fall through to create-fresh.
     try {
-      await axios.delete(`${this.url}/Items/${playlistId}`, { headers: this._headers() });
+      await axios.delete(`${this.url}/Items/${playlistId}`, { headers: this._headers(), timeout: REQUEST_TIMEOUT_MS });
     } catch (err) {
       const status = err.response?.status;
       logger.warn({ status, playlistId }, 'jellyfin replacePlaylistItems: delete failed, creating fresh');

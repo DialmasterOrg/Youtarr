@@ -267,7 +267,7 @@ describe('playlistModule', () => {
       expect(passed).not.toHaveProperty('thumbnail');
     });
 
-    test('falls back to playlist_channel_id / playlist_channel when per-video channel fields are absent', async () => {
+    test('leaves channel fields null instead of substituting the playlist owner when per-video channel fields are absent', async () => {
       Playlist.findOne.mockResolvedValue({
         id: 1, playlist_id: 'PLabc', url: 'https://u',
         min_duration: null, max_duration: null, title_filter_regex: null,
@@ -293,12 +293,46 @@ describe('playlistModule', () => {
 
       const rows = PlaylistVideo.bulkCreate.mock.calls[0][0];
       expect(rows.find((r) => r.youtube_id === 'vid1')).toMatchObject({
-        channel_id: 'UCowner',
-        channel_name: 'OwnerName',
+        channel_id: null,
+        channel_name: null,
       });
     });
 
-    test('prefers per-video channel_id over playlist_channel_id when present', async () => {
+    test('carries forward stored channel attribution when a stripped fetch omits it', async () => {
+      Playlist.findOne.mockResolvedValue({
+        id: 1, playlist_id: 'PLabc', url: 'https://u',
+        min_duration: null, max_duration: null, title_filter_regex: null,
+        update: jest.fn().mockResolvedValue(true),
+      });
+      // A previous good fetch captured the artist attribution for this video.
+      PlaylistVideo.findAll.mockResolvedValue([
+        { youtube_id: 'vid1', published_at: null, channel_id: 'UCartist', channel_name: 'Artist' },
+      ]);
+      PlaylistVideo.bulkCreate.mockResolvedValue([]);
+
+      const mockChild = new EventEmitter();
+      mockChild.stdout = new EventEmitter();
+      mockChild.stderr = new EventEmitter();
+      childProcess.spawn.mockReturnValue(mockChild);
+      const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      mockChild.stdout.emit(
+        'data',
+        JSON.stringify({ id: 'vid1', title: 'Stripped Entry', duration: 120, playlist_channel_id: 'UCowner', playlist_channel: 'OwnerName' }) + '\n'
+      );
+      mockChild.emit('close', 0);
+      await promise;
+
+      const rows = PlaylistVideo.bulkCreate.mock.calls[0][0];
+      expect(rows.find((r) => r.youtube_id === 'vid1')).toMatchObject({
+        channel_id: 'UCartist',
+        channel_name: 'Artist',
+      });
+    });
+
+    test('stores per-video channel attribution, ignoring playlist-owner fields', async () => {
       Playlist.findOne.mockResolvedValue({
         id: 1, playlist_id: 'PLabc', url: 'https://u',
         min_duration: null, max_duration: null, title_filter_regex: null,

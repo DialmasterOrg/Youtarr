@@ -134,4 +134,15 @@ describe('EmbyAdapter', () => {
     expect(axios.post).toHaveBeenCalled();
     expect(result).toEqual({ id: 'new-pl-id' });
   });
+
+  test('applies a request timeout to HTTP calls', async () => {
+    const { REQUEST_TIMEOUT_MS } = require('../baseAdapter');
+    axios.get.mockResolvedValueOnce({ data: { Version: '4.8' } });
+    const adapter = new EmbyAdapter(cfg);
+    await adapter.testConnection();
+    expect(axios.get).toHaveBeenCalledWith(
+      expect.stringContaining('/System/Info/Public'),
+      expect.objectContaining({ timeout: REQUEST_TIMEOUT_MS })
+    );
+  });
 });

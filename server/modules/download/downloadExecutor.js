@@ -16,6 +16,11 @@ const ChannelVideo = require('../../models/channelvideo');
 const logger = require('../../logger');
 const filesystem = require('../filesystem');
 
+// Cap on the serialized owner-channel map passed to the post-processor via an
+// environment variable. Linux limits a single env var to ~128KB (MAX_ARG_STRLEN);
+// stay well under it. A typical entry is ~40 bytes, so this covers thousands of videos.
+const OWNER_CHANNEL_MAP_MAX_BYTES = 64 * 1024;
+
 // yt-dlp writes certain warnings to stderr that do not indicate a problem with
 // the download: the media still downloads and yt-dlp exits 0. These must not
 // flip a successful job to "Complete with Warnings".
@@ -582,6 +587,8 @@ class DownloadExecutor {
       ratingOverride = undefined,
       ratingFallback = null,
       skipVideoFolder = false,
+      ownerChannelId = null,
+      ownerChannelMap = null,
     } = postProcessDirectives || {};
     const initialCount = this.getCountOfDownloadedVideos();
     const config = configModule.getConfig();
@@ -680,6 +687,27 @@ class DownloadExecutor {
       // when the real channel has no default rating
       if (ratingFallback !== null && ratingFallback !== undefined) {
         procEnv.YOUTARR_RATING_FALLBACK = String(ratingFallback);
+      }
+
+      // Originating channel id (channel-page downloads); the post-processor
+      // prefers it over the video's own channel_id when resolving the owner.
+      if (ownerChannelId !== null && ownerChannelId !== undefined && String(ownerChannelId).trim() !== '') {
+        procEnv.YOUTARR_OWNER_CHANNEL_ID = String(ownerChannelId).trim();
+      }
+
+      // Per-video owner-channel map (playlist downloads). The post-processor
+      // looks up its own youtube_id, so a superset map is fine.
+      if (ownerChannelMap && typeof ownerChannelMap === 'object' && Object.keys(ownerChannelMap).length > 0) {
+        try {
+          const serialized = JSON.stringify(ownerChannelMap);
+          if (serialized.length <= OWNER_CHANNEL_MAP_MAX_BYTES) {
+            procEnv.YOUTARR_OWNER_CHANNEL_MAP = serialized;
+          } else {
+            logger.warn({ bytes: serialized.length }, 'owner channel map exceeds env size cap; per-video owner resolution skipped');
+          }
+        } catch (err) {
+          logger.warn({ err }, 'could not serialize owner channel map');
+        }
       }
 
       const proc = spawn('yt-dlp', args, { env: procEnv });

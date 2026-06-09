@@ -136,11 +136,11 @@ function PlaylistPage({ token }: PlaylistPageProps) {
   }, []);
 
   const handleAction = useCallback(
-    async (label: string, action: () => Promise<unknown>): Promise<boolean> => {
+    async (label: string, action: () => Promise<unknown>, successMessage?: string): Promise<boolean> => {
       setActionRunning(true);
       try {
         await action();
-        showSnackbar(`${label} succeeded`);
+        showSnackbar(successMessage ?? `${label} succeeded`);
         return true;
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : `${label} failed`;
@@ -357,7 +357,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
         onToggleAutoDownload={handleToggleAutoDownload}
         onToggleSync={handleToggleSync}
         onChangePublic={() => setConfirmPublicOpen(true)}
-        onSyncNow={() => handleAction('Sync', sync)}
+        onSyncNow={() => handleAction('Sync', sync, 'Sync started; servers will update shortly')}
         onRegenerateM3U={() => handleAction('M3U regen', regenerateM3U)}
       />
 

@@ -115,11 +115,14 @@ class PlaylistModule {
         playlist_id: playlist.playlist_id,
         youtube_id: e.id,
         position: idx + 1,
-        // yt-dlp omits per-video channel fields for some stripped playlist listings;
-        // fall back to the playlist owner. Only affects pre-download command settings,
-        // not per-video routing.
-        channel_id: e.channel_id || e.playlist_channel_id || null,
-        channel_name: e.uploader || e.channel || e.playlist_channel || null,
+        // yt-dlp sometimes omits per-video channel fields from flat playlist
+        // listings (the same playlist can flip between fetches). Never substitute
+        // the playlist owner's channel: this field drives per-video command
+        // settings and owner-channel routing at finalize, and the owner's id
+        // mis-routes other artists' videos. Leave null and carry forward any
+        // previously-captured attribution (_preserveExistingChannelInfo).
+        channel_id: e.channel_id || null,
+        channel_name: e.uploader || e.channel || null,
         title: e.title || null,
         thumbnail: pickThumbnail(e),
         duration: typeof e.duration === 'number' ? e.duration : null,
@@ -130,6 +133,7 @@ class PlaylistModule {
       .map(({ row }) => row);
 
     await this._preserveExistingPublishedDates(playlist.playlist_id, rows);
+    await this._preserveExistingChannelInfo(playlist.playlist_id, rows);
     await this._backfillPublishedDates(rows);
 
     await PlaylistVideo.bulkCreate(rows, {
@@ -193,6 +197,31 @@ class PlaylistModule {
     for (const row of missing) {
       const date = byId.get(row.youtube_id);
       if (date) row.published_at = date;
+    }
+  }
+
+  // Like published_at above: a stripped flat listing rebuilds rows with null
+  // channel fields, and both are in bulkCreate's updateOnDuplicate list. Carry
+  // forward attribution captured by a previous good fetch so it isn't erased,
+  // while a fresh non-null value still wins (self-heals stale rows).
+  async _preserveExistingChannelInfo(playlistId, rows) {
+    const missing = rows.filter((r) => !r.channel_id && r.youtube_id);
+    if (!missing.length) return;
+    const existing = await PlaylistVideo.findAll({
+      where: { playlist_id: playlistId, youtube_id: missing.map((r) => r.youtube_id) },
+      attributes: ['youtube_id', 'channel_id', 'channel_name'],
+    });
+    const byId = new Map(
+      (existing || [])
+        .filter((r) => r.channel_id)
+        .map((r) => [r.youtube_id, r])
+    );
+    for (const row of missing) {
+      const stored = byId.get(row.youtube_id);
+      if (stored) {
+        row.channel_id = stored.channel_id;
+        if (!row.channel_name) row.channel_name = stored.channel_name;
+      }
     }
   }
 

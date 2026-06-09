@@ -967,7 +967,7 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=abc123', 'https://youtube.com/watch?v=def456'],
         false,
         false,
-        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false }
+        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false, ownerChannelId: null, ownerChannelMap: null }
       );
     });
 
@@ -998,7 +998,7 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=xyz789'],
         false,
         false,
-        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false }
+        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false, ownerChannelId: null, ownerChannelMap: null }
       );
     });
 
@@ -1024,7 +1024,7 @@ describe('DownloadModule', () => {
         ['-abc123', 'https://youtube.com/watch?v=def456'],
         false,
         false,
-        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false }
+        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false, ownerChannelId: null, ownerChannelMap: null }
       );
     });
 
@@ -1146,7 +1146,7 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test1', 'https://youtube.com/watch?v=test2'],
         true,
         false,
-        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false }
+        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false, ownerChannelId: null, ownerChannelMap: null }
       );
       // Verify that --download-archive is NOT in the arguments when allowRedownload is true
       const callArgs = mockDownloadExecutor.doDownload.mock.calls[0][0];
@@ -1181,7 +1181,7 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test'],
         false,
         false,
-        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false }
+        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false, ownerChannelId: null, ownerChannelMap: null }
       );
     });
 
@@ -1210,7 +1210,7 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=default'],
         false,
         false,
-        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false }
+        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false, ownerChannelId: null, ownerChannelMap: null }
       );
     });
 
@@ -1238,7 +1238,7 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test'],
         false,
         false,
-        { subfolderOverride: 'Movies', subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false }
+        { subfolderOverride: 'Movies', subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false, ownerChannelId: null, ownerChannelMap: null }
       );
     });
 
@@ -1264,7 +1264,7 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test'],
         false,
         false,
-        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false }
+        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false, ownerChannelId: null, ownerChannelMap: null }
       );
     });
 
@@ -1289,7 +1289,7 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test'],
         false,
         false,
-        { subfolderOverride: '', subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false }
+        { subfolderOverride: '', subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false, ownerChannelId: null, ownerChannelMap: null }
       );
     });
 
@@ -1315,7 +1315,7 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test'],
         false,
         false,
-        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: true }
+        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: true, ownerChannelId: null, ownerChannelMap: null }
       );
     });
 
@@ -1341,7 +1341,7 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test'],
         false,
         false,
-        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: true }
+        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: true, ownerChannelId: 'UC123456', ownerChannelMap: null }
       );
     });
 
@@ -1370,7 +1370,7 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test'],
         false,
         false,
-        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false }
+        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false, ownerChannelId: 'UC123456', ownerChannelMap: null }
       );
     });
 
@@ -1428,7 +1428,7 @@ describe('DownloadModule', () => {
         [],
         false,
         false,
-        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false }
+        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false, ownerChannelId: null, ownerChannelMap: null }
       );
     });
   });
@@ -1686,6 +1686,41 @@ describe('DownloadModule', () => {
       expect(spy.mock.calls[1][0].body.overrideSettings).toMatchObject({
         resolution: '1080', audioFormat: 'mp3_only', skipVideoFolder: true,
       });
+    });
+
+    it('builds a per-video owner-channel map from the playlist rows and forwards it to each group', async () => {
+      PlaylistVideoMock.findAll.mockResolvedValue([
+        { youtube_id: 'a', channel_id: 'UC-artistA' },
+        { youtube_id: 'b', channel_id: 'UC-artistB' },
+      ]);
+      VideoMock.findOne.mockResolvedValue(null);
+      ChannelMock.findOne.mockResolvedValue({ channel_id: 'exists' });
+      grouperMock.buildGroups.mockResolvedValue([
+        { resolution: '720', audioFormat: null, skipVideoFolder: false, youtubeIds: ['a'] },
+        { resolution: '1080', audioFormat: null, skipVideoFolder: false, youtubeIds: ['b'] },
+      ]);
+      const spy = jest.spyOn(downloadModule, 'doSpecificDownloads').mockResolvedValue();
+
+      await downloadModule.doPlaylistDownloads(mockPlaylist, { youtubeIds: ['a', 'b'], overrideSettings: {} });
+
+      // The full map goes to every group; the post-processor looks up its own id.
+      const expectedMap = { a: 'UC-artistA', b: 'UC-artistB' };
+      expect(spy.mock.calls[0][0].body.ownerChannelMap).toEqual(expectedMap);
+      expect(spy.mock.calls[1][0].body.ownerChannelMap).toEqual(expectedMap);
+    });
+
+    it('omits rows without a channel_id from the owner-channel map', async () => {
+      PlaylistVideoMock.findAll.mockResolvedValue([
+        { youtube_id: 'a', channel_id: 'UC-artistA' },
+        { youtube_id: 'b', channel_id: null },
+      ]);
+      VideoMock.findOne.mockResolvedValue(null);
+      ChannelMock.findOne.mockResolvedValue({ channel_id: 'exists' });
+      const spy = jest.spyOn(downloadModule, 'doSpecificDownloads').mockResolvedValue();
+
+      await downloadModule.doPlaylistDownloads(mockPlaylist, { youtubeIds: ['a', 'b'], overrideSettings: {} });
+
+      expect(spy.mock.calls[0][0].body.ownerChannelMap).toEqual({ a: 'UC-artistA' });
     });
 
     it('passes a playlist default_sub_folder as a soft fallback, not a hard subfolder', async () => {

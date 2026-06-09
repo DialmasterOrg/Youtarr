@@ -1557,6 +1557,39 @@ describe('DownloadExecutor', () => {
       });
     });
 
+    it('should set YOUTARR_OWNER_CHANNEL_ID when ownerChannelId is provided', async () => {
+      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, { ownerChannelId: 'UC-subscription' });
+      expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
+        env: expect.objectContaining({ YOUTARR_OWNER_CHANNEL_ID: 'UC-subscription' })
+      });
+    });
+
+    it('should not set YOUTARR_OWNER_CHANNEL_ID when ownerChannelId is null', async () => {
+      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, { ownerChannelId: null });
+      expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
+        env: expect.not.objectContaining({ YOUTARR_OWNER_CHANNEL_ID: expect.anything() })
+      });
+    });
+
+    it('should set YOUTARR_OWNER_CHANNEL_MAP (serialized) when ownerChannelMap is provided', async () => {
+      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      const map = { abc123: 'UC-artist', def456: 'UC-other' };
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, { ownerChannelMap: map });
+      expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
+        env: expect.objectContaining({ YOUTARR_OWNER_CHANNEL_MAP: JSON.stringify(map) })
+      });
+    });
+
+    it('should not set YOUTARR_OWNER_CHANNEL_MAP when the map is empty', async () => {
+      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, { ownerChannelMap: {} });
+      expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
+        env: expect.not.objectContaining({ YOUTARR_OWNER_CHANNEL_MAP: expect.anything() })
+      });
+    });
+
     it('should log subfolderOverride in info message', async () => {
       setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
       await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, { subfolderOverride: 'MyFolder' });

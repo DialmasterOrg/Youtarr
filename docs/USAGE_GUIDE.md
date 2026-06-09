@@ -187,7 +187,7 @@ Open a playlist to manage it:
 - **Download settings**: set a subfolder, resolution, download type, and default rating for this playlist. A video's own channel settings take precedence; these apply when the channel has no override.
 - **Sync chips**: one per media server. Click to enable or disable sync for that server, or click an unconfigured server to jump to its settings.
 - **Public on media servers**: makes the playlist visible to other users on Jellyfin and Emby. Plex playlists are always created under one account and shared manually, so this setting doesn't affect Plex.
-- **Sync now** and **Rebuild .m3u file**: push the current state to your servers or regenerate the `.m3u` on demand.
+- **Sync now** and **Rebuild .m3u file**: push the current state to your servers or regenerate the `.m3u` on demand. Sync runs in the background and can take a minute or two while your media server's library scan finishes.
 
 In the video list you can sort newest- or oldest-first, ignore videos you don't want, and select specific videos to download with **Download Selected**.
 

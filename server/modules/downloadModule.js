@@ -659,6 +659,10 @@ class DownloadModule {
           ratingOverride: overrideSettings.rating !== undefined ? overrideSettings.rating : undefined,
           ratingFallback,
           skipVideoFolder,
+          // Owning channel / per-video owner map for routing at finalize; see
+          // the resolution priority in videoDownloadPostProcessFiles.js.
+          ownerChannelId: channelId || null,
+          ownerChannelMap: this.getJobDataValue(jobData, 'ownerChannelMap') || null,
         }
       );
     }
@@ -747,6 +751,14 @@ class DownloadModule {
     const groups = await playlistDownloadGrouper.buildGroups(playlist, toDownload, overrideSettings);
     const jobLabel = playlistJobLabel(playlist);
 
+    // Per-video owner channel captured at playlist sync, so the post-processor
+    // can route VEVO/Topic videos by the real owning channel instead of the
+    // auto-generated upload channel in their .info.json.
+    const ownerChannelMap = {};
+    for (const entry of toDownload) {
+      if (entry.channel_id) ownerChannelMap[entry.youtube_id] = entry.channel_id;
+    }
+
     // Routing directives (dialog override + playlist default) are uniform across the
     // whole download, so resolve them once; channel and global tiers resolve per-video
     // at finalize. See downloadSettingsResolver.
@@ -766,7 +778,7 @@ class DownloadModule {
       if (routing.ratingFallback !== undefined) groupOverride.ratingFallback = routing.ratingFallback;
       // doSpecificDownloads accepts an Express-request shape (.body). runId ties
       // these jobs into the parent run so its summary aggregates them.
-      await this.doSpecificDownloads({ body: { urls, overrideSettings: groupOverride, jobLabel, runId: options.runId } });
+      await this.doSpecificDownloads({ body: { urls, overrideSettings: groupOverride, jobLabel, runId: options.runId, ownerChannelMap } });
     }
   }
 

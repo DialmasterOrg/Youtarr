@@ -815,49 +815,64 @@ describe('POST /api/playlists/:playlistId/refresh', () => {
 });
 
 describe('POST /api/playlists/:playlistId/sync', () => {
-  test('syncs playlist to media servers', async () => {
-    const deps = buildDeps();
-    const p = makePlaylist();
-    deps.models.Playlist.findOne.mockResolvedValue(p);
-
+  test('returns 202 immediately without awaiting the sync', async () => {
+    const playlist = makePlaylist();
+    let releaseSync;
+    const syncGate = new Promise((resolve) => { releaseSync = resolve; });
+    const deps = buildDeps({
+      Playlist: { findOne: jest.fn().mockResolvedValue(playlist) },
+      mediaServers: { mediaServerSync: { syncPlaylist: jest.fn().mockReturnValue(syncGate) } },
+    });
     const handler = getHandler('post', '/api/playlists/:playlistId/sync', deps);
-    const req = { params: { playlistId: 'PLtest123' }, log: loggerMock };
     const res = createResponse();
 
-    await handler(req, res);
+    await handler({ params: { playlistId: 'PLtest123' }, log: loggerMock }, res);
 
-    expect(deps.mediaServers.mediaServerSync.syncPlaylist).toHaveBeenCalledWith(p.id);
+    // Responded while the sync promise is still pending.
+    expect(deps.mediaServers.mediaServerSync.syncPlaylist).toHaveBeenCalledWith(playlist.id);
+    expect(res.status).toHaveBeenCalledWith(202);
     expect(res.json).toHaveBeenCalledWith({ success: true });
+    releaseSync();
   });
 
-  test('returns 404 when playlist not found', async () => {
-    const deps = buildDeps();
-    deps.models.Playlist.findOne.mockResolvedValue(null);
-
+  test('returns 404 when the playlist does not exist', async () => {
+    const deps = buildDeps({
+      Playlist: { findOne: jest.fn().mockResolvedValue(null) },
+    });
     const handler = getHandler('post', '/api/playlists/:playlistId/sync', deps);
-    const req = { params: { playlistId: 'nonexistent' }, log: loggerMock };
     const res = createResponse();
-
-    await handler(req, res);
-
+    await handler({ params: { playlistId: 'nope' }, log: loggerMock }, res);
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith({ error: 'Playlist not found' });
   });
 
-  test('returns 500 on sync error', async () => {
-    const deps = buildDeps();
-    const p = makePlaylist();
-    deps.models.Playlist.findOne.mockResolvedValue(p);
-    deps.mediaServers.mediaServerSync.syncPlaylist.mockRejectedValue(new Error('plex down'));
-
+  test('returns 500 on db error', async () => {
+    const deps = buildDeps({
+      Playlist: { findOne: jest.fn().mockRejectedValue(new Error('db down')) },
+    });
     const handler = getHandler('post', '/api/playlists/:playlistId/sync', deps);
-    const req = { params: { playlistId: 'PLtest123' }, log: loggerMock };
     const res = createResponse();
-
-    await handler(req, res);
-
+    await handler({ params: { playlistId: 'PLtest123' }, log: loggerMock }, res);
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: 'Sync failed' });
+  });
+
+  test('logs sync failures that happen after the response was sent', async () => {
+    const playlist = makePlaylist();
+    const deps = buildDeps({
+      Playlist: { findOne: jest.fn().mockResolvedValue(playlist) },
+      mediaServers: { mediaServerSync: { syncPlaylist: jest.fn().mockRejectedValue(new Error('plex down')) } },
+    });
+    const handler = getHandler('post', '/api/playlists/:playlistId/sync', deps);
+    const res = createResponse();
+    await handler({ params: { playlistId: 'PLtest123' }, log: loggerMock }, res);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(res.status).toHaveBeenCalledWith(202);
+    expect(loggerMock.error).toHaveBeenCalledWith(
+      expect.objectContaining({ err: expect.any(Error), playlist_id: 'PLtest123' }),
+      expect.stringContaining('background playlist sync failed')
+    );
   });
 });
 

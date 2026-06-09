@@ -47,6 +47,10 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     return { ok: true, value: out };
   }
 
+  const logBgFailure = (req, playlistId, op) => (err) => {
+    req.log.error({ err, playlist_id: playlistId }, `background ${op} failed`);
+  };
+
   // A persisted default_sub_folder feeds the playlist download soft fallback,
   // which reaches the filesystem path. Validate it with the same traversal-safe
   // check used for channel subfolders. null/''/absent mean "no subfolder" (root).
@@ -128,8 +132,8 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       const info = await playlistModule.getPlaylistInfo(url);
       const created = await playlistModule.upsertPlaylist(info, { enabled: true, settings });
       await playlistModule.fetchAllPlaylistVideos(created.playlist_id);
-      mediaServers.mediaServerSync.syncPlaylist(created.id).catch(() => {});
-      m3uGenerator.generatePlaylistM3U(created.id).catch(() => {});
+      mediaServers.mediaServerSync.syncPlaylist(created.id).catch(logBgFailure(req, created.playlist_id, 'playlist sync'));
+      m3uGenerator.generatePlaylistM3U(created.id).catch(logBgFailure(req, created.playlist_id, 'M3U generation'));
       res.status(201).json({ playlist: created });
     } catch (err) {
       req.log.error({ err }, 'subscribe failed');
@@ -270,8 +274,8 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       const count = await playlistModule.fetchAllPlaylistVideos(req.params.playlistId);
       const p = await Playlist.findOne({ where: { playlist_id: req.params.playlistId } });
       if (p) {
-        mediaServers.mediaServerSync.syncPlaylist(p.id).catch(() => {});
-        m3uGenerator.generatePlaylistM3U(p.id).catch(() => {});
+        mediaServers.mediaServerSync.syncPlaylist(p.id).catch(logBgFailure(req, p.playlist_id, 'playlist sync'));
+        m3uGenerator.generatePlaylistM3U(p.id).catch(logBgFailure(req, p.playlist_id, 'M3U generation'));
       }
       res.json({ fetched: count });
     } catch (err) {
@@ -284,8 +288,11 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     try {
       const p = await Playlist.findOne({ where: { playlist_id: req.params.playlistId } });
       if (!p) return res.status(404).json({ error: 'Playlist not found' });
-      await mediaServers.mediaServerSync.syncPlaylist(p.id);
-      res.json({ success: true });
+      // The sync polls media-server library scans with backoff and can take
+      // minutes; run it in the background and report acceptance. The outcome
+      // (last_synced_at / last_error) lands in playlist_sync_state.
+      mediaServers.mediaServerSync.syncPlaylist(p.id).catch(logBgFailure(req, p.playlist_id, 'playlist sync'));
+      res.status(202).json({ success: true });
     } catch (err) {
       req.log.error({ err }, 'sync failed');
       res.status(500).json({ error: 'Sync failed' });

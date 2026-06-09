@@ -1,6 +1,6 @@
 const axios = require('axios');
 const BaseAdapter = require('./baseAdapter');
-const { extractBasename } = require('./baseAdapter');
+const { extractBasename, pathSegments, trailingSegmentMatch, REQUEST_TIMEOUT_MS } = require('./baseAdapter');
 const logger = require('../../../logger');
 const plexModule = require('../../plexModule');
 
@@ -16,6 +16,12 @@ class PlexAdapter extends BaseAdapter {
     this.url = config.plexUrl;
     this.token = config.plexApiKey;
     this.libraryId = config.plexYoutubeLibraryId;
+    // Cache of video-bearing section ids to search when resolving a file to its
+    // server item. A playlist's videos can be scattered across libraries (e.g.
+    // channels writing to subfolders that the admin mapped to separate Plex
+    // libraries). Plex playlists accept ratingKeys from any section, so we search
+    // every video section. Populated lazily on first resolve. See _getVideoSectionIds.
+    this._videoSectionIds = null;
     // Optional override for playlist-scoped operations. Useful when the admin
     // token belongs to a different Plex account than the one used by the Plex
     // Web session.
@@ -33,6 +39,35 @@ class PlexAdapter extends BaseAdapter {
     }
   }
 
+  // Distinct, ordered list of video-bearing library section ids to search,
+  // discovered from the Plex server itself (not from Youtarr config, which may
+  // not map every library). The configured YouTube library is placed first as
+  // the most likely location. Result is cached for the lifetime of the adapter
+  // instance (one sync). Falls back to the configured library if enumeration fails.
+  async _getVideoSectionIds() {
+    if (this._videoSectionIds) return this._videoSectionIds;
+    const ids = [];
+    const add = (id) => {
+      if (id == null) return;
+      const s = String(id).trim();
+      if (s && /^\d+$/.test(s) && !ids.includes(s)) ids.push(s);
+    };
+    add(this.libraryId);
+    try {
+      const res = await axios.get(`${this.url}/library/sections`, { params: this._plParams(), timeout: REQUEST_TIMEOUT_MS });
+      const dirs = res.data?.MediaContainer?.Directory || [];
+      for (const dir of dirs) {
+        // Only video-bearing sections can hold downloaded videos: 'movie' covers
+        // "Other Videos"/Personal Media libraries; 'show' covers TV-type ones.
+        if (dir.type === 'movie' || dir.type === 'show') add(dir.key);
+      }
+    } catch (err) {
+      logger.warn({ err }, 'plex: could not enumerate library sections; searching configured library only');
+    }
+    this._videoSectionIds = ids;
+    return ids;
+  }
+
   // Build params for playlist-scoped requests. Conditionally omits X-Plex-Token
   // when playlistToken is null (UNCLAIMED_SERVER sentinel was configured).
   _plParams(extra = {}) {
@@ -43,7 +78,7 @@ class PlexAdapter extends BaseAdapter {
 
   async testConnection() {
     try {
-      await axios.get(`${this.url}/identity`, { params: { 'X-Plex-Token': this.token } });
+      await axios.get(`${this.url}/identity`, { params: { 'X-Plex-Token': this.token }, timeout: REQUEST_TIMEOUT_MS });
       return { ok: true };
     } catch (err) {
       return { ok: false, error: err.message };
@@ -57,28 +92,67 @@ class PlexAdapter extends BaseAdapter {
   }
 
   async resolveItemIdByFilepath(filepath) {
-    // Match by filename across different mount views. Youtarr sees e.g.
-    // /usr/src/app/data/...; Plex may report Windows paths like Q:\Media\...
-    // Use extractBasename which handles both separators. YouTube video IDs
-    // embedded in filenames (e.g. "Title [abc123].mp4") are globally unique.
-    const target = extractBasename(filepath);
-    try {
-      const res = await axios.get(`${this.url}/library/sections/${this.libraryId}/all`, {
-        params: this._plParams(),
-      });
-      const items = res.data?.MediaContainer?.Metadata || [];
-      for (const item of items) {
-        for (const media of item.Media || []) {
-          for (const part of media.Part || []) {
-            if (part.file && extractBasename(part.file) === target) return item.ratingKey;
+    const resolved = await this.resolveItemIdsByFilepaths([filepath]);
+    return resolved.get(filepath) || null;
+  }
+
+  // Batch filepath resolution: one /all fetch per video section per call, not
+  // per file, so a whole playlist costs (sections) fetches instead of
+  // (sections x files). Listings are not cached across calls: the sync
+  // orchestrator polls this while a library scan is in flight and each round
+  // must observe freshly indexed items.
+  //
+  // Matching is by basename (mount views differ between Youtarr and Plex;
+  // YouTube ids in filenames are globally unique). The same basename can match
+  // in two sections when a stale item lingers after a file moved between
+  // libraries, so every section is scanned and the best-scoring candidate wins;
+  // see trailingSegmentMatch in baseAdapter.
+  async resolveItemIdsByFilepaths(filepaths) {
+    const results = new Map();
+    const targets = [...new Set((filepaths || []).filter(Boolean))];
+    if (targets.length === 0) return results;
+
+    // Candidate index over every section, restricted to the basenames we need.
+    const wanted = new Set(targets.map(extractBasename));
+    const candidatesByBasename = new Map(); // basename -> [{ ratingKey, segments }]
+    const sectionIds = await this._getVideoSectionIds();
+    for (const libraryId of sectionIds) {
+      try {
+        const res = await axios.get(`${this.url}/library/sections/${libraryId}/all`, {
+          params: this._plParams(),
+          timeout: REQUEST_TIMEOUT_MS,
+        });
+        const items = res.data?.MediaContainer?.Metadata || [];
+        for (const item of items) {
+          for (const media of item.Media || []) {
+            for (const part of media.Part || []) {
+              if (!part.file) continue;
+              const base = extractBasename(part.file);
+              if (!wanted.has(base)) continue;
+              if (!candidatesByBasename.has(base)) candidatesByBasename.set(base, []);
+              candidatesByBasename.get(base).push({
+                ratingKey: item.ratingKey,
+                segments: pathSegments(part.file),
+              });
+            }
           }
         }
+      } catch (err) {
+        // A single section failing shouldn't abort the search of the others.
+        logger.error({ err, libraryId }, 'plex section listing failed during filepath resolution');
       }
-      return null;
-    } catch (err) {
-      logger.error({ err, filepath }, 'plex resolveItemIdByFilepath failed');
-      return null;
     }
+
+    for (const filepath of targets) {
+      const targetSegments = pathSegments(filepath);
+      let best = null; // { ratingKey, score }
+      for (const candidate of candidatesByBasename.get(extractBasename(filepath)) || []) {
+        const score = trailingSegmentMatch(targetSegments, candidate.segments);
+        if (!best || score > best.score) best = { ratingKey: candidate.ratingKey, score };
+      }
+      results.set(filepath, best ? best.ratingKey : null);
+    }
+    return results;
   }
 
   // Video playlists visible in the CURRENT scope (token / no-token). Throws on
@@ -87,6 +161,7 @@ class PlexAdapter extends BaseAdapter {
   async _listVideoPlaylists() {
     const res = await axios.get(`${this.url}/playlists`, {
       params: this._plParams({ playlistType: 'video' }),
+      timeout: REQUEST_TIMEOUT_MS,
     });
     return res.data?.MediaContainer?.Metadata || [];
   }
@@ -103,7 +178,7 @@ class PlexAdapter extends BaseAdapter {
 
   async _getMachineId() {
     // /identity is server-wide info; use the admin token which is always valid.
-    const res = await axios.get(`${this.url}/identity`, { params: { 'X-Plex-Token': this.token } });
+    const res = await axios.get(`${this.url}/identity`, { params: { 'X-Plex-Token': this.token }, timeout: REQUEST_TIMEOUT_MS });
     return res.data?.MediaContainer?.machineIdentifier;
   }
 
@@ -112,6 +187,7 @@ class PlexAdapter extends BaseAdapter {
     const uri = `server://${machineId}/com.plexapp.plugins.library/library/metadata/${itemIds.join(',')}`;
     const res = await axios.post(`${this.url}/playlists`, null, {
       params: this._plParams({ type: 'video', title: name, smart: 0, uri }),
+      timeout: REQUEST_TIMEOUT_MS,
     });
     return { id: res.data?.MediaContainer?.Metadata?.[0]?.ratingKey };
   }
@@ -129,7 +205,7 @@ class PlexAdapter extends BaseAdapter {
       if (tried.has(key)) continue;
       tried.add(key);
       try {
-        await axios.delete(`${this.url}/playlists/${playlistId}`, { params });
+        await axios.delete(`${this.url}/playlists/${playlistId}`, { params, timeout: REQUEST_TIMEOUT_MS });
         logger.info({ playlistId }, 'plex: removed stranded playlist from its prior scope');
         return true;
       } catch (err) {
@@ -146,11 +222,13 @@ class PlexAdapter extends BaseAdapter {
     try {
       await axios.delete(`${this.url}/playlists/${playlistId}/items`, {
         params: this._plParams(),
+        timeout: REQUEST_TIMEOUT_MS,
       });
       const machineId = await this._getMachineId();
       const uri = `server://${machineId}/com.plexapp.plugins.library/library/metadata/${itemIds.join(',')}`;
       await axios.put(`${this.url}/playlists/${playlistId}/items`, null, {
         params: this._plParams({ uri }),
+        timeout: REQUEST_TIMEOUT_MS,
       });
       return { id: playlistId };
     } catch (err) {

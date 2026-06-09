@@ -64,10 +64,16 @@ const mockJobVideoDownload = {
 
 const mockChannel = {
   findOne: jest.fn(() => Promise.resolve(null)),
+  findAll: jest.fn(() => Promise.resolve([])),
   update: jest.fn(() => Promise.resolve([1]))
 };
 
+const mockChannelVideo = {
+  findAll: jest.fn(() => Promise.resolve([]))
+};
+
 jest.mock('../../models/channel', () => mockChannel);
+jest.mock('../../models/channelvideo', () => mockChannelVideo);
 
 jest.mock('../../models', () => ({
   JobVideoDownload: mockJobVideoDownload,
@@ -100,6 +106,7 @@ const nfoGenerator = require('../nfoGenerator');
 const tempPathManager = require('../download/tempPathManager');
 const { JobVideoDownload } = require('../../models');
 const Channel = require('../../models/channel');
+const ChannelVideo = require('../../models/channelvideo');
 
 const flushPromises = () => new Promise((resolve) => queueMicrotask(resolve));
 
@@ -124,6 +131,8 @@ describe('videoDownloadPostProcessFiles', () => {
     logger.error.mockClear();
     JobVideoDownload.update.mockResolvedValue([0]);
     Channel.findOne.mockResolvedValue(null);
+    Channel.findAll.mockResolvedValue([]);
+    ChannelVideo.findAll.mockResolvedValue([]);
     process.env.YOUTARR_JOB_ID = 'test-job-id';
     configModule.__setConfig({
       writeChannelPosters: false,
@@ -690,6 +699,216 @@ describe('videoDownloadPostProcessFiles', () => {
         ]),
         expect.any(Object)
       );
+    });
+  });
+
+  describe('owner channel id resolution (VEVO/Topic channel fix)', () => {
+    afterEach(() => {
+      delete process.env.YOUTARR_OWNER_CHANNEL_ID;
+      delete process.env.YOUTARR_OWNER_CHANNEL_MAP;
+      delete process.env.YOUTARR_SUBFOLDER_FALLBACK;
+      delete process.env.YOUTARR_SUBFOLDER_OVERRIDE;
+    });
+
+    it('looks up the channel by the owner id, not the video info.json channel_id', async () => {
+      // info.json channel_id is 'channel123' (set in beforeEach); the owner id is
+      // the subscription the user actually downloaded from.
+      process.env.YOUTARR_OWNER_CHANNEL_ID = 'UC-subscription';
+      Channel.findOne.mockResolvedValue({
+        id: 1, sub_folder: 'Library2', uploader: 'Channel', folder_name: 'Channel', default_rating: null
+      });
+
+      await loadModule();
+      await settleAsync();
+
+      expect(Channel.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { channel_id: 'UC-subscription' } })
+      );
+    });
+
+    it('routes the video into the owner channel subfolder even when info.json channel_id differs', async () => {
+      process.env.YOUTARR_OWNER_CHANNEL_ID = 'UC-subscription';
+      Channel.findOne.mockResolvedValue({
+        id: 1, sub_folder: 'Library2', uploader: 'Channel', folder_name: 'Channel', default_rating: null
+      });
+
+      const tempVideoPath = '/tmp/youtarr-downloads/Channel/Video Title [abc123]/Video Title [abc123].mp4';
+      const tempVideoDir = '/tmp/youtarr-downloads/Channel/Video Title [abc123]';
+      process.argv = ['node', 'script', tempVideoPath];
+
+      tempPathManager.isEnabled.mockReturnValue(true);
+      tempPathManager.isTempPath.mockReturnValue(true);
+      tempPathManager.convertTempToFinal.mockImplementation((p) => p.replace('/tmp/youtarr-downloads', '/library'));
+
+      const tempJsonPath = '/tmp/youtarr-downloads/Channel/Video Title [abc123]/Video Title [abc123].info.json';
+      fs.existsSync.mockImplementation((p) => p === tempJsonPath || p.includes('/library/__Library2/Channel'));
+      fs.pathExists.mockResolvedValue(false);
+
+      await loadModule();
+      await settleAsync();
+
+      expect(fs.move).toHaveBeenCalledWith(
+        tempVideoDir,
+        expect.stringContaining('/library/__Library2/Channel/Video Title [abc123]')
+      );
+    });
+
+    it('falls back to the video info.json channel_id when no owner id is provided', async () => {
+      delete process.env.YOUTARR_OWNER_CHANNEL_ID;
+      Channel.findOne.mockResolvedValue(null);
+
+      await loadModule();
+      await settleAsync();
+
+      expect(Channel.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { channel_id: 'channel123' } })
+      );
+    });
+
+    it('uses the owner-channel map (by youtube id) over the info.json channel_id (playlist download)', async () => {
+      // VEVO video: info.json reports channel123, but the playlist passed the
+      // artist channel for this youtube id.
+      delete process.env.YOUTARR_OWNER_CHANNEL_ID;
+      process.env.YOUTARR_OWNER_CHANNEL_MAP = JSON.stringify({ abc123: 'UC-artist' });
+      Channel.findOne.mockResolvedValue({
+        id: 1, sub_folder: 'Library2', uploader: 'Channel', folder_name: 'Channel', default_rating: null
+      });
+
+      await loadModule();
+      await settleAsync();
+
+      expect(Channel.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { channel_id: 'UC-artist' } })
+      );
+    });
+
+    it('falls back to info.json channel_id when the map has no entry for this video', async () => {
+      delete process.env.YOUTARR_OWNER_CHANNEL_ID;
+      process.env.YOUTARR_OWNER_CHANNEL_MAP = JSON.stringify({ otherVideo: 'UC-artist' });
+      Channel.findOne.mockResolvedValue(null);
+
+      await loadModule();
+      await settleAsync();
+
+      expect(Channel.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { channel_id: 'channel123' } })
+      );
+    });
+
+    it('prefers the explicit owner env over the owner-channel map', async () => {
+      process.env.YOUTARR_OWNER_CHANNEL_ID = 'UC-explicit';
+      process.env.YOUTARR_OWNER_CHANNEL_MAP = JSON.stringify({ abc123: 'UC-mapped' });
+      Channel.findOne.mockResolvedValue({
+        id: 1, sub_folder: 'Library2', uploader: 'Channel', folder_name: 'Channel', default_rating: null
+      });
+
+      await loadModule();
+      await settleAsync();
+
+      expect(Channel.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { channel_id: 'UC-explicit' } })
+      );
+    });
+
+    it('ignores a malformed owner-channel map and falls back to info.json channel_id', async () => {
+      delete process.env.YOUTARR_OWNER_CHANNEL_ID;
+      process.env.YOUTARR_OWNER_CHANNEL_MAP = 'not-json{';
+      Channel.findOne.mockResolvedValue(null);
+
+      await loadModule();
+      await settleAsync();
+
+      expect(Channel.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { channel_id: 'channel123' } })
+      );
+    });
+
+    it('resolves the tracked channel that listed the video when info.json id is an untracked VEVO channel (manual paste)', async () => {
+      // No explicit owner (pasted URL). info.json channel_id is the VEVO auto-channel
+      // (channel123 here, untracked). channelvideos links the video to both the VEVO
+      // id and the tracked artist channel UC-artist.
+      delete process.env.YOUTARR_OWNER_CHANNEL_ID;
+      delete process.env.YOUTARR_OWNER_CHANNEL_MAP;
+      ChannelVideo.findAll.mockResolvedValue([
+        { channel_id: 'channel123' },
+        { channel_id: 'UC-artist' },
+      ]);
+      // Of the candidates, only UC-artist is a tracked channel.
+      Channel.findAll.mockResolvedValue([{ channel_id: 'UC-artist' }]);
+      Channel.findOne.mockResolvedValue({
+        id: 1, sub_folder: 'Library2', uploader: 'Channel', folder_name: 'Channel', default_rating: null
+      });
+
+      await loadModule();
+      await settleAsync();
+
+      expect(Channel.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { channel_id: 'UC-artist' } })
+      );
+    });
+
+    it('never routes via an untracked channelvideos id (e.g. the VEVO auto-channel)', async () => {
+      // channelvideos only has the untracked VEVO id; none of the candidates are tracked,
+      // so we must fall back to the info.json id rather than use the untracked id.
+      delete process.env.YOUTARR_OWNER_CHANNEL_ID;
+      delete process.env.YOUTARR_OWNER_CHANNEL_MAP;
+      ChannelVideo.findAll.mockResolvedValue([{ channel_id: 'UC-vevo' }]);
+      Channel.findAll.mockResolvedValue([]); // nothing tracked
+      Channel.findOne.mockResolvedValue(null);
+
+      await loadModule();
+      await settleAsync();
+
+      expect(Channel.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { channel_id: 'channel123' } })
+      );
+    });
+
+    it('prefers the explicit owner map over the channelvideos tracked lookup', async () => {
+      delete process.env.YOUTARR_OWNER_CHANNEL_ID;
+      process.env.YOUTARR_OWNER_CHANNEL_MAP = JSON.stringify({ abc123: 'UC-mapped' });
+      // channelvideos would resolve to a different tracked channel, but the explicit
+      // map must win and the tracked lookup must be skipped.
+      ChannelVideo.findAll.mockResolvedValue([{ channel_id: 'UC-other' }]);
+      Channel.findAll.mockResolvedValue([{ channel_id: 'UC-other' }]);
+      Channel.findOne.mockResolvedValue({
+        id: 1, sub_folder: 'Library2', uploader: 'Channel', folder_name: 'Channel', default_rating: null
+      });
+
+      await loadModule();
+      await settleAsync();
+
+      expect(Channel.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { channel_id: 'UC-mapped' } })
+      );
+      expect(ChannelVideo.findAll).not.toHaveBeenCalled();
+    });
+
+    it('does not backfill folder_name/title onto an owner-resolved channel', async () => {
+      // The on-disk folder is named after the video's uploader (the VEVO
+      // auto-channel), so an owner-resolved record must never receive it.
+      process.env.YOUTARR_OWNER_CHANNEL_ID = 'UC-subscription';
+      Channel.findOne.mockResolvedValue({
+        id: 1, sub_folder: null, title: null, uploader: 'Artist', folder_name: 'Artist', default_rating: null
+      });
+
+      await loadModule();
+      await settleAsync();
+
+      expect(Channel.update).not.toHaveBeenCalled();
+    });
+
+    it('does not backfill channel metadata when resolved via the owner-channel map', async () => {
+      delete process.env.YOUTARR_OWNER_CHANNEL_ID;
+      process.env.YOUTARR_OWNER_CHANNEL_MAP = JSON.stringify({ abc123: 'UC-artist' });
+      Channel.findOne.mockResolvedValue({
+        id: 1, sub_folder: null, title: null, uploader: 'Artist', folder_name: 'Artist', default_rating: null
+      });
+
+      await loadModule();
+      await settleAsync();
+
+      expect(Channel.update).not.toHaveBeenCalled();
     });
   });
 
