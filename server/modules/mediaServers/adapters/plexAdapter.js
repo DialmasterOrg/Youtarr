@@ -1,6 +1,6 @@
 const axios = require('axios');
 const BaseAdapter = require('./baseAdapter');
-const { extractBasename, pathSegments, trailingSegmentMatch } = require('./baseAdapter');
+const { extractBasename, pathSegments, trailingSegmentMatch, REQUEST_TIMEOUT_MS } = require('./baseAdapter');
 const logger = require('../../../logger');
 const plexModule = require('../../plexModule');
 
@@ -54,7 +54,7 @@ class PlexAdapter extends BaseAdapter {
     };
     add(this.libraryId);
     try {
-      const res = await axios.get(`${this.url}/library/sections`, { params: this._plParams() });
+      const res = await axios.get(`${this.url}/library/sections`, { params: this._plParams(), timeout: REQUEST_TIMEOUT_MS });
       const dirs = res.data?.MediaContainer?.Directory || [];
       for (const dir of dirs) {
         // Only video-bearing sections can hold downloaded videos: 'movie' covers
@@ -78,7 +78,7 @@ class PlexAdapter extends BaseAdapter {
 
   async testConnection() {
     try {
-      await axios.get(`${this.url}/identity`, { params: { 'X-Plex-Token': this.token } });
+      await axios.get(`${this.url}/identity`, { params: { 'X-Plex-Token': this.token }, timeout: REQUEST_TIMEOUT_MS });
       return { ok: true };
     } catch (err) {
       return { ok: false, error: err.message };
@@ -120,6 +120,7 @@ class PlexAdapter extends BaseAdapter {
       try {
         const res = await axios.get(`${this.url}/library/sections/${libraryId}/all`, {
           params: this._plParams(),
+          timeout: REQUEST_TIMEOUT_MS,
         });
         const items = res.data?.MediaContainer?.Metadata || [];
         for (const item of items) {
@@ -160,6 +161,7 @@ class PlexAdapter extends BaseAdapter {
   async _listVideoPlaylists() {
     const res = await axios.get(`${this.url}/playlists`, {
       params: this._plParams({ playlistType: 'video' }),
+      timeout: REQUEST_TIMEOUT_MS,
     });
     return res.data?.MediaContainer?.Metadata || [];
   }
@@ -176,7 +178,7 @@ class PlexAdapter extends BaseAdapter {
 
   async _getMachineId() {
     // /identity is server-wide info; use the admin token which is always valid.
-    const res = await axios.get(`${this.url}/identity`, { params: { 'X-Plex-Token': this.token } });
+    const res = await axios.get(`${this.url}/identity`, { params: { 'X-Plex-Token': this.token }, timeout: REQUEST_TIMEOUT_MS });
     return res.data?.MediaContainer?.machineIdentifier;
   }
 
@@ -185,6 +187,7 @@ class PlexAdapter extends BaseAdapter {
     const uri = `server://${machineId}/com.plexapp.plugins.library/library/metadata/${itemIds.join(',')}`;
     const res = await axios.post(`${this.url}/playlists`, null, {
       params: this._plParams({ type: 'video', title: name, smart: 0, uri }),
+      timeout: REQUEST_TIMEOUT_MS,
     });
     return { id: res.data?.MediaContainer?.Metadata?.[0]?.ratingKey };
   }
@@ -202,7 +205,7 @@ class PlexAdapter extends BaseAdapter {
       if (tried.has(key)) continue;
       tried.add(key);
       try {
-        await axios.delete(`${this.url}/playlists/${playlistId}`, { params });
+        await axios.delete(`${this.url}/playlists/${playlistId}`, { params, timeout: REQUEST_TIMEOUT_MS });
         logger.info({ playlistId }, 'plex: removed stranded playlist from its prior scope');
         return true;
       } catch (err) {
@@ -219,11 +222,13 @@ class PlexAdapter extends BaseAdapter {
     try {
       await axios.delete(`${this.url}/playlists/${playlistId}/items`, {
         params: this._plParams(),
+        timeout: REQUEST_TIMEOUT_MS,
       });
       const machineId = await this._getMachineId();
       const uri = `server://${machineId}/com.plexapp.plugins.library/library/metadata/${itemIds.join(',')}`;
       await axios.put(`${this.url}/playlists/${playlistId}/items`, null, {
         params: this._plParams({ uri }),
+        timeout: REQUEST_TIMEOUT_MS,
       });
       return { id: playlistId };
     } catch (err) {

@@ -69,7 +69,13 @@ function trailingSegmentMatch(aSegments, bSegments) {
   return matched;
 }
 
+// Per-request HTTP timeout for adapter calls. Axios defaults to NO timeout,
+// so a black-holed media server would hang a sync forever; section listings
+// on large libraries are the slowest legitimate call, hence 30s.
+const REQUEST_TIMEOUT_MS = 30000;
+
 module.exports = BaseAdapter;
 module.exports.extractBasename = extractBasename;
 module.exports.pathSegments = pathSegments;
 module.exports.trailingSegmentMatch = trailingSegmentMatch;
+module.exports.REQUEST_TIMEOUT_MS = REQUEST_TIMEOUT_MS;

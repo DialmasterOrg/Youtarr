@@ -431,6 +431,17 @@ describe('PlexAdapter', () => {
     expect(axios.post).not.toHaveBeenCalled();
   });
 
+  test('applies a request timeout to HTTP calls', async () => {
+    const { REQUEST_TIMEOUT_MS } = require('../baseAdapter');
+    axios.get.mockResolvedValueOnce({ data: {} });
+    const adapter = new PlexAdapter(cfg);
+    await adapter.testConnection();
+    expect(axios.get).toHaveBeenCalledWith(
+      'http://plex:32400/identity',
+      expect.objectContaining({ timeout: REQUEST_TIMEOUT_MS })
+    );
+  });
+
   test('replacePlaylistItems falls back to in-place when the scope listing fails (transient error)', async () => {
     // Listing the scope errors -> do NOT take the destructive relocate path.
     axios.get.mockRejectedValueOnce(new Error('network'));

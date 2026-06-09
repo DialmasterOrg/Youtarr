@@ -14,7 +14,46 @@ const ADAPTER_TYPE_TAG = {
 };
 
 class MediaServerSync {
-  async syncPlaylist(playlistId) {
+  constructor() {
+    // playlistId -> { promise, rerunRequested }. Serializes concurrent syncs of
+    // the same playlist: Jellyfin/Emby replace is delete+recreate, so two
+    // overlapping runs can destroy each other's playlists, and two first-time
+    // runs would double-create. A call arriving mid-run joins the in-flight
+    // promise and schedules exactly one follow-up pass over fresh DB state.
+    // Tradeoff: if the initial run rejects, joiners share that rejection and
+    // any rerun they requested is dropped (a later call starts fresh).
+    this._inFlight = new Map();
+  }
+
+  syncPlaylist(playlistId) {
+    // Deliberately synchronous: no await may be introduced between the map
+    // check and set, or two callers could both miss the entry and run
+    // concurrently.
+    const key = String(playlistId);
+    const existing = this._inFlight.get(key);
+    if (existing) {
+      existing.rerunRequested = true;
+      return existing.promise;
+    }
+    const entry = { rerunRequested: false };
+    entry.promise = this._runWithRerun(key, playlistId, entry);
+    this._inFlight.set(key, entry);
+    return entry.promise;
+  }
+
+  async _runWithRerun(key, playlistId, entry) {
+    try {
+      await this._doSync(playlistId);
+      while (entry.rerunRequested) {
+        entry.rerunRequested = false;
+        await this._doSync(playlistId);
+      }
+    } finally {
+      this._inFlight.delete(key);
+    }
+  }
+
+  async _doSync(playlistId) {
     const playlist = await Playlist.findByPk(playlistId);
     if (!playlist) return;
 
@@ -47,9 +86,14 @@ class MediaServerSync {
   }
 
   async _syncToOne(playlist, videos, adapter, serverType) {
+    const youtubeIds = videos.map((pv) => pv.youtube_id);
+    const downloaded = youtubeIds.length
+      ? await Video.findAll({ where: { youtubeId: youtubeIds } })
+      : [];
+    const byYoutubeId = new Map(downloaded.map((v) => [v.youtubeId, v]));
     const filepaths = [];
     for (const pv of videos) {
-      const v = await Video.findOne({ where: { youtubeId: pv.youtube_id } });
+      const v = byYoutubeId.get(pv.youtube_id);
       if (v && v.filePath) filepaths.push({ youtube_id: pv.youtube_id, filePath: v.filePath });
     }
 
@@ -144,14 +188,20 @@ class MediaServerSync {
     return resolved;
   }
 
+  // Never throws: this runs inside _doSync's per-adapter catch, and a
+  // failure here must not abort the sync of the remaining adapters.
   async _recordError(playlistId, serverType, message) {
-    const state = await PlaylistSyncState.findOne({
-      where: { playlist_id: playlistId, server_type: serverType },
-    });
-    if (state) {
-      if (state.update) await state.update({ last_error: message });
-    } else {
-      await PlaylistSyncState.create({ playlist_id: playlistId, server_type: serverType, last_error: message });
+    try {
+      const state = await PlaylistSyncState.findOne({
+        where: { playlist_id: playlistId, server_type: serverType },
+      });
+      if (state) {
+        if (state.update) await state.update({ last_error: message });
+      } else {
+        await PlaylistSyncState.create({ playlist_id: playlistId, server_type: serverType, last_error: message });
+      }
+    } catch (err) {
+      logger.error({ err, playlist_db_id: playlistId, serverType }, 'failed to record playlist sync error');
     }
   }
 }

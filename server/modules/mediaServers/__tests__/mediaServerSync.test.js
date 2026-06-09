@@ -11,7 +11,7 @@ describe('mediaServerSync', () => {
       Playlist: { findByPk: jest.fn() },
       PlaylistVideo: { findAll: jest.fn() },
       PlaylistSyncState: { findOne: jest.fn(), create: jest.fn() },
-      Video: { findOne: jest.fn() },
+      Video: { findAll: jest.fn() },
     }));
     jest.doMock('../../configModule', () => ({ getConfig: () => ({}) }));
     jest.doMock('../../../logger', () => ({
@@ -24,6 +24,7 @@ describe('mediaServerSync', () => {
     PlaylistVideo = models.PlaylistVideo;
     PlaylistSyncState = models.PlaylistSyncState;
     Video = models.Video;
+    Video.findAll.mockResolvedValue([]);
     serverRegistry = require('../serverRegistry');
   });
 
@@ -61,11 +62,10 @@ describe('mediaServerSync', () => {
       { youtube_id: 'v2', position: 2, ignored: false },
       { youtube_id: 'v3', position: 3, ignored: false },
     ]);
-    Video.findOne.mockImplementation(({ where }) => {
-      if (where.youtubeId === 'v1') return Promise.resolve({ filePath: '/youtube/A/v1.mp4' });
-      if (where.youtubeId === 'v3') return Promise.resolve({ filePath: '/youtube/C/v3.mp4' });
-      return Promise.resolve(null);
-    });
+    Video.findAll.mockResolvedValue([
+      { youtubeId: 'v1', filePath: '/youtube/A/v1.mp4' },
+      { youtubeId: 'v3', filePath: '/youtube/C/v3.mp4' },
+    ]);
     PlaylistSyncState.findOne.mockResolvedValue(null);
     PlaylistSyncState.create.mockResolvedValue({ id: 1 });
 
@@ -91,11 +91,10 @@ describe('mediaServerSync', () => {
       { youtube_id: 'v1', position: 1, ignored: false },
       { youtube_id: 'v2', position: 2, ignored: false },
     ]);
-    Video.findOne.mockImplementation(({ where }) => {
-      if (where.youtubeId === 'v1') return Promise.resolve({ filePath: '/youtube/A/v1.mp4' });
-      if (where.youtubeId === 'v2') return Promise.resolve({ filePath: '/youtube/B/v2.mp4' });
-      return Promise.resolve(null);
-    });
+    Video.findAll.mockResolvedValue([
+      { youtubeId: 'v1', filePath: '/youtube/A/v1.mp4' },
+      { youtubeId: 'v2', filePath: '/youtube/B/v2.mp4' },
+    ]);
     PlaylistSyncState.findOne.mockResolvedValue(null);
     PlaylistSyncState.create.mockResolvedValue({ id: 1 });
 
@@ -133,7 +132,7 @@ describe('mediaServerSync', () => {
       public_on_servers: true,
     });
     PlaylistVideo.findAll.mockResolvedValue([{ youtube_id: 'v1', position: 1, ignored: false }]);
-    Video.findOne.mockResolvedValue({ filePath: '/youtube/A/v1.mp4' });
+    Video.findAll.mockResolvedValue([{ youtubeId: 'v1', filePath: '/youtube/A/v1.mp4' }]);
     const updateMock = jest.fn();
     PlaylistSyncState.findOne.mockResolvedValue({ server_playlist_id: 'existingid', update: updateMock });
 
@@ -159,7 +158,7 @@ describe('mediaServerSync', () => {
       public_on_servers: false,
     });
     PlaylistVideo.findAll.mockResolvedValue([{ youtube_id: 'v1', position: 1, ignored: false }]);
-    Video.findOne.mockResolvedValue({ filePath: '/a.mp4' });
+    Video.findAll.mockResolvedValue([{ youtubeId: 'v1', filePath: '/a.mp4' }]);
     PlaylistSyncState.findOne.mockResolvedValue(null);
     PlaylistSyncState.create.mockResolvedValue({});
 
@@ -185,7 +184,7 @@ describe('mediaServerSync', () => {
       { youtube_id: 'v1', position: 1, ignored: false },
       { youtube_id: 'v2', position: 2, ignored: false },
     ]);
-    Video.findOne.mockResolvedValue(null); // No videos downloaded yet
+    Video.findAll.mockResolvedValue([]); // No videos downloaded yet
     PlaylistSyncState.findOne.mockResolvedValue(null); // No prior sync state
 
     const plexAdapter = makeAdapter('PlexAdapter');
@@ -196,6 +195,31 @@ describe('mediaServerSync', () => {
     expect(plexAdapter.createPlaylist).not.toHaveBeenCalled();
     expect(plexAdapter.replacePlaylistItems).not.toHaveBeenCalled();
     expect(PlaylistSyncState.create).not.toHaveBeenCalled();
+  });
+
+  test('fetches downloaded videos in a single batched query', async () => {
+    Playlist.findByPk.mockResolvedValue({
+      id: 1, playlist_id: 'PL1', title: 'PL',
+      sync_to_plex: true, sync_to_jellyfin: false, sync_to_emby: false,
+      public_on_servers: false,
+    });
+    PlaylistVideo.findAll.mockResolvedValue([
+      { youtube_id: 'v1', position: 1, ignored: false },
+      { youtube_id: 'v2', position: 2, ignored: false },
+    ]);
+    Video.findAll.mockResolvedValue([{ youtubeId: 'v1', filePath: '/a.mp4' }]);
+    PlaylistSyncState.findOne.mockResolvedValue(null);
+    PlaylistSyncState.create.mockResolvedValue({});
+    const plexAdapter = makeAdapter('PlexAdapter', {
+      resolveItemIdByFilepath: jest.fn().mockResolvedValue('rk1'),
+      createPlaylist: jest.fn().mockResolvedValue({ id: 'pid' }),
+    });
+    serverRegistry.getEnabledAdapters.mockReturnValue([plexAdapter]);
+
+    await mediaServerSync.syncPlaylist(1);
+
+    expect(Video.findAll).toHaveBeenCalledTimes(1);
+    expect(Video.findAll).toHaveBeenCalledWith({ where: { youtubeId: ['v1', 'v2'] } });
   });
 
   test('still replaces items with empty list when sync state exists (user ignored all videos)', async () => {
@@ -229,7 +253,7 @@ describe('mediaServerSync', () => {
       public_on_servers: false,
     });
     PlaylistVideo.findAll.mockResolvedValue([{ youtube_id: 'v1', position: 1, ignored: false }]);
-    Video.findOne.mockResolvedValue({ filePath: '/youtube/v1.mp4' });
+    Video.findAll.mockResolvedValue([{ youtubeId: 'v1', filePath: '/youtube/v1.mp4' }]);
     const updateMock = jest.fn();
     PlaylistSyncState.findOne.mockResolvedValue({ server_playlist_id: 'old-id', update: updateMock });
 
@@ -246,6 +270,36 @@ describe('mediaServerSync', () => {
     );
   });
 
+  test('continues to the next adapter when recording an error itself fails', async () => {
+    Playlist.findByPk.mockResolvedValue({
+      id: 1, playlist_id: 'PL1', title: 'PL',
+      sync_to_plex: true, sync_to_jellyfin: true, sync_to_emby: false,
+      public_on_servers: false,
+    });
+    PlaylistVideo.findAll.mockResolvedValue([{ youtube_id: 'v1', position: 1, ignored: false }]);
+    Video.findAll.mockResolvedValue([{ youtubeId: 'v1', filePath: '/a.mp4' }]);
+    // Call order: plex _syncToOne findAll -> plex createPlaylist throws ->
+    // _recordError findOne THROWS -> jellyfin _syncToOne findAll
+    PlaylistSyncState.findOne
+      .mockResolvedValueOnce(null)
+      .mockRejectedValueOnce(new Error('db connection lost'))
+      .mockResolvedValueOnce(null);
+    PlaylistSyncState.create.mockResolvedValue({});
+
+    const plexAdapter = makeAdapter('PlexAdapter', {
+      resolveItemIdByFilepath: jest.fn().mockResolvedValue('rk1'),
+      createPlaylist: jest.fn().mockRejectedValue(new Error('plex 500')),
+    });
+    const jellyfinAdapter = makeAdapter('JellyfinAdapter', {
+      resolveItemIdByFilepath: jest.fn().mockResolvedValue('jf1'),
+      createPlaylist: jest.fn().mockResolvedValue({ id: 'jf-pl' }),
+    });
+    serverRegistry.getEnabledAdapters.mockReturnValue([plexAdapter, jellyfinAdapter]);
+
+    await expect(mediaServerSync.syncPlaylist(1)).resolves.toBeUndefined();
+    expect(jellyfinAdapter.createPlaylist).toHaveBeenCalled();
+  });
+
   test('recovers from prior-failure state row (last_error set, no server_playlist_id) by updating in place', async () => {
     Playlist.findByPk.mockResolvedValue({
       id: 1, playlist_id: 'PL1', title: 'PL',
@@ -253,7 +307,7 @@ describe('mediaServerSync', () => {
       public_on_servers: false,
     });
     PlaylistVideo.findAll.mockResolvedValue([{ youtube_id: 'v1', position: 1, ignored: false }]);
-    Video.findOne.mockResolvedValue({ filePath: '/a.mp4' });
+    Video.findAll.mockResolvedValue([{ youtubeId: 'v1', filePath: '/a.mp4' }]);
     const updateMock = jest.fn();
     // Prior failure left a row with null server_playlist_id and last_error set.
     PlaylistSyncState.findOne.mockResolvedValue({
@@ -277,5 +331,43 @@ describe('mediaServerSync', () => {
       server_playlist_id: 'newpid',
       last_error: null,
     }));
+  });
+
+  test('coalesces concurrent syncs of the same playlist into one in-flight run plus one rerun', async () => {
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    // Hold the first run open at its first DB read; return null so each run
+    // ends right after the gate (no adapters needed for this test).
+    Playlist.findByPk.mockImplementation(async () => {
+      await gate;
+      return null;
+    });
+
+    const first = mediaServerSync.syncPlaylist(1);
+    const second = mediaServerSync.syncPlaylist(1);
+    const third = mediaServerSync.syncPlaylist(1);
+    expect(second).toBe(first); // joined the in-flight run
+    expect(third).toBe(first);
+
+    release();
+    await Promise.all([first, second, third]);
+
+    // One initial run + exactly ONE coalesced rerun, not one per caller.
+    expect(Playlist.findByPk).toHaveBeenCalledTimes(2);
+  });
+
+  test('syncs run fresh again once the previous run finished', async () => {
+    Playlist.findByPk.mockResolvedValue(null);
+    await mediaServerSync.syncPlaylist(1);
+    await mediaServerSync.syncPlaylist(1);
+    expect(Playlist.findByPk).toHaveBeenCalledTimes(2);
+  });
+
+  test('clears the in-flight guard when a sync rejects', async () => {
+    Playlist.findByPk.mockRejectedValueOnce(new Error('db down'));
+    await expect(mediaServerSync.syncPlaylist(1)).rejects.toThrow('db down');
+    Playlist.findByPk.mockResolvedValueOnce(null);
+    await expect(mediaServerSync.syncPlaylist(1)).resolves.toBeUndefined();
+    expect(Playlist.findByPk).toHaveBeenCalledTimes(2);
   });
 });

@@ -96,6 +96,17 @@ describe('JellyfinAdapter', () => {
     await expect(adapter.replacePlaylistItems('old', ['i1'], {})).rejects.toThrow(/opts\.name/);
   });
 
+  test('applies a request timeout to HTTP calls', async () => {
+    const { REQUEST_TIMEOUT_MS } = require('../baseAdapter');
+    axios.get.mockResolvedValueOnce({ data: { Version: '10.9.0' } });
+    const adapter = new JellyfinAdapter(cfg);
+    await adapter.testConnection();
+    expect(axios.get).toHaveBeenCalledWith(
+      'http://jf:8096/System/Info/Public',
+      expect.objectContaining({ timeout: REQUEST_TIMEOUT_MS })
+    );
+  });
+
   test('replacePlaylistItems still creates a fresh playlist when DELETE of stored id fails', async () => {
     axios.delete.mockRejectedValueOnce({ response: { status: 404 } });
     axios.post.mockResolvedValueOnce({ data: { Id: 'new-pl-id' } });
