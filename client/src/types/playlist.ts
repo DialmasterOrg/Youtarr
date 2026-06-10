@@ -40,6 +40,9 @@ export interface PlaylistVideo {
   published_at: string | null;
   thumbnail: string | null;
   downloaded: boolean;
+  // Previously downloaded but the file is gone (deleted/missing). The backend
+  // skips these during downloads unless allowRedownload is set.
+  previously_downloaded: boolean;
   youtube_removed: boolean;
   // Populated only for videos that have been downloaded; used to hydrate VideoModal
   video_id: number | null;

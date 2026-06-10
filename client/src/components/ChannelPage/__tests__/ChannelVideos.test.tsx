@@ -197,7 +197,8 @@ jest.mock('../ChannelVideosDialogs', () => ({
       'data-default-resolution': props.defaultResolution,
       'data-default-resolution-source': props.defaultResolutionSource,
       'data-selected-tab': props.selectedTab,
-      'data-tab-label': props.tabLabel
+      'data-tab-label': props.tabLabel,
+      'data-missing-video-count': props.missingVideoCount
     });
   }
 }));
@@ -581,6 +582,98 @@ describe('ChannelVideos Component', () => {
       expect(screen.getByRole('menuitem', { name: /Download Selected/i })).toBeInTheDocument();
       expect(screen.getByRole('menuitem', { name: /Ignore Selected/i })).toBeInTheDocument();
       expect(screen.getByRole('menuitem', { name: /Clear Selection/i })).toBeInTheDocument();
+    });
+  });
+
+  describe('Missing video count', () => {
+    const missingVideo: ChannelVideo = {
+      title: 'Missing Video',
+      youtube_id: 'missing1',
+      publishedAt: '2023-01-04T00:00:00Z',
+      thumbnail: 'https://i.ytimg.com/vi/missing1/mqdefault.jpg',
+      added: true,
+      removed: true,
+      duration: 300,
+      media_type: 'video',
+      live_status: null,
+    };
+
+    test('counts a selected previously-downloaded (missing) video', async () => {
+      const user = userEvent.setup();
+
+      useChannelVideos.mockReturnValue({
+        videos: [...mockVideos, missingVideo],
+        totalCount: 4,
+        oldestVideoDate: '2023-01-01',
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      await user.click(screen.getByTestId('select-video-missing1'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('channel-videos-dialogs')).toHaveAttribute('data-missing-video-count', '1');
+      });
+    });
+
+    test('does not count a selected never-downloaded video', async () => {
+      const user = userEvent.setup();
+
+      useChannelVideos.mockReturnValue({
+        videos: [...mockVideos, missingVideo],
+        totalCount: 4,
+        oldestVideoDate: '2023-01-01',
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      await user.click(screen.getByTestId('select-video-video1'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-selection-mode', 'download');
+      });
+      expect(screen.getByTestId('channel-videos-dialogs')).toHaveAttribute('data-missing-video-count', '0');
+    });
+
+    test('keeps counting a selected missing video after the loaded page no longer contains it', async () => {
+      const user = userEvent.setup();
+
+      useChannelVideos.mockReturnValue({
+        videos: [...mockVideos, missingVideo],
+        totalCount: 4,
+        oldestVideoDate: '2023-01-01',
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      const { rerender } = renderChannelVideos();
+
+      await user.click(screen.getByTestId('select-video-missing1'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('channel-videos-dialogs')).toHaveAttribute('data-missing-video-count', '1');
+      });
+
+      // Simulate a page change replacing the loaded videos with a page that
+      // does not include the selected video.
+      useChannelVideos.mockReturnValue({
+        videos: mockVideos,
+        totalCount: 4,
+        oldestVideoDate: '2023-01-01',
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+      rerender(<ChannelVideos token={mockToken} />);
+
+      expect(screen.getByTestId('channel-videos-dialogs')).toHaveAttribute('data-missing-video-count', '1');
     });
   });
 

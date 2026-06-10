@@ -104,10 +104,11 @@ jest.mock('../../DeleteVideosDialog', () => ({
 
 jest.mock('../../../DownloadManager/ManualDownload/DownloadSettingsDialog', () => ({
   __esModule: true,
-  default: function MockDownloadDialog(props: { open: boolean; onConfirm: (settings: null) => void; onClose: () => void }) {
+  default: function MockDownloadDialog(props: { open: boolean; onConfirm: (settings: null) => void; onClose: () => void; missingVideoCount?: number }) {
     const React = require('react');
     if (!props.open) return null;
     return React.createElement('div', { 'data-testid': 'download-dialog' },
+      React.createElement('div', { 'data-testid': 'download-dialog-missing-count' }, String(props.missingVideoCount)),
       React.createElement('button', { 'data-testid': 'confirm-download', onClick: () => props.onConfirm(null) }, 'Confirm Download'),
     );
   },
@@ -340,6 +341,24 @@ describe('VideoModal', () => {
   test('renders ignore button for non-downloaded videos', () => {
     renderModal({ video: neverDownloadedVideo });
     expect(screen.getByRole('button', { name: /ignore/i })).toBeInTheDocument();
+  });
+
+  test('passes missingVideoCount 1 to the download dialog for a missing video', () => {
+    renderModal({
+      video: { ...baseVideo, status: 'missing' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /download video/i }));
+
+    expect(screen.getByTestId('download-dialog-missing-count')).toHaveTextContent('1');
+  });
+
+  test('passes missingVideoCount 0 to the download dialog for a never-downloaded video', () => {
+    renderModal({ video: neverDownloadedVideo });
+
+    fireEvent.click(screen.getByRole('button', { name: /download video/i }));
+
+    expect(screen.getByTestId('download-dialog-missing-count')).toHaveTextContent('0');
   });
 
   test('calls onClose when close button clicked', async () => {

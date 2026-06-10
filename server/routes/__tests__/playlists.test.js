@@ -707,6 +707,7 @@ describe('GET /api/playlists/:playlistId/videos', () => {
       published_at: '20260101',
       thumbnail: 'https://thumb/1.jpg',
       downloaded: true,
+      previously_downloaded: false,
       video_id: 42,
       file_path: '/videos/downloaded1.mp4',
       file_size: 1024,
@@ -718,7 +719,42 @@ describe('GET /api/playlists/:playlistId/videos', () => {
       published_at: '20260215',
       thumbnail: 'https://thumb/2.jpg',
       downloaded: false,
+      previously_downloaded: false,
       video_id: null,
+    });
+  });
+
+  test('flags a video with a removed Videos row as previously_downloaded', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue({
+      count: 1,
+      rows: [
+        { id: 1, playlist_id: 'PLtest123', youtube_id: 'gone1', position: 1, ignored: false, ignored_at: null, added_at: null, channel_id: null },
+      ],
+    });
+    deps.models.Video.findAll.mockResolvedValue([
+      {
+        id: 7,
+        youtubeId: 'gone1',
+        youTubeVideoName: 'Deleted local file',
+        removed: true,
+        youtube_removed: false,
+        filePath: '/videos/gone1.mp4',
+        fileSize: 1024,
+      },
+    ]);
+
+    const handler = getHandler('get', '/api/playlists/:playlistId/videos', deps);
+    const req = { params: { playlistId: 'PLtest123' }, query: {}, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    const payload = res.json.mock.calls[0][0];
+    expect(payload.videos[0]).toMatchObject({
+      youtube_id: 'gone1',
+      downloaded: false,
+      previously_downloaded: true,
     });
   });
 

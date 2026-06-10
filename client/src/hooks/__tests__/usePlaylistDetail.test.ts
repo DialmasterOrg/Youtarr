@@ -139,6 +139,7 @@ const makeVideo = (id: number, overrides = {}) => ({
   published_at: null,
   thumbnail: '',
   downloaded: false,
+  previously_downloaded: false,
   youtube_removed: false,
   video_id: null,
   file_path: null,
@@ -229,6 +230,32 @@ describe('usePlaylistDetail sorting and pagination', () => {
     });
 
     expect(result.current.videos[0].ignored).toBe(true);
+    expect(axios.get).toHaveBeenCalledTimes(callsBefore);
+  });
+
+  test('markVideoDeleted flips the row to previously_downloaded locally without refetching', async () => {
+    axios.get.mockImplementation((url: string) => {
+      if (url.endsWith('/videos')) {
+        return Promise.resolve({
+          data: { total: 1, videos: [makeVideo(1, { downloaded: true, previously_downloaded: false })] },
+        });
+      }
+      return Promise.resolve({ data: { playlist: { playlist_id: 'PL1' } } });
+    });
+
+    const { result } = renderHook(() =>
+      usePlaylistDetail({ token: 't', playlistId: 'PL1' })
+    );
+
+    await waitFor(() => expect(result.current.videos).toHaveLength(1));
+    const callsBefore = axios.get.mock.calls.length;
+
+    act(() => {
+      result.current.markVideoDeleted('vid1');
+    });
+
+    expect(result.current.videos[0].downloaded).toBe(false);
+    expect(result.current.videos[0].previously_downloaded).toBe(true);
     expect(axios.get).toHaveBeenCalledTimes(callsBefore);
   });
 

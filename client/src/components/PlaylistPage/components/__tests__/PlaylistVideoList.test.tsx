@@ -13,7 +13,7 @@ function makeVideo(overrides: Partial<PlaylistVideo> = {}): PlaylistVideo {
     id: 1, playlist_id: 'PL1', youtube_id: 'v1', position: 1, added_at: null,
     channel_id: null, ignored: false, ignored_at: null, title: 'Title',
     channel_name: 'Chan', duration: 60, published_at: null, thumbnail: null,
-    downloaded: false, youtube_removed: false, video_id: null, file_path: null,
+    downloaded: false, previously_downloaded: false, youtube_removed: false, video_id: null, file_path: null,
     file_size: null, ...overrides,
   };
 }

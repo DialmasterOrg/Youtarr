@@ -697,12 +697,21 @@ function ChannelVideos({
     setPage(1);
   };
 
+  // Accumulates missing status for every video seen on any loaded page, so
+  // selections survive page swaps. Checkboxes only exist on loaded rows, so
+  // lookups always hit.
+  const missingByIdRef = useRef(new Map<string, boolean>());
+  useEffect(() => {
+    videos.forEach((video) => {
+      missingByIdRef.current.set(video.youtube_id, Boolean(video.added && video.removed));
+    });
+  }, [videos]);
+
   const getMissingVideoCount = () => {
-    return checkedBoxes.reduce((count, videoId) => {
-      const video = videos.find((v) => v.youtube_id === videoId);
-      if (video && video.added && video.removed) return count + 1;
-      return count;
-    }, 0);
+    return checkedBoxes.reduce(
+      (count, videoId) => (missingByIdRef.current.get(videoId) ? count + 1 : count),
+      0
+    );
   };
 
   const getTabLabel = (tabType: string) => {

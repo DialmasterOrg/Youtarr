@@ -18,6 +18,7 @@ function makeVideo(overrides: Partial<PlaylistVideo> = {}): PlaylistVideo {
     published_at: null,
     thumbnail: null,
     downloaded: false,
+    previously_downloaded: false,
     youtube_removed: false,
     video_id: null,
     file_path: null,
@@ -54,6 +55,12 @@ describe('statusLabel', () => {
   test('returns Removed on YT for a removed video', () => {
     expect(statusLabel(makeVideo({ youtube_removed: true }))).toEqual({
       label: 'Removed on YT',
+      color: 'error',
+    });
+  });
+  test('returns Missing for a previously-downloaded video whose file is gone', () => {
+    expect(statusLabel(makeVideo({ previously_downloaded: true }))).toEqual({
+      label: 'Missing',
       color: 'error',
     });
   });
