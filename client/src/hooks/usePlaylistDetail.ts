@@ -182,6 +182,18 @@ export const usePlaylistDetail = ({
     );
   }, []);
 
+  // Updates the row in place after the user deletes a video's local file, so
+  // the (paginated) list reflects the deletion without losing scroll position.
+  const markVideoDeleted = useCallback((youtubeId: string) => {
+    setVideos((prev) =>
+      prev.map((v) =>
+        v.youtube_id === youtubeId
+          ? { ...v, downloaded: false, previously_downloaded: true }
+          : v
+      )
+    );
+  }, []);
+
   const refresh = useCallback(async () => {
     if (!token || !playlistId) return;
     await axios.post(
@@ -239,6 +251,7 @@ export const usePlaylistDetail = ({
     refetch: loadInitial,
     refetchMeta,
     markVideoIgnored,
+    markVideoDeleted,
     refresh,
     sync,
     regenerateM3U,

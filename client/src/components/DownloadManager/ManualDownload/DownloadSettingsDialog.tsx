@@ -47,7 +47,6 @@ interface DownloadSettingsDialogProps {
   defaultResolutionSource?: 'channel' | 'global';
   defaultAudioFormat?: string | null; // For channel audio format default
   defaultAudioFormatSource?: 'channel' | 'global';
-  defaultRating?: string | null;
   token?: string | null; // For fetching subfolders
 }
 
@@ -63,17 +62,18 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   defaultResolutionSource = 'global',
   defaultAudioFormat = null,
   defaultAudioFormatSource = 'global',
-  defaultRating = null,
   token = null
 }) => {
   const [useCustomSettings, setUseCustomSettings] = useState(false);
-  const [resolution, setResolution] = useState(defaultResolution);
+  // Override controls default to "no override" (null) so that simply opening
+  // the custom settings section never emits overrides the user didn't choose.
+  const [resolution, setResolution] = useState<string | null>(null);
   const [channelVideoCount, setChannelVideoCount] = useState(defaultVideoCount);
   const [allowRedownload, setAllowRedownload] = useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const [subfolderOverride, setSubfolderOverride] = useState<string | null>(null);
-  const [audioFormat, setAudioFormat] = useState<string | null>(defaultAudioFormat);
-  const [rating, setRating] = useState<string | null>(defaultRating);
+  const [audioFormat, setAudioFormat] = useState<string | null>(null);
+  const [rating, setRating] = useState<string | null>(null);
   const [skipVideoFolder, setSkipVideoFolder] = useState(false);
 
   // Fetch available subfolders
@@ -96,41 +96,35 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   // Auto-detect re-download need
   useEffect(() => {
     if (open && !hasUserInteracted) {
-      setResolution(defaultResolution);
+      setResolution(null);
       setChannelVideoCount(defaultVideoCount);
-      setAudioFormat(defaultAudioFormat);
-      // Auto-check re-download if there are missing videos or previously downloaded videos in manual mode
+      setAudioFormat(null);
+      // Open the custom section too so the user can see the re-download toggle is on.
       if (missingVideoCount > 0) {
         setAllowRedownload(true);
+        setUseCustomSettings(true);
       } else {
         setAllowRedownload(false);
       }
     }
-  }, [open, hasUserInteracted, mode, missingVideoCount, defaultResolution, defaultVideoCount, defaultAudioFormat]);
+  }, [open, hasUserInteracted, mode, missingVideoCount, defaultVideoCount]);
 
   useEffect(() => {
     if (!open) {
       setHasUserInteracted(false);
       setUseCustomSettings(false);
       setAllowRedownload(false);
+      setResolution(null);
       setSubfolderOverride(null);
-      setAudioFormat(defaultAudioFormat);
-      setRating(defaultRating ?? null);
+      setAudioFormat(null);
+      setRating(null);
       setSkipVideoFolder(false);
     }
-  }, [open, defaultAudioFormat, defaultRating]);
+  }, [open]);
 
   const handleUseCustomToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const checked = event.target.checked;
-    setUseCustomSettings(checked);
+    setUseCustomSettings(event.target.checked);
     setHasUserInteracted(true);
-    if (checked) {
-      if (rating === null || rating === undefined) {
-        if (defaultRating !== null) {
-          setRating(defaultRating);
-        }
-      }
-    }
   };
 
   const handleVideoCountChange = (event: SelectChangeEvent<string>) => {
@@ -178,8 +172,10 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
     const override: DownloadSettings = {};
 
     if (useCustomSettings) {
-      override.resolution = resolution;
-      if (mode === 'channel') {
+      if (resolution !== null) {
+        override.resolution = resolution;
+      }
+      if (mode === 'channel' && channelVideoCount !== defaultVideoCount) {
         override.videoCount = channelVideoCount;
       }
       if (mode === 'manual') {
@@ -361,8 +357,9 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
               <ResolutionSelect
                 className="mb-4"
                 value={resolution}
+                emptyLabel="No override (use channel/playlist settings)"
                 onChange={(value) => {
-                  if (value) setResolution(value);
+                  setResolution(value);
                   setHasUserInteracted(true);
                 }}
                 helperText="YouTube will provide the best available quality up to your selected resolution."
@@ -449,7 +446,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                       setRating(value);
                       setHasUserInteracted(true);
                     }}
-                    emptyLabel="No Rating"
+                    emptyLabel="No override"
                     showBadge
                   />
 
@@ -464,11 +461,12 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                         color="primary"
                       />
                     }
-                    label="Flat file structure (no video subfolders)"
+                    label="Force flat file structure (no video subfolders)"
                     className="mb-1"
                   />
                   <Typography variant="caption" color="text.secondary" className="mb-4 block">
                     Save files directly in the channel folder instead of individual video subfolders.
+                    When off, each channel&apos;s own setting applies.
                   </Typography>
                 </>
               )}

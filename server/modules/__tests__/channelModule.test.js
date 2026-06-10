@@ -453,6 +453,7 @@ describe('ChannelModule', () => {
           title: 'Test Channel',
           description: 'Test Description',
           url: 'https://youtube.com/@test',
+          enabled: false,
           auto_download_enabled_tabs: 'video,short',
           available_tabs: null,
           sub_folder: null,
@@ -596,9 +597,50 @@ describe('ChannelModule', () => {
           title: channelData.title,
           description: channelData.description,
           uploader: channelData.uploader,
-          url: channelData.url,
-          enabled: false
+          url: channelData.url
         });
+      });
+
+      test('should not demote enabled on existing channel when enabled arg is false', async () => {
+        const mockChannel = {
+          ...mockChannelData,
+          enabled: true,
+          update: jest.fn()
+        };
+        Channel.findOne.mockResolvedValueOnce(mockChannel); // Found by channel_id
+
+        await ChannelModule.upsertChannel({
+          id: 'UC123',
+          title: 'Updated Channel',
+          description: 'Updated Description',
+          uploader: 'Updated Uploader',
+          url: 'https://youtube.com/@test'
+        }, false);
+
+        expect(mockChannel.update).toHaveBeenCalledWith(
+          expect.not.objectContaining({ enabled: expect.anything() })
+        );
+      });
+
+      test('should enable existing disabled channel when enabled arg is true', async () => {
+        const mockChannel = {
+          ...mockChannelData,
+          enabled: false,
+          update: jest.fn()
+        };
+        Channel.findOne.mockResolvedValueOnce(mockChannel); // Found by channel_id
+
+        await ChannelModule.upsertChannel({
+          id: 'UC123',
+          title: 'Updated Channel',
+          description: 'Updated Description',
+          uploader: 'Updated Uploader',
+          url: 'https://youtube.com/@test'
+        }, true);
+
+        expect(mockChannel.update).toHaveBeenCalledWith(
+          expect.objectContaining({ enabled: true })
+        );
       });
 
       test('should update existing channel found by URL and backfill channel_id', async () => {
@@ -630,8 +672,7 @@ describe('ChannelModule', () => {
           title: channelData.title,
           description: channelData.description,
           uploader: channelData.uploader,
-          url: channelData.url,
-          enabled: false
+          url: channelData.url
         });
       });
 
@@ -700,8 +741,7 @@ describe('ChannelModule', () => {
           title: channelData.title,
           description: channelData.description,
           uploader: channelData.uploader,
-          url: channelData.url,
-          enabled: false
+          url: channelData.url
         });
         expect(Channel.create).not.toHaveBeenCalled();
       });
@@ -735,8 +775,7 @@ describe('ChannelModule', () => {
           title: channelData.title,
           description: channelData.description,
           uploader: channelData.uploader,
-          url: channelData.url,
-          enabled: false
+          url: channelData.url
         });
         expect(Channel.create).not.toHaveBeenCalled();
       });
@@ -863,6 +902,57 @@ describe('ChannelModule', () => {
           expect.not.objectContaining({ min_duration: 60 })
         );
         expect(Channel.create).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('getChannelInfo with existing channel', () => {
+      const makeExistingChannel = (enabled) => {
+        const channel = {
+          channel_id: 'UC_EXISTING',
+          title: 'Existing Channel',
+          description: 'Existing Description',
+          uploader: 'Existing Uploader',
+          url: 'https://www.youtube.com/@existing',
+          available_tabs: 'videos',
+          hidden_tabs: null,
+          auto_download_enabled_tabs: 'video',
+          sub_folder: 'MyFolder',
+          enabled,
+        };
+        channel.update = jest.fn(async (values) => Object.assign(channel, values));
+        return channel;
+      };
+
+      test('re-enables an existing disabled channel when enableChannel is true', async () => {
+        const channel = makeExistingChannel(false);
+        Channel.findOne.mockResolvedValueOnce(channel);
+
+        const result = await ChannelModule.getChannelInfo('https://www.youtube.com/@existing', false, true);
+
+        expect(channel.update).toHaveBeenCalledWith({ enabled: true });
+        expect(result.enabled).toBe(true);
+      });
+
+      test('leaves an existing disabled channel disabled when enableChannel is false', async () => {
+        const channel = makeExistingChannel(false);
+        Channel.findOne.mockResolvedValueOnce(channel);
+
+        const result = await ChannelModule.getChannelInfo('https://www.youtube.com/@existing', false, false);
+
+        expect(channel.update).not.toHaveBeenCalled();
+        expect(result.enabled).toBe(false);
+      });
+
+      test('reports existing=true and enabled=true for an active subscription', async () => {
+        const channel = makeExistingChannel(true);
+        Channel.findOne.mockResolvedValueOnce(channel);
+
+        const result = await ChannelModule.getChannelInfo('https://www.youtube.com/@existing', false, false);
+
+        expect(channel.update).not.toHaveBeenCalled();
+        expect(result.existing).toBe(true);
+        expect(result.enabled).toBe(true);
+        expect(result.sub_folder).toBe('MyFolder');
       });
     });
 

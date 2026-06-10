@@ -8,6 +8,8 @@ import { PlaylistVideo } from '../../types/playlist';
 const mockTriggerDownload = jest.fn();
 const mockNavigate = jest.fn();
 const mockToggleAutoDownload = jest.fn();
+const mockMarkVideoDeleted = jest.fn();
+const mockRefetchMeta = jest.fn();
 
 const mockVideo: PlaylistVideo = {
   id: 1,
@@ -24,10 +26,20 @@ const mockVideo: PlaylistVideo = {
   published_at: null,
   thumbnail: null,
   downloaded: false,
+  previously_downloaded: false,
   youtube_removed: false,
   video_id: null,
   file_path: null,
   file_size: null,
+};
+
+const mockMissingVideo: PlaylistVideo = {
+  ...mockVideo,
+  id: 2,
+  youtube_id: 'vidB',
+  position: 2,
+  title: 'Vid B',
+  previously_downloaded: true,
 };
 
 const mockPlaylist = {
@@ -53,13 +65,30 @@ jest.mock('../../hooks/useConfig', () => ({
 
 jest.mock('../DownloadManager/ManualDownload/DownloadSettingsDialog', () => ({
   __esModule: true,
-  default: ({ open, onConfirm }: { open: boolean; onConfirm: (s: unknown) => void }) => {
+  default: ({
+    open,
+    onConfirm,
+    missingVideoCount,
+  }: {
+    open: boolean;
+    onConfirm: (s: unknown) => void;
+    missingVideoCount?: number;
+  }) => {
     const React = require('react');
     if (!open) return null;
     return React.createElement(
-      'button',
-      { 'data-testid': 'mock-confirm-download', onClick: () => onConfirm(null) },
-      'confirm'
+      'div',
+      null,
+      React.createElement(
+        'div',
+        { 'data-testid': 'mock-dialog-missing-count' },
+        String(missingVideoCount)
+      ),
+      React.createElement(
+        'button',
+        { 'data-testid': 'mock-confirm-download', onClick: () => onConfirm(null) },
+        'confirm'
+      )
     );
   },
 }));
@@ -71,7 +100,7 @@ jest.mock('../../hooks/useMediaQuery', () => ({
 jest.mock('../../hooks/usePlaylistDetail', () => ({
   usePlaylistDetail: () => ({
     playlist: mockPlaylist,
-    videos: [mockVideo],
+    videos: [mockVideo, mockMissingVideo],
     notDownloadedCount: 1,
     loading: false,
     loadingMore: false,
@@ -79,8 +108,9 @@ jest.mock('../../hooks/usePlaylistDetail', () => ({
     error: null,
     loadMore: jest.fn(),
     refetch: jest.fn(),
-    refetchMeta: jest.fn(),
+    refetchMeta: (...args: unknown[]) => mockRefetchMeta(...args),
     markVideoIgnored: jest.fn(),
+    markVideoDeleted: (...args: unknown[]) => mockMarkVideoDeleted(...args),
     refresh: jest.fn(),
     sync: jest.fn(),
     regenerateM3U: jest.fn(),
@@ -125,7 +155,23 @@ jest.mock('../shared/SubscriptionsBackButton', () => ({
 
 jest.mock('../shared/VideoModal', () => ({
   __esModule: true,
-  default: () => null,
+  default: ({
+    video,
+    onVideoDeleted,
+  }: {
+    video: { youtubeId: string };
+    onVideoDeleted?: (ytId: string) => void;
+  }) => {
+    const React = require('react');
+    return React.createElement(
+      'button',
+      {
+        'data-testid': 'mock-modal-delete-video',
+        onClick: () => onVideoDeleted?.(video.youtubeId),
+      },
+      'delete video'
+    );
+  },
 }));
 
 describe('PlaylistPage selected-download selection lifecycle', () => {
@@ -181,6 +227,38 @@ describe('PlaylistPage selected-download selection lifecycle', () => {
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/downloads/activity'));
   });
 
+  test('passes missingVideoCount 1 when a previously-downloaded video is selected', async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select Vid B' }));
+    await user.click(screen.getByTestId('selection-action-download'));
+
+    expect(await screen.findByTestId('mock-dialog-missing-count')).toHaveTextContent('1');
+  });
+
+  test('passes missingVideoCount 0 when only never-downloaded videos are selected', async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select Vid A' }));
+    await user.click(screen.getByTestId('selection-action-download'));
+
+    expect(await screen.findByTestId('mock-dialog-missing-count')).toHaveTextContent('0');
+  });
+
+  test('passes missingVideoCount 0 for Download new even when missing videos exist', async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    await user.click(screen.getByRole('button', { name: /Download 1 new/i }));
+
+    expect(await screen.findByTestId('mock-dialog-missing-count')).toHaveTextContent('0');
+  });
+
   test('toggling the auto-download switch turns the playlist setting on', async () => {
     const user = userEvent.setup();
     mockToggleAutoDownload.mockResolvedValue({ ...mockPlaylist, auto_download: true });
@@ -192,6 +270,19 @@ describe('PlaylistPage selected-download selection lifecycle', () => {
     await waitFor(() =>
       expect(mockToggleAutoDownload).toHaveBeenCalledWith('PL1', true)
     );
+  });
+
+  test('marks the row deleted in place and refreshes meta when the modal reports a deletion', async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    // Open the modal by clicking the video card, then delete from the modal.
+    await user.click(screen.getByText('Vid A'));
+    await user.click(await screen.findByTestId('mock-modal-delete-video'));
+
+    expect(mockMarkVideoDeleted).toHaveBeenCalledWith('vidA');
+    expect(mockRefetchMeta).toHaveBeenCalled();
   });
 
   test('renders the sort control defaulting to newest first', () => {

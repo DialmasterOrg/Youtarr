@@ -200,6 +200,12 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *                       type: string
    *                     description:
    *                       type: string
+   *                     enabled:
+   *                       type: boolean
+   *                       description: true when the channel is already an active subscription; false for new or soft-deleted (restorable) channels
+   *                     existing:
+   *                       type: boolean
+   *                       description: true when the channel row already existed in the database
    *       400:
    *         description: URL is missing
    *       403:

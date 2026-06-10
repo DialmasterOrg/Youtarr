@@ -233,6 +233,9 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
         const dl = downloadedById.get(row.youtube_id);
         const youtubeId = row.youtube_id;
         const isDownloaded = !!(dl && !dl.removed && dl.filePath);
+        // Has a Videos row but no usable file: previously downloaded, then
+        // deleted/lost. doPlaylistDownloads skips these unless allowRedownload is set.
+        const previouslyDownloaded = !!dl && !isDownloaded;
         const youtubeRemoved = Boolean(dl?.youtube_removed);
         const localThumb = `/images/videothumb-${youtubeId}.jpg`;
         const flatThumb = row.thumbnail || `https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg`;
@@ -255,6 +258,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
           published_at: row.published_at || dl?.originalDate || null,
           thumbnail: youtubeRemoved ? localThumb : flatThumb,
           downloaded: isDownloaded,
+          previously_downloaded: previouslyDownloaded,
           youtube_removed: youtubeRemoved,
           video_id: dl?.id ?? null,
           file_path: dl?.filePath ?? null,

@@ -14,6 +14,7 @@ export function statusLabel(v: PlaylistVideo): { label: string; color: PlaylistV
   if (v.ignored) return { label: 'Ignored', color: 'warning' };
   if (v.youtube_removed) return { label: 'Removed on YT', color: 'error' };
   if (v.downloaded) return { label: 'Downloaded', color: 'success' };
+  if (v.previously_downloaded) return { label: 'Missing', color: 'error' };
   return { label: 'Tracked', color: 'default' };
 }
 

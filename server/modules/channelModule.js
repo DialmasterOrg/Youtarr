@@ -325,6 +325,7 @@ class ChannelModule {
       title: channel.title,
       description: channel.description,
       url: channel.url,
+      enabled: !!channel.enabled,
       auto_download_enabled_tabs: channel.auto_download_enabled_tabs ?? 'video',
       available_tabs: effectiveTabs.length > 0 ? effectiveTabs.join(',') : null,
       sub_folder: channel.sub_folder || null,
@@ -437,15 +438,18 @@ class ChannelModule {
       where: { channel_id: channelData.id }
     });
 
-    // Prepare update data
+    // `enabled` is only upgraded here: demoting it on update would soft-delete
+    // a subscribed channel (e.g. re-fetching metadata for a URL variant).
     const updateData = {
       channel_id: channelData.id,
       title: channelData.title,
       description: channelData.description,
       uploader: channelData.uploader,
       url: channelData.url,
-      enabled: enabled,
     };
+    if (enabled) {
+      updateData.enabled = true;
+    }
 
     // Only set folder_name if explicitly provided (don't overwrite existing with null)
     if (channelData.folder_name) {
@@ -475,6 +479,8 @@ class ChannelModule {
 
     // Only create if not found by either method
     if (!channel) {
+      // New rows always carry an explicit enabled state
+      updateData.enabled = enabled;
       // Apply initial settings only for new channels
       if (initialSettings.video_quality != null) updateData.video_quality = initialSettings.video_quality;
       // Three sub_folder states must stay distinct:
@@ -840,6 +846,12 @@ class ChannelModule {
     const { foundChannel, channelUrl } = await this.findChannelByUrlOrId(channelUrlOrId);
 
     if (foundChannel) {
+      // A disabled row is a soft-deleted channel; callers that subscribe
+      // (enableChannel=true) restore it here, keeping its previous settings.
+      if (enableChannel && !foundChannel.enabled) {
+        await foundChannel.update({ enabled: true });
+        logger.info({ channelId: foundChannel.channel_id }, 'Re-enabled soft-deleted channel');
+      }
       if (emitMessage) {
         MessageEmitter.emitMessage(
           'broadcast',
@@ -849,7 +861,7 @@ class ChannelModule {
           { text: 'Channel Updated' }
         );
       }
-      return this.mapChannelToResponse(foundChannel);
+      return { ...this.mapChannelToResponse(foundChannel), existing: true };
     }
 
     logger.info('Fetching channel metadata from YouTube');
@@ -878,7 +890,7 @@ class ChannelModule {
 
     // First, upsert the channel so it exists in the database
     // We'll update auto_download_enabled_tabs after detecting available tabs
-    await this.upsertChannel({
+    const savedChannel = await this.upsertChannel({
       id: properChannelId,
       title: channelData.title,
       description: channelData.description,
@@ -918,6 +930,9 @@ class ChannelModule {
       title: channelData.title,
       description: channelData.description,
       url: channelUrl,
+      // The row may pre-date this call (matched by channel_id under a
+      // different URL), so report its actual enabled state, not enableChannel.
+      enabled: !!savedChannel?.enabled,
       auto_download_enabled_tabs: tabResult?.autoDownloadEnabledTabs || 'video',
       available_tabs: tabResult?.availableTabs?.join(',') || null,
       sub_folder: GLOBAL_DEFAULT_SENTINEL,

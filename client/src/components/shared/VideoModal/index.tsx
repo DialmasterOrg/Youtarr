@@ -258,13 +258,13 @@ function VideoModal({
         onClose={() => setDownloadDialogOpen(false)}
         onConfirm={handleDownloadConfirm}
         videoCount={1}
+        missingVideoCount={displayVideo.status === 'missing' ? 1 : 0}
         mode="manual"
         token={token}
         defaultResolution={defaultResolution}
         defaultResolutionSource={defaultResolutionSource}
         defaultAudioFormat={defaultAudioFormat}
         defaultAudioFormatSource={defaultAudioFormatSource}
-        defaultRating={channelSettings.default_rating ?? null}
       />
 
       <ChangeRatingDialog

@@ -52,13 +52,15 @@ async function processOneChannel(deps, activeJob, ch) {
     return;
   }
 
-  // Belt-and-suspenders: verify the channel isn't already in the DB
+  // Belt-and-suspenders: verify the channel isn't already actively subscribed.
+  // A disabled row is a soft-deleted channel; fall through so getChannelInfo
+  // (enableChannel=true) restores it with its previous settings.
   try {
     const existing = await Channel.findOne({
       where: { channel_id: ch.channelId },
-      attributes: ['channel_id'],
+      attributes: ['channel_id', 'enabled'],
     });
-    if (existing) {
+    if (existing && existing.enabled) {
       activeJob.results.push({
         channelId: ch.channelId,
         title: ch.title || ch.channelId,

@@ -44,7 +44,7 @@ interface SnackbarState {
 }
 
 function toModalData(v: PlaylistVideo): VideoModalData {
-  const status = v.youtube_removed
+  const status = v.youtube_removed || v.previously_downloaded
     ? 'missing'
     : v.downloaded
       ? 'downloaded'
@@ -92,6 +92,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     refetch,
     refetchMeta,
     markVideoIgnored,
+    markVideoDeleted,
     refresh,
     sync,
     regenerateM3U,
@@ -190,6 +191,15 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     setDownloadDialogOpen(true);
   }, []);
 
+  // Only counted for explicit selections: "download all" targets new videos
+  // only, and auto-enabling re-download there would re-fetch the entire
+  // playlist (allowRedownload disables the yt-dlp download archive).
+  const missingVideoCount = useMemo(() => {
+    if (pendingDownload.mode !== 'selected') return 0;
+    const ids = new Set(pendingDownload.ids);
+    return videos.filter((v) => ids.has(v.youtube_id) && v.previously_downloaded).length;
+  }, [pendingDownload, videos]);
+
   const downloadActions = useMemo<SelectionAction<string>[]>(
     () => [
       {
@@ -277,6 +287,14 @@ function PlaylistPage({ token }: PlaylistPageProps) {
       }
     },
     [playlist, ignoreVideo, markVideoIgnored, refetchMeta]
+  );
+
+  const handleVideoDeleted = useCallback(
+    (ytId: string) => {
+      markVideoDeleted(ytId);
+      void refetchMeta();
+    },
+    [markVideoDeleted, refetchMeta]
   );
 
   const handleUnignoreVideo = useCallback(
@@ -416,7 +434,9 @@ function PlaylistPage({ token }: PlaylistPageProps) {
             ? pendingDownload.ids.length
             : notDownloadedCount ?? playlist.video_count
         }
-        defaultResolution={config.preferredResolution || '1080'}
+        missingVideoCount={missingVideoCount}
+        defaultResolution={playlist.video_quality || config.preferredResolution || '1080'}
+        defaultAudioFormat={playlist.audio_format}
       />
 
       <Dialog
@@ -467,6 +487,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
           video={modalVideo}
           token={token}
           allowIgnore={false}
+          onVideoDeleted={handleVideoDeleted}
         />
       )}
 
