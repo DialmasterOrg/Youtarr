@@ -4,13 +4,11 @@ import { useChannelMutations } from '../useChannelMutations';
 import { Channel } from '../../../../types/Channel';
 
 jest.mock('axios', () => ({
-  get: jest.fn(),
   post: jest.fn(),
 }));
 
 const axios = require('axios');
 const mockedAxios = axios as {
-  get: jest.Mock;
   post: jest.Mock;
 };
 
@@ -32,7 +30,6 @@ describe('useChannelMutations', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedAxios.get.mockResolvedValue({ data: { channels: [] } });
   });
 
   test('initializes with default state', () => {
@@ -77,7 +74,6 @@ describe('useChannelMutations', () => {
   test('prevents adding the same channel twice while pending', async () => {
     const { result } = renderHook(() => useChannelMutations({ token, onRefresh: jest.fn() }));
 
-    mockedAxios.get.mockResolvedValueOnce({ data: { channels: [] } });
     mockedAxios.post.mockResolvedValueOnce({
       data: { status: 'success', channelInfo: mockChannelInfo },
     });
@@ -114,8 +110,13 @@ describe('useChannelMutations', () => {
     expect(result.current.hasPendingChanges).toBe(false);
   });
 
-  test('skips adding when the channel already exists on the server', async () => {
-    mockedAxios.get.mockResolvedValueOnce({ data: { channels: [{ url: validUrl }] } });
+  test('skips adding when the channel is already an active subscription', async () => {
+    mockedAxios.post.mockResolvedValueOnce({
+      data: {
+        status: 'success',
+        channelInfo: { ...mockChannelInfo, existing: true, enabled: true },
+      },
+    });
 
     const { result } = renderHook(() => useChannelMutations({ token, onRefresh: jest.fn() }));
 
@@ -124,18 +125,40 @@ describe('useChannelMutations', () => {
       response = await result.current.addChannel(validUrl);
     });
 
-    expect(mockedAxios.get).toHaveBeenCalledWith('/getchannels', {
-      headers: { 'x-access-token': token },
-      params: { page: 1, pageSize: 16, search: validUrl },
-    });
-    expect(mockedAxios.post).not.toHaveBeenCalled();
     expect(response).toEqual({ success: false, message: 'Channel already exists' });
     expect(result.current.pendingAdditions).toHaveLength(0);
     expect(result.current.isAddingChannel).toBe(false);
   });
 
+  test('restores a soft-deleted channel as a pending addition with its previous settings', async () => {
+    mockedAxios.post.mockResolvedValueOnce({
+      data: {
+        status: 'success',
+        channelInfo: { ...mockChannelInfo, existing: true, enabled: false },
+      },
+    });
+
+    const { result } = renderHook(() => useChannelMutations({ token, onRefresh: jest.fn() }));
+
+    let response;
+    await act(async () => {
+      response = await result.current.addChannel(validUrl);
+    });
+
+    expect(response).toEqual({
+      success: true,
+      message: 'Channel restored with its previous settings. Click Save Changes to confirm.',
+    });
+    expect(result.current.pendingAdditions).toHaveLength(1);
+    expect(result.current.pendingAdditions[0]).toMatchObject({
+      url: validUrl,
+      channel_id: 'chan-123',
+      sub_folder: 'folder',
+      video_quality: '1080',
+    });
+  });
+
   test('adds a channel successfully and formats channel info', async () => {
-    mockedAxios.get.mockResolvedValueOnce({ data: { channels: [] } });
     mockedAxios.post.mockResolvedValueOnce({
       data: { status: 'success', channelInfo: mockChannelInfo },
     });
@@ -148,7 +171,6 @@ describe('useChannelMutations', () => {
     });
 
     expect(response).toEqual({ success: true });
-    expect(mockedAxios.get).toHaveBeenCalledTimes(1);
     expect(mockedAxios.post).toHaveBeenCalledWith('/addchannelinfo', { url: validUrl }, {
       headers: { 'x-access-token': token },
     });
@@ -170,7 +192,6 @@ describe('useChannelMutations', () => {
   });
 
   test('returns specific error messages based on API errors when adding a channel', async () => {
-    mockedAxios.get.mockResolvedValueOnce({ data: { channels: [] } });
     mockedAxios.post.mockRejectedValueOnce({ response: { status: 503 } });
 
     const { result } = renderHook(() => useChannelMutations({ token, onRefresh: jest.fn() }));
@@ -189,7 +210,6 @@ describe('useChannelMutations', () => {
   });
 
   test('queueChannelForDeletion removes pending additions instead of marking deleted', async () => {
-    mockedAxios.get.mockResolvedValueOnce({ data: { channels: [] } });
     mockedAxios.post.mockResolvedValueOnce({
       data: { status: 'success', channelInfo: mockChannelInfo },
     });
@@ -270,7 +290,6 @@ describe('useChannelMutations', () => {
   });
 
   test('saveChanges persists queued additions and clears state', async () => {
-    mockedAxios.get.mockResolvedValueOnce({ data: { channels: [] } });
     mockedAxios.post.mockResolvedValueOnce({
       data: { status: 'success', channelInfo: mockChannelInfo },
     });
@@ -304,7 +323,6 @@ describe('useChannelMutations', () => {
   });
 
   test('saveChanges surfaces API errors and retains pending changes', async () => {
-    mockedAxios.get.mockResolvedValueOnce({ data: { channels: [] } });
     mockedAxios.post.mockResolvedValueOnce({
       data: { status: 'success', channelInfo: mockChannelInfo },
     });

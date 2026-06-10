@@ -164,24 +164,15 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
 
   const deletedSet = useMemo(() => new Set(deletedChannels), [deletedChannels]);
 
-  const matchesSubFolderSelection = useCallback(
-    (channel: Channel) => {
-      if (!selectedSubFolder) {
-        return true;
-      }
-      return normalizeSubFolderKey(channel.sub_folder) === selectedSubFolder;
-    },
-    [selectedSubFolder]
-  );
-
+  // Pending additions ignore the folder filter: an unsaved add (often seeded with
+  // the global-default sentinel) would otherwise vanish and look like a no-op.
   const filteredPendingAdditions = useMemo(
     () =>
       pendingAdditions.filter(
         (channel) =>
-          channelMatchesFilter(channel.uploader || '', channel.url, filterValue) &&
-          matchesSubFolderSelection(channel)
+          channelMatchesFilter(channel.uploader || '', channel.url, filterValue)
       ),
-    [pendingAdditions, filterValue, matchesSubFolderSelection]
+    [pendingAdditions, filterValue]
   );
 
   const visibleServerChannels = useMemo(

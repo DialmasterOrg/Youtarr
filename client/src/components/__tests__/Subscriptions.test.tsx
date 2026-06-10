@@ -1055,6 +1055,48 @@ describe('Subscriptions Component', () => {
       });
     });
 
+    test('keeps pending additions visible when a folder filter is active', async () => {
+      const user = userEvent.setup();
+      useChannelList.mockReturnValue({
+        channels: mockChannels,
+        total: 2,
+        totalPages: 1,
+        loading: false,
+        error: null,
+        refetch: mockRefetchChannels,
+        subFolders: ['music'],
+      });
+      useChannelMutations.mockReturnValue({
+        pendingAdditions: [
+          {
+            url: 'https://www.youtube.com/@restored',
+            uploader: 'Restored Channel',
+            channel_id: 'UC_RESTORED',
+            sub_folder: '##USE_GLOBAL_DEFAULT##',
+          },
+        ],
+        deletedChannels: [],
+        isAddingChannel: false,
+        isSaving: false,
+        addChannel: mockAddChannel,
+        queueChannelForDeletion: mockQueueChannelForDeletion,
+        undoChanges: mockUndoChanges,
+        saveChanges: mockSaveChanges,
+        hasPendingChanges: true,
+      });
+
+      renderSubscriptions();
+
+      await user.click(screen.getByRole('button', { name: /filter or group by folder/i }));
+      await user.click(screen.getByText('__music/'));
+
+      await waitFor(() => {
+        expect(
+          screen.getByTestId('channel-row-https://www.youtube.com/@restored')
+        ).toBeInTheDocument();
+      });
+    });
+
     test('clears folder filter when "All folders" selected', async () => {
       const user = userEvent.setup();
       useChannelList.mockReturnValue({

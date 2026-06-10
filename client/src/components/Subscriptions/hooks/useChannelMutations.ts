@@ -13,6 +13,17 @@ interface OperationResult {
   message?: string;
 }
 
+interface AddChannelInfoResponse {
+  status?: string;
+  channelInfo?: Channel & {
+    id?: string;
+    // True when the channel row already existed in the database.
+    existing?: boolean;
+    // The row's actual enabled state; false means soft-deleted (restorable).
+    enabled?: boolean;
+  };
+}
+
 export const useChannelMutations = ({ token, onRefresh }: UseChannelMutationsOptions) => {
   const [pendingAdditions, setPendingAdditions] = useState<Channel[]>([]);
   const [deletedChannels, setDeletedChannels] = useState<string[]>([]);
@@ -20,27 +31,6 @@ export const useChannelMutations = ({ token, onRefresh }: UseChannelMutationsOpt
   const [isSaving, setIsSaving] = useState(false);
 
   const deletedSet = useMemo(() => new Set(deletedChannels), [deletedChannels]);
-
-  const checkChannelExists = useCallback(async (normalizedUrl: string) => {
-    if (!token) return false;
-
-    try {
-      const response = await axios.get('/getchannels', {
-        headers: { 'x-access-token': token },
-        params: {
-          page: 1,
-          pageSize: 16,
-          search: normalizedUrl,
-        },
-      });
-
-      const existing = response.data?.channels || [];
-      return existing.some((channel: Channel) => channel.url === normalizedUrl);
-    } catch (err) {
-      console.error('Failed to verify existing channel', err);
-      return false;
-    }
-  }, [token]);
 
   const addChannel = useCallback(async (input: string): Promise<OperationResult> => {
     if (!token) {
@@ -67,12 +57,7 @@ export const useChannelMutations = ({ token, onRefresh }: UseChannelMutationsOpt
     setIsAddingChannel(true);
 
     try {
-      const alreadyExists = await checkChannelExists(normalizedUrl);
-      if (alreadyExists) {
-        return { success: false, message: 'Channel already exists' };
-      }
-
-      const response = await axios.post('/addchannelinfo', { url: normalizedUrl }, {
+      const response = await axios.post<AddChannelInfoResponse>('/addchannelinfo', { url: normalizedUrl }, {
         headers: { 'x-access-token': token },
       });
 
@@ -84,6 +69,11 @@ export const useChannelMutations = ({ token, onRefresh }: UseChannelMutationsOpt
       }
 
       const channelInfo = response.data.channelInfo;
+
+      // Server-reported state, so URL and case variants of an active subscription are caught.
+      if (channelInfo.enabled) {
+        return { success: false, message: 'Channel already exists' };
+      }
       const formattedChannel: Channel = {
         url: normalizedUrl,
         uploader: channelInfo.uploader || channelInfo.title || normalizedUrl,
@@ -98,6 +88,12 @@ export const useChannelMutations = ({ token, onRefresh }: UseChannelMutationsOpt
       };
 
       setPendingAdditions((prev) => [...prev, formattedChannel]);
+      if (channelInfo.existing) {
+        return {
+          success: true,
+          message: 'Channel restored with its previous settings. Click Save Changes to confirm.',
+        };
+      }
       return { success: true };
     } catch (error: any) {
       const response = error?.response;
@@ -127,7 +123,7 @@ export const useChannelMutations = ({ token, onRefresh }: UseChannelMutationsOpt
     } finally {
       setIsAddingChannel(false);
     }
-  }, [token, pendingAdditions, deletedSet, checkChannelExists]);
+  }, [token, pendingAdditions, deletedSet]);
 
   const queueChannelForDeletion = useCallback((channel: Channel) => {
     const isPendingAddition = pendingAdditions.some((item) => item.url === channel.url);
