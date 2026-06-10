@@ -499,7 +499,19 @@ For how playlist sync works across Plex, Jellyfin, and Emby, see [Media Server P
 
 ### Playlist Not Visible to Other Users (Plex)
 
-This is by design. Plex playlists are owned by a single account, and Youtarr can't grant per-user access. To share one, open the playlist in Plex Web and share it (playlist menu -> Share). See the [Plex playlist visibility scope](MEDIA_SERVER_PLAYLISTS.md#plex) notes for unclaimed-server setups.
+This is by design. Plex playlists are owned by a single account, and Youtarr can't grant per-user access. To share one, open the playlist in Plex Web and share it (playlist menu -> Share), or use **Settings -> Manage Library Access -> [user] -> Media** to grant playlists to a user. See the [Plex playlist visibility scope](MEDIA_SERVER_PLAYLISTS.md#plex) notes for unclaimed-server setups.
+
+### Shared Playlists Don't Appear for Other Users (Plex)
+
+**Problem**: You shared a Youtarr-created playlist with another Plex user (the share shows up correctly under **Settings -> Manage Library Access -> [user] -> Media**), but when that user opens the server's **Playlists** section it says "Playlists is empty" - on every client (Web, iOS, Apple TV, etc.).
+
+This is Plex behavior, not a Youtarr bug, and nothing needs to be reconfigured. In Plex, the **Playlists** source only lists playlists the user created themselves. Playlists shared by another account appear under a separate sidebar source named **Media**, at the same level as Playlists and Libraries. Have the recipient open **Media** in the server's sidebar; the shared playlists are listed there.
+
+Related gotchas when sharing playlists with other users:
+
+1. **Sharing a playlist does not grant access to the underlying library.** The recipient also needs the Youtarr library shared with them, or the playlist's items will be hidden.
+2. **Content-rating restrictions hide YouTube videos.** Downloaded YouTube videos have no content rating, so rating-based parental restrictions filter them out. For kid accounts, use label-based restrictions instead.
+3. **Smart playlists can't be shared** - but Youtarr creates standard playlists, so this doesn't affect Youtarr-created playlists.
 
 ## Channel Import Issues
 

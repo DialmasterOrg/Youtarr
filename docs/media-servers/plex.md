@@ -103,7 +103,9 @@ Most people can ignore this. Under **Settings -> Plex -> Advanced: playlist visi
 - **Unclaimed server (anonymous LAN access)**: for an unclaimed server on your LAN, where Plex Web browses without a token. If a connection test detects an unclaimed server, Youtarr nudges you toward this option.
 - **A specific Plex user account**: routes the playlists through a token you paste in.
 
-Plex playlists are always owned by a single account, so there's no automatic "public" setting. To let another Plex user see a playlist, open it in Plex Web and share it (playlist menu -> Share). Youtarr can't grant per-user access for you.
+Plex playlists are always owned by a single account, so there's no automatic "public" setting. To let another Plex user see a playlist, open it in Plex Web and share it (playlist menu -> Share), or use **Settings -> Manage Library Access -> [user] -> Media**. Youtarr can't grant per-user access for you.
+
+Heads up: shared playlists do not appear in the recipient's **Playlists** section - Plex lists playlists shared by another account under a separate sidebar source named **Media**. If a user reports the playlist is missing even though the share looks correct, have them check there. See [Shared Playlists Don't Appear for Other Users](../TROUBLESHOOTING.md#shared-playlists-dont-appear-for-other-users-plex) for related gotchas (library access, content-rating restrictions).
 
 For how syncing, ordering, and playlist updates work across all servers, see [Media Server Playlists](../MEDIA_SERVER_PLAYLISTS.md).
 
