@@ -196,6 +196,7 @@ To access Youtarr from other devices on your private network:
 For external access:
 - Do not expose Youtarr directly to the internet over plain HTTP
 - Use a reverse proxy with HTTPS, or use a VPN/SSH tunnel instead of port forwarding the app directly
+- If you use a reverse proxy, make sure WebSocket support is enabled for the Youtarr host - otherwise real-time download progress won't display. See [Troubleshooting](TROUBLESHOOTING.md#no-download-progress-shown-downloads-work-videos-just-appear)
 - Keep `AUTH_ENABLED=true` unless an upstream authentication layer protects every request
 
 ## Upgrading
