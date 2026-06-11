@@ -431,6 +431,30 @@ YouTube is blocking your downloads.
 
 **NOTE**: In some cases YouTube may temporarily blacklist your IP address if too many requests were happening from your IP. You may just need to wait in order to download again. You can manually test downloading a video from YouTube to rule out Youtarr-specific issues by downloading yt-dlp and attempting to manually download a single video.
 
+### No Download Progress Shown (Downloads Work, Videos "Just Appear")
+
+**Problem**: Downloads complete successfully, but the **Downloads -> Activity** page always shows "No download activity at the moment". Videos simply appear in the library when finished. Other real-time updates (channel refresh status, download complete notifications) are also missing.
+
+**Cause**: Youtarr delivers all real-time updates over a WebSocket connection that shares the same host and port as the web UI. Regular page loads and downloads use plain HTTP, so everything else works - but if something between your browser and Youtarr (most commonly a reverse proxy) doesn't forward WebSocket upgrade requests, the progress display never gets any updates.
+
+**How to confirm**:
+1. Open your browser devtools (F12) -> **Network** tab -> filter by "WS", then reload the Youtarr page. A working setup shows a WebSocket connection with status `101 Switching Protocols`. If it fails or keeps retrying, the WebSocket is being blocked.
+2. While a download is running, open **Downloads -> History** and refresh the page. That page fetches over HTTP, so if the job shows as In Progress there while the Activity page stays empty, the WebSocket is the problem.
+
+**Solution**: Enable WebSocket support for the Youtarr host in your reverse proxy:
+- **Nginx Proxy Manager**: edit the proxy host and enable the **Websockets Support** toggle.
+- **nginx**: add to the Youtarr `location` block:
+  ```nginx
+  proxy_http_version 1.1;
+  proxy_set_header Upgrade $http_upgrade;
+  proxy_set_header Connection "upgrade";
+  ```
+- **Synology DSM reverse proxy**: open the reverse proxy rule -> **Custom Header** -> **Create** -> **WebSocket** (adds the `Upgrade` and `Connection` headers).
+- **Apache**: enable `mod_proxy_wstunnel`.
+- **Caddy / Traefik**: WebSocket pass-through is automatic; no configuration needed.
+
+If you aren't using a reverse proxy, check for browser extensions, VPN software, or corporate proxies that block WebSocket connections.
+
 
 ## Slow Channel Operations with Proxy
 
