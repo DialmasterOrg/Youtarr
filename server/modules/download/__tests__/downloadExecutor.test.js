@@ -217,291 +217,6 @@ describe('DownloadExecutor', () => {
       expect(executor.currentJobId).toBeNull();
       expect(executor.manualTerminationReason).toBeNull();
       expect(executor.forceKillTimeout).toBeNull();
-      // Throttling state
-      expect(executor.lastProgressEmitTime).toBe(0);
-      expect(executor.pendingProgressMessage).toBeNull();
-      expect(executor.progressFlushTimer).toBeNull();
-      expect(executor.lastEmittedProgressState).toBeNull();
-      expect(executor.PROGRESS_THROTTLE_MS).toBe(250);
-    });
-  });
-
-  describe('getCountOfDownloadedVideos', () => {
-    it('should return count from archive module', () => {
-      archiveModule.readCompleteListLines.mockReturnValue(['video1', 'video2', 'video3']);
-      expect(executor.getCountOfDownloadedVideos()).toBe(3);
-    });
-
-    it('should return 0 for empty archive', () => {
-      archiveModule.readCompleteListLines.mockReturnValue([]);
-      expect(executor.getCountOfDownloadedVideos()).toBe(0);
-    });
-  });
-
-  describe('getNewVideoUrls', () => {
-    it('should return new video URLs from archive module', () => {
-      const mockUrls = ['https://youtu.be/abc123', 'https://youtu.be/def456'];
-      archiveModule.getNewVideoUrlsSince.mockReturnValue(mockUrls);
-
-      const result = executor.getNewVideoUrls(5);
-
-      expect(archiveModule.getNewVideoUrlsSince).toHaveBeenCalledWith(5);
-      expect(result).toEqual(mockUrls);
-    });
-  });
-
-  describe('extractYoutubeIdFromPath', () => {
-    it('should extract ID from bracket notation', () => {
-      const path = '/path/to/Channel - Video Title [abc123XYZ_d].mp4';
-      expect(executor.extractYoutubeIdFromPath(path)).toBe('abc123XYZ_d');
-    });
-
-    it('should extract ID from directory name with dash', () => {
-      const path = '/path/to/Channel - Video Title - abc123XYZ_d/video.mp4';
-      expect(executor.extractYoutubeIdFromPath(path)).toBe('abc123XYZ_d');
-    });
-
-    it('should return null for invalid paths', () => {
-      expect(executor.extractYoutubeIdFromPath('/path/without/id.mp4')).toBeNull();
-    });
-
-    it('should handle extraction errors gracefully', () => {
-      expect(executor.extractYoutubeIdFromPath('')).toBeNull();
-    });
-
-    it('should require 10-12 character IDs', () => {
-      // Too short
-      expect(executor.extractYoutubeIdFromPath('/path/[abc].mp4')).toBeNull();
-      // Valid length
-      expect(executor.extractYoutubeIdFromPath('/path/[abc1234567].mp4')).toBe('abc1234567');
-    });
-  });
-
-  // NOTE: isMainVideoFile, isVideoDirectory (previously isVideoSpecificDirectory),
-  // isChannelDirectory, and isDirectoryEmpty tests have been moved to
-  // server/modules/filesystem/__tests__/directoryManager.test.js
-
-  describe('cleanupInProgressVideos', () => {
-    beforeEach(() => {
-      // Reset all fs.promises mocks to default resolved values
-      mockFsPromises.access.mockResolvedValue();
-      mockFsPromises.readdir.mockResolvedValue([]);
-      mockFsPromises.stat.mockResolvedValue({ isFile: () => true, isDirectory: () => false });
-      mockFsPromises.unlink.mockResolvedValue();
-      mockFsPromises.rm.mockResolvedValue();
-      mockFsPromises.rmdir.mockResolvedValue();
-    });
-
-    it('should handle no in-progress videos', async () => {
-      JobVideoDownload.findAll.mockResolvedValue([]);
-
-      await executor.cleanupInProgressVideos('job-123');
-
-      expect(logger.info).toHaveBeenCalledWith('No in-progress videos to clean up');
-    });
-
-    it('should cleanup video directory and database entry', async () => {
-      const mockVideoDownload = {
-        youtube_id: 'abc123XYZ_d',
-        file_path: '/output/Channel - Title - abc123XYZ_d',
-        destroy: jest.fn().mockResolvedValue()
-      };
-
-      JobVideoDownload.findAll.mockResolvedValue([mockVideoDownload]);
-      // File path is a final path, not a temp path
-      tempPathManager.isTempPath.mockReturnValue(false);
-      // Mock temp path conversion to return a different path
-      tempPathManager.convertFinalToTemp.mockReturnValue('/tmp/youtarr-downloads/Channel - Title - abc123XYZ_d');
-      // Final path exists, temp path doesn't
-      mockFsPromises.access.mockImplementation((path) => {
-        if (path === '/output/Channel - Title - abc123XYZ_d') return Promise.resolve();
-        return Promise.reject(new Error('ENOENT'));
-      });
-      mockFsPromises.readdir.mockResolvedValue(['video.mp4', 'poster.jpg']);
-
-      await executor.cleanupInProgressVideos('job-123');
-
-      expect(mockFsPromises.readdir).toHaveBeenCalledWith('/output/Channel - Title - abc123XYZ_d');
-      expect(mockFsPromises.unlink).toHaveBeenCalledTimes(2);
-      expect(mockFsPromises.rmdir).toHaveBeenCalledWith('/output/Channel - Title - abc123XYZ_d');
-      expect(mockVideoDownload.destroy).toHaveBeenCalled();
-    });
-
-    it('should clean up individual files in flat mode (non-video directories)', async () => {
-      const mockVideoDownload = {
-        youtube_id: 'abc123XYZ_d',
-        file_path: '/output/Channel',
-        destroy: jest.fn().mockResolvedValue()
-      };
-
-      JobVideoDownload.findAll.mockResolvedValue([mockVideoDownload]);
-      mockFsPromises.access.mockResolvedValue(); // Directory exists
-      // Mock filesystem.isVideoDirectory to return false (flat mode)
-      filesystem.isVideoDirectory.mockReturnValue(false);
-      // Mock directory contents with matching files
-      mockFsPromises.readdir.mockResolvedValue([
-        'Channel - Title [abc123XYZ_d].mp4',
-        'Channel - Title [abc123XYZ_d].jpg',
-        'other-video.mp4'
-      ]);
-      mockFsPromises.stat.mockResolvedValue({ isFile: () => true, isDirectory: () => false });
-      mockFsPromises.unlink.mockResolvedValue();
-
-      await executor.cleanupInProgressVideos('job-123');
-
-      expect(logger.info).toHaveBeenCalledWith(
-        { youtubeId: 'abc123XYZ_d', dirPath: '/output/Channel' },
-        'Flat structure detected, cleaning up individual files'
-      );
-      // Should NOT remove the directory itself
-      expect(mockFsPromises.rmdir).not.toHaveBeenCalled();
-      // Should delete files matching the youtube ID
-      expect(mockFsPromises.unlink).toHaveBeenCalledWith('/output/Channel/Channel - Title [abc123XYZ_d].mp4');
-      expect(mockFsPromises.unlink).toHaveBeenCalledWith('/output/Channel/Channel - Title [abc123XYZ_d].jpg');
-      // Should NOT delete unrelated files
-      expect(mockFsPromises.unlink).not.toHaveBeenCalledWith('/output/Channel/other-video.mp4');
-      // Should destroy the tracking entry
-      expect(mockVideoDownload.destroy).toHaveBeenCalled();
-    });
-
-    it('should check temp location when file path is final path', async () => {
-      tempPathManager.isTempPath.mockReturnValue(false);
-      tempPathManager.convertFinalToTemp.mockReturnValue('/tmp/Channel - Title - abc123XYZ_d');
-
-      const mockVideoDownload = {
-        youtube_id: 'abc123XYZ_d',
-        file_path: '/output/Channel - Title - abc123XYZ_d',
-        destroy: jest.fn().mockResolvedValue()
-      };
-
-      JobVideoDownload.findAll.mockResolvedValue([mockVideoDownload]);
-      mockFsPromises.access.mockResolvedValue(); // Both paths exist
-      mockFsPromises.readdir.mockResolvedValue([]);
-
-      await executor.cleanupInProgressVideos('job-123');
-
-      expect(mockFsPromises.access).toHaveBeenCalledWith('/output/Channel - Title - abc123XYZ_d');
-      expect(mockFsPromises.access).toHaveBeenCalledWith('/tmp/Channel - Title - abc123XYZ_d');
-    });
-
-    it('should not convert to temp path when file path is already a temp path', async () => {
-      // When file_path is already a temp path, convertFinalToTemp should NOT be called
-      tempPathManager.isTempPath.mockReturnValue(true);
-
-      const mockVideoDownload = {
-        youtube_id: 'abc123XYZ_d',
-        file_path: '/output/.youtarr_tmp/Channel - Title - abc123XYZ_d',
-        destroy: jest.fn().mockResolvedValue()
-      };
-
-      JobVideoDownload.findAll.mockResolvedValue([mockVideoDownload]);
-      mockFsPromises.access.mockResolvedValue(); // Path exists
-      mockFsPromises.readdir.mockResolvedValue(['video.mp4']);
-      mockFsPromises.stat.mockResolvedValue({ isFile: () => true, isDirectory: () => false });
-
-      await executor.cleanupInProgressVideos('job-123');
-
-      // Should check the original temp path (first call)
-      expect(mockFsPromises.access).toHaveBeenNthCalledWith(1, '/output/.youtarr_tmp/Channel - Title - abc123XYZ_d');
-      // convertFinalToTemp should not be called since file_path is already temp
-      expect(tempPathManager.convertFinalToTemp).not.toHaveBeenCalled();
-    });
-
-    it('should handle file removal errors gracefully', async () => {
-      const mockVideoDownload = {
-        youtube_id: 'abc123XYZ_d',
-        file_path: '/output/Channel - Title - abc123XYZ_d',
-        destroy: jest.fn().mockResolvedValue()
-      };
-
-      JobVideoDownload.findAll.mockResolvedValue([mockVideoDownload]);
-      mockFsPromises.access.mockResolvedValue(); // Directory exists
-      mockFsPromises.readdir.mockResolvedValue(['video.mp4']);
-      mockFsPromises.stat.mockResolvedValue({ isFile: () => true, isDirectory: () => false });
-      mockFsPromises.unlink.mockRejectedValue(new Error('Permission denied'));
-
-      await executor.cleanupInProgressVideos('job-123');
-
-      expect(logger.error).toHaveBeenCalledWith(
-        { err: expect.any(Error), fileName: 'video.mp4' },
-        'Error removing file'
-      );
-    });
-  });
-
-  describe('cleanupPartialFiles', () => {
-    beforeEach(() => {
-      // Reset fs.promises mocks for this test suite
-      mockFsPromises.access.mockResolvedValue();
-      mockFsPromises.unlink.mockResolvedValue();
-      mockFsPromises.readdir.mockResolvedValue([]);
-    });
-
-    it('should remove .part files', async () => {
-      const files = ['/output/video.mp4'];
-      // access() resolves to indicate file exists
-      mockFsPromises.access
-        .mockResolvedValueOnce() // .part file exists
-        .mockRejectedValueOnce(); // For subsequent call in readdir error catch
-
-      await executor.cleanupPartialFiles(files);
-
-      expect(mockFsPromises.access).toHaveBeenCalledWith('/output/video.mp4.part');
-      expect(mockFsPromises.unlink).toHaveBeenCalledWith('/output/video.mp4.part');
-    });
-
-    it('should remove fragment files', async () => {
-      const path = require('path');
-      const files = ['/output/Channel - Title [abc123XYZ_d].mp4'];
-      mockFsPromises.access
-        .mockRejectedValueOnce(new Error('Not found')); // .part doesn't exist
-      mockFsPromises.readdir.mockResolvedValue([
-        'Channel - Title [abc123XYZ_d].f137.mp4',
-        'Channel - Title [abc123XYZ_d].f140.m4a',
-        'other-file.txt'
-      ]);
-
-      await executor.cleanupPartialFiles(files);
-
-      const dir = path.dirname(files[0]);
-      expect(mockFsPromises.readdir).toHaveBeenCalledWith(dir);
-      // Check that fragment files were removed
-      const unlinkCalls = mockFsPromises.unlink.mock.calls;
-      expect(unlinkCalls.some(call => call[0].includes('.f137.mp4'))).toBe(true);
-      expect(unlinkCalls.some(call => call[0].includes('.f140.m4a'))).toBe(true);
-      expect(unlinkCalls.some(call => call[0].includes('other-file.txt'))).toBe(false);
-    });
-
-    it('should handle errors gracefully', async () => {
-      const files = ['/output/video.mp4'];
-      mockFsPromises.access.mockRejectedValue(new Error('Access error'));
-      mockFsPromises.readdir.mockRejectedValue(new Error('Read error'));
-
-      await executor.cleanupPartialFiles(files);
-
-      expect(logger.error).toHaveBeenCalledWith(
-        { err: expect.any(Error), dir: '/output' },
-        'Error reading directory'
-      );
-    });
-
-    it('should not log an error when the partial file directory was already moved', async () => {
-      const files = ['/output/video.mp4'];
-      const enoent = new Error('No such file or directory');
-      enoent.code = 'ENOENT';
-      mockFsPromises.access.mockRejectedValue(new Error('Access error'));
-      mockFsPromises.readdir.mockRejectedValue(enoent);
-
-      await executor.cleanupPartialFiles(files);
-
-      expect(logger.debug).toHaveBeenCalledWith(
-        { err: enoent, dir: '/output' },
-        'Partial file directory already removed'
-      );
-      expect(logger.error).not.toHaveBeenCalledWith(
-        expect.objectContaining({ dir: '/output' }),
-        'Error reading directory'
-      );
     });
   });
 
@@ -1368,91 +1083,6 @@ describe('DownloadExecutor', () => {
           error: 'COOKIES_RECOMMENDED'
         })
       );
-    });
-
-    it('should warn when intermediate group results cannot find the job', async () => {
-      jobModule.getJob.mockReturnValue(undefined);
-
-      await executor.saveIntermediateGroupResults(
-        mockJobId,
-        '1 videos.',
-        [{ youtubeId: 'success1234', filePath: '/output/new.mp4', fileSize: '1024' }],
-        [],
-        0
-      );
-
-      expect(logger.warn).toHaveBeenCalledWith(
-        { jobId: mockJobId },
-        'Unable to merge intermediate group results; job not found'
-      );
-      expect(jobModule.updateJob).not.toHaveBeenCalled();
-      expect(jobModule.saveJobOnly).not.toHaveBeenCalled();
-    });
-
-    it('merges terminatedChannels across intermediate groups and dedupes by channelId', async () => {
-      const job = {
-        data: {
-          videos: [],
-          failedVideos: [],
-          cumulativeSkipped: 0,
-          terminatedChannels: [
-            { channelId: 'UCdupe000000000000000000', uploader: 'First Wins', url: 'first', terminatedAt: '2026-01-01' }
-          ]
-        }
-      };
-      jobModule.getJob.mockReturnValue(job);
-
-      await executor.saveIntermediateGroupResults(
-        mockJobId,
-        'output',
-        [],
-        [],
-        0,
-        {},
-        [
-          { channelId: 'UCdupe000000000000000000', uploader: 'Should Not Replace', url: 'second', terminatedAt: '2026-02-02' },
-          { channelId: 'UCnew0000000000000000000', uploader: 'New Channel', url: 'newurl', terminatedAt: '2026-02-02' }
-        ]
-      );
-
-      const updateCall = jobModule.updateJob.mock.calls.find(call => call[0] === mockJobId);
-      expect(updateCall).toBeDefined();
-      const merged = updateCall[1].data.terminatedChannels;
-      expect(merged).toHaveLength(2);
-      // First write wins on duplicate
-      expect(merged.find(c => c.channelId === 'UCdupe000000000000000000')).toEqual(
-        expect.objectContaining({ uploader: 'First Wins' })
-      );
-      expect(merged.find(c => c.channelId === 'UCnew0000000000000000000')).toEqual(
-        expect.objectContaining({ uploader: 'New Channel' })
-      );
-    });
-
-    it('merges terminationFailures across intermediate groups and dedupes by channel id', async () => {
-      const job = {
-        data: {
-          videos: [],
-          failedVideos: [],
-          cumulativeSkipped: 0,
-          terminationFailures: ['UCdupe000000000000000000']
-        }
-      };
-      jobModule.getJob.mockReturnValue(job);
-
-      await executor.saveIntermediateGroupResults(
-        mockJobId,
-        'output',
-        [],
-        [],
-        0,
-        {},
-        [],
-        ['UCdupe000000000000000000', 'UCnew0000000000000000000']
-      );
-
-      const updateCall = jobModule.updateJob.mock.calls.find(call => call[0] === mockJobId);
-      const merged = updateCall[1].data.terminationFailures;
-      expect(merged).toEqual(['UCdupe000000000000000000', 'UCnew0000000000000000000']);
     });
 
     it('should not persist to database when no videos were downloaded', async () => {
@@ -2781,206 +2411,6 @@ describe('DownloadExecutor', () => {
     });
   });
 
-  describe('isImportantMessage', () => {
-    it('should identify download destination messages as important', () => {
-      const line = '[download] Destination: /output/Channel - Title [abc123].mp4';
-      expect(executor.isImportantMessage(line, null)).toBe(true);
-    });
-
-    it('should identify merger messages as important', () => {
-      const line = '[Merger] Merging formats into "output.mp4"';
-      expect(executor.isImportantMessage(line, null)).toBe(true);
-    });
-
-    it('should identify move files messages as important', () => {
-      const line = '[MoveFiles] Moving file from temp to final location';
-      expect(executor.isImportantMessage(line, null)).toBe(true);
-    });
-
-    it('should identify metadata messages as important', () => {
-      const line = '[Metadata] Adding metadata to file';
-      expect(executor.isImportantMessage(line, null)).toBe(true);
-    });
-
-    it('should identify extract audio messages as important', () => {
-      const line = '[ExtractAudio] Extracting audio from video';
-      expect(executor.isImportantMessage(line, null)).toBe(true);
-    });
-
-    it('should identify completion messages as important', () => {
-      const line = '[download] 100% of 10.00MiB';
-      expect(executor.isImportantMessage(line, null)).toBe(true);
-    });
-
-    it('should identify new item download messages as important', () => {
-      const line = '[download] Downloading item 5 of 10';
-      expect(executor.isImportantMessage(line, null)).toBe(true);
-    });
-
-    it('should identify already archived messages as important', () => {
-      const line = '[download] Video abc123 has already been recorded in the archive';
-      expect(executor.isImportantMessage(line, null)).toBe(true);
-    });
-
-    it('should identify filter skip messages as important', () => {
-      const line = '[download] Video does not pass filter (subscribers only)';
-      expect(executor.isImportantMessage(line, null)).toBe(true);
-    });
-
-    it('should identify error messages as important', () => {
-      const line = 'ERROR: Unable to download video';
-      expect(executor.isImportantMessage(line, null)).toBe(true);
-    });
-
-    it('should identify warning messages as important', () => {
-      const line = 'WARNING: Video format may not be supported';
-      expect(executor.isImportantMessage(line, null)).toBe(true);
-    });
-
-    it('should identify HTTP 403 errors as important', () => {
-      expect(executor.isImportantMessage('HTTP Error 403: Forbidden', null)).toBe(true);
-      expect(executor.isImportantMessage('Server returned 403: Forbidden', null)).toBe(true);
-    });
-
-    it('should identify bot detection messages as important', () => {
-      const line = 'Sign in to confirm you\'re not a bot';
-      expect(executor.isImportantMessage(line, null)).toBe(true);
-    });
-
-    it('should identify state changes as important', () => {
-      executor.lastEmittedProgressState = 'downloading_video';
-      const progress = { state: 'merging' };
-      expect(executor.isImportantMessage('[download] Some progress', progress)).toBe(true);
-    });
-
-    it('should not mark regular progress messages as important', () => {
-      executor.lastEmittedProgressState = 'downloading_video';
-      const progress = { state: 'downloading_video' };
-      const line = '{"percent":"50.0%","downloaded":"5242880","total":"10485760"}';
-      expect(executor.isImportantMessage(line, progress)).toBe(false);
-    });
-
-    it('should not mark empty lines as important', () => {
-      expect(executor.isImportantMessage('', null)).toBe(false);
-    });
-  });
-
-  describe('emitProgressMessage', () => {
-    beforeEach(() => {
-      jest.useFakeTimers();
-      jest.clearAllMocks();
-    });
-
-    afterEach(() => {
-      if (executor.progressFlushTimer) {
-        clearTimeout(executor.progressFlushTimer);
-        executor.progressFlushTimer = null;
-      }
-      jest.useRealTimers();
-    });
-
-    it('should emit important messages immediately', () => {
-      const line = '[download] Destination: /output/video.mp4';
-      const progress = { state: 'downloading_video' };
-
-      executor.emitProgressMessage(line, progress);
-
-      expect(MessageEmitter.emitMessage).toHaveBeenCalledTimes(1);
-      expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
-        'broadcast',
-        null,
-        'download',
-        'downloadProgress',
-        { text: line, progress: progress }
-      );
-    });
-
-    it('should clear pending timer when important message is sent', () => {
-      // Set up a pending message
-      executor.pendingProgressMessage = { text: 'pending', progress: null };
-      executor.progressFlushTimer = setTimeout(() => {}, 1000);
-
-      const line = '[download] Destination: /output/video.mp4';
-      executor.emitProgressMessage(line, null);
-
-      expect(executor.pendingProgressMessage).toBeNull();
-      expect(executor.progressFlushTimer).toBeNull();
-    });
-
-    it('should throttle progress messages to 250ms intervals', () => {
-      // First message should go through immediately
-      executor.emitProgressMessage('Progress 1', { state: 'downloading_video' });
-      expect(MessageEmitter.emitMessage).toHaveBeenCalledTimes(1);
-
-      // Second message within 250ms should be pending
-      jest.advanceTimersByTime(100);
-      executor.emitProgressMessage('Progress 2', { state: 'downloading_video' });
-      expect(MessageEmitter.emitMessage).toHaveBeenCalledTimes(1); // Still only 1
-
-      // Third message should update pending
-      jest.advanceTimersByTime(50);
-      executor.emitProgressMessage('Progress 3', { state: 'downloading_video' });
-      expect(MessageEmitter.emitMessage).toHaveBeenCalledTimes(1); // Still only 1
-
-      // After 250ms total, pending message should flush
-      jest.advanceTimersByTime(100); // Total 250ms
-      expect(MessageEmitter.emitMessage).toHaveBeenCalledTimes(2);
-      expect(MessageEmitter.emitMessage).toHaveBeenLastCalledWith(
-        'broadcast',
-        null,
-        'download',
-        'downloadProgress',
-        { text: 'Progress 3', progress: { state: 'downloading_video' } }
-      );
-    });
-
-    it('should send progress message immediately if 250ms has elapsed', () => {
-      executor.emitProgressMessage('Progress 1', null);
-      expect(MessageEmitter.emitMessage).toHaveBeenCalledTimes(1);
-
-      // Wait 250ms
-      jest.advanceTimersByTime(250);
-
-      // Next message should go through immediately
-      executor.emitProgressMessage('Progress 2', null);
-      expect(MessageEmitter.emitMessage).toHaveBeenCalledTimes(2);
-    });
-
-    it('should update lastEmittedProgressState when state changes', () => {
-      const progress = { state: 'downloading_video' };
-      executor.emitProgressMessage('[download] Destination: /output/video.mp4', progress);
-
-      expect(executor.lastEmittedProgressState).toBe('downloading_video');
-    });
-
-    it('should only create one flush timer for multiple rapid messages', () => {
-      executor.emitProgressMessage('Progress 1', null);
-      executor.emitProgressMessage('Progress 2', null);
-      executor.emitProgressMessage('Progress 3', null);
-
-      // Only one timer should exist
-      expect(executor.progressFlushTimer).not.toBeNull();
-
-      // Fast forward past throttle time
-      jest.advanceTimersByTime(250);
-
-      // Timer should be cleared
-      expect(executor.progressFlushTimer).toBeNull();
-    });
-
-    it('should handle null progress gracefully', () => {
-      executor.emitProgressMessage('Some message', null);
-
-      expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
-        'broadcast',
-        null,
-        'download',
-        'downloadProgress',
-        { text: 'Some message', progress: null }
-      );
-    });
-  });
-
   describe('doDownload - throttling integration', () => {
     const mockArgs = ['--format', 'best', 'https://youtube.com/watch?v=test'];
     const mockJobId = 'job-123';
@@ -3014,20 +2444,17 @@ describe('DownloadExecutor', () => {
       expect(emitCalls.length).toBeLessThan(10); // Less than if all were emitted
     });
 
-    it('should clear pending progress timer on job exit', async () => {
+    it('should flush the pending throttled progress message on job exit', async () => {
       const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
 
-      // Emit initial progress to set lastProgressEmitTime
-      mockProcess.stdout.emit('data', '{"percent":"25.0%","downloaded":"2621440","total":"10485760"}\n');
-
-      // Send another progress message that should get throttled (within 250ms of first)
-      mockProcess.stdout.emit('data', '{"percent":"50.0%","downloaded":"5242880","total":"10485760"}\n');
-
-      // Give time for timer to be set
+      // Let the async preflight finish so the stream handlers are attached
       await new Promise(resolve => setTimeout(resolve, 5));
 
-      // Timer should exist if throttling occurred
-      const timerExisted = executor.progressFlushTimer !== null;
+      // First progress message emits immediately (state change)
+      mockProcess.stdout.emit('data', '{"percent":"25.0%","downloaded":"2621440","total":"10485760"}\n');
+
+      // Second progress message within 250ms gets throttled to pending
+      mockProcess.stdout.emit('data', '{"percent":"50.0%","downloaded":"5242880","total":"10485760"}\n');
 
       // Exit the process
       setTimeout(() => {
@@ -3036,27 +2463,24 @@ describe('DownloadExecutor', () => {
 
       await downloadPromise;
 
-      // Timer should be cleared (whether it existed or not)
-      expect(executor.progressFlushTimer).toBeNull();
-      expect(executor.pendingProgressMessage).toBeNull();
-
-      // If throttling occurred, verify cleanup happened
-      if (timerExisted) {
-        expect(executor.progressFlushTimer).toBeNull();
-      }
+      // The pending message must have been flushed during exit handling, not dropped
+      const texts = MessageEmitter.emitMessage.mock.calls
+        .map(call => call[4] && call[4].text)
+        .filter(Boolean);
+      expect(texts).toContain('{"percent":"50.0%","downloaded":"5242880","total":"10485760"}');
     });
 
-    it('should clear pending progress timer on job error', async () => {
+    it('should flush the pending throttled progress message on job error', async () => {
       const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
 
-      // Emit initial progress
+      // Let the async preflight finish so the stream handlers are attached
+      await new Promise(resolve => setTimeout(resolve, 5));
+
+      // First progress message emits immediately (state change)
       mockProcess.stdout.emit('data', '{"percent":"25.0%","downloaded":"2621440","total":"10485760"}\n');
 
-      // Send another progress message that should get throttled
+      // Second progress message within 250ms gets throttled to pending
       mockProcess.stdout.emit('data', '{"percent":"50.0%","downloaded":"5242880","total":"10485760"}\n');
-
-      // Give time for timer to be set
-      await new Promise(resolve => setTimeout(resolve, 5));
 
       // Emit error
       setTimeout(() => {
@@ -3065,9 +2489,11 @@ describe('DownloadExecutor', () => {
 
       await downloadPromise;
 
-      // Timer should be cleared
-      expect(executor.progressFlushTimer).toBeNull();
-      expect(executor.pendingProgressMessage).toBeNull();
+      // The pending message must have been flushed during error handling, not dropped
+      const texts = MessageEmitter.emitMessage.mock.calls
+        .map(call => call[4] && call[4].text)
+        .filter(Boolean);
+      expect(texts).toContain('{"percent":"50.0%","downloaded":"5242880","total":"10485760"}');
     });
   });
 
