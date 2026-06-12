@@ -9,17 +9,21 @@ const VideoMetadataProcessor = require('./videoMetadataProcessor');
 const tempPathManager = require('./tempPathManager');
 const { isSpecificUrlDownloadJob } = require('./jobTypes');
 const downloadRunTracker = require('./downloadRunTracker');
-const ytDlpRunner = require('../ytDlpRunner');
 const { JobVideoDownload } = require('../../models');
 const Channel = require('../../models/channel');
 const ChannelVideo = require('../../models/channelvideo');
 const logger = require('../../logger');
 const filesystem = require('../filesystem');
-
-// Cap on the serialized owner-channel map passed to the post-processor via an
-// environment variable. Linux limits a single env var to ~128KB (MAX_ARG_STRLEN);
-// stay well under it. A typical entry is ~40 bytes, so this covers thousands of videos.
-const OWNER_CHANNEL_MAP_MAX_BYTES = 64 * 1024;
+const { buildYtdlpEnv } = require('./ytdlpEnvBuilder');
+const DownloadTimeoutController = require('./DownloadTimeoutController');
+const { YtdlpErrorTracker } = require('./YtdlpErrorTracker');
+const {
+  computeOutcomeFlags,
+  describeNonZeroExit,
+  resolveTerminalStatus,
+  resolveFinalPresentation,
+  buildJobDataPayload
+} = require('./downloadStatusResolver');
 
 // yt-dlp writes certain warnings to stderr that do not indicate a problem with
 // the download: the media still downloads and yt-dlp exits 0. These must not
@@ -40,7 +44,6 @@ class DownloadExecutor {
     this.activityTimeoutMs = 30 * 60 * 1000; // 30 minutes of no activity (default)
     this.postProcessingTimeoutMs = 60 * 60 * 1000; // 60 minutes for post-processing operations
     this.maxAbsoluteTimeoutMs = 6 * 60 * 60 * 1000; // 6 hours maximum runtime
-    this.currentActivityTimeout = this.activityTimeoutMs; // Track current timeout duration
     // Current process tracking for manual termination
     this.currentProcess = null;
     this.currentJobId = null;
@@ -237,24 +240,6 @@ class DownloadExecutor {
     }
   }
 
-  isExpectedYtdlpSkipMessage(message = '') {
-    const normalized = String(message);
-    if (ytDlpRunner.isMembersOnlyError(normalized)) {
-      return true;
-    }
-    const expectedPatterns = [
-      /this live event will begin/i,
-      /will begin in (?:a few moments|\d+)/i,
-      /premiere (?:will begin|starts|is upcoming)/i,
-      /premieres? in \d+/i,
-      /pre[- ]release/i,
-      /this video is not yet available/i,
-      /release time of video is not known/i,
-    ];
-
-    return expectedPatterns.some(pattern => pattern.test(normalized));
-  }
-
   // True when everything yt-dlp wrote to stderr is known-benign warnings (or
   // whitespace). Used to avoid flagging a clean, exit-0 download as "Complete
   // with Warnings" over informational noise like the subtitle impersonation
@@ -272,24 +257,6 @@ class DownloadExecutor {
     return lines.every((line) =>
       BENIGN_STDERR_WARNING_PATTERNS.some((pattern) => pattern.test(line))
     );
-  }
-
-  // Narrower predicate than isExpectedYtdlpSkipMessage: only matches members-only
-  // patterns, not upcoming-premiere or pre-release ones. Used to decide whether
-  // to stamp channelvideos.availability with 'subscriber_only', which would be
-  // wrong for premiere/pre-release skips (those are temporary states).
-  isMembersOnlyMessage(message = '') {
-    return ytDlpRunner.isMembersOnlyError(message);
-  }
-
-  extractYoutubeIdFromYtdlpError(message = '') {
-    const match = String(message).match(/\[youtube\]\s+([a-zA-Z0-9_-]{11}):/);
-    return match ? match[1] : null;
-  }
-
-  extractChannelIdFromYtdlpError(message = '') {
-    const match = String(message).match(/\[youtube:tab\]\s+(UC[a-zA-Z0-9_-]{22}):/);
-    return match ? match[1] : null;
   }
 
   // Fire-and-forget persistence so we don't block the stdout/stderr stream
@@ -580,16 +547,235 @@ class DownloadExecutor {
     this.pendingProgressMessage = null;
   }
 
+  // Specific-URL jobs normalize to youtu.be form; otherwise diff the archive against the pre-run count.
+  resolveUrlsToProcess(jobType, originalUrls, initialCount) {
+    let urlsToProcess;
+    if (isSpecificUrlDownloadJob(jobType) && originalUrls) {
+      urlsToProcess = originalUrls.map(url => {
+        // Convert full YouTube URLs to youtu.be format for consistency
+        if (url.includes('youtube.com/watch?v=')) {
+          const videoId = url.split('v=')[1].split('&')[0];
+          logger.debug({ url, convertedUrl: `https://youtu.be/${videoId}` }, 'Converting YouTube URL format');
+          return `https://youtu.be/${videoId}`;
+        }
+        return url;
+      });
+    } else {
+      urlsToProcess = this.getNewVideoUrls(initialCount);
+    }
+    return urlsToProcess;
+  }
+
+  // Backfills URLs into errorTracker.failedVideos (read later by reconcileArchive),
+  // then splits videoData into successful vs failed by file presence.
+  partitionDownloadResults(videoData, errorTracker, urlsToProcess) {
+    for (const url of urlsToProcess) {
+      const videoId = url.split('youtu.be/')[1]?.trim().split('?')[0].split('&')[0];
+      if (videoId && errorTracker.failedVideos.has(videoId)) {
+        const failureInfo = errorTracker.failedVideos.get(videoId);
+        failureInfo.url = url;
+        errorTracker.failedVideos.set(videoId, failureInfo);
+      }
+    }
+
+    const successfulVideos = [];
+    const failedVideosList = [];
+
+    for (const video of videoData) {
+      // Check if this video was explicitly marked as failed during download
+      const wasMarkedFailed = errorTracker.failedVideos.has(video.youtubeId);
+
+      // Check if video or audio file actually exists and has size
+      // For video_mp3 mode: both fileSize and audioFileSize will be set
+      // For mp3_only mode: only audioFileSize will be set
+      // For standard video: only fileSize will be set
+      const hasVideoFile = video.fileSize && video.fileSize !== 'null' && video.fileSize !== '0';
+      const hasAudioFile = video.audioFileSize && video.audioFileSize !== 'null' && video.audioFileSize !== '0';
+      const hasAnyFile = hasVideoFile || hasAudioFile;
+
+      if (wasMarkedFailed || !hasAnyFile) {
+        const failureInfo = errorTracker.failedVideos.get(video.youtubeId) || {
+          youtubeId: video.youtubeId,
+          error: hasAnyFile ? 'Unknown error' : 'Media file not found or incomplete',
+          url: urlsToProcess.find(u => u.includes(video.youtubeId))
+        };
+
+        failedVideosList.push({
+          youtubeId: video.youtubeId,
+          title: video.youTubeVideoName,
+          channel: video.youTubeChannelName,
+          error: failureInfo.error,
+          url: failureInfo.url
+        });
+
+        logger.warn({
+          youtubeId: video.youtubeId,
+          error: failureInfo.error,
+          hasVideoFile,
+          hasAudioFile
+        }, 'Download failed');
+      } else {
+        successfulVideos.push(video);
+      }
+    }
+
+    // For any videos in failedVideos that weren't in videoData, add them to failedVideosList
+    for (const [youtubeId, failureInfo] of errorTracker.failedVideos) {
+      if (!videoData.find(v => v.youtubeId === youtubeId)) {
+        failedVideosList.push({
+          youtubeId: youtubeId,
+          title: 'Unknown',
+          channel: 'Unknown',
+          error: failureInfo.error,
+          url: failureInfo.url
+        });
+        logger.warn({ youtubeId, error: failureInfo.error }, 'Video failed without metadata');
+      }
+    }
+
+    return { successfulVideos, failedVideosList };
+  }
+
+  async reconcileArchive({ allowRedownload, failedVideosList, videoData, errorTracker }) {
+    // Remove failed videos from the yt-dlp archive so they can be retried on the next run.
+    // yt-dlp writes to the archive BEFORE calling --exec (the post-processor), so when
+    // the post-processor fails (e.g. EACCES on NFS move), the video is stuck as archived
+    // but never actually made it to the final location. Without this cleanup, the video
+    // would be permanently skipped with "already been recorded in the archive".
+    if (!allowRedownload && failedVideosList.length > 0) {
+      const archiveModule = require('../archiveModule');
+      for (const failedVideo of failedVideosList) {
+        if (failedVideo.youtubeId) {
+          // Only remove from archive if the video was explicitly marked as failed during download.
+          // Videos classified as "failed" solely because stat/waitForFile couldn't confirm the file
+          // (e.g. NFS lag) may actually exist on disk; removing them would cause spurious re-downloads.
+          const wasExplicitlyFailed = errorTracker.failedVideos.has(failedVideo.youtubeId);
+          if (!wasExplicitlyFailed) {
+            logger.info({ youtubeId: failedVideo.youtubeId }, 'Skipping archive removal - video was not explicitly failed (file may exist but stat failed)');
+            continue;
+          }
+          const removed = await archiveModule.removeVideoFromArchive(failedVideo.youtubeId);
+          if (removed) {
+            logger.info({ youtubeId: failedVideo.youtubeId }, 'Removed failed video from archive for retry on next run');
+          }
+        }
+      }
+    }
+
+    // If allowRedownload is true, we need to manually update the archive since yt-dlp won't
+    if (allowRedownload && videoData.length > 0) {
+      const archiveModule = require('../archiveModule');
+      logger.debug({ videoCount: videoData.length }, 'Updating archive for videos (allowRedownload was true)');
+
+      for (const video of videoData) {
+        // Check for either video file or audio file (supports mp3_only mode)
+        const fileToCheck = video.filePath || video.audioFilePath;
+        if (video.youtubeId && fileToCheck) {
+          // Only add to archive if the file actually exists (was successfully downloaded)
+          const fs = require('fs');
+          if (fs.existsSync(fileToCheck)) {
+            await archiveModule.addVideoToArchive(video.youtubeId);
+          } else {
+            logger.debug({ youtubeId: video.youtubeId }, 'Skipping archive update - file not found');
+          }
+        }
+      }
+    }
+  }
+
+  // Post-completion cleanup, poster backfill, playlist hooks, Plex refresh, and
+  // next-job kickoff. Deliberately fire-and-forget except poster backfill.
+  async runCompletionSideEffects({ jobId, videoData, skipJobTransition }) {
+    // Clean up temporary channels file if it exists
+    if (this.tempChannelsFile) {
+      const fs = require('fs').promises;
+      fs.unlink(this.tempChannelsFile)
+        .then(() => {
+          logger.info('Cleaned up temporary channels file');
+          this.tempChannelsFile = null;
+        })
+        .catch((err) => {
+          logger.error({ err }, 'Failed to clean up temp channels file');
+        });
+    }
+
+    // Clean up all JobVideoDownload tracking entries for this job
+    JobVideoDownload.destroy({
+      where: { job_id: jobId }
+    }).then(count => {
+      if (count > 0) {
+        logger.info({ count }, 'Cleaned up JobVideoDownload tracking entries');
+      }
+    }).catch(err => {
+      logger.error({ err }, 'Error cleaning up JobVideoDownload entries');
+    });
+
+    // Backfill channel posters for channels with newly downloaded videos
+    if (videoData && videoData.length > 0) {
+      try {
+        const uniqueChannelIds = [...new Set(
+          videoData
+            .map(v => v.channel_id)
+            .filter(Boolean)
+        )];
+
+        if (uniqueChannelIds.length > 0) {
+          const channelsToBackfill = await Channel.findAll({
+            where: { channel_id: uniqueChannelIds }
+          });
+
+          if (channelsToBackfill.length > 0) {
+            await require('../channelModule').backfillChannelPosters(channelsToBackfill);
+            logger.info({ channelCount: channelsToBackfill.length }, 'Backfilled channel posters for downloaded videos');
+          }
+        }
+      } catch (err) {
+        logger.error({ err }, 'Error backfilling channel posters');
+        // Don't fail the job if poster backfill fails
+      }
+    }
+
+    // Trigger playlist M3U regeneration and media-server sync for any playlists
+    // that contain videos from this download batch.
+    if (videoData && videoData.length > 0) {
+      const downloadedIds = videoData.map((v) => v.youtubeId).filter(Boolean);
+      if (downloadedIds.length > 0) {
+        require('../downloadModule').afterDownloadHook(downloadedIds).catch((err) => {
+          logger.error({ err }, 'afterDownloadHook failed');
+        });
+      }
+    }
+
+    // Only refresh Plex and start next job if not processing multiple groups
+    if (!skipJobTransition) {
+      // Derive the set of subfolders from where each video actually ended up
+      // on disk. This mirrors reality (the post-processor may have placed
+      // each video under its channel-specific sub_folder) instead of relying
+      // on the job-level subfolderOverride, which is null for typical
+      // manual URL and non-grouped channel downloads.
+      const baseDir = configModule.directoryPath;
+      const subfoldersInUse = new Set();
+      for (const video of (videoData || [])) {
+        const mediaPath = video.filePath || video.audioFilePath;
+        if (!mediaPath) continue;
+        subfoldersInUse.add(filesystem.extractSubfolderFromAbsPath(mediaPath, baseDir));
+      }
+
+      if (subfoldersInUse.size > 0) {
+        // Defensive: refreshLibrary currently swallows errors internally
+        plexModule.refreshLibrariesForSubfolders([...subfoldersInUse]).catch(err => {
+          logger.error({ err }, 'Failed to refresh Plex libraries');
+        });
+      }
+
+      jobModule.startNextJob().catch(err => {
+        logger.error({ err }, 'Failed to start next job');
+      });
+    }
+  }
+
   async doDownload(args, jobId, jobType, urlCount = 0, originalUrls = null, allowRedownload = false, skipJobTransition = false, postProcessDirectives = {}) {
-    const {
-      subfolderOverride = null,
-      subfolderFallback = null,
-      ratingOverride = undefined,
-      ratingFallback = null,
-      skipVideoFolder = false,
-      ownerChannelId = null,
-      ownerChannelMap = null,
-    } = postProcessDirectives || {};
+    const subfolderOverride = (postProcessDirectives || {}).subfolderOverride ?? null;
     const initialCount = this.getCountOfDownloadedVideos();
     const config = configModule.getConfig();
     const monitor = new DownloadProgressMonitor(jobId, jobType);
@@ -599,9 +785,6 @@ class DownloadExecutor {
     // always be undefined. The run owns the aggregated summary for its jobs.
     const ownerJob = jobModule.getJob(jobId);
     const runId = ownerJob && ownerJob.data ? ownerJob.data.runId : null;
-
-    // Reset activity timeout to default at start of each job
-    this.currentActivityTimeout = this.activityTimeoutMs;
 
     // For specific URL-list downloads (manual or playlist), the video count is
     // known upfront, so seed the progress total instead of letting yt-dlp's
@@ -656,59 +839,11 @@ class DownloadExecutor {
 
     return new Promise((resolve, reject) => {
       logger.info({ jobType, args, subfolderOverride }, 'Running yt-dlp');
-      const procEnv = {
-        ...process.env,
-        YOUTARR_JOB_ID: jobId,
-        TMPDIR: tempPathManager.getTempBasePath()
-      };
-
-      // Pass subfolder override (hard, from dialog) to post-processor
-      if (subfolderOverride !== null && subfolderOverride !== undefined) {
-        procEnv.YOUTARR_SUBFOLDER_OVERRIDE = subfolderOverride;
-      }
-
-      // Pass subfolder soft fallback (playlist default); post-processor uses it
-      // only when the video's real channel is untracked
-      if (subfolderFallback !== null && subfolderFallback !== undefined) {
-        procEnv.YOUTARR_SUBFOLDER_FALLBACK = subfolderFallback;
-      }
-
-      // Pass skip video folder flag to post-processor
-      if (skipVideoFolder) {
-        procEnv.YOUTARR_SKIP_VIDEO_FOLDER = 'true';
-      }
-
-      // Pass explicit rating override (hard). null is the explicit "clear rating" sentinel -> 'NR'
-      if (ratingOverride !== undefined) {
-        procEnv.YOUTARR_OVERRIDE_RATING = ratingOverride === null ? 'NR' : String(ratingOverride);
-      }
-
-      // Pass rating soft fallback (playlist default); post-processor uses it only
-      // when the real channel has no default rating
-      if (ratingFallback !== null && ratingFallback !== undefined) {
-        procEnv.YOUTARR_RATING_FALLBACK = String(ratingFallback);
-      }
-
-      // Originating channel id (channel-page downloads); the post-processor
-      // prefers it over the video's own channel_id when resolving the owner.
-      if (ownerChannelId !== null && ownerChannelId !== undefined && String(ownerChannelId).trim() !== '') {
-        procEnv.YOUTARR_OWNER_CHANNEL_ID = String(ownerChannelId).trim();
-      }
-
-      // Per-video owner-channel map (playlist downloads). The post-processor
-      // looks up its own youtube_id, so a superset map is fine.
-      if (ownerChannelMap && typeof ownerChannelMap === 'object' && Object.keys(ownerChannelMap).length > 0) {
-        try {
-          const serialized = JSON.stringify(ownerChannelMap);
-          if (serialized.length <= OWNER_CHANNEL_MAP_MAX_BYTES) {
-            procEnv.YOUTARR_OWNER_CHANNEL_MAP = serialized;
-          } else {
-            logger.warn({ bytes: serialized.length }, 'owner channel map exceeds env size cap; per-video owner resolution skipped');
-          }
-        } catch (err) {
-          logger.warn({ err }, 'could not serialize owner channel map');
-        }
-      }
+      const procEnv = buildYtdlpEnv({
+        jobId,
+        tempBasePath: tempPathManager.getTempBasePath(),
+        postProcessDirectives,
+      });
 
       const proc = spawn('yt-dlp', args, { env: procEnv });
 
@@ -716,211 +851,34 @@ class DownloadExecutor {
       this.currentProcess = proc;
       this.currentJobId = jobId;
 
-      // Activity-based timeout tracking
-      let lastActivityTime = Date.now();
-      const jobStartTime = Date.now();
-      let timeoutChecker = null;
-      let gracefulShutdownInProgress = false;
-      let shutdownReason = null;
-
-      const resetActivityTimer = () => {
-        lastActivityTime = Date.now();
-      };
-
-      const checkTimeout = () => {
-        const now = Date.now();
-        const timeSinceActivity = now - lastActivityTime;
-        const totalRuntime = now - jobStartTime;
-
-        if (timeSinceActivity > this.currentActivityTimeout) {
-          return {
-            timeout: true,
-            reason: `No download activity for ${Math.round(timeSinceActivity / 60000)} minutes`
-          };
-        }
-
-        if (totalRuntime > this.maxAbsoluteTimeoutMs) {
-          return {
-            timeout: true,
-            reason: `Maximum runtime limit of ${Math.round(this.maxAbsoluteTimeoutMs / 3600000)} hours reached`
-          };
-        }
-
-        return { timeout: false };
-      };
-
-      const initiateGracefulShutdown = (reason) => {
-        if (gracefulShutdownInProgress) return;
-        gracefulShutdownInProgress = true;
-        shutdownReason = reason;
-
-        logger.info({ reason }, 'Initiating graceful shutdown');
-
-        // Send SIGTERM to allow process to finish current video
-        try {
-          proc.kill('SIGTERM');
-        } catch (err) {
-          logger.error({ err }, 'Error sending SIGTERM');
-        }
-
-        // Wait up to 60 seconds for graceful exit, then force kill
-        setTimeout(() => {
-          if (proc.exitCode === null && proc.signalCode === null) {
-            logger.info('Grace period expired, forcing kill with SIGKILL');
-            try {
-              proc.kill('SIGKILL');
-            } catch (err) {
-              logger.error({ err }, 'Error sending SIGKILL');
-            }
-          }
-        }, 60 * 1000);
-      };
-
-      // Check timeout periodically (every minute)
-      timeoutChecker = setInterval(() => {
-        const check = checkTimeout();
-        if (check.timeout) {
-          clearInterval(timeoutChecker);
-          timeoutChecker = null;
-          initiateGracefulShutdown(check.reason);
-        }
-      }, 60 * 1000); // Check every minute
-
-      // Initial activity
-      resetActivityTimer();
+      const timeoutController = new DownloadTimeoutController({
+        activityTimeoutMs: this.activityTimeoutMs,
+        postProcessingTimeoutMs: this.postProcessingTimeoutMs,
+        maxAbsoluteTimeoutMs: this.maxAbsoluteTimeoutMs,
+      });
+      timeoutController.start(proc);
 
       const partialDestinations = new Set();
       let httpForbiddenDetected = false;
       let cookiesSuggestionEmitted = false;
+      // Node may emit both 'error' and 'exit' for the same process (e.g. a
+      // failed kill() emits 'error' while the process runs on and exits
+      // later). Whichever handler runs first owns finalization; the other
+      // must not run, or the job gets finalized twice and startNextJob can
+      // launch a second concurrent download.
+      let finalized = false;
 
-      // Track failed videos with their error messages
-      const failedVideos = new Map(); // youtubeId -> { url, error, youtubeId }
-      // Count of yt-dlp errors that we treat as expected skips (members-only,
-      // upcoming live, premiere, etc.). Only the count drives downstream
-      // behavior; per-skip context goes to the structured log.
-      let expectedSkipCount = 0;
-      // Set of youtube_id values that yt-dlp specifically rejected as
-      // members-only. Tracked separately from expectedSkipCount so the final
-      // summary can call out membership-gated skips (the user can't fix
-      // those by waiting like with premieres). Set semantics dedupe across
-      // stdout+stderr emitting the same error for one video.
-      const membersOnlyVideoIds = new Set();
-      // Count of yt-dlp errors that are NOT expected skips. Incremented in
-      // both stdout and stderr handlers regardless of whether currentVideoId
-      // is known, so unassociated errors still block the
-      // "complete with only expected skips" classification.
-      let unexpectedErrorCount = 0;
-      // seenTerminatedChannelIds: sync dedupe across stdout/stderr.
-      // terminatedChannelIds: only successful persists; drives hasOnlyHandledErrors.
-      // terminatedChannels: rich entries for the summary, populated on success only.
-      // terminationFailures: channel ids the executor saw terminated but
-      //   couldn't auto-disable (row missing or update threw). Surfaced
-      //   separately so the multi-group finalizer can warn on them.
-      // terminatedPersistencePromises: awaited by the exit handler before final state.
-      const seenTerminatedChannelIds = new Set();
-      const terminatedChannelIds = new Set();
-      const terminatedChannels = [];
-      const terminationFailures = [];
-      const terminatedPersistencePromises = [];
-      let currentVideoId = null; // Track the current video being processed
-      let lastErrorMessage = null; // Store the last error message seen
-
-      const recordExpectedSkip = (reason, source) => {
-        expectedSkipCount += 1;
-        logger.info({ youtubeId: currentVideoId, reason, source }, 'Expected video skip from yt-dlp');
-      };
-
-      // Shared by stdout and stderr. Returns true when the line was consumed
-      // by an expected skip or termination, so the caller can suppress it.
-      const handleYtdlpErrorLine = (line, source) => {
-        const errorMatch = line.match(/ERROR:\s*(.+)/);
-        if (!errorMatch) return false;
-
-        lastErrorMessage = errorMatch[1].trim();
-
-        if (this.isExpectedYtdlpSkipMessage(lastErrorMessage)) {
-          recordExpectedSkip(lastErrorMessage, source);
-          if (this.isMembersOnlyMessage(lastErrorMessage)) {
-            const membersOnlyVideoId = this.extractYoutubeIdFromYtdlpError(lastErrorMessage) || currentVideoId;
-            if (membersOnlyVideoId) {
-              membersOnlyVideoIds.add(membersOnlyVideoId);
-              this.persistMembersOnlyAvailability(membersOnlyVideoId);
-            }
-          }
-          return true;
-        }
-
-        if (ytDlpRunner.isTerminatedAccountError(lastErrorMessage)) {
-          const channelId = this.extractChannelIdFromYtdlpError(lastErrorMessage);
-          if (channelId) {
-            if (!seenTerminatedChannelIds.has(channelId)) {
-              seenTerminatedChannelIds.add(channelId);
-              logger.warn({ channelId, source }, 'Detected terminated YouTube channel');
-
-              // Broadcast after the lookup so we can name the uploader, not
-              // the raw ID. Only mark as handled on success; persistence
-              // failure stays in the unexpected-error branch so we don't
-              // tell the user "disabled" when nothing was actually disabled.
-              const lookupPromise = this.persistTerminatedChannel(channelId).then(row => {
-                if (row) {
-                  terminatedChannelIds.add(channelId);
-                  terminatedChannels.push({
-                    channelId,
-                    uploader: row.uploader || null,
-                    url: row.url || null,
-                    terminatedAt: row.terminated_at || null
-                  });
-                  const displayName = row.uploader || channelId;
-                  MessageEmitter.emitMessage(
-                    'broadcast',
-                    null,
-                    'download',
-                    'downloadProgress',
-                    {
-                      text: `Channel "${displayName}" marked terminated by YouTube; scheduled downloads disabled`,
-                      progress: monitor.snapshot('warning'),
-                      warning: true
-                    }
-                  );
-                } else {
-                  unexpectedErrorCount += 1;
-                  terminationFailures.push(channelId);
-                  logger.warn({ channelId, source }, 'Termination detected but could not be auto-disabled; channel will continue to retry');
-                  MessageEmitter.emitMessage(
-                    'broadcast',
-                    null,
-                    'download',
-                    'downloadProgress',
-                    {
-                      text: `Channel ${channelId} reported as terminated by YouTube but could not be auto-disabled`,
-                      progress: monitor.snapshot('warning'),
-                      warning: true
-                    }
-                  );
-                }
-              });
-              terminatedPersistencePromises.push(lookupPromise);
-            }
-            return true;
-          }
-          // No channel id: fall through to the unexpected-error branch.
-        }
-
-        unexpectedErrorCount += 1;
-        const errorLogMessage = source === 'stderr'
-          ? 'Error detected in stderr'
-          : 'Error detected during download';
-        logger.warn({ error: lastErrorMessage, currentVideoId }, errorLogMessage);
-        if (currentVideoId && !failedVideos.has(currentVideoId)) {
-          failedVideos.set(currentVideoId, {
-            youtubeId: currentVideoId,
-            error: lastErrorMessage,
-            url: null
+      const errorTracker = new YtdlpErrorTracker({
+        persistMembersOnlyAvailability: (id) => this.persistMembersOnlyAvailability(id),
+        persistTerminatedChannel: (id) => this.persistTerminatedChannel(id),
+        emitWarningMessage: (text) => {
+          MessageEmitter.emitMessage('broadcast', null, 'download', 'downloadProgress', {
+            text,
+            progress: monitor.snapshot('warning'),
+            warning: true
           });
-          logger.info({ youtubeId: currentVideoId, error: lastErrorMessage }, 'Recorded video failure');
-        }
-        return false;
-      };
+        },
+      });
 
       const emitCookiesSuggestionMessage = () => {
         if (cookiesSuggestionEmitted) {
@@ -966,34 +924,7 @@ class DownloadExecutor {
           .forEach((line) => {
             logger.info({ source: 'yt-dlp' }, line);
 
-            // Track activity indicators and reset timeout
-            // For post-processing start patterns, extend timeout to 60 minutes
-            const isPostProcessingStart = line.includes('[Merger]') ||
-                                          line.includes('[Metadata]') ||
-                                          line.includes('[MoveFiles]') ||
-                                          line.includes('[ModifyChapters]') ||
-                                          line.includes('[ExtractAudio]');
-
-            const isDownloadActivity = line.includes('[download]') ||
-                                       line.includes('Downloading item');
-
-            if (isPostProcessingStart) {
-              this.currentActivityTimeout = this.postProcessingTimeoutMs;
-              resetActivityTimer();
-              logger.info({ timeout: '60 minutes' }, 'Post-processing detected, extended inactivity timeout');
-            } else if (isDownloadActivity) {
-              // Reset to normal 30-minute timeout when download activity resumes
-              if (this.currentActivityTimeout !== this.activityTimeoutMs) {
-                this.currentActivityTimeout = this.activityTimeoutMs;
-                logger.debug({ timeout: '30 minutes' }, 'Download activity resumed, reset to normal timeout');
-              }
-              resetActivityTimer();
-            } else if (line.includes('[SubtitlesConvertor]') ||
-                       line.includes('[ThumbnailsConvertor]') ||
-                       line.includes('Deleting original file')) {
-              // Other activity - just reset timer, keep current timeout
-              resetActivityTimer();
-            }
+            timeoutController.noteLine(line);
 
             // Track current video being processed
             if (line.includes('[youtube] Extracting URL:') && !line.includes('[youtube:tab]')) {
@@ -1003,10 +934,8 @@ class DownloadExecutor {
                 // Extract video ID from URL
                 const idMatch = url.match(/[?&]v=([^&]+)|youtu\.be\/([^?&]+)|\/watch\/([^?&]+)|\/([a-zA-Z0-9_-]{10,12})$/);
                 if (idMatch) {
-                  currentVideoId = idMatch[1] || idMatch[2] || idMatch[3] || idMatch[4];
-                  logger.debug({ currentVideoId, url }, 'Tracking video extraction');
-                  // Clear any previous error for this video
-                  lastErrorMessage = null;
+                  errorTracker.trackVideoStart(idMatch[1] || idMatch[2] || idMatch[3] || idMatch[4]);
+                  logger.debug({ currentVideoId: errorTracker.currentVideoId, url }, 'Tracking video extraction');
                 }
               }
             }
@@ -1022,8 +951,8 @@ class DownloadExecutor {
                 if (youtubeId) {
                   // Update current video ID if we can extract it from the path
                   if (filesystem.isMainVideoFile(destPath)) {
-                    currentVideoId = youtubeId;
-                    logger.debug({ currentVideoId, destPath }, 'Updated current video ID from destination');
+                    errorTracker.trackVideoFromDestination(youtubeId);
+                    logger.debug({ currentVideoId: errorTracker.currentVideoId, destPath }, 'Updated current video ID from destination');
                   }
 
                   const videoDir = path.dirname(destPath);
@@ -1045,11 +974,11 @@ class DownloadExecutor {
               }
             }
 
-            // Suppress the line when handleYtdlpErrorLine consumed it
+            // Suppress the line when errorTracker.handleErrorLine consumed it
             // (expected skip or termination).
             let suppressErrorLine = false;
             if (line.includes('ERROR:')) {
-              suppressErrorLine = handleYtdlpErrorLine(line, 'stdout');
+              suppressErrorLine = errorTracker.handleErrorLine(line, 'stdout');
             }
 
             if (suppressErrorLine) {
@@ -1067,7 +996,7 @@ class DownloadExecutor {
               if (jsonProgress) {
                 structuredProgress = jsonProgress;
                 // Reset timer on actual progress updates
-                resetActivityTimer();
+                timeoutController.noteActivity();
               }
             }
 
@@ -1105,7 +1034,7 @@ class DownloadExecutor {
             .map(line => line.trim())
             .filter(line => line.includes('ERROR:'))
             .forEach(line => {
-              handleYtdlpErrorLine(line, 'stderr');
+              errorTracker.handleErrorLine(line, 'stderr');
             });
         }
 
@@ -1127,746 +1056,418 @@ class DownloadExecutor {
       });
 
       proc.on('exit', async (code, signal) => {
-        // Clean up timeout checker
-        if (timeoutChecker) {
-          clearInterval(timeoutChecker);
-          timeoutChecker = null;
-        }
+        if (finalized) return;
+        finalized = true;
+        // True once the job's terminal status has been persisted; the catch
+        // below must not overwrite it with 'Error' for failures that happen
+        // after that point (broadcast, run tracking, completion side effects).
+        let terminalUpdateDone = false;
+        try {
+          timeoutController.stop();
 
-        // Clear force kill timeout if it exists
-        if (this.forceKillTimeout) {
-          clearTimeout(this.forceKillTimeout);
-          this.forceKillTimeout = null;
-        }
-
-        // Clear pending progress timer if it exists
-        if (this.progressFlushTimer) {
-          clearTimeout(this.progressFlushTimer);
-          this.progressFlushTimer = null;
-        }
-        this.flushPendingProgressMessage();
-
-        // Check for manual termination before clearing references
-        const wasManuallyTerminated = this.manualTerminationReason !== null;
-        const manualReason = this.manualTerminationReason;
-
-        // Reset activity timeout to default for next job
-        this.currentActivityTimeout = this.activityTimeoutMs;
-
-        // Clear current process references
-        this.currentProcess = null;
-        this.currentJobId = null;
-        this.manualTerminationReason = null;
-
-        // Also check the complete stderr buffer for bot detection
-        if (!botDetected && stderrBuffer &&
-            stderrBuffer.includes('Sign in to confirm') &&
-            stderrBuffer.includes('not a bot')) {
-          botDetected = true;
-          logger.info('Bot detection found in stderr buffer');
-        }
-
-        if (!httpForbiddenDetected && stderrBuffer) {
-          const lowerStderr = stderrBuffer.toLowerCase();
-          if (lowerStderr.includes('http error 403') || lowerStderr.includes('403: forbidden')) {
-            httpForbiddenDetected = true;
-            logger.info('HTTP 403 detected in stderr buffer');
-            emitCookiesSuggestionMessage();
+          if (this.forceKillTimeout) {
+            clearTimeout(this.forceKillTimeout);
+            this.forceKillTimeout = null;
           }
-        }
 
-        // Wait for terminated-channel lookups before deriving finalState.
-        // Without this barrier the final broadcast can ship raw channel IDs.
-        if (terminatedPersistencePromises.length > 0) {
-          await Promise.allSettled(terminatedPersistencePromises);
-        }
-
-        let urlsToProcess;
-        if (isSpecificUrlDownloadJob(jobType) && originalUrls) {
-          urlsToProcess = originalUrls.map(url => {
-            // Convert full YouTube URLs to youtu.be format for consistency
-            if (url.includes('youtube.com/watch?v=')) {
-              const videoId = url.split('v=')[1].split('&')[0];
-              logger.debug({ url, convertedUrl: `https://youtu.be/${videoId}` }, 'Converting YouTube URL format');
-              return `https://youtu.be/${videoId}`;
-            }
-            return url;
-          });
-        } else {
-          urlsToProcess = this.getNewVideoUrls(initialCount);
-        }
-
-        // Populate URLs in failedVideos Map
-        for (const url of urlsToProcess) {
-          const videoId = url.split('youtu.be/')[1]?.trim().split('?')[0].split('&')[0];
-          if (videoId && failedVideos.has(videoId)) {
-            const failureInfo = failedVideos.get(videoId);
-            failureInfo.url = url;
-            failedVideos.set(videoId, failureInfo);
+          if (this.progressFlushTimer) {
+            clearTimeout(this.progressFlushTimer);
+            this.progressFlushTimer = null;
           }
-        }
+          this.flushPendingProgressMessage();
 
-        const videoCount = urlsToProcess.length;
-        let videoData = await VideoMetadataProcessor.processVideoMetadata(urlsToProcess);
+          // Check for manual termination before clearing references
+          const wasManuallyTerminated = this.manualTerminationReason !== null;
+          const manualReason = this.manualTerminationReason;
 
-        // Separate successful videos (with actual video files) from failed videos
-        const successfulVideos = [];
-        const failedVideosList = [];
+          this.currentProcess = null;
+          this.currentJobId = null;
+          this.manualTerminationReason = null;
 
-        for (const video of videoData) {
-          // Check if this video was explicitly marked as failed during download
-          const wasMarkedFailed = failedVideos.has(video.youtubeId);
-
-          // Check if video or audio file actually exists and has size
-          // For video_mp3 mode: both fileSize and audioFileSize will be set
-          // For mp3_only mode: only audioFileSize will be set
-          // For standard video: only fileSize will be set
-          const hasVideoFile = video.fileSize && video.fileSize !== 'null' && video.fileSize !== '0';
-          const hasAudioFile = video.audioFileSize && video.audioFileSize !== 'null' && video.audioFileSize !== '0';
-          const hasAnyFile = hasVideoFile || hasAudioFile;
-
-          if (wasMarkedFailed || !hasAnyFile) {
-            // This video failed
-            const failureInfo = failedVideos.get(video.youtubeId) || {
-              youtubeId: video.youtubeId,
-              error: hasAnyFile ? 'Unknown error' : 'Media file not found or incomplete',
-              url: urlsToProcess.find(u => u.includes(video.youtubeId))
-            };
-
-            failedVideosList.push({
-              youtubeId: video.youtubeId,
-              title: video.youTubeVideoName,
-              channel: video.youTubeChannelName,
-              error: failureInfo.error,
-              url: failureInfo.url
-            });
-
-            logger.warn({
-              youtubeId: video.youtubeId,
-              error: failureInfo.error,
-              hasVideoFile,
-              hasAudioFile
-            }, 'Download failed');
-          } else {
-            // This video succeeded
-            successfulVideos.push(video);
+          // Also check the complete stderr buffer for bot detection
+          if (!botDetected && stderrBuffer &&
+              stderrBuffer.includes('Sign in to confirm') &&
+              stderrBuffer.includes('not a bot')) {
+            botDetected = true;
+            logger.info('Bot detection found in stderr buffer');
           }
-        }
 
-        // For any videos in failedVideos that weren't in videoData, add them to failedVideosList
-        for (const [youtubeId, failureInfo] of failedVideos) {
-          if (!videoData.find(v => v.youtubeId === youtubeId)) {
-            failedVideosList.push({
-              youtubeId: youtubeId,
-              title: 'Unknown',
-              channel: 'Unknown',
-              error: failureInfo.error,
-              url: failureInfo.url
-            });
-            logger.warn({ youtubeId, error: failureInfo.error }, 'Video failed without metadata');
-          }
-        }
-
-        // Use successful videos for further processing (archive, database, etc.)
-        videoData = successfulVideos;
-
-        // Remove failed videos from the yt-dlp archive so they can be retried on the next run.
-        // yt-dlp writes to the archive BEFORE calling --exec (the post-processor), so when
-        // the post-processor fails (e.g. EACCES on NFS move), the video is stuck as archived
-        // but never actually made it to the final location. Without this cleanup, the video
-        // would be permanently skipped with "already been recorded in the archive".
-        if (!allowRedownload && failedVideosList.length > 0) {
-          const archiveModule = require('../archiveModule');
-          for (const failedVideo of failedVideosList) {
-            if (failedVideo.youtubeId) {
-              // Only remove from archive if the video was explicitly marked as failed during download.
-              // Videos classified as "failed" solely because stat/waitForFile couldn't confirm the file
-              // (e.g. NFS lag) may actually exist on disk — removing them would cause spurious re-downloads.
-              const wasExplicitlyFailed = failedVideos.has(failedVideo.youtubeId);
-              if (!wasExplicitlyFailed) {
-                logger.info({ youtubeId: failedVideo.youtubeId }, 'Skipping archive removal — video was not explicitly failed (file may exist but stat failed)');
-                continue;
-              }
-              const removed = await archiveModule.removeVideoFromArchive(failedVideo.youtubeId);
-              if (removed) {
-                logger.info({ youtubeId: failedVideo.youtubeId }, 'Removed failed video from archive for retry on next run');
-              }
+          if (!httpForbiddenDetected && stderrBuffer) {
+            const lowerStderr = stderrBuffer.toLowerCase();
+            if (lowerStderr.includes('http error 403') || lowerStderr.includes('403: forbidden')) {
+              httpForbiddenDetected = true;
+              logger.info('HTTP 403 detected in stderr buffer');
+              emitCookiesSuggestionMessage();
             }
           }
-        }
 
-        // If allowRedownload is true, we need to manually update the archive since yt-dlp won't
-        if (allowRedownload && videoData.length > 0) {
-          const archiveModule = require('../archiveModule');
-          logger.debug({ videoCount: videoData.length }, 'Updating archive for videos (allowRedownload was true)');
+          // Wait for terminated-channel lookups before deriving finalState.
+          await errorTracker.settlePersistence();
 
-          for (const video of videoData) {
-            // Check for either video file or audio file (supports mp3_only mode)
-            const fileToCheck = video.filePath || video.audioFilePath;
-            if (video.youtubeId && fileToCheck) {
-              // Only add to archive if the file actually exists (was successfully downloaded)
-              const fs = require('fs');
-              if (fs.existsSync(fileToCheck)) {
-                await archiveModule.addVideoToArchive(video.youtubeId);
-              } else {
-                logger.debug({ youtubeId: video.youtubeId }, 'Skipping archive update - file not found');
-              }
-            }
-          }
-        }
+          const urlsToProcess = this.resolveUrlsToProcess(jobType, originalUrls, initialCount);
 
-        logger.info({ jobType, jobId }, 'Job complete (with or without errors)');
+          const videoCount = urlsToProcess.length;
+          let videoData = await VideoMetadataProcessor.processVideoMetadata(urlsToProcess);
 
-        // yt-dlp exited with code 1 only because every error it emitted was an
-        // expected skip (members-only, upcoming live, premiere, etc.). Treat
-        // these as a clean completion rather than a failure. unexpectedErrorCount
-        // catches real ERRORs that miss failedVideosList because currentVideoId
-        // was null (covers both stdout and stderr). monitor.hasError on its own
-        // would only catch the stdout path.
-        const hasOnlyExpectedSkips = code === 1 &&
-          expectedSkipCount > 0 &&
-          failedVideosList.length === 0 &&
-          unexpectedErrorCount === 0 &&
-          !botDetected &&
-          !httpForbiddenDetected;
+          const { successfulVideos, failedVideosList } = this.partitionDownloadResults(videoData, errorTracker, urlsToProcess);
+          // Use successful videos for further processing (archive, database, etc.)
+          videoData = successfulVideos;
 
-        // Like hasOnlyExpectedSkips but also admits recognized terminations.
-        // Mixed failure modes still report as an error.
-        const hasOnlyHandledErrors = code === 1 &&
-          (expectedSkipCount > 0 || terminatedChannelIds.size > 0) &&
-          failedVideosList.length === 0 &&
-          unexpectedErrorCount === 0 &&
-          !botDetected &&
-          !httpForbiddenDetected;
+          await this.reconcileArchive({ allowRedownload, failedVideosList, videoData, errorTracker });
 
-        if (terminatedChannelIds.size > 0) {
-          logger.warn({ terminatedChannels }, 'Channels marked terminated during this job');
-        }
+          logger.info({ jobType, jobId }, 'Job complete (with or without errors)');
 
-        let status = '';
-        let output = '';
-        let jobErrorCode;
-
-        // Check for bot detection first
-        if (botDetected) {
-          status = 'Error';
-          output = 'Bot detection encountered. Please set cookies in your Configuration.';
-
-          await this.persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, failedVideosList);
-          await jobModule.updateJob(jobId, {
-            status: status,
-            endDate: Date.now(),
-            output: output,
-            data: {
-              videos: videoData || [],
-              failedVideos: failedVideosList || [],
-              terminatedChannels: [...terminatedChannels],
-              totalTerminatedChannels: terminatedChannelIds.size,
-              terminationFailures: [...terminationFailures],
-              totalTerminationFailures: terminationFailures.length
-            },
-            notes: 'YouTube requires authentication. Enable cookies in Configuration to resolve this issue.',
-            error: 'COOKIES_REQUIRED'
-          });
-          jobErrorCode = 'COOKIES_REQUIRED';
-        } else if (gracefulShutdownInProgress || shutdownReason || wasManuallyTerminated) {
-          // Handle timeout/graceful shutdown or manual termination
-          await this.cleanupInProgressVideos(jobId);
-
-          const completedCount = videoData.length;
-          status = 'Terminated';
-          output = `${completedCount} video${completedCount !== 1 ? 's' : ''} completed before termination`;
-
-          const terminationReason = wasManuallyTerminated
-            ? manualReason
-            : (shutdownReason || 'Download terminated due to timeout');
-
-          // Persist videos to DB BEFORE calling updateJob
-          // This ensures videos are in DB before updateJob reloads from DB
-          await this.persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, failedVideosList);
-
-          await jobModule.updateJob(jobId, {
-            status: status,
-            endDate: Date.now(),
-            output: output,
-            data: {
-              videos: videoData || [],
-              failedVideos: failedVideosList || [],
-              terminatedChannels: [...terminatedChannels],
-              totalTerminatedChannels: terminatedChannelIds.size,
-              terminationFailures: [...terminationFailures],
-              totalTerminationFailures: terminationFailures.length
-            },
-            notes: terminationReason,
+          const flags = computeOutcomeFlags({
+            code,
+            expectedSkipCount: errorTracker.expectedSkipCount,
+            terminatedChannelCount: errorTracker.terminatedChannelIds.size,
+            failedCount: failedVideosList.length,
+            unexpectedErrorCount: errorTracker.unexpectedErrorCount,
+            botDetected,
+            httpForbiddenDetected
           });
 
-          logger.info({ terminationReason, completedCount, failedCount: failedVideosList.length }, 'Job terminated, saved completed videos');
-        } else if (code !== 0) {
-          // Download actually failed (non-zero exit code)
-          await this.cleanupPartialFiles(Array.from(partialDestinations));
+          const dataPayload = buildJobDataPayload({
+            videoData,
+            failedVideosList,
+            terminatedChannels: errorTracker.terminatedChannels,
+            terminatedChannelIds: errorTracker.terminatedChannelIds,
+            terminationFailures: errorTracker.terminationFailures
+          });
 
-          const failureDetails = monitor.lastParsed || null;
-
-          status = signal === 'SIGKILL' ? 'Killed' : 'Error';
-          const hasPartialSuccess = code === 1 && videoData.length > 0;
-          let notes;
-          let errorCode;
-
-          // Provide more helpful error messages based on what we detected
-          if (hasOnlyExpectedSkips && terminatedChannelIds.size === 0) {
-            status = 'Complete';
-            output = `${videoCount} videos.`;
-          } else if (hasOnlyHandledErrors && terminatedChannelIds.size > 0) {
-            // Code 1 but every error was recognized: warning-shaped success.
-            output = `${videoCount} videos, ${terminatedChannelIds.size} channel${terminatedChannelIds.size !== 1 ? 's' : ''} marked terminated.`;
-            notes = `${terminatedChannelIds.size} channel${terminatedChannelIds.size !== 1 ? 's' : ''} marked terminated by YouTube`;
-          } else if (httpForbiddenDetected) {
-            // Failed with 403 errors - likely authentication issue
-            output = `${videoCount} videos. Error: YouTube returned HTTP 403 (Forbidden)`;
-            notes = 'YouTube denied access (HTTP 403). Configure cookies in Settings to resolve this issue.';
-            errorCode = 'COOKIES_RECOMMENDED';
-          } else {
-            // Failed with other error
-            output = `${videoCount} videos. Error: Command exited with code ${code}`;
-
-            // Add stall detection note if applicable
-            const failureReason = failureDetails && failureDetails.stalled
-              ? `stall detected at ${failureDetails.progress.percent.toFixed(1)}% (${Math.round(
-                failureDetails.progress.speedBytesPerSecond / 1024
-              )} KiB/s)`
-              : signal || `exit ${code}`;
-            notes = hasPartialSuccess
-              ? `Some videos failed (${failureReason})`
-              : `Download failed (${failureReason})`;
+          if (errorTracker.terminatedChannelIds.size > 0) {
+            logger.warn({ terminatedChannels: errorTracker.terminatedChannels }, 'Channels marked terminated during this job');
           }
 
-          if (errorCode) {
-            jobErrorCode = errorCode;
-          }
+          let status = '';
+          let output = '';
+          let jobErrorCode;
 
-          if (skipJobTransition) {
-            await this.saveIntermediateGroupResults(
-              jobId,
-              output,
-              videoData,
-              failedVideosList,
-              monitor.videoCount.skipped || 0,
-              {
-                notes: notes,
-                ...(errorCode ? { error: errorCode } : {})
-              },
-              [...terminatedChannels],
-              [...terminationFailures]
-            );
-          } else {
+          if (botDetected) {
+            status = 'Error';
+            output = 'Bot detection encountered. Please set cookies in your Configuration.';
+
             await this.persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, failedVideosList);
-            let terminalStatus = status;
-            if (hasOnlyHandledErrors && terminatedChannelIds.size > 0) {
-              terminalStatus = 'Complete with Warnings';
-            } else if (hasOnlyExpectedSkips) {
-              terminalStatus = 'Complete';
-            } else if (hasPartialSuccess) {
-              terminalStatus = 'Complete with Warnings';
-            }
             await jobModule.updateJob(jobId, {
-              status: terminalStatus,
+              status: status,
               endDate: Date.now(),
               output: output,
-              data: {
-                videos: videoData || [],
-                failedVideos: failedVideosList || [],
-                terminatedChannels: [...terminatedChannels],
-                totalTerminatedChannels: terminatedChannelIds.size,
-                terminationFailures: [...terminationFailures],
-                totalTerminationFailures: terminationFailures.length
-              },
-              notes: notes,
-              ...(errorCode ? { error: errorCode } : {})
+              data: dataPayload,
+              notes: 'YouTube requires authentication. Enable cookies in Configuration to resolve this issue.',
+              error: 'COOKIES_REQUIRED'
             });
-          }
-        } else if (stderrBuffer && !monitor.hasError && !this.stderrHasOnlyBenignWarnings(stderrBuffer)) {
-          status = 'Complete with Warnings';
-          output = `${videoCount} videos.`;
-          // When skipJobTransition is true, we're processing multiple groups
-          // Don't mark as complete yet - just save the videos
-          if (skipJobTransition) {
-            await this.saveIntermediateGroupResults(
-              jobId,
-              output,
-              videoData,
-              failedVideosList,
-              monitor.videoCount.skipped || 0,
-              {},
-              [...terminatedChannels],
-              [...terminationFailures]
-            );
-          } else {
-            // For manual/single downloads, persist to DB BEFORE calling updateJob
-            // This ensures videos are in DB before updateJob reloads from DB
+            jobErrorCode = 'COOKIES_REQUIRED';
+          } else if (timeoutController.shutdownInProgress || timeoutController.shutdownReason || wasManuallyTerminated) {
+            // Handle timeout/graceful shutdown or manual termination
+            await this.cleanupInProgressVideos(jobId);
+
+            const completedCount = videoData.length;
+            status = 'Terminated';
+            output = `${completedCount} video${completedCount !== 1 ? 's' : ''} completed before termination`;
+
+            const terminationReason = wasManuallyTerminated
+              ? manualReason
+              : (timeoutController.shutdownReason || 'Download terminated due to timeout');
+
+            // Persist videos to DB before updateJob reloads them from DB.
             await this.persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, failedVideosList);
 
             await jobModule.updateJob(jobId, {
               status: status,
+              endDate: Date.now(),
               output: output,
-              data: {
-                videos: videoData,
-                failedVideos: failedVideosList || [],
-                terminatedChannels: [...terminatedChannels],
-                totalTerminatedChannels: terminatedChannelIds.size,
-                terminationFailures: [...terminationFailures],
-                totalTerminationFailures: terminationFailures.length
-              },
+              data: dataPayload,
+              notes: terminationReason,
             });
-          }
-        } else {
-          // Upgrade to warning shape when terminations were recorded.
-          if (terminatedChannelIds.size > 0) {
-            status = 'Complete with Warnings';
-            output = `${videoCount} videos, ${terminatedChannelIds.size} channel${terminatedChannelIds.size !== 1 ? 's' : ''} marked terminated.`;
-          } else {
-            status = 'Complete';
-            output = `${videoCount} videos.`;
-          }
-          // When skipJobTransition is true, we're processing multiple groups
-          // Don't mark as complete yet - just save the videos
-          if (skipJobTransition) {
-            await this.saveIntermediateGroupResults(
-              jobId,
-              output,
-              videoData,
-              failedVideosList,
-              monitor.videoCount.skipped || 0,
-              {},
-              [...terminatedChannels],
-              [...terminationFailures]
-            );
-          } else {
-            // For manual/single downloads, persist to DB BEFORE calling updateJob
-            // This ensures videos are in DB before updateJob reloads from DB
-            await this.persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, failedVideosList);
 
-            await jobModule.updateJob(jobId, {
-              status: status,
-              output: output,
-              data: {
-                videos: videoData,
-                failedVideos: failedVideosList || [],
-                terminatedChannels: [...terminatedChannels],
-                totalTerminatedChannels: terminatedChannelIds.size,
-                terminationFailures: [...terminationFailures],
-                totalTerminationFailures: terminationFailures.length
-              },
+            logger.info({ terminationReason, completedCount, failedCount: failedVideosList.length }, 'Job terminated, saved completed videos');
+          } else if (code !== 0) {
+            // Download actually failed (non-zero exit code)
+            await this.cleanupPartialFiles(Array.from(partialDestinations));
+
+            const failureDetails = monitor.lastParsed || null;
+
+            const nonZero = describeNonZeroExit({
+              code,
+              signal,
+              videoCount,
+              videoDataCount: videoData.length,
+              terminatedChannelCount: errorTracker.terminatedChannelIds.size,
+              httpForbiddenDetected,
+              flags,
+              failureDetails
             });
-          }
-        }
+            status = nonZero.status;
+            output = nonZero.output;
 
-        // Consider it successful if:
-        // - Exit code is 0 (normal success), OR
-        // - Exit code is 1 with stderr warnings but videos were processed (yt-dlp returns 1 for warnings)
-        // - We found new video files that were downloaded
-        // Only treat as real error if exit code > 1, was killed, or nothing was processed
-        const hasProcessedVideos = (monitor.videoCount.completed > 0 || monitor.videoCount.skipped > 0);
-        const hasDownloadedNewVideos = videoCount > 0;
-        const isWarningOnly = (code === 1 && !monitor.hasError && (hasProcessedVideos || hasDownloadedNewVideos));
-
-        // If videos failed but some succeeded, treat as warning rather than complete error
-        const hasFailures = failedVideosList.length > 0;
-        const hasSuccesses = videoData.length > 0;
-        const hasNonFatalPartialSuccess = code === 1 && hasSuccesses;
-
-        const hasOnlySuccessfulTerminationsOnCleanExit = code === 0 &&
-          terminatedChannelIds.size > 0 &&
-          failedVideosList.length === 0 &&
-          unexpectedErrorCount === 0 &&
-          !botDetected &&
-          !httpForbiddenDetected;
-
-        let finalState;
-        if ((hasOnlyHandledErrors && terminatedChannelIds.size > 0) || hasOnlySuccessfulTerminationsOnCleanExit) {
-          // Warning-shaped when the only detected issue is a handled
-          // terminated channel, including when --ignore-errors exits 0.
-          finalState = 'warning';
-        } else if (code === 0 || hasOnlyExpectedSkips) {
-          finalState = hasFailures ? 'warning' : 'complete';
-        } else if (isWarningOnly || hasNonFatalPartialSuccess) {
-          finalState = 'warning';
-        } else {
-          finalState = 'error';
-        }
-
-        logger.debug({
-          code,
-          hasProcessedVideos,
-          hasDownloadedNewVideos,
-          isWarningOnly,
-          hasError: monitor.hasError,
-          hasFailures,
-          hasSuccesses,
-          hasNonFatalPartialSuccess,
-          expectedSkipCount,
-          unexpectedErrorCount,
-          hasOnlyExpectedSkips,
-          hasOnlyHandledErrors,
-          terminatedChannelCount: terminatedChannelIds.size,
-          successCount: videoData.length,
-          failureCount: failedVideosList.length,
-          finalState
-        }, 'Final state determination');
-
-        // Create a more informative final message
-        let finalText;
-        let finalErrorCode = jobErrorCode;
-        if (gracefulShutdownInProgress || shutdownReason || wasManuallyTerminated) {
-          finalState = 'terminated';
-          const completedCount = videoData.length;
-          const reason = wasManuallyTerminated ? manualReason : shutdownReason;
-          finalText = `Download terminated: ${reason}. ${completedCount} video${completedCount !== 1 ? 's' : ''} completed successfully.`;
-        } else if (botDetected) {
-          finalState = 'failed';
-          finalErrorCode = 'COOKIES_REQUIRED';
-          finalText = 'Download failed: Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.';
-        } else if (monitor.hasError && finalState === 'complete' && !hasOnlyHandledErrors) {
-          // Don't let a recognized termination flip the state back to error
-          // via DownloadProgressMonitor's broad hasError flag.
-          finalState = 'error';
-          finalText = 'Download failed';
-        } else if (finalState === 'complete' || finalState === 'warning') {
-          const actualCount = videoData.length;
-          const skippedCount = monitor.videoCount.skipped || 0;
-          const failedCount = failedVideosList.length;
-          const terminatedCount = terminatedChannelIds.size;
-          const terminationFailureCount = terminationFailures.length;
-
-          // Build message parts
-          const parts = [];
-          if (actualCount > 0) {
-            parts.push(`${actualCount} video${actualCount !== 1 ? 's' : ''} downloaded`);
-          }
-          if (failedCount > 0) {
-            parts.push(`${failedCount} failed`);
-          }
-          if (skippedCount > 0) {
-            parts.push(`${skippedCount} already existed`);
-          }
-          if (terminatedCount > 0) {
-            parts.push(`${terminatedCount} channel${terminatedCount !== 1 ? 's' : ''} marked terminated`);
-          }
-          if (terminationFailureCount > 0) {
-            parts.push(`${terminationFailureCount} termination${terminationFailureCount !== 1 ? 's' : ''} could not be auto-disabled`);
-          }
-
-          if (parts.length > 0) {
-            const statusText = finalState === 'warning' ? 'completed with errors' : 'completed';
-            finalText = `Download ${statusText}: ${parts.join(', ')}`;
-          } else {
-            finalText = 'Download completed: No new videos to download';
-          }
-        } else {
-          finalText = 'Download failed';
-        }
-
-        // Make sure final counts are accurate
-        if (monitor.videoCount.completed === 0 && videoData.length > 0 && (finalState === 'complete' || finalState === 'warning')) {
-          monitor.videoCount.completed = videoData.length;
-        }
-
-        const isFinalError = finalState !== 'complete' && finalState !== 'warning';
-        const finalProgress = monitor.snapshot(finalState);
-        const finalPayload = {
-          text: finalText,
-          progress: finalProgress
-        };
-
-        // When this job belongs to a run, the run owns the summary and notification.
-        const runActive = !skipJobTransition && downloadRunTracker.isActive(runId);
-
-        // Only include finalSummary if this is the final completion (not an intermediate group)
-        // For multi-group downloads, skipJobTransition=true means more groups are coming
-        if (!skipJobTransition && !runActive) {
-          finalPayload.finalSummary = {
-            // Use actual videoData.length for successful downloads
-            totalDownloaded: videoData.length,
-            totalSkipped: monitor.videoCount.skipped || 0,
-            totalFailed: failedVideosList.length,
-            totalMembersOnly: membersOnlyVideoIds.size,
-            totalTerminatedChannels: terminatedChannelIds.size,
-            totalTerminationFailures: terminationFailures.length,
-            failedVideos: failedVideosList,
-            terminatedChannels: [...terminatedChannels],
-            terminationFailures: [...terminationFailures],
-            jobType: jobType,
-            completedAt: new Date().toISOString()
-          };
-        }
-
-        if (finalState === 'terminated') {
-          // Terminated jobs are warnings, not full errors
-          finalPayload.warning = true;
-          finalPayload.terminationReason = wasManuallyTerminated ? manualReason : shutdownReason;
-        } else if (finalState === 'warning') {
-          // Partial failures - some videos succeeded, some failed
-          finalPayload.warning = true;
-          if (finalErrorCode) {
-            finalPayload.errorCode = finalErrorCode;
-          }
-        } else if (isFinalError) {
-          // Complete failure
-          finalPayload.error = true;
-          if (finalErrorCode) {
-            finalPayload.errorCode = finalErrorCode;
-          }
-        }
-
-        MessageEmitter.emitMessage(
-          'broadcast',
-          null,
-          'download',
-          'downloadProgress',
-          finalPayload
-        );
-
-        // Fold this job's totals into the run; it emits one aggregated summary + notification when its last job finishes.
-        if (runActive) {
-          downloadRunTracker.recordJobResult(runId, jobId, {
-            totalDownloaded: videoData.length,
-            totalSkipped: monitor.videoCount.skipped || 0,
-            totalFailed: failedVideosList.length,
-            totalMembersOnly: membersOnlyVideoIds.size,
-            failedVideos: failedVideosList,
-            terminatedChannels: [...terminatedChannels],
-            terminationFailures: [...terminationFailures],
-            videoData: videoData,
-            jobType,
-          });
-        }
-
-        // Send notification if download was successful and notifications are enabled
-        // Skip notifications for intermediate groups (only send for final completion)
-        if ((finalState === 'complete' || finalState === 'warning') && !isFinalError && !skipJobTransition && !runActive) {
-          const notificationModule = require('../notificationModule');
-          notificationModule.sendDownloadNotification({
-            finalSummary: finalPayload.finalSummary,
-            videoData: videoData,
-            channelName: monitor.currentChannelName
-          }).catch(err => {
-            logger.error({ err }, 'Failed to send notification');
-            // Continue execution - don't crash if notification fails
-          });
-        }
-
-        // Clean up temporary channels file if it exists
-        if (this.tempChannelsFile) {
-          const fs = require('fs').promises;
-          fs.unlink(this.tempChannelsFile)
-            .then(() => {
-              logger.info('Cleaned up temporary channels file');
-              this.tempChannelsFile = null;
-            })
-            .catch((err) => {
-              logger.error({ err }, 'Failed to clean up temp channels file');
-            });
-        }
-
-        // Clean up all JobVideoDownload tracking entries for this job
-        JobVideoDownload.destroy({
-          where: { job_id: jobId }
-        }).then(count => {
-          if (count > 0) {
-            logger.info({ count }, 'Cleaned up JobVideoDownload tracking entries');
-          }
-        }).catch(err => {
-          logger.error({ err }, 'Error cleaning up JobVideoDownload entries');
-        });
-
-        // Backfill channel posters for channels with newly downloaded videos
-        if (videoData && videoData.length > 0) {
-          try {
-            // Extract unique channel IDs from downloaded videos
-            const uniqueChannelIds = [...new Set(
-              videoData
-                .map(v => v.channel_id)
-                .filter(Boolean)
-            )];
-
-            if (uniqueChannelIds.length > 0) {
-              const channelsToBackfill = await Channel.findAll({
-                where: { channel_id: uniqueChannelIds }
-              });
-
-              if (channelsToBackfill.length > 0) {
-                await require('../channelModule').backfillChannelPosters(channelsToBackfill);
-                logger.info({ channelCount: channelsToBackfill.length }, 'Backfilled channel posters for downloaded videos');
-              }
+            if (nonZero.errorCode) {
+              jobErrorCode = nonZero.errorCode;
             }
-          } catch (err) {
-            logger.error({ err }, 'Error backfilling channel posters');
-            // Don't fail the job if poster backfill fails
-          }
-        }
 
-        // Trigger playlist M3U regeneration and media-server sync for any playlists
-        // that contain videos from this download batch.
-        if (videoData && videoData.length > 0) {
-          const downloadedIds = videoData.map((v) => v.youtubeId).filter(Boolean);
-          if (downloadedIds.length > 0) {
-            require('../downloadModule').afterDownloadHook(downloadedIds).catch((err) => {
-              logger.error({ err }, 'afterDownloadHook failed');
-            });
-          }
-        }
+            if (skipJobTransition) {
+              await this.saveIntermediateGroupResults(
+                jobId,
+                output,
+                videoData,
+                failedVideosList,
+                monitor.videoCount.skipped || 0,
+                {
+                  notes: nonZero.notes,
+                  ...(nonZero.errorCode ? { error: nonZero.errorCode } : {})
+                },
+                [...errorTracker.terminatedChannels],
+                [...errorTracker.terminationFailures]
+              );
+            } else {
+              await this.persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, failedVideosList);
+              const terminalStatus = resolveTerminalStatus({
+                status: nonZero.status,
+                flags,
+                terminatedChannelCount: errorTracker.terminatedChannelIds.size,
+                hasPartialSuccess: nonZero.hasPartialSuccess
+              });
+              await jobModule.updateJob(jobId, {
+                status: terminalStatus,
+                endDate: Date.now(),
+                output: output,
+                data: dataPayload,
+                notes: nonZero.notes,
+                ...(nonZero.errorCode ? { error: nonZero.errorCode } : {})
+              });
+            }
+          } else if (stderrBuffer && !monitor.hasError && !this.stderrHasOnlyBenignWarnings(stderrBuffer)) {
+            status = 'Complete with Warnings';
+            output = `${videoCount} videos.`;
+            // Intermediate group: just save videos, don't mark complete yet.
+            if (skipJobTransition) {
+              await this.saveIntermediateGroupResults(
+                jobId,
+                output,
+                videoData,
+                failedVideosList,
+                monitor.videoCount.skipped || 0,
+                {},
+                [...errorTracker.terminatedChannels],
+                [...errorTracker.terminationFailures]
+              );
+            } else {
+              // Persist videos to DB before updateJob reloads them from DB.
+              await this.persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, failedVideosList);
 
-        // Only refresh Plex and start next job if not processing multiple groups
-        if (!skipJobTransition) {
-          // Derive the set of subfolders from where each video actually ended up
-          // on disk. This mirrors reality (the post-processor may have placed
-          // each video under its channel-specific sub_folder) instead of relying
-          // on the job-level subfolderOverride, which is null for typical
-          // manual URL and non-grouped channel downloads.
-          const baseDir = configModule.directoryPath;
-          const subfoldersInUse = new Set();
-          for (const video of (videoData || [])) {
-            const mediaPath = video.filePath || video.audioFilePath;
-            if (!mediaPath) continue;
-            subfoldersInUse.add(filesystem.extractSubfolderFromAbsPath(mediaPath, baseDir));
+              await jobModule.updateJob(jobId, {
+                status: status,
+                output: output,
+                data: dataPayload,
+              });
+            }
+          } else {
+            // Upgrade to warning shape when terminations were recorded.
+            if (errorTracker.terminatedChannelIds.size > 0) {
+              status = 'Complete with Warnings';
+              output = `${videoCount} videos, ${errorTracker.terminatedChannelIds.size} channel${errorTracker.terminatedChannelIds.size !== 1 ? 's' : ''} marked terminated.`;
+            } else {
+              status = 'Complete';
+              output = `${videoCount} videos.`;
+            }
+            // Intermediate group: just save videos, don't mark complete yet.
+            if (skipJobTransition) {
+              await this.saveIntermediateGroupResults(
+                jobId,
+                output,
+                videoData,
+                failedVideosList,
+                monitor.videoCount.skipped || 0,
+                {},
+                [...errorTracker.terminatedChannels],
+                [...errorTracker.terminationFailures]
+              );
+            } else {
+              // Persist videos to DB before updateJob reloads them from DB.
+              await this.persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, failedVideosList);
+
+              await jobModule.updateJob(jobId, {
+                status: status,
+                output: output,
+                data: dataPayload,
+              });
+            }
           }
 
-          if (subfoldersInUse.size > 0) {
-            // Defensive: refreshLibrary currently swallows errors internally
-            plexModule.refreshLibrariesForSubfolders([...subfoldersInUse]).catch(err => {
-              logger.error({ err }, 'Failed to refresh Plex libraries');
-            });
-          }
+          // Every branch above ends in exactly one terminal persist
+          // (updateJob or saveIntermediateGroupResults).
+          terminalUpdateDone = true;
 
-          jobModule.startNextJob().catch(err => {
-            logger.error({ err }, 'Failed to start next job');
+          const wasTerminated = Boolean(timeoutController.shutdownInProgress || timeoutController.shutdownReason || wasManuallyTerminated);
+          const presentation = resolveFinalPresentation({
+            code,
+            jobErrorCode,
+            wasTerminated,
+            terminationReason: wasManuallyTerminated ? manualReason : timeoutController.shutdownReason,
+            botDetected,
+            monitorHasError: monitor.hasError,
+            flags,
+            videoDataCount: videoData.length,
+            failedCount: failedVideosList.length,
+            skippedCount: monitor.videoCount.skipped || 0,
+            terminatedChannelCount: errorTracker.terminatedChannelIds.size,
+            terminationFailureCount: errorTracker.terminationFailures.length,
+            videoCount,
+            monitorCompletedCount: monitor.videoCount.completed,
+            unexpectedErrorCount: errorTracker.unexpectedErrorCount,
+            httpForbiddenDetected
           });
+          const { debugFlags } = presentation;
+
+          logger.debug({
+            code,
+            hasProcessedVideos: debugFlags.hasProcessedVideos,
+            hasDownloadedNewVideos: debugFlags.hasDownloadedNewVideos,
+            isWarningOnly: debugFlags.isWarningOnly,
+            hasError: monitor.hasError,
+            hasFailures: debugFlags.hasFailures,
+            hasSuccesses: debugFlags.hasSuccesses,
+            hasNonFatalPartialSuccess: debugFlags.hasNonFatalPartialSuccess,
+            expectedSkipCount: errorTracker.expectedSkipCount,
+            unexpectedErrorCount: errorTracker.unexpectedErrorCount,
+            hasOnlyExpectedSkips: flags.hasOnlyExpectedSkips,
+            hasOnlyHandledErrors: flags.hasOnlyHandledErrors,
+            terminatedChannelCount: errorTracker.terminatedChannelIds.size,
+            successCount: videoData.length,
+            failureCount: failedVideosList.length,
+            finalState: debugFlags.finalState
+          }, 'Final state determination');
+
+          const { finalState, finalText, finalErrorCode } = presentation;
+
+          // Make sure final counts are accurate
+          if (monitor.videoCount.completed === 0 && videoData.length > 0 && (finalState === 'complete' || finalState === 'warning')) {
+            monitor.videoCount.completed = videoData.length;
+          }
+
+          const isFinalError = finalState !== 'complete' && finalState !== 'warning';
+          const finalProgress = monitor.snapshot(finalState);
+          const finalPayload = {
+            text: finalText,
+            progress: finalProgress
+          };
+
+          // When this job belongs to a run, the run owns the summary and notification.
+          const runActive = !skipJobTransition && downloadRunTracker.isActive(runId);
+
+          // Only include finalSummary if this is the final completion (not an intermediate group)
+          // For multi-group downloads, skipJobTransition=true means more groups are coming
+          if (!skipJobTransition && !runActive) {
+            finalPayload.finalSummary = {
+              // Use actual videoData.length for successful downloads
+              totalDownloaded: videoData.length,
+              totalSkipped: monitor.videoCount.skipped || 0,
+              totalFailed: failedVideosList.length,
+              totalMembersOnly: errorTracker.membersOnlyVideoIds.size,
+              totalTerminatedChannels: errorTracker.terminatedChannelIds.size,
+              totalTerminationFailures: errorTracker.terminationFailures.length,
+              failedVideos: failedVideosList,
+              terminatedChannels: [...errorTracker.terminatedChannels],
+              terminationFailures: [...errorTracker.terminationFailures],
+              jobType: jobType,
+              completedAt: new Date().toISOString()
+            };
+          }
+
+          if (finalState === 'terminated') {
+            // Terminated jobs are warnings, not full errors
+            finalPayload.warning = true;
+            finalPayload.terminationReason = wasManuallyTerminated ? manualReason : timeoutController.shutdownReason;
+          } else if (finalState === 'warning') {
+            // Partial failures - some videos succeeded, some failed
+            finalPayload.warning = true;
+            if (finalErrorCode) {
+              finalPayload.errorCode = finalErrorCode;
+            }
+          } else if (isFinalError) {
+            // Complete failure
+            finalPayload.error = true;
+            if (finalErrorCode) {
+              finalPayload.errorCode = finalErrorCode;
+            }
+          }
+
+          MessageEmitter.emitMessage(
+            'broadcast',
+            null,
+            'download',
+            'downloadProgress',
+            finalPayload
+          );
+
+          // Fold this job's totals into the run; it emits one aggregated summary + notification when its last job finishes.
+          if (runActive) {
+            downloadRunTracker.recordJobResult(runId, jobId, {
+              totalDownloaded: videoData.length,
+              totalSkipped: monitor.videoCount.skipped || 0,
+              totalFailed: failedVideosList.length,
+              totalMembersOnly: errorTracker.membersOnlyVideoIds.size,
+              failedVideos: failedVideosList,
+              terminatedChannels: [...errorTracker.terminatedChannels],
+              terminationFailures: [...errorTracker.terminationFailures],
+              videoData: videoData,
+              jobType,
+            });
+          }
+
+          // Send notification if download was successful and notifications are enabled
+          // Skip notifications for intermediate groups (only send for final completion)
+          if ((finalState === 'complete' || finalState === 'warning') && !isFinalError && !skipJobTransition && !runActive) {
+            const notificationModule = require('../notificationModule');
+            notificationModule.sendDownloadNotification({
+              finalSummary: finalPayload.finalSummary,
+              videoData: videoData,
+              channelName: monitor.currentChannelName
+            }).catch(err => {
+              logger.error({ err }, 'Failed to send notification');
+              // Continue execution - don't crash if notification fails
+            });
+          }
+
+          await this.runCompletionSideEffects({ jobId, videoData, skipJobTransition });
+          resolve();
+        } catch (err) {
+          // Finalization failed partway (e.g. DB outage). Without this catch the
+          // promise never settles, the job stays 'In Progress' forever, and the
+          // queue stalls.
+          logger.error({ err, jobId }, 'Unexpected error finalizing download job');
+          if (!terminalUpdateDone) {
+            await jobModule.updateJob(jobId, {
+              status: 'Error',
+              endDate: Date.now(),
+              output: 'Job finalization error: ' + err.message,
+            }).catch((dbErr) => logger.debug({ err: dbErr, jobId }, 'Best-effort error update failed'));
+          }
+          if (!skipJobTransition) {
+            jobModule.startNextJob().catch(err2 => {
+              logger.error({ err: err2 }, 'Failed to start next job');
+            });
+          }
+          // Resolve, not reject: the outer .catch would double-update the job.
+          resolve();
         }
-        resolve();
       });
 
       proc.on('error', async (err) => {
-        if (timeoutChecker) {
-          clearInterval(timeoutChecker);
-          timeoutChecker = null;
-        }
+        if (finalized) return;
+        finalized = true;
+        timeoutController.stop();
 
-        // Clear force kill timeout if it exists
         if (this.forceKillTimeout) {
           clearTimeout(this.forceKillTimeout);
           this.forceKillTimeout = null;
         }
 
-        // Clear pending progress timer if it exists
         if (this.progressFlushTimer) {
           clearTimeout(this.progressFlushTimer);
           this.progressFlushTimer = null;
         }
         this.flushPendingProgressMessage();
 
-        // Reset activity timeout to default for next job
-        this.currentActivityTimeout = this.activityTimeoutMs;
-
-        // Clear current process references
         this.currentProcess = null;
         this.currentJobId = null;
 
@@ -1886,12 +1487,21 @@ class DownloadExecutor {
         this.tempChannelsFile = null;
       }
 
-      // This catch block is now only for unexpected errors, not timeouts
-      // Timeouts are handled gracefully in the exit handler
+      // This catch block only handles spawn/process errors rejected via
+      // proc.on('error'); the exit handler catches its own finalization errors
       await jobModule.updateJob(jobId, {
         status: 'Error',
+        endDate: Date.now(),
         output: 'Download process error: ' + error.message,
+      }).catch((err) => {
+        logger.error({ err, jobId }, 'Failed to mark job as errored after process error');
       });
+
+      if (!skipJobTransition) {
+        jobModule.startNextJob().catch(err => {
+          logger.error({ err }, 'Failed to start next job');
+        });
+      }
     });
   }
 

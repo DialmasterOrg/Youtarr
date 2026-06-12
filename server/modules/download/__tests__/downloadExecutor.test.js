@@ -1598,6 +1598,187 @@ describe('DownloadExecutor', () => {
         'Running yt-dlp'
       );
     });
+
+    describe('finalization error handling', () => {
+      it('should resolve, mark the job Error, and start next job when finalization fails after clean exit', async () => {
+        jobModule.updateJob.mockRejectedValueOnce(new Error('db down'));
+
+        setTimeout(() => {
+          mockProcess.emit('exit', 0, null);
+        }, 10);
+
+        await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+        expect(logger.error).toHaveBeenCalledWith(
+          expect.objectContaining({ err: expect.any(Error), jobId: mockJobId }),
+          'Unexpected error finalizing download job'
+        );
+        expect(jobModule.updateJob).toHaveBeenCalledWith(
+          mockJobId,
+          expect.objectContaining({
+            status: 'Error',
+            endDate: expect.any(Number),
+            output: expect.stringContaining('Job finalization error: db down')
+          })
+        );
+        expect(jobModule.startNextJob).toHaveBeenCalled();
+      });
+
+      it('should resolve without starting next job when finalization fails and skipJobTransition is true', async () => {
+        // getJob must return a job so the skipJobTransition path reaches
+        // saveIntermediateGroupResults' updateJob call, which then rejects.
+        jobModule.getJob.mockReturnValue({ id: mockJobId, data: {} });
+        jobModule.updateJob.mockRejectedValueOnce(new Error('db down'));
+
+        setTimeout(() => {
+          mockProcess.emit('exit', 0, null);
+        }, 10);
+
+        await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, true);
+
+        expect(jobModule.updateJob).toHaveBeenCalledWith(
+          mockJobId,
+          expect.objectContaining({
+            status: 'Error',
+            endDate: expect.any(Number),
+            output: expect.stringContaining('Job finalization error: db down')
+          })
+        );
+        expect(jobModule.startNextJob).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('spawn error handling', () => {
+      it('should mark the job Error with endDate and start next job on process spawn error', async () => {
+        setTimeout(() => {
+          mockProcess.emit('error', new Error('spawn yt-dlp ENOENT'));
+        }, 5);
+
+        await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+        expect(jobModule.updateJob).toHaveBeenCalledWith(
+          mockJobId,
+          expect.objectContaining({
+            status: 'Error',
+            endDate: expect.any(Number),
+            output: expect.stringContaining('Download process error: spawn yt-dlp ENOENT')
+          })
+        );
+        expect(jobModule.startNextJob).toHaveBeenCalled();
+      });
+
+      it('should not start next job on process spawn error when skipJobTransition is true', async () => {
+        setTimeout(() => {
+          mockProcess.emit('error', new Error('spawn yt-dlp ENOENT'));
+        }, 5);
+
+        await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, true);
+
+        expect(jobModule.updateJob).toHaveBeenCalledWith(
+          mockJobId,
+          expect.objectContaining({
+            status: 'Error',
+            output: expect.stringContaining('Download process error: spawn yt-dlp ENOENT')
+          })
+        );
+        expect(jobModule.startNextJob).not.toHaveBeenCalled();
+      });
+
+      it('should still settle and start next job when updateJob rejects during spawn error handling', async () => {
+        jobModule.updateJob.mockRejectedValueOnce(new Error('db down'));
+
+        setTimeout(() => {
+          mockProcess.emit('error', new Error('spawn yt-dlp ENOENT'));
+        }, 5);
+
+        await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+        expect(logger.error).toHaveBeenCalledWith(
+          expect.objectContaining({ err: expect.any(Error), jobId: mockJobId }),
+          'Failed to mark job as errored after process error'
+        );
+        expect(jobModule.startNextJob).toHaveBeenCalled();
+      });
+    });
+
+    describe('exit/error double-fire guard', () => {
+      it('ignores a late exit event after the error handler already finalized', async () => {
+        setTimeout(() => {
+          mockProcess.emit('error', new Error('kill EPERM'));
+        }, 5);
+
+        await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+        const updateCalls = jobModule.updateJob.mock.calls.length;
+        const startNextCalls = jobModule.startNextJob.mock.calls.length;
+        expect(startNextCalls).toBe(1);
+
+        // Node may emit 'exit' after 'error' for the same process; the exit
+        // handler must not finalize the job a second time or start another job.
+        mockProcess.emit('exit', 0, null);
+        await new Promise((resolve) => setImmediate(resolve));
+
+        expect(jobModule.updateJob.mock.calls.length).toBe(updateCalls);
+        expect(jobModule.startNextJob.mock.calls.length).toBe(startNextCalls);
+      });
+
+      it('ignores a late error event after the exit handler already finalized', async () => {
+        setTimeout(() => {
+          mockProcess.emit('exit', 0, null);
+        }, 5);
+
+        await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+        const updateCalls = jobModule.updateJob.mock.calls.length;
+
+        mockProcess.emit('error', new Error('late kill failure'));
+        await new Promise((resolve) => setImmediate(resolve));
+
+        expect(jobModule.updateJob.mock.calls.length).toBe(updateCalls);
+        expect(
+          jobModule.updateJob.mock.calls.find(
+            (c) => c[1].output && String(c[1].output).includes('Download process error')
+          )
+        ).toBeUndefined();
+      });
+    });
+
+    describe('terminal status preservation', () => {
+      it('does not overwrite a persisted Complete status when a post-persist step throws', async () => {
+        // The final broadcast (the only emit carrying finalSummary) throws
+        // AFTER the terminal updateJob has already persisted 'Complete'.
+        MessageEmitter.emitMessage.mockImplementation((dest, clientId, src, type, payload) => {
+          if (payload && payload.finalSummary) {
+            throw new Error('websocket emit failed');
+          }
+        });
+
+        setTimeout(() => {
+          mockProcess.emit('exit', 0, null);
+        }, 10);
+
+        try {
+          await executor.doDownload(mockArgs, mockJobId, mockJobType);
+        } finally {
+          MessageEmitter.emitMessage.mockReset();
+        }
+
+        expect(logger.error).toHaveBeenCalledWith(
+          expect.objectContaining({ err: expect.any(Error), jobId: mockJobId }),
+          'Unexpected error finalizing download job'
+        );
+        expect(jobModule.updateJob).toHaveBeenCalledWith(
+          mockJobId,
+          expect.objectContaining({ status: 'Complete' })
+        );
+        expect(
+          jobModule.updateJob.mock.calls.find(
+            (c) => c[1].output && String(c[1].output).includes('Job finalization error')
+          )
+        ).toBeUndefined();
+        expect(jobModule.startNextJob).toHaveBeenCalled();
+      });
+    });
   });
 
   describe('failed video tracking', () => {
@@ -2289,80 +2470,6 @@ describe('DownloadExecutor', () => {
     });
   });
 
-  describe('isExpectedYtdlpSkipMessage', () => {
-    it.each([
-      'ERROR: [youtube] abc123: Join this channel to get access to members-only content like this video, and other exclusive perks.',
-      'ERROR: [youtube] abc123: This video is available to this channel\'s members on level: Assistant (or any higher level).',
-      'ERROR: [youtube] abc123: This live event will begin in 21 hours.',
-      'WARNING: [youtube] This live event will begin in a few moments.',
-      'ERROR: [youtube] abc123: Premiere will begin shortly.',
-      'ERROR: [youtube] abc123: This pre-release video is not yet available.'
-    ])('should identify expected skip text: %s', (message) => {
-      expect(executor.isExpectedYtdlpSkipMessage(message)).toBe(true);
-    });
-
-    it.each([
-      'ERROR: [youtube] abc123: Private video. Sign in if you have been granted access.',
-      'ERROR: [youtube] abc123: Sign in to confirm you are not a bot.',
-      'ERROR: [youtube] abc123: HTTP Error 403: Forbidden',
-      'ERROR: [youtube] abc123: Video unavailable. This content is not available.',
-      'ERROR: [youtube] abc123: The following content is not available on this app.'
-    ])('should not classify real failures as expected skips: %s', (message) => {
-      expect(executor.isExpectedYtdlpSkipMessage(message)).toBe(false);
-    });
-  });
-
-  describe('isMembersOnlyMessage', () => {
-    it.each([
-      'ERROR: [youtube] abc123: Join this channel to get access to members-only content like this video, and other exclusive perks.',
-      'ERROR: [youtube] abc123: This video is available to this channel\'s members on level: Assistant (or any higher level).',
-      'ERROR: [youtube] abc123: members-only content',
-      'ERROR: [youtube] abc123: subscriber_only',
-    ])('should match members-only patterns: %s', (message) => {
-      expect(executor.isMembersOnlyMessage(message)).toBe(true);
-    });
-
-    it.each([
-      'ERROR: [youtube] abc123: This live event will begin in 21 hours.',
-      'WARNING: [youtube] This live event will begin in a few moments.',
-      'ERROR: [youtube] abc123: Premiere will begin shortly.',
-      'ERROR: [youtube] abc123: This pre-release video is not yet available.',
-      'ERROR: [youtube] abc123: Release time of video is not known.',
-      'ERROR: [youtube] abc123: Sign in to confirm you are not a bot.',
-    ])('should NOT match premiere, pre-release, or unrelated patterns: %s', (message) => {
-      expect(executor.isMembersOnlyMessage(message)).toBe(false);
-    });
-  });
-
-  describe('extractYoutubeIdFromYtdlpError', () => {
-    it('should extract the authoritative youtube id from yt-dlp error text', () => {
-      const message = 'ERROR: [youtube] OOUclRI0Ae4: Join this channel to get access to members-only content.';
-
-      expect(executor.extractYoutubeIdFromYtdlpError(message)).toBe('OOUclRI0Ae4');
-    });
-
-    it('should return null when yt-dlp error text has no video id', () => {
-      expect(executor.extractYoutubeIdFromYtdlpError('members-only content')).toBeNull();
-    });
-  });
-
-  describe('extractChannelIdFromYtdlpError', () => {
-    it('extracts the canonical channel_id from a [youtube:tab] error line', () => {
-      const message = 'ERROR: [youtube:tab] UC1lg-nYUcZ1pjo6EC2Nj5Sw: YouTube said: This account has been terminated for violating Google\'s Terms of Service.';
-      expect(executor.extractChannelIdFromYtdlpError(message)).toBe('UC1lg-nYUcZ1pjo6EC2Nj5Sw');
-    });
-
-    it('returns null when the line is a [youtube] (video) error rather than [youtube:tab]', () => {
-      const message = 'ERROR: [youtube] OOUclRI0Ae4: Join this channel to get access to members-only content.';
-      expect(executor.extractChannelIdFromYtdlpError(message)).toBeNull();
-    });
-
-    it('returns null when no UC... id is present', () => {
-      expect(executor.extractChannelIdFromYtdlpError('account has been terminated for violating')).toBeNull();
-      expect(executor.extractChannelIdFromYtdlpError('')).toBeNull();
-    });
-  });
-
   describe('persistTerminatedChannel', () => {
     beforeEach(() => {
       Channel.findOne.mockReset();
@@ -2961,6 +3068,112 @@ describe('DownloadExecutor', () => {
       // Timer should be cleared
       expect(executor.progressFlushTimer).toBeNull();
       expect(executor.pendingProgressMessage).toBeNull();
+    });
+  });
+
+  describe('doDownload timeout handling', () => {
+    const mockArgs = ['--format', 'best', 'https://youtube.com/watch?v=test'];
+    const mockJobId = 'job-123';
+    const mockJobType = 'Channel Downloads';
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.runOnlyPendingTimers();
+      jest.useRealTimers();
+    });
+
+    it('sends SIGTERM after 30 minutes of no activity', async () => {
+      const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+      // Let the pre-spawn awaits (cleanTempDirectory, health check) settle
+      await jest.advanceTimersByTimeAsync(0);
+      expect(mockSpawn).toHaveBeenCalled();
+
+      await jest.advanceTimersByTimeAsync(31 * 60 * 1000);
+      expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM');
+
+      // Process exits during grace period -> job is Terminated with timeout note
+      mockProcess.exitCode = null;
+      mockProcess.signalCode = 'SIGTERM';
+      mockProcess.emit('exit', null, 'SIGTERM');
+      await jest.advanceTimersByTimeAsync(0);
+      await downloadPromise;
+
+      const updateCall = jobModule.updateJob.mock.calls.find(
+        (c) => c[1].status === 'Terminated'
+      );
+      expect(updateCall).toBeDefined();
+      expect(updateCall[1].notes).toMatch(/No download activity for \d+ minutes/);
+    });
+
+    it('escalates to SIGKILL when grace period expires', async () => {
+      executor.doDownload(mockArgs, mockJobId, mockJobType).catch(() => {});
+      await jest.advanceTimersByTimeAsync(0);
+
+      await jest.advanceTimersByTimeAsync(31 * 60 * 1000);
+      expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM');
+
+      // Still running after 60s grace
+      mockProcess.exitCode = null;
+      mockProcess.signalCode = null;
+      await jest.advanceTimersByTimeAsync(60 * 1000);
+      expect(mockProcess.kill).toHaveBeenCalledWith('SIGKILL');
+    });
+
+    it('post-processing output extends the inactivity timeout to 60 minutes', async () => {
+      executor.doDownload(mockArgs, mockJobId, mockJobType).catch(() => {});
+      await jest.advanceTimersByTimeAsync(0);
+
+      // 25 min idle, then a Merger line resets the clock and extends to 60 min
+      await jest.advanceTimersByTimeAsync(25 * 60 * 1000);
+      mockProcess.stdout.emit('data', Buffer.from('[Merger] Merging formats\n'));
+
+      // 45 more minutes: would have fired under the 30-min rule, must not fire now
+      await jest.advanceTimersByTimeAsync(45 * 60 * 1000);
+      expect(mockProcess.kill).not.toHaveBeenCalled();
+
+      // 20 more minutes (65 since last activity) -> fires
+      await jest.advanceTimersByTimeAsync(20 * 60 * 1000);
+      expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM');
+    });
+
+    it('download activity resets the extended timeout back to 30 minutes', async () => {
+      executor.doDownload(mockArgs, mockJobId, mockJobType).catch(() => {});
+      await jest.advanceTimersByTimeAsync(0);
+
+      mockProcess.stdout.emit('data', Buffer.from('[Merger] Merging formats\n'));
+      mockProcess.stdout.emit('data', Buffer.from('[download]   1.0% of 100MiB\n'));
+
+      await jest.advanceTimersByTimeAsync(31 * 60 * 1000);
+      expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM');
+    });
+
+    it('enforces the 6-hour absolute runtime cap despite ongoing activity', async () => {
+      const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+      await jest.advanceTimersByTimeAsync(0);
+
+      // Keep emitting activity every 10 minutes for 6+ hours
+      for (let i = 0; i < 37; i++) {
+        mockProcess.stdout.emit('data', Buffer.from('[download]   1.0% of 100MiB\n'));
+        await jest.advanceTimersByTimeAsync(10 * 60 * 1000);
+      }
+      expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM');
+
+      // Exit during the grace period and confirm the absolute cap (not the
+      // inactivity timeout) is what fired
+      mockProcess.exitCode = null;
+      mockProcess.signalCode = 'SIGTERM';
+      mockProcess.emit('exit', null, 'SIGTERM');
+      await jest.advanceTimersByTimeAsync(0);
+      await downloadPromise;
+
+      const updateCall = jobModule.updateJob.mock.calls.find(
+        (c) => c[1].status === 'Terminated'
+      );
+      expect(updateCall).toBeDefined();
+      expect(updateCall[1].notes).toMatch(/Maximum runtime limit/);
     });
   });
 });
