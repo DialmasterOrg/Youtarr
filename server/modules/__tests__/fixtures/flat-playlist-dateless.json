@@ -1,0 +1,97 @@
+{
+  "id": "UCfQgsKhHjSyRLOp9mnffqVg",
+  "channel": "Renaissance Periodization",
+  "channel_id": "UCfQgsKhHjSyRLOp9mnffqVg",
+  "title": "Renaissance Periodization - Videos",
+  "uploader": "Renaissance Periodization",
+  "uploader_id": "@RenaissancePeriodization",
+  "uploader_url": "https://www.youtube.com/@RenaissancePeriodization",
+  "channel_url": "https://www.youtube.com/channel/UCfQgsKhHjSyRLOp9mnffqVg",
+  "_type": "playlist",
+  "extractor_key": "YoutubeTab",
+  "extractor": "youtube:tab",
+  "webpage_url": "https://www.youtube.com/channel/UCfQgsKhHjSyRLOp9mnffqVg/videos",
+  "original_url": "https://www.youtube.com/channel/UCfQgsKhHjSyRLOp9mnffqVg/videos",
+  "entries": [
+    {
+      "title": "Exercise Scientist Critiques Dr. Berg’s Dangerous Health Advice",
+      "thumbnails": [
+        {
+          "url": "https://i.ytimg.com/vi/57xw33VP67c/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLCjHnso3zXiwI7FBaWcoK0y44-F8g",
+          "height": 94,
+          "width": 168
+        }
+      ],
+      "duration": 1301,
+      "timestamp": null,
+      "ie_key": "Youtube",
+      "id": "57xw33VP67c",
+      "_type": "url",
+      "url": "https://www.youtube.com/watch?v=57xw33VP67c"
+    },
+    {
+      "title": "Exercise Scientist Critiques Dr. Berg’s Dangerous Health Advice UNCENSORED",
+      "thumbnails": [
+        {
+          "url": "https://i.ytimg.com/vi/ZXcdRt8pGvo/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLCkyvdjPu8JLQv467vwS__AUFtxlw",
+          "height": 94,
+          "width": 168
+        }
+      ],
+      "duration": 2192,
+      "timestamp": null,
+      "ie_key": "Youtube",
+      "id": "ZXcdRt8pGvo",
+      "_type": "url",
+      "url": "https://www.youtube.com/watch?v=ZXcdRt8pGvo"
+    },
+    {
+      "title": "The Smartest Way to Do Cardio for Fat Loss and Health",
+      "thumbnails": [
+        {
+          "url": "https://i.ytimg.com/vi/0r_AlKrc70c/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLDXzlgjBDBRiu8FGIb93Y67gj5AAQ",
+          "height": 94,
+          "width": 168
+        }
+      ],
+      "duration": 1288,
+      "timestamp": null,
+      "ie_key": "Youtube",
+      "id": "0r_AlKrc70c",
+      "_type": "url",
+      "url": "https://www.youtube.com/watch?v=0r_AlKrc70c"
+    },
+    {
+      "title": "Who Knows More About Fitness: Gym Girls or Gym Boys?",
+      "thumbnails": [
+        {
+          "url": "https://i.ytimg.com/vi/mWe60vjvNSQ/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLC4TXKDUE9h3j3S9jQggiE2q3sugA",
+          "height": 94,
+          "width": 168
+        }
+      ],
+      "duration": 1122,
+      "timestamp": null,
+      "ie_key": "Youtube",
+      "id": "mWe60vjvNSQ",
+      "_type": "url",
+      "url": "https://www.youtube.com/watch?v=mWe60vjvNSQ"
+    },
+    {
+      "title": "Can the Gym Fix Depression?",
+      "thumbnails": [
+        {
+          "url": "https://i.ytimg.com/vi/S6bPaV38WYY/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLCSrxtqK7Yq0Gg0GvE58tRPOdH4WA",
+          "height": 94,
+          "width": 168
+        }
+      ],
+      "duration": 1320,
+      "timestamp": null,
+      "ie_key": "Youtube",
+      "id": "S6bPaV38WYY",
+      "_type": "url",
+      "url": "https://www.youtube.com/watch?v=S6bPaV38WYY"
+    }
+  ]
+}

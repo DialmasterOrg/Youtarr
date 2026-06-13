@@ -28,6 +28,7 @@ jest.mock('../../models/channelvideo', () => {
   MockChannelVideo.findOrCreate = jest.fn();
   MockChannelVideo.count = jest.fn();
   MockChannelVideo.findOne = jest.fn();
+  MockChannelVideo.update = jest.fn();
   MockChannelVideo.init = jest.fn(() => MockChannelVideo);
   return MockChannelVideo;
 });
@@ -957,15 +958,41 @@ describe('ChannelModule', () => {
     });
 
     describe('insertVideosIntoDb', () => {
+      // insertVideosIntoDb runs in two phases: phase 1 upserts fields and sets
+      // the initial date on CREATE (via findOrCreate defaults); phase 2 runs the
+      // shared anchoring algorithm over the whole batch and persists the final
+      // dates for non-created/changed rows via ChannelVideo.update(..., {where:{id}}).
+
+      // Make findOrCreate echo the defaults back as a created record (with an id
+      // and update stub) so phase-2 sees a realistic created row.
+      const echoCreates = (existingByYoutubeId = {}) => {
+        let nextId = 100;
+        ChannelVideo.findOrCreate.mockImplementation(async ({ where, defaults }) => {
+          const existing = existingByYoutubeId[where.youtube_id];
+          if (existing) return [existing, false];
+          return [
+            {
+              id: nextId++,
+              publishedAt: defaults.publishedAt,
+              published_at_source: defaults.published_at_source,
+              update: jest.fn(),
+            },
+            true,
+          ];
+        });
+      };
+
+      // Collect phase-2 date writes as { id, publishedAt, published_at_source }.
+      const dateWrites = () =>
+        ChannelVideo.update.mock.calls.map(([fields, opts]) => ({ id: opts.where.id, ...fields }));
+
       test('should insert new videos into database', async () => {
         const videos = [
           { ...mockVideoData, youtube_id: 'video1' },
           { ...mockVideoData, youtube_id: 'video2' }
         ];
 
-        ChannelVideo.findOrCreate
-          .mockResolvedValueOnce([{}, true])
-          .mockResolvedValueOnce([{}, true]);
+        echoCreates();
 
         await ChannelModule.insertVideosIntoDb(videos, 'UC123');
 
@@ -982,26 +1009,58 @@ describe('ChannelModule', () => {
         });
       });
 
-      test('should update existing videos', async () => {
+      test('phase 1 upserts non-date fields without the date; phase 2 writes the date', async () => {
         const mockVideo = {
+          id: 7,
+          publishedAt: '2023-01-01T00:00:00.000Z',
+          published_at_source: 'approximate',
           update: jest.fn()
         };
         ChannelVideo.findOrCreate.mockResolvedValue([mockVideo, false]);
 
         await ChannelModule.insertVideosIntoDb([mockVideoData], 'UC123');
 
+        // Phase 1: fields only, never the date.
         expect(mockVideo.update).toHaveBeenCalledWith({
           title: mockVideoData.title,
           thumbnail: mockVideoData.thumbnail,
           duration: mockVideoData.duration,
           media_type: 'video',
-          publishedAt: mockVideoData.publishedAt,
           availability: mockVideoData.availability,
         });
+        const phase1 = mockVideo.update.mock.calls[0][0];
+        expect(phase1).not.toHaveProperty('publishedAt');
+        expect(phase1).not.toHaveProperty('published_at_source');
+
+        // Phase 2: the fetched date is persisted (normalized to ISO) for this
+        // row. The source field is omitted because it is unchanged (approximate).
+        expect(ChannelVideo.update).toHaveBeenCalledWith(
+          { publishedAt: '2024-01-01T00:00:00.000Z' },
+          { where: { id: 7 } },
+        );
+      });
+
+      test('should never rewrite an exact date from a download', async () => {
+        const mockVideo = {
+          id: 9,
+          publishedAt: '2024-01-10T00:00:00.000Z',
+          published_at_source: 'exact',
+          update: jest.fn()
+        };
+        ChannelVideo.findOrCreate.mockResolvedValue([mockVideo, false]);
+
+        await ChannelModule.insertVideosIntoDb([mockVideoData], 'UC123');
+
+        // Phase 1 never carries the date...
+        const phase1 = mockVideo.update.mock.calls[0][0];
+        expect(phase1).not.toHaveProperty('publishedAt');
+        // ...and phase 2 skips exact rows entirely.
+        const wroteDate = ChannelVideo.update.mock.calls.some(([, opts]) => opts.where.id === 9);
+        expect(wroteDate).toBe(false);
       });
 
       test('should preserve existing availability when refresh has no availability', async () => {
-        const mockVideo = { update: jest.fn() };
+        const mockVideo = { id: 1, publishedAt: '2023-01-01T00:00:00.000Z', published_at_source: 'approximate', update: jest.fn() };
         ChannelVideo.findOrCreate.mockResolvedValue([mockVideo, false]);
 
         const videoWithoutAvailability = { ...mockVideoData };
@@ -1014,7 +1073,7 @@ describe('ChannelModule', () => {
       });
 
       test('should preserve existing live_status when refresh has no live_status', async () => {
-        const mockVideo = { update: jest.fn() };
+        const mockVideo = { id: 1, publishedAt: '2023-01-01T00:00:00.000Z', published_at_source: 'approximate', update: jest.fn() };
         ChannelVideo.findOrCreate.mockResolvedValue([mockVideo, false]);
 
         await ChannelModule.insertVideosIntoDb([mockVideoData], 'UC123');
@@ -1024,7 +1083,7 @@ describe('ChannelModule', () => {
       });
 
       test('should overwrite availability when refresh has a real value (real demotion still works)', async () => {
-        const mockVideo = { update: jest.fn() };
+        const mockVideo = { id: 1, publishedAt: '2023-01-01T00:00:00.000Z', published_at_source: 'approximate', update: jest.fn() };
         ChannelVideo.findOrCreate.mockResolvedValue([mockVideo, false]);
 
         const videoWithPublic = { ...mockVideoData, availability: 'public' };
@@ -1036,7 +1095,7 @@ describe('ChannelModule', () => {
       });
 
       test('should overwrite live_status when refresh has a real value', async () => {
-        const mockVideo = { update: jest.fn() };
+        const mockVideo = { id: 1, publishedAt: '2023-01-01T00:00:00.000Z', published_at_source: 'approximate', update: jest.fn() };
         ChannelVideo.findOrCreate.mockResolvedValue([mockVideo, false]);
 
         const videoWithLive = { ...mockVideoData, live_status: 'is_live' };
@@ -1053,7 +1112,7 @@ describe('ChannelModule', () => {
           live_status: 'was_live'
         };
 
-        ChannelVideo.findOrCreate.mockResolvedValue([{}, true]);
+        echoCreates();
 
         await ChannelModule.insertVideosIntoDb([videoWithLiveStatus], 'UC123');
 
@@ -1068,128 +1127,171 @@ describe('ChannelModule', () => {
         });
       });
 
-      test('should generate synthetic publishedAt for videos without dates', async () => {
+      test('should write strictly descending estimated dates for a date-less batch', async () => {
         const videosWithoutDates = [
           { youtube_id: 'video1', title: 'Video 1', publishedAt: null },
           { youtube_id: 'video2', title: 'Video 2', publishedAt: null },
           { youtube_id: 'video3', title: 'Video 3', publishedAt: null }
         ];
 
-        ChannelVideo.findOrCreate
-          .mockResolvedValueOnce([{}, true])
-          .mockResolvedValueOnce([{}, true])
-          .mockResolvedValueOnce([{}, true]);
+        echoCreates();
 
-        const beforeTime = Date.now();
         await ChannelModule.insertVideosIntoDb(videosWithoutDates, 'UC123');
-        const afterTime = Date.now();
 
-        // Verify all videos got synthetic timestamps
-        expect(ChannelVideo.findOrCreate).toHaveBeenCalledTimes(3);
+        // Created with the estimated source.
+        for (const call of ChannelVideo.findOrCreate.mock.calls) {
+          expect(call[0].defaults.published_at_source).toBe('estimated');
+        }
 
-        // First video should have the most recent synthetic timestamp
-        const firstCall = ChannelVideo.findOrCreate.mock.calls[0][0];
-        const firstTimestamp = new Date(firstCall.defaults.publishedAt).getTime();
-        expect(firstTimestamp).toBeGreaterThanOrEqual(beforeTime - 1000);
-        expect(firstTimestamp).toBeLessThanOrEqual(afterTime + 1000);
-
-        // Second video should be 1 second earlier
-        const secondCall = ChannelVideo.findOrCreate.mock.calls[1][0];
-        const secondTimestamp = new Date(secondCall.defaults.publishedAt).getTime();
-        expect(secondTimestamp).toBe(firstTimestamp - 1000);
-
-        // Third video should be 2 seconds earlier
-        const thirdCall = ChannelVideo.findOrCreate.mock.calls[2][0];
-        const thirdTimestamp = new Date(thirdCall.defaults.publishedAt).getTime();
-        expect(thirdTimestamp).toBe(firstTimestamp - 2000);
+        // Phase 2 persists strictly-descending dates, 1s apart, source unchanged.
+        const writes = dateWrites();
+        expect(writes).toHaveLength(3);
+        const times = writes.map((w) => new Date(w.publishedAt).getTime());
+        expect(times[1]).toBe(times[0] - 1000);
+        expect(times[2]).toBe(times[0] - 2000);
+        for (const w of writes) {
+          expect(w).not.toHaveProperty('published_at_source'); // estimated stays estimated
+        }
       });
 
-      test('should preserve publishedAt when provided', async () => {
-        const videosWithDates = [
-          { youtube_id: 'video1', title: 'Video 1', publishedAt: '2024-01-01T00:00:00Z' },
-          { youtube_id: 'video2', title: 'Video 2', publishedAt: '2024-01-02T00:00:00Z' }
+      test('should anchor estimated dates just below the nearest dated entry above', async () => {
+        // Mixed batch: dates for only the first entry. The undated entries must
+        // sort below it, not jump to "now".
+        const videos = [
+          { youtube_id: 'video1', title: 'Video 1', publishedAt: '2024-01-10T00:00:00.000Z' },
+          { youtube_id: 'video2', title: 'Video 2', publishedAt: null },
+          { youtube_id: 'video3', title: 'Video 3', publishedAt: null }
         ];
 
-        ChannelVideo.findOrCreate
-          .mockResolvedValueOnce([{}, true])
-          .mockResolvedValueOnce([{}, true]);
+        echoCreates();
+
+        await ChannelModule.insertVideosIntoDb(videos, 'UC123');
+
+        const anchor = new Date('2024-01-10T00:00:00.000Z').getTime();
+        const writes = dateWrites();
+        // video1 was created with the right date in defaults, so it isn't rewritten;
+        // the two estimated rows are written just below the anchor.
+        const estimatedTimes = writes.map((w) => new Date(w.publishedAt).getTime()).sort((a, b) => b - a);
+        expect(estimatedTimes).toEqual([anchor - 1000, anchor - 2000]);
+      });
+
+      test('should anchor estimated dates below an existing record real date when the response has none', async () => {
+        const existingRecord = {
+          id: 50,
+          publishedAt: '2024-02-01T00:00:00.000Z',
+          published_at_source: 'approximate',
+          update: jest.fn()
+        };
+
+        const videos = [
+          { youtube_id: 'video1', title: 'Video 1', publishedAt: null },
+          { youtube_id: 'video2', title: 'Video 2', publishedAt: null }
+        ];
+
+        echoCreates({ video1: existingRecord });
+
+        await ChannelModule.insertVideosIntoDb(videos, 'UC123');
+
+        // The existing real date is kept (no phase-2 write for that id)...
+        const wroteExisting = ChannelVideo.update.mock.calls.some(([, opts]) => opts.where.id === 50);
+        expect(wroteExisting).toBe(false);
+
+        // ...and the new undated row slots in just below it.
+        const anchor = new Date('2024-02-01T00:00:00.000Z').getTime();
+        const writes = dateWrites();
+        expect(writes).toHaveLength(1);
+        expect(new Date(writes[0].publishedAt).getTime()).toBe(anchor - 1000);
+      });
+
+      test('should re-anchor existing estimated rows on a date-less refresh', async () => {
+        const estimatedRecord = {
+          id: 60,
+          publishedAt: '2026-06-12T17:21:21.205Z',
+          published_at_source: 'estimated',
+          update: jest.fn()
+        };
+
+        const videos = [
+          { youtube_id: 'video1', title: 'Video 1', publishedAt: '2024-03-01T00:00:00.000Z' },
+          { youtube_id: 'video2', title: 'Video 2', publishedAt: null }
+        ];
+
+        echoCreates({ video2: estimatedRecord });
+
+        await ChannelModule.insertVideosIntoDb(videos, 'UC123');
+
+        const anchor = new Date('2024-03-01T00:00:00.000Z').getTime();
+        const write = dateWrites().find((w) => w.id === 60);
+        expect(write).toBeDefined();
+        expect(new Date(write.publishedAt).getTime()).toBe(anchor - 1000);
+        expect(write).not.toHaveProperty('published_at_source'); // estimated stays estimated
+      });
+
+      test('clamps a fetched approximate date that would sort above a nearby exact date', async () => {
+        // The bug this refactor fixes: an approximate date newer than an exact
+        // date below it in the listing must be clamped into position.
+        const exactRow = {
+          id: 71,
+          publishedAt: '2026-05-07T00:00:00.000Z',
+          published_at_source: 'exact',
+          update: jest.fn()
+        };
+        const videos = [
+          { youtube_id: 'before', title: 'Before', publishedAt: '2026-05-20T00:00:00.000Z' },
+          { youtube_id: 'exactvid', title: 'Exact', publishedAt: '2026-05-10T00:00:00.000Z' }, // fetch date ignored; row is exact
+          { youtube_id: 'after', title: 'After', publishedAt: '2026-05-12T00:00:00.000Z' } // newer than the exact -> must be clamped below it
+        ];
+
+        echoCreates({ exactvid: exactRow });
+
+        await ChannelModule.insertVideosIntoDb(videos, 'UC123');
+
+        // The exact row keeps its date (not rewritten).
+        const wroteExact = ChannelVideo.update.mock.calls.some(([, opts]) => opts.where.id === 71);
+        expect(wroteExact).toBe(false);
+
+        // The "after" row, despite a 5/12 fetched date, is written below 5/7.
+        const exactMs = new Date('2026-05-07T00:00:00.000Z').getTime();
+        const writes = dateWrites();
+        const afterWrite = writes.find((w) => new Date(w.publishedAt).getTime() < exactMs);
+        expect(afterWrite).toBeDefined();
+        // It keeps its approximate source (created with it; not downgraded to estimated).
+        expect(afterWrite.published_at_source).not.toBe('estimated');
+      });
+
+      test('should keep fetched dates as approximate when consistent', async () => {
+        const videosWithDates = [
+          { youtube_id: 'video1', title: 'Video 1', publishedAt: '2024-01-02T00:00:00.000Z' },
+          { youtube_id: 'video2', title: 'Video 2', publishedAt: '2024-01-01T00:00:00.000Z' }
+        ];
+
+        echoCreates();
 
         await ChannelModule.insertVideosIntoDb(videosWithDates, 'UC123');
 
         const firstCall = ChannelVideo.findOrCreate.mock.calls[0][0];
-        expect(firstCall.defaults.publishedAt).toBe('2024-01-01T00:00:00Z');
+        expect(firstCall.defaults.publishedAt).toBe('2024-01-02T00:00:00.000Z');
+        expect(firstCall.defaults.published_at_source).toBe('approximate');
 
-        const secondCall = ChannelVideo.findOrCreate.mock.calls[1][0];
-        expect(secondCall.defaults.publishedAt).toBe('2024-01-02T00:00:00Z');
+        // Consistent fetched dates need no phase-2 rewrite.
+        expect(ChannelVideo.update).not.toHaveBeenCalled();
       });
+    });
 
-      test('should preserve existing publishedAt when refresh has no date', async () => {
-        // yt-dlp's youtubetab:approximate_date is non-deterministic for
-        // lockupViewModel entries. An empty refresh must not clobber a
-        // known-good DB date with Date.now().
-        const mockVideo = {
-          publishedAt: '2024-01-01T00:00:00Z',
-          update: jest.fn()
-        };
+    describe('extractVideosFromYtDlpResponse', () => {
+      test('parses a real degraded flat-playlist response (timestamp: null) preserving order', () => {
+        // Captured from a live YouTube degraded response: every entry has
+        // timestamp: null but the order is still newest-first.
+        const fixture = require('./fixtures/flat-playlist-dateless.json');
 
-        const videoWithoutDate = {
-          ...mockVideoData,
-          publishedAt: null
-        };
+        const videos = ChannelModule.extractVideosFromYtDlpResponse(fixture);
 
-        ChannelVideo.findOrCreate.mockResolvedValue([mockVideo, false]);
-
-        await ChannelModule.insertVideosIntoDb([videoWithoutDate], 'UC123');
-
-        const updateCall = mockVideo.update.mock.calls[0][0];
-        expect(updateCall).not.toHaveProperty('publishedAt');
-      });
-
-      test('should set synthetic publishedAt on existing videos without dates', async () => {
-        const mockVideo = {
-          publishedAt: null,
-          update: jest.fn()
-        };
-
-        const videoWithoutDate = {
-          ...mockVideoData,
-          publishedAt: null
-        };
-
-        ChannelVideo.findOrCreate.mockResolvedValue([mockVideo, false]);
-
-        const beforeTime = Date.now();
-        await ChannelModule.insertVideosIntoDb([videoWithoutDate], 'UC123');
-        const afterTime = Date.now();
-
-        // Should set synthetic publishedAt when existing video has no date
-        const updateCall = mockVideo.update.mock.calls[0][0];
-        expect(updateCall.publishedAt).toBeDefined();
-        const timestamp = new Date(updateCall.publishedAt).getTime();
-        expect(timestamp).toBeGreaterThanOrEqual(beforeTime - 1000);
-        expect(timestamp).toBeLessThanOrEqual(afterTime + 1000);
-      });
-
-      test('should update publishedAt when new date is provided for existing video', async () => {
-        const mockVideo = {
-          publishedAt: '2024-01-01T00:00:00Z',
-          update: jest.fn()
-        };
-
-        const videoWithNewDate = {
-          ...mockVideoData,
-          publishedAt: '2024-01-15T00:00:00Z'
-        };
-
-        ChannelVideo.findOrCreate.mockResolvedValue([mockVideo, false]);
-
-        await ChannelModule.insertVideosIntoDb([videoWithNewDate], 'UC123');
-
-        expect(mockVideo.update).toHaveBeenCalledWith(
-          expect.objectContaining({
-            publishedAt: '2024-01-15T00:00:00Z'
-          })
-        );
+        expect(videos).toHaveLength(fixture.entries.length);
+        expect(videos.map(v => v.youtube_id)).toEqual(fixture.entries.map(e => e.id));
+        for (const video of videos) {
+          expect(video.publishedAt).toBeNull();
+          expect(video.title).toBeTruthy();
+        }
       });
     });
   });
@@ -1528,6 +1630,26 @@ describe('ChannelModule', () => {
 
         expect(result).toHaveLength(10);
         expect(result[0].youtube_id).toBe('video20');
+      });
+
+      test('should blank publishedAt for estimated rows but keep their sort position', async () => {
+        const Video = require('../../models/video');
+        const mockVideos = [
+          { youtube_id: 'newest', publishedAt: '2024-05-01T00:00:00.000Z', published_at_source: 'approximate', toJSON() { return { youtube_id: this.youtube_id, publishedAt: this.publishedAt, published_at_source: this.published_at_source }; } },
+          { youtube_id: 'undated', publishedAt: '2024-04-30T23:59:59.000Z', published_at_source: 'estimated', toJSON() { return { youtube_id: this.youtube_id, publishedAt: this.publishedAt, published_at_source: this.published_at_source }; } },
+          { youtube_id: 'oldest', publishedAt: '2024-04-01T00:00:00.000Z', published_at_source: 'exact', toJSON() { return { youtube_id: this.youtube_id, publishedAt: this.publishedAt, published_at_source: this.published_at_source }; } }
+        ];
+        ChannelVideo.findAll.mockResolvedValue(mockVideos);
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        const result = await ChannelModule.fetchNewestVideosFromDb('UC123');
+
+        // Estimated row keeps its position between the dated rows...
+        expect(result.map(v => v.youtube_id)).toEqual(['newest', 'undated', 'oldest']);
+        // ...but its placeholder date is not exposed to consumers
+        expect(result[0].publishedAt).toBe('2024-05-01T00:00:00.000Z');
+        expect(result[1].publishedAt).toBeNull();
+        expect(result[2].publishedAt).toBe('2024-04-01T00:00:00.000Z');
       });
 
       test('should filter out downloaded videos when downloadedFilter="exclude"', async () => {
@@ -2020,7 +2142,7 @@ describe('ChannelModule', () => {
         expect(ChannelVideo.findOne).toHaveBeenCalledWith({
           where: { channel_id: 'UC123', media_type: 'video' },
           order: [['publishedAt', 'ASC']],
-          attributes: ['publishedAt']
+          attributes: ['publishedAt', 'published_at_source']
         });
         expect(result).toEqual({
           totalCount: 100,
@@ -2040,8 +2162,20 @@ describe('ChannelModule', () => {
         expect(ChannelVideo.findOne).toHaveBeenCalledWith({
           where: { channel_id: 'UC123', media_type: 'short' },
           order: [['publishedAt', 'ASC']],
-          attributes: ['publishedAt']
+          attributes: ['publishedAt', 'published_at_source']
         });
+      });
+
+      test('should return null oldestVideoDate when the oldest row is estimated', async () => {
+        ChannelVideo.count.mockResolvedValue(10);
+        ChannelVideo.findOne.mockResolvedValue({
+          publishedAt: '2026-06-12T17:21:21.205Z',
+          published_at_source: 'estimated'
+        });
+
+        const result = await ChannelModule.getChannelVideoStats('UC123');
+
+        expect(result.oldestVideoDate).toBeNull();
       });
 
       test('should filter by downloadedFilter="exclude" when specified', async () => {

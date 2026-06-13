@@ -198,7 +198,8 @@ jest.mock('../ChannelVideosDialogs', () => ({
       'data-default-resolution-source': props.defaultResolutionSource,
       'data-selected-tab': props.selectedTab,
       'data-tab-label': props.tabLabel,
-      'data-missing-video-count': props.missingVideoCount
+      'data-missing-video-count': props.missingVideoCount,
+      'data-mobile-tooltip': props.mobileTooltip
     });
   }
 }));
@@ -1008,6 +1009,74 @@ describe('ChannelVideos Component', () => {
       // Both should be present
       expect(screen.getAllByRole('button', { name: '16' }).length).toBeGreaterThan(0);
       expect(screen.getAllByRole('navigation').length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Pending dates indicator', () => {
+    const estimatedVideo: ChannelVideo = {
+      title: 'Pending Date Video',
+      youtube_id: 'pending1',
+      publishedAt: null,
+      published_at_source: 'estimated',
+      thumbnail: 'https://i.ytimg.com/vi/pending1/mqdefault.jpg',
+      added: false,
+      duration: 120,
+      media_type: 'video',
+      live_status: null,
+    };
+
+    const mockVideosReturn = (videos: ChannelVideo[]) => {
+      useChannelVideos.mockReturnValue({
+        videos,
+        totalCount: videos.length,
+        oldestVideoDate: null,
+        error: null,
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+    };
+
+    test('mobile date info explains pending dates when estimated rows are present', () => {
+      (useMediaQuery as jest.Mock).mockReturnValue(true);
+      mockVideosReturn([estimatedVideo]);
+
+      renderChannelVideos();
+      fireEvent.click(screen.getByLabelText('Date info'));
+
+      expect(screen.getByTestId('channel-videos-dialogs')).toHaveAttribute(
+        'data-mobile-tooltip',
+        expect.stringContaining('Some videos show "Pending"')
+      );
+    });
+
+    test('mobile date info omits the pending explanation when all rows have dates', () => {
+      (useMediaQuery as jest.Mock).mockReturnValue(true);
+      mockVideosReturn(mockVideos);
+
+      renderChannelVideos();
+      fireEvent.click(screen.getByLabelText('Date info'));
+
+      expect(screen.getByTestId('channel-videos-dialogs')).not.toHaveAttribute(
+        'data-mobile-tooltip',
+        expect.stringContaining('Some videos show "Pending"')
+      );
+    });
+
+    test('highlights the date info icon when estimated rows are present', () => {
+      mockVideosReturn([estimatedVideo]);
+
+      renderChannelVideos();
+
+      expect(screen.getByLabelText('Date info')).toHaveStyle({ color: 'var(--warning)' });
+    });
+
+    test('does not highlight the date info icon when all rows have dates', () => {
+      mockVideosReturn(mockVideos);
+
+      renderChannelVideos();
+
+      expect(screen.getByLabelText('Date info')).toHaveStyle({ color: 'var(--foreground)' });
     });
   });
 

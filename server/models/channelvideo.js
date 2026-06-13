@@ -35,6 +35,14 @@ ChannelVideo.init(
       type: DataTypes.STRING,
       allowNull: true,
     },
+    // Provenance of publishedAt: 'exact' (.info.json), 'approximate'
+    // (yt-dlp flat-playlist date), 'estimated' (ordering-only placeholder,
+    // never displayed). NULL = legacy row, treated like 'approximate'.
+    published_at_source: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      defaultValue: null,
+    },
     availability: {
       type: DataTypes.STRING,
       allowNull: true,

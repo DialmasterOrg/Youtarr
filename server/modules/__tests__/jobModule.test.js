@@ -12,6 +12,10 @@ jest.mock('../../models/video');
 jest.mock('../../models/jobvideo');
 jest.mock('../../models/jobvideodownload');
 jest.mock('../../models/channelvideo');
+jest.mock('../channelVideoReanchor', () => ({
+  applyExactDateForGroup: jest.fn().mockResolvedValue(undefined),
+  applyExactDateForVideo: jest.fn().mockResolvedValue(undefined),
+}));
 jest.mock('../download/downloadExecutor', () => {
   return jest.fn().mockImplementation(() => ({
     cleanupInProgressVideos: jest.fn().mockResolvedValue()
@@ -1963,7 +1967,7 @@ describe('JobModule', () => {
 
       await JobModule.upsertChannelVideoFromInfo(info);
 
-      // Verify that update is called with correct fields, including clearing ignored flags
+      // The non-date fields are updated directly (and ignored flags cleared)...
       expect(mockRecord.update).toHaveBeenCalledWith({
         title: 'Updated Video',
         thumbnail: 'https://i.ytimg.com/vi/video-1/mqdefault.jpg',
@@ -1973,10 +1977,34 @@ describe('JobModule', () => {
         ignored: false,
         ignored_at: null
       });
-
-      // Explicitly verify that publishedAt is NOT included in the update
+      // ...but the authoritative date is applied via the re-anchor module so the
+      // row's old position is read first and neighbours stay ordered.
+      const channelVideoReanchor = require('../channelVideoReanchor');
+      expect(channelVideoReanchor.applyExactDateForGroup).toHaveBeenCalledWith({
+        channelId: 'channel-1',
+        mediaType: 'video',
+        youtubeId: 'video-1',
+        exactIso: '2024-01-15T00:00:00.000Z',
+      });
+      // The direct update must not carry the date fields.
       const updateCall = mockRecord.update.mock.calls[0][0];
       expect(updateCall).not.toHaveProperty('publishedAt');
+      expect(updateCall).not.toHaveProperty('published_at_source');
+    });
+
+    test('should not touch publishedAt on update when info has no upload_date', async () => {
+      const mockRecord = { update: jest.fn() };
+      ChannelVideo.findOrCreate.mockResolvedValue([mockRecord, false]);
+
+      await JobModule.upsertChannelVideoFromInfo({
+        id: 'video-1',
+        channel_id: 'channel-1',
+        title: 'No Date Video'
+      });
+
+      const updateCall = mockRecord.update.mock.calls[0][0];
+      expect(updateCall).not.toHaveProperty('publishedAt');
+      expect(updateCall).not.toHaveProperty('published_at_source');
     });
 
     test('should skip update when skipUpdateIfExists is true', async () => {

@@ -7,6 +7,8 @@ const Video = require('../models/video');
 const JobVideo = require('../models/jobvideo');
 const JobVideoDownload = require('../models/jobvideodownload');
 const ChannelVideo = require('../models/channelvideo');
+const channelVideoReanchor = require('./channelVideoReanchor');
+const { PUBLISHED_AT_SOURCE } = require('./constants/publishedAtSource');
 const cron = require('node-cron');
 const MessageEmitter = require('./messageEmitter.js'); // import the helper function
 const configModule = require('./configModule');
@@ -729,6 +731,7 @@ class JobModule {
       thumbnail,
       duration,
       publishedAt,
+      published_at_source: publishedAt ? PUBLISHED_AT_SOURCE.EXACT : null,
       availability,
       media_type,
       ignored: false,
@@ -757,6 +760,25 @@ class JobModule {
       if (age_limit != null) updates.age_limit = age_limit;
       if (normalized_rating != null) updates.normalized_rating = normalized_rating;
       await record.update(updates);
+
+      // The .info.json upload_date is authoritative; it replaces estimated and
+      // approximate dates from flat-playlist fetches. Delegated to the re-anchor
+      // module (which owns the publishedAt write) so the row's existing position
+      // is read first and neighbouring synthetic dates are shifted to keep the
+      // channel in YouTube order. On create the date is set via defaults above;
+      // a brand-new row has no prior position to preserve, so no re-anchor.
+      if (publishedAt) {
+        try {
+          await channelVideoReanchor.applyExactDateForGroup({
+            channelId: channel_id,
+            mediaType: media_type,
+            youtubeId: youtube_id,
+            exactIso: publishedAt,
+          });
+        } catch (reanchorErr) {
+          logger.error({ err: reanchorErr, youtube_id }, 'Error re-anchoring channel video order after download');
+        }
+      }
     }
   }
 
