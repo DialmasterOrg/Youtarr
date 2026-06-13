@@ -13,6 +13,7 @@ const cron = require('node-cron');
 const MessageEmitter = require('./messageEmitter.js'); // import the helper function
 const configModule = require('./configModule');
 const { isDownloadJob } = require('./download/jobTypes');
+const downloadCleanup = require('./download/downloadCleanup');
 const logger = require('../logger');
 
 const MAX_SAVE_RETRIES = 3;
@@ -223,10 +224,7 @@ class JobModule {
 
           // Step 2: Clean up in-progress videos from disk
           try {
-            // Import downloadExecutor to access cleanup method
-            const DownloadExecutor = require('./download/downloadExecutor');
-            const downloadExecutor = new DownloadExecutor();
-            await downloadExecutor.cleanupInProgressVideos(jobId);
+            await downloadCleanup.cleanupInProgressVideos(jobId);
           } catch (cleanupErr) {
             logger.error({ err: cleanupErr, jobId }, 'Error cleaning up in-progress videos for job');
           }

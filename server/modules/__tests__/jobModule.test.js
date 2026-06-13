@@ -12,6 +12,9 @@ jest.mock('../../models/video');
 jest.mock('../../models/jobvideo');
 jest.mock('../../models/jobvideodownload');
 jest.mock('../../models/channelvideo');
+jest.mock('../download/downloadCleanup', () => ({
+  cleanupInProgressVideos: jest.fn().mockResolvedValue()
+}));
 jest.mock('../channelVideoReanchor', () => ({
   applyExactDateForGroup: jest.fn().mockResolvedValue(undefined),
   applyExactDateForVideo: jest.fn().mockResolvedValue(undefined),
@@ -328,14 +331,12 @@ describe('JobModule', () => {
       JobVideoDownload.findAll.mockResolvedValue([]);
       JobVideoDownload.destroy.mockResolvedValue(0);
 
-      // Reset and reconfigure the DownloadExecutor mock for this specific test
+      // Reset and reconfigure the downloadCleanup mock for this specific test
       const mockCleanup = jest.fn().mockResolvedValue();
       jest.resetModules();
-      jest.doMock('../download/downloadExecutor', () => {
-        return jest.fn().mockImplementation(() => ({
-          cleanupInProgressVideos: mockCleanup
-        }));
-      });
+      jest.doMock('../download/downloadCleanup', () => ({
+        cleanupInProgressVideos: mockCleanup
+      }));
 
       JobModule = require('../jobModule');
 
