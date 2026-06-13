@@ -311,6 +311,48 @@ describe('VideoModal', () => {
     expect(onAvailabilityDetected).not.toHaveBeenCalled();
   });
 
+  test('fires onPublishedDateDetected once with a UTC-midnight ISO date when metadata yields an upload date', async () => {
+    videoMetadataReturn.metadata = {
+      uploadDate: '20260606',
+    } as unknown as typeof videoMetadataReturn.metadata;
+    const onPublishedDateDetected = jest.fn();
+
+    const { rerender } = renderModal({ onPublishedDateDetected });
+
+    await waitFor(() => {
+      expect(onPublishedDateDetected).toHaveBeenCalledWith(
+        baseVideo.youtubeId,
+        '2026-06-06T00:00:00.000Z',
+      );
+    });
+    expect(onPublishedDateDetected).toHaveBeenCalledTimes(1);
+
+    // A re-render with the same video must not refire.
+    rerender(
+      <MemoryRouter>
+        <VideoModal
+          open
+          onClose={jest.fn()}
+          video={baseVideo}
+          token="test-token"
+          onPublishedDateDetected={onPublishedDateDetected}
+        />
+      </MemoryRouter>
+    );
+    expect(onPublishedDateDetected).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not fire onPublishedDateDetected when metadata has no upload date', () => {
+    videoMetadataReturn.metadata = {
+      uploadDate: null,
+    } as unknown as typeof videoMetadataReturn.metadata;
+    const onPublishedDateDetected = jest.fn();
+
+    renderModal({ onPublishedDateDetected });
+
+    expect(onPublishedDateDetected).not.toHaveBeenCalled();
+  });
+
   test('renders a clickable rating chip when rating exists', () => {
     renderModal({
       video: { ...baseVideo, normalizedRating: 'PG-13', ratingSource: 'manual' },

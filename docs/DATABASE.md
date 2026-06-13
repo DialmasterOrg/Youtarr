@@ -24,7 +24,7 @@ Youtarr uses MariaDB/MySQL for storing:
 | :----------------- | :-------------    | :-------------------------------- |
 | `channels`         | `Channel`         | YouTube channel information       |
 | `Videos`           | `Video`           | Downloaded video metadata         |
-| `channelvideos`    | `ChannelVideo`    | Channel <-> video associations    |
+| `channelvideos`    | `ChannelVideo`    | Channel <-> video associations. `published_at_source` tracks publishedAt provenance: `exact` (.info.json), `approximate` (yt-dlp flat-playlist date), `estimated` (ordering-only placeholder assigned when YouTube returns a listing with no dates; never displayed), NULL (legacy, treated as approximate) |
 | `Jobs`             | `Job`             | Download job queue                |
 | `JobVideos`        | `JobVideo`        | Job <-> video associations        |
 | `JobVideoDownloads`| `JobVideoDownload`| Download progress tracking        |

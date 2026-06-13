@@ -6,6 +6,7 @@ const ytDlpRunner = require('./ytDlpRunner');
 const logger = require('../logger');
 const youtubeApi = require('./youtubeApi');
 const ChannelVideo = require('../models/channelvideo');
+const channelVideoReanchor = require('./channelVideoReanchor');
 
 const NULL_METADATA = {
   description: null,
@@ -33,6 +34,19 @@ const NULL_METADATA = {
 };
 
 const YTDLP_FETCH_TIMEOUT_MS = 60000;
+
+// Convert yt-dlp upload_date (YYYYMMDD) to the ISO string format used by
+// channelvideos.publishedAt. Returns null if unparseable.
+function uploadDateToIso(uploadDate) {
+  if (!uploadDate || typeof uploadDate !== 'string' || uploadDate.length < 8) {
+    return null;
+  }
+  const year = uploadDate.substring(0, 4);
+  const month = uploadDate.substring(4, 6);
+  const day = uploadDate.substring(6, 8);
+  const d = new Date(`${year}-${month}-${day}T00:00:00Z`);
+  return isNaN(d.getTime()) ? null : d.toISOString();
+}
 
 const SUPPORTED_HEIGHTS = [360, 480, 720, 1080, 1440, 2160];
 
@@ -180,6 +194,20 @@ class VideoMetadataModule {
           );
         } catch (backfillErr) {
           logger.warn({ err: backfillErr, youtubeId }, 'Failed to backfill ChannelVideo.availability');
+        }
+      }
+
+      // Backfill ChannelVideo.publishedAt from the authoritative .info.json
+      // upload_date, replacing estimated/approximate dates from flat-playlist
+      // channel fetches. Delegated to the re-anchor module so neighbouring
+      // synthetic dates are shifted to keep the channel in YouTube order when
+      // this exact date would otherwise sort the video out of place.
+      const uploadDateIso = uploadDateToIso(rawData.upload_date);
+      if (uploadDateIso) {
+        try {
+          await channelVideoReanchor.applyExactDateForVideo(youtubeId, uploadDateIso);
+        } catch (backfillErr) {
+          logger.warn({ err: backfillErr, youtubeId }, 'Failed to backfill ChannelVideo.publishedAt');
         }
       }
 
