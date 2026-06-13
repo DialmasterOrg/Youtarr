@@ -5,6 +5,7 @@ import {
   formatAddedDate,
   formatAddedDateTime,
   formatAddedDateParts,
+  uploadDateToIso,
 } from '../formatters';
 
 describe('formatters date helpers', () => {
@@ -39,6 +40,26 @@ describe('formatters date helpers', () => {
       expect(date!.getUTCFullYear()).toBe(2026);
       expect(date!.getUTCMonth()).toBe(3);
       expect(date!.getUTCDate()).toBe(20);
+    });
+  });
+
+  describe('uploadDateToIso', () => {
+    test('returns null for null/undefined/empty', () => {
+      expect(uploadDateToIso(null)).toBeNull();
+      expect(uploadDateToIso(undefined)).toBeNull();
+      expect(uploadDateToIso('')).toBeNull();
+    });
+
+    test('converts YYYYMMDD to UTC-midnight ISO', () => {
+      expect(uploadDateToIso('20260606')).toBe('2026-06-06T00:00:00.000Z');
+    });
+
+    test('passes an already-ISO string through as ISO', () => {
+      expect(uploadDateToIso('2026-06-06T00:00:00.000Z')).toBe('2026-06-06T00:00:00.000Z');
+    });
+
+    test('returns null for an unparseable string', () => {
+      expect(uploadDateToIso('not a date')).toBeNull();
     });
   });
 

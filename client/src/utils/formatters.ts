@@ -36,6 +36,22 @@ export function formatDate(dateStr: string | null | undefined): string | null {
   return date ? date.toLocaleDateString() : null;
 }
 
+// Convert yt-dlp's YYYYMMDD upload_date into a UTC-midnight ISO string, matching
+// how the backend stores channelvideos.publishedAt (so an override set on the
+// client renders identically to a value fetched from the server). Strings that
+// are already ISO pass through. Returns null if unparseable.
+export function uploadDateToIso(dateStr: string | null | undefined): string | null {
+  if (!dateStr) {
+    return null;
+  }
+  if (/^\d{8}$/.test(dateStr)) {
+    const iso = `${dateStr.substring(0, 4)}-${dateStr.substring(4, 6)}-${dateStr.substring(6, 8)}T00:00:00.000Z`;
+    return isNaN(new Date(iso).getTime()) ? null : iso;
+  }
+  const parsed = new Date(dateStr);
+  return isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
 const DATE_TIME_OPTIONS: Intl.DateTimeFormatOptions = {
   hour: '2-digit',
   minute: '2-digit',
