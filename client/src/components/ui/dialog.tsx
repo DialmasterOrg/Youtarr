@@ -4,9 +4,7 @@ import { X } from 'lucide-react';
 import { cn } from '../../lib/cn';
 
 const DialogRoot = DialogPrimitive.Root;
-const DialogTrigger = DialogPrimitive.Trigger;
 const DialogPortal = DialogPrimitive.Portal;
-const DialogClose = DialogPrimitive.Close;
 const DialogCompatContext = React.createContext(false);
 
 const DialogOverlay = React.forwardRef<
@@ -188,9 +186,7 @@ DialogActions.displayName = 'DialogActions';
 export {
   Dialog,
   DialogRoot,
-  DialogTrigger,
   DialogPortal,
-  DialogClose,
   DialogOverlay,
   DialogContent,
   DialogTitle,

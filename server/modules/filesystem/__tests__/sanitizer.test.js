@@ -1,5 +1,4 @@
 const {
-  sanitizePathLikeYtDlp,
   sanitizeNameLikeYtDlp,
   sanitizePathParts
 } = require('../sanitizer');
@@ -50,63 +49,6 @@ describe('sanitizer', () => {
     it('should replace trailing whitespace and dots', () => {
       expect(sanitizePathParts(['filename. '])).toEqual(['filename.#']);
       expect(sanitizePathParts(['filename .'])).toEqual(['filename #']);
-    });
-  });
-
-  describe('sanitizePathLikeYtDlp', () => {
-    it('should return "." for empty input', () => {
-      expect(sanitizePathLikeYtDlp('')).toBe('.');
-      expect(sanitizePathLikeYtDlp(null)).toBe('.');
-      expect(sanitizePathLikeYtDlp(undefined)).toBe('.');
-    });
-
-    it('should preserve leading slash for absolute paths', () => {
-      expect(sanitizePathLikeYtDlp('/home/user/file')).toBe('/home/user/file');
-      expect(sanitizePathLikeYtDlp('/a/b/c')).toBe('/a/b/c');
-    });
-
-    it('should handle relative paths', () => {
-      expect(sanitizePathLikeYtDlp('home/user/file')).toBe('home/user/file');
-      expect(sanitizePathLikeYtDlp('a/b/c')).toBe('a/b/c');
-    });
-
-    it('should sanitize Windows-forbidden characters in path', () => {
-      // Both < and > are forbidden chars, so both get replaced
-      expect(sanitizePathLikeYtDlp('/path/to/file<name>/test')).toBe('/path/to/file#name#/test');
-      expect(sanitizePathLikeYtDlp('/path/file:name')).toBe('/path/file#name');
-      // Single forbidden char
-      expect(sanitizePathLikeYtDlp('/path/to/file<test/file')).toBe('/path/to/file#test/file');
-    });
-
-    it('should handle trailing dots in path segments', () => {
-      expect(sanitizePathLikeYtDlp('/path./to./file.')).toBe('/path#/to#/file#');
-    });
-
-    it('should normalize empty segments and dots', () => {
-      expect(sanitizePathLikeYtDlp('/path//to/./file')).toBe('/path/to/file');
-    });
-
-    it('should handle parent directory references', () => {
-      expect(sanitizePathLikeYtDlp('/path/to/../file')).toBe('/path/file');
-    });
-
-    it('should handle real-world video paths with special chars', () => {
-      // Video title with colon
-      expect(sanitizePathLikeYtDlp('/videos/Channel/Video: The Title [abc123]'))
-        .toBe('/videos/Channel/Video# The Title [abc123]');
-
-      // Video title with question mark
-      expect(sanitizePathLikeYtDlp('/videos/Channel/What is this? [abc123]'))
-        .toBe('/videos/Channel/What is this# [abc123]');
-
-      // Video title with multiple special chars
-      expect(sanitizePathLikeYtDlp('/videos/Channel/Best <Video> Ever! [abc123]'))
-        .toBe('/videos/Channel/Best #Video# Ever! [abc123]');
-    });
-
-    it('should handle channel names with trailing dots', () => {
-      expect(sanitizePathLikeYtDlp('/videos/Channel Inc./video'))
-        .toBe('/videos/Channel Inc#/video');
     });
   });
 

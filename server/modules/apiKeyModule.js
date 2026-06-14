@@ -103,29 +103,6 @@ class ApiKeyModule {
   }
 
   /**
-   * Revoke an API key (soft delete)
-   * @param {number} id - API key ID
-   * @returns {boolean} True if revoked, false if not found
-   */
-  async revokeApiKey(id) {
-    const apiKey = await ApiKey.findByPk(id);
-    if (!apiKey) {
-      return false;
-    }
-
-    const keyName = apiKey.name;
-    const keyPrefix = apiKey.key_prefix;
-    await apiKey.update({ is_active: false });
-    logger.info({ 
-      keyId: id, 
-      name: keyName,
-      prefix: keyPrefix,
-      event: 'api_key_revoked'
-    }, 'API key revoked');
-    return true;
-  }
-
-  /**
    * Delete an API key permanently
    * @param {number} id - API key ID
    * @returns {boolean} True if deleted, false if not found

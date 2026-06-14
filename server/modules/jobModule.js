@@ -1215,14 +1215,6 @@ class JobModule {
     }
   }
 
-  deleteJob(jobId) {
-    delete this.jobs[jobId];
-
-    this.saveJobs().then(() => {
-      return;
-    });
-  }
-
   scheduleSaveRetry(jobId, attempt) {
     const job = this.jobs[jobId];
     if (!job) {

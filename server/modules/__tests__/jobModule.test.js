@@ -1305,30 +1305,6 @@ describe('JobModule', () => {
     });
   });
 
-  describe('deleteJob', () => {
-    beforeEach(() => {
-      fs.existsSync.mockReturnValue(false);
-      fs.readFileSync.mockReturnValue(JSON.stringify({
-        plexApiKey: 'test-key',
-      }));
-      JobModule = require('../jobModule');
-      JobModule.saveJobs = jest.fn().mockResolvedValue();
-    });
-
-    test('should delete job and save', () => {
-      JobModule.jobs = {
-        'job-1': { status: 'Complete' },
-        'job-2': { status: 'Error' }
-      };
-
-      JobModule.deleteJob('job-1');
-
-      expect(JobModule.jobs['job-1']).toBeUndefined();
-      expect(JobModule.jobs['job-2']).toBeDefined();
-      expect(JobModule.saveJobs).toHaveBeenCalled();
-    });
-  });
-
   describe('getJob', () => {
     beforeEach(() => {
       fs.existsSync.mockReturnValue(false);

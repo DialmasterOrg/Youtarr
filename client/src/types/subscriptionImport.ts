@@ -54,15 +54,6 @@ export interface ImportJobDetail extends ImportJobSummary {
   results: ImportChannelResult[];
 }
 
-export interface ImportStartRequest {
-  channels: Array<{
-    channelId: string;
-    url: string;
-    title?: string;
-    settings: RowSettings;
-  }>;
-}
-
 export const DEFAULT_ROW_SETTINGS: RowSettings = {
   autoDownloadEnabled: true,
   videoQuality: null,

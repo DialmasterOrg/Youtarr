@@ -37,21 +37,6 @@ export const isNavItemExpanded = (path: string, item: NavItem) => {
   return item.subItems?.some((subItem) => isNavPathActive(path, subItem.to)) || false;
 };
 
-export const isChannelsSectionActive = (path: string, basePath: string, key: AppNavKey) => {
-  if (path === basePath || path.startsWith(`${basePath}/`)) {
-    return true;
-  }
-
-  return (
-    key === 'subscriptions' &&
-    (path.startsWith('/channel/') || path.startsWith('/playlist/'))
-  );
-};
-
 export const isNavPathActive = (path: string, targetPath: string) => {
   return path === targetPath;
-};
-
-export const isNavItemActive = (path: string, item: NavItem) => {
-  return isNavItemExpanded(path, item);
 };

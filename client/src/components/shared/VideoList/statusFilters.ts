@@ -25,8 +25,6 @@ export const STATUS_CHIP_DESCRIPTORS: Record<StatusChipId, StatusChipDescriptor>
   downloaded: { Icon: DownloadIcon, noun: 'Downloaded' },
 };
 
-export const STATUS_CHIP_IDS = Object.keys(STATUS_CHIP_DESCRIPTORS) as StatusChipId[];
-
 export function isStatusChipId(id: string): id is StatusChipId {
   return id in STATUS_CHIP_DESCRIPTORS;
 }
