@@ -431,6 +431,30 @@ YouTube is blocking your downloads.
 
 **NOTE**: In some cases YouTube may temporarily blacklist your IP address if too many requests were happening from your IP. You may just need to wait in order to download again. You can manually test downloading a video from YouTube to rule out Youtarr-specific issues by downloading yt-dlp and attempting to manually download a single video.
 
+### No Download Progress Shown (Downloads Work, Videos "Just Appear")
+
+**Problem**: Downloads complete successfully, but the **Downloads -> Activity** page always shows "No download activity at the moment". Videos simply appear in the library when finished. Other real-time updates (channel refresh status, download complete notifications) are also missing.
+
+**Cause**: Youtarr delivers all real-time updates over a WebSocket connection that shares the same host and port as the web UI. Regular page loads and downloads use plain HTTP, so everything else works - but if something between your browser and Youtarr (most commonly a reverse proxy) doesn't forward WebSocket upgrade requests, the progress display never gets any updates.
+
+**How to confirm**:
+1. Open your browser devtools (F12) -> **Network** tab -> filter by "WS", then reload the Youtarr page. A working setup shows a WebSocket connection with status `101 Switching Protocols`. If it fails or keeps retrying, the WebSocket is being blocked.
+2. While a download is running, open **Downloads -> History** and refresh the page. That page fetches over HTTP, so if the job shows as In Progress there while the Activity page stays empty, the WebSocket is the problem.
+
+**Solution**: Enable WebSocket support for the Youtarr host in your reverse proxy:
+- **Nginx Proxy Manager**: edit the proxy host and enable the **Websockets Support** toggle.
+- **nginx**: add to the Youtarr `location` block:
+  ```nginx
+  proxy_http_version 1.1;
+  proxy_set_header Upgrade $http_upgrade;
+  proxy_set_header Connection "upgrade";
+  ```
+- **Synology DSM reverse proxy**: open the reverse proxy rule -> **Custom Header** -> **Create** -> **WebSocket** (adds the `Upgrade` and `Connection` headers).
+- **Apache**: enable `mod_proxy_wstunnel`.
+- **Caddy / Traefik**: WebSocket pass-through is automatic; no configuration needed.
+
+If you aren't using a reverse proxy, check for browser extensions, VPN software, or corporate proxies that block WebSocket connections.
+
 
 ## Slow Channel Operations with Proxy
 
@@ -474,6 +498,44 @@ YouTube is blocking your downloads.
 2. Ensure Plex is running on the same machine
 3. Check firewall isn't blocking local connections
 4. Verify Plex is accessible at the configured IP and port
+
+## Playlist Sync Issues
+
+For how playlist sync works across Plex, Jellyfin, and Emby, see [Media Server Playlists](MEDIA_SERVER_PLAYLISTS.md). The most common issues:
+
+### Videos Missing from a Synced Playlist
+
+**Problem**: A playlist syncs, but some videos aren't in it.
+
+**Checklist**:
+1. Confirm the videos are actually downloaded. Youtarr only adds videos that exist on disk; a video still showing as "Tracked" on the playlist page hasn't downloaded yet.
+2. A video has to be indexed in your media server's library before it can be added. Trigger a library scan and use **Sync now** on the playlist page.
+3. Check that the video isn't marked **Ignored** on the playlist page.
+
+### Playlist Not Created on Jellyfin or Emby
+
+**Problem**: You enabled sync but no native playlist appears.
+
+**Checklist**:
+1. Open **Settings -> Jellyfin Integration** (or **Settings -> Emby Integration**) and click **Test Connection**. A stale API key or changed server URL is the usual cause.
+2. Confirm the configured **User** still exists on the server.
+3. Youtarr won't create the playlist until at least one of its videos is downloaded and indexed. Download a video, then **Sync now**.
+
+### Playlist Not Visible to Other Users (Plex)
+
+This is by design. Plex playlists are owned by a single account, and Youtarr can't grant per-user access. To share one, open the playlist in Plex Web and share it (playlist menu -> Share), or use **Settings -> Manage Library Access -> [user] -> Media** to grant playlists to a user. See the [Plex playlist visibility scope](MEDIA_SERVER_PLAYLISTS.md#plex) notes for unclaimed-server setups.
+
+### Shared Playlists Don't Appear for Other Users (Plex)
+
+**Problem**: You shared a Youtarr-created playlist with another Plex user (the share shows up correctly under **Settings -> Manage Library Access -> [user] -> Media**), but when that user opens the server's **Playlists** section it says "Playlists is empty" - on every client (Web, iOS, Apple TV, etc.).
+
+This is Plex behavior, not a Youtarr bug, and nothing needs to be reconfigured. In Plex, the **Playlists** source only lists playlists the user created themselves. Playlists shared by another account appear under a separate sidebar source named **Media**, at the same level as Playlists and Libraries. Have the recipient open **Media** in the server's sidebar; the shared playlists are listed there.
+
+Related gotchas when sharing playlists with other users:
+
+1. **Sharing a playlist does not grant access to the underlying library.** The recipient also needs the Youtarr library shared with them, or the playlist's items will be hidden.
+2. **Content-rating restrictions hide YouTube videos.** Downloaded YouTube videos have no content rating, so rating-based parental restrictions filter them out. For kid accounts, use label-based restrictions instead.
+3. **Smart playlists can't be shared** - but Youtarr creates standard playlists, so this doesn't affect Youtarr-created playlists.
 
 ## Channel Import Issues
 

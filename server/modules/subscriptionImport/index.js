@@ -31,8 +31,10 @@ async function crossReferenceExistingChannels(Channel, channelIds) {
     return new Set();
   }
 
+  // enabled=false rows are soft-deleted channels; leaving them out of the
+  // "already subscribed" set keeps them selectable so an import restores them.
   const existing = await Channel.findAll({
-    where: { channel_id: { [Op.in]: channelIds } },
+    where: { channel_id: { [Op.in]: channelIds }, enabled: true },
     attributes: ['channel_id'],
     raw: true,
   });

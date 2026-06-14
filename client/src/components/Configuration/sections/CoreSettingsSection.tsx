@@ -216,7 +216,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                       label="Enable Automatic Downloads"
                     />
                     <InfoTooltip
-                      text="Globally enable or disable automatic scheduled downloading of videos from your channels. Only tabs that are enabled for your Channels will be checked and downloaded."
+                      text="Globally enable or disable automatic scheduled downloading of videos from your channels and playlists. Only enabled channel tabs and auto-download enabled playlists will be checked and downloaded."
                       onMobileClick={onMobileTooltipClick}
                     />
                   </Box>
@@ -281,7 +281,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
 
                 <Grid item xs={12} md={6}>
                   <FormControl fullWidth>
-                    <InputLabel>Files to Download per Channel</InputLabel>
+                    <InputLabel>Files to Download per Channel/Playlist</InputLabel>
                     <Box className="flex items-center gap-1">
                       <Select
                         value={config.channelFilesToDownload}
@@ -296,7 +296,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                         ))}
                       </Select>
                       <InfoTooltip
-                        text="How many videos (starting from most recently uploaded) Youtarr will attempt to download per tab when channel downloads run. Already downloaded videos will be skipped."
+                        text="How many videos (starting from most recently uploaded) Youtarr will attempt to download per channel tab and per playlist when downloads run. Already downloaded videos will be skipped."
                         onMobileClick={onMobileTooltipClick}
                       />
                     </Box>

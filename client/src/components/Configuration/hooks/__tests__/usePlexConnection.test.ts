@@ -1,11 +1,22 @@
 import { renderHook, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
+
+jest.mock('axios', () => ({ get: jest.fn() }));
+
 import { usePlexConnection } from '../usePlexConnection';
 import { ConfigState } from '../../types';
 import { DEFAULT_CONFIG } from '../../../../config/configSchema';
 
-// Mock fetch globally
+const axios = require('axios');
+
+// The hook calls two endpoints via axios: /getplexlibraries and
+// /plex/server-identity. To keep the existing fetch-style test fixtures, we
+// delegate library requests to the global.fetch mock (translating its
+// {ok,status,json} responses into axios {data} responses) while resolving the
+// identity request internally. Because identity never touches global.fetch,
+// every existing call-count assertion on the fetch mock stays valid.
 global.fetch = jest.fn();
+let identityResponse: { claimed: boolean | null; machineIdentifier: string | null };
 
 describe('usePlexConnection', () => {
   const mockToken = 'test-token-123';
@@ -25,6 +36,20 @@ describe('usePlexConnection', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    identityResponse = { claimed: true, machineIdentifier: 'MID' };
+    axios.get.mockImplementation(async (url: string, opts: unknown) => {
+      if (typeof url === 'string' && url.includes('/plex/server-identity')) {
+        return { data: identityResponse };
+      }
+      const res = await (global.fetch as jest.Mock)(url, opts);
+      if (!res.ok) {
+        const err = new Error('Request failed') as Error & { response?: { status: number } };
+        err.response = { status: res.status };
+        throw err;
+      }
+      const data = await res.json();
+      return { data, status: res.status };
+    });
   });
 
   describe('Hook Initialization', () => {
@@ -1687,6 +1712,100 @@ describe('usePlexConnection', () => {
       });
 
       expect(result.current.plexLibraries).toEqual([]);
+    });
+  });
+
+  describe('plexServerClaimed state', () => {
+    test('starts as null before any check', () => {
+      const { result } = renderHook(() =>
+        usePlexConnection({
+          token: mockToken,
+          config: mockConfig,
+          setConfig: mockSetConfig,
+          setInitialConfig: mockSetInitialConfig,
+          setSnackbar: mockSetSnackbar,
+          hasPlexServerConfigured: false,
+        })
+      );
+
+      expect(result.current.plexServerClaimed).toBeNull();
+    });
+
+    test('reflects the identity endpoint after a successful initial check', async () => {
+      identityResponse = { claimed: false, machineIdentifier: 'MID' };
+      const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: jest.fn().mockResolvedValueOnce([{ id: '1', title: 'YouTube' }]),
+      } as any);
+
+      const { result } = renderHook(() =>
+        usePlexConnection({
+          token: mockToken,
+          config: mockConfig,
+          setConfig: mockSetConfig,
+          setInitialConfig: mockSetInitialConfig,
+          setSnackbar: mockSetSnackbar,
+          hasPlexServerConfigured: true,
+        })
+      );
+
+      await waitFor(() => {
+        expect(result.current.plexServerClaimed).toBe(false);
+      });
+    });
+
+    test('resets to null when the connection check fails', async () => {
+      const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+
+      const { result } = renderHook(() =>
+        usePlexConnection({
+          token: mockToken,
+          config: mockConfig,
+          setConfig: mockSetConfig,
+          setInitialConfig: mockSetInitialConfig,
+          setSnackbar: mockSetSnackbar,
+          hasPlexServerConfigured: true,
+        })
+      );
+
+      await waitFor(() => {
+        expect(result.current.plexConnectionStatus).toBe('not_connected');
+      });
+      expect(result.current.plexServerClaimed).toBeNull();
+    });
+
+    test('resets to null on handlePlexAuthSuccess', async () => {
+      identityResponse = { claimed: false, machineIdentifier: 'MID' };
+      const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: jest.fn().mockResolvedValueOnce([{ id: '1', title: 'YouTube' }]),
+      } as any);
+
+      const { result } = renderHook(() =>
+        usePlexConnection({
+          token: mockToken,
+          config: mockConfig,
+          setConfig: mockSetConfig,
+          setInitialConfig: mockSetInitialConfig,
+          setSnackbar: mockSetSnackbar,
+          hasPlexServerConfigured: true,
+        })
+      );
+
+      await waitFor(() => {
+        expect(result.current.plexServerClaimed).toBe(false);
+      });
+
+      act(() => {
+        result.current.handlePlexAuthSuccess('new-key');
+      });
+
+      expect(result.current.plexServerClaimed).toBeNull();
     });
   });
 });

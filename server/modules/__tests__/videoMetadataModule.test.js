@@ -9,6 +9,7 @@ describe('VideoMetadataModule', () => {
   let mockConfigModule;
   let mockYtDlpRunner;
   let mockYoutubeApi;
+  let mockChannelVideoReanchor;
 
   beforeEach(() => {
     jest.resetModules();
@@ -71,6 +72,11 @@ describe('VideoMetadataModule', () => {
       YoutubeApiErrorCode: { QUOTA_EXCEEDED: 'QUOTA_EXCEEDED' },
     };
 
+    mockChannelVideoReanchor = {
+      applyExactDateForVideo: jest.fn().mockResolvedValue(undefined),
+      applyExactDateForGroup: jest.fn().mockResolvedValue(undefined),
+    };
+
     jest.doMock('fs', () => ({ promises: mockFs }));
     jest.doMock('../../models', () => ({ Video: mockVideo }));
     jest.doMock('../../models/channelvideo', () => mockChannelVideo);
@@ -78,6 +84,7 @@ describe('VideoMetadataModule', () => {
     jest.doMock('../../logger', () => mockLogger);
     jest.doMock('../ytDlpRunner', () => mockYtDlpRunner);
     jest.doMock('../youtubeApi', () => mockYoutubeApi);
+    jest.doMock('../channelVideoReanchor', () => mockChannelVideoReanchor);
 
     videoMetadataModule = require('../videoMetadataModule');
   });
@@ -325,6 +332,39 @@ describe('VideoMetadataModule', () => {
         expect.objectContaining({ youtubeId: 'errvid1' }),
         'Failed to backfill ChannelVideo.availability',
       );
+    });
+
+    test('re-anchors ChannelVideo order with the exact date when info.json has upload_date', async () => {
+      const rawInfoJson = {
+        upload_date: '20240315',
+        description: 'dated video',
+      };
+
+      mockFs.access.mockResolvedValue(undefined);
+      mockFs.readFile.mockResolvedValue(JSON.stringify(rawInfoJson));
+      mockVideo.findOne.mockResolvedValue(null);
+
+      await videoMetadataModule.getVideoMetadata('datedvid1');
+
+      expect(mockChannelVideoReanchor.applyExactDateForVideo).toHaveBeenCalledWith(
+        'datedvid1',
+        '2024-03-15T00:00:00.000Z',
+      );
+    });
+
+    test('does not re-anchor ChannelVideo when upload_date is malformed', async () => {
+      const rawInfoJson = {
+        upload_date: 'garbage',
+        description: 'video with bad date',
+      };
+
+      mockFs.access.mockResolvedValue(undefined);
+      mockFs.readFile.mockResolvedValue(JSON.stringify(rawInfoJson));
+      mockVideo.findOne.mockResolvedValue(null);
+
+      await videoMetadataModule.getVideoMetadata('badvid1');
+
+      expect(mockChannelVideoReanchor.applyExactDateForVideo).not.toHaveBeenCalled();
     });
 
     test('handles missing optional fields gracefully', async () => {

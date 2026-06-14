@@ -11,6 +11,10 @@ export interface ChannelVideo {
   title: string;
   youtube_id: string;
   publishedAt: string | null | undefined;
+  // Provenance of publishedAt. The server blanks publishedAt for 'estimated'
+  // rows (ordering-only placeholders), so UI date displays never see them.
+  // Backend source of truth: server/modules/constants/publishedAtSource.js
+  published_at_source?: 'exact' | 'approximate' | 'estimated' | null;
   thumbnail: string;
   added: boolean;
   removed?: boolean;

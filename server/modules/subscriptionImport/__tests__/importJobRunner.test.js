@@ -102,10 +102,10 @@ describe('importJobRunner.runImport', () => {
   test('skips already-subscribed channels via belt-and-suspenders check', async () => {
     const channels = makeChannels(3);
     activeJob = makeActiveJob(3);
-    // Channel 1 already exists
+    // Channel 1 already exists and is enabled
     deps.Channel.findOne
       .mockResolvedValueOnce(null) // 0 new
-      .mockResolvedValueOnce({ channel_id: channels[1].channelId }) // 1 exists!
+      .mockResolvedValueOnce({ channel_id: channels[1].channelId, enabled: true }) // 1 exists!
       .mockResolvedValueOnce(null); // 2 new
 
     await runImport(deps, activeJob, channels);
@@ -115,6 +115,27 @@ describe('importJobRunner.runImport', () => {
     const ch1Result = activeJob.results.find((r) => r.channelId === channels[1].channelId);
     expect(ch1Result.state).toBe('skipped');
     expect(ch1Result.reason).toMatch(/already/i);
+  });
+
+  test('imports a soft-deleted (disabled) channel instead of skipping it', async () => {
+    const channels = makeChannels(1);
+    activeJob = makeActiveJob(1);
+    // Row exists but is disabled: a previously removed channel being restored
+    deps.Channel.findOne.mockResolvedValueOnce({
+      channel_id: channels[0].channelId,
+      enabled: false,
+    });
+
+    await runImport(deps, activeJob, channels);
+
+    expect(deps.channelModule.getChannelInfo).toHaveBeenCalledWith(
+      channels[0].url,
+      false,
+      true, // enableChannel=true restores the soft-deleted row
+      expect.any(Object),
+      { skipTabDetection: true }
+    );
+    expect(activeJob.results[0].state).toBe('success');
   });
 
   test('maps camelCase frontend settings to snake_case initialSettings', async () => {
@@ -134,6 +155,49 @@ describe('importJobRunner.runImport', () => {
       false,
       true, // autoDownloadEnabled = true means enableChannel = true
       { video_quality: '1080p', sub_folder: 'custom', default_rating: 'PG' },
+      { skipTabDetection: true }
+    );
+  });
+
+  test('forwards an explicit null subFolder (No Subfolder / root) to initialSettings', async () => {
+    const channels = [
+      {
+        channelId: 'UC_root_test',
+        url: 'https://www.youtube.com/channel/UC_root_test',
+        title: 'Root Channel',
+        // User selected "No Subfolder (root)" -> subFolder: null
+        settings: { subFolder: null, autoDownloadEnabled: true, downloadType: 'videos' },
+      },
+    ];
+    activeJob = makeActiveJob(1);
+    await runImport(deps, activeJob, channels);
+
+    expect(deps.channelModule.getChannelInfo).toHaveBeenCalledWith(
+      channels[0].url,
+      false,
+      true,
+      expect.objectContaining({ sub_folder: null }),
+      { skipTabDetection: true }
+    );
+  });
+
+  test('forwards the global-default sentinel subFolder to initialSettings', async () => {
+    const channels = [
+      {
+        channelId: 'UC_default_test',
+        url: 'https://www.youtube.com/channel/UC_default_test',
+        title: 'Default Subfolder Channel',
+        settings: { subFolder: '##USE_GLOBAL_DEFAULT##', autoDownloadEnabled: true, downloadType: 'videos' },
+      },
+    ];
+    activeJob = makeActiveJob(1);
+    await runImport(deps, activeJob, channels);
+
+    expect(deps.channelModule.getChannelInfo).toHaveBeenCalledWith(
+      channels[0].url,
+      false,
+      true,
+      expect.objectContaining({ sub_folder: '##USE_GLOBAL_DEFAULT##' }),
       { skipTabDetection: true }
     );
   });

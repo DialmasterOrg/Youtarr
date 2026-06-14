@@ -135,6 +135,18 @@ describe('filesystem/pathBuilder', () => {
     it('should handle empty subfolder as no subfolder', () => {
       expect(buildChannelPath(baseDir, '', 'ChannelName')).toBe('/videos/ChannelName');
     });
+
+    it('should throw when a subfolder escapes the base directory', () => {
+      // The __ prefix only absorbs one level; deeper traversal still escapes
+      // path.join, so buildChannelPath must reject it.
+      expect(() => buildChannelPath(baseDir, 'a/../../../etc', 'ChannelName')).toThrow(
+        /escapes base directory/
+      );
+    });
+
+    it('should not throw for a legitimate subfolder name', () => {
+      expect(() => buildChannelPath(baseDir, 'My Folder-1', 'ChannelName')).not.toThrow();
+    });
   });
 
   describe('buildVideoPath', () => {

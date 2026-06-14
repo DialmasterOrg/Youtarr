@@ -73,6 +73,25 @@ describe('SubscriptionImportModule', () => {
         })),
       });
     });
+
+    test('cross-reference only matches enabled channels, so soft-deleted rows stay importable', async () => {
+      const csvBuffer = Buffer.from('header\nUC123,http://url,Title');
+      const parsedChannels = [
+        { channelId: 'UC_disabled', url: 'https://youtube.com/channel/UC_disabled', title: 'Disabled' },
+      ];
+
+      takeoutParser.parseCsv.mockReturnValue(parsedChannels);
+      mockDeps.Channel.findAll.mockResolvedValue([]);
+      thumbnailEnricher.enrichWithThumbnails.mockResolvedValue(parsedChannels);
+
+      await subscriptionImportModule.parseTakeout(csvBuffer);
+
+      expect(mockDeps.Channel.findAll).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ enabled: true }),
+        })
+      );
+    });
   });
 
   describe('fetchWithCookiesPreview', () => {

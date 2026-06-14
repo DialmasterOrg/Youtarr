@@ -6,6 +6,7 @@ Complete guide for integrating Youtarr with Plex Media Server.
 - [Overview](#overview)
 - [Library Setup](#library-setup)
 - [Youtarr Configuration](#youtarr-configuration)
+- [Native Playlist Sync](#native-playlist-sync)
 - [Multi-Library Organization](#multi-library-organization)
 - [What You'll See](#what-youll-see)
 - [Tips and Best Practices](#tips-and-best-practices)
@@ -19,6 +20,7 @@ Youtarr provides full Plex integration with:
 - Channel poster artwork
 - OAuth authentication for API token retrieval
 - Multi-library support through subfolders
+- Native playlist sync: subscribed YouTube playlists appear as Plex playlists (see [Native Playlist Sync](#native-playlist-sync))
 
 ## Library Setup
 
@@ -88,6 +90,24 @@ Youtarr automatically:
 - Triggers library scan after each download
 - Updates only the affected sections
 - Handles multi-library setups intelligently
+
+## Native Playlist Sync
+
+Once Plex is connected with the settings above, Youtarr can mirror your subscribed YouTube playlists into Plex as native playlists. Nothing extra is required for the common case: turn on a playlist's Plex sync chip in Youtarr and it appears under your account after the next sync.
+
+### Playlist visibility scope (advanced)
+
+Most people can ignore this. Under **Settings -> Plex -> Advanced: playlist visibility scope**, you can control which account owns Youtarr's playlists:
+
+- **Use my Plex admin account (default)**: the normal claimed-server case. Playlists are created under your account and are visible to you.
+- **Unclaimed server (anonymous LAN access)**: for an unclaimed server on your LAN, where Plex Web browses without a token. If a connection test detects an unclaimed server, Youtarr nudges you toward this option.
+- **A specific Plex user account**: routes the playlists through a token you paste in.
+
+Plex playlists are always owned by a single account, so there's no automatic "public" setting. To let another Plex user see a playlist, open it in Plex Web and share it (playlist menu -> Share), or use **Settings -> Manage Library Access -> [user] -> Media**. Youtarr can't grant per-user access for you.
+
+Heads up: shared playlists do not appear in the recipient's **Playlists** section - Plex lists playlists shared by another account under a separate sidebar source named **Media**. If a user reports the playlist is missing even though the share looks correct, have them check there. See [Shared Playlists Don't Appear for Other Users](../TROUBLESHOOTING.md#shared-playlists-dont-appear-for-other-users-plex) for related gotchas (library access, content-rating restrictions).
+
+For how syncing, ordering, and playlist updates work across all servers, see [Media Server Playlists](../MEDIA_SERVER_PLAYLISTS.md).
 
 ## Multi-Library Organization
 

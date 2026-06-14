@@ -7,9 +7,13 @@ const Video = require('../models/video');
 const JobVideo = require('../models/jobvideo');
 const JobVideoDownload = require('../models/jobvideodownload');
 const ChannelVideo = require('../models/channelvideo');
+const channelVideoReanchor = require('./channelVideoReanchor');
+const { PUBLISHED_AT_SOURCE } = require('./constants/publishedAtSource');
 const cron = require('node-cron');
 const MessageEmitter = require('./messageEmitter.js'); // import the helper function
 const configModule = require('./configModule');
+const { isDownloadJob } = require('./download/jobTypes');
+const downloadCleanup = require('./download/downloadCleanup');
 const logger = require('../logger');
 
 const MAX_SAVE_RETRIES = 3;
@@ -220,10 +224,7 @@ class JobModule {
 
           // Step 2: Clean up in-progress videos from disk
           try {
-            // Import downloadExecutor to access cleanup method
-            const DownloadExecutor = require('./download/downloadExecutor');
-            const downloadExecutor = new DownloadExecutor();
-            await downloadExecutor.cleanupInProgressVideos(jobId);
+            await downloadCleanup.cleanupInProgressVideos(jobId);
           } catch (cleanupErr) {
             logger.error({ err: cleanupErr, jobId }, 'Error cleaning up in-progress videos for job');
           }
@@ -728,6 +729,7 @@ class JobModule {
       thumbnail,
       duration,
       publishedAt,
+      published_at_source: publishedAt ? PUBLISHED_AT_SOURCE.EXACT : null,
       availability,
       media_type,
       ignored: false,
@@ -756,6 +758,25 @@ class JobModule {
       if (age_limit != null) updates.age_limit = age_limit;
       if (normalized_rating != null) updates.normalized_rating = normalized_rating;
       await record.update(updates);
+
+      // The .info.json upload_date is authoritative; it replaces estimated and
+      // approximate dates from flat-playlist fetches. Delegated to the re-anchor
+      // module (which owns the publishedAt write) so the row's existing position
+      // is read first and neighbouring synthetic dates are shifted to keep the
+      // channel in YouTube order. On create the date is set via defaults above;
+      // a brand-new row has no prior position to preserve, so no re-anchor.
+      if (publishedAt) {
+        try {
+          await channelVideoReanchor.applyExactDateForGroup({
+            channelId: channel_id,
+            mediaType: media_type,
+            youtubeId: youtube_id,
+            exactIso: publishedAt,
+          });
+        } catch (reanchorErr) {
+          logger.error({ err: reanchorErr, youtube_id }, 'Error re-anchoring channel video order after download');
+        }
+      }
     }
   }
 
@@ -1088,14 +1109,11 @@ class JobModule {
       return;
     }
 
-    // Download-specific completion logic: only for download job types.
     // Non-download jobs (e.g. Import Subscriptions) manage their own output field.
-    const isDownloadJob = job.jobType && (
-      job.jobType.includes('Channel Downloads') || job.jobType.includes('Manually Added Urls')
-    );
+    const jobIsDownload = isDownloadJob(job.jobType);
 
     if (
-      isDownloadJob && (
+      jobIsDownload && (
         updatedFields.status === 'Complete' ||
         updatedFields.status === 'Error' ||
         updatedFields.status === 'Complete with Warnings' ||
@@ -1134,7 +1152,7 @@ class JobModule {
                            updatedFields.status === 'Terminated' ||
                            updatedFields.status === 'Killed';
 
-    if (isCompletedJob && isDownloadJob) {
+    if (isCompletedJob && jobIsDownload) {
       // For completed download jobs, reload videos from DB to ensure accurate counts
       // This is especially important for multi-group downloads where each group
       // updates the job with only its own videos, potentially losing earlier videos

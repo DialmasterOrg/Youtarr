@@ -120,29 +120,29 @@ describe('DownloadNew', () => {
 
     expect(screen.getByText('Start Downloads')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Manual Download' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: 'Channel Download' })).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByRole('tab', { name: 'Channel/Playlist Downloads' })).toHaveAttribute('aria-selected', 'false');
     expect(screen.getByTestId('manual-download')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Download new from all channels' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Download new from all channels/playlists' })).not.toBeInTheDocument();
   });
 
   test('switches between tabs correctly', async () => {
     const user = userEvent.setup({ delay: null });
     render(<DownloadNew {...defaultProps} />);
 
-    const channelTab = screen.getByRole('tab', { name: 'Channel Download' });
+    const channelTab = screen.getByRole('tab', { name: 'Channel/Playlist Downloads' });
     await user.click(channelTab);
 
     expect(channelTab).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: 'Manual Download' })).toHaveAttribute('aria-selected', 'false');
     expect(screen.queryByTestId('manual-download')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Download new from all channels' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Download new from all channels/playlists' })).toBeInTheDocument();
 
     const manualTab = screen.getByRole('tab', { name: 'Manual Download' });
     await user.click(manualTab);
 
     expect(manualTab).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('manual-download')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Download new from all channels' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Download new from all channels/playlists' })).not.toBeInTheDocument();
   });
 
   test('uses config from useConfig hook', async () => {
@@ -216,10 +216,10 @@ describe('DownloadNew', () => {
     const user = userEvent.setup({ delay: null });
     render(<DownloadNew {...defaultProps} />);
 
-    const channelTab = screen.getByRole('tab', { name: 'Channel Download' });
+    const channelTab = screen.getByRole('tab', { name: 'Channel/Playlist Downloads' });
     await user.click(channelTab);
 
-    const downloadButton = screen.getByRole('button', { name: 'Download new from all channels' });
+    const downloadButton = screen.getByRole('button', { name: 'Download new from all channels/playlists' });
     await user.click(downloadButton);
 
     expect(screen.getByTestId('download-settings-dialog')).toBeInTheDocument();
@@ -238,10 +238,10 @@ describe('DownloadNew', () => {
 
     render(<DownloadNew {...defaultProps} />);
 
-    const channelTab = screen.getByRole('tab', { name: 'Channel Download' });
+    const channelTab = screen.getByRole('tab', { name: 'Channel/Playlist Downloads' });
     await user.click(channelTab);
 
-    const downloadButton = screen.getByRole('button', { name: 'Download new from all channels' });
+    const downloadButton = screen.getByRole('button', { name: 'Download new from all channels/playlists' });
     await user.click(downloadButton);
 
     const confirmButton = screen.getByTestId('confirm-with-settings');
@@ -282,10 +282,10 @@ describe('DownloadNew', () => {
 
     render(<DownloadNew {...defaultProps} />);
 
-    const channelTab = screen.getByRole('tab', { name: 'Channel Download' });
+    const channelTab = screen.getByRole('tab', { name: 'Channel/Playlist Downloads' });
     await user.click(channelTab);
 
-    const downloadButton = screen.getByRole('button', { name: 'Download new from all channels' });
+    const downloadButton = screen.getByRole('button', { name: 'Download new from all channels/playlists' });
     await user.click(downloadButton);
 
     const confirmButton = screen.getByTestId('confirm-default');
@@ -316,10 +316,10 @@ describe('DownloadNew', () => {
 
     render(<DownloadNew {...defaultProps} />);
 
-    const channelTab = screen.getByRole('tab', { name: 'Channel Download' });
+    const channelTab = screen.getByRole('tab', { name: 'Channel/Playlist Downloads' });
     await user.click(channelTab);
 
-    const downloadButton = screen.getByRole('button', { name: 'Download new from all channels' });
+    const downloadButton = screen.getByRole('button', { name: 'Download new from all channels/playlists' });
     await user.click(downloadButton);
 
     const confirmButton = screen.getByTestId('confirm-default');
@@ -339,10 +339,10 @@ describe('DownloadNew', () => {
     const user = userEvent.setup({ delay: null });
     render(<DownloadNew {...defaultProps} />);
 
-    const channelTab = screen.getByRole('tab', { name: 'Channel Download' });
+    const channelTab = screen.getByRole('tab', { name: 'Channel/Playlist Downloads' });
     await user.click(channelTab);
 
-    const downloadButton = screen.getByRole('button', { name: 'Download new from all channels' });
+    const downloadButton = screen.getByRole('button', { name: 'Download new from all channels/playlists' });
     await user.click(downloadButton);
 
     expect(screen.getByTestId('download-settings-dialog')).toBeInTheDocument();
@@ -429,10 +429,10 @@ describe('DownloadNew', () => {
 
     render(<DownloadNew {...defaultProps} token={null} />);
 
-    const channelTab = screen.getByRole('tab', { name: 'Channel Download' });
+    const channelTab = screen.getByRole('tab', { name: 'Channel/Playlist Downloads' });
     await user.click(channelTab);
 
-    const downloadButton = screen.getByRole('button', { name: 'Download new from all channels' });
+    const downloadButton = screen.getByRole('button', { name: 'Download new from all channels/playlists' });
     await user.click(downloadButton);
 
     const confirmButton = screen.getByTestId('confirm-default');
@@ -478,10 +478,10 @@ describe('DownloadNew', () => {
       expect(screen.getByText('Resolution: 4K')).toBeInTheDocument();
     });
 
-    const channelTab = screen.getByRole('tab', { name: 'Channel Download' });
+    const channelTab = screen.getByRole('tab', { name: 'Channel/Playlist Downloads' });
     await user.click(channelTab);
 
-    const downloadButton = screen.getByRole('button', { name: 'Download new from all channels' });
+    const downloadButton = screen.getByRole('button', { name: 'Download new from all channels/playlists' });
     await user.click(downloadButton);
 
     expect(screen.getByText('Resolution: 4K')).toBeInTheDocument();
@@ -492,15 +492,15 @@ describe('DownloadNew', () => {
     const user = userEvent.setup({ delay: null });
     const { rerender } = render(<DownloadNew {...defaultProps} />);
 
-    const channelTab = screen.getByRole('tab', { name: 'Channel Download' });
+    const channelTab = screen.getByRole('tab', { name: 'Channel/Playlist Downloads' });
     await user.click(channelTab);
 
-    expect(screen.getByRole('button', { name: 'Download new from all channels' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Download new from all channels/playlists' })).toBeInTheDocument();
 
     rerender(<DownloadNew {...defaultProps} videoUrls="updated" />);
 
     expect(channelTab).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('button', { name: 'Download new from all channels' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Download new from all channels/playlists' })).toBeInTheDocument();
   });
 
   test('handles partial config response with defaults', async () => {
@@ -533,10 +533,10 @@ describe('DownloadNew', () => {
     });
 
     const user = userEvent.setup({ delay: null });
-    const channelTab = screen.getByRole('tab', { name: 'Channel Download' });
+    const channelTab = screen.getByRole('tab', { name: 'Channel/Playlist Downloads' });
     await user.click(channelTab);
 
-    const downloadButton = screen.getByRole('button', { name: 'Download new from all channels' });
+    const downloadButton = screen.getByRole('button', { name: 'Download new from all channels/playlists' });
     await user.click(downloadButton);
 
     expect(screen.getByText('Resolution: 480')).toBeInTheDocument();

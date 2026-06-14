@@ -19,6 +19,7 @@ import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
 import ProtectionShieldButton from '../shared/ProtectionShieldButton';
 import ThumbnailClickOverlay from '../shared/ThumbnailClickOverlay';
 import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_THEMED_CHIP_SMALL_STYLE } from '../shared/chipStyles';
+import { getPublishedDateDisplay } from './publishedDateDisplay';
 
 interface VideoCardProps {
   video: ChannelVideo;
@@ -336,13 +337,12 @@ function VideoCard({
             <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
               {/* Date and download format info */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                {video.media_type !== 'short' && video.publishedAt && (
+                {video.media_type !== 'short' && (video.publishedAt || video.published_at_source === 'estimated') && (
                 <Typography variant="caption" color="text.secondary" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     <CalendarTodayIcon size={12} />
-                  {isMobile
-                    ? new Date(video.publishedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-                    : new Date(video.publishedAt).toLocaleDateString()
-                  }
+                  {getPublishedDateDisplay(video, (d) => isMobile
+                    ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+                    : d.toLocaleDateString())}
                 </Typography>
               )}
                 {video.added && !video.removed && (

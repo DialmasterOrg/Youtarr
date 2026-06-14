@@ -66,6 +66,12 @@ class ChannelSettingsModule {
 
     const trimmed = subFolder.trim();
 
+    // Check for reserved names
+    const RESERVED_SUB_FOLDERS = ['playlists'];
+    if (RESERVED_SUB_FOLDERS.includes(trimmed.toLowerCase())) {
+      return { valid: false, error: `Subfolder name "${trimmed}" is reserved by Youtarr and cannot be used` };
+    }
+
     // Check length
     if (trimmed.length > 100) {
       return { valid: false, error: 'Subfolder name must be 100 characters or less' };
@@ -245,35 +251,13 @@ class ChannelSettingsModule {
   }
 
   /**
-   * Get all valid normalized ratings from ratingMapper (cached)
-   * @returns {string[]} - Array of valid rating strings
-   */
-  getValidNormalizedRatings() {
-    return ratingMapper.getValidNormalizedRatings();
-  }
-
-  /**
-   * Validate default rating setting
+   * Validate/normalize a channel default rating.
    * @param {string|null} defaultRating - Default rating to validate
-   * @returns {Object} - { valid: boolean, error?: string }
+   * @returns {Object} - { valid: boolean, value?: (string|null), error?: string }
    */
   validateDefaultRating(defaultRating) {
-    // NULL is valid (no default rating)
-    if (defaultRating === null || defaultRating === undefined) {
-      return { valid: true };
-    }
-
-    const validRatings = this.getValidNormalizedRatings();
-    const trimmed = defaultRating.trim().toUpperCase();
-
-    if (!validRatings.includes(trimmed)) {
-      return {
-        valid: false,
-        error: `Invalid rating. Valid values: ${validRatings.join(', ')}, or null for no default`,
-      };
-    }
-
-    return { valid: true };
+    // Delegate to the canonical validator. NR and null both mean "no default".
+    return ratingMapper.validateRating(defaultRating);
   }
 
   /**
@@ -709,12 +693,15 @@ class ChannelSettingsModule {
       }
     }
 
-    // Validate default rating if provided
+    // Validate default rating if provided. Capture the normalized value so the
+    // write below persists null (not the literal 'NR') when NR is supplied.
+    let normalizedDefaultRating;
     if (settings.default_rating !== undefined) {
       const validation = this.validateDefaultRating(settings.default_rating);
       if (!validation.valid) {
         throw new Error(validation.error);
       }
+      normalizedDefaultRating = validation.value;
     }
 
     // Validate skip_video_folder if provided
@@ -782,9 +769,7 @@ class ChannelSettingsModule {
         : null;
     }
     if (settings.default_rating !== undefined) {
-      updateData.default_rating = settings.default_rating
-        ? settings.default_rating.trim()
-        : null;
+      updateData.default_rating = normalizedDefaultRating;
     }
     if (settings.audio_format !== undefined) {
       updateData.audio_format = settings.audio_format;

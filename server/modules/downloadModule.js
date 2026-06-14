@@ -4,7 +4,10 @@ const plexModule = require('./plexModule');
 const DownloadExecutor = require('./download/downloadExecutor');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const tempPathManager = require('./download/tempPathManager');
+const { MANUAL_DOWNLOAD_LABEL, playlistJobLabel } = require('./download/jobTypes');
 const logger = require('../logger');
+
+const DEFAULT_FILES_TO_DOWNLOAD = 5;
 
 class DownloadModule {
   constructor() {
@@ -79,6 +82,20 @@ class DownloadModule {
     return direct && typeof direct === 'object' ? direct : {};
   }
 
+  /**
+   * Associate a freshly-created job with its download run (if any) so the run
+   * can aggregate a single summary across all its jobs. No-op when the job is
+   * not part of a run (e.g. a standalone manual download).
+   * @param {Object} jobData - job payload that may carry a runId
+   * @param {string} jobId - id returned from jobModule.addOrUpdateJob
+   */
+  registerJobWithRun(jobData, jobId) {
+    const runId = this.getJobDataValue(jobData, 'runId');
+    if (!runId || !jobId) return;
+    const downloadRunTracker = require('./download/downloadRunTracker');
+    downloadRunTracker.registerJob(runId, jobId);
+  }
+
   async doChannelDownloads(jobData = {}, isNextJob = false) {
     const overrideSettings = this.getOverrideSettings(jobData);
     const overrideResolution = overrideSettings.resolution || null;
@@ -127,6 +144,37 @@ class DownloadModule {
     }
   }
 
+  /**
+   * Trigger channel downloads, then enqueue auto-download for every enabled
+   * playlist so playlist downloads always queue behind channel downloads.
+   * Ungrouped channel downloads return after spawning yt-dlp (not on completion),
+   * so the playlist YouTube refresh can overlap an active channel download; the
+   * job queue still serializes the actual downloads. Manual override settings
+   * (resolution, videoCount, allowRedownload) carry through to playlists too.
+   * @param {Object} jobData - optional override settings payload
+   * @returns {Promise<void>}
+   */
+  async doChannelAndPlaylistDownloads(jobData = {}) {
+    const downloadRunTracker = require('./download/downloadRunTracker');
+    const runId = downloadRunTracker.startRun();
+    this.setJobDataValue(jobData, 'runId', runId);
+
+    try {
+      await this.doChannelDownloads(jobData);
+      try {
+        const playlistModule = require('./playlistModule');
+        const overrideSettings = this.getOverrideSettings(jobData);
+        await playlistModule.playlistAutoDownload(overrideSettings, runId);
+      } catch (err) {
+        logger.error({ err }, 'playlistAutoDownload failed after channel downloads');
+      }
+    } finally {
+      // Seal once every job is enqueued so the run can emit one aggregated
+      // summary as soon as its last job finishes.
+      downloadRunTracker.seal(runId);
+    }
+  }
+
   async doSingleChannelDownloadJob(jobData = {}, isNextJob = false) {
     const jobType = 'Channel Downloads';
     logger.info('Running channel downloads job');
@@ -142,6 +190,8 @@ class DownloadModule {
       },
       isNextJob
     );
+
+    this.registerJobWithRun(jobData, jobId);
 
     if (jobModule.getJob(jobId).status === 'In Progress') {
       let tempChannelsFile = null;
@@ -208,6 +258,8 @@ class DownloadModule {
       logger.warn({ jobType }, 'Failed to create grouped channel download job');
       return;
     }
+
+    this.registerJobWithRun(jobData, jobId);
 
     const job = jobModule.getJob(jobId);
     if (!job || job.status !== 'In Progress') {
@@ -321,28 +373,46 @@ class DownloadModule {
         finalPayload.warning = true;
       }
 
-      MessageEmitter.emitMessage(
-        'broadcast',
-        null,
-        'download',
-        'downloadProgress',
-        finalPayload
-      );
-
-      logger.info({ jobId, totalVideos, totalFailed: failedVideos.length, totalTerminated: terminatedChannels.length, totalTerminationFailures: terminationFailures.length, groupCount: groups.length },
-        'Emitted final summary for multi-group download');
-
-      // Include termination-only runs (zero downloads, one or more terminated
-      // or one or more termination-persistence failures).
-      if (totalVideos > 0 || terminatedChannels.length > 0 || terminationFailures.length > 0) {
-        const notificationModule = require('./notificationModule');
-        notificationModule.sendDownloadNotification({
-          finalSummary: finalSummary,
+      // When this grouped job is part of a run, hand its totals to the run
+      // tracker, which emits one aggregated summary and notification once the
+      // run's last job finishes. Otherwise emit/notify per-job.
+      const downloadRunTracker = require('./download/downloadRunTracker');
+      const runId = this.getJobDataValue(jobData, 'runId');
+      if (downloadRunTracker.isActive(runId)) {
+        downloadRunTracker.recordJobResult(runId, jobId, {
+          totalDownloaded: totalVideos,
+          totalSkipped: totalSkipped,
+          totalFailed: failedVideos.length,
+          failedVideos: failedVideos,
+          terminatedChannels: terminatedChannels,
+          terminationFailures: terminationFailures,
           videoData: completedJob.data.videos || [],
-          channelName: `${groups.length} groups`
-        }).catch(err => {
-          logger.error({ err }, 'Failed to send notification for multi-group download');
+          jobType: 'Channel Downloads',
         });
+      } else {
+        MessageEmitter.emitMessage(
+          'broadcast',
+          null,
+          'download',
+          'downloadProgress',
+          finalPayload
+        );
+
+        logger.info({ jobId, totalVideos, totalFailed: failedVideos.length, totalTerminated: terminatedChannels.length, totalTerminationFailures: terminationFailures.length, groupCount: groups.length },
+          'Emitted final summary for multi-group download');
+
+        // Include termination-only runs (zero downloads, one or more terminated
+        // or one or more termination-persistence failures).
+        if (totalVideos > 0 || terminatedChannels.length > 0 || terminationFailures.length > 0) {
+          const notificationModule = require('./notificationModule');
+          notificationModule.sendDownloadNotification({
+            finalSummary: finalSummary,
+            videoData: completedJob.data.videos || [],
+            channelName: `${groups.length} groups`
+          }).catch(err => {
+            logger.error({ err }, 'Failed to send notification for multi-group download');
+          });
+        }
       }
     }
 
@@ -429,7 +499,7 @@ class DownloadModule {
       this.downloadExecutor.tempChannelsFile = tempChannelsFile;
 
       // Execute download with skipJobTransition flag
-      await this.downloadExecutor.doDownload(args, jobId, jobType, 0, null, allowRedownload, skipJobTransition, null, undefined, skipVideoFolder);
+      await this.downloadExecutor.doDownload(args, jobId, jobType, 0, null, allowRedownload, skipJobTransition, { skipVideoFolder });
     } catch (err) {
       logger.error({ err, jobType }, 'Error executing group download');
       if (tempChannelsFile) {
@@ -448,10 +518,14 @@ class DownloadModule {
     const jobData = reqOrJobData.body ? reqOrJobData.body : reqOrJobData;
 
     // Build job type with optional source indicator
-    let jobType = 'Manually Added Urls';
+    let jobType = MANUAL_DOWNLOAD_LABEL;
     const initiatedBy = this.getJobDataValue(jobData, 'initiatedBy');
     if (initiatedBy && initiatedBy.type === 'api_key' && initiatedBy.name) {
-      jobType = `Manually Added Urls (via API: ${initiatedBy.name})`;
+      jobType = `${MANUAL_DOWNLOAD_LABEL} (via API: ${initiatedBy.name})`;
+    }
+    const jobLabel = this.getJobDataValue(jobData, 'jobLabel');
+    if (jobLabel && typeof jobLabel === 'string') {
+      jobType = jobLabel;
     }
 
     logger.info({ jobData }, 'Running specific downloads job');
@@ -470,6 +544,8 @@ class DownloadModule {
       },
       isNextJob
     );
+
+    this.registerJobWithRun(jobData, jobId);
 
     if (jobModule.getJob(jobId).status === 'In Progress') {
       // Use override settings if provided, otherwise use defaults
@@ -500,6 +576,8 @@ class DownloadModule {
       const resolution = effectiveQuality || configModule.config.preferredResolution || '1080';
       const allowRedownload = overrideSettings.allowRedownload || false;
       const subfolderOverride = overrideSettings.subfolder !== undefined ? overrideSettings.subfolder : null;
+      const subfolderFallback = overrideSettings.subfolderFallback !== undefined ? overrideSettings.subfolderFallback : null;
+      const ratingFallback = overrideSettings.ratingFallback !== undefined ? overrideSettings.ratingFallback : null;
       // Use override audioFormat if explicitly provided (even if null), otherwise fall back to channel's audio_format setting
       const audioFormat = overrideSettings.audioFormat !== undefined
         ? overrideSettings.audioFormat
@@ -575,11 +653,162 @@ class DownloadModule {
         urls,
         allowRedownload,
         false,
-        subfolderOverride,
-        // Pass rating override from overrideSettings if present
-        overrideSettings.rating !== undefined ? overrideSettings.rating : undefined,
-        skipVideoFolder
+        {
+          subfolderOverride,
+          subfolderFallback,
+          ratingOverride: overrideSettings.rating !== undefined ? overrideSettings.rating : undefined,
+          ratingFallback,
+          skipVideoFolder,
+          // Owning channel / per-video owner map for routing at finalize; see
+          // the resolution priority in videoDownloadPostProcessFiles.js.
+          ownerChannelId: channelId || null,
+          ownerChannelMap: this.getJobDataValue(jobData, 'ownerChannelMap') || null,
+        }
       );
+    }
+  }
+
+  async doPlaylistDownloads(playlist, options = {}) {
+    const PlaylistVideo = require('../models/playlistvideo');
+    const Video = require('../models/video');
+    const Channel = require('../models/channel');
+    const playlistModule = require('./playlistModule');
+    const playlistDownloadGrouper = require('./playlistDownloadGrouper');
+    const downloadSettingsResolver = require('./download/downloadSettingsResolver');
+
+    const overrideSettings =
+      options.overrideSettings && typeof options.overrideSettings === 'object'
+        ? options.overrideSettings
+        : {};
+    const allowRedownload = !!overrideSettings.allowRedownload;
+
+    const youtubeIds = Array.isArray(options.youtubeIds) ? options.youtubeIds : [];
+    const isBulk = youtubeIds.length === 0;
+
+    // Bulk "download new" runs refresh from YouTube first so newly-added videos
+    // are discovered; explicit-id downloads never refresh.
+    if (isBulk && options.refreshFirst) {
+      try {
+        await playlistModule.fetchAllPlaylistVideos(playlist.playlist_id);
+      } catch (err) {
+        logger.error({ err, playlist_id: playlist.playlist_id }, 'Playlist refresh before download failed');
+      }
+    }
+
+    // Specific ids: download exactly those, overriding `ignored`. Otherwise
+    // all non-ignored videos. When limiting, order DESC so the newest X
+    // (tail = newest-added) are selected; otherwise preserve ASC order.
+    const bulkOrder = (isBulk && options.limitToRecent)
+      ? [['position', 'DESC']]
+      : [['position', 'ASC']];
+
+    const query = youtubeIds.length
+      ? {
+        where: { playlist_id: playlist.playlist_id, youtube_id: youtubeIds },
+        order: [['position', 'ASC']],
+        attributes: ['youtube_id', 'channel_id', 'channel_name', 'title'],
+      }
+      : {
+        where: { playlist_id: playlist.playlist_id, ignored: false },
+        order: bulkOrder,
+        attributes: ['youtube_id', 'channel_id', 'channel_name', 'title'],
+      };
+
+    if (isBulk && options.limitToRecent) {
+      query.limit = overrideSettings.videoCount || configModule.config.channelFilesToDownload || DEFAULT_FILES_TO_DOWNLOAD;
+    }
+
+    const entries = await PlaylistVideo.findAll(query);
+
+    if (!entries.length) return;
+
+    const toDownload = [];
+    for (const entry of entries) {
+      // A row that went private since the last refresh would fail in yt-dlp and
+      // show up as a confusing failed download. Skip it; the next refresh prunes it.
+      if (playlistModule.isUnavailableTitle(entry.title)) continue;
+
+      if (!allowRedownload) {
+        const already = await Video.findOne({ where: { youtubeId: entry.youtube_id } });
+        if (already) continue;
+      }
+
+      if (entry.channel_id) {
+        const channelExists = await Channel.findOne({ where: { channel_id: entry.channel_id } });
+        if (!channelExists) {
+          await playlistModule.ensureSourceChannel(
+            { channel_id: entry.channel_id, uploader: entry.channel_name || null },
+            playlist
+          );
+        }
+      }
+
+      toDownload.push({ youtube_id: entry.youtube_id, channel_id: entry.channel_id });
+    }
+
+    if (!toDownload.length) return;
+
+    const groups = await playlistDownloadGrouper.buildGroups(playlist, toDownload, overrideSettings);
+    const jobLabel = playlistJobLabel(playlist);
+
+    // Per-video owner channel captured at playlist sync, so the post-processor
+    // can route VEVO/Topic videos by the real owning channel instead of the
+    // auto-generated upload channel in their .info.json.
+    const ownerChannelMap = {};
+    for (const entry of toDownload) {
+      if (entry.channel_id) ownerChannelMap[entry.youtube_id] = entry.channel_id;
+    }
+
+    // Routing directives (dialog override + playlist default) are uniform across the
+    // whole download, so resolve them once; channel and global tiers resolve per-video
+    // at finalize. See downloadSettingsResolver.
+    const routing = downloadSettingsResolver.buildRoutingDirectives({ override: overrideSettings, playlist });
+
+    for (const group of groups) {
+      const urls = group.youtubeIds.map((id) => `https://www.youtube.com/watch?v=${id}`);
+      const groupOverride = {
+        resolution: group.resolution,
+        audioFormat: group.audioFormat,
+        skipVideoFolder: group.skipVideoFolder,
+        allowRedownload,
+      };
+      if (routing.subfolderOverride !== undefined) groupOverride.subfolder = routing.subfolderOverride;
+      if (routing.subfolderFallback !== undefined) groupOverride.subfolderFallback = routing.subfolderFallback;
+      if (routing.ratingOverride !== undefined) groupOverride.rating = routing.ratingOverride;
+      if (routing.ratingFallback !== undefined) groupOverride.ratingFallback = routing.ratingFallback;
+      // doSpecificDownloads accepts an Express-request shape (.body). runId ties
+      // these jobs into the parent run so its summary aggregates them.
+      await this.doSpecificDownloads({ body: { urls, overrideSettings: groupOverride, jobLabel, runId: options.runId, ownerChannelMap } });
+    }
+  }
+
+  async afterDownloadHook(downloadedYoutubeIds) {
+    if (!downloadedYoutubeIds?.length) return;
+
+    const PlaylistVideo = require('../models/playlistvideo');
+    const Playlist = require('../models/playlist');
+    const m3uGenerator = require('./m3uGenerator');
+    const { mediaServerSync } = require('./mediaServers');
+
+    const rows = await PlaylistVideo.findAll({
+      where: { youtube_id: downloadedYoutubeIds },
+      attributes: ['playlist_id'],
+    });
+
+    const playlistIds = [...new Set(rows.map((r) => r.playlist_id))];
+    if (playlistIds.length === 0) return;
+
+    const playlists = await Playlist.findAll({
+      where: { playlist_id: playlistIds, enabled: true },
+    });
+
+    for (const p of playlists) {
+      try {
+        await m3uGenerator.generatePlaylistM3U(p.id);
+        await mediaServerSync.syncPlaylist(p.id);
+      } catch (err) {
+        logger.error({ err, playlist_id: p.playlist_id }, 'afterDownloadHook failed for playlist');
+      }
     }
   }
 

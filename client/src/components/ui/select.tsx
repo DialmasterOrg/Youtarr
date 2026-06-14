@@ -47,7 +47,7 @@ export interface SelectProps {
   renderValue?: (value: string) => React.ReactNode;
   className?: string;
   children?: React.ReactNode;
-  placeholder?: string;
+  placeholder?: React.ReactNode;
   displayEmpty?: boolean;
   open?: boolean;
   onOpen?: () => void;

@@ -7,6 +7,7 @@ Complete guide for integrating Youtarr with Kodi media center.
 - [Library Setup](#library-setup)
 - [Metadata Configuration](#metadata-configuration)
 - [Multi-Library Organization](#multi-library-organization)
+- [Playlist Files (.m3u)](#playlist-files-m3u)
 - [File Structure](#file-structure)
 - [Troubleshooting](#troubleshooting)
 
@@ -96,6 +97,10 @@ Organize content by type using subfolders:
 - **Permissions**: Different access levels per source
 - **Views**: Custom view modes per content type
 - **Scanning**: Faster updates for specific sources
+
+## Playlist Files (.m3u)
+
+Youtarr doesn't push native playlists into Kodi the way it does for Plex, Jellyfin, and Emby. If you subscribe to YouTube playlists, Youtarr writes a standard `.m3u` file for each one into a `__playlists__` folder next to your videos. Import that file as a playlist source in Kodi to get the same list. See [Media Server Playlists](../MEDIA_SERVER_PLAYLISTS.md#m3u-fallback) for details.
 
 ## File Structure
 

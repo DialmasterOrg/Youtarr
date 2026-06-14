@@ -2,6 +2,7 @@
 
 const {
   buildTitle,
+  getSubtitle,
   getTerminatedCount,
   buildTerminatedCountLabel,
   formatTerminatedChannelLine,
@@ -32,6 +33,36 @@ describe('notification utils - terminated channel helpers', () => {
 
     test('falls back to video headline when all counts are zero', () => {
       expect(buildTitle(0, 0)).toBe('🎬 0 New Videos Downloaded');
+    });
+  });
+
+  describe('getSubtitle', () => {
+    test('labels channel downloads', () => {
+      expect(getSubtitle('Channel Downloads')).toBe('Channel Video Downloads');
+      expect(getSubtitle('Channel Downloads - 2 group(s)')).toBe('Channel Video Downloads');
+    });
+
+    test('labels manual downloads', () => {
+      expect(getSubtitle('Manually Added Urls')).toBe('Manually Selected Downloads');
+      expect(getSubtitle('Manually Added Urls (via API: my-key)')).toBe('Manually Selected Downloads');
+    });
+
+    test('labels playlist runs and single-playlist jobs', () => {
+      expect(getSubtitle('Playlist downloads')).toBe('Playlist Downloads');
+      expect(getSubtitle('Playlist: 💯🔥 CHALLENGE VIDEOS')).toBe('Playlist Downloads');
+    });
+
+    test('does not misclassify a playlist whose title contains "Channel"', () => {
+      expect(getSubtitle('Playlist: My Channel Mix')).toBe('Playlist Downloads');
+    });
+
+    test('labels a mixed channel + playlist run', () => {
+      expect(getSubtitle('Channel & playlist update')).toBe('Channel & Playlist Downloads');
+    });
+
+    test('defaults to manual when given an empty job type', () => {
+      expect(getSubtitle('')).toBe('Manually Selected Downloads');
+      expect(getSubtitle()).toBe('Manually Selected Downloads');
     });
   });
 
