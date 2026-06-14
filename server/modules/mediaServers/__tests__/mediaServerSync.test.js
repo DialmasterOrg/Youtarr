@@ -300,6 +300,42 @@ describe('mediaServerSync', () => {
     expect(jellyfinAdapter.createPlaylist).toHaveBeenCalled();
   });
 
+  test('aborts with one friendly warning and a concise last_error when the server is unreachable', async () => {
+    const { MediaServerUnavailableError } = require('../adapters/baseAdapter');
+    const logger = require('../../../logger');
+    Playlist.findByPk.mockResolvedValue({
+      id: 1, playlist_id: 'PL1', title: 'My PL',
+      sync_to_plex: false, sync_to_jellyfin: true, sync_to_emby: false,
+      public_on_servers: false,
+    });
+    PlaylistVideo.findAll.mockResolvedValue([{ youtube_id: 'v1', position: 1, ignored: false }]);
+    Video.findAll.mockResolvedValue([{ youtubeId: 'v1', filePath: '/youtube/A/v1.mp4' }]);
+    PlaylistSyncState.findOne.mockResolvedValue(null);
+    PlaylistSyncState.create.mockResolvedValue({});
+
+    const resolveBatch = jest.fn().mockRejectedValue(
+      new MediaServerUnavailableError({ status: 503, message: 'Request failed with status code 503' })
+    );
+    const jellyfinAdapter = makeAdapter('JellyfinAdapter', {
+      resolveItemIdsByFilepaths: resolveBatch,
+      createPlaylist: jest.fn(),
+    });
+    serverRegistry.getEnabledAdapters.mockReturnValue([jellyfinAdapter]);
+
+    await expect(mediaServerSync.syncPlaylist(1)).resolves.toBeUndefined();
+
+    // Aborted on the first resolve attempt: no backoff retry rounds.
+    expect(resolveBatch).toHaveBeenCalledTimes(1);
+    expect(jellyfinAdapter.createPlaylist).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ serverType: 'jellyfin' }),
+      expect.stringContaining('Unable to sync playlist "My PL" to Jellyfin: server not reachable or not responding')
+    );
+    expect(PlaylistSyncState.create).toHaveBeenCalledWith(
+      expect.objectContaining({ last_error: 'Jellyfin not reachable or not responding' })
+    );
+  });
+
   test('recovers from prior-failure state row (last_error set, no server_playlist_id) by updating in place', async () => {
     Playlist.findByPk.mockResolvedValue({
       id: 1, playlist_id: 'PL1', title: 'PL',

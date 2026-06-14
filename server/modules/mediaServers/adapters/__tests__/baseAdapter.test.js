@@ -1,5 +1,12 @@
 const BaseAdapter = require('../baseAdapter');
-const { extractBasename, pathSegments, trailingSegmentMatch } = require('../baseAdapter');
+const {
+  extractBasename,
+  pathSegments,
+  trailingSegmentMatch,
+  isServerUnavailableError,
+  describeHttpError,
+  MediaServerUnavailableError,
+} = require('../baseAdapter');
 
 describe('BaseAdapter.resolveItemIdsByFilepaths (default batch)', () => {
   class PerFileAdapter extends BaseAdapter {
@@ -77,6 +84,55 @@ describe('baseAdapter helpers', () => {
     test('handles empty inputs', () => {
       expect(trailingSegmentMatch([], ['a'])).toBe(0);
       expect(trailingSegmentMatch(['a'], [])).toBe(0);
+    });
+  });
+
+  describe('isServerUnavailableError', () => {
+    test('true for an axios error with no response (connection refused / timeout)', () => {
+      expect(isServerUnavailableError({ isAxiosError: true, code: 'ECONNREFUSED' })).toBe(true);
+    });
+
+    test('true for an axios 5xx (e.g. Jellyfin "loading" 503)', () => {
+      expect(isServerUnavailableError({ isAxiosError: true, response: { status: 503 } })).toBe(true);
+    });
+
+    test('false for an axios 4xx', () => {
+      expect(isServerUnavailableError({ isAxiosError: true, response: { status: 404 } })).toBe(false);
+    });
+
+    test('false for a non-axios error', () => {
+      expect(isServerUnavailableError(new Error('boom'))).toBe(false);
+      expect(isServerUnavailableError(null)).toBe(false);
+    });
+  });
+
+  describe('describeHttpError', () => {
+    test('keeps status/code/message and drops config/request/response (no token leak)', () => {
+      const err = {
+        isAxiosError: true,
+        code: 'ERR_BAD_RESPONSE',
+        message: 'Request failed with status code 503',
+        response: { status: 503, data: 'loading' },
+        config: { headers: { 'X-Emby-Token': 'SECRET' } },
+        request: { _header: 'GET /Items ... X-Emby-Token: SECRET' },
+      };
+      const out = describeHttpError(err);
+      expect(out).toEqual({ status: 503, code: 'ERR_BAD_RESPONSE', message: 'Request failed with status code 503' });
+      expect(JSON.stringify(out)).not.toContain('SECRET');
+    });
+
+    test('handles a falsy error', () => {
+      expect(describeHttpError(null)).toEqual({ message: 'unknown error' });
+    });
+  });
+
+  describe('MediaServerUnavailableError', () => {
+    test('carries status and code and is an Error', () => {
+      const e = new MediaServerUnavailableError({ status: 503, code: 'X', message: 'm' });
+      expect(e).toBeInstanceOf(Error);
+      expect(e.status).toBe(503);
+      expect(e.code).toBe('X');
+      expect(e.message).toBe('m');
     });
   });
 });

@@ -74,8 +74,45 @@ function trailingSegmentMatch(aSegments, bSegments) {
 // on large libraries are the slowest legitimate call, hence 30s.
 const REQUEST_TIMEOUT_MS = 30000;
 
+// Raised by an adapter when a media server can't be reached or isn't
+// responding (connection refused, timeout, DNS failure, or a 5xx such as
+// Jellyfin's "loading" 503). Lets the sync abort its resolve/backoff loop
+// instead of retrying an unreachable server through every round.
+class MediaServerUnavailableError extends Error {
+  constructor(info = {}) {
+    super(info.message || 'media server unavailable');
+    this.name = 'MediaServerUnavailableError';
+    this.status = info.status || null;
+    this.code = info.code || null;
+  }
+}
+
+// True when an axios error means the server itself is unreachable or not
+// responding, rather than a normal "queried fine, no such item" result. No
+// response at all (ECONNREFUSED / ETIMEDOUT / ENOTFOUND / timeout) or any 5xx
+// counts; a plain Error (e.g. a programming bug) does not.
+function isServerUnavailableError(err) {
+  if (!err || !err.isAxiosError) return false;
+  return !err.response || err.response.status >= 500;
+}
+
+// Compact, log-safe view of an axios error. Deliberately omits config / request
+// / response, which carry the request headers (and therefore the API token)
+// that the default error serializer would otherwise dump into the logs.
+function describeHttpError(err) {
+  if (!err) return { message: 'unknown error' };
+  return {
+    status: err.response?.status || null,
+    code: err.code || null,
+    message: err.message || String(err),
+  };
+}
+
 module.exports = BaseAdapter;
 module.exports.extractBasename = extractBasename;
 module.exports.pathSegments = pathSegments;
 module.exports.trailingSegmentMatch = trailingSegmentMatch;
 module.exports.REQUEST_TIMEOUT_MS = REQUEST_TIMEOUT_MS;
+module.exports.MediaServerUnavailableError = MediaServerUnavailableError;
+module.exports.isServerUnavailableError = isServerUnavailableError;
+module.exports.describeHttpError = describeHttpError;

@@ -1,6 +1,7 @@
 const logger = require('../../logger');
 const configModule = require('../configModule');
 const serverRegistry = require('./serverRegistry');
+const { MediaServerUnavailableError, describeHttpError } = require('./adapters/baseAdapter');
 const { Playlist, PlaylistVideo, PlaylistSyncState, Video } = require('../../models');
 
 // Backoff retry for resolving items after library scan. Tuned for typical Plex/Jellyfin
@@ -11,6 +12,12 @@ const ADAPTER_TYPE_TAG = {
   PlexAdapter: 'plex',
   JellyfinAdapter: 'jellyfin',
   EmbyAdapter: 'emby',
+};
+
+const SERVER_DISPLAY_NAME = {
+  plex: 'Plex',
+  jellyfin: 'Jellyfin',
+  emby: 'Emby',
 };
 
 class MediaServerSync {
@@ -72,8 +79,7 @@ class MediaServerSync {
       try {
         await this._syncToOne(playlist, videos, adapter, serverType);
       } catch (err) {
-        logger.error({ err, playlist_id: playlist.playlist_id, serverType }, 'sync failed');
-        await this._recordError(playlist.id, serverType, err.message);
+        await this._handleSyncError(err, playlist, serverType);
       }
     }
   }
@@ -107,7 +113,10 @@ class MediaServerSync {
     for (const entry of filepaths) {
       const id = resolvedByPath.get(entry.filePath);
       if (id) itemIds.push(id);
-      else logger.warn({ youtube_id: entry.youtube_id, serverType }, 'unresolved on media server, skipping');
+      else logger.warn(
+        { youtube_id: entry.youtube_id, serverType },
+        `Unable to sync item ${entry.youtube_id} for playlist "${playlist.title}" to ${SERVER_DISPLAY_NAME[serverType] || serverType}: not found on server, skipping`
+      );
     }
 
     const name = `YT: ${playlist.title}`;
@@ -121,7 +130,7 @@ class MediaServerSync {
     if (!state?.server_playlist_id && itemIds.length === 0) {
       logger.info(
         { playlist_id: playlist.playlist_id, serverType },
-        'sync: no resolvable items yet, deferring playlist creation until videos are downloaded'
+        `Deferring ${SERVER_DISPLAY_NAME[serverType] || serverType} sync of playlist "${playlist.title}": no downloaded items resolved yet`
       );
       return;
     }
@@ -186,6 +195,27 @@ class MediaServerSync {
       collect(await adapter.resolveItemIdsByFilepaths(pending));
     }
     return resolved;
+  }
+
+  // Turn a thrown sync error into one user-readable log line plus a concise
+  // recorded last_error. An unreachable/unresponsive server gets a friendly
+  // "not reachable" message; anything else logs a compact reason. Never the raw
+  // axios error, which would dump the API token into the logs.
+  async _handleSyncError(err, playlist, serverType) {
+    const serverName = SERVER_DISPLAY_NAME[serverType] || serverType;
+    if (err instanceof MediaServerUnavailableError) {
+      logger.warn(
+        { playlist_id: playlist.playlist_id, serverType },
+        `Unable to sync playlist "${playlist.title}" to ${serverName}: server not reachable or not responding. Please ensure that your media server is up and reachable.`
+      );
+      await this._recordError(playlist.id, serverType, `${serverName} not reachable or not responding`);
+      return;
+    }
+    const logData = { playlist_id: playlist.playlist_id, serverType };
+    if (err && err.isAxiosError) logData.reason = describeHttpError(err);
+    else logData.err = err;
+    logger.error(logData, `Unable to sync playlist "${playlist.title}" to ${serverName}`);
+    await this._recordError(playlist.id, serverType, err && err.message ? err.message : String(err));
   }
 
   // Never throws: this runs inside _doSync's per-adapter catch, and a
