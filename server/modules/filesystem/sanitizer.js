@@ -46,30 +46,6 @@ function sanitizePathParts(parts) {
 }
 
 /**
- * Sanitize a path for Windows compatibility, exactly like yt-dlp does with --windows-filenames
- *
- * Direct port of yt-dlp's sanitize_path(s, force=True) behavior on non-Windows systems
- *
- * @param {string} s - The path string to sanitize
- * @returns {string} - The sanitized path
- */
-function sanitizePathLikeYtDlp(s) {
-  if (!s || typeof s !== 'string') {
-    return '.';
-  }
-
-  // Preserve leading slash for absolute paths (Unix behavior with force=True)
-  const root = s.startsWith('/') ? '/' : '';
-
-  // Split by forward slash and sanitize each part
-  const parts = s.split('/');
-  const sanitizedPath = sanitizePathParts(parts).join('/');
-
-  // Return root + path, or '.' if both are empty
-  return (root || sanitizedPath) ? (root + sanitizedPath) : '.';
-}
-
-/**
  * Sanitize just a single filename/folder name component (not a full path)
  * This applies the same character replacement rules but doesn't handle path separators
  *
@@ -96,7 +72,6 @@ function sanitizeNameLikeYtDlp(name) {
 }
 
 module.exports = {
-  sanitizePathLikeYtDlp,
   sanitizeNameLikeYtDlp,
   sanitizePathParts
 };

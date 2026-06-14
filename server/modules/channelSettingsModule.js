@@ -27,14 +27,6 @@ const {
  */
 class ChannelSettingsModule {
   /**
-   * Get the sentinel value for "use global default subfolder"
-   * @returns {string} - The sentinel value
-   */
-  getGlobalDefaultSentinel() {
-    return GLOBAL_DEFAULT_SENTINEL;
-  }
-
-  /**
    * Resolve the effective subfolder for a channel
    * @param {string|null} channelSubFolder - The channel's sub_folder DB value
    * @returns {string|null} - The actual subfolder to use (without __ prefix), or null for root
@@ -320,18 +312,6 @@ class ChannelSettingsModule {
     }
     const deduped = Array.from(new Set(parts));
     return { valid: true, normalized: deduped.join(',') };
-  }
-
-  /**
-   * Get the full directory path for a channel, including subfolder if set
-   * @param {Object} channel - Channel database record
-   * @returns {string} - Full directory path
-   */
-  getChannelDirectory(channel) {
-    const baseDir = configModule.directoryPath;
-    const effectiveSubfolder = this.resolveEffectiveSubfolder(channel.sub_folder);
-    const channelName = resolveChannelFolderName(channel);
-    return buildChannelPath(baseDir, effectiveSubfolder, channelName);
   }
 
   /**

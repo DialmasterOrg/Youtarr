@@ -42,7 +42,6 @@ jest.mock('../jobModule', () => ({
 
 jest.mock('../plexModule', () => ({
   refreshLibrary: jest.fn().mockResolvedValue(true),
-  refreshLibraryForSubfolder: jest.fn().mockResolvedValue(true),
   refreshLibrariesForSubfolders: jest.fn().mockResolvedValue(undefined),
 }));
 
@@ -352,50 +351,6 @@ describe('ChannelSettingsModule', () => {
       childProcess.execFileSync.mockReturnValue(JSON.stringify({ matches: false }));
       const result = channelSettingsModule.validateTitleRegex('  test  ');
       expect(result.valid).toBe(true);
-    });
-  });
-
-  describe('getChannelDirectory', () => {
-    test('should return base directory path when no subfolder', () => {
-      const channel = { ...mockChannel, uploader: 'TestChannel' };
-      const result = channelSettingsModule.getChannelDirectory(channel);
-      expect(result).toBe('/test/output/TestChannel');
-    });
-
-    test('should include subfolder with __ prefix', () => {
-      const channel = { ...mockChannel, uploader: 'TestChannel', sub_folder: 'Music' };
-      const result = channelSettingsModule.getChannelDirectory(channel);
-      expect(result).toBe('/test/output/__Music/TestChannel');
-    });
-
-    test('should trim subfolder whitespace', () => {
-      const channel = { ...mockChannel, uploader: 'TestChannel', sub_folder: '  Music  ' };
-      const result = channelSettingsModule.getChannelDirectory(channel);
-      expect(result).toBe('/test/output/__Music/TestChannel');
-    });
-
-    test('should handle empty subfolder string as null', () => {
-      const channel = { ...mockChannel, uploader: 'TestChannel', sub_folder: '' };
-      const result = channelSettingsModule.getChannelDirectory(channel);
-      expect(result).toBe('/test/output/TestChannel');
-    });
-
-    test('should prefer folder_name over uploader when both exist', () => {
-      const channel = { ...mockChannel, uploader: 'RawChannel#Name', folder_name: 'RawChannel_Name' };
-      const result = channelSettingsModule.getChannelDirectory(channel);
-      expect(result).toBe('/test/output/RawChannel_Name');
-    });
-
-    test('should fall back to uploader when folder_name is null', () => {
-      const channel = { ...mockChannel, uploader: 'TestChannel', folder_name: null };
-      const result = channelSettingsModule.getChannelDirectory(channel);
-      expect(result).toBe('/test/output/TestChannel');
-    });
-
-    test('should use folder_name with subfolder', () => {
-      const channel = { ...mockChannel, uploader: 'RawName#Special', folder_name: 'RawName_Special', sub_folder: 'Music' };
-      const result = channelSettingsModule.getChannelDirectory(channel);
-      expect(result).toBe('/test/output/__Music/RawName_Special');
     });
   });
 

@@ -1,24 +1,6 @@
 import React from 'react';
-import * as ToastPrimitive from '@radix-ui/react-toast';
 import { X } from 'lucide-react';
 import { cn } from '../../lib/cn';
-
-const ToastProvider = ToastPrimitive.Provider;
-const ToastViewport = React.forwardRef<
-  React.ElementRef<typeof ToastPrimitive.Viewport>,
-  React.ComponentPropsWithoutRef<typeof ToastPrimitive.Viewport>
->(({ className, ...props }, ref) => (
-  <ToastPrimitive.Viewport
-    ref={ref}
-    className={cn(
-      'fixed bottom-4 left-1/2 -translate-x-1/2 z-[9999]',
-      'flex flex-col gap-2 w-[360px] max-w-[90vw]',
-      className
-    )}
-    {...props}
-  />
-));
-ToastViewport.displayName = 'ToastViewport';
 
 const enhanceSnackbarChildren = (children: React.ReactNode) => {
   if (!React.isValidElement(children)) {
@@ -109,4 +91,4 @@ const Snackbar: React.FC<SnackbarProps> = ({
   );
 };
 
-export { Snackbar, ToastProvider, ToastViewport };
+export { Snackbar };

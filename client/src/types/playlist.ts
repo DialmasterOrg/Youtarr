@@ -81,11 +81,4 @@ export interface PlaylistSubscribeSettings {
   default_rating?: string | null;
 }
 
-export interface PlaylistSyncState {
-  server_type: 'plex' | 'jellyfin' | 'emby';
-  server_playlist_id: string | null;
-  last_synced_at: string | null;
-  last_error: string | null;
-}
-
 export type MediaServerType = 'plex' | 'jellyfin' | 'emby';

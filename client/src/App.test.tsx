@@ -81,12 +81,6 @@ jest.mock('./components/ChannelPage', () => {
   };
 });
 
-jest.mock('./components/StorageStatus', () => {
-  return function StorageStatus({ token }: { token: string | null }) {
-    return <div data-testid="storage-status">Storage Status - Token: {token}</div>;
-  };
-});
-
 jest.mock('./components/ChangelogPage', () => {
   return function ChangelogPage() {
     return <div data-testid="changelog-page">Changelog Page Component</div>;

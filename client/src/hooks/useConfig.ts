@@ -4,12 +4,6 @@ import { DEFAULT_CONFIG } from '../config/configSchema';
 
 export const CONFIG_UPDATED_EVENT = 'config-updated';
 
-// Simple type for components that only need basic config fields
-export interface AppConfig {
-  preferredResolution?: string;
-  [key: string]: any;
-}
-
 interface UseConfigResult {
   config: ConfigState;
   initialConfig: ConfigState | null;

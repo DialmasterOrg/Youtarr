@@ -267,48 +267,5 @@ const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
   }
 );
 IconButton.displayName = 'IconButton';
-/* ─── Fab ─────────────────────────────────────────────── */
-export interface FabProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  color?: 'primary' | 'secondary' | 'error' | 'default';
-  size?: 'small' | 'medium' | 'large';
-  variant?: 'circular' | 'extended';
-  children?: React.ReactNode;
-}
 
-const colorMap: Record<string, string> = {
-  primary: 'bg-primary text-primary-foreground hover:bg-primary/90',
-  secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/90',
-  error: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
-  default: 'bg-muted text-foreground hover:bg-muted/80',
-};
-
-const sizeMap: Record<string, string> = {
-  small: 'w-10 h-10',
-  medium: 'w-14 h-14',
-  large: 'w-16 h-16',
-};
-
-const Fab = React.forwardRef<HTMLButtonElement, FabProps>(
-  ({ color = 'primary', size = 'medium', variant = 'circular', className, children, style, ...props }, ref) => {
-    return (
-      <button
-        ref={ref}
-        type="button"
-        className={cn(
-          'rounded-full flex items-center justify-center shadow-lg transition-all duration-[var(--transition-base)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-          colorMap[color] ?? colorMap.primary,
-          sizeMap[size] ?? sizeMap.medium,
-          variant === 'extended' ? 'rounded-2xl px-4 gap-2' : '',
-          className
-        )}
-        style={style}
-        {...props}
-      >
-        {children}
-      </button>
-    );
-  }
-);
-Fab.displayName = 'Fab';
-
-export { Button, IconButton, Fab, buttonVariants };
+export { Button, IconButton, buttonVariants };
