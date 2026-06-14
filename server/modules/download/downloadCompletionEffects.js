@@ -69,6 +69,16 @@ async function runCompletionSideEffects({
     }
   }
 
+  // Fill in playlist_video.channel_id and auto-create source channels from the
+  // channel_ids learned during this download (see backfillDownloadedVideoChannels).
+  if (videoData && videoData.length > 0) {
+    try {
+      await require('../playlistModule').backfillDownloadedVideoChannels(videoData);
+    } catch (err) {
+      logger.error({ err }, 'Failed to backfill playlist video channels');
+    }
+  }
+
   // Trigger playlist M3U regeneration and media-server sync for any playlists
   // that contain videos from this download batch.
   if (videoData && videoData.length > 0) {

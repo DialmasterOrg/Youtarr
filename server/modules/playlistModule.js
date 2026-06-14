@@ -1,7 +1,7 @@
 const { spawn } = require('child_process');
 const { Op } = require('sequelize');
 const logger = require('../logger');
-const { Playlist, PlaylistVideo } = require('../models');
+const { Playlist, PlaylistVideo, Channel } = require('../models');
 const youtubeApi = require('./youtubeApi');
 
 // yt-dlp's flat-playlist listing still returns private/deleted/members-only
@@ -302,6 +302,85 @@ class PlaylistModule {
       null,
       seed
     );
+  }
+
+  // A finished download's .info.json carries a per-video channel_id that the
+  // flat-playlist listing often omits, leaving playlist_video.channel_id null.
+  // Fill it onto the still-null rows and auto-create a hidden (enabled=0) source
+  // channel, seeded from the owning playlist, for any new channel not yet
+  // tracked. A non-null channel_id came from playlist sync and wins: the
+  // .info.json id is the auto-generated upload channel for VEVO/Topic videos, so
+  // it must not overwrite a stored owner or spawn a channel from that upload id.
+  // Runs once per job here, not in the per-video --exec post-processor, which
+  // lacks playlist context and races across concurrent videos.
+  async backfillDownloadedVideoChannels(videoData) {
+    if (!Array.isArray(videoData) || videoData.length === 0) return;
+
+    const channelByVideo = new Map();
+    const nameByChannel = new Map();
+    for (const v of videoData) {
+      if (!v || !v.youtubeId || !v.channel_id) continue;
+      channelByVideo.set(v.youtubeId, v.channel_id);
+      if (v.youTubeChannelName && !nameByChannel.has(v.channel_id)) {
+        nameByChannel.set(v.channel_id, v.youTubeChannelName);
+      }
+    }
+    if (channelByVideo.size === 0) return;
+
+    const rows = await PlaylistVideo.findAll({
+      where: { youtube_id: [...channelByVideo.keys()] },
+      attributes: ['playlist_id', 'youtube_id', 'channel_id'],
+    });
+    if (!rows.length) return;
+
+    const filledRows = rows.filter((row) => !row.channel_id && channelByVideo.get(row.youtube_id));
+    if (filledRows.length === 0) return;
+
+    // Keyed on youtube_id so one update fills every playlist still missing it.
+    const needsUpdate = new Set(filledRows.map((row) => row.youtube_id));
+    for (const youtubeId of needsUpdate) {
+      await PlaylistVideo.update(
+        { channel_id: channelByVideo.get(youtubeId) },
+        { where: { youtube_id: youtubeId, channel_id: null } }
+      );
+    }
+
+    // Auto-create source channels only for the just-filled rows. Channels behind
+    // already-attributed rows were handled at download-trigger time.
+    const realChannelIds = [...new Set(filledRows.map((row) => channelByVideo.get(row.youtube_id)).filter(Boolean))];
+    const tracked = await Channel.findAll({
+      where: { channel_id: realChannelIds },
+      attributes: ['channel_id'],
+    });
+    const trackedIds = new Set((tracked || []).map((c) => c.channel_id));
+    const untracked = new Set(realChannelIds.filter((id) => !trackedIds.has(id)));
+    if (untracked.size === 0) return;
+
+    // Pick one owning playlist per channel (first row wins) to seed its settings.
+    const playlistByChannel = new Map();
+    for (const row of filledRows) {
+      const realId = channelByVideo.get(row.youtube_id);
+      if (realId && untracked.has(realId) && !playlistByChannel.has(realId)) {
+        playlistByChannel.set(realId, row.playlist_id);
+      }
+    }
+    const playlists = await Playlist.findAll({
+      where: { playlist_id: [...new Set(playlistByChannel.values())] },
+    });
+    const playlistById = new Map((playlists || []).map((p) => [p.playlist_id, p]));
+
+    for (const channelId of untracked) {
+      const playlist = playlistById.get(playlistByChannel.get(channelId));
+      if (!playlist) continue;
+      try {
+        await this.ensureSourceChannel(
+          { channel_id: channelId, uploader: nameByChannel.get(channelId) || null },
+          playlist
+        );
+      } catch (err) {
+        logger.error({ err, channelId }, 'Failed to auto-create source channel for downloaded playlist video');
+      }
+    }
   }
 
   async playlistAutoDownload(overrideSettings = {}, runId) {

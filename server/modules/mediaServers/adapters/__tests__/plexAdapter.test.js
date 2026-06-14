@@ -266,6 +266,22 @@ describe('PlexAdapter', () => {
       expect(resolved.size).toBe(0);
       expect(axios.get).not.toHaveBeenCalled();
     });
+
+    test('throws MediaServerUnavailableError when a section query reports the server unreachable', async () => {
+      const { MediaServerUnavailableError } = require('../baseAdapter');
+      mockSections(ONE_SECTION);
+      axios.get.mockRejectedValueOnce({ isAxiosError: true, code: 'ECONNREFUSED', message: 'connect ECONNREFUSED' });
+      const adapter = new PlexAdapter(cfg);
+      await expect(adapter.resolveItemIdsByFilepaths(['/data/x.mp4'])).rejects.toBeInstanceOf(MediaServerUnavailableError);
+    });
+
+    test('throws MediaServerUnavailableError on a 5xx section response', async () => {
+      const { MediaServerUnavailableError } = require('../baseAdapter');
+      mockSections(ONE_SECTION);
+      axios.get.mockRejectedValueOnce({ isAxiosError: true, response: { status: 503 }, message: 'Request failed with status code 503' });
+      const adapter = new PlexAdapter(cfg);
+      await expect(adapter.resolveItemIdsByFilepaths(['/data/x.mp4'])).rejects.toBeInstanceOf(MediaServerUnavailableError);
+    });
   });
 
   describe('plexPlaylistToken override', () => {

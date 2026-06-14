@@ -1,6 +1,14 @@
 const axios = require('axios');
 const BaseAdapter = require('./baseAdapter');
-const { extractBasename, pathSegments, trailingSegmentMatch, REQUEST_TIMEOUT_MS } = require('./baseAdapter');
+const {
+  extractBasename,
+  pathSegments,
+  trailingSegmentMatch,
+  REQUEST_TIMEOUT_MS,
+  isServerUnavailableError,
+  describeHttpError,
+  MediaServerUnavailableError,
+} = require('./baseAdapter');
 const logger = require('../../../logger');
 const plexModule = require('../../plexModule');
 
@@ -62,7 +70,7 @@ class PlexAdapter extends BaseAdapter {
         if (dir.type === 'movie' || dir.type === 'show') add(dir.key);
       }
     } catch (err) {
-      logger.warn({ err }, 'plex: could not enumerate library sections; searching configured library only');
+      logger.warn({ ...describeHttpError(err) }, 'plex: could not enumerate library sections; searching configured library only');
     }
     this._videoSectionIds = ids;
     return ids;
@@ -138,8 +146,9 @@ class PlexAdapter extends BaseAdapter {
           }
         }
       } catch (err) {
+        if (isServerUnavailableError(err)) throw new MediaServerUnavailableError(describeHttpError(err));
         // A single section failing shouldn't abort the search of the others.
-        logger.error({ err, libraryId }, 'plex section listing failed during filepath resolution');
+        logger.warn({ ...describeHttpError(err), libraryId }, 'plex: could not list library section during item lookup');
       }
     }
 
@@ -171,7 +180,7 @@ class PlexAdapter extends BaseAdapter {
       const found = (await this._listVideoPlaylists()).find((p) => p.title === name);
       return found ? { id: found.ratingKey, itemIds: [] } : null;
     } catch (err) {
-      logger.error({ err }, 'plex getPlaylistByName failed');
+      logger.warn({ ...describeHttpError(err) }, 'plex: could not list playlists');
       return null;
     }
   }

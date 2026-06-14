@@ -5,6 +5,7 @@ jest.mock('../../logger', () => ({
 jest.mock('../../models', () => ({
   Playlist: { findOne: jest.fn(), create: jest.fn(), update: jest.fn(), findAll: jest.fn() },
   PlaylistVideo: { findAll: jest.fn(), bulkCreate: jest.fn(), update: jest.fn(), destroy: jest.fn() },
+  Channel: { findAll: jest.fn() },
 }));
 jest.mock('../channelModule', () => ({
   upsertChannel: jest.fn(),
@@ -24,6 +25,7 @@ describe('playlistModule', () => {
   let playlistModule;
   let Playlist;
   let PlaylistVideo;
+  let Channel;
   let channelModule;
   let downloadModule;
   let childProcess;
@@ -39,7 +41,7 @@ describe('playlistModule', () => {
     childProcess.spawn = jest.fn();
     // Now require the module — its top-level destructure picks up the mock.
     playlistModule = require('../playlistModule');
-    ({ Playlist, PlaylistVideo } = require('../../models'));
+    ({ Playlist, PlaylistVideo, Channel } = require('../../models'));
     channelModule = require('../channelModule');
     downloadModule = require('../downloadModule');
     youtubeApi = require('../youtubeApi');
@@ -636,6 +638,142 @@ describe('playlistModule', () => {
         null,
         expect.objectContaining({ sub_folder: 'Learning' })
       );
+    });
+  });
+
+  describe('backfillDownloadedVideoChannels', () => {
+    test('backfills channel_id on playlist rows from the downloaded video metadata', async () => {
+      PlaylistVideo.findAll.mockResolvedValue([
+        { playlist_id: 'PL1', youtube_id: 'v1', channel_id: null },
+      ]);
+      Channel.findAll.mockResolvedValue([{ channel_id: 'UCreal' }]);
+      Playlist.findAll.mockResolvedValue([]);
+
+      await playlistModule.backfillDownloadedVideoChannels([
+        { youtubeId: 'v1', channel_id: 'UCreal', youTubeChannelName: 'Real Ch' },
+      ]);
+
+      expect(PlaylistVideo.update).toHaveBeenCalledWith(
+        { channel_id: 'UCreal' },
+        { where: { youtube_id: 'v1', channel_id: null } }
+      );
+    });
+
+    test('auto-creates a hidden channel seeded from playlist settings when the channel is untracked', async () => {
+      PlaylistVideo.findAll.mockResolvedValue([
+        { playlist_id: 'PL1', youtube_id: 'v1', channel_id: null },
+      ]);
+      Channel.findAll.mockResolvedValue([]);
+      Playlist.findAll.mockResolvedValue([
+        { playlist_id: 'PL1', default_sub_folder: 'Library1', video_quality: '1080' },
+      ]);
+      channelModule.upsertChannel.mockResolvedValue({ id: 5, channel_id: 'UCnew' });
+
+      await playlistModule.backfillDownloadedVideoChannels([
+        { youtubeId: 'v1', channel_id: 'UCnew', youTubeChannelName: 'Marvelous Videos' },
+      ]);
+
+      expect(channelModule.upsertChannel).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'UCnew', uploader: 'Marvelous Videos' }),
+        false,
+        null,
+        expect.objectContaining({ sub_folder: 'Library1', video_quality: '1080' })
+      );
+      expect(PlaylistVideo.update).toHaveBeenCalledWith(
+        { channel_id: 'UCnew' },
+        { where: { youtube_id: 'v1', channel_id: null } }
+      );
+    });
+
+    test('does not create a channel that is already tracked', async () => {
+      PlaylistVideo.findAll.mockResolvedValue([
+        { playlist_id: 'PL1', youtube_id: 'v1', channel_id: null },
+      ]);
+      Channel.findAll.mockResolvedValue([{ channel_id: 'UCtracked' }]);
+
+      await playlistModule.backfillDownloadedVideoChannels([
+        { youtubeId: 'v1', channel_id: 'UCtracked', youTubeChannelName: 'Tracked Ch' },
+      ]);
+
+      expect(channelModule.upsertChannel).not.toHaveBeenCalled();
+    });
+
+    test('creates an untracked channel only once when it owns several downloaded videos', async () => {
+      PlaylistVideo.findAll.mockResolvedValue([
+        { playlist_id: 'PL1', youtube_id: 'v1', channel_id: null },
+        { playlist_id: 'PL1', youtube_id: 'v2', channel_id: null },
+      ]);
+      Channel.findAll.mockResolvedValue([]);
+      Playlist.findAll.mockResolvedValue([
+        { playlist_id: 'PL1', default_sub_folder: 'Library1', video_quality: '1080' },
+      ]);
+      channelModule.upsertChannel.mockResolvedValue({ id: 5, channel_id: 'UCnew' });
+
+      await playlistModule.backfillDownloadedVideoChannels([
+        { youtubeId: 'v1', channel_id: 'UCnew', youTubeChannelName: 'Marvelous Videos' },
+        { youtubeId: 'v2', channel_id: 'UCnew', youTubeChannelName: 'Marvelous Videos' },
+      ]);
+
+      expect(channelModule.upsertChannel).toHaveBeenCalledTimes(1);
+    });
+
+    test('skips downloaded videos that are not part of any playlist', async () => {
+      PlaylistVideo.findAll.mockResolvedValue([]);
+
+      await playlistModule.backfillDownloadedVideoChannels([
+        { youtubeId: 'v1', channel_id: 'UCnew', youTubeChannelName: 'X' },
+      ]);
+
+      expect(PlaylistVideo.update).not.toHaveBeenCalled();
+      expect(channelModule.upsertChannel).not.toHaveBeenCalled();
+    });
+
+    test('ignores downloaded videos that have no channel_id', async () => {
+      await playlistModule.backfillDownloadedVideoChannels([
+        { youtubeId: 'v1', channel_id: null, youTubeChannelName: 'X' },
+      ]);
+
+      expect(PlaylistVideo.findAll).not.toHaveBeenCalled();
+      expect(channelModule.upsertChannel).not.toHaveBeenCalled();
+    });
+
+    test('does nothing for empty input', async () => {
+      await playlistModule.backfillDownloadedVideoChannels([]);
+
+      expect(PlaylistVideo.findAll).not.toHaveBeenCalled();
+    });
+
+    test('does not rewrite channel_id that is already correct', async () => {
+      PlaylistVideo.findAll.mockResolvedValue([
+        { playlist_id: 'PL1', youtube_id: 'v1', channel_id: 'UCreal' },
+      ]);
+      Channel.findAll.mockResolvedValue([{ channel_id: 'UCreal' }]);
+
+      await playlistModule.backfillDownloadedVideoChannels([
+        { youtubeId: 'v1', channel_id: 'UCreal', youTubeChannelName: 'Real Ch' },
+      ]);
+
+      expect(PlaylistVideo.update).not.toHaveBeenCalled();
+    });
+
+    test('does not overwrite or create a channel when channel_id is already set, even if the downloaded id differs', async () => {
+      // Playlist sync captured the owner channel; the .info.json reports the
+      // auto-generated upload channel (VEVO/Topic). The stored owner id wins, so
+      // no overwrite and no new channel.
+      PlaylistVideo.findAll.mockResolvedValue([
+        { playlist_id: 'PL1', youtube_id: 'v1', channel_id: 'UCowner' },
+      ]);
+      Channel.findAll.mockResolvedValue([]);
+      Playlist.findAll.mockResolvedValue([
+        { playlist_id: 'PL1', default_sub_folder: 'Library1', video_quality: '1080' },
+      ]);
+
+      await playlistModule.backfillDownloadedVideoChannels([
+        { youtubeId: 'v1', channel_id: 'UCupload', youTubeChannelName: 'Artist - Topic' },
+      ]);
+
+      expect(PlaylistVideo.update).not.toHaveBeenCalled();
+      expect(channelModule.upsertChannel).not.toHaveBeenCalled();
     });
   });
 

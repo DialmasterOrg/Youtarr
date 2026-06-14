@@ -115,4 +115,36 @@ describe('JellyfinAdapter', () => {
     expect(axios.post).toHaveBeenCalled();
     expect(result).toEqual({ id: 'new-pl-id' });
   });
+
+  test('resolveItemIdByFilepath throws MediaServerUnavailableError when the server is unreachable', async () => {
+    const { MediaServerUnavailableError } = require('../baseAdapter');
+    axios.get.mockRejectedValueOnce({ isAxiosError: true, code: 'ECONNREFUSED', message: 'connect ECONNREFUSED 192.168.1.174:8096' });
+    const adapter = new JellyfinAdapter(cfg);
+    await expect(adapter.resolveItemIdByFilepath('/x/v.mp4')).rejects.toBeInstanceOf(MediaServerUnavailableError);
+  });
+
+  test('resolveItemIdByFilepath throws MediaServerUnavailableError when the server returns 5xx (loading)', async () => {
+    const { MediaServerUnavailableError } = require('../baseAdapter');
+    axios.get.mockRejectedValueOnce({ isAxiosError: true, response: { status: 503 }, message: 'Request failed with status code 503' });
+    const adapter = new JellyfinAdapter(cfg);
+    await expect(adapter.resolveItemIdByFilepath('/x/v.mp4')).rejects.toBeInstanceOf(MediaServerUnavailableError);
+  });
+
+  test('resolveItemIdByFilepath returns null and logs without the API token on a non-unavailable error', async () => {
+    const logger = require('../../../../logger');
+    const adapter = new JellyfinAdapter({ ...cfg, jellyfinApiKey: 'SUPER_SECRET_TOKEN' });
+    axios.get.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { status: 404 },
+      message: 'Request failed with status code 404',
+      config: { headers: { 'X-Emby-Token': 'SUPER_SECRET_TOKEN' } },
+    });
+    const id = await adapter.resolveItemIdByFilepath('/x/v.mp4');
+    expect(id).toBeNull();
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    const [data] = logger.warn.mock.calls[0];
+    expect(data).toMatchObject({ status: 404, filepath: '/x/v.mp4' });
+    expect(data).not.toHaveProperty('config');
+    expect(JSON.stringify(logger.warn.mock.calls)).not.toContain('SUPER_SECRET_TOKEN');
+  });
 });

@@ -50,10 +50,15 @@ jest.mock('../../downloadModule', () => ({
   afterDownloadHook: jest.fn().mockResolvedValue(),
 }));
 
+jest.mock('../../playlistModule', () => ({
+  backfillDownloadedVideoChannels: jest.fn().mockResolvedValue(),
+}));
+
 const plexModule = require('../../plexModule');
 const jobModule = require('../../jobModule');
 const channelModule = require('../../channelModule');
 const downloadModule = require('../../downloadModule');
+const playlistModule = require('../../playlistModule');
 const { JobVideoDownload } = require('../../../models');
 const Channel = require('../../../models/channel');
 const logger = require('../../../logger');
@@ -204,6 +209,44 @@ describe('downloadCompletionEffects', () => {
     await flushPromises();
 
     expect(downloadModule.afterDownloadHook).toHaveBeenCalledWith(['vid1', 'vid2']);
+  });
+
+  it('backfills playlist video channels from the downloaded video metadata', async () => {
+    const videoData = [
+      { youtubeId: 'vid1', channel_id: 'UC1' },
+      { youtubeId: 'vid2', channel_id: 'UC2' },
+    ];
+
+    await runCompletionSideEffects({
+      jobId: 'job-1',
+      videoData,
+      skipJobTransition: true,
+      tempChannelsFile: null,
+      onTempChannelsFileCleaned: jest.fn(),
+    });
+    await flushPromises();
+
+    expect(playlistModule.backfillDownloadedVideoChannels).toHaveBeenCalledWith(videoData);
+  });
+
+  it('does not fail the job when playlist channel backfill throws', async () => {
+    playlistModule.backfillDownloadedVideoChannels.mockRejectedValueOnce(new Error('db down'));
+
+    await expect(
+      runCompletionSideEffects({
+        jobId: 'job-1',
+        videoData: [{ youtubeId: 'vid1', channel_id: 'UC1' }],
+        skipJobTransition: true,
+        tempChannelsFile: null,
+        onTempChannelsFileCleaned: jest.fn(),
+      })
+    ).resolves.toBeUndefined();
+    await flushPromises();
+
+    expect(logger.error).toHaveBeenCalledWith(
+      { err: expect.any(Error) },
+      'Failed to backfill playlist video channels'
+    );
   });
 
   describe('job transition', () => {

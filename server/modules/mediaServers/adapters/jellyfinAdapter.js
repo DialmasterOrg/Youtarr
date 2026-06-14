@@ -1,6 +1,12 @@
 const axios = require('axios');
 const BaseAdapter = require('./baseAdapter');
-const { extractBasename, REQUEST_TIMEOUT_MS } = require('./baseAdapter');
+const {
+  extractBasename,
+  REQUEST_TIMEOUT_MS,
+  isServerUnavailableError,
+  describeHttpError,
+  MediaServerUnavailableError,
+} = require('./baseAdapter');
 const logger = require('../../../logger');
 
 class JellyfinAdapter extends BaseAdapter {
@@ -36,7 +42,7 @@ class JellyfinAdapter extends BaseAdapter {
     try {
       await axios.post(`${this.url}/Library/Refresh`, null, { headers: this._headers(), timeout: REQUEST_TIMEOUT_MS });
     } catch (err) {
-      logger.error({ err }, 'jellyfin triggerLibraryScan failed');
+      logger.warn({ ...describeHttpError(err) }, 'jellyfin: library refresh request failed');
     }
   }
 
@@ -56,7 +62,8 @@ class JellyfinAdapter extends BaseAdapter {
       const match = items.find((i) => i.Path && extractBasename(i.Path) === target);
       return match ? match.Id : null;
     } catch (err) {
-      logger.error({ err, filepath }, 'jellyfin resolveItemIdByFilepath failed');
+      if (isServerUnavailableError(err)) throw new MediaServerUnavailableError(describeHttpError(err));
+      logger.warn({ ...describeHttpError(err), filepath }, 'jellyfin: could not look up library item by file path');
       return null;
     }
   }
@@ -69,7 +76,7 @@ class JellyfinAdapter extends BaseAdapter {
       const found = items.find((i) => i.Name === name);
       return found ? { id: found.Id, itemIds: [] } : null;
     } catch (err) {
-      logger.error({ err }, 'jellyfin getPlaylistByName failed');
+      logger.warn({ ...describeHttpError(err) }, 'jellyfin: could not list playlists');
       return null;
     }
   }
