@@ -112,6 +112,7 @@
   "overrides": {
     "jsdom": {
       "form-data": "^3.0.4"
-    }
+    },
+    "form-data": "^4.0.6"
   }
 }
