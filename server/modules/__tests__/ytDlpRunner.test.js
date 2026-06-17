@@ -306,4 +306,31 @@ describe('YtDlpRunner', () => {
     await expect(runPromise).rejects.toMatchObject({ name: 'AbortError', code: 'ABORT_ERR' });
     expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
   });
+
+  describe('isTerminatedAccountError', () => {
+    it('matches the canonical TOS-termination ERROR line', () => {
+      const message = 'ERROR: [youtube:tab] UC1lg-nYUcZ1pjo6EC2Nj5Sw: YouTube said: This account has been terminated for violating Google\'s Terms of Service.';
+      expect(ytDlpRunner.isTerminatedAccountError(message)).toBe(true);
+    });
+
+    it('matches the community-guidelines termination variant', () => {
+      const message = 'ERROR: [youtube:tab] UCC3L8QaxqEGUiBC252GHy3w: YouTube said: This channel was removed because it violated our Community Guidelines.';
+      expect(ytDlpRunner.isTerminatedAccountError(message)).toBe(true);
+    });
+
+    it('matches the "multiple or severe violations" variant', () => {
+      const message = 'This account has been terminated due to multiple or severe violations of YouTube\'s policy';
+      expect(ytDlpRunner.isTerminatedAccountError(message)).toBe(true);
+    });
+
+    it('returns false for members-only errors', () => {
+      expect(ytDlpRunner.isTerminatedAccountError('Join this channel to get access to members-only content')).toBe(false);
+    });
+
+    it('returns false for unrelated errors', () => {
+      expect(ytDlpRunner.isTerminatedAccountError('HTTP Error 403: Forbidden')).toBe(false);
+      expect(ytDlpRunner.isTerminatedAccountError('')).toBe(false);
+      expect(ytDlpRunner.isTerminatedAccountError()).toBe(false);
+    });
+  });
 });

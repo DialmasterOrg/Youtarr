@@ -182,6 +182,8 @@ Note: *The `/path/to/youtube/videos` is just an example. Use the path you have c
 **Example**: `http://plex:32400`
 **Note**: Overrides plexIp, plexPort and plexViaHttps from config.json
 
+> **Jellyfin and Emby have no environment variables.** Their playlist-sync settings (URL, API key, user ID) are managed in `config/config.json` through the web UI under Settings, not via env vars. There is no `JELLYFIN_URL` or `EMBY_URL` equivalent to `PLEX_URL`.
+
 ## Development and Debugging
 
 ### LOG_LEVEL

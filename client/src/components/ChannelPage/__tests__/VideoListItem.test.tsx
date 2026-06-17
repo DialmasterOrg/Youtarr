@@ -79,6 +79,18 @@ describe('VideoListItem Component', () => {
       renderWithProviders(<VideoListItem {...defaultProps} />);
       expect(screen.getByText(/Jan 15, 23/)).toBeInTheDocument();
     });
+
+    test('renders Pending for estimated published dates', () => {
+      const estimatedVideo = { ...mockVideo, publishedAt: null, published_at_source: 'estimated' as const };
+      renderWithProviders(<VideoListItem {...defaultProps} video={estimatedVideo} />);
+      expect(screen.getByText('Pending')).toBeInTheDocument();
+    });
+
+    test('renders tilde prefix for approximate published dates', () => {
+      const approximateVideo = { ...mockVideo, published_at_source: 'approximate' as const };
+      renderWithProviders(<VideoListItem {...defaultProps} video={approximateVideo} />);
+      expect(screen.getByText(/~Jan 15, 23/)).toBeInTheDocument();
+    });
   });
 
   describe('Video Status', () => {

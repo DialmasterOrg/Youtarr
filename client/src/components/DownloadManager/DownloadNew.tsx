@@ -110,7 +110,7 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
         <div style={{ borderBottom: '1px solid var(--border)', marginBottom: 16 }}>
           <Tabs value={tabValue} onChange={handleTabChange} centered>
             <Tab label="Manual Download" />
-            <Tab label="Channel Download" />
+            <Tab label="Channel/Playlist Downloads" />
           </Tabs>
         </div>
 
@@ -138,7 +138,7 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
                 onClick={handleOpenChannelSettings}
                 size='large'
               >
-                Download new from all channels
+                Download new from all channels/playlists
               </Button>
             </div>
           </ErrorBoundary>

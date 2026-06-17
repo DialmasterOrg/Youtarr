@@ -6,7 +6,6 @@ import {
   DialogActions,
   Button,
   FormControl,
-  FormHelperText,
   InputLabel,
   Select,
   MenuItem,
@@ -28,8 +27,13 @@ import {
 } from '../../../lib/icons';
 import { DownloadSettings } from './types';
 import { SubfolderAutocomplete } from '../../shared/SubfolderAutocomplete';
-import RatingBadge from '../../shared/RatingBadge';
+import { ResolutionSelect } from '../../shared/ResolutionSelect';
+import { AudioFormatSelect } from '../../shared/AudioFormatSelect';
+import { RatingSelect } from '../../shared/RatingSelect';
 import { useSubfolders } from '../../../hooks/useSubfolders';
+import { RESOLUTION_OPTIONS } from '../../../utils/downloadOptions';
+
+const LARGE_DOWNLOAD_WARNING_THRESHOLD = 50;
 
 interface DownloadSettingsDialogProps {
   open: boolean;
@@ -43,18 +47,8 @@ interface DownloadSettingsDialogProps {
   defaultResolutionSource?: 'channel' | 'global';
   defaultAudioFormat?: string | null; // For channel audio format default
   defaultAudioFormatSource?: 'channel' | 'global';
-  defaultRating?: string | null;
   token?: string | null; // For fetching subfolders
 }
-
-const RESOLUTION_OPTIONS = [
-  { value: '360', label: '360p' },
-  { value: '480', label: '480p' },
-  { value: '720', label: '720p (HD)' },
-  { value: '1080', label: '1080p (Full HD)' },
-  { value: '1440', label: '1440p (2K)' },
-  { value: '2160', label: '2160p (4K)' }
-];
 
 const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   open,
@@ -68,17 +62,18 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   defaultResolutionSource = 'global',
   defaultAudioFormat = null,
   defaultAudioFormatSource = 'global',
-  defaultRating = null,
   token = null
 }) => {
   const [useCustomSettings, setUseCustomSettings] = useState(false);
-  const [resolution, setResolution] = useState(defaultResolution);
+  // Override controls default to "no override" (null) so that simply opening
+  // the custom settings section never emits overrides the user didn't choose.
+  const [resolution, setResolution] = useState<string | null>(null);
   const [channelVideoCount, setChannelVideoCount] = useState(defaultVideoCount);
   const [allowRedownload, setAllowRedownload] = useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const [subfolderOverride, setSubfolderOverride] = useState<string | null>(null);
-  const [audioFormat, setAudioFormat] = useState<string | null>(defaultAudioFormat);
-  const [rating, setRating] = useState<string | null>(defaultRating);
+  const [audioFormat, setAudioFormat] = useState<string | null>(null);
+  const [rating, setRating] = useState<string | null>(null);
   const [skipVideoFolder, setSkipVideoFolder] = useState(false);
 
   // Fetch available subfolders
@@ -101,45 +96,34 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   // Auto-detect re-download need
   useEffect(() => {
     if (open && !hasUserInteracted) {
-      setResolution(defaultResolution);
+      setResolution(null);
       setChannelVideoCount(defaultVideoCount);
-      setAudioFormat(defaultAudioFormat);
-      // Auto-check re-download if there are missing videos or previously downloaded videos in manual mode
+      setAudioFormat(null);
+      // Open the custom section too so the user can see the re-download toggle is on.
       if (missingVideoCount > 0) {
         setAllowRedownload(true);
+        setUseCustomSettings(true);
       } else {
         setAllowRedownload(false);
       }
     }
-  }, [open, hasUserInteracted, mode, missingVideoCount, defaultResolution, defaultVideoCount, defaultAudioFormat]);
+  }, [open, hasUserInteracted, mode, missingVideoCount, defaultVideoCount]);
 
   useEffect(() => {
     if (!open) {
       setHasUserInteracted(false);
       setUseCustomSettings(false);
       setAllowRedownload(false);
+      setResolution(null);
       setSubfolderOverride(null);
-      setAudioFormat(defaultAudioFormat);
-      setRating(defaultRating ?? null);
+      setAudioFormat(null);
+      setRating(null);
       setSkipVideoFolder(false);
     }
-  }, [open, defaultAudioFormat, defaultRating]);
+  }, [open]);
 
   const handleUseCustomToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const checked = event.target.checked;
-    setUseCustomSettings(checked);
-    setHasUserInteracted(true);
-    if (checked) {
-      if (rating === null || rating === undefined) {
-        if (defaultRating !== null) {
-          setRating(defaultRating);
-        }
-      }
-    }
-  };
-
-  const handleResolutionChange = (event: SelectChangeEvent<string>) => {
-    setResolution(event.target.value);
+    setUseCustomSettings(event.target.checked);
     setHasUserInteracted(true);
   };
 
@@ -167,45 +151,54 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   };
 
   const handleConfirm = () => {
-    // Save settings to localStorage for next time
     try {
       const storageKey = mode === 'channel' ? 'youtarr_channel_settings' : 'youtarr_download_settings';
-      const settingsToSave: any = {
+      const settingsToSave: Record<string, unknown> = {
         useCustom: useCustomSettings,
         resolution: resolution,
         allowRedownload: allowRedownload,
         rating: null,
       };
-
       if (mode === 'channel') {
         settingsToSave.videoCount = channelVideoCount;
       }
-
       localStorage.setItem(storageKey, JSON.stringify(settingsToSave));
     } catch (e) {
-      // localStorage might not be available
       console.error('Failed to save settings to localStorage:', e);
     }
 
-    // Include subfolder override if set (only for manual mode)
-    const hasOverride = useCustomSettings || allowRedownload ||
-      (mode === 'manual' && subfolderOverride !== null) ||
-      (mode === 'manual' && audioFormat !== null) ||
-      (mode === 'manual' && skipVideoFolder);
+    // Emit only fields the user genuinely overrode. Omitted fields fall through
+    // to channel -> playlist -> global on the backend.
+    const override: DownloadSettings = {};
 
-    if (hasOverride) {
-      onConfirm({
-        resolution: useCustomSettings ? resolution : defaultResolution,
-        videoCount: mode === 'channel' ? (useCustomSettings ? channelVideoCount : defaultVideoCount) : 0,
-        allowRedownload,
-        subfolder: mode === 'manual' ? subfolderOverride : undefined,
-        audioFormat: mode === 'manual' ? audioFormat : undefined,
-        rating: useCustomSettings ? (rating === null ? 'NR' : (rating ?? undefined)) : undefined,
-        skipVideoFolder: mode === 'manual' ? (useCustomSettings ? skipVideoFolder : false) : undefined
-      });
-    } else {
-      onConfirm(null); // Use defaults
+    if (useCustomSettings) {
+      if (resolution !== null) {
+        override.resolution = resolution;
+      }
+      if (mode === 'channel' && channelVideoCount !== defaultVideoCount) {
+        override.videoCount = channelVideoCount;
+      }
+      if (mode === 'manual') {
+        if (subfolderOverride !== null) {
+          override.subfolder = subfolderOverride;
+        }
+        if (audioFormat !== null) {
+          override.audioFormat = audioFormat;
+        }
+        if (skipVideoFolder) {
+          override.skipVideoFolder = true;
+        }
+      }
+      if (rating !== null) {
+        override.rating = rating;
+      }
     }
+
+    if (allowRedownload) {
+      override.allowRedownload = true;
+    }
+
+    onConfirm(Object.keys(override).length === 0 ? null : override);
   };
 
   const handleCancel = () => {
@@ -235,12 +228,21 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
           <Alert severity="info" className="mb-4">
             <Typography variant="body2">
               {mode === 'channel'
-                ? 'Downloading new videos from auto-download enabled channels/tabs. Channel settings and filters will be applied per channel.'
+                ? 'Downloading new videos from auto-download enabled channels/tabs and playlists. Channel and playlist settings and filters will be applied per channel/playlist.'
                 : videoCount === 1
                 ? 'You are about to download 1 video.'
                 : `You are about to download ${videoCount} videos.`}
             </Typography>
           </Alert>
+
+          {typeof videoCount === 'number' && videoCount > LARGE_DOWNLOAD_WARNING_THRESHOLD && (
+            <Alert severity="warning" className="mb-4">
+              <Typography variant="body2">
+                That is a large batch ({videoCount} videos). It may take a while and use
+                significant disk space.
+              </Typography>
+            </Alert>
+          )}
 
           {/* Warning for previously downloaded */}
           {missingVideoCount > 0 && (
@@ -273,7 +275,10 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
               <Box className="flex items-center gap-2 mb-2">
                 <QualityIcon size={16} className="text-muted-foreground" />
                 <Typography variant="body2">
-                  <strong>Quality:</strong> {defaultQualityLabel}
+                  <strong>Quality:</strong>{' '}
+                  {mode === 'channel'
+                    ? `Per channel/playlist (global ${defaultResolution}p)`
+                    : defaultQualityLabel}
                 </Typography>
               </Box>
 
@@ -349,25 +354,16 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                 Maximum Resolution
               </Typography>
 
-              <FormControl fullWidth className="mb-4">
-                <InputLabel id="resolution-select-label">Maximum Resolution</InputLabel>
-                <Select
-                  labelId="resolution-select-label"
-                  id="resolution-select"
-                  value={resolution}
-                  label="Maximum Resolution"
-                  onChange={handleResolutionChange}
-                >
-                  {RESOLUTION_OPTIONS.map(option => (
-                    <MenuItem key={option.value} value={option.value}>
-                      {option.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-                <FormHelperText>
-                  YouTube will provide the best available quality up to your selected resolution.
-                </FormHelperText>
-              </FormControl>
+              <ResolutionSelect
+                className="mb-4"
+                value={resolution}
+                emptyLabel="No override (use channel/playlist settings)"
+                onChange={(value) => {
+                  setResolution(value);
+                  setHasUserInteracted(true);
+                }}
+                helperText="YouTube will provide the best available quality up to your selected resolution."
+              />
 
               {(resolution === '2160' || resolution === '1440') && (
                 <Alert severity="warning" className="mb-4">
@@ -430,64 +426,29 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                     Download Type
                   </Typography>
 
-                  <FormControl fullWidth className="mb-4 audio-control audio-control--download-type">
-                    <InputLabel id="audio-format-select-label" shrink>Download Type</InputLabel>
-                    <Select
-                      labelId="audio-format-select-label"
-                      id="audio-format-select"
-                      value={audioFormat || ''}
-                      label="Download Type"
-                      displayEmpty
-                      notched
-                      onChange={(e) => {
-                        setAudioFormat(e.target.value || null);
-                        setHasUserInteracted(true);
-                      }}
-                    >
-                      <MenuItem value=""><em>Video Only (default)</em></MenuItem>
-                      <MenuItem value="video_mp3">Video + MP3</MenuItem>
-                      <MenuItem value="mp3_only">MP3 Only</MenuItem>
-                    </Select>
-                    {audioFormat && (
-                      <FormHelperText>
-                        MP3 files are saved at 192kbps in the same folder as videos.
-                      </FormHelperText>
-                    )}
-                  </FormControl>
+                  <AudioFormatSelect
+                    className="mb-4 audio-control audio-control--download-type"
+                    value={audioFormat}
+                    onChange={(value) => {
+                      setAudioFormat(value);
+                      setHasUserInteracted(true);
+                    }}
+                    helperText={audioFormat ? 'MP3 files are saved at 192kbps in the same folder as videos.' : undefined}
+                  />
                     <Typography variant="subtitle2" color="text.secondary" className="mb-2 mt-4">
                     Content Rating Override
                   </Typography>
 
-                    <FormControl fullWidth className="mb-4">
-                    <InputLabel id="rating-select-label" shrink>Content Rating</InputLabel>
-                    <Select
-                      labelId="rating-select-label"
-                      id="rating-select"
-                      value={rating || ''}
-                      label="Content Rating"
-                      displayEmpty
-                      onChange={(e) => {
-                        const val = e.target.value as string;
-                        setRating(val === '' ? null : val);
-                        setHasUserInteracted(true);
-                      }}
-                    >
-                      <MenuItem value="">
-                        <em>No Rating</em>
-                      </MenuItem>
-                      <MenuItem value="G"><RatingBadge rating="G" size="small" style={{ marginRight: 8 }} /> G</MenuItem>
-                      <MenuItem value="PG"><RatingBadge rating="PG" size="small" style={{ marginRight: 8 }} /> PG</MenuItem>
-                      <MenuItem value="PG-13"><RatingBadge rating="PG-13" size="small" style={{ marginRight: 8 }} /> PG-13</MenuItem>
-                      <MenuItem value="R"><RatingBadge rating="R" size="small" style={{ marginRight: 8 }} /> R</MenuItem>
-                      <MenuItem value="NC-17"><RatingBadge rating="NC-17" size="small" style={{ marginRight: 8 }} /> NC-17</MenuItem>
-                      <MenuItem value="TV-Y"><RatingBadge rating="TV-Y" size="small" style={{ marginRight: 8 }} /> TV-Y</MenuItem>
-                      <MenuItem value="TV-Y7"><RatingBadge rating="TV-Y7" size="small" style={{ marginRight: 8 }} /> TV-Y7</MenuItem>
-                      <MenuItem value="TV-G"><RatingBadge rating="TV-G" size="small" style={{ marginRight: 8 }} /> TV-G</MenuItem>
-                      <MenuItem value="TV-PG"><RatingBadge rating="TV-PG" size="small" style={{ marginRight: 8 }} /> TV-PG</MenuItem>
-                      <MenuItem value="TV-14"><RatingBadge rating="TV-14" size="small" style={{ marginRight: 8 }} /> TV-14</MenuItem>
-                      <MenuItem value="TV-MA"><RatingBadge rating="TV-MA" size="small" style={{ marginRight: 8 }} /> TV-MA</MenuItem>
-                    </Select>
-                  </FormControl>
+                  <RatingSelect
+                    className="mb-4"
+                    value={rating}
+                    onChange={(value) => {
+                      setRating(value);
+                      setHasUserInteracted(true);
+                    }}
+                    emptyLabel="No override"
+                    showBadge
+                  />
 
                   <FormControlLabel
                     control={
@@ -500,11 +461,12 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                         color="primary"
                       />
                     }
-                    label="Flat file structure (no video subfolders)"
+                    label="Force flat file structure (no video subfolders)"
                     className="mb-1"
                   />
                   <Typography variant="caption" color="text.secondary" className="mb-4 block">
                     Save files directly in the channel folder instead of individual video subfolders.
+                    When off, each channel&apos;s own setting applies.
                   </Typography>
                 </>
               )}

@@ -102,6 +102,83 @@ module.exports = function createPlexRoutes({ verifyToken, plexModule, configModu
 
   /**
    * @swagger
+   * /plex/server-identity:
+   *   get:
+   *     summary: Get Plex server identity
+   *     description: >
+   *       Reads the Plex server /identity endpoint to report whether the server
+   *       is claimed by a Plex account. Used by the UI to advise on the correct
+   *       playlist visibility scope. Accepts the same test credentials as
+   *       /getplexlibraries, otherwise uses the saved config.
+   *     tags: [Plex]
+   *     parameters:
+   *       - in: query
+   *         name: testIP
+   *         schema:
+   *           type: string
+   *       - in: query
+   *         name: testApiKey
+   *         schema:
+   *           type: string
+   *       - in: query
+   *         name: testPort
+   *         schema:
+   *           type: string
+   *       - in: query
+   *         name: testUseHttps
+   *         schema:
+   *           type: boolean
+   *     responses:
+   *       200:
+   *         description: Plex server identity
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 claimed:
+   *                   type: boolean
+   *                   nullable: true
+   *                 machineIdentifier:
+   *                   type: string
+   *                   nullable: true
+   */
+  router.get('/plex/server-identity', verifyToken, async (req, res) => {
+    try {
+      const testIP = req.query.testIP;
+      const testApiKey = req.query.testApiKey;
+      const testPortRaw = req.query.testPort;
+      const testUseHttps = req.query.testUseHttps === 'true';
+      const hasTestCredentials = typeof testApiKey === 'string' && testApiKey.length > 0;
+
+      let testPort;
+      if (typeof testPortRaw === 'string' && testPortRaw.trim().length > 0) {
+        const numericPort = testPortRaw.trim().replace(/[^0-9]/g, '');
+        testPort = numericPort.length > 0 ? numericPort : undefined;
+      }
+
+      let identity;
+      if (hasTestCredentials || typeof testIP === 'string') {
+        identity = await plexModule.getServerIdentityWithParams(testIP, testApiKey, testPort, testUseHttps);
+      } else {
+        const config = configModule.getConfig();
+        identity = await plexModule.getServerIdentityWithParams(
+          config.plexIP,
+          config.plexApiKey,
+          config.plexPort,
+          config.plexViaHttps
+        );
+      }
+
+      res.json(identity || { claimed: null, machineIdentifier: null });
+    } catch (error) {
+      req.log.error({ err: error }, 'Failed to get Plex server identity');
+      res.json({ claimed: null, machineIdentifier: null });
+    }
+  });
+
+  /**
+   * @swagger
    * /refreshlibrary:
    *   get:
    *     summary: Refresh Plex library

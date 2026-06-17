@@ -2,10 +2,10 @@ const fs = require('fs-extra');
 const path = require('path');
 const { execSync, spawnSync } = require('child_process');
 const configModule = require('./configModule');
-const channelSettingsModule = require('./channelSettingsModule');
 const nfoGenerator = require('./nfoGenerator');
 const ratingMapper = require('./ratingMapper');
 const tempPathManager = require('./download/tempPathManager');
+const downloadSettingsResolver = require('./download/downloadSettingsResolver');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const { JobVideoDownload } = require('../models');
 const logger = require('../logger');
@@ -129,6 +129,67 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
   }
 }
 
+// Parse the per-video owner-channel map (YOUTARR_OWNER_CHANNEL_MAP, set for
+// playlist downloads). Maps youtube_id -> owning channel_id, from the per-video
+// attribution captured at playlist sync. An entry wins over the .info.json
+// channel_id, which for VEVO/Topic uploads points at the auto-generated upload
+// channel instead of the channel the user subscribed to.
+function parseOwnerChannelMapEnv() {
+  const raw = process.env.YOUTARR_OWNER_CHANNEL_MAP;
+  if (!raw) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch (err) {
+    logger.warn({ err }, 'Post-process: could not parse owner channel map');
+    return null;
+  }
+}
+
+// Find the tracked channel that owns this video when no explicit owner was
+// passed (manual URL paste, channel auto-download). `channelvideos` records
+// every channel that listed a video; for a VEVO/Topic upload that includes both
+// the untracked auto-channel (the video's own channel_id) and the
+// subscribed/artist channel. Prefer the video's own channel_id when tracked,
+// otherwise any tracked associated channel; never an untracked id.
+async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
+  if (!youtubeId || youtubeId === 'default') {
+    return null;
+  }
+  try {
+    const ChannelVideo = require('../models/channelvideo');
+    const { Channel } = require('../models');
+
+    const rows = await ChannelVideo.findAll({
+      where: { youtube_id: youtubeId },
+      attributes: ['channel_id'],
+    });
+    // Video's own channel first, then the channels that listed it.
+    const candidates = [metadataChannelId, ...rows.map((r) => r.channel_id)].filter(Boolean);
+    const unique = [...new Set(candidates)];
+    if (unique.length === 0) {
+      return null;
+    }
+
+    const tracked = await Channel.findAll({
+      where: { channel_id: unique },
+      attributes: ['channel_id'],
+    });
+    const trackedIds = new Set(tracked.map((c) => c.channel_id));
+    for (const candidate of unique) {
+      if (trackedIds.has(candidate)) {
+        return candidate;
+      }
+    }
+    return null;
+  } catch (err) {
+    logger.warn({ err, youtubeId }, 'Post-process: tracked owner channel lookup failed');
+    return null;
+  }
+}
+
 // Main execution wrapped in async IIFE to handle async operations
 (async () => {
   if (fs.existsSync(jsonPath)) {
@@ -178,34 +239,69 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
     // Check for explicit rating override from manual download
     const ratingOverrideEnv = process.env.YOUTARR_OVERRIDE_RATING;
 
+    // Soft fallbacks (playlist defaults); used only when the real channel has no setting.
+    // A present hard rating override always wins, so suppress the rating fallback in that case.
+    const subfolderFallbackEnv = process.env.YOUTARR_SUBFOLDER_FALLBACK || null;
+    const ratingFallbackEnv = process.env.YOUTARR_OVERRIDE_RATING ? null : (process.env.YOUTARR_RATING_FALLBACK || null);
+
+    // Resolve which channel owns this download, in priority order: explicit
+    // owner env (channel-page download) > per-video map (playlist download) >
+    // tracked channel already associated with this video > the video's own
+    // channel_id. The .info.json channel_id alone misses VEVO/Topic uploads,
+    // whose auto-generated channel differs from the subscribed channel.
+    const ownerChannelId = process.env.YOUTARR_OWNER_CHANNEL_ID
+      ? process.env.YOUTARR_OWNER_CHANNEL_ID.trim()
+      : null;
+    const ownerChannelMap = ownerChannelId ? null : parseOwnerChannelMapEnv();
+    const mappedOwnerChannelId = ownerChannelMap && ownerChannelMap[id] ? String(ownerChannelMap[id]).trim() : null;
+    const metadataChannelId = jsonData.channel_id ? jsonData.channel_id.trim() : null;
+    const explicitOwnerChannelId = ownerChannelId || mappedOwnerChannelId;
+    const trackedOwnerChannelId = explicitOwnerChannelId
+      ? null
+      : await resolveTrackedOwnerChannelId(id, metadataChannelId);
+    const lookupChannelId = explicitOwnerChannelId || trackedOwnerChannelId || metadataChannelId;
+
     // Always look up channel to apply default rating (independent of subfolder)
     let channelRecord = null;
-    if (jsonData.channel_id) {
+    if (lookupChannelId) {
       try {
         // Use the centralized models export to ensure proper associations/initialization
         const { Channel } = require('../models');
 
-        const channelId = jsonData.channel_id.trim();
+        const channelId = lookupChannelId;
         channelRecord = await Channel.findOne({
           where: { channel_id: channelId },
-          attributes: ['id', 'sub_folder', 'uploader', 'folder_name', 'default_rating'] // Ensure default_rating is fetched
+          attributes: ['id', 'sub_folder', 'title', 'uploader', 'folder_name', 'default_rating']
         });
 
-        logger.info({ channelId, found: !!channelRecord }, 'Post-process channel lookup');
+        logger.info({ channelId, ownerProvided: !!ownerChannelId, found: !!channelRecord }, 'Post-process channel lookup');
         if (channelRecord) {
           logger.info({ channelId, defaultRating: channelRecord.default_rating }, 'Post-process channel default rating');
 
-          // Update folder_name if channel exists but name changed
-          if (actualChannelFolderName && channelRecord.folder_name !== actualChannelFolderName) {
+          // Backfill channel metadata learned from the download. folder_name is the
+          // yt-dlp-sanitized directory name; title/uploader use the raw channel name
+          // and are only filled when currently empty (e.g. a channel auto-seeded from
+          // a playlist with just a channel_id, before the playlist sync captured a
+          // channel_name), so an activated/refreshed channel is never clobbered.
+          // Only when the record was resolved via the video's own channel_id: the
+          // on-disk folder is named after the video's uploader, so for an
+          // owner-resolved record (e.g. the artist channel of a VEVO/Topic upload)
+          // these values describe a different channel and must not be written.
+          const isUploaderChannel = lookupChannelId === metadataChannelId;
+          const realChannelName = jsonData.uploader || jsonData.channel || null;
+          const channelPatch = {};
+          if (isUploaderChannel && actualChannelFolderName && channelRecord.folder_name !== actualChannelFolderName) {
+            channelPatch.folder_name = actualChannelFolderName;
+          }
+          if (isUploaderChannel && realChannelName && !channelRecord.title) channelPatch.title = realChannelName;
+          if (isUploaderChannel && realChannelName && !channelRecord.uploader) channelPatch.uploader = realChannelName;
+          if (Object.keys(channelPatch).length > 0) {
             try {
-              await Channel.update(
-                { folder_name: actualChannelFolderName },
-                { where: { id: channelRecord.id } }
-              );
-              channelRecord.folder_name = actualChannelFolderName;
-              logger.info({ folderName: actualChannelFolderName }, 'Post-process updated channel folder_name');
+              await Channel.update(channelPatch, { where: { id: channelRecord.id } });
+              Object.assign(channelRecord, channelPatch);
+              logger.info({ channelId, patch: channelPatch }, 'Post-process backfilled channel metadata');
             } catch (updateErr) {
-              logger.error({ err: updateErr }, 'Post-process error updating folder_name');
+              logger.error({ err: updateErr }, 'Post-process error updating channel metadata');
             }
           }
         } else {
@@ -228,7 +324,8 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
     const effectiveRating = ratingMapper.determineEffectiveRating(
       jsonData,
       channelRecord ? channelRecord.default_rating : null,
-      manualOverride
+      manualOverride,
+      ratingFallbackEnv
     );
 
     jsonData.normalized_rating = effectiveRating.normalized_rating;
@@ -241,48 +338,18 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
       logger.info({ source: jsonData.rating_source || 'None' }, 'Post-process no rating applied');
     }
 
-    if (subfolderOverride) {
-      // Manual download with subfolder override
-      const { ROOT_SENTINEL } = require('./filesystem/constants');
-      if (subfolderOverride === ROOT_SENTINEL) {
-        // Explicit root - no subfolder, download directly to output directory
-        channelSubFolder = null;
-        const baseDir = configModule.directoryPath;
-        targetChannelFolder = buildChannelPath(baseDir, null, actualChannelFolderName);
-        logger.info('Post-process using subfolder override: root directory (no subfolder)');
-      } else if (subfolderOverride === channelSettingsModule.getGlobalDefaultSentinel()) {
-        // Use global default subfolder
-        channelSubFolder = channelSettingsModule.resolveEffectiveSubfolder(subfolderOverride);
-        if (channelSubFolder) {
-          const baseDir = configModule.directoryPath;
-          targetChannelFolder = buildChannelPath(baseDir, channelSubFolder, actualChannelFolderName);
-        }
-        logger.info('Post-process using subfolder override: global default');
-      } else {
-        // Specific subfolder override
-        channelSubFolder = subfolderOverride;
-        const baseDir = configModule.directoryPath;
-        targetChannelFolder = buildChannelPath(baseDir, subfolderOverride, actualChannelFolderName);
-        logger.info({ subfolder: subfolderOverride }, 'Post-process using subfolder override');
-      }
-    } else if (channelRecord) {
-      // No subfolder override - use channel's subfolder setting
-      channelSubFolder = channelSettingsModule.resolveEffectiveSubfolder(channelRecord.sub_folder);
-
-      if (channelSubFolder) {
-        const baseDir = configModule.directoryPath;
-        targetChannelFolder = buildChannelPath(baseDir, channelSubFolder, actualChannelFolderName);
-        console.log(`[Post-Process] Channel will use subfolder: ${channelSubFolder}`);
-      }
-    } else {
-      // No channel_id available (rare case) - use global default
-      channelSubFolder = configModule.getDefaultSubfolder();
-      if (channelSubFolder) {
-        const baseDir = configModule.directoryPath;
-        targetChannelFolder = buildChannelPath(baseDir, channelSubFolder, actualChannelFolderName);
-        console.log(`[Post-Process] No channel ID, using global default subfolder: ${channelSubFolder}`);
-      }
+    // Per-video subfolder precedence; see resolveFinalSubfolder for the full contract.
+    channelSubFolder = downloadSettingsResolver.resolveFinalSubfolder({
+      hardOverride: subfolderOverride,
+      channelRecord,
+      softFallback: subfolderFallbackEnv,
+      globalDefault: configModule.getDefaultSubfolder(),
+    });
+    if (channelSubFolder) {
+      const baseDir = configModule.directoryPath;
+      targetChannelFolder = buildChannelPath(baseDir, channelSubFolder, actualChannelFolderName);
     }
+    logger.info({ subfolder: channelSubFolder }, 'Post-process resolved target subfolder');
 
     // Phase 2: Calculate the final path for _actual_filepath with subfolder if applicable
     // Downloads always go to temp first, so we need to store the FINAL path, not the temp path

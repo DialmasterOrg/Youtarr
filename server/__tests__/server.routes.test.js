@@ -208,7 +208,7 @@ const createServerModule = ({
 
         const downloadModuleMock = {
           doSpecificDownloads: jest.fn(),
-          doChannelDownloads: jest.fn()
+          doChannelAndPlaylistDownloads: jest.fn().mockResolvedValue(undefined)
         };
 
         const jobModuleMock = {
@@ -272,7 +272,12 @@ const createServerModule = ({
             success: true,
             folderMoved: false
           }),
-          getAllSubFolders: jest.fn().mockResolvedValue([])
+          getAllSubFolders: jest.fn().mockResolvedValue([]),
+          validateSubFolder: jest.fn((name) =>
+            /[\\/]|\.\./.test(String(name))
+              ? { valid: false, error: 'Invalid subfolder name' }
+              : { valid: true }
+          )
         };
 
         const bcryptMock = {
@@ -1827,6 +1832,108 @@ describe('server routes - downloads', () => {
       expect(res.statusCode).toBe(400);
       expect(res.body.error).toContain('Invalid resolution');
     });
+
+    test('rejects an invalid rating override', async () => {
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/triggerspecificdownloads');
+      const downloadHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: {
+          urls: ['https://youtube.com/watch?v=1'],
+          overrideSettings: { rating: 'banana' }
+        }
+      });
+      const res = createMockResponse();
+
+      await downloadHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body.error).toContain('Invalid rating');
+    });
+
+    test('normalizes an NR rating override to null before forwarding', async () => {
+      const { app, downloadModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/triggerspecificdownloads');
+      const downloadHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: {
+          urls: ['https://youtube.com/watch?v=1'],
+          overrideSettings: { rating: ' nr ' }
+        }
+      });
+      const res = createMockResponse();
+
+      await downloadHandler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(req.body.overrideSettings.rating).toBeNull();
+      expect(downloadModuleMock.doSpecificDownloads).toHaveBeenCalledWith(req);
+    });
+
+    test('rejects a path-traversal subfolderFallback override', async () => {
+      const { app, downloadModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/triggerspecificdownloads');
+      const downloadHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: {
+          urls: ['https://youtube.com/watch?v=1'],
+          overrideSettings: { subfolderFallback: '../../../etc' }
+        }
+      });
+      const res = createMockResponse();
+
+      await downloadHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(downloadModuleMock.doSpecificDownloads).not.toHaveBeenCalled();
+    });
+
+    test('rejects an invalid ratingFallback override', async () => {
+      const { app, downloadModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/triggerspecificdownloads');
+      const downloadHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: {
+          urls: ['https://youtube.com/watch?v=1'],
+          overrideSettings: { ratingFallback: 'banana' }
+        }
+      });
+      const res = createMockResponse();
+
+      await downloadHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body.error).toContain('Invalid rating');
+      expect(downloadModuleMock.doSpecificDownloads).not.toHaveBeenCalled();
+    });
+
+    test('forwards a valid subfolderFallback override', async () => {
+      const { app, downloadModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/triggerspecificdownloads');
+      const downloadHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: {
+          urls: ['https://youtube.com/watch?v=1'],
+          overrideSettings: { subfolderFallback: 'PlaylistFolder' }
+        }
+      });
+      const res = createMockResponse();
+
+      await downloadHandler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(downloadModuleMock.doSpecificDownloads).toHaveBeenCalledWith(req);
+    });
   });
 
   describe('POST /triggerchanneldownloads', () => {
@@ -1844,7 +1951,7 @@ describe('server routes - downloads', () => {
 
       await downloadHandler(req, res);
 
-      expect(downloadModuleMock.doChannelDownloads).toHaveBeenCalledWith({
+      expect(downloadModuleMock.doChannelAndPlaylistDownloads).toHaveBeenCalledWith({
         overrideSettings: { resolution: '720', videoCount: 5 }
       });
       expect(res.statusCode).toBe(200);

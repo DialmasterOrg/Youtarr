@@ -709,6 +709,43 @@ describe('plexModule', () => {
     });
   });
 
+  describe('getServerIdentityWithParams', () => {
+    test('returns claimed flag and machine identifier from /identity', async () => {
+      axios.get.mockResolvedValue({
+        data: { MediaContainer: { claimed: false, machineIdentifier: 'MID-123' } }
+      });
+      const result = await plexModule.getServerIdentityWithParams('192.168.1.10', 'token', '32400', false);
+      expect(axios.get).toHaveBeenCalledWith(
+        'http://192.168.1.10:32400/identity',
+        expect.objectContaining({ params: { 'X-Plex-Token': 'token' } })
+      );
+      expect(result).toEqual({ claimed: false, machineIdentifier: 'MID-123' });
+    });
+
+    test('omits token param when no api key provided (unclaimed/anonymous)', async () => {
+      axios.get.mockResolvedValue({
+        data: { MediaContainer: { claimed: false, machineIdentifier: 'MID-123' } }
+      });
+      await plexModule.getServerIdentityWithParams('192.168.1.10', '', '32400', false);
+      expect(axios.get).toHaveBeenCalledWith(
+        'http://192.168.1.10:32400/identity',
+        expect.objectContaining({ params: {} })
+      );
+    });
+
+    test('returns null claimed when the field is missing', async () => {
+      axios.get.mockResolvedValue({ data: { MediaContainer: { machineIdentifier: 'MID' } } });
+      const result = await plexModule.getServerIdentityWithParams('192.168.1.10', 'token', '32400', false);
+      expect(result).toEqual({ claimed: null, machineIdentifier: 'MID' });
+    });
+
+    test('returns null fields when the request fails', async () => {
+      axios.get.mockRejectedValue(new Error('ECONNREFUSED'));
+      const result = await plexModule.getServerIdentityWithParams('192.168.1.10', 'token', '32400', false);
+      expect(result).toEqual({ claimed: null, machineIdentifier: null });
+    });
+  });
+
   describe('getAuthUrl', () => {
     test('successfully creates auth URL and PIN', async () => {
       axios.post.mockResolvedValue({

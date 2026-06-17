@@ -1,6 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
 import { ConfigState, PlexConnectionStatus, SnackbarState } from '../types';
 import { PlexLibrary } from '../../../utils/plexLibraries';
+
+interface PlexServerIdentity {
+  claimed: boolean | null;
+  machineIdentifier: string | null;
+}
 
 interface UsePlexConnectionParams {
   token: string | null;
@@ -24,35 +30,51 @@ export const usePlexConnection = ({
   const [openPlexLibrarySelector, setOpenPlexLibrarySelector] = useState(false);
   const [openPlexAuthDialog, setOpenPlexAuthDialog] = useState(false);
   const [didInitialPlexCheck, setDidInitialPlexCheck] = useState(false);
+  // null = unknown/untested; false drives the "unclaimed server" playlist-scope hint.
+  const [plexServerClaimed, setPlexServerClaimed] = useState<boolean | null>(null);
+
+  const fetchPlexServerIdentity = useCallback(async (query?: string) => {
+    try {
+      const url = query ? `/plex/server-identity?${query}` : '/plex/server-identity';
+      const { data } = await axios.get<PlexServerIdentity>(url, {
+        headers: { 'x-access-token': token || '' },
+      });
+      setPlexServerClaimed(typeof data?.claimed === 'boolean' ? data.claimed : null);
+    } catch {
+      setPlexServerClaimed(null);
+    }
+  }, [token]);
 
   const checkPlexConnection = useCallback(() => {
     if (hasPlexServerConfigured) {
       // Flip to "testing" up front so the chip reads "Testing..." during the
-      // in-flight request. Without this, a slow failing fetch (e.g. Plex is
+      // in-flight request. Without this, a slow failing request (e.g. Plex is
       // unreachable) would leave the chip stuck on "Not Tested" for the whole
-      // fetch window, misleading the user into thinking nothing is happening.
+      // request window, misleading the user into thinking nothing is happening.
       setPlexConnectionStatus('testing');
-      fetch('/getplexlibraries', {
+      axios.get<PlexLibrary[]>('/getplexlibraries', {
         headers: {
           'x-access-token': token || '',
         },
       })
-        .then((response) => response.json())
-        .then((data) => {
+        .then(({ data }) => {
           if (Array.isArray(data) && data.length > 0) {
             setPlexConnectionStatus('connected');
-            setPlexLibraries(data as PlexLibrary[]);
+            setPlexLibraries(data);
+            fetchPlexServerIdentity();
           } else {
             setPlexConnectionStatus('not_connected');
             setPlexLibraries([]);
+            setPlexServerClaimed(null);
           }
         })
         .catch(() => {
           setPlexConnectionStatus('not_connected');
           setPlexLibraries([]);
+          setPlexServerClaimed(null);
         });
     }
-  }, [hasPlexServerConfigured, token]);
+  }, [hasPlexServerConfigured, token, fetchPlexServerIdentity]);
 
   // On first load after config arrives, check Plex connection if values exist
   useEffect(() => {
@@ -115,16 +137,16 @@ export const usePlexConnection = ({
       params.set('testPort', normalizedPort);
       params.set('testUseHttps', String(config.plexViaHttps));
 
-      const response = await fetch(`/getplexlibraries?${params}`, {
+      const { data } = await axios.get<PlexLibrary[]>(`/getplexlibraries?${params}`, {
         headers: {
           'x-access-token': token || '',
         },
       });
-      const data = await response.json();
 
       if (Array.isArray(data) && data.length > 0) {
         setPlexConnectionStatus('connected');
         setPlexLibraries(data as PlexLibrary[]);
+        fetchPlexServerIdentity(params.toString());
         // Plex credentials are auto-saved. Update initial snapshot for those fields.
         setInitialConfig((prev) => (
           prev
@@ -185,6 +207,7 @@ export const usePlexConnection = ({
       plexApiKey: apiKey
     }));
     setPlexConnectionStatus('not_tested');
+    setPlexServerClaimed(null);
     setSnackbar({
       open: true,
       message: 'Plex API Key obtained successfully! Click "Test Connection" to verify and save.',
@@ -195,6 +218,7 @@ export const usePlexConnection = ({
   return {
     plexConnectionStatus,
     setPlexConnectionStatus,
+    plexServerClaimed,
     plexLibraries,
     openPlexLibrarySelector,
     openPlexAuthDialog,

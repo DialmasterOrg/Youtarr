@@ -1,4 +1,5 @@
 const logger = require('../../logger');
+const { CHANNEL_DOWNLOAD_LABEL, isSpecificUrlDownloadJob } = require('./jobTypes');
 
 // Progress monitoring class for detecting stalled downloads
 class DownloadProgressMonitor {
@@ -20,7 +21,10 @@ class DownloadProgressMonitor {
       skipped: 0,
       skippedThisChannel: 0
     };
-    this.isChannelDownload = jobType.includes('Channel Downloads');
+    this.isChannelDownload = jobType.includes(CHANNEL_DOWNLOAD_LABEL);
+    // Manual and playlist downloads are fixed lists of individual video URLs;
+    // they share the same per-item progress accounting.
+    this.isSpecificUrlDownload = isSpecificUrlDownloadJob(jobType);
     this.currentChannelName = '';
     this.currentVideoCompleted = false; // Track if current video is done
     this.channelNameJustSet = false; // Track when channel name is newly set
@@ -424,7 +428,7 @@ class DownloadProgressMonitor {
 
     // Track individual video extractions for manual URLs
     if (line.includes('[youtube] Extracting URL:') && !line.includes('[youtube:tab]')) {
-      if (this.jobType === 'Manually Added Urls') {
+      if (this.isSpecificUrlDownload) {
         // Starting a new video, reset completion flag and state
         this.currentVideoCompleted = false;
         // If this is the first URL, set total if not already set

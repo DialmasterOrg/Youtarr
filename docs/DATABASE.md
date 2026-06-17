@@ -14,6 +14,7 @@ This document provides comprehensive information about Youtarr's database setup,
 
 Youtarr uses MariaDB/MySQL for storing:
 - Channel subscriptions and metadata
+- Playlist subscriptions and per-server sync state
 - Video information and download history
 - Job queues and processing state
 - Session data for authentication
@@ -23,12 +24,15 @@ Youtarr uses MariaDB/MySQL for storing:
 | :----------------- | :-------------    | :-------------------------------- |
 | `channels`         | `Channel`         | YouTube channel information       |
 | `Videos`           | `Video`           | Downloaded video metadata         |
-| `channelvideos`    | `ChannelVideo`    | Channel <-> video associations    |
+| `channelvideos`    | `ChannelVideo`    | Channel <-> video associations. `published_at_source` tracks publishedAt provenance: `exact` (.info.json), `approximate` (yt-dlp flat-playlist date), `estimated` (ordering-only placeholder assigned when YouTube returns a listing with no dates; never displayed), NULL (legacy, treated as approximate) |
 | `Jobs`             | `Job`             | Download job queue                |
 | `JobVideos`        | `JobVideo`        | Job <-> video associations        |
 | `JobVideoDownloads`| `JobVideoDownload`| Download progress tracking        |
 | `Sessions`         | `Session`         | User authentication sessions      |
 | `ApiKeys`          | `ApiKey`          | API key credentials for external integrations (bookmarklets, shortcuts, automation) |
+| `playlists`        | `Playlist`        | Subscribed YouTube playlists with per-playlist sync targets and seeded settings |
+| `playlistvideos`   | `PlaylistVideo`   | One row per (playlist, video) with the YouTube playlist position |
+| `playlist_sync_state` | `PlaylistSyncState` | Per-(playlist, server) sync state: server playlist id, last_synced_at, last_error |
 | `SequelizeMeta`    | NA                | Sequelize ORM migration tracking  |
 
 ## Internal Database (Default)

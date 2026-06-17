@@ -18,6 +18,7 @@ Youtarr supports integration with multiple media servers, providing rich metadat
 | Feature | Plex | Kodi | Jellyfin | Emby |
 |---------|------|------|----------|------|
 | Automatic Library Refresh via Youtarr | ✅ | ❌ | ❌ | ❌ |
+| Native Playlist Sync | ✅ | M3U only | ✅ | ✅ |
 | NFO Metadata | ❌ | ✅ | ✅ | ✅ |
 | Embedded MP4 Metadata | ✅ | Partial | ✅ | ✅ |
 | Channel Posters | ❌ | ✅ | ✅ | ✅ |
@@ -71,10 +72,13 @@ Disable if you are using Plex-only and want less "clutter" of files
 - **Library ID**: Select your YouTube library
 - **Server Details**: IP address and port
 
-#### Other Servers
-- No specific configuration needed
-- Metadata files created automatically
-- Point media server to Youtarr download directory
+#### Jellyfin and Emby
+- For metadata only, no Youtarr-side settings are needed. Just point the server at your download directory and the NFO and poster files are picked up automatically.
+- For native playlist sync, you do need to connect the server in Youtarr: enable it under Settings, then enter the server URL, an API key, and the user account that should own the playlists. See [Media Server Playlists](MEDIA_SERVER_PLAYLISTS.md) for the full setup.
+
+#### Kodi
+- No specific configuration needed for metadata; point Kodi at the download directory.
+- Kodi has no native playlist sync, but Youtarr writes a `.m3u` file you can import. See [Media Server Playlists](MEDIA_SERVER_PLAYLISTS.md#m3u-fallback).
 
 ## File Structure
 
@@ -109,6 +113,10 @@ See [Youtarr Downloads Folder Structure](YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md)
 | `genre`              | YouTube Categories                        |
 | `comment`            | Link to video on YouTube                  |
 | `Content Create Date`| Original upload/release date              |
+
+## Native Playlist Sync
+
+Youtarr can mirror subscribed YouTube playlists into Plex, Jellyfin, and Emby as native playlists, plus emit a universal `.m3u` fallback. Per-server setup, visibility model, and replace semantics are documented separately in [Media Server Playlists](MEDIA_SERVER_PLAYLISTS.md).
 
 ## Quick Start Guides
 

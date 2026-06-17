@@ -61,6 +61,7 @@ interface ChannelVideosProps {
   channelVideoQuality?: string | null;
   channelAudioFormat?: string | null;
   channelAvailableTabs?: string | null;
+  onVideosLoaded?: (channelId: string) => void;
 }
 
 type SortBy = 'date' | 'title' | 'duration' | 'size';
@@ -106,6 +107,7 @@ function ChannelVideos({
   channelVideoQuality,
   channelAudioFormat,
   channelAvailableTabs,
+  onVideosLoaded,
 }: ChannelVideosProps) {
   const isMobile = useMediaQuery('(max-width: 767px)');
   const initialViewMode: VideoListViewMode = isMobile ? 'list' : 'table';
@@ -150,6 +152,7 @@ function ChannelVideos({
   const [localIgnoreStatus, setLocalIgnoreStatus] = useState<Record<string, boolean>>({});
   const [localProtectedStatus, setLocalProtectedStatus] = useState<Record<string, boolean>>({});
   const [localAvailabilityStatus, setLocalAvailabilityStatus] = useState<Record<string, string>>({});
+  const [localPublishedAtStatus, setLocalPublishedAtStatus] = useState<Record<string, string>>({});
 
   const {
     filters,
@@ -328,6 +331,7 @@ function ChannelVideos({
     protectedFilter,
     missingFilter,
     ignoredFilter,
+    onFirstLoad: onVideosLoaded,
   });
 
   useEffect(() => {
@@ -410,7 +414,8 @@ function ChannelVideos({
       const hasIgnoreOverride = video.youtube_id in localIgnoreStatus;
       const hasProtectedOverride = video.youtube_id in localProtectedStatus;
       const hasAvailabilityOverride = video.youtube_id in localAvailabilityStatus;
-      if (!hasIgnoreOverride && !hasProtectedOverride && !hasAvailabilityOverride) return video;
+      const hasPublishedAtOverride = video.youtube_id in localPublishedAtStatus;
+      if (!hasIgnoreOverride && !hasProtectedOverride && !hasAvailabilityOverride && !hasPublishedAtOverride) return video;
       return {
         ...video,
         ...(hasIgnoreOverride
@@ -425,9 +430,15 @@ function ChannelVideos({
         ...(hasAvailabilityOverride
           ? { availability: localAvailabilityStatus[video.youtube_id] }
           : {}),
+        ...(hasPublishedAtOverride
+          ? {
+              publishedAt: localPublishedAtStatus[video.youtube_id],
+              published_at_source: 'exact' as const,
+            }
+          : {}),
       };
     });
-  }, [videos, localIgnoreStatus, localProtectedStatus, localAvailabilityStatus]);
+  }, [videos, localIgnoreStatus, localProtectedStatus, localAvailabilityStatus, localPublishedAtStatus]);
 
   const paginatedVideos = videosWithOverrides;
   const totalPages = Math.ceil(totalCount / effectivePageSize) || 1;
@@ -694,12 +705,21 @@ function ChannelVideos({
     setPage(1);
   };
 
+  // Accumulates missing status for every video seen on any loaded page, so
+  // selections survive page swaps. Checkboxes only exist on loaded rows, so
+  // lookups always hit.
+  const missingByIdRef = useRef(new Map<string, boolean>());
+  useEffect(() => {
+    videos.forEach((video) => {
+      missingByIdRef.current.set(video.youtube_id, Boolean(video.added && video.removed));
+    });
+  }, [videos]);
+
   const getMissingVideoCount = () => {
-    return checkedBoxes.reduce((count, videoId) => {
-      const video = videos.find((v) => v.youtube_id === videoId);
-      if (video && video.added && video.removed) return count + 1;
-      return count;
-    }, 0);
+    return checkedBoxes.reduce(
+      (count, videoId) => (missingByIdRef.current.get(videoId) ? count + 1 : count),
+      0
+    );
   };
 
   const getTabLabel = (tabType: string) => {
@@ -966,12 +986,20 @@ function ChannelVideos({
     );
   };
 
+  const hasPendingDates = videos.some(
+    (v) => v.published_at_source === 'estimated' && v.media_type !== 'short'
+  );
   const dateTooltipBase =
-    'Publish dates come from yt-dlp and may be approximate when YouTube only provides relative times. Videos remain sorted to match YouTube.';
+    'Publish dates come from YouTube, which doesn\'t always provide them, so Youtarr does the best it can with what it has. ' +
+    'A ~ means the date is approximate: YouTube only reported something like "1 month ago", so it can be off by days. ' +
+    'A date becomes exact once the video is downloaded or its details are opened. ' +
+    'Youtarr keeps videos in the same order they appear on YouTube as best it can; if the order looks off, click "Load More" to rebuild it.';
+  const pendingDatesSentence =
+    'Some videos show "Pending" because YouTube returned this list without dates. ';
   const dateTooltipText =
     selectedTab === 'shorts'
       ? 'Shorts do not expose publish dates via yt-dlp, so dates are hidden. ' + dateTooltipBase
-      : dateTooltipBase;
+      : (hasPendingDates ? pendingDatesSentence : '') + dateTooltipBase;
 
   const headerSlot = (
     <div
@@ -1019,7 +1047,8 @@ function ChannelVideos({
                 cursor: 'pointer',
                 display: 'inline-flex',
                 alignItems: 'center',
-                color: 'var(--foreground)',
+                // Warn-tint the icon when any date is pending, to invite a click
+                color: hasPendingDates ? 'var(--warning)' : 'var(--foreground)',
               }}
               aria-label="Date info"
             >
@@ -1037,7 +1066,7 @@ function ChannelVideos({
                   cursor: 'pointer',
                   display: 'inline-flex',
                   alignItems: 'center',
-                  color: 'var(--foreground)',
+                  color: hasPendingDates ? 'var(--warning)' : 'var(--foreground)',
                 }}
                 aria-label="Date info"
               >
@@ -1277,6 +1306,9 @@ function ChannelVideos({
           onRatingChanged={() => refetchVideos()}
           onAvailabilityDetected={(youtubeId, availability) => {
             setLocalAvailabilityStatus((prev) => ({ ...prev, [youtubeId]: availability }));
+          }}
+          onPublishedDateDetected={(youtubeId, isoDate) => {
+            setLocalPublishedAtStatus((prev) => ({ ...prev, [youtubeId]: isoDate }));
           }}
         />
       )}

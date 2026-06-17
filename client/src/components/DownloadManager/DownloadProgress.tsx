@@ -73,12 +73,23 @@ interface FailedVideo {
   url?: string;
 }
 
+interface TerminatedChannelSummary {
+  channelId: string;
+  uploader?: string | null;
+  url?: string | null;
+  terminatedAt?: string | null;
+}
+
 interface FinalSummary {
   totalDownloaded: number;
   totalSkipped: number;
   totalFailed?: number;
   totalMembersOnly?: number;
+  totalTerminatedChannels?: number;
+  totalTerminationFailures?: number;
   failedVideos?: FailedVideo[];
+  terminatedChannels?: TerminatedChannelSummary[];
+  terminationFailures?: string[];
   jobType: string;
   completedAt?: string;
 }
@@ -511,11 +522,18 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
 
         {/* Show final summary if available */}
         {finalSummary && !currentProgress && !errorDetails && (() => {
-          // Treat members-only skips as "warning"-shaped too: not a hard failure
-          // but the user couldn't actually download what they queued.
+          // Members-only skips and terminations are warning-shaped, not hard failures.
+          const terminatedCount = finalSummary.totalTerminatedChannels
+            ?? finalSummary.terminatedChannels?.length
+            ?? 0;
+          const terminationFailureCount = finalSummary.totalTerminationFailures
+            ?? finalSummary.terminationFailures?.length
+            ?? 0;
           const hasIssue =
             (finalSummary.totalFailed != null && finalSummary.totalFailed > 0)
-            || (finalSummary.totalMembersOnly != null && finalSummary.totalMembersOnly > 0);
+            || (finalSummary.totalMembersOnly != null && finalSummary.totalMembersOnly > 0)
+            || terminatedCount > 0
+            || terminationFailureCount > 0;
           // text-{success,warning}-foreground is meant for solid bg pairing;
           // on /10 tinted bg we want the saturated colour token itself.
           const bgClass = hasIssue ? 'bg-warning/10' : 'bg-success/10';
@@ -537,6 +555,12 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                   }
                   if (finalSummary.totalMembersOnly && finalSummary.totalMembersOnly > 0) {
                     parts.push(`${finalSummary.totalMembersOnly} members-only video${finalSummary.totalMembersOnly !== 1 ? 's' : ''} skipped`);
+                  }
+                  if (terminatedCount > 0) {
+                    parts.push(`${terminatedCount} channel${terminatedCount !== 1 ? 's' : ''} marked terminated`);
+                  }
+                  if (terminationFailureCount > 0) {
+                    parts.push(`${terminationFailureCount} termination${terminationFailureCount !== 1 ? 's' : ''} could not be auto-disabled`);
                   }
                   if (finalSummary.totalSkipped > 0) {
                     parts.push(`${finalSummary.totalSkipped} skipped (already downloaded or filtered)`);
@@ -562,6 +586,54 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                 })()}
               </Typography>
             </Box>
+
+            {/* Show details of terminated channels if any */}
+            {finalSummary.terminatedChannels && finalSummary.terminatedChannels.length > 0 && (
+              <Box className="mt-4">
+                <Alert severity="warning">
+                  <AlertTitle>Channels Marked Terminated by YouTube</AlertTitle>
+                  <Typography variant="body2" component="div" className="mb-1">
+                    Scheduled downloads have been disabled for the following channel{finalSummary.terminatedChannels.length !== 1 ? 's' : ''}:
+                  </Typography>
+                  <Box className="mt-1 pl-4">
+                    {finalSummary.terminatedChannels.map((channel) => (
+                      <Typography
+                        key={channel.channelId}
+                        variant="caption"
+                        component="div"
+                        color="text.secondary"
+                      >
+                        • {channel.uploader || channel.channelId}
+                      </Typography>
+                    ))}
+                  </Box>
+                </Alert>
+              </Box>
+            )}
+
+            {/* Termination-persistence failures: detected but not auto-disabled */}
+            {finalSummary.terminationFailures && finalSummary.terminationFailures.length > 0 && (
+              <Box className="mt-4">
+                <Alert severity="warning">
+                  <AlertTitle>Terminations Could Not Be Auto-Disabled</AlertTitle>
+                  <Typography variant="body2" component="div" className="mb-1">
+                    YouTube reported the following channel{finalSummary.terminationFailures.length !== 1 ? 's' : ''} as terminated, but Youtarr could not disable scheduled downloads. Check the channel manually:
+                  </Typography>
+                  <Box className="mt-1 pl-4">
+                    {finalSummary.terminationFailures.map((channelId) => (
+                      <Typography
+                        key={channelId}
+                        variant="caption"
+                        component="div"
+                        color="text.secondary"
+                      >
+                        • {channelId}
+                      </Typography>
+                    ))}
+                  </Box>
+                </Alert>
+              </Box>
+            )}
 
             {/* Show details of failed videos if any */}
             {finalSummary.failedVideos && finalSummary.failedVideos.length > 0 && (

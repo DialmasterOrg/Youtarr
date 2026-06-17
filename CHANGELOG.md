@@ -1,5 +1,118 @@
 # Changelog
 
+## [v1.71.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.71.0) - 2026-06-14
+
+## [1.71.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.70.0...v1.71.0) (2026-06-14)
+
+
+### Features
+
+* **channelModule:** seed min_duration, max_duration, title_filter_regex, audio_format on new channel insert ([565a686](https://github.com/DialmasterOrg/Youtarr/commit/565a6866a3451827a00dfbd29a2729cff04b9755))
+* **channelSettings:** reserve 'playlists' as a subfolder name ([5adc508](https://github.com/DialmasterOrg/Youtarr/commit/5adc508bbd066bcbe92f424b8e4a0543a55d918a))
+* **config:** improve Jellyfin/Emby user picker UI ([4e75b50](https://github.com/DialmasterOrg/Youtarr/commit/4e75b5062670acafa948605a8c62673f212ca1ad)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* **config:** register Jellyfin and Emby connection fields ([7ca409d](https://github.com/DialmasterOrg/Youtarr/commit/7ca409d38283cb138640c73323d2fe427d011104))
+* **cron:** run playlistAutoDownload after channelAutoDownload ([0466f02](https://github.com/DialmasterOrg/Youtarr/commit/0466f023039ccd05c21c8e9de9e0e24c0ef70b0b))
+* **db:** add playlist, playlistvideo, playlist_sync_state tables ([b8604a5](https://github.com/DialmasterOrg/Youtarr/commit/b8604a5d9306f39b8af041d14a0a4945bc4d68a3))
+* **downloadModule:** add doPlaylistDownloads entry point ([a752a3c](https://github.com/DialmasterOrg/Youtarr/commit/a752a3ced224f993378c41b8ed53916148edb101))
+* **downloads:** include playlists in channel runs ([e39baa0](https://github.com/DialmasterOrg/Youtarr/commit/e39baa0bf5f93321ac7810d0edd123403ce175c9)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* **emby:** make public playlists server-global ([bd710f2](https://github.com/DialmasterOrg/Youtarr/commit/bd710f208dc5050778a579688afb0cce27041725)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* **m3uGenerator:** add generatePlaylistM3U with relative paths ([97074d4](https://github.com/DialmasterOrg/Youtarr/commit/97074d45c8875126140e16435bffadfa2e888795))
+* **mediaServers:** add aggregator index ([2b0a47b](https://github.com/DialmasterOrg/Youtarr/commit/2b0a47bd85087534a77ec07bdddfa8d251e53acf))
+* **mediaServers:** add baseAdapter interface ([17cd0ee](https://github.com/DialmasterOrg/Youtarr/commit/17cd0ee9b4456f8c510dab82e725a43e3332c937))
+* **mediaServers:** add embyAdapter ([9818505](https://github.com/DialmasterOrg/Youtarr/commit/98185053247489ef1037a89ef8f65f828b1c943f))
+* **mediaServers:** add jellyfinAdapter ([785b2e2](https://github.com/DialmasterOrg/Youtarr/commit/785b2e2cf7bbfe9cb782cea468b7e7f2299f1134))
+* **mediaServers:** add mediaServerSync orchestrator ([9f07399](https://github.com/DialmasterOrg/Youtarr/commit/9f0739981cb416651ca7a988c988d48384d48675))
+* **mediaServers:** add plexAdapter ([b5a4d28](https://github.com/DialmasterOrg/Youtarr/commit/b5a4d285e08f4a5e3f27d69527cf8e1f603f3dda))
+* **mediaServers:** add serverRegistry ([ca1ba9e](https://github.com/DialmasterOrg/Youtarr/commit/ca1ba9e41bb376d326a1408a711de753cf551999))
+* **models:** add Playlist Sequelize model ([99d058d](https://github.com/DialmasterOrg/Youtarr/commit/99d058de4e240b1b2bf425ebb130806cafccc014))
+* **models:** add PlaylistSyncState Sequelize model ([98fd51b](https://github.com/DialmasterOrg/Youtarr/commit/98fd51b1716e2bc86f18e80c91201e3c80fe0863))
+* **models:** add PlaylistVideo Sequelize model ([4c750ed](https://github.com/DialmasterOrg/Youtarr/commit/4c750edf5c7ebfa621ba155d6d546771b956827d))
+* **models:** register Playlist models and associations ([9cc092b](https://github.com/DialmasterOrg/Youtarr/commit/9cc092b4c000e199e82eaae97d668833402d2890))
+* **playlistModule:** add getPlaylistInfo with yt-dlp metadata fetch ([d5b4228](https://github.com/DialmasterOrg/Youtarr/commit/d5b4228ba432fea59a5f093a2d6bfb5f8cbf53c1))
+* **playlists:** add auto-download toggle ([331dad5](https://github.com/DialmasterOrg/Youtarr/commit/331dad5e9f486237dd8e1866c8a91cbd99be331d)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* **playlists:** add download settings to dialog ([d992574](https://github.com/DialmasterOrg/Youtarr/commit/d992574d6fa5453a8acab6c1e6658b44a513dafb)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* **playlists:** add help modal to playlists tab ([b8ec821](https://github.com/DialmasterOrg/Youtarr/commit/b8ec8214b1a5bea6762bfedf501cdecb6040f788)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* **playlists:** add per-video download settings ([e84e8e5](https://github.com/DialmasterOrg/Youtarr/commit/e84e8e54cc96e1641ef49843bdcf4232ce4b19a3)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* **playlists:** download selected playlist videos ([f88437c](https://github.com/DialmasterOrg/Youtarr/commit/f88437c3fa1f4436f11c33c0c116dfe5ce208682)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* **playlists:** newest-first sort + load-more ([a37a5b1](https://github.com/DialmasterOrg/Youtarr/commit/a37a5b1cbd3714563d64487f8eea92d98f6d6349)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* **playlists:** regroup detail header into action groups ([29fd4b9](https://github.com/DialmasterOrg/Youtarr/commit/29fd4b9802c2926c21a6a9e10477bc4c79b9c790)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* **playlists:** WIP playlist page, media server settings, and rename ChannelManager -> Subscriptions ([ef5eb86](https://github.com/DialmasterOrg/Youtarr/commit/ef5eb8669c048ecaaaae653a58fac57bd2f115fd))
+* **plex:** add playlist visibility scope control ([835df1d](https://github.com/DialmasterOrg/Youtarr/commit/835df1d026834d502c129e634dc3c9bd1f39eda9)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* **plexAdapter:** optional plexPlaylistToken override for playlist scope ([bb516d4](https://github.com/DialmasterOrg/Youtarr/commit/bb516d4aa782e19b6d41d0cceb73b18ee3caf1e7))
+* **routes:** add /api/mediaservers routes ([c8070fb](https://github.com/DialmasterOrg/Youtarr/commit/c8070fb06f12e132d43b19d830f9e272447f9464))
+* **routes:** add /api/playlists routes ([453b46f](https://github.com/DialmasterOrg/Youtarr/commit/453b46f1b9547c53182d6a69dc0a17f4c7ab6d0d))
+* **routes:** add POST /api/playlists/:playlistId/download ([ecb2e0d](https://github.com/DialmasterOrg/Youtarr/commit/ecb2e0d55fb81b9dc7d4bc07707a1f239f1a6b4a))
+* **routes:** wire playlist + mediaservers routes ([7db92f8](https://github.com/DialmasterOrg/Youtarr/commit/7db92f8b80ae9bb95cb44ae90cb4ba95d6c065a4))
+* **subscriptions:** back button on detail pages ([e66c938](https://github.com/DialmasterOrg/Youtarr/commit/e66c93874a37c2336d4a68307e401785523db0eb)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* **subscriptions:** context-sensitive add bar ([e3ac30f](https://github.com/DialmasterOrg/Youtarr/commit/e3ac30f84deb71f36ceaed538cf4c93989dbe826)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+
+
+### Bug Fixes
+
+* **downloadModule:** wrap doPlaylistDownloads urls in body shape for doSpecificDownloads ([db3982e](https://github.com/DialmasterOrg/Youtarr/commit/db3982e760586e4eb2ecf5bdf6eb07b61f7180f1))
+* **downloads:** aggregate channel+playlist total ([3813bf2](https://github.com/DialmasterOrg/Youtarr/commit/3813bf2aba0a4f96621cce72a9f0aac4cab7fa9f)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* **downloads:** show per-channel quality in dialog ([964a8c8](https://github.com/DialmasterOrg/Youtarr/commit/964a8c850243cedcf86ba1199b7c4405e55e56ef)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* **mediaServers:** cross-platform basename extraction for Plex-on-Windows ([c9fa3a6](https://github.com/DialmasterOrg/Youtarr/commit/c9fa3a68c09671e623cf94b7c4549bf423804fef))
+* **mediaServers:** Emby create uses query params; recover from prior-failure state ([ab5c6b5](https://github.com/DialmasterOrg/Youtarr/commit/ab5c6b57d1a8c19b4f59f192929c698059bb6c2d))
+* **mediaServers:** Jellyfin/Emby replace = delete playlist and recreate ([bddf01c](https://github.com/DialmasterOrg/Youtarr/commit/bddf01c26070f5f4a94b81fcfa561e44764d76bc))
+* **mediaServers:** match item paths by basename, not strict equality ([bf1348b](https://github.com/DialmasterOrg/Youtarr/commit/bf1348b0aa789f8133e20161407de5616aabb4ec))
+* **mediaServers:** resolve Plex URL via plexModule.getBaseUrl ([e5ef1b9](https://github.com/DialmasterOrg/Youtarr/commit/e5ef1b97be9a2fe45d6d72b1c9cb04a055eddc5c))
+* **mediaServers:** skip playlist creation when no items resolve yet ([350dadd](https://github.com/DialmasterOrg/Youtarr/commit/350daddb93a1e74b83744b03608fea19aef69de2))
+* **mediaServers:** tolerate stale server_playlist_id in replacePlaylistItems ([eae455a](https://github.com/DialmasterOrg/Youtarr/commit/eae455ad9a4068c069f4e7407e3e0f26f0cd8cee))
+* **playlistModule:** pass \"id\" shape to upsertChannel and synthesize channel URL ([acbcfdf](https://github.com/DialmasterOrg/Youtarr/commit/acbcfdffea64577299e7e1ae0febdc94288c4075))
+* **playlistModule:** seed auto-created channels with GLOBAL_DEFAULT_SENTINEL ([209ae02](https://github.com/DialmasterOrg/Youtarr/commit/209ae024e182677066f94c9a6409f86cd078e9dc))
+* allow restoring soft-deleted channels ([297ec55](https://github.com/DialmasterOrg/Youtarr/commit/297ec5500055ff05b6282655cef9aa3b20d99529)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* backfill playlist video channels on download ([dc86dbe](https://github.com/DialmasterOrg/Youtarr/commit/dc86dbedb98ec6b912a8164d67b6b13bb0dc5bdb)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* correct published dates on channel videos ([34ee615](https://github.com/DialmasterOrg/Youtarr/commit/34ee615783fbdb8993e49ffd121640fe89d6566e))
+* correct subscription import result counts ([19c6f92](https://github.com/DialmasterOrg/Youtarr/commit/19c6f92d8cad32701cacd3116ee083a675ff4835)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* default new channels to global subfolder ([f9dc4e5](https://github.com/DialmasterOrg/Youtarr/commit/f9dc4e573a1dd0c1df77dafc2a3dcf1271acc7d6)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* don't mark clean downloads with warnings ([86a54db](https://github.com/DialmasterOrg/Youtarr/commit/86a54db61409295ec3ca5a5afcad369c80305c27)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* exclude private videos from playlist sync ([b2828f2](https://github.com/DialmasterOrg/Youtarr/commit/b2828f29c836c38c4484a79c44fb167b1077bd4c)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* re-download handling for missing videos ([8397911](https://github.com/DialmasterOrg/Youtarr/commit/8397911f7e11f0ab8d9ea48bcf4eacffccdb32ff)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* route downloads by owning channel ([525ade5](https://github.com/DialmasterOrg/Youtarr/commit/525ade5758a70ba9e8929109bf728793772338ab)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* send prefixed field keys in media server test ([98d4c0e](https://github.com/DialmasterOrg/Youtarr/commit/98d4c0ea666e1327420aa7da6975162e0895ea18)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* stop retrying media-server sync when down ([2c91fb7](https://github.com/DialmasterOrg/Youtarr/commit/2c91fb74b34cdf7de60bbda224f9b1a7aa6d139d)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* update channels nav dropdown labels ([1f59dc1](https://github.com/DialmasterOrg/Youtarr/commit/1f59dc19ff5fdf8bdc95499da9aed19d5d8945ba))
+* write .ignore marker in playlists folder ([9b180f9](https://github.com/DialmasterOrg/Youtarr/commit/9b180f90596ac012023ca5ef48f0dd1ed37a04ad)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* **playlists:** harden media server sync ([041008c](https://github.com/DialmasterOrg/Youtarr/commit/041008cbb6dec4c636efbc149ea4057561d443b7)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+
+
+### Documentation
+
+* add reverse proxy websocket troubleshooting ([3e9d217](https://github.com/DialmasterOrg/Youtarr/commit/3e9d2178c87edcb150b33b98a2a55bde84ca9d24))
+* document playlist support across user guides ([acae0fb](https://github.com/DialmasterOrg/Youtarr/commit/acae0fb95f57623d8ffa324e8fc812a6acb5f6fe)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* explain where Plex shared playlists appear ([73c6cd3](https://github.com/DialmasterOrg/Youtarr/commit/73c6cd3802056b89a7682cfa80ed21afd5f10e00)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* update CHANGELOG for v1.70.0 [skip ci] ([f193ffd](https://github.com/DialmasterOrg/Youtarr/commit/f193ffd55344803b68a91f0de3faf2c443420752))
+
+
+### Code Refactoring
+
+* **plexAdapter:** use "UNCLAIMED_SERVER" sentinel for anonymous mode ([e49cb8b](https://github.com/DialmasterOrg/Youtarr/commit/e49cb8bc556f5f44c14dec91f087182290341555))
+* break up downloadExecutor doDownload ([708bf11](https://github.com/DialmasterOrg/Youtarr/commit/708bf114d73bc9a57ac26aad386ba1a1b5a98313)), closes [#645](https://github.com/DialmasterOrg/Youtarr/issues/645)
+* split doDownload into focused modules ([af70884](https://github.com/DialmasterOrg/Youtarr/commit/af708845eefddd58ca9a18f98cb7a725b0f8496c)), closes [#645](https://github.com/DialmasterOrg/Youtarr/issues/645)
+
+
+
+
+
+## [v1.70.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.70.0) - 2026-05-30
+
+## [1.70.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.69.2...v1.70.0) (2026-05-30)
+
+
+### Features
+
+* detect and disable terminated channels ([04fb599](https://github.com/DialmasterOrg/Youtarr/commit/04fb599037b641bebddcd1a8aa16dedf199b2c2c)), closes [#621](https://github.com/DialmasterOrg/Youtarr/issues/621)
+
+
+### Documentation
+
+* update CHANGELOG for v1.69.2 [skip ci] ([6265702](https://github.com/DialmasterOrg/Youtarr/commit/626570272fe212951774423d0fb66bd2e28e20fc))
+
+
+
+
+
 ## [v1.69.2](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.69.2) - 2026-05-15
 
 ### [1.69.2](https://github.com/DialmasterOrg/Youtarr/compare/vv1.69.1...v1.69.2) (2026-05-15)

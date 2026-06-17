@@ -23,6 +23,7 @@ import DeleteVideosDialog from '../DeleteVideosDialog';
 import ChangeRatingDialog from '../ChangeRatingDialog';
 import DownloadSettingsDialog from '../../DownloadManager/ManualDownload/DownloadSettingsDialog';
 import { useConfig } from '../../../hooks/useConfig';
+import { uploadDateToIso } from '../../../utils/formatters';
 
 const SNACKBAR_AUTO_HIDE_MS = 4000;
 
@@ -37,6 +38,7 @@ function VideoModal({
   onDownloadQueued,
   onRatingChanged,
   onAvailabilityDetected,
+  onPublishedDateDetected,
   allowIgnore,
 }: VideoModalProps) {
   const isMobile = useMediaQuery('(max-width: 599px)');
@@ -142,6 +144,24 @@ function VideoModal({
       onAvailabilityDetected?.(video.youtubeId, 'subscriber_only');
     }
   }, [metadata?.availability, localVideo.status, video.youtubeId, onAvailabilityDetected]);
+
+  // Notify the parent the first time the metadata fetch yields an authoritative
+  // upload date (from the .info.json), so list pages can replace an estimated or
+  // approximate date with the exact one without a manual refresh. The backend
+  // stamps the channelvideos row in the same request; this just keeps the
+  // already-rendered list in sync. Keyed on youtubeId so it fires once per video
+  // and re-arms when the modal switches videos.
+  const datePropagatedForRef = useRef<string | null>(null);
+  useEffect(() => {
+    const uploadDate = metadata?.uploadDate;
+    if (uploadDate && datePropagatedForRef.current !== video.youtubeId) {
+      const isoDate = uploadDateToIso(uploadDate);
+      if (isoDate) {
+        datePropagatedForRef.current = video.youtubeId;
+        onPublishedDateDetected?.(video.youtubeId, isoDate);
+      }
+    }
+  }, [metadata?.uploadDate, video.youtubeId, onPublishedDateDetected]);
 
   const hasChannelQualityOverride = Boolean(channelSettings.video_quality);
   const defaultResolution = channelSettings.video_quality || config.preferredResolution || '1080';
@@ -258,13 +278,13 @@ function VideoModal({
         onClose={() => setDownloadDialogOpen(false)}
         onConfirm={handleDownloadConfirm}
         videoCount={1}
+        missingVideoCount={displayVideo.status === 'missing' ? 1 : 0}
         mode="manual"
         token={token}
         defaultResolution={defaultResolution}
         defaultResolutionSource={defaultResolutionSource}
         defaultAudioFormat={defaultAudioFormat}
         defaultAudioFormatSource={defaultAudioFormatSource}
-        defaultRating={channelSettings.default_rating ?? null}
       />
 
       <ChangeRatingDialog

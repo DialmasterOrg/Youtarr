@@ -1,10 +1,10 @@
 # Youtarr
 
-![Backend Coverage](https://img.shields.io/badge/Backend_Coverage-83%25-brightgreen)
-![Frontend Coverage](https://img.shields.io/badge/Frontend_Coverage-86%25-brightgreen)
+![Backend Coverage](https://img.shields.io/badge/Backend_Coverage-85%25-brightgreen)
+![Frontend Coverage](https://img.shields.io/badge/Frontend_Coverage-85%25-brightgreen)
 ![CI Status](https://github.com/DialmasterOrg/Youtarr/workflows/CI%20-%20Lint%20and%20Test/badge.svg)
 
-Youtarr is a self-hosted YouTube downloader that automatically downloads videos from your favorite channels. It provides metadata for multiple media servers and offers optional Plex integration for automatic library refreshes.
+Youtarr is a self-hosted YouTube downloader that automatically downloads videos from your favorite channels and playlists. It provides metadata for multiple media servers, mirrors your subscribed YouTube playlists into Plex, Jellyfin, and Emby as native playlists, and offers optional Plex integration for automatic library refreshes.
 
 > Don't want to self-host? You can also run Youtarr on [ElfHosted](https://store.elfhosted.com/product/youtarr/) with a managed deployment – see their [Youtarr docs](https://docs.elfhosted.com/app/youtarr/).
 
@@ -25,6 +25,7 @@ https://github.com/user-attachments/assets/a80548fc-bcf9-4ad0-889c-dbd5aac250ee
 
 - **Smart Downloads**: Pre-validate manually pasted URLs with metadata preview before downloading
 - **Channel Subscriptions**: Subscribe to channels and auto-download new videos, shorts, and streams with per-tab controls
+- **Playlist Subscriptions**: Subscribe to YouTube playlists and auto-download their videos into the right channel folders; Youtarr mirrors each playlist into Plex, Jellyfin, and Emby as a native playlist and writes a universal `.m3u` file for any other player
 - **Browse Channels**: View and search all videos from subscribed channels with advanced filtering, tabbed views for Videos/Shorts/Streams, and contextual publish date accuracy tips
 - **Find on YouTube**: Search YouTube from inside Youtarr, see which results are already downloaded or missing, and click any result to queue a download
 - **In-App Playback**: Click any thumbnail to open a detail modal with extended metadata and in-browser streaming of downloaded videos; no media server required
@@ -75,6 +76,7 @@ You'll need Docker, Docker Compose, Git, and a Bash shell (Git Bash on Windows).
 - [Kodi Setup](docs/media-servers/kodi.md) - Kodi configuration
 - [Jellyfin Setup](docs/media-servers/jellyfin.md) - Jellyfin integration
 - [Emby Setup](docs/media-servers/emby.md) - Emby configuration
+- [Media Server Playlists](docs/MEDIA_SERVER_PLAYLISTS.md) - Sync subscribed playlists to Plex, Jellyfin, and Emby
 
 ### Platform Guides
 - [Synology NAS](docs/platforms/synology.md) - DSM 7+ optimized setup

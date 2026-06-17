@@ -489,11 +489,13 @@ See [YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md](../YOUTARR_DOWNLOADS_FOLDER_STRUCTUR
 - Add library as "Movies" type
 - Enable NFO metadata reader
 - Point to your `YOUTUBE_OUTPUT_DIR`
+- For native playlist sync, also connect Jellyfin in Youtarr (Settings -> Jellyfin Integration: URL, API key, user). See [Media Server Playlists](../MEDIA_SERVER_PLAYLISTS.md).
 
 #### Emby
 - Similar to Jellyfin setup
 - Use NFO metadata format
 - Configure as Movies library
+- For native playlist sync, also connect Emby in Youtarr (Settings -> Emby Integration). See [Media Server Playlists](../MEDIA_SERVER_PLAYLISTS.md).
 
 ---
 
