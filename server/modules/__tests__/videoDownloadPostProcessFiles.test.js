@@ -305,7 +305,8 @@ describe('videoDownloadPostProcessFiles', () => {
       sub_folder: null,
       uploader: 'Channel',
       folder_name: 'Channel',
-      default_rating: 'PG-13'
+      default_rating: 'PG-13',
+      enabled: true
     });
 
     await loadModule();
@@ -649,7 +650,8 @@ describe('videoDownloadPostProcessFiles', () => {
         sub_folder: 'Kids',
         uploader: 'Channel',
         folder_name: 'Channel',
-        default_rating: null
+        default_rating: null,
+        enabled: true
       });
       process.env.YOUTARR_SUBFOLDER_FALLBACK = 'PLFolder';
       delete process.env.YOUTARR_SUBFOLDER_OVERRIDE;
@@ -700,6 +702,76 @@ describe('videoDownloadPostProcessFiles', () => {
         expect.any(Object)
       );
     });
+
+    it('disabled channel sub_folder falls through to the playlist soft fallback', async () => {
+      // Disabled channel settings shouldn't override the playlist.
+      Channel.findOne.mockResolvedValue({
+        id: 1,
+        sub_folder: 'Kids',
+        uploader: 'Channel',
+        folder_name: 'Channel',
+        default_rating: null,
+        enabled: false
+      });
+      process.env.YOUTARR_SUBFOLDER_FALLBACK = 'PLFolder';
+      delete process.env.YOUTARR_SUBFOLDER_OVERRIDE;
+
+      const tempVideoPath = '/tmp/youtarr-downloads/Channel/Video Title [abc123]/Video Title [abc123].mp4';
+      const tempVideoDir = '/tmp/youtarr-downloads/Channel/Video Title [abc123]';
+      process.argv = ['node', 'script', tempVideoPath];
+
+      tempPathManager.isEnabled.mockReturnValue(true);
+      tempPathManager.isTempPath.mockReturnValue(true);
+      tempPathManager.convertTempToFinal.mockImplementation((p) => p.replace('/tmp/youtarr-downloads', '/library'));
+
+      const tempJsonPath = '/tmp/youtarr-downloads/Channel/Video Title [abc123]/Video Title [abc123].info.json';
+      fs.existsSync.mockImplementation((p) => {
+        return p === tempJsonPath || p.includes('/library/__PLFolder/Channel');
+      });
+      fs.pathExists.mockResolvedValue(false);
+
+      await loadModule();
+      await settleAsync();
+
+      // Routes to PLFolder (playlist fallback), not Kids (disabled channel setting)
+      expect(fs.move).toHaveBeenCalledWith(
+        tempVideoDir,
+        expect.stringContaining('/library/__PLFolder/Channel/Video Title [abc123]')
+      );
+      expect(fs.move).not.toHaveBeenCalledWith(
+        tempVideoDir,
+        expect.stringContaining('Kids')
+      );
+    });
+
+    it('disabled channel default_rating falls through to the rating soft fallback', async () => {
+      Channel.findOne.mockResolvedValue({
+        id: 1,
+        sub_folder: null,
+        uploader: 'Channel',
+        folder_name: 'Channel',
+        default_rating: 'R',
+        enabled: false
+      });
+      process.env.YOUTARR_RATING_FALLBACK = 'PG';
+      delete process.env.YOUTARR_OVERRIDE_RATING;
+
+      await loadModule();
+      await settleAsync();
+
+      // The playlist fallback PG is used, not the disabled channel's R rating
+      expect(childProcess.spawnSync).toHaveBeenCalledWith(
+        '/usr/bin/AtomicParsley',
+        expect.arrayContaining([
+          '--rDNSatom', 'mpaa|PG|', 'name=iTunEXTC', 'domain=com.apple.iTunes'
+        ]),
+        expect.any(Object)
+      );
+      const ratingArgs = childProcess.spawnSync.mock.calls
+        .filter((c) => c[0] === '/usr/bin/AtomicParsley')
+        .flatMap((c) => c[1]);
+      expect(ratingArgs).not.toContain('mpaa|R|');
+    });
   });
 
   describe('owner channel id resolution (VEVO/Topic channel fix)', () => {
@@ -715,7 +787,7 @@ describe('videoDownloadPostProcessFiles', () => {
       // the subscription the user actually downloaded from.
       process.env.YOUTARR_OWNER_CHANNEL_ID = 'UC-subscription';
       Channel.findOne.mockResolvedValue({
-        id: 1, sub_folder: 'Library2', uploader: 'Channel', folder_name: 'Channel', default_rating: null
+        id: 1, sub_folder: 'Library2', uploader: 'Channel', folder_name: 'Channel', default_rating: null, enabled: true
       });
 
       await loadModule();
@@ -729,7 +801,7 @@ describe('videoDownloadPostProcessFiles', () => {
     it('routes the video into the owner channel subfolder even when info.json channel_id differs', async () => {
       process.env.YOUTARR_OWNER_CHANNEL_ID = 'UC-subscription';
       Channel.findOne.mockResolvedValue({
-        id: 1, sub_folder: 'Library2', uploader: 'Channel', folder_name: 'Channel', default_rating: null
+        id: 1, sub_folder: 'Library2', uploader: 'Channel', folder_name: 'Channel', default_rating: null, enabled: true
       });
 
       const tempVideoPath = '/tmp/youtarr-downloads/Channel/Video Title [abc123]/Video Title [abc123].mp4';
@@ -771,7 +843,7 @@ describe('videoDownloadPostProcessFiles', () => {
       delete process.env.YOUTARR_OWNER_CHANNEL_ID;
       process.env.YOUTARR_OWNER_CHANNEL_MAP = JSON.stringify({ abc123: 'UC-artist' });
       Channel.findOne.mockResolvedValue({
-        id: 1, sub_folder: 'Library2', uploader: 'Channel', folder_name: 'Channel', default_rating: null
+        id: 1, sub_folder: 'Library2', uploader: 'Channel', folder_name: 'Channel', default_rating: null, enabled: true
       });
 
       await loadModule();
@@ -799,7 +871,7 @@ describe('videoDownloadPostProcessFiles', () => {
       process.env.YOUTARR_OWNER_CHANNEL_ID = 'UC-explicit';
       process.env.YOUTARR_OWNER_CHANNEL_MAP = JSON.stringify({ abc123: 'UC-mapped' });
       Channel.findOne.mockResolvedValue({
-        id: 1, sub_folder: 'Library2', uploader: 'Channel', folder_name: 'Channel', default_rating: null
+        id: 1, sub_folder: 'Library2', uploader: 'Channel', folder_name: 'Channel', default_rating: null, enabled: true
       });
 
       await loadModule();
@@ -836,7 +908,7 @@ describe('videoDownloadPostProcessFiles', () => {
       // Of the candidates, only UC-artist is a tracked channel.
       Channel.findAll.mockResolvedValue([{ channel_id: 'UC-artist' }]);
       Channel.findOne.mockResolvedValue({
-        id: 1, sub_folder: 'Library2', uploader: 'Channel', folder_name: 'Channel', default_rating: null
+        id: 1, sub_folder: 'Library2', uploader: 'Channel', folder_name: 'Channel', default_rating: null, enabled: true
       });
 
       await loadModule();
@@ -872,7 +944,7 @@ describe('videoDownloadPostProcessFiles', () => {
       ChannelVideo.findAll.mockResolvedValue([{ channel_id: 'UC-other' }]);
       Channel.findAll.mockResolvedValue([{ channel_id: 'UC-other' }]);
       Channel.findOne.mockResolvedValue({
-        id: 1, sub_folder: 'Library2', uploader: 'Channel', folder_name: 'Channel', default_rating: null
+        id: 1, sub_folder: 'Library2', uploader: 'Channel', folder_name: 'Channel', default_rating: null, enabled: true
       });
 
       await loadModule();
@@ -920,7 +992,8 @@ describe('videoDownloadPostProcessFiles', () => {
 
       Channel.findOne.mockResolvedValue({
         sub_folder: 'Entertainment',
-        uploader: 'Channel'
+        uploader: 'Channel',
+        enabled: true
       });
 
       tempPathManager.isEnabled.mockReturnValue(true);
@@ -961,7 +1034,8 @@ describe('videoDownloadPostProcessFiles', () => {
 
       Channel.findOne.mockResolvedValue({
         sub_folder: 'Entertainment',
-        uploader: 'Channel'
+        uploader: 'Channel',
+        enabled: true
       });
 
       tempPathManager.isEnabled.mockReturnValue(true);
@@ -996,7 +1070,8 @@ describe('videoDownloadPostProcessFiles', () => {
 
       Channel.findOne.mockResolvedValue({
         sub_folder: 'Music',
-        uploader: rawChannelName
+        uploader: rawChannelName,
+        enabled: true
       });
 
       tempPathManager.isEnabled.mockReturnValue(true);
@@ -1046,7 +1121,8 @@ describe('videoDownloadPostProcessFiles', () => {
 
       Channel.findOne.mockResolvedValue({
         sub_folder: 'Education',
-        uploader: rawChannelName
+        uploader: rawChannelName,
+        enabled: true
       });
 
       tempPathManager.isEnabled.mockReturnValue(true);
@@ -1122,7 +1198,8 @@ describe('videoDownloadPostProcessFiles', () => {
 
       Channel.findOne.mockResolvedValue({
         sub_folder: 'Music',
-        uploader: channelName
+        uploader: channelName,
+        enabled: true
       });
 
       fs.readFileSync.mockReturnValue(JSON.stringify({

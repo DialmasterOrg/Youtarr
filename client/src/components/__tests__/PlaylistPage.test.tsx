@@ -31,6 +31,8 @@ const mockVideo: PlaylistVideo = {
   video_id: null,
   file_path: null,
   file_size: null,
+  audio_file_path: null,
+  audio_file_size: null,
 };
 
 const mockMissingVideo: PlaylistVideo = {

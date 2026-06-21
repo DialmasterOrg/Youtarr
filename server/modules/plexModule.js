@@ -57,17 +57,6 @@ class PlexModule {
   }
 
   /**
-   * Refresh the Plex library associated with the given resolved subfolder.
-   * Falls back to the global library when no specific mapping exists.
-   * @param {string|null} subfolder - Resolved subfolder name (no __ prefix, null = root)
-   * @returns {Promise<Object|null>}
-   */
-  async refreshLibraryForSubfolder(subfolder) {
-    const libraryId = this.getLibraryIdForSubfolder(subfolder);
-    return this.refreshLibrary(libraryId);
-  }
-
-  /**
    * Refresh all distinct Plex libraries mapped to the provided subfolders.
    * Deduplicates library IDs so each library is only refreshed once.
    * @param {Array<string|null>} subfolders - Array of resolved subfolder names

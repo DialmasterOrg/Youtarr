@@ -689,6 +689,8 @@ describe('GET /api/playlists/:playlistId/videos', () => {
         youtube_removed: false,
         filePath: '/videos/downloaded1.mp4',
         fileSize: 1024,
+        audioFilePath: '/videos/downloaded1.m4a',
+        audioFileSize: 2048,
       },
     ]);
 
@@ -711,9 +713,13 @@ describe('GET /api/playlists/:playlistId/videos', () => {
       video_id: 42,
       file_path: '/videos/downloaded1.mp4',
       file_size: 1024,
+      audio_file_path: '/videos/downloaded1.m4a',
+      audio_file_size: 2048,
     });
     expect(payload.videos[1]).toMatchObject({
       youtube_id: 'tracked2',
+      audio_file_path: null,
+      audio_file_size: null,
       title: 'A tracked video',
       duration: 456,
       published_at: '20260215',

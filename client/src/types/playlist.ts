@@ -48,6 +48,8 @@ export interface PlaylistVideo {
   video_id: number | null;
   file_path: string | null;
   file_size: number | null;
+  audio_file_path: string | null;
+  audio_file_size: number | null;
 }
 
 export interface MediaServerStatus {
@@ -79,13 +81,6 @@ export interface PlaylistSubscribeSettings {
   title_filter_regex?: string | null;
   audio_format?: string | null;
   default_rating?: string | null;
-}
-
-export interface PlaylistSyncState {
-  server_type: 'plex' | 'jellyfin' | 'emby';
-  server_playlist_id: string | null;
-  last_synced_at: string | null;
-  last_error: string | null;
 }
 
 export type MediaServerType = 'plex' | 'jellyfin' | 'emby';

@@ -47,6 +47,30 @@ test('uses channel command settings when the channel is configured', async () =>
   });
 });
 
+test('only loads enabled channels for settings resolution', async () => {
+  await grouper.buildGroups(playlist, [{ youtube_id: 'b', channel_id: 'UCc' }], {});
+  expect(Channel.findAll).toHaveBeenCalledWith(
+    expect.objectContaining({ where: { channel_id: ['UCc'], enabled: true } })
+  );
+});
+
+test('falls through to playlist settings when the channel is disabled', async () => {
+  // The enabled filter excludes the row, so findAll returns nothing and resolution
+  // falls through to playlist -> global.
+  Channel.findAll.mockResolvedValue([]);
+  const groups = await grouper.buildGroups(
+    { ...playlist, audio_format: 'video_mp3' },
+    [{ youtube_id: 'b', channel_id: 'UCdisabled' }],
+    {}
+  );
+  expect(groups[0]).toEqual({
+    resolution: '720',
+    audioFormat: 'video_mp3',
+    skipVideoFolder: false,
+    youtubeIds: ['b'],
+  });
+});
+
 test('override beats channel and playlist for command settings', async () => {
   Channel.findAll.mockResolvedValue([
     { channel_id: 'UCc', video_quality: '1080', audio_format: 'mp3_only', skip_video_folder: true },

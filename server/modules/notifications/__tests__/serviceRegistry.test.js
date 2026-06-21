@@ -6,8 +6,7 @@ const {
   getDefaultNameForUrl,
   isDiscord,
   isDiscordWebhook,
-  getRichFormattingServices,
-  getAllServices
+  getRichFormattingServices
 } = require('../serviceRegistry');
 
 describe('Service Registry', () => {
@@ -181,31 +180,6 @@ describe('Service Registry', () => {
       expect(richServices).toContain('email');
       expect(richServices).not.toContain('ntfy');
       expect(richServices).not.toContain('pushover');
-    });
-  });
-
-  describe('getAllServices', () => {
-    it('should return all registered services', () => {
-      const services = getAllServices();
-      expect(Object.keys(services)).toContain('discord');
-      expect(Object.keys(services)).toContain('slack');
-      expect(Object.keys(services)).toContain('telegram');
-      expect(Object.keys(services)).toContain('email');
-      expect(Object.keys(services)).toContain('ntfy');
-    });
-
-    it('should have required properties on each service', () => {
-      const services = getAllServices();
-      for (const service of Object.values(services)) {
-        expect(service).toHaveProperty('name');
-        expect(service).toHaveProperty('patterns');
-        expect(service).toHaveProperty('supportsRichFormatting');
-        expect(service).toHaveProperty('formatter');
-        expect(service).toHaveProperty('sendMethod');
-        expect(Array.isArray(service.patterns)).toBe(true);
-        expect(typeof service.name).toBe('string');
-        expect(typeof service.supportsRichFormatting).toBe('boolean');
-      }
     });
   });
 });

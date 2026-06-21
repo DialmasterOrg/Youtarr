@@ -10,6 +10,21 @@ export function isDownloadable(v: PlaylistVideo): boolean {
   return !v.downloaded && !v.youtube_removed;
 }
 
+// Maps PlaylistVideo's snake_case file fields to the indicator's camelCase props.
+export function toDownloadFileProps(v: PlaylistVideo): {
+  filePath: string | null;
+  audioFilePath: string | null;
+  fileSize: number | null;
+  audioFileSize: number | null;
+} {
+  return {
+    filePath: v.file_path,
+    audioFilePath: v.audio_file_path,
+    fileSize: v.file_size,
+    audioFileSize: v.audio_file_size,
+  };
+}
+
 export function statusLabel(v: PlaylistVideo): { label: string; color: PlaylistVideoStatusColor } {
   if (v.ignored) return { label: 'Ignored', color: 'warning' };
   if (v.youtube_removed) return { label: 'Removed on YT', color: 'error' };

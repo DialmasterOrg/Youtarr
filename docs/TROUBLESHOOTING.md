@@ -258,10 +258,56 @@ for how to create your DB with the correct character set.
 Either:
 1. Recreate your DB with the correct character set (**THIS WILL CAUSE LOSS OF ALL DB DATA**)
 or
-2. Backup your DB and then alter your existing DB to the correct character set using:
+2. Backup your DB and then convert your existing DB to the correct character set.
+
 ```
   ALTER DATABASE youtarr CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 ```
+
+**Note:** `ALTER DATABASE` only changes the default for *new* tables. Existing tables keep their old
+character set, so you'll need to convert each one too. See
+[UTF8mb4 Migration Fails on Foreign Key Columns](#utf8mb4-migration-fails-on-foreign-key-columns)
+below for how (foreign key checks have to be off first).
+
+### UTF8mb4 Migration Fails on Foreign Key Columns
+
+**Problem**: On startup the `20250907000000-upgrade-to-utf8mb4-if-needed` migration fails with logs like:
+```
+Upgrading database to utf8mb4...
+Converting table JobVideos from utf8mb3_general_ci to utf8mb4_unicode_ci
+UTF8mb4 migration failed: ...
+```
+It fails on an `ALTER TABLE ... CONVERT TO CHARACTER SET` for a table that has a `job_id` foreign key
+(`JobVideos` or `JobVideoDownloads`). This is almost always an external database that was created as
+`utf8`/`utf8mb3` instead of `utf8mb4`.
+
+**Cause**: The `job_id` columns are UUIDs stored as `CHAR(36)`, and they're part of a foreign key into
+the `Jobs` table. MariaDB won't change the character set of a column that's part of a foreign key, so
+the conversion fails right there. It only happens when the database was created as `utf8mb3` in the
+first place. The bundled MariaDB is created as `utf8mb4`, so it skips the conversion entirely and
+never runs into this.
+
+**Solution**: Update Youtarr. The migration now turns foreign key checks off while it converts the
+tables and turns them back on afterward. It also checks each table on its own instead of trusting the
+database default, so it'll finish the job on a database that an earlier failed run left half-converted
+(database default already on `utf8mb4`, some tables still on `utf8mb3`).
+
+To fix it by hand before updating, connect to the database as root and run the conversion with foreign
+key checks off. Replace `youtarr` with your database name, and add an `ALTER TABLE` line for every
+table that's still on `utf8mb3`:
+```sql
+SET FOREIGN_KEY_CHECKS = 0;
+ALTER DATABASE youtarr CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+ALTER TABLE JobVideos CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+ALTER TABLE JobVideoDownloads CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+-- ... repeat for any other table still on utf8mb3 ...
+SET FOREIGN_KEY_CHECKS = 1;
+```
+The character-set query in [UTF-8 Character Errors](#utf-8-character-errors) above will tell you which
+tables are still on the wrong character set.
+
+**Prevention**: If you run your own database, create it as `utf8mb4` from the start and this conversion
+never has to run. See the [External Database Guide](platforms/external-db.md).
 
 ### Database Connection Failed
 

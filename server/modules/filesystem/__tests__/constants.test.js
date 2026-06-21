@@ -3,8 +3,6 @@ const {
   GLOBAL_DEFAULT_SENTINEL,
   VIDEO_EXTENSIONS,
   CHANNEL_TEMPLATE,
-  VIDEO_FOLDER_TEMPLATE,
-  VIDEO_FILE_TEMPLATE,
   YOUTUBE_ID_BRACKET_PATTERN,
   YOUTUBE_ID_DASH_PATTERN,
   YOUTUBE_ID_PATTERN,
@@ -43,17 +41,6 @@ describe('filesystem/constants', () => {
   describe('yt-dlp templates', () => {
     it('CHANNEL_TEMPLATE should use uploader with fallbacks and byte truncation', () => {
       expect(CHANNEL_TEMPLATE).toBe('%(uploader,channel,uploader_id).80B');
-    });
-
-    it('VIDEO_FOLDER_TEMPLATE should include channel and byte-truncated title', () => {
-      expect(VIDEO_FOLDER_TEMPLATE).toContain(CHANNEL_TEMPLATE);
-      expect(VIDEO_FOLDER_TEMPLATE).toContain('%(title).76B');
-      expect(VIDEO_FOLDER_TEMPLATE).toContain('%(id)s');
-    });
-
-    it('VIDEO_FILE_TEMPLATE should include bracketed video ID', () => {
-      expect(VIDEO_FILE_TEMPLATE).toContain('[%(id)s]');
-      expect(VIDEO_FILE_TEMPLATE).toContain('%(ext)s');
     });
   });
 
@@ -221,13 +208,6 @@ describe('filesystem/constants', () => {
     });
   });
 
-  describe('VIDEO_FILE_TEMPLATE backward compatibility', () => {
-    it('still equals the composed default (legacy callers keep working)', () => {
-      const { VIDEO_FILE_TEMPLATE } = require('../constants');
-      expect(VIDEO_FILE_TEMPLATE).toBe(composeVideoFileTemplate(DEFAULT_VIDEO_FILENAME_PREFIX));
-    });
-  });
-
   describe('composeVideoFolderName', () => {
     it('produces the legacy folder template when given the default prefix', () => {
       expect(composeVideoFolderName(DEFAULT_VIDEO_FILENAME_PREFIX))
@@ -251,13 +231,6 @@ describe('filesystem/constants', () => {
         .toBe('%(uploader,channel,uploader_id).80B - %(title).76B - %(id)s');
       expect(composeVideoFolderName(undefined))
         .toBe('%(uploader,channel,uploader_id).80B - %(title).76B - %(id)s');
-    });
-  });
-
-  describe('VIDEO_FOLDER_TEMPLATE backward compatibility', () => {
-    it('still equals the composed default folder name (legacy callers keep working)', () => {
-      const { VIDEO_FOLDER_TEMPLATE } = require('../constants');
-      expect(VIDEO_FOLDER_TEMPLATE).toBe(composeVideoFolderName(DEFAULT_VIDEO_FILENAME_PREFIX));
     });
   });
 });
