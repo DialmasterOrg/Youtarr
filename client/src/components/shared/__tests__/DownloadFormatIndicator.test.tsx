@@ -126,4 +126,35 @@ describe('DownloadFormatIndicator', () => {
       expect(tooltip).toHaveTextContent('/custom/path/video.mp4');
     });
   });
+
+  describe('Click propagation', () => {
+    test('does not bubble a chip click to a parent row/card handler', async () => {
+      const user = userEvent.setup();
+      const handleParentClick = jest.fn();
+      render(
+        <div onClick={handleParentClick}>
+          <DownloadFormatIndicator filePath="/videos/test.mp4" fileSize={104857600} />
+        </div>
+      );
+
+      await user.click(screen.getByText('100MB'));
+
+      expect(handleParentClick).not.toHaveBeenCalled();
+    });
+
+    test('still lets the parent handler fire for clicks outside the indicator', async () => {
+      const user = userEvent.setup();
+      const handleParentClick = jest.fn();
+      render(
+        <div onClick={handleParentClick}>
+          <span>elsewhere</span>
+          <DownloadFormatIndicator filePath="/videos/test.mp4" fileSize={104857600} />
+        </div>
+      );
+
+      await user.click(screen.getByText('elsewhere'));
+
+      expect(handleParentClick).toHaveBeenCalledTimes(1);
+    });
+  });
 });

@@ -71,7 +71,12 @@ const DownloadFormatIndicator: React.FC<DownloadFormatIndicatorProps> = ({
       : 'inline-flex items-center gap-1';
 
   return (
-    <Box className={containerClassName} data-testid="download-format-indicator">
+    <Box
+      className={containerClassName}
+      data-testid="download-format-indicator"
+      // A chip tap should just show its path tooltip, not bubble up to row/card selection.
+      onClick={(e) => e.stopPropagation()}
+    >
       {hasVideo && (
         <Tooltip title={renderPathTooltip(displayVideoPath)} arrow placement="top" enterTouchDelay={0}>
           <Chip
