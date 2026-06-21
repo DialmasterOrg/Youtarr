@@ -13,8 +13,12 @@ class PlaylistDownloadGrouper {
   async loadChannelMap(channelIds) {
     const ids = [...new Set(channelIds.filter(Boolean))];
     if (ids.length === 0) return new Map();
+    // Only enabled channels contribute settings. Disabled channels (including the hidden
+    // source channels auto-created during playlist sync) are invisible in the UI, so their
+    // settings shouldn't override the playlist. Treat them as untracked: resolution falls
+    // through to playlist -> global.
     const channels = await Channel.findAll({
-      where: { channel_id: ids },
+      where: { channel_id: ids, enabled: true },
       attributes: ['channel_id', 'video_quality', 'audio_format', 'skip_video_folder'],
     });
     const map = new Map();
