@@ -48,6 +48,8 @@ export interface PlaylistVideo {
   video_id: number | null;
   file_path: string | null;
   file_size: number | null;
+  audio_file_path: string | null;
+  audio_file_size: number | null;
 }
 
 export interface MediaServerStatus {

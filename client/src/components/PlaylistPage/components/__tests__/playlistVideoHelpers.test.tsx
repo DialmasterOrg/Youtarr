@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { isDownloadable, statusLabel, PublishedDate } from '../playlistVideoHelpers';
+import { isDownloadable, statusLabel, PublishedDate, toDownloadFileProps } from '../playlistVideoHelpers';
 import { PlaylistVideo } from '../../../../types/playlist';
 
 function makeVideo(overrides: Partial<PlaylistVideo> = {}): PlaylistVideo {
@@ -23,6 +23,8 @@ function makeVideo(overrides: Partial<PlaylistVideo> = {}): PlaylistVideo {
     video_id: null,
     file_path: null,
     file_size: null,
+    audio_file_path: null,
+    audio_file_size: null,
     ...overrides,
   };
 }
@@ -66,6 +68,33 @@ describe('statusLabel', () => {
   });
   test('returns Tracked for a plain tracked video', () => {
     expect(statusLabel(makeVideo())).toEqual({ label: 'Tracked', color: 'default' });
+  });
+});
+
+describe('toDownloadFileProps', () => {
+  test('maps snake_case file fields to DownloadFormatIndicator camelCase props', () => {
+    const v = makeVideo({
+      file_path: '/data/video.mp4',
+      file_size: 1000,
+      audio_file_path: '/data/audio.m4a',
+      audio_file_size: 500,
+    });
+    expect(toDownloadFileProps(v)).toEqual({
+      filePath: '/data/video.mp4',
+      audioFilePath: '/data/audio.m4a',
+      fileSize: 1000,
+      audioFileSize: 500,
+    });
+  });
+
+  test('preserves nulls when no audio file exists', () => {
+    const v = makeVideo({ file_path: '/data/video.mp4', file_size: 1000 });
+    expect(toDownloadFileProps(v)).toEqual({
+      filePath: '/data/video.mp4',
+      audioFilePath: null,
+      fileSize: 1000,
+      audioFileSize: null,
+    });
   });
 });
 

@@ -8,7 +8,7 @@ function makeVideo(overrides: Partial<PlaylistVideo> = {}): PlaylistVideo {
     channel_id: null, ignored: false, ignored_at: null, title: 'Title',
     channel_name: 'Chan', duration: 60, published_at: null, thumbnail: null,
     downloaded: false, previously_downloaded: false, youtube_removed: false, video_id: null, file_path: null,
-    file_size: null, ...overrides,
+    file_size: null, audio_file_path: null, audio_file_size: null, ...overrides,
   };
 }
 
@@ -83,5 +83,41 @@ describe('PlaylistVideoTable selection', () => {
     const header = screen.getAllByRole('checkbox')[0];
     fireEvent.click(header);
     expect(onClearSelection).toHaveBeenCalled();
+  });
+
+  describe('downloaded status', () => {
+    test('renders the download format indicator (size + format icon) for a downloaded video', () => {
+      render(
+        <PlaylistVideoTable
+          {...baseProps}
+          videos={[makeVideo({ youtube_id: 'done', downloaded: true, file_path: '/data/v.mp4', file_size: 1024 * 1024 * 50 })]}
+        />
+      );
+      expect(screen.getByTestId('download-format-indicator')).toBeInTheDocument();
+      expect(screen.getByTestId('VideoFormatIcon')).toBeInTheDocument();
+      expect(screen.getByText(/50/)).toBeInTheDocument();
+      expect(screen.queryByText('Downloaded')).not.toBeInTheDocument();
+    });
+
+    test('shows both format icons when a downloaded video also has an audio file', () => {
+      render(
+        <PlaylistVideoTable
+          {...baseProps}
+          videos={[makeVideo({
+            youtube_id: 'both', downloaded: true,
+            file_path: '/data/v.mp4', file_size: 1024 * 1024 * 50,
+            audio_file_path: '/data/v.m4a', audio_file_size: 1024 * 1024 * 5,
+          })]}
+        />
+      );
+      expect(screen.getByTestId('VideoFormatIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('AudioFormatIcon')).toBeInTheDocument();
+    });
+
+    test('shows the status chip (not the indicator) for a tracked video', () => {
+      render(<PlaylistVideoTable {...baseProps} videos={[makeVideo({ youtube_id: 'trk' })]} />);
+      expect(screen.getByText('Tracked')).toBeInTheDocument();
+      expect(screen.queryByTestId('download-format-indicator')).not.toBeInTheDocument();
+    });
   });
 });
