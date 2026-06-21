@@ -8,7 +8,7 @@ function makeVideo(overrides: Partial<PlaylistVideo> = {}): PlaylistVideo {
     channel_id: null, ignored: false, ignored_at: null, title: 'Title',
     channel_name: 'Chan', duration: 60, published_at: null, thumbnail: null,
     downloaded: false, previously_downloaded: false, youtube_removed: false, video_id: null, file_path: null,
-    file_size: null, ...overrides,
+    file_size: null, audio_file_path: null, audio_file_size: null, ...overrides,
   };
 }
 
@@ -49,5 +49,26 @@ describe('PlaylistVideoCard', () => {
     render(<PlaylistVideoCard {...baseProps} onIgnore={onIgnore} video={makeVideo({ youtube_id: 'x' })} />);
     fireEvent.click(screen.getByRole('button', { name: 'Ignore' }));
     expect(onIgnore).toHaveBeenCalledWith('x');
+  });
+
+  describe('downloaded status', () => {
+    test('renders the download format indicator (size + format icon) for a downloaded video', () => {
+      render(
+        <PlaylistVideoCard
+          {...baseProps}
+          video={makeVideo({ downloaded: true, file_path: '/data/v.mp4', file_size: 1024 * 1024 * 50 })}
+        />
+      );
+      expect(screen.getByTestId('download-format-indicator')).toBeInTheDocument();
+      expect(screen.getByTestId('VideoFormatIcon')).toBeInTheDocument();
+      expect(screen.getByText(/50/)).toBeInTheDocument();
+      expect(screen.queryByText('Downloaded')).not.toBeInTheDocument();
+    });
+
+    test('shows the status chip (not the indicator) for a tracked video', () => {
+      render(<PlaylistVideoCard {...baseProps} video={makeVideo()} />);
+      expect(screen.getByText('Tracked')).toBeInTheDocument();
+      expect(screen.queryByTestId('download-format-indicator')).not.toBeInTheDocument();
+    });
   });
 });

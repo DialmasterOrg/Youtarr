@@ -20,21 +20,21 @@ describe('DownloadFormatIndicator', () => {
       expect(container).toBeEmptyDOMElement();
     });
 
-    test('renders video chip when filePath is provided', () => {
+    test('renders video chip with the video icon when filePath is provided', () => {
       render(<DownloadFormatIndicator filePath="/videos/test.mp4" fileSize={104857600} />);
 
       expect(screen.getByText('100MB')).toBeInTheDocument();
-      expect(screen.getByTestId('StorageIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('VideoFormatIcon')).toBeInTheDocument();
     });
 
-    test('renders audio chip when audioFilePath is provided', () => {
+    test('renders audio chip with the audio icon when audioFilePath is provided', () => {
       render(<DownloadFormatIndicator audioFilePath="/audio/test.mp3" audioFileSize={52428800} />);
 
       expect(screen.getByText('50MB')).toBeInTheDocument();
-      expect(screen.getByTestId('StorageIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('AudioFormatIcon')).toBeInTheDocument();
     });
 
-    test('renders both chips when both paths are provided', () => {
+    test('renders distinct icons for the video and audio chips', () => {
       render(
         <DownloadFormatIndicator
           filePath="/videos/test.mp4"
@@ -46,7 +46,8 @@ describe('DownloadFormatIndicator', () => {
 
       expect(screen.getByText('1.0GB')).toBeInTheDocument();
       expect(screen.getByText('50MB')).toBeInTheDocument();
-      expect(screen.getAllByTestId('StorageIcon')).toHaveLength(2);
+      expect(screen.getByTestId('VideoFormatIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('AudioFormatIcon')).toBeInTheDocument();
     });
 
     test('shows "Unknown" when file size is not provided', () => {
@@ -62,8 +63,37 @@ describe('DownloadFormatIndicator', () => {
     });
   });
 
-  describe('Path stripping', () => {
-    test('strips Docker internal path prefix from video path in tooltip', async () => {
+  describe('Layout orientation', () => {
+    test('lays chips out horizontally by default', () => {
+      render(
+        <DownloadFormatIndicator
+          filePath="/videos/test.mp4"
+          fileSize={1073741824}
+          audioFilePath="/audio/test.mp3"
+          audioFileSize={52428800}
+        />
+      );
+
+      expect(screen.getByTestId('download-format-indicator')).not.toHaveClass('flex-col');
+    });
+
+    test('stacks chips vertically when orientation is vertical', () => {
+      render(
+        <DownloadFormatIndicator
+          filePath="/videos/test.mp4"
+          fileSize={1073741824}
+          audioFilePath="/audio/test.mp3"
+          audioFileSize={52428800}
+          orientation="vertical"
+        />
+      );
+
+      expect(screen.getByTestId('download-format-indicator')).toHaveClass('flex-col');
+    });
+  });
+
+  describe('Tooltip path', () => {
+    test('strips Docker internal path prefix but keeps the filename in the tooltip', async () => {
       const user = userEvent.setup();
       render(
         <DownloadFormatIndicator
@@ -76,12 +106,11 @@ describe('DownloadFormatIndicator', () => {
       await user.hover(chip);
 
       const tooltip = await screen.findByRole('tooltip');
-      expect(tooltip).toHaveTextContent('channel');
-      expect(tooltip).not.toHaveTextContent('video.mp4');
+      expect(tooltip).toHaveTextContent('channel/video.mp4');
       expect(tooltip).not.toHaveTextContent('/usr/src/app/data/');
     });
 
-    test('preserves non-Docker paths in tooltip', async () => {
+    test('shows the full non-Docker path including the filename in the tooltip', async () => {
       const user = userEvent.setup();
       render(
         <DownloadFormatIndicator
@@ -94,8 +123,38 @@ describe('DownloadFormatIndicator', () => {
       await user.hover(chip);
 
       const tooltip = await screen.findByRole('tooltip');
-      expect(tooltip).toHaveTextContent('/custom/path');
-      expect(tooltip).not.toHaveTextContent('video.mp4');
+      expect(tooltip).toHaveTextContent('/custom/path/video.mp4');
+    });
+  });
+
+  describe('Click propagation', () => {
+    test('does not bubble a chip click to a parent row/card handler', async () => {
+      const user = userEvent.setup();
+      const handleParentClick = jest.fn();
+      render(
+        <div onClick={handleParentClick}>
+          <DownloadFormatIndicator filePath="/videos/test.mp4" fileSize={104857600} />
+        </div>
+      );
+
+      await user.click(screen.getByText('100MB'));
+
+      expect(handleParentClick).not.toHaveBeenCalled();
+    });
+
+    test('still lets the parent handler fire for clicks outside the indicator', async () => {
+      const user = userEvent.setup();
+      const handleParentClick = jest.fn();
+      render(
+        <div onClick={handleParentClick}>
+          <span>elsewhere</span>
+          <DownloadFormatIndicator filePath="/videos/test.mp4" fileSize={104857600} />
+        </div>
+      );
+
+      await user.click(screen.getByText('elsewhere'));
+
+      expect(handleParentClick).toHaveBeenCalledTimes(1);
     });
   });
 });

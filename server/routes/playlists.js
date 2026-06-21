@@ -224,7 +224,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       if (youtubeIds.length > 0 && Video) {
         const downloaded = await Video.findAll({
           where: { youtubeId: youtubeIds },
-          attributes: ['id', 'youtubeId', 'youTubeVideoName', 'youTubeChannelName', 'duration', 'originalDate', 'removed', 'youtube_removed', 'filePath', 'fileSize'],
+          attributes: ['id', 'youtubeId', 'youTubeVideoName', 'youTubeChannelName', 'duration', 'originalDate', 'removed', 'youtube_removed', 'filePath', 'fileSize', 'audioFilePath', 'audioFileSize'],
         });
         downloaded.forEach((v) => downloadedById.set(v.youtubeId, v));
       }
@@ -263,6 +263,8 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
           video_id: dl?.id ?? null,
           file_path: dl?.filePath ?? null,
           file_size: dl?.fileSize != null ? Number(dl.fileSize) : null,
+          audio_file_path: dl?.audioFilePath ?? null,
+          audio_file_size: dl?.audioFileSize != null ? Number(dl.audioFileSize) : null,
         };
       });
 
