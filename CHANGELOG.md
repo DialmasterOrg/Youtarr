@@ -1,5 +1,38 @@
 # Changelog
 
+## [v1.72.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.72.0) - 2026-06-21
+
+## [1.72.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.71.0...v1.72.0) (2026-06-21)
+
+
+### Features
+
+* make downloaded video chips consistent ([f54983e](https://github.com/DialmasterOrg/Youtarr/commit/f54983eb4fdf015c8e2081213cc64b488889f9f9)), closes [#666](https://github.com/DialmasterOrg/Youtarr/issues/666)
+
+
+### Bug Fixes
+
+* decode entities in youtube search results ([9e4c68c](https://github.com/DialmasterOrg/Youtarr/commit/9e4c68cd9eee5428aedc2b53e550ea27ef74515d)), closes [#39](https://github.com/DialmasterOrg/Youtarr/issues/39) [#652](https://github.com/DialmasterOrg/Youtarr/issues/652)
+* ignore disabled channel download settings ([e211451](https://github.com/DialmasterOrg/Youtarr/commit/e211451a08064c8ed736f94767ec2e958bfb62b1)), closes [#663](https://github.com/DialmasterOrg/Youtarr/issues/663)
+* prevent utf8mb4 migration failure on upgrade ([295be30](https://github.com/DialmasterOrg/Youtarr/commit/295be301aa3e7091ee0bc4a0035c622714d40d88)), closes [#658](https://github.com/DialmasterOrg/Youtarr/issues/658)
+* stop download chip taps from selecting video ([9c9fcfd](https://github.com/DialmasterOrg/Youtarr/commit/9c9fcfd5edb7922b7998eaf0be5aa123e432d52b)), closes [#666](https://github.com/DialmasterOrg/Youtarr/issues/666)
+
+
+### Build Systems
+
+* **deps:** bump multer to 2.2.0 ([61ee9aa](https://github.com/DialmasterOrg/Youtarr/commit/61ee9aa397fd068eaf928b022e4a25c4a1ecd965))
+* **deps:** pin form-data to ^4.0.6 ([077e599](https://github.com/DialmasterOrg/Youtarr/commit/077e5998b11d8c6af5cf4465d1263360df633484)), closes [#654](https://github.com/DialmasterOrg/Youtarr/issues/654)
+
+
+### Documentation
+
+* point unraid guide at maintained template ([6ea90ad](https://github.com/DialmasterOrg/Youtarr/commit/6ea90adfd903c16e6257eab1f2718953b4bc67d4))
+* update CHANGELOG for v1.71.0 [skip ci] ([4b89e45](https://github.com/DialmasterOrg/Youtarr/commit/4b89e45d9d00aac92d99b0b2828b5a8ec7052cfd))
+
+
+
+
+
 ## [v1.71.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.71.0) - 2026-06-14
 
 ## [1.71.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.70.0...v1.71.0) (2026-06-14)
