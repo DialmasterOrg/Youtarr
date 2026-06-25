@@ -2255,16 +2255,22 @@ class ChannelModule {
       // the fallback-to-videos behavior if all probes fail.
       const availableTabs = await this._probeTabs(channelId);
 
-      // Determine auto_download_enabled_tabs: preserve existing user choice if set,
-      // otherwise pick a smart default based on available tabs
+      // Reconcile the stored value against the detected tabs: keep media types whose
+      // tab exists, drop the rest (this sheds the NOT NULL 'video' default on channels
+      // with no videos tab). An empty string means auto-download is off, so keep it.
+      const detectedMediaTypes = new Set(
+        availableTabs.map((tab) => MEDIA_TAB_TYPE_MAP[tab]).filter(Boolean)
+      );
       const existingEnabledTabs = channel.auto_download_enabled_tabs;
-      const hasUserChoice = existingEnabledTabs !== null && existingEnabledTabs !== undefined;
+      const reconciledTabs = parseTabCsv(existingEnabledTabs).filter((mt) => detectedMediaTypes.has(mt));
 
       let autoDownloadEnabledTabs;
-      if (hasUserChoice) {
-        // User already set a value (including empty string for "disabled") -- preserve it
-        autoDownloadEnabledTabs = existingEnabledTabs;
+      if (reconciledTabs.length > 0) {
+        autoDownloadEnabledTabs = reconciledTabs.join(',');
+      } else if (existingEnabledTabs === '') {
+        autoDownloadEnabledTabs = '';
       } else {
+        // Nothing survived: default to the videos tab, or the first available tab.
         autoDownloadEnabledTabs = 'video';
         if (!availableTabs.includes(TAB_TYPES.VIDEOS) && availableTabs.length > 0) {
           autoDownloadEnabledTabs = MEDIA_TAB_TYPE_MAP[availableTabs[0]] || 'video';
