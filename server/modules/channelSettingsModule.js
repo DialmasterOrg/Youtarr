@@ -302,15 +302,10 @@ class ChannelSettingsModule {
         .map((tab) => MEDIA_TAB_TYPE_MAP[tab])
         .filter(Boolean)
     );
-    for (const part of parts) {
-      if (!effectiveMediaTypes.has(part)) {
-        return {
-          valid: false,
-          error: `auto_download_enabled_tabs entry '${part}' is not allowed: corresponding tab is not detected for this channel or is hidden`
-        };
-      }
-    }
-    const deduped = Array.from(new Set(parts));
+    // Drop entries whose tab isn't detected or is hidden instead of rejecting the
+    // whole save; this sheds a stale 'video' default riding along on a shorts-only channel.
+    const allowed = parts.filter((part) => effectiveMediaTypes.has(part));
+    const deduped = Array.from(new Set(allowed));
     return { valid: true, normalized: deduped.join(',') };
   }
 
