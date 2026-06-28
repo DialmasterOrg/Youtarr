@@ -1,5 +1,23 @@
 # Changelog
 
+## [v1.72.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.72.1) - 2026-06-27
+
+### [1.72.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.72.0...v1.72.1) (2026-06-27)
+
+
+### Bug Fixes
+
+* allow auto-download on shorts-only channels ([f6df56a](https://github.com/DialmasterOrg/Youtarr/commit/f6df56a54d8487b0c4924c23756e3acba05ce0e4)), closes [#671](https://github.com/DialmasterOrg/Youtarr/issues/671)
+
+
+### Documentation
+
+* update CHANGELOG for v1.72.0 [skip ci] ([6411280](https://github.com/DialmasterOrg/Youtarr/commit/6411280f776540ebf5499afec4a9dd56723e9299))
+
+
+
+
+
 ## [v1.72.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.72.0) - 2026-06-21
 
 ## [1.72.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.71.0...v1.72.0) (2026-06-21)
