@@ -233,6 +233,7 @@ const initialize = async () => {
 
     const configModule = require('./modules/configModule');
     const channelModule = require('./modules/channelModule');
+    const subfolderModule = require('./modules/subfolderModule');
     const plexModule = require('./modules/plexModule');
     const downloadModule = require('./modules/downloadModule');
     const jobModule = require('./modules/jobModule');
@@ -285,6 +286,7 @@ const initialize = async () => {
       jobModule,
       messageEmitter,
       Channel,
+      subfolderModule,
     });
 
     logger.info({ directoryPath: configModule.directoryPath }, 'YouTube downloads directory configured');

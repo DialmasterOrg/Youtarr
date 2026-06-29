@@ -417,6 +417,38 @@ function isMainVideoFile(filePath) {
   return MAIN_VIDEO_FILE_PATTERN.test(filename) && !FRAGMENT_FILE_PATTERN.test(filename);
 }
 
+/**
+ * Recursively determine whether a directory subtree contains any
+ * non-ignorable regular file. Used to decide if a subfolder is safe to delete.
+ *
+ * @param {string} dirPath - Directory to scan
+ * @returns {Promise<boolean>} - True if a real file exists anywhere beneath it
+ */
+async function directoryHasFiles(dirPath) {
+  let entries;
+  try {
+    entries = await fsPromises.readdir(dirPath, { withFileTypes: true });
+  } catch (error) {
+    if (error.code === 'ENOENT' || error.code === 'ENOTDIR') {
+      return false;
+    }
+    throw error;
+  }
+
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      if (await directoryHasFiles(path.join(dirPath, entry.name))) {
+        return true;
+      }
+      continue;
+    }
+    if (!isIgnorableEntry(entry.name)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 module.exports = {
   ensureDir,
   ensureDirSync,
@@ -433,5 +465,6 @@ module.exports = {
   isIgnorableEntry,
   listDirectory,
   listSubdirectories,
-  isMainVideoFile
+  isMainVideoFile,
+  directoryHasFiles
 };

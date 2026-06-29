@@ -28,7 +28,7 @@ jest.mock('../../../shared/SubfolderAutocomplete', () => ({
 // A fresh function/object per render would retrigger the dialog's open effect
 // (refetchConfig is in its deps) and loop forever.
 jest.mock('../../../../hooks/useSubfolders', () => {
-  const value = { subfolders: [], loading: false, error: null, refetch: () => Promise.resolve() };
+  const value = { subfolders: [], loading: false, error: null, refetch: () => Promise.resolve(), createSubfolder: jest.fn(() => Promise.resolve()) };
   return { useSubfolders: () => value };
 });
 

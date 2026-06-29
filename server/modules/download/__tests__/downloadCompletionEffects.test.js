@@ -54,11 +54,16 @@ jest.mock('../../playlistModule', () => ({
   backfillDownloadedVideoChannels: jest.fn().mockResolvedValue(),
 }));
 
+jest.mock('../../subfolderModule', () => ({
+  register: jest.fn().mockResolvedValue(undefined),
+}));
+
 const plexModule = require('../../plexModule');
 const jobModule = require('../../jobModule');
 const channelModule = require('../../channelModule');
 const downloadModule = require('../../downloadModule');
 const playlistModule = require('../../playlistModule');
+const subfolderModule = require('../../subfolderModule');
 const { JobVideoDownload } = require('../../../models');
 const Channel = require('../../../models/channel');
 const logger = require('../../../logger');
@@ -247,6 +252,58 @@ describe('downloadCompletionEffects', () => {
       { err: expect.any(Error) },
       'Failed to backfill playlist video channels'
     );
+  });
+
+  describe('subfolder registration', () => {
+    it('registers the subfolder when a video lands in a named subfolder (skipJobTransition false)', async () => {
+      await runCompletionSideEffects({
+        jobId: 1,
+        videoData: [
+          { youtubeId: 'vid1', filePath: '/mock/output/__DialTest679/Chan/Vid - abcdefghijk/abcdefghijk.mp4' },
+        ],
+        skipJobTransition: false,
+        tempChannelsFile: null,
+        onTempChannelsFileCleaned: jest.fn(),
+      });
+      await flushPromises();
+
+      expect(subfolderModule.register).toHaveBeenCalledWith('DialTest679');
+    });
+
+    it('does not call register with a real name for a root download (no __ segment)', async () => {
+      await runCompletionSideEffects({
+        jobId: 1,
+        videoData: [
+          { youtubeId: 'vid1', filePath: '/mock/output/Chan/Vid - abcdefghijk/abcdefghijk.mp4' },
+        ],
+        skipJobTransition: false,
+        tempChannelsFile: null,
+        onTempChannelsFileCleaned: jest.fn(),
+      });
+      await flushPromises();
+
+      // extractSubfolderFromAbsPath returns null for root paths; register is
+      // called with null (harmless no-op) but never with a real string name.
+      const calls = subfolderModule.register.mock.calls;
+      const calledWithString = calls.some(([name]) => typeof name === 'string');
+      expect(calledWithString).toBe(false);
+    });
+
+    it('registers the subfolder even when skipJobTransition is true and does not start next job', async () => {
+      await runCompletionSideEffects({
+        jobId: 1,
+        videoData: [
+          { youtubeId: 'vid1', filePath: '/mock/output/__DialTest679/Chan/Vid - abcdefghijk/abcdefghijk.mp4' },
+        ],
+        skipJobTransition: true,
+        tempChannelsFile: null,
+        onTempChannelsFileCleaned: jest.fn(),
+      });
+      await flushPromises();
+
+      expect(subfolderModule.register).toHaveBeenCalledWith('DialTest679');
+      expect(jobModule.startNextJob).not.toHaveBeenCalled();
+    });
   });
 
   describe('job transition', () => {

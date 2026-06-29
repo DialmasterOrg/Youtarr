@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { SubfolderAutocomplete } from '../SubfolderAutocomplete';
@@ -17,16 +17,23 @@ jest.mock('../AddSubfolderDialog', () => ({
     onAdd: (name: string) => void;
   }) {
     const React = require('react');
+    const [inputValue, setInputValue] = React.useState('');
     if (!open) return null;
     return React.createElement('div', { 'data-testid': 'add-subfolder-dialog' },
+      React.createElement('label', { htmlFor: 'subfolder-name-input' }, 'Subfolder Name'),
+      React.createElement('input', {
+        id: 'subfolder-name-input',
+        value: inputValue,
+        onChange: (e: { target: { value: string } }) => setInputValue(e.target.value),
+      }),
       React.createElement('button', {
         'data-testid': 'dialog-close',
-        onClick: onClose
+        onClick: onClose,
       }, 'Close'),
       React.createElement('button', {
         'data-testid': 'dialog-add',
-        onClick: () => onAdd('NewFolder')
-      }, 'Add')
+        onClick: () => onAdd(inputValue || 'NewFolder'),
+      }, 'Add Subfolder'),
     );
   }
 }));
@@ -347,6 +354,27 @@ describe('SubfolderAutocomplete', () => {
       await user.click(autocomplete);
 
       expect(screen.getByText('__NewFolder')).toBeInTheDocument();
+    });
+
+    test('persists a newly added subfolder via createSubfolder when provided', async () => {
+      const onChange = jest.fn();
+      const createSubfolder = jest.fn().mockResolvedValue(undefined);
+      render(
+        <SubfolderAutocomplete
+          mode="channel"
+          value={null}
+          onChange={onChange}
+          subfolders={[]}
+          createSubfolder={createSubfolder}
+        />
+      );
+
+      fireEvent.click(screen.getByText('Add Subfolder'));
+      fireEvent.change(screen.getByLabelText('Subfolder Name'), { target: { value: 'Sports' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Add Subfolder' }));
+
+      await waitFor(() => expect(createSubfolder).toHaveBeenCalledWith('Sports'));
+      expect(onChange).toHaveBeenCalledWith('Sports');
     });
   });
 

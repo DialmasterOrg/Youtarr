@@ -23,11 +23,12 @@ interface RowSettingsPopoverProps {
   rowState: RowState;
   dispatch: React.Dispatch<ImportFlowAction>;
   subfolders: string[];
+  createSubfolder: (name: string) => Promise<void>;
   defaultSubfolderDisplay: string | null;
 }
 
 const RowSettingsPopover: React.FC<RowSettingsPopoverProps> = ({
-  anchorEl, open, onClose, channelId, rowState, dispatch, subfolders, defaultSubfolderDisplay,
+  anchorEl, open, onClose, channelId, rowState, dispatch, subfolders, createSubfolder, defaultSubfolderDisplay,
 }) => {
   const { settings } = rowState;
 
@@ -90,6 +91,7 @@ const RowSettingsPopover: React.FC<RowSettingsPopoverProps> = ({
           value={settings.subFolder}
           onChange={(newValue) => updateSettings({ subFolder: newValue })}
           subfolders={subfolders}
+          createSubfolder={createSubfolder}
           defaultSubfolderDisplay={defaultSubfolderDisplay}
           label="Subfolder"
         />

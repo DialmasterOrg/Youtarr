@@ -144,6 +144,11 @@ const setupServer = async ({ authEnabled = 'false', passwordHash = null } = {}) 
     updateChannelSettings: jest.fn(),
     getAllSubFolders: jest.fn()
   }));
+  jest.doMock('../modules/subfolderModule', () => ({
+    getAll: jest.fn().mockResolvedValue([]),
+    register: jest.fn().mockResolvedValue(undefined),
+    delete: jest.fn().mockResolvedValue(undefined),
+  }));
   jest.doMock('../modules/archiveModule', () => ({
     getAutoRemovalDryRun: jest.fn().mockResolvedValue({ videos: [], totalSize: 0 })
   }));

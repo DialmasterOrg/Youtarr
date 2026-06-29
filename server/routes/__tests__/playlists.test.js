@@ -50,6 +50,10 @@ const buildDeps = (overrides = {}) => ({
     validateSubFolder: jest.fn().mockReturnValue({ valid: true }),
     ...overrides.channelSettingsModule,
   },
+  subfolderModule: {
+    register: jest.fn().mockResolvedValue(undefined),
+    ...overrides.subfolderModule,
+  },
   // Real ratingMapper: it is a pure module with no DB/IO deps, so route tests
   // exercise the actual rating validation/normalization.
   ratingMapper: require('../../modules/ratingMapper'),
@@ -341,6 +345,24 @@ describe('POST /api/playlists', () => {
     expect(res.json).toHaveBeenCalledWith({ playlist: created });
   });
 
+  test('registers a real default_sub_folder so it appears in every picker', async () => {
+    const deps = buildDeps();
+    deps.playlistModule.getPlaylistInfo.mockResolvedValue({ playlist_id: 'PLtest' });
+    deps.playlistModule.upsertPlaylist.mockResolvedValue(makePlaylist());
+    deps.playlistModule.fetchAllPlaylistVideos.mockResolvedValue(0);
+
+    const handler = getHandler('post', '/api/playlists', deps);
+    const req = {
+      body: { url: 'https://youtube.com/playlist?list=PLtest', settings: { default_sub_folder: 'Music' } },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.subfolderModule.register).toHaveBeenCalledWith('Music');
+  });
+
   test('returns 400 when url is missing', async () => {
     const deps = buildDeps();
     const handler = getHandler('post', '/api/playlists', deps);
@@ -558,6 +580,23 @@ describe('PUT /api/playlists/:playlistId/settings', () => {
 
     expect(p.update).toHaveBeenCalledWith({ video_quality: '720p', min_duration: 60 });
     expect(res.json).toHaveBeenCalledWith({ settings: { video_quality: '720p', min_duration: 60 } });
+  });
+
+  test('registers a real default_sub_folder when settings are updated', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(makePlaylist());
+
+    const handler = getHandler('put', '/api/playlists/:playlistId/settings', deps);
+    const req = {
+      params: { playlistId: 'PLtest123' },
+      body: { default_sub_folder: 'Music' },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.subfolderModule.register).toHaveBeenCalledWith('Music');
   });
 
   test('returns 404 when playlist not found', async () => {

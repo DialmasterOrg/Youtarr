@@ -34,7 +34,7 @@ function broadcast(messageEmitter, jobId, type, data) {
  * @param {object} ch - Channel descriptor { channelId, url, title, settings }
  */
 async function processOneChannel(deps, activeJob, ch) {
-  const { channelModule, messageEmitter, Channel } = deps;
+  const { channelModule, messageEmitter, Channel, subfolderModule } = deps;
 
   // Check cancellation before starting
   if (activeJob.cancelRequested) {
@@ -101,6 +101,12 @@ async function processOneChannel(deps, activeJob, ch) {
     // emitMessage = false because we broadcast our own progress
     // skipTabDetection = true to speed up import; tabs are lazy-detected on first channel page visit
     await channelModule.getChannelInfo(url, false, true, initialSettings, { skipTabDetection: true });
+
+    // Keep the subfolder registry in sync for imported channels. register()
+    // ignores null/empty/sentinels and never throws.
+    if (subfolderModule && initialSettings.sub_folder) {
+      await subfolderModule.register(initialSettings.sub_folder);
+    }
 
     // Apply auto-download settings after channel creation
     if (frontendSettings.autoDownloadEnabled === false) {

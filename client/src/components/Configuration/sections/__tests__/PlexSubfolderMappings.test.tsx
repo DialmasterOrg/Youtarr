@@ -5,12 +5,13 @@ import '@testing-library/jest-dom';
 import { PlexSubfolderMappings, PlexSubfolderMapping } from '../PlexSubfolderMappings';
 import { renderWithProviders } from '../../../../test-utils';
 import { PlexConnectionStatus } from '../../types';
+import { useSubfolders } from '../../../../hooks/useSubfolders';
 
-jest.mock('axios', () => ({
-  get: jest.fn(),
+jest.mock('../../../../hooks/useSubfolders', () => ({
+  useSubfolders: jest.fn(),
 }));
 
-const axios = require('axios');
+const mockUseSubfolders = useSubfolders as jest.MockedFunction<typeof useSubfolders>;
 
 const MOCK_LIBRARIES = [
   { id: '1', title: 'YouTube' },
@@ -18,10 +19,6 @@ const MOCK_LIBRARIES = [
 ];
 
 const MOCK_SUBFOLDERS = ['__kids', '__music'];
-
-function setupAxiosMocks() {
-  axios.get.mockResolvedValue({ data: MOCK_SUBFOLDERS });
-}
 
 const DEFAULT_PROPS = {
   mappings: [] as PlexSubfolderMapping[],
@@ -34,6 +31,14 @@ const DEFAULT_PROPS = {
 describe('PlexSubfolderMappings', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUseSubfolders.mockReturnValue({
+      subfolders: MOCK_SUBFOLDERS,
+      loading: false,
+      error: null,
+      refetch: jest.fn(),
+      createSubfolder: jest.fn(),
+      deleteSubfolder: jest.fn(),
+    });
   });
 
   describe('when plexConnectionStatus is not connected', () => {
@@ -103,10 +108,6 @@ describe('PlexSubfolderMappings', () => {
   });
 
   describe('when plexConnectionStatus is connected', () => {
-    beforeEach(() => {
-      setupAxiosMocks();
-    });
-
     test('shows the section title "Per-Subfolder Library Mappings"', async () => {
       renderWithProviders(<PlexSubfolderMappings {...DEFAULT_PROPS} />);
       await waitFor(() => {
@@ -130,24 +131,37 @@ describe('PlexSubfolderMappings', () => {
       });
     });
 
-    test('does NOT call axios when not connected', () => {
-      axios.get.mockReset();
+    test('calls useSubfolders with null token when not connected', () => {
       renderWithProviders(
         <PlexSubfolderMappings {...DEFAULT_PROPS} plexConnectionStatus="not_connected" />
       );
-      expect(axios.get).not.toHaveBeenCalled();
+      expect(mockUseSubfolders).toHaveBeenCalledWith(null);
     });
   });
 
   describe('loading and error states', () => {
     test('shows loading indicator while the subfolder fetch is in progress', () => {
-      axios.get.mockReturnValue(new Promise(() => {}));
+      mockUseSubfolders.mockReturnValue({
+        subfolders: [],
+        loading: true,
+        error: null,
+        refetch: jest.fn(),
+        createSubfolder: jest.fn(),
+        deleteSubfolder: jest.fn(),
+      });
       renderWithProviders(<PlexSubfolderMappings {...DEFAULT_PROPS} />);
       expect(screen.getByText(/Loading subfolders/)).toBeInTheDocument();
     });
 
     test('shows error alert when the subfolder fetch fails', async () => {
-      axios.get.mockRejectedValue(new Error('Network error'));
+      mockUseSubfolders.mockReturnValue({
+        subfolders: [],
+        loading: false,
+        error: new Error('Network error'),
+        refetch: jest.fn(),
+        createSubfolder: jest.fn(),
+        deleteSubfolder: jest.fn(),
+      });
       renderWithProviders(<PlexSubfolderMappings {...DEFAULT_PROPS} />);
       await waitFor(() => {
         expect(
@@ -157,7 +171,14 @@ describe('PlexSubfolderMappings', () => {
     });
 
     test('still shows mapping rows with resolved library titles when the subfolder fetch fails', async () => {
-      axios.get.mockRejectedValue(new Error('Subfolders failed'));
+      mockUseSubfolders.mockReturnValue({
+        subfolders: [],
+        loading: false,
+        error: new Error('Subfolders failed'),
+        refetch: jest.fn(),
+        createSubfolder: jest.fn(),
+        deleteSubfolder: jest.fn(),
+      });
       renderWithProviders(
         <PlexSubfolderMappings
           {...DEFAULT_PROPS}
@@ -176,7 +197,6 @@ describe('PlexSubfolderMappings', () => {
 
   describe('existing mappings display', () => {
     test('renders a table row for each mapping showing subfolder name with __ prefix', async () => {
-      setupAxiosMocks();
       renderWithProviders(
         <PlexSubfolderMappings
           {...DEFAULT_PROPS}
@@ -189,7 +209,6 @@ describe('PlexSubfolderMappings', () => {
     });
 
     test('renders "Root folder" label for a mapping with subfolder: null', async () => {
-      setupAxiosMocks();
       renderWithProviders(
         <PlexSubfolderMappings
           {...DEFAULT_PROPS}
@@ -202,7 +221,6 @@ describe('PlexSubfolderMappings', () => {
     });
 
     test('renders the library title with an "(id: X)" suffix for resolved libraries', async () => {
-      setupAxiosMocks();
       renderWithProviders(
         <PlexSubfolderMappings
           {...DEFAULT_PROPS}
@@ -217,10 +235,6 @@ describe('PlexSubfolderMappings', () => {
   });
 
   describe('adding a mapping', () => {
-    beforeEach(() => {
-      setupAxiosMocks();
-    });
-
     test('clicking "Add Mapping" shows the subfolder and library selects', async () => {
       const user = userEvent.setup();
       renderWithProviders(<PlexSubfolderMappings {...DEFAULT_PROPS} />);
@@ -390,10 +404,6 @@ describe('PlexSubfolderMappings', () => {
   });
 
   describe('deleting a mapping', () => {
-    beforeEach(() => {
-      setupAxiosMocks();
-    });
-
     test('clicking the delete button for a mapping calls onMappingsChange with that mapping removed', async () => {
       const user = userEvent.setup();
       const onMappingsChange = jest.fn();

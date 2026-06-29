@@ -8,12 +8,11 @@ const logger = require('../logger');
 const ratingMapper = require('./ratingMapper');
 
 const { MEDIA_TAB_TYPE_MAP, VALID_TAB_TYPES, parseTabCsv } = require('./tabsUtils');
+const { validateSubFolderName } = require('./filesystem/subfolderValidation');
+const subfolderModule = require('./subfolderModule');
 const {
   GLOBAL_DEFAULT_SENTINEL,
-  ROOT_SENTINEL,
-  SUBFOLDER_PREFIX,
   buildChannelPath,
-  buildSubfolderSegment,
   resolveEffectiveSubfolder: fsResolveEffectiveSubfolder,
   resolveChannelFolderName,
   calculateRelocatedPath,
@@ -41,52 +40,7 @@ class ChannelSettingsModule {
    * @returns {Object} - { valid: boolean, error?: string }
    */
   validateSubFolder(subFolder) {
-    // NULL or empty string is valid (download to root)
-    if (!subFolder || subFolder.trim() === '') {
-      return { valid: true };
-    }
-
-    // Allow the special "use global default" sentinel value
-    if (subFolder === GLOBAL_DEFAULT_SENTINEL) {
-      return { valid: true };
-    }
-
-    // Allow the special "explicit root" sentinel value (for manual downloads)
-    if (subFolder === ROOT_SENTINEL) {
-      return { valid: true };
-    }
-
-    const trimmed = subFolder.trim();
-
-    // Check for reserved names
-    const RESERVED_SUB_FOLDERS = ['playlists'];
-    if (RESERVED_SUB_FOLDERS.includes(trimmed.toLowerCase())) {
-      return { valid: false, error: `Subfolder name "${trimmed}" is reserved by Youtarr and cannot be used` };
-    }
-
-    // Check length
-    if (trimmed.length > 100) {
-      return { valid: false, error: 'Subfolder name must be 100 characters or less' };
-    }
-
-    // Check for invalid characters
-    // Allow: alphanumeric, spaces, hyphens, underscores
-    const validPattern = /^[a-zA-Z0-9\s\-_]+$/;
-    if (!validPattern.test(trimmed)) {
-      return { valid: false, error: 'Subfolder name can only contain letters, numbers, spaces, hyphens, and underscores' };
-    }
-
-    // Check for path traversal attempts
-    if (trimmed.includes('..') || trimmed.includes('/') || trimmed.includes('\\')) {
-      return { valid: false, error: 'Invalid subfolder name' };
-    }
-
-    // Reject names starting with __ (reserved for system use)
-    if (trimmed.startsWith(SUBFOLDER_PREFIX)) {
-      return { valid: false, error: `Subfolder names cannot start with ${SUBFOLDER_PREFIX} (reserved prefix)` };
-    }
-
-    return { valid: true };
+    return validateSubFolderName(subFolder);
   }
 
   /**
@@ -383,47 +337,12 @@ class ChannelSettingsModule {
   }
 
   /**
-   * Get all unique subfolders currently in use
-   *
-   * Includes:
-   * - Every explicit sub_folder value set on a channel (excluding the
-   *   ##USE_GLOBAL_DEFAULT## sentinel which is not a real folder name)
-   * - The configured global defaultSubfolder, if set. Channels on
-   *   ##USE_GLOBAL_DEFAULT## (and fresh installs with no channels at all)
-   *   still produce files under __{defaultSubfolder}/..., so the caller
-   *   must be able to see and map that folder.
-   *
-   * @returns {Promise<Array<string>>} - Array of unique subfolder names (with __ prefix)
+   * Get all known subfolders (with __ prefix), sourced from the subfolder registry
+   * unioned with the in-memory config default and Plex mappings.
+   * @returns {Promise<Array<string>>}
    */
   async getAllSubFolders() {
-    const channels = await Channel.findAll({
-      attributes: ['sub_folder'],
-      where: {
-        sub_folder: {
-          [Op.and]: [
-            { [Op.ne]: null },
-            { [Op.ne]: GLOBAL_DEFAULT_SENTINEL }
-          ]
-        }
-      }
-    });
-
-    const uniqueSubFolders = new Set(
-      channels
-        .map(ch => ch.sub_folder ? ch.sub_folder.trim() : null)
-        .filter(folder => folder && folder !== GLOBAL_DEFAULT_SENTINEL)
-    );
-
-    // Include the configured global default subfolder so the UI can map it
-    // even when no channels reference it explicitly. configModule already
-    // normalizes whitespace and returns null for empty values.
-    const globalDefault = configModule.getDefaultSubfolder();
-    if (globalDefault) {
-      uniqueSubFolders.add(globalDefault);
-    }
-
-    // Add __ prefix for display (matches filesystem names)
-    return [...uniqueSubFolders].map(folder => buildSubfolderSegment(folder)).sort();
+    return subfolderModule.getAll();
   }
 
   /**
@@ -810,6 +729,13 @@ class ChannelSettingsModule {
         }
         throw moveError;
       }
+    }
+
+    // Keep the subfolder registry in sync so a newly-assigned folder appears in
+    // every picker even if it was never created through the registry API.
+    // register() ignores null/empty/sentinels and never throws.
+    if (subFolderChanged && newSubFolder) {
+      await subfolderModule.register(newSubFolder);
     }
 
     const detectedTabsAfter = parseTabCsv(updatedChannel.available_tabs);

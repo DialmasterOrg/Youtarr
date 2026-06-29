@@ -77,7 +77,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   const [skipVideoFolder, setSkipVideoFolder] = useState(false);
 
   // Fetch available subfolders
-  const { subfolders, loading: subfoldersLoading } = useSubfolders(token);
+  const { subfolders, loading: subfoldersLoading, createSubfolder } = useSubfolders(token);
 
   const selectedDefaultOption = RESOLUTION_OPTIONS.find((option) => option.value === defaultResolution);
   const defaultQualityLabel = selectedDefaultOption
@@ -418,6 +418,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                     }}
                     subfolders={subfolders}
                     loading={subfoldersLoading}
+                    createSubfolder={createSubfolder}
                     label="Override Destination"
                     helperText="Configured channels use their subfolder, unconfigured channels use global default."
                   />

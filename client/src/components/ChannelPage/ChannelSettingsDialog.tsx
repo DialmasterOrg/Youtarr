@@ -26,6 +26,7 @@ import {
 import { CheckCircle as CheckCircleIcon, XCircle as CancelIcon, Info as InfoIcon, Copy as ContentCopyIcon, Settings as SettingsIcon, Download as DownloadIcon, Filter as FilterAltIcon, Shield as RatingIcon } from '../../lib/icons';
 import useMediaQuery from '../../hooks/useMediaQuery';
 import { useConfig } from '../../hooks/useConfig';
+import { useSubfolders } from '../../hooks/useSubfolders';
 import { SubfolderAutocomplete } from '../shared/SubfolderAutocomplete';
 import { ResolutionSelect } from '../shared/ResolutionSelect';
 import { AudioFormatSelect } from '../shared/AudioFormatSelect';
@@ -141,7 +142,6 @@ function ChannelSettingsDialog({
     hidden_tabs: []
   });
   const [detectedTabs, setDetectedTabs] = useState<string[]>([]);
-  const [subfolders, setSubfolders] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -150,6 +150,8 @@ function ChannelSettingsDialog({
   // Use config hook to get global quality setting
   const { config, refetch: refetchConfig } = useConfig(token);
   const globalQuality = config.preferredResolution || '1080';
+
+  const { subfolders, createSubfolder } = useSubfolders(token);
 
   // Duration input state (in minutes for UI convenience)
   const [minDurationMinutes, setMinDurationMinutes] = useState<string>('');
@@ -234,22 +236,6 @@ function ChannelSettingsDialog({
         }
         if (settingsData.max_duration) {
           setMaxDurationMinutes(String(Math.floor(settingsData.max_duration / 60)));
-        }
-
-        // Load subfolders (non-critical)
-        try {
-          const subfoldersResponse = await fetch('/api/channels/subfolders', {
-            headers: {
-              'x-access-token': token || ''
-            }
-          });
-
-          if (subfoldersResponse.ok) {
-            const subfoldersData = await subfoldersResponse.json();
-            setSubfolders(subfoldersData);
-          }
-        } catch (err) {
-          console.error('Failed to load subfolders:', err);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load settings');
@@ -641,6 +627,7 @@ function ChannelSettingsDialog({
                 defaultSubfolderDisplay={config.defaultSubfolder || null}
                 label="Subfolder"
                 helperText="Choose where this channel's videos are saved"
+                createSubfolder={createSubfolder}
               />
               <Alert severity="info" style={{ marginTop: 8 }}>
                 <Typography variant="caption">

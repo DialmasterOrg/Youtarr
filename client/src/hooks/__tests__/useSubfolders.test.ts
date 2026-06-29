@@ -1,9 +1,16 @@
 import { renderHook, waitFor, act } from '@testing-library/react';
-import { useSubfolders } from '../useSubfolders';
 
-// Mock global fetch
-const mockFetch = jest.fn();
-global.fetch = mockFetch;
+// Mock axios (factory + require per project testing conventions)
+jest.mock('axios', () => ({
+  get: jest.fn(),
+  post: jest.fn(),
+  delete: jest.fn(),
+  isAxiosError: (e: unknown) => Boolean(e && (e as { isAxiosError?: boolean }).isAxiosError),
+}));
+
+const axios = require('axios');
+
+import { useSubfolders, SUBFOLDERS_UPDATED_EVENT } from '../useSubfolders';
 
 describe('useSubfolders', () => {
   const mockToken = 'test-token-123';
@@ -31,11 +38,11 @@ describe('useSubfolders', () => {
     test('does not fetch when token is null', () => {
       renderHook(() => useSubfolders(null));
 
-      expect(mockFetch).not.toHaveBeenCalled();
+      expect(axios.get).not.toHaveBeenCalled();
     });
 
     test('starts loading when token is provided', () => {
-      mockFetch.mockImplementation(() => new Promise(() => {})); // Never resolves
+      axios.get.mockImplementation(() => new Promise(() => {})); // Never resolves
 
       const { result } = renderHook(() => useSubfolders(mockToken));
 
@@ -45,10 +52,7 @@ describe('useSubfolders', () => {
 
   describe('Successful Data Fetching', () => {
     test('fetches and returns subfolders successfully', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce(mockSubfolders),
-      });
+      axios.get.mockResolvedValueOnce({ data: mockSubfolders });
 
       const { result } = renderHook(() => useSubfolders(mockToken));
 
@@ -61,18 +65,15 @@ describe('useSubfolders', () => {
     });
 
     test('includes correct authentication header', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce(mockSubfolders),
-      });
+      axios.get.mockResolvedValueOnce({ data: mockSubfolders });
 
       renderHook(() => useSubfolders(mockToken));
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledTimes(1);
+        expect(axios.get).toHaveBeenCalledTimes(1);
       });
 
-      expect(mockFetch).toHaveBeenCalledWith('/api/channels/subfolders', {
+      expect(axios.get).toHaveBeenCalledWith('/api/channels/subfolders', {
         headers: {
           'x-access-token': mockToken,
         },
@@ -80,10 +81,7 @@ describe('useSubfolders', () => {
     });
 
     test('handles empty subfolders array', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce([]),
-      });
+      axios.get.mockResolvedValueOnce({ data: [] });
 
       const { result } = renderHook(() => useSubfolders(mockToken));
 
@@ -98,10 +96,7 @@ describe('useSubfolders', () => {
 
   describe('Error Handling', () => {
     test('handles API error response', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        statusText: 'Not Found',
-      });
+      axios.get.mockRejectedValueOnce(new Error('Request failed: Not Found'));
 
       const { result } = renderHook(() => useSubfolders(mockToken));
 
@@ -115,7 +110,7 @@ describe('useSubfolders', () => {
     });
 
     test('handles network error', async () => {
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+      axios.get.mockRejectedValueOnce(new Error('Network error'));
 
       const { result } = renderHook(() => useSubfolders(mockToken));
 
@@ -129,7 +124,7 @@ describe('useSubfolders', () => {
     });
 
     test('handles non-Error throw', async () => {
-      mockFetch.mockRejectedValueOnce('String error');
+      axios.get.mockRejectedValueOnce('String error');
 
       const { result } = renderHook(() => useSubfolders(mockToken));
 
@@ -144,10 +139,7 @@ describe('useSubfolders', () => {
 
   describe('Token Changes', () => {
     test('re-fetches when token changes', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: jest.fn().mockResolvedValue(mockSubfolders),
-      });
+      axios.get.mockResolvedValue({ data: mockSubfolders });
 
       const { result, rerender } = renderHook(
         ({ token }: { token: string | null }) => useSubfolders(token),
@@ -158,16 +150,16 @@ describe('useSubfolders', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(axios.get).toHaveBeenCalledTimes(1);
 
       // Change to a different token
       rerender({ token: 'new-token' });
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledTimes(2);
+        expect(axios.get).toHaveBeenCalledTimes(2);
       });
 
-      expect(mockFetch).toHaveBeenLastCalledWith('/api/channels/subfolders', {
+      expect(axios.get).toHaveBeenLastCalledWith('/api/channels/subfolders', {
         headers: {
           'x-access-token': 'new-token',
         },
@@ -175,10 +167,7 @@ describe('useSubfolders', () => {
     });
 
     test('does not fetch when token changes to null', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce(mockSubfolders),
-      });
+      axios.get.mockResolvedValueOnce({ data: mockSubfolders });
 
       const { result, rerender } = renderHook(
         ({ token }: { token: string | null }) => useSubfolders(token),
@@ -189,13 +178,13 @@ describe('useSubfolders', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(axios.get).toHaveBeenCalledTimes(1);
 
       // Change to null token
       rerender({ token: null });
 
       // Should not have made another fetch call
-      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(axios.get).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -204,15 +193,9 @@ describe('useSubfolders', () => {
       const firstResponse = ['__Sports'];
       const secondResponse = ['__Sports', '__Music'];
 
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(firstResponse),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(secondResponse),
-        });
+      axios.get
+        .mockResolvedValueOnce({ data: firstResponse })
+        .mockResolvedValueOnce({ data: secondResponse });
 
       const { result } = renderHook(() => useSubfolders(mockToken));
 
@@ -221,14 +204,14 @@ describe('useSubfolders', () => {
       });
 
       expect(result.current.subfolders).toEqual(firstResponse);
-      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(axios.get).toHaveBeenCalledTimes(1);
 
       // Call refetch
       await act(async () => {
         await result.current.refetch();
       });
 
-      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(axios.get).toHaveBeenCalledTimes(2);
       expect(result.current.subfolders).toEqual(secondResponse);
     });
 
@@ -238,11 +221,8 @@ describe('useSubfolders', () => {
         resolvePromise = resolve;
       });
 
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
-        })
+      axios.get
+        .mockResolvedValueOnce({ data: mockSubfolders })
         .mockImplementationOnce(() => promise);
 
       const { result } = renderHook(() => useSubfolders(mockToken));
@@ -261,10 +241,7 @@ describe('useSubfolders', () => {
 
       // Resolve the promise
       await act(async () => {
-        resolvePromise!({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
-        });
+        resolvePromise!({ data: mockSubfolders });
       });
 
       await waitFor(() => {
@@ -279,19 +256,13 @@ describe('useSubfolders', () => {
         await result.current.refetch();
       });
 
-      expect(mockFetch).not.toHaveBeenCalled();
+      expect(axios.get).not.toHaveBeenCalled();
     });
 
     test('refetch clears previous error', async () => {
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: false,
-          statusText: 'Error',
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
-        });
+      axios.get
+        .mockRejectedValueOnce(new Error('Error'))
+        .mockResolvedValueOnce({ data: mockSubfolders });
 
       const { result } = renderHook(() => useSubfolders(mockToken));
 
@@ -316,7 +287,7 @@ describe('useSubfolders', () => {
         resolvePromise = resolve;
       });
 
-      mockFetch.mockImplementationOnce(() => promise);
+      axios.get.mockImplementationOnce(() => promise);
 
       const { result } = renderHook(() => useSubfolders(mockToken));
 
@@ -326,10 +297,7 @@ describe('useSubfolders', () => {
 
       // Resolve the fetch
       await act(async () => {
-        resolvePromise!({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
-        });
+        resolvePromise!({ data: mockSubfolders });
       });
 
       await waitFor(() => {
@@ -345,7 +313,7 @@ describe('useSubfolders', () => {
         rejectPromise = reject;
       });
 
-      mockFetch.mockImplementationOnce(() => promise);
+      axios.get.mockImplementationOnce(() => promise);
 
       const { result } = renderHook(() => useSubfolders(mockToken));
 
@@ -362,6 +330,39 @@ describe('useSubfolders', () => {
       });
 
       expect(result.current.error).toBeInstanceOf(Error);
+    });
+  });
+
+  describe('mutations', () => {
+    test('createSubfolder POSTs and dispatches the update event', async () => {
+      axios.get.mockResolvedValue({ data: ['__A', '__B'] });
+      axios.post.mockResolvedValueOnce({ data: { name: 'B' } });
+
+      const dispatchSpy = jest.spyOn(window, 'dispatchEvent');
+      const { result } = renderHook(() => useSubfolders('t'));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      await act(async () => { await result.current.createSubfolder('B'); });
+
+      expect(axios.post).toHaveBeenCalledWith(
+        '/api/subfolders',
+        { name: 'B' },
+        { headers: { 'x-access-token': 't' } }
+      );
+      expect(dispatchSpy.mock.calls.some(([e]) => (e as Event).type === SUBFOLDERS_UPDATED_EVENT)).toBe(true);
+    });
+
+    test('deleteSubfolder throws the server error message on 409', async () => {
+      axios.get.mockResolvedValueOnce({ data: [] });
+      axios.delete.mockRejectedValueOnce({
+        isAxiosError: true,
+        response: { status: 409, data: { error: 'Subfolder is in use by 1 channel(s)' } },
+      });
+
+      const { result } = renderHook(() => useSubfolders('t'));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      await expect(result.current.deleteSubfolder('Used')).rejects.toThrow('Subfolder is in use by 1 channel(s)');
     });
   });
 });
