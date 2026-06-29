@@ -21,6 +21,7 @@ interface ReviewTableProps {
   rowStates: Record<string, RowState>;
   dispatch: React.Dispatch<ImportFlowAction>;
   subfolders: string[];
+  createSubfolder: (name: string) => Promise<void>;
   defaultSubfolderDisplay: string | null;
   globalPreferredResolution: string;
 }
@@ -28,7 +29,7 @@ interface ReviewTableProps {
 const ROWS_PER_PAGE = 50;
 
 const ReviewTable: React.FC<ReviewTableProps> = ({
-  channels, rowStates, dispatch, subfolders, defaultSubfolderDisplay, globalPreferredResolution,
+  channels, rowStates, dispatch, subfolders, createSubfolder, defaultSubfolderDisplay, globalPreferredResolution,
 }) => {
   const isMobile = useMediaQuery('(max-width: 767px)');
   const [page, setPage] = useState(1);
@@ -95,6 +96,7 @@ const ReviewTable: React.FC<ReviewTableProps> = ({
               rowState={rowStates[channel.channelId]}
               dispatch={dispatch}
               subfolders={subfolders}
+              createSubfolder={createSubfolder}
               defaultSubfolderDisplay={defaultSubfolderDisplay}
               globalPreferredResolution={globalPreferredResolution}
             />
@@ -132,6 +134,7 @@ const ReviewTable: React.FC<ReviewTableProps> = ({
               rowState={rowStates[channel.channelId]}
               dispatch={dispatch}
               subfolders={subfolders}
+              createSubfolder={createSubfolder}
               defaultSubfolderDisplay={defaultSubfolderDisplay}
               globalPreferredResolution={globalPreferredResolution}
             />

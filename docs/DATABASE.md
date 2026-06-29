@@ -33,6 +33,7 @@ Youtarr uses MariaDB/MySQL for storing:
 | `playlists`        | `Playlist`        | Subscribed YouTube playlists with per-playlist sync targets and seeded settings |
 | `playlistvideos`   | `PlaylistVideo`   | One row per (playlist, video) with the YouTube playlist position |
 | `playlist_sync_state` | `PlaylistSyncState` | Per-(playlist, server) sync state: server playlist id, last_synced_at, last_error |
+| `subfolders`       | `Subfolder`       | Durable registry of known subfolder names (id, name unique, createdAt, updatedAt). Backfilled from channels, playlists, and video file paths by the `add-subfolders-table` migration; kept current by register-on-create and register-on-download-override. |
 | `SequelizeMeta`    | NA                | Sequelize ORM migration tracking  |
 
 ## Internal Database (Default)

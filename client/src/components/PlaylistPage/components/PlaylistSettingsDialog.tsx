@@ -57,7 +57,7 @@ const PlaylistSettingsDialog: React.FC<PlaylistSettingsDialogProps> = ({
 }) => {
   const [form, setForm] = useState<FormState>(() => fromPlaylist(playlist));
 
-  const { subfolders, loading: subfoldersLoading } = useSubfolders(token);
+  const { subfolders, loading: subfoldersLoading, createSubfolder } = useSubfolders(token);
   const { config, refetch: refetchConfig } = useConfig(token);
   const { updateSettings, pending, error } = usePlaylistMutations({ token });
 
@@ -113,6 +113,7 @@ const PlaylistSettingsDialog: React.FC<PlaylistSettingsDialogProps> = ({
               onChange={(value) => update('default_sub_folder', value)}
               subfolders={subfolders}
               loading={subfoldersLoading}
+              createSubfolder={createSubfolder}
               defaultSubfolderDisplay={config.defaultSubfolder || null}
               label="Default Subfolder"
               helperText="Where this playlist's videos are saved when the channel has no subfolder of its own."

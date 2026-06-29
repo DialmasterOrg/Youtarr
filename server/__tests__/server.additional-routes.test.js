@@ -258,6 +258,11 @@ const createServerModule = ({
           updateChannelSettings: jest.fn(),
           getAllSubFolders: jest.fn()
         }));
+        jest.doMock('../modules/subfolderModule', () => ({
+          getAll: jest.fn().mockResolvedValue([]),
+          register: jest.fn().mockResolvedValue(undefined),
+          delete: jest.fn().mockResolvedValue(undefined),
+        }));
         jest.doMock('../modules/videoDeletionModule', () => ({
           deleteVideos: jest.fn().mockResolvedValue({ deleted: [], failed: [] }),
           deleteVideosByYoutubeIds: jest.fn().mockResolvedValue({ deleted: [], failed: [] })

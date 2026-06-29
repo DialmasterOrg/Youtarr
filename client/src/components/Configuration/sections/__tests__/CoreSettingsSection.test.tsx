@@ -14,6 +14,8 @@ jest.mock('../../../../hooks/useSubfolders', () => ({
     loading: false,
     error: null,
     refetch: jest.fn(),
+    createSubfolder: jest.fn(() => Promise.resolve()),
+    deleteSubfolder: jest.fn(() => Promise.resolve()),
   }),
 }));
 

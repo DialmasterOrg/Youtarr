@@ -382,6 +382,11 @@ const createServerModule = ({
         jest.doMock('../models/channelvideo', () => ({
           update: jest.fn().mockResolvedValue([1])
         }));
+        jest.doMock('../modules/subfolderModule', () => ({
+          getAll: jest.fn().mockResolvedValue([]),
+          register: jest.fn().mockResolvedValue(undefined),
+          delete: jest.fn().mockResolvedValue(undefined),
+        }));
         jest.doMock('../modules/webSocketServer.js', () => jest.fn());
         jest.doMock('node-cron', () => cronMock);
         jest.doMock('express-rate-limit', () => Object.assign(rateLimitMiddleware, { ipKeyGenerator: rateLimitMiddleware.ipKeyGenerator }));

@@ -15,6 +15,7 @@ const createMediaServerRoutes = require('./mediaServers');
 const createYoutubeApiKeyRoutes = require('./youtubeApiKey');
 const createYtdlpOptionsRoutes = require('./ytdlpOptions');
 const createMaintenanceRoutes = require('./maintenance');
+const createSubfolderRoutes = require('./subfolders');
 const videoMetadataModule = require('../modules/videoMetadataModule');
 const videoOembedEnricher = require('../modules/videoOembedEnricher');
 const playlistModule = require('../modules/playlistModule');
@@ -22,6 +23,7 @@ const m3uGenerator = require('../modules/m3uGenerator');
 const mediaServers = require('../modules/mediaServers');
 const channelSettingsModule = require('../modules/channelSettingsModule');
 const ratingMapper = require('../modules/ratingMapper');
+const subfolderModule = require('../modules/subfolderModule');
 const models = require('../models');
 
 /**
@@ -98,13 +100,16 @@ function registerRoutes(app, deps) {
   app.use(createVideoDetailRoutes({ verifyToken, videoMetadataModule }));
 
   // Playlist routes
-  app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper }));
+  app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule }));
 
   // Media server routes
   app.use(createMediaServerRoutes({ verifyToken, configModule, mediaServers }));
 
   // Maintenance routes
   app.use(createMaintenanceRoutes({ verifyToken, videosModule, configModule }));
+
+  // Subfolder registry routes
+  app.use(createSubfolderRoutes({ verifyToken, subfolderModule }));
 
   // Defensive redirect: /channels -> /subscriptions (frontend handles client-side routing,
   // this fallback covers direct server-side hits during the transition period)

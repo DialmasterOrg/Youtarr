@@ -1,8 +1,16 @@
 const express = require('express');
 
-function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper }) {
+function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule }) {
   const router = express.Router();
   const { Playlist, PlaylistVideo, Video } = models;
+
+  // Keep the subfolder registry in sync when a playlist persists a real
+  // default subfolder. register() ignores null/empty/sentinels and never throws.
+  const registerSubfolder = (name) => {
+    if (subfolderModule && name) {
+      subfolderModule.register(name).catch(() => {});
+    }
+  };
 
   const ALLOWED_RESOLUTIONS = ['360', '480', '720', '1080', '1440', '2160'];
   const ALLOWED_AUDIO_FORMATS = ['video_mp3', 'mp3_only'];
@@ -131,6 +139,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     try {
       const info = await playlistModule.getPlaylistInfo(url);
       const created = await playlistModule.upsertPlaylist(info, { enabled: true, settings });
+      registerSubfolder(settings.default_sub_folder);
       await playlistModule.fetchAllPlaylistVideos(created.playlist_id);
       mediaServers.mediaServerSync.syncPlaylist(created.id).catch(logBgFailure(req, created.playlist_id, 'playlist sync'));
       m3uGenerator.generatePlaylistM3U(created.id).catch(logBgFailure(req, created.playlist_id, 'M3U generation'));
@@ -198,6 +207,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       const p = await Playlist.findOne({ where: { playlist_id: req.params.playlistId } });
       if (!p) return res.status(404).json({ error: 'Playlist not found' });
       await p.update(updates);
+      registerSubfolder(updates.default_sub_folder);
       res.json({ settings: updates });
     } catch (err) {
       req.log.error({ err }, 'update settings failed');

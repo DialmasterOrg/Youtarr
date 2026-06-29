@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
+import React, { useState } from 'react';
+import { useSubfolders } from '../../../hooks/useSubfolders';
+import { stripSubfolderPrefix } from '../../../utils/subfolderDisplay';
 import {
   Alert,
   Box,
@@ -47,12 +48,9 @@ interface PlexSubfolderMappingsProps {
  */
 const ROOT_SELECT_VALUE = '__YOUTARR_ROOT_LIBRARY_MAPPING__';
 
-/** Strip the __ filesystem prefix from a subfolder name returned by the API. */
-const stripPrefix = (folder: string): string => folder.replace(/^__/, '');
-
 /** Convert a Select value back to the stored mapping subfolder (null for root). */
 const selectValueToSubfolder = (value: string): string | null =>
-  value === ROOT_SELECT_VALUE ? null : stripPrefix(value);
+  value === ROOT_SELECT_VALUE ? null : stripSubfolderPrefix(value);
 
 /** Format a mapping's subfolder for display in the table. */
 const formatMappingSubfolder = (subfolder: string | null): string =>
@@ -65,41 +63,13 @@ export const PlexSubfolderMappings: React.FC<PlexSubfolderMappingsProps> = ({
   plexConnectionStatus,
   plexLibraries,
 }) => {
-  const [subfolders, setSubfolders] = useState<string[]>([]);
-  const [loadingData, setLoadingData] = useState(false);
-  const [fetchError, setFetchError] = useState(false);
   const [newSubfolder, setNewSubfolder] = useState<string>('');
   const [newLibraryId, setNewLibraryId] = useState<string>('');
   const [showAddForm, setShowAddForm] = useState(false);
 
   const isConnected = plexConnectionStatus === 'connected';
 
-  useEffect(() => {
-    if (!isConnected) return;
-
-    const controller = new AbortController();
-    const { signal } = controller;
-    const headers = { 'x-access-token': token || '' };
-
-    setLoadingData(true);
-    setFetchError(false);
-
-    axios
-      .get<unknown>('/api/channels/subfolders', { headers, signal })
-      .then((res) => {
-        if (signal.aborted) return;
-        setSubfolders(Array.isArray(res.data) ? (res.data as string[]) : []);
-      })
-      .catch(() => {
-        if (signal.aborted) return;
-        setFetchError(true);
-      })
-      .finally(() => {
-        if (!signal.aborted) setLoadingData(false);
-      });
-
-    return () => controller.abort();
-  }, [isConnected, token]);
+  const { subfolders, loading: loadingData, error: fetchErrorObj } = useSubfolders(isConnected ? token : null);
 
   const isMappingDuplicate = (subfolder: string | null): boolean =>
     mappings.some((m) => m.subfolder === subfolder);
@@ -168,7 +138,7 @@ export const PlexSubfolderMappings: React.FC<PlexSubfolderMappingsProps> = ({
         </Box>
       )}
 
-      {fetchError && (
+      {fetchErrorObj && (
         <Alert severity="warning" className="mb-4">
           Could not load channel subfolders. Check your connection and try refreshing.
         </Alert>
