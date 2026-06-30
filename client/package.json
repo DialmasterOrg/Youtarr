@@ -1,6 +1,6 @@
 {
   "name": "client",
-  "version": "1.71.0",
+  "version": "1.72.1",
   "private": true,
   "type": "module",
   "proxy": "http://localhost:3011",
@@ -112,6 +112,7 @@
   "overrides": {
     "jsdom": {
       "form-data": "^3.0.4"
-    }
+    },
+    "form-data": "^4.0.6"
   }
 }

@@ -111,14 +111,6 @@ const createApiKeyModuleMock = () => {
         key.usage_count++;
       }
     }),
-    revokeApiKey: jest.fn(async (id) => {
-      const key = keys.find(k => k.id === id);
-      if (key) {
-        key.is_active = false;
-        return true;
-      }
-      return false;
-    }),
     deleteApiKey: jest.fn(async (id) => {
       const idx = keys.findIndex(k => k.id === id);
       if (idx >= 0) {
@@ -453,7 +445,7 @@ describe('API Key Module - Unit Tests', () => {
 
     test('rejects revoked keys', async () => {
       const created = await apiKeyModule.createApiKey('Revoked Key');
-      await apiKeyModule.revokeApiKey(created.id);
+      await apiKeyModule.deleteApiKey(created.id);
       const validated = await apiKeyModule.validateApiKey(created.key);
       
       expect(validated).toBeNull();
@@ -510,8 +502,8 @@ describe('API Key Module - Unit Tests', () => {
       const key2 = await apiKeyModule.createApiKey('Key 2');
       await apiKeyModule.createApiKey('Key 3');
       
-      await apiKeyModule.revokeApiKey(key2.id);
-      
+      await apiKeyModule.deleteApiKey(key2.id);
+
       const list = await apiKeyModule.listApiKeys();
       expect(list).toHaveLength(2);
       expect(list.find(k => k.name === 'Key 2')).toBeUndefined();
@@ -524,22 +516,6 @@ describe('API Key Module - Unit Tests', () => {
       expect(list[0]).not.toHaveProperty('key');
       expect(list[0]).not.toHaveProperty('key_hash');
       expect(list[0]).toHaveProperty('key_prefix');
-    });
-  });
-
-  describe('revokeApiKey', () => {
-    test('revokes existing key', async () => {
-      const created = await apiKeyModule.createApiKey('Revoke Me');
-      const result = await apiKeyModule.revokeApiKey(created.id);
-      
-      expect(result).toBe(true);
-      const storedKey = apiKeyModule._getKeys().find(k => k.id === created.id);
-      expect(storedKey.is_active).toBe(false);
-    });
-
-    test('returns false for non-existent key', async () => {
-      const result = await apiKeyModule.revokeApiKey(9999);
-      expect(result).toBe(false);
     });
   });
 
@@ -580,14 +556,14 @@ describe('API Key Module - Unit Tests', () => {
       expect(storedKey.usage_count).toBe(3);
     });
 
-    test('does not increment for revoked key', async () => {
-      const created = await apiKeyModule.createApiKey('Revoked Usage Key');
-      await apiKeyModule.revokeApiKey(created.id);
-      
+    test('does not increment for deleted key', async () => {
+      const created = await apiKeyModule.createApiKey('Deleted Usage Key');
+      await apiKeyModule.deleteApiKey(created.id);
+
       await apiKeyModule.incrementUsageCount(created.id);
 
       const storedKey = apiKeyModule._getKeys().find(k => k.id === created.id);
-      expect(storedKey.usage_count).toBe(0);
+      expect(storedKey).toBeUndefined();
     });
   });
 });

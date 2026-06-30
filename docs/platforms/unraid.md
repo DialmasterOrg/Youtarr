@@ -1,6 +1,6 @@
 # Youtarr on Unraid
 
-Youtarr has not yet been accepted into the Community Templates store, but has been validated as working on Unraid
+Youtarr is available in the Unraid **Community Applications** store, using the actively maintained template from [@nwithan8](https://codeberg.org/nwithan8/unraid_templates).
 
 
 ## Deploying on Unraid
@@ -35,31 +35,39 @@ See [docs/platforms/external-db.md](external-db.md) for reference
 
 ### Install and setup Youtarr
 
-The Unraid template for Youtarr `https://github.com/DialmasterOrg/unraid-templates/blob/main/Youtarr/Youtarr.xml`
+The recommended install path is through **Community Applications**, which always pulls the actively maintained template.
 
-1. Open a terminal in Unraid
+1. Install the **Community Applications** plugin if you haven't already.
+2. Open the **Apps** tab, search for **Youtarr**, and click **Install**.
+3. Fill in the configuration fields the template presents:
+   - **Database** (`DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`): match the MariaDB instance you set up above.
+     - Use the LAN IP of your Unraid server as `DB_HOST` (eg `192.168.1.100`). Just the bare IP. No `http://` prefix, no trailing slash. `DB_HOST` is a hostname, not a URL.
+     - Do not use `127.0.0.1` or `localhost`, those refer to the container itself, not the Unraid host.
+   - **Authentication**: set both `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` to seed your login credentials. They must meet these rules or they'll be ignored:
+     - `AUTH_PRESET_USERNAME`: 1-32 characters in length
+     - `AUTH_PRESET_PASSWORD`: 8-64 characters in length
+     - Leaving them blank uses the one-time setup-token wizard; retrieve the token from the container logs or the mapped `config/setup-token` file.
+   - Leave `AUTH_ENABLED` set to `true` unless Youtarr is only reachable over LAN/VPN or sits behind an authenticating reverse proxy.
+   - **Paths**: point the video output path at your media share (for example `/mnt/user/media/youtube`) and leave the config, images, and jobs paths at their `/mnt/user/appdata/youtarr/...` defaults unless you have a reason to change them.
+4. Click **Apply** to start Youtarr.
+
+Once the container is running, open `http://<your-unraid-ip>:3011` in your browser to access Youtarr (3011 is the template's default Web UI port; change it in the template if you prefer a different one).
+
+#### Manual install (fallback)
+
+If you would rather load the template by hand instead of through Community Applications, use the maintained template directly:
+
+- Template (web view): `https://codeberg.org/nwithan8/unraid_templates/src/branch/main/templates/youtarr.xml`
+
+1. Open a terminal in Unraid.
 2. Download the template and make it available in Unraid:
 ```bash
-curl -L https://raw.githubusercontent.com/DialmasterOrg/unraid-templates/main/Youtarr/Youtarr.xml -o /boot/config/plugins/dockerMan/templates-user/my-Youtarr.xml
+curl -L https://codeberg.org/nwithan8/unraid_templates/raw/branch/main/templates/youtarr.xml -o /boot/config/plugins/dockerMan/templates-user/my-youtarr.xml
 ```
-3. Navigate to the Docker tab in Unraid and click "Add container"
-4. Select "Youtarr" from "User Templates"
-5. Fill in all configuration details
-  - Ensure that your MariaDB instance is setup with a database name, user and password matching what you set in the Youtarr configuration
-  - Use the LAN IP of your Unraid server as `DB_HOST` (eg `192.168.1.100`)
-    - Just the bare IP. No `http://` prefix, no trailing slash. `DB_HOST` is a hostname, not a URL.
-    - Do not use `127.0.0.1` or `localhost`, those refer to the container itself, not the Unraid host.
-  - Map your persistent paths (for example `/mnt/user/appdata/youtarr` for `/app/config` and `/mnt/user/media/youtube` for `/data`) and supply the MariaDB connection variables before deploying.
-  - Set both `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` to set credentials for login to Youtarr
-  - **IMPORTANT**: `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` must meet these rules or they’ll be ignored:
-    - `AUTH_PRESET_USERNAME`: 1-32 characters in length
-    - `AUTH_PRESET_PASSWORD`: 8-64 characters in length
-  Leaving them blank uses the setup-token wizard; retrieve the token from the container logs or the mapped `config/setup-token` file.
-6. Click the "Apply" button to start Youtarr
-
-Once the container is running, open http://<your-unraid-ip>:3087 in your browser to access Youtarr.
-
-- **Note** Until the template is accepted into the main Community Applications feed, it is available directly from the repository above.
+3. Navigate to the Docker tab in Unraid and click "Add container".
+4. Select "Youtarr" from "User Templates".
+5. Fill in the configuration as described above.
+6. Click "Apply" to start Youtarr.
 
 ## Troubleshooting MariaDB connection issues
 
@@ -90,7 +98,7 @@ By default, Youtarr runs as root inside the container. This works fine for most 
    chown -R 99:100 /mnt/user/appdata/youtarr
    chown -R 99:100 /path/to/your/youtube_videos
    ```
-   Replace the paths with your actual mapped directories. The `99:100` corresponds to the `nobody:users` user/group on Unraid. The `/app/config` volume is mapped to `/mnt/user/appdata/youtarr` (not a `/config` subfolder), so recursing from the top picks up `config.json`, `jobs/`, and `images/` in one shot.
+   Replace the paths with your actual mapped directories. The `99:100` corresponds to the `nobody:users` user/group on Unraid. The template maps Youtarr's config, images, and jobs under `/mnt/user/appdata/youtarr/` (in `config/`, `images/`, and `jobs/` subfolders), so recursing from the top with `chown -R` covers all of them in one shot.
 
 3. **Add the user parameter to your container**:
    - Edit your Youtarr container in Unraid

@@ -1,6 +1,6 @@
 {
   "name": "youtarr",
-  "version": "1.71.0",
+  "version": "1.72.1",
   "description": "",
   "main": "server/index.js",
   "engines": {
@@ -49,6 +49,9 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "overrides": {
+    "form-data": "^4.0.6"
+  },
   "dependencies": {
     "axios": "^1.12.0",
     "bcrypt": "^6.0.0",
@@ -56,7 +59,7 @@
     "express": "^4.18.2",
     "express-rate-limit": "^8.1.0",
     "fs-extra": "^11.1.1",
-    "multer": "^2.0.2",
+    "multer": "^2.2.0",
     "mysql2": "^3.9.4",
     "node-cron": "^4.2.1",
     "pino": "^10.0.0",

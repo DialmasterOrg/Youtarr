@@ -3442,6 +3442,34 @@ describe('ChannelModule', () => {
         });
       });
 
+      test('reconciles the stale video default to the detected tab for a shorts-only channel', async () => {
+        // 'video' is the NOT NULL column default; detection should drop it and default to 'short'.
+        const mockChannel = {
+          ...mockChannelData,
+          available_tabs: null,
+          auto_download_enabled_tabs: 'video'
+        };
+        Channel.findOne.mockResolvedValue(mockChannel);
+        Channel.update.mockResolvedValue([1]);
+
+        ChannelModule.checkTabExistsViaYtdlp = jest.fn()
+          .mockImplementation(async (chId, tabType) => tabType === 'shorts');
+
+        const result = await ChannelModule.detectAndSaveChannelTabs('UC123');
+
+        expect(Channel.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            available_tabs: 'shorts',
+            auto_download_enabled_tabs: 'short'
+          }),
+          { where: { channel_id: 'UC123' } }
+        );
+        expect(result).toEqual({
+          availableTabs: ['shorts'],
+          autoDownloadEnabledTabs: 'short'
+        });
+      });
+
       test('should fallback to videos tab when all RSS checks fail', async () => {
         const mockChannel = {
           ...mockChannelData,

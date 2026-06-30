@@ -2,7 +2,8 @@ import React from 'react';
 import { Button, Card, CardContent, Checkbox, Chip, Typography } from '../../ui';
 import { PlaylistVideo } from '../../../types/playlist';
 import { formatDurationClock } from '../../../utils';
-import { isDownloadable, statusLabel, PublishedDate } from './playlistVideoHelpers';
+import { isDownloadable, statusLabel, PublishedDate, toDownloadFileProps } from './playlistVideoHelpers';
+import DownloadFormatIndicator from '../../shared/DownloadFormatIndicator';
 
 const THUMB_WIDTH = 120;
 const THUMB_HEIGHT = 68;
@@ -73,7 +74,11 @@ const PlaylistVideoCard: React.FC<PlaylistVideoCardProps> = ({
         <div className="flex items-center gap-2 flex-wrap mt-1 text-xs text-muted-foreground">
           <PublishedDate value={video.published_at} />
           <span className="whitespace-nowrap">{formatDurationClock(video.duration) || '-'}</span>
-          <Chip label={status.label} color={status.color} size="small" />
+          {video.downloaded ? (
+            <DownloadFormatIndicator {...toDownloadFileProps(video)} orientation="horizontal" />
+          ) : (
+            <Chip label={status.label} color={status.color} size="small" />
+          )}
         </div>
         <div className="mt-2" onClick={(e) => e.stopPropagation()}>
           {video.ignored ? (

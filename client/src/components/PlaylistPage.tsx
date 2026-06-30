@@ -27,6 +27,7 @@ import VideoListSelectionPill from './shared/VideoList/VideoListSelectionPill';
 import { SelectionAction } from './shared/VideoList/types';
 import { Download as DownloadIcon } from '../lib/icons';
 import PlaylistSettingsDialog from './PlaylistPage/components/PlaylistSettingsDialog';
+import { toDownloadFileProps } from './PlaylistPage/components/playlistVideoHelpers';
 import DownloadSettingsDialog from './DownloadManager/ManualDownload/DownloadSettingsDialog';
 import { DownloadSettings } from './DownloadManager/ManualDownload/types';
 import SubscriptionsBackButton from './shared/SubscriptionsBackButton';
@@ -60,10 +61,7 @@ function toModalData(v: PlaylistVideo): VideoModalData {
     mediaType: 'video',
     status,
     isDownloaded: v.downloaded,
-    filePath: v.file_path,
-    fileSize: v.file_size,
-    audioFilePath: null,
-    audioFileSize: null,
+    ...toDownloadFileProps(v),
     isProtected: false,
     isIgnored: v.ignored,
     normalizedRating: null,

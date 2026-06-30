@@ -1,7 +1,6 @@
 /* eslint-env jest */
 
 const { EventEmitter } = require('events');
-const { isDiscordWebhook } = require('../notificationHelpers');
 
 // Create mock functions
 const mockSpawn = jest.fn();
@@ -143,24 +142,6 @@ describe('NotificationModule', () => {
     });
   });
 
-  describe('isDiscordWebhook (from notificationHelpers)', () => {
-    it('should return true for discord.com webhook URLs', () => {
-      expect(isDiscordWebhook('https://discord.com/api/webhooks/123/abc')).toBe(true);
-    });
-
-    it('should return true for discordapp.com webhook URLs', () => {
-      expect(isDiscordWebhook('https://discordapp.com/api/webhooks/123/abc')).toBe(true);
-    });
-
-    it('should return false for discord:// Apprise URLs', () => {
-      // discord:// URLs are NOT HTTP webhooks, they go through Apprise
-      expect(isDiscordWebhook('discord://webhook_id/token')).toBe(false);
-    });
-
-    it('should return false for other URLs', () => {
-      expect(isDiscordWebhook('ntfy://test')).toBe(false);
-    });
-  });
 });
 
 describe('Notification Utils', () => {

@@ -271,7 +271,7 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
         const channelId = lookupChannelId;
         channelRecord = await Channel.findOne({
           where: { channel_id: channelId },
-          attributes: ['id', 'sub_folder', 'title', 'uploader', 'folder_name', 'default_rating']
+          attributes: ['id', 'sub_folder', 'title', 'uploader', 'folder_name', 'default_rating', 'enabled']
         });
 
         logger.info({ channelId, ownerProvided: !!ownerChannelId, found: !!channelRecord }, 'Post-process channel lookup');
@@ -312,6 +312,12 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
       }
     }
 
+    // Only an enabled channel contributes routing settings (rating, subfolder). A disabled
+    // channel is invisible in the UI, so treat it as untracked and fall through to the
+    // playlist fallback -> global. channelRecord above is still used for metadata backfill
+    // regardless of enabled state.
+    const settingsChannelRecord = channelRecord && channelRecord.enabled ? channelRecord : null;
+
     // Determine effective rating using strict priority order:
     // 1. Manual Override
     // 2. Channel Default
@@ -323,7 +329,7 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
 
     const effectiveRating = ratingMapper.determineEffectiveRating(
       jsonData,
-      channelRecord ? channelRecord.default_rating : null,
+      settingsChannelRecord ? settingsChannelRecord.default_rating : null,
       manualOverride,
       ratingFallbackEnv
     );
@@ -341,7 +347,7 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
     // Per-video subfolder precedence; see resolveFinalSubfolder for the full contract.
     channelSubFolder = downloadSettingsResolver.resolveFinalSubfolder({
       hardOverride: subfolderOverride,
-      channelRecord,
+      channelRecord: settingsChannelRecord,
       softFallback: subfolderFallbackEnv,
       globalDefault: configModule.getDefaultSubfolder(),
     });

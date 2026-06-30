@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
+import { decodeHtml } from '../../../utils/formatters';
 import { SearchResult, PageSize } from '../types';
 
 interface UseVideoSearchResult {
@@ -43,7 +44,15 @@ export function useVideoSearch(token: string | null): UseVideoSearchResult {
       );
       // Late-arriving response from a superseded search: drop it.
       if (controllerRef.current !== controller) return;
-      setResults(res.data.results || []);
+      // The YouTube Data API HTML-encodes titles/channel names (e.g. "Rubik&#39;s").
+      // Decode here so all result views render plain text; yt-dlp results are already
+      // plain, so decodeHtml is a no-op for them.
+      const decoded = (res.data.results || []).map((r: SearchResult) => ({
+        ...r,
+        title: r.title ? decodeHtml(r.title) : r.title,
+        channelName: r.channelName ? decodeHtml(r.channelName) : r.channelName,
+      }));
+      setResults(decoded);
     } catch (err: unknown) {
       if (axios.isCancel(err)) {
         // user canceled or superseded; do not surface as error

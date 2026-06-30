@@ -130,12 +130,3 @@ export function supportsRichFormatting(url: string): boolean {
   return false;
 }
 
-/**
- * Get list of service keys that support rich formatting
- */
-export function getRichFormattingServices(): string[] {
-  return Object.entries(NOTIFICATION_SERVICES)
-    .filter(([, service]) => service.supportsRichFormatting)
-    .map(([key]) => key);
-}
-

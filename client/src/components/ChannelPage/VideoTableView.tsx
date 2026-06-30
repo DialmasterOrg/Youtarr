@@ -333,6 +333,7 @@ function VideoTableView({
                       audioFilePath={video.audioFilePath}
                       fileSize={video.fileSize}
                       audioFileSize={video.audioFileSize}
+                      orientation="vertical"
                     />
                   ) : '-'}
                 </td>

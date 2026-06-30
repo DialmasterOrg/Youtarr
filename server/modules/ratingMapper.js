@@ -295,8 +295,8 @@ function mapToITunEXTC(normalizedRating) {
 }
 
 /**
- * Get all valid normalized rating strings (cached at module level).
- * @returns {string[]} - Sorted array of valid rating strings (e.g., ['G', 'NC-17', 'PG', ...])
+ * Sorted array of valid normalized rating strings (e.g., ['G', 'NC-17', 'PG', ...]),
+ * cached at module level. Used by validateRating below.
  */
 const VALID_NORMALIZED_RATINGS = (() => {
   const ratings = new Set();
@@ -304,10 +304,6 @@ const VALID_NORMALIZED_RATINGS = (() => {
   Object.values(TVPG_RATINGS).forEach(r => { if (r !== null) ratings.add(r); });
   return Array.from(ratings).sort();
 })();
-
-function getValidNormalizedRatings() {
-  return VALID_NORMALIZED_RATINGS;
-}
 
 /**
  * Canonical rating validator/normalizer. Single source of truth for every place
@@ -349,7 +345,6 @@ module.exports = {
   determineEffectiveRating,
   mapToNumericRating,
   mapToITunEXTC,
-  getValidNormalizedRatings,
   validateRating,
   NOT_RATED,
   MPAA_RATINGS,

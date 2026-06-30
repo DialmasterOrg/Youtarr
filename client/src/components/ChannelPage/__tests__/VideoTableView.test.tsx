@@ -198,7 +198,7 @@ describe('VideoTableView Component', () => {
       renderWithProviders(<VideoTableView {...defaultProps} videos={[videoWithFile]} />);
       // File size shown in format indicator chip
       expect(screen.getByText(/50/)).toBeInTheDocument();
-      expect(screen.getByTestId('StorageIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('VideoFormatIcon')).toBeInTheDocument();
     });
 
     test('renders dash when no file path exists', () => {
@@ -206,6 +206,21 @@ describe('VideoTableView Component', () => {
       renderWithProviders(<VideoTableView {...defaultProps} videos={[videoNoFile]} />);
       // Two dashes on a never-downloaded row: Downloaded column and Size column
       expect(screen.getAllByText('-').length).toBeGreaterThan(0);
+    });
+
+    test('stacks the format chips vertically so they fit the narrow size column', () => {
+      const videoWithBothFormats = {
+        ...mockVideo,
+        filePath: '/path/to/video.mp4',
+        fileSize: 1024 * 1024 * 50,
+        audioFilePath: '/path/to/audio.mp3',
+        audioFileSize: 1024 * 1024 * 5,
+      };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[videoWithBothFormats]} />);
+
+      expect(screen.getByTestId('VideoFormatIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('AudioFormatIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('download-format-indicator')).toHaveClass('flex-col');
     });
   });
 
@@ -868,7 +883,7 @@ describe('VideoTableView Component', () => {
       renderWithProviders(<VideoTableView {...defaultProps} videos={[largeVideo]} />);
       // File size shown in format indicator chip
       expect(screen.getByText(/GB/)).toBeInTheDocument();
-      expect(screen.getByTestId('StorageIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('VideoFormatIcon')).toBeInTheDocument();
     });
 
     test('handles video in both selectedForDeletion and checkedBoxes', () => {
