@@ -635,14 +635,13 @@ describe('CoreSettingsSection Component', () => {
       renderWithProviders(<CoreSettingsSection {...props} />);
 
 
-      // Default values from schema: all three true
       const nfoCheckbox = screen.getByRole('checkbox', { name: /Generate video \.nfo files/i });
       const posterCheckbox = screen.getByRole('checkbox', { name: /Copy channel poster\.jpg files/i });
       const fanartCheckbox = screen.getByRole('checkbox', { name: /Create video fanart files/i });
 
       expect(nfoCheckbox).toBeChecked();
       expect(posterCheckbox).toBeChecked();
-      expect(fanartCheckbox).not.toBeChecked();
+      expect(fanartCheckbox).not.toBeChecked(); // opt-in: defaults to false
     });
   });
   describe('InfoTooltip Integration', () => {

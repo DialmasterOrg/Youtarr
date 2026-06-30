@@ -1224,4 +1224,93 @@ describe('videoDownloadPostProcessFiles', () => {
       );
     });
   });
+
+  describe('writeVideoFanart', () => {
+    const imagePath = '/library/Channel/Video Title [abc123].jpg';
+    const fanartPath = '/library/Channel/Video Title [abc123]-fanart.jpg';
+
+    it('creates fanart file when writeVideoFanart is true and image exists', async () => {
+      configModule.__setConfig({
+        writeChannelPosters: false,
+        writeVideoNfoFiles: true,
+        writeVideoFanart: true,
+      });
+      fs.existsSync.mockImplementation((p) => p === jsonPath || p === imagePath);
+
+      await loadModule();
+      await settleAsync();
+
+      expect(fs.copySync).toHaveBeenCalledWith(imagePath, fanartPath, { overwrite: true });
+      expect(logger.info).toHaveBeenCalledWith(
+        { fanartPath },
+        '[Post-Process] Created video fanart file'
+      );
+    });
+
+    it('does not create fanart file when writeVideoFanart is false', async () => {
+      configModule.__setConfig({
+        writeChannelPosters: false,
+        writeVideoNfoFiles: true,
+        writeVideoFanart: false,
+      });
+      fs.existsSync.mockImplementation((p) => p === jsonPath || p === imagePath);
+
+      await loadModule();
+      await settleAsync();
+
+      const fanartCopied = fs.copySync.mock.calls.some(([, dest]) => dest === fanartPath);
+      expect(fanartCopied).toBe(false);
+    });
+
+    it('does not create fanart file when writeVideoFanart is absent from config', async () => {
+      configModule.__setConfig({
+        writeChannelPosters: false,
+        writeVideoNfoFiles: true,
+      });
+      fs.existsSync.mockImplementation((p) => p === jsonPath || p === imagePath);
+
+      await loadModule();
+      await settleAsync();
+
+      const fanartCopied = fs.copySync.mock.calls.some(([, dest]) => dest === fanartPath);
+      expect(fanartCopied).toBe(false);
+    });
+
+    it('skips fanart copy when image file does not exist', async () => {
+      configModule.__setConfig({
+        writeChannelPosters: false,
+        writeVideoNfoFiles: true,
+        writeVideoFanart: true,
+      });
+      // Only json exists, not the image
+      fs.existsSync.mockImplementation((p) => p === jsonPath);
+
+      await loadModule();
+      await settleAsync();
+
+      const fanartCopied = fs.copySync.mock.calls.some(([, dest]) => dest === fanartPath);
+      expect(fanartCopied).toBe(false);
+    });
+
+    it('logs warning and does not exit when fanart copy throws', async () => {
+      configModule.__setConfig({
+        writeChannelPosters: false,
+        writeVideoNfoFiles: true,
+        writeVideoFanart: true,
+      });
+      fs.existsSync.mockImplementation((p) => p === jsonPath || p === imagePath);
+      fs.copySync.mockImplementation((src, dest) => {
+        if (dest === fanartPath) throw new Error('disk full');
+      });
+
+      await loadModule();
+      await settleAsync();
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ err: expect.any(Error) }),
+        '[Post-Process] Error creating video fanart'
+      );
+      expect(process.exit).not.toHaveBeenCalled();
+    });
+  });
 });

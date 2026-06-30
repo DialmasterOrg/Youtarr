@@ -51,7 +51,7 @@ function shouldWriteVideoNfoFiles() {
 
 function shouldWriteVideoFanart() {
   const config = configModule.getConfig() || {};
-  return config.writeVideoFanart !== false;
+  return config.writeVideoFanart === true;
 }
 
 // Helper function to download channel thumbnail if needed
