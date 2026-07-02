@@ -51,6 +51,11 @@ function shouldWriteVideoNfoFiles() {
   return config.writeVideoNfoFiles !== false;
 }
 
+function shouldWriteVideoFanart() {
+  const config = configModule.getConfig() || {};
+  return config.writeVideoFanart === true;
+}
+
 // Helper function to download channel thumbnail if needed
 async function downloadChannelThumbnailIfMissing(channelId) {
   const channelThumbPath = path.join(
@@ -739,6 +744,28 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
     } catch (jsonErr) {
       logger.error({ err: jsonErr }, '[Post-Process] Error updating JSON file with final path');
       // Don't fail the process, but log the error
+    }
+
+    // Create fanart.jpg in video folder if enabled (for Plex background image on compatible clients)
+    // This complements the poster.jpg (which comes from channel thumbnail)
+    if (shouldWriteVideoFanart()) {
+      try {
+        const videoDir = path.dirname(finalVideoPath);
+        const videoBaseName = path.parse(finalVideoPath).name; // filename without extension
+        const finalImagePath = path.join(videoDir, `${videoBaseName}.jpg`);
+        const fanartPath = path.join(videoDir, `${videoBaseName}-fanart.jpg`);
+
+        // Copy the video thumbnail as fanart (if the thumbnail exists in the final location and -fanart doesn't already exist)
+        if (fs.existsSync(finalImagePath) && !fs.existsSync(fanartPath)) {
+          fs.copySync(finalImagePath, fanartPath);
+          logger.info({ fanartPath }, '[Post-Process] Created video fanart file');
+        } else {
+          logger.debug({ finalImagePath }, '[Post-Process] No image copied for fanart creation');
+        }
+      } catch (err) {
+        logger.warn({ err }, '[Post-Process] Error creating video fanart');
+        // Don't fail the process, but log the warning
+      }
     }
 
     // Copy channel thumbnail as poster.jpg to channel folder (must be done AFTER all moves)
