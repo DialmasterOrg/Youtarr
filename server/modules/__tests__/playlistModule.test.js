@@ -4,7 +4,7 @@ jest.mock('../../logger', () => ({
 }));
 jest.mock('../../models', () => ({
   Playlist: { findOne: jest.fn(), create: jest.fn(), update: jest.fn(), findAll: jest.fn() },
-  PlaylistVideo: { findAll: jest.fn(), bulkCreate: jest.fn(), update: jest.fn(), destroy: jest.fn() },
+  PlaylistVideo: { findAll: jest.fn(), bulkCreate: jest.fn(), update: jest.fn(), destroy: jest.fn(), count: jest.fn() },
   Channel: { findAll: jest.fn() },
 }));
 jest.mock('../channelModule', () => ({
@@ -42,6 +42,7 @@ describe('playlistModule', () => {
     // Now require the module — its top-level destructure picks up the mock.
     playlistModule = require('../playlistModule');
     ({ Playlist, PlaylistVideo, Channel } = require('../../models'));
+    PlaylistVideo.count.mockResolvedValue(0);
     channelModule = require('../channelModule');
     downloadModule = require('../downloadModule');
     youtubeApi = require('../youtubeApi');
@@ -480,7 +481,7 @@ describe('playlistModule', () => {
       expect(PlaylistVideo.destroy).not.toHaveBeenCalled();
     });
 
-    test('sets playlist video_count to the available (non-private) count', async () => {
+    test('sets playlist video_count from the tracked row count, not the fetched entry count', async () => {
       const update = jest.fn().mockResolvedValue(true);
       Playlist.findOne.mockResolvedValue({
         id: 1, playlist_id: 'PLabc', url: 'https://u',
@@ -491,6 +492,9 @@ describe('playlistModule', () => {
       PlaylistVideo.findAll.mockResolvedValue([]);
       PlaylistVideo.bulkCreate.mockResolvedValue([]);
       PlaylistVideo.destroy.mockResolvedValue(0);
+      // 198 rows already tracked from an earlier full fetch; this capped fetch
+      // returns only 1 entry and must not clobber the count down to 1.
+      PlaylistVideo.count.mockResolvedValue(198);
 
       const mockChild = new EventEmitter();
       mockChild.stdout = new EventEmitter();
@@ -500,15 +504,120 @@ describe('playlistModule', () => {
       await new Promise((resolve) => setImmediate(resolve));
       await new Promise((resolve) => setImmediate(resolve));
 
-      const lines = [
-        JSON.stringify({ id: 'v1', title: 'Public Video', duration: 300, playlist_count: 2 }),
-        JSON.stringify({ id: 'v2', title: null, duration: null, playlist_count: 2 }),
-      ].join('\n') + '\n';
-      mockChild.stdout.emit('data', lines);
+      mockChild.stdout.emit('data', JSON.stringify({ id: 'v1', title: 'Public Video', duration: 300, playlist_count: 198 }) + '\n');
       mockChild.emit('close', 0);
       await promise;
 
-      expect(update).toHaveBeenCalledWith(expect.objectContaining({ video_count: 1 }));
+      expect(PlaylistVideo.count).toHaveBeenCalledWith({ where: { playlist_id: 'PLabc' } });
+      expect(update).toHaveBeenCalledWith(expect.objectContaining({ video_count: 198 }));
+    });
+
+    test('caps a default fetch at the first 100 entries', async () => {
+      Playlist.findOne.mockResolvedValue({
+        id: 1, playlist_id: 'PLabc', url: 'https://u',
+        min_duration: null, max_duration: null, title_filter_regex: null,
+        update: jest.fn().mockResolvedValue(true),
+      });
+      PlaylistVideo.findAll.mockResolvedValue([]);
+      PlaylistVideo.bulkCreate.mockResolvedValue([]);
+
+      const mockChild = new EventEmitter();
+      mockChild.stdout = new EventEmitter();
+      mockChild.stderr = new EventEmitter();
+      childProcess.spawn.mockReturnValue(mockChild);
+      const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      mockChild.emit('close', 0);
+      await promise;
+
+      expect(childProcess.spawn).toHaveBeenCalledWith('yt-dlp', [
+        '--flat-playlist', '--dump-json', '--playlist-end', '100', 'https://u',
+      ]);
+    });
+
+    test('full fetch uses the InnerTube API path capped at 5000 entries', async () => {
+      Playlist.findOne.mockResolvedValue({
+        id: 1, playlist_id: 'PLabc', url: 'https://u',
+        min_duration: null, max_duration: null, title_filter_regex: null,
+        update: jest.fn().mockResolvedValue(true),
+      });
+      PlaylistVideo.findAll.mockResolvedValue([]);
+      PlaylistVideo.bulkCreate.mockResolvedValue([]);
+
+      const mockChild = new EventEmitter();
+      mockChild.stdout = new EventEmitter();
+      mockChild.stderr = new EventEmitter();
+      childProcess.spawn.mockReturnValue(mockChild);
+      const promise = playlistModule.fetchAllPlaylistVideos('PLabc', { fetchAll: true });
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      mockChild.emit('close', 0);
+      await promise;
+
+      expect(childProcess.spawn).toHaveBeenCalledWith('yt-dlp', [
+        '--flat-playlist', '--dump-json',
+        '--playlist-end', '5000',
+        '--extractor-args', 'youtubetab:skip=webpage',
+        'https://u',
+      ]);
+    });
+
+    test('rejects a second fetch while one is in progress for the same playlist', async () => {
+      Playlist.findOne.mockResolvedValue({
+        id: 1, playlist_id: 'PLabc', url: 'https://u',
+        min_duration: null, max_duration: null, title_filter_regex: null,
+        update: jest.fn().mockResolvedValue(true),
+      });
+      PlaylistVideo.findAll.mockResolvedValue([]);
+      PlaylistVideo.bulkCreate.mockResolvedValue([]);
+
+      const mockChild = new EventEmitter();
+      mockChild.stdout = new EventEmitter();
+      mockChild.stderr = new EventEmitter();
+      childProcess.spawn.mockReturnValue(mockChild);
+      const first = playlistModule.fetchAllPlaylistVideos('PLabc');
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      await expect(playlistModule.fetchAllPlaylistVideos('PLabc')).rejects.toThrow('FETCH_IN_PROGRESS');
+
+      mockChild.emit('close', 0);
+      await first;
+    });
+
+    test('allows a new fetch after a failed one clears the in-progress guard', async () => {
+      Playlist.findOne.mockResolvedValue({
+        id: 1, playlist_id: 'PLabc', url: 'https://u',
+        min_duration: null, max_duration: null, title_filter_regex: null,
+        update: jest.fn().mockResolvedValue(true),
+      });
+      PlaylistVideo.findAll.mockResolvedValue([]);
+      PlaylistVideo.bulkCreate.mockResolvedValue([]);
+
+      const failingChild = new EventEmitter();
+      failingChild.stdout = new EventEmitter();
+      failingChild.stderr = new EventEmitter();
+      childProcess.spawn.mockReturnValue(failingChild);
+      const failing = playlistModule.fetchAllPlaylistVideos('PLabc');
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+      failingChild.emit('close', 1);
+      await expect(failing).rejects.toThrow('NETWORK_ERROR');
+
+      const retryChild = new EventEmitter();
+      retryChild.stdout = new EventEmitter();
+      retryChild.stderr = new EventEmitter();
+      childProcess.spawn.mockReturnValue(retryChild);
+      const retry = playlistModule.fetchAllPlaylistVideos('PLabc');
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+      retryChild.emit('close', 0);
+      await retry;
+
+      expect(childProcess.spawn).toHaveBeenCalledTimes(2);
     });
   });
 

@@ -11,7 +11,18 @@ const youtubeApi = require('./youtubeApi');
 // back null for every entry.
 const UNAVAILABLE_TITLE_RE = /^\[(private|deleted|unavailable)\b[^\]]*\]$/i;
 
+// Regular refreshes (subscribe, cron, pre-download) fetch only the first page
+// of a playlist so they stay fast and deterministic; the explicit "Load More"
+// full fetch is capped like the channel Load More (channelModule).
+const DEFAULT_FETCH_LIMIT = 100;
+const MAX_LOAD_MORE_VIDEOS = 5000;
+
 class PlaylistModule {
+  constructor() {
+    // Concurrent fetches for the same playlist would race on row upserts and video_count.
+    this.activeFetches = new Set();
+  }
+
   isUnavailableTitle(title) {
     if (title == null) return true;
     const trimmed = String(title).trim();
@@ -85,11 +96,28 @@ class PlaylistModule {
     return Playlist.create(payload);
   }
 
-  async fetchAllPlaylistVideos(playlistId) {
+  async fetchAllPlaylistVideos(playlistId, { fetchAll = false } = {}) {
+    if (this.activeFetches.has(playlistId)) {
+      throw new Error('FETCH_IN_PROGRESS');
+    }
+    this.activeFetches.add(playlistId);
+    try {
+      return await this._fetchPlaylistVideos(playlistId, fetchAll);
+    } finally {
+      this.activeFetches.delete(playlistId);
+    }
+  }
+
+  async _fetchPlaylistVideos(playlistId, fetchAll) {
     const playlist = await Playlist.findOne({ where: { playlist_id: playlistId } });
     if (!playlist) throw new Error('PLAYLIST_NOT_FOUND');
 
-    const entries = await this._spawnFlatPlaylist(playlist.url);
+    const entries = await this._spawnFlatPlaylist(
+      playlist.url,
+      fetchAll
+        ? { playlistEnd: MAX_LOAD_MORE_VIDEOS, skipWebpage: true }
+        : { playlistEnd: DEFAULT_FETCH_LIMIT }
+    );
 
     const available = entries.filter((e) => !this.isUnavailableTitle(e.title));
 
@@ -164,12 +192,19 @@ class PlaylistModule {
       await PlaylistVideo.destroy({ where });
     }
 
+    // video_count comes from the tracked rows, not this fetch's entry count:
+    // a capped default fetch after a full "Load More" would otherwise clobber
+    // the count back down to the first page's size.
+    const totalTracked = await PlaylistVideo.count({
+      where: { playlist_id: playlist.playlist_id },
+    });
+
     // Backfill the playlist's own thumbnail from the first available entry's video
     // id when it is missing. yt-dlp's `--playlist-items 0` mode used by
     // getPlaylistInfo does not return a playlist-level thumbnail, leaving the
     // column null on initial subscribe. The first video's hqdefault is what
     // YouTube itself renders as the playlist cover.
-    const update = { lastFetched: new Date(), video_count: available.length };
+    const update = { lastFetched: new Date(), video_count: totalTracked };
     if (!playlist.thumbnail && available[0]?.id) {
       update.thumbnail = `https://i.ytimg.com/vi/${available[0].id}/hqdefault.jpg`;
     }
@@ -249,9 +284,20 @@ class PlaylistModule {
     }
   }
 
-  _spawnFlatPlaylist(url) {
+  // The webpage extraction path silently stops after the first 100 entries;
+  // skip=webpage pages the full playlist via the InnerTube API. If cookies are
+  // ever added here, an authenticated jar makes yt-dlp reject skip=webpage
+  // unless skip=authcheck is also passed.
+  _spawnFlatPlaylist(url, { playlistEnd, skipWebpage = false } = {}) {
     return new Promise((resolve, reject) => {
-      const args = ['--flat-playlist', '--dump-json', url];
+      const args = ['--flat-playlist', '--dump-json'];
+      if (playlistEnd != null) {
+        args.push('--playlist-end', String(playlistEnd));
+      }
+      if (skipWebpage) {
+        args.push('--extractor-args', 'youtubetab:skip=webpage');
+      }
+      args.push(url);
       const child = spawn('yt-dlp', args);
       let stdout = '';
       let stderr = '';
