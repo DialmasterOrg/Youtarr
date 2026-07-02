@@ -1240,7 +1240,7 @@ describe('videoDownloadPostProcessFiles', () => {
       await loadModule();
       await settleAsync();
 
-      expect(fs.copySync).toHaveBeenCalledWith(imagePath, fanartPath, { overwrite: true });
+      expect(fs.copySync).toHaveBeenCalledWith(imagePath, fanartPath);
       expect(logger.info).toHaveBeenCalledWith(
         { fanartPath },
         '[Post-Process] Created video fanart file'

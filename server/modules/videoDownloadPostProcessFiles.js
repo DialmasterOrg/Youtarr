@@ -753,12 +753,12 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
         const finalImagePath = path.join(videoDir, `${videoBaseName}.jpg`);
         const fanartPath = path.join(videoDir, `${videoBaseName}-fanart.jpg`);
 
-        // Copy the video thumbnail as fanart (if the image exists in the final location)
-        if (fs.existsSync(finalImagePath)) {
-          fs.copySync(finalImagePath, fanartPath, { overwrite: true });
+        // Copy the video thumbnail as fanart (if the thumbnail exists in the final location and -fanart doesn't already exist)
+        if (fs.existsSync(finalImagePath) && !fs.existsSync(fanartPath)) {
+          fs.copySync(finalImagePath, fanartPath);
           logger.info({ fanartPath }, '[Post-Process] Created video fanart file');
         } else {
-          logger.debug({ finalImagePath }, '[Post-Process] No image found for fanart creation');
+          logger.debug({ finalImagePath }, '[Post-Process] No image copied for fanart creation');
         }
       } catch (err) {
         logger.warn({ err }, '[Post-Process] Error creating video fanart');
