@@ -7,6 +7,7 @@ const logger = require('../../logger');
 const MessageEmitter = require('../messageEmitter');
 const filesystem = require('../filesystem');
 const { JobVideoDownload } = require('../../models');
+const { VIDEO_PERSISTED_MARKER } = require('../constants/outputMarkers');
 
 const PROGRESS_THROTTLE_MS = 250;
 
@@ -40,6 +41,15 @@ class YtdlpOutputRouter {
         logger.info({ source: 'yt-dlp' }, line);
 
         this.timeoutController.noteLine(line);
+
+        // Control marker from the per-video post-processor: its DB rows are
+        // committed, so tell listing pages to refetch. Not yt-dlp output;
+        // skip progress parsing for this line.
+        if (line.startsWith(VIDEO_PERSISTED_MARKER)) {
+          const youtubeId = line.slice(VIDEO_PERSISTED_MARKER.length).trim();
+          MessageEmitter.emitMessage('broadcast', null, 'download', 'videosUpdated', { youtubeId });
+          return;
+        }
 
         // Track current video being processed
         if (line.includes('[youtube] Extracting URL:') && !line.includes('[youtube:tab]')) {

@@ -8,6 +8,8 @@ const tempPathManager = require('./download/tempPathManager');
 const downloadSettingsResolver = require('./download/downloadSettingsResolver');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const { JobVideoDownload } = require('../models');
+const videoPersistence = require('./videoPersistence');
+const { VIDEO_PERSISTED_MARKER } = require('./constants/outputMarkers');
 const logger = require('../logger');
 const { buildChannelPath, cleanupEmptyParents, moveWithRetries, ensureDirWithRetries } = require('./filesystem');
 
@@ -747,6 +749,22 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
       : path.dirname(path.dirname(finalVideoPath));
     if (jsonData.channel_id) {
       await copyChannelPosterIfNeeded(jsonData.channel_id, finalChannelFolderPath);
+    }
+
+    // Save to the videos + channelvideos tables now so listing pages can show
+    // this video mid-batch. The end-of-batch save still runs; a failure here
+    // must not fail the download.
+    if (activeJobId) {
+      try {
+        const persisted = await videoPersistence.persistDownloadedVideoForJob({ jobId: activeJobId, youtubeId: id });
+        if (persisted) {
+          // Control marker, not a log line: stdout flows through yt-dlp to
+          // YtdlpOutputRouter, which broadcasts videosUpdated to the listing pages.
+          process.stdout.write(`${VIDEO_PERSISTED_MARKER}${id}\n`);
+        }
+      } catch (err) {
+        logger.error({ err, id }, 'Error persisting downloaded video during post-processing');
+      }
     }
 
     // Mark this video as completed in the JobVideoDownload tracking table
