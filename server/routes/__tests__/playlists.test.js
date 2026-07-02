@@ -913,8 +913,51 @@ describe('POST /api/playlists/:playlistId/refresh', () => {
 
     await handler(req, res);
 
-    expect(deps.playlistModule.fetchAllPlaylistVideos).toHaveBeenCalledWith('PLtest123');
+    expect(deps.playlistModule.fetchAllPlaylistVideos).toHaveBeenCalledWith('PLtest123', { fetchAll: false });
     expect(res.json).toHaveBeenCalledWith({ fetched: 10 });
+  });
+
+  test('passes fetchAll to the module when the body requests a full fetch', async () => {
+    const deps = buildDeps();
+    deps.playlistModule.fetchAllPlaylistVideos.mockResolvedValue(4200);
+    deps.models.Playlist.findOne.mockResolvedValue(makePlaylist());
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/refresh', deps);
+    const req = { params: { playlistId: 'PLtest123' }, body: { fetchAll: true }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.playlistModule.fetchAllPlaylistVideos).toHaveBeenCalledWith('PLtest123', { fetchAll: true });
+    expect(res.json).toHaveBeenCalledWith({ fetched: 4200 });
+  });
+
+  test('returns 400 when fetchAll is not a boolean', async () => {
+    const deps = buildDeps();
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/refresh', deps);
+    const req = { params: { playlistId: 'PLtest123' }, body: { fetchAll: 'yes' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'fetchAll must be a boolean' });
+    expect(deps.playlistModule.fetchAllPlaylistVideos).not.toHaveBeenCalled();
+  });
+
+  test('returns 409 when a fetch is already in progress', async () => {
+    const deps = buildDeps();
+    deps.playlistModule.fetchAllPlaylistVideos.mockRejectedValue(new Error('FETCH_IN_PROGRESS'));
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/refresh', deps);
+    const req = { params: { playlistId: 'PLtest123' }, body: { fetchAll: true }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith({ error: 'A fetch is already in progress for this playlist' });
   });
 
   test('returns 500 on fetch error', async () => {

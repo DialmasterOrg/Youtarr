@@ -285,9 +285,15 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     }
   });
 
+  // fetchAll: true switches from the fast first-page refresh to the full
+  // "Load More" fetch (up to 5000 videos), which can run for minutes.
   router.post('/api/playlists/:playlistId/refresh', verifyToken, async (req, res) => {
+    const fetchAll = req.body?.fetchAll;
+    if (fetchAll !== undefined && typeof fetchAll !== 'boolean') {
+      return res.status(400).json({ error: 'fetchAll must be a boolean' });
+    }
     try {
-      const count = await playlistModule.fetchAllPlaylistVideos(req.params.playlistId);
+      const count = await playlistModule.fetchAllPlaylistVideos(req.params.playlistId, { fetchAll: !!fetchAll });
       const p = await Playlist.findOne({ where: { playlist_id: req.params.playlistId } });
       if (p) {
         mediaServers.mediaServerSync.syncPlaylist(p.id).catch(logBgFailure(req, p.playlist_id, 'playlist sync'));
@@ -295,6 +301,9 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       }
       res.json({ fetched: count });
     } catch (err) {
+      if (err.message === 'FETCH_IN_PROGRESS') {
+        return res.status(409).json({ error: 'A fetch is already in progress for this playlist' });
+      }
       req.log.error({ err }, 'refresh failed');
       res.status(500).json({ error: 'Failed to refresh playlist' });
     }
