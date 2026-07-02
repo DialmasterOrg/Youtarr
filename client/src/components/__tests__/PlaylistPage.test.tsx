@@ -11,6 +11,7 @@ const mockToggleAutoDownload = jest.fn();
 const mockMarkVideoDeleted = jest.fn();
 const mockRefetchMeta = jest.fn();
 const mockFetchAllVideos = jest.fn();
+let mockLocationState: unknown = null;
 
 const mockVideo: PlaylistVideo = {
   id: 1,
@@ -60,6 +61,13 @@ jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
   useParams: () => ({ id: 'PL1' }),
   useNavigate: () => mockNavigate,
+  useLocation: () => ({
+    pathname: '/playlist/PL1',
+    search: '',
+    hash: '',
+    state: mockLocationState,
+    key: 'test',
+  }),
 }));
 
 jest.mock('../../hooks/useConfig', () => ({
@@ -373,5 +381,35 @@ describe('PlaylistPage Load More videos', () => {
     // an inline Alert in the page flow does not.
     const toast = await screen.findByRole('status');
     expect(toast).toHaveTextContent('All available videos loaded');
+  });
+});
+
+describe('PlaylistPage restored-subscription notice', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockLocationState = null;
+  });
+
+  afterEach(() => {
+    mockLocationState = null;
+  });
+
+  test('shows a snackbar and clears router state when arriving from a restore', async () => {
+    mockLocationState = { restored: true };
+
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    expect(
+      await screen.findByText('Playlist restored with its previous settings')
+    ).toBeInTheDocument();
+    expect(mockNavigate).toHaveBeenCalledWith('/playlist/PL1', { replace: true, state: null });
+  });
+
+  test('shows no restore notice on a normal visit', () => {
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    expect(
+      screen.queryByText('Playlist restored with its previous settings')
+    ).not.toBeInTheDocument();
   });
 });

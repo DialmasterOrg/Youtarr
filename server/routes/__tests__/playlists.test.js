@@ -60,7 +60,9 @@ const buildDeps = (overrides = {}) => ({
   models: {
     Playlist: {
       findAndCountAll: jest.fn(),
-      findOne: jest.fn(),
+      // Most :playlistId routes guard on an enabled playlist existing; default
+      // to one so tests only override findOne for the not-found/soft-deleted cases.
+      findOne: jest.fn().mockResolvedValue(makePlaylist()),
       ...overrides.Playlist,
     },
     PlaylistVideo: {
@@ -167,9 +169,27 @@ describe('GET /api/playlists/:playlistId', () => {
     await handler(req, res);
 
     expect(deps.models.Playlist.findOne).toHaveBeenCalledWith({
-      where: { playlist_id: 'PLtest123' },
+      where: { playlist_id: 'PLtest123', enabled: true },
     });
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ playlist }));
+  });
+
+  test('is not found when the playlist is soft-deleted', async () => {
+    const deps = buildDeps();
+    // The enabled-only lookup returns nothing for a soft-deleted playlist.
+    deps.models.Playlist.findOne.mockResolvedValue(null);
+
+    const handler = getHandler('get', '/api/playlists/:playlistId', deps);
+    const req = { params: { playlistId: 'PLdeleted' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.models.Playlist.findOne).toHaveBeenCalledWith({
+      where: { playlist_id: 'PLdeleted', enabled: true },
+    });
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Playlist not found' });
   });
 
   test('returns 404 when playlist not found', async () => {
@@ -329,7 +349,7 @@ describe('POST /api/playlists', () => {
     const info = { playlist_id: 'PLtest', title: 'Test', video_count: 5 };
     const created = makePlaylist();
     deps.playlistModule.getPlaylistInfo.mockResolvedValue(info);
-    deps.playlistModule.upsertPlaylist.mockResolvedValue(created);
+    deps.playlistModule.upsertPlaylist.mockResolvedValue({ playlist: created, restored: false });
     deps.playlistModule.fetchAllPlaylistVideos.mockResolvedValue(5);
 
     const handler = getHandler('post', '/api/playlists', deps);
@@ -342,13 +362,35 @@ describe('POST /api/playlists', () => {
     expect(deps.playlistModule.upsertPlaylist).toHaveBeenCalledWith(info, { enabled: true, settings: {} });
     expect(deps.playlistModule.fetchAllPlaylistVideos).toHaveBeenCalledWith(created.playlist_id);
     expect(res.status).toHaveBeenCalledWith(201);
-    expect(res.json).toHaveBeenCalledWith({ playlist: created });
+    expect(res.json).toHaveBeenCalledWith({ playlist: created, restored: false });
+  });
+
+  test('restores a soft-deleted playlist and reports restored without touching its settings', async () => {
+    const deps = buildDeps();
+    const restoredPlaylist = makePlaylist();
+    deps.playlistModule.getPlaylistInfo.mockResolvedValue({ playlist_id: 'PLtest123' });
+    deps.playlistModule.upsertPlaylist.mockResolvedValue({ playlist: restoredPlaylist, restored: true });
+    deps.playlistModule.fetchAllPlaylistVideos.mockResolvedValue(5);
+
+    const handler = getHandler('post', '/api/playlists', deps);
+    const req = {
+      body: { url: 'https://youtube.com/playlist?list=PLtest123', settings: { default_sub_folder: 'Music' } },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({ playlist: restoredPlaylist, restored: true });
+    // Discarded settings must not register their subfolder.
+    expect(deps.subfolderModule.register).not.toHaveBeenCalled();
   });
 
   test('registers a real default_sub_folder so it appears in every picker', async () => {
     const deps = buildDeps();
     deps.playlistModule.getPlaylistInfo.mockResolvedValue({ playlist_id: 'PLtest' });
-    deps.playlistModule.upsertPlaylist.mockResolvedValue(makePlaylist());
+    deps.playlistModule.upsertPlaylist.mockResolvedValue({ playlist: makePlaylist(), restored: false });
     deps.playlistModule.fetchAllPlaylistVideos.mockResolvedValue(0);
 
     const handler = getHandler('post', '/api/playlists', deps);
@@ -898,6 +940,24 @@ describe('GET /api/playlists/:playlistId/videos', () => {
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: 'Failed to list videos' });
   });
+
+  test('returns 404 for a soft-deleted playlist without listing videos', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(null);
+
+    const handler = getHandler('get', '/api/playlists/:playlistId/videos', deps);
+    const req = { params: { playlistId: 'PLdeleted' }, query: {}, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.models.Playlist.findOne).toHaveBeenCalledWith({
+      where: { playlist_id: 'PLdeleted', enabled: true },
+    });
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Playlist not found' });
+    expect(deps.models.PlaylistVideo.findAndCountAll).not.toHaveBeenCalled();
+  });
 });
 
 describe('POST /api/playlists/:playlistId/refresh', () => {
@@ -943,6 +1003,24 @@ describe('POST /api/playlists/:playlistId/refresh', () => {
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({ error: 'fetchAll must be a boolean' });
+    expect(deps.playlistModule.fetchAllPlaylistVideos).not.toHaveBeenCalled();
+  });
+
+  test('returns 404 for a soft-deleted playlist without fetching', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(null);
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/refresh', deps);
+    const req = { params: { playlistId: 'PLdeleted' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.models.Playlist.findOne).toHaveBeenCalledWith({
+      where: { playlist_id: 'PLdeleted', enabled: true },
+    });
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Playlist not found' });
     expect(deps.playlistModule.fetchAllPlaylistVideos).not.toHaveBeenCalled();
   });
 
@@ -996,13 +1074,16 @@ describe('POST /api/playlists/:playlistId/sync', () => {
     releaseSync();
   });
 
-  test('returns 404 when the playlist does not exist', async () => {
+  test('returns 404 when the playlist does not exist or is soft-deleted', async () => {
     const deps = buildDeps({
       Playlist: { findOne: jest.fn().mockResolvedValue(null) },
     });
     const handler = getHandler('post', '/api/playlists/:playlistId/sync', deps);
     const res = createResponse();
     await handler({ params: { playlistId: 'nope' }, log: loggerMock }, res);
+    expect(deps.models.Playlist.findOne).toHaveBeenCalledWith({
+      where: { playlist_id: 'nope', enabled: true },
+    });
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith({ error: 'Playlist not found' });
   });
@@ -1057,7 +1138,7 @@ describe('POST /api/playlists/:playlistId/download', () => {
     expect(res.json).toHaveBeenCalledWith({ status: 'accepted', message: 'Playlist download started' });
   });
 
-  test('returns 404 when playlist not found', async () => {
+  test('returns 404 when playlist not found or soft-deleted, without starting downloads', async () => {
     const deps = buildDeps();
     deps.models.Playlist.findOne.mockResolvedValue(null);
 
@@ -1067,6 +1148,9 @@ describe('POST /api/playlists/:playlistId/download', () => {
 
     await handler(req, res);
 
+    expect(deps.models.Playlist.findOne).toHaveBeenCalledWith({
+      where: { playlist_id: 'nope', enabled: true },
+    });
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith({ error: 'Playlist not found' });
     expect(deps.downloadModule.doPlaylistDownloads).not.toHaveBeenCalled();
@@ -1362,6 +1446,21 @@ describe('POST /api/playlists/:playlistId/regenerate-m3u', () => {
 });
 
 describe('POST /api/playlists/:playlistId/videos/:ytId/ignore', () => {
+  test('returns 404 for a soft-deleted playlist without updating the row', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(null);
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/videos/:ytId/ignore', deps);
+    const req = { params: { playlistId: 'PLdeleted', ytId: 'v1' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Playlist not found' });
+    expect(deps.models.PlaylistVideo.update).not.toHaveBeenCalled();
+  });
+
   test('marks a video as ignored', async () => {
     const deps = buildDeps();
     deps.models.PlaylistVideo.update.mockResolvedValue([1]);
@@ -1395,6 +1494,21 @@ describe('POST /api/playlists/:playlistId/videos/:ytId/ignore', () => {
 });
 
 describe('POST /api/playlists/:playlistId/videos/:ytId/unignore', () => {
+  test('returns 404 for a soft-deleted playlist without updating the row', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(null);
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/videos/:ytId/unignore', deps);
+    const req = { params: { playlistId: 'PLdeleted', ytId: 'v1' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Playlist not found' });
+    expect(deps.models.PlaylistVideo.update).not.toHaveBeenCalled();
+  });
+
   test('removes ignored status from a video', async () => {
     const deps = buildDeps();
     deps.models.PlaylistVideo.update.mockResolvedValue([1]);

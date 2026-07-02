@@ -25,6 +25,8 @@ const mockAddChannel = jest.fn();
 const mockQueueChannelForDeletion = jest.fn();
 const mockUndoChanges = jest.fn();
 const mockSaveChanges = jest.fn();
+const mockUnsubscribePlaylist = jest.fn();
+const mockRefetchPlaylists = jest.fn();
 
 jest.mock('../Subscriptions/hooks/useChannelList', () => ({
   useChannelList: jest.fn(),
@@ -123,9 +125,19 @@ jest.mock('../Subscriptions/components/AddPlaylistDialog', () => ({
 
 jest.mock('../Subscriptions/components/PlaylistListBlock', () => ({
   __esModule: true,
-  default: function MockPlaylistListBlock() {
+  default: function MockPlaylistListBlock({ playlists, onDelete }: any) {
     const React = require('react');
-    return React.createElement('div', { 'data-testid': 'playlist-list-block' });
+    return React.createElement(
+      'div',
+      { 'data-testid': 'playlist-list-block' },
+      (playlists || []).map((playlist: any) =>
+        React.createElement('button', {
+          key: playlist.playlist_id,
+          'data-testid': `delete-playlist-${playlist.playlist_id}`,
+          onClick: () => onDelete && onDelete(playlist),
+        }, `delete-${playlist.title}`)
+      )
+    );
   }
 }));
 
@@ -133,10 +145,15 @@ jest.mock('../../hooks/usePlaylistList', () => ({
   usePlaylistList: jest.fn(),
 }));
 
+jest.mock('../../hooks/usePlaylistMutations', () => ({
+  usePlaylistMutations: jest.fn(),
+}));
+
 const { useChannelList } = require('../Subscriptions/hooks/useChannelList');
 const { useChannelMutations } = require('../Subscriptions/hooks/useChannelMutations');
 const { useConfig } = require('../../hooks/useConfig');
 const { usePlaylistList } = require('../../hooks/usePlaylistList');
+const { usePlaylistMutations } = require('../../hooks/usePlaylistMutations');
 
 describe('Subscriptions Component', () => {
   const mockToken = 'test-token';
@@ -206,7 +223,13 @@ describe('Subscriptions Component', () => {
       total: 0,
       loading: false,
       error: null,
-      refetch: jest.fn(),
+      refetch: mockRefetchPlaylists,
+    });
+
+    usePlaylistMutations.mockReturnValue({
+      unsubscribe: mockUnsubscribePlaylist,
+      error: null,
+      pending: false,
     });
   });
 
@@ -634,6 +657,91 @@ describe('Subscriptions Component', () => {
         expect(screen.queryByText('Remove channel?')).not.toBeInTheDocument();
       });
       expect(mockQueueChannelForDeletion).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Deleting Playlists', () => {
+    const mockPlaylists = [
+      { id: 1, playlist_id: 'PL1', title: 'Playlist One' },
+      { id: 2, playlist_id: 'PL2', title: 'Playlist Two' },
+    ];
+
+    beforeEach(() => {
+      mockLocationState = { tab: 'playlists' };
+      usePlaylistList.mockReturnValue({
+        playlists: mockPlaylists,
+        total: 2,
+        loading: false,
+        error: null,
+        refetch: mockRefetchPlaylists,
+      });
+    });
+
+    test('shows the confirmation dialog when the playlist delete button is clicked', async () => {
+      const user = userEvent.setup();
+      renderSubscriptions();
+
+      await user.click(screen.getByTestId('delete-playlist-PL1'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Remove playlist?')).toBeInTheDocument();
+      });
+      expect(screen.getByText(/existing videos/i)).toBeInTheDocument();
+    });
+
+    test('unsubscribes and refreshes the list when confirmed', async () => {
+      const user = userEvent.setup();
+      mockUnsubscribePlaylist.mockResolvedValue(true);
+      renderSubscriptions();
+
+      await user.click(screen.getByTestId('delete-playlist-PL1'));
+      await waitFor(() => {
+        expect(screen.getByText('Remove playlist?')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole('button', { name: /^remove$/i }));
+
+      await waitFor(() => {
+        expect(mockUnsubscribePlaylist).toHaveBeenCalledWith('PL1');
+      });
+      await waitFor(() => {
+        expect(mockRefetchPlaylists).toHaveBeenCalled();
+      });
+    });
+
+    test('does not unsubscribe when cancelled', async () => {
+      const user = userEvent.setup();
+      renderSubscriptions();
+
+      await user.click(screen.getByTestId('delete-playlist-PL1'));
+      await waitFor(() => {
+        expect(screen.getByText('Remove playlist?')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole('button', { name: /cancel/i }));
+
+      await waitFor(() => {
+        expect(screen.queryByText('Remove playlist?')).not.toBeInTheDocument();
+      });
+      expect(mockUnsubscribePlaylist).not.toHaveBeenCalled();
+      expect(mockRefetchPlaylists).not.toHaveBeenCalled();
+    });
+
+    test('does not refresh the list when unsubscribe fails', async () => {
+      const user = userEvent.setup();
+      mockUnsubscribePlaylist.mockResolvedValue(false);
+      renderSubscriptions();
+
+      await user.click(screen.getByTestId('delete-playlist-PL1'));
+      await waitFor(() => {
+        expect(screen.getByText('Remove playlist?')).toBeInTheDocument();
+      });
+      await user.click(screen.getByRole('button', { name: /^remove$/i }));
+
+      await waitFor(() => {
+        expect(mockUnsubscribePlaylist).toHaveBeenCalledWith('PL1');
+      });
+      expect(mockRefetchPlaylists).not.toHaveBeenCalled();
     });
   });
 

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -142,6 +142,17 @@ function PlaylistPage({ token }: PlaylistPageProps) {
   const showSnackbar = useCallback((message: string, severity: SnackbarState['severity'] = 'success') => {
     setSnackbar({ open: true, message, severity });
   }, []);
+
+  // A re-subscribe arrives with router state from AddPlaylistDialog. Show the
+  // notice once, then clear the state so refresh or back doesn't repeat it.
+  const location = useLocation();
+  useEffect(() => {
+    const navState = location.state as { restored?: boolean } | null;
+    if (navState?.restored) {
+      showSnackbar('Playlist restored with its previous settings');
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.pathname, location.state, navigate, showSnackbar]);
 
   const handleAction = useCallback(
     async (label: string, action: () => Promise<unknown>, successMessage?: string): Promise<boolean> => {
