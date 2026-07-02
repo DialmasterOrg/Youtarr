@@ -509,6 +509,36 @@ describe('DownloadSettingsDialog', () => {
     });
   });
 
+  describe('hideRedownloadOption', () => {
+    test('hides the re-download toggle when hideRedownloadOption is set', () => {
+      render(<DownloadSettingsDialog {...defaultProps} hideRedownloadOption />);
+
+      const toggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
+      fireEvent.click(toggle);
+
+      expect(
+        screen.queryByLabelText('Allow re-downloading previously fetched videos')
+      ).not.toBeInTheDocument();
+    });
+
+    test('never emits allowRedownload when hidden, even with missing videos', () => {
+      // missingVideoCount > 0 normally auto-enables the re-download toggle;
+      // with the option hidden that path must stay off too.
+      render(
+        <DownloadSettingsDialog
+          {...defaultProps}
+          hideRedownloadOption
+          missingVideoCount={3}
+          mode="manual"
+        />
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /Start Download/i }));
+
+      expect(mockOnConfirm).toHaveBeenCalledWith(null);
+    });
+  });
+
   describe('Confirm Action', () => {
     test('calls onConfirm with settings when custom settings enabled', () => {
       render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);

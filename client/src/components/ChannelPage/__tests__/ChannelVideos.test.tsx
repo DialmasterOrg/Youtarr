@@ -204,6 +204,23 @@ jest.mock('../ChannelVideosDialogs', () => ({
   }
 }));
 
+jest.mock('../DownloadAllVideosDialog', () => ({
+  __esModule: true,
+  default: function MockDownloadAllVideosDialog(props: {
+    open: boolean;
+    tabType: string;
+    tabLabel: string;
+  }) {
+    const React = require('react');
+    return React.createElement('div', {
+      'data-testid': 'download-all-dialog',
+      'data-open': String(props.open),
+      'data-tab-type': props.tabType,
+      'data-tab-label': props.tabLabel,
+    });
+  }
+}));
+
 // Mock custom hooks
 const mockRefetchVideos = jest.fn();
 const mockRefreshVideos = jest.fn();
@@ -410,6 +427,20 @@ describe('ChannelVideos Component', () => {
       ).not.toBeInTheDocument();
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
       expect(screen.getByTestId('video-list-empty-state')).toBeInTheDocument();
+    });
+  });
+
+  describe('Download All', () => {
+    test('the header button opens the download-all dialog for the active tab', () => {
+      renderChannelVideos();
+
+      expect(screen.getByTestId('download-all-dialog')).toHaveAttribute('data-open', 'false');
+
+      fireEvent.click(screen.getByTestId('channel-download-all-button'));
+
+      const dialog = screen.getByTestId('download-all-dialog');
+      expect(dialog).toHaveAttribute('data-open', 'true');
+      expect(dialog).toHaveAttribute('data-tab-type', 'videos');
     });
   });
 

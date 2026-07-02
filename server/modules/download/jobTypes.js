@@ -14,12 +14,21 @@ const CHANNEL_DOWNLOAD_LABEL = 'Channel Downloads';
 // Playlist jobs are labelled `Playlist: <title>` so they are distinguishable in
 // the activity view. The title is dynamic, so detection matches on the prefix.
 const PLAYLIST_DOWNLOAD_LABEL_PREFIX = 'Playlist: ';
+// "Download all videos for a channel" jobs. Must NOT contain
+// CHANNEL_DOWNLOAD_LABEL: isDownloadJob and the /triggerchanneldownloads
+// already-running guard match that substring, and a download-all job is a
+// URL-list job, not a channel/tab sweep.
+const CHANNEL_DOWNLOAD_ALL_LABEL_PREFIX = 'Channel Download All: ';
 
-// True for a fixed-URL-list download (manual or playlist), as opposed to a
-// channel/tab download.
+// True for a fixed-URL-list download (manual, playlist, or channel
+// download-all), as opposed to a channel/tab download.
 function isSpecificUrlDownloadJob(jobType) {
   if (!jobType) return false;
-  return jobType.includes(MANUAL_DOWNLOAD_LABEL) || jobType.startsWith(PLAYLIST_DOWNLOAD_LABEL_PREFIX);
+  return (
+    jobType.includes(MANUAL_DOWNLOAD_LABEL) ||
+    jobType.startsWith(PLAYLIST_DOWNLOAD_LABEL_PREFIX) ||
+    jobType.startsWith(CHANNEL_DOWNLOAD_ALL_LABEL_PREFIX)
+  );
 }
 
 // True for any download job (channel, manual, or playlist). Gates
@@ -35,11 +44,26 @@ function playlistJobLabel(playlist) {
   return `${PLAYLIST_DOWNLOAD_LABEL_PREFIX}${playlist.title || playlist.playlist_id}`;
 }
 
+// Build the activity-view job label for a channel download-all job.
+function channelDownloadAllJobLabel(channel) {
+  return `${CHANNEL_DOWNLOAD_ALL_LABEL_PREFIX}${channel.title || channel.channel_id}`;
+}
+
+// True for a channel download-all job. These jobs are exempt from the
+// absolute runtime cap (large channels legitimately take days).
+function isChannelDownloadAllJob(jobType) {
+  if (!jobType) return false;
+  return jobType.startsWith(CHANNEL_DOWNLOAD_ALL_LABEL_PREFIX);
+}
+
 module.exports = {
   MANUAL_DOWNLOAD_LABEL,
   CHANNEL_DOWNLOAD_LABEL,
   PLAYLIST_DOWNLOAD_LABEL_PREFIX,
+  CHANNEL_DOWNLOAD_ALL_LABEL_PREFIX,
   isSpecificUrlDownloadJob,
   isDownloadJob,
   playlistJobLabel,
+  channelDownloadAllJobLabel,
+  isChannelDownloadAllJob,
 };

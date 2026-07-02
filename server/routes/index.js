@@ -22,6 +22,7 @@ const playlistModule = require('../modules/playlistModule');
 const m3uGenerator = require('../modules/m3uGenerator');
 const mediaServers = require('../modules/mediaServers');
 const channelSettingsModule = require('../modules/channelSettingsModule');
+const channelDownloadAllModule = require('../modules/channelDownloadAllModule');
 const ratingMapper = require('../modules/ratingMapper');
 const subfolderModule = require('../modules/subfolderModule');
 const models = require('../models');
@@ -70,7 +71,7 @@ function registerRoutes(app, deps) {
   app.use(createConfigRoutes({ verifyToken, configModule, validateEnvAuthCredentials, isWslEnvironment, filenamePreviewRateLimiter }));
 
   // Channel routes
-  app.use(createChannelRoutes({ verifyToken, channelModule, archiveModule }));
+  app.use(createChannelRoutes({ verifyToken, channelModule, archiveModule, channelDownloadAllModule, ratingMapper }));
 
   // Video routes
   app.use(createVideoRoutes({ verifyToken, videosModule, downloadModule, videoOembedEnricher }));
