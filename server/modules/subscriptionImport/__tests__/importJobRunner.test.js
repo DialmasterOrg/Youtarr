@@ -27,6 +27,9 @@ describe('importJobRunner.runImport', () => {
         findOne: jest.fn().mockResolvedValue(null), // not found = new channel
         update: jest.fn().mockResolvedValue([1]),
       },
+      subfolderModule: {
+        register: jest.fn().mockResolvedValue(undefined),
+      },
     };
   });
 
@@ -157,6 +160,36 @@ describe('importJobRunner.runImport', () => {
       { video_quality: '1080p', sub_folder: 'custom', default_rating: 'PG' },
       { skipTabDetection: true }
     );
+  });
+
+  test('registers a real imported subfolder in the registry', async () => {
+    const channels = [
+      {
+        channelId: 'UC_settings_test',
+        url: 'https://www.youtube.com/channel/UC_settings_test',
+        title: 'Settings Channel',
+        settings: { subFolder: 'custom', autoDownloadEnabled: true, downloadType: 'videos' },
+      },
+    ];
+    activeJob = makeActiveJob(1);
+    await runImport(deps, activeJob, channels);
+
+    expect(deps.subfolderModule.register).toHaveBeenCalledWith('custom');
+  });
+
+  test('does not register a null (root) imported subfolder', async () => {
+    const channels = [
+      {
+        channelId: 'UC_root_test',
+        url: 'https://www.youtube.com/channel/UC_root_test',
+        title: 'Root Channel',
+        settings: { subFolder: null, autoDownloadEnabled: true, downloadType: 'videos' },
+      },
+    ];
+    activeJob = makeActiveJob(1);
+    await runImport(deps, activeJob, channels);
+
+    expect(deps.subfolderModule.register).not.toHaveBeenCalled();
   });
 
   test('forwards an explicit null subFolder (No Subfolder / root) to initialSettings', async () => {

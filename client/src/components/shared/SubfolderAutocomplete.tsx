@@ -14,6 +14,7 @@ import {
   isExplicitlyRoot,
 } from '../../utils/channelHelpers';
 import { AddSubfolderDialog } from './AddSubfolderDialog';
+import { addSubfolderPrefix, stripSubfolderPrefix } from '../../utils/subfolderDisplay';
 
 /**
  * Represents an option in the subfolder autocomplete
@@ -47,6 +48,8 @@ interface SubfolderAutocompleteProps {
   helperText?: string;
   /** Label for the input */
   label?: string;
+  /** Optional callback to persist a newly added subfolder (e.g. via API) */
+  createSubfolder?: (name: string) => Promise<void>;
 }
 
 const ADD_NEW_SENTINEL = '__ADD_NEW__';
@@ -68,6 +71,7 @@ export function SubfolderAutocomplete({
   loading = false,
   helperText,
   label = 'Subfolder',
+  createSubfolder,
 }: SubfolderAutocompleteProps) {
   // State for the Add Subfolder dialog
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -160,8 +164,8 @@ export function SubfolderAutocomplete({
 
     // Add existing subfolders (strip __ prefix from display, store clean value)
     allSubfolders.forEach((folder) => {
-      const cleanValue = folder.replace(/^__/, '');
-      const displayLabel = folder.startsWith('__') ? folder : `__${folder}`;
+      const cleanValue = stripSubfolderPrefix(folder);
+      const displayLabel = addSubfolderPrefix(folder);
       opts.push({
         label: displayLabel,
         value: cleanValue,
@@ -261,12 +265,16 @@ export function SubfolderAutocomplete({
 
   // Handle new subfolder addition from dialog
   const handleAddSubfolder = (newName: string) => {
-    // Add to local list with __ prefix
-    setLocalSubfolders((prev) => [...prev, `__${newName}`]);
-    // Set as the selected value
+    // Optimistically show it immediately.
+    setLocalSubfolders((prev) => [...prev, addSubfolderPrefix(newName)]);
     onChange(newName);
-    // Close dialog
     setAddDialogOpen(false);
+    // Persist so it survives navigation and is reusable everywhere.
+    if (createSubfolder) {
+      createSubfolder(newName).catch((err) => {
+        console.error('Failed to persist subfolder:', err);
+      });
+    }
   };
 
   // Convert the current option value to a string for Select
@@ -379,6 +387,7 @@ export function SubfolderAutocomplete({
           Radix Dialog has set body pointer-events to none. */}
       <button
         type="button"
+        aria-label="Open add subfolder dialog"
         onClick={() => { setIsOpen(false); setPendingAddDialog(true); }}
         style={{
           marginTop: 4,

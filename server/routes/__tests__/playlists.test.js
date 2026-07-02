@@ -50,6 +50,10 @@ const buildDeps = (overrides = {}) => ({
     validateSubFolder: jest.fn().mockReturnValue({ valid: true }),
     ...overrides.channelSettingsModule,
   },
+  subfolderModule: {
+    register: jest.fn().mockResolvedValue(undefined),
+    ...overrides.subfolderModule,
+  },
   // Real ratingMapper: it is a pure module with no DB/IO deps, so route tests
   // exercise the actual rating validation/normalization.
   ratingMapper: require('../../modules/ratingMapper'),
@@ -341,6 +345,24 @@ describe('POST /api/playlists', () => {
     expect(res.json).toHaveBeenCalledWith({ playlist: created });
   });
 
+  test('registers a real default_sub_folder so it appears in every picker', async () => {
+    const deps = buildDeps();
+    deps.playlistModule.getPlaylistInfo.mockResolvedValue({ playlist_id: 'PLtest' });
+    deps.playlistModule.upsertPlaylist.mockResolvedValue(makePlaylist());
+    deps.playlistModule.fetchAllPlaylistVideos.mockResolvedValue(0);
+
+    const handler = getHandler('post', '/api/playlists', deps);
+    const req = {
+      body: { url: 'https://youtube.com/playlist?list=PLtest', settings: { default_sub_folder: 'Music' } },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.subfolderModule.register).toHaveBeenCalledWith('Music');
+  });
+
   test('returns 400 when url is missing', async () => {
     const deps = buildDeps();
     const handler = getHandler('post', '/api/playlists', deps);
@@ -560,6 +582,23 @@ describe('PUT /api/playlists/:playlistId/settings', () => {
     expect(res.json).toHaveBeenCalledWith({ settings: { video_quality: '720p', min_duration: 60 } });
   });
 
+  test('registers a real default_sub_folder when settings are updated', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(makePlaylist());
+
+    const handler = getHandler('put', '/api/playlists/:playlistId/settings', deps);
+    const req = {
+      params: { playlistId: 'PLtest123' },
+      body: { default_sub_folder: 'Music' },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.subfolderModule.register).toHaveBeenCalledWith('Music');
+  });
+
   test('returns 404 when playlist not found', async () => {
     const deps = buildDeps();
     deps.models.Playlist.findOne.mockResolvedValue(null);
@@ -764,6 +803,43 @@ describe('GET /api/playlists/:playlistId/videos', () => {
     });
   });
 
+  test('flags an audio-only download (no video filePath) as downloaded', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue({
+      count: 1,
+      rows: [
+        { id: 1, playlist_id: 'PLtest123', youtube_id: 'audio1', position: 1, ignored: false, ignored_at: null, added_at: null, channel_id: null },
+      ],
+    });
+    deps.models.Video.findAll.mockResolvedValue([
+      {
+        id: 9,
+        youtubeId: 'audio1',
+        youTubeVideoName: 'An mp3-only download',
+        removed: false,
+        youtube_removed: false,
+        filePath: null,
+        fileSize: null,
+        audioFilePath: '/videos/audio1.mp3',
+        audioFileSize: 512,
+      },
+    ]);
+
+    const handler = getHandler('get', '/api/playlists/:playlistId/videos', deps);
+    const req = { params: { playlistId: 'PLtest123' }, query: {}, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    const payload = res.json.mock.calls[0][0];
+    expect(payload.videos[0]).toMatchObject({
+      youtube_id: 'audio1',
+      downloaded: true,
+      previously_downloaded: false,
+      audio_file_path: '/videos/audio1.mp3',
+    });
+  });
+
   test('orders by position DESC when sortOrder=desc', async () => {
     const deps = buildDeps();
     deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue({ count: 0, rows: [] });
@@ -837,8 +913,51 @@ describe('POST /api/playlists/:playlistId/refresh', () => {
 
     await handler(req, res);
 
-    expect(deps.playlistModule.fetchAllPlaylistVideos).toHaveBeenCalledWith('PLtest123');
+    expect(deps.playlistModule.fetchAllPlaylistVideos).toHaveBeenCalledWith('PLtest123', { fetchAll: false });
     expect(res.json).toHaveBeenCalledWith({ fetched: 10 });
+  });
+
+  test('passes fetchAll to the module when the body requests a full fetch', async () => {
+    const deps = buildDeps();
+    deps.playlistModule.fetchAllPlaylistVideos.mockResolvedValue(4200);
+    deps.models.Playlist.findOne.mockResolvedValue(makePlaylist());
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/refresh', deps);
+    const req = { params: { playlistId: 'PLtest123' }, body: { fetchAll: true }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.playlistModule.fetchAllPlaylistVideos).toHaveBeenCalledWith('PLtest123', { fetchAll: true });
+    expect(res.json).toHaveBeenCalledWith({ fetched: 4200 });
+  });
+
+  test('returns 400 when fetchAll is not a boolean', async () => {
+    const deps = buildDeps();
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/refresh', deps);
+    const req = { params: { playlistId: 'PLtest123' }, body: { fetchAll: 'yes' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'fetchAll must be a boolean' });
+    expect(deps.playlistModule.fetchAllPlaylistVideos).not.toHaveBeenCalled();
+  });
+
+  test('returns 409 when a fetch is already in progress', async () => {
+    const deps = buildDeps();
+    deps.playlistModule.fetchAllPlaylistVideos.mockRejectedValue(new Error('FETCH_IN_PROGRESS'));
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/refresh', deps);
+    const req = { params: { playlistId: 'PLtest123' }, body: { fetchAll: true }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith({ error: 'A fetch is already in progress for this playlist' });
   });
 
   test('returns 500 on fetch error', async () => {

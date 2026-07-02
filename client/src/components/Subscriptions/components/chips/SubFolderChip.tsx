@@ -2,6 +2,7 @@ import React from 'react';
 import { Chip } from '../../../../components/ui';
 import { Folder as FolderIcon } from '../../../../lib/icons';
 import { isUsingDefaultSubfolder, isExplicitlyNoSubfolder } from '../../../../utils/channelHelpers';
+import { addSubfolderPrefix } from '../../../../utils/subfolderDisplay';
 import { SHARED_CHANNEL_META_CHIP_STYLE, SHARED_CHANNEL_META_DEFAULT_SURFACE_STYLE } from '../../../shared/chipStyles';
 
 interface SubFolderChipProps {
@@ -53,7 +54,7 @@ const SubFolderChip: React.FC<SubFolderChipProps> = ({ subFolder }) => {
       size="small"
       color="default"
       icon={<FolderIcon size={14} style={{ color: 'var(--channel-meta-chip-icon)' }} data-testid="FolderIcon" />}
-      label={`__${subFolder}/`}
+      label={`${addSubfolderPrefix(subFolder as string)}/`}
       style={chipStyle}
     />
   );

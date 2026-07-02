@@ -35,6 +35,7 @@ import { useChannelFetchStatus } from './hooks/useChannelFetchStatus';
 import { useChannelVideoFilters } from './hooks/useChannelVideoFilters';
 import { useConfig } from '../../hooks/useConfig';
 import { useTriggerDownloads } from '../../hooks/useTriggerDownloads';
+import { useDownloadListingsRefresh } from '../../hooks/useDownloadListingsRefresh';
 import VideoModal from '../shared/VideoModal';
 import { VideoModalData } from '../shared/VideoModal/types';
 import { ChannelVideo } from '../../types/ChannelVideo';
@@ -333,6 +334,8 @@ function ChannelVideos({
     ignoredFilter,
     onFirstLoad: onVideosLoaded,
   });
+
+  useDownloadListingsRefresh(refetchVideos);
 
   useEffect(() => {
     if (availableTabsFromVideos && availableTabsFromVideos.length > 0) {

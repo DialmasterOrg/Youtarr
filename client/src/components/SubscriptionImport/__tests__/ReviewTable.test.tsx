@@ -61,6 +61,7 @@ const renderTable = (
         rowStates={rowStates}
         dispatch={dispatch}
         subfolders={[]}
+        createSubfolder={jest.fn(() => Promise.resolve())}
         defaultSubfolderDisplay={null}
         globalPreferredResolution="1080"
       />

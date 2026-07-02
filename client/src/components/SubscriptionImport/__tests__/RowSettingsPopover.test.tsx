@@ -19,6 +19,7 @@ interface WrapperProps {
   rowState: RowState;
   dispatch: React.Dispatch<ImportFlowAction>;
   subfolders?: string[];
+  createSubfolder?: (name: string) => Promise<void>;
   defaultSubfolderDisplay?: string | null;
 }
 
@@ -41,6 +42,7 @@ const PopoverWrapper: React.FC<WrapperProps> = (props) => {
         rowState={props.rowState}
         dispatch={props.dispatch}
         subfolders={props.subfolders ?? []}
+        createSubfolder={props.createSubfolder ?? jest.fn(() => Promise.resolve())}
         defaultSubfolderDisplay={props.defaultSubfolderDisplay ?? null}
       />
     </div>

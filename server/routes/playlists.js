@@ -1,8 +1,16 @@
 const express = require('express');
 
-function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper }) {
+function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule }) {
   const router = express.Router();
   const { Playlist, PlaylistVideo, Video } = models;
+
+  // Keep the subfolder registry in sync when a playlist persists a real
+  // default subfolder. register() ignores null/empty/sentinels and never throws.
+  const registerSubfolder = (name) => {
+    if (subfolderModule && name) {
+      subfolderModule.register(name).catch(() => {});
+    }
+  };
 
   const ALLOWED_RESOLUTIONS = ['360', '480', '720', '1080', '1440', '2160'];
   const ALLOWED_AUDIO_FORMATS = ['video_mp3', 'mp3_only'];
@@ -131,6 +139,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     try {
       const info = await playlistModule.getPlaylistInfo(url);
       const created = await playlistModule.upsertPlaylist(info, { enabled: true, settings });
+      registerSubfolder(settings.default_sub_folder);
       await playlistModule.fetchAllPlaylistVideos(created.playlist_id);
       mediaServers.mediaServerSync.syncPlaylist(created.id).catch(logBgFailure(req, created.playlist_id, 'playlist sync'));
       m3uGenerator.generatePlaylistM3U(created.id).catch(logBgFailure(req, created.playlist_id, 'M3U generation'));
@@ -198,6 +207,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       const p = await Playlist.findOne({ where: { playlist_id: req.params.playlistId } });
       if (!p) return res.status(404).json({ error: 'Playlist not found' });
       await p.update(updates);
+      registerSubfolder(updates.default_sub_folder);
       res.json({ settings: updates });
     } catch (err) {
       req.log.error({ err }, 'update settings failed');
@@ -232,7 +242,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       const videos = rows.map((row) => {
         const dl = downloadedById.get(row.youtube_id);
         const youtubeId = row.youtube_id;
-        const isDownloaded = !!(dl && !dl.removed && dl.filePath);
+        const isDownloaded = !!(dl && !dl.removed && (dl.filePath || dl.audioFilePath));
         // Has a Videos row but no usable file: previously downloaded, then
         // deleted/lost. doPlaylistDownloads skips these unless allowRedownload is set.
         const previouslyDownloaded = !!dl && !isDownloaded;
@@ -275,9 +285,15 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     }
   });
 
+  // fetchAll: true switches from the fast first-page refresh to the full
+  // "Load More" fetch (up to 5000 videos), which can run for minutes.
   router.post('/api/playlists/:playlistId/refresh', verifyToken, async (req, res) => {
+    const fetchAll = req.body?.fetchAll;
+    if (fetchAll !== undefined && typeof fetchAll !== 'boolean') {
+      return res.status(400).json({ error: 'fetchAll must be a boolean' });
+    }
     try {
-      const count = await playlistModule.fetchAllPlaylistVideos(req.params.playlistId);
+      const count = await playlistModule.fetchAllPlaylistVideos(req.params.playlistId, { fetchAll: !!fetchAll });
       const p = await Playlist.findOne({ where: { playlist_id: req.params.playlistId } });
       if (p) {
         mediaServers.mediaServerSync.syncPlaylist(p.id).catch(logBgFailure(req, p.playlist_id, 'playlist sync'));
@@ -285,6 +301,9 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       }
       res.json({ fetched: count });
     } catch (err) {
+      if (err.message === 'FETCH_IN_PROGRESS') {
+        return res.status(409).json({ error: 'A fetch is already in progress for this playlist' });
+      }
       req.log.error({ err }, 'refresh failed');
       res.status(500).json({ error: 'Failed to refresh playlist' });
     }

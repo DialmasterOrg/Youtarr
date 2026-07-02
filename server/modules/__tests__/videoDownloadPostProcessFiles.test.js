@@ -80,6 +80,12 @@ jest.mock('../../models', () => ({
   Channel: mockChannel
 }));
 
+const mockVideoPersistence = {
+  persistDownloadedVideoForJob: jest.fn(() => Promise.resolve(null))
+};
+
+jest.mock('../videoPersistence', () => mockVideoPersistence);
+
 jest.mock('../../logger');
 
 // downloadSettingsResolver is intentionally not mocked: it is a pure function, so these
@@ -130,6 +136,7 @@ describe('videoDownloadPostProcessFiles', () => {
     logger.warn.mockClear();
     logger.error.mockClear();
     JobVideoDownload.update.mockResolvedValue([0]);
+    mockVideoPersistence.persistDownloadedVideoForJob.mockResolvedValue(null);
     Channel.findOne.mockResolvedValue(null);
     Channel.findAll.mockResolvedValue([]);
     ChannelVideo.findAll.mockResolvedValue([]);
@@ -435,6 +442,80 @@ describe('videoDownloadPostProcessFiles', () => {
       'Error updating JobVideoDownload status'
     );
     expect(process.exit).not.toHaveBeenCalled(); // Should not fail entire post-processing
+  });
+
+  it('persists the downloaded video for mid-batch listing updates', async () => {
+    await loadModule();
+    await settleAsync();
+
+    expect(mockVideoPersistence.persistDownloadedVideoForJob).toHaveBeenCalledWith({
+      jobId: 'test-job-id',
+      youtubeId: 'abc123'
+    });
+  });
+
+  it('emits the persisted control marker on stdout after a successful persist', async () => {
+    mockVideoPersistence.persistDownloadedVideoForJob.mockResolvedValue({ id: 7 });
+    const stdoutSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    try {
+      await loadModule();
+      await settleAsync();
+
+      expect(stdoutSpy).toHaveBeenCalledWith('[Youtarr:videoPersisted] abc123\n');
+    } finally {
+      stdoutSpy.mockRestore();
+    }
+  });
+
+  it('does not emit the control marker when the persist was skipped', async () => {
+    mockVideoPersistence.persistDownloadedVideoForJob.mockResolvedValue(null);
+    const stdoutSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    try {
+      await loadModule();
+      await settleAsync();
+
+      expect(stdoutSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining('[Youtarr:videoPersisted]')
+      );
+    } finally {
+      stdoutSpy.mockRestore();
+    }
+  });
+
+  it('skips mid-batch persistence when job ID is not available', async () => {
+    delete process.env.YOUTARR_JOB_ID;
+
+    await loadModule();
+    await settleAsync();
+
+    expect(mockVideoPersistence.persistDownloadedVideoForJob).not.toHaveBeenCalled();
+  });
+
+  it('does not fail post-processing when mid-batch persistence throws', async () => {
+    mockVideoPersistence.persistDownloadedVideoForJob.mockRejectedValueOnce(
+      new Error('db down')
+    );
+    JobVideoDownload.update.mockResolvedValueOnce([1]);
+
+    await loadModule();
+    await settleAsync();
+
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'abc123' }),
+      'Error persisting downloaded video during post-processing'
+    );
+    expect(JobVideoDownload.update).toHaveBeenCalledWith(
+      { status: 'completed', file_path: videoPath },
+      {
+        where: {
+          job_id: 'test-job-id',
+          youtube_id: 'abc123'
+        }
+      }
+    );
+    expect(process.exit).not.toHaveBeenCalled();
   });
 
   describe('tempPathManager integration', () => {
@@ -1222,6 +1303,95 @@ describe('videoDownloadPostProcessFiles', () => {
         expect.stringContaining('/library/Test Channel/Video Title [abc123]/Video Title [abc123].info.json'),
         expect.stringContaining('"_actual_filepath": "/library/__Music/Test Channel/Video Title [abc123]/Video Title [abc123].mp4"')
       );
+    });
+  });
+
+  describe('writeVideoFanart', () => {
+    const imagePath = '/library/Channel/Video Title [abc123].jpg';
+    const fanartPath = '/library/Channel/Video Title [abc123]-fanart.jpg';
+
+    it('creates fanart file when writeVideoFanart is true and image exists', async () => {
+      configModule.__setConfig({
+        writeChannelPosters: false,
+        writeVideoNfoFiles: true,
+        writeVideoFanart: true,
+      });
+      fs.existsSync.mockImplementation((p) => p === jsonPath || p === imagePath);
+
+      await loadModule();
+      await settleAsync();
+
+      expect(fs.copySync).toHaveBeenCalledWith(imagePath, fanartPath);
+      expect(logger.info).toHaveBeenCalledWith(
+        { fanartPath },
+        '[Post-Process] Created video fanart file'
+      );
+    });
+
+    it('does not create fanart file when writeVideoFanart is false', async () => {
+      configModule.__setConfig({
+        writeChannelPosters: false,
+        writeVideoNfoFiles: true,
+        writeVideoFanart: false,
+      });
+      fs.existsSync.mockImplementation((p) => p === jsonPath || p === imagePath);
+
+      await loadModule();
+      await settleAsync();
+
+      const fanartCopied = fs.copySync.mock.calls.some(([, dest]) => dest === fanartPath);
+      expect(fanartCopied).toBe(false);
+    });
+
+    it('does not create fanart file when writeVideoFanart is absent from config', async () => {
+      configModule.__setConfig({
+        writeChannelPosters: false,
+        writeVideoNfoFiles: true,
+      });
+      fs.existsSync.mockImplementation((p) => p === jsonPath || p === imagePath);
+
+      await loadModule();
+      await settleAsync();
+
+      const fanartCopied = fs.copySync.mock.calls.some(([, dest]) => dest === fanartPath);
+      expect(fanartCopied).toBe(false);
+    });
+
+    it('skips fanart copy when image file does not exist', async () => {
+      configModule.__setConfig({
+        writeChannelPosters: false,
+        writeVideoNfoFiles: true,
+        writeVideoFanart: true,
+      });
+      // Only json exists, not the image
+      fs.existsSync.mockImplementation((p) => p === jsonPath);
+
+      await loadModule();
+      await settleAsync();
+
+      const fanartCopied = fs.copySync.mock.calls.some(([, dest]) => dest === fanartPath);
+      expect(fanartCopied).toBe(false);
+    });
+
+    it('logs warning and does not exit when fanart copy throws', async () => {
+      configModule.__setConfig({
+        writeChannelPosters: false,
+        writeVideoNfoFiles: true,
+        writeVideoFanart: true,
+      });
+      fs.existsSync.mockImplementation((p) => p === jsonPath || p === imagePath);
+      fs.copySync.mockImplementation((src, dest) => {
+        if (dest === fanartPath) throw new Error('disk full');
+      });
+
+      await loadModule();
+      await settleAsync();
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ err: expect.any(Error) }),
+        '[Post-Process] Error creating video fanart'
+      );
+      expect(process.exit).not.toHaveBeenCalled();
     });
   });
 });
