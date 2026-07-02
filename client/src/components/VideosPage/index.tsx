@@ -5,6 +5,7 @@ import { Alert, Box, Grid, Snackbar, Typography } from '../ui';
 import { Trash2 as DeleteIcon, Star as RatingIcon } from '../../lib/icons';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useConfig } from '../../hooks/useConfig';
+import { useDownloadListingsRefresh } from '../../hooks/useDownloadListingsRefresh';
 import { VideoData } from '../../types/VideoData';
 import DeleteVideosDialog from '../shared/DeleteVideosDialog';
 import { useVideoDeletion } from '../shared/useVideoDeletion';
@@ -132,6 +133,8 @@ function VideosPage({ token }: VideosPageProps) {
     missingFilter,
     useInfiniteScroll,
   });
+
+  useDownloadListingsRefresh(refetch);
 
   useEffect(() => {
     setVideos([]);

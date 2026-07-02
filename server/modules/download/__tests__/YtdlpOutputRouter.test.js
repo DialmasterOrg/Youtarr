@@ -97,6 +97,20 @@ describe('YtdlpOutputRouter', () => {
       });
     });
 
+    it('broadcasts videosUpdated for a video-persisted control marker line', () => {
+      router.handleStdoutChunk('[Youtarr:videoPersisted] abc123XYZ_d\n');
+
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
+        'broadcast',
+        null,
+        'download',
+        'videosUpdated',
+        { youtubeId: 'abc123XYZ_d' }
+      );
+      // Marker lines are control messages, not yt-dlp output
+      expect(monitor.processProgress).not.toHaveBeenCalled();
+    });
+
     it('routes ERROR lines to the error tracker and suppresses consumed lines', () => {
       errorTracker.handleErrorLine.mockReturnValue(true);
 

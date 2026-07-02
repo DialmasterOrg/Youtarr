@@ -242,7 +242,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       const videos = rows.map((row) => {
         const dl = downloadedById.get(row.youtube_id);
         const youtubeId = row.youtube_id;
-        const isDownloaded = !!(dl && !dl.removed && dl.filePath);
+        const isDownloaded = !!(dl && !dl.removed && (dl.filePath || dl.audioFilePath));
         // Has a Videos row but no usable file: previously downloaded, then
         // deleted/lost. doPlaylistDownloads skips these unless allowRedownload is set.
         const previouslyDownloaded = !!dl && !isDownloaded;

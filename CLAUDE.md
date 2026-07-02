@@ -68,7 +68,7 @@ For multi-part requests (e.g., "review this PR AND explain WebSocket handling"),
 ### Implementation notes (non-obvious behaviors)
 - **Plex integration** uses OAuth; the user must be the Plex server admin. The target Plex library must be "Other Videos" with the "Personal Media" agent.
 - **Video downloads**: yt-dlp writes to a temp location, then post-processing finalizes files into the channel's target directory. Resume-on-partial-download is supported.
-- **WebSocket server** shares the HTTP server port (3011 in container, 3087 on host) via the `ws` library; there is no separate WS port.
+- **WebSocket server** shares the HTTP server port (3011 in container, 3087 on host) via the `ws` library; there is no separate WS port. Broadcast message types include `downloadProgress`, `downloadComplete`, and `videosUpdated` (emitted per video mid-batch after its DB rows are persisted; listing pages subscribe via `client/src/hooks/useDownloadListingsRefresh.ts` to refetch in near real time).
 - **Deno** is installed in the container; yt-dlp uses it automatically for JS-heavy extractors.
 
 ## Code Quality Standards (for new and rewritten code)

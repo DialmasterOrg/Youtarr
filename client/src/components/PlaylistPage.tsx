@@ -15,6 +15,7 @@ import {
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useConfig } from '../hooks/useConfig';
 import { usePlaylistDetail, PlaylistSortOrder } from '../hooks/usePlaylistDetail';
+import { useDownloadListingsRefresh } from '../hooks/useDownloadListingsRefresh';
 import { usePlaylistMutations } from '../hooks/usePlaylistMutations';
 import { useMediaServerStatus } from '../hooks/useMediaServerStatus';
 import { MediaServerType, PlaylistSubscribeSettings, PlaylistVideo } from '../types/playlist';
@@ -96,6 +97,8 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     regenerateM3U,
     triggerDownload,
   } = usePlaylistDetail({ token, playlistId, sortOrder });
+
+  useDownloadListingsRefresh(refetch);
 
   const {
     status: serverStatus,

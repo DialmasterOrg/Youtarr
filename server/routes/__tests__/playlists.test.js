@@ -803,6 +803,43 @@ describe('GET /api/playlists/:playlistId/videos', () => {
     });
   });
 
+  test('flags an audio-only download (no video filePath) as downloaded', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue({
+      count: 1,
+      rows: [
+        { id: 1, playlist_id: 'PLtest123', youtube_id: 'audio1', position: 1, ignored: false, ignored_at: null, added_at: null, channel_id: null },
+      ],
+    });
+    deps.models.Video.findAll.mockResolvedValue([
+      {
+        id: 9,
+        youtubeId: 'audio1',
+        youTubeVideoName: 'An mp3-only download',
+        removed: false,
+        youtube_removed: false,
+        filePath: null,
+        fileSize: null,
+        audioFilePath: '/videos/audio1.mp3',
+        audioFileSize: 512,
+      },
+    ]);
+
+    const handler = getHandler('get', '/api/playlists/:playlistId/videos', deps);
+    const req = { params: { playlistId: 'PLtest123' }, query: {}, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    const payload = res.json.mock.calls[0][0];
+    expect(payload.videos[0]).toMatchObject({
+      youtube_id: 'audio1',
+      downloaded: true,
+      previously_downloaded: false,
+      audio_file_path: '/videos/audio1.mp3',
+    });
+  });
+
   test('orders by position DESC when sortOrder=desc', async () => {
     const deps = buildDeps();
     deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue({ count: 0, rows: [] });
