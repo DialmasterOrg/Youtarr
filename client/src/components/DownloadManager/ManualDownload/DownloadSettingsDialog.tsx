@@ -48,6 +48,9 @@ interface DownloadSettingsDialogProps {
   defaultAudioFormat?: string | null; // For channel audio format default
   defaultAudioFormatSource?: 'channel' | 'global';
   token?: string | null; // For fetching subfolders
+  // Hides the "Allow re-downloading" switch and guarantees allowRedownload is
+  // never emitted.
+  hideRedownloadOption?: boolean;
 }
 
 const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
@@ -62,7 +65,8 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   defaultResolutionSource = 'global',
   defaultAudioFormat = null,
   defaultAudioFormatSource = 'global',
-  token = null
+  token = null,
+  hideRedownloadOption = false
 }) => {
   const [useCustomSettings, setUseCustomSettings] = useState(false);
   // Override controls default to "no override" (null) so that simply opening
@@ -100,14 +104,14 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
       setChannelVideoCount(defaultVideoCount);
       setAudioFormat(null);
       // Open the custom section too so the user can see the re-download toggle is on.
-      if (missingVideoCount > 0) {
+      if (missingVideoCount > 0 && !hideRedownloadOption) {
         setAllowRedownload(true);
         setUseCustomSettings(true);
       } else {
         setAllowRedownload(false);
       }
     }
-  }, [open, hasUserInteracted, mode, missingVideoCount, defaultVideoCount]);
+  }, [open, hasUserInteracted, mode, missingVideoCount, defaultVideoCount, hideRedownloadOption]);
 
   useEffect(() => {
     if (!open) {
@@ -194,7 +198,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
       }
     }
 
-    if (allowRedownload) {
+    if (allowRedownload && !hideRedownloadOption) {
       override.allowRedownload = true;
     }
 
@@ -334,20 +338,22 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
           <Collapse in={useCustomSettings} timeout={300}>
             <Box data-testid="custom-settings-section" className="mb-4">
               {/* Allow Re-download Toggle */}
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={allowRedownload}
-                    onChange={(e) => {
-                      setAllowRedownload(e.target.checked);
-                      setHasUserInteracted(true);
-                    }}
-                    color="primary"
-                  />
-                }
-                label="Allow re-downloading previously fetched videos"
-                className="mb-4 block"
-              />
+              {!hideRedownloadOption && (
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={allowRedownload}
+                      onChange={(e) => {
+                        setAllowRedownload(e.target.checked);
+                        setHasUserInteracted(true);
+                      }}
+                      color="primary"
+                    />
+                  }
+                  label="Allow re-downloading previously fetched videos"
+                  className="mb-4 block"
+                />
+              )}
 
               {/* Resolution Selection */}
               <Typography variant="subtitle2" color="text.secondary" className="mb-2">

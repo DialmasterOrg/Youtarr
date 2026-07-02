@@ -2076,6 +2076,16 @@ describe('DownloadExecutor', () => {
       expect(executor.maxAbsoluteTimeoutMs).toBe(6 * 60 * 60 * 1000); // 6 hours
     });
 
+    it('disables the absolute runtime cap for channel download-all jobs', () => {
+      expect(executor.resolveMaxAbsoluteTimeoutMs('Channel Download All: My Channel')).toBeNull();
+    });
+
+    it('keeps the absolute runtime cap for other job types', () => {
+      expect(executor.resolveMaxAbsoluteTimeoutMs('Channel Downloads')).toBe(6 * 60 * 60 * 1000);
+      expect(executor.resolveMaxAbsoluteTimeoutMs('Manually Added Urls')).toBe(6 * 60 * 60 * 1000);
+      expect(executor.resolveMaxAbsoluteTimeoutMs('Playlist: Favorites')).toBe(6 * 60 * 60 * 1000);
+    });
+
     it('should track current process for manual termination', async () => {
       let processReference = null;
       let jobIdReference = null;

@@ -5,7 +5,7 @@ const jobModule = require('../jobModule');
 const MessageEmitter = require('../messageEmitter');
 const DownloadProgressMonitor = require('./DownloadProgressMonitor');
 const tempPathManager = require('./tempPathManager');
-const { isSpecificUrlDownloadJob } = require('./jobTypes');
+const { isSpecificUrlDownloadJob, isChannelDownloadAllJob } = require('./jobTypes');
 const downloadResultProcessor = require('./downloadResultProcessor');
 const downloadCleanup = require('./downloadCleanup');
 const { finalizeDownloadJob } = require('./downloadJobFinalizer');
@@ -113,6 +113,12 @@ class DownloadExecutor {
     }
   }
 
+  // Channel download-all jobs legitimately run for days, so they get no
+  // absolute runtime cap; the activity timeout remains the hang guard.
+  resolveMaxAbsoluteTimeoutMs(jobType) {
+    return isChannelDownloadAllJob(jobType) ? null : this.maxAbsoluteTimeoutMs;
+  }
+
   async doDownload(args, jobId, jobType, urlCount = 0, originalUrls = null, allowRedownload = false, skipJobTransition = false, postProcessDirectives = {}) {
     const subfolderOverride = (postProcessDirectives || {}).subfolderOverride ?? null;
     const initialCount = downloadResultProcessor.getCountOfDownloadedVideos();
@@ -193,7 +199,7 @@ class DownloadExecutor {
       const timeoutController = new DownloadTimeoutController({
         activityTimeoutMs: this.activityTimeoutMs,
         postProcessingTimeoutMs: this.postProcessingTimeoutMs,
-        maxAbsoluteTimeoutMs: this.maxAbsoluteTimeoutMs,
+        maxAbsoluteTimeoutMs: this.resolveMaxAbsoluteTimeoutMs(jobType),
       });
       timeoutController.start(proc);
 
