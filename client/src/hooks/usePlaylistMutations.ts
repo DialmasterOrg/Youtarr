@@ -13,6 +13,14 @@ interface UsePlaylistMutationsParams {
 
 interface PlaylistResponse {
   playlist: Playlist;
+  restored?: boolean;
+}
+
+export interface PlaylistSubscribeResult {
+  playlist: Playlist;
+  // True when subscribing re-enabled a previously removed playlist, which
+  // keeps its old settings instead of the ones submitted with the request.
+  restored: boolean;
 }
 
 const SYNC_KEY_BY_SERVER: Record<MediaServerType, keyof Playlist> = {
@@ -65,7 +73,7 @@ export const usePlaylistMutations = ({ token }: UsePlaylistMutationsParams) => {
     async (
       url: string,
       settings: PlaylistSubscribeSettings = {}
-    ): Promise<Playlist | null> => {
+    ): Promise<PlaylistSubscribeResult | null> => {
       if (!token) return null;
       setPending(true);
       setError(null);
@@ -75,7 +83,7 @@ export const usePlaylistMutations = ({ token }: UsePlaylistMutationsParams) => {
           { url, settings },
           { headers: authHeaders(token) }
         );
-        return res.data.playlist;
+        return { playlist: res.data.playlist, restored: Boolean(res.data.restored) };
       } catch (err: unknown) {
         setError(extractMessage(err, 'Failed to subscribe to playlist'));
         return null;

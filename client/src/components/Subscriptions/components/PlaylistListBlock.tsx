@@ -6,15 +6,16 @@ import {
   Tooltip,
   Typography,
 } from '../../ui';
-import { Download as DownloadIcon } from '../../../lib/icons';
+import { Download as DownloadIcon, Delete as DeleteIcon } from '../../../lib/icons';
 import { Playlist } from '../../../types/playlist';
 
 interface PlaylistListBlockProps {
   playlists: Playlist[];
   loading: boolean;
+  onDelete: (playlist: Playlist) => void;
 }
 
-const PlaylistListBlock: React.FC<PlaylistListBlockProps> = ({ playlists, loading }) => {
+const PlaylistListBlock: React.FC<PlaylistListBlockProps> = ({ playlists, loading, onDelete }) => {
   if (loading && playlists.length === 0) {
     return (
       <div className="flex justify-center items-center py-6">
@@ -95,6 +96,21 @@ const PlaylistListBlock: React.FC<PlaylistListBlockProps> = ({ playlists, loadin
                     }
                   />
                 </span>
+              </Tooltip>
+              <Tooltip title="Remove playlist">
+                <button
+                  type="button"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--destructive)', display: 'inline-flex', alignItems: 'center', padding: 4, flexShrink: 0 }}
+                  onClick={(event) => {
+                    // The whole row is a RouterLink; keep the click from navigating.
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onDelete(p);
+                  }}
+                  aria-label="Remove playlist"
+                >
+                  <DeleteIcon size={20} />
+                </button>
               </Tooltip>
             </div>
           </RouterLink>

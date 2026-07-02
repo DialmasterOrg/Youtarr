@@ -66,6 +66,8 @@ import AddPlaylistDialog from './Subscriptions/components/AddPlaylistDialog';
 import PlaylistListBlock from './Subscriptions/components/PlaylistListBlock';
 import { useActiveImport } from '../hooks/useActiveImport';
 import { usePlaylistList } from '../hooks/usePlaylistList';
+import { usePlaylistMutations } from '../hooks/usePlaylistMutations';
+import { Playlist } from '../types/playlist';
 
 type ViewMode = 'list' | 'grid';
 type SortOrder = 'asc' | 'desc';
@@ -103,6 +105,8 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
   const [filterAnchorEl, setFilterAnchorEl] = useState<HTMLElement | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [channelToDelete, setChannelToDelete] = useState<Channel | null>(null);
+  const [playlistDeleteConfirmOpen, setPlaylistDeleteConfirmOpen] = useState(false);
+  const [playlistToDelete, setPlaylistToDelete] = useState<Playlist | null>(null);
   const [dialogMessage, setDialogMessage] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [helpDialogOpen, setHelpDialogOpen] = useState(false);
@@ -145,7 +149,10 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
     playlists,
     total: playlistTotal,
     loading: playlistsLoading,
+    refetch: refetchPlaylists,
   } = usePlaylistList({ token, page: 1, pageSize: 100 });
+
+  const { unsubscribe: unsubscribePlaylist } = usePlaylistMutations({ token });
 
   const {
     pendingAdditions,
@@ -316,6 +323,27 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
     }
     setChannelToDelete(null);
     setDeleteConfirmOpen(false);
+  };
+
+  const handlePlaylistDeleteClick = (playlist: Playlist) => {
+    setPlaylistToDelete(playlist);
+    setPlaylistDeleteConfirmOpen(true);
+  };
+
+  // Unlike channels, playlists have no staged add/remove batch, so removal
+  // applies immediately on confirm.
+  const handlePlaylistDeleteConfirm = async () => {
+    const playlist = playlistToDelete;
+    setPlaylistToDelete(null);
+    setPlaylistDeleteConfirmOpen(false);
+    if (!playlist) return;
+    const removed = await unsubscribePlaylist(playlist.playlist_id);
+    if (removed) {
+      refetchPlaylists();
+    } else {
+      setDialogMessage('Failed to remove playlist. Please try again.');
+      setDialogOpen(true);
+    }
   };
 
   const handleRegexClick = useCallback((event: React.MouseEvent<HTMLElement>, regex: string) => {
@@ -593,7 +621,11 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {typeFilter === 'playlists' ? (
-              <PlaylistListBlock playlists={playlists} loading={playlistsLoading} />
+              <PlaylistListBlock
+                playlists={playlists}
+                loading={playlistsLoading}
+                onDelete={handlePlaylistDeleteClick}
+              />
             ) : (
               <>
                 <VideoListPaginationBar
@@ -882,6 +914,26 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
         <DialogActions>
           <Button onClick={() => setDeleteConfirmOpen(false)}>Cancel</Button>
           <Button onClick={handleDeleteConfirm} color="error">
+            Remove
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={playlistDeleteConfirmOpen}
+        onClose={() => setPlaylistDeleteConfirmOpen(false)}
+      >
+        <DialogTitle>Remove playlist?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Removing this playlist will stop automatic downloads and hide it from your
+            subscriptions. Existing videos, media server playlists, and .m3u files won't be
+            deleted. Re-adding it later restores its previous settings.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPlaylistDeleteConfirmOpen(false)}>Cancel</Button>
+          <Button onClick={handlePlaylistDeleteConfirm} color="error">
             Remove
           </Button>
         </DialogActions>

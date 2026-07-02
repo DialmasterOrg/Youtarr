@@ -1,6 +1,7 @@
 const { spawn } = require('child_process');
 const { Op } = require('sequelize');
 const logger = require('../logger');
+const { sequelize, Sequelize } = require('../db');
 const { Playlist, PlaylistVideo, Channel } = require('../models');
 const youtubeApi = require('./youtubeApi');
 
@@ -16,6 +17,10 @@ const UNAVAILABLE_TITLE_RE = /^\[(private|deleted|unavailable)\b[^\]]*\]$/i;
 // full fetch is capped like the channel Load More (channelModule).
 const DEFAULT_FETCH_LIMIT = 100;
 const MAX_LOAD_MORE_VIDEOS = 5000;
+
+// added_at round-trips through a DATETIME column (second precision), so an
+// exact millisecond comparison would flag every already-correct row as stale.
+const ADDED_AT_TOLERANCE_MS = 1000;
 
 class PlaylistModule {
   constructor() {
@@ -77,7 +82,7 @@ class PlaylistModule {
 
   async upsertPlaylist(data, opts = {}) {
     const { enabled = false, settings = {} } = opts;
-    const payload = {
+    const metadata = {
       playlist_id: data.playlist_id,
       title: data.title,
       url: data.url,
@@ -86,14 +91,18 @@ class PlaylistModule {
       thumbnail: data.thumbnail,
       video_count: data.video_count,
       enabled,
-      ...settings,
     };
     const existing = await Playlist.findOne({ where: { playlist_id: data.playlist_id } });
     if (existing) {
-      await existing.update(payload);
-      return existing;
+      // Settings apply only on create: re-subscribing a soft-deleted playlist
+      // must restore it exactly as configured before, so only the YouTube
+      // metadata and the enabled flag are refreshed here.
+      const restored = Boolean(enabled && !existing.enabled);
+      await existing.update(metadata);
+      return { playlist: existing, restored };
     }
-    return Playlist.create(payload);
+    const playlist = await Playlist.create({ ...metadata, ...settings });
+    return { playlist, restored: false };
   }
 
   async fetchAllPlaylistVideos(playlistId, { fetchAll = false } = {}) {
@@ -164,6 +173,8 @@ class PlaylistModule {
     await this._preserveExistingChannelInfo(playlist.playlist_id, rows);
     await this._backfillPublishedDates(rows);
 
+    // added_at is deliberately absent: existing rows keep their first-seen
+    // timestamp, and backfillFromDownloadedVideos re-stamps downloaded rows.
     await PlaylistVideo.bulkCreate(rows, {
       updateOnDuplicate: [
         'position',
@@ -173,7 +184,6 @@ class PlaylistModule {
         'thumbnail',
         'duration',
         'published_at',
-        'added_at',
         'updatedAt',
       ],
     });
@@ -209,6 +219,14 @@ class PlaylistModule {
       update.thumbnail = `https://i.ytimg.com/vi/${available[0].id}/hqdefault.jpg`;
     }
     await playlist.update(update);
+
+    // Best-effort: a failed reconciliation shouldn't fail the fetch.
+    try {
+      await this.backfillFromDownloadedVideos(playlist.playlist_id);
+    } catch (err) {
+      logger.warn({ err, playlist_id: playlist.playlist_id }, 'Downloaded-video reconciliation after playlist fetch failed');
+    }
+
     return rows.length;
   }
 
@@ -364,20 +382,34 @@ class PlaylistModule {
 
     const channelByVideo = new Map();
     const nameByChannel = new Map();
+    const downloadedAtByVideo = new Map();
+    const youtubeIds = new Set();
+    const fallbackDownloadedAt = new Date();
     for (const v of videoData) {
-      if (!v || !v.youtubeId || !v.channel_id) continue;
+      if (!v || !v.youtubeId) continue;
+      youtubeIds.add(v.youtubeId);
+      // downloadedAt: undefined means "downloaded just now" (the post-download
+      // hook), an explicit null means the caller has no reliable download time
+      // and added_at must be left alone.
+      if (v.downloadedAt !== null) {
+        const valid = v.downloadedAt instanceof Date && !Number.isNaN(v.downloadedAt.getTime());
+        downloadedAtByVideo.set(v.youtubeId, valid ? v.downloadedAt : fallbackDownloadedAt);
+      }
+      if (!v.channel_id) continue;
       channelByVideo.set(v.youtubeId, v.channel_id);
       if (v.youTubeChannelName && !nameByChannel.has(v.channel_id)) {
         nameByChannel.set(v.channel_id, v.youTubeChannelName);
       }
     }
-    if (channelByVideo.size === 0) return;
+    if (youtubeIds.size === 0) return;
 
     const rows = await PlaylistVideo.findAll({
-      where: { youtube_id: [...channelByVideo.keys()] },
-      attributes: ['playlist_id', 'youtube_id', 'channel_id'],
+      where: { youtube_id: [...youtubeIds] },
+      attributes: ['playlist_id', 'youtube_id', 'channel_id', 'added_at'],
     });
-    if (!rows.length) return;
+    if (!rows || !rows.length) return;
+
+    await this._stampDownloadedAddedAt(rows, downloadedAtByVideo);
 
     const filledRows = rows.filter((row) => !row.channel_id && channelByVideo.get(row.youtube_id));
     if (filledRows.length === 0) return;
@@ -402,18 +434,22 @@ class PlaylistModule {
     const untracked = new Set(realChannelIds.filter((id) => !trackedIds.has(id)));
     if (untracked.size === 0) return;
 
-    // Pick one owning playlist per channel (first row wins) to seed its settings.
+    // Only an enabled playlist may seed a hidden source channel's settings:
+    // a soft-deleted playlist's overrides must not keep applying to downloads.
+    const candidatePlaylistIds = [...new Set(filledRows.map((row) => row.playlist_id))];
+    const playlists = await Playlist.findAll({
+      where: { playlist_id: candidatePlaylistIds, enabled: true },
+    });
+    const playlistById = new Map((playlists || []).map((p) => [p.playlist_id, p]));
+
+    // Pick one enabled owning playlist per channel (first enabled row wins).
     const playlistByChannel = new Map();
     for (const row of filledRows) {
       const realId = channelByVideo.get(row.youtube_id);
-      if (realId && untracked.has(realId) && !playlistByChannel.has(realId)) {
+      if (realId && untracked.has(realId) && !playlistByChannel.has(realId) && playlistById.has(row.playlist_id)) {
         playlistByChannel.set(realId, row.playlist_id);
       }
     }
-    const playlists = await Playlist.findAll({
-      where: { playlist_id: [...new Set(playlistByChannel.values())] },
-    });
-    const playlistById = new Map((playlists || []).map((p) => [p.playlist_id, p]));
 
     for (const channelId of untracked) {
       const playlist = playlistById.get(playlistByChannel.get(channelId));
@@ -427,6 +463,69 @@ class PlaylistModule {
         logger.error({ err, channelId }, 'Failed to auto-create source channel for downloaded playlist video');
       }
     }
+  }
+
+  // The playlist UI shows added_at as the video's download time, but fetch
+  // writes stamp rows with fetch time. Re-stamp rows for downloaded videos,
+  // soft-deleted playlists included, so a later re-subscribe stays accurate.
+  async _stampDownloadedAddedAt(rows, downloadedAtByVideo) {
+    const stale = new Map();
+    for (const row of rows) {
+      const target = downloadedAtByVideo.get(row.youtube_id);
+      if (!target || stale.has(row.youtube_id)) continue;
+      const current = row.added_at ? new Date(row.added_at).getTime() : null;
+      if (current == null || Math.abs(current - target.getTime()) > ADDED_AT_TOLERANCE_MS) {
+        stale.set(row.youtube_id, target);
+      }
+    }
+    for (const [youtubeId, addedAt] of stale) {
+      await PlaylistVideo.update(
+        { added_at: addedAt },
+        { where: { youtube_id: youtubeId } }
+      );
+    }
+  }
+
+  // Reconciles one playlist's tracked rows against videos that already exist in
+  // the Videos table: fills channel attribution and re-stamps added_at with the
+  // video's actual download time. Runs after every fetch so rows created for
+  // videos downloaded by other means (or while the playlist was soft-deleted)
+  // pick up the right metadata.
+  async backfillFromDownloadedVideos(playlistId) {
+    const tracked = await PlaylistVideo.findAll({
+      where: { playlist_id: playlistId },
+      attributes: ['youtube_id'],
+    });
+    const youtubeIds = (tracked || []).map((r) => r.youtube_id).filter(Boolean);
+    if (!youtubeIds.length) return;
+
+    // Same download-time derivation as videosModule/videoDeletionModule's
+    // timeCreated: last download wins, then the download job's creation time,
+    // then the upload date.
+    const downloaded = await sequelize.query(
+      `SELECT
+         Videos.youtubeId,
+         Videos.channel_id,
+         Videos.youTubeChannelName,
+         COALESCE(Videos.last_downloaded_at, MAX(Jobs.timeCreated), STR_TO_DATE(Videos.originalDate, '%Y%m%d')) AS downloadedAt
+       FROM Videos
+       LEFT JOIN JobVideos ON Videos.id = JobVideos.video_id
+       LEFT JOIN Jobs ON Jobs.id = JobVideos.job_id
+       WHERE Videos.youtubeId IN (:youtubeIds)
+       GROUP BY Videos.id`,
+      { replacements: { youtubeIds }, type: Sequelize.QueryTypes.SELECT }
+    );
+    if (!downloaded || !downloaded.length) return;
+
+    await this.backfillDownloadedVideoChannels(downloaded.map((v) => {
+      const downloadedAt = v.downloadedAt ? new Date(v.downloadedAt) : null;
+      return {
+        youtubeId: v.youtubeId,
+        channel_id: v.channel_id,
+        youTubeChannelName: v.youTubeChannelName,
+        downloadedAt: downloadedAt && !Number.isNaN(downloadedAt.getTime()) ? downloadedAt : null,
+      };
+    }));
   }
 
   async playlistAutoDownload(overrideSettings = {}, runId) {

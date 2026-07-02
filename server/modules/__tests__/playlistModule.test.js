@@ -7,6 +7,10 @@ jest.mock('../../models', () => ({
   PlaylistVideo: { findAll: jest.fn(), bulkCreate: jest.fn(), update: jest.fn(), destroy: jest.fn(), count: jest.fn() },
   Channel: { findAll: jest.fn() },
 }));
+jest.mock('../../db', () => ({
+  sequelize: { query: jest.fn().mockResolvedValue([]) },
+  Sequelize: { QueryTypes: { SELECT: 'SELECT' } },
+}));
 jest.mock('../channelModule', () => ({
   upsertChannel: jest.fn(),
 }));
@@ -30,6 +34,7 @@ describe('playlistModule', () => {
   let downloadModule;
   let childProcess;
   let youtubeApi;
+  let db;
 
   beforeEach(() => {
     jest.resetModules();
@@ -46,6 +51,8 @@ describe('playlistModule', () => {
     channelModule = require('../channelModule');
     downloadModule = require('../downloadModule');
     youtubeApi = require('../youtubeApi');
+    db = require('../../db');
+    db.sequelize.query.mockResolvedValue([]);
   });
 
   describe('getPlaylistInfo', () => {
@@ -98,31 +105,61 @@ describe('playlistModule', () => {
   });
 
   describe('upsertPlaylist', () => {
-    test('creates a new playlist when none exists', async () => {
+    test('creates a new playlist with the provided settings when none exists', async () => {
       Playlist.findOne.mockResolvedValue(null);
       Playlist.create.mockResolvedValue({ id: 1, playlist_id: 'PLabc' });
 
       const result = await playlistModule.upsertPlaylist({
         playlist_id: 'PLabc', title: 'X', url: 'https://u',
-      }, { enabled: true });
+      }, { enabled: true, settings: { sync_to_plex: true } });
 
       expect(Playlist.create).toHaveBeenCalledWith(expect.objectContaining({
-        playlist_id: 'PLabc', title: 'X', enabled: true,
+        playlist_id: 'PLabc', title: 'X', enabled: true, sync_to_plex: true,
       }));
-      expect(result.id).toBe(1);
+      expect(result.playlist.id).toBe(1);
+      expect(result.restored).toBe(false);
     });
 
-    test('updates existing playlist', async () => {
-      const existing = { id: 2, playlist_id: 'PLabc', update: jest.fn().mockResolvedValue(true) };
+    test('updates existing playlist metadata', async () => {
+      const existing = { id: 2, playlist_id: 'PLabc', enabled: true, update: jest.fn().mockResolvedValue(true) };
       Playlist.findOne.mockResolvedValue(existing);
 
-      await playlistModule.upsertPlaylist({
+      const result = await playlistModule.upsertPlaylist({
         playlist_id: 'PLabc', title: 'Updated',
       }, { enabled: true });
 
       expect(existing.update).toHaveBeenCalledWith(expect.objectContaining({
         title: 'Updated', enabled: true,
       }));
+      expect(result.playlist).toBe(existing);
+      expect(result.restored).toBe(false);
+    });
+
+    test('re-enables a soft-deleted playlist without clobbering its saved settings and reports restored', async () => {
+      const existing = { id: 2, playlist_id: 'PLabc', enabled: false, update: jest.fn().mockResolvedValue(true) };
+      Playlist.findOne.mockResolvedValue(existing);
+
+      const result = await playlistModule.upsertPlaylist({
+        playlist_id: 'PLabc', title: 'Re-added',
+      }, { enabled: true, settings: { sync_to_plex: false, default_sub_folder: 'Other' } });
+
+      expect(result.restored).toBe(true);
+      const updatePayload = existing.update.mock.calls[0][0];
+      expect(updatePayload).toEqual(expect.objectContaining({ title: 'Re-added', enabled: true }));
+      expect(updatePayload).not.toHaveProperty('sync_to_plex');
+      expect(updatePayload).not.toHaveProperty('default_sub_folder');
+    });
+
+    test('does not apply settings when updating an already-enabled playlist', async () => {
+      const existing = { id: 2, playlist_id: 'PLabc', enabled: true, update: jest.fn().mockResolvedValue(true) };
+      Playlist.findOne.mockResolvedValue(existing);
+
+      const result = await playlistModule.upsertPlaylist({
+        playlist_id: 'PLabc', title: 'Same',
+      }, { enabled: true, settings: { sync_to_emby: true } });
+
+      expect(result.restored).toBe(false);
+      expect(existing.update.mock.calls[0][0]).not.toHaveProperty('sync_to_emby');
     });
   });
 
@@ -565,6 +602,80 @@ describe('playlistModule', () => {
       ]);
     });
 
+    test('does not clobber added_at on existing rows during a refresh', async () => {
+      Playlist.findOne.mockResolvedValue({
+        id: 1, playlist_id: 'PLabc', url: 'https://u',
+        min_duration: null, max_duration: null, title_filter_regex: null,
+        update: jest.fn().mockResolvedValue(true),
+      });
+      PlaylistVideo.findAll.mockResolvedValue([]);
+      PlaylistVideo.bulkCreate.mockResolvedValue([]);
+
+      const mockChild = new EventEmitter();
+      mockChild.stdout = new EventEmitter();
+      mockChild.stderr = new EventEmitter();
+      childProcess.spawn.mockReturnValue(mockChild);
+      const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
+
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+      mockChild.stdout.emit('data', JSON.stringify({ id: 'v1', title: 'Video 1', duration: 100 }) + '\n');
+      mockChild.emit('close', 0);
+      await promise;
+
+      const updateOnDuplicate = PlaylistVideo.bulkCreate.mock.calls[0][1].updateOnDuplicate;
+      expect(updateOnDuplicate).not.toContain('added_at');
+    });
+
+    test('reconciles rows against downloaded videos after the fetch completes', async () => {
+      Playlist.findOne.mockResolvedValue({
+        id: 1, playlist_id: 'PLabc', url: 'https://u',
+        min_duration: null, max_duration: null, title_filter_regex: null,
+        update: jest.fn().mockResolvedValue(true),
+      });
+      PlaylistVideo.findAll.mockResolvedValue([]);
+      PlaylistVideo.bulkCreate.mockResolvedValue([]);
+      const reconcile = jest.spyOn(playlistModule, 'backfillFromDownloadedVideos').mockResolvedValue(undefined);
+
+      const mockChild = new EventEmitter();
+      mockChild.stdout = new EventEmitter();
+      mockChild.stderr = new EventEmitter();
+      childProcess.spawn.mockReturnValue(mockChild);
+      const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
+
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+      mockChild.stdout.emit('data', JSON.stringify({ id: 'v1', title: 'Video 1', duration: 100 }) + '\n');
+      mockChild.emit('close', 0);
+      await promise;
+
+      expect(reconcile).toHaveBeenCalledWith('PLabc');
+    });
+
+    test('a failed downloaded-video reconciliation does not fail the fetch', async () => {
+      Playlist.findOne.mockResolvedValue({
+        id: 1, playlist_id: 'PLabc', url: 'https://u',
+        min_duration: null, max_duration: null, title_filter_regex: null,
+        update: jest.fn().mockResolvedValue(true),
+      });
+      PlaylistVideo.findAll.mockResolvedValue([]);
+      PlaylistVideo.bulkCreate.mockResolvedValue([]);
+      jest.spyOn(playlistModule, 'backfillFromDownloadedVideos').mockRejectedValue(new Error('db down'));
+
+      const mockChild = new EventEmitter();
+      mockChild.stdout = new EventEmitter();
+      mockChild.stderr = new EventEmitter();
+      childProcess.spawn.mockReturnValue(mockChild);
+      const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
+
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+      mockChild.stdout.emit('data', JSON.stringify({ id: 'v1', title: 'Video 1', duration: 100 }) + '\n');
+      mockChild.emit('close', 0);
+
+      await expect(promise).resolves.toBe(1);
+    });
+
     test('rejects a second fetch while one is in progress for the same playlist', async () => {
       Playlist.findOne.mockResolvedValue({
         id: 1, playlist_id: 'PLabc', url: 'https://u',
@@ -837,12 +948,19 @@ describe('playlistModule', () => {
       expect(channelModule.upsertChannel).not.toHaveBeenCalled();
     });
 
-    test('ignores downloaded videos that have no channel_id', async () => {
+    test('stamps added_at but skips channel work for downloaded videos that have no channel_id', async () => {
+      PlaylistVideo.findAll.mockResolvedValue([
+        { playlist_id: 'PL1', youtube_id: 'v1', channel_id: 'UCowner', added_at: null },
+      ]);
+
       await playlistModule.backfillDownloadedVideoChannels([
         { youtubeId: 'v1', channel_id: null, youTubeChannelName: 'X' },
       ]);
 
-      expect(PlaylistVideo.findAll).not.toHaveBeenCalled();
+      expect(PlaylistVideo.update).toHaveBeenCalledWith(
+        { added_at: expect.any(Date) },
+        { where: { youtube_id: 'v1' } }
+      );
       expect(channelModule.upsertChannel).not.toHaveBeenCalled();
     });
 
@@ -854,7 +972,7 @@ describe('playlistModule', () => {
 
     test('does not rewrite channel_id that is already correct', async () => {
       PlaylistVideo.findAll.mockResolvedValue([
-        { playlist_id: 'PL1', youtube_id: 'v1', channel_id: 'UCreal' },
+        { playlist_id: 'PL1', youtube_id: 'v1', channel_id: 'UCreal', added_at: new Date() },
       ]);
       Channel.findAll.mockResolvedValue([{ channel_id: 'UCreal' }]);
 
@@ -870,7 +988,7 @@ describe('playlistModule', () => {
       // auto-generated upload channel (VEVO/Topic). The stored owner id wins, so
       // no overwrite and no new channel.
       PlaylistVideo.findAll.mockResolvedValue([
-        { playlist_id: 'PL1', youtube_id: 'v1', channel_id: 'UCowner' },
+        { playlist_id: 'PL1', youtube_id: 'v1', channel_id: 'UCowner', added_at: new Date() },
       ]);
       Channel.findAll.mockResolvedValue([]);
       Playlist.findAll.mockResolvedValue([
@@ -883,6 +1001,152 @@ describe('playlistModule', () => {
 
       expect(PlaylistVideo.update).not.toHaveBeenCalled();
       expect(channelModule.upsertChannel).not.toHaveBeenCalled();
+    });
+
+    test('stamps added_at with the provided download time when a row is stale', async () => {
+      const downloadedAt = new Date('2026-01-05T10:00:00.000Z');
+      PlaylistVideo.findAll.mockResolvedValue([
+        { playlist_id: 'PL1', youtube_id: 'v1', channel_id: 'UCreal', added_at: new Date('2026-06-01T00:00:00.000Z') },
+      ]);
+      Channel.findAll.mockResolvedValue([{ channel_id: 'UCreal' }]);
+
+      await playlistModule.backfillDownloadedVideoChannels([
+        { youtubeId: 'v1', channel_id: 'UCreal', youTubeChannelName: 'Real Ch', downloadedAt },
+      ]);
+
+      expect(PlaylistVideo.findAll).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { youtube_id: ['v1'] } })
+      );
+      expect(PlaylistVideo.update).toHaveBeenCalledWith(
+        { added_at: downloadedAt },
+        { where: { youtube_id: 'v1' } }
+      );
+    });
+
+    test('does not rewrite an added_at that already matches the download time', async () => {
+      const downloadedAt = new Date('2026-01-05T10:00:00.000Z');
+      PlaylistVideo.findAll.mockResolvedValue([
+        { playlist_id: 'PL1', youtube_id: 'v1', channel_id: 'UCreal', added_at: new Date(downloadedAt) },
+      ]);
+      Channel.findAll.mockResolvedValue([{ channel_id: 'UCreal' }]);
+
+      await playlistModule.backfillDownloadedVideoChannels([
+        { youtubeId: 'v1', channel_id: 'UCreal', youTubeChannelName: 'Real Ch', downloadedAt },
+      ]);
+
+      expect(PlaylistVideo.update).not.toHaveBeenCalled();
+    });
+
+    test('leaves added_at alone when the caller reports no reliable download time', async () => {
+      PlaylistVideo.findAll.mockResolvedValue([
+        { playlist_id: 'PL1', youtube_id: 'v1', channel_id: 'UCreal', added_at: null },
+      ]);
+      Channel.findAll.mockResolvedValue([{ channel_id: 'UCreal' }]);
+
+      await playlistModule.backfillDownloadedVideoChannels([
+        { youtubeId: 'v1', channel_id: 'UCreal', youTubeChannelName: 'Real Ch', downloadedAt: null },
+      ]);
+
+      expect(PlaylistVideo.update).not.toHaveBeenCalled();
+    });
+
+    test('does not seed a hidden channel from a soft-deleted owning playlist', async () => {
+      PlaylistVideo.findAll.mockResolvedValue([
+        { playlist_id: 'PLdeleted', youtube_id: 'v1', channel_id: null, added_at: new Date() },
+      ]);
+      Channel.findAll.mockResolvedValue([]);
+      // The enabled-only lookup finds no candidate playlists.
+      Playlist.findAll.mockResolvedValue([]);
+
+      await playlistModule.backfillDownloadedVideoChannels([
+        { youtubeId: 'v1', channel_id: 'UCnew', youTubeChannelName: 'New Ch' },
+      ]);
+
+      expect(Playlist.findAll).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ enabled: true }) })
+      );
+      // channel_id is still filled on the soft-deleted playlist's row...
+      expect(PlaylistVideo.update).toHaveBeenCalledWith(
+        { channel_id: 'UCnew' },
+        { where: { youtube_id: 'v1', channel_id: null } }
+      );
+      // ...but no hidden channel is created with the deleted playlist's settings.
+      expect(channelModule.upsertChannel).not.toHaveBeenCalled();
+    });
+
+    test('seeds from an enabled owning playlist when the first owning row is soft-deleted', async () => {
+      PlaylistVideo.findAll.mockResolvedValue([
+        { playlist_id: 'PLdeleted', youtube_id: 'v1', channel_id: null, added_at: new Date() },
+        { playlist_id: 'PLlive', youtube_id: 'v1', channel_id: null, added_at: new Date() },
+      ]);
+      Channel.findAll.mockResolvedValue([]);
+      Playlist.findAll.mockResolvedValue([
+        { playlist_id: 'PLlive', default_sub_folder: 'LiveFolder', video_quality: '720' },
+      ]);
+
+      await playlistModule.backfillDownloadedVideoChannels([
+        { youtubeId: 'v1', channel_id: 'UCnew', youTubeChannelName: 'New Ch' },
+      ]);
+
+      expect(channelModule.upsertChannel).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'UCnew' }),
+        false,
+        null,
+        expect.objectContaining({ sub_folder: 'LiveFolder', video_quality: '720' })
+      );
+    });
+  });
+
+  describe('backfillFromDownloadedVideos', () => {
+    test('reconciles tracked rows against already-downloaded videos', async () => {
+      const downloadedAt = new Date('2026-02-10T08:00:00.000Z');
+      PlaylistVideo.findAll
+        // id scan for the playlist being reconciled
+        .mockResolvedValueOnce([{ youtube_id: 'v1' }, { youtube_id: 'v2' }])
+        // rows matched inside backfillDownloadedVideoChannels
+        .mockResolvedValueOnce([
+          { playlist_id: 'PL1', youtube_id: 'v1', channel_id: null, added_at: null },
+        ]);
+      db.sequelize.query.mockResolvedValue([
+        { youtubeId: 'v1', channel_id: 'UCa', youTubeChannelName: 'A', downloadedAt },
+      ]);
+      Channel.findAll.mockResolvedValue([{ channel_id: 'UCa' }]);
+
+      await playlistModule.backfillFromDownloadedVideos('PL1');
+
+      expect(PlaylistVideo.findAll).toHaveBeenNthCalledWith(1,
+        expect.objectContaining({ where: { playlist_id: 'PL1' } })
+      );
+      expect(db.sequelize.query).toHaveBeenCalledWith(
+        expect.stringContaining('COALESCE'),
+        expect.objectContaining({ replacements: { youtubeIds: ['v1', 'v2'] } })
+      );
+      expect(PlaylistVideo.update).toHaveBeenCalledWith(
+        { added_at: downloadedAt },
+        { where: { youtube_id: 'v1' } }
+      );
+      expect(PlaylistVideo.update).toHaveBeenCalledWith(
+        { channel_id: 'UCa' },
+        { where: { youtube_id: 'v1', channel_id: null } }
+      );
+    });
+
+    test('skips the Videos lookup when the playlist has no tracked rows', async () => {
+      PlaylistVideo.findAll.mockResolvedValueOnce([]);
+
+      await playlistModule.backfillFromDownloadedVideos('PL1');
+
+      expect(db.sequelize.query).not.toHaveBeenCalled();
+    });
+
+    test('no-ops when none of the tracked videos have been downloaded', async () => {
+      PlaylistVideo.findAll.mockResolvedValueOnce([{ youtube_id: 'v1' }]);
+      db.sequelize.query.mockResolvedValue([]);
+
+      await playlistModule.backfillFromDownloadedVideos('PL1');
+
+      expect(PlaylistVideo.update).not.toHaveBeenCalled();
+      expect(PlaylistVideo.findAll).toHaveBeenCalledTimes(1);
     });
   });
 
