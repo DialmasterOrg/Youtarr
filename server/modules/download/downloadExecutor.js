@@ -225,7 +225,14 @@ class DownloadExecutor {
         },
       });
 
-      const router = new YtdlpOutputRouter({ jobId, config, monitor, errorTracker, timeoutController });
+      const router = new YtdlpOutputRouter({
+        jobId,
+        config,
+        monitor,
+        errorTracker,
+        timeoutController,
+        cookiesEnabled: Boolean(configModule.getCookiesPath()),
+      });
 
       // Emit initial state so the UI reflects the job start immediately
       MessageEmitter.emitMessage(

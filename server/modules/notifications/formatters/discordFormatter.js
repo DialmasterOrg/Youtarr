@@ -17,7 +17,9 @@ const {
   formatTerminatedChannelLine,
   getTerminationFailureCount,
   buildTerminationFailureCountLabel,
-  formatTerminationFailureLine
+  formatTerminationFailureLine,
+  getDiagnoses,
+  formatDiagnosisLine
 } = require('../utils');
 
 const DISCORD_FIELD_VALUE_LIMIT = 1024;
@@ -112,6 +114,14 @@ function formatDownloadMessage(finalSummary, videoData) {
       name: '⚠️ Failed downloads',
       value: failedValue,
       inline: false
+    });
+
+    getDiagnoses(finalSummary).forEach(diagnosis => {
+      fields.push({
+        name: '💡 Likely cause',
+        value: truncateFieldValueAtLineBoundary(formatDiagnosisLine(diagnosis)),
+        inline: false
+      });
     });
   }
 

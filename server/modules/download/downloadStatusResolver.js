@@ -42,6 +42,7 @@ function describeNonZeroExit({
   videoDataCount,
   terminatedChannelCount,
   httpForbiddenDetected,
+  cookiesEnabled = false,
   flags,
   failureDetails
 }) {
@@ -59,9 +60,13 @@ function describeNonZeroExit({
     output = `${videoCount} videos, ${terminatedChannelCount} channel${terminatedChannelCount !== 1 ? 's' : ''} marked terminated.`;
     notes = `${terminatedChannelCount} channel${terminatedChannelCount !== 1 ? 's' : ''} marked terminated by YouTube`;
   } else if (httpForbiddenDetected) {
-    // Failed with 403 errors - likely authentication issue
+    // Failed with 403 errors - likely authentication issue. With cookies
+    // already enabled, "configure cookies" is the wrong advice: stale or
+    // rotated cookies are the usual cause.
     output = `${videoCount} videos. Error: YouTube returned HTTP 403 (Forbidden)`;
-    notes = 'YouTube denied access (HTTP 403). Configure cookies in Settings to resolve this issue.';
+    notes = cookiesEnabled
+      ? 'YouTube denied access (HTTP 403) while using your uploaded cookies. Re-export fresh cookies from your browser, or disable cookies in Settings -> Cookies.'
+      : 'YouTube denied access (HTTP 403). Configure cookies in Settings -> Cookies to resolve this issue.';
     errorCode = 'COOKIES_RECOMMENDED';
   } else {
     // Failed with other error
@@ -110,6 +115,7 @@ function resolveFinalPresentation({
   monitorCompletedCount,
   unexpectedErrorCount,
   httpForbiddenDetected,
+  cookiesEnabled = false,
   // Failures already handed off to a queued auto-retry job. Affects only the
   // presented text; state derivation still counts them as failures.
   autoRetryQueuedCount = 0
@@ -169,7 +175,11 @@ function resolveFinalPresentation({
   } else if (botDetected) {
     finalState = 'failed';
     finalErrorCode = 'COOKIES_REQUIRED';
-    finalText = 'Download failed: Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.';
+    // With cookies already enabled, "set cookies" is the wrong advice: stale
+    // or rotated cookies are the usual cause.
+    finalText = cookiesEnabled
+      ? 'Download failed: Bot detection encountered even though cookies are configured - they are likely expired or rotated. Re-export fresh cookies from your browser and upload them in Settings -> Cookies.'
+      : 'Download failed: Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.';
   } else if (monitorHasError && finalState === 'complete' && !flags.hasOnlyHandledErrors) {
     // Don't let a recognized termination flip the state back to error
     // via DownloadProgressMonitor's broad hasError flag.
@@ -220,10 +230,11 @@ function resolveFinalPresentation({
   return { finalState, finalText, finalErrorCode, debugFlags };
 }
 
-function buildJobDataPayload({ videoData, failedVideosList, terminatedChannels, terminatedChannelIds, terminationFailures }) {
+function buildJobDataPayload({ videoData, failedVideosList, terminatedChannels, terminatedChannelIds, terminationFailures, diagnoses }) {
   return {
     videos: videoData || [],
     failedVideos: failedVideosList || [],
+    diagnoses: diagnoses || [],
     terminatedChannels: [...terminatedChannels],
     totalTerminatedChannels: terminatedChannelIds.size,
     terminationFailures: [...terminationFailures],

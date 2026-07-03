@@ -119,11 +119,25 @@ describe('downloadStatusResolver', () => {
       expect(result.notes).toBe('1 channel marked terminated by YouTube');
     });
 
-    it('recommends cookies when HTTP 403 was detected', () => {
+    it('recommends cookies when HTTP 403 was detected without cookies configured', () => {
       const result = describeNonZeroExit({ ...baseInput, videoCount: 2, httpForbiddenDetected: true });
       expect(result.errorCode).toBe('COOKIES_RECOMMENDED');
       expect(result.output).toBe('2 videos. Error: YouTube returned HTTP 403 (Forbidden)');
-      expect(result.notes).toBe('YouTube denied access (HTTP 403). Configure cookies in Settings to resolve this issue.');
+      expect(result.notes).toBe('YouTube denied access (HTTP 403). Configure cookies in Settings -> Cookies to resolve this issue.');
+    });
+
+    it('recommends refreshing or disabling cookies when HTTP 403 was detected with cookies enabled', () => {
+      const result = describeNonZeroExit({
+        ...baseInput,
+        videoCount: 2,
+        httpForbiddenDetected: true,
+        cookiesEnabled: true
+      });
+      expect(result.errorCode).toBe('COOKIES_RECOMMENDED');
+      expect(result.output).toBe('2 videos. Error: YouTube returned HTTP 403 (Forbidden)');
+      expect(result.notes).toMatch(/re-export fresh cookies/i);
+      expect(result.notes).toMatch(/disable cookies/i);
+      expect(result.notes).not.toMatch(/configure cookies/i);
     });
 
     it('describes a generic failure with the exit code when nothing succeeded', () => {
@@ -426,6 +440,20 @@ describe('downloadStatusResolver', () => {
       expect(result.finalText).toBe('Download failed: Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.');
     });
 
+    it('uses stale-cookie messaging for bot detection when cookies are enabled', () => {
+      const result = resolveFinalPresentation({
+        ...baseInput,
+        code: 1,
+        botDetected: true,
+        cookiesEnabled: true
+      });
+      expect(result.finalState).toBe('failed');
+      expect(result.finalErrorCode).toBe('COOKIES_REQUIRED');
+      expect(result.finalText).toMatch(/expired or rotated/i);
+      expect(result.finalText).toMatch(/re-export fresh cookies/i);
+      expect(result.finalText).not.toMatch(/set cookies/i);
+    });
+
     it('reports terminated with the reason and singular completed count', () => {
       const result = resolveFinalPresentation({
         ...baseInput,
@@ -524,6 +552,7 @@ describe('downloadStatusResolver', () => {
       expect(payload).toEqual({
         videos: [{ youtubeId: 'abc' }],
         failedVideos: [{ youtubeId: 'def' }],
+        diagnoses: [],
         terminatedChannels: [{ channelId: 'chan1' }],
         totalTerminatedChannels: 2,
         terminationFailures: [{ channelId: 'chan3' }],
@@ -539,6 +568,19 @@ describe('downloadStatusResolver', () => {
       });
       expect(payload.videos).toEqual([]);
       expect(payload.failedVideos).toEqual([]);
+    });
+
+    it('includes the diagnoses list in the payload', () => {
+      const diagnoses = [{ key: 'http-403-cookies-enabled', title: 't', message: 'm', count: 2 }];
+      const payload = buildJobDataPayload({ ...buildInput(), diagnoses });
+
+      expect(payload.diagnoses).toEqual(diagnoses);
+    });
+
+    it('defaults diagnoses to an empty array when not provided', () => {
+      const payload = buildJobDataPayload(buildInput());
+
+      expect(payload.diagnoses).toEqual([]);
     });
 
     it('copies the termination arrays so later mutation does not change the payload', () => {

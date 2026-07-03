@@ -20,7 +20,7 @@ import {
   CardContent,
 } from '../ui';
 import { ChevronDown as ExpandMoreIcon, ChevronUp as ExpandLessIcon } from 'lucide-react';
-import { Job } from '../../types/Job';
+import { Job, FailedVideo } from '../../types/Job';
 import { VideoData } from '../../types/VideoData';
 import { useSwipeable } from 'react-swipeable';
 import { useConfig } from '../../hooks/useConfig';
@@ -29,6 +29,8 @@ import VideoModal from '../shared/VideoModal';
 import { VideoModalData } from '../shared/VideoModal/types';
 import VideoThumbnail from './VideoThumbnail';
 import MissingVideoChip from './MissingVideoChip';
+import FailedVideoChip from './FailedVideoChip';
+import FailedDownloadsDetail from './FailedDownloadsDetail';
 
 interface DownloadHistoryProps {
   jobs: Job[];
@@ -41,12 +43,23 @@ interface DownloadHistoryProps {
 }
 
 function cleanJobTypeLabel(jobType: string): string {
+  if (jobType.startsWith('Auto-retry')) return 'Auto-retry';
   if (jobType.includes('Channel Downloads')) return 'Channel Downloads';
   if (jobType.includes('Manually Added Urls')) {
     const apiKeyMatch = jobType.match(/\(via API: (.+)\)/);
     return apiKeyMatch ? `Manual Videos (API: ${apiKeyMatch[1]})` : 'Manual Videos';
   }
   return jobType;
+}
+
+// Failures handed off to an auto-retry job report their final outcome on the
+// retry job's row; showing them here too would double-count them.
+function getDisplayableFailedVideos(job: Job): FailedVideo[] {
+  return (job.data?.failedVideos || []).filter((video) => !video.autoRetryQueued);
+}
+
+function getDiagnosisTitles(job: Job): string[] {
+  return (job.data?.diagnoses || []).map((diagnosis) => diagnosis.title);
 }
 
 function jobVideoToModalData(video: VideoData): VideoModalData {
@@ -115,7 +128,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
         return true;
       }
 
-      return job.data.videos.length > 0;
+      return job.data.videos.length > 0 || getDisplayableFailedVideos(job).length > 0;
     });
 
   const totalPages = Math.max(1, Math.ceil(jobsToDisplay.length / itemsPerPage));
@@ -234,7 +247,8 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                     const period = hours >= 12 ? 'PM' : 'AM';
 
                     let formattedJobType = '';
-                    if (job.jobType.includes('Channel Downloads')) formattedJobType = 'Channels';
+                    if (job.jobType.startsWith('Auto-retry')) formattedJobType = 'Auto-retry';
+                    else if (job.jobType.includes('Channel Downloads')) formattedJobType = 'Channels';
                     else if (job.jobType.includes('Manually Added Urls')) {
                       const apiKeyMatch = job.jobType.match(/\(via API: (.+)\)/);
                       formattedJobType = apiKeyMatch ? `API: ${apiKeyMatch[1]}` : 'Manual Videos';
@@ -250,6 +264,8 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                     const channelText = !hasMultiple ? singleVideo?.youTubeChannelName : undefined;
                     const showThumbnail = !hasMultiple && !!singleVideo;
                     const missingCount = videos.filter((v: VideoData) => v.removed).length;
+                    const failedForJob = getDisplayableFailedVideos(job);
+                    const hasExpandable = hasMultiple || failedForJob.length > 0;
 
                     return (
                       <Box
@@ -281,8 +297,14 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                                 tooltip={`${missingCount} of ${videos.length} video files not found on disk`}
                               />
                             )}
+                            {failedForJob.length > 0 && (
+                              <FailedVideoChip
+                                count={failedForJob.length}
+                                diagnosisTitles={getDiagnosisTitles(job)}
+                              />
+                            )}
                           </Box>
-                          {hasMultiple && (
+                          {hasExpandable && (
                             <IconButton size="small" onClick={() => handleExpandCell(job.id)}>
                               {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                             </IconButton>
@@ -344,7 +366,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                           )}
                         </Box>
 
-                        {hasMultiple && (
+                        {hasExpandable && (
                           <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                             <Box className="mt-1.5 flex flex-col gap-1.5">
                               {videos.map((video: VideoData) => (
@@ -365,6 +387,10 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                                   </Box>
                                 </Box>
                               ))}
+                              <FailedDownloadsDetail
+                                failedVideos={failedForJob}
+                                diagnoses={job.data?.diagnoses}
+                              />
                             </Box>
                           </Collapse>
                         )}
@@ -447,7 +473,8 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                     const period = hours >= 12 ? 'PM' : 'AM';
 
                     let formattedJobType = '';
-                    if (job.jobType.includes('Channel Downloads')) formattedJobType = 'Channels';
+                    if (job.jobType.startsWith('Auto-retry')) formattedJobType = 'Auto-retry';
+                    else if (job.jobType.includes('Channel Downloads')) formattedJobType = 'Channels';
                     else if (job.jobType.includes('Manually Added Urls')) {
                       const apiKeyMatch = job.jobType.match(/\(via API: (.+)\)/);
                       formattedJobType = apiKeyMatch ? `API: ${apiKeyMatch[1]}` : 'Manual Videos';
@@ -457,19 +484,30 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                     hours = hours ? hours : 12;
                     const formattedTimeCreated = `${month}-${day} ${hours}:${minutes} ${period}`;
 
-                    if (videos.length > 1) {
+                    const failedForJob = getDisplayableFailedVideos(job);
+
+                    if (videos.length > 1 || failedForJob.length > 0) {
                       const missingCount = videos.filter((v: VideoData) => v.removed).length;
+                      const summaryLabel = videos.length > 1
+                        ? `Multiple (${videos.length})`
+                        : videos[0]?.youTubeVideoName || cleanJobTypeLabel(job.jobType);
                       return (
                         <React.Fragment key={job.id}>
                           <TableRow hover onClick={() => handleExpandCell(job.id)}>
                             <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>{formattedTimeCreated}</TableCell>
                             <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>
                               <Box className="flex items-center gap-2 flex-wrap">
-                                <span>Multiple ({videos.length})</span>
+                                <span>{summaryLabel}</span>
                                 {missingCount > 0 && (
                                   <MissingVideoChip
                                     label={`${missingCount} missing`}
                                     tooltip={`${missingCount} of ${videos.length} video files not found on disk`}
+                                  />
+                                )}
+                                {failedForJob.length > 0 && (
+                                  <FailedVideoChip
+                                    count={failedForJob.length}
+                                    diagnosisTitles={getDiagnosisTitles(job)}
                                   />
                                 )}
                               </Box>
@@ -487,6 +525,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                             <TableCell colSpan={5} style={{ padding: 0, border: 'none' }}>
                               <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                                 <Box className="p-2">
+                                  {videos.length > 0 && (
                                   <Table size="small">
                                     <TableBody>
                                       {videos.map((video: VideoData) => (
@@ -513,6 +552,11 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                                       ))}
                                     </TableBody>
                                   </Table>
+                                  )}
+                                  <FailedDownloadsDetail
+                                    failedVideos={failedForJob}
+                                    diagnoses={job.data?.diagnoses}
+                                  />
                                 </Box>
                               </Collapse>
                             </TableCell>
