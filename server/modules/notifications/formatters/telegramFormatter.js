@@ -18,7 +18,9 @@ const {
   formatTerminatedChannelLine,
   getTerminationFailureCount,
   buildTerminationFailureCountLabel,
-  formatTerminationFailureLine
+  formatTerminationFailureLine,
+  getDiagnoses,
+  formatDiagnosisLine
 } = require('../utils');
 
 /**
@@ -69,6 +71,9 @@ function formatDownloadMessage(finalSummary, videoData) {
     if (failedCount > failedVideosToShow.length) {
       body += `<i>...and ${failedCount - failedVideosToShow.length} more failed</i>\n`;
     }
+    getDiagnoses(finalSummary).forEach(diagnosis => {
+      body += `💡 <i>${escapeHtml(formatDiagnosisLine(diagnosis))}</i>\n`;
+    });
     body += '\n';
   }
 

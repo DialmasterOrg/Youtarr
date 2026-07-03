@@ -398,6 +398,7 @@ class DownloadModule {
       const totalSkipped = completedJob.data.cumulativeSkipped || 0;
       const terminatedChannels = completedJob.data.terminatedChannels || [];
       const terminationFailures = completedJob.data.terminationFailures || [];
+      const diagnoses = completedJob.data.diagnoses || [];
 
       const finalSummary = {
         totalDownloaded: totalVideos,
@@ -407,6 +408,7 @@ class DownloadModule {
         totalTerminatedChannels: terminatedChannels.length,
         totalTerminationFailures: terminationFailures.length,
         failedVideos: failedVideos,
+        diagnoses: diagnoses,
         terminatedChannels: terminatedChannels,
         terminationFailures: terminationFailures,
         jobType: 'Channel Downloads - All Groups',
@@ -455,6 +457,7 @@ class DownloadModule {
           totalSkipped: totalSkipped,
           totalFailed: failedVideos.length,
           failedVideos: failedVideos,
+          diagnoses: diagnoses,
           terminatedChannels: terminatedChannels,
           terminationFailures: terminationFailures,
           videoData: completedJob.data.videos || [],
@@ -473,8 +476,9 @@ class DownloadModule {
           'Emitted final summary for multi-group download');
 
         // Include termination-only runs (zero downloads, one or more terminated
-        // or one or more termination-persistence failures).
-        if (totalVideos > 0 || terminatedChannels.length > 0 || terminationFailures.length > 0) {
+        // or one or more termination-persistence failures) and diagnosed
+        // failure-only runs (the advice is the whole point of notifying).
+        if (totalVideos > 0 || terminatedChannels.length > 0 || terminationFailures.length > 0 || diagnoses.length > 0) {
           const notificationModule = require('./notificationModule');
           notificationModule.sendDownloadNotification({
             finalSummary: finalSummary,

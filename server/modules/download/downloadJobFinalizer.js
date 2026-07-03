@@ -14,6 +14,7 @@ const notificationModule = require('../notificationModule');
 const downloadResultProcessor = require('./downloadResultProcessor');
 const downloadCleanup = require('./downloadCleanup');
 const transient403RetryPlanner = require('./transient403RetryPlanner');
+const failureAdvisor = require('./failureAdvisor');
 const { runCompletionSideEffects } = require('./downloadCompletionEffects');
 const {
   computeOutcomeFlags,
@@ -71,7 +72,7 @@ async function persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, fail
   await jobModule.saveJobOnly(jobId, currentJob);
 }
 
-async function saveIntermediateGroupResults(jobId, output, videoData, failedVideosList, skippedCount, extraFields = {}, terminatedChannelsForGroup = [], terminationFailuresForGroup = []) {
+async function saveIntermediateGroupResults(jobId, output, videoData, failedVideosList, skippedCount, extraFields = {}, terminatedChannelsForGroup = [], terminationFailuresForGroup = [], diagnosesForGroup = []) {
   const currentJob = jobModule.getJob(jobId);
   if (!currentJob) {
     logger.warn({ jobId }, 'Unable to merge intermediate group results; job not found');
@@ -83,6 +84,7 @@ async function saveIntermediateGroupResults(jobId, output, videoData, failedVide
   const existingSkippedCount = currentJob.data?.cumulativeSkipped || 0;
   const existingTerminated = currentJob.data?.terminatedChannels || [];
   const existingFailures = currentJob.data?.terminationFailures || [];
+  const existingDiagnoses = currentJob.data?.diagnoses || [];
 
   // First write wins so original uploader/url/date stick across groups.
   const seenChannelIds = new Set(existingTerminated.map(c => c.channelId));
@@ -102,6 +104,7 @@ async function saveIntermediateGroupResults(jobId, output, videoData, failedVide
     data: {
       videos: [...existingVideos, ...(videoData || [])],
       failedVideos: [...existingFailedVideos, ...(failedVideosList || [])],
+      diagnoses: failureAdvisor.mergeDiagnoses(existingDiagnoses, diagnosesForGroup),
       cumulativeSkipped: existingSkippedCount + (skippedCount || 0),
       terminatedChannels: mergedTerminated,
       terminationFailures: mergedFailures
@@ -225,6 +228,25 @@ async function finalizeDownloadJob({
     // tags included, still persists in job.data for history.
     const reportableFailedVideos = failedVideosList.filter((video) => !video.autoRetryQueued);
 
+    // Cookie state drives both the failure diagnoses and the cookie-related
+    // terminal messages below: with cookies enabled, "set cookies" advice is
+    // exactly backwards (stale cookies are the usual cause).
+    const cookiesEnabled = Boolean(configModule.getCookiesPath());
+
+    // Reportable failures are final by construction (the auto-retry already
+    // failed or was never possible), so diagnose them. A diagnosis failure
+    // must never break finalization.
+    let diagnoses = [];
+    try {
+      diagnoses = failureAdvisor.adviseFailures(reportableFailedVideos, {
+        cookiesEnabled,
+        httpForbiddenDetected,
+        botDetected,
+      });
+    } catch (err) {
+      logger.error({ err, jobId }, 'Failure advisor threw; continuing without diagnoses');
+    }
+
     logger.info({ jobType, jobId }, 'Job complete (with or without errors)');
 
     const flags = computeOutcomeFlags({
@@ -240,6 +262,7 @@ async function finalizeDownloadJob({
     const dataPayload = buildJobDataPayload({
       videoData,
       failedVideosList,
+      diagnoses,
       terminatedChannels: errorTracker.terminatedChannels,
       terminatedChannelIds: errorTracker.terminatedChannelIds,
       terminationFailures: errorTracker.terminationFailures
@@ -255,7 +278,9 @@ async function finalizeDownloadJob({
 
     if (botDetected) {
       status = 'Error';
-      output = 'Bot detection encountered. Please set cookies in your Configuration.';
+      output = cookiesEnabled
+        ? 'Bot detection encountered even though cookies are configured - they are likely expired or rotated.'
+        : 'Bot detection encountered. Please set cookies in your Configuration.';
 
       await persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, failedVideosList);
       await jobModule.updateJob(jobId, {
@@ -263,7 +288,9 @@ async function finalizeDownloadJob({
         endDate: Date.now(),
         output: output,
         data: dataPayload,
-        notes: 'YouTube requires authentication. Enable cookies in Configuration to resolve this issue.',
+        notes: cookiesEnabled
+          ? 'YouTube requires authentication and your uploaded cookies appear stale. Re-export fresh cookies from your browser and upload them in Settings -> Cookies.'
+          : 'YouTube requires authentication. Enable cookies in Configuration to resolve this issue.',
         error: 'COOKIES_REQUIRED'
       });
       jobErrorCode = 'COOKIES_REQUIRED';
@@ -304,6 +331,7 @@ async function finalizeDownloadJob({
         videoDataCount: videoData.length,
         terminatedChannelCount: errorTracker.terminatedChannelIds.size,
         httpForbiddenDetected,
+        cookiesEnabled,
         flags,
         failureDetails
       });
@@ -326,7 +354,8 @@ async function finalizeDownloadJob({
             ...(nonZero.errorCode ? { error: nonZero.errorCode } : {})
           },
           [...errorTracker.terminatedChannels],
-          [...errorTracker.terminationFailures]
+          [...errorTracker.terminationFailures],
+          diagnoses
         );
       } else {
         await persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, failedVideosList);
@@ -358,7 +387,8 @@ async function finalizeDownloadJob({
           monitor.videoCount.skipped || 0,
           {},
           [...errorTracker.terminatedChannels],
-          [...errorTracker.terminationFailures]
+          [...errorTracker.terminationFailures],
+          diagnoses
         );
       } else {
         // Persist videos to DB before updateJob reloads them from DB.
@@ -389,7 +419,8 @@ async function finalizeDownloadJob({
           monitor.videoCount.skipped || 0,
           {},
           [...errorTracker.terminatedChannels],
-          [...errorTracker.terminationFailures]
+          [...errorTracker.terminationFailures],
+          diagnoses
         );
       } else {
         // Persist videos to DB before updateJob reloads them from DB.
@@ -424,6 +455,7 @@ async function finalizeDownloadJob({
       monitorCompletedCount: monitor.videoCount.completed,
       unexpectedErrorCount: errorTracker.unexpectedErrorCount,
       httpForbiddenDetected,
+      cookiesEnabled,
       autoRetryQueuedCount
     });
     const { debugFlags } = presentation;
@@ -477,6 +509,7 @@ async function finalizeDownloadJob({
         totalTerminatedChannels: errorTracker.terminatedChannelIds.size,
         totalTerminationFailures: errorTracker.terminationFailures.length,
         failedVideos: reportableFailedVideos,
+        diagnoses,
         terminatedChannels: [...errorTracker.terminatedChannels],
         terminationFailures: [...errorTracker.terminationFailures],
         jobType: jobType,
@@ -518,6 +551,7 @@ async function finalizeDownloadJob({
         totalFailed: reportableFailedVideos.length,
         totalMembersOnly: errorTracker.membersOnlyVideoIds.size,
         failedVideos: reportableFailedVideos,
+        diagnoses,
         terminatedChannels: [...errorTracker.terminatedChannels],
         terminationFailures: [...errorTracker.terminationFailures],
         videoData: videoData,
@@ -526,8 +560,12 @@ async function finalizeDownloadJob({
     }
 
     // Send notification if download was successful and notifications are enabled
-    // Skip notifications for intermediate groups (only send for final completion)
-    if ((finalState === 'complete' || finalState === 'warning') && !isFinalError && !skipJobTransition && !runActive) {
+    // Skip notifications for intermediate groups (only send for final completion).
+    // Diagnosed failure-only jobs also notify (the advice is the point), except
+    // manual/timeout terminations where the user was already acting.
+    const successOutcome = (finalState === 'complete' || finalState === 'warning') && !isFinalError;
+    const diagnosedFailureOutcome = diagnoses.length > 0 && finalState !== 'terminated';
+    if ((successOutcome || diagnosedFailureOutcome) && !skipJobTransition && !runActive) {
       notificationModule.sendDownloadNotification({
         finalSummary: finalPayload.finalSummary,
         videoData: videoData,

@@ -742,4 +742,150 @@ describe('DownloadHistory', () => {
       });
     });
   });
+
+  describe('Failed download indicators', () => {
+    const adviceMessage =
+      'Re-export fresh cookies from your browser and upload them in Settings -> Cookies.';
+
+    function makeFailedJob(overrides: Partial<Job> = {}): Job {
+      return {
+        id: 'job-failed',
+        jobType: 'Channel Downloads',
+        status: 'Complete with Warnings',
+        output: '',
+        timeCreated: new Date('2024-01-15T09:00:00Z').getTime(),
+        timeInitiated: new Date('2024-01-15T09:00:30Z').getTime(),
+        data: {
+          videos: [],
+          failedVideos: [
+            {
+              youtubeId: 'fail0000001',
+              title: 'Broken Video',
+              channel: 'StarTalk',
+              error: 'unable to download video data: HTTP Error 403: Forbidden',
+              diagnosisKey: 'http-403-cookies-enabled',
+            },
+          ],
+          diagnoses: [
+            {
+              key: 'http-403-cookies-enabled',
+              title: 'YouTube blocked the download while using your cookies',
+              message: adviceMessage,
+              count: 1,
+            },
+          ],
+        },
+        ...overrides,
+      };
+    }
+
+    test('shows failed-only jobs by default with a failed chip', () => {
+      render(<DownloadHistory {...defaultProps} jobs={[makeFailedJob()]} />);
+
+      expect(screen.getByText('1 failed')).toBeInTheDocument();
+      expect(screen.queryByText('No jobs currently running')).not.toBeInTheDocument();
+    });
+
+    test('excludes failures handed to auto-retry from the chip count', () => {
+      const job = makeFailedJob();
+      job.data.failedVideos = [
+        ...(job.data.failedVideos || []),
+        {
+          youtubeId: 'fail0000002',
+          error: 'HTTP Error 403: Forbidden',
+          autoRetryQueued: true,
+        },
+      ];
+
+      render(<DownloadHistory {...defaultProps} jobs={[job]} />);
+
+      expect(screen.getByText('1 failed')).toBeInTheDocument();
+    });
+
+    test('hides jobs whose failures were all handed to auto-retry', () => {
+      const job = makeFailedJob();
+      job.data.failedVideos = [
+        {
+          youtubeId: 'fail0000002',
+          error: 'HTTP Error 403: Forbidden',
+          autoRetryQueued: true,
+        },
+      ];
+      job.data.diagnoses = [];
+
+      render(<DownloadHistory {...defaultProps} jobs={[job]} />);
+
+      expect(screen.getByText('No jobs currently running')).toBeInTheDocument();
+    });
+
+    test('shows the diagnosis title in the chip tooltip', async () => {
+      const user = userEvent.setup();
+      render(<DownloadHistory {...defaultProps} jobs={[makeFailedJob()]} />);
+
+      await user.hover(screen.getByText('1 failed'));
+
+      const tooltip = await screen.findByRole('tooltip');
+      expect(tooltip).toHaveTextContent(
+        'YouTube blocked the download while using your cookies'
+      );
+    });
+
+    test('expanded row shows the advice once with the failed video title', () => {
+      render(
+        <DownloadHistory
+          {...defaultProps}
+          jobs={[makeFailedJob()]}
+          expanded={{ 'job-failed': true }}
+        />
+      );
+
+      expect(screen.getAllByText(adviceMessage)).toHaveLength(1);
+      expect(screen.getByText(/Broken Video/)).toBeInTheDocument();
+    });
+
+    test('shows the raw error for undiagnosed failures in the expanded row', () => {
+      const job = makeFailedJob();
+      job.data.failedVideos = [
+        {
+          youtubeId: 'fail0000001',
+          title: 'Broken Video',
+          error: 'Postprocessing failed with exit code 1',
+        },
+      ];
+      job.data.diagnoses = [];
+
+      render(
+        <DownloadHistory
+          {...defaultProps}
+          jobs={[job]}
+          expanded={{ 'job-failed': true }}
+        />
+      );
+
+      expect(screen.getByText(/Postprocessing failed with exit code 1/)).toBeInTheDocument();
+    });
+
+    test('labels auto-retry jobs with a clean label instead of the raw job type', () => {
+      const job = makeFailedJob({ jobType: 'Auto-retry: 1 video (HTTP 403)' });
+
+      render(<DownloadHistory {...defaultProps} jobs={[job]} />);
+
+      expect(screen.getAllByText('Auto-retry').length).toBeGreaterThanOrEqual(1);
+      expect(screen.queryByText('Auto-retry: 1 video (HTTP 403)')).not.toBeInTheDocument();
+    });
+
+    test('mobile card shows the failed chip and expanded advice', () => {
+      render(
+        <DownloadHistory
+          {...defaultProps}
+          jobs={[makeFailedJob()]}
+          expanded={{ 'job-failed': true }}
+          isMobile={true}
+        />
+      );
+
+      expect(screen.getByText('1 failed')).toBeInTheDocument();
+      expect(screen.getByText(adviceMessage)).toBeInTheDocument();
+    });
+  });
 });

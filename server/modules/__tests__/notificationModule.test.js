@@ -432,6 +432,58 @@ describe('Rich Notification Formatters', () => {
   });
 });
 
+describe('Failure diagnoses in notifications', () => {
+  const adviceMessage = 'YouTube blocked this download while using your uploaded cookies. Re-export fresh cookies from your browser.';
+  const diagnosedSummary = {
+    totalDownloaded: 0,
+    totalFailed: 1,
+    jobType: 'Channel Downloads',
+    failedVideos: [
+      { channel: 'StarTalk', title: 'Some Video', error: 'HTTP Error 403: Forbidden' }
+    ],
+    diagnoses: [
+      { key: 'http-403-cookies-enabled', title: 'YouTube blocked the download while using your cookies', message: adviceMessage, count: 1 }
+    ]
+  };
+
+  it.each([
+    ['plain', () => plainFormatter],
+    ['discord', () => discordFormatter],
+    ['email', () => emailFormatter],
+    ['telegram', () => telegramFormatter],
+    ['slack', () => slackMarkdownFormatter],
+  ])('includes a likely-cause line in %s notifications', (_name, getFormatter) => {
+    const message = getFormatter().formatDownloadMessage(diagnosedSummary, []);
+    const serialized = JSON.stringify(message);
+
+    expect(serialized).toContain('Likely cause');
+    expect(serialized).toContain('Re-export fresh cookies from your browser.');
+  });
+
+  it('renders one likely-cause line per distinct diagnosis', () => {
+    const summary = {
+      ...diagnosedSummary,
+      diagnoses: [
+        ...diagnosedSummary.diagnoses,
+        { key: 'bot-check-cookies-disabled', title: 'Bot check', message: 'Upload YouTube cookies to resolve this.', count: 2 }
+      ]
+    };
+
+    const message = plainFormatter.formatDownloadMessage(summary, []);
+
+    expect(message.body.match(/Likely cause/g)).toHaveLength(2);
+    expect(message.body).toContain('Upload YouTube cookies to resolve this.');
+  });
+
+  it('omits likely-cause lines when there are no diagnoses', () => {
+    const summary = { ...diagnosedSummary, diagnoses: [] };
+
+    const message = plainFormatter.formatDownloadMessage(summary, []);
+
+    expect(message.body).not.toContain('Likely cause');
+  });
+});
+
 
 describe('Apprise Sender', () => {
   let mockProcess;
@@ -772,6 +824,57 @@ describe('NotificationModule Integration', () => {
 
       expect(mockSpawn).toHaveBeenCalled();
       expect(mockLoggerDebug).not.toHaveBeenCalledWith('No new videos downloaded and no terminations recorded, skipping notification');
+    });
+
+    it('still sends notification for a failure-only run when diagnoses exist', async () => {
+      const notificationData = {
+        finalSummary: {
+          totalDownloaded: 0,
+          totalSkipped: 0,
+          totalFailed: 1,
+          jobType: 'Channel Downloads',
+          failedVideos: [
+            { youtubeId: 'fail0000001', channel: 'StarTalk', error: 'HTTP Error 403: Forbidden' }
+          ],
+          diagnoses: [
+            {
+              key: 'http-403-cookies-enabled',
+              title: 'YouTube blocked the download while using your cookies',
+              message: 'Re-export fresh cookies from your browser.',
+              count: 1
+            }
+          ]
+        },
+        videoData: []
+      };
+
+      const sendPromise = notificationModule.sendDownloadNotification(notificationData);
+      setImmediate(() => {
+        mockProcess.emit('close', 0);
+      });
+      await sendPromise;
+
+      expect(mockSpawn).toHaveBeenCalled();
+    });
+
+    it('skips a failure-only run when there are no diagnoses', async () => {
+      const notificationData = {
+        finalSummary: {
+          totalDownloaded: 0,
+          totalSkipped: 0,
+          totalFailed: 1,
+          jobType: 'Channel Downloads',
+          failedVideos: [
+            { youtubeId: 'fail0000001', channel: 'StarTalk', error: 'Postprocessing failed' }
+          ],
+          diagnoses: []
+        },
+        videoData: []
+      };
+
+      await notificationModule.sendDownloadNotification(notificationData);
+
+      expect(mockSpawn).not.toHaveBeenCalled();
     });
 
     it('should use Discord webhook directly for Discord URLs with rich formatting', async () => {

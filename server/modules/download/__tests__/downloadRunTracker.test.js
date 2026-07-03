@@ -100,6 +100,70 @@ describe('downloadRunTracker', () => {
       expect(summary.failedVideos).toHaveLength(1);
     });
 
+    test('merges diagnoses across jobs by key, summing counts', () => {
+      const cookie403 = { key: 'http-403-cookies-enabled', title: 't', message: 'm', count: 1 };
+      const runId = tracker.startRun();
+      tracker.registerJob(runId, 'j1');
+      tracker.registerJob(runId, 'j2');
+      tracker.recordJobResult(runId, 'j1', {
+        totalFailed: 1,
+        failedVideos: [{ youtubeId: 'x' }],
+        diagnoses: [cookie403],
+        jobType: 'Channel Downloads',
+      });
+      tracker.recordJobResult(runId, 'j2', {
+        totalFailed: 2,
+        failedVideos: [{ youtubeId: 'y' }, { youtubeId: 'z' }],
+        diagnoses: [
+          { ...cookie403, count: 1 },
+          { key: 'bot-check-cookies-disabled', title: 'bt', message: 'bm', count: 1 },
+        ],
+        jobType: 'Playlist: Foo',
+      });
+      tracker.seal(runId);
+
+      const summary = emittedSummary().finalSummary;
+      expect(summary.diagnoses).toHaveLength(2);
+      expect(summary.diagnoses.find((d) => d.key === 'http-403-cookies-enabled').count).toBe(2);
+      expect(summary.diagnoses.find((d) => d.key === 'bot-check-cookies-disabled').count).toBe(1);
+    });
+
+    test('emits an empty diagnoses list when no job reported any', () => {
+      const runId = tracker.startRun();
+      tracker.registerJob(runId, 'j1');
+      tracker.recordJobResult(runId, 'j1', { totalDownloaded: 1, jobType: 'Channel Downloads' });
+      tracker.seal(runId);
+
+      expect(emittedSummary().finalSummary.diagnoses).toEqual([]);
+    });
+
+    test('sends a notification for a failure-only run when diagnoses exist', () => {
+      const runId = tracker.startRun();
+      tracker.registerJob(runId, 'j1');
+      tracker.recordJobResult(runId, 'j1', {
+        totalFailed: 1,
+        failedVideos: [{ youtubeId: 'x' }],
+        diagnoses: [{ key: 'http-403-cookies-enabled', title: 't', message: 'm', count: 1 }],
+        jobType: 'Channel Downloads',
+      });
+      tracker.seal(runId);
+
+      expect(notificationModule.sendDownloadNotification).toHaveBeenCalledTimes(1);
+    });
+
+    test('stays silent for a failure-only run without diagnoses', () => {
+      const runId = tracker.startRun();
+      tracker.registerJob(runId, 'j1');
+      tracker.recordJobResult(runId, 'j1', {
+        totalFailed: 1,
+        failedVideos: [{ youtubeId: 'x' }],
+        jobType: 'Channel Downloads',
+      });
+      tracker.seal(runId);
+
+      expect(notificationModule.sendDownloadNotification).not.toHaveBeenCalled();
+    });
+
     test('waits for every registered job to reach a terminal state', () => {
       const runId = tracker.startRun();
       tracker.registerJob(runId, 'j1');

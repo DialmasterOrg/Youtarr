@@ -183,6 +183,55 @@ describe('YtdlpOutputRouter', () => {
     });
   });
 
+  describe('context-aware hints when cookies are enabled', () => {
+    let cookiesRouter;
+
+    beforeEach(() => {
+      cookiesRouter = new YtdlpOutputRouter({
+        jobId: 'job-123',
+        config: { enableStallDetection: false },
+        monitor: makeMonitor(),
+        errorTracker: makeErrorTracker(),
+        timeoutController: makeTimeoutController(),
+        cookiesEnabled: true
+      });
+    });
+
+    afterEach(() => {
+      if (cookiesRouter.progressFlushTimer) {
+        clearTimeout(cookiesRouter.progressFlushTimer);
+        cookiesRouter.progressFlushTimer = null;
+      }
+    });
+
+    it('suggests refreshing or disabling cookies on 403 instead of enabling them', () => {
+      cookiesRouter.handleStderrChunk('HTTP Error 403: Forbidden');
+
+      const call = MessageEmitter.emitMessage.mock.calls.find(
+        (c) => c[4] && c[4].errorCode === 'COOKIES_MAY_BE_STALE'
+      );
+      expect(call).toBeDefined();
+      expect(call[4].text).toMatch(/re-exporting fresh cookies/i);
+      expect(call[4].text).toMatch(/disable cookies/i);
+      expect(
+        MessageEmitter.emitMessage.mock.calls.some(
+          (c) => c[4] && c[4].errorCode === 'COOKIES_RECOMMENDED'
+        )
+      ).toBe(false);
+    });
+
+    it('suggests refreshing cookies on bot detection instead of setting them', () => {
+      cookiesRouter.handleStderrChunk('Sign in to confirm you\'re not a bot');
+
+      const call = MessageEmitter.emitMessage.mock.calls.find(
+        (c) => c[4] && c[4].progress && c[4].progress.state === 'bot_detected'
+      );
+      expect(call).toBeDefined();
+      expect(call[4].text).toMatch(/likely expired or rotated/i);
+      expect(call[4].text).not.toMatch(/set cookies/i);
+    });
+  });
+
   describe('isImportantMessage', () => {
     it('should identify download destination messages as important', () => {
       const line = '[download] Destination: /output/Channel - Title [abc123].mp4';

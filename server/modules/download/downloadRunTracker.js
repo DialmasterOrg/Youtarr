@@ -2,6 +2,7 @@ const { v4: uuidv4 } = require('uuid');
 const jobModule = require('../jobModule');
 const MessageEmitter = require('../messageEmitter');
 const logger = require('../../logger');
+const { mergeDiagnoses } = require('./failureAdvisor');
 
 // A "run" groups the multiple download jobs produced by a single
 // channel-and-playlist sweep (one channel job plus one job per playlist
@@ -89,6 +90,7 @@ class DownloadRunTracker {
         totalFailed: 0,
         totalMembersOnly: 0,
         failedVideos: [],
+        diagnoses: [],
         terminatedChannels: [],
         terminationFailures: [],
         videoData: [],
@@ -137,6 +139,7 @@ class DownloadRunTracker {
     acc.totalFailed += summary.totalFailed || 0;
     acc.totalMembersOnly += summary.totalMembersOnly || 0;
     if (Array.isArray(summary.failedVideos)) acc.failedVideos.push(...summary.failedVideos);
+    if (Array.isArray(summary.diagnoses)) acc.diagnoses = mergeDiagnoses(acc.diagnoses, summary.diagnoses);
     if (Array.isArray(summary.videoData)) acc.videoData.push(...summary.videoData);
     if (Array.isArray(summary.terminatedChannels)) acc.terminatedChannels.push(...summary.terminatedChannels);
     if (Array.isArray(summary.terminationFailures)) acc.terminationFailures.push(...summary.terminationFailures);
@@ -195,6 +198,7 @@ class DownloadRunTracker {
       totalTerminatedChannels: terminatedChannels.length,
       totalTerminationFailures: terminationFailures.length,
       failedVideos: acc.failedVideos,
+      diagnoses: acc.diagnoses,
       terminatedChannels,
       terminationFailures,
       jobType: deriveLabel(run.jobTypes),
@@ -228,7 +232,9 @@ class DownloadRunTracker {
       'Emitted aggregated final summary for download run'
     );
 
-    if (acc.totalDownloaded > 0 || terminatedChannels.length > 0 || terminationFailures.length > 0) {
+    // Diagnosed failures notify even when nothing downloaded: automated users
+    // otherwise never learn about a persistent, fixable failure.
+    if (acc.totalDownloaded > 0 || terminatedChannels.length > 0 || terminationFailures.length > 0 || acc.diagnoses.length > 0) {
       const notificationModule = require('../notificationModule');
       notificationModule
         .sendDownloadNotification({ finalSummary, videoData: acc.videoData })

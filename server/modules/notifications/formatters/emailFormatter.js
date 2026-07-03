@@ -18,7 +18,9 @@ const {
   formatTerminatedChannelLine,
   getTerminationFailureCount,
   buildTerminationFailureCountLabel,
-  formatTerminationFailureLine
+  formatTerminationFailureLine,
+  getDiagnoses,
+  formatDiagnosisLine
 } = require('../utils');
 
 const DEFAULT_HEADER_GRADIENT = 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)';
@@ -140,11 +142,16 @@ function formatDownloadMessage(finalSummary, videoData) {
       ? `<p class="more-videos">...and ${failedCount - failedVideosToShow.length} more failed</p>`
       : '';
 
+    const diagnosisItems = getDiagnoses(finalSummary).map(diagnosis =>
+      `<p>💡 <em>${escapeHtml(formatDiagnosisLine(diagnosis))}</em></p>`
+    ).join('');
+
     content += `
       <div class="warning-card">
         <strong>⚠️ ${escapeHtml(buildFailedCountLabel(failedCount))}.</strong>
         ${failedItems ? `<ul>${failedItems}</ul>` : '<p>See Youtarr download history for details.</p>'}
         ${moreFailures}
+        ${diagnosisItems}
       </div>`;
   }
 

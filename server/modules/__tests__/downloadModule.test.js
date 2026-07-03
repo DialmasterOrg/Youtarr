@@ -757,6 +757,35 @@ describe('DownloadModule', () => {
       expect(plexModuleMock.refreshLibrariesForSubfolders).toHaveBeenCalledWith(['kids', 'music']);
     });
 
+    it('should hand accumulated diagnoses to the run tracker on completion', async () => {
+      const groups = [
+        { quality: '1080', subFolder: null, channels: [{ channel_id: 'UC1' }] }
+      ];
+      const diagnoses = [{ key: 'http-403-cookies-enabled', title: 't', message: 'm', count: 1 }];
+      jest.spyOn(downloadModule, 'executeGroupDownload').mockResolvedValue();
+      jobModuleMock.getJob.mockReturnValue({
+        status: 'In Progress',
+        data: {
+          videos: [],
+          failedVideos: [{ youtubeId: 'failvid0001', error: 'HTTP Error 403: Forbidden' }],
+          diagnoses,
+          cumulativeSkipped: 0
+        }
+      });
+      const downloadRunTracker = require('../download/downloadRunTracker');
+      jest.spyOn(downloadRunTracker, 'isActive').mockReturnValue(true);
+      const recordSpy = jest.spyOn(downloadRunTracker, 'recordJobResult').mockReturnValue(true);
+      const plexModuleMock = require('../plexModule');
+      plexModuleMock.refreshLibrariesForSubfolders = jest.fn().mockReturnValue(Promise.resolve());
+
+      await downloadModule.doGroupedChannelDownloads({ runId: 'run-x' }, groups);
+
+      expect(recordSpy).toHaveBeenCalledWith('run-x', 'job-123', expect.objectContaining({
+        diagnoses,
+        totalFailed: 1
+      }));
+    });
+
     it('should stop processing groups if job is terminated', async () => {
       const groups = [
         { quality: '1080', subFolder: null, channels: [{ channel_id: 'UC1' }] },

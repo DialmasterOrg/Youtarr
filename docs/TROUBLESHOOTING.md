@@ -471,11 +471,30 @@ Youtarr's Docker image includes yt-dlp which auto-updates on every release, upda
 **Solution #2**:
 
 YouTube is blocking your downloads.
-1. Try enabling and uploading cookies in Configuration -> Cookie Configuration
+1. If cookies are **not** enabled, try enabling and uploading cookies in Settings -> Cookies. If cookies **are** enabled, they may be the cause - see "Downloads Fail with HTTP 403" below.
 2. If only some videos are failing, try increasing the "Sleep Between Requests" value in Configuration -> Advanced Settings
 3. Try using a proxy, or switching to a VPN
 
 **NOTE**: In some cases YouTube may temporarily blacklist your IP address if too many requests were happening from your IP. You may just need to wait in order to download again. You can manually test downloading a video from YouTube to rule out Youtarr-specific issues by downloading yt-dlp and attempting to manually download a single video.
+
+### Downloads Fail with HTTP 403: Forbidden
+
+**Problem**: A video (or every video) fails with `unable to download video data: HTTP Error 403: Forbidden`, even after Youtarr's automatic retry. Metadata, thumbnails, and subtitles often download fine; only the video itself fails.
+
+Youtarr detects this pattern and shows a "Likely cause" diagnosis on the Downloads page, in Download History (expand the failed job's row), and in notifications. The right fix depends on whether cookies are enabled:
+
+**If cookies are enabled** (Settings -> Cookies):
+
+Uploaded cookies change which YouTube player client yt-dlp can use, and YouTube enforces stricter requirements on that path. Stale or rotated cookies are the most common trigger - YouTube rotates cookie values regularly, so an exported cookies file goes invalid over time.
+
+1. **Refresh your cookies first**: sign into YouTube in your browser, re-export cookies with a browser extension (e.g., "Get cookies.txt LOCALLY"), and upload the fresh file. Refreshing preserves whatever you enabled cookies for.
+2. **If fresh cookies still fail**, temporarily disable cookies and retry the video. Many videos download fine without cookies because yt-dlp can then use a less restricted client.
+
+**If cookies are not enabled**:
+
+The 403 is sometimes a temporary block on YouTube's side - retrying later can work. If it keeps failing, uploading YouTube cookies from your browser (Settings -> Cookies) often resolves it.
+
+**Note**: The same failure on one machine but not another usually comes down to this cookies difference, not the network - both machines can share an IP and behave differently.
 
 ### No Download Progress Shown (Downloads Work, Videos "Just Appear")
 

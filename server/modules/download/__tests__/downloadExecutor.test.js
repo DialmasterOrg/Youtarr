@@ -33,6 +33,7 @@ jest.mock('../../../logger');
 // Mock dependencies
 jest.mock('../../configModule', () => ({
   getConfig: jest.fn(),
+  getCookiesPath: jest.fn().mockReturnValue(null),
   directoryPath: '/mock/output'
 }));
 
@@ -1108,7 +1109,7 @@ describe('DownloadExecutor', () => {
       expect(jobModule.updateJob).toHaveBeenCalledWith(
         mockJobId,
         expect.objectContaining({
-          notes: 'YouTube denied access (HTTP 403). Configure cookies in Settings to resolve this issue.',
+          notes: 'YouTube denied access (HTTP 403). Configure cookies in Settings -> Cookies to resolve this issue.',
           error: 'COOKIES_RECOMMENDED'
         })
       );
