@@ -116,6 +116,12 @@ module.exports = {
           '0%': { transform: 'translateY(-8px)', opacity: '0' },
           '100%': { transform: 'translateY(0)', opacity: '1' },
         },
+        'download-arrow-drop': {
+          '0%': { transform: 'translateY(-4px)', opacity: '0' },
+          '30%': { opacity: '1' },
+          '70%': { opacity: '1' },
+          '100%': { transform: 'translateY(4px)', opacity: '0' },
+        },
       },
       animation: {
         wiggle: 'wiggle 320ms var(--transition-bouncy)',
@@ -123,6 +129,7 @@ module.exports = {
         'fade-in': 'fade-in 150ms ease',
         'slide-up': 'slide-up 150ms ease',
         'slide-down': 'slide-down 150ms ease',
+        'download-arrow-drop': 'download-arrow-drop 1.1s ease-in-out infinite',
         spin: 'spin 1s linear infinite',
       },
     },
