@@ -32,6 +32,7 @@
   "downloadSocketTimeoutSeconds": 30,
   "downloadThrottledRate": "100K",
   "downloadRetryCount": 2,
+  "downloadAutoRetryCount": 1,
   "enableStallDetection": true,
   "stallDetectionWindowSeconds": 30,
   "stallDetectionRateThreshold": "100K",

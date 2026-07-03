@@ -287,6 +287,37 @@ describe('DownloadProgress', () => {
     expect(screen.getByText(/Channel update.*Completed/)).toBeInTheDocument();
   });
 
+  test('displays queued auto-retries in the final summary', async () => {
+    renderWithContext(
+      <DownloadProgress
+        downloadProgressRef={mockDownloadProgressRef}
+        downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
+        token="test-token"
+      />
+    );
+
+    const [, processCallback] = mockSubscribe.mock.calls[0];
+
+    await act(async () => {
+      processCallback({
+        finalSummary: {
+          totalDownloaded: 2,
+          totalSkipped: 0,
+          totalFailed: 0,
+          totalAutoRetried: 1,
+          jobType: 'Channel Downloads',
+          completedAt: '2026-07-02T10:30:00Z',
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Summary of last job')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/✓ 2 videos downloaded, 1 queued for auto-retry/)).toBeInTheDocument();
+  });
+
   test('renders termination summary as warning-shaped even with zero downloads', async () => {
     renderWithContext(
       <DownloadProgress

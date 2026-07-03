@@ -4,10 +4,12 @@ const {
   CHANNEL_DOWNLOAD_LABEL,
   PLAYLIST_DOWNLOAD_LABEL_PREFIX,
   CHANNEL_DOWNLOAD_ALL_LABEL_PREFIX,
+  AUTO_RETRY_LABEL_PREFIX,
   isSpecificUrlDownloadJob,
   isDownloadJob,
   playlistJobLabel,
   channelDownloadAllJobLabel,
+  autoRetryJobLabel,
   isChannelDownloadAllJob,
 } = require('../jobTypes');
 
@@ -80,6 +82,26 @@ describe('jobTypes', () => {
       // a running download-all job must not block scheduled channel downloads.
       const label = channelDownloadAllJobLabel({ title: 'My Channel', channel_id: 'UC123' });
       expect(label.includes(CHANNEL_DOWNLOAD_LABEL)).toBe(false);
+    });
+  });
+
+  describe('auto-retry jobs', () => {
+    it('labels jobs with the video count and pluralizes', () => {
+      expect(autoRetryJobLabel(1)).toBe(`${AUTO_RETRY_LABEL_PREFIX}1 video (HTTP 403)`);
+      expect(autoRetryJobLabel(2)).toBe(`${AUTO_RETRY_LABEL_PREFIX}2 videos (HTTP 403)`);
+    });
+
+    it('treats auto-retry jobs as specific URL-list download jobs', () => {
+      const label = autoRetryJobLabel(1);
+      expect(isSpecificUrlDownloadJob(label)).toBe(true);
+      expect(isDownloadJob(label)).toBe(true);
+      expect(isChannelDownloadAllJob(label)).toBe(false);
+    });
+
+    it('is not mistaken for a channel-downloads family label', () => {
+      // /triggerchanneldownloads guards on jobType.includes(CHANNEL_DOWNLOAD_LABEL);
+      // a running auto-retry job must not block scheduled channel downloads.
+      expect(autoRetryJobLabel(3).includes(CHANNEL_DOWNLOAD_LABEL)).toBe(false);
     });
   });
 
