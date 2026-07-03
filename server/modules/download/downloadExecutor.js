@@ -18,7 +18,10 @@ const DownloadTimeoutController = require('./DownloadTimeoutController');
 const { YtdlpErrorTracker } = require('./YtdlpErrorTracker');
 
 class DownloadExecutor {
-  constructor() {
+  // enqueueAutoRetry is injected by downloadModule so the finalizer can queue
+  // transient-403 retry jobs without a require cycle back into downloadModule.
+  constructor({ enqueueAutoRetry = null } = {}) {
+    this.enqueueAutoRetry = enqueueAutoRetry;
     this.tempChannelsFile = null;
     // Timeout configuration
     this.activityTimeoutMs = 30 * 60 * 1000; // 30 minutes of no activity (default)
@@ -279,6 +282,7 @@ class DownloadExecutor {
             runId,
             tempChannelsFile: this.tempChannelsFile,
             onTempChannelsFileCleaned: () => { this.tempChannelsFile = null; },
+            enqueueAutoRetry: this.enqueueAutoRetry,
           });
           resolve();
         } catch (err) {

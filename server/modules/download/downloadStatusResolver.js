@@ -109,7 +109,10 @@ function resolveFinalPresentation({
   videoCount,
   monitorCompletedCount,
   unexpectedErrorCount,
-  httpForbiddenDetected
+  httpForbiddenDetected,
+  // Failures already handed off to a queued auto-retry job. Affects only the
+  // presented text; state derivation still counts them as failures.
+  autoRetryQueuedCount = 0
 }) {
   // Consider it successful if:
   // - Exit code is 0 (normal success), OR
@@ -179,8 +182,14 @@ function resolveFinalPresentation({
     if (actualCount > 0) {
       parts.push(`${actualCount} video${actualCount !== 1 ? 's' : ''} downloaded`);
     }
-    if (failedCount > 0) {
-      parts.push(`${failedCount} failed`);
+    // Failures handed to a queued auto-retry are reported under the retry
+    // part only, matching finalSummary's totalFailed/totalAutoRetried split.
+    const reportedFailedCount = Math.max(0, failedCount - autoRetryQueuedCount);
+    if (reportedFailedCount > 0) {
+      parts.push(`${reportedFailedCount} failed`);
+    }
+    if (autoRetryQueuedCount > 0) {
+      parts.push(`${autoRetryQueuedCount} queued for auto-retry`);
     }
     if (skippedCount > 0) {
       parts.push(`${skippedCount} already existed`);
@@ -197,6 +206,12 @@ function resolveFinalPresentation({
       finalText = `Download ${statusText}: ${parts.join(', ')}`;
     } else {
       finalText = 'Download completed: No new videos to download';
+    }
+  } else if (autoRetryQueuedCount > 0) {
+    finalText = `Download failed: ${autoRetryQueuedCount} video${autoRetryQueuedCount !== 1 ? 's' : ''} queued for auto-retry`;
+    const remainingFailedCount = Math.max(0, failedCount - autoRetryQueuedCount);
+    if (remainingFailedCount > 0) {
+      finalText += `, ${remainingFailedCount} other failure${remainingFailedCount !== 1 ? 's' : ''}`;
     }
   } else {
     finalText = 'Download failed';

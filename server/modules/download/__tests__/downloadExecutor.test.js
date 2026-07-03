@@ -427,6 +427,35 @@ describe('DownloadExecutor', () => {
       );
     });
 
+    it('invokes the injected enqueueAutoRetry when a video fails with a mid-stream 403', async () => {
+      const enqueueAutoRetry = jest.fn().mockResolvedValue();
+      const retryExecutor = new DownloadExecutor({ enqueueAutoRetry });
+
+      setTimeout(() => {
+        mockProcess.stdout.emit(
+          'data',
+          Buffer.from('[youtube] Extracting URL: https://www.youtube.com/watch?v=abc123def45\n')
+        );
+        mockProcess.stderr.emit(
+          'data',
+          Buffer.from('ERROR: unable to download video data: HTTP Error 403: Forbidden\n')
+        );
+        mockProcess.emit('exit', 1, null);
+      }, 10);
+
+      await retryExecutor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(enqueueAutoRetry).toHaveBeenCalledWith({
+        retryVideos: [{
+          youtubeId: 'abc123def45',
+          url: 'https://www.youtube.com/watch?v=abc123def45'
+        }],
+        autoRetryAttempt: 1,
+        runId: null,
+        sourceJobData: {}
+      });
+    });
+
     it('reports to the run tracker using the runId captured at entry, even after job.data is stripped', async () => {
       // Regression: terminal updateJob() replaces job.data with an object that
       // omits runId. doDownload must capture runId at entry, not re-read it at

@@ -19,6 +19,10 @@ const PLAYLIST_DOWNLOAD_LABEL_PREFIX = 'Playlist: ';
 // already-running guard match that substring, and a download-all job is a
 // URL-list job, not a channel/tab sweep.
 const CHANNEL_DOWNLOAD_ALL_LABEL_PREFIX = 'Channel Download All: ';
+// Auto-retry jobs enqueued after transient-403 failures. Always a URL-list
+// job. Like the download-all label, must NOT contain CHANNEL_DOWNLOAD_LABEL
+// even when retrying channel-sweep failures.
+const AUTO_RETRY_LABEL_PREFIX = 'Auto-retry: ';
 
 // True for a fixed-URL-list download (manual, playlist, or channel
 // download-all), as opposed to a channel/tab download.
@@ -27,7 +31,8 @@ function isSpecificUrlDownloadJob(jobType) {
   return (
     jobType.includes(MANUAL_DOWNLOAD_LABEL) ||
     jobType.startsWith(PLAYLIST_DOWNLOAD_LABEL_PREFIX) ||
-    jobType.startsWith(CHANNEL_DOWNLOAD_ALL_LABEL_PREFIX)
+    jobType.startsWith(CHANNEL_DOWNLOAD_ALL_LABEL_PREFIX) ||
+    jobType.startsWith(AUTO_RETRY_LABEL_PREFIX)
   );
 }
 
@@ -49,6 +54,11 @@ function channelDownloadAllJobLabel(channel) {
   return `${CHANNEL_DOWNLOAD_ALL_LABEL_PREFIX}${channel.title || channel.channel_id}`;
 }
 
+// Build the activity-view job label for a transient-403 auto-retry job.
+function autoRetryJobLabel(videoCount) {
+  return `${AUTO_RETRY_LABEL_PREFIX}${videoCount} video${videoCount !== 1 ? 's' : ''} (HTTP 403)`;
+}
+
 // True for a channel download-all job. These jobs are exempt from the
 // absolute runtime cap (large channels legitimately take days).
 function isChannelDownloadAllJob(jobType) {
@@ -61,9 +71,11 @@ module.exports = {
   CHANNEL_DOWNLOAD_LABEL,
   PLAYLIST_DOWNLOAD_LABEL_PREFIX,
   CHANNEL_DOWNLOAD_ALL_LABEL_PREFIX,
+  AUTO_RETRY_LABEL_PREFIX,
   isSpecificUrlDownloadJob,
   isDownloadJob,
   playlistJobLabel,
   channelDownloadAllJobLabel,
+  autoRetryJobLabel,
   isChannelDownloadAllJob,
 };

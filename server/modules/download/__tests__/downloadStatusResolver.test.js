@@ -345,6 +345,67 @@ describe('downloadStatusResolver', () => {
       expect(result.finalText).toBe('Download completed with errors: 2 videos downloaded, 1 failed');
     });
 
+    it('reports a fully handed-off failure as queued for auto-retry, not failed', () => {
+      // Matches finalSummary's split: the handed-off video is totalAutoRetried,
+      // not totalFailed, so the text must not double-count it.
+      const result = resolveFinalPresentation({
+        ...baseInput,
+        code: 1,
+        videoDataCount: 2,
+        failedCount: 1,
+        videoCount: 3,
+        monitorCompletedCount: 2,
+        autoRetryQueuedCount: 1
+      });
+      expect(result.finalState).toBe('warning');
+      expect(result.finalText).toBe('Download completed with errors: 2 videos downloaded, 1 queued for auto-retry');
+    });
+
+    it('reports non-retried failures separately from queued auto-retries', () => {
+      const result = resolveFinalPresentation({
+        ...baseInput,
+        code: 1,
+        videoDataCount: 2,
+        failedCount: 2,
+        videoCount: 4,
+        monitorCompletedCount: 2,
+        autoRetryQueuedCount: 1
+      });
+      expect(result.finalState).toBe('warning');
+      expect(result.finalText).toBe('Download completed with errors: 2 videos downloaded, 1 failed, 1 queued for auto-retry');
+    });
+
+    it('mentions queued auto-retries when a hard failure processed nothing', () => {
+      const result = resolveFinalPresentation({
+        ...baseInput,
+        code: 1,
+        failedCount: 1,
+        autoRetryQueuedCount: 1
+      });
+      expect(result.finalState).toBe('error');
+      expect(result.finalText).toBe('Download failed: 1 video queued for auto-retry');
+    });
+
+    it('pluralizes queued auto-retries in the hard-failure text', () => {
+      const result = resolveFinalPresentation({
+        ...baseInput,
+        code: 1,
+        failedCount: 2,
+        autoRetryQueuedCount: 2
+      });
+      expect(result.finalText).toBe('Download failed: 2 videos queued for auto-retry');
+    });
+
+    it('mentions non-retried failures in the hard-failure text', () => {
+      const result = resolveFinalPresentation({
+        ...baseInput,
+        code: 1,
+        failedCount: 3,
+        autoRetryQueuedCount: 1
+      });
+      expect(result.finalText).toBe('Download failed: 1 video queued for auto-retry, 2 other failures');
+    });
+
     it('reports error when a hard failure processed nothing', () => {
       const result = resolveFinalPresentation({
         ...baseInput,

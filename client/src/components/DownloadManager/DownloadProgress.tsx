@@ -84,6 +84,7 @@ interface FinalSummary {
   totalDownloaded: number;
   totalSkipped: number;
   totalFailed?: number;
+  totalAutoRetried?: number;
   totalMembersOnly?: number;
   totalTerminatedChannels?: number;
   totalTerminationFailures?: number;
@@ -531,6 +532,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
             ?? 0;
           const hasIssue =
             (finalSummary.totalFailed != null && finalSummary.totalFailed > 0)
+            || (finalSummary.totalAutoRetried != null && finalSummary.totalAutoRetried > 0)
             || (finalSummary.totalMembersOnly != null && finalSummary.totalMembersOnly > 0)
             || terminatedCount > 0
             || terminationFailureCount > 0;
@@ -552,6 +554,9 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                   }
                   if (finalSummary.totalFailed && finalSummary.totalFailed > 0) {
                     parts.push(`✗ ${finalSummary.totalFailed} failed`);
+                  }
+                  if (finalSummary.totalAutoRetried && finalSummary.totalAutoRetried > 0) {
+                    parts.push(`${finalSummary.totalAutoRetried} queued for auto-retry`);
                   }
                   if (finalSummary.totalMembersOnly && finalSummary.totalMembersOnly > 0) {
                     parts.push(`${finalSummary.totalMembersOnly} members-only video${finalSummary.totalMembersOnly !== 1 ? 's' : ''} skipped`);

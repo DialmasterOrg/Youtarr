@@ -5,6 +5,7 @@
 // I/O sequencing. finalizeDownloadJob never throws: its catch is the
 // last-resort path that keeps the job queue moving.
 const logger = require('../../logger');
+const configModule = require('../configModule');
 const jobModule = require('../jobModule');
 const MessageEmitter = require('../messageEmitter');
 const VideoMetadataProcessor = require('./videoMetadataProcessor');
@@ -12,6 +13,7 @@ const downloadRunTracker = require('./downloadRunTracker');
 const notificationModule = require('../notificationModule');
 const downloadResultProcessor = require('./downloadResultProcessor');
 const downloadCleanup = require('./downloadCleanup');
+const transient403RetryPlanner = require('./transient403RetryPlanner');
 const { runCompletionSideEffects } = require('./downloadCompletionEffects');
 const {
   computeOutcomeFlags,
@@ -130,6 +132,7 @@ async function finalizeDownloadJob({
   runId,
   tempChannelsFile,
   onTempChannelsFileCleaned,
+  enqueueAutoRetry = null,
 }) {
   // True once the job's terminal status has been persisted; the catch
   // below must not overwrite it with 'Error' for failures that happen
@@ -173,6 +176,54 @@ async function finalizeDownloadJob({
     videoData = successfulVideos;
 
     await downloadResultProcessor.reconcileArchive({ allowRedownload, failedVideosList, videoData, errorTracker });
+
+    const wasTerminated = Boolean(timeoutController.shutdownInProgress || timeoutController.shutdownReason || wasManuallyTerminated);
+
+    // Auto-retry transient 403 failures. Enqueue while this job is still
+    // In Progress so the retry queues as Pending behind it, and read job data
+    // now, before the terminal update replaces it. Handed-off failures are
+    // tagged so run summaries and notifications report the post-retry outcome
+    // instead of a failure the retry is about to fix.
+    let autoRetryQueuedCount = 0;
+    if (typeof enqueueAutoRetry === 'function') {
+      const preTerminalJob = jobModule.getJob(jobId);
+      const sourceJobData = (preTerminalJob && preTerminalJob.data) || {};
+      const retryPlan = transient403RetryPlanner.planAutoRetry({
+        failedVideosList,
+        httpForbiddenDetected,
+        botDetected,
+        wasTerminated,
+        sourceJobData,
+        maxAttempts: configModule.getConfig().downloadAutoRetryCount,
+      });
+      if (retryPlan) {
+        try {
+          await enqueueAutoRetry({
+            retryVideos: retryPlan.retryVideos,
+            autoRetryAttempt: retryPlan.nextAttempt,
+            runId,
+            sourceJobData,
+          });
+          const retryIds = new Set(retryPlan.retryVideos.map((video) => video.youtubeId));
+          for (const failedVideo of failedVideosList) {
+            if (retryIds.has(failedVideo.youtubeId)) {
+              failedVideo.autoRetryQueued = true;
+            }
+          }
+          autoRetryQueuedCount = retryPlan.retryVideos.length;
+          logger.info(
+            { jobId, count: autoRetryQueuedCount, attempt: retryPlan.nextAttempt },
+            'Queued auto-retry job for transient 403 failures'
+          );
+        } catch (err) {
+          logger.error({ err, jobId }, 'Failed to enqueue auto-retry for transient 403 failures');
+        }
+      }
+    }
+    // Failures handed off to the retry job are excluded from run totals and
+    // summaries (the retry job reports their final outcome); the full list,
+    // tags included, still persists in job.data for history.
+    const reportableFailedVideos = failedVideosList.filter((video) => !video.autoRetryQueued);
 
     logger.info({ jobType, jobId }, 'Job complete (with or without errors)');
 
@@ -356,7 +407,6 @@ async function finalizeDownloadJob({
     // (updateJob or saveIntermediateGroupResults).
     terminalUpdateDone = true;
 
-    const wasTerminated = Boolean(timeoutController.shutdownInProgress || timeoutController.shutdownReason || wasManuallyTerminated);
     const presentation = resolveFinalPresentation({
       code,
       jobErrorCode,
@@ -373,7 +423,8 @@ async function finalizeDownloadJob({
       videoCount,
       monitorCompletedCount: monitor.videoCount.completed,
       unexpectedErrorCount: errorTracker.unexpectedErrorCount,
-      httpForbiddenDetected
+      httpForbiddenDetected,
+      autoRetryQueuedCount
     });
     const { debugFlags } = presentation;
 
@@ -420,11 +471,12 @@ async function finalizeDownloadJob({
         // Use actual videoData.length for successful downloads
         totalDownloaded: videoData.length,
         totalSkipped: monitor.videoCount.skipped || 0,
-        totalFailed: failedVideosList.length,
+        totalFailed: reportableFailedVideos.length,
+        totalAutoRetried: autoRetryQueuedCount,
         totalMembersOnly: errorTracker.membersOnlyVideoIds.size,
         totalTerminatedChannels: errorTracker.terminatedChannelIds.size,
         totalTerminationFailures: errorTracker.terminationFailures.length,
-        failedVideos: failedVideosList,
+        failedVideos: reportableFailedVideos,
         terminatedChannels: [...errorTracker.terminatedChannels],
         terminationFailures: [...errorTracker.terminationFailures],
         jobType: jobType,
@@ -463,9 +515,9 @@ async function finalizeDownloadJob({
       downloadRunTracker.recordJobResult(runId, jobId, {
         totalDownloaded: videoData.length,
         totalSkipped: monitor.videoCount.skipped || 0,
-        totalFailed: failedVideosList.length,
+        totalFailed: reportableFailedVideos.length,
         totalMembersOnly: errorTracker.membersOnlyVideoIds.size,
-        failedVideos: failedVideosList,
+        failedVideos: reportableFailedVideos,
         terminatedChannels: [...errorTracker.terminatedChannels],
         terminationFailures: [...errorTracker.terminationFailures],
         videoData: videoData,
