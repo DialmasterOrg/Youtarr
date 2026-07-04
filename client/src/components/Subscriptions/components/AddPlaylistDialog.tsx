@@ -97,11 +97,16 @@ const AddPlaylistDialog: React.FC<AddPlaylistDialogProps> = ({
       sync_to_jellyfin: status.jellyfin,
       sync_to_emby: status.emby,
     };
-    const playlist = await subscribe(trimmed, settings);
-    if (playlist) {
-      onSubscribed?.(playlist);
+    const result = await subscribe(trimmed, settings);
+    if (result) {
+      onSubscribed?.(result.playlist);
       resetAndClose();
-      navigate(`/playlist/${playlist.playlist_id}`);
+      if (result.restored) {
+        // The playlist page shows a "restored with previous settings" notice.
+        navigate(`/playlist/${result.playlist.playlist_id}`, { state: { restored: true } });
+      } else {
+        navigate(`/playlist/${result.playlist.playlist_id}`);
+      }
     }
   };
 

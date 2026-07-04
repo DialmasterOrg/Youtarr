@@ -68,6 +68,35 @@ describe('DownloadTimeoutController', () => {
     });
   });
 
+  describe('absolute timeout exemption', () => {
+    function makeExemptController() {
+      return new DownloadTimeoutController({
+        activityTimeoutMs: ACTIVITY_TIMEOUT_MS,
+        postProcessingTimeoutMs: POST_PROCESSING_TIMEOUT_MS,
+        maxAbsoluteTimeoutMs: null,
+      });
+    }
+
+    it('never fires the absolute cap when maxAbsoluteTimeoutMs is null', () => {
+      const controller = makeExemptController();
+
+      jest.advanceTimersByTime(MAX_ABSOLUTE_TIMEOUT_MS * 4);
+      controller.noteActivity();
+
+      expect(controller.checkTimeout()).toEqual({ timeout: false });
+    });
+
+    it('still fires the inactivity timeout when maxAbsoluteTimeoutMs is null', () => {
+      const controller = makeExemptController();
+
+      jest.advanceTimersByTime(ACTIVITY_TIMEOUT_MS + 60 * 1000);
+
+      const result = controller.checkTimeout();
+      expect(result.timeout).toBe(true);
+      expect(result.reason).toMatch(/No download activity for \d+ minutes/);
+    });
+  });
+
   describe('noteLine', () => {
     it('extends the timeout to the post-processing window on a Merger line and logs info', () => {
       const controller = makeController();

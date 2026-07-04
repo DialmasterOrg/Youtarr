@@ -1,5 +1,6 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const { ROOT_SENTINEL, GLOBAL_DEFAULT_SENTINEL } = require('../modules/filesystem/constants');
 
 // Video validation rate limiter
 const videoValidationLimiter = rateLimit({
@@ -650,6 +651,13 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
           error: validation.error
         });
       }
+    }
+
+    // Persist a real subfolder override so it is reusable in future downloads.
+    if (subfolder && subfolder !== ROOT_SENTINEL && subfolder !== GLOBAL_DEFAULT_SENTINEL) {
+      require('../modules/subfolderModule')
+        .register(subfolder)
+        .catch((err) => req.log.warn({ err }, 'Failed to register download subfolder'));
     }
 
     try {

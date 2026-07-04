@@ -9,6 +9,7 @@ const ApiKey = require('./apikey');
 const Playlist = require('./playlist');
 const PlaylistVideo = require('./playlistvideo');
 const PlaylistSyncState = require('./playlistsyncstate');
+const Subfolder = require('./subfolder');
 
 Job.hasMany(JobVideo, { foreignKey: 'job_id', as: 'jobVideos' });
 Job.hasMany(JobVideoDownload, { foreignKey: 'job_id', as: 'jobVideoDownloads' });
@@ -37,4 +38,5 @@ module.exports = {
   Playlist,
   PlaylistVideo,
   PlaylistSyncState,
+  Subfolder,
 };

@@ -80,7 +80,7 @@ describe('AddPlaylistDialog', () => {
       video_count: 5,
       thumbnail: '',
     });
-    mockSubscribe.mockResolvedValue({ playlist_id: 'PL123' });
+    mockSubscribe.mockResolvedValue({ playlist: { playlist_id: 'PL123' }, restored: false });
 
     renderWithProviders(<AddPlaylistDialog open token="t" onClose={jest.fn()} initialUrl={PLAYLIST_URL} />);
 
@@ -93,6 +93,26 @@ describe('AddPlaylistDialog', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/playlist/PL123');
   });
 
+  test('navigates with restored state when the subscription restored a soft-deleted playlist', async () => {
+    const user = userEvent.setup();
+    mockFetchPlaylistInfo.mockResolvedValue({
+      title: 'My List',
+      uploader: 'Me',
+      video_count: 5,
+      thumbnail: '',
+    });
+    mockSubscribe.mockResolvedValue({ playlist: { playlist_id: 'PL123' }, restored: true });
+
+    renderWithProviders(<AddPlaylistDialog open token="t" onClose={jest.fn()} initialUrl={PLAYLIST_URL} />);
+
+    const subscribeBtn = await screen.findByRole('button', { name: /subscribe/i });
+    await user.click(subscribeBtn);
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/playlist/PL123', { state: { restored: true } });
+    });
+  });
+
   test('notifies onSubscribed with the new playlist on success', async () => {
     const user = userEvent.setup();
     const onSubscribed = jest.fn();
@@ -103,7 +123,7 @@ describe('AddPlaylistDialog', () => {
       video_count: 5,
       thumbnail: '',
     });
-    mockSubscribe.mockResolvedValue(playlist);
+    mockSubscribe.mockResolvedValue({ playlist, restored: false });
 
     renderWithProviders(
       <AddPlaylistDialog open token="t" onClose={jest.fn()} onSubscribed={onSubscribed} initialUrl={PLAYLIST_URL} />

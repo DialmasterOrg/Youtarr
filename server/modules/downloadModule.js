@@ -4,7 +4,8 @@ const plexModule = require('./plexModule');
 const DownloadExecutor = require('./download/downloadExecutor');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const tempPathManager = require('./download/tempPathManager');
-const { MANUAL_DOWNLOAD_LABEL, playlistJobLabel } = require('./download/jobTypes');
+const { MANUAL_DOWNLOAD_LABEL, playlistJobLabel, autoRetryJobLabel } = require('./download/jobTypes');
+const ChannelVideo = require('../models/channelvideo');
 const logger = require('../logger');
 
 const DEFAULT_FILES_TO_DOWNLOAD = 5;
@@ -12,7 +13,9 @@ const DEFAULT_FILES_TO_DOWNLOAD = 5;
 class DownloadModule {
   constructor() {
     this.config = configModule.getConfig(); // Get the initial configuration
-    this.downloadExecutor = new DownloadExecutor();
+    this.downloadExecutor = new DownloadExecutor({
+      enqueueAutoRetry: (payload) => this.enqueueAutoRetryJob(payload),
+    });
     configModule.on('change', this.handleConfigChange.bind(this)); // Listen for configuration changes
 
     // Clean temp directory on startup if temp downloads are enabled
@@ -94,6 +97,68 @@ class DownloadModule {
     if (!runId || !jobId) return;
     const downloadRunTracker = require('./download/downloadRunTracker');
     downloadRunTracker.registerJob(runId, jobId);
+  }
+
+  /**
+   * Enqueue a follow-up URL-list job for videos that failed with a transient
+   * HTTP 403. Owning channels are resolved so channel-tier settings (quality,
+   * audio format, subfolder routing) apply on the retry; the source job's
+   * overrideSettings carry dialog-picked options through for manual and
+   * playlist downloads.
+   * @param {Object} params
+   * @param {Array<{youtubeId: string, url: string}>} params.retryVideos
+   * @param {number} params.autoRetryAttempt - attempt number stamped on the retry job
+   * @param {string|null} params.runId - active run to fold the retry outcome into
+   * @param {Object} params.sourceJobData - the failing job's data payload
+   */
+  async enqueueAutoRetryJob({ retryVideos, autoRetryAttempt, runId, sourceJobData = {} }) {
+    if (!Array.isArray(retryVideos) || retryVideos.length === 0) return;
+
+    const ownerChannelMap = { ...(this.getJobDataValue(sourceJobData, 'ownerChannelMap') || {}) };
+    const unmappedIds = retryVideos
+      .map((video) => video.youtubeId)
+      .filter((id) => id && !ownerChannelMap[id]);
+    if (unmappedIds.length > 0) {
+      try {
+        const rows = await ChannelVideo.findAll({
+          where: { youtube_id: unmappedIds },
+          attributes: ['youtube_id', 'channel_id'],
+        });
+        for (const row of rows) {
+          if (row.channel_id) ownerChannelMap[row.youtube_id] = row.channel_id;
+        }
+      } catch (err) {
+        logger.warn({ err }, 'Could not resolve owning channels for auto-retry; falling back to global settings');
+      }
+    }
+
+    // A single owning channel lets doSpecificDownloads resolve channel-tier
+    // quality/audio/skip-video-folder; with mixed channels those fall back to
+    // the copied override or global settings (subfolder routing still resolves
+    // per video via ownerChannelMap in post-processing).
+    const mappedChannelIds = new Set(
+      retryVideos.map((video) => ownerChannelMap[video.youtubeId]).filter(Boolean)
+    );
+    const channelId = this.getJobDataValue(sourceJobData, 'channelId')
+      || (mappedChannelIds.size === 1 ? [...mappedChannelIds][0] : null);
+    const effectiveQuality = this.getJobDataValue(sourceJobData, 'effectiveQuality') || null;
+
+    const body = {
+      urls: retryVideos.map((video) => video.url),
+      overrideSettings: { ...this.getOverrideSettings(sourceJobData) },
+      jobLabel: autoRetryJobLabel(retryVideos.length),
+      autoRetryAttempt,
+    };
+    if (Object.keys(ownerChannelMap).length > 0) body.ownerChannelMap = ownerChannelMap;
+    if (channelId) body.channelId = channelId;
+    if (effectiveQuality) body.effectiveQuality = effectiveQuality;
+    if (runId) body.runId = runId;
+
+    logger.info(
+      { videoCount: retryVideos.length, autoRetryAttempt, channelId, runId },
+      'Enqueueing auto-retry job for transient 403 failures'
+    );
+    await this.doSpecificDownloads({ body });
   }
 
   async doChannelDownloads(jobData = {}, isNextJob = false) {
@@ -325,18 +390,25 @@ class DownloadModule {
       // Emit final summary WebSocket message with cumulative totals
       const MessageEmitter = require('./messageEmitter');
       const totalVideos = completedJob.data.videos?.length || 0;
-      const failedVideos = completedJob.data.failedVideos || [];
+      // Failures handed off to a queued auto-retry job report their final
+      // outcome via that job; exclude them here so the summary isn't stale.
+      const allFailedVideos = completedJob.data.failedVideos || [];
+      const failedVideos = allFailedVideos.filter((video) => !(video && video.autoRetryQueued));
+      const autoRetriedCount = allFailedVideos.length - failedVideos.length;
       const totalSkipped = completedJob.data.cumulativeSkipped || 0;
       const terminatedChannels = completedJob.data.terminatedChannels || [];
       const terminationFailures = completedJob.data.terminationFailures || [];
+      const diagnoses = completedJob.data.diagnoses || [];
 
       const finalSummary = {
         totalDownloaded: totalVideos,
         totalSkipped: totalSkipped,
         totalFailed: failedVideos.length,
+        totalAutoRetried: autoRetriedCount,
         totalTerminatedChannels: terminatedChannels.length,
         totalTerminationFailures: terminationFailures.length,
         failedVideos: failedVideos,
+        diagnoses: diagnoses,
         terminatedChannels: terminatedChannels,
         terminationFailures: terminationFailures,
         jobType: 'Channel Downloads - All Groups',
@@ -347,6 +419,7 @@ class DownloadModule {
       const messageParts = [`${totalVideos} downloaded`];
       if (totalSkipped > 0) messageParts.push(`${totalSkipped} skipped`);
       if (failedVideos.length > 0) messageParts.push(`${failedVideos.length} failed`);
+      if (autoRetriedCount > 0) messageParts.push(`${autoRetriedCount} queued for auto-retry`);
       if (terminatedChannels.length > 0) {
         messageParts.push(`${terminatedChannels.length} channel${terminatedChannels.length !== 1 ? 's' : ''} marked terminated`);
       }
@@ -384,6 +457,7 @@ class DownloadModule {
           totalSkipped: totalSkipped,
           totalFailed: failedVideos.length,
           failedVideos: failedVideos,
+          diagnoses: diagnoses,
           terminatedChannels: terminatedChannels,
           terminationFailures: terminationFailures,
           videoData: completedJob.data.videos || [],
@@ -402,8 +476,9 @@ class DownloadModule {
           'Emitted final summary for multi-group download');
 
         // Include termination-only runs (zero downloads, one or more terminated
-        // or one or more termination-persistence failures).
-        if (totalVideos > 0 || terminatedChannels.length > 0 || terminationFailures.length > 0) {
+        // or one or more termination-persistence failures) and diagnosed
+        // failure-only runs (the advice is the whole point of notifying).
+        if (totalVideos > 0 || terminatedChannels.length > 0 || terminationFailures.length > 0 || diagnoses.length > 0) {
           const notificationModule = require('./notificationModule');
           notificationModule.sendDownloadNotification({
             finalSummary: finalSummary,

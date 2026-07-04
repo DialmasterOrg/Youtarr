@@ -10,6 +10,8 @@ const mockNavigate = jest.fn();
 const mockToggleAutoDownload = jest.fn();
 const mockMarkVideoDeleted = jest.fn();
 const mockRefetchMeta = jest.fn();
+const mockFetchAllVideos = jest.fn();
+let mockLocationState: unknown = null;
 
 const mockVideo: PlaylistVideo = {
   id: 1,
@@ -59,6 +61,13 @@ jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
   useParams: () => ({ id: 'PL1' }),
   useNavigate: () => mockNavigate,
+  useLocation: () => ({
+    pathname: '/playlist/PL1',
+    search: '',
+    hash: '',
+    state: mockLocationState,
+    key: 'test',
+  }),
 }));
 
 jest.mock('../../hooks/useConfig', () => ({
@@ -114,6 +123,7 @@ jest.mock('../../hooks/usePlaylistDetail', () => ({
     markVideoIgnored: jest.fn(),
     markVideoDeleted: (...args: unknown[]) => mockMarkVideoDeleted(...args),
     refresh: jest.fn(),
+    fetchAllVideos: (...args: unknown[]) => mockFetchAllVideos(...args),
     sync: jest.fn(),
     regenerateM3U: jest.fn(),
     triggerDownload: (...args: unknown[]) => mockTriggerDownload(...args),
@@ -292,5 +302,114 @@ describe('PlaylistPage selected-download selection lifecycle', () => {
 
     const sortControl = screen.getByRole('button', { name: 'Sort' });
     expect(sortControl).toHaveTextContent('Newest first');
+  });
+});
+
+describe('PlaylistPage Load More videos', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('Load More opens the confirmation dialog and runs the full fetch on Continue', async () => {
+    const user = userEvent.setup();
+    mockFetchAllVideos.mockResolvedValue(undefined);
+
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    await user.click(screen.getByRole('button', { name: /Load More/i }));
+    expect(await screen.findByText('Load More Videos')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    await waitFor(() => expect(mockFetchAllVideos).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('All available videos loaded')).toBeInTheDocument();
+  });
+
+  test('Cancel dismisses the confirmation dialog without fetching', async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    await user.click(screen.getByRole('button', { name: /Load More/i }));
+    expect(await screen.findByText('Load More Videos')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() =>
+      expect(screen.queryByText('Load More Videos')).not.toBeInTheDocument()
+    );
+    expect(mockFetchAllVideos).not.toHaveBeenCalled();
+  });
+
+  test('shows the server error message when the full fetch fails', async () => {
+    const user = userEvent.setup();
+    mockFetchAllVideos.mockRejectedValue(
+      new Error('A fetch is already in progress for this playlist')
+    );
+
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    await user.click(screen.getByRole('button', { name: /Load More/i }));
+    await user.click(await screen.findByRole('button', { name: 'Continue' }));
+
+    expect(
+      await screen.findByText('A fetch is already in progress for this playlist')
+    ).toBeInTheDocument();
+  });
+
+  test('shows a visible note that unavailable videos are excluded from the list', () => {
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    expect(
+      screen.getByText(/private, members-only, and deleted videos/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/fewer videos here than YouTube reports/i)
+    ).toBeInTheDocument();
+  });
+
+  test('shows the outcome as a viewport-anchored toast, not inline below the video list', async () => {
+    const user = userEvent.setup();
+    mockFetchAllVideos.mockResolvedValue(undefined);
+
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    await user.click(screen.getByRole('button', { name: /Load More/i }));
+    await user.click(await screen.findByRole('button', { name: 'Continue' }));
+
+    // The ui Snackbar renders a fixed-position role="status" live region;
+    // an inline Alert in the page flow does not.
+    const toast = await screen.findByRole('status');
+    expect(toast).toHaveTextContent('All available videos loaded');
+  });
+});
+
+describe('PlaylistPage restored-subscription notice', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockLocationState = null;
+  });
+
+  afterEach(() => {
+    mockLocationState = null;
+  });
+
+  test('shows a snackbar and clears router state when arriving from a restore', async () => {
+    mockLocationState = { restored: true };
+
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    expect(
+      await screen.findByText('Playlist restored with its previous settings')
+    ).toBeInTheDocument();
+    expect(mockNavigate).toHaveBeenCalledWith('/playlist/PL1', { replace: true, state: null });
+  });
+
+  test('shows no restore notice on a normal visit', () => {
+    renderWithProviders(<PlaylistPage token="t" />);
+
+    expect(
+      screen.queryByText('Playlist restored with its previous settings')
+    ).not.toBeInTheDocument();
   });
 });

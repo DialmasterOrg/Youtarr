@@ -63,6 +63,10 @@ When a playlist's video list changes (new videos downloaded, ignored videos remo
 
 If the stored `server_playlist_id` no longer exists on the server (manual deletion, server state drift), the next sync detects the failure, logs a warning, and creates a fresh playlist. Sync is self-healing; no manual database surgery is required.
 
+## Removing a playlist
+
+Removing a playlist in Youtarr (trashcan icon on the Subscriptions page) is a soft delete: it stops auto-downloads, hides the playlist from the UI and API, and stops future syncs. It does **not** delete downloaded videos, does not remove the playlist from your media server (delete it there directly if you want it gone), and does not delete the `.m3u` file. Re-adding the same playlist later restores it with its previous settings and download history intact.
+
 ## M3U fallback
 
 For every tracked playlist, Youtarr writes a `.m3u` file under:

@@ -7,6 +7,7 @@ import {
 } from '../../lib/icons';
 import { ThemeLayoutPolicy } from '../../themes';
 import { StorageHeaderWidget } from './StorageHeaderWidget';
+import { DownloadActivityIndicator } from './DownloadActivityIndicator';
 
 interface NavHeaderActionsProps {
   layoutPolicy: ThemeLayoutPolicy;
@@ -140,6 +141,8 @@ export const NavHeaderActions: React.FC<NavHeaderActionsProps> = ({
           </Box>
         </Tooltip>
       )}
+
+      <DownloadActivityIndicator token={token} />
 
       {hasAnyUpdate && sharedUpdateTooltip && (
         <Tooltip title={sharedUpdateTooltip} placement="bottom" arrow>

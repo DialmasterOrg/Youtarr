@@ -87,6 +87,7 @@ export const CONFIG_FIELDS = {
   downloadSocketTimeoutSeconds: { default: 30, trackChanges: true },
   downloadThrottledRate: { default: '100K', trackChanges: true },
   downloadRetryCount: { default: 2, trackChanges: true },
+  downloadAutoRetryCount: { default: 1, trackChanges: true },
   enableStallDetection: { default: true, trackChanges: true },
   stallDetectionWindowSeconds: { default: 30, trackChanges: true },
   stallDetectionRateThreshold: { default: '100K', trackChanges: true },
@@ -102,6 +103,7 @@ export const CONFIG_FIELDS = {
   // Kodi compatibility
   writeChannelPosters: { default: true, trackChanges: true },
   writeVideoNfoFiles: { default: true, trackChanges: true },
+  writeVideoFanart: { default: false, trackChanges: true },
 
   // Notifications
   notificationsEnabled: { default: false, trackChanges: true },
@@ -206,6 +208,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   downloadSocketTimeoutSeconds: CONFIG_FIELDS.downloadSocketTimeoutSeconds.default,
   downloadThrottledRate: CONFIG_FIELDS.downloadThrottledRate.default,
   downloadRetryCount: CONFIG_FIELDS.downloadRetryCount.default,
+  downloadAutoRetryCount: CONFIG_FIELDS.downloadAutoRetryCount.default,
   enableStallDetection: CONFIG_FIELDS.enableStallDetection.default,
   stallDetectionWindowSeconds: CONFIG_FIELDS.stallDetectionWindowSeconds.default,
   stallDetectionRateThreshold: CONFIG_FIELDS.stallDetectionRateThreshold.default,
@@ -215,6 +218,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   customCookiesUploaded: CONFIG_FIELDS.customCookiesUploaded.default,
   writeChannelPosters: CONFIG_FIELDS.writeChannelPosters.default,
   writeVideoNfoFiles: CONFIG_FIELDS.writeVideoNfoFiles.default,
+  writeVideoFanart: CONFIG_FIELDS.writeVideoFanart.default,
   notificationsEnabled: CONFIG_FIELDS.notificationsEnabled.default,
   appriseUrls: CONFIG_FIELDS.appriseUrls.default,
   autoRemovalEnabled: CONFIG_FIELDS.autoRemovalEnabled.default,

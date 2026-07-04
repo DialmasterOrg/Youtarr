@@ -35,6 +35,9 @@ jest.mock('../channelModule', () => ({
 jest.mock('../../models/channel', () => ({
   findOne: jest.fn()
 }));
+jest.mock('../../models/channelvideo', () => ({
+  findAll: jest.fn()
+}));
 jest.mock('../channelDownloadGrouper', () => ({
   generateDownloadGroups: jest.fn()
 }));
@@ -148,6 +151,17 @@ describe('DownloadModule', () => {
         channelFilesToDownload: 3,
       });
       expect(downloadModule.downloadExecutor).toBeDefined();
+    });
+
+    it('injects an auto-retry enqueue callback into the executor', async () => {
+      const DownloadExecutorMock = require('../download/downloadExecutor');
+      const ctorArgs = DownloadExecutorMock.mock.calls[0][0];
+      expect(typeof ctorArgs.enqueueAutoRetry).toBe('function');
+
+      const enqueueSpy = jest.spyOn(downloadModule, 'enqueueAutoRetryJob').mockResolvedValue(undefined);
+      await ctorArgs.enqueueAutoRetry({ retryVideos: [] });
+
+      expect(enqueueSpy).toHaveBeenCalledWith({ retryVideos: [] });
     });
   });
 
@@ -743,6 +757,35 @@ describe('DownloadModule', () => {
       expect(plexModuleMock.refreshLibrariesForSubfolders).toHaveBeenCalledWith(['kids', 'music']);
     });
 
+    it('should hand accumulated diagnoses to the run tracker on completion', async () => {
+      const groups = [
+        { quality: '1080', subFolder: null, channels: [{ channel_id: 'UC1' }] }
+      ];
+      const diagnoses = [{ key: 'http-403-cookies-enabled', title: 't', message: 'm', count: 1 }];
+      jest.spyOn(downloadModule, 'executeGroupDownload').mockResolvedValue();
+      jobModuleMock.getJob.mockReturnValue({
+        status: 'In Progress',
+        data: {
+          videos: [],
+          failedVideos: [{ youtubeId: 'failvid0001', error: 'HTTP Error 403: Forbidden' }],
+          diagnoses,
+          cumulativeSkipped: 0
+        }
+      });
+      const downloadRunTracker = require('../download/downloadRunTracker');
+      jest.spyOn(downloadRunTracker, 'isActive').mockReturnValue(true);
+      const recordSpy = jest.spyOn(downloadRunTracker, 'recordJobResult').mockReturnValue(true);
+      const plexModuleMock = require('../plexModule');
+      plexModuleMock.refreshLibrariesForSubfolders = jest.fn().mockReturnValue(Promise.resolve());
+
+      await downloadModule.doGroupedChannelDownloads({ runId: 'run-x' }, groups);
+
+      expect(recordSpy).toHaveBeenCalledWith('run-x', 'job-123', expect.objectContaining({
+        diagnoses,
+        totalFailed: 1
+      }));
+    });
+
     it('should stop processing groups if job is terminated', async () => {
       const groups = [
         { quality: '1080', subFolder: null, channels: [{ channel_id: 'UC1' }] },
@@ -913,6 +956,136 @@ describe('DownloadModule', () => {
       ).rejects.toThrow('Write failed');
 
       expect(fsPromises.unlink).toHaveBeenCalled();
+    });
+  });
+
+  describe('enqueueAutoRetryJob', () => {
+    let ChannelVideoMock;
+    let doSpecificDownloadsSpy;
+    const retryVideo = {
+      youtubeId: 'abc123def45',
+      url: 'https://www.youtube.com/watch?v=abc123def45',
+    };
+
+    beforeEach(() => {
+      ChannelVideoMock = require('../../models/channelvideo');
+      ChannelVideoMock.findAll.mockResolvedValue([]);
+      doSpecificDownloadsSpy = jest
+        .spyOn(downloadModule, 'doSpecificDownloads')
+        .mockResolvedValue(undefined);
+    });
+
+    it('enqueues a URL-list job with the auto-retry label, attempt counter, and run id', async () => {
+      await downloadModule.enqueueAutoRetryJob({
+        retryVideos: [retryVideo],
+        autoRetryAttempt: 1,
+        runId: 'run-1',
+        sourceJobData: { overrideSettings: { resolution: '720' } },
+      });
+
+      expect(doSpecificDownloadsSpy).toHaveBeenCalledWith({
+        body: expect.objectContaining({
+          urls: ['https://www.youtube.com/watch?v=abc123def45'],
+          overrideSettings: { resolution: '720' },
+          jobLabel: 'Auto-retry: 1 video (HTTP 403)',
+          autoRetryAttempt: 1,
+          runId: 'run-1',
+        }),
+      });
+    });
+
+    it('resolves owning channels for unmapped videos and passes channelId when unique', async () => {
+      ChannelVideoMock.findAll.mockResolvedValue([
+        { youtube_id: 'abc123def45', channel_id: 'UC-owner' },
+      ]);
+
+      await downloadModule.enqueueAutoRetryJob({
+        retryVideos: [retryVideo],
+        autoRetryAttempt: 1,
+        runId: null,
+        sourceJobData: {},
+      });
+
+      expect(ChannelVideoMock.findAll).toHaveBeenCalledWith({
+        where: { youtube_id: ['abc123def45'] },
+        attributes: ['youtube_id', 'channel_id'],
+      });
+      const { body } = doSpecificDownloadsSpy.mock.calls[0][0];
+      expect(body.channelId).toBe('UC-owner');
+      expect(body.ownerChannelMap).toEqual({ abc123def45: 'UC-owner' });
+      expect(body.runId).toBeUndefined();
+    });
+
+    it('omits channelId when the failed videos span multiple channels', async () => {
+      const second = { youtubeId: 'zzz999xxx11', url: 'https://www.youtube.com/watch?v=zzz999xxx11' };
+      ChannelVideoMock.findAll.mockResolvedValue([
+        { youtube_id: 'abc123def45', channel_id: 'UC-one' },
+        { youtube_id: 'zzz999xxx11', channel_id: 'UC-two' },
+      ]);
+
+      await downloadModule.enqueueAutoRetryJob({
+        retryVideos: [retryVideo, second],
+        autoRetryAttempt: 1,
+        runId: null,
+        sourceJobData: {},
+      });
+
+      const { body } = doSpecificDownloadsSpy.mock.calls[0][0];
+      expect(body.channelId).toBeUndefined();
+      expect(body.ownerChannelMap).toEqual({
+        abc123def45: 'UC-one',
+        zzz999xxx11: 'UC-two',
+      });
+    });
+
+    it('prefers the source job channel id and owner map over lookups', async () => {
+      await downloadModule.enqueueAutoRetryJob({
+        retryVideos: [retryVideo],
+        autoRetryAttempt: 2,
+        runId: null,
+        sourceJobData: {
+          channelId: 'UC-source',
+          ownerChannelMap: { abc123def45: 'UC-mapped' },
+          effectiveQuality: '1440',
+        },
+      });
+
+      expect(ChannelVideoMock.findAll).not.toHaveBeenCalled();
+      const { body } = doSpecificDownloadsSpy.mock.calls[0][0];
+      expect(body.channelId).toBe('UC-source');
+      expect(body.ownerChannelMap).toEqual({ abc123def45: 'UC-mapped' });
+      expect(body.effectiveQuality).toBe('1440');
+      expect(body.autoRetryAttempt).toBe(2);
+    });
+
+    it('still enqueues with global settings when the channel lookup fails', async () => {
+      ChannelVideoMock.findAll.mockRejectedValue(new Error('db down'));
+
+      await downloadModule.enqueueAutoRetryJob({
+        retryVideos: [retryVideo],
+        autoRetryAttempt: 1,
+        runId: null,
+        sourceJobData: {},
+      });
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        { err: expect.any(Error) },
+        'Could not resolve owning channels for auto-retry; falling back to global settings'
+      );
+      const { body } = doSpecificDownloadsSpy.mock.calls[0][0];
+      expect(body.channelId).toBeUndefined();
+      expect(body.urls).toEqual(['https://www.youtube.com/watch?v=abc123def45']);
+    });
+
+    it('does nothing when there are no retry videos', async () => {
+      await downloadModule.enqueueAutoRetryJob({
+        retryVideos: [],
+        autoRetryAttempt: 1,
+        runId: null,
+        sourceJobData: {},
+      });
+
+      expect(doSpecificDownloadsSpy).not.toHaveBeenCalled();
     });
   });
 

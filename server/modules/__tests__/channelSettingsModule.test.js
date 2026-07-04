@@ -45,6 +45,11 @@ jest.mock('../plexModule', () => ({
   refreshLibrariesForSubfolders: jest.fn().mockResolvedValue(undefined),
 }));
 
+jest.mock('../subfolderModule', () => ({
+  getAll: jest.fn(),
+  register: jest.fn().mockResolvedValue(undefined),
+}));
+
 describe('ChannelSettingsModule', () => {
   let channelSettingsModule;
   let fs;
@@ -372,96 +377,14 @@ describe('ChannelSettingsModule', () => {
   });
 
   describe('getAllSubFolders', () => {
-    test('should return empty array when no channels have subfolders', async () => {
-      Channel.findAll.mockResolvedValue([]);
-      const result = await channelSettingsModule.getAllSubFolders();
-      expect(result).toEqual([]);
-    });
-
-    test('should return unique subfolders with __ prefix', async () => {
-      Channel.findAll.mockResolvedValue([
-        { sub_folder: 'Music' },
-        { sub_folder: 'Gaming' },
-        { sub_folder: 'Music' } // Duplicate
-      ]);
-      const result = await channelSettingsModule.getAllSubFolders();
-      expect(result).toEqual(['__Gaming', '__Music']);
-    });
-
-    test('should handle null subfolders', async () => {
-      Channel.findAll.mockResolvedValue([
-        { sub_folder: 'Music' },
-        { sub_folder: null }
-      ]);
-      const result = await channelSettingsModule.getAllSubFolders();
-      expect(result).toEqual(['__Music']);
-    });
-
-    test('should trim subfolder whitespace', async () => {
-      Channel.findAll.mockResolvedValue([
-        { sub_folder: '  Music  ' },
-        { sub_folder: 'Gaming' }
-      ]);
-      const result = await channelSettingsModule.getAllSubFolders();
-      expect(result).toEqual(['__Gaming', '__Music']);
-    });
-
-    test('should sort subfolders alphabetically', async () => {
-      Channel.findAll.mockResolvedValue([
-        { sub_folder: 'Zulu' },
-        { sub_folder: 'Alpha' },
-        { sub_folder: 'Beta' }
-      ]);
-      const result = await channelSettingsModule.getAllSubFolders();
-      expect(result).toEqual(['__Alpha', '__Beta', '__Zulu']);
-    });
-
-    test('should include the configured global default subfolder when no channels exist', async () => {
-      Channel.findAll.mockResolvedValue([]);
-      const configModule = require('../configModule');
-      configModule.getDefaultSubfolder.mockReturnValue('Adults');
+    test('delegates to subfolderModule.getAll', async () => {
+      const subfolderModule = require('../subfolderModule');
+      subfolderModule.getAll.mockResolvedValue(['__A', '__B']);
 
       const result = await channelSettingsModule.getAllSubFolders();
 
-      expect(result).toEqual(['__Adults']);
-    });
-
-    test('should include the global default subfolder alongside explicit channel subfolders', async () => {
-      Channel.findAll.mockResolvedValue([
-        { sub_folder: 'Kids' },
-        { sub_folder: 'Music' }
-      ]);
-      const configModule = require('../configModule');
-      configModule.getDefaultSubfolder.mockReturnValue('Adults');
-
-      const result = await channelSettingsModule.getAllSubFolders();
-
-      expect(result).toEqual(['__Adults', '__Kids', '__Music']);
-    });
-
-    test('should deduplicate when the global default matches an explicit channel subfolder', async () => {
-      Channel.findAll.mockResolvedValue([
-        { sub_folder: 'Music' },
-        { sub_folder: 'Adults' }
-      ]);
-      const configModule = require('../configModule');
-      configModule.getDefaultSubfolder.mockReturnValue('Adults');
-
-      const result = await channelSettingsModule.getAllSubFolders();
-
-      expect(result).toEqual(['__Adults', '__Music']);
-    });
-
-    test('should not add anything when the global default subfolder is null', async () => {
-      Channel.findAll.mockResolvedValue([
-        { sub_folder: 'Music' }
-      ]);
-      const configModule = require('../configModule');
-      configModule.getDefaultSubfolder.mockReturnValue(null);
-
-      const result = await channelSettingsModule.getAllSubFolders();
-
-      expect(result).toEqual(['__Music']);
+      expect(subfolderModule.getAll).toHaveBeenCalled();
+      expect(result).toEqual(['__A', '__B']);
     });
   });
 
@@ -641,6 +564,28 @@ describe('ChannelSettingsModule', () => {
       });
 
       expect(result.settings.sub_folder).toBe('NewFolder');
+    });
+
+    test('registers a newly-assigned subfolder so it appears in every picker', async () => {
+      const subfolderModule = require('../subfolderModule');
+      subfolderModule.register.mockClear();
+
+      await channelSettingsModule.updateChannelSettings('UC123456', {
+        sub_folder: 'NewFolder'
+      });
+
+      expect(subfolderModule.register).toHaveBeenCalledWith('NewFolder');
+    });
+
+    test('does not register when the subfolder is unchanged', async () => {
+      const subfolderModule = require('../subfolderModule');
+      subfolderModule.register.mockClear();
+
+      await channelSettingsModule.updateChannelSettings('UC123456', {
+        video_quality: '720'
+      });
+
+      expect(subfolderModule.register).not.toHaveBeenCalled();
     });
 
     test('should update video quality', async () => {

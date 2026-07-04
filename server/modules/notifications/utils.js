@@ -146,6 +146,24 @@ function formatFailedVideoLine(failedVideo = {}) {
 }
 
 /**
+ * Get the failure diagnoses from a final summary.
+ * @param {Object} finalSummary - Summary object from downloadExecutor
+ * @returns {Array} Deduped diagnosis objects ({ key, title, message, count })
+ */
+function getDiagnoses(finalSummary = {}) {
+  return Array.isArray(finalSummary.diagnoses) ? finalSummary.diagnoses : [];
+}
+
+/**
+ * Format a failure diagnosis for notification bodies.
+ * @param {Object} diagnosis - Diagnosis object ({ key, title, message, count })
+ * @returns {string} Human-readable likely-cause line
+ */
+function formatDiagnosisLine(diagnosis = {}) {
+  return `Likely cause: ${diagnosis.message || diagnosis.title || 'Unknown'}`;
+}
+
+/**
  * Get subtitle based on job type. Handles per-job labels (channel, manual,
  * `Playlist: <title>`) as well as the aggregated download-run labels
  * (`Channel Downloads`, `Playlist downloads`, `Channel & playlist update`).
@@ -240,6 +258,8 @@ module.exports = {
   getFailedCount,
   buildFailedCountLabel,
   formatFailedVideoLine,
+  getDiagnoses,
+  formatDiagnosisLine,
   getSubtitle,
   buildAutoRemovalTitle,
   formatBytes,

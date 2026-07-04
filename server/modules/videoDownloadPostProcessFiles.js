@@ -8,6 +8,8 @@ const tempPathManager = require('./download/tempPathManager');
 const downloadSettingsResolver = require('./download/downloadSettingsResolver');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const { JobVideoDownload } = require('../models');
+const videoPersistence = require('./videoPersistence');
+const { VIDEO_PERSISTED_MARKER } = require('./constants/outputMarkers');
 const logger = require('../logger');
 const { buildChannelPath, cleanupEmptyParents, moveWithRetries, ensureDirWithRetries } = require('./filesystem');
 
@@ -47,6 +49,11 @@ function shouldWriteChannelPosters() {
 function shouldWriteVideoNfoFiles() {
   const config = configModule.getConfig() || {};
   return config.writeVideoNfoFiles !== false;
+}
+
+function shouldWriteVideoFanart() {
+  const config = configModule.getConfig() || {};
+  return config.writeVideoFanart === true;
 }
 
 // Helper function to download channel thumbnail if needed
@@ -739,6 +746,28 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
       // Don't fail the process, but log the error
     }
 
+    // Create fanart.jpg in video folder if enabled (for Plex background image on compatible clients)
+    // This complements the poster.jpg (which comes from channel thumbnail)
+    if (shouldWriteVideoFanart()) {
+      try {
+        const videoDir = path.dirname(finalVideoPath);
+        const videoBaseName = path.parse(finalVideoPath).name; // filename without extension
+        const finalImagePath = path.join(videoDir, `${videoBaseName}.jpg`);
+        const fanartPath = path.join(videoDir, `${videoBaseName}-fanart.jpg`);
+
+        // Copy the video thumbnail as fanart (if the thumbnail exists in the final location and -fanart doesn't already exist)
+        if (fs.existsSync(finalImagePath) && !fs.existsSync(fanartPath)) {
+          fs.copySync(finalImagePath, fanartPath);
+          logger.info({ fanartPath }, '[Post-Process] Created video fanart file');
+        } else {
+          logger.debug({ finalImagePath }, '[Post-Process] No image copied for fanart creation');
+        }
+      } catch (err) {
+        logger.warn({ err }, '[Post-Process] Error creating video fanart');
+        // Don't fail the process, but log the warning
+      }
+    }
+
     // Copy channel thumbnail as poster.jpg to channel folder (must be done AFTER all moves)
     // Calculate the final channel folder path based on the final video path
     // In flat mode, the file is directly in the channel folder
@@ -747,6 +776,22 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
       : path.dirname(path.dirname(finalVideoPath));
     if (jsonData.channel_id) {
       await copyChannelPosterIfNeeded(jsonData.channel_id, finalChannelFolderPath);
+    }
+
+    // Save to the videos + channelvideos tables now so listing pages can show
+    // this video mid-batch. The end-of-batch save still runs; a failure here
+    // must not fail the download.
+    if (activeJobId) {
+      try {
+        const persisted = await videoPersistence.persistDownloadedVideoForJob({ jobId: activeJobId, youtubeId: id });
+        if (persisted) {
+          // Control marker, not a log line: stdout flows through yt-dlp to
+          // YtdlpOutputRouter, which broadcasts videosUpdated to the listing pages.
+          process.stdout.write(`${VIDEO_PERSISTED_MARKER}${id}\n`);
+        }
+      } catch (err) {
+        logger.error({ err, id }, 'Error persisting downloaded video during post-processing');
+      }
     }
 
     // Mark this video as completed in the JobVideoDownload tracking table

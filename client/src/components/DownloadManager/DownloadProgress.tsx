@@ -22,7 +22,8 @@ import {
 import { ChevronDown as ExpandMoreIcon, List as QueueIcon, PlaySquare as PlaylistPlayIcon, Square as StopIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import WebSocketContext from '../../contexts/WebSocketContext';
-import { Job } from '../../types/Job';
+import { Job, FailedVideo, DownloadDiagnosis } from '../../types/Job';
+import { groupFailuresByDiagnosis } from './failureGrouping';
 import TerminateJobDialog from './TerminateJobDialog';
 
 interface DownloadProgressProps {
@@ -65,14 +66,6 @@ interface StructuredProgress {
   videoCount?: { current: number; total: number; completed: number; skipped: number, skippedThisChannel: number };
 }
 
-interface FailedVideo {
-  youtubeId: string;
-  title: string;
-  channel: string;
-  error: string;
-  url?: string;
-}
-
 interface TerminatedChannelSummary {
   channelId: string;
   uploader?: string | null;
@@ -84,10 +77,12 @@ interface FinalSummary {
   totalDownloaded: number;
   totalSkipped: number;
   totalFailed?: number;
+  totalAutoRetried?: number;
   totalMembersOnly?: number;
   totalTerminatedChannels?: number;
   totalTerminationFailures?: number;
   failedVideos?: FailedVideo[];
+  diagnoses?: DownloadDiagnosis[];
   terminatedChannels?: TerminatedChannelSummary[];
   terminationFailures?: string[];
   jobType: string;
@@ -493,7 +488,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                   <Button
                     color="inherit"
                     size="small"
-                    onClick={() => navigate('/settings/integrations')}
+                    onClick={() => navigate('/settings/cookies')}
                   >
                     Go to Settings
                   </Button>
@@ -531,6 +526,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
             ?? 0;
           const hasIssue =
             (finalSummary.totalFailed != null && finalSummary.totalFailed > 0)
+            || (finalSummary.totalAutoRetried != null && finalSummary.totalAutoRetried > 0)
             || (finalSummary.totalMembersOnly != null && finalSummary.totalMembersOnly > 0)
             || terminatedCount > 0
             || terminationFailureCount > 0;
@@ -552,6 +548,9 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                   }
                   if (finalSummary.totalFailed && finalSummary.totalFailed > 0) {
                     parts.push(`✗ ${finalSummary.totalFailed} failed`);
+                  }
+                  if (finalSummary.totalAutoRetried && finalSummary.totalAutoRetried > 0) {
+                    parts.push(`${finalSummary.totalAutoRetried} queued for auto-retry`);
                   }
                   if (finalSummary.totalMembersOnly && finalSummary.totalMembersOnly > 0) {
                     parts.push(`${finalSummary.totalMembersOnly} members-only video${finalSummary.totalMembersOnly !== 1 ? 's' : ''} skipped`);
@@ -641,27 +640,30 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                 <Alert severity="error">
                   <AlertTitle>Failed Downloads</AlertTitle>
                   {(() => {
-                    // Group videos by error message
-                    const errorGroups = new Map<string, FailedVideo[]>();
-                    finalSummary.failedVideos.forEach(video => {
-                      const existing = errorGroups.get(video.error) || [];
-                      existing.push(video);
-                      errorGroups.set(video.error, existing);
-                    });
+                    const errorGroups = groupFailuresByDiagnosis(
+                      finalSummary.failedVideos,
+                      finalSummary.diagnoses
+                    );
 
-                    return Array.from(errorGroups.entries()).map(([error, videos], groupIndex) => (
-                      <Box key={groupIndex} className={groupIndex > 0 ? 'mt-3' : ''}>
+                    return Array.from(errorGroups.entries()).map(([groupKey, group], groupIndex) => (
+                      <Box key={groupKey} className={groupIndex > 0 ? 'mt-3' : ''}>
                         <Typography variant="body2" component="div" className="font-bold">
-                          {videos.length} video{videos.length !== 1 ? 's' : ''} failed:
+                          {group.videos.length} video{group.videos.length !== 1 ? 's' : ''} failed:
+                          {group.heading ? ` ${group.heading}` : ''}
                         </Typography>
+                        {group.message && (
+                          <Typography variant="body2" component="div" className="mt-1">
+                            {group.message}
+                          </Typography>
+                        )}
                         <Typography variant="caption" color="text.secondary" component="div" className="mt-1">
-                          {error}
+                          {group.videos[0].error}
                         </Typography>
 
                         {/* Only show individual video details if titles are known */}
-                        {videos.some(v => v.title !== 'Unknown') && (
+                        {group.videos.some(v => v.title !== 'Unknown') && (
                           <Box className="mt-2 pl-4">
-                            {videos
+                            {group.videos
                               .filter(v => v.title !== 'Unknown')
                               .map((video, index) => (
                                 <Typography key={video.youtubeId || index} variant="caption" component="div" color="text.secondary">

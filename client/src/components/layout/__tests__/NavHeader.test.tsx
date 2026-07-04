@@ -12,6 +12,12 @@ jest.mock('../StorageHeaderWidget', () => ({
   StorageHeaderWidget: () => <div data-testid="storage-header-widget" />,
 }));
 
+jest.mock('../DownloadActivityIndicator', () => ({
+  DownloadActivityIndicator: () => (
+    <div data-testid="download-activity-indicator" />
+  ),
+}));
+
 const NAV_ITEMS = [
   {
     key: 'channels',
@@ -165,6 +171,20 @@ describe('NavHeader shared update indicator', () => {
     renderHeader({ layoutPolicy: resolveThemeLayoutPolicy(getThemeById('playful'), 'mobile') });
 
     expect(screen.getByTestId('storage-header-widget')).toBeInTheDocument();
+  });
+
+  it('renders the download activity indicator in the desktop header actions', () => {
+    renderHeader();
+
+    expect(screen.getByTestId('download-activity-indicator')).toBeInTheDocument();
+  });
+
+  it('renders the download activity indicator in the playful mobile header', () => {
+    localStorage.setItem('uiThemeMode', 'playful');
+
+    renderHeader({ layoutPolicy: resolveThemeLayoutPolicy(getThemeById('playful'), 'mobile') });
+
+    expect(screen.getByTestId('download-activity-indicator')).toBeInTheDocument();
   });
 
   it('renders the header wordmark 30 percent larger across themes', () => {

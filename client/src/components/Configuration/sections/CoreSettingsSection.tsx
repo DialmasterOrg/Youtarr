@@ -33,6 +33,7 @@ import { InfoTooltip } from '../common/InfoTooltip';
 import SubtitleLanguageSelector from '../SubtitleLanguageSelector';
 import { VideoFilenameTemplate } from './components/VideoFilenameTemplate';
 import { SubfolderAutocomplete } from '../../shared/SubfolderAutocomplete';
+import { ManageSubfoldersDialog } from '../../shared/ManageSubfoldersDialog';
 import { useSubfolders } from '../../../hooks/useSubfolders';
 import { ConfigState, DeploymentEnvironment, PlatformManagedState } from '../types';
 import { reverseFrequencyMapping, getChannelFilesOptions } from '../helpers';
@@ -67,9 +68,10 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
   onYtDlpUpdate,
 }) => {
   // Fetch available subfolders
-  const { subfolders, loading: subfoldersLoading } = useSubfolders(token);
+  const { subfolders, loading: subfoldersLoading, createSubfolder } = useSubfolders(token);
 
   // State for confirmation dialog when setting default subfolder
+  const [manageOpen, setManageOpen] = useState(false);
   const [pendingDefaultSubfolder, setPendingDefaultSubfolder] = useState<string | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [affectedChannels, setAffectedChannels] = useState<{ count: number; channelNames: string[] }>({ count: 0, channelNames: [] });
@@ -432,6 +434,29 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                     />
                   </FormControl>
                 </Grid>
+
+                <Grid item xs={12} md={6} className="mt-3">
+                  <FormControl>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          name="writeVideoFanart"
+                          checked={config.writeVideoFanart}
+                          onChange={handleCheckboxChange}
+                        />
+                      }
+                      label={
+                        <Box className="flex items-center">
+                          Create video fanart files
+                          <InfoTooltip
+                            text="Create -fanart.jpg files for each video with the video thumbnail. Some Plex clients like NVIDIA Shield use this as the background preview instead of the poster."
+                            onMobileClick={onMobileTooltipClick}
+                          />
+                        </Box>
+                      }
+                    />
+                  </FormControl>
+                </Grid>
               </Grid>
             </AccordionDetails>
           </Accordion>
@@ -476,6 +501,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                       onChange={handleDefaultSubfolderChange}
                       subfolders={subfolders}
                       loading={subfoldersLoading}
+                      createSubfolder={createSubfolder}
                       label="Default Subfolder"
                       helperText="Default download location for channels using 'Default Subfolder'"
                     />
@@ -486,6 +512,14 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                       />
                     </Box>
                   </Box>
+                  <Button variant="text" size="sm" onClick={() => setManageOpen(true)}>
+                    Manage Subfolders
+                  </Button>
+                  <ManageSubfoldersDialog
+                    open={manageOpen}
+                    onClose={() => setManageOpen(false)}
+                    token={token}
+                  />
                 </Grid>
 
                 <Grid item xs={12} md={6}>

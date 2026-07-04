@@ -42,6 +42,7 @@ function describeNonZeroExit({
   videoDataCount,
   terminatedChannelCount,
   httpForbiddenDetected,
+  cookiesEnabled = false,
   flags,
   failureDetails
 }) {
@@ -59,9 +60,13 @@ function describeNonZeroExit({
     output = `${videoCount} videos, ${terminatedChannelCount} channel${terminatedChannelCount !== 1 ? 's' : ''} marked terminated.`;
     notes = `${terminatedChannelCount} channel${terminatedChannelCount !== 1 ? 's' : ''} marked terminated by YouTube`;
   } else if (httpForbiddenDetected) {
-    // Failed with 403 errors - likely authentication issue
+    // Failed with 403 errors - likely authentication issue. With cookies
+    // already enabled, "configure cookies" is the wrong advice: stale or
+    // rotated cookies are the usual cause.
     output = `${videoCount} videos. Error: YouTube returned HTTP 403 (Forbidden)`;
-    notes = 'YouTube denied access (HTTP 403). Configure cookies in Settings to resolve this issue.';
+    notes = cookiesEnabled
+      ? 'YouTube denied access (HTTP 403) while using your uploaded cookies. Re-export fresh cookies from your browser, or disable cookies in Settings -> Cookies.'
+      : 'YouTube denied access (HTTP 403). Configure cookies in Settings -> Cookies to resolve this issue.';
     errorCode = 'COOKIES_RECOMMENDED';
   } else {
     // Failed with other error
@@ -109,7 +114,11 @@ function resolveFinalPresentation({
   videoCount,
   monitorCompletedCount,
   unexpectedErrorCount,
-  httpForbiddenDetected
+  httpForbiddenDetected,
+  cookiesEnabled = false,
+  // Failures already handed off to a queued auto-retry job. Affects only the
+  // presented text; state derivation still counts them as failures.
+  autoRetryQueuedCount = 0
 }) {
   // Consider it successful if:
   // - Exit code is 0 (normal success), OR
@@ -166,7 +175,11 @@ function resolveFinalPresentation({
   } else if (botDetected) {
     finalState = 'failed';
     finalErrorCode = 'COOKIES_REQUIRED';
-    finalText = 'Download failed: Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.';
+    // With cookies already enabled, "set cookies" is the wrong advice: stale
+    // or rotated cookies are the usual cause.
+    finalText = cookiesEnabled
+      ? 'Download failed: Bot detection encountered even though cookies are configured - they are likely expired or rotated. Re-export fresh cookies from your browser and upload them in Settings -> Cookies.'
+      : 'Download failed: Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.';
   } else if (monitorHasError && finalState === 'complete' && !flags.hasOnlyHandledErrors) {
     // Don't let a recognized termination flip the state back to error
     // via DownloadProgressMonitor's broad hasError flag.
@@ -179,8 +192,14 @@ function resolveFinalPresentation({
     if (actualCount > 0) {
       parts.push(`${actualCount} video${actualCount !== 1 ? 's' : ''} downloaded`);
     }
-    if (failedCount > 0) {
-      parts.push(`${failedCount} failed`);
+    // Failures handed to a queued auto-retry are reported under the retry
+    // part only, matching finalSummary's totalFailed/totalAutoRetried split.
+    const reportedFailedCount = Math.max(0, failedCount - autoRetryQueuedCount);
+    if (reportedFailedCount > 0) {
+      parts.push(`${reportedFailedCount} failed`);
+    }
+    if (autoRetryQueuedCount > 0) {
+      parts.push(`${autoRetryQueuedCount} queued for auto-retry`);
     }
     if (skippedCount > 0) {
       parts.push(`${skippedCount} already existed`);
@@ -198,6 +217,12 @@ function resolveFinalPresentation({
     } else {
       finalText = 'Download completed: No new videos to download';
     }
+  } else if (autoRetryQueuedCount > 0) {
+    finalText = `Download failed: ${autoRetryQueuedCount} video${autoRetryQueuedCount !== 1 ? 's' : ''} queued for auto-retry`;
+    const remainingFailedCount = Math.max(0, failedCount - autoRetryQueuedCount);
+    if (remainingFailedCount > 0) {
+      finalText += `, ${remainingFailedCount} other failure${remainingFailedCount !== 1 ? 's' : ''}`;
+    }
   } else {
     finalText = 'Download failed';
   }
@@ -205,10 +230,11 @@ function resolveFinalPresentation({
   return { finalState, finalText, finalErrorCode, debugFlags };
 }
 
-function buildJobDataPayload({ videoData, failedVideosList, terminatedChannels, terminatedChannelIds, terminationFailures }) {
+function buildJobDataPayload({ videoData, failedVideosList, terminatedChannels, terminatedChannelIds, terminationFailures, diagnoses }) {
   return {
     videos: videoData || [],
     failedVideos: failedVideosList || [],
+    diagnoses: diagnoses || [],
     terminatedChannels: [...terminatedChannels],
     totalTerminatedChannels: terminatedChannelIds.size,
     terminationFailures: [...terminationFailures],

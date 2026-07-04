@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import '@testing-library/jest-dom';
 import PlaylistListBlock from '../PlaylistListBlock';
 import { Playlist } from '../../../../types/playlist';
@@ -29,10 +30,16 @@ const basePlaylist: Playlist = {
   lastFetched: null,
 };
 
-const renderBlock = (playlists: Playlist[]) =>
+const renderBlock = (playlists: Playlist[], onDelete: jest.Mock = jest.fn()) =>
   render(
-    <MemoryRouter>
-      <PlaylistListBlock playlists={playlists} loading={false} />
+    <MemoryRouter initialEntries={['/']}>
+      <Routes>
+        <Route
+          path="/"
+          element={<PlaylistListBlock playlists={playlists} loading={false} onDelete={onDelete} />}
+        />
+        <Route path="/playlist/:id" element={<div data-testid="playlist-page">navigated</div>} />
+      </Routes>
     </MemoryRouter>
   );
 
@@ -59,5 +66,37 @@ describe('PlaylistListBlock auto-download indicator', () => {
 
     expect(screen.getByLabelText('Auto-download off')).toBeInTheDocument();
     expect(screen.getByLabelText('Auto-download on')).toBeInTheDocument();
+  });
+});
+
+describe('PlaylistListBlock remove button', () => {
+  test('renders a remove button for each playlist', () => {
+    renderBlock([
+      basePlaylist,
+      { ...basePlaylist, id: 2, playlist_id: 'PL2' },
+    ]);
+
+    expect(screen.getAllByRole('button', { name: 'Remove playlist' })).toHaveLength(2);
+  });
+
+  test('clicking remove calls onDelete with the playlist without navigating', async () => {
+    const user = userEvent.setup();
+    const onDelete = jest.fn();
+    renderBlock([basePlaylist], onDelete);
+
+    await user.click(screen.getByRole('button', { name: 'Remove playlist' }));
+
+    expect(onDelete).toHaveBeenCalledTimes(1);
+    expect(onDelete).toHaveBeenCalledWith(expect.objectContaining({ playlist_id: 'PL1' }));
+    expect(screen.queryByTestId('playlist-page')).not.toBeInTheDocument();
+  });
+
+  test('clicking the row still navigates to the playlist page', async () => {
+    const user = userEvent.setup();
+    renderBlock([basePlaylist]);
+
+    await user.click(screen.getByText('My Playlist'));
+
+    expect(await screen.findByTestId('playlist-page')).toBeInTheDocument();
   });
 });

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -10,11 +10,14 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  LinearProgress,
+  Snackbar,
   Typography,
 } from './ui';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useConfig } from '../hooks/useConfig';
 import { usePlaylistDetail, PlaylistSortOrder } from '../hooks/usePlaylistDetail';
+import { useDownloadListingsRefresh } from '../hooks/useDownloadListingsRefresh';
 import { usePlaylistMutations } from '../hooks/usePlaylistMutations';
 import { useMediaServerStatus } from '../hooks/useMediaServerStatus';
 import { MediaServerType, PlaylistSubscribeSettings, PlaylistVideo } from '../types/playlist';
@@ -25,8 +28,9 @@ import PlaylistSortControl from './PlaylistPage/components/PlaylistSortControl';
 import { useVideoSelection } from './shared/VideoList/hooks/useVideoSelection';
 import VideoListSelectionPill from './shared/VideoList/VideoListSelectionPill';
 import { SelectionAction } from './shared/VideoList/types';
-import { Download as DownloadIcon } from '../lib/icons';
+import { Download as DownloadIcon, Refresh as RefreshIcon } from '../lib/icons';
 import PlaylistSettingsDialog from './PlaylistPage/components/PlaylistSettingsDialog';
+import LoadMoreVideosDialog from './PlaylistPage/components/LoadMoreVideosDialog';
 import { toDownloadFileProps } from './PlaylistPage/components/playlistVideoHelpers';
 import DownloadSettingsDialog from './DownloadManager/ManualDownload/DownloadSettingsDialog';
 import { DownloadSettings } from './DownloadManager/ManualDownload/types';
@@ -92,10 +96,13 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     markVideoIgnored,
     markVideoDeleted,
     refresh,
+    fetchAllVideos,
     sync,
     regenerateM3U,
     triggerDownload,
   } = usePlaylistDetail({ token, playlistId, sortOrder });
+
+  useDownloadListingsRefresh(refetch);
 
   const {
     status: serverStatus,
@@ -121,6 +128,8 @@ function PlaylistPage({ token }: PlaylistPageProps) {
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [confirmPublicOpen, setConfirmPublicOpen] = useState(false);
+  const [loadMoreConfirmOpen, setLoadMoreConfirmOpen] = useState(false);
+  const [loadingAllVideos, setLoadingAllVideos] = useState(false);
   const [pendingVideoId, setPendingVideoId] = useState<string | null>(null);
   const [modalVideo, setModalVideo] = useState<VideoModalData | null>(null);
   const [snackbar, setSnackbar] = useState<SnackbarState>({
@@ -133,6 +142,17 @@ function PlaylistPage({ token }: PlaylistPageProps) {
   const showSnackbar = useCallback((message: string, severity: SnackbarState['severity'] = 'success') => {
     setSnackbar({ open: true, message, severity });
   }, []);
+
+  // A re-subscribe arrives with router state from AddPlaylistDialog. Show the
+  // notice once, then clear the state so refresh or back doesn't repeat it.
+  const location = useLocation();
+  useEffect(() => {
+    const navState = location.state as { restored?: boolean } | null;
+    if (navState?.restored) {
+      showSnackbar('Playlist restored with its previous settings');
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.pathname, location.state, navigate, showSnackbar]);
 
   const handleAction = useCallback(
     async (label: string, action: () => Promise<unknown>, successMessage?: string): Promise<boolean> => {
@@ -309,6 +329,15 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     [playlist, unignoreVideo, markVideoIgnored, refetchMeta]
   );
 
+  // handleAction owns the shared actionRunning flag and the outcome snackbar;
+  // the local flag drives the button label and progress bar.
+  const handleConfirmLoadMore = useCallback(async () => {
+    setLoadMoreConfirmOpen(false);
+    setLoadingAllVideos(true);
+    await handleAction('Load more videos', fetchAllVideos, 'All available videos loaded');
+    setLoadingAllVideos(false);
+  }, [handleAction, fetchAllVideos]);
+
   const handleSettingsSaved = useCallback(
     (next: PlaylistSubscribeSettings) => {
       showSnackbar('Playlist settings saved');
@@ -383,12 +412,29 @@ function PlaylistPage({ token }: PlaylistPageProps) {
             <Typography variant="h6" style={{ fontWeight: 600 }}>
               Videos
             </Typography>
-            <PlaylistSortControl
-              value={sortOrder}
-              onChange={setSortOrder}
-              disabled={loading && videos.length === 0}
-            />
+            <Box className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant="outlined"
+                size="sm"
+                onClick={() => setLoadMoreConfirmOpen(true)}
+                disabled={actionRunning}
+                startIcon={<RefreshIcon size={16} />}
+              >
+                {loadingAllVideos ? 'Loading...' : 'Load More'}
+              </Button>
+              <PlaylistSortControl
+                value={sortOrder}
+                onChange={setSortOrder}
+                disabled={loading && videos.length === 0}
+              />
+            </Box>
           </Box>
+          <Typography variant="caption" color="text.secondary" className="block mb-2">
+            Private, members-only, and deleted videos can&apos;t be accessed, so
+            they are never loaded or downloaded; you may see fewer videos here
+            than YouTube reports for the playlist.
+          </Typography>
+          {loadingAllVideos && <LinearProgress className="mb-2" />}
           <PlaylistVideoList
             videos={videos}
             loading={loading}
@@ -419,6 +465,12 @@ function PlaylistPage({ token }: PlaylistPageProps) {
         token={token}
         onClose={() => setSettingsOpen(false)}
         onSaved={handleSettingsSaved}
+      />
+
+      <LoadMoreVideosDialog
+        open={loadMoreConfirmOpen}
+        onCancel={() => setLoadMoreConfirmOpen(false)}
+        onConfirm={handleConfirmLoadMore}
       />
 
       <DownloadSettingsDialog
@@ -468,15 +520,18 @@ function PlaylistPage({ token }: PlaylistPageProps) {
         </DialogActions>
       </Dialog>
 
-      {snackbar.open && (
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+      >
         <Alert
           severity={snackbar.severity}
           onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
-          className="mt-3"
         >
           {snackbar.message}
         </Alert>
-      )}
+      </Snackbar>
 
       {modalVideo && (
         <VideoModal

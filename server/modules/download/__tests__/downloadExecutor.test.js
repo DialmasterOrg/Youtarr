@@ -33,6 +33,7 @@ jest.mock('../../../logger');
 // Mock dependencies
 jest.mock('../../configModule', () => ({
   getConfig: jest.fn(),
+  getCookiesPath: jest.fn().mockReturnValue(null),
   directoryPath: '/mock/output'
 }));
 
@@ -425,6 +426,35 @@ describe('DownloadExecutor', () => {
           status: 'Error'
         })
       );
+    });
+
+    it('invokes the injected enqueueAutoRetry when a video fails with a mid-stream 403', async () => {
+      const enqueueAutoRetry = jest.fn().mockResolvedValue();
+      const retryExecutor = new DownloadExecutor({ enqueueAutoRetry });
+
+      setTimeout(() => {
+        mockProcess.stdout.emit(
+          'data',
+          Buffer.from('[youtube] Extracting URL: https://www.youtube.com/watch?v=abc123def45\n')
+        );
+        mockProcess.stderr.emit(
+          'data',
+          Buffer.from('ERROR: unable to download video data: HTTP Error 403: Forbidden\n')
+        );
+        mockProcess.emit('exit', 1, null);
+      }, 10);
+
+      await retryExecutor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(enqueueAutoRetry).toHaveBeenCalledWith({
+        retryVideos: [{
+          youtubeId: 'abc123def45',
+          url: 'https://www.youtube.com/watch?v=abc123def45'
+        }],
+        autoRetryAttempt: 1,
+        runId: null,
+        sourceJobData: {}
+      });
     });
 
     it('reports to the run tracker using the runId captured at entry, even after job.data is stripped', async () => {
@@ -1079,7 +1109,7 @@ describe('DownloadExecutor', () => {
       expect(jobModule.updateJob).toHaveBeenCalledWith(
         mockJobId,
         expect.objectContaining({
-          notes: 'YouTube denied access (HTTP 403). Configure cookies in Settings to resolve this issue.',
+          notes: 'YouTube denied access (HTTP 403). Configure cookies in Settings -> Cookies to resolve this issue.',
           error: 'COOKIES_RECOMMENDED'
         })
       );
@@ -2074,6 +2104,16 @@ describe('DownloadExecutor', () => {
     it('should have configurable timeout values', () => {
       expect(executor.activityTimeoutMs).toBe(30 * 60 * 1000); // 30 minutes
       expect(executor.maxAbsoluteTimeoutMs).toBe(6 * 60 * 60 * 1000); // 6 hours
+    });
+
+    it('disables the absolute runtime cap for channel download-all jobs', () => {
+      expect(executor.resolveMaxAbsoluteTimeoutMs('Channel Download All: My Channel')).toBeNull();
+    });
+
+    it('keeps the absolute runtime cap for other job types', () => {
+      expect(executor.resolveMaxAbsoluteTimeoutMs('Channel Downloads')).toBe(6 * 60 * 60 * 1000);
+      expect(executor.resolveMaxAbsoluteTimeoutMs('Manually Added Urls')).toBe(6 * 60 * 60 * 1000);
+      expect(executor.resolveMaxAbsoluteTimeoutMs('Playlist: Favorites')).toBe(6 * 60 * 60 * 1000);
     });
 
     it('should track current process for manual termination', async () => {

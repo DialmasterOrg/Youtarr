@@ -97,6 +97,20 @@ describe('YtdlpOutputRouter', () => {
       });
     });
 
+    it('broadcasts videosUpdated for a video-persisted control marker line', () => {
+      router.handleStdoutChunk('[Youtarr:videoPersisted] abc123XYZ_d\n');
+
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
+        'broadcast',
+        null,
+        'download',
+        'videosUpdated',
+        { youtubeId: 'abc123XYZ_d' }
+      );
+      // Marker lines are control messages, not yt-dlp output
+      expect(monitor.processProgress).not.toHaveBeenCalled();
+    });
+
     it('routes ERROR lines to the error tracker and suppresses consumed lines', () => {
       errorTracker.handleErrorLine.mockReturnValue(true);
 
@@ -166,6 +180,55 @@ describe('YtdlpOutputRouter', () => {
         (call) => call[4] && call[4].errorCode === 'COOKIES_RECOMMENDED'
       );
       expect(cookieCalls).toHaveLength(1);
+    });
+  });
+
+  describe('context-aware hints when cookies are enabled', () => {
+    let cookiesRouter;
+
+    beforeEach(() => {
+      cookiesRouter = new YtdlpOutputRouter({
+        jobId: 'job-123',
+        config: { enableStallDetection: false },
+        monitor: makeMonitor(),
+        errorTracker: makeErrorTracker(),
+        timeoutController: makeTimeoutController(),
+        cookiesEnabled: true
+      });
+    });
+
+    afterEach(() => {
+      if (cookiesRouter.progressFlushTimer) {
+        clearTimeout(cookiesRouter.progressFlushTimer);
+        cookiesRouter.progressFlushTimer = null;
+      }
+    });
+
+    it('suggests refreshing or disabling cookies on 403 instead of enabling them', () => {
+      cookiesRouter.handleStderrChunk('HTTP Error 403: Forbidden');
+
+      const call = MessageEmitter.emitMessage.mock.calls.find(
+        (c) => c[4] && c[4].errorCode === 'COOKIES_MAY_BE_STALE'
+      );
+      expect(call).toBeDefined();
+      expect(call[4].text).toMatch(/re-exporting fresh cookies/i);
+      expect(call[4].text).toMatch(/disable cookies/i);
+      expect(
+        MessageEmitter.emitMessage.mock.calls.some(
+          (c) => c[4] && c[4].errorCode === 'COOKIES_RECOMMENDED'
+        )
+      ).toBe(false);
+    });
+
+    it('suggests refreshing cookies on bot detection instead of setting them', () => {
+      cookiesRouter.handleStderrChunk('Sign in to confirm you\'re not a bot');
+
+      const call = MessageEmitter.emitMessage.mock.calls.find(
+        (c) => c[4] && c[4].progress && c[4].progress.state === 'bot_detected'
+      );
+      expect(call).toBeDefined();
+      expect(call[4].text).toMatch(/likely expired or rotated/i);
+      expect(call[4].text).not.toMatch(/set cookies/i);
     });
   });
 

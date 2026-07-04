@@ -339,6 +339,13 @@ These fields work like the Jellyfin fields above, with `emby*` names. They're re
 - **Description**: Generate NFO metadata files for Kodi/Jellyfin/Emby
 - **Note**: Creates .nfo XML files with video metadata
 
+### Write Video Fanart
+- **Config Key**: `writeVideoFanart`
+- **Type**: `boolean`
+- **Default**: `false`
+- **Description**: Create fanart image files for video backgrounds in media servers
+- **Note**: Creates a `-fanart.jpg` file alongside each video with the video thumbnail. Some Plex clients (notably NVIDIA Shield) use this as the background preview image instead of or alongside the poster. When enabled with `writeChannelPosters`, videos will display correctly on all Plex clients with both a poster (from channel thumbnail) and background (from video thumbnail).
+
 ## Cookie Config
 
 ### Enable Cookies
@@ -484,6 +491,14 @@ The old `discordWebhookUrl` and `notificationService` fields are automatically r
 - **Description**: Number of retry attempts for failed downloads
 - **Range**: 0-10
 - **Note**: Used for yt-dlp `--fragment-retries` and `--retries` settings.
+
+### Auto-Retry Failed Videos
+- **Config Key**: `downloadAutoRetryCount`
+- **Type**: `number`
+- **Default**: `1`
+- **Description**: Number of times a video that fails with a transient HTTP 403 is automatically re-queued in a fresh download job
+- **Range**: 0-3 (`0` disables auto-retry)
+- **Note**: YouTube sometimes rejects an already-issued stream URL mid-download with HTTP 403. yt-dlp's own retries (`downloadRetryCount`) re-request the same rejected URL and cannot recover; only a fresh yt-dlp run with a fresh extraction can. When a video fails with the 403 signature, Youtarr queues an "Auto-retry" job for just that video. Permanent failures (members-only, terminated channels, bot detection) are never auto-retried.
 
 ### Enable Stall Detection
 - **Config Key**: `enableStallDetection`

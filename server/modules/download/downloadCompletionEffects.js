@@ -8,6 +8,7 @@ const configModule = require('../configModule');
 const plexModule = require('../plexModule');
 const jobModule = require('../jobModule');
 const filesystem = require('../filesystem');
+const subfolderModule = require('../subfolderModule');
 const { JobVideoDownload } = require('../../models');
 const Channel = require('../../models/channel');
 
@@ -90,21 +91,27 @@ async function runCompletionSideEffects({
     }
   }
 
+  // Use where each video actually landed on disk, not the job-level
+  // subfolderOverride (null for manual and non-grouped downloads).
+  const baseDir = configModule.directoryPath;
+  const subfoldersInUse = new Set();
+  for (const video of (videoData || [])) {
+    const mediaPath = video.filePath || video.audioFilePath;
+    if (!mediaPath) continue;
+    subfoldersInUse.add(filesystem.extractSubfolderFromAbsPath(mediaPath, baseDir));
+  }
+
+  // Persist every real subfolder a downloaded video landed in, so created/used
+  // folders appear in every picker and are reusable later. register() ignores
+  // null (root) and sentinels. Runs for all completions, including grouped ones.
+  for (const subfolder of subfoldersInUse) {
+    subfolderModule.register(subfolder).catch((err) => {
+      logger.error({ err, subfolder }, 'Failed to register downloaded subfolder');
+    });
+  }
+
   // Only refresh Plex and start next job if not processing multiple groups
   if (!skipJobTransition) {
-    // Derive the set of subfolders from where each video actually ended up
-    // on disk. This mirrors reality (the post-processor may have placed
-    // each video under its channel-specific sub_folder) instead of relying
-    // on the job-level subfolderOverride, which is null for typical
-    // manual URL and non-grouped channel downloads.
-    const baseDir = configModule.directoryPath;
-    const subfoldersInUse = new Set();
-    for (const video of (videoData || [])) {
-      const mediaPath = video.filePath || video.audioFilePath;
-      if (!mediaPath) continue;
-      subfoldersInUse.add(filesystem.extractSubfolderFromAbsPath(mediaPath, baseDir));
-    }
-
     if (subfoldersInUse.size > 0) {
       // Defensive: refreshLibrary currently swallows errors internally
       plexModule.refreshLibrariesForSubfolders([...subfoldersInUse]).catch(err => {

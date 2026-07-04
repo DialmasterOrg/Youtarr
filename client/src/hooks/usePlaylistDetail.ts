@@ -204,6 +204,27 @@ export const usePlaylistDetail = ({
     await loadInitial();
   }, [token, playlistId, loadInitial]);
 
+  // Rethrows the server's error message so the caller's snackbar shows
+  // specifics (e.g. the 409 when a fetch is already running).
+  const fetchAllVideos = useCallback(async () => {
+    if (!token || !playlistId) return;
+    try {
+      await axios.post(
+        `/api/playlists/${playlistId}/refresh`,
+        { fetchAll: true },
+        { headers: authHeaders(token) }
+      );
+    } catch (err: unknown) {
+      const message =
+        (axios.isAxiosError(err) && err.response?.data?.error) ||
+        'Failed to load all playlist videos';
+      throw new Error(
+        typeof message === 'string' ? message : 'Failed to load all playlist videos'
+      );
+    }
+    await loadInitial();
+  }, [token, playlistId, loadInitial]);
+
   const sync = useCallback(async () => {
     if (!token || !playlistId) return;
     await axios.post(
@@ -253,6 +274,7 @@ export const usePlaylistDetail = ({
     markVideoIgnored,
     markVideoDeleted,
     refresh,
+    fetchAllVideos,
     sync,
     regenerateM3U,
     triggerDownload,

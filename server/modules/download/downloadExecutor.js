@@ -5,7 +5,7 @@ const jobModule = require('../jobModule');
 const MessageEmitter = require('../messageEmitter');
 const DownloadProgressMonitor = require('./DownloadProgressMonitor');
 const tempPathManager = require('./tempPathManager');
-const { isSpecificUrlDownloadJob } = require('./jobTypes');
+const { isSpecificUrlDownloadJob, isChannelDownloadAllJob } = require('./jobTypes');
 const downloadResultProcessor = require('./downloadResultProcessor');
 const downloadCleanup = require('./downloadCleanup');
 const { finalizeDownloadJob } = require('./downloadJobFinalizer');
@@ -18,7 +18,10 @@ const DownloadTimeoutController = require('./DownloadTimeoutController');
 const { YtdlpErrorTracker } = require('./YtdlpErrorTracker');
 
 class DownloadExecutor {
-  constructor() {
+  // enqueueAutoRetry is injected by downloadModule so the finalizer can queue
+  // transient-403 retry jobs without a require cycle back into downloadModule.
+  constructor({ enqueueAutoRetry = null } = {}) {
+    this.enqueueAutoRetry = enqueueAutoRetry;
     this.tempChannelsFile = null;
     // Timeout configuration
     this.activityTimeoutMs = 30 * 60 * 1000; // 30 minutes of no activity (default)
@@ -113,6 +116,12 @@ class DownloadExecutor {
     }
   }
 
+  // Channel download-all jobs legitimately run for days, so they get no
+  // absolute runtime cap; the activity timeout remains the hang guard.
+  resolveMaxAbsoluteTimeoutMs(jobType) {
+    return isChannelDownloadAllJob(jobType) ? null : this.maxAbsoluteTimeoutMs;
+  }
+
   async doDownload(args, jobId, jobType, urlCount = 0, originalUrls = null, allowRedownload = false, skipJobTransition = false, postProcessDirectives = {}) {
     const subfolderOverride = (postProcessDirectives || {}).subfolderOverride ?? null;
     const initialCount = downloadResultProcessor.getCountOfDownloadedVideos();
@@ -193,7 +202,7 @@ class DownloadExecutor {
       const timeoutController = new DownloadTimeoutController({
         activityTimeoutMs: this.activityTimeoutMs,
         postProcessingTimeoutMs: this.postProcessingTimeoutMs,
-        maxAbsoluteTimeoutMs: this.maxAbsoluteTimeoutMs,
+        maxAbsoluteTimeoutMs: this.resolveMaxAbsoluteTimeoutMs(jobType),
       });
       timeoutController.start(proc);
 
@@ -216,7 +225,14 @@ class DownloadExecutor {
         },
       });
 
-      const router = new YtdlpOutputRouter({ jobId, config, monitor, errorTracker, timeoutController });
+      const router = new YtdlpOutputRouter({
+        jobId,
+        config,
+        monitor,
+        errorTracker,
+        timeoutController,
+        cookiesEnabled: Boolean(configModule.getCookiesPath()),
+      });
 
       // Emit initial state so the UI reflects the job start immediately
       MessageEmitter.emitMessage(
@@ -273,6 +289,7 @@ class DownloadExecutor {
             runId,
             tempChannelsFile: this.tempChannelsFile,
             onTempChannelsFileCleaned: () => { this.tempChannelsFile = null; },
+            enqueueAutoRetry: this.enqueueAutoRetry,
           });
           resolve();
         } catch (err) {

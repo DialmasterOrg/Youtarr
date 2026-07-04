@@ -90,7 +90,9 @@ class DownloadTimeoutController {
       };
     }
 
-    if (totalRuntime > this.maxAbsoluteTimeoutMs) {
+    // null means "no absolute cap" (channel download-all jobs); the
+    // inactivity timeout above remains the hang guard.
+    if (this.maxAbsoluteTimeoutMs != null && totalRuntime > this.maxAbsoluteTimeoutMs) {
       return {
         timeout: true,
         reason: `Maximum runtime limit of ${Math.round(this.maxAbsoluteTimeoutMs / 3600000)} hours reached`

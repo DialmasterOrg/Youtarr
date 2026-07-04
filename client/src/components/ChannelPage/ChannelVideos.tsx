@@ -29,12 +29,14 @@ import VideoCard from './VideoCard';
 import VideoListItem from './VideoListItem';
 import VideoTableView from './VideoTableView';
 import ChannelVideosDialogs from './ChannelVideosDialogs';
+import DownloadAllVideosDialog from './DownloadAllVideosDialog';
 import { useChannelVideos } from './hooks/useChannelVideos';
 import { useRefreshChannelVideos } from './hooks/useRefreshChannelVideos';
 import { useChannelFetchStatus } from './hooks/useChannelFetchStatus';
 import { useChannelVideoFilters } from './hooks/useChannelVideoFilters';
 import { useConfig } from '../../hooks/useConfig';
 import { useTriggerDownloads } from '../../hooks/useTriggerDownloads';
+import { useDownloadListingsRefresh } from '../../hooks/useDownloadListingsRefresh';
 import VideoModal from '../shared/VideoModal';
 import { VideoModalData } from '../shared/VideoModal/types';
 import { ChannelVideo } from '../../types/ChannelVideo';
@@ -141,6 +143,7 @@ function ChannelVideos({
   const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
   const [hoveredVideo, setHoveredVideo] = useState<string | null>(null);
   const [refreshConfirmOpen, setRefreshConfirmOpen] = useState(false);
+  const [downloadAllOpen, setDownloadAllOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -333,6 +336,8 @@ function ChannelVideos({
     ignoredFilter,
     onFirstLoad: onVideosLoaded,
   });
+
+  useDownloadListingsRefresh(refetchVideos);
 
   useEffect(() => {
     if (availableTabsFromVideos && availableTabsFromVideos.length > 0) {
@@ -549,6 +554,18 @@ function ChannelVideos({
   };
 
   const handleRefreshClick = () => setRefreshConfirmOpen(true);
+
+  const handleDownloadAllClick = useCallback(() => {
+    // Start fetch-status polling so the header progress bar tracks the
+    // metadata fetch the dialog kicks off, and the list refetches when done.
+    startPolling();
+    setDownloadAllOpen(true);
+  }, [startPolling]);
+
+  const handleDownloadAllStarted = useCallback(() => {
+    setDownloadAllOpen(false);
+    navigate('/downloads/activity');
+  }, [navigate]);
 
   const handleRefreshConfirm = async () => {
     setRefreshConfirmOpen(false);
@@ -1075,18 +1092,32 @@ function ChannelVideos({
             </Tooltip>
           )}
         </div>
-        <Button
-          onClick={handleRefreshClick}
-          variant="outlined"
-          size="small"
-          color="inherit"
-          disabled={fetchingAllVideos}
-          startIcon={<RefreshIcon size={16} />}
-          className={intentStyles.base}
-          data-testid="channel-refresh-button"
-        >
-          {fetchingAllVideos ? 'Loading...' : 'Load More'}
-        </Button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <Button
+            onClick={handleDownloadAllClick}
+            variant="outlined"
+            size="small"
+            color="inherit"
+            disabled={fetchingAllVideos}
+            startIcon={<DownloadIcon size={16} />}
+            className={intentStyles.base}
+            data-testid="channel-download-all-button"
+          >
+            Download All
+          </Button>
+          <Button
+            onClick={handleRefreshClick}
+            variant="outlined"
+            size="small"
+            color="inherit"
+            disabled={fetchingAllVideos}
+            startIcon={<RefreshIcon size={16} />}
+            className={intentStyles.base}
+            data-testid="channel-refresh-button"
+          >
+            {fetchingAllVideos ? 'Loading...' : 'Load More'}
+          </Button>
+        </div>
       </div>
       {fetchingAllVideos && <LinearProgress style={{ marginTop: 8 }} />}
     </div>
@@ -1284,6 +1315,21 @@ function ChannelVideos({
         onMobileTooltipClose={() => setMobileTooltip(null)}
         onSuccessMessageClose={() => setSuccessMessage(null)}
         onErrorMessageClose={() => setErrorMessage(null)}
+      />
+
+      <DownloadAllVideosDialog
+        open={downloadAllOpen}
+        onClose={() => setDownloadAllOpen(false)}
+        channelId={channelId}
+        token={token}
+        tabType={selectedTab || 'videos'}
+        tabLabel={getTabLabel(selectedTab || 'videos')}
+        defaultResolution={defaultResolution}
+        defaultResolutionSource={defaultResolutionSource}
+        defaultAudioFormat={defaultAudioFormat}
+        defaultAudioFormatSource={defaultAudioFormatSource}
+        runMetadataFetch={refreshVideos}
+        onStarted={handleDownloadAllStarted}
       />
 
       {modalVideo && (

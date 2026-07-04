@@ -1,55 +1,34 @@
 const express = require('express');
+const { createOverrideSettingsValidator } = require('./overrideSettingsValidator');
 
-function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper }) {
+function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule }) {
   const router = express.Router();
   const { Playlist, PlaylistVideo, Video } = models;
 
-  const ALLOWED_RESOLUTIONS = ['360', '480', '720', '1080', '1440', '2160'];
-  const ALLOWED_AUDIO_FORMATS = ['video_mp3', 'mp3_only'];
+  // Keep the subfolder registry in sync when a playlist persists a real
+  // default subfolder. register() ignores null/empty/sentinels and never throws.
+  const registerSubfolder = (name) => {
+    if (subfolderModule && name) {
+      subfolderModule.register(name).catch(() => {});
+    }
+  };
+
   const VIDEO_SORT_DIRECTIONS = { asc: 'ASC', desc: 'DESC' };
   const DEFAULT_VIDEO_SORT_DIRECTION = 'ASC';
 
-  // Returns { ok: true, value } or { ok: false }. value is undefined when input
-  // is absent. Unknown keys are ignored. Rating is validated and normalized here
-  // via ratingMapper (NR/null -> null).
-  function validateOverrideSettings(input) {
-    if (input === undefined) return { ok: true, value: undefined };
-    if (typeof input !== 'object' || input === null || Array.isArray(input)) return { ok: false };
-    const out = {};
-    if ('resolution' in input) {
-      if (!ALLOWED_RESOLUTIONS.includes(String(input.resolution))) return { ok: false };
-      out.resolution = String(input.resolution);
-    }
-    if ('allowRedownload' in input) {
-      if (typeof input.allowRedownload !== 'boolean') return { ok: false };
-      out.allowRedownload = input.allowRedownload;
-    }
-    if ('skipVideoFolder' in input) {
-      if (typeof input.skipVideoFolder !== 'boolean') return { ok: false };
-      out.skipVideoFolder = input.skipVideoFolder;
-    }
-    if ('subfolder' in input) {
-      if (input.subfolder !== null) {
-        if (typeof input.subfolder !== 'string') return { ok: false };
-        if (!channelSettingsModule.validateSubFolder(input.subfolder).valid) return { ok: false };
-      }
-      out.subfolder = input.subfolder;
-    }
-    if ('audioFormat' in input) {
-      if (input.audioFormat !== null && !ALLOWED_AUDIO_FORMATS.includes(input.audioFormat)) return { ok: false };
-      out.audioFormat = input.audioFormat;
-    }
-    if ('rating' in input) {
-      const ratingResult = ratingMapper.validateRating(input.rating);
-      if (!ratingResult.valid) return { ok: false };
-      out.rating = ratingResult.value;
-    }
-    return { ok: true, value: out };
-  }
+  const validateOverrideSettings = createOverrideSettingsValidator({
+    channelSettingsModule,
+    ratingMapper,
+  });
 
   const logBgFailure = (req, playlistId, op) => (err) => {
     req.log.error({ err, playlist_id: playlistId }, `background ${op} failed`);
   };
+
+  // Soft-deleted playlists (enabled: false) 404 on every id-addressed route.
+  // Only POST /api/playlists (restore) and DELETE can touch one.
+  const findEnabledPlaylist = (playlistId) =>
+    Playlist.findOne({ where: { playlist_id: playlistId, enabled: true } });
 
   // A persisted default_sub_folder feeds the playlist download soft fallback,
   // which reaches the filesystem path. Validate it with the same traversal-safe
@@ -79,7 +58,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
 
   router.get('/api/playlists/:playlistId', verifyToken, async (req, res) => {
     try {
-      const p = await Playlist.findOne({ where: { playlist_id: req.params.playlistId } });
+      const p = await findEnabledPlaylist(req.params.playlistId);
       if (!p) return res.status(404).json({ error: 'Playlist not found' });
 
       // Mirrors the "download new" selection in downloadModule.doPlaylistDownloads:
@@ -130,11 +109,14 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     }
     try {
       const info = await playlistModule.getPlaylistInfo(url);
-      const created = await playlistModule.upsertPlaylist(info, { enabled: true, settings });
+      const { playlist: created, restored } = await playlistModule.upsertPlaylist(info, { enabled: true, settings });
+      // On restore the submitted settings are discarded in favor of the saved
+      // ones, so the submitted subfolder must not enter the registry.
+      if (!restored) registerSubfolder(settings.default_sub_folder);
       await playlistModule.fetchAllPlaylistVideos(created.playlist_id);
       mediaServers.mediaServerSync.syncPlaylist(created.id).catch(logBgFailure(req, created.playlist_id, 'playlist sync'));
       m3uGenerator.generatePlaylistM3U(created.id).catch(logBgFailure(req, created.playlist_id, 'M3U generation'));
-      res.status(201).json({ playlist: created });
+      res.status(201).json({ playlist: created, restored });
     } catch (err) {
       req.log.error({ err }, 'subscribe failed');
       res.status(500).json({ error: 'Failed to subscribe to playlist' });
@@ -158,7 +140,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     const updates = {};
     for (const k of allowed) if (k in req.body) updates[k] = req.body[k];
     try {
-      const p = await Playlist.findOne({ where: { playlist_id: req.params.playlistId } });
+      const p = await findEnabledPlaylist(req.params.playlistId);
       if (!p) return res.status(404).json({ error: 'Playlist not found' });
       await p.update(updates);
       res.json({ playlist: p });
@@ -170,7 +152,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
 
   router.get('/api/playlists/:playlistId/settings', verifyToken, async (req, res) => {
     try {
-      const p = await Playlist.findOne({ where: { playlist_id: req.params.playlistId } });
+      const p = await findEnabledPlaylist(req.params.playlistId);
       if (!p) return res.status(404).json({ error: 'Playlist not found' });
       res.json({
         default_sub_folder: p.default_sub_folder,
@@ -195,9 +177,10 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       return res.status(400).json({ error: 'Invalid default_sub_folder' });
     }
     try {
-      const p = await Playlist.findOne({ where: { playlist_id: req.params.playlistId } });
+      const p = await findEnabledPlaylist(req.params.playlistId);
       if (!p) return res.status(404).json({ error: 'Playlist not found' });
       await p.update(updates);
+      registerSubfolder(updates.default_sub_folder);
       res.json({ settings: updates });
     } catch (err) {
       req.log.error({ err }, 'update settings failed');
@@ -207,6 +190,9 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
 
   router.get('/api/playlists/:playlistId/videos', verifyToken, async (req, res) => {
     try {
+      const playlist = await findEnabledPlaylist(req.params.playlistId);
+      if (!playlist) return res.status(404).json({ error: 'Playlist not found' });
+
       const page = parseInt(req.query.page || '1', 10);
       const pageSize = Math.min(parseInt(req.query.pageSize || '50', 10), 200);
       const sortDirection =
@@ -232,7 +218,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       const videos = rows.map((row) => {
         const dl = downloadedById.get(row.youtube_id);
         const youtubeId = row.youtube_id;
-        const isDownloaded = !!(dl && !dl.removed && dl.filePath);
+        const isDownloaded = !!(dl && !dl.removed && (dl.filePath || dl.audioFilePath));
         // Has a Videos row but no usable file: previously downloaded, then
         // deleted/lost. doPlaylistDownloads skips these unless allowRedownload is set.
         const previouslyDownloaded = !!dl && !isDownloaded;
@@ -275,16 +261,24 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     }
   });
 
+  // fetchAll: true switches from the fast first-page refresh to the full
+  // "Load More" fetch (up to 5000 videos), which can run for minutes.
   router.post('/api/playlists/:playlistId/refresh', verifyToken, async (req, res) => {
+    const fetchAll = req.body?.fetchAll;
+    if (fetchAll !== undefined && typeof fetchAll !== 'boolean') {
+      return res.status(400).json({ error: 'fetchAll must be a boolean' });
+    }
     try {
-      const count = await playlistModule.fetchAllPlaylistVideos(req.params.playlistId);
-      const p = await Playlist.findOne({ where: { playlist_id: req.params.playlistId } });
-      if (p) {
-        mediaServers.mediaServerSync.syncPlaylist(p.id).catch(logBgFailure(req, p.playlist_id, 'playlist sync'));
-        m3uGenerator.generatePlaylistM3U(p.id).catch(logBgFailure(req, p.playlist_id, 'M3U generation'));
-      }
+      const p = await findEnabledPlaylist(req.params.playlistId);
+      if (!p) return res.status(404).json({ error: 'Playlist not found' });
+      const count = await playlistModule.fetchAllPlaylistVideos(p.playlist_id, { fetchAll: !!fetchAll });
+      mediaServers.mediaServerSync.syncPlaylist(p.id).catch(logBgFailure(req, p.playlist_id, 'playlist sync'));
+      m3uGenerator.generatePlaylistM3U(p.id).catch(logBgFailure(req, p.playlist_id, 'M3U generation'));
       res.json({ fetched: count });
     } catch (err) {
+      if (err.message === 'FETCH_IN_PROGRESS') {
+        return res.status(409).json({ error: 'A fetch is already in progress for this playlist' });
+      }
       req.log.error({ err }, 'refresh failed');
       res.status(500).json({ error: 'Failed to refresh playlist' });
     }
@@ -292,7 +286,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
 
   router.post('/api/playlists/:playlistId/sync', verifyToken, async (req, res) => {
     try {
-      const p = await Playlist.findOne({ where: { playlist_id: req.params.playlistId } });
+      const p = await findEnabledPlaylist(req.params.playlistId);
       if (!p) return res.status(404).json({ error: 'Playlist not found' });
       // The sync polls media-server library scans with backoff and can take
       // minutes; run it in the background and report acceptance. The outcome
@@ -330,7 +324,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
         return res.status(400).json({ error: 'Invalid overrideSettings' });
       }
 
-      const p = await Playlist.findOne({ where: { playlist_id: req.params.playlistId } });
+      const p = await findEnabledPlaylist(req.params.playlistId);
       if (!p) return res.status(404).json({ error: 'Playlist not found' });
 
       const download = downloadModule.doPlaylistDownloads(p, {
@@ -349,7 +343,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
 
   router.post('/api/playlists/:playlistId/regenerate-m3u', verifyToken, async (req, res) => {
     try {
-      const p = await Playlist.findOne({ where: { playlist_id: req.params.playlistId } });
+      const p = await findEnabledPlaylist(req.params.playlistId);
       if (!p) return res.status(404).json({ error: 'Playlist not found' });
       const ok = await m3uGenerator.generatePlaylistM3U(p.id);
       res.json({ success: ok });
@@ -361,6 +355,8 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
 
   router.post('/api/playlists/:playlistId/videos/:ytId/ignore', verifyToken, async (req, res) => {
     try {
+      const p = await findEnabledPlaylist(req.params.playlistId);
+      if (!p) return res.status(404).json({ error: 'Playlist not found' });
       await PlaylistVideo.update(
         { ignored: true, ignored_at: new Date() },
         { where: { playlist_id: req.params.playlistId, youtube_id: req.params.ytId } }
@@ -374,6 +370,8 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
 
   router.post('/api/playlists/:playlistId/videos/:ytId/unignore', verifyToken, async (req, res) => {
     try {
+      const p = await findEnabledPlaylist(req.params.playlistId);
+      if (!p) return res.status(404).json({ error: 'Playlist not found' });
       await PlaylistVideo.update(
         { ignored: false, ignored_at: null },
         { where: { playlist_id: req.params.playlistId, youtube_id: req.params.ytId } }
