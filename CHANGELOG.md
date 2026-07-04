@@ -1,5 +1,31 @@
 # Changelog
 
+## [v1.73.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.73.0) - 2026-07-04
+
+## [1.73.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.72.1...v1.73.0) (2026-07-04)
+
+
+### Features
+
+* add ability to remove playlists ([5f372ec](https://github.com/DialmasterOrg/Youtarr/commit/5f372ec9304eff10cb5a4c02abb43f696e36e05d)), closes [#676](https://github.com/DialmasterOrg/Youtarr/issues/676)
+* add download activity indicator to header ([2d48838](https://github.com/DialmasterOrg/Youtarr/commit/2d48838bc93447dc76fc6bf5d4153be5b9ce4e85))
+* add download all videos for a channel tab ([6e131fd](https://github.com/DialmasterOrg/Youtarr/commit/6e131fdb0e1de7be3f26791110ec0907bfb454c3)), closes [#660](https://github.com/DialmasterOrg/Youtarr/issues/660)
+* add likely-cause advice for failed downloads ([e6a3612](https://github.com/DialmasterOrg/Youtarr/commit/e6a36121d3de54185eaa43010c31dd34497a386f)), closes [#672](https://github.com/DialmasterOrg/Youtarr/issues/672)
+* add load more for playlist videos ([9d5d6c5](https://github.com/DialmasterOrg/Youtarr/commit/9d5d6c5dcb6daa6e820f13a8e9b97c0ee7ea94d6)), closes [#682](https://github.com/DialmasterOrg/Youtarr/issues/682)
+* Add option to generate video fanart files ([99a72aa](https://github.com/DialmasterOrg/Youtarr/commit/99a72aa43872e153dbb71edff5a7b2b2c4e3f4eb))
+* auto-retry videos that fail with HTTP 403 ([3a18648](https://github.com/DialmasterOrg/Youtarr/commit/3a18648667b873e8306d12a8046d6eeb88500aaa)), closes [#672](https://github.com/DialmasterOrg/Youtarr/issues/672)
+* persist subfolders in a shared registry ([b82befe](https://github.com/DialmasterOrg/Youtarr/commit/b82befe6b9977f0decb374158e569af0963315c0)), closes [#679](https://github.com/DialmasterOrg/Youtarr/issues/679)
+* update video listings during batch downloads ([a6e0bdf](https://github.com/DialmasterOrg/Youtarr/commit/a6e0bdf87a4bf0a707271b520bc66e34602db226)), closes [#662](https://github.com/DialmasterOrg/Youtarr/issues/662)
+
+
+### Documentation
+
+* update CHANGELOG for v1.72.1 [skip ci] ([789f6a1](https://github.com/DialmasterOrg/Youtarr/commit/789f6a186d3ccaeb66e3a624eaeb479b54859cf6))
+
+
+
+
+
 ## [v1.72.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.72.1) - 2026-06-27
 
 ### [1.72.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.72.0...v1.72.1) (2026-06-27)
