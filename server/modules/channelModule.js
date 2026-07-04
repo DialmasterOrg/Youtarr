@@ -11,7 +11,7 @@ const MessageEmitter = require('./messageEmitter.js');
 const { Op, fn, col, where } = require('sequelize');
 const fileCheckModule = require('./fileCheckModule');
 const logger = require('../logger');
-const { sanitizeNameLikeYtDlp, GLOBAL_DEFAULT_SENTINEL } = require('./filesystem');
+const { sanitizeNameLikeYtDlp, GLOBAL_DEFAULT_SENTINEL, copySyncWithFallback } = require('./filesystem');
 const youtubeApi = require('./youtubeApi');
 const ratingMapper = require('./ratingMapper');
 const tempPathManager = require('./download/tempPathManager');
@@ -1005,7 +1005,7 @@ class ChannelModule {
 
           if (fs.existsSync(channelThumbPath)) {
             try {
-              fs.copySync(channelThumbPath, channelPosterPath);
+              copySyncWithFallback(channelThumbPath, channelPosterPath);
             } catch (copyErr) {
               logger.error({ err: copyErr, channelFolderName }, 'Error backfilling poster for channel');
             }
