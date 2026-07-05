@@ -757,7 +757,7 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
 
         // Copy the video thumbnail as fanart (if the thumbnail exists in the final location and -fanart doesn't already exist)
         if (fs.existsSync(finalImagePath) && !fs.existsSync(fanartPath)) {
-          fs.copySync(finalImagePath, fanartPath);
+          copySyncWithFallback(finalImagePath, fanartPath);
           logger.info({ fanartPath }, '[Post-Process] Created video fanart file');
         } else {
           logger.debug({ finalImagePath }, '[Post-Process] No image copied for fanart creation');
