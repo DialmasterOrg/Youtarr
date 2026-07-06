@@ -12,6 +12,7 @@ const baseProps = {
   onDownloadAll: jest.fn(),
   onOpenSettings: jest.fn(),
   actionRunning: false,
+  refreshing: false,
 };
 
 describe('LibraryDownloadsGroup', () => {
@@ -41,5 +42,18 @@ describe('LibraryDownloadsGroup', () => {
     );
     await user.click(screen.getByRole('checkbox', { name: /Auto-download new videos/i }));
     expect(onToggleAutoDownload).toHaveBeenCalledWith(true);
+  });
+
+  test('shows a spinner and Refreshing... label while refreshing', () => {
+    render(<LibraryDownloadsGroup {...baseProps} refreshing />);
+    const button = screen.getByRole('button', { name: /Refreshing.../i });
+    expect(button).toBeDisabled();
+    expect(screen.getByTestId('loading-spinner')).toBeInTheDocument();
+  });
+
+  test('shows the normal label and no spinner when not refreshing', () => {
+    render(<LibraryDownloadsGroup {...baseProps} refreshing={false} />);
+    expect(screen.getByRole('button', { name: /Refresh from YouTube/i })).not.toBeDisabled();
+    expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
   });
 });

@@ -17,6 +17,9 @@ jest.mock('../channelModule', () => ({
 jest.mock('../downloadModule', () => ({
   doPlaylistDownloads: jest.fn().mockResolvedValue(undefined),
 }));
+jest.mock('../jobModule', () => ({
+  addJob: jest.fn().mockResolvedValue('mock-job-id'),
+}));
 jest.mock('../youtubeApi', () => ({
   isAvailable: jest.fn(() => false),
   getApiKey: jest.fn(() => null),
@@ -32,6 +35,7 @@ describe('playlistModule', () => {
   let Channel;
   let channelModule;
   let downloadModule;
+  let jobModule;
   let childProcess;
   let youtubeApi;
   let db;
@@ -50,6 +54,7 @@ describe('playlistModule', () => {
     PlaylistVideo.count.mockResolvedValue(0);
     channelModule = require('../channelModule');
     downloadModule = require('../downloadModule');
+    jobModule = require('../jobModule');
     youtubeApi = require('../youtubeApi');
     db = require('../../db');
     db.sequelize.query.mockResolvedValue([]);
@@ -164,6 +169,34 @@ describe('playlistModule', () => {
   });
 
   describe('fetchAllPlaylistVideos', () => {
+    test('fetches via the default path with the full-playlist cap', async () => {
+      Playlist.findOne.mockResolvedValue({
+        id: 1, playlist_id: 'PLabc', url: 'https://u',
+        min_duration: null, max_duration: null, title_filter_regex: null,
+        update: jest.fn().mockResolvedValue(true),
+      });
+      PlaylistVideo.findAll.mockResolvedValue([]);
+      PlaylistVideo.bulkCreate.mockResolvedValue([]);
+
+      const mockChild = new EventEmitter();
+      mockChild.stdout = new EventEmitter();
+      mockChild.stderr = new EventEmitter();
+      childProcess.spawn.mockReturnValue(mockChild);
+
+      const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+      mockChild.stdout.emit('data', JSON.stringify({ id: 'v1', title: 'Video 1' }) + '\n');
+      mockChild.emit('close', 0);
+      await promise;
+
+      const spawnArgs = childProcess.spawn.mock.calls[0][1];
+      expect(spawnArgs).toEqual(expect.arrayContaining([
+        '--playlist-end', '5000',
+      ]));
+      expect(spawnArgs).not.toContain('--extractor-args');
+    });
+
     test('parses yt-dlp flat-playlist output and upserts rows in position order', async () => {
       Playlist.findOne.mockResolvedValue({
         id: 1, playlist_id: 'PLabc', url: 'https://u',
@@ -478,23 +511,37 @@ describe('playlistModule', () => {
       PlaylistVideo.bulkCreate.mockResolvedValue([]);
       PlaylistVideo.destroy.mockResolvedValue(0);
 
-      const mockChild = new EventEmitter();
-      mockChild.stdout = new EventEmitter();
-      mockChild.stderr = new EventEmitter();
-      childProcess.spawn.mockReturnValue(mockChild);
+      // A short first fetch (1 of 10) is itself the InnerTube-fallback trigger,
+      // so a second child is needed for the automatic retry.
+      const defaultChild = new EventEmitter();
+      defaultChild.stdout = new EventEmitter();
+      defaultChild.stderr = new EventEmitter();
+      const innertubeChild = new EventEmitter();
+      innertubeChild.stdout = new EventEmitter();
+      innertubeChild.stderr = new EventEmitter();
+      childProcess.spawn
+        .mockReturnValueOnce(defaultChild)
+        .mockReturnValueOnce(innertubeChild);
       const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
       await new Promise((resolve) => setImmediate(resolve));
       await new Promise((resolve) => setImmediate(resolve));
 
-      // Only 1 of 10 entries came back: a partial fetch must not delete anything.
-      mockChild.stdout.emit('data', JSON.stringify({ id: 'v1', title: 'Public Video', duration: 300, playlist_count: 10 }) + '\n');
-      mockChild.emit('close', 0);
+      // Only 1 of 10 entries came back on the default path.
+      defaultChild.stdout.emit('data', JSON.stringify({ id: 'v1', title: 'Public Video', duration: 300, playlist_count: 10 }) + '\n');
+      defaultChild.emit('close', 0);
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      // The InnerTube fallback also comes back short: the fetch remains
+      // partial and must not delete anything.
+      innertubeChild.stdout.emit('data', JSON.stringify({ id: 'v1', title: 'Public Video', duration: 300, playlist_count: 10 }) + '\n');
+      innertubeChild.emit('close', 0);
       await promise;
 
       expect(PlaylistVideo.destroy).not.toHaveBeenCalled();
     });
 
-    test('does not prune when the fetch returns no entries', async () => {
+    test('does not prune when the fetch returns no entries on either path', async () => {
       Playlist.findOne.mockResolvedValue({
         id: 1, playlist_id: 'PLabc', url: 'https://u',
         min_duration: null, max_duration: null, title_filter_regex: null,
@@ -504,17 +551,29 @@ describe('playlistModule', () => {
       PlaylistVideo.bulkCreate.mockResolvedValue([]);
       PlaylistVideo.destroy.mockResolvedValue(0);
 
-      const mockChild = new EventEmitter();
-      mockChild.stdout = new EventEmitter();
-      mockChild.stderr = new EventEmitter();
-      childProcess.spawn.mockReturnValue(mockChild);
+      // An empty default-path result now triggers the InnerTube fallback,
+      // so a second child is needed even though it also comes back empty.
+      const defaultChild = new EventEmitter();
+      defaultChild.stdout = new EventEmitter();
+      defaultChild.stderr = new EventEmitter();
+      const innertubeChild = new EventEmitter();
+      innertubeChild.stdout = new EventEmitter();
+      innertubeChild.stderr = new EventEmitter();
+      childProcess.spawn
+        .mockReturnValueOnce(defaultChild)
+        .mockReturnValueOnce(innertubeChild);
       const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
       await new Promise((resolve) => setImmediate(resolve));
       await new Promise((resolve) => setImmediate(resolve));
 
-      mockChild.emit('close', 0);
+      defaultChild.emit('close', 0);
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      innertubeChild.emit('close', 0);
       await promise;
 
+      expect(childProcess.spawn).toHaveBeenCalledTimes(2);
       expect(PlaylistVideo.destroy).not.toHaveBeenCalled();
     });
 
@@ -533,23 +592,37 @@ describe('playlistModule', () => {
       // returns only 1 entry and must not clobber the count down to 1.
       PlaylistVideo.count.mockResolvedValue(198);
 
-      const mockChild = new EventEmitter();
-      mockChild.stdout = new EventEmitter();
-      mockChild.stderr = new EventEmitter();
-      childProcess.spawn.mockReturnValue(mockChild);
+      // A short first fetch (1 of 198) is itself the InnerTube-fallback
+      // trigger, so a second child is needed for the automatic retry.
+      const defaultChild = new EventEmitter();
+      defaultChild.stdout = new EventEmitter();
+      defaultChild.stderr = new EventEmitter();
+      const innertubeChild = new EventEmitter();
+      innertubeChild.stdout = new EventEmitter();
+      innertubeChild.stderr = new EventEmitter();
+      childProcess.spawn
+        .mockReturnValueOnce(defaultChild)
+        .mockReturnValueOnce(innertubeChild);
       const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
       await new Promise((resolve) => setImmediate(resolve));
       await new Promise((resolve) => setImmediate(resolve));
 
-      mockChild.stdout.emit('data', JSON.stringify({ id: 'v1', title: 'Public Video', duration: 300, playlist_count: 198 }) + '\n');
-      mockChild.emit('close', 0);
+      defaultChild.stdout.emit('data', JSON.stringify({ id: 'v1', title: 'Public Video', duration: 300, playlist_count: 198 }) + '\n');
+      defaultChild.emit('close', 0);
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      // The InnerTube fallback also returns only 1 entry; video_count must
+      // still reflect the tracked row count, not either fetch's entry count.
+      innertubeChild.stdout.emit('data', JSON.stringify({ id: 'v1', title: 'Public Video', duration: 300, playlist_count: 198 }) + '\n');
+      innertubeChild.emit('close', 0);
       await promise;
 
       expect(PlaylistVideo.count).toHaveBeenCalledWith({ where: { playlist_id: 'PLabc' } });
       expect(update).toHaveBeenCalledWith(expect.objectContaining({ video_count: 198 }));
     });
 
-    test('caps a default fetch at the first 100 entries', async () => {
+    test('spawns yt-dlp with exactly the default-path args capped at 5000 entries', async () => {
       Playlist.findOne.mockResolvedValue({
         id: 1, playlist_id: 'PLabc', url: 'https://u',
         min_duration: null, max_duration: null, title_filter_regex: null,
@@ -566,15 +639,203 @@ describe('playlistModule', () => {
       await new Promise((resolve) => setImmediate(resolve));
       await new Promise((resolve) => setImmediate(resolve));
 
+      // A non-empty result (with no reported count) keeps this test scoped to
+      // the default-path args; an empty result would itself trigger the
+      // InnerTube fallback and is covered separately.
+      mockChild.stdout.emit('data', JSON.stringify({ id: 'v1', title: 'Video 1' }) + '\n');
       mockChild.emit('close', 0);
       await promise;
 
       expect(childProcess.spawn).toHaveBeenCalledWith('yt-dlp', [
-        '--flat-playlist', '--dump-json', '--playlist-end', '100', 'https://u',
+        '--flat-playlist', '--dump-json',
+        '--playlist-end', '5000',
+        'https://u',
       ]);
     });
 
-    test('full fetch uses the InnerTube API path capped at 5000 entries', async () => {
+    test('retries via InnerTube when the default fetch falls short of the reported count', async () => {
+      Playlist.findOne.mockResolvedValue({
+        id: 1, playlist_id: 'PLabc', url: 'https://u',
+        min_duration: null, max_duration: null, title_filter_regex: null,
+        update: jest.fn().mockResolvedValue(true),
+      });
+      PlaylistVideo.findAll.mockResolvedValue([]);
+      PlaylistVideo.bulkCreate.mockResolvedValue([]);
+
+      const defaultChild = new EventEmitter();
+      defaultChild.stdout = new EventEmitter();
+      defaultChild.stderr = new EventEmitter();
+      const innertubeChild = new EventEmitter();
+      innertubeChild.stdout = new EventEmitter();
+      innertubeChild.stderr = new EventEmitter();
+      childProcess.spawn
+        .mockReturnValueOnce(defaultChild)
+        .mockReturnValueOnce(innertubeChild);
+
+      const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const defaultLines = [
+        JSON.stringify({ id: 'v1', title: 'Video 1', playlist_count: 500 }),
+        JSON.stringify({ id: 'v2', title: 'Video 2', playlist_count: 500 }),
+      ].join('\n') + '\n';
+      defaultChild.stdout.emit('data', defaultLines);
+      defaultChild.emit('close', 0);
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const innertubeLines = [
+        JSON.stringify({ id: 'v1', title: 'Video 1', playlist_count: 500 }),
+        JSON.stringify({ id: 'v2', title: 'Video 2', playlist_count: 500 }),
+        JSON.stringify({ id: 'v3', title: 'Video 3', playlist_count: 500 }),
+      ].join('\n') + '\n';
+      innertubeChild.stdout.emit('data', innertubeLines);
+      innertubeChild.emit('close', 0);
+      await promise;
+
+      expect(childProcess.spawn).toHaveBeenCalledTimes(2);
+      const secondCallArgs = childProcess.spawn.mock.calls[1][1];
+      expect(secondCallArgs).toEqual(expect.arrayContaining([
+        '--extractor-args', 'youtubetab:skip=webpage',
+      ]));
+      const rows = PlaylistVideo.bulkCreate.mock.calls[0][0];
+      expect(rows.map((r) => r.youtube_id)).toEqual(['v1', 'v2', 'v3']);
+    });
+
+    test('retries via InnerTube when the default fetch returns no entries', async () => {
+      Playlist.findOne.mockResolvedValue({
+        id: 1, playlist_id: 'PLabc', url: 'https://u',
+        min_duration: null, max_duration: null, title_filter_regex: null,
+        update: jest.fn().mockResolvedValue(true),
+      });
+      PlaylistVideo.findAll.mockResolvedValue([]);
+      PlaylistVideo.bulkCreate.mockResolvedValue([]);
+
+      const defaultChild = new EventEmitter();
+      defaultChild.stdout = new EventEmitter();
+      defaultChild.stderr = new EventEmitter();
+      const innertubeChild = new EventEmitter();
+      innertubeChild.stdout = new EventEmitter();
+      innertubeChild.stderr = new EventEmitter();
+      childProcess.spawn
+        .mockReturnValueOnce(defaultChild)
+        .mockReturnValueOnce(innertubeChild);
+
+      const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      // The default path resolves with exit code 0 but no stdout at all.
+      defaultChild.emit('close', 0);
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const innertubeLines = [
+        JSON.stringify({ id: 'v1', title: 'Video 1' }),
+        JSON.stringify({ id: 'v2', title: 'Video 2' }),
+      ].join('\n') + '\n';
+      innertubeChild.stdout.emit('data', innertubeLines);
+      innertubeChild.emit('close', 0);
+      await promise;
+
+      expect(childProcess.spawn).toHaveBeenCalledTimes(2);
+      const secondCallArgs = childProcess.spawn.mock.calls[1][1];
+      expect(secondCallArgs).toEqual(expect.arrayContaining([
+        '--extractor-args', 'youtubetab:skip=webpage',
+      ]));
+      const rows = PlaylistVideo.bulkCreate.mock.calls[0][0];
+      expect(rows.map((r) => r.youtube_id)).toEqual(['v1', 'v2']);
+    });
+
+    test('keeps the default result when the InnerTube retry returns fewer entries', async () => {
+      Playlist.findOne.mockResolvedValue({
+        id: 1, playlist_id: 'PLabc', url: 'https://u',
+        min_duration: null, max_duration: null, title_filter_regex: null,
+        update: jest.fn().mockResolvedValue(true),
+      });
+      PlaylistVideo.findAll.mockResolvedValue([]);
+      PlaylistVideo.bulkCreate.mockResolvedValue([]);
+
+      const defaultChild = new EventEmitter();
+      defaultChild.stdout = new EventEmitter();
+      defaultChild.stderr = new EventEmitter();
+      const innertubeChild = new EventEmitter();
+      innertubeChild.stdout = new EventEmitter();
+      innertubeChild.stderr = new EventEmitter();
+      childProcess.spawn
+        .mockReturnValueOnce(defaultChild)
+        .mockReturnValueOnce(innertubeChild);
+
+      const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const defaultLines = [
+        JSON.stringify({ id: 'v1', title: 'Video 1', playlist_count: 500 }),
+        JSON.stringify({ id: 'v2', title: 'Video 2', playlist_count: 500 }),
+        JSON.stringify({ id: 'v3', title: 'Video 3', playlist_count: 500 }),
+      ].join('\n') + '\n';
+      defaultChild.stdout.emit('data', defaultLines);
+      defaultChild.emit('close', 0);
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const innertubeLines = [
+        JSON.stringify({ id: 'v1', title: 'Video 1', playlist_count: 500 }),
+        JSON.stringify({ id: 'v2', title: 'Video 2', playlist_count: 500 }),
+      ].join('\n') + '\n';
+      innertubeChild.stdout.emit('data', innertubeLines);
+      innertubeChild.emit('close', 0);
+      await promise;
+
+      const rows = PlaylistVideo.bulkCreate.mock.calls[0][0];
+      expect(rows.map((r) => r.youtube_id)).toEqual(['v1', 'v2', 'v3']);
+    });
+
+    test('keeps the default result when the InnerTube retry itself fails', async () => {
+      Playlist.findOne.mockResolvedValue({
+        id: 1, playlist_id: 'PLabc', url: 'https://u',
+        min_duration: null, max_duration: null, title_filter_regex: null,
+        update: jest.fn().mockResolvedValue(true),
+      });
+      PlaylistVideo.findAll.mockResolvedValue([]);
+      PlaylistVideo.bulkCreate.mockResolvedValue([]);
+
+      const defaultChild = new EventEmitter();
+      defaultChild.stdout = new EventEmitter();
+      defaultChild.stderr = new EventEmitter();
+      const innertubeChild = new EventEmitter();
+      innertubeChild.stdout = new EventEmitter();
+      innertubeChild.stderr = new EventEmitter();
+      childProcess.spawn
+        .mockReturnValueOnce(defaultChild)
+        .mockReturnValueOnce(innertubeChild);
+
+      const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const defaultLines = [
+        JSON.stringify({ id: 'v1', title: 'Video 1', playlist_count: 500 }),
+        JSON.stringify({ id: 'v2', title: 'Video 2', playlist_count: 500 }),
+        JSON.stringify({ id: 'v3', title: 'Video 3', playlist_count: 500 }),
+      ].join('\n') + '\n';
+      defaultChild.stdout.emit('data', defaultLines);
+      defaultChild.emit('close', 0);
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      innertubeChild.stderr.emit('data', 'ERROR: InnerTube exploded');
+      innertubeChild.emit('close', 1);
+
+      await expect(promise).resolves.toBeDefined();
+      expect(childProcess.spawn).toHaveBeenCalledTimes(2);
+      const rows = PlaylistVideo.bulkCreate.mock.calls[0][0];
+      expect(rows.map((r) => r.youtube_id)).toEqual(['v1', 'v2', 'v3']);
+    });
+
+    test('does not retry when the fetch is within the slack of the reported count', async () => {
       Playlist.findOne.mockResolvedValue({
         id: 1, playlist_id: 'PLabc', url: 'https://u',
         min_duration: null, max_duration: null, title_filter_regex: null,
@@ -587,19 +848,119 @@ describe('playlistModule', () => {
       mockChild.stdout = new EventEmitter();
       mockChild.stderr = new EventEmitter();
       childProcess.spawn.mockReturnValue(mockChild);
-      const promise = playlistModule.fetchAllPlaylistVideos('PLabc', { fetchAll: true });
+
+      const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
       await new Promise((resolve) => setImmediate(resolve));
       await new Promise((resolve) => setImmediate(resolve));
 
+      const lines = Array.from({ length: 10 }, (_, i) =>
+        JSON.stringify({ id: `v${i}`, title: `Video ${i}`, playlist_count: 12 })
+      ).join('\n') + '\n';
+      mockChild.stdout.emit('data', lines);
       mockChild.emit('close', 0);
       await promise;
 
-      expect(childProcess.spawn).toHaveBeenCalledWith('yt-dlp', [
-        '--flat-playlist', '--dump-json',
-        '--playlist-end', '5000',
-        '--extractor-args', 'youtubetab:skip=webpage',
-        'https://u',
-      ]);
+      expect(childProcess.spawn).toHaveBeenCalledTimes(1);
+    });
+
+    test('falls back to InnerTube when the default fetch fails', async () => {
+      Playlist.findOne.mockResolvedValue({
+        id: 1, playlist_id: 'PLabc', url: 'https://u',
+        min_duration: null, max_duration: null, title_filter_regex: null,
+        update: jest.fn().mockResolvedValue(true),
+      });
+      PlaylistVideo.findAll.mockResolvedValue([]);
+      PlaylistVideo.bulkCreate.mockResolvedValue([]);
+
+      const defaultChild = new EventEmitter();
+      defaultChild.stdout = new EventEmitter();
+      defaultChild.stderr = new EventEmitter();
+      const innertubeChild = new EventEmitter();
+      innertubeChild.stdout = new EventEmitter();
+      innertubeChild.stderr = new EventEmitter();
+      childProcess.spawn
+        .mockReturnValueOnce(defaultChild)
+        .mockReturnValueOnce(innertubeChild);
+
+      const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      defaultChild.stderr.emit('data', 'ERROR: network unreachable');
+      defaultChild.emit('close', 1);
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      // Fallback result is itself short of the reported count; the guard must
+      // stop a would-be third spawn (never retry twice).
+      innertubeChild.stdout.emit('data', JSON.stringify({ id: 'v1', title: 'Video 1', playlist_count: 500 }) + '\n');
+      innertubeChild.emit('close', 0);
+      await promise;
+
+      expect(childProcess.spawn).toHaveBeenCalledTimes(2);
+    });
+
+    test('rejects when both fetch paths fail', async () => {
+      Playlist.findOne.mockResolvedValue({
+        id: 1, playlist_id: 'PLabc', url: 'https://u',
+        min_duration: null, max_duration: null, title_filter_regex: null,
+        update: jest.fn().mockResolvedValue(true),
+      });
+      PlaylistVideo.findAll.mockResolvedValue([]);
+      PlaylistVideo.bulkCreate.mockResolvedValue([]);
+
+      const defaultChild = new EventEmitter();
+      defaultChild.stdout = new EventEmitter();
+      defaultChild.stderr = new EventEmitter();
+      const innertubeChild = new EventEmitter();
+      innertubeChild.stdout = new EventEmitter();
+      innertubeChild.stderr = new EventEmitter();
+      childProcess.spawn
+        .mockReturnValueOnce(defaultChild)
+        .mockReturnValueOnce(innertubeChild);
+
+      const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      defaultChild.emit('close', 1);
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      innertubeChild.emit('close', 1);
+
+      await expect(promise).rejects.toThrow('NETWORK_ERROR');
+    });
+
+    test('warns when the fetch hits the 5000-entry cap', async () => {
+      const logger = require('../../logger');
+      Playlist.findOne.mockResolvedValue({
+        id: 1, playlist_id: 'PLabc', url: 'https://u',
+        min_duration: null, max_duration: null, title_filter_regex: null,
+        update: jest.fn().mockResolvedValue(true),
+      });
+      PlaylistVideo.findAll.mockResolvedValue([]);
+      PlaylistVideo.bulkCreate.mockResolvedValue([]);
+
+      const mockChild = new EventEmitter();
+      mockChild.stdout = new EventEmitter();
+      mockChild.stderr = new EventEmitter();
+      childProcess.spawn.mockReturnValue(mockChild);
+      const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const lines = Array.from({ length: 5000 }, (_, i) =>
+        JSON.stringify({ id: `v${i}`, title: `Video ${i}` })
+      ).join('\n') + '\n';
+      mockChild.stdout.emit('data', lines);
+      mockChild.emit('close', 0);
+      await promise;
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ playlist_id: 'PLabc', fetched: 5000, cap: 5000 }),
+        expect.stringContaining('cap')
+      );
     });
 
     test('does not clobber added_at on existing rows during a refresh', async () => {
@@ -695,6 +1056,9 @@ describe('playlistModule', () => {
 
       await expect(playlistModule.fetchAllPlaylistVideos('PLabc')).rejects.toThrow('FETCH_IN_PROGRESS');
 
+      // A non-empty result avoids triggering the InnerTube fallback; this
+      // test only cares about the in-progress guard.
+      mockChild.stdout.emit('data', JSON.stringify({ id: 'v1', title: 'Video 1' }) + '\n');
       mockChild.emit('close', 0);
       await first;
     });
@@ -708,14 +1072,24 @@ describe('playlistModule', () => {
       PlaylistVideo.findAll.mockResolvedValue([]);
       PlaylistVideo.bulkCreate.mockResolvedValue([]);
 
+      // Both the default fetch and its InnerTube fallback must fail for the
+      // overall fetch to reject (dual-path fetch).
       const failingChild = new EventEmitter();
       failingChild.stdout = new EventEmitter();
       failingChild.stderr = new EventEmitter();
-      childProcess.spawn.mockReturnValue(failingChild);
+      const failingFallbackChild = new EventEmitter();
+      failingFallbackChild.stdout = new EventEmitter();
+      failingFallbackChild.stderr = new EventEmitter();
+      childProcess.spawn
+        .mockReturnValueOnce(failingChild)
+        .mockReturnValueOnce(failingFallbackChild);
       const failing = playlistModule.fetchAllPlaylistVideos('PLabc');
       await new Promise((resolve) => setImmediate(resolve));
       await new Promise((resolve) => setImmediate(resolve));
       failingChild.emit('close', 1);
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+      failingFallbackChild.emit('close', 1);
       await expect(failing).rejects.toThrow('NETWORK_ERROR');
 
       const retryChild = new EventEmitter();
@@ -725,10 +1099,13 @@ describe('playlistModule', () => {
       const retry = playlistModule.fetchAllPlaylistVideos('PLabc');
       await new Promise((resolve) => setImmediate(resolve));
       await new Promise((resolve) => setImmediate(resolve));
+      // A non-empty result avoids triggering the InnerTube fallback; this
+      // test only cares about the in-progress guard clearing.
+      retryChild.stdout.emit('data', JSON.stringify({ id: 'v1', title: 'Video 1' }) + '\n');
       retryChild.emit('close', 0);
       await retry;
 
-      expect(childProcess.spawn).toHaveBeenCalledTimes(2);
+      expect(childProcess.spawn).toHaveBeenCalledTimes(3);
     });
   });
 
@@ -1200,6 +1577,56 @@ describe('playlistModule', () => {
         pl2,
         { refreshFirst: true, limitToRecent: true, overrideSettings: { resolution: '720', videoCount: 3 } }
       );
+    });
+
+    test('creates one Complete "Playlist Downloads" job when auto-enabled playlists exist and nothing was enqueued', async () => {
+      const pl1 = { playlist_id: 'PL1', title: 'One' };
+      const pl2 = { playlist_id: 'PL2', title: 'Two' };
+      Playlist.findAll.mockResolvedValue([pl1, pl2]);
+      downloadModule.doPlaylistDownloads.mockResolvedValueOnce(0).mockResolvedValueOnce(0);
+
+      await playlistModule.playlistAutoDownload();
+
+      expect(jobModule.addJob).toHaveBeenCalledTimes(1);
+      expect(jobModule.addJob).toHaveBeenCalledWith({
+        jobType: 'Playlist Downloads',
+        status: 'Complete',
+        output: '',
+      });
+    });
+
+    test('does not create a job when any playlist enqueued videos', async () => {
+      const pl1 = { playlist_id: 'PL1', title: 'One' };
+      const pl2 = { playlist_id: 'PL2', title: 'Two' };
+      Playlist.findAll.mockResolvedValue([pl1, pl2]);
+      downloadModule.doPlaylistDownloads.mockResolvedValueOnce(0).mockResolvedValueOnce(3);
+
+      await playlistModule.playlistAutoDownload();
+
+      expect(jobModule.addJob).not.toHaveBeenCalled();
+    });
+
+    test('does not create a job when there are no auto-enabled playlists', async () => {
+      Playlist.findAll.mockResolvedValue([]);
+
+      await playlistModule.playlistAutoDownload();
+
+      expect(downloadModule.doPlaylistDownloads).not.toHaveBeenCalled();
+      expect(jobModule.addJob).not.toHaveBeenCalled();
+    });
+
+    test('does not create a job when a playlist download errors, but other playlists still run', async () => {
+      const pl1 = { playlist_id: 'PL1', title: 'One' };
+      const pl2 = { playlist_id: 'PL2', title: 'Two' };
+      Playlist.findAll.mockResolvedValue([pl1, pl2]);
+      downloadModule.doPlaylistDownloads
+        .mockRejectedValueOnce(new Error('boom'))
+        .mockResolvedValueOnce(0);
+
+      await playlistModule.playlistAutoDownload();
+
+      expect(downloadModule.doPlaylistDownloads).toHaveBeenCalledTimes(2);
+      expect(jobModule.addJob).not.toHaveBeenCalled();
     });
   });
 

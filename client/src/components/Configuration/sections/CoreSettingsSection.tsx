@@ -298,7 +298,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                         ))}
                       </Select>
                       <InfoTooltip
-                        text="How many videos (starting from most recently uploaded) Youtarr will attempt to download per channel tab and per playlist when downloads run. Already downloaded videos will be skipped."
+                        text="How many videos Youtarr will attempt to download per channel tab and per playlist when downloads run (channels: newest uploads; playlists: most recently added). Already downloaded videos will be skipped."
                         onMobileClick={onMobileTooltipClick}
                       />
                     </Box>

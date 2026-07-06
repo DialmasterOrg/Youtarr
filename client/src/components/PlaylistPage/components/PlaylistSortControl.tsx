@@ -27,8 +27,9 @@ const PlaylistSortControl: React.FC<PlaylistSortControlProps> = ({
         disabled={disabled}
         onValueChange={(next) => onChange(next as PlaylistSortOrder)}
       >
-        <MenuItem value="desc">Newest first</MenuItem>
-        <MenuItem value="asc">Oldest first</MenuItem>
+        <MenuItem value="asc">Playlist order</MenuItem>
+        <MenuItem value="desc">Reverse playlist order</MenuItem>
+        <MenuItem value="recent">Recently added first</MenuItem>
       </Select>
     </FormControl>
   );

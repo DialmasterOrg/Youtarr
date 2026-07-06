@@ -166,6 +166,25 @@ class DownloadModule {
     const overrideResolution = overrideSettings.resolution || null;
     const channelDownloadGrouper = require('./channelDownloadGrouper');
 
+    // Fresh invocations (cron tick / manual "run now") skip gracefully when no
+    // enabled channel has any auto-download tab: creating a job that can only
+    // fail pollutes Download History and logs a misleading ERROR every cycle
+    // on playlist-only setups. Queued jobs (isNextJob / jobData.id set)
+    // keep the existing create-then-fail path so startNextJob never loops on a
+    // Pending job whose action returned without touching it.
+    if (!isNextJob && !jobData?.id) {
+      try {
+        const channelModule = require('./channelModule');
+        const channelUrls = await channelModule.getEnabledChannelDownloadUrls();
+        if (channelUrls.length === 0) {
+          logger.info('No enabled channels with enabled tabs; skipping channel downloads');
+          return;
+        }
+      } catch (err) {
+        logger.warn({ err }, 'Channel URL pre-check failed; continuing with normal job creation');
+      }
+    }
+
     try {
       const groups = await channelDownloadGrouper.generateDownloadGroups(overrideResolution);
 
@@ -743,6 +762,81 @@ class DownloadModule {
     }
   }
 
+  /**
+   * Seed-then-track selection for playlist auto-downloads.
+   * First run (null baseline): "latest N by position" seed, then stamp
+   * auto_download_baseline_at. Later runs: newest N rows first-seen after the
+   * baseline. Ordering-proof: does not assume where the owner inserts videos.
+   * @returns {Promise<Array<{youtube_id, channel_id, channel_name, title, position, added_at}>>}
+   */
+  async selectAutoDownloadEntries(playlist, overrideSettings = {}) {
+    const PlaylistVideo = require('../models/playlistvideo');
+    const Video = require('../models/video');
+    const playlistModule = require('./playlistModule');
+    const playlistAutoSelection = require('./download/playlistAutoSelection');
+
+    const limit =
+      overrideSettings.videoCount || configModule.config.channelFilesToDownload || DEFAULT_FILES_TO_DOWNLOAD;
+    const allowRedownload = !!overrideSettings.allowRedownload;
+
+    const rows = await PlaylistVideo.findAll({
+      where: { playlist_id: playlist.playlist_id, ignored: false },
+      order: [['position', 'ASC']],
+      attributes: ['youtube_id', 'channel_id', 'channel_name', 'title', 'position', 'added_at'],
+    });
+    if (!rows.length) return [];
+
+    // The exclusion is "a Videos row exists" (even if the file was later
+    // deleted): auto-download is not a re-download mechanism.
+    let downloadedIds = new Set();
+    if (!allowRedownload) {
+      const ids = rows.map((r) => r.youtube_id).filter(Boolean);
+      const existing = ids.length
+        ? await Video.findAll({ where: { youtubeId: ids }, attributes: ['youtubeId'] })
+        : [];
+      downloadedIds = new Set(existing.map((v) => v.youtubeId));
+    }
+
+    const candidates = rows.map((r) => ({
+      youtube_id: r.youtube_id,
+      channel_id: r.channel_id,
+      channel_name: r.channel_name,
+      title: r.title,
+      position: r.position,
+      added_at: r.added_at,
+      downloaded: downloadedIds.has(r.youtube_id),
+      unavailable: playlistModule.isUnavailableTitle(r.title),
+    }));
+
+    const baselineAt = playlist.auto_download_baseline_at || null;
+    let selected;
+    if (!baselineAt) {
+      selected = playlistAutoSelection.selectSeedEntries({
+        candidates,
+        playlistId: playlist.playlist_id,
+        limit,
+      });
+      await playlist.update({ auto_download_baseline_at: new Date() });
+      logger.info(
+        { playlist_id: playlist.playlist_id, candidateCount: candidates.length, selectedCount: selected.length },
+        'First auto-download run for playlist: seeded latest-N selection and stamped baseline'
+      );
+    } else {
+      selected = playlistAutoSelection.selectNewSinceBaseline({ candidates, baselineAt, limit });
+      logger.info(
+        {
+          playlist_id: playlist.playlist_id,
+          candidateCount: candidates.length,
+          alreadyDownloaded: candidates.filter((c) => c.downloaded).length,
+          unavailable: candidates.filter((c) => c.unavailable).length,
+          selectedCount: selected.length,
+        },
+        'Playlist auto-download selection'
+      );
+    }
+    return selected;
+  }
+
   async doPlaylistDownloads(playlist, options = {}) {
     const PlaylistVideo = require('../models/playlistvideo');
     const Video = require('../models/video');
@@ -770,32 +864,29 @@ class DownloadModule {
       }
     }
 
-    // Specific ids: download exactly those, overriding `ignored`. Otherwise
-    // all non-ignored videos. When limiting, order DESC so the newest X
-    // (tail = newest-added) are selected; otherwise preserve ASC order.
-    const bulkOrder = (isBulk && options.limitToRecent)
-      ? [['position', 'DESC']]
-      : [['position', 'ASC']];
-
-    const query = youtubeIds.length
-      ? {
+    let entries;
+    if (isBulk && options.limitToRecent) {
+      // Scheduled auto-download: seed-then-track selection (see
+      // selectAutoDownloadEntries). Entries are already filtered; the shared
+      // loop below re-checks harmlessly on the <= limit selected rows.
+      entries = await this.selectAutoDownloadEntries(playlist, overrideSettings);
+    } else if (isBulk) {
+      // Manual "download all new": every non-ignored candidate, playlist order.
+      entries = await PlaylistVideo.findAll({
+        where: { playlist_id: playlist.playlist_id, ignored: false },
+        order: [['position', 'ASC']],
+        attributes: ['youtube_id', 'channel_id', 'channel_name', 'title'],
+      });
+    } else {
+      // Explicit ids: download exactly those, overriding `ignored`.
+      entries = await PlaylistVideo.findAll({
         where: { playlist_id: playlist.playlist_id, youtube_id: youtubeIds },
         order: [['position', 'ASC']],
         attributes: ['youtube_id', 'channel_id', 'channel_name', 'title'],
-      }
-      : {
-        where: { playlist_id: playlist.playlist_id, ignored: false },
-        order: bulkOrder,
-        attributes: ['youtube_id', 'channel_id', 'channel_name', 'title'],
-      };
-
-    if (isBulk && options.limitToRecent) {
-      query.limit = overrideSettings.videoCount || configModule.config.channelFilesToDownload || DEFAULT_FILES_TO_DOWNLOAD;
+      });
     }
 
-    const entries = await PlaylistVideo.findAll(query);
-
-    if (!entries.length) return;
+    if (!entries.length) return 0;
 
     const toDownload = [];
     for (const entry of entries) {
@@ -821,7 +912,7 @@ class DownloadModule {
       toDownload.push({ youtube_id: entry.youtube_id, channel_id: entry.channel_id });
     }
 
-    if (!toDownload.length) return;
+    if (!toDownload.length) return 0;
 
     const groups = await playlistDownloadGrouper.buildGroups(playlist, toDownload, overrideSettings);
     const jobLabel = playlistJobLabel(playlist);
@@ -855,6 +946,8 @@ class DownloadModule {
       // these jobs into the parent run so its summary aggregates them.
       await this.doSpecificDownloads({ body: { urls, overrideSettings: groupOverride, jobLabel, runId: options.runId, ownerChannelMap } });
     }
+
+    return toDownload.length;
   }
 
   async afterDownloadHook(downloadedYoutubeIds) {

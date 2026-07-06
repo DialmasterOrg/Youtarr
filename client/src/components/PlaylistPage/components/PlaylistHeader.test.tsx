@@ -27,6 +27,7 @@ const baseProps = {
   newCount: 37,
   togglePending: false,
   actionRunning: false,
+  refreshing: false,
   onRefresh: jest.fn(),
   onDownloadAll: jest.fn(),
   onOpenSettings: jest.fn(),

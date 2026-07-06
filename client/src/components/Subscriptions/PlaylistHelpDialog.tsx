@@ -97,13 +97,20 @@ function PlaylistHelpDialog({ open, onClose, isMobile }: PlaylistHelpDialogProps
           <Section icon={<FileDownloadIcon size={16} style={iconColor} />} title="Downloading automatically">
             <p>
               Turn on auto-download for a playlist and Youtarr keeps it current on the regular
-              download schedule, the same way it does for channels. It grabs the newest videos in the
-              playlist, up to the count you set under{' '}
+              download schedule, the same way it does for channels. The first run grabs the
+              playlist&apos;s most recent videos, up to the count you set under{' '}
               <strong className="text-foreground font-medium">
                 Settings &rarr; Core Settings &rarr; Download Settings
               </strong>
-              , and skips anything you already have or have marked as ignored. New videos added to the
-              playlist later get picked up on their own.
+              . After that, every run downloads whatever has been newly added to the playlist, no
+              matter where in the playlist it was placed (top, middle, or bottom), skipping anything
+              you already have or have marked as ignored. If more videos arrive than the per-run
+              count, the extras catch up on later runs.
+            </p>
+            <p>
+              The &quot;Recently added first&quot; sort on a playlist&apos;s page shows these new
+              additions at the top. Videos that were already in the playlist when you subscribed keep
+              their playlist order.
             </p>
           </Section>
 

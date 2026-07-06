@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import AddPlaylistDialog from '../AddPlaylistDialog';
 import { renderWithProviders } from '../../../../test-utils';
+import { PlaylistSubscribeResult } from '../../../../hooks/usePlaylistMutations';
 
 const mockNavigate = jest.fn();
 jest.mock('react-router-dom', () => ({
@@ -145,5 +146,64 @@ describe('AddPlaylistDialog', () => {
 
     renderWithProviders(<AddPlaylistDialog open token="t" onClose={jest.fn()} />);
     expect(screen.getByText(/No media server is currently configured/i)).toBeInTheDocument();
+  });
+
+  test('shows an in-flight indicator while the subscribe request is outstanding', async () => {
+    const user = userEvent.setup();
+    mockFetchPlaylistInfo.mockResolvedValue({
+      title: 'My List',
+      uploader: 'Me',
+      video_count: 5,
+      thumbnail: '',
+    });
+    let resolveSubscribe: (value: PlaylistSubscribeResult | null) => void = () => {};
+    const subscribePromise = new Promise<PlaylistSubscribeResult | null>((resolve) => {
+      resolveSubscribe = resolve;
+    });
+    mockSubscribe.mockReturnValue(subscribePromise);
+
+    renderWithProviders(<AddPlaylistDialog open token="t" onClose={jest.fn()} initialUrl={PLAYLIST_URL} />);
+
+    const subscribeBtn = await screen.findByRole('button', { name: /subscribe/i });
+    await user.click(subscribeBtn);
+
+    expect(await screen.findByRole('button', { name: 'Subscribing...' })).toBeInTheDocument();
+    expect(screen.getByTestId('loading-spinner')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Fetching the complete playlist from YouTube\. Large playlists can take a minute or two - keep this dialog open\./i
+      )
+    ).toBeInTheDocument();
+
+    resolveSubscribe(null);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Subscribe' })).toBeInTheDocument();
+    });
+  });
+
+  test('clears the in-flight indicator when the subscribe request fails', async () => {
+    const user = userEvent.setup();
+    mockFetchPlaylistInfo.mockResolvedValue({
+      title: 'My List',
+      uploader: 'Me',
+      video_count: 5,
+      thumbnail: '',
+    });
+    mockSubscribe.mockResolvedValue(null);
+
+    renderWithProviders(<AddPlaylistDialog open token="t" onClose={jest.fn()} initialUrl={PLAYLIST_URL} />);
+
+    const subscribeBtn = await screen.findByRole('button', { name: /subscribe/i });
+    await user.click(subscribeBtn);
+
+    await waitFor(() => {
+      expect(mockSubscribe).toHaveBeenCalled();
+    });
+
+    expect(await screen.findByRole('button', { name: 'Subscribe' })).toBeInTheDocument();
+    expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Fetching the complete playlist from YouTube/i)
+    ).not.toBeInTheDocument();
   });
 });

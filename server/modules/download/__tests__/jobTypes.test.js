@@ -5,6 +5,7 @@ const {
   PLAYLIST_DOWNLOAD_LABEL_PREFIX,
   CHANNEL_DOWNLOAD_ALL_LABEL_PREFIX,
   AUTO_RETRY_LABEL_PREFIX,
+  PLAYLIST_SWEEP_LABEL,
   isSpecificUrlDownloadJob,
   isDownloadJob,
   playlistJobLabel,
@@ -102,6 +103,14 @@ describe('jobTypes', () => {
       // /triggerchanneldownloads guards on jobType.includes(CHANNEL_DOWNLOAD_LABEL);
       // a running auto-retry job must not block scheduled channel downloads.
       expect(autoRetryJobLabel(3).includes(CHANNEL_DOWNLOAD_LABEL)).toBe(false);
+    });
+  });
+
+  describe('PLAYLIST_SWEEP_LABEL', () => {
+    it('is not matched by any detection helper', () => {
+      expect(isSpecificUrlDownloadJob(PLAYLIST_SWEEP_LABEL)).toBe(false);
+      expect(isDownloadJob(PLAYLIST_SWEEP_LABEL)).toBe(false);
+      expect(isChannelDownloadAllJob(PLAYLIST_SWEEP_LABEL)).toBe(false);
     });
   });
 

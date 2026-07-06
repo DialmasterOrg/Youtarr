@@ -195,14 +195,17 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
 
       const page = parseInt(req.query.page || '1', 10);
       const pageSize = Math.min(parseInt(req.query.pageSize || '50', 10), 200);
-      const sortDirection =
-        VIDEO_SORT_DIRECTIONS[String(req.query.sortOrder || '').toLowerCase()] ||
-        DEFAULT_VIDEO_SORT_DIRECTION;
+      const sortOrder = String(req.query.sortOrder || '').toLowerCase();
+      // 'recent' = first-seen order (what auto-download considers newest);
+      // otherwise position in the owner's playlist order.
+      const order = sortOrder === 'recent'
+        ? [['added_at', 'DESC'], ['position', 'ASC']]
+        : [['position', VIDEO_SORT_DIRECTIONS[sortOrder] || DEFAULT_VIDEO_SORT_DIRECTION]];
       const { count, rows } = await PlaylistVideo.findAndCountAll({
         where: { playlist_id: req.params.playlistId },
         limit: pageSize,
         offset: (page - 1) * pageSize,
-        order: [['position', sortDirection]],
+        order,
       });
 
       const youtubeIds = rows.map((r) => r.youtube_id).filter(Boolean);
@@ -261,17 +264,14 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     }
   });
 
-  // fetchAll: true switches from the fast first-page refresh to the full
-  // "Load More" fetch (up to 5000 videos), which can run for minutes.
+  // Full refresh from YouTube (webpage path with an InnerTube fallback, up to
+  // 5000 entries; can take a minute for very large playlists). Older cached
+  // clients may still send { fetchAll: true } - the body is ignored.
   router.post('/api/playlists/:playlistId/refresh', verifyToken, async (req, res) => {
-    const fetchAll = req.body?.fetchAll;
-    if (fetchAll !== undefined && typeof fetchAll !== 'boolean') {
-      return res.status(400).json({ error: 'fetchAll must be a boolean' });
-    }
     try {
       const p = await findEnabledPlaylist(req.params.playlistId);
       if (!p) return res.status(404).json({ error: 'Playlist not found' });
-      const count = await playlistModule.fetchAllPlaylistVideos(p.playlist_id, { fetchAll: !!fetchAll });
+      const count = await playlistModule.fetchAllPlaylistVideos(p.playlist_id);
       mediaServers.mediaServerSync.syncPlaylist(p.id).catch(logBgFailure(req, p.playlist_id, 'playlist sync'));
       m3uGenerator.generatePlaylistM3U(p.id).catch(logBgFailure(req, p.playlist_id, 'M3U generation'));
       res.json({ fetched: count });
