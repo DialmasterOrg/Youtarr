@@ -897,6 +897,21 @@ describe('GET /api/playlists/:playlistId/videos', () => {
     );
   });
 
+  test('orders by added_at DESC with position tie-break when sortOrder=recent', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue({ count: 0, rows: [] });
+
+    const handler = getHandler('get', '/api/playlists/:playlistId/videos', deps);
+    const req = { params: { playlistId: 'PLtest123' }, query: { sortOrder: 'recent' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.models.PlaylistVideo.findAndCountAll).toHaveBeenCalledWith(
+      expect.objectContaining({ order: [['added_at', 'DESC'], ['position', 'ASC']] })
+    );
+  });
+
   test('falls back to position ASC for an invalid sortOrder', async () => {
     const deps = buildDeps();
     deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue({ count: 0, rows: [] });
@@ -973,37 +988,24 @@ describe('POST /api/playlists/:playlistId/refresh', () => {
 
     await handler(req, res);
 
-    expect(deps.playlistModule.fetchAllPlaylistVideos).toHaveBeenCalledWith('PLtest123', { fetchAll: false });
+    expect(deps.playlistModule.fetchAllPlaylistVideos).toHaveBeenCalledWith('PLtest123');
     expect(res.json).toHaveBeenCalledWith({ fetched: 10 });
   });
 
-  test('passes fetchAll to the module when the body requests a full fetch', async () => {
+  test('ignores a legacy fetchAll body field from older cached clients', async () => {
     const deps = buildDeps();
-    deps.playlistModule.fetchAllPlaylistVideos.mockResolvedValue(4200);
+    deps.playlistModule.fetchAllPlaylistVideos.mockResolvedValue(42);
     deps.models.Playlist.findOne.mockResolvedValue(makePlaylist());
 
     const handler = getHandler('post', '/api/playlists/:playlistId/refresh', deps);
-    const req = { params: { playlistId: 'PLtest123' }, body: { fetchAll: true }, log: loggerMock };
+    const req = { params: { playlistId: 'PLtest123' }, body: { fetchAll: 'not-a-boolean' }, log: loggerMock };
     const res = createResponse();
 
     await handler(req, res);
 
-    expect(deps.playlistModule.fetchAllPlaylistVideos).toHaveBeenCalledWith('PLtest123', { fetchAll: true });
-    expect(res.json).toHaveBeenCalledWith({ fetched: 4200 });
-  });
-
-  test('returns 400 when fetchAll is not a boolean', async () => {
-    const deps = buildDeps();
-
-    const handler = getHandler('post', '/api/playlists/:playlistId/refresh', deps);
-    const req = { params: { playlistId: 'PLtest123' }, body: { fetchAll: 'yes' }, log: loggerMock };
-    const res = createResponse();
-
-    await handler(req, res);
-
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({ error: 'fetchAll must be a boolean' });
-    expect(deps.playlistModule.fetchAllPlaylistVideos).not.toHaveBeenCalled();
+    expect(deps.playlistModule.fetchAllPlaylistVideos).toHaveBeenCalledWith('PLtest123');
+    expect(res.json).toHaveBeenCalledWith({ fetched: 42 });
+    expect(res.status).not.toHaveBeenCalledWith(400);
   });
 
   test('returns 404 for a soft-deleted playlist without fetching', async () => {

@@ -23,6 +23,10 @@ const CHANNEL_DOWNLOAD_ALL_LABEL_PREFIX = 'Channel Download All: ';
 // job. Like the download-all label, must NOT contain CHANNEL_DOWNLOAD_LABEL
 // even when retrying channel-sweep failures.
 const AUTO_RETRY_LABEL_PREFIX = 'Auto-retry: ';
+// Synthetic status-marker jobType for an idle playlist auto-download sweep
+// (>=1 auto-enabled playlist checked, nothing enqueued, no errors). NOT a
+// download job: it must stay un-matched by every detection helper below.
+const PLAYLIST_SWEEP_LABEL = 'Playlist Downloads';
 
 // True for a fixed-URL-list download (manual, playlist, or channel
 // download-all), as opposed to a channel/tab download.
@@ -72,6 +76,7 @@ module.exports = {
   PLAYLIST_DOWNLOAD_LABEL_PREFIX,
   CHANNEL_DOWNLOAD_ALL_LABEL_PREFIX,
   AUTO_RETRY_LABEL_PREFIX,
+  PLAYLIST_SWEEP_LABEL,
   isSpecificUrlDownloadJob,
   isDownloadJob,
   playlistJobLabel,

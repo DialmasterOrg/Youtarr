@@ -12,6 +12,7 @@ interface LibraryDownloadsGroupProps {
   onDownloadAll: () => void;
   onOpenSettings: () => void;
   actionRunning: boolean;
+  refreshing: boolean;
 }
 
 const LibraryDownloadsGroup: React.FC<LibraryDownloadsGroupProps> = ({
@@ -23,6 +24,7 @@ const LibraryDownloadsGroup: React.FC<LibraryDownloadsGroupProps> = ({
   onDownloadAll,
   onOpenSettings,
   actionRunning,
+  refreshing,
 }) => {
   const downloadLabel =
     newCount === null
@@ -44,7 +46,8 @@ const LibraryDownloadsGroup: React.FC<LibraryDownloadsGroupProps> = ({
           <div>
             <p className="mb-2">
               <strong>Refresh from YouTube</strong> re-checks YouTube for new, removed, or
-              changed videos. It does not download anything.
+              changed videos. It does not download anything. Large playlists can take about
+              a minute.
             </p>
             <p>
               <strong>Download</strong> queues videos not yet downloaded. You confirm settings
@@ -60,9 +63,10 @@ const LibraryDownloadsGroup: React.FC<LibraryDownloadsGroupProps> = ({
           size="sm"
           onClick={onRefresh}
           disabled={actionRunning}
+          loading={refreshing}
           startIcon={<RefreshIcon size={16} />}
         >
-          Refresh from YouTube
+          {refreshing ? 'Refreshing...' : 'Refresh from YouTube'}
         </Button>
         <Button
           variant="contained"
@@ -89,8 +93,9 @@ const LibraryDownloadsGroup: React.FC<LibraryDownloadsGroupProps> = ({
           label="Auto-download new videos"
         />
         <InfoHint label="About auto-download">
-          New videos added to this playlist on YouTube download automatically on the next
-          scheduled run.
+          Videos added to this playlist on YouTube download automatically on the next scheduled
+          run, no matter where in the playlist they&apos;re added. Use the &quot;Recently added
+          first&quot; sort to see them.
         </InfoHint>
       </div>
 

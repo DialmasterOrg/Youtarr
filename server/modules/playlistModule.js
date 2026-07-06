@@ -12,11 +12,17 @@ const youtubeApi = require('./youtubeApi');
 // back null for every entry.
 const UNAVAILABLE_TITLE_RE = /^\[(private|deleted|unavailable)\b[^\]]*\]$/i;
 
-// Regular refreshes (subscribe, cron, pre-download) fetch only the first page
-// of a playlist so they stay fast and deterministic; the explicit "Load More"
-// full fetch is capped like the channel Load More (channelModule).
-const DEFAULT_FETCH_LIMIT = 100;
-const MAX_LOAD_MORE_VIDEOS = 5000;
+// Every playlist fetch pages the full playlist up to this cap: the
+// default webpage path first, with a one-shot InnerTube fallback when it
+// fails or falls short (see _fetchPlaylistVideos). This cap is
+// playlist-scoped; channelModule.js has a separate, differently-named cap
+// (MAX_LOAD_MORE_VIDEOS) for the unrelated channel-videos Load More feature.
+const MAX_PLAYLIST_VIDEOS = 5000;
+
+// playlist_count routinely overcounts by a few (it includes videos deleted
+// from YouTube that no longer appear in listings), so only treat a fetch as
+// truncated when it falls short of the reported count by more than this.
+const REPORTED_COUNT_SLACK = 5;
 
 // added_at round-trips through a DATETIME column (second precision), so an
 // exact millisecond comparison would flag every already-correct row as stale.
@@ -105,28 +111,67 @@ class PlaylistModule {
     return { playlist, restored: false };
   }
 
-  async fetchAllPlaylistVideos(playlistId, { fetchAll = false } = {}) {
+  async fetchAllPlaylistVideos(playlistId) {
     if (this.activeFetches.has(playlistId)) {
       throw new Error('FETCH_IN_PROGRESS');
     }
     this.activeFetches.add(playlistId);
     try {
-      return await this._fetchPlaylistVideos(playlistId, fetchAll);
+      return await this._fetchPlaylistVideos(playlistId);
     } finally {
       this.activeFetches.delete(playlistId);
     }
   }
 
-  async _fetchPlaylistVideos(playlistId, fetchAll) {
+  async _fetchPlaylistVideos(playlistId) {
     const playlist = await Playlist.findOne({ where: { playlist_id: playlistId } });
     if (!playlist) throw new Error('PLAYLIST_NOT_FOUND');
 
-    const entries = await this._spawnFlatPlaylist(
-      playlist.url,
-      fetchAll
-        ? { playlistEnd: MAX_LOAD_MORE_VIDEOS, skipWebpage: true }
-        : { playlistEnd: DEFAULT_FETCH_LIMIT }
-    );
+    // YouTube has broken each flat-playlist extraction path at different
+    // times in 2026: the default webpage path truncated at ~100 entries
+    // (June 2026, fixed in yt-dlp 2026.07.04), and the InnerTube-only path
+    // (youtubetab:skip=webpage) still stops at ~200 for playlist views
+    // (server-side; channel tabs are unaffected). Fetch via the default
+    // path; when the result falls short of the playlist's reported size,
+    // or the spawn fails outright, retry once via InnerTube and keep
+    // whichever fetch returned more entries.
+    let entries;
+    let usedInnertube = false;
+    const innertubeOpts = { playlistEnd: MAX_PLAYLIST_VIDEOS, skipWebpage: true };
+    try {
+      entries = await this._spawnFlatPlaylist(playlist.url, { playlistEnd: MAX_PLAYLIST_VIDEOS });
+    } catch (err) {
+      logger.warn({ playlist_id: playlistId, err }, 'Default playlist fetch failed; retrying via InnerTube');
+      entries = await this._spawnFlatPlaylist(playlist.url, innertubeOpts);
+      usedInnertube = true;
+    }
+
+    const reported = Number(entries[0]?.playlist_count ?? entries[0]?.n_entries) || null;
+    const expected = reported == null ? null : Math.min(reported, MAX_PLAYLIST_VIDEOS);
+    if (
+      !usedInnertube &&
+      (entries.length === 0 || (expected != null && entries.length + REPORTED_COUNT_SLACK < expected))
+    ) {
+      logger.warn(
+        { playlist_id: playlistId, fetched: entries.length, expected },
+        'Playlist fetch came back empty or short of reported count; retrying via InnerTube'
+      );
+      try {
+        const fallback = await this._spawnFlatPlaylist(playlist.url, innertubeOpts);
+        if (fallback.length > entries.length) entries = fallback;
+      } catch (err) {
+        // Unlike the failure-path fallback above, here we already have a usable
+        // (if short) default result; keep it rather than failing the fetch.
+        logger.warn({ playlist_id: playlistId, err }, 'InnerTube fallback fetch failed; keeping the default fetch result');
+      }
+    }
+
+    if (entries.length >= MAX_PLAYLIST_VIDEOS) {
+      logger.warn(
+        { playlist_id: playlistId, fetched: entries.length, cap: MAX_PLAYLIST_VIDEOS },
+        'Playlist fetch hit the entry cap; videos beyond the cap are not tracked'
+      );
+    }
 
     const available = entries.filter((e) => !this.isUnavailableTitle(e.title));
 
@@ -302,10 +347,12 @@ class PlaylistModule {
     }
   }
 
-  // The webpage extraction path silently stops after the first 100 entries;
-  // skip=webpage pages the full playlist via the InnerTube API. If cookies are
-  // ever added here, an authenticated jar makes yt-dlp reject skip=webpage
-  // unless skip=authcheck is also passed.
+  // Default (webpage) extraction paginates fully on yt-dlp >= 2026.07.04.
+  // skipWebpage (InnerTube-only) is the fallback used by _fetchPlaylistVideos
+  // when the default path fails or under-delivers; it stops at ~200 entries
+  // for playlist views as of 2026-07. If cookies are ever added here, an
+  // authenticated jar makes yt-dlp reject skip=webpage unless skip=authcheck
+  // is also passed.
   _spawnFlatPlaylist(url, { playlistEnd, skipWebpage = false } = {}) {
     return new Promise((resolve, reject) => {
       const args = ['--flat-playlist', '--dump-json'];
@@ -533,11 +580,26 @@ class PlaylistModule {
     const playlists = await Playlist.findAll({
       where: { enabled: true, auto_download: true },
     });
+    let totalEnqueued = 0;
+    let anyErrored = false;
     for (const p of playlists) {
       try {
-        await downloadModule.doPlaylistDownloads(p, { refreshFirst: true, limitToRecent: true, overrideSettings, runId });
+        const enqueued = await downloadModule.doPlaylistDownloads(p, { refreshFirst: true, limitToRecent: true, overrideSettings, runId });
+        totalEnqueued += enqueued || 0;
       } catch (err) {
+        anyErrored = true;
         logger.error({ err, playlist_id: p.playlist_id }, 'playlistAutoDownload failed for playlist');
+      }
+    }
+
+    if (playlists.length > 0 && totalEnqueued === 0 && !anyErrored) {
+      try {
+        const jobModule = require('./jobModule');
+        const { PLAYLIST_SWEEP_LABEL } = require('./download/jobTypes');
+        await jobModule.addJob({ jobType: PLAYLIST_SWEEP_LABEL, status: 'Complete', output: '' });
+        logger.info({ playlistsChecked: playlists.length }, 'Playlist auto-download sweep found no new videos; recorded idle sweep in history');
+      } catch (err) {
+        logger.error({ err }, 'Failed to record idle playlist auto-download sweep in history');
       }
     }
   }

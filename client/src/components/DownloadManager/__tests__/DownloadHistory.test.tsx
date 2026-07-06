@@ -593,6 +593,73 @@ describe('DownloadHistory', () => {
       expect(cellTexts.some(text => text === 'Channels')).toBe(true);
     });
 
+    test('displays "Playlists" and "Complete - no new videos" for an idle playlist sweep', () => {
+      const sweepJob: Job[] = [{
+        id: 'sweep-job',
+        jobType: 'Playlist Downloads',
+        status: 'Complete',
+        output: '',
+        timeCreated: Date.now(),
+        timeInitiated: Date.now(),
+        data: undefined as unknown as Job['data'],
+      }];
+
+      render(<DownloadHistory {...defaultProps} jobs={sweepJob} />);
+
+      const tableCells = screen.getAllByRole('cell');
+      const cellTexts = tableCells.map(cell => cell.textContent || '');
+      expect(cellTexts.some(text => text === 'Playlists')).toBe(true);
+      expect(cellTexts.some(text => text === 'Complete - no new videos')).toBe(true);
+    });
+
+    test('still displays the idle playlist sweep after DB hydration gives it an empty videos array', () => {
+      const sweepJob: Job[] = [{
+        id: 'sweep-job-hydrated',
+        jobType: 'Playlist Downloads',
+        status: 'Complete',
+        output: '',
+        timeCreated: Date.now(),
+        timeInitiated: Date.now(),
+        data: { videos: [] },
+      }];
+
+      render(<DownloadHistory {...defaultProps} jobs={sweepJob} />);
+
+      const tableCells = screen.getAllByRole('cell');
+      const cellTexts = tableCells.map(cell => cell.textContent || '');
+      expect(cellTexts.some(text => text === 'Playlists')).toBe(true);
+      expect(cellTexts.some(text => text === 'Complete - no new videos')).toBe(true);
+    });
+
+    test('displays "Playlists" for a playlist download job with videos', () => {
+      const playlistJob: Job[] = [{
+        id: 'playlist-job',
+        jobType: 'Playlist: My Cool Playlist',
+        status: 'Complete',
+        output: '',
+        timeCreated: Date.now(),
+        timeInitiated: Date.now(),
+        data: {
+          videos: [{
+            id: 1,
+            youtubeId: 'v1',
+            youTubeChannelName: 'Test',
+            youTubeVideoName: 'Playlist Video',
+            duration: 100,
+            timeCreated: new Date().toISOString(),
+            originalDate: null,
+            description: null,
+          } as VideoData],
+        },
+      }];
+
+      render(<DownloadHistory {...defaultProps} jobs={playlistJob} />);
+
+      const tableCells = screen.getAllByRole('cell');
+      const cellTexts = tableCells.map(cell => cell.textContent || '');
+      expect(cellTexts.some(text => text === 'Playlists')).toBe(true);
+    });
+
     test('extracts API key name with special characters', () => {
       const apiJob: Job[] = [{
         id: 'api-job',

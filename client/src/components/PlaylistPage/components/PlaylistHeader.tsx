@@ -14,6 +14,7 @@ interface PlaylistHeaderProps {
   newCount: number | null;
   togglePending: boolean;
   actionRunning: boolean;
+  refreshing: boolean;
   onRefresh: () => void;
   onDownloadAll: () => void;
   onOpenSettings: () => void;
@@ -42,6 +43,7 @@ const PlaylistHeader: React.FC<PlaylistHeaderProps> = ({
   newCount,
   togglePending,
   actionRunning,
+  refreshing,
   onRefresh,
   onDownloadAll,
   onOpenSettings,
@@ -107,6 +109,7 @@ const PlaylistHeader: React.FC<PlaylistHeaderProps> = ({
                 onDownloadAll={onDownloadAll}
                 onOpenSettings={onOpenSettings}
                 actionRunning={actionRunning}
+                refreshing={refreshing}
               />
               <MediaServerSyncGroup
                 playlist={playlist}

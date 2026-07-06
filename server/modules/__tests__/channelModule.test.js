@@ -2726,6 +2726,45 @@ describe('ChannelModule', () => {
       });
     });
 
+    describe('getEnabledChannelDownloadUrls', () => {
+      it('returns one URL per enabled tab, mapping tab names to URL suffixes', async () => {
+        Channel.findAll.mockResolvedValue([
+          { channel_id: 'UC1', url: 'https://www.youtube.com/@one', auto_download_enabled_tabs: 'video,short' },
+        ]);
+
+        const urls = await ChannelModule.getEnabledChannelDownloadUrls();
+
+        expect(urls).toEqual([
+          expect.stringMatching(/UC1\/videos$/),
+          expect.stringMatching(/UC1\/shorts$/),
+        ]);
+      });
+
+      it('returns an empty array when every enabled channel has no enabled tabs', async () => {
+        Channel.findAll.mockResolvedValue([
+          { channel_id: 'UC1', url: 'https://www.youtube.com/@one', auto_download_enabled_tabs: '' },
+        ]);
+
+        await expect(ChannelModule.getEnabledChannelDownloadUrls()).resolves.toEqual([]);
+      });
+
+      it('returns an empty array when there are no enabled channels at all', async () => {
+        Channel.findAll.mockResolvedValue([]);
+
+        await expect(ChannelModule.getEnabledChannelDownloadUrls()).resolves.toEqual([]);
+      });
+
+      it('falls back to the stored url for channels without a channel_id', async () => {
+        Channel.findAll.mockResolvedValue([
+          { channel_id: null, url: 'https://www.youtube.com/@legacy', auto_download_enabled_tabs: 'video' },
+        ]);
+
+        await expect(ChannelModule.getEnabledChannelDownloadUrls()).resolves.toEqual([
+          'https://www.youtube.com/@legacy',
+        ]);
+      });
+    });
+
     describe('channelAutoDownload', () => {
       let jobModule;
 
