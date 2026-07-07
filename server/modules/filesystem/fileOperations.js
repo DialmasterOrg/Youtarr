@@ -67,7 +67,7 @@ async function moveWithRetries(src, dest, { retries = 5, delayMs = 200, overwrit
           logger.warn({ src, dest }, 'Move succeeded via cp fallback after EPERM from fs.move');
           return;
         } catch (fallbackErr) {
-          logger.warn({ src, dest, fallbackErr }, 'cp fallback for cross-device move also failed');
+          logger.warn({ err: fallbackErr, src, dest }, 'cp fallback for cross-device move also failed');
           throw fallbackErr;
         }
       }
