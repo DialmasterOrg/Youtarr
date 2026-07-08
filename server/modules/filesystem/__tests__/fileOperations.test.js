@@ -1,5 +1,6 @@
 const fs = require('fs-extra');
 const fsPromises = require('fs').promises;
+const { execFile, execFileSync } = require('child_process');
 
 // Mock fs-extra and fs.promises
 jest.mock('fs-extra');
@@ -16,6 +17,12 @@ jest.mock('fs', () => ({
   utimesSync: jest.fn()
 }));
 
+// Mock child_process (used by the cp fallback for FUSE-mount EPERM errors)
+jest.mock('child_process', () => ({
+  execFile: jest.fn(),
+  execFileSync: jest.fn()
+}));
+
 // Mock logger
 jest.mock('../../../logger', () => ({
   debug: jest.fn(),
@@ -29,12 +36,20 @@ const {
   moveWithRetries,
   safeRemove,
   safeCopy,
+  copySyncWithFallback,
   pathExists,
   safeStat,
   setTimestamp,
   isFile,
   isDirectory
 } = require('../fileOperations');
+
+function eperm(syscall) {
+  const err = new Error('operation not permitted');
+  err.code = 'EPERM';
+  err.syscall = syscall;
+  return err;
+}
 
 describe('filesystem/fileOperations', () => {
   beforeEach(() => {
@@ -104,6 +119,95 @@ describe('filesystem/fileOperations', () => {
       await moveWithRetries('/src', '/dest', { overwrite: false });
 
       expect(fs.move).toHaveBeenCalledWith('/src', '/dest', { overwrite: false });
+    });
+
+    it('should fall back to cp -r on EPERM copyfile error from FUSE mounts', async () => {
+      fs.move.mockRejectedValueOnce(eperm('copyfile'));
+      fs.remove.mockResolvedValue();
+      execFile.mockImplementation((cmd, args, callback) => callback(null, '', ''));
+
+      await moveWithRetries('/src', '/dest');
+
+      expect(execFile).toHaveBeenCalledWith('cp', ['-r', '--', '/src', '/dest'], expect.any(Function));
+      expect(fs.remove).toHaveBeenCalledWith('/src');
+    });
+
+    it('should remove destination before falling back when overwrite is true', async () => {
+      fs.move.mockRejectedValueOnce(eperm('copyfile'));
+      fs.remove.mockResolvedValue();
+      execFile.mockImplementation((cmd, args, callback) => callback(null, '', ''));
+
+      await moveWithRetries('/src', '/dest', { overwrite: true });
+
+      expect(fs.remove).toHaveBeenCalledWith('/dest');
+    });
+
+    it('should throw the fallback error when cp -r also fails', async () => {
+      fs.move.mockRejectedValueOnce(eperm('copyfile'));
+      fs.remove.mockResolvedValue();
+      const cpError = new Error('cp: cannot create fifo');
+      execFile.mockImplementation((cmd, args, callback) => callback(cpError));
+
+      await expect(moveWithRetries('/src', '/dest')).rejects.toThrow('cp: cannot create fifo');
+    });
+
+    it('should not use the cp fallback for EPERM errors from other syscalls', async () => {
+      jest.useFakeTimers();
+      const error = eperm('rename');
+      fs.move.mockRejectedValue(error);
+
+      const promise = moveWithRetries('/src', '/dest', { retries: 1, delayMs: 10 });
+      for (let i = 0; i < 2; i++) {
+        await Promise.resolve();
+        jest.advanceTimersByTime(1000);
+      }
+
+      await expect(promise).rejects.toThrow(error);
+      expect(execFile).not.toHaveBeenCalled();
+      jest.useRealTimers();
+    });
+  });
+
+  describe('copySyncWithFallback', () => {
+    it('should copy synchronously without fallback on success', () => {
+      fs.copySync.mockReturnValueOnce();
+
+      copySyncWithFallback('/src', '/dest');
+
+      expect(fs.copySync).toHaveBeenCalledWith('/src', '/dest', { overwrite: true });
+      expect(execFileSync).not.toHaveBeenCalled();
+    });
+
+    it('should fall back to cp -r on EPERM copyfile error', () => {
+      fs.copySync.mockImplementationOnce(() => {
+        throw eperm('copyfile');
+      });
+      fs.removeSync.mockReturnValueOnce();
+
+      copySyncWithFallback('/src', '/dest');
+
+      expect(fs.removeSync).toHaveBeenCalledWith('/dest');
+      expect(execFileSync).toHaveBeenCalledWith('cp', ['-r', '--', '/src', '/dest']);
+    });
+
+    it('should not remove the destination first when overwrite is false', () => {
+      fs.copySync.mockImplementationOnce(() => {
+        throw eperm('copyfile');
+      });
+
+      copySyncWithFallback('/src', '/dest', { overwrite: false });
+
+      expect(fs.removeSync).not.toHaveBeenCalled();
+      expect(execFileSync).toHaveBeenCalledWith('cp', ['-r', '--', '/src', '/dest']);
+    });
+
+    it('should rethrow errors that are not the FUSE-mount EPERM case', () => {
+      fs.copySync.mockImplementationOnce(() => {
+        throw eperm('rename');
+      });
+
+      expect(() => copySyncWithFallback('/src', '/dest')).toThrow();
+      expect(execFileSync).not.toHaveBeenCalled();
     });
   });
 

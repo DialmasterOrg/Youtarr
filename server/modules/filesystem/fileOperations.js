@@ -5,6 +5,9 @@
 
 const fs = require('fs-extra');
 const fsPromises = require('fs').promises;
+const { execFile, execFileSync } = require('child_process');
+const { promisify } = require('util');
+const execFileAsync = promisify(execFile);
 const logger = require('../../logger');
 
 /**
@@ -14,6 +17,29 @@ const logger = require('../../logger');
  */
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Some FUSE-backed filesystems (e.g. rclone mounts) return EPERM instead of
+ * EXDEV/EOPNOTSUPP when Node's copy_file_range-based fs.copyFile is used for
+ * a cross-device copy, and fs-extra doesn't fall back to a plain read/write
+ * copy in that case. The system 'cp' binary handles this correctly, so shell
+ * out to it as a last resort.
+ *
+ * @param {string} src - Source path
+ * @param {string} dest - Destination path
+ * @param {boolean} overwrite - Whether to overwrite an existing destination
+ * @returns {Promise<void>}
+ */
+async function moveViaCpFallback(src, dest, overwrite) {
+  if (overwrite) {
+    await fs.remove(dest);
+  }
+  // Plain recursive copy, no -a/--preserve: some FUSE mounts (e.g. rclone)
+  // reject utimes()/chown() on the destination with EPERM even though the
+  // actual data copy is allowed.
+  await execFileAsync('cp', ['-r', '--', src, dest]);
+  await fs.remove(src);
 }
 
 /**
@@ -35,6 +61,16 @@ async function moveWithRetries(src, dest, { retries = 5, delayMs = 200, overwrit
       await fs.move(src, dest, { overwrite });
       return;
     } catch (err) {
+      if (err && err.code === 'EPERM' && err.syscall === 'copyfile') {
+        try {
+          await moveViaCpFallback(src, dest, overwrite);
+          logger.warn({ src, dest }, 'Move succeeded via cp fallback after EPERM from fs.move');
+          return;
+        } catch (fallbackErr) {
+          logger.warn({ err: fallbackErr, src, dest }, 'cp fallback for cross-device move also failed');
+          throw fallbackErr;
+        }
+      }
       if (attempt === retries) {
         throw err;
       }
@@ -59,6 +95,30 @@ async function safeRemove(filePath) {
     if (err && err.code !== 'ENOENT') {
       logger.warn({ err, filePath }, 'Error deleting file');
     }
+  }
+}
+
+/**
+ * Synchronous copy with the same EPERM/copy_file_range fallback as
+ * moveWithRetries, for call sites that use fs.copySync directly.
+ *
+ * @param {string} src - Source path
+ * @param {string} dest - Destination path
+ * @param {Object} options - Options
+ * @param {boolean} options.overwrite - Whether to overwrite existing (default: true)
+ */
+function copySyncWithFallback(src, dest, { overwrite = true } = {}) {
+  try {
+    fs.copySync(src, dest, { overwrite });
+  } catch (err) {
+    if (err && err.code === 'EPERM' && err.syscall === 'copyfile') {
+      if (overwrite) {
+        fs.removeSync(dest);
+      }
+      execFileSync('cp', ['-r', '--', src, dest]);
+      return;
+    }
+    throw err;
   }
 }
 
@@ -205,6 +265,7 @@ module.exports = {
   moveWithRetries,
   safeRemove,
   safeCopy,
+  copySyncWithFallback,
   pathExists,
   safeStat,
   setTimestamp,

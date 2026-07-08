@@ -11,7 +11,7 @@ const { JobVideoDownload } = require('../models');
 const videoPersistence = require('./videoPersistence');
 const { VIDEO_PERSISTED_MARKER } = require('./constants/outputMarkers');
 const logger = require('../logger');
-const { buildChannelPath, cleanupEmptyParents, moveWithRetries, ensureDirWithRetries } = require('./filesystem');
+const { buildChannelPath, cleanupEmptyParents, moveWithRetries, ensureDirWithRetries, copySyncWithFallback } = require('./filesystem');
 
 const activeJobId = process.env.YOUTARR_JOB_ID;
 
@@ -122,7 +122,7 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
       );
 
       if (fs.existsSync(channelThumbPath)) {
-        fs.copySync(channelThumbPath, channelPosterPath);
+        copySyncWithFallback(channelThumbPath, channelPosterPath);
         logger.info({ channelFolderPath }, 'Channel poster.jpg created');
       }
     }
@@ -493,7 +493,7 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
         newImagePath,
         `videothumb-${id}-small.jpg`
       ); // define the new path for image thumbnail
-      fs.copySync(imagePath, newImageFullPath, { overwrite: true }); // copy the image thumbnail
+      copySyncWithFallback(imagePath, newImageFullPath, { overwrite: true }); // copy the image thumbnail
 
       // Resize the image using ffmpeg with proper settings to avoid deprecated format warnings
       // Using -loglevel error to suppress the deprecated pixel format warnings but still show actual errors
@@ -757,7 +757,7 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
 
         // Copy the video thumbnail as fanart (if the thumbnail exists in the final location and -fanart doesn't already exist)
         if (fs.existsSync(finalImagePath) && !fs.existsSync(fanartPath)) {
-          fs.copySync(finalImagePath, fanartPath);
+          copySyncWithFallback(finalImagePath, fanartPath);
           logger.info({ fanartPath }, '[Post-Process] Created video fanart file');
         } else {
           logger.debug({ finalImagePath }, '[Post-Process] No image copied for fanart creation');
