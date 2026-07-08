@@ -1592,6 +1592,7 @@ describe('playlistModule', () => {
         jobType: 'Playlist Downloads',
         status: 'Complete',
         output: '',
+        data: { videos: [] },
       });
     });
 

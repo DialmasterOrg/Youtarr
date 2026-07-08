@@ -596,7 +596,10 @@ class PlaylistModule {
       try {
         const jobModule = require('./jobModule');
         const { PLAYLIST_SWEEP_LABEL } = require('./download/jobTypes');
-        await jobModule.addJob({ jobType: PLAYLIST_SWEEP_LABEL, status: 'Complete', output: '' });
+        // Empty videos array so Download History treats the fresh in-memory job
+        // like any completed no-video job (hidden unless "Show jobs with no
+        // videos" is checked), matching the shape DB hydration produces.
+        await jobModule.addJob({ jobType: PLAYLIST_SWEEP_LABEL, status: 'Complete', output: '', data: { videos: [] } });
         logger.info({ playlistsChecked: playlists.length }, 'Playlist auto-download sweep found no new videos; recorded idle sweep in history');
       } catch (err) {
         logger.error({ err }, 'Failed to record idle playlist auto-download sweep in history');

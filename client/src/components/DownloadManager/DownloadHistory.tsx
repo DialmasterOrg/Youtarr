@@ -124,10 +124,6 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
         return true;
       }
 
-      if (job.jobType === 'Playlist Downloads') {
-        return true;
-      }
-
       if (!job.data?.videos) {
         return true;
       }
