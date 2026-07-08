@@ -56,7 +56,7 @@ One thing to expect with Public playlists: Emby shows them as read-only and hide
 
 ## Audio-only playlists
 
-A playlist whose download type is **MP3 Only** syncs as an *audio* playlist: a music playlist on Plex, `MediaType: Audio` on Jellyfin and Emby. For the sync to find the files, your media server needs a music-type library that includes the Youtarr output directory:
+A playlist whose Download Type setting is **MP3 Only** syncs as an *audio* playlist: a music playlist on Plex, `MediaType: Audio` on Jellyfin and Emby. The **setting** decides the type, not what happens to be downloaded: per-video overrides can mix formats, but an MP3 Only playlist always syncs mp3s (items downloaded as **Video + MP3** contribute their mp3 too), and every other playlist always syncs video files. For the sync to find the files, your media server needs a music-type library that includes the Youtarr output directory:
 
 - **Plex**: create a **Music** library pointing at your Youtarr output folder. A video library and a music library can point at the same folder; each scanner only indexes its own media type. Channel folders will show up as "artists" in the music library, which is cosmetic.
 - **Jellyfin / Emby**: add a **Music** library (or a mixed-content library on Jellyfin) that includes the output folder.
@@ -67,10 +67,19 @@ When Youtarr syncs an audio playlist it asks the server to scan its music librar
 
 Two more things to know:
 
-- A playlist that mixes video and audio-only items syncs as a **video** playlist containing only the video items; media servers cannot mix both types in one playlist. Playlists downloaded as **Video + MP3** sync their videos.
-- The `.m3u` fallback file always lists every downloaded item, mp3s included, regardless of media server setup.
+- Media servers cannot mix video and audio in one playlist, so items downloaded without a file of the playlist's type are left out of the synced playlist: a video-only download never appears in an MP3 Only playlist, and an mp3-only download never appears in a video playlist. The playlist page shows a notice with the count of affected items.
+- The `.m3u` fallback file always lists every downloaded item regardless of type or media server setup; when an item has both files, the `.m3u` uses the one matching the playlist's type.
 
 **Where to find them**: media servers list audio playlists separately from video playlists. In Plex Web, look in your music library's **Playlists** tab, or open **Playlists** in the sidebar and switch the type filter to **Music**; synced audio playlists do not appear alongside your video playlists.
+
+## Switching a playlist's download type
+
+Changing a playlist's **Download Type** across the video/audio boundary (to or from **MP3 Only**) changes what its media-server playlist is:
+
+- **To MP3 Only**: on the next sync with at least one mp3 available, servers replace the synced video playlist with a music playlist. Items downloaded as **Video + MP3** carry over (their mp3 is used); items downloaded as video-only drop out. Until an mp3 exists, the old video playlist is left untouched.
+- **From MP3 Only**: the mirror image - the music playlist is replaced by a video playlist once a video file exists, and mp3-only items drop out.
+
+Existing downloads are never converted or re-downloaded when the setting changes; new downloads simply follow the new setting. Switching back later restores the other type's items, since the files stay on disk. Items that dropped out of the synced playlist always remain in the `.m3u` file, and switching between **Video Only** and **Video + MP3** has no effect on the synced playlist's type.
 
 ## Replace semantics
 

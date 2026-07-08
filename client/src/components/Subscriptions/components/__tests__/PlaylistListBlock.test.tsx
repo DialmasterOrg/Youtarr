@@ -69,6 +69,20 @@ describe('PlaylistListBlock auto-download indicator', () => {
   });
 });
 
+describe('PlaylistListBlock download format indicator', () => {
+  test('shows the MP3 indicator for an MP3 Only playlist', () => {
+    renderBlock([{ ...basePlaylist, audio_format: 'mp3_only' }]);
+
+    expect(screen.getByRole('img', { name: 'MP3 only downloads' })).toBeInTheDocument();
+  });
+
+  test('shows no format indicator for a video-only playlist', () => {
+    renderBlock([basePlaylist]);
+
+    expect(screen.queryByTestId('download-format-config-indicator')).not.toBeInTheDocument();
+  });
+});
+
 describe('PlaylistListBlock remove button', () => {
   test('renders a remove button for each playlist', () => {
     renderBlock([

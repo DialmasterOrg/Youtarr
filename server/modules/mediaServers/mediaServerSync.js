@@ -97,25 +97,28 @@ class MediaServerSync {
       ? await Video.findAll({ where: { youtubeId: youtubeIds } })
       : [];
     const byYoutubeId = new Map(downloaded.map((v) => [v.youtubeId, v]));
+
+    // Server playlists are media-typed (Plex audio vs video, Jellyfin/Emby
+    // MediaType) and can't mix types. The Download Type setting decides which
+    // type we sync, not what's on disk: per-video overrides can mix formats,
+    // and one manual video download shouldn't flip an audio playlist to video.
+    const mediaType = playlist.audio_format === 'mp3_only' ? 'audio' : 'video';
     const entries = [];
+    let mismatched = 0;
     for (const pv of videos) {
       const v = byYoutubeId.get(pv.youtube_id);
-      // Audio-only downloads store their path in audioFilePath; filePath stays null.
-      const mediaPath = v && (v.filePath || v.audioFilePath);
+      if (!v) continue;
+      const mediaPath = mediaType === 'audio' ? v.audioFilePath : v.filePath;
       if (mediaPath) {
-        entries.push({ youtube_id: pv.youtube_id, filePath: mediaPath, isAudio: !v.filePath });
+        entries.push({ youtube_id: pv.youtube_id, filePath: mediaPath });
+      } else if (v.filePath || v.audioFilePath) {
+        mismatched += 1;
       }
     }
-
-    // Server playlists are media-typed (Plex audio vs video playlists,
-    // Jellyfin/Emby MediaType) and cannot mix types.
-    const mediaType = entries.length > 0 && entries.every((e) => e.isAudio) ? 'audio' : 'video';
-    const filepaths = mediaType === 'audio' ? entries : entries.filter((e) => !e.isAudio);
-    const skippedAudioCount = entries.length - filepaths.length;
-    if (skippedAudioCount > 0) {
+    if (mismatched > 0) {
       logger.info(
-        { playlist_id: playlist.playlist_id, serverType, skippedAudioCount },
-        `Playlist "${playlist.title}" mixes video and audio-only items; syncing the video items only (media servers cannot mix types in one playlist)`
+        { playlist_id: playlist.playlist_id, serverType, mediaType, mismatched },
+        `Playlist "${playlist.title}" has ${mismatched} downloaded item(s) with no ${mediaType === 'audio' ? 'mp3' : 'video'} file; leaving them out (the playlist's Download Type setting makes this a ${mediaType} playlist, and media servers cannot mix types)`
       );
     }
 
@@ -126,10 +129,10 @@ class MediaServerSync {
 
     const resolvedByPath = await this._resolveAllWithBackoff(
       adapter,
-      filepaths.map((entry) => entry.filePath)
+      entries.map((entry) => entry.filePath)
     );
     const itemIds = [];
-    for (const entry of filepaths) {
+    for (const entry of entries) {
       const id = resolvedByPath.get(entry.filePath);
       if (id) itemIds.push(id);
       else logger.warn(
@@ -143,12 +146,17 @@ class MediaServerSync {
       where: { playlist_id: playlist.id, server_type: serverType },
     });
 
-    // Skip create when no items resolved. Plex/Jellyfin/Emby reject empty playlist creation,
-    // and the normal flow (subscribe → videos download later → post-download hook re-syncs)
-    // will create the playlist on the next sync once items exist.
-    if (!state?.server_playlist_id && itemIds.length === 0) {
-      const reason = filepaths.length === 0
-        ? 'no downloaded items resolved yet'
+    // With zero resolved items, the only case that proceeds is a deliberately
+    // emptied playlist (every video ignored/removed) with an existing server
+    // playlist to empty. Everything else defers: the servers reject empty
+    // playlist creation, and replacing an existing playlist with nothing would
+    // wipe it over a transient condition (scan lag, or downloads that don't
+    // match a just-changed Download Type).
+    if (itemIds.length === 0 && !(state?.server_playlist_id && videos.length === 0)) {
+      const reason = entries.length === 0
+        ? mismatched > 0
+          ? `none of the downloaded items has a ${mediaType === 'audio' ? 'mp3' : 'video'} file matching the playlist's Download Type`
+          : 'no downloaded items resolved yet'
         : mediaType === 'audio'
           ? 'downloaded audio files were not found on the server. Audio playlists need a music-type library that includes the Youtarr output folder'
           : 'downloaded files were not found on the server yet';

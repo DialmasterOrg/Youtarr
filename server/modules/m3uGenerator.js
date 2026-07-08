@@ -36,12 +36,17 @@ class M3uGenerator {
       const fileName = sanitizeNameLikeYtDlp(title) + '.m3u';
       const m3uPath = path.join(m3uDir, fileName);
 
+      // One entry per item: MP3 Only playlists prefer the mp3, everything else
+      // the video, falling back to the other file so nothing is dropped.
+      const preferAudio = playlist.audio_format === 'mp3_only';
+
       const lines = ['#EXTM3U', `#PLAYLIST:${title}`];
       let included = 0;
       for (const pv of videos) {
         const video = await Video.findOne({ where: { youtubeId: pv.youtube_id } });
-        // Audio-only downloads store their path in audioFilePath; filePath stays null.
-        const mediaPath = video && (video.filePath || video.audioFilePath);
+        const mediaPath = video && (preferAudio
+          ? (video.audioFilePath || video.filePath)
+          : (video.filePath || video.audioFilePath));
         if (!mediaPath) {
           logger.debug({ youtube_id: pv.youtube_id }, 'M3U: skipping un-downloaded video');
           continue;

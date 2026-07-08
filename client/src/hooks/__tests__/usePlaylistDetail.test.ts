@@ -122,6 +122,36 @@ describe('usePlaylistDetail.notDownloadedCount', () => {
     });
     expect(result.current.notDownloadedCount).toBeNull();
   });
+
+  test('exposes unsyncableCount from the playlist response, null when absent', async () => {
+    axios.get.mockImplementation((url: string) => {
+      if (url.endsWith('/videos')) {
+        return Promise.resolve({ data: { total: 0, videos: [] } });
+      }
+      return Promise.resolve({
+        data: { playlist: { playlist_id: 'PL1' }, unsyncable_count: 3 },
+      });
+    });
+
+    const { result } = renderHook(() =>
+      usePlaylistDetail({ token: 't', playlistId: 'PL1' })
+    );
+
+    await waitFor(() => {
+      expect(result.current.unsyncableCount).toBe(3);
+    });
+
+    axios.get.mockImplementation((url: string) => {
+      if (url.endsWith('/videos')) {
+        return Promise.resolve({ data: { total: 0, videos: [] } });
+      }
+      return Promise.resolve({ data: { playlist: { playlist_id: 'PL1' } } });
+    });
+    await act(async () => {
+      await result.current.refetchMeta();
+    });
+    expect(result.current.unsyncableCount).toBeNull();
+  });
 });
 
 const makeVideo = (id: number, overrides = {}) => ({

@@ -56,4 +56,12 @@ describe('LibraryDownloadsGroup', () => {
     expect(screen.getByRole('button', { name: /Refresh from YouTube/i })).not.toBeDisabled();
     expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
   });
+
+  test('opens playlist settings from the Playlist settings button', async () => {
+    const user = userEvent.setup();
+    const onOpenSettings = jest.fn();
+    render(<LibraryDownloadsGroup {...baseProps} onOpenSettings={onOpenSettings} />);
+    await user.click(screen.getByRole('button', { name: /Playlist settings/i }));
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+  });
 });
