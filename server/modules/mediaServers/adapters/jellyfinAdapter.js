@@ -50,10 +50,12 @@ class JellyfinAdapter extends BaseAdapter {
     // Match by filename across different mount views (supports Windows paths
     // via extractBasename which splits on both / and \).
     const target = extractBasename(filepath);
+    // Audio-only downloads are Audio items on the server, not Video.
+    const isAudio = /\.mp3$/i.test(target);
     try {
       const params = {
         userId: this.userId,
-        includeItemTypes: 'Video,Movie,Episode',
+        includeItemTypes: isAudio ? 'Audio' : 'Video,Movie,Episode',
         recursive: true,
         fields: 'Path',
       };
@@ -68,25 +70,12 @@ class JellyfinAdapter extends BaseAdapter {
     }
   }
 
-  async getPlaylistByName(name) {
-    try {
-      const params = { userId: this.userId, includeItemTypes: 'Playlist', recursive: true };
-      const res = await axios.get(`${this.url}/Items`, { headers: this._headers(), params, timeout: REQUEST_TIMEOUT_MS });
-      const items = res.data?.Items || [];
-      const found = items.find((i) => i.Name === name);
-      return found ? { id: found.Id, itemIds: [] } : null;
-    } catch (err) {
-      logger.warn({ ...describeHttpError(err) }, 'jellyfin: could not list playlists');
-      return null;
-    }
-  }
-
   async createPlaylist(name, itemIds, opts = {}) {
     const body = {
       Name: name,
       Ids: itemIds,
       UserId: this.userId,
-      MediaType: 'Video',
+      MediaType: opts.mediaType === 'audio' ? 'Audio' : 'Video',
       IsPublic: !!opts.public,
     };
     const res = await axios.post(`${this.url}/Playlists`, body, { headers: this._headers(), timeout: REQUEST_TIMEOUT_MS });
@@ -108,7 +97,7 @@ class JellyfinAdapter extends BaseAdapter {
       const status = err.response?.status;
       logger.warn({ status, playlistId }, 'jellyfin replacePlaylistItems: delete failed, creating fresh');
     }
-    return this.createPlaylist(opts.name, itemIds, { public: !!opts.public });
+    return this.createPlaylist(opts.name, itemIds, { public: !!opts.public, mediaType: opts.mediaType });
   }
 }
 

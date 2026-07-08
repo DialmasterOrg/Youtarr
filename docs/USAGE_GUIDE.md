@@ -189,7 +189,7 @@ Open a playlist to manage it:
 - **Public on media servers**: makes the playlist visible to other users on Jellyfin and Emby. Plex playlists are always created under one account and shared manually, so this setting doesn't affect Plex.
 - **Sync now** and **Rebuild .m3u file**: push the current state to your servers or regenerate the `.m3u` on demand. Sync runs in the background and can take a minute or two while your media server's library scan finishes.
 
-In the video list you can sort newest- or oldest-first, ignore videos you don't want, and select specific videos to download with **Download Selected**.
+In the video list you can sort newest- or oldest-first, filter by download state with the **Show** control (All videos / Downloaded / Not downloaded), ignore videos you don't want, and select specific videos to download with **Download Selected**. Videos whose file was deleted after downloading count as not downloaded.
 
 ### Playlist files (.m3u)
 
@@ -198,6 +198,8 @@ For every playlist you subscribe to, Youtarr writes a `.m3u` file into a `__play
 ### Syncing to Plex, Jellyfin, and Emby
 
 Connect a media server under Settings first, then turn on sync for the playlists you want. A video has to be in your media server's library before it can be added to the synced playlist, so a fresh download might take a scan cycle to show up.
+
+Playlists downloaded as **MP3 Only** sync as music playlists; your server needs a music-type library that includes the Youtarr output directory. See [Audio-only playlists](MEDIA_SERVER_PLAYLISTS.md#audio-only-playlists).
 
 For per-server setup (API keys, user IDs, the Plex playlist visibility scope), the public/private model, and how Youtarr handles playlist changes, see [Media Server Playlists](MEDIA_SERVER_PLAYLISTS.md).
 

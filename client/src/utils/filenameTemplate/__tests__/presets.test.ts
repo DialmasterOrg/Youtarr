@@ -15,7 +15,7 @@ describe('FILENAME_PRESETS', () => {
     expect(FILENAME_PRESETS[0].prefix).toBe(DEFAULT_PRESET_PREFIX);
   });
 
-  it('default prefix is the legacy template prefix', () => {
-    expect(DEFAULT_PRESET_PREFIX).toBe('%(uploader,channel,uploader_id).80B - %(title).76B');
+  it('default prefix caps the title at 64 bytes', () => {
+    expect(DEFAULT_PRESET_PREFIX).toBe('%(uploader,channel,uploader_id).80B - %(title).64B');
   });
 });

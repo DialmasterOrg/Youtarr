@@ -177,4 +177,36 @@ describe('EmbyAdapter', () => {
     expect(data).not.toHaveProperty('config');
     expect(JSON.stringify(logger.warn.mock.calls)).not.toContain('SUPER_SECRET_TOKEN');
   });
+
+  test('resolveItemIdByFilepath uses Audio item types for mp3 files', async () => {
+    axios.get.mockResolvedValueOnce({
+      data: { Items: [{ Id: 'T1', Path: '/mnt/media/ChanA/Song [aud1].mp3' }] },
+    });
+    const adapter = new EmbyAdapter(cfg);
+    const id = await adapter.resolveItemIdByFilepath('/youtube/ChanA/Song [aud1].mp3');
+    expect(id).toBe('T1');
+    expect(axios.get.mock.calls[0][1].params.includeItemTypes).toBe('Audio');
+  });
+
+  test('resolveItemIdByFilepath keeps video item types for non-mp3 files', async () => {
+    axios.get.mockResolvedValueOnce({ data: { Items: [] } });
+    const adapter = new EmbyAdapter(cfg);
+    await adapter.resolveItemIdByFilepath('/youtube/ChanA/Video [v1].mp4');
+    expect(axios.get.mock.calls[0][1].params.includeItemTypes).toBe('Video,Movie,Episode');
+  });
+
+  test('createPlaylist with mediaType audio sends MediaType Audio', async () => {
+    axios.post.mockResolvedValueOnce({ data: { Id: 'pl1' } });
+    const adapter = new EmbyAdapter(cfg);
+    await adapter.createPlaylist('YT: Audio PL', ['T1'], { public: false, mediaType: 'audio' });
+    expect(axios.post.mock.calls[0][2].params.MediaType).toBe('Audio');
+  });
+
+  test('replacePlaylistItems recreates with the given mediaType', async () => {
+    axios.delete.mockResolvedValueOnce({});
+    axios.post.mockResolvedValueOnce({ data: { Id: 'new-id' } });
+    const adapter = new EmbyAdapter(cfg);
+    await adapter.replacePlaylistItems('old-id', ['T1'], { name: 'YT: Audio PL', public: false, mediaType: 'audio' });
+    expect(axios.post.mock.calls[0][2].params.MediaType).toBe('Audio');
+  });
 });

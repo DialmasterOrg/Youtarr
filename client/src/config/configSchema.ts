@@ -32,7 +32,7 @@ export const CONFIG_FIELDS = {
   videoCodec: { default: 'default', trackChanges: true },
   defaultSubfolder: { default: '', trackChanges: true },
   videoFilenamePrefix: {
-    default: '%(uploader,channel,uploader_id).80B - %(title).76B',
+    default: '%(uploader,channel,uploader_id).80B - %(title).64B',
     trackChanges: true,
   },
 

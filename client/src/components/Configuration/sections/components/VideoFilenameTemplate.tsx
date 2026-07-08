@@ -220,7 +220,7 @@ export const VideoFilenameTemplate: React.FC<VideoFilenameTemplateProps> = ({
           </span>{' '}
           can produce arbitrarily long filenames depending on the video. Consider{' '}
           <span className="font-mono px-1 py-0.5 rounded text-xs bg-muted">
-            %(title).76B
+            %(title).64B
           </span>
           .
         </Typography>
@@ -234,11 +234,11 @@ export const VideoFilenameTemplate: React.FC<VideoFilenameTemplateProps> = ({
         >
           Title byte truncation above{' '}
           <span className="font-mono px-1 py-0.5 rounded text-xs bg-muted">
-            .76B
+            .64B
           </span>{' '}
           is not recommended. Larger values can push full paths past Windows{'’'} 260-character limit, especially with deep subfolders or non-ASCII channel names. Stick with{' '}
           <span className="font-mono px-1 py-0.5 rounded text-xs bg-muted">
-            %(title).76B
+            %(title).64B
           </span>{' '}
           or smaller.
         </Typography>

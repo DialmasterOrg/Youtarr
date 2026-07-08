@@ -55,9 +55,15 @@ const MediaServerSyncGroup: React.FC<MediaServerSyncGroupProps> = ({
               Pick which connected servers show this playlist. Only servers connected in
               Settings can be toggled.
             </p>
-            <p>
+            <p className="mb-2">
               Youtarr re-syncs after each download and when you Refresh from YouTube. After
               changing these settings, use Sync now to apply them right away.
+            </p>
+            <p>
+              Playlists downloaded as MP3 Only sync as music playlists: the server needs a
+              music-type library that includes the Youtarr output folder (a video library and
+              a music library can point at the same folder). Video + MP3 playlists sync the
+              videos only.
             </p>
           </div>
         </InfoHint>

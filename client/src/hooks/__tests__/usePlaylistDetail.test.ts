@@ -182,6 +182,63 @@ describe('usePlaylistDetail sorting and pagination', () => {
     });
   });
 
+  test('forwards downloadState when it is not "all"', async () => {
+    axios.get.mockResolvedValue({ data: { playlist: { playlist_id: 'PL1' }, total: 0, videos: [] } });
+
+    renderHook(() =>
+      usePlaylistDetail({ token: 't', playlistId: 'PL1', downloadState: 'downloaded' })
+    );
+
+    await waitFor(() => {
+      expect(axios.get).toHaveBeenCalledWith(
+        '/api/playlists/PL1/videos',
+        expect.objectContaining({
+          params: expect.objectContaining({ page: 1, downloadState: 'downloaded' }),
+        })
+      );
+    });
+  });
+
+  test('omits downloadState from params when it is "all" (default)', async () => {
+    axios.get.mockResolvedValue({ data: { playlist: { playlist_id: 'PL1' }, total: 0, videos: [] } });
+
+    renderHook(() => usePlaylistDetail({ token: 't', playlistId: 'PL1' }));
+
+    await waitFor(() => {
+      expect(axios.get).toHaveBeenCalledWith(
+        '/api/playlists/PL1/videos',
+        expect.objectContaining({
+          params: expect.not.objectContaining({ downloadState: expect.anything() }),
+        })
+      );
+    });
+  });
+
+  test('changing downloadState refetches page 1 with the new filter', async () => {
+    axios.get.mockResolvedValue({ data: { playlist: { playlist_id: 'PL1' }, total: 0, videos: [] } });
+
+    const { rerender } = renderHook(
+      ({ downloadState }: { downloadState: 'all' | 'downloaded' | 'not_downloaded' }) =>
+        usePlaylistDetail({ token: 't', playlistId: 'PL1', downloadState }),
+      { initialProps: { downloadState: 'all' as 'all' | 'downloaded' | 'not_downloaded' } }
+    );
+
+    await waitFor(() => expect(axios.get).toHaveBeenCalled());
+    axios.get.mockClear();
+    axios.get.mockResolvedValue({ data: { playlist: { playlist_id: 'PL1' }, total: 0, videos: [] } });
+
+    rerender({ downloadState: 'not_downloaded' });
+
+    await waitFor(() => {
+      expect(axios.get).toHaveBeenCalledWith(
+        '/api/playlists/PL1/videos',
+        expect.objectContaining({
+          params: expect.objectContaining({ page: 1, downloadState: 'not_downloaded' }),
+        })
+      );
+    });
+  });
+
   test('loadMore appends the next page and dedupes by id', async () => {
     axios.get.mockImplementation((url: string, config?: { params?: { page?: number } }) => {
       if (url.endsWith('/videos')) {
