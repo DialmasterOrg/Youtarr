@@ -71,17 +71,26 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       });
       const candidateIds = candidates.map((c) => c.youtube_id).filter(Boolean);
       let downloadedExisting = 0;
+      // Downloads lacking the file type the playlist syncs as (its Download
+      // Type setting: mp3 for MP3 Only playlists, video otherwise). Media
+      // server sync leaves these out; the count feeds the UI notice.
+      let unsyncable_count = 0;
       if (candidateIds.length > 0 && Video) {
         const existing = await Video.findAll({
           where: { youtubeId: candidateIds },
-          attributes: ['youtubeId'],
+          attributes: ['youtubeId', 'filePath', 'audioFilePath'],
         });
         const existingIds = new Set(existing.map((v) => v.youtubeId));
         downloadedExisting = candidateIds.filter((id) => existingIds.has(id)).length;
+        const targetsAudio = p.audio_format === 'mp3_only';
+        unsyncable_count = existing.filter((v) => {
+          const matching = targetsAudio ? v.audioFilePath : v.filePath;
+          return !matching && (v.filePath || v.audioFilePath);
+        }).length;
       }
       const not_downloaded_count = candidateIds.length - downloadedExisting;
 
-      res.json({ playlist: p, not_downloaded_count });
+      res.json({ playlist: p, not_downloaded_count, unsyncable_count });
     } catch (err) {
       req.log.error({ err }, 'GET /api/playlists/:playlistId failed');
       res.status(500).json({ error: 'Failed to fetch playlist' });

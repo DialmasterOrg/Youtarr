@@ -95,6 +95,11 @@ describe('PlaylistSettingsDialog', () => {
     };
   });
 
+  test('titles the dialog Playlist Settings', () => {
+    setupDialog();
+    expect(screen.getByText('Playlist Settings')).toBeInTheDocument();
+  });
+
   test('renders dropdowns seeded from the playlist values', () => {
     setupDialog();
     expect(screen.getByLabelText('Video Quality')).toHaveTextContent('720p (HD)');
@@ -176,5 +181,36 @@ describe('PlaylistSettingsDialog', () => {
     mockMutationsReturn.error = 'Failed to update settings';
     setupDialog();
     expect(screen.getByText('Failed to update settings')).toBeInTheDocument();
+  });
+
+  test('warns that the synced playlist becomes a music playlist when switching to MP3 Only', async () => {
+    setupDialog();
+
+    fireEvent.mouseDown(screen.getByLabelText('Download Type'));
+    fireEvent.click(await screen.findByRole('option', { name: 'MP3 Only' }));
+
+    expect(
+      screen.getByText(/replace the synced video playlist with a music playlist/i)
+    ).toBeInTheDocument();
+  });
+
+  test('warns that the synced playlist becomes a video playlist when leaving MP3 Only', async () => {
+    setupDialog({ playlist: { ...basePlaylist, audio_format: 'mp3_only' } });
+
+    fireEvent.mouseDown(screen.getByLabelText('Download Type'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Video + MP3' }));
+
+    expect(
+      screen.getByText(/replace the synced music playlist with a video playlist/i)
+    ).toBeInTheDocument();
+  });
+
+  test('shows no sync-type warning when the change stays within video types', async () => {
+    setupDialog();
+
+    fireEvent.mouseDown(screen.getByLabelText('Download Type'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Video + MP3' }));
+
+    expect(screen.queryByText(/replace the synced/i)).not.toBeInTheDocument();
   });
 });

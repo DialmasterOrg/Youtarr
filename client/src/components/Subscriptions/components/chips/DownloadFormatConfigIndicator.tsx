@@ -17,6 +17,8 @@ const DownloadFormatConfigIndicator: React.FC<DownloadFormatConfigIndicatorProps
 
   if (!showAudio) return null;
 
+  const label = audioFormat === 'mp3_only' ? 'MP3 only downloads' : 'Video + MP3 downloads';
+
   return (
     <div
       style={{
@@ -25,8 +27,10 @@ const DownloadFormatConfigIndicator: React.FC<DownloadFormatConfigIndicatorProps
         gap: 2,
       }}
       data-testid="download-format-config-indicator"
+      role="img"
+      aria-label={label}
     >
-      <Tooltip title="MP3 downloads" arrow placement="top" enterTouchDelay={0}>
+      <Tooltip title={label} arrow placement="top" enterTouchDelay={0}>
         <AudioIcon
           data-testid="audio-format-icon"
           size={16}

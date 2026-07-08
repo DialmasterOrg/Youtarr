@@ -27,6 +27,9 @@ interface UsePlaylistDetailParams {
 interface PlaylistDetailResponse {
   playlist: Playlist;
   not_downloaded_count?: number;
+  // Downloaded items lacking the file type the playlist syncs as (mp3 for
+  // MP3 Only playlists, video otherwise); media server sync leaves them out.
+  unsyncable_count?: number;
 }
 
 interface PlaylistVideosResponse {
@@ -60,6 +63,7 @@ export const usePlaylistDetail = ({
   const [videos, setVideos] = useState<PlaylistVideo[]>([]);
   const [videoTotal, setVideoTotal] = useState(0);
   const [notDownloadedCount, setNotDownloadedCount] = useState<number | null>(null);
+  const [unsyncableCount, setUnsyncableCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(!!(token && playlistId));
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,6 +79,7 @@ export const usePlaylistDetail = ({
       setVideos([]);
       setVideoTotal(0);
       setNotDownloadedCount(null);
+      setUnsyncableCount(null);
       setLoading(false);
       setError(null);
       return;
@@ -101,6 +106,11 @@ export const usePlaylistDetail = ({
       setNotDownloadedCount(
         typeof playlistRes.data.not_downloaded_count === 'number'
           ? playlistRes.data.not_downloaded_count
+          : null
+      );
+      setUnsyncableCount(
+        typeof playlistRes.data.unsyncable_count === 'number'
+          ? playlistRes.data.unsyncable_count
           : null
       );
       setVideos(videosRes.data.videos || []);
@@ -169,6 +179,11 @@ export const usePlaylistDetail = ({
       setNotDownloadedCount(
         typeof res.data.not_downloaded_count === 'number'
           ? res.data.not_downloaded_count
+          : null
+      );
+      setUnsyncableCount(
+        typeof res.data.unsyncable_count === 'number'
+          ? res.data.unsyncable_count
           : null
       );
     } catch {
@@ -247,6 +262,7 @@ export const usePlaylistDetail = ({
     videos,
     videoTotal,
     notDownloadedCount,
+    unsyncableCount,
     loading,
     loadingMore,
     hasMore,

@@ -258,6 +258,59 @@ describe('GET /api/playlists/:playlistId not_downloaded_count', () => {
   });
 });
 
+describe('GET /api/playlists/:playlistId unsyncable_count', () => {
+  test('counts downloads without a video file on a video-type playlist', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(makePlaylist({ audio_format: null }));
+    deps.models.PlaylistVideo.findAll.mockResolvedValue([
+      { youtube_id: 'a' },
+      { youtube_id: 'b' },
+      { youtube_id: 'c' },
+    ]);
+    deps.models.Video.findAll.mockResolvedValue([
+      // Downloaded as mp3-only: no video file to sync.
+      { youtubeId: 'a', filePath: null, audioFilePath: '/y/a.mp3' },
+      { youtubeId: 'b', filePath: '/y/b.mp4', audioFilePath: null },
+      // 'c' has no Video row: counted as not downloaded, not as unsyncable.
+    ]);
+
+    const handler = getHandler('get', '/api/playlists/:playlistId', deps);
+    const req = { params: { playlistId: 'PLtest123' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ not_downloaded_count: 1, unsyncable_count: 1 })
+    );
+  });
+
+  test('counts downloads without an mp3 on an MP3 Only playlist', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(makePlaylist({ audio_format: 'mp3_only' }));
+    deps.models.PlaylistVideo.findAll.mockResolvedValue([
+      { youtube_id: 'a' },
+      { youtube_id: 'b' },
+    ]);
+    deps.models.Video.findAll.mockResolvedValue([
+      // Manually downloaded as video-only: no mp3 to sync.
+      { youtubeId: 'a', filePath: '/y/a.mp4', audioFilePath: null },
+      // Video + MP3 download: its mp3 syncs fine.
+      { youtubeId: 'b', filePath: '/y/b.mp4', audioFilePath: '/y/b.mp3' },
+    ]);
+
+    const handler = getHandler('get', '/api/playlists/:playlistId', deps);
+    const req = { params: { playlistId: 'PLtest123' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ unsyncable_count: 1 })
+    );
+  });
+});
+
 describe('POST /api/playlists/addplaylistinfo', () => {
   test('returns playlist info on success', async () => {
     const deps = buildDeps();

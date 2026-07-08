@@ -8,6 +8,7 @@ import {
 } from '../../ui';
 import { Download as DownloadIcon, Delete as DeleteIcon } from '../../../lib/icons';
 import { Playlist } from '../../../types/playlist';
+import { DownloadFormatConfigIndicator } from './chips';
 
 interface PlaylistListBlockProps {
   playlists: Playlist[];
@@ -71,6 +72,7 @@ const PlaylistListBlock: React.FC<PlaylistListBlockProps> = ({ playlists, loadin
                   {p.uploader || '-'} • {p.video_count} videos
                 </Typography>
               </div>
+              <DownloadFormatConfigIndicator audioFormat={p.audio_format} />
               <Tooltip
                 title={
                   p.auto_download

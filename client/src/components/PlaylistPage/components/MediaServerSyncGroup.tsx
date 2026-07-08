@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Alert,
   Box,
   Button,
   FormControlLabel,
@@ -24,6 +25,9 @@ interface MediaServerSyncGroupProps {
   onRegenerateM3U: () => void;
   anyConfigured: boolean;
   actionRunning: boolean;
+  // Downloaded items with no file of the playlist's sync type (mp3 for MP3
+  // Only playlists, video otherwise); sync leaves them out.
+  unsyncableCount?: number | null;
 }
 
 const MediaServerSyncGroup: React.FC<MediaServerSyncGroupProps> = ({
@@ -37,8 +41,15 @@ const MediaServerSyncGroup: React.FC<MediaServerSyncGroupProps> = ({
   onRegenerateM3U,
   anyConfigured,
   actionRunning,
+  unsyncableCount,
 }) => {
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const isAudioPlaylist = playlist.audio_format === 'mp3_only';
+  // The mismatch notice is noise unless the playlist actually syncs somewhere.
+  const syncsSomewhere =
+    (serverStatus.plex && playlist.sync_to_plex) ||
+    (serverStatus.jellyfin && playlist.sync_to_jellyfin) ||
+    (serverStatus.emby && playlist.sync_to_emby);
 
   return (
     <Box
@@ -60,10 +71,11 @@ const MediaServerSyncGroup: React.FC<MediaServerSyncGroupProps> = ({
               changing these settings, use Sync now to apply them right away.
             </p>
             <p>
-              Playlists downloaded as MP3 Only sync as music playlists: the server needs a
-              music-type library that includes the Youtarr output folder (a video library and
-              a music library can point at the same folder). Video + MP3 playlists sync the
-              videos only.
+              The playlist&apos;s Download Type setting decides how it syncs: MP3 Only
+              playlists sync as music playlists (the server needs a music-type library that
+              includes your Youtarr output folder; a video library and a music library can
+              point at the same folder), everything else syncs as a video playlist. Items
+              downloaded without a file of that type are left out.
             </p>
           </div>
         </InfoHint>
@@ -77,6 +89,17 @@ const MediaServerSyncGroup: React.FC<MediaServerSyncGroupProps> = ({
           disabled={togglePending}
         />
       </div>
+
+      {typeof unsyncableCount === 'number' && unsyncableCount > 0 && syncsSomewhere && (
+        <Alert severity="warning">
+          <Typography variant="body2">
+            {unsyncableCount} downloaded {unsyncableCount === 1 ? 'item has' : 'items have'} no{' '}
+            {isAudioPlaylist ? 'MP3' : 'video'} file, so {unsyncableCount === 1 ? 'it' : 'they'}{' '}
+            won&apos;t appear in synced playlists. The Download Type setting decides whether this
+            playlist syncs as a {isAudioPlaylist ? 'music' : 'video'} playlist.
+          </Typography>
+        </Alert>
+      )}
 
       <div className="flex items-center gap-2">
         <FormControlLabel

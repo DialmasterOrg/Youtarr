@@ -586,6 +586,7 @@ For how playlist sync works across Plex, Jellyfin, and Emby, see [Media Server P
 1. Confirm the videos are actually downloaded. Youtarr only adds videos that exist on disk; a video still showing as "Tracked" on the playlist page hasn't downloaded yet.
 2. A video has to be indexed in your media server's library before it can be added. Trigger a library scan and use **Sync now** on the playlist page.
 3. Check that the video isn't marked **Ignored** on the playlist page.
+4. Check the item's format matches the playlist's **Download Type**: an MP3 Only playlist syncs only items that have an mp3, and a video playlist syncs only items with a video file, so items downloaded in the other format (for example via a per-video override) are left out. The playlist page shows a notice with the count of affected items; see [Switching a playlist's download type](MEDIA_SERVER_PLAYLISTS.md#switching-a-playlists-download-type).
 
 ### Playlist Not Created on Jellyfin or Emby
 

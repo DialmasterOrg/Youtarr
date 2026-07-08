@@ -101,7 +101,7 @@ const LibraryDownloadsGroup: React.FC<LibraryDownloadsGroupProps> = ({
 
       <div>
         <Button variant="outlined" size="sm" onClick={onOpenSettings} disabled={actionRunning}>
-          Download settings
+          Playlist settings
         </Button>
       </div>
     </Box>

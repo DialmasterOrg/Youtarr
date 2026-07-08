@@ -76,6 +76,13 @@ const PlaylistSettingsDialog: React.FC<PlaylistSettingsDialogProps> = ({
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
+  // Media-server playlists are typed by the Download Type setting (MP3 Only =
+  // music playlist, anything else = video playlist), so crossing that boundary
+  // replaces the synced playlist on the next sync. Warn before saving.
+  const wasAudio = playlist.audio_format === 'mp3_only';
+  const willBeAudio = form.audio_format === 'mp3_only';
+  const syncTypeChanges = wasAudio !== willBeAudio;
+
   const handleSave = async () => {
     const settings: PlaylistSubscribeSettings = {
       default_sub_folder: form.default_sub_folder,
@@ -92,7 +99,7 @@ const PlaylistSettingsDialog: React.FC<PlaylistSettingsDialogProps> = ({
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
-      <DialogTitle>Playlist Download Settings</DialogTitle>
+      <DialogTitle>Playlist Settings</DialogTitle>
       <DialogContent>
         <div className="flex flex-col gap-4 mt-2">
           {error && <Alert severity="error">{error}</Alert>}
@@ -101,7 +108,8 @@ const PlaylistSettingsDialog: React.FC<PlaylistSettingsDialogProps> = ({
             <Typography variant="body2">
               Defaults for videos downloaded from this playlist. A video&apos;s own channel
               settings take precedence; these apply when the channel has no override. They also
-              seed new channels auto-created from this playlist.
+              seed new channels auto-created from this playlist. The Download Type additionally
+              decides whether this playlist syncs to media servers as a video or music playlist.
             </Typography>
           </Alert>
 
@@ -151,6 +159,17 @@ const PlaylistSettingsDialog: React.FC<PlaylistSettingsDialogProps> = ({
                   : undefined
               }
             />
+            {syncTypeChanges && (
+              <div className="mt-2">
+                <Alert severity="warning">
+                  <Typography variant="body2">
+                    {willBeAudio
+                      ? 'On the next sync, media servers will replace the synced video playlist with a music playlist. Items downloaded as video without an MP3 will not appear in it; existing downloads are never converted or re-downloaded.'
+                      : 'On the next sync, media servers will replace the synced music playlist with a video playlist. Items downloaded as MP3 only will not appear in it; existing downloads are never converted or re-downloaded.'}
+                  </Typography>
+                </Alert>
+              </div>
+            )}
           </div>
 
           <Divider />

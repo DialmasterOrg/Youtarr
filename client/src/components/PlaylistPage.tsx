@@ -86,6 +86,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     playlist,
     videos,
     notDownloadedCount,
+    unsyncableCount,
     loading,
     loadingMore,
     hasMore,
@@ -383,6 +384,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
         serverStatus={serverStatus}
         anyConfigured={anyConfigured}
         newCount={notDownloadedCount}
+        unsyncableCount={unsyncableCount}
         togglePending={pending}
         actionRunning={actionRunning}
         refreshing={runningAction === 'Refresh'}

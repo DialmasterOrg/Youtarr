@@ -184,7 +184,7 @@ Open a playlist to manage it:
 - **Refresh from YouTube**: re-fetches the live playlist, updates the video list, then re-syncs and rewrites the `.m3u`. It doesn't download anything.
 - **Download new**: downloads every tracked video you don't already have. A settings dialog lets you confirm resolution and other options first.
 - **Auto-download new videos**: turn this on and Youtarr keeps the playlist current on your regular download schedule (see [Configure Automation](#configure-automation)).
-- **Download settings**: set a subfolder, resolution, download type, and default rating for this playlist. A video's own channel settings take precedence; these apply when the channel has no override.
+- **Playlist settings**: set a subfolder, resolution, download type, and default rating for this playlist. A video's own channel settings take precedence; these apply when the channel has no override. The download type also decides whether the playlist syncs to media servers as a video or music playlist (see [Switching a playlist's download type](MEDIA_SERVER_PLAYLISTS.md#switching-a-playlists-download-type)).
 - **Sync chips**: one per media server. Click to enable or disable sync for that server, or click an unconfigured server to jump to its settings.
 - **Public on media servers**: makes the playlist visible to other users on Jellyfin and Emby. Plex playlists are always created under one account and shared manually, so this setting doesn't affect Plex.
 - **Sync now** and **Rebuild .m3u file**: push the current state to your servers or regenerate the `.m3u` on demand. Sync runs in the background and can take a minute or two while your media server's library scan finishes.
@@ -193,13 +193,13 @@ In the video list you can sort newest- or oldest-first, filter by download state
 
 ### Playlist files (.m3u)
 
-For every playlist you subscribe to, Youtarr writes a `.m3u` file into a `__playlists__` folder next to your videos. It uses relative paths, so it keeps working if you move your library, and it's written whether or not you've connected a media server. The file lists the videos you've actually downloaded, in playlist order. Any player that reads `.m3u` (VLC, mpv, Kodi, and most media servers) can open it.
+For every playlist you subscribe to, Youtarr writes a `.m3u` file into a `__playlists__` folder next to your videos. It uses relative paths, so it keeps working if you move your library, and it's written whether or not you've connected a media server. The file lists every item you've actually downloaded, in playlist order: one entry each, using the file that matches the playlist's Download Type (the MP3 for MP3 Only playlists, the video file otherwise) and falling back to the other format so nothing is dropped. Any player that reads `.m3u` (VLC, mpv, Kodi, and most media servers) can open it.
 
 ### Syncing to Plex, Jellyfin, and Emby
 
 Connect a media server under Settings first, then turn on sync for the playlists you want. A video has to be in your media server's library before it can be added to the synced playlist, so a fresh download might take a scan cycle to show up.
 
-Playlists downloaded as **MP3 Only** sync as music playlists; your server needs a music-type library that includes the Youtarr output directory. See [Audio-only playlists](MEDIA_SERVER_PLAYLISTS.md#audio-only-playlists).
+Playlists set to **MP3 Only** sync as music playlists; your server needs a music-type library that includes the Youtarr output directory. The playlist's Download Type setting decides its media-server playlist type, so changing it later switches the synced playlist too. See [Audio-only playlists](MEDIA_SERVER_PLAYLISTS.md#audio-only-playlists) and [Switching a playlist's download type](MEDIA_SERVER_PLAYLISTS.md#switching-a-playlists-download-type).
 
 For per-server setup (API keys, user IDs, the Plex playlist visibility scope), the public/private model, and how Youtarr handles playlist changes, see [Media Server Playlists](MEDIA_SERVER_PLAYLISTS.md).
 
