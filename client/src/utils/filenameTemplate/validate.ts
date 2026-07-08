@@ -69,12 +69,11 @@ export function hasUntruncatedTitle(prefix: string): boolean {
   return /%\(title(?:[,|][^)]*)?\)s/.test(prefix) && !/%\(title[^)]*\.\d+B?\)s?/.test(prefix);
 }
 
-// 76 bytes is the validated-safe upper bound for the title token. yt-dlp's
-// channel template uses .80B and the locked suffix is 17 bytes; staying at .76B
-// keeps full paths within Windows' 260-char limit even for deep subfolders and
-// multi-byte titles. Past incidents (#404) showed character-based truncation
-// produced 200+ byte filenames in CJK locales - never widen this bound silently.
-export const RECOMMENDED_TITLE_BYTE_LIMIT = 76;
+// The prefix appears twice in the full path (per-video folder + filename),
+// so the title counts double, and Plex on Windows silently skips paths that
+// reach 260 chars. Byte truncation, not character: .Ns truncation produced
+// 200+ byte filenames in CJK locales. Never widen this bound silently.
+export const RECOMMENDED_TITLE_BYTE_LIMIT = 64;
 
 export function hasOversizedTitleTruncation(prefix: string): boolean {
   const matches = prefix.matchAll(/%\(title(?:[,|][^)]*)?\)\.(\d+)B/g);

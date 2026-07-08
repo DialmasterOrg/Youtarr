@@ -24,12 +24,9 @@ class PlexAdapter extends BaseAdapter {
     this.url = config.plexUrl;
     this.token = config.plexApiKey;
     this.libraryId = config.plexYoutubeLibraryId;
-    // Cache of video-bearing section ids to search when resolving a file to its
-    // server item. A playlist's videos can be scattered across libraries (e.g.
-    // channels writing to subfolders that the admin mapped to separate Plex
-    // libraries). Plex playlists accept ratingKeys from any section, so we search
-    // every video section. Populated lazily on first resolve. See _getVideoSectionIds.
-    this._videoSectionIds = null;
+    // Section ids to search when resolving files, split { video, music }.
+    // Populated lazily on first resolve; see _getSectionIds.
+    this._sectionIds = null;
     // Optional override for playlist-scoped operations. Useful when the admin
     // token belongs to a different Plex account than the one used by the Plex
     // Web session.
@@ -47,33 +44,36 @@ class PlexAdapter extends BaseAdapter {
     }
   }
 
-  // Distinct, ordered list of video-bearing library section ids to search,
-  // discovered from the Plex server itself (not from Youtarr config, which may
-  // not map every library). The configured YouTube library is placed first as
-  // the most likely location. Result is cached for the lifetime of the adapter
-  // instance (one sync). Falls back to the configured library if enumeration fails.
-  async _getVideoSectionIds() {
-    if (this._videoSectionIds) return this._videoSectionIds;
-    const ids = [];
-    const add = (id) => {
+  // Distinct, ordered lists of library section ids to search, discovered from
+  // the Plex server itself (not from Youtarr config, which may not map every
+  // library). video: 'movie' covers "Other Videos"/Personal Media libraries,
+  // 'show' covers TV-type ones. music: 'artist' covers Music libraries, which
+  // hold audio-only downloads. The configured YouTube library is placed first
+  // as the most likely location. Result is cached for the lifetime of the
+  // adapter instance (one sync). Falls back to the configured library if
+  // enumeration fails.
+  async _getSectionIds() {
+    if (this._sectionIds) return this._sectionIds;
+    const video = [];
+    const music = [];
+    const add = (list, id) => {
       if (id == null) return;
       const s = String(id).trim();
-      if (s && /^\d+$/.test(s) && !ids.includes(s)) ids.push(s);
+      if (s && /^\d+$/.test(s) && !video.includes(s) && !music.includes(s)) list.push(s);
     };
-    add(this.libraryId);
+    add(video, this.libraryId);
     try {
       const res = await axios.get(`${this.url}/library/sections`, { params: this._plParams(), timeout: REQUEST_TIMEOUT_MS });
       const dirs = res.data?.MediaContainer?.Directory || [];
       for (const dir of dirs) {
-        // Only video-bearing sections can hold downloaded videos: 'movie' covers
-        // "Other Videos"/Personal Media libraries; 'show' covers TV-type ones.
-        if (dir.type === 'movie' || dir.type === 'show') add(dir.key);
+        if (dir.type === 'movie' || dir.type === 'show') add(video, dir.key);
+        else if (dir.type === 'artist') add(music, dir.key);
       }
     } catch (err) {
       logger.warn({ ...describeHttpError(err) }, 'plex: could not enumerate library sections; searching configured library only');
     }
-    this._videoSectionIds = ids;
-    return ids;
+    this._sectionIds = { video, music };
+    return this._sectionIds;
   }
 
   // Build params for playlist-scoped requests. Conditionally omits X-Plex-Token
@@ -95,7 +95,19 @@ class PlexAdapter extends BaseAdapter {
 
   async listUsers() { return []; }
 
-  async triggerLibraryScan(subfolder) {
+  async triggerLibraryScan(subfolder, opts = {}) {
+    // Video sections are already scanned by the post-download refresh (see
+    // downloadCompletionEffects), so the subfolder delegation below stays a
+    // deliberate no-op when no subfolder is given. Music sections have no
+    // scan trigger anywhere else in Youtarr, so an audio sync must request
+    // one here or the mp3s stay unindexed until the user's own library
+    // settings happen to scan them.
+    if (opts.mediaType === 'audio') {
+      const sections = await this._getSectionIds();
+      // refreshLibrary logs and swallows its own errors; allSettled just
+      // guarantees one section can't abort the sync.
+      await Promise.allSettled(sections.music.map((id) => plexModule.refreshLibrary(id)));
+    }
     return plexModule.refreshLibrariesForSubfolders([subfolder].filter(Boolean));
   }
 
@@ -104,11 +116,12 @@ class PlexAdapter extends BaseAdapter {
     return resolved.get(filepath) || null;
   }
 
-  // Batch filepath resolution: one /all fetch per video section per call, not
-  // per file, so a whole playlist costs (sections) fetches instead of
-  // (sections x files). Listings are not cached across calls: the sync
-  // orchestrator polls this while a library scan is in flight and each round
-  // must observe freshly indexed items.
+  // Batch filepath resolution: one /all fetch per searched section per call,
+  // not per file, so a whole playlist costs (sections) fetches instead of
+  // (sections x files). Video sections are always searched; music only for
+  // mp3 batches. Listings are not cached across calls: the sync orchestrator
+  // polls this while a library scan is in flight and each round must observe
+  // freshly indexed items.
   //
   // Matching is by basename (mount views differ between Youtarr and Plex;
   // YouTube ids in filenames are globally unique). The same basename can match
@@ -123,11 +136,18 @@ class PlexAdapter extends BaseAdapter {
     // Candidate index over every section, restricted to the basenames we need.
     const wanted = new Set(targets.map(extractBasename));
     const candidatesByBasename = new Map(); // basename -> [{ ratingKey, segments }]
-    const sectionIds = await this._getVideoSectionIds();
-    for (const libraryId of sectionIds) {
+    const sections = await this._getSectionIds();
+    // Music sections must be queried with type=10 (tracks): the default /all
+    // for an 'artist' section returns artists, which carry no file paths.
+    const hasAudio = targets.some((p) => /\.mp3$/i.test(p));
+    const sources = [
+      ...sections.video.map((id) => ({ id, params: {} })),
+      ...(hasAudio ? sections.music.map((id) => ({ id, params: { type: 10 } })) : []),
+    ];
+    for (const { id: libraryId, params } of sources) {
       try {
         const res = await axios.get(`${this.url}/library/sections/${libraryId}/all`, {
-          params: this._plParams(),
+          params: this._plParams(params),
           timeout: REQUEST_TIMEOUT_MS,
         });
         const items = res.data?.MediaContainer?.Metadata || [];
@@ -164,25 +184,15 @@ class PlexAdapter extends BaseAdapter {
     return results;
   }
 
-  // Video playlists visible in the CURRENT scope (token / no-token). Throws on
-  // request failure so callers can distinguish "id genuinely absent from this
-  // scope" from "couldn't enumerate the scope".
-  async _listVideoPlaylists() {
+  // Playlists of the given media type visible in the CURRENT scope (token /
+  // no-token). Throws on request failure so callers can distinguish "id
+  // genuinely absent from this scope" from "couldn't enumerate the scope".
+  async _listPlaylists(mediaType) {
     const res = await axios.get(`${this.url}/playlists`, {
-      params: this._plParams({ playlistType: 'video' }),
+      params: this._plParams({ playlistType: mediaType === 'audio' ? 'audio' : 'video' }),
       timeout: REQUEST_TIMEOUT_MS,
     });
     return res.data?.MediaContainer?.Metadata || [];
-  }
-
-  async getPlaylistByName(name) {
-    try {
-      const found = (await this._listVideoPlaylists()).find((p) => p.title === name);
-      return found ? { id: found.ratingKey, itemIds: [] } : null;
-    } catch (err) {
-      logger.warn({ ...describeHttpError(err) }, 'plex: could not list playlists');
-      return null;
-    }
   }
 
   async _getMachineId() {
@@ -191,19 +201,21 @@ class PlexAdapter extends BaseAdapter {
     return res.data?.MediaContainer?.machineIdentifier;
   }
 
-  async createPlaylist(name, itemIds) {
+  async createPlaylist(name, itemIds, opts = {}) {
     const machineId = await this._getMachineId();
     const uri = `server://${machineId}/com.plexapp.plugins.library/library/metadata/${itemIds.join(',')}`;
     const res = await axios.post(`${this.url}/playlists`, null, {
-      params: this._plParams({ type: 'video', title: name, smart: 0, uri }),
+      params: this._plParams({ type: opts.mediaType === 'audio' ? 'audio' : 'video', title: name, smart: 0, uri }),
       timeout: REQUEST_TIMEOUT_MS,
     });
     return { id: res.data?.MediaContainer?.Metadata?.[0]?.ratingKey };
   }
 
-  // Best-effort removal of a playlist stranded in a DIFFERENT scope than the one
-  // currently configured (e.g. after switching plexPlaylistToken). The configured
-  // token can't see it, so we try each scope auth we know about (current,
+  // Best-effort removal of a playlist superseded by the relocate path: either
+  // stranded in a DIFFERENT scope than the one currently configured (e.g. after
+  // switching plexPlaylistToken), or left behind as the wrong media type after
+  // a flip. Deletion by direct id works regardless of playlist type, but the
+  // owning scope may differ, so we try each scope auth we know about (current,
   // anonymous, admin token) and stop at the first success; failure leaves an orphan.
   async _deleteStrandedPlaylist(playlistId) {
     const candidates = [this._plParams(), {}];
@@ -215,7 +227,7 @@ class PlexAdapter extends BaseAdapter {
       tried.add(key);
       try {
         await axios.delete(`${this.url}/playlists/${playlistId}`, { params, timeout: REQUEST_TIMEOUT_MS });
-        logger.info({ playlistId }, 'plex: removed stranded playlist from its prior scope');
+        logger.info({ playlistId }, 'plex: removed superseded playlist (prior scope or media type)');
         return true;
       } catch (err) {
         // Wrong scope for this candidate; try the next.
@@ -245,7 +257,7 @@ class PlexAdapter extends BaseAdapter {
       if (status === 404 || status === 403) {
         logger.warn({ status, playlistId }, 'plex _replaceInPlace: stored id unreachable, creating fresh');
         if (!opts.name) throw err;
-        return this.createPlaylist(opts.name, itemIds, { public: !!opts.public });
+        return this.createPlaylist(opts.name, itemIds, { public: !!opts.public, mediaType: opts.mediaType });
       }
       throw err;
     }
@@ -260,7 +272,7 @@ class PlexAdapter extends BaseAdapter {
     // in-place path rather than taking the destructive relocate route.
     let scopePlaylists = null;
     try {
-      scopePlaylists = await this._listVideoPlaylists();
+      scopePlaylists = await this._listPlaylists(opts.mediaType);
     } catch (err) {
       logger.warn({ err, playlistId }, 'plex replacePlaylistItems: could not list current scope; attempting in-place');
     }
@@ -269,9 +281,14 @@ class PlexAdapter extends BaseAdapter {
       const visible = scopePlaylists.some((p) => String(p.ratingKey) === String(playlistId));
       if (!visible) {
         if (!opts.name) throw new Error('cannot relocate Plex playlist without a name');
+        // Two ways the stored id can be missing from this listing: the playlist
+        // lives in a different token scope (a stranded playlist), or the
+        // playlist's media type flipped (e.g. an all-audio playlist whose first
+        // video item just downloaded: the id exists, but not as a playlist of
+        // the current media type).
         logger.warn(
-          { playlistId },
-          'plex replacePlaylistItems: stored id not visible in current scope; relocating playlist to this scope'
+          { playlistId, mediaType: opts.mediaType === 'audio' ? 'audio' : 'video' },
+          'plex replacePlaylistItems: stored id not found among current-scope playlists of this media type (scope changed or media type flipped); recreating'
         );
         // Remove the stranded copy from its old scope so it does not linger in
         // a Plex Web session the user is still browsing.
@@ -280,7 +297,7 @@ class PlexAdapter extends BaseAdapter {
         // pile up duplicates: adopt an existing same-named playlist if present.
         const sameName = scopePlaylists.find((p) => p.title === opts.name);
         if (sameName) return this._replaceInPlace(sameName.ratingKey, itemIds, opts);
-        return this.createPlaylist(opts.name, itemIds, { public: !!opts.public });
+        return this.createPlaylist(opts.name, itemIds, { public: !!opts.public, mediaType: opts.mediaType });
       }
     }
 

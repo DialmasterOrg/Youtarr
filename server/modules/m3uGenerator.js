@@ -40,11 +40,13 @@ class M3uGenerator {
       let included = 0;
       for (const pv of videos) {
         const video = await Video.findOne({ where: { youtubeId: pv.youtube_id } });
-        if (!video || !video.filePath) {
+        // Audio-only downloads store their path in audioFilePath; filePath stays null.
+        const mediaPath = video && (video.filePath || video.audioFilePath);
+        if (!mediaPath) {
           logger.debug({ youtube_id: pv.youtube_id }, 'M3U: skipping un-downloaded video');
           continue;
         }
-        const relPath = path.relative(m3uDir, video.filePath);
+        const relPath = path.relative(m3uDir, mediaPath);
         const label = `${video.youTubeChannelName || ''} - ${video.youTubeVideoName || pv.youtube_id}`;
         lines.push(`#EXTINF:${video.duration || 0},${label}`);
         lines.push(relPath);

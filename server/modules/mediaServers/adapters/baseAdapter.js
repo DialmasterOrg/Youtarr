@@ -7,7 +7,7 @@ class BaseAdapter {
 
   async testConnection() { throw new Error('not implemented'); }
   async listUsers() { throw new Error('not implemented'); }
-  async triggerLibraryScan(/* subfolder */) { throw new Error('not implemented'); }
+  async triggerLibraryScan(/* subfolder, opts: { mediaType } */) { throw new Error('not implemented'); }
   async resolveItemIdByFilepath(/* filepath */) { throw new Error('not implemented'); }
 
   /**
@@ -24,7 +24,6 @@ class BaseAdapter {
     }
     return results;
   }
-  async getPlaylistByName(/* name */) { throw new Error('not implemented'); }
   async createPlaylist(/* name, itemIds, opts */) { throw new Error('not implemented'); }
   async replacePlaylistItems(/* id, itemIds */) { throw new Error('not implemented'); }
 }

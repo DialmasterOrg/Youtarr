@@ -12,6 +12,7 @@ export interface DownloadOverrideSettings {
 }
 
 export type PlaylistSortOrder = 'asc' | 'desc' | 'recent';
+export type PlaylistDownloadState = 'all' | 'downloaded' | 'not_downloaded';
 
 const DEFAULT_PAGE_SIZE = 50;
 
@@ -20,6 +21,7 @@ interface UsePlaylistDetailParams {
   playlistId: string | null;
   pageSize?: number;
   sortOrder?: PlaylistSortOrder;
+  downloadState?: PlaylistDownloadState;
 }
 
 interface PlaylistDetailResponse {
@@ -52,6 +54,7 @@ export const usePlaylistDetail = ({
   playlistId,
   pageSize = DEFAULT_PAGE_SIZE,
   sortOrder = 'asc',
+  downloadState = 'all',
 }: UsePlaylistDetailParams) => {
   const [playlist, setPlaylist] = useState<Playlist | null>(null);
   const [videos, setVideos] = useState<PlaylistVideo[]>([]);
@@ -89,7 +92,8 @@ export const usePlaylistDetail = ({
         axios.get<PlaylistDetailResponse>(`/api/playlists/${playlistId}`, { headers }),
         axios.get<PlaylistVideosResponse>(`/api/playlists/${playlistId}/videos`, {
           headers,
-          params: { page: 1, pageSize, sortOrder },
+          // 'all' is the server default; no need to send it.
+          params: { page: 1, pageSize, sortOrder, ...(downloadState !== 'all' && { downloadState }) },
         }),
       ]);
       if (requestId !== requestIdRef.current) return;
@@ -115,7 +119,7 @@ export const usePlaylistDetail = ({
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [token, playlistId, pageSize, sortOrder]);
+  }, [token, playlistId, pageSize, sortOrder, downloadState]);
 
   useEffect(() => {
     loadInitial();
@@ -137,7 +141,7 @@ export const usePlaylistDetail = ({
         `/api/playlists/${playlistId}/videos`,
         {
           headers: authHeaders(token),
-          params: { page: nextPage, pageSize, sortOrder },
+          params: { page: nextPage, pageSize, sortOrder, ...(downloadState !== 'all' && { downloadState }) },
         }
       );
       // A reset (sort change / refetch) happened mid-flight; discard this page.
@@ -150,7 +154,7 @@ export const usePlaylistDetail = ({
     } finally {
       setLoadingMore(false);
     }
-  }, [token, playlistId, pageSize, sortOrder, loading, loadingMore, videos.length, videoTotal]);
+  }, [token, playlistId, pageSize, sortOrder, downloadState, loading, loadingMore, videos.length, videoTotal]);
 
   // Refreshes only playlist meta + the not-downloaded count without reloading
   // the (paginated) video list, so scroll position is preserved.

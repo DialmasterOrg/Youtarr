@@ -97,13 +97,32 @@ class MediaServerSync {
       ? await Video.findAll({ where: { youtubeId: youtubeIds } })
       : [];
     const byYoutubeId = new Map(downloaded.map((v) => [v.youtubeId, v]));
-    const filepaths = [];
+    const entries = [];
     for (const pv of videos) {
       const v = byYoutubeId.get(pv.youtube_id);
-      if (v && v.filePath) filepaths.push({ youtube_id: pv.youtube_id, filePath: v.filePath });
+      // Audio-only downloads store their path in audioFilePath; filePath stays null.
+      const mediaPath = v && (v.filePath || v.audioFilePath);
+      if (mediaPath) {
+        entries.push({ youtube_id: pv.youtube_id, filePath: mediaPath, isAudio: !v.filePath });
+      }
     }
 
-    await adapter.triggerLibraryScan();
+    // Server playlists are media-typed (Plex audio vs video playlists,
+    // Jellyfin/Emby MediaType) and cannot mix types.
+    const mediaType = entries.length > 0 && entries.every((e) => e.isAudio) ? 'audio' : 'video';
+    const filepaths = mediaType === 'audio' ? entries : entries.filter((e) => !e.isAudio);
+    const skippedAudioCount = entries.length - filepaths.length;
+    if (skippedAudioCount > 0) {
+      logger.info(
+        { playlist_id: playlist.playlist_id, serverType, skippedAudioCount },
+        `Playlist "${playlist.title}" mixes video and audio-only items; syncing the video items only (media servers cannot mix types in one playlist)`
+      );
+    }
+
+    // The media type tells Plex whether music sections need a scan; audio
+    // files have no other scan trigger anywhere in Youtarr. Jellyfin/Emby
+    // ignore the hint (their refresh already covers every library).
+    await adapter.triggerLibraryScan(null, { mediaType });
 
     const resolvedByPath = await this._resolveAllWithBackoff(
       adapter,
@@ -128,9 +147,14 @@ class MediaServerSync {
     // and the normal flow (subscribe → videos download later → post-download hook re-syncs)
     // will create the playlist on the next sync once items exist.
     if (!state?.server_playlist_id && itemIds.length === 0) {
+      const reason = filepaths.length === 0
+        ? 'no downloaded items resolved yet'
+        : mediaType === 'audio'
+          ? 'downloaded audio files were not found on the server. Audio playlists need a music-type library that includes the Youtarr output folder'
+          : 'downloaded files were not found on the server yet';
       logger.info(
         { playlist_id: playlist.playlist_id, serverType },
-        `Deferring ${SERVER_DISPLAY_NAME[serverType] || serverType} sync of playlist "${playlist.title}": no downloaded items resolved yet`
+        `Deferring ${SERVER_DISPLAY_NAME[serverType] || serverType} sync of playlist "${playlist.title}": ${reason}`
       );
       return;
     }
@@ -141,7 +165,7 @@ class MediaServerSync {
       // and ignores opts. Capture the returned id in case the adapter recreated
       // — the sync-state row must track the new id.
       const replaced = await adapter.replacePlaylistItems(state.server_playlist_id, itemIds, {
-        name, public: !!playlist.public_on_servers,
+        name, public: !!playlist.public_on_servers, mediaType,
       });
       const effectiveId = replaced?.id || state.server_playlist_id;
       if (state.update) await state.update({
@@ -150,7 +174,7 @@ class MediaServerSync {
         last_error: null,
       });
     } else {
-      const created = await adapter.createPlaylist(name, itemIds, { public: !!playlist.public_on_servers });
+      const created = await adapter.createPlaylist(name, itemIds, { public: !!playlist.public_on_servers, mediaType });
       if (state) {
         // State row exists from a prior failure (last_error set, server_playlist_id null).
         // Update it in place rather than creating a duplicate — the unique constraint

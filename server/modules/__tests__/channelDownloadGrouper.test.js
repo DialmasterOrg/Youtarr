@@ -586,8 +586,8 @@ describe('ChannelDownloadGrouper', () => {
       const expectedPath = path.join(
         '/mock/youtube/output',
         '%(uploader,channel,uploader_id).80B',
-        '%(uploader,channel,uploader_id).80B - %(title).76B - %(id)s',
-        '%(uploader,channel,uploader_id).80B - %(title).76B [%(id)s].%(ext)s'
+        '%(uploader,channel,uploader_id).80B - %(title).64B - %(id)s',
+        '%(uploader,channel,uploader_id).80B - %(title).64B [%(id)s].%(ext)s'
       );
 
       expect(template).toBe(expectedPath);
@@ -601,8 +601,8 @@ describe('ChannelDownloadGrouper', () => {
         '/mock/youtube/output',
         '__Tech',
         '%(uploader,channel,uploader_id).80B',
-        '%(uploader,channel,uploader_id).80B - %(title).76B - %(id)s',
-        '%(uploader,channel,uploader_id).80B - %(title).76B [%(id)s].%(ext)s'
+        '%(uploader,channel,uploader_id).80B - %(title).64B - %(id)s',
+        '%(uploader,channel,uploader_id).80B - %(title).64B [%(id)s].%(ext)s'
       );
 
       expect(template).toBe(expectedPath);
@@ -640,7 +640,7 @@ describe('ChannelDownloadGrouper', () => {
       const expectedPath = path.join(
         '/mock/youtube/output',
         '%(uploader,channel,uploader_id).80B',
-        '%(uploader,channel,uploader_id).80B - %(title).76B - %(id)s',
+        '%(uploader,channel,uploader_id).80B - %(title).64B - %(id)s',
         'poster'
       );
 
@@ -655,7 +655,7 @@ describe('ChannelDownloadGrouper', () => {
         '/mock/youtube/output',
         '__Tech',
         '%(uploader,channel,uploader_id).80B',
-        '%(uploader,channel,uploader_id).80B - %(title).76B - %(id)s',
+        '%(uploader,channel,uploader_id).80B - %(title).64B - %(id)s',
         'poster'
       );
 

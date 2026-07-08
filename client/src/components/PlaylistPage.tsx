@@ -15,7 +15,7 @@ import {
 } from './ui';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useConfig } from '../hooks/useConfig';
-import { usePlaylistDetail, PlaylistSortOrder } from '../hooks/usePlaylistDetail';
+import { usePlaylistDetail, PlaylistSortOrder, PlaylistDownloadState } from '../hooks/usePlaylistDetail';
 import { useDownloadListingsRefresh } from '../hooks/useDownloadListingsRefresh';
 import { usePlaylistMutations } from '../hooks/usePlaylistMutations';
 import { useMediaServerStatus } from '../hooks/useMediaServerStatus';
@@ -24,6 +24,7 @@ import PlaylistHeader from './PlaylistPage/components/PlaylistHeader';
 import NoMediaServerWarning from './PlaylistPage/components/NoMediaServerWarning';
 import PlaylistVideoList from './PlaylistPage/components/PlaylistVideoList';
 import PlaylistSortControl from './PlaylistPage/components/PlaylistSortControl';
+import PlaylistDownloadFilterControl from './PlaylistPage/components/PlaylistDownloadFilterControl';
 import { useVideoSelection } from './shared/VideoList/hooks/useVideoSelection';
 import VideoListSelectionPill from './shared/VideoList/VideoListSelectionPill';
 import { SelectionAction } from './shared/VideoList/types';
@@ -79,6 +80,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
   const isMobile = useMediaQuery('(max-width: 767px)');
 
   const [sortOrder, setSortOrder] = useState<PlaylistSortOrder>('asc');
+  const [downloadState, setDownloadState] = useState<PlaylistDownloadState>('all');
 
   const {
     playlist,
@@ -97,7 +99,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     sync,
     regenerateM3U,
     triggerDownload,
-  } = usePlaylistDetail({ token, playlistId, sortOrder });
+  } = usePlaylistDetail({ token, playlistId, sortOrder, downloadState });
 
   useDownloadListingsRefresh(refetch);
 
@@ -401,6 +403,11 @@ function PlaylistPage({ token }: PlaylistPageProps) {
               Videos
             </Typography>
             <Box className="flex items-center gap-2 flex-wrap">
+              <PlaylistDownloadFilterControl
+                value={downloadState}
+                onChange={setDownloadState}
+                disabled={loading && videos.length === 0}
+              />
               <PlaylistSortControl
                 value={sortOrder}
                 onChange={setSortOrder}
