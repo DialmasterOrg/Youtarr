@@ -94,9 +94,8 @@ const MediaServerSyncGroup: React.FC<MediaServerSyncGroupProps> = ({
         <Alert severity="warning">
           <Typography variant="body2">
             {unsyncableCount} downloaded {unsyncableCount === 1 ? 'item has' : 'items have'} no{' '}
-            {isAudioPlaylist ? 'MP3' : 'video'} file, so {unsyncableCount === 1 ? 'it' : 'they'}{' '}
-            won&apos;t appear in synced playlists. The Download Type setting decides whether this
-            playlist syncs as a {isAudioPlaylist ? 'music' : 'video'} playlist.
+            {isAudioPlaylist ? 'MP3' : 'video'}{' '}
+            file and won&apos;t appear in synced playlists.
           </Typography>
         </Alert>
       )}

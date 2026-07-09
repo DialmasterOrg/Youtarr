@@ -610,6 +610,24 @@ describe('PATCH /api/playlists/:playlistId', () => {
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: 'Failed to update playlist' });
   });
+
+  test('ignores sort_order sent via PATCH (settings endpoint owns it)', async () => {
+    const deps = buildDeps();
+    const p = makePlaylist();
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+
+    const handler = getHandler('patch', '/api/playlists/:playlistId', deps);
+    const req = {
+      params: { playlistId: 'PLtest123' },
+      body: { auto_download: true, sort_order: 'reversed' },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(p.update).toHaveBeenCalledWith({ auto_download: true });
+  });
 });
 
 describe('GET /api/playlists/:playlistId/settings', () => {
@@ -623,6 +641,7 @@ describe('GET /api/playlists/:playlistId/settings', () => {
       title_filter_regex: null,
       audio_format: null,
       default_rating: null,
+      sort_order: 'reversed',
     });
     deps.models.Playlist.findOne.mockResolvedValue(p);
 
@@ -640,6 +659,7 @@ describe('GET /api/playlists/:playlistId/settings', () => {
       title_filter_regex: null,
       audio_format: null,
       default_rating: null,
+      sort_order: 'reversed',
     });
   });
 
@@ -676,6 +696,43 @@ describe('PUT /api/playlists/:playlistId/settings', () => {
 
     expect(p.update).toHaveBeenCalledWith({ video_quality: '720p', min_duration: 60 });
     expect(res.json).toHaveBeenCalledWith({ settings: { video_quality: '720p', min_duration: 60 } });
+  });
+
+  test('updates sort_order when given a valid value', async () => {
+    const deps = buildDeps();
+    const p = makePlaylist();
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+
+    const handler = getHandler('put', '/api/playlists/:playlistId/settings', deps);
+    const req = {
+      params: { playlistId: 'PLtest123' },
+      body: { sort_order: 'reversed' },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(p.update).toHaveBeenCalledWith({ sort_order: 'reversed' });
+    expect(res.json).toHaveBeenCalledWith({ settings: { sort_order: 'reversed' } });
+  });
+
+  test('rejects an invalid sort_order with 400 before touching the playlist', async () => {
+    const deps = buildDeps();
+
+    const handler = getHandler('put', '/api/playlists/:playlistId/settings', deps);
+    const req = {
+      params: { playlistId: 'PLtest123' },
+      body: { sort_order: 'upside_down' },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Invalid sort_order; expected default or reversed' });
+    expect(deps.models.Playlist.findOne).not.toHaveBeenCalled();
   });
 
   test('registers a real default_sub_folder when settings are updated', async () => {

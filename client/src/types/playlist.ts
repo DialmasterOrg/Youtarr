@@ -1,3 +1,6 @@
+// Saved output order for the .m3u file and media server playlist sync.
+export type PlaylistSortOrderSetting = 'default' | 'reversed';
+
 export interface Playlist {
   id: number;
   playlist_id: string;
@@ -13,6 +16,7 @@ export interface Playlist {
   sync_to_jellyfin: boolean;
   sync_to_emby: boolean;
   public_on_servers: boolean;
+  sort_order: PlaylistSortOrderSetting;
   default_sub_folder: string | null;
   video_quality: string | null;
   min_duration: number | null;
@@ -81,6 +85,7 @@ export interface PlaylistSubscribeSettings {
   title_filter_regex?: string | null;
   audio_format?: string | null;
   default_rating?: string | null;
+  sort_order?: PlaylistSortOrderSetting;
 }
 
 export type MediaServerType = 'plex' | 'jellyfin' | 'emby';

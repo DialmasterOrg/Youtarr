@@ -21,9 +21,10 @@ class M3uGenerator {
         return false;
       }
 
+      const positionDirection = playlist.sort_order === 'reversed' ? 'DESC' : 'ASC';
       const videos = await PlaylistVideo.findAll({
         where: { playlist_id: playlist.playlist_id, ignored: false },
-        order: [['position', 'ASC']],
+        order: [['position', positionDirection]],
       });
 
       const outputRoot = configModule.directoryPath;

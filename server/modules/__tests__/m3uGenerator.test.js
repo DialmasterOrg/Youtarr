@@ -151,4 +151,15 @@ describe('m3uGenerator', () => {
     // No mp3 for v1, but the .m3u never drops a downloaded item.
     expect(contents).toMatch(/\n\.\.\/ChanB\/Vid 1\/v1\.mp4/);
   });
+
+  test('reversed sort order queries positions descending', async () => {
+    Playlist.findByPk.mockResolvedValue({ id: 1, playlist_id: 'PL1', title: 'PL', sort_order: 'reversed' });
+    PlaylistVideo.findAll.mockResolvedValue([]);
+
+    await m3uGenerator.generatePlaylistM3U(1);
+
+    expect(PlaylistVideo.findAll).toHaveBeenCalledWith(expect.objectContaining({
+      order: [['position', 'DESC']],
+    }));
+  });
 });

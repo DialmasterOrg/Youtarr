@@ -64,9 +64,10 @@ class MediaServerSync {
     const playlist = await Playlist.findByPk(playlistId);
     if (!playlist) return;
 
+    const positionDirection = playlist.sort_order === 'reversed' ? 'DESC' : 'ASC';
     const videos = await PlaylistVideo.findAll({
       where: { playlist_id: playlist.playlist_id, ignored: false },
-      order: [['position', 'ASC']],
+      order: [['position', positionDirection]],
     });
 
     const config = configModule.getConfig();

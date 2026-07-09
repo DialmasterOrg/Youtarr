@@ -63,6 +63,7 @@ const basePlaylist: Playlist = {
   sync_to_jellyfin: true,
   sync_to_emby: true,
   public_on_servers: false,
+  sort_order: 'default',
   default_sub_folder: null,
   video_quality: '720',
   min_duration: 300,
@@ -105,10 +106,11 @@ describe('PlaylistSettingsDialog', () => {
     expect(screen.getByLabelText('Video Quality')).toHaveTextContent('720p (HD)');
     expect(screen.getByLabelText('Download Type')).toHaveTextContent('Video Only (default)');
     expect(screen.getByLabelText('Default Rating')).toHaveTextContent('PG');
+    expect(screen.getByLabelText('Playlist order')).toHaveTextContent('YouTube playlist order');
     expect(screen.getByTestId('subfolder-mock')).toHaveTextContent('subfolder:null');
   });
 
-  test('saves only the four surfaced fields and leaves filter columns untouched', async () => {
+  test('saves only the surfaced fields and leaves filter columns untouched', async () => {
     const props = setupDialog();
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -119,6 +121,7 @@ describe('PlaylistSettingsDialog', () => {
         video_quality: '720',
         audio_format: null,
         default_rating: 'PG',
+        sort_order: 'default',
       });
     });
     const payload = mockMutationsReturn.updateSettings.mock.calls[0][1];
@@ -212,5 +215,47 @@ describe('PlaylistSettingsDialog', () => {
     fireEvent.click(await screen.findByRole('option', { name: 'Video + MP3' }));
 
     expect(screen.queryByText(/replace the synced/i)).not.toBeInTheDocument();
+  });
+
+  test('shows the saved playlist order as the selected value', () => {
+    setupDialog({ playlist: { ...basePlaylist, sort_order: 'reversed' } });
+    expect(screen.getByLabelText('Playlist order')).toHaveTextContent('Reverse playlist order');
+  });
+
+  test('persists an edited playlist order', async () => {
+    setupDialog();
+
+    fireEvent.mouseDown(screen.getByLabelText('Playlist order'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Reverse playlist order' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(mockMutationsReturn.updateSettings).toHaveBeenCalledWith(
+        'PL123',
+        expect.objectContaining({ sort_order: 'reversed' })
+      );
+    });
+  });
+
+  test('reminds the user to re-sync when the playlist order changes', async () => {
+    setupDialog();
+
+    expect(screen.queryByText(/applies the next time this playlist syncs/i)).not.toBeInTheDocument();
+
+    fireEvent.mouseDown(screen.getByLabelText('Playlist order'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Reverse playlist order' }));
+
+    expect(screen.getByText(/applies the next time this playlist syncs/i)).toBeInTheDocument();
+  });
+
+  test('hides the re-sync reminder when the order is set back to the saved value', async () => {
+    setupDialog();
+
+    fireEvent.mouseDown(screen.getByLabelText('Playlist order'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Reverse playlist order' }));
+    fireEvent.mouseDown(screen.getByLabelText('Playlist order'));
+    fireEvent.click(await screen.findByRole('option', { name: 'YouTube playlist order' }));
+
+    expect(screen.queryByText(/applies the next time this playlist syncs/i)).not.toBeInTheDocument();
   });
 });

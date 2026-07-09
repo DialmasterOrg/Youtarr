@@ -20,6 +20,9 @@ Playlist.init(
     sync_to_jellyfin: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     sync_to_emby: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     public_on_servers: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    // Output order for the .m3u file and media server playlist sync:
+    // 'default' = YouTube playlist order, 'reversed' = flipped.
+    sort_order: { type: DataTypes.STRING, allowNull: false, defaultValue: 'default' },
     // New playlists default to the global default subfolder (the sentinel
     // resolves to config's default subfolder at download time). NULL is a
     // deliberate "download to root" choice from the settings dialog.
