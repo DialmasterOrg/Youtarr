@@ -20,6 +20,7 @@ const basePlaylist: Playlist = {
   sync_to_jellyfin: false,
   sync_to_emby: false,
   public_on_servers: false,
+  sort_order: 'default',
   default_sub_folder: null,
   video_quality: null,
   min_duration: null,

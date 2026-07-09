@@ -11,6 +11,7 @@ const playlist = {
   sync_to_jellyfin: false,
   sync_to_emby: false,
   public_on_servers: false,
+  sort_order: 'default',
 } as unknown as Playlist;
 
 const baseProps = {

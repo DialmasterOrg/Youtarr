@@ -17,6 +17,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
   const VIDEO_SORT_DIRECTIONS = { asc: 'ASC', desc: 'DESC' };
   const DEFAULT_VIDEO_SORT_DIRECTION = 'ASC';
   const VIDEO_DOWNLOAD_STATES = new Set(['all', 'downloaded', 'not_downloaded']);
+  const VALID_SORT_ORDERS = new Set(['default', 'reversed']);
 
   const validateOverrideSettings = createOverrideSettingsValidator({
     channelSettingsModule,
@@ -173,6 +174,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
         title_filter_regex: p.title_filter_regex,
         audio_format: p.audio_format,
         default_rating: p.default_rating,
+        sort_order: p.sort_order,
       });
     } catch (err) {
       req.log.error({ err }, 'get settings failed');
@@ -181,11 +183,14 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
   });
 
   router.put('/api/playlists/:playlistId/settings', verifyToken, async (req, res) => {
-    const allowed = ['default_sub_folder', 'video_quality', 'min_duration', 'max_duration', 'title_filter_regex', 'audio_format', 'default_rating'];
+    const allowed = ['default_sub_folder', 'video_quality', 'min_duration', 'max_duration', 'title_filter_regex', 'audio_format', 'default_rating', 'sort_order'];
     const updates = {};
     for (const k of allowed) if (k in req.body) updates[k] = req.body[k];
     if (defaultSubFolderInvalid(updates.default_sub_folder)) {
       return res.status(400).json({ error: 'Invalid default_sub_folder' });
+    }
+    if ('sort_order' in updates && !VALID_SORT_ORDERS.has(updates.sort_order)) {
+      return res.status(400).json({ error: 'Invalid sort_order; expected default or reversed' });
     }
     try {
       const p = await findEnabledPlaylist(req.params.playlistId);
