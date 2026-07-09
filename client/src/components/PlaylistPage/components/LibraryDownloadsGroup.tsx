@@ -45,9 +45,9 @@ const LibraryDownloadsGroup: React.FC<LibraryDownloadsGroupProps> = ({
         <InfoHint label="About library and downloads">
           <div>
             <p className="mb-2">
-              <strong>Refresh from YouTube</strong> re-checks YouTube for new, removed, or
-              changed videos. It does not download anything. Large playlists can take about
-              a minute.
+              <strong>Refresh from YouTube</strong> re-checks the entire playlist on YouTube
+              for new, removed, or changed videos. It does not download anything. Large
+              playlists can take a few minutes.
             </p>
             <p>
               <strong>Download</strong> queues videos not yet downloaded. You confirm settings
