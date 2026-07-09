@@ -6,12 +6,14 @@ import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useConfig } from '../../hooks/useConfig';
 
 const dialogPropsStore: { current: any } = { current: null };
+const channelVideosPropsStore: { current: any } = { current: null };
 
 // Mock child components
 jest.mock('../ChannelPage/ChannelVideos', () => ({
   __esModule: true,
   default: function MockChannelVideos(props: any) {
     const React = require('react');
+    channelVideosPropsStore.current = props;
     return React.createElement('div', {
       'data-testid': 'channel-videos',
       'data-token': props.token,
@@ -84,6 +86,7 @@ describe('ChannelPage Component', () => {
       setInitialConfig: jest.fn(),
     });
     dialogPropsStore.current = null;
+    channelVideosPropsStore.current = null;
   });
 
   describe('Component Rendering', () => {
@@ -1240,6 +1243,202 @@ describe('ChannelPage Component', () => {
 
       // Check for the ChannelVideos component
       expect(screen.getByTestId('channel-videos')).toBeInTheDocument();
+    });
+  });
+
+  describe('Terminated channel refresh on videos load', () => {
+    test('refetches channel info when videos load and current channel is marked terminated', async () => {
+      const terminatedChannel = {
+        ...mockChannel,
+        terminated_at: '2026-03-01T00:00:00Z',
+      };
+      const reinstatedChannel = {
+        ...mockChannel,
+        terminated_at: null,
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(terminatedChannel),
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(channelVideosPropsStore.current).not.toBeNull();
+      });
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+      });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(reinstatedChannel),
+      });
+
+      await act(async () => {
+        channelVideosPropsStore.current.onVideosLoaded('UC123456');
+      });
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+      });
+      expect(mockFetch.mock.calls[1][0]).toContain('/getChannelInfo/UC123456');
+    });
+
+    test('does NOT refetch channel info when channel was never terminated', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(mockChannel),
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(channelVideosPropsStore.current).not.toBeNull();
+      });
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+      });
+
+      await act(async () => {
+        channelVideosPropsStore.current.onVideosLoaded('UC123456');
+      });
+
+      // No second fetch: callback short-circuits when terminated_at is unset.
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    test('refetches channel info when videos load before initial /getChannelInfo response lands', async () => {
+      // Race scenario: useChannelVideos resolves and the backend cleared
+      // terminated_at, but the parent's initial /getChannelInfo is still
+      // in flight. channelRef.current is null at callback time. Without
+      // refetching here, the in-flight stale response would overwrite and
+      // the hook latch (already fired) can never retry.
+      const reinstatedChannel = {
+        ...mockChannel,
+        terminated_at: null,
+      };
+
+      let resolveInitial: ((value: any) => void) | undefined;
+      const initialPromise = new Promise((resolve) => {
+        resolveInitial = resolve;
+      });
+      mockFetch.mockReturnValueOnce(initialPromise);
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(channelVideosPropsStore.current).not.toBeNull();
+      });
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+      });
+
+      // Queue the refetch response BEFORE firing the callback so the
+      // mockFetch chain stays deterministic.
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(reinstatedChannel),
+      });
+
+      await act(async () => {
+        channelVideosPropsStore.current.onVideosLoaded('UC123456');
+      });
+
+      // The refetch fires even though channelRef.current is still null.
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+      });
+      expect(mockFetch.mock.calls[1][0]).toContain('/getChannelInfo/UC123456');
+
+      // Resolve the initial in-flight request so React can clean up cleanly.
+      await act(async () => {
+        resolveInitial!({
+          ok: true,
+          json: jest.fn().mockResolvedValue({
+            ...mockChannel,
+            terminated_at: '2026-03-01T00:00:00Z',
+          }),
+        });
+      });
+    });
+
+    test('late stale /getChannelInfo response does not overwrite the fresh refetch', async () => {
+      // End-to-end ordering check: the initial request resolves AFTER the
+      // post-videos-loaded refetch. The monotonic request-id gate must
+      // reject the late stale response so the terminated notice stays gone.
+      const terminatedPayload = {
+        ...mockChannel,
+        terminated_at: '2026-03-01T00:00:00Z',
+      };
+      const reinstatedPayload = {
+        ...mockChannel,
+        terminated_at: null,
+      };
+
+      let resolveInitial: ((value: any) => void) | undefined;
+      const initialPromise = new Promise((resolve) => {
+        resolveInitial = resolve;
+      });
+      mockFetch.mockReturnValueOnce(initialPromise);
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(channelVideosPropsStore.current).not.toBeNull();
+      });
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+      });
+
+      // Refetch returns reinstated state.
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(reinstatedPayload),
+      });
+
+      await act(async () => {
+        channelVideosPropsStore.current.onVideosLoaded('UC123456');
+      });
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+      });
+
+      // Reinstated state has committed - terminated notice must not render.
+      await waitFor(() => {
+        expect(screen.getByText('Tech Channel')).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('terminated-notice')).not.toBeInTheDocument();
+
+      // Now the slow initial /getChannelInfo arrives with the stale
+      // terminated payload. The request-id gate must reject it.
+      await act(async () => {
+        resolveInitial!({
+          ok: true,
+          json: jest.fn().mockResolvedValue(terminatedPayload),
+        });
+      });
+
+      // Notice still gone - stale response did not overwrite.
+      expect(screen.queryByTestId('terminated-notice')).not.toBeInTheDocument();
     });
   });
 });

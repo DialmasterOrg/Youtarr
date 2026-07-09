@@ -117,16 +117,16 @@ Configuration can be modified through:
 ### Video Filename Template
 - **Config Key**: `videoFilenamePrefix`
 - **Type**: `string`
-- **Default**: `"%(uploader,channel,uploader_id).80B - %(title).76B"` (matches the legacy fixed format byte-for-byte)
+- **Default**: `"%(uploader,channel,uploader_id).80B - %(title).64B"`. The title is capped at 64 bytes because the prefix appears twice in the full path (per-video folder + filename) and Plex on Windows silently skips files whose full path reaches 260 characters. Installs that saved settings under an older default keep their persisted value (`.74B`/`.76B`) until the setting is edited.
 - **Description**: User-customizable prefix for downloaded video filenames AND per-video directory names. Youtarr always appends ` [VIDEO_ID].EXT` to filenames and ` - VIDEO_ID` to per-video folder names so it can re-find your videos on disk; those suffixes are not configurable.
-- **Syntax**: Uses [yt-dlp's output template syntax](https://github.com/yt-dlp/yt-dlp#output-template). Common tokens: `%(title)s`, `%(uploader)s`, `%(channel)s`, `%(upload_date>%Y-%m-%d)s`, `%(channel_id)s`, `%(display_id)s`. Use `.NB` to byte-truncate values (e.g. `%(title).76B`) or `.Ns` for character truncation (e.g. `%(title).40s`); recommended to keep paths under Windows' 260-char limit.
+- **Syntax**: Uses [yt-dlp's output template syntax](https://github.com/yt-dlp/yt-dlp#output-template). Common tokens: `%(title)s`, `%(uploader)s`, `%(channel)s`, `%(upload_date>%Y-%m-%d)s`, `%(channel_id)s`, `%(display_id)s`. Use `.NB` to byte-truncate values (e.g. `%(title).64B`) or `.Ns` for character truncation (e.g. `%(title).40s`); recommended to keep paths under Windows' 260-char limit.
 - **Validation**: Empty values, path separators (`/`, `\`), `..`, ASCII control characters, values longer than 160 characters, malformed yt-dlp percent syntax, and invalid truncation like `%(title).40` are rejected. Escape literal percent signs as `%%`. Trailing whitespace is trimmed on save.
 - **Scope**: Global setting. Applies only to NEW downloads; existing files are not renamed.
 - **Examples** (all paired with the locked suffixes):
   - **Default**: `Preston - ESCAPING 99 Nights in the Forest IN REAL LIFE! [Cbq15X05wyY].mp4`
-  - **Date prefix** (`%(upload_date>%Y-%m-%d)s - %(title).76B`): `2025-10-17 - ESCAPING 99 Nights ... [Cbq15X05wyY].mp4`
-  - **Plex YouTube-Agent** (`%(upload_date>%Y_%m_%d)s %(title).76B`): `2025_10_17 ESCAPING 99 Nights ... [Cbq15X05wyY].mp4` (compatible with [Absolute-Series-Scanner](https://github.com/ZeroQI/Absolute-Series-Scanner) and [YouTube-Agent.bundle](https://github.com/ZeroQI/YouTube-Agent.bundle))
-  - **Title only** (`%(title).76B`): `ESCAPING 99 Nights ... [Cbq15X05wyY].mp4`
+  - **Date prefix** (`%(upload_date>%Y-%m-%d)s - %(title).64B`): `2025-10-17 - ESCAPING 99 Nights ... [Cbq15X05wyY].mp4`
+  - **Plex YouTube-Agent** (`%(upload_date>%Y_%m_%d)s %(title).64B`): `2025_10_17 ESCAPING 99 Nights ... [Cbq15X05wyY].mp4` (compatible with [Absolute-Series-Scanner](https://github.com/ZeroQI/Absolute-Series-Scanner) and [YouTube-Agent.bundle](https://github.com/ZeroQI/YouTube-Agent.bundle))
+  - **Title only** (`%(title).64B`): `ESCAPING 99 Nights ... [Cbq15X05wyY].mp4`
 - **UI**: A live preview in **Settings -> Core Settings -> File Structure Settings** shows the rendered folder and file names against a sample video, with length warnings (yellow > 110 chars, red > 130 chars on the rendered name).
 
 ### Enable Subtitles
@@ -210,6 +210,62 @@ Configuration can be modified through:
 - **Usage**: Not configurable via the web UI. Edit `config/config.json` manually or set the `PLEX_URL` environment variable to populate it.
 - **Note**: When this field is set it takes precedence over the `plexIP`, `plexPort`, and `plexViaHttps` values shown in the UI.
 
+### Plex Playlist Token (advanced)
+- **Config Key**: `plexPlaylistToken`
+- **Type**: `string`
+- **Default**: `""` (empty)
+- **Description**: Optional override for the token used on playlist-scoped Plex API calls.
+- **Values**:
+  - `""` / unset: fall back to `plexApiKey`. This is the standard claimed-server case; playlists are visible to the authenticated user.
+  - `"UNCLAIMED_SERVER"`: send playlist requests with no `X-Plex-Token` header. Use this for unclaimed-server LAN setups where Plex Web also accepts unauthenticated calls.
+  - Any other string: use that exact token (route Youtarr-managed playlists through a specific Plex user account other than the admin).
+- **Usage**: Surface in the UI as an "Advanced" toggle inside the Plex Settings section. Most users do not need to set this.
+
+## Jellyfin Integration
+
+These fields are required only when you want Youtarr to mirror playlists to Jellyfin as native playlists. Channel downloads work without them.
+
+### Enable Jellyfin
+- **Config Key**: `jellyfinEnabled`
+- **Type**: `boolean`
+- **Default**: `false`
+
+### Jellyfin URL
+- **Config Key**: `jellyfinUrl`
+- **Type**: `string`
+- **Default**: `""`
+- **Description**: Base URL of your Jellyfin server (e.g., `http://192.168.1.100:8096`).
+
+### Jellyfin API Key
+- **Config Key**: `jellyfinApiKey`
+- **Type**: `string`
+- **Default**: `""`
+- **Description**: Created in Jellyfin under **Dashboard -> API Keys**. Redacted in logs.
+
+### Jellyfin User ID
+- **Config Key**: `jellyfinUserId`
+- **Type**: `string`
+- **Default**: `""`
+- **Description**: User account that will own Youtarr-managed playlists. In the UI, open the **Jellyfin User** dropdown to load accounts from your server and pick one, or use **Enter ID manually** to paste the ID.
+
+### Jellyfin Video Library IDs
+- **Config Key**: `jellyfinVideoLibraryIds`
+- **Type**: `array<string>`
+- **Default**: `[]`
+- **Description**: Library IDs that contain your Youtarr videos. Optional and safe to leave blank; Youtarr matches downloaded videos to Jellyfin items across all of your libraries.
+
+## Emby Integration
+
+These fields work like the Jellyfin fields above, with `emby*` names. They're required only when you want Youtarr to mirror playlists to Emby as native playlists; channel downloads work without them. See [Media Server Playlists](MEDIA_SERVER_PLAYLISTS.md) for setup details.
+
+| Config Key | Type | Default | Description |
+| :--------- | :--- | :------ | :---------- |
+| `embyEnabled` | `boolean` | `false` | Turn Emby playlist sync on or off. |
+| `embyUrl` | `string` | `""` | Base URL of your Emby server (e.g., `http://192.168.1.100:8096`). |
+| `embyApiKey` | `string` | `""` | Created in Emby under **Settings -> Advanced -> API Keys**. Redacted in logs. |
+| `embyUserId` | `string` | `""` | User account that will own Youtarr-managed playlists. Open the **Emby User** dropdown in the UI to load accounts from your server and pick one. |
+| `embyVideoLibraryIds` | `array<string>` | `[]` | Library IDs that contain your Youtarr videos. Optional and safe to leave blank; Youtarr matches videos across all of your libraries. |
+
 ## YouTube Data API (Optional)
 
 ### YouTube API Key
@@ -282,6 +338,13 @@ Configuration can be modified through:
 - **Default**: `true`
 - **Description**: Generate NFO metadata files for Kodi/Jellyfin/Emby
 - **Note**: Creates .nfo XML files with video metadata
+
+### Write Video Fanart
+- **Config Key**: `writeVideoFanart`
+- **Type**: `boolean`
+- **Default**: `false`
+- **Description**: Create fanart image files for video backgrounds in media servers
+- **Note**: Creates a `-fanart.jpg` file alongside each video with the video thumbnail. Some Plex clients (notably NVIDIA Shield) use this as the background preview image instead of or alongside the poster. When enabled with `writeChannelPosters`, videos will display correctly on all Plex clients with both a poster (from channel thumbnail) and background (from video thumbnail).
 
 ## Cookie Config
 
@@ -428,6 +491,14 @@ The old `discordWebhookUrl` and `notificationService` fields are automatically r
 - **Description**: Number of retry attempts for failed downloads
 - **Range**: 0-10
 - **Note**: Used for yt-dlp `--fragment-retries` and `--retries` settings.
+
+### Auto-Retry Failed Videos
+- **Config Key**: `downloadAutoRetryCount`
+- **Type**: `number`
+- **Default**: `1`
+- **Description**: Number of times a video that fails with a transient HTTP 403 is automatically re-queued in a fresh download job
+- **Range**: 0-3 (`0` disables auto-retry)
+- **Note**: YouTube sometimes rejects an already-issued stream URL mid-download with HTTP 403. yt-dlp's own retries (`downloadRetryCount`) re-request the same rejected URL and cannot recover; only a fresh yt-dlp run with a fresh extraction can. When a video fails with the 403 signature, Youtarr queues an "Auto-retry" job for just that video. Permanent failures (members-only, terminated channels, bot detection) are never auto-retried.
 
 ### Enable Stall Detection
 - **Config Key**: `enableStallDetection`

@@ -26,11 +26,12 @@ interface RowSettingsSheetProps {
   rowState: RowState;
   dispatch: React.Dispatch<ImportFlowAction>;
   subfolders: string[];
+  createSubfolder: (name: string) => Promise<void>;
   defaultSubfolderDisplay: string | null;
 }
 
 const RowSettingsSheet: React.FC<RowSettingsSheetProps> = ({
-  open, onClose, onOpen: _onOpen, channelId, rowState, dispatch, subfolders, defaultSubfolderDisplay,
+  open, onClose, onOpen: _onOpen, channelId, rowState, dispatch, subfolders, createSubfolder, defaultSubfolderDisplay,
 }) => {
   const { settings } = rowState;
 
@@ -86,6 +87,7 @@ const RowSettingsSheet: React.FC<RowSettingsSheetProps> = ({
           value={settings.subFolder}
           onChange={(newValue) => updateSettings({ subFolder: newValue })}
           subfolders={subfolders}
+          createSubfolder={createSubfolder}
           defaultSubfolderDisplay={defaultSubfolderDisplay}
           label="Subfolder"
         />

@@ -1,5 +1,4 @@
 const express = require('express');
-const router = express.Router();
 
 // Tri-state filter query params ('off' | 'only' | 'exclude'). Any other
 // value (missing, empty string, garbage) falls back to 'off'.
@@ -12,11 +11,27 @@ const parseFilterMode = (value) =>
  * @param {Function} deps.verifyToken - Token verification middleware
  * @param {Object} deps.channelModule - Channel module
  * @param {Object} deps.archiveModule - Archive module
+ * @param {Object} deps.channelDownloadAllModule - Channel download-all module
+ * @param {Object} deps.ratingMapper - Rating validation/normalization module
  * @returns {express.Router}
  */
-module.exports = function createChannelRoutes({ verifyToken, channelModule, archiveModule }) {
+module.exports = function createChannelRoutes({ verifyToken, channelModule, archiveModule, channelDownloadAllModule, ratingMapper }) {
+  const router = express.Router();
   const channelSettingsModule = require('../modules/channelSettingsModule');
   const ChannelVideo = require('../models/channelvideo');
+  const { VALID_TAB_TYPES } = require('../modules/tabsUtils');
+  const { createOverrideSettingsValidator } = require('./overrideSettingsValidator');
+
+  const validateOverrideSettings = createOverrideSettingsValidator({
+    channelSettingsModule,
+    ratingMapper,
+  });
+
+  // Shared by the download-all routes: 'videos' when absent, null when invalid.
+  const parseTabType = (value) => {
+    const tabType = value || 'videos';
+    return VALID_TAB_TYPES.has(tabType) ? tabType : null;
+  };
 
   /**
    * @swagger
@@ -200,6 +215,12 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *                       type: string
    *                     description:
    *                       type: string
+   *                     enabled:
+   *                       type: boolean
+   *                       description: true when the channel is already an active subscription; false for new or soft-deleted (restorable) channels
+   *                     existing:
+   *                       type: boolean
+   *                       description: true when the channel row already existed in the database
    *       400:
    *         description: URL is missing
    *       403:
@@ -850,6 +871,156 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
         isFetching: false,
         error: 'Failed to get fetch status'
       });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/channels/{channelId}/download-all/preview:
+   *   get:
+   *     summary: Preview a channel download-all run
+   *     description: Returns how many known videos on a channel tab would be downloaded by a download-all run, plus their total content duration. Run a full fetch (fetchallchannelvideos) first for an accurate count.
+   *     tags: [Channels]
+   *     parameters:
+   *       - in: path
+   *         name: channelId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: YouTube channel ID
+   *       - in: query
+   *         name: tabType
+   *         schema:
+   *           type: string
+   *           enum: [videos, shorts, streams]
+   *           default: videos
+   *     responses:
+   *       200:
+   *         description: Preview computed
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 count:
+   *                   type: integer
+   *                 totalDurationSeconds:
+   *                   type: integer
+   *                 missingDurations:
+   *                   type: integer
+   *       400:
+   *         description: Invalid tabType
+   *       404:
+   *         description: Channel not found
+   *       500:
+   *         description: Failed to compute preview
+   */
+  router.get('/api/channels/:channelId/download-all/preview', verifyToken, async (req, res) => {
+    const { channelId } = req.params;
+    const tabType = parseTabType(req.query.tabType);
+    if (!tabType) {
+      return res.status(400).json({ error: 'Invalid tabType' });
+    }
+
+    try {
+      const preview = await channelDownloadAllModule.getPreview(channelId, tabType);
+      res.json(preview);
+    } catch (error) {
+      if (error.message === 'CHANNEL_NOT_FOUND') {
+        return res.status(404).json({ error: 'Channel not found' });
+      }
+      req.log.error({ err: error, channelId, tabType }, 'Failed to compute download-all preview');
+      res.status(500).json({ error: 'Failed to compute download-all preview' });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/channels/{channelId}/download-all:
+   *   post:
+   *     summary: Download all videos for a channel tab
+   *     description: Queues a single download job covering every known, never-downloaded video on the channel tab (previously downloaded videos are excluded, even if since deleted). The job is exempt from the absolute runtime cap and may run for days; it can be cancelled from the Downloads page and completed videos are kept.
+   *     tags: [Channels]
+   *     parameters:
+   *       - in: path
+   *         name: channelId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: YouTube channel ID
+   *     requestBody:
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               tabType:
+   *                 type: string
+   *                 enum: [videos, shorts, streams]
+   *                 default: videos
+   *               overrideSettings:
+   *                 type: object
+   *                 description: Optional per-run overrides. allowRedownload is not supported here and is ignored (previously downloaded videos are always excluded).
+   *                 properties:
+   *                   resolution:
+   *                     type: string
+   *                     enum: ['360', '480', '720', '1080', '1440', '2160']
+   *                   skipVideoFolder:
+   *                     type: boolean
+   *                   subfolder:
+   *                     type: string
+   *                     nullable: true
+   *                   audioFormat:
+   *                     type: string
+   *                     nullable: true
+   *                     enum: [video_mp3, mp3_only]
+   *                   rating:
+   *                     type: string
+   *                     nullable: true
+   *     responses:
+   *       202:
+   *         description: Download job queued
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 status:
+   *                   type: string
+   *                 queued:
+   *                   type: integer
+   *       400:
+   *         description: Invalid tabType or overrideSettings
+   *       404:
+   *         description: Channel not found
+   *       500:
+   *         description: Failed to start download
+   */
+  router.post('/api/channels/:channelId/download-all', verifyToken, async (req, res) => {
+    const { channelId } = req.params;
+    const tabType = parseTabType(req.body?.tabType);
+    if (!tabType) {
+      return res.status(400).json({ error: 'Invalid tabType' });
+    }
+
+    const overrideResult = validateOverrideSettings(req.body?.overrideSettings);
+    if (!overrideResult.ok) {
+      return res.status(400).json({ error: 'Invalid overrideSettings' });
+    }
+
+    try {
+      const result = await channelDownloadAllModule.startDownloadAll(
+        channelId,
+        tabType,
+        overrideResult.value || {}
+      );
+      res.status(202).json({ status: 'accepted', queued: result.queued });
+    } catch (error) {
+      if (error.message === 'CHANNEL_NOT_FOUND') {
+        return res.status(404).json({ error: 'Channel not found' });
+      }
+      req.log.error({ err: error, channelId, tabType }, 'Failed to start channel download-all');
+      res.status(500).json({ error: 'Failed to start channel download-all' });
     }
   });
 

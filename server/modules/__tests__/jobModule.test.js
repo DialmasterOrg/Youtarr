@@ -12,6 +12,13 @@ jest.mock('../../models/video');
 jest.mock('../../models/jobvideo');
 jest.mock('../../models/jobvideodownload');
 jest.mock('../../models/channelvideo');
+jest.mock('../download/downloadCleanup', () => ({
+  cleanupInProgressVideos: jest.fn().mockResolvedValue()
+}));
+jest.mock('../channelVideoReanchor', () => ({
+  applyExactDateForGroup: jest.fn().mockResolvedValue(undefined),
+  applyExactDateForVideo: jest.fn().mockResolvedValue(undefined),
+}));
 jest.mock('../download/downloadExecutor', () => {
   return jest.fn().mockImplementation(() => ({
     cleanupInProgressVideos: jest.fn().mockResolvedValue()
@@ -324,14 +331,12 @@ describe('JobModule', () => {
       JobVideoDownload.findAll.mockResolvedValue([]);
       JobVideoDownload.destroy.mockResolvedValue(0);
 
-      // Reset and reconfigure the DownloadExecutor mock for this specific test
+      // Reset and reconfigure the downloadCleanup mock for this specific test
       const mockCleanup = jest.fn().mockResolvedValue();
       jest.resetModules();
-      jest.doMock('../download/downloadExecutor', () => {
-        return jest.fn().mockImplementation(() => ({
-          cleanupInProgressVideos: mockCleanup
-        }));
-      });
+      jest.doMock('../download/downloadCleanup', () => ({
+        cleanupInProgressVideos: mockCleanup
+      }));
 
       JobModule = require('../jobModule');
 
@@ -1247,7 +1252,7 @@ describe('JobModule', () => {
 
     test('should not reload videos for Terminated jobs', async () => {
       JobModule.jobs = {
-        'job-1': { status: 'In Progress', data: { videos: [] } }
+        'job-1': { status: 'In Progress', jobType: 'Channel Downloads', data: { videos: [] } }
       };
 
       JobModule.saveJobOnly = jest.fn().mockResolvedValue();
@@ -1272,29 +1277,31 @@ describe('JobModule', () => {
       // But output should not be modified for Terminated status
       expect(JobModule.jobs['job-1'].output).toBe('Job terminated by user');
     });
-  });
 
-  describe('deleteJob', () => {
-    beforeEach(() => {
-      fs.existsSync.mockReturnValue(false);
-      fs.readFileSync.mockReturnValue(JSON.stringify({
-        plexApiKey: 'test-key',
-      }));
-      JobModule = require('../jobModule');
-      JobModule.saveJobs = jest.fn().mockResolvedValue();
-    });
-
-    test('should delete job and save', () => {
+    test('should preserve output for completed non-download jobs (Import Subscriptions)', async () => {
+      const importResults = JSON.stringify([
+        { channelId: 'UC1', title: 'Channel One', state: 'success' },
+        { channelId: 'UC2', title: 'Channel Two', state: 'success' }
+      ]);
       JobModule.jobs = {
-        'job-1': { status: 'Complete' },
-        'job-2': { status: 'Error' }
+        'job-1': { status: 'In Progress', jobType: 'Import Subscriptions' }
       };
 
-      JobModule.deleteJob('job-1');
+      JobModule.saveJobOnly = jest.fn().mockResolvedValue();
 
-      expect(JobModule.jobs['job-1']).toBeUndefined();
-      expect(JobModule.jobs['job-2']).toBeDefined();
-      expect(JobModule.saveJobs).toHaveBeenCalled();
+      await JobModule.updateJob('job-1', {
+        status: 'Complete',
+        output: importResults
+      });
+
+      // Wait for async save operation
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // The import job's JSON results must survive: the download-only video
+      // reload block must not run and overwrite output with "N videos."
+      expect(JobModule.jobs['job-1'].output).toBe(importResults);
+      expect(JobModule.jobs['job-1'].output).not.toMatch(/^\d+ videos\.$/);
+      expect(JobModule.saveJobOnly).toHaveBeenCalledWith('job-1', expect.any(Object));
     });
   });
 
@@ -1937,7 +1944,7 @@ describe('JobModule', () => {
 
       await JobModule.upsertChannelVideoFromInfo(info);
 
-      // Verify that update is called with correct fields, including clearing ignored flags
+      // The non-date fields are updated directly (and ignored flags cleared)...
       expect(mockRecord.update).toHaveBeenCalledWith({
         title: 'Updated Video',
         thumbnail: 'https://i.ytimg.com/vi/video-1/mqdefault.jpg',
@@ -1947,10 +1954,34 @@ describe('JobModule', () => {
         ignored: false,
         ignored_at: null
       });
-
-      // Explicitly verify that publishedAt is NOT included in the update
+      // ...but the authoritative date is applied via the re-anchor module so the
+      // row's old position is read first and neighbours stay ordered.
+      const channelVideoReanchor = require('../channelVideoReanchor');
+      expect(channelVideoReanchor.applyExactDateForGroup).toHaveBeenCalledWith({
+        channelId: 'channel-1',
+        mediaType: 'video',
+        youtubeId: 'video-1',
+        exactIso: '2024-01-15T00:00:00.000Z',
+      });
+      // The direct update must not carry the date fields.
       const updateCall = mockRecord.update.mock.calls[0][0];
       expect(updateCall).not.toHaveProperty('publishedAt');
+      expect(updateCall).not.toHaveProperty('published_at_source');
+    });
+
+    test('should not touch publishedAt on update when info has no upload_date', async () => {
+      const mockRecord = { update: jest.fn() };
+      ChannelVideo.findOrCreate.mockResolvedValue([mockRecord, false]);
+
+      await JobModule.upsertChannelVideoFromInfo({
+        id: 'video-1',
+        channel_id: 'channel-1',
+        title: 'No Date Video'
+      });
+
+      const updateCall = mockRecord.update.mock.calls[0][0];
+      expect(updateCall).not.toHaveProperty('publishedAt');
+      expect(updateCall).not.toHaveProperty('published_at_source');
     });
 
     test('should skip update when skipUpdateIfExists is true', async () => {

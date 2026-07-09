@@ -4,12 +4,6 @@ import { DEFAULT_CONFIG } from '../config/configSchema';
 
 export const CONFIG_UPDATED_EVENT = 'config-updated';
 
-// Simple type for components that only need basic config fields
-export interface AppConfig {
-  preferredResolution?: string;
-  [key: string]: any;
-}
-
 interface UseConfigResult {
   config: ConfigState;
   initialConfig: ConfigState | null;
@@ -81,11 +75,14 @@ export function useConfig(token: string | null): UseConfigResult {
         });
       }
 
-      // Apply defaults
+      // Spread DEFAULT_CONFIG first so fields missing from the server response
+      // (stale config pre-dating a new field) fall back to defaults instead of undefined.
       const resolvedConfig = {
+        ...DEFAULT_CONFIG,
         ...data,
         writeChannelPosters: data.writeChannelPosters ?? true,
         writeVideoNfoFiles: data.writeVideoNfoFiles ?? true,
+        writeVideoFanart: data.writeVideoFanart ?? false,
         plexPort: data.plexPort ? String(data.plexPort) : '32400'
       };
 

@@ -24,6 +24,21 @@ describe('useVideoSearch', () => {
     expect(result.current.error).toBeNull();
   });
 
+  test('decodes HTML entities in title and channelName from the YouTube API', async () => {
+    axios.post.mockResolvedValueOnce({
+      data: {
+        results: [
+          { youtubeId: 'a', title: 'Rubik&#39;s Cube &amp; You', channelName: 'Tom &amp; Jerry' },
+        ],
+      },
+    });
+    const { result } = renderHook(() => useVideoSearch('token'));
+
+    await act(async () => { await result.current.search('rubiks', 25); });
+    expect(result.current.results[0].title).toBe("Rubik's Cube & You");
+    expect(result.current.results[0].channelName).toBe('Tom & Jerry');
+  });
+
   test('second search while loading aborts the first and runs the new one', async () => {
     const firstSignals: AbortSignal[] = [];
     axios.post.mockImplementationOnce((_url: string, _body: unknown, opts: { signal?: AbortSignal }) => {

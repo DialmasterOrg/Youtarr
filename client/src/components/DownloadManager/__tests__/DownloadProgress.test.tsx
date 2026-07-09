@@ -287,6 +287,133 @@ describe('DownloadProgress', () => {
     expect(screen.getByText(/Channel update.*Completed/)).toBeInTheDocument();
   });
 
+  test('displays queued auto-retries in the final summary', async () => {
+    renderWithContext(
+      <DownloadProgress
+        downloadProgressRef={mockDownloadProgressRef}
+        downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
+        token="test-token"
+      />
+    );
+
+    const [, processCallback] = mockSubscribe.mock.calls[0];
+
+    await act(async () => {
+      processCallback({
+        finalSummary: {
+          totalDownloaded: 2,
+          totalSkipped: 0,
+          totalFailed: 0,
+          totalAutoRetried: 1,
+          jobType: 'Channel Downloads',
+          completedAt: '2026-07-02T10:30:00Z',
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Summary of last job')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/✓ 2 videos downloaded, 1 queued for auto-retry/)).toBeInTheDocument();
+  });
+
+  test('renders termination summary as warning-shaped even with zero downloads', async () => {
+    renderWithContext(
+      <DownloadProgress
+        downloadProgressRef={mockDownloadProgressRef}
+        downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
+        token="test-token"
+      />
+    );
+
+    const [, processCallback] = mockSubscribe.mock.calls[0];
+
+    await act(async () => {
+      processCallback({
+        finalSummary: {
+          totalDownloaded: 0,
+          totalSkipped: 0,
+          totalTerminatedChannels: 1,
+          terminatedChannels: [
+            { channelId: 'UC1234567890123456789012', uploader: 'Banned Channel' },
+          ],
+          jobType: 'Channel Downloads',
+          completedAt: '2026-05-19T12:00:00Z',
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Summary of last job')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/1 channel marked terminated/)).toBeInTheDocument();
+    expect(screen.getByText('Channels Marked Terminated by YouTube')).toBeInTheDocument();
+    expect(screen.getByText(/• Banned Channel/)).toBeInTheDocument();
+  });
+
+  test('renders termination-failure alert when terminationFailures present', async () => {
+    renderWithContext(
+      <DownloadProgress
+        downloadProgressRef={mockDownloadProgressRef}
+        downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
+        token="test-token"
+      />
+    );
+
+    const [, processCallback] = mockSubscribe.mock.calls[0];
+
+    await act(async () => {
+      processCallback({
+        finalSummary: {
+          totalDownloaded: 0,
+          totalSkipped: 0,
+          totalTerminationFailures: 1,
+          terminationFailures: ['UC1234567890123456789012'],
+          jobType: 'Channel Downloads',
+          completedAt: '2026-05-19T12:00:00Z',
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Summary of last job')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/1 termination could not be auto-disabled/)).toBeInTheDocument();
+    expect(screen.getByText('Terminations Could Not Be Auto-Disabled')).toBeInTheDocument();
+    expect(screen.getByText(/• UC1234567890123456789012/)).toBeInTheDocument();
+  });
+
+  test('omits the terminated alert when terminatedChannels is empty', async () => {
+    renderWithContext(
+      <DownloadProgress
+        downloadProgressRef={mockDownloadProgressRef}
+        downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
+        token="test-token"
+      />
+    );
+
+    const [, processCallback] = mockSubscribe.mock.calls[0];
+
+    await act(async () => {
+      processCallback({
+        finalSummary: {
+          totalDownloaded: 3,
+          totalSkipped: 0,
+          jobType: 'Channel Downloads',
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Summary of last job')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Channels Marked Terminated by YouTube')).not.toBeInTheDocument();
+  });
+
   test('displays final summary with single video grammar', async () => {
     renderWithContext(
       <DownloadProgress
@@ -313,6 +440,62 @@ describe('DownloadProgress', () => {
       expect(screen.getByText(/✓ 1 video downloaded/)).toBeInTheDocument();
     });
     expect(screen.getByText(/Manual download/)).toBeInTheDocument();
+  });
+
+  test('displays members-only count in final summary when totalMembersOnly > 0', async () => {
+    renderWithContext(
+      <DownloadProgress
+        downloadProgressRef={mockDownloadProgressRef}
+        downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
+        token="test-token"
+      />
+    );
+
+    const [, processCallback] = mockSubscribe.mock.calls[0];
+
+    await act(async () => {
+      processCallback({
+        finalSummary: {
+          totalDownloaded: 0,
+          totalSkipped: 0,
+          totalMembersOnly: 2,
+          jobType: 'Manually Added Urls',
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/2 members-only videos skipped/)).toBeInTheDocument();
+    });
+  });
+
+  test('singular grammar for one members-only video', async () => {
+    renderWithContext(
+      <DownloadProgress
+        downloadProgressRef={mockDownloadProgressRef}
+        downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
+        token="test-token"
+      />
+    );
+
+    const [, processCallback] = mockSubscribe.mock.calls[0];
+
+    await act(async () => {
+      processCallback({
+        finalSummary: {
+          totalDownloaded: 0,
+          totalSkipped: 0,
+          totalMembersOnly: 1,
+          jobType: 'Manually Added Urls',
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/1 members-only video skipped/)).toBeInTheDocument();
+    });
   });
 
   test('displays error with cookies required', async () => {
@@ -343,7 +526,7 @@ describe('DownloadProgress', () => {
     expect(screen.getByRole('button', { name: 'Go to Settings' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Go to Settings' }));
-    expect(mockNavigate).toHaveBeenCalledWith('/settings/integrations');
+    expect(mockNavigate).toHaveBeenCalledWith('/settings/cookies');
   });
 
   test('displays generic error without settings button', async () => {
@@ -1665,6 +1848,126 @@ describe('DownloadProgress', () => {
       expect(screen.getByText(/1 video failed:/)).toBeInTheDocument();
       expect(screen.getByText('Video unavailable')).toBeInTheDocument();
       expect(screen.getByText('Network timeout')).toBeInTheDocument();
+    });
+
+    test('groups diagnosed failures under the advice headline with the raw error as detail', async () => {
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+          pendingJobs={[]}
+          token="test-token"
+        />
+      );
+
+      const [, processCallback] = mockSubscribe.mock.calls[0];
+
+      await act(async () => {
+        processCallback({
+          finalSummary: {
+            totalDownloaded: 0,
+            totalSkipped: 0,
+            totalFailed: 2,
+            failedVideos: [
+              {
+                youtubeId: 'video1',
+                title: 'Cosmic Queries',
+                channel: 'StarTalk',
+                error: 'unable to download video data: HTTP Error 403: Forbidden',
+                diagnosisKey: 'http-403-cookies-enabled',
+              },
+              {
+                youtubeId: 'video2',
+                title: 'Another Episode',
+                channel: 'StarTalk',
+                error: 'unable to download video data: HTTP Error 403: Forbidden',
+                diagnosisKey: 'http-403-cookies-enabled',
+              },
+            ],
+            diagnoses: [
+              {
+                key: 'http-403-cookies-enabled',
+                title: 'YouTube blocked the download while using your cookies',
+                message: 'Re-export fresh cookies from your browser and upload them in Settings.',
+                count: 2,
+              },
+            ],
+            jobType: 'Channel Downloads',
+          },
+        });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Summary of last job')).toBeInTheDocument();
+      });
+      expect(
+        screen.getByText(/2 videos failed: YouTube blocked the download while using your cookies/)
+      ).toBeInTheDocument();
+      expect(
+        screen.getAllByText('Re-export fresh cookies from your browser and upload them in Settings.')
+      ).toHaveLength(1);
+      expect(
+        screen.getByText('unable to download video data: HTTP Error 403: Forbidden')
+      ).toBeInTheDocument();
+      expect(screen.getByText(/Cosmic Queries/)).toBeInTheDocument();
+      expect(screen.getByText(/Another Episode/)).toBeInTheDocument();
+    });
+
+    test('renders undiagnosed failures unchanged alongside diagnosed ones', async () => {
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+          pendingJobs={[]}
+          token="test-token"
+        />
+      );
+
+      const [, processCallback] = mockSubscribe.mock.calls[0];
+
+      await act(async () => {
+        processCallback({
+          finalSummary: {
+            totalDownloaded: 0,
+            totalSkipped: 0,
+            totalFailed: 2,
+            failedVideos: [
+              {
+                youtubeId: 'video1',
+                title: 'Diagnosed Video',
+                channel: 'StarTalk',
+                error: 'HTTP Error 403: Forbidden',
+                diagnosisKey: 'http-403-cookies-enabled',
+              },
+              {
+                youtubeId: 'video2',
+                title: 'Mystery Video',
+                channel: 'Other Channel',
+                error: 'Postprocessing failed',
+              },
+            ],
+            diagnoses: [
+              {
+                key: 'http-403-cookies-enabled',
+                title: 'YouTube blocked the download while using your cookies',
+                message: 'Re-export fresh cookies from your browser.',
+                count: 1,
+              },
+            ],
+            jobType: 'Channel Downloads',
+          },
+        });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Summary of last job')).toBeInTheDocument();
+      });
+      expect(
+        screen.getByText(/1 video failed: YouTube blocked the download while using your cookies/)
+      ).toBeInTheDocument();
+      expect(screen.getByText(/1 video failed:$/)).toBeInTheDocument();
+      expect(screen.getByText('Postprocessing failed')).toBeInTheDocument();
+      expect(screen.getByText(/Mystery Video/)).toBeInTheDocument();
     });
 
     test('hides unknown video titles in failed videos list', async () => {

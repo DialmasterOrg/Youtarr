@@ -15,6 +15,7 @@ import StillLiveDot from './StillLiveDot';
 import RatingBadge from '../shared/RatingBadge';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
 import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_THEMED_CHIP_SMALL_STYLE } from '../shared/chipStyles';
+import { getPublishedDateDisplay } from './publishedDateDisplay';
 
 type SortBy = 'date' | 'title' | 'duration' | 'size';
 type SortOrder = 'asc' | 'desc';
@@ -292,9 +293,7 @@ function VideoTableView({
                   </Typography>
                 </td>
                 <td style={{ whiteSpace: 'nowrap', padding: '8px 4px' }}>
-                  {video.media_type === 'short' || !video.publishedAt
-                    ? 'N/A'
-                    : new Date(video.publishedAt).toLocaleDateString()}
+                  {getPublishedDateDisplay(video, (d) => d.toLocaleDateString()) ?? 'N/A'}
                 </td>
                 <td style={{ whiteSpace: 'nowrap', padding: '8px 4px' }}>
                   {(() => {
@@ -334,6 +333,7 @@ function VideoTableView({
                       audioFilePath={video.audioFilePath}
                       fileSize={video.fileSize}
                       audioFileSize={video.audioFileSize}
+                      orientation="vertical"
                     />
                   ) : '-'}
                 </td>

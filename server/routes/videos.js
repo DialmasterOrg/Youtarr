@@ -1,5 +1,6 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const { ROOT_SENTINEL, GLOBAL_DEFAULT_SENTINEL } = require('../modules/filesystem/constants');
 
 // Video validation rate limiter
 const videoValidationLimiter = rateLimit({
@@ -194,27 +195,13 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
         });
       }
 
-      // Validate rating value against the single source of truth in ratingMapper
+      // Validate/normalize against the single source of truth in ratingMapper
       const ratingMapper = require('../modules/ratingMapper');
-      const validRatings = ratingMapper.getValidNormalizedRatings();
-
-      let normalizedRating = rating;
-
-      if (normalizedRating !== null) {
-        if (typeof normalizedRating !== 'string') {
-          return res.status(400).json({ success: false, error: 'rating must be a string or null' });
-        }
-
-        normalizedRating = normalizedRating.trim().toUpperCase();
-
-        if (normalizedRating === ratingMapper.NOT_RATED) {
-          normalizedRating = null;
-        }
+      const ratingResult = ratingMapper.validateRating(rating);
+      if (!ratingResult.valid) {
+        return res.status(400).json({ success: false, error: ratingResult.error });
       }
-
-      if (normalizedRating !== null && !validRatings.includes(normalizedRating)) {
-        return res.status(400).json({ success: false, error: `Invalid rating value. Valid options: ${validRatings.join(', ')}` });
-      }
+      const normalizedRating = ratingResult.value;
 
       const result = await videosModule.bulkUpdateVideoRatings(videoIds, normalizedRating);
       res.json(result);
@@ -666,6 +653,13 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
       }
     }
 
+    // Persist a real subfolder override so it is reusable in future downloads.
+    if (subfolder && subfolder !== ROOT_SENTINEL && subfolder !== GLOBAL_DEFAULT_SENTINEL) {
+      require('../modules/subfolderModule')
+        .register(subfolder)
+        .catch((err) => req.log.warn({ err }, 'Failed to register download subfolder'));
+    }
+
     try {
       // Optionally fetch video metadata for response
       const videoValidationModule = require('../modules/videoValidationModule');
@@ -780,11 +774,44 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
         }
       }
 
+      // Validate subfolder soft fallback if provided. This field reaches the
+      // filesystem path the same way subfolder does, so it must pass the same
+      // traversal-safe validation rather than being trusted as internal-only.
+      if (overrideSettings.subfolderFallback !== undefined && overrideSettings.subfolderFallback !== null) {
+        const channelSettingsModule = require('../modules/channelSettingsModule');
+        const validation = channelSettingsModule.validateSubFolder(overrideSettings.subfolderFallback);
+        if (!validation.valid) {
+          return res.status(400).json({
+            error: validation.error
+          });
+        }
+      }
+
       // Validate skipVideoFolder if provided
       if (overrideSettings.skipVideoFolder !== undefined && typeof overrideSettings.skipVideoFolder !== 'boolean') {
         return res.status(400).json({
           error: 'skipVideoFolder must be a boolean'
         });
+      }
+
+      // Validate/normalize rating override if provided
+      if (overrideSettings.rating !== undefined) {
+        const ratingMapper = require('../modules/ratingMapper');
+        const ratingResult = ratingMapper.validateRating(overrideSettings.rating);
+        if (!ratingResult.valid) {
+          return res.status(400).json({ error: ratingResult.error });
+        }
+        overrideSettings.rating = ratingResult.value;
+      }
+
+      // Validate/normalize rating soft fallback if provided
+      if (overrideSettings.ratingFallback !== undefined && overrideSettings.ratingFallback !== null) {
+        const ratingMapper = require('../modules/ratingMapper');
+        const ratingResult = ratingMapper.validateRating(overrideSettings.ratingFallback);
+        if (!ratingResult.valid) {
+          return res.status(400).json({ error: ratingResult.error });
+        }
+        overrideSettings.ratingFallback = ratingResult.value;
       }
     }
 
@@ -855,7 +882,11 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
       }
     }
 
-    downloadModule.doChannelDownloads(req.body || {});
+    downloadModule
+      .doChannelAndPlaylistDownloads(req.body || {})
+      .catch((err) => {
+        req.log.error({ err }, 'Manual channel + playlist downloads failed');
+      });
     res.json({ status: 'success' });
   });
 

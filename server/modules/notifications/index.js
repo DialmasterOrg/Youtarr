@@ -104,8 +104,21 @@ class NotificationModule {
       const { finalSummary, videoData } = notificationData;
       const config = this.configModule.getConfig();
 
-      if (finalSummary.totalDownloaded === 0) {
-        logger.debug('No new videos downloaded, skipping notification');
+      const terminatedChannelCount = Array.isArray(finalSummary.terminatedChannels)
+        ? finalSummary.terminatedChannels.length
+        : 0;
+      const terminationFailureCount = Array.isArray(finalSummary.terminationFailures)
+        ? finalSummary.terminationFailures.length
+        : 0;
+
+      const diagnosisCount = Array.isArray(finalSummary.diagnoses)
+        ? finalSummary.diagnoses.length
+        : 0;
+
+      // Diagnosed failure-only runs still notify: the "Likely cause" advice is
+      // the whole point of telling an automated user about the failure.
+      if (finalSummary.totalDownloaded === 0 && terminatedChannelCount === 0 && terminationFailureCount === 0 && diagnosisCount === 0) {
+        logger.debug('No new videos downloaded and no terminations recorded, skipping notification');
         return;
       }
 

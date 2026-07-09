@@ -22,6 +22,7 @@ interface UseChannelVideosParams {
   protectedFilter?: ChipFilterMode;
   missingFilter?: ChipFilterMode;
   ignoredFilter?: ChipFilterMode;
+  onFirstLoad?: (channelId: string) => void;
 }
 
 interface UseChannelVideosResult {
@@ -55,6 +56,7 @@ export function useChannelVideos({
   protectedFilter,
   missingFilter,
   ignoredFilter,
+  onFirstLoad,
 }: UseChannelVideosParams): UseChannelVideosResult {
   const [videos, setVideos] = useState<ChannelVideo[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
@@ -64,6 +66,11 @@ export function useChannelVideos({
   const [autoDownloadsEnabled, setAutoDownloadsEnabled] = useState<boolean>(false);
   const [availableTabs, setAvailableTabs] = useState<string[]>([]);
   const resetKeyRef = useRef<string | undefined>(resetKey);
+  // Fire onFirstLoad once per channelId. Subsequent fetches (sort, page,
+  // tab change) should not retrigger it.
+  const firstLoadFiredFor = useRef<string | null>(null);
+  const onFirstLoadRef = useRef(onFirstLoad);
+  onFirstLoadRef.current = onFirstLoad;
 
   const fetchVideos = useCallback(async () => {
     if (!channelId || !token || !tabType) return;
@@ -161,6 +168,12 @@ export function useChannelVideos({
       // distinguishes "fetch failed" from "filter matched nothing".
       if (data.fetchError) {
         setError(new Error('Failed to fetch channel videos'));
+      } else if (data.freshFetchPerformed && firstLoadFiredFor.current !== channelId) {
+        // Only latch on responses that actually ran yt-dlp - cache-only or
+        // cached-fallback responses leave the door open for a later refetch
+        // (tab change, expiry) to fire it.
+        firstLoadFiredFor.current = channelId;
+        onFirstLoadRef.current?.(channelId);
       }
     } catch (err) {
       console.error('Error fetching channel videos:', err);

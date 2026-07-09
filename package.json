@@ -1,8 +1,12 @@
 {
   "name": "youtarr",
-  "version": "1.68.0",
+  "version": "1.73.0",
   "description": "",
   "main": "server/index.js",
+  "engines": {
+    "node": ">=20.19.0",
+    "npm": ">=11.10.0"
+  },
   "scripts": {
     "start": "node server/server.js",
     "lint": "eslint ./client/src/. --ext .ts,.tsx && eslint ./server/. --ext .js",
@@ -45,6 +49,9 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "overrides": {
+    "form-data": "^4.0.6"
+  },
   "dependencies": {
     "axios": "^1.12.0",
     "bcrypt": "^6.0.0",
@@ -52,7 +59,7 @@
     "express": "^4.18.2",
     "express-rate-limit": "^8.1.0",
     "fs-extra": "^11.1.1",
-    "multer": "^2.0.2",
+    "multer": "^2.2.0",
     "mysql2": "^3.9.4",
     "node-cron": "^3.0.2",
     "pino": "^10.0.0",

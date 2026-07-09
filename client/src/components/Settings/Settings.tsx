@@ -13,6 +13,8 @@ import ConfigurationSkeleton from '../Configuration/common/ConfigurationSkeleton
 import { CoreSettingsSection } from '../Configuration/sections/CoreSettingsSection';
 import AppearanceSettingsSection from '../Configuration/sections/AppearanceSettingsSection';
 import { PlexIntegrationSection } from '../Configuration/sections/PlexIntegrationSection';
+import JellyfinSection from '../Configuration/sections/JellyfinSection';
+import EmbySection from '../Configuration/sections/EmbySection';
 import { SponsorBlockSection } from '../Configuration/sections/SponsorBlockSection';
 import { CookieConfigSection } from '../Configuration/sections/CookieConfigSection';
 import { NotificationsSection } from '../Configuration/sections/NotificationsSection';
@@ -36,12 +38,18 @@ import { useConfig } from '../../hooks/useConfig';
 import { TRACKABLE_CONFIG_KEYS } from '../../config/configSchema';
 import { ConfigState, SnackbarState } from '../Configuration/types';
 import { validateConfig } from '../Configuration/utils/configValidation';
+import { FILENAME_PRESETS } from '../../utils/filenameTemplate/presets';
+import { validatePrefix } from '../../utils/filenameTemplate/validate';
 import { SETTINGS_PAGES, SettingsIndex } from './SettingsIndex';
 import { MaintenanceSection } from './MaintenanceSection';
 
 interface SettingsProps {
   token: string | null;
 }
+
+const PREVIEW_CUSTOM_TEMPLATE_MESSAGE = 'Preview this custom filename template before saving.';
+
+const normalizeFilenamePrefix = (prefix?: string | null) => (prefix ?? '').replace(/\s+$/, '');
 
 export function Settings({ token }: SettingsProps) {
   const location = useLocation();
@@ -63,16 +71,41 @@ export function Settings({ token }: SettingsProps) {
     severity: 'success',
   });
   const [mobileTooltip, setMobileTooltip] = useState<string | null>(null);
+  const [filenamePreviewedPrefix, setFilenamePreviewedPrefix] = useState<string | null>(null);
 
   const hasPlexServerConfigured = isPlatformManaged.plexUrl || Boolean(config.plexIP);
 
   const { available: storageAvailable } = useStorageStatus(token, { checkOnly: true });
 
-  const validationError = validateConfig(config);
+  const configValidationError = validateConfig(config);
+  const filenameTemplateSaveRequirement = useMemo(() => {
+    if (!initialConfig) return null;
+
+    const currentPrefix = normalizeFilenamePrefix(config.videoFilenamePrefix);
+    if (!validatePrefix(currentPrefix).ok) return null;
+
+    const savedPrefix = normalizeFilenamePrefix(initialConfig.videoFilenamePrefix);
+    if (currentPrefix === savedPrefix) return null;
+
+    const matchesPreset = FILENAME_PRESETS.some(
+      (preset) => normalizeFilenamePrefix(preset.prefix) === currentPrefix
+    );
+    if (matchesPreset) return null;
+
+    if (filenamePreviewedPrefix === currentPrefix) return null;
+
+    return PREVIEW_CUSTOM_TEMPLATE_MESSAGE;
+  }, [config.videoFilenamePrefix, initialConfig, filenamePreviewedPrefix]);
+  const validationError = configValidationError ?? filenameTemplateSaveRequirement;
+
+  const handleFilenameTemplatePreviewSuccess = useCallback((prefix: string) => {
+    setFilenamePreviewedPrefix(normalizeFilenamePrefix(prefix));
+  }, []);
 
   const {
     plexConnectionStatus,
     setPlexConnectionStatus,
+    plexServerClaimed,
     plexLibraries,
     openPlexLibrarySelector,
     openPlexAuthDialog,
@@ -250,6 +283,8 @@ export function Settings({ token }: SettingsProps) {
                 onConfigChange={handleConfigChange}
                 onMobileTooltipClick={setMobileTooltip}
                 token={token}
+                filenameTemplateSaveRequirement={filenameTemplateSaveRequirement}
+                onFilenameTemplatePreviewSuccess={handleFilenameTemplatePreviewSuccess}
                 ytDlpVersionInfo={ytDlpVersionInfo}
                 ytDlpUpdateStatus={ytDlpUpdateStatus}
                 onYtDlpUpdate={performYtDlpUpdate}
@@ -264,6 +299,7 @@ export function Settings({ token }: SettingsProps) {
                 config={config}
                 isPlatformManaged={isPlatformManaged}
                 plexConnectionStatus={plexConnectionStatus}
+                plexServerClaimed={plexServerClaimed}
                 plexLibraries={plexLibraries}
                 hasPlexServerConfigured={hasPlexServerConfigured}
                 onConfigChange={handleConfigChange}
@@ -272,6 +308,26 @@ export function Settings({ token }: SettingsProps) {
                 onOpenPlexAuthDialog={() => setOpenPlexAuthDialog(true)}
                 onMobileTooltipClick={setMobileTooltip}
                 token={token}
+              />
+            }
+          />
+          <Route
+            path="jellyfin"
+            element={
+              <JellyfinSection
+                config={config}
+                token={token}
+                onConfigChange={handleConfigChange}
+              />
+            }
+          />
+          <Route
+            path="emby"
+            element={
+              <EmbySection
+                config={config}
+                token={token}
+                onConfigChange={handleConfigChange}
               />
             }
           />

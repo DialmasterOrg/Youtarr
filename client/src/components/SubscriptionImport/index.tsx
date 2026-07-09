@@ -31,7 +31,7 @@ const ImportSubscriptionsPage: React.FC<ImportSubscriptionsPageProps> = ({ token
   const { loading: uploadLoading, error: uploadError, upload } = usePreviewUpload(token);
   const { jobDetail } = useImportJob(state.activeJobId, token);
   const prevStatusRef = useRef<string | null>(null);
-  const { subfolders } = useSubfolders(token);
+  const { subfolders, createSubfolder } = useSubfolders(token);
   const { config } = useConfig(token);
   const defaultSubfolderDisplay = config.defaultSubfolder || null;
   const globalPreferredResolution = config.preferredResolution || '1080';
@@ -113,7 +113,7 @@ const ImportSubscriptionsPage: React.FC<ImportSubscriptionsPageProps> = ({ token
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-start gap-3">
-        <Button variant="outlined" size="small" onClick={() => navigate('/channels')}>
+        <Button variant="outlined" size="small" onClick={() => navigate('/subscriptions')}>
           Back to channels
         </Button>
         <div className="space-y-1">
@@ -148,6 +148,7 @@ const ImportSubscriptionsPage: React.FC<ImportSubscriptionsPageProps> = ({ token
             rowStates={state.rowStates}
             dispatch={dispatch}
             subfolders={subfolders}
+            createSubfolder={createSubfolder}
             defaultSubfolderDisplay={defaultSubfolderDisplay}
             globalPreferredResolution={globalPreferredResolution}
           />

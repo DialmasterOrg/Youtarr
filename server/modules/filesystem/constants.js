@@ -49,10 +49,12 @@ const CHANNEL_TEMPLATE = '%(uploader,channel,uploader_id).80B';
 /**
  * Default prefix for the user-customizable video filename template.
  * Composed with VIDEO_FILENAME_SUFFIX to produce the full yt-dlp -o template.
- * Matches the legacy fixed template byte-for-byte so existing installs are
- * unchanged until the user touches the setting.
+ * The title is capped at 64 bytes: the prefix appears twice in the full path
+ * (per-video folder + filename), and Plex on Windows silently skips any file
+ * whose full path reaches 260 chars. Installs that saved the setting keep
+ * their persisted prefix; this default only applies until they touch it.
  */
-const DEFAULT_VIDEO_FILENAME_PREFIX = `${CHANNEL_TEMPLATE} - %(title).76B`;
+const DEFAULT_VIDEO_FILENAME_PREFIX = `${CHANNEL_TEMPLATE} - %(title).64B`;
 
 /**
  * Locked suffix appended to every user-customized video filename.
@@ -108,18 +110,6 @@ function composeVideoFolderName(prefix) {
 }
 
 /**
- * Legacy-compatible folder template. Kept so existing imports of
- * VIDEO_FOLDER_TEMPLATE continue to work byte-identically.
- */
-const VIDEO_FOLDER_TEMPLATE = composeVideoFolderName(DEFAULT_VIDEO_FILENAME_PREFIX);
-
-/**
- * Legacy-compatible full template. Kept so existing imports of
- * VIDEO_FILE_TEMPLATE (e.g. tests, future callers) continue to work.
- */
-const VIDEO_FILE_TEMPLATE = composeVideoFileTemplate(DEFAULT_VIDEO_FILENAME_PREFIX);
-
-/**
  * Pattern to extract YouTube video ID from filename
  * Matches [VideoID] where VideoID is 10-12 alphanumeric characters (including - and _)
  */
@@ -141,18 +131,6 @@ const YOUTUBE_ID_PATTERN = /^[a-zA-Z0-9_-]{10,12}$/;
  * Matches [VideoID].mp4/mkv/webm but NOT .fXXX.mp4
  */
 const MAIN_VIDEO_FILE_PATTERN = /\[[a-zA-Z0-9_-]{10,12}\]\.(mp4|mkv|webm)$/;
-
-/**
- * Pattern to identify main audio files (MP3 downloads)
- * Matches [VideoID].mp3
- */
-const MAIN_AUDIO_FILE_PATTERN = /\[[a-zA-Z0-9_-]{10,12}\]\.mp3$/;
-
-/**
- * Pattern to identify any main media file (video or audio)
- * Matches [VideoID].mp4/mkv/webm/mp3
- */
-const MAIN_MEDIA_FILE_PATTERN = /\[[a-zA-Z0-9_-]{10,12}\]\.(mp4|mkv|webm|mp3)$/;
 
 /**
  * Pattern to identify video fragment files (to exclude)
@@ -190,8 +168,6 @@ module.exports = {
   AUDIO_EXTENSIONS,
   MEDIA_EXTENSIONS,
   CHANNEL_TEMPLATE,
-  VIDEO_FOLDER_TEMPLATE,
-  VIDEO_FILE_TEMPLATE,
   DEFAULT_VIDEO_FILENAME_PREFIX,
   VIDEO_FILENAME_SUFFIX,
   composeVideoFileTemplate,
@@ -201,8 +177,6 @@ module.exports = {
   YOUTUBE_ID_DASH_PATTERN,
   YOUTUBE_ID_PATTERN,
   MAIN_VIDEO_FILE_PATTERN,
-  MAIN_AUDIO_FILE_PATTERN,
-  MAIN_MEDIA_FILE_PATTERN,
   FRAGMENT_FILE_PATTERN,
   CHANNEL_CLEANUP_IGNORABLE_FILES,
   APPLEDOUBLE_FILE_PATTERN

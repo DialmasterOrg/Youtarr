@@ -11,6 +11,18 @@ interface UseConfigSaveParams {
   checkPlexConnection: () => void;
 }
 
+async function getSaveErrorMessage(response: Response): Promise<string> {
+  try {
+    const body = await response.json();
+    if (body && typeof body.error === 'string' && body.error.trim()) {
+      return body.error;
+    }
+  } catch {
+    // Fall through to the generic message when the server did not return JSON.
+  }
+  return 'Failed to save configuration';
+}
+
 export const useConfigSave = ({
   token,
   config,
@@ -34,7 +46,12 @@ export const useConfigSave = ({
       });
 
       if (!response.ok) {
-        throw new Error('Failed to save configuration');
+        setSnackbar({
+          open: true,
+          message: await getSaveErrorMessage(response),
+          severity: 'error'
+        });
+        return false;
       }
 
       setInitialConfig(config);

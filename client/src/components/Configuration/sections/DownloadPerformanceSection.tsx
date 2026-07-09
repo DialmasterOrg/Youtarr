@@ -109,6 +109,25 @@ export const DownloadPerformanceSection: React.FC<DownloadPerformanceSectionProp
           </FormControl>
         </Grid>
 
+        <Grid item xs={12} md={6}>
+          <FormControl fullWidth>
+            <InputLabel>Auto-Retry Failed Videos</InputLabel>
+            <Select
+              value={config.downloadAutoRetryCount ?? 1}
+              onChange={(e) => onConfigChange({ downloadAutoRetryCount: Number(e.target.value) })}
+              label="Auto-Retry Failed Videos"
+            >
+              <MenuItem value={0}>Disabled</MenuItem>
+              <MenuItem value={1}>1 auto-retry</MenuItem>
+              <MenuItem value={2}>2 auto-retries</MenuItem>
+              <MenuItem value={3}>3 auto-retries</MenuItem>
+            </Select>
+            <FormHelperText>
+              Re-run videos that fail with a transient HTTP 403 in a fresh download job
+            </FormHelperText>
+          </FormControl>
+        </Grid>
+
         {config.enableStallDetection && (
           <>
             <Grid item xs={12} md={6}>

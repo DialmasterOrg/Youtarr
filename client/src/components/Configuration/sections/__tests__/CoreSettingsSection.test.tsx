@@ -14,6 +14,8 @@ jest.mock('../../../../hooks/useSubfolders', () => ({
     loading: false,
     error: null,
     refetch: jest.fn(),
+    createSubfolder: jest.fn(() => Promise.resolve()),
+    deleteSubfolder: jest.fn(() => Promise.resolve()),
   }),
 }));
 
@@ -132,6 +134,84 @@ describe('CoreSettingsSection Component', () => {
 
       const infoTrigger = await screen.findByRole('button', { name: /Jellyfin \/ Kodi \/ Emby Setting Information/i });
       expect(infoTrigger).toHaveAttribute('data-state', 'closed');
+    });
+  });
+
+  describe('Create video fanart files Checkbox', () => {
+    test('renders Create video fanart files checkbox', async () => {
+      const user = userEvent.setup();
+      const props = createSectionProps();
+      renderWithProviders(<CoreSettingsSection {...props} />);
+
+
+      expect(screen.getByRole('checkbox', { name: /Create video fanart files/i })).toBeInTheDocument();
+    });
+
+    test('checkbox reflects writeVideoFanart state when false', async () => {
+      const user = userEvent.setup();
+      const props = createSectionProps({
+        config: createConfig({ writeVideoFanart: false })
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+
+
+      const checkbox = screen.getByRole('checkbox', { name: /Create video fanart files/i });
+      expect(checkbox).not.toBeChecked();
+    });
+
+    test('checkbox reflects writeVideoFanart state when true', async () => {
+      const user = userEvent.setup();
+      const props = createSectionProps({
+        config: createConfig({ writeVideoFanart: true })
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+
+
+      const checkbox = screen.getByRole('checkbox', { name: /Create video fanart files/i });
+      expect(checkbox).toBeChecked();
+    });
+
+    test('calls onConfigChange when checkbox is toggled from false to true', async () => {
+      const user = userEvent.setup();
+      const onConfigChange = jest.fn();
+      const props = createSectionProps({
+        config: createConfig({ writeVideoFanart: false }),
+        onConfigChange
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+
+
+      const checkbox = screen.getByRole('checkbox', { name: /Create video fanart files/i });
+      await user.click(checkbox);
+
+      expect(onConfigChange).toHaveBeenCalledTimes(1);
+      expect(onConfigChange).toHaveBeenCalledWith({ writeVideoFanart: true });
+    });
+
+    test('calls onConfigChange when checkbox is toggled from true to false', async () => {
+      const user = userEvent.setup();
+      const onConfigChange = jest.fn();
+      const props = createSectionProps({
+        config: createConfig({ writeVideoFanart: true }),
+        onConfigChange
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+
+
+      const checkbox = screen.getByRole('checkbox', { name: /Create video fanart files/i });
+      await user.click(checkbox);
+
+      expect(onConfigChange).toHaveBeenCalledTimes(1);
+      expect(onConfigChange).toHaveBeenCalledWith({ writeVideoFanart: false });
+    });
+
+    test('renders helper text for video fanart', () => {
+      const props = createSectionProps();
+      renderWithProviders(<CoreSettingsSection {...props} />);
+      
+      // Verify the checkbox label is present with the info tooltip
+      const checkboxLabel = screen.getByText('Create video fanart files');
+      expect(checkboxLabel).toBeInTheDocument();
     });
   });
 

@@ -225,6 +225,11 @@ const createServerModule = ({
           updateChannelSettings: jest.fn(),
           getAllSubFolders: jest.fn()
         }));
+        jest.doMock('../modules/subfolderModule', () => ({
+          getAll: jest.fn().mockResolvedValue([]),
+          register: jest.fn().mockResolvedValue(undefined),
+          delete: jest.fn().mockResolvedValue(undefined),
+        }));
         jest.doMock('../modules/archiveModule', () => ({
           getAutoRemovalDryRun: jest.fn().mockResolvedValue({ videos: [], totalSize: 0 })
         }));
@@ -254,6 +259,12 @@ const createServerModule = ({
         }));
         jest.doMock('../modules/notificationModule', () => ({
           sendTestNotification: jest.fn().mockResolvedValue({ success: true })
+        }));
+        // Mocked to avoid pulling fs-extra (via ytDlpRunner -> tempPathManager),
+        // which the minimal `fs` stub above can't satisfy.
+        jest.doMock('../modules/filenamePreview', () => ({
+          previewTemplate: jest.fn(),
+          validateTemplate: jest.fn().mockResolvedValue({ ok: true })
         }));
         jest.doMock('../models/channelvideo', () => ({
           update: jest.fn().mockResolvedValue([1])

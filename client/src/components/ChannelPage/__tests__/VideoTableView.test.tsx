@@ -161,6 +161,24 @@ describe('VideoTableView Component', () => {
       expect(screen.getByText('N/A')).toBeInTheDocument();
     });
 
+    test('renders Pending for estimated published dates', () => {
+      const estimatedVideo = { ...mockVideo, publishedAt: null, published_at_source: 'estimated' as const };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[estimatedVideo]} />);
+      expect(screen.getByText('Pending')).toBeInTheDocument();
+    });
+
+    test('renders tilde prefix for approximate published dates', () => {
+      const approximateVideo = { ...mockVideo, published_at_source: 'approximate' as const };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[approximateVideo]} />);
+      expect(screen.getByText(/^~1\/15\/2023/)).toBeInTheDocument();
+    });
+
+    test('renders exact published dates without a tilde', () => {
+      const exactVideo = { ...mockVideo, published_at_source: 'exact' as const };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[exactVideo]} />);
+      expect(screen.getByText(/^1\/15\/2023/)).toBeInTheDocument();
+    });
+
     test('renders duration for regular videos', () => {
       renderWithProviders(<VideoTableView {...defaultProps} />);
       // Duration is 600 seconds = 10 minutes
@@ -180,7 +198,7 @@ describe('VideoTableView Component', () => {
       renderWithProviders(<VideoTableView {...defaultProps} videos={[videoWithFile]} />);
       // File size shown in format indicator chip
       expect(screen.getByText(/50/)).toBeInTheDocument();
-      expect(screen.getByTestId('StorageIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('VideoFormatIcon')).toBeInTheDocument();
     });
 
     test('renders dash when no file path exists', () => {
@@ -188,6 +206,21 @@ describe('VideoTableView Component', () => {
       renderWithProviders(<VideoTableView {...defaultProps} videos={[videoNoFile]} />);
       // Two dashes on a never-downloaded row: Downloaded column and Size column
       expect(screen.getAllByText('-').length).toBeGreaterThan(0);
+    });
+
+    test('stacks the format chips vertically so they fit the narrow size column', () => {
+      const videoWithBothFormats = {
+        ...mockVideo,
+        filePath: '/path/to/video.mp4',
+        fileSize: 1024 * 1024 * 50,
+        audioFilePath: '/path/to/audio.mp3',
+        audioFileSize: 1024 * 1024 * 5,
+      };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[videoWithBothFormats]} />);
+
+      expect(screen.getByTestId('VideoFormatIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('AudioFormatIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('download-format-indicator')).toHaveClass('flex-col');
     });
   });
 
@@ -850,7 +883,7 @@ describe('VideoTableView Component', () => {
       renderWithProviders(<VideoTableView {...defaultProps} videos={[largeVideo]} />);
       // File size shown in format indicator chip
       expect(screen.getByText(/GB/)).toBeInTheDocument();
-      expect(screen.getByTestId('StorageIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('VideoFormatIcon')).toBeInTheDocument();
     });
 
     test('handles video in both selectedForDeletion and checkedBoxes', () => {
@@ -931,10 +964,13 @@ describe('VideoTableView Component', () => {
       renderWithProviders(
         <VideoTableView {...defaultProps} videos={[downloadedVideo]} />
       );
-      // Downloaded cell stacks date above time. Time format is unique to this cell
-      // (Published has no time); date regex also matches Published so use getAllByText.
+      // Downloaded cell stacks date above time. Time format is unique to this
+      // cell (Published has no time). The Published column renders with a ~
+      // prefix (approximate source), so the bare date regex matches only the
+      // Downloaded cell.
       expect(screen.getByText(/^\d{2}:\d{2} (AM|PM)$/)).toBeInTheDocument();
-      expect(screen.getAllByText(/^\d{1,2}\/\d{1,2}\/\d{4}$/).length).toBeGreaterThanOrEqual(2);
+      expect(screen.getByText(/^\d{1,2}\/\d{1,2}\/\d{4}$/)).toBeInTheDocument();
+      expect(screen.getByText(/^~\d{1,2}\/\d{1,2}\/\d{4}$/)).toBeInTheDocument();
     });
 
     test('renders "-" for never downloaded videos', () => {

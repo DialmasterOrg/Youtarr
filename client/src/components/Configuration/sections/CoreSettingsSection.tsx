@@ -33,6 +33,7 @@ import { InfoTooltip } from '../common/InfoTooltip';
 import SubtitleLanguageSelector from '../SubtitleLanguageSelector';
 import { VideoFilenameTemplate } from './components/VideoFilenameTemplate';
 import { SubfolderAutocomplete } from '../../shared/SubfolderAutocomplete';
+import { ManageSubfoldersDialog } from '../../shared/ManageSubfoldersDialog';
 import { useSubfolders } from '../../../hooks/useSubfolders';
 import { ConfigState, DeploymentEnvironment, PlatformManagedState } from '../types';
 import { reverseFrequencyMapping, getChannelFilesOptions } from '../helpers';
@@ -46,6 +47,8 @@ interface CoreSettingsSectionProps {
   onConfigChange: (updates: Partial<ConfigState>) => void;
   onMobileTooltipClick?: (text: string) => void;
   token: string | null;
+  filenameTemplateSaveRequirement?: string | null;
+  onFilenameTemplatePreviewSuccess?: (prefix: string) => void;
   ytDlpVersionInfo?: YtDlpVersionInfo;
   ytDlpUpdateStatus?: YtDlpUpdateStatus;
   onYtDlpUpdate?: () => void;
@@ -58,14 +61,17 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
   onConfigChange,
   onMobileTooltipClick,
   token,
+  filenameTemplateSaveRequirement,
+  onFilenameTemplatePreviewSuccess,
   ytDlpVersionInfo,
   ytDlpUpdateStatus,
   onYtDlpUpdate,
 }) => {
   // Fetch available subfolders
-  const { subfolders, loading: subfoldersLoading } = useSubfolders(token);
+  const { subfolders, loading: subfoldersLoading, createSubfolder } = useSubfolders(token);
 
   // State for confirmation dialog when setting default subfolder
+  const [manageOpen, setManageOpen] = useState(false);
   const [pendingDefaultSubfolder, setPendingDefaultSubfolder] = useState<string | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [affectedChannels, setAffectedChannels] = useState<{ count: number; channelNames: string[] }>({ count: 0, channelNames: [] });
@@ -212,7 +218,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                       label="Enable Automatic Downloads"
                     />
                     <InfoTooltip
-                      text="Globally enable or disable automatic scheduled downloading of videos from your channels. Only tabs that are enabled for your Channels will be checked and downloaded."
+                      text="Globally enable or disable automatic scheduled downloading of videos from your channels and playlists. Only enabled channel tabs and auto-download enabled playlists will be checked and downloaded."
                       onMobileClick={onMobileTooltipClick}
                     />
                   </Box>
@@ -277,7 +283,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
 
                 <Grid item xs={12} md={6}>
                   <FormControl fullWidth>
-                    <InputLabel>Files to Download per Channel</InputLabel>
+                    <InputLabel>Files to Download per Channel/Playlist</InputLabel>
                     <Box className="flex items-center gap-1">
                       <Select
                         value={config.channelFilesToDownload}
@@ -292,7 +298,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                         ))}
                       </Select>
                       <InfoTooltip
-                        text="How many videos (starting from most recently uploaded) Youtarr will attempt to download per tab when channel downloads run. Already downloaded videos will be skipped."
+                        text="How many videos Youtarr will attempt to download per channel tab and per playlist when downloads run (channels: newest uploads; playlists: most recently added). Already downloaded videos will be skipped."
                         onMobileClick={onMobileTooltipClick}
                       />
                     </Box>
@@ -428,6 +434,29 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                     />
                   </FormControl>
                 </Grid>
+
+                <Grid item xs={12} md={6} className="mt-3">
+                  <FormControl>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          name="writeVideoFanart"
+                          checked={config.writeVideoFanart}
+                          onChange={handleCheckboxChange}
+                        />
+                      }
+                      label={
+                        <Box className="flex items-center">
+                          Create video fanart files
+                          <InfoTooltip
+                            text="Create -fanart.jpg files for each video with the video thumbnail. Some Plex clients like NVIDIA Shield use this as the background preview instead of the poster."
+                            onMobileClick={onMobileTooltipClick}
+                          />
+                        </Box>
+                      }
+                    />
+                  </FormControl>
+                </Grid>
               </Grid>
             </AccordionDetails>
           </Accordion>
@@ -472,6 +501,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                       onChange={handleDefaultSubfolderChange}
                       subfolders={subfolders}
                       loading={subfoldersLoading}
+                      createSubfolder={createSubfolder}
                       label="Default Subfolder"
                       helperText="Default download location for channels using 'Default Subfolder'"
                     />
@@ -482,6 +512,14 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                       />
                     </Box>
                   </Box>
+                  <Button variant="text" size="sm" onClick={() => setManageOpen(true)}>
+                    Manage Subfolders
+                  </Button>
+                  <ManageSubfoldersDialog
+                    open={manageOpen}
+                    onClose={() => setManageOpen(false)}
+                    token={token}
+                  />
                 </Grid>
 
                 <Grid item xs={12} md={6}>
@@ -523,6 +561,9 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                     <VideoFilenameTemplate
                       value={config.videoFilenamePrefix}
                       onChange={(newValue) => onConfigChange({ videoFilenamePrefix: newValue })}
+                      token={token}
+                      saveRequirement={filenameTemplateSaveRequirement}
+                      onPreviewSuccess={onFilenameTemplatePreviewSuccess}
                     />
                   </Box>
                 </Grid>

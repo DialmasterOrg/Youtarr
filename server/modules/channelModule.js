@@ -11,10 +11,12 @@ const MessageEmitter = require('./messageEmitter.js');
 const { Op, fn, col, where } = require('sequelize');
 const fileCheckModule = require('./fileCheckModule');
 const logger = require('../logger');
-const { sanitizeNameLikeYtDlp } = require('./filesystem');
+const { sanitizeNameLikeYtDlp, GLOBAL_DEFAULT_SENTINEL, copySyncWithFallback } = require('./filesystem');
 const youtubeApi = require('./youtubeApi');
 const ratingMapper = require('./ratingMapper');
 const tempPathManager = require('./download/tempPathManager');
+const channelVideoReanchor = require('./channelVideoReanchor');
+const { PUBLISHED_AT_SOURCE } = require('./constants/publishedAtSource');
 
 const { v4: uuidv4 } = require('uuid');
 const { spawn, execSync } = require('child_process');
@@ -325,6 +327,7 @@ class ChannelModule {
       title: channel.title,
       description: channel.description,
       url: channel.url,
+      enabled: !!channel.enabled,
       auto_download_enabled_tabs: channel.auto_download_enabled_tabs ?? 'video',
       available_tabs: effectiveTabs.length > 0 ? effectiveTabs.join(',') : null,
       sub_folder: channel.sub_folder || null,
@@ -333,6 +336,7 @@ class ChannelModule {
       min_duration: channel.min_duration || null,
       max_duration: channel.max_duration || null,
       title_filter_regex: channel.title_filter_regex || null,
+      terminated_at: channel.terminated_at || null,
     };
 
     if (channel.default_rating != null) {
@@ -361,6 +365,7 @@ class ChannelModule {
       max_duration: channel.max_duration || null,
       title_filter_regex: channel.title_filter_regex || null,
       audio_format: channel.audio_format || null,
+      terminated_at: channel.terminated_at || null,
     };
 
     if (channel.default_rating != null) {
@@ -435,15 +440,18 @@ class ChannelModule {
       where: { channel_id: channelData.id }
     });
 
-    // Prepare update data
+    // `enabled` is only upgraded here: demoting it on update would soft-delete
+    // a subscribed channel (e.g. re-fetching metadata for a URL variant).
     const updateData = {
       channel_id: channelData.id,
       title: channelData.title,
       description: channelData.description,
       uploader: channelData.uploader,
       url: channelData.url,
-      enabled: enabled,
     };
+    if (enabled) {
+      updateData.enabled = true;
+    }
 
     // Only set folder_name if explicitly provided (don't overwrite existing with null)
     if (channelData.folder_name) {
@@ -473,10 +481,26 @@ class ChannelModule {
 
     // Only create if not found by either method
     if (!channel) {
+      // New rows always carry an explicit enabled state
+      updateData.enabled = enabled;
       // Apply initial settings only for new channels
       if (initialSettings.video_quality != null) updateData.video_quality = initialSettings.video_quality;
-      if (initialSettings.sub_folder != null) updateData.sub_folder = initialSettings.sub_folder;
+      // Three sub_folder states must stay distinct:
+      //   absent          -> global-default sentinel (falls through to global default)
+      //   explicit null   -> filesystem root (user chose "No Subfolder")
+      //   explicit value  -> that value
+      // hasOwnProperty, not a null check, keeps explicit-null distinct from absent.
+      // Mirrors playlistModule.ensureSourceChannel.
+      if (Object.prototype.hasOwnProperty.call(initialSettings, 'sub_folder')) {
+        updateData.sub_folder = initialSettings.sub_folder;
+      } else {
+        updateData.sub_folder = GLOBAL_DEFAULT_SENTINEL;
+      }
       if (initialSettings.default_rating != null) updateData.default_rating = initialSettings.default_rating;
+      if (initialSettings.min_duration != null) updateData.min_duration = initialSettings.min_duration;
+      if (initialSettings.max_duration != null) updateData.max_duration = initialSettings.max_duration;
+      if (initialSettings.title_filter_regex != null) updateData.title_filter_regex = initialSettings.title_filter_regex;
+      if (initialSettings.audio_format != null) updateData.audio_format = initialSettings.audio_format;
 
       channel = await Channel.create(updateData);
     }
@@ -593,9 +617,9 @@ class ChannelModule {
    * Trigger automatic channel video downloads.
    * Called by cron scheduler based on configured frequency.
    * Skips execution if a Channel Downloads job is already running to prevent queue backup.
-   * @returns {void}
+   * @returns {Promise<void>}
    */
-  channelAutoDownload() {
+  async channelAutoDownload() {
     logger.info({
       currentTime: new Date(),
       interval: configModule.getConfig().channelDownloadFrequency
@@ -616,7 +640,11 @@ class ChannelModule {
       return;
     }
 
-    downloadModule.doChannelDownloads();
+    try {
+      await downloadModule.doChannelAndPlaylistDownloads();
+    } catch (err) {
+      logger.error({ err }, 'Scheduled channel + playlist downloads failed');
+    }
   }
 
   /**
@@ -820,6 +848,12 @@ class ChannelModule {
     const { foundChannel, channelUrl } = await this.findChannelByUrlOrId(channelUrlOrId);
 
     if (foundChannel) {
+      // A disabled row is a soft-deleted channel; callers that subscribe
+      // (enableChannel=true) restore it here, keeping its previous settings.
+      if (enableChannel && !foundChannel.enabled) {
+        await foundChannel.update({ enabled: true });
+        logger.info({ channelId: foundChannel.channel_id }, 'Re-enabled soft-deleted channel');
+      }
       if (emitMessage) {
         MessageEmitter.emitMessage(
           'broadcast',
@@ -829,7 +863,7 @@ class ChannelModule {
           { text: 'Channel Updated' }
         );
       }
-      return this.mapChannelToResponse(foundChannel);
+      return { ...this.mapChannelToResponse(foundChannel), existing: true };
     }
 
     logger.info('Fetching channel metadata from YouTube');
@@ -858,7 +892,7 @@ class ChannelModule {
 
     // First, upsert the channel so it exists in the database
     // We'll update auto_download_enabled_tabs after detecting available tabs
-    await this.upsertChannel({
+    const savedChannel = await this.upsertChannel({
       id: properChannelId,
       title: channelData.title,
       description: channelData.description,
@@ -898,9 +932,12 @@ class ChannelModule {
       title: channelData.title,
       description: channelData.description,
       url: channelUrl,
+      // The row may pre-date this call (matched by channel_id under a
+      // different URL), so report its actual enabled state, not enableChannel.
+      enabled: !!savedChannel?.enabled,
       auto_download_enabled_tabs: tabResult?.autoDownloadEnabledTabs || 'video',
       available_tabs: tabResult?.availableTabs?.join(',') || null,
-      sub_folder: null,
+      sub_folder: GLOBAL_DEFAULT_SENTINEL,
       video_quality: null,
     };
   }
@@ -968,7 +1005,7 @@ class ChannelModule {
 
           if (fs.existsSync(channelThumbPath)) {
             try {
-              fs.copySync(channelThumbPath, channelPosterPath);
+              copySyncWithFallback(channelThumbPath, channelPosterPath);
             } catch (copyErr) {
               logger.error({ err: copyErr, channelFolderName }, 'Error backfilling poster for channel');
             }
@@ -1218,6 +1255,62 @@ class ChannelModule {
   }
 
   /**
+   * Build the list of yt-dlp target URLs for all enabled channels, one per
+   * enabled tab (video/short/livestream). Empty when nothing is downloadable.
+   * @returns {Promise<string[]>}
+   */
+  async getEnabledChannelDownloadUrls() {
+    const channels = await Channel.findAll({
+      where: { enabled: true },
+      attributes: ['channel_id', 'url', 'auto_download_enabled_tabs']
+    });
+
+    const urls = [];
+    for (const channel of channels) {
+      if (channel.channel_id) {
+        const canonical = this.resolveChannelUrlFromId(channel.channel_id);
+
+        // Parse the enabled tabs for this channel (empty string means no tabs enabled)
+        const enabledTabs = (channel.auto_download_enabled_tabs ?? '')
+          .split(',')
+          .map(t => t.trim())
+          .filter(tab => tab.length > 0);
+
+        if (enabledTabs.length === 0) {
+          // All tabs disabled for this channel, skip adding URLs
+          continue;
+        }
+
+        // Generate a URL for each enabled tab type
+        for (const tabType of enabledTabs) {
+          // auto_download_enabled_tabs stores 'video', 'short', 'livestream'
+          // but we need 'videos', 'shorts', 'streams' for URLs
+          let tabUrl;
+          switch (tabType) {
+          case 'video':
+            tabUrl = 'videos';
+            break;
+          case 'short':
+            tabUrl = 'shorts';
+            break;
+          case 'livestream':
+            tabUrl = 'streams';
+            break;
+          default:
+            tabUrl = 'videos'; // fallback
+          }
+
+          urls.push(`${canonical}/${tabUrl}`);
+        }
+      } else {
+        // Fallback for channels without channel_id
+        urls.push(channel.url);
+      }
+    }
+    return urls;
+  }
+
+  /**
    * Generate a temporary file with enabled channel URLs for yt-dlp
    * Respects the auto_download_enabled_tabs column to generate URLs for each enabled tab type
    * @returns {Promise<string>} - Path to the temporary file
@@ -1225,57 +1318,8 @@ class ChannelModule {
   async generateChannelsFile() {
     const tempFilePath = path.join(os.tmpdir(), `channels-temp-${uuidv4()}.txt`);
     try {
-      const channels = await Channel.findAll({
-        where: { enabled: true },
-        attributes: ['channel_id', 'url', 'auto_download_enabled_tabs']
-      });
+      const urls = await this.getEnabledChannelDownloadUrls();
 
-      // Generate URLs for each channel, respecting their auto_download_enabled_tabs setting
-      const urls = [];
-      for (const channel of channels) {
-        if (channel.channel_id) {
-          const canonical = this.resolveChannelUrlFromId(channel.channel_id);
-
-          // Parse the enabled tabs for this channel (empty string means no tabs enabled)
-          const enabledTabs = (channel.auto_download_enabled_tabs ?? '')
-            .split(',')
-            .map(t => t.trim())
-            .filter(tab => tab.length > 0);
-
-          if (enabledTabs.length === 0) {
-            // All tabs disabled for this channel, skip adding URLs
-            continue;
-          }
-
-          // Generate a URL for each enabled tab type
-          for (const tabType of enabledTabs) {
-            // Map the media type back to tab type if needed
-            // auto_download_enabled_tabs stores 'video', 'short', 'livestream'
-            // but we need 'videos', 'shorts', 'streams' for URLs
-            let tabUrl;
-            switch (tabType) {
-            case 'video':
-              tabUrl = 'videos';
-              break;
-            case 'short':
-              tabUrl = 'shorts';
-              break;
-            case 'livestream':
-              tabUrl = 'streams';
-              break;
-            default:
-              tabUrl = 'videos'; // fallback
-            }
-
-            urls.push(`${canonical}/${tabUrl}`);
-          }
-        } else {
-          // Fallback for channels without channel_id
-          urls.push(channel.url);
-        }
-      }
-
-      // Check if we have any URLs to download
       if (urls.length === 0) {
         const error = new Error('No valid channel URLs to download - all enabled channels have no enabled tabs');
         logger.warn('No URLs generated for channel downloads - all enabled channels have disabled tabs');
@@ -1297,18 +1341,35 @@ class ChannelModule {
   }
 
   /**
-   * Insert or update videos in the database.
-   * Creates new records or updates existing ones with latest metadata.
-   * @param {Array<Object>} videos - Array of video objects to save
+   * Insert or update videos in the database, keeping the channel in YouTube
+   * order even when some rows carry authoritative exact dates.
+   *
+   * YouTube intermittently serves channel-tab listings where every entry has
+   * timestamp: null, but the entry order is still newest-first (verified
+   * against captured degraded responses; only the timestamp field differs).
+   * So rather than trust per-row dates, this runs in two phases (see the inline
+   * Phase 1 / Phase 2 comments): the date value is deferred to a batch-wide
+   * anchoring pass that assigns strictly-descending dates in fetch order.
+   *
+   * publishedAt precedence: 'estimated' < 'approximate'/NULL < 'exact'.
+   * 'exact' comes from a download's .info.json and is never overwritten here.
+   * @param {Array<Object>} videos - Video objects in yt-dlp response order
+   *   (newest first)
    * @param {string} channelId - Channel ID these videos belong to
    * @returns {Promise<void>}
    */
   async insertVideosIntoDb(videos, channelId, mediaType = 'video') {
-    const syntheticBaseTime = Date.now();
+    const nowMs = Date.now();
+    const provisionalIso = new Date(nowMs).toISOString();
 
-    for (const [index, video] of videos.entries()) {
-      const syntheticPublishedAt = video.publishedAt || new Date(syntheticBaseTime - index * 1000).toISOString();
-
+    // Phase 1: ensure every row exists and upsert its non-date fields, and
+    // classify each row's ordering source + candidate date. The date VALUE is
+    // deliberately deferred to phase 2, where the shared anchoring algorithm
+    // assigns strictly-descending dates across the whole batch. This keeps
+    // ordering correct around scattered exact dates, since a fetched/existing
+    // approximate date newer than a nearby exact date must be clamped below it.
+    const entries = [];
+    for (const video of videos) {
       const [videoRecord, created] = await ChannelVideo.findOrCreate({
         where: {
           youtube_id: video.youtube_id,
@@ -1316,7 +1377,8 @@ class ChannelModule {
         },
         defaults: {
           ...video,
-          publishedAt: syntheticPublishedAt,
+          publishedAt: video.publishedAt || provisionalIso,
+          published_at_source: video.publishedAt ? PUBLISHED_AT_SOURCE.APPROXIMATE : PUBLISHED_AT_SOURCE.ESTIMATED,
           channel_id: channelId,
           media_type: mediaType,
         },
@@ -1327,17 +1389,75 @@ class ChannelModule {
           title: video.title,
           thumbnail: video.thumbnail,
           duration: video.duration,
-          availability: video.availability || null,
           media_type: mediaType,
-          live_status: video.live_status || null,
-          publishedAt: video.publishedAt || syntheticPublishedAt,
         };
 
+        // Only overwrite availability/live_status when yt-dlp returned a real value.
+        // yt-dlp's flat-playlist mode currently omits these for lockupViewModel
+        // entries, so an empty refresh must not wipe known-good values that other
+        // code paths (modal open, download error, URL validation) populated.
+        if (video.availability) updates.availability = video.availability;
+        if (video.live_status) updates.live_status = video.live_status;
         if (video.content_rating != null) updates.content_rating = video.content_rating;
         if (video.age_limit != null) updates.age_limit = video.age_limit;
         if (video.normalized_rating != null) updates.normalized_rating = video.normalized_rating;
-
+        // publishedAt / published_at_source intentionally deferred to phase 2.
         await videoRecord.update(updates);
+      }
+
+      // Classify for ordering. Exact dates (.info.json) are immovable anchors;
+      // a freshly fetched or existing real date is a soft anchor; everything
+      // else is an estimated placeholder.
+      const isExact = videoRecord.published_at_source === PUBLISHED_AT_SOURCE.EXACT;
+      let orderingSource;
+      let candidateMs;
+      if (isExact) {
+        orderingSource = PUBLISHED_AT_SOURCE.EXACT;
+        candidateMs = videoRecord.publishedAt ? Date.parse(videoRecord.publishedAt) : null;
+      } else if (video.publishedAt) {
+        orderingSource = PUBLISHED_AT_SOURCE.APPROXIMATE;
+        candidateMs = Date.parse(video.publishedAt);
+      } else if (videoRecord.publishedAt && videoRecord.published_at_source !== PUBLISHED_AT_SOURCE.ESTIMATED) {
+        // Existing real (approximate / legacy) date, no fresh date this fetch.
+        orderingSource = PUBLISHED_AT_SOURCE.APPROXIMATE;
+        candidateMs = Date.parse(videoRecord.publishedAt);
+      } else {
+        orderingSource = PUBLISHED_AT_SOURCE.ESTIMATED;
+        candidateMs = null;
+      }
+
+      entries.push({
+        id: videoRecord.id,
+        oldIso: videoRecord.publishedAt,
+        oldSource: videoRecord.published_at_source,
+        orderingSource,
+        candidateMs: Number.isFinite(candidateMs) ? candidateMs : null,
+        hasFetchedDate: Boolean(video.publishedAt),
+      });
+    }
+
+    if (entries.length === 0) return;
+
+    // Phase 2: compute a strictly-descending date for every row in fetch order
+    // (newest first) and persist only the rows whose date or source changed.
+    const orderedDates = channelVideoReanchor.computeReanchoredDates(
+      entries.map((e) => ({ ms: e.candidateMs, source: e.orderingSource })),
+      nowMs
+    );
+
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      if (entry.orderingSource === PUBLISHED_AT_SOURCE.EXACT) continue; // never rewrite exact dates
+
+      const newIso = new Date(orderedDates[i]).toISOString();
+      // A freshly fetched date is 'approximate'; otherwise preserve the existing
+      // label (estimated stays estimated, legacy NULL stays NULL).
+      const newSource = entry.hasFetchedDate ? PUBLISHED_AT_SOURCE.APPROXIMATE : entry.oldSource;
+
+      if (newIso !== entry.oldIso || newSource !== entry.oldSource) {
+        const fields = { publishedAt: newIso };
+        if (newSource !== entry.oldSource) fields.published_at_source = newSource;
+        await ChannelVideo.update(fields, { where: { id: entry.id } });
       }
     }
   }
@@ -1484,16 +1604,22 @@ class ChannelModule {
         video.duration && video.duration <= maxDuration
       );
     }
+    // Estimated dates are ordering-only placeholders; date-range filters
+    // must not match on them.
     if (dateFrom) {
       const fromDate = new Date(dateFrom);
       filtered = filtered.filter(video =>
-        video.publishedAt && new Date(video.publishedAt) >= fromDate
+        video.publishedAt &&
+        video.published_at_source !== PUBLISHED_AT_SOURCE.ESTIMATED &&
+        new Date(video.publishedAt) >= fromDate
       );
     }
     if (dateTo) {
       const toDate = new Date(dateTo);
       filtered = filtered.filter(video =>
-        video.publishedAt && new Date(video.publishedAt) <= toDate
+        video.publishedAt &&
+        video.published_at_source !== PUBLISHED_AT_SOURCE.ESTIMATED &&
+        new Date(video.publishedAt) <= toDate
       );
     }
 
@@ -1648,6 +1774,14 @@ class ChannelModule {
       }
     }
 
+    // Estimated dates exist only for ordering (already applied above); blank
+    // them so consumers render "no date" instead of a fabricated one.
+    for (const video of paginatedVideos) {
+      if (video.published_at_source === PUBLISHED_AT_SOURCE.ESTIMATED) {
+        video.publishedAt = null;
+      }
+    }
+
     return paginatedVideos;
   }
 
@@ -1699,10 +1833,12 @@ class ChannelModule {
 
       filteredVideos = this._applyStatusFilters(filteredVideos, protectedFilter, missingFilter, ignoredFilter);
 
+      // Estimated dates are ordering-only placeholders; never surface them.
+      const oldest = filteredVideos.length > 0 ? filteredVideos[filteredVideos.length - 1] : null;
       return {
         totalCount: filteredVideos.length,
-        oldestVideoDate: filteredVideos.length > 0 ?
-          filteredVideos[filteredVideos.length - 1].publishedAt : null
+        oldestVideoDate: oldest && oldest.published_at_source !== PUBLISHED_AT_SOURCE.ESTIMATED ?
+          oldest.publishedAt : null
       };
     } else {
       // Fast path - just use database counts when no filters
@@ -1719,12 +1855,13 @@ class ChannelModule {
           media_type: mediaType,
         },
         order: [['publishedAt', 'ASC']],
-        attributes: ['publishedAt']
+        attributes: ['publishedAt', 'published_at_source']
       });
 
       return {
         totalCount,
-        oldestVideoDate: oldestVideo ? oldestVideo.publishedAt : null
+        oldestVideoDate: oldestVideo && oldestVideo.published_at_source !== PUBLISHED_AT_SOURCE.ESTIMATED ?
+          oldestVideo.publishedAt : null
       };
     }
   }
@@ -1908,6 +2045,12 @@ class ChannelModule {
    */
   shouldRefreshChannelVideos(channel, videoCount, mediaType) {
     if (!channel) return false;
+
+    // Always re-probe terminated channels so a reinstatement is detected on
+    // the very next page load, regardless of cache freshness. Without this,
+    // a terminated channel with recent lastFetched would skip yt-dlp and the
+    // termination notice would stick until cache expiry.
+    if (channel.terminated_at) return true;
 
     const lastFetched = this.getLastFetchedForTab(channel, mediaType);
 
@@ -2109,7 +2252,7 @@ class ChannelModule {
         logger.debug({ channelId }, 'Tabs already detected, returning cached');
         return {
           availableTabs: channel.available_tabs.split(','),
-          autoDownloadEnabledTabs: channel.auto_download_enabled_tabs || 'video'
+          autoDownloadEnabledTabs: channel.auto_download_enabled_tabs ?? 'video'
         };
       }
 
@@ -2119,16 +2262,22 @@ class ChannelModule {
       // the fallback-to-videos behavior if all probes fail.
       const availableTabs = await this._probeTabs(channelId);
 
-      // Determine auto_download_enabled_tabs: preserve existing user choice if set,
-      // otherwise pick a smart default based on available tabs
+      // Reconcile the stored value against the detected tabs: keep media types whose
+      // tab exists, drop the rest (this sheds the NOT NULL 'video' default on channels
+      // with no videos tab). An empty string means auto-download is off, so keep it.
+      const detectedMediaTypes = new Set(
+        availableTabs.map((tab) => MEDIA_TAB_TYPE_MAP[tab]).filter(Boolean)
+      );
       const existingEnabledTabs = channel.auto_download_enabled_tabs;
-      const hasUserChoice = existingEnabledTabs !== null && existingEnabledTabs !== undefined;
+      const reconciledTabs = parseTabCsv(existingEnabledTabs).filter((mt) => detectedMediaTypes.has(mt));
 
       let autoDownloadEnabledTabs;
-      if (hasUserChoice) {
-        // User already set a value (including empty string for "disabled") -- preserve it
-        autoDownloadEnabledTabs = existingEnabledTabs;
+      if (reconciledTabs.length > 0) {
+        autoDownloadEnabledTabs = reconciledTabs.join(',');
+      } else if (existingEnabledTabs === '') {
+        autoDownloadEnabledTabs = '';
       } else {
+        // Nothing survived: default to the videos tab, or the first available tab.
         autoDownloadEnabledTabs = 'video';
         if (!availableTabs.includes(TAB_TYPES.VIDEOS) && availableTabs.length > 0) {
           autoDownloadEnabledTabs = MEDIA_TAB_TYPE_MAP[availableTabs[0]] || 'video';
@@ -2311,7 +2460,7 @@ class ChannelModule {
     const mediaType = MEDIA_TAB_TYPE_MAP[tabType] || 'video';
 
     // Get current enabled tabs
-    const currentEnabledTabs = (channel.auto_download_enabled_tabs || 'video')
+    const currentEnabledTabs = (channel.auto_download_enabled_tabs ?? 'video')
       .split(',')
       .map(t => t.trim())
       .filter(Boolean);
@@ -2387,6 +2536,11 @@ class ChannelModule {
       }
     }
 
+    // Tracks whether yt-dlp actually ran AND resolved in this request.
+    // Frontends key the "channel state may have changed" signal off this flag,
+    // so it must NOT flip true on cache-only or yt-dlp-failed-with-cache paths.
+    let freshFetchPerformed = false;
+
     try {
       // First check if we need to refresh recent videos from YouTube
       const allVideos = await this.fetchNewestVideosFromDb(channelId, 1, 0, 'off', '', 'date', 'desc', false, mediaType);
@@ -2410,6 +2564,7 @@ class ChannelModule {
           try {
             // Fetch videos for the specified tab type
             await this.fetchAndSaveVideosViaYtDlp(channel, channelId, tabType, mostRecentVideoDate);
+            freshFetchPerformed = true;
           } finally {
             // Clear the active fetch record
             this.activeFetches.delete(fetchKey);
@@ -2491,7 +2646,10 @@ class ChannelModule {
       // Get stats for the response
       const stats = await this.getChannelVideoStats(channelId, downloadedFilter, searchQuery, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter);
 
-      return this.buildChannelVideosResponse(paginatedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType);
+      return {
+        ...this.buildChannelVideosResponse(paginatedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType),
+        freshFetchPerformed
+      };
 
     } catch (error) {
       logger.error({ err: error, channelId }, 'Error fetching channel videos');
@@ -2506,6 +2664,25 @@ class ChannelModule {
         response.fetchError = true;
       }
       return response;
+    }
+  }
+
+  /**
+   * Clear terminated_at on a channel when we've proven it's reachable.
+   * Swallows failures so the calling page-load path can't be broken by a
+   * stuck UPDATE - the marker would just stay set until the next attempt.
+   * @param {Object} channel - Sequelize channel instance
+   * @param {string} channelId - Channel ID for log context
+   * @returns {Promise<void>}
+   * @private
+   */
+  async _clearTerminationMarkerIfSet(channel, channelId) {
+    if (!channel || !channel.terminated_at) return;
+    try {
+      await channel.update({ terminated_at: null });
+      logger.info({ channelId }, 'Channel previously marked terminated is reachable again; clearing termination marker');
+    } catch (clearErr) {
+      logger.warn({ err: clearErr, channelId }, 'Failed to clear terminated_at after successful video fetch');
     }
   }
 
@@ -2545,6 +2722,10 @@ class ChannelModule {
 
         // Update the last fetched timestamp for this specific tab (atomic SQL update)
         await this.setLastFetchedForTab(channel, mediaType, new Date());
+
+        // Reaching this point means yt-dlp returned a valid response, so the
+        // channel is reachable - inverse of persistTerminatedChannel.
+        await this._clearTerminationMarkerIfSet(channel, channelId);
       }
     } catch (ytdlpError) {
       logger.error({ err: ytdlpError, channelId }, 'Error fetching channel videos');
@@ -2633,6 +2814,9 @@ class ChannelModule {
         }
         // Update the last fetched timestamp for this specific tab (atomic SQL update)
         await this.setLastFetchedForTab(channel, mediaType, new Date());
+
+        // yt-dlp returned a valid response, so the channel is reachable.
+        await this._clearTerminationMarkerIfSet(channel, channelId);
 
         // Get the requested page of videos after the full fetch
         const offset = (requestedPage - 1) * requestedPageSize;

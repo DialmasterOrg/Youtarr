@@ -4,10 +4,12 @@ describe('VideoMetadataModule', () => {
   let videoMetadataModule;
   let mockFs;
   let mockVideo;
+  let mockChannelVideo;
   let mockLogger;
   let mockConfigModule;
   let mockYtDlpRunner;
   let mockYoutubeApi;
+  let mockChannelVideoReanchor;
 
   beforeEach(() => {
     jest.resetModules();
@@ -30,6 +32,10 @@ describe('VideoMetadataModule', () => {
       update: jest.fn(),
     };
 
+    mockChannelVideo = {
+      update: jest.fn().mockResolvedValue([1]),
+    };
+
     mockLogger = {
       info: jest.fn(),
       warn: jest.fn(),
@@ -46,6 +52,15 @@ describe('VideoMetadataModule', () => {
 
     mockYtDlpRunner = {
       fetchMetadata: jest.fn(),
+      isMembersOnlyError: jest.fn((message = '') => {
+        const normalized = String(message);
+        return [
+          /join this channel to get access to members-only content/i,
+          /available to this channel'?s members/i,
+          /members[- ]only/i,
+          /subscriber[_ -]?only/i,
+        ].some(pattern => pattern.test(normalized));
+      }),
     };
 
     mockYoutubeApi = {
@@ -57,12 +72,19 @@ describe('VideoMetadataModule', () => {
       YoutubeApiErrorCode: { QUOTA_EXCEEDED: 'QUOTA_EXCEEDED' },
     };
 
+    mockChannelVideoReanchor = {
+      applyExactDateForVideo: jest.fn().mockResolvedValue(undefined),
+      applyExactDateForGroup: jest.fn().mockResolvedValue(undefined),
+    };
+
     jest.doMock('fs', () => ({ promises: mockFs }));
     jest.doMock('../../models', () => ({ Video: mockVideo }));
+    jest.doMock('../../models/channelvideo', () => mockChannelVideo);
     jest.doMock('../configModule', () => mockConfigModule);
     jest.doMock('../../logger', () => mockLogger);
     jest.doMock('../ytDlpRunner', () => mockYtDlpRunner);
     jest.doMock('../youtubeApi', () => mockYoutubeApi);
+    jest.doMock('../channelVideoReanchor', () => mockChannelVideoReanchor);
 
     videoMetadataModule = require('../videoMetadataModule');
   });
@@ -239,6 +261,110 @@ describe('VideoMetadataModule', () => {
       await videoMetadataModule.getVideoMetadata('nobackfill');
 
       expect(mockVideoRecord.update).not.toHaveBeenCalled();
+    });
+
+    test('backfills ChannelVideo.availability when yt-dlp returns subscriber_only', async () => {
+      const rawInfoJson = {
+        availability: 'subscriber_only',
+        description: 'members-only video',
+      };
+
+      mockFs.access.mockResolvedValue(undefined);
+      mockFs.readFile.mockResolvedValue(JSON.stringify(rawInfoJson));
+      mockVideo.findOne.mockResolvedValue(null);
+
+      await videoMetadataModule.getVideoMetadata('memvid1');
+
+      expect(mockChannelVideo.update).toHaveBeenCalledWith(
+        { availability: 'subscriber_only' },
+        { where: { youtube_id: 'memvid1' } },
+      );
+    });
+
+    test('backfills ChannelVideo.availability when yt-dlp returns public', async () => {
+      const rawInfoJson = {
+        availability: 'public',
+        description: 'public video',
+      };
+
+      mockFs.access.mockResolvedValue(undefined);
+      mockFs.readFile.mockResolvedValue(JSON.stringify(rawInfoJson));
+      mockVideo.findOne.mockResolvedValue(null);
+
+      await videoMetadataModule.getVideoMetadata('pubvid1');
+
+      expect(mockChannelVideo.update).toHaveBeenCalledWith(
+        { availability: 'public' },
+        { where: { youtube_id: 'pubvid1' } },
+      );
+    });
+
+    test('does not call ChannelVideo.update when rawData has no availability', async () => {
+      const rawInfoJson = {
+        description: 'video without availability field',
+      };
+
+      mockFs.access.mockResolvedValue(undefined);
+      mockFs.readFile.mockResolvedValue(JSON.stringify(rawInfoJson));
+      mockVideo.findOne.mockResolvedValue(null);
+
+      await videoMetadataModule.getVideoMetadata('noavail1');
+
+      expect(mockChannelVideo.update).not.toHaveBeenCalled();
+    });
+
+    test('logs and swallows ChannelVideo.update errors', async () => {
+      const rawInfoJson = {
+        availability: 'subscriber_only',
+        description: 'members-only video',
+      };
+
+      mockFs.access.mockResolvedValue(undefined);
+      mockFs.readFile.mockResolvedValue(JSON.stringify(rawInfoJson));
+      mockVideo.findOne.mockResolvedValue(null);
+      mockChannelVideo.update.mockRejectedValueOnce(new Error('db down'));
+
+      const result = await videoMetadataModule.getVideoMetadata('errvid1');
+
+      // Backfill failure must not break the metadata return
+      expect(result.availability).toBe('subscriber_only');
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ youtubeId: 'errvid1' }),
+        'Failed to backfill ChannelVideo.availability',
+      );
+    });
+
+    test('re-anchors ChannelVideo order with the exact date when info.json has upload_date', async () => {
+      const rawInfoJson = {
+        upload_date: '20240315',
+        description: 'dated video',
+      };
+
+      mockFs.access.mockResolvedValue(undefined);
+      mockFs.readFile.mockResolvedValue(JSON.stringify(rawInfoJson));
+      mockVideo.findOne.mockResolvedValue(null);
+
+      await videoMetadataModule.getVideoMetadata('datedvid1');
+
+      expect(mockChannelVideoReanchor.applyExactDateForVideo).toHaveBeenCalledWith(
+        'datedvid1',
+        '2024-03-15T00:00:00.000Z',
+      );
+    });
+
+    test('does not re-anchor ChannelVideo when upload_date is malformed', async () => {
+      const rawInfoJson = {
+        upload_date: 'garbage',
+        description: 'video with bad date',
+      };
+
+      mockFs.access.mockResolvedValue(undefined);
+      mockFs.readFile.mockResolvedValue(JSON.stringify(rawInfoJson));
+      mockVideo.findOne.mockResolvedValue(null);
+
+      await videoMetadataModule.getVideoMetadata('badvid1');
+
+      expect(mockChannelVideoReanchor.applyExactDateForVideo).not.toHaveBeenCalled();
     });
 
     test('handles missing optional fields gracefully', async () => {
@@ -669,6 +795,113 @@ describe('VideoMetadataModule', () => {
       await videoMetadataModule.getVideoMetadata('abc12345678');
 
       expect(updateMock).toHaveBeenCalledWith({ originalDate: '20240101' });
+    });
+
+    test('does not backfill ChannelVideo.availability from API fallback path', async () => {
+      // The YouTube Data API never returns 'subscriber_only' (only public/unlisted/private),
+      // so backfilling from this path would silently downgrade real values to 'public'.
+      mockYoutubeApi.isAvailable.mockReturnValue(true);
+      mockYoutubeApi.getApiKey.mockReturnValue('test-key');
+      mockYoutubeApi.client.getVideoMetadata.mockResolvedValueOnce([{
+        id: 'apivid1',
+        availability: 'public',
+      }]);
+
+      await videoMetadataModule.getVideoMetadata('apivid1');
+
+      expect(mockChannelVideo.update).not.toHaveBeenCalled();
+    });
+
+    test('stamps subscriber_only when yt-dlp errors with members-only message', async () => {
+      // Real-world error text from yt-dlp for a members-only video
+      const membersOnlyError = new Error(
+        'Failed to fetch video metadata: ERROR: [youtube] memvid2: ' +
+        'This video is available to this channel\'s members on level: LTT Members Plus (or any higher level). ' +
+        'Join this channel to get access to members-only content and other exclusive perks.'
+      );
+      mockYtDlpRunner.fetchMetadata.mockRejectedValue(membersOnlyError);
+
+      await videoMetadataModule.getVideoMetadata('memvid2');
+
+      expect(mockChannelVideo.update).toHaveBeenCalledWith(
+        { availability: 'subscriber_only' },
+        { where: { youtube_id: 'memvid2' } },
+      );
+    });
+
+    test('returned metadata reports availability=subscriber_only after members-only detection', async () => {
+      // The API fallback would normally set availability from the API response
+      // (which never reports subscriber_only). We must override so the modal
+      // can render the Members Only state on first open.
+      mockYtDlpRunner.fetchMetadata.mockRejectedValue(
+        new Error('ERROR: [youtube] memvid4: Join this channel to get access to members-only content.')
+      );
+      // No API key configured -> API fallback returns NULL_METADATA, which has
+      // availability: null. Verify our override flips it to subscriber_only.
+      const result = await videoMetadataModule.getVideoMetadata('memvid4');
+
+      expect(result.availability).toBe('subscriber_only');
+    });
+
+    test('members-only override does not mutate null fallback metadata for later calls', async () => {
+      mockYtDlpRunner.fetchMetadata
+        .mockRejectedValueOnce(
+          new Error('ERROR: [youtube] memvid4: Join this channel to get access to members-only content.')
+        )
+        .mockRejectedValueOnce(
+          new Error('Failed to fetch video metadata: ERROR: [youtube] xyz: HTTP Error 403: Forbidden')
+        );
+
+      const membersOnlyResult = await videoMetadataModule.getVideoMetadata('memvid4');
+      const unrelatedResult = await videoMetadataModule.getVideoMetadata('xyz');
+
+      expect(membersOnlyResult.availability).toBe('subscriber_only');
+      expect(unrelatedResult.availability).toBeNull();
+    });
+
+    test('returned metadata reports availability=subscriber_only even when API fallback returns public', async () => {
+      mockYtDlpRunner.fetchMetadata.mockRejectedValue(
+        new Error('ERROR: [youtube] memvid5: members-only content.')
+      );
+      mockYoutubeApi.isAvailable.mockReturnValue(true);
+      mockYoutubeApi.getApiKey.mockReturnValue('test-key');
+      mockYoutubeApi.client.getVideoMetadata.mockResolvedValueOnce([{
+        id: 'memvid5',
+        availability: 'public', // API can't see members-only gating
+        description: 'cached desc from api',
+      }]);
+
+      const result = await videoMetadataModule.getVideoMetadata('memvid5');
+
+      expect(result.availability).toBe('subscriber_only');
+      // Other API-derived fields should still come through
+      expect(result.description).toBe('cached desc from api');
+    });
+
+    test('does not stamp subscriber_only on unrelated yt-dlp errors', async () => {
+      mockYtDlpRunner.fetchMetadata.mockRejectedValue(
+        new Error('Failed to fetch video metadata: ERROR: [youtube] xyz: HTTP Error 403: Forbidden')
+      );
+
+      await videoMetadataModule.getVideoMetadata('xyz');
+
+      expect(mockChannelVideo.update).not.toHaveBeenCalled();
+    });
+
+    test('logs and swallows backfill error when stamping after members-only fetch failure', async () => {
+      mockYtDlpRunner.fetchMetadata.mockRejectedValue(
+        new Error('ERROR: [youtube] memvid3: Join this channel to get access to members-only content.')
+      );
+      mockChannelVideo.update.mockRejectedValueOnce(new Error('db down'));
+
+      // Should still resolve (returning fallback) despite the backfill failure
+      const result = await videoMetadataModule.getVideoMetadata('memvid3');
+
+      expect(result).toBeDefined();
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ youtubeId: 'memvid3' }),
+        'Failed to backfill ChannelVideo.availability after members-only fetch error',
+      );
     });
 
     test('returns NULL_METADATA when both yt-dlp and API fail', async () => {

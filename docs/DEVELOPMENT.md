@@ -44,12 +44,32 @@ If you set `YOUTARR_IMAGE` in `.env`, remove or comment that line first, otherwi
 
 For development, you'll need:
 
-1. **Node.js 20.19+ and npm** (needed for the build script that compiles the client and installs dependencies before Docker runs)
+1. **Node.js 20.19+ and npm 11.10+** (needed for the build script that compiles the client and installs dependencies before Docker runs)
 2. **Docker** and Docker Compose (v2 or v1)
 3. **Git** for version control
 4. A code editor (VS Code recommended)
 
 **Note:** Runtime dependencies (MariaDB, yt-dlp, ffmpeg, Node) run inside the dev containers, but the `build-dev` script uses your host Node.js to install packages and build the frontend before the Docker image is created.
+
+### npm version requirement and install cooldown
+
+Installs are gated on a **5-day cooldown**: npm refuses to install any package version published less than 5 days ago (`min-release-age=5` in `.npmrc`). This is a supply-chain defense; most malicious package releases are caught and removed within a day or two, so waiting before adopting a new version avoids the bulk of the risk. The cooldown applies at resolution time (`npm install` / `npm update`), not to `npm ci`, so your day-to-day builds against the committed lockfile are unaffected.
+
+The cooldown requires **npm 11.10 or newer**, which is enforced via `engines` in `package.json` plus `engine-strict=true` in `.npmrc`. If your local npm is older, `npm ci` / `npm install` will fail with an engine error instead of silently skipping the cooldown. Upgrade with:
+
+```bash
+# Pin to an npm 11.10+ release that is itself older than the 5-day cooldown
+# window (this global install is not lockfile-pinned, so it is not cooldown-protected),
+# matching the pin used by CI and the Docker build.
+npm install -g npm@11.15.0 --ignore-scripts
+npm --version   # confirm >= 11.10.0
+```
+
+CI and the Docker build pin npm to a known 11.x via a "Pin npm" step / `npm install -g`, so they honor the same gate.
+
+If you ever need an urgent dependency update that the cooldown blocks (for example a same-day security patch), override it for that one install with `npm install <pkg> --before=<date>` or a temporary `--min-release-age=0`, rather than removing the repo-wide setting.
+
+**Lifecycle scripts are disabled by default.** `.npmrc` sets `ignore-scripts=true`, so a dependency's `preinstall` / `install` / `postinstall` scripts do not run just because you install it. This blocks the most common malicious-package execution path. The CI and Docker installs already passed `--ignore-scripts`; this extends the same protection to a bare local `npm install`. Explicitly invoked scripts still run, so Husky setup via `npm run prepare` (used by `build-dev.sh`) is unaffected. If you add a dependency that needs a native build step, run `npm rebuild <pkg> --ignore-scripts=false` after confirming you trust the package; a plain `npm rebuild` inherits `ignore-scripts=true` and would still skip the build.
 
 ## Project Structure
 
@@ -84,9 +104,6 @@ cd Youtarr
 
 ### 2. Build Development Environment
 ```bash
-# Install root dependencies
-npm i
-
 # First build (installs dependencies and builds the client)
 ./scripts/build-dev.sh --install-deps
 
@@ -95,7 +112,7 @@ npm i
 ```
 
 Optional flags:
-- `--install-deps` - Runs `npm install` in the root and `client/` before building (required on a clean clone or after dependency changes)
+- `--install-deps` - Runs `npm ci --ignore-scripts` in the root and `client/` before building, then runs `npm run prepare` once to wire up Husky git hooks (Husky's own script only; dependency lifecycle scripts stay disabled). Required on a clean clone or after dependency changes.
 - `--no-cache` - Force rebuild to get latest yt-dlp version
 - `SKIP_DEV_IMAGE_PRUNE=1` - Skip automatic cleanup of old untagged `youtarr-dev` images (pruning is enabled by default to keep Docker storage from filling)
 
@@ -126,7 +143,7 @@ Build and run the full stack using the pre-built static frontend served by the a
 This starts:
 - **Backend** on http://localhost:3011 (Node.js Express server with `--watch` for auto-restart)
 - **Frontend (static, served by the app container)** on http://localhost:3087
-- **MariaDB** database on port 3321
+- **MariaDB** database on the internal Docker network only
 
 Optional flags:
 - `--no-auth` - Disable authentication (only use behind auth gateway or if not exposed outside your network)
@@ -158,10 +175,10 @@ Use Storybook to develop and document components in isolation.
 
 **Prerequisites:** Complete Step 2 (Build Development Environment) first, or at minimum install client dependencies:
 ```bash
-cd client && npm install
+cd client && npm ci --ignore-scripts
 ```
 
-This automatically generates the MSW (Mock Service Worker) file needed for API mocking in stories.
+The MSW (Mock Service Worker) file used for Storybook API mocking is committed at `client/public/mockServiceWorker.js`. After bumping `msw`, regenerate it with `cd client && npm run msw:init` and commit the updated worker.
 
 ```bash
 # Start Storybook Server
@@ -202,7 +219,7 @@ Create your admin account on first access.
 The development setup is a "build-and-test-in-Docker" workflow that ensures your code works in a containerized environment:
 
 **Build Phase** (`./scripts/build-dev.sh`):
-1. Runs `npm install` on your host (if `--install-deps` is used)
+1. Runs `npm ci --ignore-scripts` on your host (if `--install-deps` is used)
 2. Builds the React frontend (`npm run build` in client directory) - creates production build
 3. Builds a Docker image with the pre-built static files
 
@@ -324,10 +341,7 @@ docker compose logs -f youtarr-db
 ### Database Access
 
 ```bash
-# From host
-mysql -h localhost -P 3321 -u root -p123qweasd youtarr
-
-# From inside container
+# From inside the database container
 docker compose exec youtarr-db mysql -u root -p123qweasd youtarr
 ```
 
@@ -701,7 +715,7 @@ docker compose down
 
 3. Test connection:
    ```bash
-   mysql -h localhost -P 3321 -u root -p123qweasd
+   docker compose exec youtarr-db mysql -u root -p123qweasd youtarr
    ```
 
 ### Code Changes Not Reflected

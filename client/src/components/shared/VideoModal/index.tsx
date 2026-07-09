@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import axios from 'axios';
 import {
   Dialog,
@@ -23,6 +23,7 @@ import DeleteVideosDialog from '../DeleteVideosDialog';
 import ChangeRatingDialog from '../ChangeRatingDialog';
 import DownloadSettingsDialog from '../../DownloadManager/ManualDownload/DownloadSettingsDialog';
 import { useConfig } from '../../../hooks/useConfig';
+import { uploadDateToIso } from '../../../utils/formatters';
 
 const SNACKBAR_AUTO_HIDE_MS = 4000;
 
@@ -36,6 +37,8 @@ function VideoModal({
   onIgnoreChanged,
   onDownloadQueued,
   onRatingChanged,
+  onAvailabilityDetected,
+  onPublishedDateDetected,
   allowIgnore,
 }: VideoModalProps) {
   const isMobile = useMediaQuery('(max-width: 599px)');
@@ -114,6 +117,52 @@ function VideoModal({
     return () => { controller.abort(); };
   }, [open, video.channelId, token]);
 
+  // Promote localVideo to members_only display when the metadata fetch detects
+  // a members-only video. The backend stamps the channelvideos row in the same
+  // request, so a second open would catch it via getVideoStatus, but on the
+  // first open the prop's status is stale (still 'never_downloaded' or similar).
+  // Deriving here keeps VideoPlayer/VideoActions in sync without round-tripping.
+  const displayVideo = useMemo(() => {
+    if (metadata?.availability === 'subscriber_only' && localVideo.status !== 'members_only') {
+      return { ...localVideo, status: 'members_only' as const };
+    }
+    return localVideo;
+  }, [localVideo, metadata?.availability]);
+
+  // Notify the parent the first time we promote a video to members_only, so
+  // list pages that read availability (e.g. ChannelVideos via getVideoStatus)
+  // can update without a manual refresh. Keyed on youtubeId so we fire once
+  // per video and re-arm when the modal switches to a different one.
+  const promotedForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      metadata?.availability === 'subscriber_only' &&
+      localVideo.status !== 'members_only' &&
+      promotedForRef.current !== video.youtubeId
+    ) {
+      promotedForRef.current = video.youtubeId;
+      onAvailabilityDetected?.(video.youtubeId, 'subscriber_only');
+    }
+  }, [metadata?.availability, localVideo.status, video.youtubeId, onAvailabilityDetected]);
+
+  // Notify the parent the first time the metadata fetch yields an authoritative
+  // upload date (from the .info.json), so list pages can replace an estimated or
+  // approximate date with the exact one without a manual refresh. The backend
+  // stamps the channelvideos row in the same request; this just keeps the
+  // already-rendered list in sync. Keyed on youtubeId so it fires once per video
+  // and re-arms when the modal switches videos.
+  const datePropagatedForRef = useRef<string | null>(null);
+  useEffect(() => {
+    const uploadDate = metadata?.uploadDate;
+    if (uploadDate && datePropagatedForRef.current !== video.youtubeId) {
+      const isoDate = uploadDateToIso(uploadDate);
+      if (isoDate) {
+        datePropagatedForRef.current = video.youtubeId;
+        onPublishedDateDetected?.(video.youtubeId, isoDate);
+      }
+    }
+  }, [metadata?.uploadDate, video.youtubeId, onPublishedDateDetected]);
+
   const hasChannelQualityOverride = Boolean(channelSettings.video_quality);
   const defaultResolution = channelSettings.video_quality || config.preferredResolution || '1080';
   const defaultResolutionSource: 'channel' | 'global' = hasChannelQualityOverride ? 'channel' : 'global';
@@ -166,7 +215,7 @@ function VideoModal({
                 wordBreak: 'break-word',
               }}
             >
-              {localVideo.title}
+              {displayVideo.title}
             </Typography>
           </span>
         </DialogTitle>
@@ -187,13 +236,13 @@ function VideoModal({
             }}
           >
             <VideoPlayer
-              video={localVideo}
+              video={displayVideo}
               token={token}
               onDownloadClick={() => setDownloadDialogOpen(true)}
               isMobile={isMobile}
             />
             <VideoActions
-              video={localVideo}
+              video={displayVideo}
               onDelete={() => setDeleteDialogOpen(true)}
               onProtectionToggle={handleProtectionToggle}
               onIgnoreToggle={handleIgnoreToggle}
@@ -204,12 +253,12 @@ function VideoModal({
               allowIgnore={allowIgnore}
             />
             <VideoMetadata
-              video={localVideo}
+              video={displayVideo}
               metadata={metadata}
               loading={metadataLoading}
             />
             <VideoTechnical
-              video={localVideo}
+              video={displayVideo}
               metadata={metadata}
               loading={metadataLoading}
             />
@@ -229,13 +278,13 @@ function VideoModal({
         onClose={() => setDownloadDialogOpen(false)}
         onConfirm={handleDownloadConfirm}
         videoCount={1}
+        missingVideoCount={displayVideo.status === 'missing' ? 1 : 0}
         mode="manual"
         token={token}
         defaultResolution={defaultResolution}
         defaultResolutionSource={defaultResolutionSource}
         defaultAudioFormat={defaultAudioFormat}
         defaultAudioFormatSource={defaultAudioFormatSource}
-        defaultRating={channelSettings.default_rating ?? null}
       />
 
       <ChangeRatingDialog

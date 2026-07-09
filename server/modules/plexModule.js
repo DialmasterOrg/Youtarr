@@ -57,17 +57,6 @@ class PlexModule {
   }
 
   /**
-   * Refresh the Plex library associated with the given resolved subfolder.
-   * Falls back to the global library when no specific mapping exists.
-   * @param {string|null} subfolder - Resolved subfolder name (no __ prefix, null = root)
-   * @returns {Promise<Object|null>}
-   */
-  async refreshLibraryForSubfolder(subfolder) {
-    const libraryId = this.getLibraryIdForSubfolder(subfolder);
-    return this.refreshLibrary(libraryId);
-  }
-
-  /**
    * Refresh all distinct Plex libraries mapped to the provided subfolders.
    * Deduplicates library IDs so each library is only refreshed once.
    * @param {Array<string|null>} subfolders - Array of resolved subfolder names
@@ -166,6 +155,34 @@ class PlexModule {
       }
       // Return empty array instead of throwing to prevent frontend crashes
       return [];
+    }
+  }
+
+  // Reads /identity to determine whether the Plex server is claimed by a Plex
+  // account. Used by the UI to warn that an unclaimed server needs the
+  // "unclaimed server" playlist scope for playlists to be visible in Plex Web.
+  // claimed is null when the server is unreachable or the response is unexpected.
+  async getServerIdentityWithParams(plexIP, plexApiKey, plexPort, plexViaHttps) {
+    try {
+      const config = configModule.getConfig();
+      const baseUrl = this.getBaseUrl(plexIP, config, plexPort, plexViaHttps);
+      if (!baseUrl) {
+        logger.warn('Missing Plex server URL for identity check');
+        return { claimed: null, machineIdentifier: null };
+      }
+
+      const params = plexApiKey ? { 'X-Plex-Token': plexApiKey } : {};
+      const response = await axios.get(`${baseUrl}/identity`, {
+        params,
+        timeout: PLEX_REQUEST_TIMEOUT_MS,
+      });
+
+      const container = response.data?.MediaContainer || {};
+      const claimed = typeof container.claimed === 'boolean' ? container.claimed : null;
+      return { claimed, machineIdentifier: container.machineIdentifier || null };
+    } catch (error) {
+      logger.warn({ err: error }, 'Failed to read Plex server identity');
+      return { claimed: null, machineIdentifier: null };
     }
   }
 

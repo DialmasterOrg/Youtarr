@@ -74,6 +74,3 @@ client/build-storybook/
 # Storybook test artifacts
 .out_storybook_
 .storyshots
-
-# MSW service worker - regenerate with: cd client && npx msw init public/ --save
-client/public/mockServiceWorker.js

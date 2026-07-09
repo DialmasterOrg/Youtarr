@@ -42,8 +42,12 @@ jest.mock('../jobModule', () => ({
 
 jest.mock('../plexModule', () => ({
   refreshLibrary: jest.fn().mockResolvedValue(true),
-  refreshLibraryForSubfolder: jest.fn().mockResolvedValue(true),
   refreshLibrariesForSubfolders: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('../subfolderModule', () => ({
+  getAll: jest.fn(),
+  register: jest.fn().mockResolvedValue(undefined),
 }));
 
 describe('ChannelSettingsModule', () => {
@@ -158,6 +162,20 @@ describe('ChannelSettingsModule', () => {
     test('should trim whitespace before validation', () => {
       const result = channelSettingsModule.validateSubFolder('  ValidFolder  ');
       expect(result.valid).toBe(true);
+    });
+
+    test('rejects reserved name "playlists" case-insensitively', () => {
+      const lower = channelSettingsModule.validateSubFolder('playlists');
+      expect(lower.valid).toBe(false);
+      expect(lower.error).toMatch(/reserved/i);
+
+      const upper = channelSettingsModule.validateSubFolder('PLAYLISTS');
+      expect(upper.valid).toBe(false);
+      expect(upper.error).toMatch(/reserved/i);
+
+      const mixed = channelSettingsModule.validateSubFolder('Playlists');
+      expect(mixed.valid).toBe(false);
+      expect(mixed.error).toMatch(/reserved/i);
     });
   });
 
@@ -341,50 +359,6 @@ describe('ChannelSettingsModule', () => {
     });
   });
 
-  describe('getChannelDirectory', () => {
-    test('should return base directory path when no subfolder', () => {
-      const channel = { ...mockChannel, uploader: 'TestChannel' };
-      const result = channelSettingsModule.getChannelDirectory(channel);
-      expect(result).toBe('/test/output/TestChannel');
-    });
-
-    test('should include subfolder with __ prefix', () => {
-      const channel = { ...mockChannel, uploader: 'TestChannel', sub_folder: 'Music' };
-      const result = channelSettingsModule.getChannelDirectory(channel);
-      expect(result).toBe('/test/output/__Music/TestChannel');
-    });
-
-    test('should trim subfolder whitespace', () => {
-      const channel = { ...mockChannel, uploader: 'TestChannel', sub_folder: '  Music  ' };
-      const result = channelSettingsModule.getChannelDirectory(channel);
-      expect(result).toBe('/test/output/__Music/TestChannel');
-    });
-
-    test('should handle empty subfolder string as null', () => {
-      const channel = { ...mockChannel, uploader: 'TestChannel', sub_folder: '' };
-      const result = channelSettingsModule.getChannelDirectory(channel);
-      expect(result).toBe('/test/output/TestChannel');
-    });
-
-    test('should prefer folder_name over uploader when both exist', () => {
-      const channel = { ...mockChannel, uploader: 'RawChannel#Name', folder_name: 'RawChannel_Name' };
-      const result = channelSettingsModule.getChannelDirectory(channel);
-      expect(result).toBe('/test/output/RawChannel_Name');
-    });
-
-    test('should fall back to uploader when folder_name is null', () => {
-      const channel = { ...mockChannel, uploader: 'TestChannel', folder_name: null };
-      const result = channelSettingsModule.getChannelDirectory(channel);
-      expect(result).toBe('/test/output/TestChannel');
-    });
-
-    test('should use folder_name with subfolder', () => {
-      const channel = { ...mockChannel, uploader: 'RawName#Special', folder_name: 'RawName_Special', sub_folder: 'Music' };
-      const result = channelSettingsModule.getChannelDirectory(channel);
-      expect(result).toBe('/test/output/__Music/RawName_Special');
-    });
-  });
-
   describe('hasActiveDownloads', () => {
     test('should return false when no jobs are running', async () => {
       jobModule.getAllJobs.mockReturnValue({});
@@ -403,96 +377,14 @@ describe('ChannelSettingsModule', () => {
   });
 
   describe('getAllSubFolders', () => {
-    test('should return empty array when no channels have subfolders', async () => {
-      Channel.findAll.mockResolvedValue([]);
-      const result = await channelSettingsModule.getAllSubFolders();
-      expect(result).toEqual([]);
-    });
-
-    test('should return unique subfolders with __ prefix', async () => {
-      Channel.findAll.mockResolvedValue([
-        { sub_folder: 'Music' },
-        { sub_folder: 'Gaming' },
-        { sub_folder: 'Music' } // Duplicate
-      ]);
-      const result = await channelSettingsModule.getAllSubFolders();
-      expect(result).toEqual(['__Gaming', '__Music']);
-    });
-
-    test('should handle null subfolders', async () => {
-      Channel.findAll.mockResolvedValue([
-        { sub_folder: 'Music' },
-        { sub_folder: null }
-      ]);
-      const result = await channelSettingsModule.getAllSubFolders();
-      expect(result).toEqual(['__Music']);
-    });
-
-    test('should trim subfolder whitespace', async () => {
-      Channel.findAll.mockResolvedValue([
-        { sub_folder: '  Music  ' },
-        { sub_folder: 'Gaming' }
-      ]);
-      const result = await channelSettingsModule.getAllSubFolders();
-      expect(result).toEqual(['__Gaming', '__Music']);
-    });
-
-    test('should sort subfolders alphabetically', async () => {
-      Channel.findAll.mockResolvedValue([
-        { sub_folder: 'Zulu' },
-        { sub_folder: 'Alpha' },
-        { sub_folder: 'Beta' }
-      ]);
-      const result = await channelSettingsModule.getAllSubFolders();
-      expect(result).toEqual(['__Alpha', '__Beta', '__Zulu']);
-    });
-
-    test('should include the configured global default subfolder when no channels exist', async () => {
-      Channel.findAll.mockResolvedValue([]);
-      const configModule = require('../configModule');
-      configModule.getDefaultSubfolder.mockReturnValue('Adults');
+    test('delegates to subfolderModule.getAll', async () => {
+      const subfolderModule = require('../subfolderModule');
+      subfolderModule.getAll.mockResolvedValue(['__A', '__B']);
 
       const result = await channelSettingsModule.getAllSubFolders();
 
-      expect(result).toEqual(['__Adults']);
-    });
-
-    test('should include the global default subfolder alongside explicit channel subfolders', async () => {
-      Channel.findAll.mockResolvedValue([
-        { sub_folder: 'Kids' },
-        { sub_folder: 'Music' }
-      ]);
-      const configModule = require('../configModule');
-      configModule.getDefaultSubfolder.mockReturnValue('Adults');
-
-      const result = await channelSettingsModule.getAllSubFolders();
-
-      expect(result).toEqual(['__Adults', '__Kids', '__Music']);
-    });
-
-    test('should deduplicate when the global default matches an explicit channel subfolder', async () => {
-      Channel.findAll.mockResolvedValue([
-        { sub_folder: 'Music' },
-        { sub_folder: 'Adults' }
-      ]);
-      const configModule = require('../configModule');
-      configModule.getDefaultSubfolder.mockReturnValue('Adults');
-
-      const result = await channelSettingsModule.getAllSubFolders();
-
-      expect(result).toEqual(['__Adults', '__Music']);
-    });
-
-    test('should not add anything when the global default subfolder is null', async () => {
-      Channel.findAll.mockResolvedValue([
-        { sub_folder: 'Music' }
-      ]);
-      const configModule = require('../configModule');
-      configModule.getDefaultSubfolder.mockReturnValue(null);
-
-      const result = await channelSettingsModule.getAllSubFolders();
-
-      expect(result).toEqual(['__Music']);
+      expect(subfolderModule.getAll).toHaveBeenCalled();
+      expect(result).toEqual(['__A', '__B']);
     });
   });
 
@@ -674,6 +566,28 @@ describe('ChannelSettingsModule', () => {
       expect(result.settings.sub_folder).toBe('NewFolder');
     });
 
+    test('registers a newly-assigned subfolder so it appears in every picker', async () => {
+      const subfolderModule = require('../subfolderModule');
+      subfolderModule.register.mockClear();
+
+      await channelSettingsModule.updateChannelSettings('UC123456', {
+        sub_folder: 'NewFolder'
+      });
+
+      expect(subfolderModule.register).toHaveBeenCalledWith('NewFolder');
+    });
+
+    test('does not register when the subfolder is unchanged', async () => {
+      const subfolderModule = require('../subfolderModule');
+      subfolderModule.register.mockClear();
+
+      await channelSettingsModule.updateChannelSettings('UC123456', {
+        video_quality: '720'
+      });
+
+      expect(subfolderModule.register).not.toHaveBeenCalled();
+    });
+
     test('should update video quality', async () => {
       const channel = await Channel.findOne();
 
@@ -747,6 +661,35 @@ describe('ChannelSettingsModule', () => {
           title_filter_regex: 'a'.repeat(501)
         })
       ).rejects.toThrow('Title filter regex must be 500 characters or less');
+    });
+
+    test('should update default rating, normalized to uppercase', async () => {
+      const channel = await Channel.findOne();
+
+      const result = await channelSettingsModule.updateChannelSettings('UC123456', {
+        default_rating: 'pg-13'
+      });
+
+      expect(result.settings.default_rating).toBe('PG-13');
+      expect(channel.update).toHaveBeenCalledWith({ default_rating: 'PG-13' });
+    });
+
+    test('should store NR default rating as null', async () => {
+      const channel = await Channel.findOne();
+
+      await channelSettingsModule.updateChannelSettings('UC123456', {
+        default_rating: 'NR'
+      });
+
+      expect(channel.update).toHaveBeenCalledWith({ default_rating: null });
+    });
+
+    test('should reject an invalid default rating', async () => {
+      await expect(
+        channelSettingsModule.updateChannelSettings('UC123456', {
+          default_rating: 'banana'
+        })
+      ).rejects.toThrow('Invalid rating');
     });
 
     test('should move folder when subfolder changes', async () => {
@@ -936,28 +879,53 @@ describe('ChannelSettingsModule', () => {
         expect(channel.update).not.toHaveBeenCalled();
       });
 
-      test('rejects entries whose tab is not detected for the channel', async () => {
+      test('drops entries whose tab is not detected for the channel and keeps valid ones', async () => {
         const channel = buildChannel({ available_tabs: 'videos' });
         Channel.findOne.mockResolvedValue(channel);
 
-        await expect(
-          channelSettingsModule.updateChannelSettings('UC123456', {
-            auto_download_enabled_tabs: 'short'
-          })
-        ).rejects.toThrow(/'short' is not allowed/);
-        expect(channel.update).not.toHaveBeenCalled();
+        const result = await channelSettingsModule.updateChannelSettings('UC123456', {
+          auto_download_enabled_tabs: 'video,short'
+        });
+
+        expect(channel.update).toHaveBeenCalledWith(
+          expect.objectContaining({ auto_download_enabled_tabs: 'video' })
+        );
+        expect(result.settings.auto_download_enabled_tabs).toBe('video');
       });
 
-      test('rejects entries whose tab will be hidden after the same update', async () => {
+      test('drops entries whose tab will be hidden after the same update', async () => {
         const channel = buildChannel();
         Channel.findOne.mockResolvedValue(channel);
 
-        await expect(
-          channelSettingsModule.updateChannelSettings('UC123456', {
-            hidden_tabs: ['shorts'],
-            auto_download_enabled_tabs: 'video,short'
-          })
-        ).rejects.toThrow(/'short' is not allowed/);
+        await channelSettingsModule.updateChannelSettings('UC123456', {
+          hidden_tabs: ['shorts'],
+          auto_download_enabled_tabs: 'video,short'
+        });
+
+        const autoCall = channel.update.mock.calls.find(
+          (call) => 'auto_download_enabled_tabs' in (call[0] || {})
+        );
+        expect(autoCall).toBeDefined();
+        expect(autoCall[0].auto_download_enabled_tabs).toBe('video');
+      });
+
+      test('enables shorts auto-download on a shorts-only channel carrying the stale video default', async () => {
+        // Channel carries the stale 'video' default; enabling shorts sends 'video,short',
+        // and the 'video' should be dropped rather than rejected.
+        const channel = buildChannel({
+          available_tabs: 'shorts',
+          auto_download_enabled_tabs: 'video'
+        });
+        Channel.findOne.mockResolvedValue(channel);
+
+        const result = await channelSettingsModule.updateChannelSettings('UC123456', {
+          auto_download_enabled_tabs: 'video,short'
+        });
+
+        expect(channel.update).toHaveBeenCalledWith(
+          expect.objectContaining({ auto_download_enabled_tabs: 'short' })
+        );
+        expect(result.settings.auto_download_enabled_tabs).toBe('short');
       });
 
       test('does not run hidden-tab strip side-effect when user supplies a validated value', async () => {

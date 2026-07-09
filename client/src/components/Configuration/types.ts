@@ -4,11 +4,6 @@ import type { ConfigState } from '../../config/configSchema';
 // Re-export for convenience
 export type { ConfigState };
 
-export interface ConfigurationProps {
-  token: string | null;
-  sectionGroup?: SettingsSectionGroup;
-}
-
 export type SettingsSectionGroup = 'general' | 'integrations' | 'downloads' | 'advanced' | 'security';
 
 export interface AutoRemovalDryRunVideoSummary {

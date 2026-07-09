@@ -104,4 +104,12 @@ describe('validateConfig', () => {
     });
     expect(validateConfig(config)).toBeNull();
   });
+
+  // Regression for #611: missing videoFilenamePrefix crashed the Settings page on render.
+  test('does not crash when videoFilenamePrefix is missing from the config object', () => {
+    const config = createConfig();
+    delete (config as Partial<ConfigState>).videoFilenamePrefix;
+    expect(() => validateConfig(config)).not.toThrow();
+    expect(validateConfig(config)).toMatch(/Cannot save:/);
+  });
 });

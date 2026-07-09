@@ -6,7 +6,7 @@ on:
 
 permissions:
   contents: read
-  actions: write
+  actions: read
 
 jobs:
   lint:
@@ -15,21 +15,31 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20.x'
           cache: 'npm'
 
+      - name: Pin npm
+        run: npm install -g npm@11.15.0 --ignore-scripts
+
       - name: Install root dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Install client dependencies
         run: |
           cd client
-          npm ci
+          npm ci --ignore-scripts
+
+      - name: Verify MSW worker is current
+        run: |
+          cd client
+          npm run msw:init
+          cd ..
+          git diff --exit-code -- client/package.json client/package-lock.json client/public/mockServiceWorker.js
 
       - name: Run ESLint on Backend
         id: lint-backend
@@ -67,16 +77,19 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20.x'
           cache: 'npm'
 
+      - name: Pin npm
+        run: npm install -g npm@11.15.0 --ignore-scripts
+
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Run backend tests with coverage
         run: npm run test:backend -- --coverage --coverageReporters=json-summary --coverageReporters=lcov --coverageReporters=text
@@ -110,7 +123,7 @@ jobs:
           fi
 
       - name: Upload backend coverage artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: backend-coverage
           path: |
@@ -123,21 +136,24 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20.x'
           cache: 'npm'
 
+      - name: Pin npm
+        run: npm install -g npm@11.15.0 --ignore-scripts
+
       - name: Install root dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Install client dependencies
         run: |
           cd client
-          npm ci
+          npm ci --ignore-scripts
 
       - name: Run frontend tests with coverage
         run: cd client && npm test -- --coverage --coverageReporters=json-summary --coverageReporters=lcov --coverageReporters=text --watchAll=false
@@ -171,7 +187,7 @@ jobs:
           fi
 
       - name: Upload frontend coverage artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: frontend-coverage
           path: |
@@ -184,25 +200,28 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20.x'
           cache: 'npm'
 
+      - name: Pin npm
+        run: npm install -g npm@11.15.0 --ignore-scripts
+
       - name: Install root dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Install client dependencies
         run: |
           cd client
-          npm ci
+          npm ci --ignore-scripts
 
       - name: Cache Storybook build
         id: cache-storybook
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: client/storybook-static
           key: ${{ runner.os }}-storybook-${{ hashFiles('client/src/**', 'client/.storybook/**', 'client/package-lock.json') }}
@@ -224,27 +243,36 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20.x'
           cache: 'npm'
 
+      - name: Pin npm
+        run: npm install -g npm@11.15.0 --ignore-scripts
+
       - name: Install root dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Install client dependencies
         run: |
           cd client
-          npm ci
+          npm ci --ignore-scripts
 
-      - name: Audit root dependencies
+      - name: Audit root runtime dependencies
         run: npm audit --audit-level=high --omit=dev
 
-      - name: Audit client dependencies
+      - name: Audit all root dependencies (critical only)
+        run: npm audit --audit-level=critical
+
+      - name: Audit client runtime dependencies
         run: cd client && npm audit --audit-level=high --omit=dev
+
+      - name: Audit all client dependencies (critical only)
+        run: cd client && npm audit --audit-level=critical
 
   # This job is required for branch protection rules
   # It will only succeed if all tests and linting pass

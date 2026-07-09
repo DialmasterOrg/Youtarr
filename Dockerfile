@@ -1,6 +1,10 @@
 # ---- Base Node ----
 FROM node:20-slim AS base
 WORKDIR /app
+# Pin npm >= 11.10 so it honors min-release-age/engine-strict from .npmrc.
+# Pick a release older than the 5-day cooldown (this global install isn't
+# lockfile-pinned). --ignore-scripts since the project .npmrc isn't in the image yet.
+RUN npm install -g npm@11.15.0 --ignore-scripts
 
 # ---- Dependencies ----
 FROM base AS dependencies
@@ -11,7 +15,7 @@ RUN npm ci --only=production --ignore-scripts
 # ---- Build ----
 FROM base AS build
 COPY package*.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts
 # Copy server code and built React app
 COPY server/ ./server/
 COPY client/build/ ./client/build/

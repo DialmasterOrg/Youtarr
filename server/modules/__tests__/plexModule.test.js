@@ -321,44 +321,6 @@ describe('plexModule', () => {
     });
   });
 
-  describe('refreshLibraryForSubfolder', () => {
-    test('refreshes the library mapped to the given subfolder', async () => {
-      config.plexSubfolderLibraryMappings = [{ subfolder: 'kids', libraryId: '2' }];
-      axios.get.mockResolvedValue({ status: 200 });
-
-      await plexModule.refreshLibraryForSubfolder('kids');
-
-      expect(axios.get).toHaveBeenCalledWith(
-        expect.stringContaining('/library/sections/2/refresh'),
-        { timeout: 10000 }
-      );
-    });
-
-    test('falls back to global library when no mapping for subfolder', async () => {
-      config.plexSubfolderLibraryMappings = [];
-      axios.get.mockResolvedValue({ status: 200 });
-
-      await plexModule.refreshLibraryForSubfolder('unknown');
-
-      expect(axios.get).toHaveBeenCalledWith(
-        expect.stringContaining('/library/sections/1/refresh'),
-        { timeout: 10000 }
-      );
-    });
-
-    test('uses global library for null (root) subfolder when no root mapping', async () => {
-      config.plexSubfolderLibraryMappings = [];
-      axios.get.mockResolvedValue({ status: 200 });
-
-      await plexModule.refreshLibraryForSubfolder(null);
-
-      expect(axios.get).toHaveBeenCalledWith(
-        expect.stringContaining('/library/sections/1/refresh'),
-        { timeout: 10000 }
-      );
-    });
-  });
-
   describe('refreshLibrariesForSubfolders', () => {
     test('refreshes each distinct library once', async () => {
       config.plexSubfolderLibraryMappings = [
@@ -425,19 +387,6 @@ describe('plexModule', () => {
       ).resolves.toBeUndefined();
 
       expect(axios.get).toHaveBeenCalledTimes(2);
-    });
-  });
-
-  describe('refreshLibraryForSubfolder - error handling', () => {
-    test('resolves to null when the underlying refresh fails', async () => {
-      config.plexSubfolderLibraryMappings = [{ subfolder: 'kids', libraryId: '2' }];
-      // Force the axios call inside refreshLibrary to throw synchronously after try/catch
-      // by making getBaseUrl produce a value but axios.get throwing past the catch
-      // In practice refreshLibrary catches all errors and returns null, so this confirms
-      // that the method resolves (does not throw) even when the underlying call fails.
-      axios.get.mockRejectedValue(new Error('Unexpected'));
-
-      await expect(plexModule.refreshLibraryForSubfolder('kids')).resolves.toBeNull();
     });
   });
 
@@ -706,6 +655,43 @@ describe('plexModule', () => {
         { timeout: 10000 }
       );
       expect(result).toHaveLength(1);
+    });
+  });
+
+  describe('getServerIdentityWithParams', () => {
+    test('returns claimed flag and machine identifier from /identity', async () => {
+      axios.get.mockResolvedValue({
+        data: { MediaContainer: { claimed: false, machineIdentifier: 'MID-123' } }
+      });
+      const result = await plexModule.getServerIdentityWithParams('192.168.1.10', 'token', '32400', false);
+      expect(axios.get).toHaveBeenCalledWith(
+        'http://192.168.1.10:32400/identity',
+        expect.objectContaining({ params: { 'X-Plex-Token': 'token' } })
+      );
+      expect(result).toEqual({ claimed: false, machineIdentifier: 'MID-123' });
+    });
+
+    test('omits token param when no api key provided (unclaimed/anonymous)', async () => {
+      axios.get.mockResolvedValue({
+        data: { MediaContainer: { claimed: false, machineIdentifier: 'MID-123' } }
+      });
+      await plexModule.getServerIdentityWithParams('192.168.1.10', '', '32400', false);
+      expect(axios.get).toHaveBeenCalledWith(
+        'http://192.168.1.10:32400/identity',
+        expect.objectContaining({ params: {} })
+      );
+    });
+
+    test('returns null claimed when the field is missing', async () => {
+      axios.get.mockResolvedValue({ data: { MediaContainer: { machineIdentifier: 'MID' } } });
+      const result = await plexModule.getServerIdentityWithParams('192.168.1.10', 'token', '32400', false);
+      expect(result).toEqual({ claimed: null, machineIdentifier: 'MID' });
+    });
+
+    test('returns null fields when the request fails', async () => {
+      axios.get.mockRejectedValue(new Error('ECONNREFUSED'));
+      const result = await plexModule.getServerIdentityWithParams('192.168.1.10', 'token', '32400', false);
+      expect(result).toEqual({ claimed: null, machineIdentifier: null });
     });
   });
 

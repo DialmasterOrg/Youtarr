@@ -5,11 +5,7 @@ import {
   DialogContent,
   DialogActions,
   Button,
-  FormControl,
   FormControlLabel,
-  InputLabel,
-  Select,
-  MenuItem,
   Switch,
   TextField,
   CircularProgress,
@@ -30,7 +26,11 @@ import {
 import { CheckCircle as CheckCircleIcon, XCircle as CancelIcon, Info as InfoIcon, Copy as ContentCopyIcon, Settings as SettingsIcon, Download as DownloadIcon, Filter as FilterAltIcon, Shield as RatingIcon } from '../../lib/icons';
 import useMediaQuery from '../../hooks/useMediaQuery';
 import { useConfig } from '../../hooks/useConfig';
+import { useSubfolders } from '../../hooks/useSubfolders';
 import { SubfolderAutocomplete } from '../shared/SubfolderAutocomplete';
+import { ResolutionSelect } from '../shared/ResolutionSelect';
+import { AudioFormatSelect } from '../shared/AudioFormatSelect';
+import { RatingSelect } from '../shared/RatingSelect';
 import { RATING_OPTIONS } from '../../utils/ratings';
 import RatingBadge from '../shared/RatingBadge';
 import TabsEditor, { TabsEditorRefreshResult } from './components/TabsEditor';
@@ -142,7 +142,6 @@ function ChannelSettingsDialog({
     hidden_tabs: []
   });
   const [detectedTabs, setDetectedTabs] = useState<string[]>([]);
-  const [subfolders, setSubfolders] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -151,6 +150,8 @@ function ChannelSettingsDialog({
   // Use config hook to get global quality setting
   const { config, refetch: refetchConfig } = useConfig(token);
   const globalQuality = config.preferredResolution || '1080';
+
+  const { subfolders, createSubfolder } = useSubfolders(token);
 
   // Duration input state (in minutes for UI convenience)
   const [minDurationMinutes, setMinDurationMinutes] = useState<string>('');
@@ -167,15 +168,6 @@ function ChannelSettingsDialog({
   const effectiveQualityDisplay = settings.video_quality
     ? `${settings.video_quality}p (channel)`
     : `${globalQuality}p (global)`;
-
-  const qualityOptions = [
-    { value: '360', label: '360p' },
-    { value: '480', label: '480p' },
-    { value: '720', label: '720p (HD)' },
-    { value: '1080', label: '1080p (Full HD)' },
-    { value: '1440', label: '1440p (2K)' },
-    { value: '2160', label: '2160p (4K)' }
-  ];
 
   const sections = [
     { id: 'general', label: 'General', icon: <SettingsIcon size={18} /> },
@@ -244,22 +236,6 @@ function ChannelSettingsDialog({
         }
         if (settingsData.max_duration) {
           setMaxDurationMinutes(String(Math.floor(settingsData.max_duration / 60)));
-        }
-
-        // Load subfolders (non-critical)
-        try {
-          const subfoldersResponse = await fetch('/api/channels/subfolders', {
-            headers: {
-              'x-access-token': token || ''
-            }
-          });
-
-          if (subfoldersResponse.ok) {
-            const subfoldersData = await subfoldersResponse.json();
-            setSubfolders(subfoldersData);
-          }
-        } catch (err) {
-          console.error('Failed to load subfolders:', err);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load settings');
@@ -576,29 +552,15 @@ function ChannelSettingsDialog({
               <Typography variant="subtitle2" gutterBottom style={{ fontWeight: 600 }}>
                 Resolution Override
               </Typography>
-              <FormControl fullWidth>
-                <InputLabel id="video-quality-label" shrink>Channel Video Quality Override</InputLabel>
-                <Select
-                  labelId="video-quality-label"
-                  value={settings.video_quality || ''}
-                  label="Channel Video Quality Override"
-                  onChange={(e) => setSettings({
-                    ...settings,
-                    video_quality: e.target.value || null
-                  })}
-                  displayEmpty
-                  notched
-                >
-                  <MenuItem value="">
-                    <em>Using Global Setting</em>
-                  </MenuItem>
-                  {qualityOptions.map((option) => (
-                    <MenuItem key={option.value || 'null'} value={option.value || ''}>
-                      {option.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <ResolutionSelect
+                label="Channel Video Quality Override"
+                emptyLabel="Using Global Setting"
+                value={settings.video_quality}
+                onChange={(value) => setSettings({
+                  ...settings,
+                  video_quality: value
+                })}
+              />
               <Typography variant="caption" color="text.secondary" style={{ marginTop: 8, display: 'block' }}>
                 Effective channel quality: {effectiveQualityDisplay}.
               </Typography>
@@ -609,32 +571,15 @@ function ChannelSettingsDialog({
               )}
             </div>
 
-            <FormControl fullWidth style={{ marginTop: 8 }}>
-              <InputLabel id="audio-format-label" shrink>Download Type</InputLabel>
-              <Select
-                labelId="audio-format-label"
-                value={settings.audio_format || ''}
-                label="Download Type"
-                onChange={(e) => setSettings({
-                  ...settings,
-                  audio_format: e.target.value || null
-                })}
-                displayEmpty
-                notched
-              >
-                <MenuItem value="">
-                  <em>Video Only (default)</em>
-                </MenuItem>
-                <MenuItem value="video_mp3">Video + MP3</MenuItem>
-                <MenuItem value="mp3_only">MP3 Only</MenuItem>
-              </Select>
-            </FormControl>
-
-            {settings.audio_format && (
-              <Typography variant="caption" color="text.secondary" style={{ marginTop: 8, display: 'block' }}>
-                MP3 files are saved at 192kbps in the same folder as videos.
-              </Typography>
-            )}
+            <AudioFormatSelect
+              className="mt-2"
+              value={settings.audio_format}
+              onChange={(value) => setSettings({
+                ...settings,
+                audio_format: value
+              })}
+              helperText={settings.audio_format ? 'MP3 files are saved at 192kbps in the same folder as videos.' : undefined}
+            />
 
             <FormControlLabel
               control={
@@ -682,6 +627,7 @@ function ChannelSettingsDialog({
                 defaultSubfolderDisplay={config.defaultSubfolder || null}
                 label="Subfolder"
                 helperText="Choose where this channel's videos are saved"
+                createSubfolder={createSubfolder}
               />
               <Alert severity="info" style={{ marginTop: 8 }}>
                 <Typography variant="caption">
@@ -868,24 +814,14 @@ function ChannelSettingsDialog({
                 Set a default rating for videos from this channel when no rating metadata is available.
               </Typography>
             </Alert>
-            <FormControl fullWidth>
-              <InputLabel>Default Rating</InputLabel>
-              <Select
-                value={settings.default_rating || ''}
-                label="Default Rating"
-                onChange={(event) => setSettings({
-                  ...settings,
-                  default_rating: event.target.value || null
-                })}
-              >
-                <MenuItem value="">No Override</MenuItem>
-                {RATING_OPTIONS.filter(option => option.value !== '').map(option => (
-                  <MenuItem key={option.value} value={option.value}>
-                    {option.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <RatingSelect
+              label="Default Rating"
+              value={settings.default_rating}
+              onChange={(value) => setSettings({
+                ...settings,
+                default_rating: value
+              })}
+            />
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <Typography variant="caption" color="text.secondary">
                 Effective default rating:

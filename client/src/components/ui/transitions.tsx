@@ -235,48 +235,4 @@ const Collapse: React.FC<CollapseProps> = ({
   );
 };
 
-/* ─── Backdrop ─────────────────────────────────────────── */
-export interface BackdropProps extends React.HTMLAttributes<HTMLDivElement> {
-  open?: boolean;
-  invisible?: boolean;
-}
-
-const Backdrop: React.FC<BackdropProps> = ({
-  open = false,
-  invisible = false,
-  className,
-  children,
-  onClick,
-  ...props
-}) => {
-  if (!open) return null;
-  return (
-    <div
-      className={cn(
-        'fixed inset-0 z-40 flex items-center justify-center',
-        !invisible && 'bg-black/50',
-        className
-      )}
-      onClick={onClick}
-      aria-hidden="true"
-      {...props}
-    >
-      {children}
-    </div>
-  );
-};
-
-/* ─── Zoom ─────────────────────────────────────────────
-   Scale transition. Simple passthrough for our usage.
-──────────────────────────────────────────────────────── */
-export interface ZoomProps {
-  in?: boolean;
-  children: React.ReactElement;
-  timeout?: number;
-}
-
-const Zoom: React.FC<ZoomProps> = ({ in: inProp = true, children }) => {
-  return inProp ? children : null;
-};
-
-export { Grow, Slide, Fade, Collapse, Backdrop, Zoom };
+export { Grow, Slide, Fade, Collapse };

@@ -14,6 +14,7 @@ This document provides comprehensive information about Youtarr's database setup,
 
 Youtarr uses MariaDB/MySQL for storing:
 - Channel subscriptions and metadata
+- Playlist subscriptions and per-server sync state
 - Video information and download history
 - Job queues and processing state
 - Session data for authentication
@@ -23,12 +24,16 @@ Youtarr uses MariaDB/MySQL for storing:
 | :----------------- | :-------------    | :-------------------------------- |
 | `channels`         | `Channel`         | YouTube channel information       |
 | `Videos`           | `Video`           | Downloaded video metadata         |
-| `channelvideos`    | `ChannelVideo`    | Channel <-> video associations    |
+| `channelvideos`    | `ChannelVideo`    | Channel <-> video associations. `published_at_source` tracks publishedAt provenance: `exact` (.info.json), `approximate` (yt-dlp flat-playlist date), `estimated` (ordering-only placeholder assigned when YouTube returns a listing with no dates; never displayed), NULL (legacy, treated as approximate) |
 | `Jobs`             | `Job`             | Download job queue                |
 | `JobVideos`        | `JobVideo`        | Job <-> video associations        |
 | `JobVideoDownloads`| `JobVideoDownload`| Download progress tracking        |
 | `Sessions`         | `Session`         | User authentication sessions      |
 | `ApiKeys`          | `ApiKey`          | API key credentials for external integrations (bookmarklets, shortcuts, automation) |
+| `playlists`        | `Playlist`        | Subscribed YouTube playlists with per-playlist sync targets and seeded settings. `auto_download_baseline_at` (DATETIME, nullable): seed-then-track baseline for playlist auto-downloads; NULL until the first auto-download run. |
+| `playlistvideos`   | `PlaylistVideo`   | One row per (playlist, video) with the YouTube playlist position |
+| `playlist_sync_state` | `PlaylistSyncState` | Per-(playlist, server) sync state: server playlist id, last_synced_at, last_error |
+| `subfolders`       | `Subfolder`       | Durable registry of known subfolder names (id, name unique, createdAt, updatedAt). Backfilled from channels, playlists, and video file paths by the `add-subfolders-table` migration; kept current by register-on-create and register-on-download-override. |
 | `SequelizeMeta`    | NA                | Sequelize ORM migration tracking  |
 
 ## Internal Database (Default)
@@ -36,7 +41,7 @@ Youtarr uses MariaDB/MySQL for storing:
 ### Container Details
 - **Image**: `mariadb:10.3`
 - **Container Name**: `youtarr-db`
-- **Port**: 3321 (both host and container)
+- **Port**: 3321 inside the Docker network only; the bundled database is not published to the host
 - **Character Set**: `utf8mb4` (full Unicode/emoji support)
 - **Default Credentials**:
   - User: `root`
@@ -161,7 +166,7 @@ COMPOSE_FILE=docker-compose.yml:docker-compose.arm.yml
 
 3. Restart containers for changes to take effect
 
-**Warning**: Never expose port 3321 to the internet without proper security measures.
+**Warning**: The bundled database is not exposed to the host by default. If you manually publish port 3321, keep it restricted to trusted hosts only.
 
 ## External Database Setup
 
@@ -317,12 +322,8 @@ With recent updates, migrations are idempotent and self-healing:
 
 2. **Test connection**:
    ```bash
-   # From host
-   mysql -h localhost -P 3321 -u root -p123qweasd
-
-   # From Youtarr container
-   docker exec -it youtarr bash
-   mysql -h youtarr-db -P 3321 -u root -p123qweasd
+   # From inside the database container
+   docker compose exec youtarr-db mysql -u root -p123qweasd youtarr
    ```
 
 3. **Check logs**:

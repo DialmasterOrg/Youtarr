@@ -364,6 +364,77 @@ describe('DownloadPerformanceSection Component', () => {
     });
   });
 
+  describe('Auto-Retry Failed Videos Select', () => {
+    test('renders the auto-retry select with its helper text', async () => {
+      const props = createSectionProps();
+      renderWithProviders(<DownloadPerformanceSection {...props} />);
+
+      expect(screen.getAllByText('Auto-Retry Failed Videos').length).toBeGreaterThan(0);
+      expect(
+        screen.getByText('Re-run videos that fail with a transient HTTP 403 in a fresh download job')
+      ).toBeInTheDocument();
+    });
+
+    test('displays default value of 1 auto-retry', async () => {
+      const props = createSectionProps({
+        config: createConfig({ downloadAutoRetryCount: 1 })
+      });
+      renderWithProviders(<DownloadPerformanceSection {...props} />);
+
+      expect(screen.getByText('1 auto-retry')).toBeInTheDocument();
+    });
+
+    test('displays "Disabled" for value of 0', async () => {
+      const props = createSectionProps({
+        config: createConfig({ downloadAutoRetryCount: 0 })
+      });
+      renderWithProviders(<DownloadPerformanceSection {...props} />);
+
+      expect(screen.getByText('Disabled')).toBeInTheDocument();
+    });
+
+    test('uses default value when undefined', async () => {
+      const config = createConfig();
+      delete (config as { downloadAutoRetryCount?: number }).downloadAutoRetryCount;
+      const props = createSectionProps({ config });
+      renderWithProviders(<DownloadPerformanceSection {...props} />);
+
+      expect(screen.getByText('1 auto-retry')).toBeInTheDocument();
+    });
+
+    test('calls onConfigChange when the auto-retry count is changed', async () => {
+      const user = userEvent.setup();
+      const onConfigChange = jest.fn();
+      const props = createSectionProps({
+        config: createConfig({ downloadAutoRetryCount: 1 }),
+        onConfigChange
+      });
+      renderWithProviders(<DownloadPerformanceSection {...props} />);
+
+      const selectButton = screen.getByRole('button', { name: '1 auto-retry' });
+      await user.click(selectButton);
+
+      const option = await screen.findByRole('option', { name: '3 auto-retries' });
+      await user.click(option);
+
+      expect(onConfigChange).toHaveBeenCalledWith({ downloadAutoRetryCount: 3 });
+    });
+
+    test('displays all auto-retry options', async () => {
+      const user = userEvent.setup();
+      const props = createSectionProps();
+      renderWithProviders(<DownloadPerformanceSection {...props} />);
+
+      const selectButton = screen.getByRole('button', { name: '1 auto-retry' });
+      await user.click(selectButton);
+
+      expect(await screen.findByRole('option', { name: 'Disabled' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: '1 auto-retry' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: '2 auto-retries' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: '3 auto-retries' })).toBeInTheDocument();
+    });
+  });
+
   describe('Enable Stall Detection Switch', () => {
     test('renders stall detection switch', async () => {
       const user = userEvent.setup();

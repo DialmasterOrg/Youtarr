@@ -204,12 +204,41 @@ function VideoPlayer({ video, token, onDownloadClick, isMobile }: VideoPlayerPro
               </IconButton>
             </>
           ) : video.status === 'members_only' ? (
+            // Dark text + white glow stays legible on both light and dark
+            // thumbnails. Hardcoded color: this label sits on top of an
+            // arbitrary photo, not on themed UI background.
             <>
-              <LockIcon size={48} color="white" />
-              <Typography variant="body1" sx={{ color: 'common.white', fontWeight: 500 }}>
+              <LockIcon
+                size={48}
+                color="#0f172a"
+                style={{
+                  filter:
+                    'drop-shadow(0 0 4px rgba(255,255,255,0.95)) drop-shadow(0 0 10px rgba(255,255,255,0.75))',
+                }}
+              />
+              <Typography
+                variant="body1"
+                sx={{
+                  color: '#0f172a',
+                  fontWeight: 600,
+                  textShadow:
+                    '0 0 4px rgba(255,255,255,0.95), 0 0 10px rgba(255,255,255,0.8), 0 0 16px rgba(255,255,255,0.55)',
+                }}
+              >
                 Members Only
               </Typography>
-              <Typography variant="body2" sx={{ color: 'common.white', opacity: 0.85, textAlign: 'center', paddingLeft: 16, paddingRight: 16 }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: '#0f172a',
+                  fontWeight: 500,
+                  textAlign: 'center',
+                  paddingLeft: 16,
+                  paddingRight: 16,
+                  textShadow:
+                    '0 0 4px rgba(255,255,255,0.95), 0 0 10px rgba(255,255,255,0.8), 0 0 16px rgba(255,255,255,0.55)',
+                }}
+              >
                 Youtarr cannot download this video or fetch its metadata
               </Typography>
             </>

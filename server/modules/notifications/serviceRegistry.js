@@ -216,14 +216,6 @@ function getRichFormattingServices() {
     .map(([key]) => key);
 }
 
-/**
- * Get all registered services (for documentation/UI)
- * @returns {Object} All service definitions
- */
-function getAllServices() {
-  return services;
-}
-
 module.exports = {
   services,
   defaultService,
@@ -233,7 +225,6 @@ module.exports = {
   getDefaultNameForUrl,
   isDiscord,
   isDiscordWebhook,
-  getRichFormattingServices,
-  getAllServices
+  getRichFormattingServices
 };
 

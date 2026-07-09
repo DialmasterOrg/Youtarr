@@ -3,9 +3,38 @@ const path = require('path');
 const fs = require('fs');
 const tempPathManager = require('./download/tempPathManager');
 
+const MEMBERS_ONLY_PATTERNS = [
+  /join this channel to get access to members-only content/i,
+  /available to this channel'?s members/i,
+  /members[- ]only/i,
+  /subscriber[_ -]?only/i,
+];
+
+// YouTube uses two phrasings for terminations:
+//   "account has been terminated ..." (TOS violations)
+//   "channel was removed because it violated ..." (community guidelines)
+const TERMINATED_ACCOUNT_PATTERN = /(account has been terminated|channel was removed because it violated)/i;
+
+function isMembersOnlyError(message = '') {
+  const normalized = String(message);
+  return MEMBERS_ONLY_PATTERNS.some(pattern => pattern.test(normalized));
+}
+
+function isTerminatedAccountError(message = '') {
+  return TERMINATED_ACCOUNT_PATTERN.test(String(message));
+}
+
 class YtDlpRunner {
   constructor() {
     this.defaultTimeout = 10000;
+  }
+
+  isMembersOnlyError(message = '') {
+    return isMembersOnlyError(message);
+  }
+
+  isTerminatedAccountError(message = '') {
+    return isTerminatedAccountError(message);
   }
 
   /**

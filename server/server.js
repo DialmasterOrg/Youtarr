@@ -233,6 +233,7 @@ const initialize = async () => {
 
     const configModule = require('./modules/configModule');
     const channelModule = require('./modules/channelModule');
+    const subfolderModule = require('./modules/subfolderModule');
     const plexModule = require('./modules/plexModule');
     const downloadModule = require('./modules/downloadModule');
     const jobModule = require('./modules/jobModule');
@@ -285,6 +286,7 @@ const initialize = async () => {
       jobModule,
       messageEmitter,
       Channel,
+      subfolderModule,
     });
 
     logger.info({ directoryPath: configModule.directoryPath }, 'YouTube downloads directory configured');
@@ -559,6 +561,28 @@ const initialize = async () => {
       },
     });
 
+    // Rate limiter for the /api/config/filename-preview endpoint. Each
+    // request spawns two yt-dlp processes (file template + folder template);
+    // limit is higher than ytdlp validate-args since it's button-driven and
+    // legitimate users can issue several previews per minute while iterating.
+    const filenamePreviewRateLimiter = rateLimit({
+      windowMs: 1 * 60 * 1000,
+      max: 30,
+      message: { error: 'Too many preview requests. Please wait a minute before trying again.' },
+      standardHeaders: true,
+      legacyHeaders: false,
+      validate: {
+        trustProxy: false,
+        ip: false,
+      },
+      keyGenerator: (req) => getRateLimitAddress(req),
+      handler: (_req, res) => {
+        res.status(429).json({
+          error: 'Too many preview requests. Please wait a minute before trying again.',
+        });
+      },
+    });
+
     /**** ONLY ROUTES BELOW THIS LINE *********/
 
     // Setup Swagger documentation at /swagger
@@ -614,6 +638,7 @@ const initialize = async () => {
       setupCreateAuthLimiter,
       youtubeApiKeyTestLimiter,
       ytdlpValidationRateLimiter,
+      filenamePreviewRateLimiter,
       configModule,
       channelModule,
       plexModule,

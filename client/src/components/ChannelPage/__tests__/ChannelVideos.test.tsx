@@ -197,7 +197,26 @@ jest.mock('../ChannelVideosDialogs', () => ({
       'data-default-resolution': props.defaultResolution,
       'data-default-resolution-source': props.defaultResolutionSource,
       'data-selected-tab': props.selectedTab,
-      'data-tab-label': props.tabLabel
+      'data-tab-label': props.tabLabel,
+      'data-missing-video-count': props.missingVideoCount,
+      'data-mobile-tooltip': props.mobileTooltip
+    });
+  }
+}));
+
+jest.mock('../DownloadAllVideosDialog', () => ({
+  __esModule: true,
+  default: function MockDownloadAllVideosDialog(props: {
+    open: boolean;
+    tabType: string;
+    tabLabel: string;
+  }) {
+    const React = require('react');
+    return React.createElement('div', {
+      'data-testid': 'download-all-dialog',
+      'data-open': String(props.open),
+      'data-tab-type': props.tabType,
+      'data-tab-label': props.tabLabel,
     });
   }
 }));
@@ -411,6 +430,20 @@ describe('ChannelVideos Component', () => {
     });
   });
 
+  describe('Download All', () => {
+    test('the header button opens the download-all dialog for the active tab', () => {
+      renderChannelVideos();
+
+      expect(screen.getByTestId('download-all-dialog')).toHaveAttribute('data-open', 'false');
+
+      fireEvent.click(screen.getByTestId('channel-download-all-button'));
+
+      const dialog = screen.getByTestId('download-all-dialog');
+      expect(dialog).toHaveAttribute('data-open', 'true');
+      expect(dialog).toHaveAttribute('data-tab-type', 'videos');
+    });
+  });
+
   describe('Tab Management', () => {
     test('does not show tabs while fetching, then shows tabs after loading', async () => {
       // Setup a delayed response to catch the loading state
@@ -581,6 +614,98 @@ describe('ChannelVideos Component', () => {
       expect(screen.getByRole('menuitem', { name: /Download Selected/i })).toBeInTheDocument();
       expect(screen.getByRole('menuitem', { name: /Ignore Selected/i })).toBeInTheDocument();
       expect(screen.getByRole('menuitem', { name: /Clear Selection/i })).toBeInTheDocument();
+    });
+  });
+
+  describe('Missing video count', () => {
+    const missingVideo: ChannelVideo = {
+      title: 'Missing Video',
+      youtube_id: 'missing1',
+      publishedAt: '2023-01-04T00:00:00Z',
+      thumbnail: 'https://i.ytimg.com/vi/missing1/mqdefault.jpg',
+      added: true,
+      removed: true,
+      duration: 300,
+      media_type: 'video',
+      live_status: null,
+    };
+
+    test('counts a selected previously-downloaded (missing) video', async () => {
+      const user = userEvent.setup();
+
+      useChannelVideos.mockReturnValue({
+        videos: [...mockVideos, missingVideo],
+        totalCount: 4,
+        oldestVideoDate: '2023-01-01',
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      await user.click(screen.getByTestId('select-video-missing1'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('channel-videos-dialogs')).toHaveAttribute('data-missing-video-count', '1');
+      });
+    });
+
+    test('does not count a selected never-downloaded video', async () => {
+      const user = userEvent.setup();
+
+      useChannelVideos.mockReturnValue({
+        videos: [...mockVideos, missingVideo],
+        totalCount: 4,
+        oldestVideoDate: '2023-01-01',
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      await user.click(screen.getByTestId('select-video-video1'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-selection-mode', 'download');
+      });
+      expect(screen.getByTestId('channel-videos-dialogs')).toHaveAttribute('data-missing-video-count', '0');
+    });
+
+    test('keeps counting a selected missing video after the loaded page no longer contains it', async () => {
+      const user = userEvent.setup();
+
+      useChannelVideos.mockReturnValue({
+        videos: [...mockVideos, missingVideo],
+        totalCount: 4,
+        oldestVideoDate: '2023-01-01',
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      const { rerender } = renderChannelVideos();
+
+      await user.click(screen.getByTestId('select-video-missing1'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('channel-videos-dialogs')).toHaveAttribute('data-missing-video-count', '1');
+      });
+
+      // Simulate a page change replacing the loaded videos with a page that
+      // does not include the selected video.
+      useChannelVideos.mockReturnValue({
+        videos: mockVideos,
+        totalCount: 4,
+        oldestVideoDate: '2023-01-01',
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+      rerender(<ChannelVideos token={mockToken} />);
+
+      expect(screen.getByTestId('channel-videos-dialogs')).toHaveAttribute('data-missing-video-count', '1');
     });
   });
 
@@ -915,6 +1040,74 @@ describe('ChannelVideos Component', () => {
       // Both should be present
       expect(screen.getAllByRole('button', { name: '16' }).length).toBeGreaterThan(0);
       expect(screen.getAllByRole('navigation').length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Pending dates indicator', () => {
+    const estimatedVideo: ChannelVideo = {
+      title: 'Pending Date Video',
+      youtube_id: 'pending1',
+      publishedAt: null,
+      published_at_source: 'estimated',
+      thumbnail: 'https://i.ytimg.com/vi/pending1/mqdefault.jpg',
+      added: false,
+      duration: 120,
+      media_type: 'video',
+      live_status: null,
+    };
+
+    const mockVideosReturn = (videos: ChannelVideo[]) => {
+      useChannelVideos.mockReturnValue({
+        videos,
+        totalCount: videos.length,
+        oldestVideoDate: null,
+        error: null,
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+    };
+
+    test('mobile date info explains pending dates when estimated rows are present', () => {
+      (useMediaQuery as jest.Mock).mockReturnValue(true);
+      mockVideosReturn([estimatedVideo]);
+
+      renderChannelVideos();
+      fireEvent.click(screen.getByLabelText('Date info'));
+
+      expect(screen.getByTestId('channel-videos-dialogs')).toHaveAttribute(
+        'data-mobile-tooltip',
+        expect.stringContaining('Some videos show "Pending"')
+      );
+    });
+
+    test('mobile date info omits the pending explanation when all rows have dates', () => {
+      (useMediaQuery as jest.Mock).mockReturnValue(true);
+      mockVideosReturn(mockVideos);
+
+      renderChannelVideos();
+      fireEvent.click(screen.getByLabelText('Date info'));
+
+      expect(screen.getByTestId('channel-videos-dialogs')).not.toHaveAttribute(
+        'data-mobile-tooltip',
+        expect.stringContaining('Some videos show "Pending"')
+      );
+    });
+
+    test('highlights the date info icon when estimated rows are present', () => {
+      mockVideosReturn([estimatedVideo]);
+
+      renderChannelVideos();
+
+      expect(screen.getByLabelText('Date info')).toHaveStyle({ color: 'var(--warning)' });
+    });
+
+    test('does not highlight the date info icon when all rows have dates', () => {
+      mockVideosReturn(mockVideos);
+
+      renderChannelVideos();
+
+      expect(screen.getByLabelText('Date info')).toHaveStyle({ color: 'var(--foreground)' });
     });
   });
 

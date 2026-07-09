@@ -91,6 +91,18 @@ describe('VideoCard Component', () => {
       expect(screen.getByText(/Jan 15/)).toBeInTheDocument();
     });
 
+    test('renders Pending for estimated published dates', () => {
+      const estimatedVideo = { ...mockVideo, publishedAt: null, published_at_source: 'estimated' as const };
+      renderWithProviders(<VideoCard {...defaultProps} video={estimatedVideo} />);
+      expect(screen.getByText('Pending')).toBeInTheDocument();
+    });
+
+    test('renders tilde prefix for approximate published dates', () => {
+      const approximateVideo = { ...mockVideo, published_at_source: 'approximate' as const };
+      renderWithProviders(<VideoCard {...defaultProps} video={approximateVideo} />);
+      expect(screen.getByText(/~1\/15\/2023/)).toBeInTheDocument();
+    });
+
     test('does not render published date for shorts', () => {
       const shortVideo = { ...mockVideo, media_type: 'short' };
       renderWithProviders(<VideoCard {...defaultProps} video={shortVideo} />);
@@ -163,13 +175,13 @@ describe('VideoCard Component', () => {
       renderWithProviders(<VideoCard {...defaultProps} video={videoWithFile} />);
       // File size shown in format indicator chip
       expect(screen.getByText(/50/)).toBeInTheDocument();
-      expect(screen.getByTestId('StorageIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('VideoFormatIcon')).toBeInTheDocument();
     });
 
     test('does not render format indicator when no file path exists', () => {
       renderWithProviders(<VideoCard {...defaultProps} />);
-      const movieIcons = screen.queryAllByTestId('StorageIcon');
-      expect(movieIcons.length).toBe(0);
+      const indicators = screen.queryAllByTestId('download-format-indicator');
+      expect(indicators.length).toBe(0);
     });
   });
 
@@ -688,7 +700,7 @@ describe('VideoCard Component', () => {
       renderWithProviders(<VideoCard {...defaultProps} video={largeVideo} />);
       // Check for file size presence in format indicator chip
       expect(screen.getByText(/GB/)).toBeInTheDocument();
-      expect(screen.getByTestId('StorageIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('VideoFormatIcon')).toBeInTheDocument();
     });
 
     test('handles video in both selectedForDeletion and checkedBoxes', () => {

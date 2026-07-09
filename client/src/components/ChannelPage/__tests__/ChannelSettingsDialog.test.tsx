@@ -21,6 +21,18 @@ jest.mock('axios', () => ({
   isAxiosError: jest.fn(() => false),
 }));
 
+// Mock useSubfolders so tests don't make real fetch calls for the subfolder list.
+jest.mock('../../../hooks/useSubfolders', () => ({
+  useSubfolders: () => ({
+    subfolders: ['__Library1', '__Library2'],
+    loading: false,
+    error: null,
+    refetch: jest.fn(),
+    createSubfolder: jest.fn(() => Promise.resolve()),
+    deleteSubfolder: jest.fn(() => Promise.resolve()),
+  }),
+}));
+
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const mockAxios = require('axios');
 
@@ -98,10 +110,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -134,10 +142,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -169,10 +173,6 @@ describe('ChannelSettingsDialog', () => {
             max_duration: 3600,
             title_filter_regex: '(?i)highlight',
           }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -202,24 +202,26 @@ describe('ChannelSettingsDialog', () => {
       expect(regexInput).toHaveValue('(?i)highlight');
     });
 
-    test('loads subfolders list', async () => {
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(['__Sports', '__Music']),
-        });
+    test('renders the options provided by the useSubfolders hook', async () => {
+      const user = userEvent.setup();
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
+      });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith('/api/channels/subfolders', {
-          headers: { 'x-access-token': 'test-token' },
-        });
+        expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
+
+      const subfolderInput = screen.getByLabelText('Subfolder');
+      await user.click(subfolderInput);
+
+      // Subfolders from the hook appear as options
+      expect(screen.getByText('__Library1')).toBeInTheDocument();
+      expect(screen.getByText('__Library2')).toBeInTheDocument();
     });
 
     test('refetches config when dialog opens', async () => {
@@ -227,10 +229,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -292,10 +290,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -323,10 +317,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -370,10 +360,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -391,10 +377,6 @@ describe('ChannelSettingsDialog', () => {
             ...mockChannelSettings,
             video_quality: '1440',
           }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -414,10 +396,6 @@ describe('ChannelSettingsDialog', () => {
             ...mockChannelSettings,
             sub_folder: 'Sports',
           }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -437,10 +415,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -484,10 +458,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         })
         .mockResolvedValueOnce({
           ok: true,
@@ -543,10 +513,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -569,10 +535,6 @@ describe('ChannelSettingsDialog', () => {
             min_duration: 180,
             max_duration: 1800,
           }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -597,10 +559,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         })
         .mockResolvedValueOnce({
           ok: true,
@@ -656,10 +614,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -686,10 +640,6 @@ describe('ChannelSettingsDialog', () => {
             ...mockChannelSettings,
             min_duration: 300,
           }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -715,10 +665,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -742,10 +688,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -767,10 +709,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -789,10 +727,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -826,10 +760,6 @@ describe('ChannelSettingsDialog', () => {
             ...mockChannelSettings,
             title_filter_regex: '(?i)test',
           }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         })
         .mockResolvedValueOnce({
           ok: true,
@@ -867,10 +797,6 @@ describe('ChannelSettingsDialog', () => {
           }),
         })
         .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
-        })
-        .mockResolvedValueOnce({
           ok: false,
           json: jest.fn().mockResolvedValueOnce({ error: 'Invalid regex' }),
         });
@@ -896,10 +822,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -928,10 +850,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         })
         .mockResolvedValueOnce({
           ok: true,
@@ -977,10 +895,6 @@ describe('ChannelSettingsDialog', () => {
         })
         .mockResolvedValueOnce({
           ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
           json: jest.fn().mockResolvedValueOnce({
             settings: { ...mockChannelSettings, video_quality: '720' },
           }),
@@ -1011,10 +925,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         })
         .mockResolvedValueOnce({
           ok: true,
@@ -1053,10 +963,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         })
         .mockResolvedValueOnce({
           ok: true,
@@ -1099,10 +1005,6 @@ describe('ChannelSettingsDialog', () => {
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
         })
         .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
-        })
-        .mockResolvedValueOnce({
           ok: false,
           status: 500,
           statusText: 'Internal Server Error',
@@ -1136,10 +1038,6 @@ describe('ChannelSettingsDialog', () => {
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
         })
         .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
-        })
-        .mockResolvedValueOnce({
           ok: false,
           status: 409,
         });
@@ -1170,10 +1068,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -1193,10 +1087,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -1224,10 +1114,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -1249,10 +1135,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       const { rerender } = render(<ChannelSettingsDialog {...defaultProps} />);
@@ -1277,10 +1159,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       rerender(<ChannelSettingsDialog {...defaultProps} open={true} />);
@@ -1293,15 +1171,10 @@ describe('ChannelSettingsDialog', () => {
 
   describe('State Reset on Dialog Close', () => {
     test('reloads data when dialog reopens', async () => {
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
-        });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
+      });
 
       const { rerender } = render(<ChannelSettingsDialog {...defaultProps} open={true} />);
 
@@ -1311,21 +1184,17 @@ describe('ChannelSettingsDialog', () => {
 
       rerender(<ChannelSettingsDialog {...defaultProps} open={false} />);
 
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
-        });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
+      });
 
       rerender(<ChannelSettingsDialog {...defaultProps} open={true} />);
 
       await waitFor(() => {
-        // 2 calls on first open (settings + subfolders) + 2 calls on second open
-        expect(mockFetch).toHaveBeenCalledTimes(4);
+        // 1 call on first open (settings) + 1 call on second open
+        // subfolders come from useSubfolders hook, not from fetch
+        expect(mockFetch).toHaveBeenCalledTimes(2);
       });
     });
   });
@@ -1336,10 +1205,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -1358,10 +1223,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -1388,10 +1249,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -1410,10 +1267,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -1440,10 +1293,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         })
         .mockResolvedValueOnce({
           ok: true,
@@ -1486,10 +1335,6 @@ describe('ChannelSettingsDialog', () => {
             ...mockChannelSettings,
             skip_video_folder: true,
           }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -1511,10 +1356,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         })
         .mockResolvedValueOnce({
           ok: true,
@@ -1543,10 +1384,6 @@ describe('ChannelSettingsDialog', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} token={null} />);
@@ -1593,10 +1430,6 @@ describe('ChannelSettingsDialog', () => {
         })
         .mockResolvedValueOnce({
           ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
           json: jest.fn().mockResolvedValueOnce({
             settings: { ...mockChannelSettings, sub_folder: 'NewFolder' },
             folderMoved: true,
@@ -1640,10 +1473,6 @@ describe('ChannelSettingsDialog', () => {
             hidden_tabs: ['shorts'],
             available_tabs: ['videos', 'streams'],
           }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -1669,10 +1498,6 @@ describe('ChannelSettingsDialog', () => {
             hidden_tabs: [],
             available_tabs: ['videos', 'shorts', 'streams'],
           }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         })
         .mockResolvedValueOnce({
           ok: true,
@@ -1725,10 +1550,6 @@ describe('ChannelSettingsDialog', () => {
             hidden_tabs: [],
             available_tabs: ['videos', 'shorts'],
           }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -1756,10 +1577,6 @@ describe('ChannelSettingsDialog', () => {
             hidden_tabs: ['shorts'],
             available_tabs: ['videos'],
           }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       // Backend's redetect probe now also finds 'streams' and keeps 'shorts' hidden
@@ -1821,10 +1638,6 @@ describe('ChannelSettingsDialog', () => {
             available_tabs: ['videos', 'streams'],
             auto_download_enabled_tabs: 'video',
           }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -1850,10 +1663,6 @@ describe('ChannelSettingsDialog', () => {
             available_tabs: ['videos', 'shorts', 'streams'],
             auto_download_enabled_tabs: 'short,livestream',
           }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -1878,10 +1687,6 @@ describe('ChannelSettingsDialog', () => {
             available_tabs: [],
             auto_download_enabled_tabs: '',
           }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
@@ -1907,10 +1712,6 @@ describe('ChannelSettingsDialog', () => {
             available_tabs: ['videos', 'shorts'],
             auto_download_enabled_tabs: 'video',
           }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         })
         .mockResolvedValueOnce({
           ok: true,
@@ -1963,10 +1764,6 @@ describe('ChannelSettingsDialog', () => {
             available_tabs: ['videos', 'shorts'],
             auto_download_enabled_tabs: 'video,short',
           }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         })
         .mockResolvedValueOnce({
           ok: true,

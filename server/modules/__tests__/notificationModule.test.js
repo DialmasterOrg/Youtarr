@@ -1,7 +1,6 @@
 /* eslint-env jest */
 
 const { EventEmitter } = require('events');
-const { isDiscordWebhook } = require('../notificationHelpers');
 
 // Create mock functions
 const mockSpawn = jest.fn();
@@ -143,24 +142,6 @@ describe('NotificationModule', () => {
     });
   });
 
-  describe('isDiscordWebhook (from notificationHelpers)', () => {
-    it('should return true for discord.com webhook URLs', () => {
-      expect(isDiscordWebhook('https://discord.com/api/webhooks/123/abc')).toBe(true);
-    });
-
-    it('should return true for discordapp.com webhook URLs', () => {
-      expect(isDiscordWebhook('https://discordapp.com/api/webhooks/123/abc')).toBe(true);
-    });
-
-    it('should return false for discord:// Apprise URLs', () => {
-      // discord:// URLs are NOT HTTP webhooks, they go through Apprise
-      expect(isDiscordWebhook('discord://webhook_id/token')).toBe(false);
-    });
-
-    it('should return false for other URLs', () => {
-      expect(isDiscordWebhook('ntfy://test')).toBe(false);
-    });
-  });
 });
 
 describe('Notification Utils', () => {
@@ -448,6 +429,58 @@ describe('Rich Notification Formatters', () => {
 
     expect(message.body).toContain('⚠️ *1 video failed.*');
     expect(message.body).toContain('Private Channel: This video is members-only');
+  });
+});
+
+describe('Failure diagnoses in notifications', () => {
+  const adviceMessage = 'YouTube blocked this download while using your uploaded cookies. Re-export fresh cookies from your browser.';
+  const diagnosedSummary = {
+    totalDownloaded: 0,
+    totalFailed: 1,
+    jobType: 'Channel Downloads',
+    failedVideos: [
+      { channel: 'StarTalk', title: 'Some Video', error: 'HTTP Error 403: Forbidden' }
+    ],
+    diagnoses: [
+      { key: 'http-403-cookies-enabled', title: 'YouTube blocked the download while using your cookies', message: adviceMessage, count: 1 }
+    ]
+  };
+
+  it.each([
+    ['plain', () => plainFormatter],
+    ['discord', () => discordFormatter],
+    ['email', () => emailFormatter],
+    ['telegram', () => telegramFormatter],
+    ['slack', () => slackMarkdownFormatter],
+  ])('includes a likely-cause line in %s notifications', (_name, getFormatter) => {
+    const message = getFormatter().formatDownloadMessage(diagnosedSummary, []);
+    const serialized = JSON.stringify(message);
+
+    expect(serialized).toContain('Likely cause');
+    expect(serialized).toContain('Re-export fresh cookies from your browser.');
+  });
+
+  it('renders one likely-cause line per distinct diagnosis', () => {
+    const summary = {
+      ...diagnosedSummary,
+      diagnoses: [
+        ...diagnosedSummary.diagnoses,
+        { key: 'bot-check-cookies-disabled', title: 'Bot check', message: 'Upload YouTube cookies to resolve this.', count: 2 }
+      ]
+    };
+
+    const message = plainFormatter.formatDownloadMessage(summary, []);
+
+    expect(message.body.match(/Likely cause/g)).toHaveLength(2);
+    expect(message.body).toContain('Upload YouTube cookies to resolve this.');
+  });
+
+  it('omits likely-cause lines when there are no diagnoses', () => {
+    const summary = { ...diagnosedSummary, diagnoses: [] };
+
+    const message = plainFormatter.formatDownloadMessage(summary, []);
+
+    expect(message.body).not.toContain('Likely cause');
   });
 });
 
@@ -758,7 +791,7 @@ describe('NotificationModule Integration', () => {
       expect(mockLoggerDebug).toHaveBeenCalledWith('Notifications not configured, skipping notification');
     });
 
-    it('should skip notification when no videos downloaded', async () => {
+    it('should skip notification when no videos downloaded and no terminations recorded', async () => {
       const notificationData = {
         ...baseNotificationData,
         finalSummary: { ...baseNotificationData.finalSummary, totalDownloaded: 0 }
@@ -767,7 +800,81 @@ describe('NotificationModule Integration', () => {
       await notificationModule.sendDownloadNotification(notificationData);
 
       expect(mockSpawn).not.toHaveBeenCalled();
-      expect(mockLoggerDebug).toHaveBeenCalledWith('No new videos downloaded, skipping notification');
+      expect(mockLoggerDebug).toHaveBeenCalledWith('No new videos downloaded and no terminations recorded, skipping notification');
+    });
+
+    it('still sends notification when zero videos downloaded but a channel was marked terminated', async () => {
+      const notificationData = {
+        ...baseNotificationData,
+        finalSummary: {
+          ...baseNotificationData.finalSummary,
+          totalDownloaded: 0,
+          terminatedChannels: [
+            { channelId: 'UC1234567890123456789012', uploader: 'Banned Channel' }
+          ]
+        }
+      };
+
+      const sendPromise = notificationModule.sendDownloadNotification(notificationData);
+      // ntfy:// routes through Apprise; close the child so the sender resolves.
+      setImmediate(() => {
+        mockProcess.emit('close', 0);
+      });
+      await sendPromise;
+
+      expect(mockSpawn).toHaveBeenCalled();
+      expect(mockLoggerDebug).not.toHaveBeenCalledWith('No new videos downloaded and no terminations recorded, skipping notification');
+    });
+
+    it('still sends notification for a failure-only run when diagnoses exist', async () => {
+      const notificationData = {
+        finalSummary: {
+          totalDownloaded: 0,
+          totalSkipped: 0,
+          totalFailed: 1,
+          jobType: 'Channel Downloads',
+          failedVideos: [
+            { youtubeId: 'fail0000001', channel: 'StarTalk', error: 'HTTP Error 403: Forbidden' }
+          ],
+          diagnoses: [
+            {
+              key: 'http-403-cookies-enabled',
+              title: 'YouTube blocked the download while using your cookies',
+              message: 'Re-export fresh cookies from your browser.',
+              count: 1
+            }
+          ]
+        },
+        videoData: []
+      };
+
+      const sendPromise = notificationModule.sendDownloadNotification(notificationData);
+      setImmediate(() => {
+        mockProcess.emit('close', 0);
+      });
+      await sendPromise;
+
+      expect(mockSpawn).toHaveBeenCalled();
+    });
+
+    it('skips a failure-only run when there are no diagnoses', async () => {
+      const notificationData = {
+        finalSummary: {
+          totalDownloaded: 0,
+          totalSkipped: 0,
+          totalFailed: 1,
+          jobType: 'Channel Downloads',
+          failedVideos: [
+            { youtubeId: 'fail0000001', channel: 'StarTalk', error: 'Postprocessing failed' }
+          ],
+          diagnoses: []
+        },
+        videoData: []
+      };
+
+      await notificationModule.sendDownloadNotification(notificationData);
+
+      expect(mockSpawn).not.toHaveBeenCalled();
     });
 
     it('should use Discord webhook directly for Discord URLs with rich formatting', async () => {

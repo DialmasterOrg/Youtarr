@@ -111,7 +111,7 @@ const ImportSummary: React.FC<ImportSummaryProps> = ({ jobDetail }) => {
         )}
 
         <Button asChild variant="contained">
-          <RouterLink to="/channels">Back to channels</RouterLink>
+          <RouterLink to="/subscriptions">Back to channels</RouterLink>
         </Button>
       </CardContent>
     </Card>

@@ -7,9 +7,12 @@ const Video = require('../models/video');
 const JobVideo = require('../models/jobvideo');
 const JobVideoDownload = require('../models/jobvideodownload');
 const ChannelVideo = require('../models/channelvideo');
+const videoPersistence = require('./videoPersistence');
 const cron = require('node-cron');
 const MessageEmitter = require('./messageEmitter.js'); // import the helper function
 const configModule = require('./configModule');
+const { isDownloadJob } = require('./download/jobTypes');
+const downloadCleanup = require('./download/downloadCleanup');
 const logger = require('../logger');
 
 const MAX_SAVE_RETRIES = 3;
@@ -220,10 +223,7 @@ class JobModule {
 
           // Step 2: Clean up in-progress videos from disk
           try {
-            // Import downloadExecutor to access cleanup method
-            const DownloadExecutor = require('./download/downloadExecutor');
-            const downloadExecutor = new DownloadExecutor();
-            await downloadExecutor.cleanupInProgressVideos(jobId);
+            await downloadCleanup.cleanupInProgressVideos(jobId);
           } catch (cleanupErr) {
             logger.error({ err: cleanupErr, jobId }, 'Error cleaning up in-progress videos for job');
           }
@@ -461,33 +461,7 @@ class JobModule {
    * Prepares video data for database save, setting last_downloaded_at if file is verified
    */
   prepareVideoDataForSave(video, isNewVideo = false) {
-    const data = { ...video };
-    const hasVerifiedFile = Boolean(
-      video.filePath && video.fileSize !== null && video.fileSize !== undefined
-    );
-
-    if (hasVerifiedFile) {
-      // Always set these fields when file is verified
-      data.filePath = video.filePath;
-      data.fileSize = video.fileSize;
-      data.removed = false;
-      data.last_downloaded_at = new Date();
-      logger.debug({ youtubeId: video.youtubeId, fileSize: video.fileSize, isNewVideo }, 'Setting last_downloaded_at - file verified');
-    } else {
-      if (!isNewVideo) {
-        // For updates, delete fields to leave them untouched
-        delete data.filePath;
-        delete data.fileSize;
-        delete data.removed;
-      }
-      logger.debug({ youtubeId: video.youtubeId, filePath: video.filePath, fileSize: video.fileSize, isNewVideo }, 'NOT setting last_downloaded_at - hasVerifiedFile is false');
-    }
-
-    if (!video.media_type) {
-      delete data.media_type;
-    }
-
-    return data;
+    return videoPersistence.prepareVideoDataForSave(video, isNewVideo);
   }
 
   /**
@@ -497,67 +471,7 @@ class JobModule {
    * @param {boolean} alwaysCreateJobVideo - Always create JobVideo relationship even if video exists (for recovery)
    */
   async upsertVideoForJob(video, jobInstance, alwaysCreateJobVideo = false) {
-    let videoInstance = await Video.findOne({
-      where: { youtubeId: video.youtubeId },
-    });
-
-    let videoExisted = !!videoInstance;
-
-    if (videoInstance) {
-      // During recovery (alwaysCreateJobVideo=true), treat updates like new videos
-      // to ensure file metadata and last_downloaded_at are set
-      const updateData = this.prepareVideoDataForSave(video, alwaysCreateJobVideo);
-      await videoInstance.update(updateData);
-    } else {
-      // Try to create the video
-      try {
-        const createData = this.prepareVideoDataForSave(video, true);
-        videoInstance = await Video.create(createData);
-      } catch (err) {
-        // If unique constraint error, the video was created by another process (like backfill)
-        // Query for it again
-        if (err.name === 'SequelizeUniqueConstraintError' || err.original?.code === 'ER_DUP_ENTRY') {
-          logger.info({ youtubeId: video.youtubeId }, 'Video already exists (created by another process), fetching it');
-          videoInstance = await Video.findOne({
-            where: { youtubeId: video.youtubeId },
-          });
-          videoExisted = true;
-
-          if (!videoInstance) {
-            // This shouldn't happen, but if it does, re-throw the error
-            throw new Error(`Failed to find video ${video.youtubeId} after unique constraint error`);
-          }
-        } else {
-          // Some other error, re-throw it
-          throw err;
-        }
-      }
-    }
-
-    // Create JobVideo relationship if needed
-    const shouldCreateJobVideo = alwaysCreateJobVideo || !videoExisted;
-
-    if (shouldCreateJobVideo) {
-      // Check if JobVideo relationship already exists
-      const existingJobVideo = await JobVideo.findOne({
-        where: {
-          job_id: jobInstance.id,
-          video_id: videoInstance.id
-        }
-      });
-
-      if (!existingJobVideo) {
-        await JobVideo.create({
-          job_id: jobInstance.id,
-          video_id: videoInstance.id,
-        });
-        logger.debug({ youtubeId: video.youtubeId, job_id: jobInstance.id, video_id: videoInstance.id }, 'Created JobVideo relationship');
-      } else {
-        logger.debug({ youtubeId: video.youtubeId }, 'JobVideo relationship already exists');
-      }
-    }
-
-    return videoInstance;
+    return videoPersistence.upsertVideoForJob(video, jobInstance, alwaysCreateJobVideo);
   }
 
   // Save a single job and its video data to the database
@@ -697,66 +611,12 @@ class JobModule {
 
   // Convert yt-dlp upload_date (YYYYMMDD) to ISO string
   uploadDateToIso(upload_date) {
-    if (!upload_date || typeof upload_date !== 'string' || upload_date.length < 8) {
-      return null;
-    }
-    const year = upload_date.substring(0, 4);
-    const month = upload_date.substring(4, 6);
-    const day = upload_date.substring(6, 8);
-    const d = new Date(`${year}-${month}-${day}T00:00:00Z`);
-    return isNaN(d.getTime()) ? null : d.toISOString();
+    return videoPersistence.uploadDateToIso(upload_date);
   }
 
   // Upsert into channelvideos using info.json-like fields
-  async upsertChannelVideoFromInfo(info, { skipUpdateIfExists = false } = {}) {
-    const youtube_id = info.id || info.youtubeId;
-    const channel_id = info.channel_id || info.channelId;
-    if (!youtube_id || !channel_id) return;
-
-    const title = info.title || info.youTubeVideoName || 'Untitled';
-    const duration = typeof info.duration === 'number' ? info.duration : null;
-    const publishedAt = info.upload_date ? this.uploadDateToIso(info.upload_date) : null;
-    const availability = info.availability || null;
-    const media_type = info.media_type || 'video';
-    const thumbnail = `https://i.ytimg.com/vi/${youtube_id}/mqdefault.jpg`;
-    const content_rating = info.content_rating || null;
-    const age_limit = info.age_limit ?? null;
-    const normalized_rating = info.normalized_rating || null;
-
-    const defaults = {
-      title,
-      thumbnail,
-      duration,
-      publishedAt,
-      availability,
-      media_type,
-      ignored: false,
-      ignored_at: null
-    };
-    if (content_rating != null) defaults.content_rating = content_rating;
-    if (age_limit != null) defaults.age_limit = age_limit;
-    if (normalized_rating != null) defaults.normalized_rating = normalized_rating;
-
-    const [record, created] = await ChannelVideo.findOrCreate({
-      where: { youtube_id, channel_id },
-      defaults,
-    });
-    if (!created && !skipUpdateIfExists) {
-      // Clear ignored flag when video is downloaded - user action shows they want this video
-      const updates = {
-        title,
-        thumbnail,
-        duration,
-        availability,
-        media_type,
-        ignored: false,
-        ignored_at: null
-      };
-      if (content_rating != null) updates.content_rating = content_rating;
-      if (age_limit != null) updates.age_limit = age_limit;
-      if (normalized_rating != null) updates.normalized_rating = normalized_rating;
-      await record.update(updates);
-    }
+  async upsertChannelVideoFromInfo(info, options) {
+    return videoPersistence.upsertChannelVideoFromInfo(info, options);
   }
 
   // Backfill Videos and channelvideos tables from complete.list and jobs info JSON
@@ -1088,14 +948,11 @@ class JobModule {
       return;
     }
 
-    // Download-specific completion logic: only for download job types.
     // Non-download jobs (e.g. Import Subscriptions) manage their own output field.
-    const isDownloadJob = job.jobType && (
-      job.jobType.includes('Channel Downloads') || job.jobType.includes('Manually Added Urls')
-    );
+    const jobIsDownload = isDownloadJob(job.jobType);
 
     if (
-      isDownloadJob && (
+      jobIsDownload && (
         updatedFields.status === 'Complete' ||
         updatedFields.status === 'Error' ||
         updatedFields.status === 'Complete with Warnings' ||
@@ -1134,7 +991,7 @@ class JobModule {
                            updatedFields.status === 'Terminated' ||
                            updatedFields.status === 'Killed';
 
-    if (isCompletedJob && isDownloadJob) {
+    if (isCompletedJob && jobIsDownload) {
       // For completed download jobs, reload videos from DB to ensure accurate counts
       // This is especially important for multi-group downloads where each group
       // updates the job with only its own videos, potentially losing earlier videos
@@ -1195,14 +1052,6 @@ class JobModule {
         logger.error({ err, jobId }, 'Failed to save in-progress job');
       });
     }
-  }
-
-  deleteJob(jobId) {
-    delete this.jobs[jobId];
-
-    this.saveJobs().then(() => {
-      return;
-    });
   }
 
   scheduleSaveRetry(jobId, attempt) {

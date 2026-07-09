@@ -8,7 +8,7 @@ const meta: Meta<typeof AppShell> = {
   component: AppShell,
   decorators: [
     (Story) => (
-      <MemoryRouter initialEntries={['/channels']}>
+      <MemoryRouter initialEntries={['/subscriptions']}>
         <Story />
       </MemoryRouter>
     ),

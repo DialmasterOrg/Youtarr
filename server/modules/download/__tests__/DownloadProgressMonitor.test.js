@@ -454,6 +454,26 @@ describe('DownloadProgressMonitor', () => {
       expect(monitor.currentVideoCompleted).toBe(false);
     });
 
+    it('should track video extraction for playlist downloads like manual URLs', () => {
+      // Playlist jobs are specific URL-list downloads; they use the same
+      // per-item counting path as manual URLs.
+      monitor = new DownloadProgressMonitor(mockJobId, 'Playlist: My Favorites');
+      expect(monitor.isSpecificUrlDownload).toBe(true);
+      expect(monitor.isChannelDownload).toBe(false);
+
+      // Total seeded upfront.
+      monitor.videoCount.total = 3;
+      monitor.videoCount.completed = 1;
+
+      const line = '[youtube] Extracting URL: https://youtube.com/watch?v=456';
+      const result = monitor.parseAndUpdateVideoCounts(line);
+
+      expect(result).toBe(true);
+      // Advances to the next item without clobbering the seeded total.
+      expect(monitor.videoCount.total).toBe(3);
+      expect(monitor.videoCount.current).toBe(2);
+    });
+
     it('should track video completion', () => {
       monitor.currentVideoCompleted = false;
       monitor.videoCount.completed = 0;

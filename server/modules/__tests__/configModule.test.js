@@ -1385,4 +1385,74 @@ describe('ConfigModule', () => {
       expect(logger.error).toHaveBeenCalled();
     });
   });
+
+  describe('Jellyfin and Emby config fields', () => {
+    const templateWithMediaServers = {
+      ...defaultTemplate,
+      jellyfinEnabled: false,
+      jellyfinUrl: '',
+      jellyfinApiKey: '',
+      jellyfinUserId: '',
+      jellyfinVideoLibraryIds: '',
+      embyEnabled: false,
+      embyUrl: '',
+      embyApiKey: '',
+      embyUserId: '',
+      embyVideoLibraryIds: '',
+    };
+
+    beforeEach(() => {
+      fs.existsSync.mockReturnValue(true);
+      fs.readFileSync.mockReturnValue(JSON.stringify(templateWithMediaServers));
+    });
+
+    test('getConfig() returns Jellyfin fields with defaults when not set', () => {
+      ConfigModule = require('../configModule');
+      const config = ConfigModule.getConfig();
+
+      expect(config.jellyfinEnabled).toBe(false);
+      expect(config.jellyfinUrl).toBe('');
+      expect(config.jellyfinApiKey).toBe('');
+      expect(config.jellyfinUserId).toBe('');
+      expect(config.jellyfinVideoLibraryIds).toBe('');
+    });
+
+    test('getConfig() returns Emby fields with defaults when not set', () => {
+      ConfigModule = require('../configModule');
+      const config = ConfigModule.getConfig();
+
+      expect(config.embyEnabled).toBe(false);
+      expect(config.embyUrl).toBe('');
+      expect(config.embyApiKey).toBe('');
+      expect(config.embyUserId).toBe('');
+      expect(config.embyVideoLibraryIds).toBe('');
+    });
+
+    test('updating jellyfinUrl is reflected in getConfig()', () => {
+      ConfigModule = require('../configModule');
+      const updated = { ...ConfigModule.getConfig(), jellyfinUrl: 'http://jellyfin.local:8096' };
+
+      ConfigModule.updateConfig(updated);
+
+      expect(ConfigModule.getConfig().jellyfinUrl).toBe('http://jellyfin.local:8096');
+    });
+
+    test('Jellyfin and Emby fields are merged from template into existing config that lacks them', () => {
+      // Existing config without Jellyfin/Emby fields
+      fs.readFileSync.mockImplementation((path) => {
+        if (path.includes('config.json') && !path.includes('example')) {
+          return JSON.stringify(defaultTemplate);
+        }
+        return JSON.stringify(templateWithMediaServers);
+      });
+
+      ConfigModule = require('../configModule');
+      const config = ConfigModule.getConfig();
+
+      expect(config.jellyfinEnabled).toBe(false);
+      expect(config.embyEnabled).toBe(false);
+      // Config should have been saved because fields were added
+      expect(fs.writeFileSync).toHaveBeenCalled();
+    });
+  });
 });

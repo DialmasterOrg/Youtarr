@@ -14,7 +14,6 @@ export * from './label';
 export * from './layout';
 export * from './list';
 export * from './menu';
-export * from './pagination';
 export * from './paper';
 export * from './progress';
 export * from './select';

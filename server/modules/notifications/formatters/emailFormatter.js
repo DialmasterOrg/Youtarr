@@ -12,7 +12,15 @@ const {
   getSubtitle,
   buildAutoRemovalTitle,
   formatBytes,
-  groupVideosByChannel
+  groupVideosByChannel,
+  getTerminatedCount,
+  buildTerminatedCountLabel,
+  formatTerminatedChannelLine,
+  getTerminationFailureCount,
+  buildTerminationFailureCountLabel,
+  formatTerminationFailureLine,
+  getDiagnoses,
+  formatDiagnosisLine
 } = require('../utils');
 
 const DEFAULT_HEADER_GRADIENT = 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)';
@@ -83,11 +91,47 @@ function buildEmailHtml(title, subtitle, content) {
 function formatDownloadMessage(finalSummary, videoData) {
   const { totalDownloaded, jobType } = finalSummary;
   const failedCount = getFailedCount(finalSummary);
+  const terminatedCount = getTerminatedCount(finalSummary);
+  const terminationFailureCount = getTerminationFailureCount(finalSummary);
 
-  const title = buildTitle(totalDownloaded);
+  const title = buildTitle(totalDownloaded, terminatedCount, terminationFailureCount);
   const subtitle = getSubtitle(jobType);
 
   let content = '';
+
+  if (terminatedCount > 0) {
+    const terminatedChannelsToShow = (finalSummary.terminatedChannels || []).slice(0, 5);
+    const terminatedItems = terminatedChannelsToShow.map(channel =>
+      `<li>${escapeHtml(formatTerminatedChannelLine(channel))}</li>`
+    ).join('');
+    const moreTerminated = terminatedCount > terminatedChannelsToShow.length
+      ? `<p class="more-videos">...and ${terminatedCount - terminatedChannelsToShow.length} more</p>`
+      : '';
+
+    content += `
+      <div class="warning-card">
+        <strong>⚠️ ${escapeHtml(buildTerminatedCountLabel(terminatedCount))}.</strong>
+        ${terminatedItems ? `<ul>${terminatedItems}</ul>` : '<p>See Youtarr channels list for details.</p>'}
+        ${moreTerminated}
+      </div>`;
+  }
+
+  if (terminationFailureCount > 0) {
+    const failuresToShow = (finalSummary.terminationFailures || []).slice(0, 5);
+    const failureItems = failuresToShow.map(channelId =>
+      `<li>${escapeHtml(formatTerminationFailureLine(channelId))}</li>`
+    ).join('');
+    const moreFailures = terminationFailureCount > failuresToShow.length
+      ? `<p class="more-videos">...and ${terminationFailureCount - failuresToShow.length} more</p>`
+      : '';
+
+    content += `
+      <div class="warning-card">
+        <strong>⚠️ ${escapeHtml(buildTerminationFailureCountLabel(terminationFailureCount))}.</strong>
+        ${failureItems ? `<ul>${failureItems}</ul>` : '<p>Check Youtarr logs for details.</p>'}
+        ${moreFailures}
+      </div>`;
+  }
 
   if (failedCount > 0) {
     const failedVideosToShow = (finalSummary.failedVideos || []).slice(0, 5);
@@ -98,11 +142,16 @@ function formatDownloadMessage(finalSummary, videoData) {
       ? `<p class="more-videos">...and ${failedCount - failedVideosToShow.length} more failed</p>`
       : '';
 
+    const diagnosisItems = getDiagnoses(finalSummary).map(diagnosis =>
+      `<p>💡 <em>${escapeHtml(formatDiagnosisLine(diagnosis))}</em></p>`
+    ).join('');
+
     content += `
       <div class="warning-card">
         <strong>⚠️ ${escapeHtml(buildFailedCountLabel(failedCount))}.</strong>
         ${failedItems ? `<ul>${failedItems}</ul>` : '<p>See Youtarr download history for details.</p>'}
         ${moreFailures}
+        ${diagnosisItems}
       </div>`;
   }
 

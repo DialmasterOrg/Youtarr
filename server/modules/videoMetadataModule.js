@@ -5,6 +5,8 @@ const configModule = require('./configModule');
 const ytDlpRunner = require('./ytDlpRunner');
 const logger = require('../logger');
 const youtubeApi = require('./youtubeApi');
+const ChannelVideo = require('../models/channelvideo');
+const channelVideoReanchor = require('./channelVideoReanchor');
 
 const NULL_METADATA = {
   description: null,
@@ -32,6 +34,19 @@ const NULL_METADATA = {
 };
 
 const YTDLP_FETCH_TIMEOUT_MS = 60000;
+
+// Convert yt-dlp upload_date (YYYYMMDD) to the ISO string format used by
+// channelvideos.publishedAt. Returns null if unparseable.
+function uploadDateToIso(uploadDate) {
+  if (!uploadDate || typeof uploadDate !== 'string' || uploadDate.length < 8) {
+    return null;
+  }
+  const year = uploadDate.substring(0, 4);
+  const month = uploadDate.substring(4, 6);
+  const day = uploadDate.substring(6, 8);
+  const d = new Date(`${year}-${month}-${day}T00:00:00Z`);
+  return isNaN(d.getTime()) ? null : d.toISOString();
+}
 
 const SUPPORTED_HEIGHTS = [360, 480, 720, 1080, 1440, 2160];
 
@@ -109,10 +124,37 @@ class VideoMetadataModule {
           }
         } catch (fetchErr) {
           logger.warn({ err: fetchErr, youtubeId }, 'Failed to fetch metadata via yt-dlp');
+
+          // yt-dlp throws "Join this channel..." / "available to this channel's
+          // members..." style errors for members-only videos. The fetch failure
+          // is itself the signal: stamp subscriber_only so the next modal open
+          // short-circuits the failing fetch (VideoModal skips getVideoMetadata
+          // when video.status === 'members_only').
+          const detectedMembersOnly = ytDlpRunner.isMembersOnlyError(fetchErr?.message);
+          if (detectedMembersOnly) {
+            try {
+              await ChannelVideo.update(
+                { availability: 'subscriber_only' },
+                { where: { youtube_id: youtubeId } },
+              );
+            } catch (backfillErr) {
+              logger.warn({ err: backfillErr, youtubeId }, 'Failed to backfill ChannelVideo.availability after members-only fetch error');
+            }
+          }
+
           // Try API fallback so the UI isn't left completely empty. File
           // detail fields will be null (API can't provide them), but text
           // fields are still useful.
-          return this._getApiFallbackMetadata(youtubeId);
+          const fallbackMetadata = { ...(await this._getApiFallbackMetadata(youtubeId)) };
+          // The Data API never reports 'subscriber_only' (it sees the video as
+          // 'public' since the gating is membership-side). When we already
+          // detected members-only from the yt-dlp error, override the response
+          // so the modal renders the Members Only state on first open instead
+          // of treating the video as public until the next refetch.
+          if (detectedMembersOnly) {
+            fallbackMetadata.availability = 'subscriber_only';
+          }
+          return fallbackMetadata;
         }
       }
 
@@ -135,6 +177,37 @@ class VideoMetadataModule {
           }
         } catch (backfillErr) {
           logger.warn({ err: backfillErr, youtubeId }, 'Failed to backfill originalDate');
+        }
+      }
+
+      // Backfill ChannelVideo.availability so members-only videos surfaced via
+      // modal open get marked, even when yt-dlp's flat-playlist channel listing
+      // omits availability for lockupViewModel entries. Same shape as the
+      // originalDate backfill above. Only runs on the yt-dlp path; the API
+      // fallback never reports 'subscriber_only' so backfilling from there
+      // would silently downgrade real values to 'public'.
+      if (rawData.availability) {
+        try {
+          await ChannelVideo.update(
+            { availability: rawData.availability },
+            { where: { youtube_id: youtubeId } },
+          );
+        } catch (backfillErr) {
+          logger.warn({ err: backfillErr, youtubeId }, 'Failed to backfill ChannelVideo.availability');
+        }
+      }
+
+      // Backfill ChannelVideo.publishedAt from the authoritative .info.json
+      // upload_date, replacing estimated/approximate dates from flat-playlist
+      // channel fetches. Delegated to the re-anchor module so neighbouring
+      // synthetic dates are shifted to keep the channel in YouTube order when
+      // this exact date would otherwise sort the video out of place.
+      const uploadDateIso = uploadDateToIso(rawData.upload_date);
+      if (uploadDateIso) {
+        try {
+          await channelVideoReanchor.applyExactDateForVideo(youtubeId, uploadDateIso);
+        } catch (backfillErr) {
+          logger.warn({ err: backfillErr, youtubeId }, 'Failed to backfill ChannelVideo.publishedAt');
         }
       }
 

@@ -5,11 +5,9 @@ const {
   resolveEffectiveSubfolder,
   resolveChannelFolderName,
   buildChannelPath,
-  buildVideoPath,
   buildOutputTemplate,
   buildThumbnailTemplate,
   extractYoutubeIdFromPath,
-  isValidYoutubeId,
   calculateRelocatedPath,
   extractSubfolderFromAbsPath
 } = require('../pathBuilder');
@@ -135,19 +133,17 @@ describe('filesystem/pathBuilder', () => {
     it('should handle empty subfolder as no subfolder', () => {
       expect(buildChannelPath(baseDir, '', 'ChannelName')).toBe('/videos/ChannelName');
     });
-  });
 
-  describe('buildVideoPath', () => {
-    const baseDir = '/videos';
-
-    it('should build full video path without subfolder', () => {
-      expect(buildVideoPath(baseDir, null, 'ChannelName', 'Video - Title - abc123'))
-        .toBe('/videos/ChannelName/Video - Title - abc123');
+    it('should throw when a subfolder escapes the base directory', () => {
+      // The __ prefix only absorbs one level; deeper traversal still escapes
+      // path.join, so buildChannelPath must reject it.
+      expect(() => buildChannelPath(baseDir, 'a/../../../etc', 'ChannelName')).toThrow(
+        /escapes base directory/
+      );
     });
 
-    it('should build full video path with subfolder', () => {
-      expect(buildVideoPath(baseDir, 'MyFolder', 'ChannelName', 'Video - Title - abc123'))
-        .toBe('/videos/__MyFolder/ChannelName/Video - Title - abc123');
+    it('should not throw for a legitimate subfolder name', () => {
+      expect(() => buildChannelPath(baseDir, 'My Folder-1', 'ChannelName')).not.toThrow();
     });
   });
 
@@ -213,28 +209,6 @@ describe('filesystem/pathBuilder', () => {
 
     it('should handle empty path', () => {
       expect(extractYoutubeIdFromPath('')).toBeNull();
-    });
-  });
-
-  describe('isValidYoutubeId', () => {
-    it('should validate standard YouTube IDs', () => {
-      expect(isValidYoutubeId('dQw4w9WgXcQ')).toBe(true);
-    });
-
-    it('should validate IDs with hyphens and underscores', () => {
-      expect(isValidYoutubeId('a-b_c-d_e-fg')).toBe(true);
-    });
-
-    it('should reject too short', () => {
-      expect(isValidYoutubeId('abc')).toBe(false);
-    });
-
-    it('should reject too long', () => {
-      expect(isValidYoutubeId('abcdefghijklm')).toBe(false);
-    });
-
-    it('should reject invalid characters', () => {
-      expect(isValidYoutubeId('abc!@#$%^&*')).toBe(false);
     });
   });
 

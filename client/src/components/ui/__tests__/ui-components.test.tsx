@@ -376,7 +376,7 @@ describe('Tabs', () => {
 });
 
 // ─── transitions.tsx ─────────────────────────────────────────────────────────
-import { Grow, Slide, Fade, Collapse, Backdrop, Zoom } from '../transitions';
+import { Grow, Slide, Fade, Collapse } from '../transitions';
 
 describe('Grow', () => {
   it('renders children when in=true', () => {
@@ -507,45 +507,6 @@ describe('Collapse', () => {
   it('accepts auto timeout', () => {
     render(<Collapse in timeout="auto"><div>AutoCollapse</div></Collapse>);
     expect(screen.getByText('AutoCollapse')).toBeInTheDocument();
-  });
-});
-
-describe('Backdrop', () => {
-  it('renders when open=true', () => {
-    render(<Backdrop open data-testid="backdrop"><div>Over</div></Backdrop>);
-    expect(screen.getByTestId('backdrop')).toBeInTheDocument();
-    expect(screen.getByText('Over')).toBeInTheDocument();
-  });
-
-  it('does not render when open=false', () => {
-    render(<Backdrop open={false} data-testid="backdrop">Content</Backdrop>);
-    expect(screen.queryByTestId('backdrop')).not.toBeInTheDocument();
-  });
-
-  it('renders without dark overlay when invisible=true', () => {
-    render(<Backdrop open invisible data-testid="backdrop">Invisible</Backdrop>);
-    const el = screen.getByTestId('backdrop');
-    expect(el).not.toHaveClass('bg-black/50');
-  });
-
-  it('calls onClick when clicked', async () => {
-    const user = userEvent.setup();
-    const onClick = jest.fn();
-    render(<Backdrop open onClick={onClick} data-testid="backdrop">Click me</Backdrop>);
-    await user.click(screen.getByTestId('backdrop'));
-    expect(onClick).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('Zoom', () => {
-  it('renders children when in=true', () => {
-    render(<Zoom in><div>ZoomIn</div></Zoom>);
-    expect(screen.getByText('ZoomIn')).toBeInTheDocument();
-  });
-
-  it('returns null when in=false', () => {
-    render(<Zoom in={false}><div>ZoomOut</div></Zoom>);
-    expect(screen.queryByText('ZoomOut')).not.toBeInTheDocument();
   });
 });
 

@@ -31,7 +31,7 @@ Youtarr ships four Compose files so each supported runtime can layer the right o
 
 ### Database Container (youtarr-db)
 - **Image**: `mariadb:10.3`
-- **Port**: 3321 (both host and container)
+- **Port**: 3321 inside the Docker network only; the bundled database is not published to the host
 - **Volumes**:
   - `./database:/var/lib/mysql` - Database persistence (default)
   - `youtarr-db-data:/var/lib/mysql` - Named volume (recommended for Docker Desktop/ARM/NAS)

@@ -12,8 +12,7 @@ const {
   composeVideoFolderName,
   composeVideoFileTemplate,
   YOUTUBE_ID_BRACKET_PATTERN,
-  YOUTUBE_ID_DASH_PATTERN,
-  YOUTUBE_ID_PATTERN
+  YOUTUBE_ID_DASH_PATTERN
 } = require('./constants');
 
 /**
@@ -104,22 +103,17 @@ function resolveChannelFolderName(channel) {
 function buildChannelPath(baseDir, subfolder, channelFolderName) {
   if (subfolder) {
     const subfolderSegment = buildSubfolderSegment(subfolder);
-    return path.join(baseDir, subfolderSegment, channelFolderName);
+    const full = path.join(baseDir, subfolderSegment, channelFolderName);
+    // Last line of defense: a subfolder must never resolve outside baseDir.
+    // Route-level validation should catch traversal first; this guarantees no
+    // caller (current or future) can write outside the output directory.
+    const rel = path.relative(baseDir, full);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+      throw new Error(`Subfolder escapes base directory: ${subfolder}`);
+    }
+    return full;
   }
   return path.join(baseDir, channelFolderName);
-}
-
-/**
- * Build the full path to a video directory
- * @param {string} baseDir - The base output directory
- * @param {string|null} subfolder - The subfolder name (without prefix) or null
- * @param {string} channelFolderName - The channel folder name
- * @param {string} videoFolderName - The video folder name
- * @returns {string} - Full path to the video directory
- */
-function buildVideoPath(baseDir, subfolder, channelFolderName, videoFolderName) {
-  const channelPath = buildChannelPath(baseDir, subfolder, channelFolderName);
-  return path.join(channelPath, videoFolderName);
 }
 
 /**
@@ -189,15 +183,6 @@ function extractYoutubeIdFromPath(filePath) {
 }
 
 /**
- * Check if a string is a valid YouTube video ID
- * @param {string} str - The string to check
- * @returns {boolean} - True if valid YouTube ID format
- */
-function isValidYoutubeId(str) {
-  return YOUTUBE_ID_PATTERN.test(str);
-}
-
-/**
  * Calculate the new path after moving from oldBase to newBase
  * Used when relocating files after a subfolder change
  * @param {string} oldBasePath - The old base path
@@ -259,11 +244,9 @@ module.exports = {
   resolveEffectiveSubfolder,
   resolveChannelFolderName,
   buildChannelPath,
-  buildVideoPath,
   buildOutputTemplate,
   buildThumbnailTemplate,
   extractYoutubeIdFromPath,
-  isValidYoutubeId,
   calculateRelocatedPath,
   extractSubfolderFromAbsPath
 };

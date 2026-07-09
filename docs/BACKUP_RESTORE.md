@@ -60,6 +60,8 @@ On Debian/Ubuntu, install jq with: `sudo apt install jq`
 - They're typically stored on external/NAS storage
 - They can be re-downloaded if lost (though this takes time)
 
+Your playlist subscriptions and per-server sync state live in the database, so they're covered by the database dump. The generated `.m3u` files under `__playlists__/` in your output directory are not backed up, but Youtarr rewrites them on the next sync, so there's nothing to restore.
+
 ## Backup Options
 
 ### Full Backup to default location ./backups/
@@ -178,7 +180,7 @@ If your system drive fails but your video files survive (on external/NAS storage
    ./start.sh
    ```
 
-Your channels, settings, and download history will be restored. Videos should appear since they reference the same output directory.
+Your channels, playlists, settings, and download history will be restored. Videos should appear since they reference the same output directory.
 
 ### Upgrading to New Hardware
 
@@ -248,7 +250,7 @@ The database container may take longer to start on some systems:
 
 1. Wait a moment and try again
 2. Check Docker is running: `docker ps`
-3. Check for port conflicts on 3321
+3. Check the database logs: `docker compose logs youtarr-db`
 
 ### "YOUTUBE_OUTPUT_DIR does not exist"
 
@@ -282,7 +284,7 @@ If the database import fails:
    ./start.sh
    ```
 
-You'll lose your channel subscriptions but keep your settings. Videos will still exist; you'll need to re-add channels.
+You'll lose your channel and playlist subscriptions but keep your settings. Videos will still exist; you'll need to re-add channels and playlists.
 
 ## Security Considerations
 

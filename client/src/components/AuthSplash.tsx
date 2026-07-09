@@ -76,7 +76,7 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
       const { token } = response.data;
       localStorage.setItem('authToken', token);
       setToken(token);
-      window.location.href = '/channels';
+      window.location.href = '/subscriptions';
     } catch (err: unknown) {
       const shouldShowPasswordResetHelp = axios.isAxiosError(err) && err.response?.status === 401;
       const nextError = getAxiosErrorMessage(err);

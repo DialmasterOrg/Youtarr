@@ -36,15 +36,84 @@ function formatDuration(seconds) {
 }
 
 /**
- * Build notification title based on download count
+ * Build notification title based on download count.
+ * When no videos downloaded but channels were marked terminated or failed
+ * to auto-disable, the headline shifts to the termination event.
  * @param {number} totalDownloaded - Number of videos downloaded
+ * @param {number} [terminatedCount=0] - Number of channels marked terminated
+ * @param {number} [terminationFailureCount=0] - Number of terminations not auto-disabled
  * @returns {string} Title string
  */
-function buildTitle(totalDownloaded) {
+function buildTitle(totalDownloaded, terminatedCount = 0, terminationFailureCount = 0) {
+  if (totalDownloaded === 0 && (terminatedCount + terminationFailureCount) > 0) {
+    const total = terminatedCount + terminationFailureCount;
+    return total === 1
+      ? '⚠️ Channel Termination Detected'
+      : `⚠️ ${total} Channel Terminations Detected`;
+  }
   if (totalDownloaded === 1) {
     return '🎬 New Video Downloaded';
   }
   return `🎬 ${totalDownloaded} New Videos Downloaded`;
+}
+
+/**
+ * Get terminated channel count from a final summary.
+ * @param {Object} finalSummary - Summary object from downloadExecutor
+ * @returns {number} Number of channels marked terminated
+ */
+function getTerminatedCount(finalSummary = {}) {
+  return finalSummary.totalTerminatedChannels
+    || finalSummary.terminatedChannels?.length
+    || 0;
+}
+
+/**
+ * Build a concise terminated channel label.
+ * @param {number} count - Number of terminated channels
+ * @returns {string} Human-readable terminated count
+ */
+function buildTerminatedCountLabel(count) {
+  return `${count} ${count === 1 ? 'channel' : 'channels'} marked terminated`;
+}
+
+/**
+ * Format a terminated channel entry for notification bodies.
+ * @param {Object} channel - Terminated channel entry
+ * @returns {string} Human-readable line
+ */
+function formatTerminatedChannelLine(channel = {}) {
+  const label = channel.uploader || channel.channelId || 'Unknown channel';
+  return `${label}: scheduled downloads disabled`;
+}
+
+/**
+ * Get termination-persistence-failure count from a final summary.
+ * @param {Object} finalSummary - Summary object from downloadExecutor
+ * @returns {number} Number of channels detected as terminated but not auto-disabled
+ */
+function getTerminationFailureCount(finalSummary = {}) {
+  return finalSummary.totalTerminationFailures
+    || finalSummary.terminationFailures?.length
+    || 0;
+}
+
+/**
+ * Build a concise label for termination-persistence failures.
+ * @param {number} count - Number of failures
+ * @returns {string} Human-readable label
+ */
+function buildTerminationFailureCountLabel(count) {
+  return `${count} termination${count === 1 ? '' : 's'} could not be auto-disabled`;
+}
+
+/**
+ * Format a termination-persistence-failure entry for notification bodies.
+ * @param {string} channelId - The channel id
+ * @returns {string} Human-readable line
+ */
+function formatTerminationFailureLine(channelId) {
+  return `${channelId}: detected as terminated but could not be auto-disabled (check the channel manually)`;
 }
 
 /**
@@ -77,13 +146,40 @@ function formatFailedVideoLine(failedVideo = {}) {
 }
 
 /**
- * Get subtitle based on job type
+ * Get the failure diagnoses from a final summary.
+ * @param {Object} finalSummary - Summary object from downloadExecutor
+ * @returns {Array} Deduped diagnosis objects ({ key, title, message, count })
+ */
+function getDiagnoses(finalSummary = {}) {
+  return Array.isArray(finalSummary.diagnoses) ? finalSummary.diagnoses : [];
+}
+
+/**
+ * Format a failure diagnosis for notification bodies.
+ * @param {Object} diagnosis - Diagnosis object ({ key, title, message, count })
+ * @returns {string} Human-readable likely-cause line
+ */
+function formatDiagnosisLine(diagnosis = {}) {
+  return `Likely cause: ${diagnosis.message || diagnosis.title || 'Unknown'}`;
+}
+
+/**
+ * Get subtitle based on job type. Handles per-job labels (channel, manual,
+ * `Playlist: <title>`) as well as the aggregated download-run labels
+ * (`Channel Downloads`, `Playlist downloads`, `Channel & playlist update`).
  * @param {string} jobType - The job type string
  * @returns {string} Subtitle string
  */
-function getSubtitle(jobType) {
-  const isChannelDownload = jobType.includes('Channel Downloads');
-  return isChannelDownload ? 'Channel Video Downloads' : 'Manually Selected Downloads';
+function getSubtitle(jobType = '') {
+  const type = jobType || '';
+  const isChannel = type.includes('Channel Downloads') || type.includes('Channel & playlist');
+  const isPlaylist =
+    type.startsWith('Playlist: ') || type === 'Playlist downloads' || type.includes('Channel & playlist');
+
+  if (isChannel && isPlaylist) return 'Channel & Playlist Downloads';
+  if (isPlaylist) return 'Playlist Downloads';
+  if (isChannel) return 'Channel Video Downloads';
+  return 'Manually Selected Downloads';
 }
 
 /**
@@ -162,8 +258,16 @@ module.exports = {
   getFailedCount,
   buildFailedCountLabel,
   formatFailedVideoLine,
+  getDiagnoses,
+  formatDiagnosisLine,
   getSubtitle,
   buildAutoRemovalTitle,
   formatBytes,
-  groupVideosByChannel
+  groupVideosByChannel,
+  getTerminatedCount,
+  buildTerminatedCountLabel,
+  formatTerminatedChannelLine,
+  getTerminationFailureCount,
+  buildTerminationFailureCountLabel,
+  formatTerminationFailureLine
 };

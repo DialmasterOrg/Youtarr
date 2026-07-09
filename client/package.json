@@ -1,9 +1,13 @@
 {
   "name": "client",
-  "version": "1.68.0",
+  "version": "1.73.0",
   "private": true,
   "type": "module",
   "proxy": "http://localhost:3011",
+  "engines": {
+    "node": ">=20.19.0",
+    "npm": ">=11.10.0"
+  },
   "dependencies": {
     "@fontsource/archivo": "^5.2.8",
     "@fontsource/ibm-plex-sans": "^5.2.8",
@@ -49,7 +53,7 @@
     "typescript": "5.9.3"
   },
   "scripts": {
-    "postinstall": "npx msw init public/ --save",
+    "msw:init": "msw init public/ --save",
     "dev": "vite",
     "start": "vite",
     "build": "vite build",
@@ -90,7 +94,7 @@
     "jest": "^30.1.3",
     "jest-environment-jsdom": "^30.2.0",
     "jest-transform-stub": "^2.0.0",
-    "msw": "^2.12.7",
+    "msw": "2.12.10",
     "msw-storybook-addon": "^2.0.6",
     "postcss": "^8.5.6",
     "storybook": "^10.2.10",
@@ -108,6 +112,7 @@
   "overrides": {
     "jsdom": {
       "form-data": "^3.0.4"
-    }
+    },
+    "form-data": "^4.0.6"
   }
 }

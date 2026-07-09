@@ -13,7 +13,15 @@ const {
   getSubtitle,
   buildAutoRemovalTitle,
   formatBytes,
-  groupVideosByChannel
+  groupVideosByChannel,
+  getTerminatedCount,
+  buildTerminatedCountLabel,
+  formatTerminatedChannelLine,
+  getTerminationFailureCount,
+  buildTerminationFailureCountLabel,
+  formatTerminationFailureLine,
+  getDiagnoses,
+  formatDiagnosisLine
 } = require('../utils');
 
 /**
@@ -25,9 +33,35 @@ const {
 function formatDownloadMessage(finalSummary, videoData) {
   const { totalDownloaded, jobType } = finalSummary;
   const failedCount = getFailedCount(finalSummary);
+  const terminatedCount = getTerminatedCount(finalSummary);
+  const terminationFailureCount = getTerminationFailureCount(finalSummary);
 
-  const title = buildTitle(totalDownloaded);
+  const title = buildTitle(totalDownloaded, terminatedCount, terminationFailureCount);
   let body = `*${getSubtitle(jobType)}*\n\n`;
+
+  if (terminatedCount > 0) {
+    body += `⚠️ *${buildTerminatedCountLabel(terminatedCount)}.*\n`;
+    const terminatedChannelsToShow = (finalSummary.terminatedChannels || []).slice(0, 5);
+    terminatedChannelsToShow.forEach(channel => {
+      body += `• ${formatTerminatedChannelLine(channel)}\n`;
+    });
+    if (terminatedCount > terminatedChannelsToShow.length) {
+      body += `_...and ${terminatedCount - terminatedChannelsToShow.length} more_\n`;
+    }
+    body += '\n';
+  }
+
+  if (terminationFailureCount > 0) {
+    body += `⚠️ *${buildTerminationFailureCountLabel(terminationFailureCount)}.*\n`;
+    const failuresToShow = (finalSummary.terminationFailures || []).slice(0, 5);
+    failuresToShow.forEach(channelId => {
+      body += `• ${formatTerminationFailureLine(channelId)}\n`;
+    });
+    if (terminationFailureCount > failuresToShow.length) {
+      body += `_...and ${terminationFailureCount - failuresToShow.length} more_\n`;
+    }
+    body += '\n';
+  }
 
   if (failedCount > 0) {
     body += `⚠️ *${buildFailedCountLabel(failedCount)}.*\n`;
@@ -38,6 +72,9 @@ function formatDownloadMessage(finalSummary, videoData) {
     if (failedCount > failedVideosToShow.length) {
       body += `_...and ${failedCount - failedVideosToShow.length} more failed_\n`;
     }
+    getDiagnoses(finalSummary).forEach(diagnosis => {
+      body += `💡 _${formatDiagnosisLine(diagnosis)}_\n`;
+    });
     body += '\n';
   }
 

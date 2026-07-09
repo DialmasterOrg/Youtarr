@@ -13,6 +13,7 @@ import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { decodeHtml, formatAddedDate } from '../../utils/formatters';
 import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_THEMED_CHIP_SMALL_STYLE } from '../shared/chipStyles';
+import { getPublishedDateDisplay } from './publishedDateDisplay';
 import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo, getStatusChipVariant, getStatusChipStyle } from '../../utils/videoStatus';
 import StillLiveDot from './StillLiveDot';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
@@ -323,10 +324,10 @@ function VideoListItem({
           </Typography>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 'auto' }}>
-            {video.media_type !== 'short' && video.publishedAt && (
+            {video.media_type !== 'short' && (video.publishedAt || video.published_at_source === 'estimated') && (
             <Typography variant="caption" color="text.secondary" style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: '0.7rem' }}>
                 <CalendarTodayIcon size={11} />
-              {new Date(video.publishedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' })}
+              {getPublishedDateDisplay(video, (d) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' }))}
             </Typography>
           )}
             {video.added && video.timeCreated && (

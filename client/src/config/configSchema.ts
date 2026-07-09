@@ -20,16 +20,19 @@ import { SponsorBlockCategories } from '../components/Configuration/types';
  */
 export const CONFIG_FIELDS = {
   // Channel settings
+  // Defaults must match config/config.example.json: useConfig fills missing
+  // server fields from here and save POSTs the full object back.
+  // Enforced by configSchemaAlignment.test.ts.
   channelAutoDownload: { default: false, trackChanges: true },
-  channelDownloadFrequency: { default: '', trackChanges: true },
-  channelFilesToDownload: { default: 3, trackChanges: true },
+  channelDownloadFrequency: { default: '0 * * * *', trackChanges: true },
+  channelFilesToDownload: { default: 5, trackChanges: true },
 
   // Video settings
   preferredResolution: { default: '1080', trackChanges: true },
   videoCodec: { default: 'default', trackChanges: true },
   defaultSubfolder: { default: '', trackChanges: true },
   videoFilenamePrefix: {
-    default: '%(uploader,channel,uploader_id).80B - %(title).76B',
+    default: '%(uploader,channel,uploader_id).80B - %(title).64B',
     trackChanges: true,
   },
 
@@ -43,6 +46,21 @@ export const CONFIG_FIELDS = {
   plexIP: { default: '', trackChanges: true },
   plexPort: { default: '32400', trackChanges: true },
   plexViaHttps: { default: false, trackChanges: true },
+  plexPlaylistToken: { default: '', trackChanges: true },
+
+  // Jellyfin integration
+  jellyfinEnabled: { default: false, trackChanges: true },
+  jellyfinUrl: { default: '', trackChanges: true },
+  jellyfinApiKey: { default: '', trackChanges: true },
+  jellyfinUserId: { default: '', trackChanges: true },
+  jellyfinVideoLibraryIds: { default: [] as string[], trackChanges: true },
+
+  // Emby integration
+  embyEnabled: { default: false, trackChanges: true },
+  embyUrl: { default: '', trackChanges: true },
+  embyApiKey: { default: '', trackChanges: true },
+  embyUserId: { default: '', trackChanges: true },
+  embyVideoLibraryIds: { default: [] as string[], trackChanges: true },
 
   // YouTube Data API
   youtubeApiKey: { default: '', trackChanges: true },
@@ -69,6 +87,7 @@ export const CONFIG_FIELDS = {
   downloadSocketTimeoutSeconds: { default: 30, trackChanges: true },
   downloadThrottledRate: { default: '100K', trackChanges: true },
   downloadRetryCount: { default: 2, trackChanges: true },
+  downloadAutoRetryCount: { default: 1, trackChanges: true },
   enableStallDetection: { default: true, trackChanges: true },
   stallDetectionWindowSeconds: { default: 30, trackChanges: true },
   stallDetectionRateThreshold: { default: '100K', trackChanges: true },
@@ -84,6 +103,7 @@ export const CONFIG_FIELDS = {
   // Kodi compatibility
   writeChannelPosters: { default: true, trackChanges: true },
   writeVideoNfoFiles: { default: true, trackChanges: true },
+  writeVideoFanart: { default: false, trackChanges: true },
 
   // Notifications
   notificationsEnabled: { default: false, trackChanges: true },
@@ -104,7 +124,7 @@ export const CONFIG_FIELDS = {
 
   // Appearance
   darkModeEnabled: { default: false, trackChanges: true },
-  channelVideosHotLoad: { default: true, trackChanges: true },
+  channelVideosHotLoad: { default: false, trackChanges: true },
 
   // API Keys
   apiKeyRateLimit: { default: 10, trackChanges: true },
@@ -169,6 +189,17 @@ export const DEFAULT_CONFIG: ConfigState = {
   plexIP: CONFIG_FIELDS.plexIP.default,
   plexPort: CONFIG_FIELDS.plexPort.default,
   plexViaHttps: CONFIG_FIELDS.plexViaHttps.default,
+  plexPlaylistToken: CONFIG_FIELDS.plexPlaylistToken.default,
+  jellyfinEnabled: CONFIG_FIELDS.jellyfinEnabled.default,
+  jellyfinUrl: CONFIG_FIELDS.jellyfinUrl.default,
+  jellyfinApiKey: CONFIG_FIELDS.jellyfinApiKey.default,
+  jellyfinUserId: CONFIG_FIELDS.jellyfinUserId.default,
+  jellyfinVideoLibraryIds: CONFIG_FIELDS.jellyfinVideoLibraryIds.default,
+  embyEnabled: CONFIG_FIELDS.embyEnabled.default,
+  embyUrl: CONFIG_FIELDS.embyUrl.default,
+  embyApiKey: CONFIG_FIELDS.embyApiKey.default,
+  embyUserId: CONFIG_FIELDS.embyUserId.default,
+  embyVideoLibraryIds: CONFIG_FIELDS.embyVideoLibraryIds.default,
   youtubeApiKey: CONFIG_FIELDS.youtubeApiKey.default,
   sponsorblockEnabled: CONFIG_FIELDS.sponsorblockEnabled.default,
   sponsorblockAction: CONFIG_FIELDS.sponsorblockAction.default,
@@ -177,6 +208,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   downloadSocketTimeoutSeconds: CONFIG_FIELDS.downloadSocketTimeoutSeconds.default,
   downloadThrottledRate: CONFIG_FIELDS.downloadThrottledRate.default,
   downloadRetryCount: CONFIG_FIELDS.downloadRetryCount.default,
+  downloadAutoRetryCount: CONFIG_FIELDS.downloadAutoRetryCount.default,
   enableStallDetection: CONFIG_FIELDS.enableStallDetection.default,
   stallDetectionWindowSeconds: CONFIG_FIELDS.stallDetectionWindowSeconds.default,
   stallDetectionRateThreshold: CONFIG_FIELDS.stallDetectionRateThreshold.default,
@@ -186,6 +218,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   customCookiesUploaded: CONFIG_FIELDS.customCookiesUploaded.default,
   writeChannelPosters: CONFIG_FIELDS.writeChannelPosters.default,
   writeVideoNfoFiles: CONFIG_FIELDS.writeVideoNfoFiles.default,
+  writeVideoFanart: CONFIG_FIELDS.writeVideoFanart.default,
   notificationsEnabled: CONFIG_FIELDS.notificationsEnabled.default,
   appriseUrls: CONFIG_FIELDS.appriseUrls.default,
   autoRemovalEnabled: CONFIG_FIELDS.autoRemovalEnabled.default,

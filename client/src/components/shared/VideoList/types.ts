@@ -4,11 +4,6 @@ export type VideoListViewMode = 'grid' | 'list' | 'table';
 
 export type ChipFilterMode = 'off' | 'only' | 'exclude';
 
-export interface DateRangeFilterValue {
-  dateFrom: string | null;
-  dateTo: string | null;
-}
-
 export type FilterConfig =
   | {
       id: 'dateRange';

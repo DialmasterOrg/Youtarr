@@ -5,8 +5,8 @@ import { ReviewChannel, RowState } from '../../../types/subscriptionImport';
 import { ImportFlowAction } from '../hooks/useImportFlow';
 import ChannelThumbnail from './ChannelThumbnail';
 import RowSettingsPopover from './RowSettingsPopover';
-import SubFolderChip from '../../ChannelManager/components/chips/SubFolderChip';
-import QualityChip from '../../ChannelManager/components/chips/QualityChip';
+import SubFolderChip from '../../Subscriptions/components/chips/SubFolderChip';
+import QualityChip from '../../Subscriptions/components/chips/QualityChip';
 import RatingBadge from '../../shared/RatingBadge';
 
 interface ReviewTableRowProps {
@@ -14,12 +14,13 @@ interface ReviewTableRowProps {
   rowState: RowState;
   dispatch: React.Dispatch<ImportFlowAction>;
   subfolders: string[];
+  createSubfolder: (name: string) => Promise<void>;
   defaultSubfolderDisplay: string | null;
   globalPreferredResolution: string;
 }
 
 const ReviewTableRow: React.FC<ReviewTableRowProps> = ({
-  channel, rowState, dispatch, subfolders, defaultSubfolderDisplay, globalPreferredResolution,
+  channel, rowState, dispatch, subfolders, createSubfolder, defaultSubfolderDisplay, globalPreferredResolution,
 }) => {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const popoverOpen = Boolean(anchorEl);
@@ -82,6 +83,7 @@ const ReviewTableRow: React.FC<ReviewTableRowProps> = ({
           rowState={rowState}
           dispatch={dispatch}
           subfolders={subfolders}
+          createSubfolder={createSubfolder}
           defaultSubfolderDisplay={defaultSubfolderDisplay}
         />
       </TableCell>
