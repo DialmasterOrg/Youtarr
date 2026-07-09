@@ -24,8 +24,8 @@ export const FILENAME_PRESETS: readonly FilenamePreset[] = [
   },
   {
     label: 'Plex TV Series',
-    prefix: '%(timestamp>S%YE%m%d%H%M)s %(title).76B',
-    description: 'Compatible with Plex TV series naming convention'
+    prefix: '%(timestamp>S%YE%m%d%H%M)s %(title).64B',
+    description: 'Compatible with Plex TV series naming convention.',
   },
   {
     label: 'Title only',

@@ -1,12 +1,13 @@
 import { FILENAME_PRESETS, DEFAULT_PRESET_PREFIX } from '../presets';
 
 describe('FILENAME_PRESETS', () => {
-  it('exports four presets in a stable order', () => {
-    expect(FILENAME_PRESETS).toHaveLength(4);
+  it('exports five presets in a stable order', () => {
+    expect(FILENAME_PRESETS).toHaveLength(5);
     expect(FILENAME_PRESETS.map((p) => p.label)).toEqual([
       'Default',
       'Date prefix',
       'Plex YouTube-Agent',
+      'Plex TV Series',
       'Title only',
     ]);
   });

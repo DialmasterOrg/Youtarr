@@ -36,12 +36,13 @@ describe('VideoFilenameTemplate', () => {
     expect(handleChange).toHaveBeenCalledWith('%(title)s');
   });
 
-  it('renders all four presets and applies one when clicked', () => {
+  it('renders all five presets and applies one when clicked', () => {
     const handleChange = jest.fn();
     render(<VideoFilenameTemplate value="x" onChange={handleChange} token="tok" />);
     expect(screen.getByRole('button', { name: /default/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /date prefix/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /plex youtube-agent/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /plex tv series/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /title only/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /title only/i }));

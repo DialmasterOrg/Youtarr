@@ -24,9 +24,9 @@ Youtarr provides full Plex integration with:
 
 ## Library Setup
 
-There are 2 ways you can add Youtarr content to Plex. Movies "just works", however "TV Shows" tends to work better, but requires specific naming. It is recomended to go with TV Shows for a new setup. However you do need to set the correct file names initially, before you start downloading everything. Or re-download everything after setting the naming.
+There are two ways to add Youtarr content to Plex. The "Other Videos" library is the standard, recommended method: it has been in place since Youtarr's inception, is extensively tested, and works out of the box. The "TV Shows" library is an alternative you can try if you want a more series-style presentation in Plex. It requires a specific file naming convention, so you need to set the file naming before you start downloading, or re-download existing videos after changing it.
 
-### Movies
+### Other Videos
 
 #### Step 1: Create a New Library
 
@@ -66,12 +66,12 @@ Point the library to your Youtarr download directory:
 
 ### TV Shows
 
-#### Step 1: Set Naming convention
-In Youtarr settings go to `Settings -> Core -> Video Filename Template` and select `Plex TV Series`.
+#### Step 1: Set Naming Convention
+In Youtarr, go to `Settings -> Core -> Video Filename Template` and select the `Plex TV Series` preset.
 
-This will NOT rename old videos, you are best to do this before downloading, or re-download videos to let them get the new name.
+This will **not** rename previously downloaded videos. It is best to set this before you start downloading; otherwise, re-download videos so they pick up the new naming.
 
-#### Step 2: Create a new Library
+#### Step 2: Create a New Library
 1. In Plex, go to Settings → Manage → Libraries
 2. Click "Add Library"
 3. Configure as follows:
@@ -83,9 +83,9 @@ This will NOT rename old videos, you are best to do this before downloading, or 
 
 Choose the appropriate agent:
 * **Agent**: Plex Personal Media
-* **Use local assets**: THis MUST be true, to use the local metadata
+* **Use local assets**: this **must** be enabled so Plex uses the local metadata
 
-It is also recomended to settings that scan the shows, like intro detection, credits dection and voice activity detection. They will not work but it will still scan them trying.
+It is also recommended to disable the settings that scan shows, like intro detection, credit detection, and voice activity detection. They do not work for this content, but Plex will still spend time scanning for them if left enabled.
 
 ## Youtarr Configuration
 
