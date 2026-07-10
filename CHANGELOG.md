@@ -7,18 +7,18 @@
 
 ### Features
 
-* add per-playlist sort order setting ([95fe232](https://github.com/DialmasterOrg/Youtarr/commit/95fe232942765084b44c7cadd1c80e966ae7bf1d)), closes [#687](https://github.com/DialmasterOrg/Youtarr/issues/687)
+* Playlists have a new Sort Order setting: keep YouTube's playlist order or reverse it, so playlists that add new videos at the top can play oldest-first in media server playlists and .m3u files ([95fe232](https://github.com/DialmasterOrg/Youtarr/commit/95fe232942765084b44c7cadd1c80e966ae7bf1d)), closes [#687](https://github.com/DialmasterOrg/Youtarr/issues/687)
 
 
 ### Bug Fixes
 
-* align Plex TV Series preset with 64-byte cap ([a6c05d0](https://github.com/DialmasterOrg/Youtarr/commit/a6c05d0d178be44660e0362b3a6e1cd6f1de88e5))
-* clarify playlist refresh scope in info hint ([0c363fa](https://github.com/DialmasterOrg/Youtarr/commit/0c363fa9a1e61804b505deef95a7b2a02366bf23)), closes [#699](https://github.com/DialmasterOrg/Youtarr/issues/699)
-* fall back to cp -r on EPERM for cross-device move/copy on FUSE mounts ([bc5b9c6](https://github.com/DialmasterOrg/Youtarr/commit/bc5b9c681ed850a5a6666d57d6aa540ae3a1a773)), closes [#370](https://github.com/DialmasterOrg/Youtarr/issues/370) [#693](https://github.com/DialmasterOrg/Youtarr/issues/693)
-* hide no-video playlist sweep by default ([43527d8](https://github.com/DialmasterOrg/Youtarr/commit/43527d831498c20aed7e5382c4ec3e388e9a3071))
-* make playlist auto-downloads order-agnostic ([f0b8c56](https://github.com/DialmasterOrg/Youtarr/commit/f0b8c56613f324c456dbc88bafc07d4d829b7c7c)), closes [#680](https://github.com/DialmasterOrg/Youtarr/issues/680)
-* sync audio-only playlists to media servers ([bde4653](https://github.com/DialmasterOrg/Youtarr/commit/bde46533cfcaa58c28a969700fdc3c9ef9b3dc6b)), closes [#699](https://github.com/DialmasterOrg/Youtarr/issues/699)
-* sync playlists by their download type setting ([9647c86](https://github.com/DialmasterOrg/Youtarr/commit/9647c8623e7c9fc7efff102fcc8a8aa0d86559f4)), closes [#699](https://github.com/DialmasterOrg/Youtarr/issues/699)
+* The new Plex TV Series filename preset (added in [#605](https://github.com/DialmasterOrg/Youtarr/pull/605)) now caps video titles at 64 bytes like the other presets, so long titles no longer trigger the oversized-title warning or produce paths too long for Plex on Windows ([a6c05d0](https://github.com/DialmasterOrg/Youtarr/commit/a6c05d0d178be44660e0362b3a6e1cd6f1de88e5))
+* The playlist page help text now explains that "Refresh from YouTube" re-checks the entire playlist, and that large playlists can take a few minutes ([0c363fa](https://github.com/DialmasterOrg/Youtarr/commit/0c363fa9a1e61804b505deef95a7b2a02366bf23)), closes [#699](https://github.com/DialmasterOrg/Youtarr/issues/699)
+* Downloads to FUSE-backed storage (rclone mounts and similar) no longer get stuck retrying a failing file move; moves and copies now fall back to a plain copy that these mounts accept ([bc5b9c6](https://github.com/DialmasterOrg/Youtarr/commit/bc5b9c681ed850a5a6666d57d6aa540ae3a1a773)), closes [#370](https://github.com/DialmasterOrg/Youtarr/issues/370) [#693](https://github.com/DialmasterOrg/Youtarr/issues/693)
+* Playlist download runs that find nothing new no longer clutter Download History; like channel runs, they only show when "Show jobs with no videos" is checked ([43527d8](https://github.com/DialmasterOrg/Youtarr/commit/43527d831498c20aed7e5382c4ec3e388e9a3071))
+* Playlist auto-downloads now catch new videos added anywhere in a playlist, not just at the end. Refreshes also fetch the full playlist (up to 5000 videos), playlist-only setups no longer record a failed channel job every cycle, and the playlist page gets clearer sort options and progress indicators ([f0b8c56](https://github.com/DialmasterOrg/Youtarr/commit/f0b8c56613f324c456dbc88bafc07d4d829b7c7c)), closes [#680](https://github.com/DialmasterOrg/Youtarr/issues/680)
+* Audio-only (MP3) playlists now sync to Plex, Jellyfin, and Emby as music playlists and show up in .m3u files; previously they never synced at all. Syncing audio requires a music library covering your output directory. Also adds a downloaded / not downloaded filter to the playlist page ([bde4653](https://github.com/DialmasterOrg/Youtarr/commit/bde46533cfcaa58c28a969700fdc3c9ef9b3dc6b)), closes [#699](https://github.com/DialmasterOrg/Youtarr/issues/699)
+* A playlist's Download Type setting now decides whether it syncs as a music or video playlist, instead of guessing from the files on disk; one video download can no longer flip a music playlist to video, and the playlist page shows how many items don't match the playlist's type ([9647c86](https://github.com/DialmasterOrg/Youtarr/commit/9647c8623e7c9fc7efff102fcc8a8aa0d86559f4)), closes [#699](https://github.com/DialmasterOrg/Youtarr/issues/699)
 
 
 ### Documentation
@@ -36,15 +36,15 @@
 
 ### Features
 
-* add ability to remove playlists ([5f372ec](https://github.com/DialmasterOrg/Youtarr/commit/5f372ec9304eff10cb5a4c02abb43f696e36e05d)), closes [#676](https://github.com/DialmasterOrg/Youtarr/issues/676)
-* add download activity indicator to header ([2d48838](https://github.com/DialmasterOrg/Youtarr/commit/2d48838bc93447dc76fc6bf5d4153be5b9ce4e85))
-* add download all videos for a channel tab ([6e131fd](https://github.com/DialmasterOrg/Youtarr/commit/6e131fdb0e1de7be3f26791110ec0907bfb454c3)), closes [#660](https://github.com/DialmasterOrg/Youtarr/issues/660)
-* add likely-cause advice for failed downloads ([e6a3612](https://github.com/DialmasterOrg/Youtarr/commit/e6a36121d3de54185eaa43010c31dd34497a386f)), closes [#672](https://github.com/DialmasterOrg/Youtarr/issues/672)
-* add load more for playlist videos ([9d5d6c5](https://github.com/DialmasterOrg/Youtarr/commit/9d5d6c5dcb6daa6e820f13a8e9b97c0ee7ea94d6)), closes [#682](https://github.com/DialmasterOrg/Youtarr/issues/682)
-* Add option to generate video fanart files ([99a72aa](https://github.com/DialmasterOrg/Youtarr/commit/99a72aa43872e153dbb71edff5a7b2b2c4e3f4eb))
-* auto-retry videos that fail with HTTP 403 ([3a18648](https://github.com/DialmasterOrg/Youtarr/commit/3a18648667b873e8306d12a8046d6eeb88500aaa)), closes [#672](https://github.com/DialmasterOrg/Youtarr/issues/672)
-* persist subfolders in a shared registry ([b82befe](https://github.com/DialmasterOrg/Youtarr/commit/b82befe6b9977f0decb374158e569af0963315c0)), closes [#679](https://github.com/DialmasterOrg/Youtarr/issues/679)
-* update video listings during batch downloads ([a6e0bdf](https://github.com/DialmasterOrg/Youtarr/commit/a6e0bdf87a4bf0a707271b520bc66e34602db226)), closes [#662](https://github.com/DialmasterOrg/Youtarr/issues/662)
+* Playlists can now be removed from the Subscriptions page. Auto-downloads stop and the playlist disappears from the UI, but downloaded videos, media server playlists, and .m3u files are left alone; re-subscribing restores the playlist with its saved settings ([5f372ec](https://github.com/DialmasterOrg/Youtarr/commit/5f372ec9304eff10cb5a4c02abb43f696e36e05d)), closes [#676](https://github.com/DialmasterOrg/Youtarr/issues/676)
+* The header now shows an animated indicator whenever a download is running or queued; clicking it opens the activity page ([2d48838](https://github.com/DialmasterOrg/Youtarr/commit/2d48838bc93447dc76fc6bf5d4153be5b9ce4e85))
+* Channel pages have a new "Download All" button that queues every video from a tab you haven't downloaded before, showing an accurate video count before you confirm. Large channels can take days, so these jobs are exempt from the usual 6-hour runtime cap ([6e131fd](https://github.com/DialmasterOrg/Youtarr/commit/6e131fdb0e1de7be3f26791110ec0907bfb454c3)), closes [#660](https://github.com/DialmasterOrg/Youtarr/issues/660)
+* Failed downloads now show a plain-language likely cause and suggested fix (for example, YouTube bot checks or stale cookies) in Download History, live progress, and notifications, instead of only the raw yt-dlp error ([e6a3612](https://github.com/DialmasterOrg/Youtarr/commit/e6a36121d3de54185eaa43010c31dd34497a386f)), closes [#672](https://github.com/DialmasterOrg/Youtarr/issues/672)
+* Playlist pages have a new "Load More" button that fetches the complete playlist (up to 5000 videos); previously only the first 100 videos were ever shown ([9d5d6c5](https://github.com/DialmasterOrg/Youtarr/commit/9d5d6c5dcb6daa6e820f13a8e9b97c0ee7ea94d6)), closes [#682](https://github.com/DialmasterOrg/Youtarr/issues/682)
+* A new download setting can write -fanart.jpg files from video thumbnails, which some media server clients (like Plex on NVIDIA Shield) use for background previews ([99a72aa](https://github.com/DialmasterOrg/Youtarr/commit/99a72aa43872e153dbb71edff5a7b2b2c4e3f4eb))
+* Videos that fail mid-download with an HTTP 403 error are automatically retried in a follow-up job, since a fresh attempt usually succeeds; a new setting controls how many retries are allowed (0-3, default 1) ([3a18648](https://github.com/DialmasterOrg/Youtarr/commit/3a18648667b873e8306d12a8046d6eeb88500aaa)), closes [#672](https://github.com/DialmasterOrg/Youtarr/issues/672)
+* Subfolders are now saved permanently, so folders created in settings no longer disappear on refresh and every subfolder picker shows the same list; a new Manage Subfolders dialog shows where each folder is used and lets you delete unused ones ([b82befe](https://github.com/DialmasterOrg/Youtarr/commit/b82befe6b9977f0decb374158e569af0963315c0)), closes [#679](https://github.com/DialmasterOrg/Youtarr/issues/679)
+* Videos now appear on the Videos, Channel, and Playlist pages as each download finishes, instead of only after the whole batch completes. Audio-only downloads also now count as downloaded on playlist pages ([a6e0bdf](https://github.com/DialmasterOrg/Youtarr/commit/a6e0bdf87a4bf0a707271b520bc66e34602db226)), closes [#662](https://github.com/DialmasterOrg/Youtarr/issues/662)
 
 
 ### Documentation
@@ -62,7 +62,7 @@
 
 ### Bug Fixes
 
-* allow auto-download on shorts-only channels ([f6df56a](https://github.com/DialmasterOrg/Youtarr/commit/f6df56a54d8487b0c4924c23756e3acba05ce0e4)), closes [#671](https://github.com/DialmasterOrg/Youtarr/issues/671)
+* Enabling Shorts auto-download on channels that only have a Shorts tab now saves correctly instead of failing with a validation error ([f6df56a](https://github.com/DialmasterOrg/Youtarr/commit/f6df56a54d8487b0c4924c23756e3acba05ce0e4)), closes [#671](https://github.com/DialmasterOrg/Youtarr/issues/671)
 
 
 ### Documentation
@@ -80,26 +80,26 @@
 
 ### Features
 
-* make downloaded video chips consistent ([f54983e](https://github.com/DialmasterOrg/Youtarr/commit/f54983eb4fdf015c8e2081213cc64b488889f9f9)), closes [#666](https://github.com/DialmasterOrg/Youtarr/issues/666)
+* Downloaded indicators now look the same everywhere: distinct icons for video and audio files, the full file path in the tooltip, and playlist videos use the same indicator instead of a generic "Downloaded" chip ([f54983e](https://github.com/DialmasterOrg/Youtarr/commit/f54983eb4fdf015c8e2081213cc64b488889f9f9)), closes [#666](https://github.com/DialmasterOrg/Youtarr/issues/666)
 
 
 ### Bug Fixes
 
-* decode entities in youtube search results ([9e4c68c](https://github.com/DialmasterOrg/Youtarr/commit/9e4c68cd9eee5428aedc2b53e550ea27ef74515d)), closes [#39](https://github.com/DialmasterOrg/Youtarr/issues/39) [#652](https://github.com/DialmasterOrg/Youtarr/issues/652)
-* ignore disabled channel download settings ([e211451](https://github.com/DialmasterOrg/Youtarr/commit/e211451a08064c8ed736f94767ec2e958bfb62b1)), closes [#663](https://github.com/DialmasterOrg/Youtarr/issues/663)
-* prevent utf8mb4 migration failure on upgrade ([295be30](https://github.com/DialmasterOrg/Youtarr/commit/295be301aa3e7091ee0bc4a0035c622714d40d88)), closes [#658](https://github.com/DialmasterOrg/Youtarr/issues/658)
-* stop download chip taps from selecting video ([9c9fcfd](https://github.com/DialmasterOrg/Youtarr/commit/9c9fcfd5edb7922b7998eaf0be5aa123e432d52b)), closes [#666](https://github.com/DialmasterOrg/Youtarr/issues/666)
+* Titles and channel names in YouTube search results now show apostrophes and other special characters correctly instead of raw HTML codes like `&#39;` ([9e4c68c](https://github.com/DialmasterOrg/Youtarr/commit/9e4c68cd9eee5428aedc2b53e550ea27ef74515d)), closes [#39](https://github.com/DialmasterOrg/Youtarr/issues/39) [#652](https://github.com/DialmasterOrg/Youtarr/issues/652)
+* Removed channels, including the hidden ones playlists create behind the scenes, no longer override playlist and global download settings; resolution, audio format, subfolder, and rating now resolve from settings you can actually see and change ([e211451](https://github.com/DialmasterOrg/Youtarr/commit/e211451a08064c8ed736f94767ec2e958bfb62b1)), closes [#663](https://github.com/DialmasterOrg/Youtarr/issues/663)
+* Upgrading older installs no longer fails the full-Unicode database migration on tables with foreign keys ([295be30](https://github.com/DialmasterOrg/Youtarr/commit/295be301aa3e7091ee0bc4a0035c622714d40d88)), closes [#658](https://github.com/DialmasterOrg/Youtarr/issues/658)
+* Tapping the downloaded indicator on a video no longer also selects that video ([9c9fcfd](https://github.com/DialmasterOrg/Youtarr/commit/9c9fcfd5edb7922b7998eaf0be5aa123e432d52b)), closes [#666](https://github.com/DialmasterOrg/Youtarr/issues/666)
 
 
 ### Build Systems
 
-* **deps:** bump multer to 2.2.0 ([61ee9aa](https://github.com/DialmasterOrg/Youtarr/commit/61ee9aa397fd068eaf928b022e4a25c4a1ecd965))
-* **deps:** pin form-data to ^4.0.6 ([077e599](https://github.com/DialmasterOrg/Youtarr/commit/077e5998b11d8c6af5cf4465d1263360df633484)), closes [#654](https://github.com/DialmasterOrg/Youtarr/issues/654)
+* **deps:** Updated multer to 2.2.0 to patch two high-severity denial-of-service advisories ([61ee9aa](https://github.com/DialmasterOrg/Youtarr/commit/61ee9aa397fd068eaf928b022e4a25c4a1ecd965))
+* **deps:** Pinned form-data to 4.0.6 to clear a high-severity security advisory pulled in through axios ([077e599](https://github.com/DialmasterOrg/Youtarr/commit/077e5998b11d8c6af5cf4465d1263360df633484)), closes [#654](https://github.com/DialmasterOrg/Youtarr/issues/654)
 
 
 ### Documentation
 
-* point unraid guide at maintained template ([6ea90ad](https://github.com/DialmasterOrg/Youtarr/commit/6ea90adfd903c16e6257eab1f2718953b4bc67d4))
+* The Unraid install guide now points at the actively maintained community template instead of a stale copy ([6ea90ad](https://github.com/DialmasterOrg/Youtarr/commit/6ea90adfd903c16e6257eab1f2718953b4bc67d4))
 * update CHANGELOG for v1.71.0 [skip ci] ([4b89e45](https://github.com/DialmasterOrg/Youtarr/commit/4b89e45d9d00aac92d99b0b2828b5a8ec7052cfd))
 
 
@@ -113,89 +113,89 @@
 
 ### Features
 
-* **channelModule:** seed min_duration, max_duration, title_filter_regex, audio_format on new channel insert ([565a686](https://github.com/DialmasterOrg/Youtarr/commit/565a6866a3451827a00dfbd29a2729cff04b9755))
-* **channelSettings:** reserve 'playlists' as a subfolder name ([5adc508](https://github.com/DialmasterOrg/Youtarr/commit/5adc508bbd066bcbe92f424b8e4a0543a55d918a))
-* **config:** improve Jellyfin/Emby user picker UI ([4e75b50](https://github.com/DialmasterOrg/Youtarr/commit/4e75b5062670acafa948605a8c62673f212ca1ad)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
-* **config:** register Jellyfin and Emby connection fields ([7ca409d](https://github.com/DialmasterOrg/Youtarr/commit/7ca409d38283cb138640c73323d2fe427d011104))
-* **cron:** run playlistAutoDownload after channelAutoDownload ([0466f02](https://github.com/DialmasterOrg/Youtarr/commit/0466f023039ccd05c21c8e9de9e0e24c0ef70b0b))
-* **db:** add playlist, playlistvideo, playlist_sync_state tables ([b8604a5](https://github.com/DialmasterOrg/Youtarr/commit/b8604a5d9306f39b8af041d14a0a4945bc4d68a3))
-* **downloadModule:** add doPlaylistDownloads entry point ([a752a3c](https://github.com/DialmasterOrg/Youtarr/commit/a752a3ced224f993378c41b8ed53916148edb101))
-* **downloads:** include playlists in channel runs ([e39baa0](https://github.com/DialmasterOrg/Youtarr/commit/e39baa0bf5f93321ac7810d0edd123403ce175c9)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
-* **emby:** make public playlists server-global ([bd710f2](https://github.com/DialmasterOrg/Youtarr/commit/bd710f208dc5050778a579688afb0cce27041725)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
-* **m3uGenerator:** add generatePlaylistM3U with relative paths ([97074d4](https://github.com/DialmasterOrg/Youtarr/commit/97074d45c8875126140e16435bffadfa2e888795))
-* **mediaServers:** add aggregator index ([2b0a47b](https://github.com/DialmasterOrg/Youtarr/commit/2b0a47bd85087534a77ec07bdddfa8d251e53acf))
-* **mediaServers:** add baseAdapter interface ([17cd0ee](https://github.com/DialmasterOrg/Youtarr/commit/17cd0ee9b4456f8c510dab82e725a43e3332c937))
-* **mediaServers:** add embyAdapter ([9818505](https://github.com/DialmasterOrg/Youtarr/commit/98185053247489ef1037a89ef8f65f828b1c943f))
-* **mediaServers:** add jellyfinAdapter ([785b2e2](https://github.com/DialmasterOrg/Youtarr/commit/785b2e2cf7bbfe9cb782cea468b7e7f2299f1134))
-* **mediaServers:** add mediaServerSync orchestrator ([9f07399](https://github.com/DialmasterOrg/Youtarr/commit/9f0739981cb416651ca7a988c988d48384d48675))
-* **mediaServers:** add plexAdapter ([b5a4d28](https://github.com/DialmasterOrg/Youtarr/commit/b5a4d285e08f4a5e3f27d69527cf8e1f603f3dda))
-* **mediaServers:** add serverRegistry ([ca1ba9e](https://github.com/DialmasterOrg/Youtarr/commit/ca1ba9e41bb376d326a1408a711de753cf551999))
-* **models:** add Playlist Sequelize model ([99d058d](https://github.com/DialmasterOrg/Youtarr/commit/99d058de4e240b1b2bf425ebb130806cafccc014))
-* **models:** add PlaylistSyncState Sequelize model ([98fd51b](https://github.com/DialmasterOrg/Youtarr/commit/98fd51b1716e2bc86f18e80c91201e3c80fe0863))
-* **models:** add PlaylistVideo Sequelize model ([4c750ed](https://github.com/DialmasterOrg/Youtarr/commit/4c750edf5c7ebfa621ba155d6d546771b956827d))
-* **models:** register Playlist models and associations ([9cc092b](https://github.com/DialmasterOrg/Youtarr/commit/9cc092b4c000e199e82eaae97d668833402d2890))
-* **playlistModule:** add getPlaylistInfo with yt-dlp metadata fetch ([d5b4228](https://github.com/DialmasterOrg/Youtarr/commit/d5b4228ba432fea59a5f093a2d6bfb5f8cbf53c1))
-* **playlists:** add auto-download toggle ([331dad5](https://github.com/DialmasterOrg/Youtarr/commit/331dad5e9f486237dd8e1866c8a91cbd99be331d)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
-* **playlists:** add download settings to dialog ([d992574](https://github.com/DialmasterOrg/Youtarr/commit/d992574d6fa5453a8acab6c1e6658b44a513dafb)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
-* **playlists:** add help modal to playlists tab ([b8ec821](https://github.com/DialmasterOrg/Youtarr/commit/b8ec8214b1a5bea6762bfedf501cdecb6040f788)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
-* **playlists:** add per-video download settings ([e84e8e5](https://github.com/DialmasterOrg/Youtarr/commit/e84e8e54cc96e1641ef49843bdcf4232ce4b19a3)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
-* **playlists:** download selected playlist videos ([f88437c](https://github.com/DialmasterOrg/Youtarr/commit/f88437c3fa1f4436f11c33c0c116dfe5ce208682)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
-* **playlists:** newest-first sort + load-more ([a37a5b1](https://github.com/DialmasterOrg/Youtarr/commit/a37a5b1cbd3714563d64487f8eea92d98f6d6349)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
-* **playlists:** regroup detail header into action groups ([29fd4b9](https://github.com/DialmasterOrg/Youtarr/commit/29fd4b9802c2926c21a6a9e10477bc4c79b9c790)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
-* **playlists:** WIP playlist page, media server settings, and rename ChannelManager -> Subscriptions ([ef5eb86](https://github.com/DialmasterOrg/Youtarr/commit/ef5eb8669c048ecaaaae653a58fac57bd2f115fd))
-* **plex:** add playlist visibility scope control ([835df1d](https://github.com/DialmasterOrg/Youtarr/commit/835df1d026834d502c129e634dc3c9bd1f39eda9)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
-* **plexAdapter:** optional plexPlaylistToken override for playlist scope ([bb516d4](https://github.com/DialmasterOrg/Youtarr/commit/bb516d4aa782e19b6d41d0cceb73b18ee3caf1e7))
-* **routes:** add /api/mediaservers routes ([c8070fb](https://github.com/DialmasterOrg/Youtarr/commit/c8070fb06f12e132d43b19d830f9e272447f9464))
-* **routes:** add /api/playlists routes ([453b46f](https://github.com/DialmasterOrg/Youtarr/commit/453b46f1b9547c53182d6a69dc0a17f4c7ab6d0d))
-* **routes:** add POST /api/playlists/:playlistId/download ([ecb2e0d](https://github.com/DialmasterOrg/Youtarr/commit/ecb2e0d55fb81b9dc7d4bc07707a1f239f1a6b4a))
-* **routes:** wire playlist + mediaservers routes ([7db92f8](https://github.com/DialmasterOrg/Youtarr/commit/7db92f8b80ae9bb95cb44ae90cb4ba95d6c065a4))
-* **subscriptions:** back button on detail pages ([e66c938](https://github.com/DialmasterOrg/Youtarr/commit/e66c93874a37c2336d4a68307e401785523db0eb)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
-* **subscriptions:** context-sensitive add bar ([e3ac30f](https://github.com/DialmasterOrg/Youtarr/commit/e3ac30f84deb71f36ceaed538cf4c93989dbe826)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* Internal: new channel records now start with their duration, title filter, and audio format fields initialized ([565a686](https://github.com/DialmasterOrg/Youtarr/commit/565a6866a3451827a00dfbd29a2729cff04b9755))
+* "playlists" can no longer be used as a subfolder name; it's reserved for Youtarr's generated playlist files ([5adc508](https://github.com/DialmasterOrg/Youtarr/commit/5adc508bbd066bcbe92f424b8e4a0543a55d918a))
+* The Jellyfin/Emby user picker is now a dropdown that loads accounts when opened and shows the saved user's name instead of a raw ID, with manual entry as a fallback; the API key field is masked without triggering the browser's password manager ([4e75b50](https://github.com/DialmasterOrg/Youtarr/commit/4e75b5062670acafa948605a8c62673f212ca1ad)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* Added the Jellyfin and Emby connection settings (URL, API key, user, and video libraries); both API keys are redacted from all log output ([7ca409d](https://github.com/DialmasterOrg/Youtarr/commit/7ca409d38283cb138640c73323d2fe427d011104))
+* Scheduled download runs now check playlists for new videos right after channels ([0466f02](https://github.com/DialmasterOrg/Youtarr/commit/0466f023039ccd05c21c8e9de9e0e24c0ef70b0b))
+* Internal: added the database tables that track playlists, their videos, and media server sync state ([b8604a5](https://github.com/DialmasterOrg/Youtarr/commit/b8604a5d9306f39b8af041d14a0a4945bc4d68a3))
+* Playlist downloads skip videos that are already downloaded or ignored, and track the source channel for videos whose channel isn't subscribed ([a752a3c](https://github.com/DialmasterOrg/Youtarr/commit/a752a3ced224f993378c41b8ed53916148edb101))
+* Scheduled and manual download runs now include auto-download playlists alongside channels; playlists refresh from YouTube first, download only the newest videos, and honor manual override settings ([e39baa0](https://github.com/DialmasterOrg/Youtarr/commit/e39baa0bf5f93321ac7810d0edd123403ce175c9)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* Emby playlists marked public are now visible to every Emby user instead of only the configured account ([bd710f2](https://github.com/DialmasterOrg/Youtarr/commit/bd710f208dc5050778a579688afb0cce27041725)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* Playlists now generate .m3u files with relative paths, as a fallback for players without native playlist sync ([97074d4](https://github.com/DialmasterOrg/Youtarr/commit/97074d45c8875126140e16435bffadfa2e888795))
+* Internal: added a single entry point for the new media server sync modules ([2b0a47b](https://github.com/DialmasterOrg/Youtarr/commit/2b0a47bd85087534a77ec07bdddfa8d251e53acf))
+* Internal: added the shared interface that all media server adapters implement ([17cd0ee](https://github.com/DialmasterOrg/Youtarr/commit/17cd0ee9b4456f8c510dab82e725a43e3332c937))
+* Playlists can now sync natively to Emby through its REST API ([9818505](https://github.com/DialmasterOrg/Youtarr/commit/98185053247489ef1037a89ef8f65f828b1c943f))
+* Playlists can now sync natively to Jellyfin through its REST API ([785b2e2](https://github.com/DialmasterOrg/Youtarr/commit/785b2e2cf7bbfe9cb782cea468b7e7f2299f1134))
+* Internal: added the orchestrator that decides which media servers each playlist syncs to and records per-server sync state ([9f07399](https://github.com/DialmasterOrg/Youtarr/commit/9f0739981cb416651ca7a988c988d48384d48675))
+* Playlists can now sync natively to Plex through its REST API ([b5a4d28](https://github.com/DialmasterOrg/Youtarr/commit/b5a4d285e08f4a5e3f27d69527cf8e1f603f3dda))
+* Internal: added the registry that detects which media servers are configured for playlist sync ([ca1ba9e](https://github.com/DialmasterOrg/Youtarr/commit/ca1ba9e41bb376d326a1408a711de753cf551999))
+* Internal: added the Playlist database model ([99d058d](https://github.com/DialmasterOrg/Youtarr/commit/99d058de4e240b1b2bf425ebb130806cafccc014))
+* Internal: added the database model that tracks each playlist's per-server sync state ([98fd51b](https://github.com/DialmasterOrg/Youtarr/commit/98fd51b1716e2bc86f18e80c91201e3c80fe0863))
+* Internal: added the database model that tracks the videos in each playlist ([4c750ed](https://github.com/DialmasterOrg/Youtarr/commit/4c750edf5c7ebfa621ba155d6d546771b956827d))
+* Internal: wired the playlist models and their associations into the app ([9cc092b](https://github.com/DialmasterOrg/Youtarr/commit/9cc092b4c000e199e82eaae97d668833402d2890))
+* Playlist titles, uploaders, and video lists are now fetched from YouTube via yt-dlp ([d5b4228](https://github.com/DialmasterOrg/Youtarr/commit/d5b4228ba432fea59a5f093a2d6bfb5f8cbf53c1))
+* Playlists have an auto-download toggle on the detail page and an indicator in the subscriptions list; new playlists start with auto-download off, making it opt-in ([331dad5](https://github.com/DialmasterOrg/Youtarr/commit/331dad5e9f486237dd8e1866c8a91cbd99be331d)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* The playlist settings dialog now covers subfolder, resolution, audio format, and rating, using the same dropdowns as channel and manual downloads ([d992574](https://github.com/DialmasterOrg/Youtarr/commit/d992574d6fa5453a8acab6c1e6658b44a513dafb)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* The Playlists tab has a "How playlists work" help guide covering subscriptions, download paths, auto-download, .m3u files, and per-server sync caveats ([b8ec821](https://github.com/DialmasterOrg/Youtarr/commit/b8ec8214b1a5bea6762bfedf501cdecb6040f788)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* Playlist downloads can now override download settings at download time; settings resolve per video, with override beating channel, then playlist, then global defaults ([e84e8e5](https://github.com/DialmasterOrg/Youtarr/commit/e84e8e54cc96e1641ef49843bdcf4232ce4b19a3)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* The playlist page has per-video checkboxes and a "Download Selected" action alongside download-all; the selection survives a failed download ([f88437c](https://github.com/DialmasterOrg/Youtarr/commit/f88437c3fa1f4436f11c33c0c116dfe5ce208682)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* Playlist videos now list newest-first with a sort dropdown, and more videos load automatically as you scroll instead of stopping at the first 50 ([a37a5b1](https://github.com/DialmasterOrg/Youtarr/commit/a37a5b1cbd3714563d64487f8eea92d98f6d6349)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* The playlist page header is organized into Library & Downloads and Media Server Sync groups with inline help, and the bulk download button now reads "Download N new" so you can see how many videos are actually new before confirming ([29fd4b9](https://github.com/DialmasterOrg/Youtarr/commit/29fd4b9802c2926c21a6a9e10477bc4c79b9c790)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* Added the playlist detail page and the Jellyfin and Emby settings sections, and renamed the Channels page to Channels & Playlists (old /channels links redirect) ([ef5eb86](https://github.com/DialmasterOrg/Youtarr/commit/ef5eb8669c048ecaaaae653a58fac57bd2f115fd))
+* Plex playlist visibility is now a scope selector (admin, unclaimed server, or a specific user), and changing scope cleans up playlists stranded under the old scope instead of duplicating them ([835df1d](https://github.com/DialmasterOrg/Youtarr/commit/835df1d026834d502c129e634dc3c9bd1f39eda9)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* An advanced setting lets Plex playlists be created under a different account or anonymous session, fixing playlists that never appeared in Plex Web on unclaimed servers with unauthenticated LAN access ([bb516d4](https://github.com/DialmasterOrg/Youtarr/commit/bb516d4aa782e19b6d41d0cceb73b18ee3caf1e7))
+* Internal: added the /api/mediaservers routes that back the connection test and user lookup in Settings ([c8070fb](https://github.com/DialmasterOrg/Youtarr/commit/c8070fb06f12e132d43b19d830f9e272447f9464))
+* Internal: added the /api/playlists routes for subscribing to and managing playlists ([453b46f](https://github.com/DialmasterOrg/Youtarr/commit/453b46f1b9547c53182d6a69dc0a17f4c7ab6d0d))
+* A new API endpoint queues a download of every not-yet-downloaded video in a playlist ([ecb2e0d](https://github.com/DialmasterOrg/Youtarr/commit/ecb2e0d55fb81b9dc7d4bc07707a1f239f1a6b4a))
+* Internal: wired the new playlist and media server routes into the server ([7db92f8](https://github.com/DialmasterOrg/Youtarr/commit/7db92f8b80ae9bb95cb44ae90cb4ba95d6c065a4))
+* Channel and playlist pages have a back button that returns to Channels & Playlists with the matching tab selected ([e66c938](https://github.com/DialmasterOrg/Youtarr/commit/e66c93874a37c2336d4a68307e401785523db0eb)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* The Channels & Playlists page now shows only the add controls for the current tab, and the redundant "All" tab is gone ([e3ac30f](https://github.com/DialmasterOrg/Youtarr/commit/e3ac30f84deb71f36ceaed538cf4c93989dbe826)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
 
 
 ### Bug Fixes
 
-* **downloadModule:** wrap doPlaylistDownloads urls in body shape for doSpecificDownloads ([db3982e](https://github.com/DialmasterOrg/Youtarr/commit/db3982e760586e4eb2ecf5bdf6eb07b61f7180f1))
-* **downloads:** aggregate channel+playlist total ([3813bf2](https://github.com/DialmasterOrg/Youtarr/commit/3813bf2aba0a4f96621cce72a9f0aac4cab7fa9f)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
-* **downloads:** show per-channel quality in dialog ([964a8c8](https://github.com/DialmasterOrg/Youtarr/commit/964a8c850243cedcf86ba1199b7c4405e55e56ef)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
-* **mediaServers:** cross-platform basename extraction for Plex-on-Windows ([c9fa3a6](https://github.com/DialmasterOrg/Youtarr/commit/c9fa3a68c09671e623cf94b7c4549bf423804fef))
-* **mediaServers:** Emby create uses query params; recover from prior-failure state ([ab5c6b5](https://github.com/DialmasterOrg/Youtarr/commit/ab5c6b57d1a8c19b4f59f192929c698059bb6c2d))
-* **mediaServers:** Jellyfin/Emby replace = delete playlist and recreate ([bddf01c](https://github.com/DialmasterOrg/Youtarr/commit/bddf01c26070f5f4a94b81fcfa561e44764d76bc))
-* **mediaServers:** match item paths by basename, not strict equality ([bf1348b](https://github.com/DialmasterOrg/Youtarr/commit/bf1348b0aa789f8133e20161407de5616aabb4ec))
-* **mediaServers:** resolve Plex URL via plexModule.getBaseUrl ([e5ef1b9](https://github.com/DialmasterOrg/Youtarr/commit/e5ef1b97be9a2fe45d6d72b1c9cb04a055eddc5c))
-* **mediaServers:** skip playlist creation when no items resolve yet ([350dadd](https://github.com/DialmasterOrg/Youtarr/commit/350daddb93a1e74b83744b03608fea19aef69de2))
-* **mediaServers:** tolerate stale server_playlist_id in replacePlaylistItems ([eae455a](https://github.com/DialmasterOrg/Youtarr/commit/eae455ad9a4068c069f4e7407e3e0f26f0cd8cee))
-* **playlistModule:** pass \"id\" shape to upsertChannel and synthesize channel URL ([acbcfdf](https://github.com/DialmasterOrg/Youtarr/commit/acbcfdffea64577299e7e1ae0febdc94288c4075))
-* **playlistModule:** seed auto-created channels with GLOBAL_DEFAULT_SENTINEL ([209ae02](https://github.com/DialmasterOrg/Youtarr/commit/209ae024e182677066f94c9a6409f86cd078e9dc))
-* allow restoring soft-deleted channels ([297ec55](https://github.com/DialmasterOrg/Youtarr/commit/297ec5500055ff05b6282655cef9aa3b20d99529)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
-* backfill playlist video channels on download ([dc86dbe](https://github.com/DialmasterOrg/Youtarr/commit/dc86dbedb98ec6b912a8164d67b6b13bb0dc5bdb)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
-* correct published dates on channel videos ([34ee615](https://github.com/DialmasterOrg/Youtarr/commit/34ee615783fbdb8993e49ffd121640fe89d6566e))
-* correct subscription import result counts ([19c6f92](https://github.com/DialmasterOrg/Youtarr/commit/19c6f92d8cad32701cacd3116ee083a675ff4835)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
-* default new channels to global subfolder ([f9dc4e5](https://github.com/DialmasterOrg/Youtarr/commit/f9dc4e573a1dd0c1df77dafc2a3dcf1271acc7d6)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
-* don't mark clean downloads with warnings ([86a54db](https://github.com/DialmasterOrg/Youtarr/commit/86a54db61409295ec3ca5a5afcad369c80305c27)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
-* exclude private videos from playlist sync ([b2828f2](https://github.com/DialmasterOrg/Youtarr/commit/b2828f29c836c38c4484a79c44fb167b1077bd4c)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
-* re-download handling for missing videos ([8397911](https://github.com/DialmasterOrg/Youtarr/commit/8397911f7e11f0ab8d9ea48bcf4eacffccdb32ff)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
-* route downloads by owning channel ([525ade5](https://github.com/DialmasterOrg/Youtarr/commit/525ade5758a70ba9e8929109bf728793772338ab)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
-* send prefixed field keys in media server test ([98d4c0e](https://github.com/DialmasterOrg/Youtarr/commit/98d4c0ea666e1327420aa7da6975162e0895ea18)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
-* stop retrying media-server sync when down ([2c91fb7](https://github.com/DialmasterOrg/Youtarr/commit/2c91fb74b34cdf7de60bbda224f9b1a7aa6d139d)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
-* update channels nav dropdown labels ([1f59dc1](https://github.com/DialmasterOrg/Youtarr/commit/1f59dc19ff5fdf8bdc95499da9aed19d5d8945ba))
-* write .ignore marker in playlists folder ([9b180f9](https://github.com/DialmasterOrg/Youtarr/commit/9b180f90596ac012023ca5ef48f0dd1ed37a04ad)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
-* **playlists:** harden media server sync ([041008c](https://github.com/DialmasterOrg/Youtarr/commit/041008cbb6dec4c636efbc149ea4057561d443b7)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* Fixed a crash when starting playlist downloads ([db3982e](https://github.com/DialmasterOrg/Youtarr/commit/db3982e760586e4eb2ecf5bdf6eb07b61f7180f1))
+* When a run downloads both channel and playlist videos, the end-of-run summary and notification now report the combined total instead of only the last job's videos ([3813bf2](https://github.com/DialmasterOrg/Youtarr/commit/3813bf2aba0a4f96621cce72a9f0aac4cab7fa9f)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* The download dialog no longer presents the global resolution as if it applied to every channel; quality resolves per channel or playlist with the global setting as fallback, and the dialog now says so ([964a8c8](https://github.com/DialmasterOrg/Youtarr/commit/964a8c850243cedcf86ba1199b7c4405e55e56ef)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* Playlist sync now matches files correctly when Plex runs on Windows and Youtarr runs on Linux, or the other way around ([c9fa3a6](https://github.com/DialmasterOrg/Youtarr/commit/c9fa3a68c09671e623cf94b7c4549bf423804fef))
+* Fixed Emby playlist creation, which failed with a server error because Emby's API expects a different request format than Jellyfin's; a failed first sync also no longer blocks every later attempt ([ab5c6b5](https://github.com/DialmasterOrg/Youtarr/commit/ab5c6b57d1a8c19b4f59f192929c698059bb6c2d))
+* Jellyfin and Emby playlist updates now delete and recreate the playlist, working around a server-side bug that rejects removing items ([bddf01c](https://github.com/DialmasterOrg/Youtarr/commit/bddf01c26070f5f4a94b81fcfa561e44764d76bc))
+* Playlist sync now finds downloaded videos on the media server even when Youtarr and the server see the media folder at different paths ([bf1348b](https://github.com/DialmasterOrg/Youtarr/commit/bf1348b0aa789f8133e20161407de5616aabb4ec))
+* Playlist sync now recognizes Plex configured with the classic IP and port fields, not just a full URL ([e5ef1b9](https://github.com/DialmasterOrg/Youtarr/commit/e5ef1b97be9a2fe45d6d72b1c9cb04a055eddc5c))
+* Subscribing to a playlist no longer fails its first sync; Youtarr waits until at least one video is downloaded before creating the server playlist ([350dadd](https://github.com/DialmasterOrg/Youtarr/commit/350daddb93a1e74b83744b03608fea19aef69de2))
+* If a synced playlist was deleted on the media server, the next sync recreates it instead of failing every time ([eae455a](https://github.com/DialmasterOrg/Youtarr/commit/eae455ad9a4068c069f4e7407e3e0f26f0cd8cee))
+* Fixed an error on the first playlist download when a video's channel wasn't tracked yet ([acbcfdf](https://github.com/DialmasterOrg/Youtarr/commit/acbcfdffea64577299e7e1ae0febdc94288c4075))
+* Videos downloaded through playlists now go to your configured default subfolder instead of the root of the media directory, where media servers often can't see them ([209ae02](https://github.com/DialmasterOrg/Youtarr/commit/209ae024e182677066f94c9a6409f86cd078e9dc))
+* Re-adding a previously removed channel now restores it with its old settings; before, re-adding looked like a no-op and imports flagged the channel as already subscribed ([297ec55](https://github.com/DialmasterOrg/Youtarr/commit/297ec5500055ff05b6282655cef9aa3b20d99529)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* Playlist videos that YouTube lists without channel information now get their channel filled in after download instead of staying unattributed ([dc86dbe](https://github.com/DialmasterOrg/Youtarr/commit/dc86dbedb98ec6b912a8164d67b6b13bb0dc5bdb)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* Channel videos no longer show invented published dates: real dates show as-is, approximate dates are marked with "~", and unknown dates show "Pending"; a migration backfills accurate dates for already-downloaded videos ([34ee615](https://github.com/DialmasterOrg/Youtarr/commit/34ee615783fbdb8993e49ffd121640fe89d6566e))
+* Subscription import summaries no longer show all zeros when the import finishes ([19c6f92](https://github.com/DialmasterOrg/Youtarr/commit/19c6f92d8cad32701cacd3116ee083a675ff4835)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* Newly subscribed channels now download into your configured default subfolder instead of the root of the media directory ([f9dc4e5](https://github.com/DialmasterOrg/Youtarr/commit/f9dc4e573a1dd0c1df77dafc2a3dcf1271acc7d6)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* Manual and playlist downloads no longer finish as "Complete with Warnings" when the only output was harmless yt-dlp notices ([86a54db](https://github.com/DialmasterOrg/Youtarr/commit/86a54db61409295ec3ca5a5afcad369c80305c27)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* Private and members-only videos no longer show up in playlists as bare video IDs or get queued for downloads that can only fail; they drop out of the list automatically ([b2828f2](https://github.com/DialmasterOrg/Youtarr/commit/b2828f29c836c38c4484a79c44fb167b1077bd4c)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* Re-downloading deleted videos now works from the playlist page and video modal: the dialog warns about previously downloaded videos, pre-checks re-download, and no longer silently skips them; custom settings only override the values you actually change ([8397911](https://github.com/DialmasterOrg/Youtarr/commit/8397911f7e11f0ab8d9ea48bcf4eacffccdb32ff)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* Videos from VEVO and auto-generated "Topic" channels now download into the subscribed channel's folder with its quality and rating settings, instead of being routed by the uploader listed in the video's metadata ([525ade5](https://github.com/DialmasterOrg/Youtarr/commit/525ade5758a70ba9e8929109bf728793772338ab)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* Fixed the Jellyfin/Emby "Test Connection" and user lookup, which always failed because the request used the wrong field names ([98d4c0e](https://github.com/DialmasterOrg/Youtarr/commit/98d4c0ea666e1327420aa7da6975162e0895ea18)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* An unreachable media server now stops that server's sync with one concise warning, instead of retrying every video and logging errors that included the API token ([2c91fb7](https://github.com/DialmasterOrg/Youtarr/commit/2c91fb74b34cdf7de60bbda224f9b1a7aa6d139d)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* Updated the navigation dropdown labels to match the new Channels & Playlists naming ([1f59dc1](https://github.com/DialmasterOrg/Youtarr/commit/1f59dc19ff5fdf8bdc95499da9aed19d5d8945ba))
+* Jellyfin and Emby no longer import the generated .m3u files as duplicate playlists; the playlists folder now carries an ".ignore" marker their library scanners honor ([9b180f9](https://github.com/DialmasterOrg/Youtarr/commit/9b180f90596ac012023ca5ef48f0dd1ed37a04ad)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* Media server sync is more resilient: requests time out after 30 seconds instead of hanging, concurrent syncs of the same playlist no longer race and create duplicates, and manual sync runs in the background instead of holding the request open ([041008c](https://github.com/DialmasterOrg/Youtarr/commit/041008cbb6dec4c636efbc149ea4057561d443b7)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
 
 
 ### Documentation
 
-* add reverse proxy websocket troubleshooting ([3e9d217](https://github.com/DialmasterOrg/Youtarr/commit/3e9d2178c87edcb150b33b98a2a55bde84ca9d24))
-* document playlist support across user guides ([acae0fb](https://github.com/DialmasterOrg/Youtarr/commit/acae0fb95f57623d8ffa324e8fc812a6acb5f6fe)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
-* explain where Plex shared playlists appear ([73c6cd3](https://github.com/DialmasterOrg/Youtarr/commit/73c6cd3802056b89a7682cfa80ed21afd5f10e00)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* Added a troubleshooting guide for reverse proxies that don't forward WebSocket connections, which left the Activity page showing no progress during downloads ([3e9d217](https://github.com/DialmasterOrg/Youtarr/commit/3e9d2178c87edcb150b33b98a2a55bde84ca9d24))
+* Documented playlist support across the usage guide, README, and the Plex, Jellyfin, and Emby guides ([acae0fb](https://github.com/DialmasterOrg/Youtarr/commit/acae0fb95f57623d8ffa324e8fc812a6acb5f6fe)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
+* Documented that Plex shows playlists shared from another account under the "Media" sidebar source, not the recipient's Playlists section ([73c6cd3](https://github.com/DialmasterOrg/Youtarr/commit/73c6cd3802056b89a7682cfa80ed21afd5f10e00)), closes [#144](https://github.com/DialmasterOrg/Youtarr/issues/144)
 * update CHANGELOG for v1.70.0 [skip ci] ([f193ffd](https://github.com/DialmasterOrg/Youtarr/commit/f193ffd55344803b68a91f0de3faf2c443420752))
 
 
 ### Code Refactoring
 
-* **plexAdapter:** use "UNCLAIMED_SERVER" sentinel for anonymous mode ([e49cb8b](https://github.com/DialmasterOrg/Youtarr/commit/e49cb8bc556f5f44c14dec91f087182290341555))
-* break up downloadExecutor doDownload ([708bf11](https://github.com/DialmasterOrg/Youtarr/commit/708bf114d73bc9a57ac26aad386ba1a1b5a98313)), closes [#645](https://github.com/DialmasterOrg/Youtarr/issues/645)
-* split doDownload into focused modules ([af70884](https://github.com/DialmasterOrg/Youtarr/commit/af708845eefddd58ca9a18f98cb7a725b0f8496c)), closes [#645](https://github.com/DialmasterOrg/Youtarr/issues/645)
+* The anonymous Plex playlist mode now uses an explicit "UNCLAIMED_SERVER" value instead of easy-to-confuse empty-string handling ([e49cb8b](https://github.com/DialmasterOrg/Youtarr/commit/e49cb8bc556f5f44c14dec91f087182290341555))
+* Internal cleanup of the download executor, with hardening so a failed download can no longer leave a job stuck "In Progress" and stall the queue ([708bf11](https://github.com/DialmasterOrg/Youtarr/commit/708bf114d73bc9a57ac26aad386ba1a1b5a98313)), closes [#645](https://github.com/DialmasterOrg/Youtarr/issues/645)
+* Internal cleanup: split the 1500-line download executor into focused modules, with no intended behavior changes ([af70884](https://github.com/DialmasterOrg/Youtarr/commit/af708845eefddd58ca9a18f98cb7a725b0f8496c)), closes [#645](https://github.com/DialmasterOrg/Youtarr/issues/645)
 
 
 
@@ -208,7 +208,7 @@
 
 ### Features
 
-* detect and disable terminated channels ([04fb599](https://github.com/DialmasterOrg/Youtarr/commit/04fb599037b641bebddcd1a8aa16dedf199b2c2c)), closes [#621](https://github.com/DialmasterOrg/Youtarr/issues/621)
+* Channels terminated by YouTube are now detected and flagged in the UI, and their scheduled downloads stop instead of silently failing every run; the flag clears automatically if the channel comes back ([04fb599](https://github.com/DialmasterOrg/Youtarr/commit/04fb599037b641bebddcd1a8aa16dedf199b2c2c)), closes [#621](https://github.com/DialmasterOrg/Youtarr/issues/621)
 
 
 ### Documentation
