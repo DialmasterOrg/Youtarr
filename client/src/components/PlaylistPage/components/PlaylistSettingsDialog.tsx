@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import {
   Alert,
   Button,
@@ -7,6 +7,10 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
   Typography,
 } from '../../ui';
 import { SubfolderAutocomplete } from '../../shared/SubfolderAutocomplete';
@@ -16,7 +20,7 @@ import { RatingSelect } from '../../shared/RatingSelect';
 import { useSubfolders } from '../../../hooks/useSubfolders';
 import { useConfig } from '../../../hooks/useConfig';
 import { usePlaylistMutations } from '../../../hooks/usePlaylistMutations';
-import { Playlist, PlaylistSubscribeSettings } from '../../../types/playlist';
+import { Playlist, PlaylistSortOrderSetting, PlaylistSubscribeSettings } from '../../../types/playlist';
 
 interface PlaylistSettingsDialogProps {
   open: boolean;
@@ -35,6 +39,7 @@ interface FormState {
   video_quality: string | null;
   audio_format: string | null;
   default_rating: string | null;
+  sort_order: PlaylistSortOrderSetting;
 }
 
 function fromPlaylist(p: Playlist): FormState {
@@ -43,10 +48,13 @@ function fromPlaylist(p: Playlist): FormState {
     video_quality: p.video_quality ?? null,
     audio_format: p.audio_format ?? null,
     default_rating: p.default_rating ?? null,
+    sort_order: p.sort_order ?? 'default',
   };
 }
 
 const MP3_HELPER_TEXT = 'MP3 files are saved at 192kbps in the same folder as videos.';
+const MP3_ONLY_SYNC_HINT =
+  ' MP3 Only playlists sync to media servers as music playlists: the server needs a music-type library that includes your Youtarr output folder.';
 
 const PlaylistSettingsDialog: React.FC<PlaylistSettingsDialogProps> = ({
   open,
@@ -56,6 +64,7 @@ const PlaylistSettingsDialog: React.FC<PlaylistSettingsDialogProps> = ({
   onSaved,
 }) => {
   const [form, setForm] = useState<FormState>(() => fromPlaylist(playlist));
+  const sortOrderLabelId = useId();
 
   const { subfolders, loading: subfoldersLoading, createSubfolder } = useSubfolders(token);
   const { config, refetch: refetchConfig } = useConfig(token);
@@ -74,12 +83,23 @@ const PlaylistSettingsDialog: React.FC<PlaylistSettingsDialogProps> = ({
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
+  // Media-server playlists are typed by the Download Type setting (MP3 Only =
+  // music playlist, anything else = video playlist), so crossing that boundary
+  // replaces the synced playlist on the next sync. Warn before saving.
+  const wasAudio = playlist.audio_format === 'mp3_only';
+  const willBeAudio = form.audio_format === 'mp3_only';
+  const syncTypeChanges = wasAudio !== willBeAudio;
+
+  // Saving a new order doesn't sync anything by itself.
+  const sortOrderChanges = form.sort_order !== (playlist.sort_order ?? 'default');
+
   const handleSave = async () => {
     const settings: PlaylistSubscribeSettings = {
       default_sub_folder: form.default_sub_folder,
       video_quality: form.video_quality,
       audio_format: form.audio_format,
       default_rating: form.default_rating,
+      sort_order: form.sort_order,
     };
     const ok = await updateSettings(playlist.playlist_id, settings);
     if (ok) {
@@ -90,7 +110,7 @@ const PlaylistSettingsDialog: React.FC<PlaylistSettingsDialogProps> = ({
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
-      <DialogTitle>Playlist Download Settings</DialogTitle>
+      <DialogTitle>Playlist Settings</DialogTitle>
       <DialogContent>
         <div className="flex flex-col gap-4 mt-2">
           {error && <Alert severity="error">{error}</Alert>}
@@ -99,7 +119,8 @@ const PlaylistSettingsDialog: React.FC<PlaylistSettingsDialogProps> = ({
             <Typography variant="body2">
               Defaults for videos downloaded from this playlist. A video&apos;s own channel
               settings take precedence; these apply when the channel has no override. They also
-              seed new channels auto-created from this playlist.
+              seed new channels auto-created from this playlist. The Download Type additionally
+              decides whether this playlist syncs to media servers as a video or music playlist.
             </Typography>
           </Alert>
 
@@ -141,8 +162,62 @@ const PlaylistSettingsDialog: React.FC<PlaylistSettingsDialogProps> = ({
             <AudioFormatSelect
               value={form.audio_format}
               onChange={(value) => update('audio_format', value)}
-              helperText={form.audio_format ? MP3_HELPER_TEXT : undefined}
+              helperText={
+                form.audio_format
+                  ? form.audio_format === 'mp3_only'
+                    ? MP3_HELPER_TEXT + MP3_ONLY_SYNC_HINT
+                    : MP3_HELPER_TEXT
+                  : undefined
+              }
             />
+            {syncTypeChanges && (
+              <div className="mt-2">
+                <Alert severity="warning">
+                  <Typography variant="body2">
+                    {willBeAudio
+                      ? 'On the next sync, media servers will replace the synced video playlist with a music playlist. Items downloaded as video without an MP3 will not appear in it; existing downloads are never converted or re-downloaded.'
+                      : 'On the next sync, media servers will replace the synced music playlist with a video playlist. Items downloaded as MP3 only will not appear in it; existing downloads are never converted or re-downloaded.'}
+                  </Typography>
+                </Alert>
+              </div>
+            )}
+          </div>
+
+          <Divider />
+
+          <div>
+            <Typography variant="subtitle2" gutterBottom style={{ fontWeight: 600 }}>
+              Playlist Order
+            </Typography>
+            <FormControl style={{ minWidth: 230 }}>
+              <InputLabel id={sortOrderLabelId} shrink>
+                Playlist order
+              </InputLabel>
+              <Select
+                labelId={sortOrderLabelId}
+                size="small"
+                value={form.sort_order}
+                onValueChange={(next) => update('sort_order', next as PlaylistSortOrderSetting)}
+              >
+                <MenuItem value="default">YouTube playlist order</MenuItem>
+                <MenuItem value="reversed">Reverse playlist order</MenuItem>
+              </Select>
+            </FormControl>
+            <Typography variant="caption" color="text.secondary" className="block mt-1">
+              Order of the .m3u file and synced media server playlists. Some playlists add new
+              videos at the top; Reverse playlist order keeps those playing oldest-first as new
+              videos are added.
+            </Typography>
+            {sortOrderChanges && (
+              <div className="mt-2">
+                <Alert severity="info">
+                  <Typography variant="body2">
+                    The new order applies the next time this playlist syncs. Use Sync now and
+                    Rebuild .m3u file on the playlist page, or wait for the next download.
+                  </Typography>
+                </Alert>
+              </div>
+            )}
           </div>
 
           <Divider />

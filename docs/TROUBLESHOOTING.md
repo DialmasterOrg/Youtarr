@@ -138,6 +138,16 @@ The rescan recognizes `.mp4`, `.webm`, `.mkv`, `.m4v`, `.avi`, and `.mp3`. Files
 
 **Solution**: Run **Settings -> Maintenance -> Rescan files on disk**. As long as the converted file kept the original `[<youtube-id>]` segment in its filename and uses one of the supported extensions (`.mp4`, `.webm`, `.mkv`, `.m4v`, `.avi`, `.mp3`), Youtarr will detect the new file, update the stored path, and clear the "missing" flag. See [Rescan Files on Disk](USAGE_GUIDE.md#rescan-files-on-disk) for full details on supported formats and limitations.
 
+### Video Downloads Fine but Never Appears in Plex (Windows Path Length)
+
+**Problem**: A video downloads successfully, shows as downloaded in Youtarr, and exists on disk, but it never appears in Plex; if the video belongs to a synced playlist, the logs show `Unable to sync item <id> for playlist "..." to <server>: not found on server, skipping`.
+
+**Cause**: When Plex runs on Windows, its scanner silently skips any file whose full path is 260 characters or longer (the Win32 MAX_PATH limit). Youtarr's filename template is used for both the per-video folder and the filename; with the channel folder on top, the channel name appears three times in the full path and the title twice. Combined with your Windows drive and folder prefix, a long channel name plus a long title can cross the limit. The current default template caps titles at 64 bytes (`%(title).64B`) to keep typical paths well clear of the limit, but installs that saved settings under an older default keep their persisted `.74B`/`.76B` value, which can cross it. The file itself is fine: NTFS and File Explorer handle long paths, but Plex's scanner does not. Note that Windows' `LongPathsEnabled` registry setting does not help, because Plex does not declare itself long-path aware.
+
+**Diagnosis**: Measure the full path as Plex sees it (drive letter through `.mp4`). At 260 characters or more, this is your problem.
+
+**Solution**: Shorten the video's folder and file names on disk, keeping the `[<youtube-id>]` segment in the filename. Then run **Settings -> Maintenance -> Rescan files on disk** so Youtarr picks up the new path, let Plex scan the library, and (for playlists) run **Sync now**. To prevent recurrence, shorten the filename template under **Settings -> Core Settings -> Video Filename Template**: reduce the title truncation to the current recommended `%(title).64B` (or smaller), or use a preset without the channel-name prefix; see [Video Filename Template](CONFIG.md#video-filename-template). Only new downloads are affected; existing files keep their names.
+
 ## Docker Issues
 
 ### "Empty section between colons" Error
@@ -576,6 +586,7 @@ For how playlist sync works across Plex, Jellyfin, and Emby, see [Media Server P
 1. Confirm the videos are actually downloaded. Youtarr only adds videos that exist on disk; a video still showing as "Tracked" on the playlist page hasn't downloaded yet.
 2. A video has to be indexed in your media server's library before it can be added. Trigger a library scan and use **Sync now** on the playlist page.
 3. Check that the video isn't marked **Ignored** on the playlist page.
+4. Check the item's format matches the playlist's **Download Type**: an MP3 Only playlist syncs only items that have an mp3, and a video playlist syncs only items with a video file, so items downloaded in the other format (for example via a per-video override) are left out. The playlist page shows a notice with the count of affected items; see [Switching a playlist's download type](MEDIA_SERVER_PLAYLISTS.md#switching-a-playlists-download-type).
 
 ### Playlist Not Created on Jellyfin or Emby
 

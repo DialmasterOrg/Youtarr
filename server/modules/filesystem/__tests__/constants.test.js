@@ -155,8 +155,8 @@ describe('filesystem/constants', () => {
   } = require('../constants');
 
   describe('DEFAULT_VIDEO_FILENAME_PREFIX', () => {
-    it('matches the legacy file template prefix exactly', () => {
-      expect(DEFAULT_VIDEO_FILENAME_PREFIX).toBe('%(uploader,channel,uploader_id).80B - %(title).76B');
+    it('is the channel template plus a 64-byte-capped title', () => {
+      expect(DEFAULT_VIDEO_FILENAME_PREFIX).toBe('%(uploader,channel,uploader_id).80B - %(title).64B');
     });
   });
 
@@ -167,9 +167,9 @@ describe('filesystem/constants', () => {
   });
 
   describe('composeVideoFileTemplate', () => {
-    it('produces the legacy template when given the default prefix', () => {
+    it('produces the default template when given the default prefix', () => {
       expect(composeVideoFileTemplate(DEFAULT_VIDEO_FILENAME_PREFIX))
-        .toBe('%(uploader,channel,uploader_id).80B - %(title).76B [%(id)s].%(ext)s');
+        .toBe('%(uploader,channel,uploader_id).80B - %(title).64B [%(id)s].%(ext)s');
     });
 
     it('inserts a single space between non-empty prefix and suffix', () => {
@@ -187,16 +187,16 @@ describe('filesystem/constants', () => {
 
     it('falls back to default when prefix is null or undefined', () => {
       expect(composeVideoFileTemplate(null))
-        .toBe('%(uploader,channel,uploader_id).80B - %(title).76B [%(id)s].%(ext)s');
+        .toBe('%(uploader,channel,uploader_id).80B - %(title).64B [%(id)s].%(ext)s');
       expect(composeVideoFileTemplate(undefined))
-        .toBe('%(uploader,channel,uploader_id).80B - %(title).76B [%(id)s].%(ext)s');
+        .toBe('%(uploader,channel,uploader_id).80B - %(title).64B [%(id)s].%(ext)s');
     });
   });
 
   describe('composeThumbnailFilename', () => {
-    it('produces the legacy thumbnail template when given the default prefix', () => {
+    it('produces the default thumbnail template when given the default prefix', () => {
       expect(composeThumbnailFilename(DEFAULT_VIDEO_FILENAME_PREFIX))
-        .toBe('%(uploader,channel,uploader_id).80B - %(title).76B [%(id)s]');
+        .toBe('%(uploader,channel,uploader_id).80B - %(title).64B [%(id)s]');
     });
 
     it('drops the .%(ext)s tail relative to the file template', () => {
@@ -209,9 +209,9 @@ describe('filesystem/constants', () => {
   });
 
   describe('composeVideoFolderName', () => {
-    it('produces the legacy folder template when given the default prefix', () => {
+    it('produces the default folder template when given the default prefix', () => {
       expect(composeVideoFolderName(DEFAULT_VIDEO_FILENAME_PREFIX))
-        .toBe('%(uploader,channel,uploader_id).80B - %(title).76B - %(id)s');
+        .toBe('%(uploader,channel,uploader_id).80B - %(title).64B - %(id)s');
     });
 
     it('inserts " - " between non-empty prefix and id', () => {
@@ -228,9 +228,9 @@ describe('filesystem/constants', () => {
 
     it('falls back to default when prefix is null or undefined', () => {
       expect(composeVideoFolderName(null))
-        .toBe('%(uploader,channel,uploader_id).80B - %(title).76B - %(id)s');
+        .toBe('%(uploader,channel,uploader_id).80B - %(title).64B - %(id)s');
       expect(composeVideoFolderName(undefined))
-        .toBe('%(uploader,channel,uploader_id).80B - %(title).76B - %(id)s');
+        .toBe('%(uploader,channel,uploader_id).80B - %(title).64B - %(id)s');
     });
   });
 });

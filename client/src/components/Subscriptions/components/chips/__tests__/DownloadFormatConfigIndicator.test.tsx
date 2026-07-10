@@ -40,6 +40,18 @@ describe('DownloadFormatConfigIndicator', () => {
     expect(screen.getByTestId('download-format-config-indicator')).toBeInTheDocument();
   });
 
+  test('labels video_mp3 as Video + MP3 downloads', () => {
+    renderWithProviders(<DownloadFormatConfigIndicator audioFormat="video_mp3" />);
+
+    expect(screen.getByRole('img', { name: 'Video + MP3 downloads' })).toBeInTheDocument();
+  });
+
+  test('labels mp3_only as MP3 only downloads', () => {
+    renderWithProviders(<DownloadFormatConfigIndicator audioFormat="mp3_only" />);
+
+    expect(screen.getByRole('img', { name: 'MP3 only downloads' })).toBeInTheDocument();
+  });
+
   test('does not render container when no audio format (default video-only)', () => {
     renderWithProviders(<DownloadFormatConfigIndicator audioFormat={null} />);
 

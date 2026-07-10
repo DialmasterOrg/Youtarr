@@ -49,10 +49,12 @@ class EmbyAdapter extends BaseAdapter {
   async resolveItemIdByFilepath(filepath) {
     // Match by filename across different mount views — see plexAdapter/jellyfinAdapter.
     const target = extractBasename(filepath);
+    // Audio-only downloads are Audio items on the server, not Video.
+    const isAudio = /\.mp3$/i.test(target);
     try {
       const params = {
         userId: this.userId,
-        includeItemTypes: 'Video,Movie,Episode',
+        includeItemTypes: isAudio ? 'Audio' : 'Video,Movie,Episode',
         recursive: true,
         fields: 'Path',
       };
@@ -63,19 +65,6 @@ class EmbyAdapter extends BaseAdapter {
     } catch (err) {
       if (isServerUnavailableError(err)) throw new MediaServerUnavailableError(describeHttpError(err));
       logger.warn({ ...describeHttpError(err), filepath }, 'emby: could not look up library item by file path');
-      return null;
-    }
-  }
-
-  async getPlaylistByName(name) {
-    try {
-      const params = { userId: this.userId, includeItemTypes: 'Playlist', recursive: true };
-      const res = await axios.get(`${this.url}/Items`, { headers: this._headers(), params, timeout: REQUEST_TIMEOUT_MS });
-      const items = res.data?.Items || [];
-      const found = items.find((i) => i.Name === name);
-      return found ? { id: found.Id, itemIds: [] } : null;
-    } catch (err) {
-      logger.warn({ ...describeHttpError(err) }, 'emby: could not list playlists');
       return null;
     }
   }
@@ -93,7 +82,7 @@ class EmbyAdapter extends BaseAdapter {
     const params = {
       Name: name,
       Ids: itemIds.join(','),
-      MediaType: 'Video',
+      MediaType: opts.mediaType === 'audio' ? 'Audio' : 'Video',
     };
     if (!opts.public) {
       params.UserId = this.userId;
@@ -120,7 +109,7 @@ class EmbyAdapter extends BaseAdapter {
       const status = err.response?.status;
       logger.warn({ status, playlistId }, 'emby replacePlaylistItems: delete failed, creating fresh');
     }
-    return this.createPlaylist(opts.name, itemIds, { public: !!opts.public });
+    return this.createPlaylist(opts.name, itemIds, { public: !!opts.public, mediaType: opts.mediaType });
   }
 }
 

@@ -4,9 +4,11 @@ jest.mock('../../../../logger', () => ({
 }));
 jest.mock('../../../plexModule', () => ({
   refreshLibrariesForSubfolders: jest.fn(),
+  refreshLibrary: jest.fn(),
 }));
 
 const axios = require('axios');
+const plexModule = require('../../../plexModule');
 const PlexAdapter = require('../plexAdapter');
 
 describe('PlexAdapter', () => {
@@ -471,5 +473,100 @@ describe('PlexAdapter', () => {
     expect(result).toEqual({ id: '100' });
     // No relocation create.
     expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  describe('audio (music library) support', () => {
+    const VIDEO_AND_MUSIC = [
+      { key: '2', type: 'movie', title: 'YouTube' },
+      { key: '40', type: 'artist', title: 'Music' },
+    ];
+
+    test('an mp3 in the batch searches music sections with type=10 and resolves the track', async () => {
+      mockSections(VIDEO_AND_MUSIC);
+      // Video section '2': no match.
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+      // Music section '40' (tracks listing) has it.
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Metadata: [{ ratingKey: '900', Media: [{ Part: [{ file: '/plex/ChanA/Song [aud1].mp3' }] }] }] } },
+      });
+      const adapter = new PlexAdapter(cfg);
+      const id = await adapter.resolveItemIdByFilepath('/data/ChanA/Song [aud1].mp3');
+      expect(id).toBe('900');
+      const musicCall = axios.get.mock.calls.find((c) => c[0].includes('/library/sections/40/all'));
+      expect(musicCall[1].params.type).toBe(10);
+    });
+
+    test('a batch with no mp3 does not query music sections', async () => {
+      mockSections(VIDEO_AND_MUSIC);
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+      const adapter = new PlexAdapter(cfg);
+      await adapter.resolveItemIdByFilepath('/data/ChanA/Video [v1].mp4');
+      const queried = axios.get.mock.calls.map((c) => c[0]);
+      expect(queried.some((u) => u.includes('/library/sections/40/all'))).toBe(false);
+    });
+
+    test('video sections are queried without a type filter even when the batch has mp3s', async () => {
+      mockSections(VIDEO_AND_MUSIC);
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+      const adapter = new PlexAdapter(cfg);
+      await adapter.resolveItemIdByFilepath('/data/ChanA/Song [aud1].mp3');
+      const videoCall = axios.get.mock.calls.find((c) => c[0].includes('/library/sections/2/all'));
+      expect(videoCall[1].params.type).toBeUndefined();
+    });
+
+    test('createPlaylist with mediaType audio posts type=audio', async () => {
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { machineIdentifier: 'MID' } } });
+      axios.post.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [{ ratingKey: 'p1' }] } } });
+      const adapter = new PlexAdapter(cfg);
+      const result = await adapter.createPlaylist('YT: Audio PL', ['900'], { mediaType: 'audio' });
+      expect(result.id).toBe('p1');
+      expect(axios.post.mock.calls[0][2].params.type).toBe('audio');
+    });
+
+    test('createPlaylist defaults to type=video when mediaType is absent', async () => {
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { machineIdentifier: 'MID' } } });
+      axios.post.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [{ ratingKey: 'p1' }] } } });
+      const adapter = new PlexAdapter(cfg);
+      await adapter.createPlaylist('YT: Video PL', ['1']);
+      expect(axios.post.mock.calls[0][2].params.type).toBe('video');
+    });
+
+    test('replacePlaylistItems checks scope against audio playlists when mediaType is audio', async () => {
+      // Scope listing: the stored id is visible.
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [{ ratingKey: 'p1', title: 'YT: Audio PL' }] } } });
+      axios.delete.mockResolvedValueOnce({});
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { machineIdentifier: 'MID' } } });
+      axios.put.mockResolvedValueOnce({});
+      const adapter = new PlexAdapter(cfg);
+      await adapter.replacePlaylistItems('p1', ['900'], { name: 'YT: Audio PL', mediaType: 'audio' });
+      expect(axios.get.mock.calls[0][1].params.playlistType).toBe('audio');
+    });
+
+    test('triggerLibraryScan with mediaType audio refreshes each music section', async () => {
+      mockSections(VIDEO_AND_MUSIC);
+      const adapter = new PlexAdapter(cfg);
+      await adapter.triggerLibraryScan(null, { mediaType: 'audio' });
+      expect(plexModule.refreshLibrary).toHaveBeenCalledTimes(1);
+      expect(plexModule.refreshLibrary).toHaveBeenCalledWith('40');
+      // Existing subfolder-based video refresh delegation is preserved.
+      expect(plexModule.refreshLibrariesForSubfolders).toHaveBeenCalledWith([]);
+    });
+
+    test('triggerLibraryScan without an audio mediaType does not touch music sections', async () => {
+      const adapter = new PlexAdapter(cfg);
+      await adapter.triggerLibraryScan(null, { mediaType: 'video' });
+      await adapter.triggerLibraryScan();
+      expect(plexModule.refreshLibrary).not.toHaveBeenCalled();
+      // No section enumeration needed for video scans.
+      expect(axios.get).not.toHaveBeenCalled();
+    });
+
+    test('triggerLibraryScan audio degrades to no music refresh when enumeration fails', async () => {
+      axios.get.mockRejectedValueOnce(new Error('boom'));
+      const adapter = new PlexAdapter(cfg);
+      await expect(adapter.triggerLibraryScan(null, { mediaType: 'audio' })).resolves.not.toThrow();
+      expect(plexModule.refreshLibrary).not.toHaveBeenCalled();
+    });
   });
 });

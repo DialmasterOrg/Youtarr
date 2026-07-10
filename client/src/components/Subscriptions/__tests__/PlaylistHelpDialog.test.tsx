@@ -25,6 +25,20 @@ describe('PlaylistHelpDialog', () => {
     expect(screen.getByText('Syncing to Plex, Jellyfin, and Emby')).toBeInTheDocument();
   });
 
+  test('explains that the Download Type decides the synced playlist type', () => {
+    renderDialog();
+    expect(
+      screen.getByText(/MP3 Only.*sync as music playlists/i)
+    ).toBeInTheDocument();
+  });
+
+  test('explains that the .m3u lists one entry per downloaded item', () => {
+    renderDialog();
+    expect(
+      screen.getByText(/one entry per downloaded item/i)
+    ).toBeInTheDocument();
+  });
+
   test('calls onClose when the Close button is clicked', async () => {
     const onClose = jest.fn();
     renderDialog({ onClose });

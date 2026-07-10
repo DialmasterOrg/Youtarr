@@ -86,7 +86,7 @@ If you subscribe to any YouTube playlists, Youtarr creates a `__playlists__` fol
 │   └── [videos]
 ```
 
-The `.m3u` files use relative paths, so they keep working if you move your library to a different location. Each one lists only the videos you've actually downloaded, in playlist order.
+The `.m3u` files use relative paths, so they keep working if you move your library to a different location. Each one lists only the items you've actually downloaded, in playlist order (for MP3 Only playlists the entries are the MP3 files).
 
 `playlists` is a reserved subfolder name, so Youtarr won't let you assign a channel to a subfolder called `playlists`. Channel subfolders also can't start with `__`, so they never collide with the `__playlists__` folder itself. See [Media Server Playlists](MEDIA_SERVER_PLAYLISTS.md) for how playlists download and sync.
 

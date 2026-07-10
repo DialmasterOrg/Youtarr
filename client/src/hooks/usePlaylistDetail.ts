@@ -11,7 +11,8 @@ export interface DownloadOverrideSettings {
   skipVideoFolder?: boolean;
 }
 
-export type PlaylistSortOrder = 'asc' | 'desc';
+export type PlaylistSortOrder = 'asc' | 'desc' | 'recent';
+export type PlaylistDownloadState = 'all' | 'downloaded' | 'not_downloaded';
 
 const DEFAULT_PAGE_SIZE = 50;
 
@@ -20,11 +21,15 @@ interface UsePlaylistDetailParams {
   playlistId: string | null;
   pageSize?: number;
   sortOrder?: PlaylistSortOrder;
+  downloadState?: PlaylistDownloadState;
 }
 
 interface PlaylistDetailResponse {
   playlist: Playlist;
   not_downloaded_count?: number;
+  // Downloaded items lacking the file type the playlist syncs as (mp3 for
+  // MP3 Only playlists, video otherwise); media server sync leaves them out.
+  unsyncable_count?: number;
 }
 
 interface PlaylistVideosResponse {
@@ -51,12 +56,14 @@ export const usePlaylistDetail = ({
   token,
   playlistId,
   pageSize = DEFAULT_PAGE_SIZE,
-  sortOrder = 'desc',
+  sortOrder = 'asc',
+  downloadState = 'all',
 }: UsePlaylistDetailParams) => {
   const [playlist, setPlaylist] = useState<Playlist | null>(null);
   const [videos, setVideos] = useState<PlaylistVideo[]>([]);
   const [videoTotal, setVideoTotal] = useState(0);
   const [notDownloadedCount, setNotDownloadedCount] = useState<number | null>(null);
+  const [unsyncableCount, setUnsyncableCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(!!(token && playlistId));
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +79,7 @@ export const usePlaylistDetail = ({
       setVideos([]);
       setVideoTotal(0);
       setNotDownloadedCount(null);
+      setUnsyncableCount(null);
       setLoading(false);
       setError(null);
       return;
@@ -89,7 +97,8 @@ export const usePlaylistDetail = ({
         axios.get<PlaylistDetailResponse>(`/api/playlists/${playlistId}`, { headers }),
         axios.get<PlaylistVideosResponse>(`/api/playlists/${playlistId}/videos`, {
           headers,
-          params: { page: 1, pageSize, sortOrder },
+          // 'all' is the server default; no need to send it.
+          params: { page: 1, pageSize, sortOrder, ...(downloadState !== 'all' && { downloadState }) },
         }),
       ]);
       if (requestId !== requestIdRef.current) return;
@@ -97,6 +106,11 @@ export const usePlaylistDetail = ({
       setNotDownloadedCount(
         typeof playlistRes.data.not_downloaded_count === 'number'
           ? playlistRes.data.not_downloaded_count
+          : null
+      );
+      setUnsyncableCount(
+        typeof playlistRes.data.unsyncable_count === 'number'
+          ? playlistRes.data.unsyncable_count
           : null
       );
       setVideos(videosRes.data.videos || []);
@@ -115,7 +129,7 @@ export const usePlaylistDetail = ({
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [token, playlistId, pageSize, sortOrder]);
+  }, [token, playlistId, pageSize, sortOrder, downloadState]);
 
   useEffect(() => {
     loadInitial();
@@ -137,7 +151,7 @@ export const usePlaylistDetail = ({
         `/api/playlists/${playlistId}/videos`,
         {
           headers: authHeaders(token),
-          params: { page: nextPage, pageSize, sortOrder },
+          params: { page: nextPage, pageSize, sortOrder, ...(downloadState !== 'all' && { downloadState }) },
         }
       );
       // A reset (sort change / refetch) happened mid-flight; discard this page.
@@ -150,7 +164,7 @@ export const usePlaylistDetail = ({
     } finally {
       setLoadingMore(false);
     }
-  }, [token, playlistId, pageSize, sortOrder, loading, loadingMore, videos.length, videoTotal]);
+  }, [token, playlistId, pageSize, sortOrder, downloadState, loading, loadingMore, videos.length, videoTotal]);
 
   // Refreshes only playlist meta + the not-downloaded count without reloading
   // the (paginated) video list, so scroll position is preserved.
@@ -165,6 +179,11 @@ export const usePlaylistDetail = ({
       setNotDownloadedCount(
         typeof res.data.not_downloaded_count === 'number'
           ? res.data.not_downloaded_count
+          : null
+      );
+      setUnsyncableCount(
+        typeof res.data.unsyncable_count === 'number'
+          ? res.data.unsyncable_count
           : null
       );
     } catch {
@@ -201,27 +220,6 @@ export const usePlaylistDetail = ({
       {},
       { headers: authHeaders(token) }
     );
-    await loadInitial();
-  }, [token, playlistId, loadInitial]);
-
-  // Rethrows the server's error message so the caller's snackbar shows
-  // specifics (e.g. the 409 when a fetch is already running).
-  const fetchAllVideos = useCallback(async () => {
-    if (!token || !playlistId) return;
-    try {
-      await axios.post(
-        `/api/playlists/${playlistId}/refresh`,
-        { fetchAll: true },
-        { headers: authHeaders(token) }
-      );
-    } catch (err: unknown) {
-      const message =
-        (axios.isAxiosError(err) && err.response?.data?.error) ||
-        'Failed to load all playlist videos';
-      throw new Error(
-        typeof message === 'string' ? message : 'Failed to load all playlist videos'
-      );
-    }
     await loadInitial();
   }, [token, playlistId, loadInitial]);
 
@@ -264,6 +262,7 @@ export const usePlaylistDetail = ({
     videos,
     videoTotal,
     notDownloadedCount,
+    unsyncableCount,
     loading,
     loadingMore,
     hasMore,
@@ -274,7 +273,6 @@ export const usePlaylistDetail = ({
     markVideoIgnored,
     markVideoDeleted,
     refresh,
-    fetchAllVideos,
     sync,
     regenerateM3U,
     triggerDownload,

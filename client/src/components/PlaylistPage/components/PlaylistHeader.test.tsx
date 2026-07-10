@@ -27,6 +27,7 @@ const baseProps = {
   newCount: 37,
   togglePending: false,
   actionRunning: false,
+  refreshing: false,
   onRefresh: jest.fn(),
   onDownloadAll: jest.fn(),
   onOpenSettings: jest.fn(),
@@ -48,5 +49,35 @@ describe('PlaylistHeader', () => {
     expect(screen.getByText(/Library & Downloads/i)).toBeInTheDocument();
     expect(screen.getByText(/Media Server Sync/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Download 37 new/i })).toBeInTheDocument();
+  });
+
+  test('shows a Video playlist chip when the playlist is not MP3 Only', () => {
+    render(
+      <MemoryRouter>
+        <PlaylistHeader {...baseProps} />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('Video playlist')).toBeInTheDocument();
+  });
+
+  test('shows an Audio playlist chip when the playlist is MP3 Only', () => {
+    render(
+      <MemoryRouter>
+        <PlaylistHeader
+          {...baseProps}
+          playlist={{ ...playlist, audio_format: 'mp3_only' }}
+        />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('Audio playlist')).toBeInTheDocument();
+  });
+
+  test('forwards unsyncableCount to the media server sync group', () => {
+    render(
+      <MemoryRouter>
+        <PlaylistHeader {...baseProps} unsyncableCount={2} />
+      </MemoryRouter>
+    );
+    expect(screen.getByText(/2 downloaded items have no video file/i)).toBeInTheDocument();
   });
 });

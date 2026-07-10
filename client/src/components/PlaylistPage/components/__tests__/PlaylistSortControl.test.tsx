@@ -6,16 +6,17 @@ describe('PlaylistSortControl', () => {
   test('shows the current sort order as the selected value', () => {
     render(<PlaylistSortControl value="desc" onChange={jest.fn()} />);
     const trigger = screen.getByRole('button', { name: 'Sort' });
-    expect(trigger).toHaveTextContent('Newest first');
+    expect(trigger).toHaveTextContent('Reverse playlist order');
   });
 
-  test('renders both sort options when opened', async () => {
+  test('renders all sort options when opened', async () => {
     render(<PlaylistSortControl value="desc" onChange={jest.fn()} />);
 
     fireEvent.mouseDown(screen.getByRole('button', { name: 'Sort' }));
 
-    expect(await screen.findByRole('option', { name: 'Newest first' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Oldest first' })).toBeInTheDocument();
+    expect(await screen.findByRole('option', { name: 'Playlist order' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Reverse playlist order' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Recently added first' })).toBeInTheDocument();
   });
 
   test('calls onChange with the chosen order', async () => {
@@ -23,9 +24,19 @@ describe('PlaylistSortControl', () => {
     render(<PlaylistSortControl value="desc" onChange={onChange} />);
 
     fireEvent.mouseDown(screen.getByRole('button', { name: 'Sort' }));
-    fireEvent.click(await screen.findByRole('option', { name: 'Oldest first' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Playlist order' }));
 
     expect(onChange).toHaveBeenCalledWith('asc');
+  });
+
+  test('calls onChange with recent when the new option is chosen', async () => {
+    const onChange = jest.fn();
+    render(<PlaylistSortControl value="desc" onChange={onChange} />);
+
+    fireEvent.mouseDown(screen.getByRole('button', { name: 'Sort' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Recently added first' }));
+
+    expect(onChange).toHaveBeenCalledWith('recent');
   });
 
   test('does not open when disabled', () => {
@@ -33,6 +44,6 @@ describe('PlaylistSortControl', () => {
 
     fireEvent.mouseDown(screen.getByRole('button', { name: 'Sort' }));
 
-    expect(screen.queryByRole('option', { name: 'Oldest first' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Playlist order' })).not.toBeInTheDocument();
   });
 });

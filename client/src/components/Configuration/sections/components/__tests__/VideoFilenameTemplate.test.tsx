@@ -36,16 +36,17 @@ describe('VideoFilenameTemplate', () => {
     expect(handleChange).toHaveBeenCalledWith('%(title)s');
   });
 
-  it('renders all four presets and applies one when clicked', () => {
+  it('renders all five presets and applies one when clicked', () => {
     const handleChange = jest.fn();
     render(<VideoFilenameTemplate value="x" onChange={handleChange} token="tok" />);
     expect(screen.getByRole('button', { name: /default/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /date prefix/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /plex youtube-agent/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /plex tv series/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /title only/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /title only/i }));
-    expect(handleChange).toHaveBeenCalledWith('%(title).76B');
+    expect(handleChange).toHaveBeenCalledWith('%(title).64B');
   });
 
   it('does not show preview lines until the user clicks Preview', () => {
@@ -111,13 +112,13 @@ describe('VideoFilenameTemplate', () => {
     expect(screen.getByText(/untruncated/i)).toBeInTheDocument();
   });
 
-  it('shows the oversized-title warning when title byte truncation exceeds 76B', () => {
+  it('shows the oversized-title warning when title byte truncation exceeds the recommended limit', () => {
     render(<VideoFilenameTemplate value="%(title).150B" onChange={() => {}} token="tok" />);
-    expect(screen.getByTestId('oversized-title-warning')).toHaveTextContent(/76B/);
+    expect(screen.getByTestId('oversized-title-warning')).toHaveTextContent(/64B/);
   });
 
-  it('does not show the oversized-title warning at the recommended .76B', () => {
-    render(<VideoFilenameTemplate value="%(title).76B" onChange={() => {}} token="tok" />);
+  it('does not show the oversized-title warning at the recommended .64B', () => {
+    render(<VideoFilenameTemplate value="%(title).64B" onChange={() => {}} token="tok" />);
     expect(screen.queryByTestId('oversized-title-warning')).not.toBeInTheDocument();
   });
 

@@ -148,8 +148,12 @@ describe('hasOversizedTitleTruncation', () => {
     expect(hasOversizedTitleTruncation('%(title).150B')).toBe(true);
   });
 
-  it('does not flag the recommended %(title).76B', () => {
-    expect(hasOversizedTitleTruncation('%(title).76B')).toBe(false);
+  it('does not flag the recommended %(title).64B', () => {
+    expect(hasOversizedTitleTruncation('%(title).64B')).toBe(false);
+  });
+
+  it('flags the old default %(title).76B', () => {
+    expect(hasOversizedTitleTruncation('%(title).76B')).toBe(true);
   });
 
   it('does not flag below the recommended limit', () => {

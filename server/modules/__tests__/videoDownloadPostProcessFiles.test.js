@@ -25,6 +25,8 @@ jest.mock('fs-extra', () => {
 jest.mock('child_process', () => ({
   execSync: jest.fn(),
   spawnSync: jest.fn(() => ({ status: 0, error: null })),
+  execFile: jest.fn((cmd, args, callback) => callback(null, '', '')),
+  execFileSync: jest.fn(),
 }));
 
 const mockConfig = {};
@@ -1321,7 +1323,7 @@ describe('videoDownloadPostProcessFiles', () => {
       await loadModule();
       await settleAsync();
 
-      expect(fs.copySync).toHaveBeenCalledWith(imagePath, fanartPath);
+      expect(fs.copySync).toHaveBeenCalledWith(imagePath, fanartPath, { overwrite: true });
       expect(logger.info).toHaveBeenCalledWith(
         { fanartPath },
         '[Post-Process] Created video fanart file'

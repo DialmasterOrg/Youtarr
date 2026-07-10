@@ -104,7 +104,8 @@ describe('Channel Poster Functionality', () => {
       expect(fs.copySync).toHaveBeenCalledTimes(1);
       expect(fs.copySync).toHaveBeenCalledWith(
         '/images/channelthumb-UC123.jpg',
-        '/videos/Test Channel 1/poster.jpg'
+        '/videos/Test Channel 1/poster.jpg',
+        { overwrite: true }
       );
     });
 
@@ -141,7 +142,8 @@ describe('Channel Poster Functionality', () => {
       expect(fs.copySync).toHaveBeenCalledTimes(1);
       expect(fs.copySync).toHaveBeenCalledWith(
         '/images/channelthumb-UC456.jpg',
-        '/videos/Valid Channel/poster.jpg'
+        '/videos/Valid Channel/poster.jpg',
+        { overwrite: true }
       );
     });
 

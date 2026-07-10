@@ -10,7 +10,6 @@ const mockNavigate = jest.fn();
 const mockToggleAutoDownload = jest.fn();
 const mockMarkVideoDeleted = jest.fn();
 const mockRefetchMeta = jest.fn();
-const mockFetchAllVideos = jest.fn();
 let mockLocationState: unknown = null;
 
 const mockVideo: PlaylistVideo = {
@@ -123,7 +122,6 @@ jest.mock('../../hooks/usePlaylistDetail', () => ({
     markVideoIgnored: jest.fn(),
     markVideoDeleted: (...args: unknown[]) => mockMarkVideoDeleted(...args),
     refresh: jest.fn(),
-    fetchAllVideos: (...args: unknown[]) => mockFetchAllVideos(...args),
     sync: jest.fn(),
     regenerateM3U: jest.fn(),
     triggerDownload: (...args: unknown[]) => mockTriggerDownload(...args),
@@ -297,64 +295,17 @@ describe('PlaylistPage selected-download selection lifecycle', () => {
     expect(mockRefetchMeta).toHaveBeenCalled();
   });
 
-  test('renders the sort control defaulting to newest first', () => {
+  test('renders the sort control defaulting to playlist order', () => {
     renderWithProviders(<PlaylistPage token="t" />);
 
     const sortControl = screen.getByRole('button', { name: 'Sort' });
-    expect(sortControl).toHaveTextContent('Newest first');
+    expect(sortControl).toHaveTextContent('Playlist order');
   });
 });
 
-describe('PlaylistPage Load More videos', () => {
+describe('PlaylistPage video list notices', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-  });
-
-  test('Load More opens the confirmation dialog and runs the full fetch on Continue', async () => {
-    const user = userEvent.setup();
-    mockFetchAllVideos.mockResolvedValue(undefined);
-
-    renderWithProviders(<PlaylistPage token="t" />);
-
-    await user.click(screen.getByRole('button', { name: /Load More/i }));
-    expect(await screen.findByText('Load More Videos')).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
-
-    await waitFor(() => expect(mockFetchAllVideos).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText('All available videos loaded')).toBeInTheDocument();
-  });
-
-  test('Cancel dismisses the confirmation dialog without fetching', async () => {
-    const user = userEvent.setup();
-
-    renderWithProviders(<PlaylistPage token="t" />);
-
-    await user.click(screen.getByRole('button', { name: /Load More/i }));
-    expect(await screen.findByText('Load More Videos')).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: 'Cancel' }));
-
-    await waitFor(() =>
-      expect(screen.queryByText('Load More Videos')).not.toBeInTheDocument()
-    );
-    expect(mockFetchAllVideos).not.toHaveBeenCalled();
-  });
-
-  test('shows the server error message when the full fetch fails', async () => {
-    const user = userEvent.setup();
-    mockFetchAllVideos.mockRejectedValue(
-      new Error('A fetch is already in progress for this playlist')
-    );
-
-    renderWithProviders(<PlaylistPage token="t" />);
-
-    await user.click(screen.getByRole('button', { name: /Load More/i }));
-    await user.click(await screen.findByRole('button', { name: 'Continue' }));
-
-    expect(
-      await screen.findByText('A fetch is already in progress for this playlist')
-    ).toBeInTheDocument();
   });
 
   test('shows a visible note that unavailable videos are excluded from the list', () => {
@@ -366,21 +317,6 @@ describe('PlaylistPage Load More videos', () => {
     expect(
       screen.getByText(/fewer videos here than YouTube reports/i)
     ).toBeInTheDocument();
-  });
-
-  test('shows the outcome as a viewport-anchored toast, not inline below the video list', async () => {
-    const user = userEvent.setup();
-    mockFetchAllVideos.mockResolvedValue(undefined);
-
-    renderWithProviders(<PlaylistPage token="t" />);
-
-    await user.click(screen.getByRole('button', { name: /Load More/i }));
-    await user.click(await screen.findByRole('button', { name: 'Continue' }));
-
-    // The ui Snackbar renders a fixed-position role="status" live region;
-    // an inline Alert in the page flow does not.
-    const toast = await screen.findByRole('status');
-    expect(toast).toHaveTextContent('All available videos loaded');
   });
 });
 

@@ -1,5 +1,6 @@
 /* eslint-env jest */
 const express = require('express');
+const { Op } = require('sequelize');
 const createPlaylistRoutes = require('../playlists');
 const { findRouteHandler } = require('../../__tests__/testUtils');
 
@@ -254,6 +255,59 @@ describe('GET /api/playlists/:playlistId not_downloaded_count', () => {
     const res = createResponse();
     await handler(req, res);
     expect(res.status).toHaveBeenCalledWith(404);
+  });
+});
+
+describe('GET /api/playlists/:playlistId unsyncable_count', () => {
+  test('counts downloads without a video file on a video-type playlist', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(makePlaylist({ audio_format: null }));
+    deps.models.PlaylistVideo.findAll.mockResolvedValue([
+      { youtube_id: 'a' },
+      { youtube_id: 'b' },
+      { youtube_id: 'c' },
+    ]);
+    deps.models.Video.findAll.mockResolvedValue([
+      // Downloaded as mp3-only: no video file to sync.
+      { youtubeId: 'a', filePath: null, audioFilePath: '/y/a.mp3' },
+      { youtubeId: 'b', filePath: '/y/b.mp4', audioFilePath: null },
+      // 'c' has no Video row: counted as not downloaded, not as unsyncable.
+    ]);
+
+    const handler = getHandler('get', '/api/playlists/:playlistId', deps);
+    const req = { params: { playlistId: 'PLtest123' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ not_downloaded_count: 1, unsyncable_count: 1 })
+    );
+  });
+
+  test('counts downloads without an mp3 on an MP3 Only playlist', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(makePlaylist({ audio_format: 'mp3_only' }));
+    deps.models.PlaylistVideo.findAll.mockResolvedValue([
+      { youtube_id: 'a' },
+      { youtube_id: 'b' },
+    ]);
+    deps.models.Video.findAll.mockResolvedValue([
+      // Manually downloaded as video-only: no mp3 to sync.
+      { youtubeId: 'a', filePath: '/y/a.mp4', audioFilePath: null },
+      // Video + MP3 download: its mp3 syncs fine.
+      { youtubeId: 'b', filePath: '/y/b.mp4', audioFilePath: '/y/b.mp3' },
+    ]);
+
+    const handler = getHandler('get', '/api/playlists/:playlistId', deps);
+    const req = { params: { playlistId: 'PLtest123' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ unsyncable_count: 1 })
+    );
   });
 });
 
@@ -556,6 +610,24 @@ describe('PATCH /api/playlists/:playlistId', () => {
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: 'Failed to update playlist' });
   });
+
+  test('ignores sort_order sent via PATCH (settings endpoint owns it)', async () => {
+    const deps = buildDeps();
+    const p = makePlaylist();
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+
+    const handler = getHandler('patch', '/api/playlists/:playlistId', deps);
+    const req = {
+      params: { playlistId: 'PLtest123' },
+      body: { auto_download: true, sort_order: 'reversed' },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(p.update).toHaveBeenCalledWith({ auto_download: true });
+  });
 });
 
 describe('GET /api/playlists/:playlistId/settings', () => {
@@ -569,6 +641,7 @@ describe('GET /api/playlists/:playlistId/settings', () => {
       title_filter_regex: null,
       audio_format: null,
       default_rating: null,
+      sort_order: 'reversed',
     });
     deps.models.Playlist.findOne.mockResolvedValue(p);
 
@@ -586,6 +659,7 @@ describe('GET /api/playlists/:playlistId/settings', () => {
       title_filter_regex: null,
       audio_format: null,
       default_rating: null,
+      sort_order: 'reversed',
     });
   });
 
@@ -622,6 +696,43 @@ describe('PUT /api/playlists/:playlistId/settings', () => {
 
     expect(p.update).toHaveBeenCalledWith({ video_quality: '720p', min_duration: 60 });
     expect(res.json).toHaveBeenCalledWith({ settings: { video_quality: '720p', min_duration: 60 } });
+  });
+
+  test('updates sort_order when given a valid value', async () => {
+    const deps = buildDeps();
+    const p = makePlaylist();
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+
+    const handler = getHandler('put', '/api/playlists/:playlistId/settings', deps);
+    const req = {
+      params: { playlistId: 'PLtest123' },
+      body: { sort_order: 'reversed' },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(p.update).toHaveBeenCalledWith({ sort_order: 'reversed' });
+    expect(res.json).toHaveBeenCalledWith({ settings: { sort_order: 'reversed' } });
+  });
+
+  test('rejects an invalid sort_order with 400 before touching the playlist', async () => {
+    const deps = buildDeps();
+
+    const handler = getHandler('put', '/api/playlists/:playlistId/settings', deps);
+    const req = {
+      params: { playlistId: 'PLtest123' },
+      body: { sort_order: 'upside_down' },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Invalid sort_order; expected default or reversed' });
+    expect(deps.models.Playlist.findOne).not.toHaveBeenCalled();
   });
 
   test('registers a real default_sub_folder when settings are updated', async () => {
@@ -897,6 +1008,21 @@ describe('GET /api/playlists/:playlistId/videos', () => {
     );
   });
 
+  test('orders by added_at DESC with position tie-break when sortOrder=recent', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue({ count: 0, rows: [] });
+
+    const handler = getHandler('get', '/api/playlists/:playlistId/videos', deps);
+    const req = { params: { playlistId: 'PLtest123' }, query: { sortOrder: 'recent' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.models.PlaylistVideo.findAndCountAll).toHaveBeenCalledWith(
+      expect.objectContaining({ order: [['added_at', 'DESC'], ['position', 'ASC']] })
+    );
+  });
+
   test('falls back to position ASC for an invalid sortOrder', async () => {
     const deps = buildDeps();
     deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue({ count: 0, rows: [] });
@@ -960,6 +1086,119 @@ describe('GET /api/playlists/:playlistId/videos', () => {
   });
 });
 
+describe('GET /api/playlists/:playlistId/videos downloadState filter', () => {
+  // dl1 has a usable file; gone2 was downloaded then lost its file
+  // (previously_downloaded); new3 has no Video row at all.
+  const memberRows = [
+    { youtube_id: 'dl1' },
+    { youtube_id: 'gone2' },
+    { youtube_id: 'new3' },
+  ];
+  const videoRows = [
+    { youtubeId: 'dl1', removed: false, filePath: '/videos/dl1.mp4', audioFilePath: null },
+    { youtubeId: 'gone2', removed: false, filePath: null, audioFilePath: null },
+  ];
+
+  test('downloadState=downloaded restricts the page query to ids with a usable file', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.findAll.mockResolvedValue(memberRows);
+    deps.models.Video.findAll.mockResolvedValue(videoRows);
+    deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue({
+      count: 1,
+      rows: [{ id: 1, playlist_id: 'PLtest123', youtube_id: 'dl1', position: 1, ignored: false, ignored_at: null, added_at: null, channel_id: null }],
+    });
+
+    const handler = getHandler('get', '/api/playlists/:playlistId/videos', deps);
+    const req = { params: { playlistId: 'PLtest123' }, query: { downloadState: 'downloaded' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.models.PlaylistVideo.findAndCountAll).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { playlist_id: 'PLtest123', youtube_id: { [Op.in]: ['dl1'] } },
+      })
+    );
+    const payload = res.json.mock.calls[0][0];
+    expect(payload.total).toBe(1);
+    expect(payload.videos[0]).toMatchObject({ youtube_id: 'dl1', downloaded: true });
+  });
+
+  test('downloadState=not_downloaded excludes ids with a usable file; previously-downloaded rows still shown', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.findAll.mockResolvedValue(memberRows);
+    deps.models.Video.findAll.mockResolvedValue(videoRows);
+    deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue({
+      count: 2,
+      rows: [
+        { id: 2, playlist_id: 'PLtest123', youtube_id: 'gone2', position: 2, ignored: false, ignored_at: null, added_at: null, channel_id: null },
+        { id: 3, playlist_id: 'PLtest123', youtube_id: 'new3', position: 3, ignored: false, ignored_at: null, added_at: null, channel_id: null },
+      ],
+    });
+
+    const handler = getHandler('get', '/api/playlists/:playlistId/videos', deps);
+    const req = { params: { playlistId: 'PLtest123' }, query: { downloadState: 'not_downloaded' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.models.PlaylistVideo.findAndCountAll).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { playlist_id: 'PLtest123', youtube_id: { [Op.notIn]: ['dl1'] } },
+      })
+    );
+    const payload = res.json.mock.calls[0][0];
+    expect(payload.videos.map((v) => v.youtube_id)).toEqual(['gone2', 'new3']);
+    expect(payload.videos[0]).toMatchObject({ downloaded: false, previously_downloaded: true });
+  });
+
+  test('downloadState=downloaded short-circuits to an empty page when nothing is downloaded', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.findAll.mockResolvedValue(memberRows);
+    deps.models.Video.findAll.mockResolvedValue([]);
+
+    const handler = getHandler('get', '/api/playlists/:playlistId/videos', deps);
+    const req = { params: { playlistId: 'PLtest123' }, query: { downloadState: 'downloaded' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.json).toHaveBeenCalledWith({ total: 0, videos: [] });
+    expect(deps.models.PlaylistVideo.findAndCountAll).not.toHaveBeenCalled();
+  });
+
+  test('downloadState=not_downloaded applies no id filter when nothing is downloaded', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.findAll.mockResolvedValue(memberRows);
+    deps.models.Video.findAll.mockResolvedValue([]);
+    deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue({ count: 0, rows: [] });
+
+    const handler = getHandler('get', '/api/playlists/:playlistId/videos', deps);
+    const req = { params: { playlistId: 'PLtest123' }, query: { downloadState: 'not_downloaded' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.models.PlaylistVideo.findAndCountAll).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { playlist_id: 'PLtest123' } })
+    );
+  });
+
+  test('rejects an invalid downloadState with 400', async () => {
+    const deps = buildDeps();
+
+    const handler = getHandler('get', '/api/playlists/:playlistId/videos', deps);
+    const req = { params: { playlistId: 'PLtest123' }, query: { downloadState: 'sideways' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: expect.stringContaining('downloadState') });
+    expect(deps.models.PlaylistVideo.findAndCountAll).not.toHaveBeenCalled();
+  });
+});
+
 describe('POST /api/playlists/:playlistId/refresh', () => {
   test('refreshes playlist videos and returns count', async () => {
     const deps = buildDeps();
@@ -973,37 +1212,24 @@ describe('POST /api/playlists/:playlistId/refresh', () => {
 
     await handler(req, res);
 
-    expect(deps.playlistModule.fetchAllPlaylistVideos).toHaveBeenCalledWith('PLtest123', { fetchAll: false });
+    expect(deps.playlistModule.fetchAllPlaylistVideos).toHaveBeenCalledWith('PLtest123');
     expect(res.json).toHaveBeenCalledWith({ fetched: 10 });
   });
 
-  test('passes fetchAll to the module when the body requests a full fetch', async () => {
+  test('ignores a legacy fetchAll body field from older cached clients', async () => {
     const deps = buildDeps();
-    deps.playlistModule.fetchAllPlaylistVideos.mockResolvedValue(4200);
+    deps.playlistModule.fetchAllPlaylistVideos.mockResolvedValue(42);
     deps.models.Playlist.findOne.mockResolvedValue(makePlaylist());
 
     const handler = getHandler('post', '/api/playlists/:playlistId/refresh', deps);
-    const req = { params: { playlistId: 'PLtest123' }, body: { fetchAll: true }, log: loggerMock };
+    const req = { params: { playlistId: 'PLtest123' }, body: { fetchAll: 'not-a-boolean' }, log: loggerMock };
     const res = createResponse();
 
     await handler(req, res);
 
-    expect(deps.playlistModule.fetchAllPlaylistVideos).toHaveBeenCalledWith('PLtest123', { fetchAll: true });
-    expect(res.json).toHaveBeenCalledWith({ fetched: 4200 });
-  });
-
-  test('returns 400 when fetchAll is not a boolean', async () => {
-    const deps = buildDeps();
-
-    const handler = getHandler('post', '/api/playlists/:playlistId/refresh', deps);
-    const req = { params: { playlistId: 'PLtest123' }, body: { fetchAll: 'yes' }, log: loggerMock };
-    const res = createResponse();
-
-    await handler(req, res);
-
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({ error: 'fetchAll must be a boolean' });
-    expect(deps.playlistModule.fetchAllPlaylistVideos).not.toHaveBeenCalled();
+    expect(deps.playlistModule.fetchAllPlaylistVideos).toHaveBeenCalledWith('PLtest123');
+    expect(res.json).toHaveBeenCalledWith({ fetched: 42 });
+    expect(res.status).not.toHaveBeenCalledWith(400);
   });
 
   test('returns 404 for a soft-deleted playlist without fetching', async () => {

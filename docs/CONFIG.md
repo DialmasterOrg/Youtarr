@@ -117,16 +117,16 @@ Configuration can be modified through:
 ### Video Filename Template
 - **Config Key**: `videoFilenamePrefix`
 - **Type**: `string`
-- **Default**: `"%(uploader,channel,uploader_id).80B - %(title).76B"` (matches the legacy fixed format byte-for-byte)
+- **Default**: `"%(uploader,channel,uploader_id).80B - %(title).64B"`. The title is capped at 64 bytes because the prefix appears twice in the full path (per-video folder + filename) and Plex on Windows silently skips files whose full path reaches 260 characters. Installs that saved settings under an older default keep their persisted value (`.74B`/`.76B`) until the setting is edited.
 - **Description**: User-customizable prefix for downloaded video filenames AND per-video directory names. Youtarr always appends ` [VIDEO_ID].EXT` to filenames and ` - VIDEO_ID` to per-video folder names so it can re-find your videos on disk; those suffixes are not configurable.
-- **Syntax**: Uses [yt-dlp's output template syntax](https://github.com/yt-dlp/yt-dlp#output-template). Common tokens: `%(title)s`, `%(uploader)s`, `%(channel)s`, `%(upload_date>%Y-%m-%d)s`, `%(channel_id)s`, `%(display_id)s`. Use `.NB` to byte-truncate values (e.g. `%(title).76B`) or `.Ns` for character truncation (e.g. `%(title).40s`); recommended to keep paths under Windows' 260-char limit.
+- **Syntax**: Uses [yt-dlp's output template syntax](https://github.com/yt-dlp/yt-dlp#output-template). Common tokens: `%(title)s`, `%(uploader)s`, `%(channel)s`, `%(upload_date>%Y-%m-%d)s`, `%(channel_id)s`, `%(display_id)s`. Use `.NB` to byte-truncate values (e.g. `%(title).64B`) or `.Ns` for character truncation (e.g. `%(title).40s`); recommended to keep paths under Windows' 260-char limit.
 - **Validation**: Empty values, path separators (`/`, `\`), `..`, ASCII control characters, values longer than 160 characters, malformed yt-dlp percent syntax, and invalid truncation like `%(title).40` are rejected. Escape literal percent signs as `%%`. Trailing whitespace is trimmed on save.
 - **Scope**: Global setting. Applies only to NEW downloads; existing files are not renamed.
 - **Examples** (all paired with the locked suffixes):
   - **Default**: `Preston - ESCAPING 99 Nights in the Forest IN REAL LIFE! [Cbq15X05wyY].mp4`
-  - **Date prefix** (`%(upload_date>%Y-%m-%d)s - %(title).76B`): `2025-10-17 - ESCAPING 99 Nights ... [Cbq15X05wyY].mp4`
-  - **Plex YouTube-Agent** (`%(upload_date>%Y_%m_%d)s %(title).76B`): `2025_10_17 ESCAPING 99 Nights ... [Cbq15X05wyY].mp4` (compatible with [Absolute-Series-Scanner](https://github.com/ZeroQI/Absolute-Series-Scanner) and [YouTube-Agent.bundle](https://github.com/ZeroQI/YouTube-Agent.bundle))
-  - **Title only** (`%(title).76B`): `ESCAPING 99 Nights ... [Cbq15X05wyY].mp4`
+  - **Date prefix** (`%(upload_date>%Y-%m-%d)s - %(title).64B`): `2025-10-17 - ESCAPING 99 Nights ... [Cbq15X05wyY].mp4`
+  - **Plex YouTube-Agent** (`%(upload_date>%Y_%m_%d)s %(title).64B`): `2025_10_17 ESCAPING 99 Nights ... [Cbq15X05wyY].mp4` (compatible with [Absolute-Series-Scanner](https://github.com/ZeroQI/Absolute-Series-Scanner) and [YouTube-Agent.bundle](https://github.com/ZeroQI/YouTube-Agent.bundle))
+  - **Title only** (`%(title).64B`): `ESCAPING 99 Nights ... [Cbq15X05wyY].mp4`
 - **UI**: A live preview in **Settings -> Core Settings -> File Structure Settings** shows the rendered folder and file names against a sample video, with length warnings (yellow > 110 chars, red > 130 chars on the rendered name).
 
 ### Enable Subtitles

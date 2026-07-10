@@ -49,10 +49,12 @@ const CHANNEL_TEMPLATE = '%(uploader,channel,uploader_id).80B';
 /**
  * Default prefix for the user-customizable video filename template.
  * Composed with VIDEO_FILENAME_SUFFIX to produce the full yt-dlp -o template.
- * Matches the legacy fixed template byte-for-byte so existing installs are
- * unchanged until the user touches the setting.
+ * The title is capped at 64 bytes: the prefix appears twice in the full path
+ * (per-video folder + filename), and Plex on Windows silently skips any file
+ * whose full path reaches 260 chars. Installs that saved the setting keep
+ * their persisted prefix; this default only applies until they touch it.
  */
-const DEFAULT_VIDEO_FILENAME_PREFIX = `${CHANNEL_TEMPLATE} - %(title).76B`;
+const DEFAULT_VIDEO_FILENAME_PREFIX = `${CHANNEL_TEMPLATE} - %(title).64B`;
 
 /**
  * Locked suffix appended to every user-customized video filename.

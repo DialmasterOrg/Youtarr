@@ -104,4 +104,62 @@ describe('m3uGenerator', () => {
       order: [['position', 'ASC']],
     }));
   });
+
+  test('includes audio-only entries via audioFilePath and prefers filePath when both exist', async () => {
+    Playlist.findByPk.mockResolvedValue({ id: 1, playlist_id: 'PL1', title: 'Audio PL' });
+    PlaylistVideo.findAll.mockResolvedValue([
+      { youtube_id: 'a1', position: 1, ignored: false },
+      { youtube_id: 'a2', position: 2, ignored: false },
+    ]);
+    Video.findOne.mockImplementation(({ where }) => {
+      const key = where.youtubeId;
+      if (key === 'a1') return Promise.resolve({ filePath: null, audioFilePath: '/youtube/ChanA/Song 1/a1.mp3', duration: 200, youTubeVideoName: 'Song 1', youTubeChannelName: 'ChanA' });
+      if (key === 'a2') return Promise.resolve({ filePath: '/youtube/ChanB/Vid 2/a2.mp4', audioFilePath: '/youtube/ChanB/Vid 2/a2.mp3', duration: 100, youTubeVideoName: 'Vid 2', youTubeChannelName: 'ChanB' });
+      return Promise.resolve(null);
+    });
+
+    const result = await m3uGenerator.generatePlaylistM3U(1);
+
+    expect(result).toBe(true);
+    const writeCall = fs.writeFileSync.mock.calls.find((c) => String(c[0]).endsWith('.m3u'));
+    const contents = writeCall[1];
+    expect(contents).toMatch(/\n\.\.\/ChanA\/Song 1\/a1\.mp3/);
+    expect(contents).toMatch(/\n\.\.\/ChanB\/Vid 2\/a2\.mp4/);
+    expect(contents).not.toContain('a2.mp3');
+  });
+
+  test('MP3 Only playlist prefers the mp3 when both files exist, keeping video-only items as fallback', async () => {
+    Playlist.findByPk.mockResolvedValue({ id: 1, playlist_id: 'PL1', title: 'Audio PL', audio_format: 'mp3_only' });
+    PlaylistVideo.findAll.mockResolvedValue([
+      { youtube_id: 'b1', position: 1, ignored: false },
+      { youtube_id: 'v1', position: 2, ignored: false },
+    ]);
+    Video.findOne.mockImplementation(({ where }) => {
+      const key = where.youtubeId;
+      if (key === 'b1') return Promise.resolve({ filePath: '/youtube/ChanA/Both 1/b1.mp4', audioFilePath: '/youtube/ChanA/Both 1/b1.mp3', duration: 200, youTubeVideoName: 'Both 1', youTubeChannelName: 'ChanA' });
+      if (key === 'v1') return Promise.resolve({ filePath: '/youtube/ChanB/Vid 1/v1.mp4', audioFilePath: null, duration: 100, youTubeVideoName: 'Vid 1', youTubeChannelName: 'ChanB' });
+      return Promise.resolve(null);
+    });
+
+    const result = await m3uGenerator.generatePlaylistM3U(1);
+
+    expect(result).toBe(true);
+    const writeCall = fs.writeFileSync.mock.calls.find((c) => String(c[0]).endsWith('.m3u'));
+    const contents = writeCall[1];
+    expect(contents).toMatch(/\n\.\.\/ChanA\/Both 1\/b1\.mp3/);
+    expect(contents).not.toContain('b1.mp4');
+    // No mp3 for v1, but the .m3u never drops a downloaded item.
+    expect(contents).toMatch(/\n\.\.\/ChanB\/Vid 1\/v1\.mp4/);
+  });
+
+  test('reversed sort order queries positions descending', async () => {
+    Playlist.findByPk.mockResolvedValue({ id: 1, playlist_id: 'PL1', title: 'PL', sort_order: 'reversed' });
+    PlaylistVideo.findAll.mockResolvedValue([]);
+
+    await m3uGenerator.generatePlaylistM3U(1);
+
+    expect(PlaylistVideo.findAll).toHaveBeenCalledWith(expect.objectContaining({
+      order: [['position', 'DESC']],
+    }));
+  });
 });

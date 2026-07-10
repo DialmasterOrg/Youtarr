@@ -21,9 +21,10 @@ class M3uGenerator {
         return false;
       }
 
+      const positionDirection = playlist.sort_order === 'reversed' ? 'DESC' : 'ASC';
       const videos = await PlaylistVideo.findAll({
         where: { playlist_id: playlist.playlist_id, ignored: false },
-        order: [['position', 'ASC']],
+        order: [['position', positionDirection]],
       });
 
       const outputRoot = configModule.directoryPath;
@@ -36,15 +37,22 @@ class M3uGenerator {
       const fileName = sanitizeNameLikeYtDlp(title) + '.m3u';
       const m3uPath = path.join(m3uDir, fileName);
 
+      // One entry per item: MP3 Only playlists prefer the mp3, everything else
+      // the video, falling back to the other file so nothing is dropped.
+      const preferAudio = playlist.audio_format === 'mp3_only';
+
       const lines = ['#EXTM3U', `#PLAYLIST:${title}`];
       let included = 0;
       for (const pv of videos) {
         const video = await Video.findOne({ where: { youtubeId: pv.youtube_id } });
-        if (!video || !video.filePath) {
+        const mediaPath = video && (preferAudio
+          ? (video.audioFilePath || video.filePath)
+          : (video.filePath || video.audioFilePath));
+        if (!mediaPath) {
           logger.debug({ youtube_id: pv.youtube_id }, 'M3U: skipping un-downloaded video');
           continue;
         }
-        const relPath = path.relative(m3uDir, video.filePath);
+        const relPath = path.relative(m3uDir, mediaPath);
         const label = `${video.youTubeChannelName || ''} - ${video.youTubeVideoName || pv.youtube_id}`;
         lines.push(`#EXTINF:${video.duration || 0},${label}`);
         lines.push(relPath);

@@ -253,6 +253,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                       const apiKeyMatch = job.jobType.match(/\(via API: (.+)\)/);
                       formattedJobType = apiKeyMatch ? `API: ${apiKeyMatch[1]}` : 'Manual Videos';
                     }
+                    else if (job.jobType === 'Playlist Downloads' || job.jobType.startsWith('Playlist: ')) formattedJobType = 'Playlists';
 
                     hours = hours % 12;
                     hours = hours ? hours : 12;
@@ -479,6 +480,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                       const apiKeyMatch = job.jobType.match(/\(via API: (.+)\)/);
                       formattedJobType = apiKeyMatch ? `API: ${apiKeyMatch[1]}` : 'Manual Videos';
                     }
+                    else if (job.jobType === 'Playlist Downloads' || job.jobType.startsWith('Playlist: ')) formattedJobType = 'Playlists';
 
                     hours = hours % 12;
                     hours = hours ? hours : 12;

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Card, CardContent, Stack, Tooltip, Typography } from '../../ui';
+import { Box, Card, CardContent, Chip, Stack, Tooltip, Typography } from '../../ui';
 import { Info as InfoIcon } from '../../../lib/icons';
 import { MediaServerStatus, MediaServerType, Playlist } from '../../../types/playlist';
 import LibraryDownloadsGroup from './LibraryDownloadsGroup';
@@ -14,6 +14,7 @@ interface PlaylistHeaderProps {
   newCount: number | null;
   togglePending: boolean;
   actionRunning: boolean;
+  refreshing: boolean;
   onRefresh: () => void;
   onDownloadAll: () => void;
   onOpenSettings: () => void;
@@ -22,6 +23,7 @@ interface PlaylistHeaderProps {
   onChangePublic: () => void;
   onSyncNow: () => void;
   onRegenerateM3U: () => void;
+  unsyncableCount?: number | null;
 }
 
 function formatTimestamp(value: string | null): string {
@@ -42,6 +44,7 @@ const PlaylistHeader: React.FC<PlaylistHeaderProps> = ({
   newCount,
   togglePending,
   actionRunning,
+  refreshing,
   onRefresh,
   onDownloadAll,
   onOpenSettings,
@@ -50,7 +53,9 @@ const PlaylistHeader: React.FC<PlaylistHeaderProps> = ({
   onChangePublic,
   onSyncNow,
   onRegenerateM3U,
+  unsyncableCount,
 }) => {
+  const isAudioPlaylist = playlist.audio_format === 'mp3_only';
   return (
     <Card elevation={8} className="mb-4" style={{ borderRadius: 'var(--radius-ui)', overflow: 'hidden' }}>
       <CardContent
@@ -79,7 +84,22 @@ const PlaylistHeader: React.FC<PlaylistHeaderProps> = ({
                   By {playlist.uploader}
                 </Typography>
               )}
-              <Stack direction="row" spacing={2} className="flex-wrap gap-2 mt-1">
+              <Stack direction="row" spacing={2} className="flex-wrap gap-2 mt-1 items-center">
+                <Tooltip
+                  title={
+                    isAudioPlaylist
+                      ? 'This playlist downloads MP3s and syncs to media servers as a music playlist. Set by its Download Type setting.'
+                      : 'This playlist syncs to media servers as a video playlist. Set by its Download Type setting.'
+                  }
+                >
+                  <span className="inline-flex">
+                    <Chip
+                      label={isAudioPlaylist ? 'Audio playlist' : 'Video playlist'}
+                      size="small"
+                      variant="outlined"
+                    />
+                  </span>
+                </Tooltip>
                 <Typography variant="body2" color="text.secondary" className="inline-flex items-center gap-1">
                   {playlist.video_count} videos
                   <Tooltip title="Private and members-only videos can't be accessed, so they're excluded from this list and never downloaded.">
@@ -107,6 +127,7 @@ const PlaylistHeader: React.FC<PlaylistHeaderProps> = ({
                 onDownloadAll={onDownloadAll}
                 onOpenSettings={onOpenSettings}
                 actionRunning={actionRunning}
+                refreshing={refreshing}
               />
               <MediaServerSyncGroup
                 playlist={playlist}
@@ -119,6 +140,7 @@ const PlaylistHeader: React.FC<PlaylistHeaderProps> = ({
                 onRegenerateM3U={onRegenerateM3U}
                 anyConfigured={anyConfigured}
                 actionRunning={actionRunning}
+                unsyncableCount={unsyncableCount}
               />
             </div>
           </div>

@@ -43,6 +43,7 @@ const AddPlaylistDialog: React.FC<AddPlaylistDialogProps> = ({
   const [url, setUrl] = useState('');
   const [preview, setPreview] = useState<PlaylistPreview | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [subscribing, setSubscribing] = useState(false);
 
   const error = mutationError || localError;
 
@@ -97,16 +98,21 @@ const AddPlaylistDialog: React.FC<AddPlaylistDialogProps> = ({
       sync_to_jellyfin: status.jellyfin,
       sync_to_emby: status.emby,
     };
-    const result = await subscribe(trimmed, settings);
-    if (result) {
-      onSubscribed?.(result.playlist);
-      resetAndClose();
-      if (result.restored) {
-        // The playlist page shows a "restored with previous settings" notice.
-        navigate(`/playlist/${result.playlist.playlist_id}`, { state: { restored: true } });
-      } else {
-        navigate(`/playlist/${result.playlist.playlist_id}`);
+    setSubscribing(true);
+    try {
+      const result = await subscribe(trimmed, settings);
+      if (result) {
+        onSubscribed?.(result.playlist);
+        resetAndClose();
+        if (result.restored) {
+          // The playlist page shows a "restored with previous settings" notice.
+          navigate(`/playlist/${result.playlist.playlist_id}`, { state: { restored: true } });
+        } else {
+          navigate(`/playlist/${result.playlist.playlist_id}`);
+        }
       }
+    } finally {
+      setSubscribing(false);
     }
   };
 
@@ -185,6 +191,16 @@ const AddPlaylistDialog: React.FC<AddPlaylistDialogProps> = ({
               On subscribe, Youtarr will sync this playlist to: {enabledServers.join(', ')}.
             </Typography>
           )}
+
+          {subscribing && (
+            <Box className="flex gap-2 items-center mt-1">
+              <CircularProgress size={14} />
+              <Typography variant="body2" color="text.secondary">
+                Fetching the complete playlist from YouTube. Large playlists can take a minute or
+                two - keep this dialog open.
+              </Typography>
+            </Box>
+          )}
         </div>
       </DialogContent>
       <DialogActions>
@@ -192,8 +208,13 @@ const AddPlaylistDialog: React.FC<AddPlaylistDialogProps> = ({
           Cancel
         </Button>
         {preview ? (
-          <Button variant="contained" onClick={handleSubscribe} disabled={pending}>
-            {pending ? <CircularProgress size={16} /> : 'Subscribe'}
+          <Button
+            variant="contained"
+            onClick={handleSubscribe}
+            disabled={pending}
+            loading={subscribing}
+          >
+            {subscribing ? 'Subscribing...' : 'Subscribe'}
           </Button>
         ) : (
           <Button variant="contained" onClick={handleFetch} disabled={pending}>

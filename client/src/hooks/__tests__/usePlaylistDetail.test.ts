@@ -81,51 +81,6 @@ describe('usePlaylistDetail.triggerDownload', () => {
   });
 });
 
-describe('usePlaylistDetail.fetchAllVideos', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    axios.get.mockResolvedValue({ data: { playlist: { playlist_id: 'PL1' }, total: 0, videos: [] } });
-    axios.post.mockResolvedValue({ data: { fetched: 42 } });
-  });
-
-  test('posts a full-fetch refresh and reloads the listing', async () => {
-    const { result } = renderHook(() =>
-      usePlaylistDetail({ token: 't', playlistId: 'PL1' })
-    );
-    await waitFor(() => expect(axios.get).toHaveBeenCalled());
-    const getCallsBefore = axios.get.mock.calls.length;
-
-    await act(async () => {
-      await result.current.fetchAllVideos();
-    });
-
-    expect(axios.post).toHaveBeenCalledWith(
-      '/api/playlists/PL1/refresh',
-      { fetchAll: true },
-      { headers: { 'x-access-token': 't' } }
-    );
-    expect(axios.get.mock.calls.length).toBeGreaterThan(getCallsBefore);
-  });
-
-  test('rethrows the server error message when the full fetch fails', async () => {
-    axios.isAxiosError.mockReturnValue(true);
-    axios.post.mockRejectedValue({
-      response: { data: { error: 'A fetch is already in progress for this playlist' } },
-    });
-
-    const { result } = renderHook(() =>
-      usePlaylistDetail({ token: 't', playlistId: 'PL1' })
-    );
-    await waitFor(() => expect(axios.get).toHaveBeenCalled());
-
-    await act(async () => {
-      await expect(result.current.fetchAllVideos()).rejects.toThrow(
-        'A fetch is already in progress for this playlist'
-      );
-    });
-  });
-});
-
 describe('usePlaylistDetail.notDownloadedCount', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -167,6 +122,36 @@ describe('usePlaylistDetail.notDownloadedCount', () => {
     });
     expect(result.current.notDownloadedCount).toBeNull();
   });
+
+  test('exposes unsyncableCount from the playlist response, null when absent', async () => {
+    axios.get.mockImplementation((url: string) => {
+      if (url.endsWith('/videos')) {
+        return Promise.resolve({ data: { total: 0, videos: [] } });
+      }
+      return Promise.resolve({
+        data: { playlist: { playlist_id: 'PL1' }, unsyncable_count: 3 },
+      });
+    });
+
+    const { result } = renderHook(() =>
+      usePlaylistDetail({ token: 't', playlistId: 'PL1' })
+    );
+
+    await waitFor(() => {
+      expect(result.current.unsyncableCount).toBe(3);
+    });
+
+    axios.get.mockImplementation((url: string) => {
+      if (url.endsWith('/videos')) {
+        return Promise.resolve({ data: { total: 0, videos: [] } });
+      }
+      return Promise.resolve({ data: { playlist: { playlist_id: 'PL1' } } });
+    });
+    await act(async () => {
+      await result.current.refetchMeta();
+    });
+    expect(result.current.unsyncableCount).toBeNull();
+  });
 });
 
 const makeVideo = (id: number, overrides = {}) => ({
@@ -199,7 +184,7 @@ describe('usePlaylistDetail sorting and pagination', () => {
     jest.clearAllMocks();
   });
 
-  test('defaults to requesting sortOrder=desc for the video list', async () => {
+  test('defaults to requesting sortOrder=asc for the video list', async () => {
     axios.get.mockResolvedValue({ data: { playlist: { playlist_id: 'PL1' }, total: 0, videos: [] } });
 
     renderHook(() => usePlaylistDetail({ token: 't', playlistId: 'PL1' }));
@@ -207,9 +192,7 @@ describe('usePlaylistDetail sorting and pagination', () => {
     await waitFor(() => {
       expect(axios.get).toHaveBeenCalledWith(
         '/api/playlists/PL1/videos',
-        expect.objectContaining({
-          params: expect.objectContaining({ page: 1, sortOrder: 'desc' }),
-        })
+        expect.objectContaining({ params: expect.objectContaining({ page: 1, sortOrder: 'asc' }) }),
       );
     });
   });
@@ -224,6 +207,63 @@ describe('usePlaylistDetail sorting and pagination', () => {
         '/api/playlists/PL1/videos',
         expect.objectContaining({
           params: expect.objectContaining({ sortOrder: 'asc' }),
+        })
+      );
+    });
+  });
+
+  test('forwards downloadState when it is not "all"', async () => {
+    axios.get.mockResolvedValue({ data: { playlist: { playlist_id: 'PL1' }, total: 0, videos: [] } });
+
+    renderHook(() =>
+      usePlaylistDetail({ token: 't', playlistId: 'PL1', downloadState: 'downloaded' })
+    );
+
+    await waitFor(() => {
+      expect(axios.get).toHaveBeenCalledWith(
+        '/api/playlists/PL1/videos',
+        expect.objectContaining({
+          params: expect.objectContaining({ page: 1, downloadState: 'downloaded' }),
+        })
+      );
+    });
+  });
+
+  test('omits downloadState from params when it is "all" (default)', async () => {
+    axios.get.mockResolvedValue({ data: { playlist: { playlist_id: 'PL1' }, total: 0, videos: [] } });
+
+    renderHook(() => usePlaylistDetail({ token: 't', playlistId: 'PL1' }));
+
+    await waitFor(() => {
+      expect(axios.get).toHaveBeenCalledWith(
+        '/api/playlists/PL1/videos',
+        expect.objectContaining({
+          params: expect.not.objectContaining({ downloadState: expect.anything() }),
+        })
+      );
+    });
+  });
+
+  test('changing downloadState refetches page 1 with the new filter', async () => {
+    axios.get.mockResolvedValue({ data: { playlist: { playlist_id: 'PL1' }, total: 0, videos: [] } });
+
+    const { rerender } = renderHook(
+      ({ downloadState }: { downloadState: 'all' | 'downloaded' | 'not_downloaded' }) =>
+        usePlaylistDetail({ token: 't', playlistId: 'PL1', downloadState }),
+      { initialProps: { downloadState: 'all' as 'all' | 'downloaded' | 'not_downloaded' } }
+    );
+
+    await waitFor(() => expect(axios.get).toHaveBeenCalled());
+    axios.get.mockClear();
+    axios.get.mockResolvedValue({ data: { playlist: { playlist_id: 'PL1' }, total: 0, videos: [] } });
+
+    rerender({ downloadState: 'not_downloaded' });
+
+    await waitFor(() => {
+      expect(axios.get).toHaveBeenCalledWith(
+        '/api/playlists/PL1/videos',
+        expect.objectContaining({
+          params: expect.objectContaining({ page: 1, downloadState: 'not_downloaded' }),
         })
       );
     });

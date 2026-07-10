@@ -64,9 +64,10 @@ class MediaServerSync {
     const playlist = await Playlist.findByPk(playlistId);
     if (!playlist) return;
 
+    const positionDirection = playlist.sort_order === 'reversed' ? 'DESC' : 'ASC';
     const videos = await PlaylistVideo.findAll({
       where: { playlist_id: playlist.playlist_id, ignored: false },
-      order: [['position', 'ASC']],
+      order: [['position', positionDirection]],
     });
 
     const config = configModule.getConfig();
@@ -97,20 +98,42 @@ class MediaServerSync {
       ? await Video.findAll({ where: { youtubeId: youtubeIds } })
       : [];
     const byYoutubeId = new Map(downloaded.map((v) => [v.youtubeId, v]));
-    const filepaths = [];
+
+    // Server playlists are media-typed (Plex audio vs video, Jellyfin/Emby
+    // MediaType) and can't mix types. The Download Type setting decides which
+    // type we sync, not what's on disk: per-video overrides can mix formats,
+    // and one manual video download shouldn't flip an audio playlist to video.
+    const mediaType = playlist.audio_format === 'mp3_only' ? 'audio' : 'video';
+    const entries = [];
+    let mismatched = 0;
     for (const pv of videos) {
       const v = byYoutubeId.get(pv.youtube_id);
-      if (v && v.filePath) filepaths.push({ youtube_id: pv.youtube_id, filePath: v.filePath });
+      if (!v) continue;
+      const mediaPath = mediaType === 'audio' ? v.audioFilePath : v.filePath;
+      if (mediaPath) {
+        entries.push({ youtube_id: pv.youtube_id, filePath: mediaPath });
+      } else if (v.filePath || v.audioFilePath) {
+        mismatched += 1;
+      }
+    }
+    if (mismatched > 0) {
+      logger.info(
+        { playlist_id: playlist.playlist_id, serverType, mediaType, mismatched },
+        `Playlist "${playlist.title}" has ${mismatched} downloaded item(s) with no ${mediaType === 'audio' ? 'mp3' : 'video'} file; leaving them out (the playlist's Download Type setting makes this a ${mediaType} playlist, and media servers cannot mix types)`
+      );
     }
 
-    await adapter.triggerLibraryScan();
+    // The media type tells Plex whether music sections need a scan; audio
+    // files have no other scan trigger anywhere in Youtarr. Jellyfin/Emby
+    // ignore the hint (their refresh already covers every library).
+    await adapter.triggerLibraryScan(null, { mediaType });
 
     const resolvedByPath = await this._resolveAllWithBackoff(
       adapter,
-      filepaths.map((entry) => entry.filePath)
+      entries.map((entry) => entry.filePath)
     );
     const itemIds = [];
-    for (const entry of filepaths) {
+    for (const entry of entries) {
       const id = resolvedByPath.get(entry.filePath);
       if (id) itemIds.push(id);
       else logger.warn(
@@ -124,13 +147,23 @@ class MediaServerSync {
       where: { playlist_id: playlist.id, server_type: serverType },
     });
 
-    // Skip create when no items resolved. Plex/Jellyfin/Emby reject empty playlist creation,
-    // and the normal flow (subscribe → videos download later → post-download hook re-syncs)
-    // will create the playlist on the next sync once items exist.
-    if (!state?.server_playlist_id && itemIds.length === 0) {
+    // With zero resolved items, the only case that proceeds is a deliberately
+    // emptied playlist (every video ignored/removed) with an existing server
+    // playlist to empty. Everything else defers: the servers reject empty
+    // playlist creation, and replacing an existing playlist with nothing would
+    // wipe it over a transient condition (scan lag, or downloads that don't
+    // match a just-changed Download Type).
+    if (itemIds.length === 0 && !(state?.server_playlist_id && videos.length === 0)) {
+      const reason = entries.length === 0
+        ? mismatched > 0
+          ? `none of the downloaded items has a ${mediaType === 'audio' ? 'mp3' : 'video'} file matching the playlist's Download Type`
+          : 'no downloaded items resolved yet'
+        : mediaType === 'audio'
+          ? 'downloaded audio files were not found on the server. Audio playlists need a music-type library that includes the Youtarr output folder'
+          : 'downloaded files were not found on the server yet';
       logger.info(
         { playlist_id: playlist.playlist_id, serverType },
-        `Deferring ${SERVER_DISPLAY_NAME[serverType] || serverType} sync of playlist "${playlist.title}": no downloaded items resolved yet`
+        `Deferring ${SERVER_DISPLAY_NAME[serverType] || serverType} sync of playlist "${playlist.title}": ${reason}`
       );
       return;
     }
@@ -141,7 +174,7 @@ class MediaServerSync {
       // and ignores opts. Capture the returned id in case the adapter recreated
       // — the sync-state row must track the new id.
       const replaced = await adapter.replacePlaylistItems(state.server_playlist_id, itemIds, {
-        name, public: !!playlist.public_on_servers,
+        name, public: !!playlist.public_on_servers, mediaType,
       });
       const effectiveId = replaced?.id || state.server_playlist_id;
       if (state.update) await state.update({
@@ -150,7 +183,7 @@ class MediaServerSync {
         last_error: null,
       });
     } else {
-      const created = await adapter.createPlaylist(name, itemIds, { public: !!playlist.public_on_servers });
+      const created = await adapter.createPlaylist(name, itemIds, { public: !!playlist.public_on_servers, mediaType });
       if (state) {
         // State row exists from a prior failure (last_error set, server_playlist_id null).
         // Update it in place rather than creating a duplicate — the unique constraint

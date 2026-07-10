@@ -1,4 +1,5 @@
 const express = require('express');
+const { Op } = require('sequelize');
 const { createOverrideSettingsValidator } = require('./overrideSettingsValidator');
 
 function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule }) {
@@ -15,6 +16,8 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
 
   const VIDEO_SORT_DIRECTIONS = { asc: 'ASC', desc: 'DESC' };
   const DEFAULT_VIDEO_SORT_DIRECTION = 'ASC';
+  const VIDEO_DOWNLOAD_STATES = new Set(['all', 'downloaded', 'not_downloaded']);
+  const VALID_SORT_ORDERS = new Set(['default', 'reversed']);
 
   const validateOverrideSettings = createOverrideSettingsValidator({
     channelSettingsModule,
@@ -69,17 +72,26 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       });
       const candidateIds = candidates.map((c) => c.youtube_id).filter(Boolean);
       let downloadedExisting = 0;
+      // Downloads lacking the file type the playlist syncs as (its Download
+      // Type setting: mp3 for MP3 Only playlists, video otherwise). Media
+      // server sync leaves these out; the count feeds the UI notice.
+      let unsyncable_count = 0;
       if (candidateIds.length > 0 && Video) {
         const existing = await Video.findAll({
           where: { youtubeId: candidateIds },
-          attributes: ['youtubeId'],
+          attributes: ['youtubeId', 'filePath', 'audioFilePath'],
         });
         const existingIds = new Set(existing.map((v) => v.youtubeId));
         downloadedExisting = candidateIds.filter((id) => existingIds.has(id)).length;
+        const targetsAudio = p.audio_format === 'mp3_only';
+        unsyncable_count = existing.filter((v) => {
+          const matching = targetsAudio ? v.audioFilePath : v.filePath;
+          return !matching && (v.filePath || v.audioFilePath);
+        }).length;
       }
       const not_downloaded_count = candidateIds.length - downloadedExisting;
 
-      res.json({ playlist: p, not_downloaded_count });
+      res.json({ playlist: p, not_downloaded_count, unsyncable_count });
     } catch (err) {
       req.log.error({ err }, 'GET /api/playlists/:playlistId failed');
       res.status(500).json({ error: 'Failed to fetch playlist' });
@@ -162,6 +174,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
         title_filter_regex: p.title_filter_regex,
         audio_format: p.audio_format,
         default_rating: p.default_rating,
+        sort_order: p.sort_order,
       });
     } catch (err) {
       req.log.error({ err }, 'get settings failed');
@@ -170,11 +183,14 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
   });
 
   router.put('/api/playlists/:playlistId/settings', verifyToken, async (req, res) => {
-    const allowed = ['default_sub_folder', 'video_quality', 'min_duration', 'max_duration', 'title_filter_regex', 'audio_format', 'default_rating'];
+    const allowed = ['default_sub_folder', 'video_quality', 'min_duration', 'max_duration', 'title_filter_regex', 'audio_format', 'default_rating', 'sort_order'];
     const updates = {};
     for (const k of allowed) if (k in req.body) updates[k] = req.body[k];
     if (defaultSubFolderInvalid(updates.default_sub_folder)) {
       return res.status(400).json({ error: 'Invalid default_sub_folder' });
+    }
+    if ('sort_order' in updates && !VALID_SORT_ORDERS.has(updates.sort_order)) {
+      return res.status(400).json({ error: 'Invalid sort_order; expected default or reversed' });
     }
     try {
       const p = await findEnabledPlaylist(req.params.playlistId);
@@ -195,14 +211,57 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
 
       const page = parseInt(req.query.page || '1', 10);
       const pageSize = Math.min(parseInt(req.query.pageSize || '50', 10), 200);
-      const sortDirection =
-        VIDEO_SORT_DIRECTIONS[String(req.query.sortOrder || '').toLowerCase()] ||
-        DEFAULT_VIDEO_SORT_DIRECTION;
+      const sortOrder = String(req.query.sortOrder || '').toLowerCase();
+      const downloadState = String(req.query.downloadState || 'all').toLowerCase();
+      if (!VIDEO_DOWNLOAD_STATES.has(downloadState)) {
+        return res.status(400).json({ error: 'Invalid downloadState; expected all, downloaded, or not_downloaded' });
+      }
+      // 'recent' = first-seen order (what auto-download considers newest);
+      // otherwise position in the owner's playlist order.
+      const order = sortOrder === 'recent'
+        ? [['added_at', 'DESC'], ['position', 'ASC']]
+        : [['position', VIDEO_SORT_DIRECTIONS[sortOrder] || DEFAULT_VIDEO_SORT_DIRECTION]];
+
+      const where = { playlist_id: req.params.playlistId };
+      if (downloadState !== 'all') {
+        // The list is paginated, so the filter must narrow the page query
+        // itself. Build the downloaded id set with the same usable-file
+        // predicate as the per-row `downloaded` flag below so the two can
+        // never disagree. Rows with a Videos record but no usable file
+        // (downloaded, then deleted) count as not downloaded.
+        const members = await PlaylistVideo.findAll({
+          where: { playlist_id: req.params.playlistId },
+          attributes: ['youtube_id'],
+        });
+        const memberIds = members.map((m) => m.youtube_id).filter(Boolean);
+        let downloadedIds = [];
+        if (memberIds.length > 0 && Video) {
+          const existing = await Video.findAll({
+            where: { youtubeId: memberIds },
+            attributes: ['youtubeId', 'removed', 'filePath', 'audioFilePath'],
+          });
+          downloadedIds = existing
+            .filter((v) => !v.removed && (v.filePath || v.audioFilePath))
+            .map((v) => v.youtubeId);
+        }
+        if (downloadState === 'downloaded') {
+          // Op.in with an empty list matches nothing anyway; short-circuit to
+          // skip the pointless page query.
+          if (downloadedIds.length === 0) return res.json({ total: 0, videos: [] });
+          where.youtube_id = { [Op.in]: downloadedIds };
+        } else if (downloadedIds.length > 0) {
+          // Op.notIn with an empty list would generate NOT IN (NULL), which
+          // matches nothing; with no downloaded ids every row qualifies, so
+          // add no filter at all.
+          where.youtube_id = { [Op.notIn]: downloadedIds };
+        }
+      }
+
       const { count, rows } = await PlaylistVideo.findAndCountAll({
-        where: { playlist_id: req.params.playlistId },
+        where,
         limit: pageSize,
         offset: (page - 1) * pageSize,
-        order: [['position', sortDirection]],
+        order,
       });
 
       const youtubeIds = rows.map((r) => r.youtube_id).filter(Boolean);
@@ -261,17 +320,14 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     }
   });
 
-  // fetchAll: true switches from the fast first-page refresh to the full
-  // "Load More" fetch (up to 5000 videos), which can run for minutes.
+  // Full refresh from YouTube (webpage path with an InnerTube fallback, up to
+  // 5000 entries; can take a minute for very large playlists). Older cached
+  // clients may still send { fetchAll: true } - the body is ignored.
   router.post('/api/playlists/:playlistId/refresh', verifyToken, async (req, res) => {
-    const fetchAll = req.body?.fetchAll;
-    if (fetchAll !== undefined && typeof fetchAll !== 'boolean') {
-      return res.status(400).json({ error: 'fetchAll must be a boolean' });
-    }
     try {
       const p = await findEnabledPlaylist(req.params.playlistId);
       if (!p) return res.status(404).json({ error: 'Playlist not found' });
-      const count = await playlistModule.fetchAllPlaylistVideos(p.playlist_id, { fetchAll: !!fetchAll });
+      const count = await playlistModule.fetchAllPlaylistVideos(p.playlist_id);
       mediaServers.mediaServerSync.syncPlaylist(p.id).catch(logBgFailure(req, p.playlist_id, 'playlist sync'));
       m3uGenerator.generatePlaylistM3U(p.id).catch(logBgFailure(req, p.playlist_id, 'M3U generation'));
       res.json({ fetched: count });

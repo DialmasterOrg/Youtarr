@@ -111,3 +111,41 @@ describe('usePlaylistMutations.unsubscribe', () => {
     expect(axios.delete).not.toHaveBeenCalled();
   });
 });
+
+describe('usePlaylistMutations.updateSettings', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('puts the settings payload including sort_order', async () => {
+    axios.put.mockResolvedValue({ data: { settings: {} } });
+
+    const { result } = renderHook(() => usePlaylistMutations({ token: 't' }));
+
+    let res = false;
+    await act(async () => {
+      res = await result.current.updateSettings('PL1', { sort_order: 'reversed' });
+    });
+
+    expect(axios.put).toHaveBeenCalledWith(
+      '/api/playlists/PL1/settings',
+      { sort_order: 'reversed' },
+      { headers: { 'x-access-token': 't' } }
+    );
+    expect(res).toBe(true);
+  });
+
+  test('returns false and sets error when the request fails', async () => {
+    axios.put.mockRejectedValue(new Error('boom'));
+
+    const { result } = renderHook(() => usePlaylistMutations({ token: 't' }));
+
+    let res = true;
+    await act(async () => {
+      res = await result.current.updateSettings('PL1', { sort_order: 'default' });
+    });
+
+    expect(res).toBe(false);
+    expect(result.current.error).toBe('Failed to update settings');
+  });
+});

@@ -11,7 +11,7 @@ const MessageEmitter = require('./messageEmitter.js');
 const { Op, fn, col, where } = require('sequelize');
 const fileCheckModule = require('./fileCheckModule');
 const logger = require('../logger');
-const { sanitizeNameLikeYtDlp, GLOBAL_DEFAULT_SENTINEL } = require('./filesystem');
+const { sanitizeNameLikeYtDlp, GLOBAL_DEFAULT_SENTINEL, copySyncWithFallback } = require('./filesystem');
 const youtubeApi = require('./youtubeApi');
 const ratingMapper = require('./ratingMapper');
 const tempPathManager = require('./download/tempPathManager');
@@ -1005,7 +1005,7 @@ class ChannelModule {
 
           if (fs.existsSync(channelThumbPath)) {
             try {
-              fs.copySync(channelThumbPath, channelPosterPath);
+              copySyncWithFallback(channelThumbPath, channelPosterPath);
             } catch (copyErr) {
               logger.error({ err: copyErr, channelFolderName }, 'Error backfilling poster for channel');
             }
@@ -1255,6 +1255,62 @@ class ChannelModule {
   }
 
   /**
+   * Build the list of yt-dlp target URLs for all enabled channels, one per
+   * enabled tab (video/short/livestream). Empty when nothing is downloadable.
+   * @returns {Promise<string[]>}
+   */
+  async getEnabledChannelDownloadUrls() {
+    const channels = await Channel.findAll({
+      where: { enabled: true },
+      attributes: ['channel_id', 'url', 'auto_download_enabled_tabs']
+    });
+
+    const urls = [];
+    for (const channel of channels) {
+      if (channel.channel_id) {
+        const canonical = this.resolveChannelUrlFromId(channel.channel_id);
+
+        // Parse the enabled tabs for this channel (empty string means no tabs enabled)
+        const enabledTabs = (channel.auto_download_enabled_tabs ?? '')
+          .split(',')
+          .map(t => t.trim())
+          .filter(tab => tab.length > 0);
+
+        if (enabledTabs.length === 0) {
+          // All tabs disabled for this channel, skip adding URLs
+          continue;
+        }
+
+        // Generate a URL for each enabled tab type
+        for (const tabType of enabledTabs) {
+          // auto_download_enabled_tabs stores 'video', 'short', 'livestream'
+          // but we need 'videos', 'shorts', 'streams' for URLs
+          let tabUrl;
+          switch (tabType) {
+          case 'video':
+            tabUrl = 'videos';
+            break;
+          case 'short':
+            tabUrl = 'shorts';
+            break;
+          case 'livestream':
+            tabUrl = 'streams';
+            break;
+          default:
+            tabUrl = 'videos'; // fallback
+          }
+
+          urls.push(`${canonical}/${tabUrl}`);
+        }
+      } else {
+        // Fallback for channels without channel_id
+        urls.push(channel.url);
+      }
+    }
+    return urls;
+  }
+
+  /**
    * Generate a temporary file with enabled channel URLs for yt-dlp
    * Respects the auto_download_enabled_tabs column to generate URLs for each enabled tab type
    * @returns {Promise<string>} - Path to the temporary file
@@ -1262,57 +1318,8 @@ class ChannelModule {
   async generateChannelsFile() {
     const tempFilePath = path.join(os.tmpdir(), `channels-temp-${uuidv4()}.txt`);
     try {
-      const channels = await Channel.findAll({
-        where: { enabled: true },
-        attributes: ['channel_id', 'url', 'auto_download_enabled_tabs']
-      });
+      const urls = await this.getEnabledChannelDownloadUrls();
 
-      // Generate URLs for each channel, respecting their auto_download_enabled_tabs setting
-      const urls = [];
-      for (const channel of channels) {
-        if (channel.channel_id) {
-          const canonical = this.resolveChannelUrlFromId(channel.channel_id);
-
-          // Parse the enabled tabs for this channel (empty string means no tabs enabled)
-          const enabledTabs = (channel.auto_download_enabled_tabs ?? '')
-            .split(',')
-            .map(t => t.trim())
-            .filter(tab => tab.length > 0);
-
-          if (enabledTabs.length === 0) {
-            // All tabs disabled for this channel, skip adding URLs
-            continue;
-          }
-
-          // Generate a URL for each enabled tab type
-          for (const tabType of enabledTabs) {
-            // Map the media type back to tab type if needed
-            // auto_download_enabled_tabs stores 'video', 'short', 'livestream'
-            // but we need 'videos', 'shorts', 'streams' for URLs
-            let tabUrl;
-            switch (tabType) {
-            case 'video':
-              tabUrl = 'videos';
-              break;
-            case 'short':
-              tabUrl = 'shorts';
-              break;
-            case 'livestream':
-              tabUrl = 'streams';
-              break;
-            default:
-              tabUrl = 'videos'; // fallback
-            }
-
-            urls.push(`${canonical}/${tabUrl}`);
-          }
-        } else {
-          // Fallback for channels without channel_id
-          urls.push(channel.url);
-        }
-      }
-
-      // Check if we have any URLs to download
       if (urls.length === 0) {
         const error = new Error('No valid channel URLs to download - all enabled channels have no enabled tabs');
         logger.warn('No URLs generated for channel downloads - all enabled channels have disabled tabs');

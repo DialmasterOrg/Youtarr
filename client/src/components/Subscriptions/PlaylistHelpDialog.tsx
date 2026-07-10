@@ -97,13 +97,20 @@ function PlaylistHelpDialog({ open, onClose, isMobile }: PlaylistHelpDialogProps
           <Section icon={<FileDownloadIcon size={16} style={iconColor} />} title="Downloading automatically">
             <p>
               Turn on auto-download for a playlist and Youtarr keeps it current on the regular
-              download schedule, the same way it does for channels. It grabs the newest videos in the
-              playlist, up to the count you set under{' '}
+              download schedule, the same way it does for channels. The first run grabs the
+              playlist&apos;s most recent videos, up to the count you set under{' '}
               <strong className="text-foreground font-medium">
                 Settings &rarr; Core Settings &rarr; Download Settings
               </strong>
-              , and skips anything you already have or have marked as ignored. New videos added to the
-              playlist later get picked up on their own.
+              . After that, every run downloads whatever has been newly added to the playlist, no
+              matter where in the playlist it was placed (top, middle, or bottom), skipping anything
+              you already have or have marked as ignored. If more videos arrive than the per-run
+              count, the extras catch up on later runs.
+            </p>
+            <p>
+              The &quot;Recently added first&quot; sort on a playlist&apos;s page shows these new
+              additions at the top. Videos that were already in the playlist when you subscribed keep
+              their playlist order.
             </p>
           </Section>
 
@@ -113,7 +120,9 @@ function PlaylistHelpDialog({ open, onClose, isMobile }: PlaylistHelpDialogProps
               into a <code>__playlists__</code> folder next to your videos. It uses relative paths, so
               it keeps working if you move your library, and it&apos;s generated whether or not
               you&apos;ve connected a media server. Any player that reads <code>.m3u</code> files can
-              open it. The file lists the videos you&apos;ve actually downloaded.
+              open it. The file has one entry per downloaded item: the MP3 for MP3 Only playlists,
+              the video file otherwise. If an item wasn&apos;t downloaded in that format, its other
+              file is listed instead, so nothing is left out.
             </p>
           </Section>
 
@@ -139,6 +148,12 @@ function PlaylistHelpDialog({ open, onClose, isMobile }: PlaylistHelpDialogProps
                 setting makes the playlist visible to other users.
               </li>
             </ul>
+            <p>
+              Playlists set to MP3 Only sync as music playlists (your server needs a music-type
+              library that includes the Youtarr folder); every other playlist syncs as a video
+              playlist. The playlist&apos;s Download Type setting decides this, and items
+              downloaded in the other format are left out of the synced playlist.
+            </p>
             <p>
               A video has to be in your media server&apos;s library before it can be added to the
               synced playlist, so a fresh download might take a scan cycle to show up.

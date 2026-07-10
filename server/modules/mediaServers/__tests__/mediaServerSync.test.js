@@ -77,7 +77,7 @@ describe('mediaServerSync', () => {
 
     await mediaServerSync.syncPlaylist(1);
 
-    expect(plexAdapter.createPlaylist).toHaveBeenCalledWith('YT: My PL', ['rk1', 'rk3'], { public: false });
+    expect(plexAdapter.createPlaylist).toHaveBeenCalledWith('YT: My PL', ['rk1', 'rk3'], { public: false, mediaType: 'video' });
     expect(plexAdapter.replacePlaylistItems).not.toHaveBeenCalled();
   });
 
@@ -122,7 +122,7 @@ describe('mediaServerSync', () => {
     expect(batchResolve).toHaveBeenCalledTimes(2);
     expect(batchResolve).toHaveBeenNthCalledWith(1, ['/youtube/A/v1.mp4', '/youtube/B/v2.mp4']);
     expect(batchResolve).toHaveBeenNthCalledWith(2, ['/youtube/B/v2.mp4']);
-    expect(plexAdapter.createPlaylist).toHaveBeenCalledWith('YT: PL', ['rk1', 'rk2'], { public: false });
+    expect(plexAdapter.createPlaylist).toHaveBeenCalledWith('YT: PL', ['rk1', 'rk2'], { public: false, mediaType: 'video' });
   });
 
   test('replaces items when sync state already exists', async () => {
@@ -360,7 +360,7 @@ describe('mediaServerSync', () => {
 
     await mediaServerSync.syncPlaylist(1);
 
-    expect(plexAdapter.createPlaylist).toHaveBeenCalledWith('YT: PL', ['rk1'], { public: false });
+    expect(plexAdapter.createPlaylist).toHaveBeenCalledWith('YT: PL', ['rk1'], { public: false, mediaType: 'video' });
     // Must UPDATE the existing row (unique constraint would reject a duplicate create)
     expect(PlaylistSyncState.create).not.toHaveBeenCalled();
     expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({
@@ -405,5 +405,313 @@ describe('mediaServerSync', () => {
     Playlist.findByPk.mockResolvedValueOnce(null);
     await expect(mediaServerSync.syncPlaylist(1)).resolves.toBeUndefined();
     expect(Playlist.findByPk).toHaveBeenCalledTimes(2);
+  });
+
+  test('audio-only playlist syncs via audioFilePath and creates an audio playlist', async () => {
+    Playlist.findByPk.mockResolvedValue({
+      id: 1, playlist_id: 'PL1', title: 'Audio PL',
+      sync_to_plex: true, sync_to_jellyfin: false, sync_to_emby: false,
+      public_on_servers: false, audio_format: 'mp3_only',
+    });
+    PlaylistVideo.findAll.mockResolvedValue([
+      { youtube_id: 'a1', position: 1, ignored: false },
+      { youtube_id: 'a2', position: 2, ignored: false },
+    ]);
+    Video.findAll.mockResolvedValue([
+      { youtubeId: 'a1', filePath: null, audioFilePath: '/youtube/A/a1.mp3' },
+      { youtubeId: 'a2', filePath: null, audioFilePath: '/youtube/B/a2.mp3' },
+    ]);
+    PlaylistSyncState.findOne.mockResolvedValue(null);
+    PlaylistSyncState.create.mockResolvedValue({ id: 1 });
+
+    const plexAdapter = makeAdapter('PlexAdapter', {
+      resolveItemIdByFilepath: jest.fn((p) => Promise.resolve(p === '/youtube/A/a1.mp3' ? 'rk1' : p === '/youtube/B/a2.mp3' ? 'rk2' : null)),
+      createPlaylist: jest.fn().mockResolvedValue({ id: 'pid' }),
+    });
+    serverRegistry.getEnabledAdapters.mockReturnValue([plexAdapter]);
+
+    await mediaServerSync.syncPlaylist(1);
+
+    expect(plexAdapter.createPlaylist).toHaveBeenCalledWith(
+      'YT: Audio PL', ['rk1', 'rk2'], { public: false, mediaType: 'audio' }
+    );
+  });
+
+  test('audio-only sync asks the adapter to scan audio libraries', async () => {
+    Playlist.findByPk.mockResolvedValue({
+      id: 1, playlist_id: 'PL1', title: 'Audio PL',
+      sync_to_plex: true, sync_to_jellyfin: false, sync_to_emby: false,
+      public_on_servers: false, audio_format: 'mp3_only',
+    });
+    PlaylistVideo.findAll.mockResolvedValue([
+      { youtube_id: 'a1', position: 1, ignored: false },
+    ]);
+    Video.findAll.mockResolvedValue([
+      { youtubeId: 'a1', filePath: null, audioFilePath: '/youtube/A/a1.mp3' },
+    ]);
+    PlaylistSyncState.findOne.mockResolvedValue(null);
+    PlaylistSyncState.create.mockResolvedValue({ id: 1 });
+
+    const plexAdapter = makeAdapter('PlexAdapter', {
+      resolveItemIdByFilepath: jest.fn().mockResolvedValue('rk1'),
+      createPlaylist: jest.fn().mockResolvedValue({ id: 'pid' }),
+    });
+    serverRegistry.getEnabledAdapters.mockReturnValue([plexAdapter]);
+
+    await mediaServerSync.syncPlaylist(1);
+
+    expect(plexAdapter.triggerLibraryScan).toHaveBeenCalledWith(null, { mediaType: 'audio' });
+  });
+
+  test('video sync asks the adapter to scan with the video media type', async () => {
+    Playlist.findByPk.mockResolvedValue({
+      id: 1, playlist_id: 'PL1', title: 'Video PL',
+      sync_to_plex: true, sync_to_jellyfin: false, sync_to_emby: false,
+      public_on_servers: false,
+    });
+    PlaylistVideo.findAll.mockResolvedValue([
+      { youtube_id: 'v1', position: 1, ignored: false },
+    ]);
+    Video.findAll.mockResolvedValue([
+      { youtubeId: 'v1', filePath: '/youtube/A/v1.mp4', audioFilePath: null },
+    ]);
+    PlaylistSyncState.findOne.mockResolvedValue(null);
+    PlaylistSyncState.create.mockResolvedValue({ id: 1 });
+
+    const plexAdapter = makeAdapter('PlexAdapter', {
+      resolveItemIdByFilepath: jest.fn().mockResolvedValue('rk1'),
+      createPlaylist: jest.fn().mockResolvedValue({ id: 'pid' }),
+    });
+    serverRegistry.getEnabledAdapters.mockReturnValue([plexAdapter]);
+
+    await mediaServerSync.syncPlaylist(1);
+
+    expect(plexAdapter.triggerLibraryScan).toHaveBeenCalledWith(null, { mediaType: 'video' });
+  });
+
+  test('mixed playlist syncs only its video items, as a video playlist', async () => {
+    Playlist.findByPk.mockResolvedValue({
+      id: 1, playlist_id: 'PL1', title: 'Mixed PL',
+      sync_to_plex: true, sync_to_jellyfin: false, sync_to_emby: false,
+      public_on_servers: false,
+    });
+    PlaylistVideo.findAll.mockResolvedValue([
+      { youtube_id: 'v1', position: 1, ignored: false },
+      { youtube_id: 'a1', position: 2, ignored: false },
+    ]);
+    Video.findAll.mockResolvedValue([
+      { youtubeId: 'v1', filePath: '/youtube/A/v1.mp4', audioFilePath: null },
+      { youtubeId: 'a1', filePath: null, audioFilePath: '/youtube/B/a1.mp3' },
+    ]);
+    PlaylistSyncState.findOne.mockResolvedValue(null);
+    PlaylistSyncState.create.mockResolvedValue({ id: 1 });
+
+    const resolve = jest.fn((p) => Promise.resolve(p === '/youtube/A/v1.mp4' ? 'rk1' : null));
+    const plexAdapter = makeAdapter('PlexAdapter', {
+      resolveItemIdByFilepath: resolve,
+      createPlaylist: jest.fn().mockResolvedValue({ id: 'pid' }),
+    });
+    serverRegistry.getEnabledAdapters.mockReturnValue([plexAdapter]);
+
+    await mediaServerSync.syncPlaylist(1);
+
+    expect(resolve).not.toHaveBeenCalledWith('/youtube/B/a1.mp3');
+    expect(plexAdapter.createPlaylist).toHaveBeenCalledWith(
+      'YT: Mixed PL', ['rk1'], { public: false, mediaType: 'video' }
+    );
+  });
+
+  test('a video row with both filePath and audioFilePath syncs its video file', async () => {
+    Playlist.findByPk.mockResolvedValue({
+      id: 1, playlist_id: 'PL1', title: 'V+A PL',
+      sync_to_plex: true, sync_to_jellyfin: false, sync_to_emby: false,
+      public_on_servers: false,
+    });
+    PlaylistVideo.findAll.mockResolvedValue([
+      { youtube_id: 'v1', position: 1, ignored: false },
+    ]);
+    Video.findAll.mockResolvedValue([
+      { youtubeId: 'v1', filePath: '/youtube/A/v1.mp4', audioFilePath: '/youtube/A/v1.mp3' },
+    ]);
+    PlaylistSyncState.findOne.mockResolvedValue(null);
+    PlaylistSyncState.create.mockResolvedValue({ id: 1 });
+
+    const resolve = jest.fn(() => Promise.resolve('rk1'));
+    const plexAdapter = makeAdapter('PlexAdapter', {
+      resolveItemIdByFilepath: resolve,
+      createPlaylist: jest.fn().mockResolvedValue({ id: 'pid' }),
+    });
+    serverRegistry.getEnabledAdapters.mockReturnValue([plexAdapter]);
+
+    await mediaServerSync.syncPlaylist(1);
+
+    expect(resolve).toHaveBeenCalledWith('/youtube/A/v1.mp4');
+    expect(resolve).not.toHaveBeenCalledWith('/youtube/A/v1.mp3');
+    expect(plexAdapter.createPlaylist).toHaveBeenCalledWith(
+      'YT: V+A PL', ['rk1'], { public: false, mediaType: 'video' }
+    );
+  });
+
+  test('MP3 Only playlist syncs as audio using each item\'s mp3, skipping items downloaded without one', async () => {
+    Playlist.findByPk.mockResolvedValue({
+      id: 1, playlist_id: 'PL1', title: 'Audio PL',
+      sync_to_plex: true, sync_to_jellyfin: false, sync_to_emby: false,
+      public_on_servers: false, audio_format: 'mp3_only',
+    });
+    PlaylistVideo.findAll.mockResolvedValue([
+      { youtube_id: 'a1', position: 1, ignored: false },
+      { youtube_id: 'v1', position: 2, ignored: false },
+      { youtube_id: 'b1', position: 3, ignored: false },
+    ]);
+    Video.findAll.mockResolvedValue([
+      // Normal mp3-only download.
+      { youtubeId: 'a1', filePath: null, audioFilePath: '/youtube/A/a1.mp3' },
+      // Manually downloaded as video-only: no mp3, so it can't join an audio playlist.
+      { youtubeId: 'v1', filePath: '/youtube/V/v1.mp4', audioFilePath: null },
+      // Downloaded as Video + MP3: the mp3 joins the audio playlist.
+      { youtubeId: 'b1', filePath: '/youtube/B/b1.mp4', audioFilePath: '/youtube/B/b1.mp3' },
+    ]);
+    PlaylistSyncState.findOne.mockResolvedValue(null);
+    PlaylistSyncState.create.mockResolvedValue({ id: 1 });
+
+    const resolve = jest.fn((p) => Promise.resolve(
+      p === '/youtube/A/a1.mp3' ? 'rk-a1' : p === '/youtube/B/b1.mp3' ? 'rk-b1' : null
+    ));
+    const plexAdapter = makeAdapter('PlexAdapter', {
+      resolveItemIdByFilepath: resolve,
+      createPlaylist: jest.fn().mockResolvedValue({ id: 'pid' }),
+    });
+    serverRegistry.getEnabledAdapters.mockReturnValue([plexAdapter]);
+
+    await mediaServerSync.syncPlaylist(1);
+
+    expect(resolve).not.toHaveBeenCalledWith('/youtube/V/v1.mp4');
+    expect(resolve).not.toHaveBeenCalledWith('/youtube/B/b1.mp4');
+    expect(plexAdapter.createPlaylist).toHaveBeenCalledWith(
+      'YT: Audio PL', ['rk-a1', 'rk-b1'], { public: false, mediaType: 'audio' }
+    );
+  });
+
+  test('playlist not set to MP3 Only defers rather than syncing audio-only downloads as audio', async () => {
+    Playlist.findByPk.mockResolvedValue({
+      id: 1, playlist_id: 'PL1', title: 'Video PL',
+      sync_to_plex: true, sync_to_jellyfin: false, sync_to_emby: false,
+      public_on_servers: false, audio_format: null,
+    });
+    PlaylistVideo.findAll.mockResolvedValue([
+      { youtube_id: 'a1', position: 1, ignored: false },
+      { youtube_id: 'a2', position: 2, ignored: false },
+    ]);
+    Video.findAll.mockResolvedValue([
+      { youtubeId: 'a1', filePath: null, audioFilePath: '/youtube/A/a1.mp3' },
+      { youtubeId: 'a2', filePath: null, audioFilePath: '/youtube/B/a2.mp3' },
+    ]);
+    PlaylistSyncState.findOne.mockResolvedValue(null);
+
+    const plexAdapter = makeAdapter('PlexAdapter', {
+      createPlaylist: jest.fn().mockResolvedValue({ id: 'pid' }),
+    });
+    serverRegistry.getEnabledAdapters.mockReturnValue([plexAdapter]);
+
+    await mediaServerSync.syncPlaylist(1);
+
+    expect(plexAdapter.triggerLibraryScan).toHaveBeenCalledWith(null, { mediaType: 'video' });
+    expect(plexAdapter.createPlaylist).not.toHaveBeenCalled();
+    expect(PlaylistSyncState.create).not.toHaveBeenCalled();
+  });
+
+  test('keeps the existing server playlist when no downloads match the playlist type yet', async () => {
+    // A playlist just switched to MP3 Only: its downloads are still video files.
+    // The old server playlist must be left alone, not emptied or recreated.
+    Playlist.findByPk.mockResolvedValue({
+      id: 1, playlist_id: 'PL1', title: 'Flipped PL',
+      sync_to_plex: true, sync_to_jellyfin: false, sync_to_emby: false,
+      public_on_servers: false, audio_format: 'mp3_only',
+    });
+    PlaylistVideo.findAll.mockResolvedValue([{ youtube_id: 'v1', position: 1, ignored: false }]);
+    Video.findAll.mockResolvedValue([
+      { youtubeId: 'v1', filePath: '/youtube/A/v1.mp4', audioFilePath: null },
+    ]);
+    const updateMock = jest.fn();
+    PlaylistSyncState.findOne.mockResolvedValue({ server_playlist_id: 'existingid', update: updateMock });
+
+    const plexAdapter = makeAdapter('PlexAdapter', {
+      resolveItemIdByFilepath: jest.fn().mockResolvedValue('rk1'),
+    });
+    serverRegistry.getEnabledAdapters.mockReturnValue([plexAdapter]);
+
+    await mediaServerSync.syncPlaylist(1);
+
+    expect(plexAdapter.replacePlaylistItems).not.toHaveBeenCalled();
+    expect(plexAdapter.createPlaylist).not.toHaveBeenCalled();
+  });
+
+  test('defers instead of emptying an existing server playlist when no items resolve (scan lag)', async () => {
+    Playlist.findByPk.mockResolvedValue({
+      id: 1, playlist_id: 'PL1', title: 'PL',
+      sync_to_plex: true, sync_to_jellyfin: false, sync_to_emby: false,
+      public_on_servers: false, audio_format: null,
+    });
+    PlaylistVideo.findAll.mockResolvedValue([{ youtube_id: 'v1', position: 1, ignored: false }]);
+    Video.findAll.mockResolvedValue([{ youtubeId: 'v1', filePath: '/youtube/A/v1.mp4' }]);
+    const updateMock = jest.fn();
+    PlaylistSyncState.findOne.mockResolvedValue({ server_playlist_id: 'existingid', update: updateMock });
+
+    const plexAdapter = makeAdapter('PlexAdapter', {
+      resolveItemIdByFilepath: jest.fn().mockResolvedValue(null),
+    });
+    serverRegistry.getEnabledAdapters.mockReturnValue([plexAdapter]);
+
+    // Collapse the backoff sleeps so the test runs instantly.
+    const setTimeoutSpy = jest.spyOn(global, 'setTimeout').mockImplementation((cb) => {
+      cb();
+      return 0;
+    });
+    try {
+      await mediaServerSync.syncPlaylist(1);
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
+
+    expect(plexAdapter.replacePlaylistItems).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('reversed sort order queries positions descending and syncs items in that order', async () => {
+    Playlist.findByPk.mockResolvedValue({
+      id: 1, playlist_id: 'PL1', title: 'PL', sort_order: 'reversed',
+      sync_to_plex: true, sync_to_jellyfin: false, sync_to_emby: false,
+      public_on_servers: false,
+    });
+    // Simulate the DESC query result: highest position first.
+    PlaylistVideo.findAll.mockResolvedValue([
+      { youtube_id: 'v2', position: 2, ignored: false },
+      { youtube_id: 'v1', position: 1, ignored: false },
+    ]);
+    Video.findAll.mockResolvedValue([
+      { youtubeId: 'v1', filePath: '/youtube/A/v1.mp4' },
+      { youtubeId: 'v2', filePath: '/youtube/B/v2.mp4' },
+    ]);
+    PlaylistSyncState.findOne.mockResolvedValue(null);
+    PlaylistSyncState.create.mockResolvedValue({ id: 1 });
+
+    const plexAdapter = makeAdapter('PlexAdapter', {
+      resolveItemIdByFilepath: jest.fn((p) =>
+        Promise.resolve(p === '/youtube/B/v2.mp4' ? 'rk2' : 'rk1')
+      ),
+      createPlaylist: jest.fn().mockResolvedValue({ id: 'pid' }),
+    });
+    serverRegistry.getEnabledAdapters.mockReturnValue([plexAdapter]);
+
+    await mediaServerSync.syncPlaylist(1);
+
+    expect(PlaylistVideo.findAll).toHaveBeenCalledWith(expect.objectContaining({
+      order: [['position', 'DESC']],
+    }));
+    expect(plexAdapter.createPlaylist).toHaveBeenCalledWith(
+      'YT: PL',
+      ['rk2', 'rk1'],
+      { public: false, mediaType: 'video' }
+    );
   });
 });
