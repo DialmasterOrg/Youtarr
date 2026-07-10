@@ -1,5 +1,34 @@
 # Changelog
 
+## [v1.74.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.74.0) - 2026-07-10
+
+## [1.74.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.73.0...v1.74.0) (2026-07-10)
+
+
+### Features
+
+* add per-playlist sort order setting ([95fe232](https://github.com/DialmasterOrg/Youtarr/commit/95fe232942765084b44c7cadd1c80e966ae7bf1d)), closes [#687](https://github.com/DialmasterOrg/Youtarr/issues/687)
+
+
+### Bug Fixes
+
+* align Plex TV Series preset with 64-byte cap ([a6c05d0](https://github.com/DialmasterOrg/Youtarr/commit/a6c05d0d178be44660e0362b3a6e1cd6f1de88e5))
+* clarify playlist refresh scope in info hint ([0c363fa](https://github.com/DialmasterOrg/Youtarr/commit/0c363fa9a1e61804b505deef95a7b2a02366bf23)), closes [#699](https://github.com/DialmasterOrg/Youtarr/issues/699)
+* fall back to cp -r on EPERM for cross-device move/copy on FUSE mounts ([bc5b9c6](https://github.com/DialmasterOrg/Youtarr/commit/bc5b9c681ed850a5a6666d57d6aa540ae3a1a773)), closes [#370](https://github.com/DialmasterOrg/Youtarr/issues/370) [#693](https://github.com/DialmasterOrg/Youtarr/issues/693)
+* hide no-video playlist sweep by default ([43527d8](https://github.com/DialmasterOrg/Youtarr/commit/43527d831498c20aed7e5382c4ec3e388e9a3071))
+* make playlist auto-downloads order-agnostic ([f0b8c56](https://github.com/DialmasterOrg/Youtarr/commit/f0b8c56613f324c456dbc88bafc07d4d829b7c7c)), closes [#680](https://github.com/DialmasterOrg/Youtarr/issues/680)
+* sync audio-only playlists to media servers ([bde4653](https://github.com/DialmasterOrg/Youtarr/commit/bde46533cfcaa58c28a969700fdc3c9ef9b3dc6b)), closes [#699](https://github.com/DialmasterOrg/Youtarr/issues/699)
+* sync playlists by their download type setting ([9647c86](https://github.com/DialmasterOrg/Youtarr/commit/9647c8623e7c9fc7efff102fcc8a8aa0d86559f4)), closes [#699](https://github.com/DialmasterOrg/Youtarr/issues/699)
+
+
+### Documentation
+
+* update CHANGELOG for v1.73.0 [skip ci] ([7e88b16](https://github.com/DialmasterOrg/Youtarr/commit/7e88b1689cf580f8233f9893733ff38e137ed0d5))
+
+
+
+
+
 ## [v1.73.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.73.0) - 2026-07-04
 
 ## [1.73.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.72.1...v1.73.0) (2026-07-04)
