@@ -37,6 +37,15 @@ describe('resolveCommandSettings', () => {
     const out = resolver.resolveCommandSettings({ override: {}, channel: null, playlist: {}, config: {} });
     expect(out).toEqual({ resolution: '1080', audioFormat: null, skipVideoFolder: false });
   });
+
+  test('skipVideoFolder falls through to global default when channel value is null', () => {
+    const channel = { video_quality: null, audio_format: null, skip_video_folder: null };
+    const out = resolver.resolveCommandSettings({
+      override: {}, channel, playlist: {},
+      config: { preferredResolution: '1080', defaultSkipVideoFolder: true },
+    });
+    expect(out.skipVideoFolder).toBe(true);
+  });
 });
 
 describe('buildRoutingDirectives', () => {
@@ -71,6 +80,52 @@ describe('buildRoutingDirectives', () => {
   test('passes the global-default sentinel through unchanged', () => {
     const out = resolver.buildRoutingDirectives({ override: {}, playlist: { default_sub_folder: GLOBAL_DEFAULT_SENTINEL } });
     expect(out).toEqual({ subfolderFallback: GLOBAL_DEFAULT_SENTINEL });
+  });
+});
+
+describe('resolveSkipVideoFolder', () => {
+  test('override wins over channel and global', () => {
+    expect(resolver.resolveSkipVideoFolder({
+      override: { skipVideoFolder: false },
+      channel: { skip_video_folder: true },
+      config: { defaultSkipVideoFolder: true },
+    })).toBe(false);
+  });
+
+  test('channel explicit true beats global false', () => {
+    expect(resolver.resolveSkipVideoFolder({
+      override: {},
+      channel: { skip_video_folder: true },
+      config: { defaultSkipVideoFolder: false },
+    })).toBe(true);
+  });
+
+  test('channel explicit false beats global true', () => {
+    expect(resolver.resolveSkipVideoFolder({
+      override: {},
+      channel: { skip_video_folder: false },
+      config: { defaultSkipVideoFolder: true },
+    })).toBe(false);
+  });
+
+  test('channel null inherits global true', () => {
+    expect(resolver.resolveSkipVideoFolder({
+      override: {},
+      channel: { skip_video_folder: null },
+      config: { defaultSkipVideoFolder: true },
+    })).toBe(true);
+  });
+
+  test('missing channel inherits global true', () => {
+    expect(resolver.resolveSkipVideoFolder({
+      override: {},
+      channel: null,
+      config: { defaultSkipVideoFolder: true },
+    })).toBe(true);
+  });
+
+  test('defaults to false when config lacks defaultSkipVideoFolder', () => {
+    expect(resolver.resolveSkipVideoFolder({ override: {}, channel: null, config: {} })).toBe(false);
   });
 });
 

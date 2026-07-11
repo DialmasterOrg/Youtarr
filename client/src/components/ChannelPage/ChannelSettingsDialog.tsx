@@ -5,7 +5,12 @@ import {
   DialogContent,
   DialogActions,
   Button,
+  FormControl,
   FormControlLabel,
+  InputLabel,
+  MenuItem,
+  Select,
+  SelectChangeEvent,
   Switch,
   TextField,
   CircularProgress,
@@ -581,23 +586,29 @@ function ChannelSettingsDialog({
               helperText={settings.audio_format ? 'MP3 files are saved at 192kbps in the same folder as videos.' : undefined}
             />
 
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={!!settings.skip_video_folder}
-                  onChange={(e) => setSettings({
+            <div className="mt-2">
+              <FormControl fullWidth>
+                <InputLabel id="video-file-structure-label">Video File Structure</InputLabel>
+                <Select
+                  labelId="video-file-structure-label"
+                  value={settings.skip_video_folder === null ? 'default' : settings.skip_video_folder ? 'flat' : 'subfolders'}
+                  onChange={(e: SelectChangeEvent<string>) => setSettings({
                     ...settings,
-                    skip_video_folder: e.target.checked ? true : null
+                    skip_video_folder: e.target.value === 'default' ? null : e.target.value === 'flat'
                   })}
-                  color="primary"
-                />
-              }
-              label="Flat file structure (no video subfolders)"
-              style={{ marginTop: 8 }}
-            />
-            <Typography variant="caption" color="text.secondary" style={{ marginTop: -4, marginBottom: 8, display: 'block' }}>
-              When enabled, video files are saved directly in the channel folder instead of individual video subfolders. Only affects new downloads.
-            </Typography>
+                  label="Video File Structure"
+                >
+                  <MenuItem value="default">
+                    Use global setting ({config.defaultSkipVideoFolder ? 'Flat' : 'Video subfolders'})
+                  </MenuItem>
+                  <MenuItem value="flat">Flat (no video subfolders)</MenuItem>
+                  <MenuItem value="subfolders">Video subfolders</MenuItem>
+                </Select>
+              </FormControl>
+              <Typography variant="caption" color="text.secondary" className="mt-1 mb-2 block">
+                Flat saves video files directly in the channel folder instead of individual video subfolders. Only affects new downloads.
+              </Typography>
+            </div>
 
             <Alert severity="info" style={{ marginBottom: 16 }}>
               <Typography variant="body2" style={{ fontWeight: 'bold', marginBottom: 8 }}>

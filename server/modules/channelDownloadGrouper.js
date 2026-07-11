@@ -2,6 +2,7 @@ const Channel = require('../models/channel');
 const configModule = require('./configModule');
 const channelSettingsModule = require('./channelSettingsModule');
 const { buildOutputTemplate, buildThumbnailTemplate } = require('./filesystem');
+const downloadSettingsResolver = require('./download/downloadSettingsResolver');
 
 /**
  * Encapsulates channel filter settings for download filtering
@@ -50,15 +51,16 @@ class ChannelFilterConfig {
   /**
    * Create a ChannelFilterConfig from a channel record
    * @param {Object} channel - Channel record from database
+   * @param {Object} [config] - Global config (defaults to configModule.config)
    * @returns {ChannelFilterConfig} - New filter config instance
    */
-  static fromChannel(channel) {
+  static fromChannel(channel, config = configModule.config) {
     return new ChannelFilterConfig(
       channel.min_duration,
       channel.max_duration,
       channel.title_filter_regex,
       channel.audio_format,
-      channel.skip_video_folder
+      downloadSettingsResolver.resolveSkipVideoFolder({ channel, config })
     );
   }
 }

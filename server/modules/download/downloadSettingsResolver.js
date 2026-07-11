@@ -9,7 +9,8 @@ const DEFAULT_RESOLUTION = '1080';
  * Two timing classes:
  * - Command settings (resolution, audioFormat, skipVideoFolder) are built into the
  *   yt-dlp invocation pre-download and drive grouping. Resolved here from whatever
- *   channel info is available pre-download.
+ *   channel info is available pre-download. skipVideoFolder resolves override > channel
+ *   (explicit true/false) > global defaultSkipVideoFolder.
  * - Routing settings (subfolder, rating) are applied per-video at finalize time by the
  *   post-processor, which reads the true channel from .info.json. The grouper only
  *   forwards the dialog override (hard) and the playlist default (soft); channel and
@@ -35,16 +36,26 @@ class DownloadSettingsResolver {
         ? ov.audioFormat
         : (channel && channel.audio_format) || pl.audio_format || null;
 
-    let skipVideoFolder;
-    if (ov.skipVideoFolder !== undefined) {
-      skipVideoFolder = !!ov.skipVideoFolder;
-    } else if (channel && channel.skip_video_folder) {
-      skipVideoFolder = true;
-    } else {
-      skipVideoFolder = false;
-    }
+    const skipVideoFolder = this.resolveSkipVideoFolder({ override: ov, channel, config: cfg });
 
     return { resolution, audioFormat, skipVideoFolder };
+  }
+
+  /**
+   * Flat-structure precedence: override > channel explicit true/false > global default.
+   * channel.skip_video_folder is tri-state: true = flat, false = explicitly per-video
+   * subfolders, null/undefined = inherit the global defaultSkipVideoFolder setting.
+   */
+  resolveSkipVideoFolder({ override = {}, channel = null, config = null } = {}) {
+    const cfg = config || configModule.config || {};
+    const ov = override || {};
+    if (ov.skipVideoFolder !== undefined) {
+      return !!ov.skipVideoFolder;
+    }
+    if (channel && channel.skip_video_folder !== null && channel.skip_video_folder !== undefined) {
+      return !!channel.skip_video_folder;
+    }
+    return !!cfg.defaultSkipVideoFolder;
   }
 
   buildRoutingDirectives({ override = {}, playlist = {} } = {}) {

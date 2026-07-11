@@ -35,6 +35,8 @@ import { RESOLUTION_OPTIONS } from '../../../utils/downloadOptions';
 
 const LARGE_DOWNLOAD_WARNING_THRESHOLD = 50;
 
+type FileStructureChoice = 'inherit' | 'flat' | 'subfolders';
+
 interface DownloadSettingsDialogProps {
   open: boolean;
   onClose: () => void;
@@ -78,7 +80,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   const [subfolderOverride, setSubfolderOverride] = useState<string | null>(null);
   const [audioFormat, setAudioFormat] = useState<string | null>(null);
   const [rating, setRating] = useState<string | null>(null);
-  const [skipVideoFolder, setSkipVideoFolder] = useState(false);
+  const [fileStructure, setFileStructure] = useState<FileStructureChoice>('inherit');
 
   // Fetch available subfolders
   const { subfolders, loading: subfoldersLoading, createSubfolder } = useSubfolders(token);
@@ -122,7 +124,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
       setSubfolderOverride(null);
       setAudioFormat(null);
       setRating(null);
-      setSkipVideoFolder(false);
+      setFileStructure('inherit');
     }
   }, [open]);
 
@@ -189,8 +191,8 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
         if (audioFormat !== null) {
           override.audioFormat = audioFormat;
         }
-        if (skipVideoFolder) {
-          override.skipVideoFolder = true;
+        if (fileStructure !== 'inherit') {
+          override.skipVideoFolder = fileStructure === 'flat';
         }
       }
       if (rating !== null) {
@@ -457,23 +459,30 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                     showBadge
                   />
 
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={skipVideoFolder}
-                        onChange={(e) => {
-                          setSkipVideoFolder(e.target.checked);
-                          setHasUserInteracted(true);
-                        }}
-                        color="primary"
-                      />
-                    }
-                    label="Force flat file structure (no video subfolders)"
-                    className="mb-1"
-                  />
+                  <Typography variant="subtitle2" color="text.secondary" className="mb-2 mt-4">
+                    File Structure Override
+                  </Typography>
+
+                  <FormControl fullWidth className="mb-1">
+                    <InputLabel id="download-file-structure-label">Video File Structure</InputLabel>
+                    <Select
+                      labelId="download-file-structure-label"
+                      value={fileStructure}
+                      onChange={(e: SelectChangeEvent<string>) => {
+                        setFileStructure(e.target.value as FileStructureChoice);
+                        setHasUserInteracted(true);
+                      }}
+                      label="Video File Structure"
+                    >
+                      <MenuItem value="inherit">Use channel/global settings</MenuItem>
+                      <MenuItem value="flat">Force flat (no video subfolders)</MenuItem>
+                      <MenuItem value="subfolders">Force individual video subfolders</MenuItem>
+                    </Select>
+                  </FormControl>
                   <Typography variant="caption" color="text.secondary" className="mb-4 block">
-                    Save files directly in the channel folder instead of individual video subfolders.
-                    When off, each channel&apos;s own setting applies.
+                    Flat saves files directly in the channel folder; individual subfolders creates a
+                    folder per video. &quot;Use channel/global settings&quot; applies each channel&apos;s own
+                    setting, or the global default.
                   </Typography>
                 </>
               )}

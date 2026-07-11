@@ -114,6 +114,17 @@ Configuration can be modified through:
   - Set a default location while allowing individual channels to override
   - Explicitly place specific channels in the root directory using "No Subfolder"
 
+### Flat File Structure Default
+- **Config Key**: `defaultSkipVideoFolder`
+- **Type**: `boolean`
+- **Default**: `false`
+- **Description**: When `true`, new downloads are saved directly in the channel folder (flat structure) instead of an individual per-video subfolder, for every channel that has not chosen its own File Structure setting.
+- **Channel Override Semantics** (channel setting `skip_video_folder`, edited via the channel's "Video File Structure" select):
+  - **"Use global setting"** (NULL in database): channel follows this global default
+  - **"Flat (no video subfolders)"** (`true`): channel always uses flat structure
+  - **"Video subfolders"** (`false`): channel always uses per-video subfolders, even when the global default is flat
+- **Note**: Only affects new downloads; existing files are not moved. The manual download dialog can override the structure for a single download ("Force flat" or "Force individual video subfolders"); its default option ("Use channel/global settings") follows the channel setting and this global default.
+
 ### Video Filename Template
 - **Config Key**: `videoFilenamePrefix`
 - **Type**: `string`
