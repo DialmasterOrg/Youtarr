@@ -37,8 +37,12 @@ function VideoPlayer({ video, token, onDownloadClick, isMobile }: VideoPlayerPro
   }, [video.youtubeId]);
 
   const canStream = video.isDownloaded && video.status !== 'missing';
+  const playbackType: 'video' | 'audio' =
+    !video.filePath && video.audioFilePath ? 'audio' : 'video';
   const streamUrl = token
-    ? `/api/videos/${video.youtubeId}/stream?token=${encodeURIComponent(token)}`
+    ? `/api/videos/${video.youtubeId}/stream?token=${encodeURIComponent(token)}${
+        playbackType === 'audio' ? '&type=audio' : ''
+      }`
     : null;
 
   const handlePlay = useCallback(() => {
@@ -63,10 +67,12 @@ function VideoPlayer({ video, token, onDownloadClick, isMobile }: VideoPlayerPro
 
   const youtubeUrl = `${YOUTUBE_URL_BASE}${video.youtubeId}`;
   const isPlaying = canStream && playbackStarted && streamUrl && !streamError;
+  const isPlayingVideo = isPlaying && playbackType === 'video';
+  const isPlayingAudio = isPlaying && playbackType === 'audio';
   const fallbackAspectRatio = video.mediaType === 'short'
     ? DEFAULT_PORTRAIT_ASPECT_RATIO
     : DEFAULT_LANDSCAPE_ASPECT_RATIO;
-  const displayAspectRatio = isPlaying
+  const displayAspectRatio = isPlayingVideo
     ? (streamAspectRatio ?? fallbackAspectRatio)
     : fallbackAspectRatio;
   const maxPlayerHeight = isMobile
@@ -80,7 +86,7 @@ function VideoPlayer({ video, token, onDownloadClick, isMobile }: VideoPlayerPro
         display: 'block',
         width: `min(100%, calc(${maxPlayerHeight} * ${displayAspectRatio}))`,
         maxWidth: '100%',
-        ...(isPlaying ? {} : { aspectRatio: `${displayAspectRatio}` }),
+        ...(isPlayingVideo ? {} : { aspectRatio: `${displayAspectRatio}` }),
         padding: 0,
         backgroundColor: 'transparent',
         border: 'none',
@@ -92,7 +98,7 @@ function VideoPlayer({ video, token, onDownloadClick, isMobile }: VideoPlayerPro
       }}
     >
       {/* Video element - absolutely positioned when playing */}
-      {isPlaying && (
+      {isPlayingVideo && (
         <Box
           component="video"
           data-testid="video-stream-element"
@@ -113,7 +119,8 @@ function VideoPlayer({ video, token, onDownloadClick, isMobile }: VideoPlayerPro
         />
       )}
 
-      {!isPlaying && (
+      {/* Thumbnail stays visible during audio playback - there is no video frame to show */}
+      {!isPlayingVideo && (
         <Box
           component="img"
           src={video.thumbnailUrl}
@@ -126,6 +133,25 @@ function VideoPlayer({ video, token, onDownloadClick, isMobile }: VideoPlayerPro
             height: '100%',
             objectFit: 'cover',
             borderRadius: 'inherit',
+          }}
+        />
+      )}
+
+      {/* Audio bar overlaid on the thumbnail when playing an audio-only download */}
+      {isPlayingAudio && (
+        <Box
+          component="audio"
+          data-testid="audio-stream-element"
+          src={streamUrl}
+          controls
+          autoPlay
+          onError={handleStreamError}
+          style={{
+            position: 'absolute',
+            bottom: 8,
+            left: 8,
+            width: 'calc(100% - 16px)',
+            zIndex: 2,
           }}
         />
       )}
@@ -149,7 +175,7 @@ function VideoPlayer({ video, token, onDownloadClick, isMobile }: VideoPlayerPro
             <>
               <CloudOffIcon size={48} color="white" />
               <Typography variant="body2" sx={{ color: 'common.white' }}>
-                Unable to stream video
+                {playbackType === 'audio' ? 'Unable to stream audio' : 'Unable to stream video'}
               </Typography>
               <Link
                 href={youtubeUrl}
@@ -165,7 +191,7 @@ function VideoPlayer({ video, token, onDownloadClick, isMobile }: VideoPlayerPro
           ) : canStream ? (
             <IconButton
               onClick={handlePlay}
-              aria-label="Play video"
+              aria-label={playbackType === 'audio' ? 'Play audio' : 'Play video'}
               style={{
                 backgroundColor: 'var(--video-modal-overlay-action-background, var(--media-overlay-background-strong))',
                 color: 'var(--video-modal-overlay-action-foreground, var(--media-overlay-foreground))',
@@ -303,7 +329,7 @@ function VideoPlayer({ video, token, onDownloadClick, isMobile }: VideoPlayerPro
                   }}
                 >
                   <Typography variant="caption" style={{ display: 'block', lineHeight: 1.5 }}>
-                    Video is served directly without transcoding. Playback may buffer on slow connections.
+                    {playbackType === 'audio' ? 'Audio' : 'Video'} is served directly without transcoding. Playback may buffer on slow connections.
                   </Typography>
                 </Box>
               )}
