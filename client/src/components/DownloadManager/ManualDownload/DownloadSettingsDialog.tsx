@@ -28,14 +28,23 @@ import {
 import { DownloadSettings } from './types';
 import { SubfolderAutocomplete } from '../../shared/SubfolderAutocomplete';
 import { ResolutionSelect } from '../../shared/ResolutionSelect';
-import { AudioFormatSelect } from '../../shared/AudioFormatSelect';
+import { OptionSelect } from '../../shared/OptionSelect';
 import { RatingSelect } from '../../shared/RatingSelect';
 import { useSubfolders } from '../../../hooks/useSubfolders';
-import { RESOLUTION_OPTIONS } from '../../../utils/downloadOptions';
+import { RESOLUTION_OPTIONS, AUDIO_FORMAT_OPTIONS, SelectOption } from '../../../utils/downloadOptions';
 
 const LARGE_DOWNLOAD_WARNING_THRESHOLD = 50;
 
 type FileStructureChoice = 'inherit' | 'flat' | 'subfolders';
+
+// Four-state, unlike channel/playlist settings where a null audio_format means
+// video only. Here the empty option means "no override" (channel/playlist setting
+// applies); VIDEO_ONLY_CHOICE sends an explicit audioFormat: null to force video.
+const VIDEO_ONLY_CHOICE = 'video_only';
+const DOWNLOAD_TYPE_OPTIONS: SelectOption[] = [
+  { value: VIDEO_ONLY_CHOICE, label: 'Video Only' },
+  ...AUDIO_FORMAT_OPTIONS,
+];
 
 interface DownloadSettingsDialogProps {
   open: boolean;
@@ -47,8 +56,8 @@ interface DownloadSettingsDialogProps {
   defaultVideoCount?: number; // For channel downloads
   mode?: 'manual' | 'channel'; // To differentiate between modes
   defaultResolutionSource?: 'channel' | 'global';
-  defaultAudioFormat?: string | null; // For channel audio format default
-  defaultAudioFormatSource?: 'channel' | 'global';
+  defaultAudioFormat?: string | null; // For channel/playlist audio format default
+  defaultAudioFormatSource?: 'channel' | 'playlist' | 'global';
   token?: string | null; // For fetching subfolders
   // Hides the "Allow re-downloading" switch and guarantees allowRedownload is
   // never emitted.
@@ -98,6 +107,27 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   };
 
   const defaultAudioFormatLabel = getAudioFormatLabel(defaultAudioFormat);
+
+  // "No override" outcome for the Download Type select: show the actual
+  // channel/playlist setting when the flow knows it (channel page, video
+  // modal, playlist page); the paste flow can only state the per-video rule.
+  const downloadTypeSettingLabel =
+    DOWNLOAD_TYPE_OPTIONS.find((option) => option.value === defaultAudioFormat)?.label
+    ?? 'Video Only';
+  const downloadTypeEmptyLabel =
+    defaultAudioFormatSource === 'channel'
+      ? `No override (channel setting: ${downloadTypeSettingLabel})`
+      : defaultAudioFormatSource === 'playlist'
+        // Channel settings beat the playlist setting per video, so the playlist value is only the fallback.
+        ? `No override (per channel, else playlist setting: ${downloadTypeSettingLabel})`
+        : 'No override (per channel, else Video Only)';
+
+  const isMp3Format = audioFormat === 'video_mp3' || audioFormat === 'mp3_only';
+  const downloadTypeHelperText = isMp3Format
+    ? 'MP3 files are saved at 192kbps in the same folder as videos.'
+    : audioFormat === null && defaultAudioFormatSource === 'global'
+      ? 'Configured channels use their Download Type setting; all other videos download as Video Only.'
+      : undefined;
 
   // Auto-detect re-download need
   useEffect(() => {
@@ -189,7 +219,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
           override.subfolder = subfolderOverride;
         }
         if (audioFormat !== null) {
-          override.audioFormat = audioFormat;
+          override.audioFormat = audioFormat === VIDEO_ONLY_CHOICE ? null : audioFormat;
         }
         if (fileStructure !== 'inherit') {
           override.skipVideoFolder = fileStructure === 'flat';
@@ -435,14 +465,17 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                     Download Type
                   </Typography>
 
-                  <AudioFormatSelect
+                  <OptionSelect
                     className="mb-4 audio-control audio-control--download-type"
+                    options={DOWNLOAD_TYPE_OPTIONS}
+                    label="Download Type"
+                    emptyLabel={downloadTypeEmptyLabel}
                     value={audioFormat}
                     onChange={(value) => {
                       setAudioFormat(value);
                       setHasUserInteracted(true);
                     }}
-                    helperText={audioFormat ? 'MP3 files are saved at 192kbps in the same folder as videos.' : undefined}
+                    helperText={downloadTypeHelperText}
                   />
                     <Typography variant="subtitle2" color="text.secondary" className="mb-2 mt-4">
                     Content Rating Override

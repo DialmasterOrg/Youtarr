@@ -1002,6 +1002,163 @@ describe('DownloadSettingsDialog', () => {
     });
   });
 
+  describe('Download Type Override Select', () => {
+    const openCustomSettings = () => {
+      fireEvent.click(screen.getByRole('checkbox', { name: /Use custom settings/i }));
+    };
+
+    test('defaults to No override naming the per-channel fallback', () => {
+      render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
+      openCustomSettings();
+
+      expect(screen.getByLabelText('Download Type')).toHaveTextContent(
+        'No override (per channel, else Video Only)'
+      );
+    });
+
+    test('shows the channel setting in the No override option when known', () => {
+      render(
+        <DownloadSettingsDialog
+          {...defaultProps}
+          mode="manual"
+          defaultAudioFormat="mp3_only"
+          defaultAudioFormatSource="channel"
+        />
+      );
+      openCustomSettings();
+
+      expect(screen.getByLabelText('Download Type')).toHaveTextContent(
+        'No override (channel setting: MP3 Only)'
+      );
+    });
+
+    test('shows the playlist setting behind the per-channel fallback in the No override option', () => {
+      render(
+        <DownloadSettingsDialog
+          {...defaultProps}
+          mode="manual"
+          defaultAudioFormat="mp3_only"
+          defaultAudioFormatSource="playlist"
+        />
+      );
+      openCustomSettings();
+
+      expect(screen.getByLabelText('Download Type')).toHaveTextContent(
+        'No override (per channel, else playlist setting: MP3 Only)'
+      );
+    });
+
+    test('explains the per-channel fallback in helper text when no override is selected', () => {
+      render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
+      openCustomSettings();
+
+      expect(
+        screen.getByText(/Configured channels use their Download Type setting/)
+      ).toBeInTheDocument();
+    });
+
+    test('omits the fallback helper text when the channel setting is already shown', () => {
+      render(
+        <DownloadSettingsDialog
+          {...defaultProps}
+          mode="manual"
+          defaultAudioFormat="mp3_only"
+          defaultAudioFormatSource="channel"
+        />
+      );
+      openCustomSettings();
+
+      expect(
+        screen.queryByText(/Configured channels use their Download Type setting/)
+      ).not.toBeInTheDocument();
+    });
+
+    test('hides the fallback helper text once an override is chosen', async () => {
+      const user = userEvent.setup();
+      render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
+      openCustomSettings();
+
+      await user.click(screen.getByLabelText('Download Type'));
+      await user.click(screen.getByRole('option', { name: 'Video Only' }));
+
+      expect(
+        screen.queryByText(/Configured channels use their Download Type setting/)
+      ).not.toBeInTheDocument();
+    });
+
+    test('emits an explicit null audioFormat when Video Only is selected', async () => {
+      const user = userEvent.setup();
+      render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
+      openCustomSettings();
+
+      await user.click(screen.getByLabelText('Download Type'));
+      await user.click(screen.getByRole('option', { name: 'Video Only' }));
+
+      fireEvent.click(screen.getByRole('button', { name: /Start Download/i }));
+
+      expect(mockOnConfirm).toHaveBeenCalledWith(
+        expect.objectContaining({ audioFormat: null })
+      );
+    });
+
+    test('emits mp3_only when MP3 Only is selected', async () => {
+      const user = userEvent.setup();
+      render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
+      openCustomSettings();
+
+      await user.click(screen.getByLabelText('Download Type'));
+      await user.click(screen.getByRole('option', { name: 'MP3 Only' }));
+
+      fireEvent.click(screen.getByRole('button', { name: /Start Download/i }));
+
+      expect(mockOnConfirm).toHaveBeenCalledWith(
+        expect.objectContaining({ audioFormat: 'mp3_only' })
+      );
+    });
+
+    test('omits audioFormat after switching back to No override', async () => {
+      const user = userEvent.setup();
+      render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
+      openCustomSettings();
+
+      await user.click(screen.getByLabelText('Download Type'));
+      await user.click(screen.getByRole('option', { name: 'Video Only' }));
+      await user.click(screen.getByLabelText('Download Type'));
+      await user.click(
+        screen.getByRole('option', { name: /No override \(per channel, else Video Only\)/i })
+      );
+
+      fireEvent.click(screen.getByRole('checkbox', { name: /Allow re-downloading/i }));
+      fireEvent.click(screen.getByRole('button', { name: /Start Download/i }));
+
+      const payload = mockOnConfirm.mock.calls[0][0];
+      expect(payload).toEqual({ allowRedownload: true });
+      expect(payload).not.toHaveProperty('audioFormat');
+    });
+
+    test('does not show the MP3 helper text when Video Only is selected', async () => {
+      const user = userEvent.setup();
+      render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
+      openCustomSettings();
+
+      await user.click(screen.getByLabelText('Download Type'));
+      await user.click(screen.getByRole('option', { name: 'Video Only' }));
+
+      expect(screen.queryByText(/192kbps/)).not.toBeInTheDocument();
+    });
+
+    test('shows the MP3 helper text when an MP3 format is selected', async () => {
+      const user = userEvent.setup();
+      render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
+      openCustomSettings();
+
+      await user.click(screen.getByLabelText('Download Type'));
+      await user.click(screen.getByRole('option', { name: 'MP3 Only' }));
+
+      expect(screen.getByText(/192kbps/)).toBeInTheDocument();
+    });
+  });
+
   describe('Large Batch Warning', () => {
     const renderDialog = (props: { videoCount?: number }) =>
       render(<DownloadSettingsDialog {...defaultProps} mode="manual" {...props} />);

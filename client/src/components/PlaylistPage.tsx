@@ -468,6 +468,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
         missingVideoCount={missingVideoCount}
         defaultResolution={playlist.video_quality || config.preferredResolution || '1080'}
         defaultAudioFormat={playlist.audio_format}
+        defaultAudioFormatSource="playlist"
       />
 
       <Dialog

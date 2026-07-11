@@ -81,6 +81,19 @@ test('override beats channel and playlist for command settings', async () => {
   expect(groups[0]).toMatchObject({ resolution: '2160', audioFormat: 'video_mp3', skipVideoFolder: false });
 });
 
+test('explicit null audioFormat override forces video-only despite channel/playlist MP3 settings', async () => {
+  Channel.findAll.mockResolvedValue([
+    { channel_id: 'UCc', video_quality: null, audio_format: 'mp3_only', skip_video_folder: false },
+  ]);
+  const groups = await grouper.buildGroups(
+    { ...playlist, audio_format: 'mp3_only' },
+    [{ youtube_id: 'b', channel_id: 'UCc' }],
+    { audioFormat: null }
+  );
+  expect(groups).toHaveLength(1);
+  expect(groups[0].audioFormat).toBeNull();
+});
+
 test('videos sharing command settings group together even with different channels', async () => {
   Channel.findAll.mockResolvedValue([
     { channel_id: 'UCa', video_quality: null, audio_format: null, skip_video_folder: false },
