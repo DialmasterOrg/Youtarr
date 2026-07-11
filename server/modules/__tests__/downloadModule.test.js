@@ -135,6 +135,9 @@ describe('DownloadModule', () => {
     const channelDownloadGrouperMock = require('../channelDownloadGrouper');
     channelDownloadGrouperMock.generateDownloadGroups = jest.fn().mockResolvedValue(null);
 
+    const configModuleMock = require('../configModule');
+    configModuleMock.config.defaultSkipVideoFolder = false;
+
     logger = require('../../logger');
     logger.info.mockClear();
     logger.error.mockClear();
@@ -1561,6 +1564,62 @@ describe('DownloadModule', () => {
           overrideSettings: {
             skipVideoFolder: false
           }
+        }
+      };
+
+      await downloadModule.doSpecificDownloads(request);
+
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, false);
+      expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
+        expect.any(Array),
+        mockJobId,
+        'Manually Added Urls',
+        1,
+        ['https://youtube.com/watch?v=test'],
+        false,
+        false,
+        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false, ownerChannelId: 'UC123456', ownerChannelMap: null }
+      );
+    });
+
+    it('should use global defaultSkipVideoFolder when channel has no explicit setting', async () => {
+      const configModuleMock = require('../configModule');
+      configModuleMock.config.defaultSkipVideoFolder = true;
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+      ChannelModelMock.findOne.mockResolvedValue({ video_quality: null, audio_format: null, skip_video_folder: null });
+
+      const request = {
+        body: {
+          urls: ['https://youtube.com/watch?v=test'],
+          channelId: 'UC123456'
+        }
+      };
+
+      await downloadModule.doSpecificDownloads(request);
+
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, true);
+      expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
+        expect.any(Array),
+        mockJobId,
+        'Manually Added Urls',
+        1,
+        ['https://youtube.com/watch?v=test'],
+        false,
+        false,
+        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: true, ownerChannelId: 'UC123456', ownerChannelMap: null }
+      );
+    });
+
+    it('should honor channel explicit false over a global flat default', async () => {
+      const configModuleMock = require('../configModule');
+      configModuleMock.config.defaultSkipVideoFolder = true;
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+      ChannelModelMock.findOne.mockResolvedValue({ video_quality: null, audio_format: null, skip_video_folder: false });
+
+      const request = {
+        body: {
+          urls: ['https://youtube.com/watch?v=test'],
+          channelId: 'UC123456'
         }
       };
 

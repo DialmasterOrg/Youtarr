@@ -4,6 +4,7 @@ const plexModule = require('./plexModule');
 const DownloadExecutor = require('./download/downloadExecutor');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const tempPathManager = require('./download/tempPathManager');
+const downloadSettingsResolver = require('./download/downloadSettingsResolver');
 const { MANUAL_DOWNLOAD_LABEL, playlistJobLabel, autoRetryJobLabel } = require('./download/jobTypes');
 const ChannelVideo = require('../models/channelvideo');
 const logger = require('../logger');
@@ -680,13 +681,12 @@ class DownloadModule {
       // Persist resolved quality for any subsequent retries of this job
       this.setJobDataValue(jobData, 'effectiveQuality', resolution);
 
-      // Determine skipVideoFolder from override settings or channel setting
-      let skipVideoFolder = false;
-      if (overrideSettings.skipVideoFolder !== undefined) {
-        skipVideoFolder = !!overrideSettings.skipVideoFolder;
-      } else if (channelRecord && channelRecord.skip_video_folder) {
-        skipVideoFolder = true;
-      }
+      // Flat-structure precedence: override > channel explicit setting > global default
+      const skipVideoFolder = downloadSettingsResolver.resolveSkipVideoFolder({
+        override: overrideSettings,
+        channel: channelRecord,
+        config: configModule.config,
+      });
 
       // For manual downloads, we don't apply duration filters but still exclude members-only
       // Subfolder override is passed to post-processor via environment variable

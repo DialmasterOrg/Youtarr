@@ -125,6 +125,52 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
     setShowAffectedList(false);
   };
 
+  const [pendingFlatDefault, setPendingFlatDefault] = useState<boolean | null>(null);
+  const [showFlatConfirmDialog, setShowFlatConfirmDialog] = useState(false);
+  const [flatAffectedChannels, setFlatAffectedChannels] = useState<{ count: number; channelNames: string[] } | null>(null);
+  const [loadingFlatAffectedChannels, setLoadingFlatAffectedChannels] = useState(false);
+  const [showFlatAffectedList, setShowFlatAffectedList] = useState(false);
+
+  const handleFlatDefaultChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const newValue = event.target.checked;
+    if (newValue === config.defaultSkipVideoFolder) {
+      return;
+    }
+
+    setPendingFlatDefault(newValue);
+    setShowFlatConfirmDialog(true);
+    setLoadingFlatAffectedChannels(true);
+    setFlatAffectedChannels(null);
+
+    try {
+      const response = await fetch('/api/channels/using-global-file-structure', {
+        headers: { 'x-access-token': token || '' },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setFlatAffectedChannels(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch affected channels:', err);
+      setFlatAffectedChannels(null);
+    } finally {
+      setLoadingFlatAffectedChannels(false);
+    }
+  };
+
+  const handleConfirmFlatDefault = () => {
+    onConfigChange({ defaultSkipVideoFolder: pendingFlatDefault === true });
+    setShowFlatConfirmDialog(false);
+    setPendingFlatDefault(null);
+    setShowFlatAffectedList(false);
+  };
+
+  const handleCancelFlatDefault = () => {
+    setShowFlatConfirmDialog(false);
+    setPendingFlatDefault(null);
+    setShowFlatAffectedList(false);
+  };
+
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
     let parsedValue: any = value;
@@ -556,6 +602,25 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                   </Box>
                 </Grid>
 
+                <Grid item xs={12} md={6}>
+                  <Box className="flex items-center">
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          name="defaultSkipVideoFolder"
+                          checked={config.defaultSkipVideoFolder}
+                          onChange={handleFlatDefaultChange}
+                        />
+                      }
+                      label="Flat file structure by default"
+                    />
+                    <InfoTooltip
+                      text="When enabled, new downloads are saved directly in each channel folder instead of individual per-video subfolders. Channels can override this in their own settings (Flat or Video subfolders). Only affects new downloads; existing files are not moved."
+                      onMobileClick={onMobileTooltipClick}
+                    />
+                  </Box>
+                </Grid>
+
                 <Grid item xs={12}>
                   <Box className="border-t pt-3">
                     <VideoFilenameTemplate
@@ -776,6 +841,69 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
         <DialogActions>
           <Button onClick={handleCancelDefaultSubfolder}>Cancel</Button>
           <Button onClick={handleConfirmDefaultSubfolder} variant="contained" color="primary">
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={showFlatConfirmDialog} onClose={handleCancelFlatDefault}>
+        <DialogTitle>Change default file structure?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {pendingFlatDefault
+              ? 'New downloads for channels using the global setting will be saved directly in the channel folder (flat structure, no per-video subfolders).'
+              : 'New downloads for channels using the global setting will be saved in individual per-video subfolders.'}
+          </DialogContentText>
+
+          <Box className="mt-4 mb-4">
+            {loadingFlatAffectedChannels ? (
+              <Box className="flex items-center gap-2">
+                <CircularProgress size={16} />
+                <span>Checking affected channels...</span>
+              </Box>
+            ) : flatAffectedChannels === null ? (
+              <DialogContentText style={{ color: 'var(--warning)' }}>
+                Could not determine how many channels are affected. You can still continue, but the
+                affected channel count is unknown.
+              </DialogContentText>
+            ) : flatAffectedChannels.count === 0 ? (
+              <DialogContentText>
+                No tracked channels are currently using the global setting.
+              </DialogContentText>
+            ) : (
+              <>
+                <DialogContentText>
+                  {flatAffectedChannels.count} tracked channel{flatAffectedChannels.count !== 1 ? 's' : ''} follow{flatAffectedChannels.count === 1 ? 's' : ''} the global setting and will be affected.
+                </DialogContentText>
+                <Link
+                  component="button"
+                  variant="body2"
+                  onClick={() => setShowFlatAffectedList(!showFlatAffectedList)}
+                  className="mt-1 block cursor-pointer"
+                >
+                  {showFlatAffectedList ? 'Hide affected channels ▲' : 'Show affected channels ▼'}
+                </Link>
+                <Collapse in={showFlatAffectedList}>
+                  <Box
+                    component="ul"
+                    className="mt-2 pl-4 max-h-[200px] overflow-auto bg-muted/50 rounded py-2"
+                  >
+                    {flatAffectedChannels.channelNames.map((name, index) => (
+                      <li key={index}>{name}</li>
+                    ))}
+                  </Box>
+                </Collapse>
+              </>
+            )}
+          </Box>
+
+          <DialogContentText>
+            Previously downloaded videos are not affected. Existing files will not be moved or renamed; only new downloads use the new structure.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelFlatDefault}>Cancel</Button>
+          <Button onClick={handleConfirmFlatDefault} variant="contained" color="primary" disabled={loadingFlatAffectedChannels}>
             Confirm
           </Button>
         </DialogActions>

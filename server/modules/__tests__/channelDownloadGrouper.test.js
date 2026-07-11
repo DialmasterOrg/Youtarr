@@ -28,6 +28,7 @@ describe('ChannelDownloadGrouper', () => {
     jest.clearAllMocks();
     configModule.getConfig.mockReturnValue({});
     configModule.config.preferredResolution = '1080';
+    configModule.config.defaultSkipVideoFolder = false;
   });
 
   describe('ChannelFilterConfig', () => {
@@ -162,6 +163,47 @@ describe('ChannelDownloadGrouper', () => {
         expect(filterConfig.minDuration).toBe(300);
         expect(filterConfig.maxDuration).toBeNull();
         expect(filterConfig.titleFilterRegex).toBeNull();
+      });
+    });
+
+    describe('fromChannel with global flat default', () => {
+      const baseChannel = {
+        min_duration: null,
+        max_duration: null,
+        title_filter_regex: null,
+        audio_format: null,
+      };
+
+      it('inherits the global default when channel setting is null', () => {
+        const filterConfig = ChannelFilterConfig.fromChannel(
+          { ...baseChannel, skip_video_folder: null },
+          { defaultSkipVideoFolder: true }
+        );
+        expect(filterConfig.skipVideoFolder).toBe(true);
+      });
+
+      it('keeps per-video subfolders when channel explicitly sets false', () => {
+        const filterConfig = ChannelFilterConfig.fromChannel(
+          { ...baseChannel, skip_video_folder: false },
+          { defaultSkipVideoFolder: true }
+        );
+        expect(filterConfig.skipVideoFolder).toBe(false);
+      });
+
+      it('stays flat when channel sets true and global default is off', () => {
+        const filterConfig = ChannelFilterConfig.fromChannel(
+          { ...baseChannel, skip_video_folder: true },
+          { defaultSkipVideoFolder: false }
+        );
+        expect(filterConfig.skipVideoFolder).toBe(true);
+      });
+
+      it('defaults to configModule.config when no config argument is given', () => {
+        configModule.config.defaultSkipVideoFolder = true;
+        const filterConfig = ChannelFilterConfig.fromChannel(
+          { ...baseChannel, skip_video_folder: null }
+        );
+        expect(filterConfig.skipVideoFolder).toBe(true);
       });
     });
   });
@@ -477,6 +519,20 @@ describe('ChannelDownloadGrouper', () => {
 
       expect(groups).toHaveLength(1);
       expect(groups[0].quality).toBe('1080');
+    });
+
+    it('separates explicitly-nested channels from inheriting channels when global flat is on', () => {
+      configModule.config.defaultSkipVideoFolder = true;
+      const channels = [
+        { channel_id: 'a', uploader: 'A', sub_folder: null, video_quality: null, min_duration: null, max_duration: null, title_filter_regex: null, audio_format: null, skip_video_folder: null },
+        { channel_id: 'b', uploader: 'B', sub_folder: null, video_quality: null, min_duration: null, max_duration: null, title_filter_regex: null, audio_format: null, skip_video_folder: false },
+      ];
+
+      const groups = channelDownloadGrouper.groupChannels(channels, '1080');
+
+      expect(groups).toHaveLength(2);
+      const flags = groups.map((g) => g.filterConfig.skipVideoFolder).sort();
+      expect(flags).toEqual([false, true]);
     });
   });
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { CoreSettingsSection } from '../CoreSettingsSection';
@@ -651,6 +651,181 @@ describe('CoreSettingsSection Component', () => {
       renderWithProviders(<CoreSettingsSection {...props} />);
       expect(screen.queryByText('Platform Managed')).not.toBeInTheDocument();
       expect(screen.queryByText('Managed by Elfhosted')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Flat File Structure Default Checkbox', () => {
+    test('renders unchecked by default', () => {
+      const props = createSectionProps();
+      renderWithProviders(<CoreSettingsSection {...props} />);
+      const toggle = screen.getByRole('checkbox', { name: /Flat file structure by default/i });
+      expect(toggle).not.toBeChecked();
+    });
+
+    test('renders checked when defaultSkipVideoFolder is true', () => {
+      const props = createSectionProps({ config: createConfig({ defaultSkipVideoFolder: true }) });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+      const toggle = screen.getByRole('checkbox', { name: /Flat file structure by default/i });
+      expect(toggle).toBeChecked();
+    });
+
+    describe('confirmation dialog', () => {
+      let mockFetch: jest.SpyInstance;
+
+      beforeEach(() => {
+        mockFetch = jest.spyOn(global, 'fetch');
+      });
+
+      afterEach(() => {
+        mockFetch.mockRestore();
+      });
+
+      test('calls onConfigChange with defaultSkipVideoFolder true when toggled on', async () => {
+        const user = userEvent.setup();
+        mockFetch.mockResolvedValue({
+          ok: true,
+          json: jest.fn().mockResolvedValue({ count: 0, channelNames: [] })
+        } as unknown as Response);
+
+        const props = createSectionProps();
+        renderWithProviders(<CoreSettingsSection {...props} />);
+        const toggle = screen.getByRole('checkbox', { name: /Flat file structure by default/i });
+        await user.click(toggle);
+
+        await screen.findByText('Change default file structure?');
+        const confirmButton = screen.getByRole('button', { name: 'Confirm' });
+        await waitFor(() => expect(confirmButton).toBeEnabled());
+        await user.click(confirmButton);
+
+        expect(props.onConfigChange).toHaveBeenCalledWith({ defaultSkipVideoFolder: true });
+      });
+
+      test('does not call onConfigChange when the confirmation is cancelled', async () => {
+        const user = userEvent.setup();
+        mockFetch.mockResolvedValue({
+          ok: true,
+          json: jest.fn().mockResolvedValue({ count: 0, channelNames: [] })
+        } as unknown as Response);
+
+        const props = createSectionProps();
+        renderWithProviders(<CoreSettingsSection {...props} />);
+        const toggle = screen.getByRole('checkbox', { name: /Flat file structure by default/i });
+        await user.click(toggle);
+
+        await screen.findByText('Change default file structure?');
+        const cancelButton = screen.getByRole('button', { name: 'Cancel' });
+        await user.click(cancelButton);
+
+        expect(props.onConfigChange).not.toHaveBeenCalled();
+        expect(screen.queryByText('Change default file structure?')).not.toBeInTheDocument();
+      });
+
+      test('shows the affected channel count from the API', async () => {
+        const user = userEvent.setup();
+        mockFetch.mockResolvedValue({
+          ok: true,
+          json: jest.fn().mockResolvedValue({ count: 3, channelNames: ['A', 'B', 'C'] })
+        } as unknown as Response);
+
+        const props = createSectionProps();
+        renderWithProviders(<CoreSettingsSection {...props} />);
+        const toggle = screen.getByRole('checkbox', { name: /Flat file structure by default/i });
+        await user.click(toggle);
+
+        await screen.findByText(/3 tracked channels/);
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          '/api/channels/using-global-file-structure',
+          { headers: { 'x-access-token': 'test-token' } }
+        );
+      });
+
+      test('states that previously downloaded videos are not affected', async () => {
+        const user = userEvent.setup();
+        mockFetch.mockResolvedValue({
+          ok: true,
+          json: jest.fn().mockResolvedValue({ count: 0, channelNames: [] })
+        } as unknown as Response);
+
+        const props = createSectionProps();
+        renderWithProviders(<CoreSettingsSection {...props} />);
+        const toggle = screen.getByRole('checkbox', { name: /Flat file structure by default/i });
+        await user.click(toggle);
+
+        await screen.findByText('Change default file structure?');
+        expect(screen.getByText(/Previously downloaded videos are not affected/)).toBeInTheDocument();
+      });
+
+      test('describes per-video subfolders when disabling', async () => {
+        const user = userEvent.setup();
+        mockFetch.mockResolvedValue({
+          ok: true,
+          json: jest.fn().mockResolvedValue({ count: 0, channelNames: [] })
+        } as unknown as Response);
+
+        const props = createSectionProps({ config: createConfig({ defaultSkipVideoFolder: true }) });
+        renderWithProviders(<CoreSettingsSection {...props} />);
+        const toggle = screen.getByRole('checkbox', { name: /Flat file structure by default/i });
+        await user.click(toggle);
+
+        await screen.findByText('Change default file structure?');
+        expect(
+          screen.getByText(/New downloads for channels using the global setting will be saved in individual per-video subfolders\./)
+        ).toBeInTheDocument();
+      });
+
+      test('disables Confirm while the affected-channel lookup is loading', async () => {
+        const user = userEvent.setup();
+        mockFetch.mockReturnValue(new Promise(() => {}));
+
+        const props = createSectionProps();
+        renderWithProviders(<CoreSettingsSection {...props} />);
+        const toggle = screen.getByRole('checkbox', { name: /Flat file structure by default/i });
+        await user.click(toggle);
+
+        await screen.findByText('Change default file structure?');
+        expect(screen.getByRole('button', { name: 'Confirm' })).toBeDisabled();
+      });
+
+      test('shows a warning instead of a zero count when the lookup fails', async () => {
+        const user = userEvent.setup();
+        const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+        mockFetch.mockRejectedValue(new Error('Network error'));
+
+        const props = createSectionProps();
+        renderWithProviders(<CoreSettingsSection {...props} />);
+        const toggle = screen.getByRole('checkbox', { name: /Flat file structure by default/i });
+        await user.click(toggle);
+
+        await screen.findByText('Change default file structure?');
+        await screen.findByText(/Could not determine how many channels are affected/);
+        expect(
+          screen.queryByText('No tracked channels are currently using the global setting.')
+        ).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Confirm' })).toBeEnabled();
+
+        consoleSpy.mockRestore();
+      });
+
+      test('shows a warning instead of a zero count when the lookup returns non-OK', async () => {
+        const user = userEvent.setup();
+        mockFetch.mockResolvedValue({
+          ok: false,
+          json: jest.fn().mockResolvedValueOnce({ count: 0, channelNames: [] })
+        } as unknown as Response);
+
+        const props = createSectionProps();
+        renderWithProviders(<CoreSettingsSection {...props} />);
+        const toggle = screen.getByRole('checkbox', { name: /Flat file structure by default/i });
+        await user.click(toggle);
+
+        await screen.findByText('Change default file structure?');
+        await screen.findByText(/Could not determine how many channels are affected/);
+        expect(
+          screen.queryByText('No tracked channels are currently using the global setting.')
+        ).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Confirm' })).toBeEnabled();
+      });
     });
   });
 
