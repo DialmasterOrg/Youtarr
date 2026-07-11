@@ -682,12 +682,22 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
         ? { type: 'api_key', name: req.apiKeyName }
         : { type: 'web_ui' };
 
-      downloadModule.doSpecificDownloads({
+      // Channel attribution from the validation metadata already fetched above,
+      // so tracked channels' per-channel settings apply to API-key downloads.
+      const videoMeta = metadata.metadata || {};
+      const videoChannelMap = videoMeta.channelId && videoMeta.youtubeId
+        ? { [videoMeta.youtubeId]: videoMeta.channelId }
+        : undefined;
+
+      downloadModule.doGroupedManualDownloads({
         body: {
           urls: [url],
           overrideSettings: Object.keys(overrideSettings).length > 0 ? overrideSettings : undefined,
+          videoChannelMap,
           initiatedBy
         }
+      }).catch((err) => {
+        req.log.error({ err }, 'Failed to start API download');
       });
 
       // Increment usage count for API key statistics
@@ -744,6 +754,15 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
    *                     type: string
    *                     enum: ['360', '480', '720', '1080', '1440', '2160']
    *                     description: Override download resolution
+   *               videoChannelMap:
+   *                 type: object
+   *                 additionalProperties:
+   *                   type: string
+   *                 description: >
+   *                   Optional map of YouTube video ID (11 characters) to owning
+   *                   YouTube channel ID (UC-prefixed), captured from URL
+   *                   validation metadata. Lets tracked channels' per-channel
+   *                   download settings apply to each pasted video.
    *     responses:
    *       200:
    *         description: Download job started
@@ -815,7 +834,33 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
       }
     }
 
-    downloadModule.doSpecificDownloads(req);
+    // videoChannelMap is untrusted client input: it maps each pasted video to
+    // the channel_id captured from validation metadata. Entries only ever act
+    // as candidates that must resolve to a tracked+enabled channel, but the
+    // shape is still validated here at the boundary.
+    const { videoChannelMap } = req.body;
+    if (videoChannelMap !== undefined && videoChannelMap !== null) {
+      const YOUTUBE_ID_PATTERN = /^[a-zA-Z0-9_-]{11}$/;
+      const YOUTUBE_CHANNEL_ID_PATTERN = /^UC[a-zA-Z0-9_-]{22}$/;
+      const isValidMap =
+        typeof videoChannelMap === 'object' &&
+        !Array.isArray(videoChannelMap) &&
+        Object.entries(videoChannelMap).every(
+          ([videoId, channelId]) =>
+            YOUTUBE_ID_PATTERN.test(videoId) &&
+            typeof channelId === 'string' &&
+            YOUTUBE_CHANNEL_ID_PATTERN.test(channelId)
+        );
+      if (!isValidMap) {
+        return res.status(400).json({
+          error: 'videoChannelMap must map 11-character YouTube video IDs to UC-format channel IDs'
+        });
+      }
+    }
+
+    downloadModule.doGroupedManualDownloads(req).catch((err) => {
+      req.log.error({ err }, 'Failed to start manual downloads');
+    });
     res.json({ status: 'success' });
   });
 

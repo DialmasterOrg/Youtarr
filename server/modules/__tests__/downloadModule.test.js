@@ -38,6 +38,7 @@ jest.mock('../../models/channel', () => ({
 jest.mock('../../models/channelvideo', () => ({
   findAll: jest.fn()
 }));
+jest.mock('../videoValidationModule', () => ({ getCachedChannelId: jest.fn(() => null) }));
 jest.mock('../channelDownloadGrouper', () => ({
   generateDownloadGroups: jest.fn()
 }));
@@ -1122,6 +1123,135 @@ describe('DownloadModule', () => {
 
       expect(doSpecificDownloadsSpy).not.toHaveBeenCalled();
     });
+
+    test('propagates structurePerVideo from the source job', async () => {
+      await downloadModule.enqueueAutoRetryJob({
+        retryVideos: [{ youtubeId: 'dQw4w9WgXcQ', url: 'https://youtu.be/dQw4w9WgXcQ' }],
+        autoRetryAttempt: 1,
+        runId: null,
+        sourceJobData: { structurePerVideo: true },
+      });
+      const { body } = doSpecificDownloadsSpy.mock.calls[0][0];
+      expect(body.structurePerVideo).toBe(true);
+    });
+  });
+
+  describe('doGroupedManualDownloads', () => {
+    let manualDownloadGrouper;
+    let downloadRunTracker;
+    let videoValidationModule;
+    let doSpecificDownloadsSpy;
+    let buildGroupsSpy;
+    let startRunSpy;
+    let sealSpy;
+
+    beforeEach(() => {
+      // Re-require after the outer beforeEach's jest.resetModules(): these
+      // singletons are unmocked, so a stale describe-scope reference would
+      // point at a different instance than the one the late-required
+      // production code resolves within this test.
+      manualDownloadGrouper = require('../manualDownloadGrouper');
+      downloadRunTracker = require('../download/downloadRunTracker');
+      videoValidationModule = require('../videoValidationModule');
+      doSpecificDownloadsSpy = jest
+        .spyOn(downloadModule, 'doSpecificDownloads')
+        .mockResolvedValue('job-1');
+      buildGroupsSpy = jest.spyOn(manualDownloadGrouper, 'buildGroups');
+      startRunSpy = jest.spyOn(downloadRunTracker, 'startRun').mockReturnValue('run-test');
+      sealSpy = jest.spyOn(downloadRunTracker, 'seal').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      doSpecificDownloadsSpy.mockRestore();
+      buildGroupsSpy.mockRestore();
+      startRunSpy.mockRestore();
+      sealSpy.mockRestore();
+    });
+
+    test('delegates unchanged when a channelId is provided (channel-page flow)', async () => {
+      const req = { body: { urls: ['u1'], channelId: 'UCx' } };
+      await downloadModule.doGroupedManualDownloads(req);
+      expect(buildGroupsSpy).not.toHaveBeenCalled();
+      expect(doSpecificDownloadsSpy).toHaveBeenCalledWith(req);
+    });
+
+    test('single group spawns one per-video-structure job with resolved settings', async () => {
+      buildGroupsSpy.mockResolvedValue([
+        { resolution: '720', audioFormat: 'mp3_only', urls: ['u1', 'u2'] },
+      ]);
+      await downloadModule.doGroupedManualDownloads({
+        body: {
+          urls: ['u1', 'u2'],
+          overrideSettings: { allowRedownload: true, subfolder: 'Kids', skipVideoFolder: false },
+          videoChannelMap: { abcdefghijk: 'UCx' },
+          initiatedBy: { type: 'api_key', name: 'shortcut' },
+        },
+      });
+      expect(startRunSpy).not.toHaveBeenCalled();
+      expect(doSpecificDownloadsSpy).toHaveBeenCalledTimes(1);
+      const { body } = doSpecificDownloadsSpy.mock.calls[0][0];
+      expect(body.urls).toEqual(['u1', 'u2']);
+      expect(body.overrideSettings).toEqual({
+        allowRedownload: true,
+        subfolder: 'Kids',
+        skipVideoFolder: false,
+        resolution: '720',
+        audioFormat: 'mp3_only',
+      });
+      expect(body.structurePerVideo).toBe(true);
+      expect(body.initiatedBy).toEqual({ type: 'api_key', name: 'shortcut' });
+      expect(body.runId).toBeUndefined();
+    });
+
+    test('merges validation-cache channel ids over the client attribution map', async () => {
+      videoValidationModule.getCachedChannelId.mockReturnValueOnce('UCuAXFkgsw1L7xaCfnd5JJOw');
+      buildGroupsSpy.mockResolvedValue([
+        { resolution: '1080', audioFormat: null, urls: ['https://www.youtube.com/watch?v=dQw4w9WgXcQ'] },
+      ]);
+      await downloadModule.doGroupedManualDownloads({
+        body: { urls: ['https://www.youtube.com/watch?v=dQw4w9WgXcQ'] },
+      });
+      expect(buildGroupsSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          videoChannelMap: { dQw4w9WgXcQ: 'UCuAXFkgsw1L7xaCfnd5JJOw' },
+        })
+      );
+    });
+
+    test('multiple groups spawn one job each inside a sealed run', async () => {
+      buildGroupsSpy.mockResolvedValue([
+        { resolution: '1080', audioFormat: null, urls: ['u1'] },
+        { resolution: '720', audioFormat: null, urls: ['u2'] },
+      ]);
+      await downloadModule.doGroupedManualDownloads({ body: { urls: ['u1', 'u2'] } });
+      expect(startRunSpy).toHaveBeenCalledTimes(1);
+      expect(doSpecificDownloadsSpy).toHaveBeenCalledTimes(2);
+      expect(doSpecificDownloadsSpy.mock.calls[0][0].body.urls).toEqual(['u1']);
+      expect(doSpecificDownloadsSpy.mock.calls[0][0].body.runId).toBe('run-test');
+      expect(doSpecificDownloadsSpy.mock.calls[1][0].body.urls).toEqual(['u2']);
+      expect(doSpecificDownloadsSpy.mock.calls[1][0].body.runId).toBe('run-test');
+      expect(sealSpy).toHaveBeenCalledWith('run-test');
+    });
+
+    test('seals the run even when a group job throws', async () => {
+      buildGroupsSpy.mockResolvedValue([
+        { resolution: '1080', audioFormat: null, urls: ['u1'] },
+        { resolution: '720', audioFormat: null, urls: ['u2'] },
+      ]);
+      doSpecificDownloadsSpy.mockRejectedValueOnce(new Error('boom'));
+      await expect(
+        downloadModule.doGroupedManualDownloads({ body: { urls: ['u1', 'u2'] } })
+      ).rejects.toThrow('boom');
+      expect(sealSpy).toHaveBeenCalledWith('run-test');
+    });
+
+    test('falls back to a single ungrouped job that still uses per-video structure', async () => {
+      buildGroupsSpy.mockRejectedValue(new Error('db down'));
+      const req = { body: { urls: ['u1'] } };
+      await downloadModule.doGroupedManualDownloads(req);
+      expect(doSpecificDownloadsSpy).toHaveBeenCalledWith(req);
+      expect(req.body.structurePerVideo).toBe(true);
+    });
   });
 
   describe('doSpecificDownloads', () => {
@@ -1694,6 +1824,36 @@ describe('DownloadModule', () => {
         false,
         { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false, ownerChannelId: null, ownerChannelMap: null }
       );
+    });
+
+    test('structurePerVideo jobs build a nested template and forward structure directives', async () => {
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+      YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload.mockReturnValue([]);
+      await downloadModule.doSpecificDownloads({
+        body: {
+          urls: ['https://www.youtube.com/watch?v=dQw4w9WgXcQ'],
+          overrideSettings: { skipVideoFolder: true },
+          structurePerVideo: true,
+        },
+      });
+      // Template always nested: 4th arg (skipVideoFolder) is false
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload)
+        .toHaveBeenCalledWith(expect.anything(), false, null, false);
+      // Executor options (8th positional arg) carry the per-video directives
+      const options = mockDownloadExecutor.doDownload.mock.calls[0][7];
+      expect(options.structurePerVideo).toBe(true);
+      expect(options.skipVideoFolder).toBe(false);
+      expect(options.skipVideoFolderOverride).toBe(true);
+    });
+
+    test('structurePerVideo jobs without a user choice omit the override directive', async () => {
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+      YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload.mockReturnValue([]);
+      await downloadModule.doSpecificDownloads({
+        body: { urls: ['https://www.youtube.com/watch?v=dQw4w9WgXcQ'], structurePerVideo: true },
+      });
+      const options = mockDownloadExecutor.doDownload.mock.calls[0][7];
+      expect(options.skipVideoFolderOverride).toBeUndefined();
     });
   });
 

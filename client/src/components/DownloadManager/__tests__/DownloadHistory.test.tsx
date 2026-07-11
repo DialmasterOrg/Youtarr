@@ -32,13 +32,18 @@ jest.mock('../../shared/VideoModal', () => ({
   default: function MockVideoModal(props: {
     open: boolean;
     onVideoDeleted?: (youtubeId: string) => void;
-    video: { youtubeId: string };
+    video: { youtubeId: string; status: string };
   }) {
     const React = require('react');
     if (!props.open) return null;
     return React.createElement(
       'div',
       { 'data-testid': 'mock-video-modal' },
+      React.createElement(
+        'span',
+        { 'data-testid': 'mock-video-status' },
+        props.video.status
+      ),
       React.createElement(
         'button',
         {
@@ -810,6 +815,36 @@ describe('DownloadHistory', () => {
       await waitFor(() => {
         expect(screen.queryByTestId('mock-video-modal')).not.toBeInTheDocument();
       });
+    });
+  });
+
+  describe('Modal download status', () => {
+    test('reports an audio-only download as downloaded when opened from history', async () => {
+      const user = userEvent.setup();
+      const job = makeMultiVideoJob('job-audio', [
+        makeVideo({
+          id: 7,
+          youtubeId: 'mp3only1',
+          youTubeVideoName: 'Audio Only Video',
+          filePath: null,
+          audioFilePath: '/library/Channel/Audio Only Video.mp3',
+          removed: false,
+        }),
+        makeVideo({ id: 8, youtubeId: 'other1', youTubeVideoName: 'Other Video' }),
+      ]);
+
+      render(
+        <DownloadHistory
+          {...defaultProps}
+          jobs={[job]}
+          expanded={{ 'job-audio': true }}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Audio Only Video' }));
+
+      // Exact match: 'never_downloaded' also contains the substring 'downloaded'
+      expect(screen.getByTestId('mock-video-status')).toHaveTextContent(/^downloaded$/);
     });
   });
 

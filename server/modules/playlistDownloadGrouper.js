@@ -32,13 +32,19 @@ class PlaylistDownloadGrouper {
 
     for (const entry of entries) {
       const channel = entry.channel_id ? channelMap.get(entry.channel_id) || null : null;
-      const { resolution, audioFormat, skipVideoFolder } =
-        downloadSettingsResolver.resolveCommandSettings({
-          override: overrideSettings,
-          channel,
-          playlist,
-          config: configModule.config,
-        });
+      const resolved = downloadSettingsResolver.resolveCommandSettings({
+        override: overrideSettings,
+        channel,
+        playlist,
+        config: configModule.config,
+      });
+      // Preserve the executor's audio contract: an explicitly provided
+      // audioFormat wins even when it is null (= force video-only). The
+      // generic resolver treats null as "no override".
+      const audioFormat = overrideSettings.audioFormat !== undefined
+        ? overrideSettings.audioFormat
+        : resolved.audioFormat;
+      const { resolution, skipVideoFolder } = resolved;
 
       const key = JSON.stringify({ resolution, audioFormat, skipVideoFolder });
       if (!groups.has(key)) {

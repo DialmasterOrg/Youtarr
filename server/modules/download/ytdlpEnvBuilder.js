@@ -14,6 +14,8 @@ function buildYtdlpEnv({ jobId, tempBasePath, postProcessDirectives, baseEnv = p
     ratingOverride = undefined,
     ratingFallback = null,
     skipVideoFolder = false,
+    structurePerVideo = false,
+    skipVideoFolderOverride = undefined,
     ownerChannelId = null,
     ownerChannelMap = null,
   } = postProcessDirectives || {};
@@ -35,6 +37,16 @@ function buildYtdlpEnv({ jobId, tempBasePath, postProcessDirectives, baseEnv = p
 
   if (skipVideoFolder) {
     env.YOUTARR_SKIP_VIDEO_FOLDER = 'true';
+  }
+
+  // Per-video structure mode: the post-processor resolves flat-vs-subfolder
+  // per video (override -> channel -> global) instead of using the fixed
+  // per-job layout. The override is only present when the user chose one.
+  if (structurePerVideo) {
+    env.YOUTARR_STRUCTURE_PER_VIDEO = 'true';
+  }
+  if (skipVideoFolderOverride !== undefined) {
+    env.YOUTARR_SKIP_VIDEO_FOLDER_OVERRIDE = String(!!skipVideoFolderOverride);
   }
 
   // null is the explicit "clear rating" sentinel -> 'NR'

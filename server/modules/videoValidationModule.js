@@ -2,6 +2,7 @@ const ytDlpRunner = require('./ytDlpRunner');
 const archiveModule = require('./archiveModule');
 const logger = require('../logger');
 const ChannelVideo = require('../models/channelvideo');
+const youtubeUrlParser = require('./youtubeUrlParser');
 
 class VideoValidationModule {
   constructor() {
@@ -16,61 +17,7 @@ class VideoValidationModule {
    * @throws {Error} - If URL is not a valid YouTube video URL
    */
   normalizeUrlToVideoId(url) {
-    if (!url || typeof url !== 'string') {
-      throw new Error('Invalid URL provided');
-    }
-
-    let trimmedUrl = url.trim();
-    if (!/^https?:\/\//i.test(trimmedUrl)) {
-      trimmedUrl = `https://${trimmedUrl}`;
-    }
-
-    let parsedUrl;
-    try {
-      parsedUrl = new URL(trimmedUrl);
-    } catch (error) {
-      throw new Error('Invalid YouTube URL format');
-    }
-
-    const hostname = parsedUrl.hostname.replace(/^www\./i, '');
-    const pathSegments = parsedUrl.pathname.split('/').filter(Boolean);
-    let videoId = null;
-
-    const isYoutubeDomain = (
-      hostname === 'youtube.com' ||
-      hostname === 'm.youtube.com' ||
-      hostname === 'music.youtube.com'
-    );
-
-    const idPattern = /^[a-zA-Z0-9_-]{11}$/;
-
-    if (hostname === 'youtu.be') {
-      const candidate = pathSegments[0];
-      if (candidate && idPattern.test(candidate)) {
-        videoId = candidate;
-      }
-    } else if (isYoutubeDomain) {
-      if (pathSegments[0] === 'watch') {
-        const candidate = parsedUrl.searchParams.get('v');
-        if (candidate && idPattern.test(candidate)) {
-          videoId = candidate;
-        }
-      } else if (pathSegments[0] === 'shorts' || pathSegments[0] === 'embed' || pathSegments[0] === 'live') {
-        const candidate = pathSegments[1];
-        if (candidate && idPattern.test(candidate)) {
-          videoId = candidate;
-        }
-      }
-    }
-
-    if (!videoId) {
-      throw new Error('Invalid YouTube URL format');
-    }
-
-    return {
-      id: videoId,
-      canonicalUrl: `https://www.youtube.com/watch?v=${videoId}`
-    };
+    return youtubeUrlParser.normalizeUrlToVideoId(url);
   }
 
   /**
@@ -148,6 +95,7 @@ class VideoValidationModule {
         youtubeId: videoId,
         url: `https://www.youtube.com/watch?v=${videoId}`,
         channelName: metadata.channel || metadata.uploader || 'Unknown',
+        channelId: metadata.channel_id || null,
         videoTitle: metadata.title || 'Unknown',
         duration: metadata.duration || 0,
         publishedAt: metadata.upload_date ?
@@ -188,6 +136,18 @@ class VideoValidationModule {
       }
     }
     return null;
+  }
+
+  /**
+   * Read-only lookup of the channelId captured when this video was validated.
+   * Server-side attribution source for the manual download planner; returns
+   * null on cache miss or expiry.
+   * @param {string} youtubeId - YouTube video ID
+   * @returns {string|null}
+   */
+  getCachedChannelId(youtubeId) {
+    const cached = this.getCachedResponse(youtubeId);
+    return (cached && cached.metadata && cached.metadata.channelId) || null;
   }
 
   /**
@@ -311,6 +271,7 @@ class VideoValidationModule {
             youtubeId: extractedVideoId,
             url: `https://www.youtube.com/watch?v=${extractedVideoId}`,
             channelName: 'Unknown',
+            channelId: null,
             videoTitle: 'Members-only video',
             duration: 0,
             publishedAt: null,

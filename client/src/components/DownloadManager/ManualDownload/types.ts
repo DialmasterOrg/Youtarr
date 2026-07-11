@@ -2,6 +2,7 @@ export interface VideoInfo {
   youtubeId: string;
   url: string;
   channelName: string;
+  channelId?: string | null;
   videoTitle: string;
   duration: number;
   publishedAt: number;
@@ -30,6 +31,7 @@ export interface ValidationResponse {
     youtubeId: string;
     url: string;
     channelName: string;
+    channelId?: string | null;
     videoTitle: string;
     duration: number;
     publishedAt: number;

@@ -245,10 +245,11 @@ const createServerModule = ({
           updateChannelsByDelta: jest.fn().mockResolvedValue()
         }));
         jest.doMock('../modules/plexModule', () => ({}));
-        jest.doMock('../modules/downloadModule', () => ({
+        const downloadModuleMock = {
           downloadSpecificUrl: jest.fn().mockResolvedValue({ success: true, jobId: 'test-job-id' }),
-          doSpecificDownloads: jest.fn().mockResolvedValue({ success: true })
-        }));
+          doGroupedManualDownloads: jest.fn().mockResolvedValue(undefined)
+        };
+        jest.doMock('../modules/downloadModule', () => downloadModuleMock);
         jest.doMock('../modules/jobModule', () => ({
           getRunningJobs: jest.fn(() => []),
           getRunningJobsWithFreshVideos: jest.fn().mockResolvedValue([])
@@ -292,14 +293,15 @@ const createServerModule = ({
           deleteVideos: jest.fn().mockResolvedValue({ deleted: [], failed: [] }),
           deleteVideosByYoutubeIds: jest.fn().mockResolvedValue({ deleted: [], failed: [] })
         }));
-        jest.doMock('../modules/videoValidationModule', () => ({
-          validateVideo: jest.fn().mockResolvedValue({ 
-            isValidUrl: true, 
+        const videoValidationModuleMock = {
+          validateVideo: jest.fn().mockResolvedValue({
+            isValidUrl: true,
             title: 'Test Video',
             thumbnail: 'https://example.com/thumb.jpg',
             duration: 180
           })
-        }));
+        };
+        jest.doMock('../modules/videoValidationModule', () => videoValidationModuleMock);
         jest.doMock('../modules/notificationModule', () => ({
           sendTestNotification: jest.fn().mockResolvedValue({ success: true })
         }));
@@ -363,6 +365,8 @@ const createServerModule = ({
         state.apiKeyModuleMock = apiKeyModuleMock;
         state.setupTokenModuleMock = setupTokenModuleMock;
         state.sessionUpdateMock = effectiveSession?.update || defaultSessionUpdate;
+        state.downloadModuleMock = downloadModuleMock;
+        state.videoValidationModuleMock = videoValidationModuleMock;
 
         const finalize = () => resolve(state);
 
@@ -795,6 +799,41 @@ describe('API Key Authentication - Security Tests', () => {
       expect(res.statusCode).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.message).toContain('queued');
+    });
+
+    test('forwards channel attribution from validation metadata as videoChannelMap', async () => {
+      const apiKeyModuleMock = createApiKeyModuleMock();
+      const created = await apiKeyModuleMock.createApiKey('Download Key');
+
+      const { app, downloadModuleMock, videoValidationModuleMock } = await createServerModule({ apiKeyModuleMock });
+      videoValidationModuleMock.validateVideo.mockResolvedValueOnce({
+        isValidUrl: true,
+        title: 'Test Video',
+        thumbnail: 'https://example.com/thumb.jpg',
+        duration: 180,
+        metadata: { channelId: 'UCuAXFkgsw1L7xaCfnd5JJOw', youtubeId: 'dQw4w9WgXcQ' }
+      });
+
+      const handlers = findRouteHandlers(app, 'post', '/api/videos/download');
+      const downloadHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' },
+        headers: { 'x-api-key': created.key },
+        authType: 'api_key',
+        apiKeyId: created.id,
+        apiKeyName: 'Download Key'
+      });
+      const res = createMockResponse();
+
+      await downloadHandler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(downloadModuleMock.doGroupedManualDownloads).toHaveBeenCalledWith({
+        body: expect.objectContaining({
+          videoChannelMap: { dQw4w9WgXcQ: 'UCuAXFkgsw1L7xaCfnd5JJOw' }
+        })
+      });
     });
 
     test('rejects invalid API key via apiKeyModule', async () => {

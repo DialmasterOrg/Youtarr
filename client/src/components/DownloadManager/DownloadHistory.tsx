@@ -63,7 +63,7 @@ function getDiagnosisTitles(job: Job): string[] {
 }
 
 function jobVideoToModalData(video: VideoData): VideoModalData {
-  const isDownloaded = Boolean(video.filePath) && !video.removed;
+  const isDownloaded = Boolean(video.filePath || video.audioFilePath) && !video.removed;
   const status: VideoModalData['status'] = video.removed
     ? 'missing'
     : isDownloaded

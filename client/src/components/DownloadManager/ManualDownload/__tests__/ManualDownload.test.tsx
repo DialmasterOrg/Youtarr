@@ -377,10 +377,48 @@ describe('ManualDownload', () => {
     await waitFor(() => {
       expect(mockOnStartDownload).toHaveBeenCalledWith(
         ['https://youtube.com/watch?v=test123', 'https://youtube.com/watch?v=test123'],
-        null
+        null,
+        undefined
       );
     });
     expect(await screen.findByText('Started downloading 2 videos.')).toBeInTheDocument();
+  });
+
+  test('passes a videoChannelMap built from validated videos to onStartDownload', async () => {
+    mockedAxios.post.mockResolvedValueOnce({
+      data: {
+        ...mockValidationResponse,
+        metadata: {
+          ...mockValidationResponse.metadata,
+          youtubeId: 'dQw4w9WgXcQ',
+          url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+          channelId: 'UCuAXFkgsw1L7xaCfnd5JJOw',
+        },
+      },
+    });
+
+    render(<ManualDownload onStartDownload={mockOnStartDownload} token={mockToken} />);
+
+    const validateButton = screen.getByTestId('validate-button');
+    fireEvent.click(validateButton);
+
+    await screen.findByTestId('video-chip-dQw4w9WgXcQ');
+
+    const downloadButton = screen.getByRole('button', { name: /download videos/i });
+    fireEvent.click(downloadButton);
+
+    await screen.findByTestId('download-settings-dialog');
+
+    const confirmButton = screen.getByTestId('confirm-download');
+    fireEvent.click(confirmButton);
+
+    await waitFor(() => {
+      expect(mockOnStartDownload).toHaveBeenCalledWith(
+        ['https://www.youtube.com/watch?v=dQw4w9WgXcQ'],
+        null,
+        { dQw4w9WgXcQ: 'UCuAXFkgsw1L7xaCfnd5JJOw' }
+      );
+    });
   });
 
   test('allows downloading already downloaded videos', async () => {
@@ -420,7 +458,7 @@ describe('ManualDownload', () => {
 
     // The onStartDownload should be called
     await waitFor(() => {
-      expect(mockOnStartDownload).toHaveBeenCalledWith(['https://youtube.com/watch?v=test123'], null);
+      expect(mockOnStartDownload).toHaveBeenCalledWith(['https://youtube.com/watch?v=test123'], null, undefined);
     });
   });
 
@@ -724,7 +762,8 @@ describe('ManualDownload', () => {
           'https://www.youtube.com/watch?v=bulk1aaaaaa',
           'https://www.youtube.com/watch?v=bulk2aaaaaa',
         ],
-        null
+        null,
+        undefined
       );
     });
   });

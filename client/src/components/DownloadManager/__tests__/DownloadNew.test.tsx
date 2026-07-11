@@ -31,7 +31,15 @@ jest.mock('../ManualDownload/ManualDownload', () => ({
       React.createElement('button', {
         onClick: () => onStartDownload(['https://youtube.com/watch?v=test&list=123'], null),
         'data-testid': 'trigger-manual-with-ampersand'
-      }, 'Download URL with ampersand')
+      }, 'Download URL with ampersand'),
+      React.createElement('button', {
+        onClick: () => onStartDownload(
+          ['https://www.youtube.com/watch?v=dQw4w9WgXcQ'],
+          null,
+          { dQw4w9WgXcQ: 'UCuAXFkgsw1L7xaCfnd5JJOw' }
+        ),
+        'data-testid': 'trigger-manual-with-channel-map'
+      }, 'Download With Channel Map')
     );
   }
 }));
@@ -415,6 +423,32 @@ describe('DownloadNew', () => {
       },
       body: JSON.stringify({
         urls: ['https://youtube.com/watch?v=test']
+      }),
+    });
+  });
+
+  test('includes videoChannelMap in manual download request when provided', async () => {
+    const user = userEvent.setup({ delay: null });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: jest.fn().mockResolvedValueOnce({}),
+    });
+
+    render(<DownloadNew {...defaultProps} />);
+
+    const triggerButton = screen.getByTestId('trigger-manual-with-channel-map');
+    await user.click(triggerButton);
+
+    expect(mockFetch).toHaveBeenCalledWith('/triggerspecificdownloads', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-access-token': mockToken,
+      },
+      body: JSON.stringify({
+        urls: ['https://www.youtube.com/watch?v=dQw4w9WgXcQ'],
+        videoChannelMap: { dQw4w9WgXcQ: 'UCuAXFkgsw1L7xaCfnd5JJOw' },
       }),
     });
   });
