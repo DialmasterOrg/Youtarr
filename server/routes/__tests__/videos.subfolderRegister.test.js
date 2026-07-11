@@ -24,7 +24,10 @@ describe('POST /api/videos/download subfolder registration', () => {
     jest.clearAllMocks();
     // Reset the mock to ensure register is callable after clearAllMocks
     subfolderModule.register.mockResolvedValue(undefined);
-    downloadModule = { doSpecificDownloads: jest.fn() };
+    downloadModule = {
+      doSpecificDownloads: jest.fn(),
+      doGroupedManualDownloads: jest.fn().mockResolvedValue(undefined),
+    };
     const createVideoRoutes = require('../videos');
     app = express();
     app.use(express.json());

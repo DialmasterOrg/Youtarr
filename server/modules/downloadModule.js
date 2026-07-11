@@ -154,6 +154,7 @@ class DownloadModule {
     if (channelId) body.channelId = channelId;
     if (effectiveQuality) body.effectiveQuality = effectiveQuality;
     if (runId) body.runId = runId;
+    if (this.getJobDataValue(sourceJobData, 'structurePerVideo')) body.structurePerVideo = true;
 
     logger.info(
       { videoCount: retryVideos.length, autoRetryAttempt, channelId, runId },
@@ -681,12 +682,19 @@ class DownloadModule {
       // Persist resolved quality for any subsequent retries of this job
       this.setJobDataValue(jobData, 'effectiveQuality', resolution);
 
-      // Flat-structure precedence: override > channel explicit setting > global default
-      const skipVideoFolder = downloadSettingsResolver.resolveSkipVideoFolder({
-        override: overrideSettings,
-        channel: channelRecord,
-        config: configModule.config,
-      });
+      const structurePerVideo = !!this.getJobDataValue(jobData, 'structurePerVideo');
+
+      // Per-video structure mode: the yt-dlp template always writes the nested
+      // layout; the post-processor decides flat-vs-subfolder per video. Fixed
+      // mode keeps the pre-resolved per-job value (flat-structure precedence:
+      // override > channel explicit setting > global default).
+      const skipVideoFolder = structurePerVideo
+        ? false
+        : downloadSettingsResolver.resolveSkipVideoFolder({
+          override: overrideSettings,
+          channel: channelRecord,
+          config: configModule.config,
+        });
 
       // For manual downloads, we don't apply duration filters but still exclude members-only
       // Subfolder override is passed to post-processor via environment variable
@@ -753,12 +761,108 @@ class DownloadModule {
           ratingOverride: overrideSettings.rating !== undefined ? overrideSettings.rating : undefined,
           ratingFallback,
           skipVideoFolder,
+          // Fixed-mode jobs omit these (undefined) so the yt-dlp env stays
+          // byte-for-byte unchanged; per-video mode jobs carry them through
+          // to the post-processor via buildYtdlpEnv.
+          structurePerVideo: structurePerVideo || undefined,
+          skipVideoFolderOverride: structurePerVideo && overrideSettings.skipVideoFolder !== undefined
+            ? !!overrideSettings.skipVideoFolder
+            : undefined,
           // Owning channel / per-video owner map for routing at finalize; see
           // the resolution priority in videoDownloadPostProcessFiles.js.
           ownerChannelId: channelId || null,
           ownerChannelMap: this.getJobDataValue(jobData, 'ownerChannelMap') || null,
         }
       );
+    }
+  }
+
+  /**
+   * Entry point for manual URL-list downloads. When no owning channel is
+   * given, attributes each URL to its channel (validation-captured channelId
+   * first - server cache merged over the client echo - then DB) and splits
+   * the batch into one doSpecificDownloads job per distinct (resolution,
+   * audioFormat) bucket. File structure is NOT grouped: every manual job runs
+   * in per-video structure mode, where the post-processor resolves
+   * flat-vs-subfolder per video from its real channel. Multi-bucket batches
+   * share a download run for a single aggregate summary. Falls back to a
+   * single ungrouped (still per-video-structure) job when grouping fails.
+   * @param {Object} reqOrJobData - Express request ({ body }) or jobData
+   */
+  async doGroupedManualDownloads(reqOrJobData) {
+    const jobData = reqOrJobData.body ? reqOrJobData.body : reqOrJobData;
+    const urls = this.getJobDataValue(jobData, 'urls');
+    const channelId = this.getJobDataValue(jobData, 'channelId');
+
+    // Channel-page downloads carry the owning channel; keep the single-job path.
+    if (channelId || !Array.isArray(urls) || urls.length === 0) {
+      return this.doSpecificDownloads(reqOrJobData);
+    }
+
+    const overrideSettings = this.getOverrideSettings(jobData);
+    const manualDownloadGrouper = require('./manualDownloadGrouper');
+    const videoValidationModule = require('./videoValidationModule');
+
+    // Merge server-side validation-cache hits over the client-echoed map:
+    // both originate from the same yt-dlp validation fetch, but the cache is
+    // server-derived and covers stale clients that do not send the map.
+    // Entries are only candidates gated to tracked+enabled channels.
+    const videoChannelMap = { ...(this.getJobDataValue(jobData, 'videoChannelMap') || {}) };
+    for (const url of urls) {
+      const youtubeId = manualDownloadGrouper.extractYoutubeId(url);
+      if (!youtubeId) continue;
+      const cachedChannelId = videoValidationModule.getCachedChannelId(youtubeId);
+      if (cachedChannelId) videoChannelMap[youtubeId] = cachedChannelId;
+    }
+
+    let groups;
+    try {
+      groups = await manualDownloadGrouper.buildGroups({
+        urls,
+        overrideSettings,
+        videoChannelMap: Object.keys(videoChannelMap).length > 0 ? videoChannelMap : null,
+      });
+    } catch (err) {
+      logger.warn({ err }, 'Manual download grouping failed; falling back to global command settings');
+      // Structure still resolves per video at finalize even without grouping.
+      this.setJobDataValue(jobData, 'structurePerVideo', true);
+      return this.doSpecificDownloads(reqOrJobData);
+    }
+
+    logger.info(
+      {
+        urlCount: urls.length,
+        attributedCount: Object.keys(videoChannelMap).length,
+        groupCount: groups.length,
+      },
+      'Planned manual download groups'
+    );
+
+    const buildGroupBody = (group, runId) => ({
+      urls: group.urls,
+      overrideSettings: {
+        ...overrideSettings,
+        resolution: group.resolution,
+        audioFormat: group.audioFormat,
+      },
+      structurePerVideo: true,
+      initiatedBy: this.getJobDataValue(jobData, 'initiatedBy'),
+      jobLabel: this.getJobDataValue(jobData, 'jobLabel'),
+      ...(runId ? { runId } : {}),
+    });
+
+    if (groups.length === 1) {
+      return this.doSpecificDownloads({ body: buildGroupBody(groups[0], null) });
+    }
+
+    const downloadRunTracker = require('./download/downloadRunTracker');
+    const runId = downloadRunTracker.startRun();
+    try {
+      for (const group of groups) {
+        await this.doSpecificDownloads({ body: buildGroupBody(group, runId) });
+      }
+    } finally {
+      downloadRunTracker.seal(runId);
     }
   }
 

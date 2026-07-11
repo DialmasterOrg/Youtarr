@@ -206,6 +206,17 @@ describe('downloadRunTracker', () => {
       tracker.seal(runId);
       expect(MessageEmitter.emitMessage).toHaveBeenCalledTimes(1);
     });
+
+    test('labels an all-manual run as Manual downloads', () => {
+      const runId = tracker.startRun();
+      tracker.registerJob(runId, 'job-1');
+      tracker.registerJob(runId, 'job-2');
+      tracker.recordJobResult(runId, 'job-1', { jobType: 'Manually Added Urls', totalDownloaded: 1 });
+      tracker.recordJobResult(runId, 'job-2', { jobType: 'Manually Added Urls', totalDownloaded: 2 });
+      tracker.seal(runId);
+
+      expect(emittedSummary().finalSummary.jobType).toBe('Manual downloads');
+    });
   });
 
   describe('summary labelling', () => {

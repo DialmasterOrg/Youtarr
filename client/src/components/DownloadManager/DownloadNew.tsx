@@ -69,7 +69,11 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
     setTimeout(fetchRunningJobs, 500);
   };
 
-  const handleManualDownload = useCallback(async (urls: string[], settings?: DownloadSettings | null) => {
+  const handleManualDownload = useCallback(async (
+    urls: string[],
+    settings?: DownloadSettings | null,
+    videoChannelMap?: Record<string, string>
+  ) => {
     downloadInitiatedRef.current = true;
     const strippedUrls = urls.map((url) =>
       url.includes('&') ? url.substring(0, url.indexOf('&')) : url
@@ -79,6 +83,9 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
     // Add settings to the request body if provided
     if (settings) {
       body.overrideSettings = settings;
+    }
+    if (videoChannelMap && Object.keys(videoChannelMap).length > 0) {
+      body.videoChannelMap = videoChannelMap;
     }
 
     await fetch('/triggerspecificdownloads', {

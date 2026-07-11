@@ -100,6 +100,33 @@ describe('skipVideoFolder', () => {
   });
 });
 
+describe('structurePerVideo / skipVideoFolderOverride', () => {
+  test('sets per-video structure directives', () => {
+    const env = buildYtdlpEnv({
+      jobId: 'j1',
+      tempBasePath: '/tmp/x',
+      postProcessDirectives: { structurePerVideo: true, skipVideoFolderOverride: true },
+    });
+    expect(env.YOUTARR_STRUCTURE_PER_VIDEO).toBe('true');
+    expect(env.YOUTARR_SKIP_VIDEO_FOLDER_OVERRIDE).toBe('true');
+  });
+
+  test('omits per-video directives by default', () => {
+    const env = buildYtdlpEnv({ jobId: 'j1', tempBasePath: '/tmp/x', postProcessDirectives: {} });
+    expect(env.YOUTARR_STRUCTURE_PER_VIDEO).toBeUndefined();
+    expect(env.YOUTARR_SKIP_VIDEO_FOLDER_OVERRIDE).toBeUndefined();
+  });
+
+  test('an explicit false override is forwarded as the string false', () => {
+    const env = buildYtdlpEnv({
+      jobId: 'j1',
+      tempBasePath: '/tmp/x',
+      postProcessDirectives: { structurePerVideo: true, skipVideoFolderOverride: false },
+    });
+    expect(env.YOUTARR_SKIP_VIDEO_FOLDER_OVERRIDE).toBe('false');
+  });
+});
+
 describe('ratingOverride', () => {
   test('sets YOUTARR_OVERRIDE_RATING to "NR" when null (clear-rating sentinel)', () => {
     const env = buildYtdlpEnv({ ...BASE_ARGS, baseEnv: {}, postProcessDirectives: { ratingOverride: null } });
