@@ -1,6 +1,6 @@
 # Youtarr vs alternatives
 
-*As of April 2026. These projects move fast; verify current state before committing.*
+*Youtarr details updated July 2026; Pinchflat and Tube Archivist last verified April 2026.*
 
 ## At a glance
 
@@ -8,11 +8,11 @@ All three monitor YouTube channels and archive new videos with yt-dlp, but they 
 
 - **Pick Tube Archivist** if you want a full self-hosted YouTube media server with in-app playback, full-text search across subtitles and comments, and you're willing to run a multi-container stack.
 - **Pick Pinchflat** if you want the simplest single-container install, the most flexible filename/folder templating, and a podcast-RSS workflow. One caveat: the project has been in maintenance-only mode since September 2025 (small fixes still land, no new features). It still works and is still widely recommended, but don't expect the roadmap to move.
-- **Pick Youtarr** if you want native playlist sync into Plex, Jellyfin, or Emby, polished in-browser playback, integrated YouTube search, and a documented REST API. The tradeoff is a smaller community and a few things the other two do better (transcript search, custom filename templates).
+- **Pick Youtarr** if you want the deepest media-server integration: native playlist sync into Plex, Jellyfin, or Emby, an optional TV-show-style Plex layout, polished in-browser playback, integrated YouTube search, and a documented REST API. The tradeoff is a smaller community and a couple of things the other two do better (transcript search, podcast RSS).
 
 Short summary of each:
 
-- **Youtarr** (Node.js/Express + React + MariaDB, ISC). Media-server automation tool with the strongest Plex story of the three. Unique strengths: automatic Plex library refresh with per-subfolder library mapping, native playlist sync that mirrors subscribed YouTube playlists into Plex, Jellyfin, and Emby (plus a universal `.m3u` fallback), channel grouping into user-defined subfolders (`__kids`/`__music`/`__news`, whatever), per-video content ratings, integrated in-app YouTube search, in-browser playback, a Swagger-documented REST API, MP3-only audio extraction, per-channel regex title filters, bulk channel import from Google Takeout CSV or a one-time cookies file, per-video protection against auto-deletion, backup/restore scripts, in-app yt-dlp updates, and Apprise notifications. Weaker than the competition on flexible filename templating, full-text transcript/comment search, multi-user RBAC, podcast RSS output, and sheer community size.
+- **Youtarr** (Node.js/Express + React + MariaDB, ISC). Media-server automation tool with the strongest Plex story of the three. Unique strengths: automatic Plex library refresh with per-subfolder library mapping, native playlist sync that mirrors subscribed YouTube playlists into Plex, Jellyfin, and Emby (plus a universal `.m3u` fallback), MP3 playlists that sync as real music playlists, an optional TV Series layout that shows each channel as a show in Plex, one-click download of a channel's entire back catalog, automatic detection of terminated YouTube channels, channel grouping into user-defined subfolders (`__kids`/`__music`/`__news`, whatever), per-video content ratings, integrated in-app YouTube search, in-browser playback, a Swagger-documented REST API, MP3-only audio extraction, per-channel regex title filters, bulk channel import from Google Takeout CSV or a one-time cookies file, per-video protection against auto-deletion, backup/restore scripts, in-app yt-dlp updates, and Apprise notifications. Weaker than the competition on full-text transcript/comment search, multi-user RBAC, podcast RSS output, and sheer community size.
 
 - **Pinchflat** (Elixir/Phoenix + SQLite, AGPL-3.0). Single-container media manager by Kieran Eglin. Community favorite for its "just works" install, powerful filename templating, per-source filters (regex, duration, date cutoff), audio-only Media Profiles that produce podcast-app-compatible RSS feeds, and first-class SponsorBlock + cookies handling. No built-in player by design, no REST API, single-user HTTP basic auth only.
 
@@ -27,8 +27,8 @@ Short summary of each:
 | License | ISC | AGPL-3.0 | GPL-3.0 |
 | Stars | ~1,030 | ~4,800 | ~7,600 |
 | Forks | 38 | ~130 | 359 |
-| Latest release | Apr 2026 | Sept 2025 | Mar 2026 |
-| Release cadence | 3-5/month | Maintenance-only since Sept 2025 | Roughly monthly |
+| Latest release | Jul 2026 | Sept 2025 | Mar 2026 |
+| Release cadence | 2-3/month | Maintenance-only since Sept 2025 | Roughly monthly |
 | Docker pulls | 100K+ | 100K+ | 1M+ |
 
 ## Architecture and tech stack
@@ -46,29 +46,29 @@ Legend: ✅ supported, ❌ not supported, ⚠️ partial/caveat, "unclear" = not
 | Feature | Youtarr | Pinchflat | Tube Archivist |
 |---|---|---|---|
 | **Subscriptions & sources** | | | |
-| Channel subscriptions + auto-download | ✅ Per-tab controls (videos/shorts/streams) | ✅ "Sources", the core model | ✅ Subscriptions page; separate "add to queue" for back-catalog |
-| Playlist as first-class source | ✅ Subscribe to public/unlisted playlists; auto-download + native sync to Plex/Jellyfin/Emby + `.m3u` (no private playlists yet) | ✅ Yes (also user-created) | ✅ Yes, including reverse sort |
+| Channel subscriptions + auto-download | ✅ Per-tab controls (videos/shorts/streams); one-click Download All for the back catalog; terminated channels get flagged automatically | ✅ "Sources", the core model | ✅ Subscriptions page; separate "add to queue" for back-catalog |
+| Playlist as first-class source | ✅ Subscribe to public/unlisted playlists; auto-download + native sync to Plex/Jellyfin/Emby + `.m3u`; optional reverse ordering (no private playlists yet) | ✅ Yes (also user-created) | ✅ Yes, including reverse sort |
 | Individual/one-off downloads | ✅ Pre-validated URL preview; bulk video-URL import; bulk channel import from Takeout CSV or one-time cookies | ⚠️ Supported but not the design goal; docs suggest the "unlisted playlist" workaround | ✅ Accepts video/channel/playlist URLs |
 | Integrated YouTube search inside the UI | ✅ "Find on YouTube" with "already downloaded" state | ❌ | ⚠️ Search operates on archived library; browser extension adds YouTube-side one-click archive |
 | Cron/scheduled fetching | ✅ Cron-based download scheduling | ✅ Per-source `index_frequency_minutes`; daily retention/update checks | ✅ Full cron UI at /settings/scheduling/ |
 | **Downloads & filtering** | | | |
 | Quality/format selection | ✅ 360p-4K, global + per-channel; true 1440p/2160p via VP9/AV1-to-MP4 remux | ✅ Via Media Profile (res sort + format string) | ✅ yt-dlp format/sort strings |
-| Audio-only (MP3) extraction | ✅ MP3-only download available | ✅ First-class; audio-only Media Profile | ❌ Listed on open roadmap |
+| Audio-only (MP3) extraction | ✅ MP3-only downloads; MP3 playlists sync as music playlists | ✅ First-class; audio-only Media Profile | ❌ Listed on open roadmap |
 | Duration/date filters | ✅ Per-channel | ✅ Strong: cutoff date, min/max duration, shorts/livestream rules | ⚠️ Via page size + type toggles; no arbitrary duration filter |
 | Title regex filter (per-channel/source) | ✅ Per-channel title filter with regex examples | ✅ Documented in Advanced Source mode | ❌ Not user-facing |
-| Bandwidth / rate limiting | ⚠️ Not yet available | ✅ App-wide rate limit | ⚠️ No dedicated MB/s cap; uses yt-dlp sleep intervals |
+| Bandwidth / rate limiting | ✅ App-wide download rate limit (eg 500K, 5M) | ✅ App-wide rate limit | ⚠️ No dedicated MB/s cap; uses yt-dlp sleep intervals |
 | Archive tracking (no re-downloads) | ✅ Smart dedup | ✅ Per-source index | ✅ Indexed + ignore list |
 | **Metadata & files** | | | |
 | NFO files | ✅ Generated for Jellyfin/Kodi/Emby ordering | ✅ First-class (`nfo_filepath` on every item) | ⚠️ Only via user script `RoninTech/ta-helper` |
-| Thumbnails / channel posters | ✅ Poster + per-video thumbs | ✅ Via yt-dlp | ✅ Downloaded and can be embedded |
+| Thumbnails / channel posters | ✅ Poster + per-video thumbs; optional fanart for Plex backgrounds | ✅ Via yt-dlp | ✅ Downloaded and can be embedded |
 | Embedded MP4 tags | ✅ Title/genre/studio/keywords + optional original-year metadata | ✅ Via `--embed-metadata` | ✅ Can embed full TA metadata into MP4 tags |
 | JSON info-sidecar | ⚠️ Written via `--write-info-json`, moved to `jobs/info/` rather than kept alongside the video | ✅ Via `--write-info-json` | ⚠️ Only via user script `lamusmaser/create_info_json` |
 | Subtitles (user + auto-generated) | ⚠️ Language configurable from YouTube, no auto-gen | ✅ Yes, including auto-gen, configurable langs | ✅ Yes, language regex supported |
 | Chapters | ✅ Via Sponsorblock | ✅ Via yt-dlp + SponsorBlock chapter marks | ✅ Inherited from yt-dlp + in-player seeking |
 | Comments archiving | ❌ | ❌ | ✅ Configurable; slow by nature |
 | SponsorBlock | ✅ Global settings | ✅ With chapter-marking option | ✅ Global + per-channel override |
-| Custom file-naming template | ❌ Fixed scheme | ✅ Very flexible per Media Profile | ❌ Fixed `<channel-id>/<video-id>.mp4` (explicit design choice) |
-| Channel-grouping subfolders (kids/music/etc.) | ✅ eg `__kids`, `__music`, `__news`, each mappable to a different Plex library | ⚠️ Achievable via output template | ❌ Not configurable |
+| Custom file-naming template | ✅ Templated filename prefix (yt-dlp syntax) with live preview and presets, including a Plex TV Series layout; the video-ID suffix is fixed | ✅ Very flexible per Media Profile | ❌ Fixed `<channel-id>/<video-id>.mp4` (explicit design choice) |
+| Channel-grouping subfolders (kids/music/etc.) | ✅ eg `__kids`, `__music`, `__news`, each mappable to a different Plex library; in-app management shows where each folder is used | ⚠️ Achievable via output template | ❌ Not configurable |
 | Retention / auto-prune | ✅ Age + free-space with dry-run; per-video "protection" shield; Apprise notifications on auto-removal | ✅ Per-source "auto-delete after N days" | ✅ Global + per-channel |
 | **Playback & viewing** | | | |
 | In-browser video player | ✅ Detail modal + streaming | ❌ Intentionally out of scope | ✅ Full HTML5 player with SponsorBlock skip, keyboard shortcuts, Cast |
@@ -76,7 +76,7 @@ Legend: ✅ supported, ❌ not supported, ⚠️ partial/caveat, "unclear" = not
 | Full-text search across transcripts | ❌ | ❌ | ✅ Flagship feature via Elasticsearch |
 | Search across comments | ❌ | ❌ | ⚠️ Comments archived; dedicated comment-search UI still on roadmap |
 | **Integrations** | | | |
-| Plex library refresh | ✅ Native (auto-refresh after downloads); HTTPS to Plex; per-subfolder library mapping | ⚠️ Indirect via NFO + filepaths | ⚠️ Via community `tubearchivist-plex` Scanner + Agent |
+| Plex library refresh | ✅ Native (auto-refresh after downloads); HTTPS to Plex; per-subfolder library mapping; TV Series preset for a shows-style library | ⚠️ Indirect via NFO + filepaths | ⚠️ Via community `tubearchivist-plex` Scanner + Agent |
 | Jellyfin integration | ✅ NFO-compatible | ✅ NFO-compatible; community reports "just works" | ✅ Dedicated `tubearchivist-jf-plugin` with bidirectional watched-state sync |
 | Emby | ✅ NFO-compatible | ✅ NFO-compatible | ❌ No plugin |
 | Kodi | ✅ NFO-compatible | ✅ NFO-compatible | ⚠️ Only via user-script-generated NFOs |
@@ -87,7 +87,7 @@ Legend: ✅ supported, ❌ not supported, ⚠️ partial/caveat, "unclear" = not
 | REST/GraphQL API | ✅ 40+ endpoints, Swagger UI at `/swagger`, API keys with rate-limiting | ❌ Open feature request | ✅ REST + OpenAPI docs at `/api/docs/` |
 | Multi-user / RBAC | ❌ Single admin + API keys | ❌ Single HTTP basic-auth user | ⚠️ Superuser/staff/read-only roles; library is still shared across users |
 | Apprise notifications | ✅ | ✅ | ✅ |
-| Cookies (private/unlisted/members-only) | ✅ Persistent `cookies.txt` for downloads + separate one-time cookies file for bulk import (auto-deleted after use) [^1] | ✅ Three modes: Disabled / When Needed / All Ops | ✅ Plus PO-token provider support for bot-detection bypass |
+| Cookies (private/unlisted/members-only) | ✅ Persistent `cookies.txt` for downloads + separate one-time cookies file for bulk import (auto-deleted after use) [^1]; transient 403 failures retry automatically, persistent ones get a plain-language explanation | ✅ Three modes: Disabled / When Needed / All Ops | ✅ Plus PO-token provider support for bot-detection bypass |
 | Backup / restore | ✅ In-app backup & restore scripts | ⚠️ File-level (copy `/config`) | ⚠️ Documented manual multi-step procedure |
 | Responsive / mobile-friendly UI | ✅ Responsive; mobile screenshots | ⚠️ Likely responsive (Tailwind); not explicitly claimed | ✅ |
 | Live-stream / premiere handling | ⚠️ Streams in per-tab controls; in-progress stream handling not supported | ✅ Per-source shorts/livestream rules | ✅ Streams as a separate per-channel tab; disable via page size 0 |
@@ -97,7 +97,7 @@ Legend: ✅ supported, ❌ not supported, ⚠️ partial/caveat, "unclear" = not
 
 ## Install and operational complexity
 
-**Youtarr** sits in the middle. One `git clone` + `./start.sh` spins up the two containers and walks you through output path, timezone, and admin credentials. MariaDB adds weight versus Pinchflat's SQLite. Updates run via `./start.sh --pull-latest`. In-app backup/restore scripts, an in-app yt-dlp update, bulk channel import, per-video auto-deletion protection, and per-subfolder Plex library mapping are all available. Documentation covers Plex, Jellyfin, Emby, Kodi, Synology, Unraid, external DB, authentication, and backup/restore, plus Swagger API docs.
+**Youtarr** sits in the middle. One `git clone` + `./start.sh` spins up the two containers and walks you through output path, timezone, and admin credentials. MariaDB adds weight versus Pinchflat's SQLite. Updates run via `./start.sh --pull-latest`. First-time setup is gated behind a one-time token, the bundled database isn't reachable from outside the Docker network, and there's a published security disclosure policy. Downloads also work on FUSE-backed storage like rclone mounts. In-app backup/restore scripts, an in-app yt-dlp update, bulk channel import, per-video auto-deletion protection, and per-subfolder Plex library mapping are all available. Documentation covers Plex, Jellyfin, Emby, Kodi, Synology, Unraid, external DB, authentication, and backup/restore, plus Swagger API docs.
 
 **Pinchflat** is the clear winner for simplicity. A single `docker run` with two volumes and one port. No DB to provision, no Redis, no Elasticsearch, no kernel knobs. Everything configurable lives under environment variables plus the web UI. Documentation is GitHub Wiki-based, no standalone docs site, but the wiki is well-written and honest about edge cases. Updates are "pull the new image." The one recurring gotcha is SQLite on network shares, with a documented workaround that carries a data-loss caveat.
 
