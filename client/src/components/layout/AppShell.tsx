@@ -94,6 +94,7 @@ export function AppShell({
   const channelsSubItems = useMemo(
     () => [
       { key: 'subscriptions-list', label: 'Channels & Playlists', to: '/subscriptions' },
+      { key: 'subscriptions-find', label: 'Find on YouTube', to: '/subscriptions/find' },
       { key: 'subscriptions-imports', label: 'Import Channels', to: '/subscriptions/imports' },
     ],
     []

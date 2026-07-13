@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { useSwipeable } from 'react-swipeable';
 import { Alert, Box, Grid, Snackbar, Typography } from '../ui';
@@ -7,6 +7,7 @@ import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useConfig } from '../../hooks/useConfig';
 import { useDownloadListingsRefresh } from '../../hooks/useDownloadListingsRefresh';
 import { VideoData } from '../../types/VideoData';
+import AddChannelDialog from '../shared/AddChannelDialog';
 import DeleteVideosDialog from '../shared/DeleteVideosDialog';
 import { useVideoDeletion } from '../shared/useVideoDeletion';
 import ChangeRatingDialog from '../shared/ChangeRatingDialog';
@@ -87,6 +88,11 @@ function VideosPage({ token }: VideosPageProps) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [modalVideo, setModalVideo] = useState<VideoData | null>(null);
+  const [addChannelTarget, setAddChannelTarget] = useState<{ name: string; url: string } | null>(null);
+  const handleAddChannel = useCallback(
+    (name: string, url: string) => setAddChannelTarget({ name, url }),
+    []
+  );
 
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
@@ -418,6 +424,7 @@ function VideosPage({ token }: VideosPageProps) {
                 onToggleProtection={handleToggleProtection}
                 onDeleteSingle={handleDeleteSingleVideo}
                 onImageError={handleImageError}
+                onAddChannel={handleAddChannel}
               />
             </Grid>
           ))}
@@ -435,6 +442,7 @@ function VideosPage({ token }: VideosPageProps) {
           onOpenModal={handleOpenModal}
           onToggleProtection={handleToggleProtection}
           onImageError={handleImageError}
+          onAddChannel={handleAddChannel}
         />
       );
     }
@@ -454,6 +462,7 @@ function VideosPage({ token }: VideosPageProps) {
         onToggleProtection={handleToggleProtection}
         onDeleteSingle={handleDeleteSingleVideo}
         onImageError={handleImageError}
+        onAddChannel={handleAddChannel}
       />
     );
   };
@@ -577,6 +586,15 @@ function VideosPage({ token }: VideosPageProps) {
               )
             );
           }}
+        />
+      )}
+
+      {addChannelTarget && (
+        <AddChannelDialog
+          open
+          onClose={() => setAddChannelTarget(null)}
+          channelName={addChannelTarget.name}
+          channelUrl={addChannelTarget.url}
         />
       )}
     </Box>

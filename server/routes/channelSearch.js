@@ -31,16 +31,16 @@ function validate(body, ALLOWED_COUNTS) {
   return { query, count };
 }
 
-function createVideoSearchRoutes({ verifyToken, videoSearchModule }) {
+function createChannelSearchRoutes({ verifyToken, channelSearchModule }) {
   const router = express.Router();
 
   /**
    * @swagger
-   * /api/videos/search:
+   * /api/channels/search:
    *   post:
-   *     summary: Search YouTube by free text
-   *     description: Search YouTube via yt-dlp and return a list of matching videos, sorted newest-to-oldest by publishedAt (entries without a timestamp sort last). Results are ephemeral; nothing is persisted. Each result includes a `status` field (`downloaded`, `missing`, or `never_downloaded`) describing the video's state in the local Video table.
-   *     tags: [Videos]
+   *     summary: Search YouTube for channels by free text
+   *     description: Search YouTube for channels via the YouTube Data API (when a key is configured) with a yt-dlp fallback. Results keep YouTube's relevance order and are ephemeral; nothing is persisted. Each result includes a `subscribed` flag reflecting whether an enabled Channel row with that channel_id exists locally. `videoCount` is only populated on the YouTube API path; the yt-dlp fallback returns null for it.
+   *     tags: [Channels]
    *     requestBody:
    *       required: true
    *       content:
@@ -74,26 +74,15 @@ function createVideoSearchRoutes({ verifyToken, videoSearchModule }) {
    *                   items:
    *                     type: object
    *                     properties:
-   *                       youtubeId: { type: string }
-   *                       title: { type: string }
-   *                       channelName: { type: string }
-   *                       channelId: { type: string, nullable: true }
-   *                       duration: { type: integer, nullable: true }
+   *                       channelId: { type: string }
+   *                       name: { type: string }
+   *                       handle: { type: string, nullable: true, example: "@minecraft" }
+   *                       url: { type: string, example: "https://www.youtube.com/channel/UC1sELGmy5jp5fQUugmuYlXQ" }
    *                       thumbnailUrl: { type: string, nullable: true }
-   *                       publishedAt: { type: string, nullable: true, format: date-time }
-   *                       viewCount: { type: integer, nullable: true }
-   *                       status:
-   *                         type: string
-   *                         enum: [downloaded, missing, never_downloaded]
-   *                       databaseId: { type: integer, nullable: true, description: "Video row id when status is downloaded or missing." }
-   *                       filePath: { type: string, nullable: true }
-   *                       fileSize: { type: integer, nullable: true }
-   *                       audioFilePath: { type: string, nullable: true }
-   *                       audioFileSize: { type: integer, nullable: true }
-   *                       addedAt: { type: string, nullable: true, format: date-time }
-   *                       isProtected: { type: boolean, nullable: true }
-   *                       normalizedRating: { type: string, nullable: true }
-   *                       ratingSource: { type: string, nullable: true }
+   *                       subscriberCount: { type: integer, nullable: true }
+   *                       videoCount: { type: integer, nullable: true }
+   *                       description: { type: string, nullable: true }
+   *                       subscribed: { type: boolean }
    *       400:
    *         description: Invalid query or count
    *       429:
@@ -101,12 +90,12 @@ function createVideoSearchRoutes({ verifyToken, videoSearchModule }) {
    *       499:
    *         description: Client closed the request before search completed
    *       502:
-   *         description: Search failed (yt-dlp error)
+   *         description: Search failed (yt-dlp or API error)
    *       504:
    *         description: Search timed out (60s server-side limit)
    */
-  router.post('/api/videos/search', verifyToken, searchLimiter, async (req, res) => {
-    const validation = validate(req.body, videoSearchModule.ALLOWED_COUNTS);
+  router.post('/api/channels/search', verifyToken, searchLimiter, async (req, res) => {
+    const validation = validate(req.body, channelSearchModule.ALLOWED_COUNTS);
     if (validation.error) {
       return res.status(400).json({ error: validation.error });
     }
@@ -119,7 +108,7 @@ function createVideoSearchRoutes({ verifyToken, videoSearchModule }) {
     });
 
     try {
-      const results = await videoSearchModule.searchVideos(
+      const results = await channelSearchModule.searchChannels(
         validation.query,
         validation.count,
         { signal: controller.signal }
@@ -128,13 +117,13 @@ function createVideoSearchRoutes({ verifyToken, videoSearchModule }) {
       res.json({ results });
     } catch (err) {
       if (res.headersSent) return;
-      if (err instanceof videoSearchModule.SearchCanceledError) {
+      if (err instanceof channelSearchModule.SearchCanceledError) {
         return res.status(499).json({ error: 'Search canceled' });
       }
-      if (err instanceof videoSearchModule.SearchTimeoutError) {
+      if (err instanceof channelSearchModule.SearchTimeoutError) {
         return res.status(504).json({ error: 'Search timed out' });
       }
-      req.log.error({ err, query: validation.query }, 'video search failed');
+      req.log.error({ err, query: validation.query }, 'channel search failed');
       return res.status(502).json({ error: 'Search failed' });
     }
   });
@@ -142,4 +131,4 @@ function createVideoSearchRoutes({ verifyToken, videoSearchModule }) {
   return router;
 }
 
-module.exports = createVideoSearchRoutes;
+module.exports = createChannelSearchRoutes;

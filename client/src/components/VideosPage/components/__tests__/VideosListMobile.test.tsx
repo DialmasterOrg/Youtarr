@@ -42,6 +42,7 @@ const renderList = (overrides: Partial<React.ComponentProps<typeof VideosListMob
     onOpenModal: jest.fn(),
     onToggleProtection: jest.fn(),
     onImageError: jest.fn(),
+    onAddChannel: jest.fn(),
   };
   render(
     <MemoryRouter>
@@ -95,5 +96,27 @@ describe('VideosListMobile', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /Compact Row Video/ }));
     expect(onToggleSelect).toHaveBeenCalledWith(1);
+  });
+
+  test('unsubscribed channel name opens the add-channel affordance without selecting the row', () => {
+    const { onToggleSelect, onAddChannel } = renderList({
+      videos: [{
+        ...sampleVideo,
+        channel_id: 'UCnew',
+        youTubeChannelName: 'New Channel',
+      }],
+      enabledChannels: [],
+    });
+
+    // Query by title: the selectable row is itself role="button" and its accessible
+    // name includes the channel name, so a role-based query would be ambiguous.
+    fireEvent.click(screen.getByTitle('Add New Channel to your channels'));
+
+    expect(onAddChannel).toHaveBeenCalledWith(
+      'New Channel',
+      'https://www.youtube.com/channel/UCnew'
+    );
+    // stopPropagation must keep the click from bubbling to the row's select handler.
+    expect(onToggleSelect).not.toHaveBeenCalled();
   });
 });

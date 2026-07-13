@@ -51,6 +51,7 @@ const Avatar = React.forwardRef<
           AvatarPrimitive.Image returns null in JSDOM because images never load). */}
       {src && (
         <img
+          {...imgProps}
           src={src}
           alt={alt}
           onError={(e) => {

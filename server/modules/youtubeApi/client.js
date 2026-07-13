@@ -326,6 +326,115 @@ async function searchVideos(apiKey, query, maxResults, { signal } = {}) {
   }
 }
 
+async function searchChannels(apiKey, query, maxResults, { signal } = {}) {
+  const baseResults = [];
+  const seenIds = new Set();
+  let pageToken;
+  let pagesFetched = 0;
+  const maxPages = Math.ceil(maxResults / SEARCH_LIST_MAX_RESULTS) + SEARCH_LIST_EXTRA_PAGE_BUFFER;
+
+  while (baseResults.length < maxResults && pagesFetched < maxPages) {
+    const params = {
+      q: query,
+      type: 'channel',
+      part: 'snippet',
+      maxResults: SEARCH_LIST_MAX_RESULTS,
+    };
+    if (pageToken) params.pageToken = pageToken;
+
+    // eslint-disable-next-line no-await-in-loop
+    const data = await apiGet(apiKey, ENDPOINTS.search, params, { signal });
+    pagesFetched += 1;
+
+    if (Array.isArray(data.items)) {
+      for (const item of data.items) {
+        if (item?.id?.kind !== 'youtube#channel' || !item?.id?.channelId) continue;
+        if (seenIds.has(item.id.channelId)) continue;
+        const snippet = item.snippet || {};
+        seenIds.add(item.id.channelId);
+        baseResults.push({
+          channelId: item.id.channelId,
+          name: snippet.title || '',
+          handle: null,
+          // medium (s240) first: cards render 80px avatars, and a page of
+          // s800 requests trips ggpht burst rate limiting (429 responses
+          // that Chrome surfaces as ERR_BLOCKED_BY_ORB).
+          thumbnailUrl: snippet.thumbnails?.medium?.url
+            || snippet.thumbnails?.default?.url
+            || snippet.thumbnails?.high?.url
+            || null,
+          description: snippet.description || null,
+          subscriberCount: null,
+          videoCount: null,
+        });
+      }
+    }
+
+    if (!data.nextPageToken) break;
+    pageToken = data.nextPageToken;
+  }
+
+  if (baseResults.length === 0) return baseResults;
+
+  const trimmed = baseResults.slice(0, maxResults);
+
+  // search.list snippets lack statistics and the @handle; a follow-up
+  // channels.list batch (1 unit per 50 ids, vs 100 units per search page) fills
+  // them. If enrichment fails, fall back to the un-enriched results rather than
+  // failing the whole search.
+  try {
+    const ids = trimmed.map((r) => r.channelId);
+    const itemsById = new Map();
+    for (const batch of chunk(ids, VIDEOS_LIST_BATCH_SIZE)) {
+      // eslint-disable-next-line no-await-in-loop
+      const data = await apiGet(
+        apiKey,
+        ENDPOINTS.channels,
+        { id: batch.join(','), part: 'snippet,statistics' },
+        { signal }
+      );
+      if (Array.isArray(data.items)) {
+        for (const item of data.items) itemsById.set(item.id, item);
+      }
+    }
+
+    const parseIntOrNull = (v) => {
+      if (v === undefined || v === null) return null;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
+
+    return trimmed.map((r) => {
+      const item = itemsById.get(r.channelId);
+      if (!item) return r;
+      const snippet = item.snippet || {};
+      const statistics = item.statistics || {};
+      let handle = null;
+      if (typeof snippet.customUrl === 'string' && snippet.customUrl.length > 0) {
+        handle = snippet.customUrl.startsWith('@') ? snippet.customUrl : `@${snippet.customUrl}`;
+      }
+      return {
+        ...r,
+        handle,
+        thumbnailUrl: snippet.thumbnails?.medium?.url
+          || snippet.thumbnails?.default?.url
+          || snippet.thumbnails?.high?.url
+          || r.thumbnailUrl,
+        subscriberCount: statistics.hiddenSubscriberCount
+          ? null
+          : parseIntOrNull(statistics.subscriberCount),
+        videoCount: parseIntOrNull(statistics.videoCount),
+      };
+    });
+  } catch (err) {
+    if (err && err.code === YoutubeApiErrorCode.CANCELED) {
+      throw err;
+    }
+    logger.warn({ err, code: err?.code }, 'YouTube API searchChannels statistics enrichment failed');
+    return trimmed;
+  }
+}
+
 /**
  * Probe all three channel-tab playlists in parallel. A non-empty response
  * means the tab effectively has content. An empty items array OR a 404
@@ -378,6 +487,7 @@ module.exports = {
   getVideoMetadata,
   getChannelInfo,
   searchVideos,
+  searchChannels,
   detectAvailableTabs,
   YoutubeApiError,
 };

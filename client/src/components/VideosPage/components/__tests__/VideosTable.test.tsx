@@ -63,6 +63,7 @@ const renderTable = (overrides: Partial<React.ComponentProps<typeof VideosTable>
     onToggleProtection: jest.fn(),
     onDeleteSingle: jest.fn(),
     onImageError: jest.fn(),
+    onAddChannel: jest.fn(),
   };
   render(
     <MemoryRouter>
@@ -113,5 +114,23 @@ describe('VideosTable', () => {
     // Title cell stops propagation - row click happens via the underlying tr; click the row directly via the duration cell.
     fireEvent.click(screen.getByText('5m'));
     expect(onToggleSelect).toHaveBeenCalledWith(1);
+  });
+
+  test('unsubscribed channel name opens the add-channel affordance', () => {
+    const onAddChannel = jest.fn();
+    renderTable({
+      videos: [
+        { ...sampleVideos[0], channel_id: 'UCnew', youTubeChannelName: 'New Channel' },
+      ],
+      enabledChannels: [],
+      onAddChannel,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /new channel/i }));
+
+    expect(onAddChannel).toHaveBeenCalledWith(
+      'New Channel',
+      'https://www.youtube.com/channel/UCnew'
+    );
   });
 });

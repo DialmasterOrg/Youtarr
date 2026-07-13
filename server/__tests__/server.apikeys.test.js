@@ -282,6 +282,12 @@ const createServerModule = ({
           SearchCanceledError: class SearchCanceledError extends Error {},
           SearchTimeoutError: class SearchTimeoutError extends Error {},
         }));
+        jest.doMock('../modules/channelSearchModule', () => ({
+          searchChannels: jest.fn().mockResolvedValue([]),
+          ALLOWED_COUNTS: [10, 25, 50, 100],
+          SearchCanceledError: class SearchCanceledError extends Error {},
+          SearchTimeoutError: class SearchTimeoutError extends Error {},
+        }));
         jest.doMock('../modules/messageEmitter', () => ({
           emitMessage: jest.fn(),
           getLastMessages: jest.fn(() => [])

@@ -1,5 +1,4 @@
 import React from 'react';
-import { Link as RouterLink } from 'react-router-dom';
 import { Box, Typography, Chip, Checkbox, Stack } from '../../ui';
 import { AlertCircle as ErrorOutlineIcon } from 'lucide-react';
 import { formatDuration, formatYTDate } from '../../../utils';
@@ -13,6 +12,7 @@ import ProtectionShieldButton from '../../shared/ProtectionShieldButton';
 import ThumbnailClickOverlay from '../../shared/ThumbnailClickOverlay';
 import AvailabilityChip from '../../shared/AvailabilityChip';
 import { SHARED_STATUS_CHIP_SMALL_STYLE } from '../../shared/chipStyles';
+import ChannelNameDisplay from './ChannelNameDisplay';
 
 export interface VideosListMobileProps {
   videos: VideoData[];
@@ -23,6 +23,7 @@ export interface VideosListMobileProps {
   onOpenModal: (video: VideoData) => void;
   onToggleProtection: (videoId: number) => void;
   onImageError: (youtubeId: string) => void;
+  onAddChannel: (channelName: string, channelUrl: string) => void;
 }
 
 const COMPACT_CHIP_HEIGHT = 20;
@@ -48,6 +49,7 @@ function VideosListMobile({
   onOpenModal,
   onToggleProtection,
   onImageError,
+  onAddChannel,
 }: VideosListMobileProps) {
   return (
     <Box>
@@ -262,27 +264,15 @@ function VideosListMobile({
               >
                 {video.youTubeVideoName}
               </Typography>
-              {channelId ? (
-                <Typography
-                  component={RouterLink}
-                  to={`/channel/${channelId}`}
-                  variant="caption"
-                  className="text-primary no-underline hover:underline block truncate"
-                  onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                  style={{ fontSize: '0.7rem' }}
-                >
-                  {video.youTubeChannelName}
-                </Typography>
-              ) : (
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  className="block truncate"
-                  style={{ fontSize: '0.7rem' }}
-                >
-                  {video.youTubeChannelName}
-                </Typography>
-              )}
+              <ChannelNameDisplay
+                channelName={video.youTubeChannelName}
+                enabledChannelId={channelId}
+                videoChannelId={video.channel_id}
+                variant="caption"
+                className="block truncate"
+                style={{ fontSize: '0.7rem' }}
+                onAddChannel={onAddChannel}
+              />
               <Stack direction="row" spacing={0.5} className="flex-wrap gap-1">
                 {!video.removed && (video.filePath || video.audioFilePath) && (
                   <DownloadFormatIndicator

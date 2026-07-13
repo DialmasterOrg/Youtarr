@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { VideoModalData } from '../types';
 
@@ -76,9 +76,22 @@ jest.mock('../components/VideoPlayer', () => ({
 
 jest.mock('../components/VideoMetadata', () => ({
   __esModule: true,
-  default: function MockVideoMetadata() {
+  default: function MockVideoMetadata(props: { onAddChannel?: () => void }) {
     const React = require('react');
-    return React.createElement('div', { 'data-testid': 'video-metadata' }, 'VideoMetadata');
+    return React.createElement('div', { 'data-testid': 'video-metadata' },
+      props.onAddChannel
+        ? React.createElement('button', { 'data-testid': 'add-channel-affordance', onClick: props.onAddChannel }, 'Add channel')
+        : null
+    );
+  },
+}));
+
+jest.mock('../../AddChannelDialog', () => ({
+  __esModule: true,
+  default: function MockAddChannelDialog(props: { open: boolean; channelName: string; channelUrl: string }) {
+    const React = require('react');
+    if (!props.open) return null;
+    return React.createElement('div', { 'data-testid': 'add-channel-dialog' }, `${props.channelName}|${props.channelUrl}`);
   },
 }));
 
@@ -609,6 +622,96 @@ describe('VideoModal', () => {
       });
 
       expect(axios.post).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('add-channel affordance', () => {
+    test('affordance appears when the settings fetch 404s (unsubscribed channel)', async () => {
+      axios.get.mockRejectedValue({ response: { status: 404 } });
+
+      renderModal({ video: { ...baseVideo, channelId: 'UCx' } });
+
+      expect(await screen.findByTestId('add-channel-affordance')).toBeInTheDocument();
+    });
+
+    test('affordance appears when settings return enabled=false (soft-deleted channel)', async () => {
+      axios.get.mockResolvedValue({ data: { video_quality: null, enabled: false } });
+
+      renderModal({ video: { ...baseVideo, channelId: 'UCx' } });
+
+      expect(await screen.findByTestId('add-channel-affordance')).toBeInTheDocument();
+    });
+
+    test('no affordance when settings return enabled=true (subscribed channel)', async () => {
+      axios.get.mockResolvedValue({ data: { video_quality: null, enabled: true } });
+
+      renderModal({ video: { ...baseVideo, channelId: 'UCx' } });
+
+      await waitFor(() => expect(axios.get).toHaveBeenCalled());
+      expect(screen.queryByTestId('add-channel-affordance')).not.toBeInTheDocument();
+    });
+
+    test('clicking the affordance opens the AddChannelDialog with the channel URL', async () => {
+      axios.get.mockRejectedValue({ response: { status: 404 } });
+
+      renderModal({ video: { ...baseVideo, channelId: 'UCx', channelName: 'Chan X' } });
+
+      fireEvent.click(await screen.findByTestId('add-channel-affordance'));
+
+      expect(screen.getByTestId('add-channel-dialog')).toHaveTextContent(
+        'Chan X|https://www.youtube.com/channel/UCx'
+      );
+    });
+
+    test('switching to a different channel drops the previous affordance until its own fetch resolves', async () => {
+      // Video A's channel is unsubscribed (404): affordance shows.
+      axios.get.mockRejectedValueOnce({ response: { status: 404 } });
+      const { rerender } = renderModal({ video: { ...baseVideo, channelId: 'UCa' } });
+      expect(await screen.findByTestId('add-channel-affordance')).toBeInTheDocument();
+
+      // Video B's fetch stays pending: A's 'unsubscribed' state must not leak
+      // into B while B's request is in flight.
+      let resolveB: (v: unknown) => void = () => {};
+      axios.get.mockImplementationOnce(() => new Promise((resolve) => { resolveB = resolve; }));
+      rerender(
+        <MemoryRouter>
+          <VideoModal
+            open
+            onClose={jest.fn()}
+            token="test-token"
+            video={{ ...baseVideo, channelId: 'UCb' }}
+          />
+        </MemoryRouter>
+      );
+
+      expect(screen.queryByTestId('add-channel-affordance')).not.toBeInTheDocument();
+
+      // B resolves as subscribed: still no affordance.
+      await act(async () => {
+        resolveB({ data: { video_quality: null, enabled: true } });
+      });
+      expect(screen.queryByTestId('add-channel-affordance')).not.toBeInTheDocument();
+    });
+
+    test('a failed non-404 fetch after switching channels does not inherit the previous unsubscribed state', async () => {
+      axios.get.mockRejectedValueOnce({ response: { status: 404 } });
+      const { rerender } = renderModal({ video: { ...baseVideo, channelId: 'UCa' } });
+      expect(await screen.findByTestId('add-channel-affordance')).toBeInTheDocument();
+
+      axios.get.mockRejectedValueOnce({ response: { status: 500 } });
+      rerender(
+        <MemoryRouter>
+          <VideoModal
+            open
+            onClose={jest.fn()}
+            token="test-token"
+            video={{ ...baseVideo, channelId: 'UCc' }}
+          />
+        </MemoryRouter>
+      );
+
+      await waitFor(() => expect(axios.get).toHaveBeenCalledTimes(2));
+      expect(screen.queryByTestId('add-channel-affordance')).not.toBeInTheDocument();
     });
   });
 
