@@ -101,6 +101,36 @@ describe('YtdlpCommandBuilder', () => {
     });
   });
 
+  describe('buildChannelSearchArgs', () => {
+    it('targets the channel-filtered results URL with an encoded query', () => {
+      const result = YtdlpCommandBuilder.buildChannelSearchArgs('My Query & Co', 25);
+      expect(result).toContain('--flat-playlist');
+      expect(result).toContain('--dump-json');
+      expect(result).toContain('--no-warnings');
+      expect(result[result.length - 1]).toBe(
+        'https://www.youtube.com/results?search_query=My%20Query%20%26%20Co&sp=EgIQAg%3D%3D'
+      );
+    });
+
+    it('caps results via --playlist-items 1-<count>', () => {
+      const result = YtdlpCommandBuilder.buildChannelSearchArgs('test', 50);
+      const idx = result.indexOf('--playlist-items');
+      expect(idx).toBeGreaterThanOrEqual(0);
+      expect(result[idx + 1]).toBe('1-50');
+    });
+
+    it('does not use video-search specific args', () => {
+      const result = YtdlpCommandBuilder.buildChannelSearchArgs('test', 10);
+      expect(result).not.toContain('--default-search');
+      expect(result).not.toContain('youtubetab:approximate_date');
+    });
+
+    it('includes common args (-4) from buildCommonArgs', () => {
+      const result = YtdlpCommandBuilder.buildChannelSearchArgs('test', 10);
+      expect(result).toContain('-4');
+    });
+  });
+
   describe('buildSponsorblockArgs', () => {
     it('should return empty array when sponsorblock is disabled', () => {
       const config = { sponsorblockEnabled: false };

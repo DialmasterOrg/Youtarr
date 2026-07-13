@@ -1,5 +1,4 @@
 import React from 'react';
-import { Link as RouterLink } from 'react-router-dom';
 import {
   Paper,
   Table,
@@ -32,6 +31,7 @@ import ProtectionShieldButton from '../../shared/ProtectionShieldButton';
 import ThumbnailClickOverlay from '../../shared/ThumbnailClickOverlay';
 import AvailabilityChip from '../../shared/AvailabilityChip';
 import { SHARED_STATUS_CHIP_SMALL_STYLE } from '../../shared/chipStyles';
+import ChannelNameDisplay from './ChannelNameDisplay';
 
 export interface VideosTableProps {
   videos: VideoData[];
@@ -48,6 +48,7 @@ export interface VideosTableProps {
   onToggleProtection: (videoId: number) => void;
   onDeleteSingle: (videoId: number) => void;
   onImageError: (youtubeId: string) => void;
+  onAddChannel: (channelName: string, channelUrl: string) => void;
 }
 
 function VideosTable({
@@ -65,6 +66,7 @@ function VideosTable({
   onToggleProtection,
   onDeleteSingle,
   onImageError,
+  onAddChannel,
 }: VideosTableProps) {
   const selectableVideos = videos.filter((v) => !v.removed);
   const selectableIds = selectableVideos.map((v) => v.id);
@@ -263,20 +265,13 @@ function VideosTable({
                     </Typography>
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
-                    {channelId ? (
-                      <Typography
-                        component={RouterLink}
-                        to={`/channel/${channelId}`}
-                        variant="body2"
-                        className="text-primary no-underline hover:underline"
-                      >
-                        {video.youTubeChannelName}
-                      </Typography>
-                    ) : (
-                      <Typography variant="body2" color="text.secondary">
-                        {video.youTubeChannelName}
-                      </Typography>
-                    )}
+                    <ChannelNameDisplay
+                      channelName={video.youTubeChannelName}
+                      enabledChannelId={channelId}
+                      videoChannelId={video.channel_id}
+                      variant="body2"
+                      onAddChannel={onAddChannel}
+                    />
                   </TableCell>
                   <TableCell style={{ whiteSpace: 'nowrap' }}>
                     {formatYTDate(video.originalDate)}

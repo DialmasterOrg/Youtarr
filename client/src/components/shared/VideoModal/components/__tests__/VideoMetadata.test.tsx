@@ -16,6 +16,7 @@ jest.mock('../../../../../lib/icons', () => {
     ExpandMore: make('IconExpandMore'),
     ExpandLess: make('IconExpandLess'),
     FileDownload: make('IconDownloaded'),
+    Plus: make('IconPlus'),
   };
 });
 
@@ -271,5 +272,44 @@ describe('VideoMetadata', () => {
   test('omits description block when description is null', () => {
     renderMetadata({}, baseMetadata);
     expect(screen.queryByText('Show more')).not.toBeInTheDocument();
+  });
+
+  test('channel name is plain text when onAddChannel is not provided', () => {
+    render(<VideoMetadata video={baseVideo} metadata={baseMetadata} loading={false} />);
+    expect(screen.getByText('Test Channel')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /test channel/i })).not.toBeInTheDocument();
+  });
+
+  test('channel name becomes an add affordance when onAddChannel is provided', () => {
+    const onAddChannel = jest.fn();
+    render(
+      <VideoMetadata
+        video={baseVideo}
+        metadata={baseMetadata}
+        loading={false}
+        onAddChannel={onAddChannel}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /test channel/i }));
+
+    expect(onAddChannel).toHaveBeenCalledTimes(1);
+  });
+
+  test('add affordance shows the add icon next to the channel name', () => {
+    render(
+      <VideoMetadata
+        video={baseVideo}
+        metadata={baseMetadata}
+        loading={false}
+        onAddChannel={jest.fn()}
+      />
+    );
+    expect(screen.getByTestId('IconPlus')).toBeInTheDocument();
+  });
+
+  test('plain channel name has no add icon', () => {
+    render(<VideoMetadata video={baseVideo} metadata={baseMetadata} loading={false} />);
+    expect(screen.queryByTestId('IconPlus')).not.toBeInTheDocument();
   });
 });

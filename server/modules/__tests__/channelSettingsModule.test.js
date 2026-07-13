@@ -568,6 +568,22 @@ describe('ChannelSettingsModule', () => {
 
       expect(result.auto_download_enabled_tabs).toBe('video,short');
     });
+
+    test('includes enabled=true for an active subscription', async () => {
+      Channel.findOne.mockResolvedValue({ ...mockChannel, enabled: true });
+
+      const result = await channelSettingsModule.getChannelSettings('UC123456');
+
+      expect(result.enabled).toBe(true);
+    });
+
+    test('includes enabled=false for a soft-deleted channel row', async () => {
+      Channel.findOne.mockResolvedValue({ ...mockChannel, enabled: false });
+
+      const result = await channelSettingsModule.getChannelSettings('UC123456');
+
+      expect(result.enabled).toBe(false);
+    });
   });
 
   describe('updateChannelSettings', () => {

@@ -474,6 +474,7 @@ class ChannelSettingsModule {
 
     return {
       channel_id: channel.channel_id,
+      enabled: Boolean(channel.enabled),
       uploader: channel.uploader,
       sub_folder: channel.sub_folder,
       video_quality: channel.video_quality,
