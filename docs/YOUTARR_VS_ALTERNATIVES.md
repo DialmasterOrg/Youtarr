@@ -25,8 +25,8 @@ Short summary of each:
 | First commit | May 2023 | Jan 2024 | Sept 2021 |
 | Primary maintainer | Chris Dial (dialmaster) | Kieran Eglin (kieraneglin) | Simon (bbilly1) + MerlinScheurer |
 | License | ISC | AGPL-3.0 | GPL-3.0 |
-| Stars | ~1,030 | ~4,800 | ~7,600 |
-| Forks | 38 | ~130 | 359 |
+| Stars | ~1,420 | ~4,800 | ~7,600 |
+| Forks | 56 | ~130 | 359 |
 | Latest release | Jul 2026 | Sept 2025 | Mar 2026 |
 | Release cadence | 2-3/month | Maintenance-only since Sept 2025 | Roughly monthly |
 | Docker pulls | 100K+ | 100K+ | 1M+ |
