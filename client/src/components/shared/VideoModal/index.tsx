@@ -21,6 +21,7 @@ import { useVideoModalActions } from './hooks/useVideoModalActions';
 import { VideoModalProps } from './types';
 import DeleteVideosDialog from '../DeleteVideosDialog';
 import ChangeRatingDialog from '../ChangeRatingDialog';
+import AddChannelDialog from '../AddChannelDialog';
 import DownloadSettingsDialog from '../../DownloadManager/ManualDownload/DownloadSettingsDialog';
 import { useConfig } from '../../../hooks/useConfig';
 import { uploadDateToIso } from '../../../utils/formatters';
@@ -88,14 +89,22 @@ function VideoModal({
     video_quality?: string | null;
     audio_format?: string | null;
     default_rating?: string | null;
+    enabled?: boolean;
   }
   const [channelSettings, setChannelSettings] = useState<ChannelSettings>({});
+  type ChannelSubscription = 'subscribed' | 'unsubscribed' | 'unknown';
+  const [channelSubscription, setChannelSubscription] = useState<ChannelSubscription>('unknown');
+  const [addChannelOpen, setAddChannelOpen] = useState(false);
 
   useEffect(() => {
     if (!open || !video.channelId || !token) {
       setChannelSettings({});
+      setChannelSubscription('unknown');
       return;
     }
+    // Drop the previous channel's state so it cannot leak into this channel
+    // while the fetch is in flight, or persist if the fetch fails non-404.
+    setChannelSubscription('unknown');
     const controller = new AbortController();
     const fetchSettings = async () => {
       try {
@@ -108,9 +117,13 @@ function VideoModal({
         );
         if (!controller.signal.aborted) {
           setChannelSettings(resp.data);
+          setChannelSubscription(resp.data.enabled === true ? 'subscribed' : 'unsubscribed');
         }
-      } catch {
+      } catch (err: unknown) {
         // Request failed or was aborted; leave channelSettings at its last value.
+        if (controller.signal.aborted) return;
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        if (status === 404) setChannelSubscription('unsubscribed');
       }
     };
     fetchSettings();
@@ -169,6 +182,8 @@ function VideoModal({
   const hasChannelAudioOverride = Boolean(channelSettings.audio_format);
   const defaultAudioFormat = channelSettings.audio_format || null;
   const defaultAudioFormatSource: 'channel' | 'global' = hasChannelAudioOverride ? 'channel' : 'global';
+
+  const canAddChannel = channelSubscription === 'unsubscribed' && Boolean(video.channelId);
 
   return (
     <>
@@ -256,6 +271,7 @@ function VideoModal({
               video={displayVideo}
               metadata={metadata}
               loading={metadataLoading}
+              onAddChannel={canAddChannel ? () => setAddChannelOpen(true) : undefined}
             />
             <VideoTechnical
               video={displayVideo}
@@ -293,6 +309,15 @@ function VideoModal({
         onApply={handleRatingApply}
         selectedCount={1}
       />
+
+      {video.channelId && (
+        <AddChannelDialog
+          open={addChannelOpen}
+          onClose={() => setAddChannelOpen(false)}
+          channelName={displayVideo.channelName}
+          channelUrl={`https://www.youtube.com/channel/${video.channelId}`}
+        />
+      )}
 
       <Snackbar
         open={snackbar.open}

@@ -1065,6 +1065,22 @@ describe('videoDownloadPostProcessFiles', () => {
 
       expect(Channel.update).not.toHaveBeenCalled();
     });
+
+    it('prefers an enabled lister channel over a disabled uploader channel', async () => {
+      // The video's own channel ('channel123', from the mocked .info.json) is
+      // tracked but DISABLED; a tracked ENABLED channel also listed the video.
+      ChannelVideo.findAll.mockResolvedValue([{ channel_id: 'UCenabledchannel' }]);
+      Channel.findAll.mockResolvedValue([
+        { channel_id: 'channel123', enabled: false },
+        { channel_id: 'UCenabledchannel', enabled: true },
+      ]);
+
+      await loadModule();
+
+      expect(Channel.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { channel_id: 'UCenabledchannel' } })
+      );
+    });
   });
 
   describe('subfolder support', () => {
@@ -1394,6 +1410,119 @@ describe('videoDownloadPostProcessFiles', () => {
         '[Post-Process] Error creating video fanart'
       );
       expect(process.exit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('per-video structure mode (YOUTARR_STRUCTURE_PER_VIDEO)', () => {
+    const { moveWithRetries } = require('../filesystem');
+    const tempVideoPath = '/tmp/youtarr-downloads/Channel/Video Title - abc123/Video Title [abc123].mp4';
+    const tempJsonPath = '/tmp/youtarr-downloads/Channel/Video Title - abc123/Video Title [abc123].info.json';
+    const trackedChannel = {
+      id: 1,
+      enabled: true,
+      sub_folder: null,
+      default_rating: null,
+      title: 'Channel',
+      uploader: 'Channel',
+      folder_name: 'Channel',
+    };
+
+    beforeEach(() => {
+      process.env.YOUTARR_STRUCTURE_PER_VIDEO = 'true';
+      delete process.env.YOUTARR_SKIP_VIDEO_FOLDER; // incoming temp layout: nested
+      process.argv = ['node', 'script', tempVideoPath];
+      tempPathManager.isTempPath.mockReturnValue(true);
+      tempPathManager.convertTempToFinal.mockImplementation((p) =>
+        p.replace('/tmp/youtarr-downloads', '/library')
+      );
+      // The script needs the .info.json to exist in the temp video dir, and the
+      // post-move existence check probes the final path.
+      fs.existsSync.mockImplementation((p) => p === tempJsonPath || p.startsWith('/library/'));
+      fs.readdir.mockResolvedValue(['Video Title [abc123].mp4', 'Video Title [abc123].jpg']);
+    });
+
+    afterEach(() => {
+      delete process.env.YOUTARR_STRUCTURE_PER_VIDEO;
+      delete process.env.YOUTARR_SKIP_VIDEO_FOLDER_OVERRIDE;
+    });
+
+    it('keeps the video subfolder when the channel chose skip_video_folder=false', async () => {
+      Channel.findOne.mockResolvedValue({ ...trackedChannel, skip_video_folder: false });
+
+      await loadModule();
+      await settleAsync();
+
+      expect(moveWithRetries).toHaveBeenCalledWith(
+        '/tmp/youtarr-downloads/Channel/Video Title - abc123',
+        '/library/Channel/Video Title - abc123',
+        expect.any(Object)
+      );
+    });
+
+    it('hoists files flat into the channel folder when the channel chose skip_video_folder=true', async () => {
+      Channel.findOne.mockResolvedValue({ ...trackedChannel, skip_video_folder: true });
+
+      await loadModule();
+      await settleAsync();
+
+      expect(moveWithRetries).toHaveBeenCalledWith(
+        tempVideoPath,
+        '/library/Channel/Video Title [abc123].mp4',
+        expect.any(Object)
+      );
+      expect(moveWithRetries).toHaveBeenCalledWith(
+        '/tmp/youtarr-downloads/Channel/Video Title - abc123/Video Title [abc123].jpg',
+        '/library/Channel/Video Title [abc123].jpg',
+        expect.any(Object)
+      );
+    });
+
+    it('explicit structure override beats the channel setting', async () => {
+      process.env.YOUTARR_SKIP_VIDEO_FOLDER_OVERRIDE = 'true';
+      Channel.findOne.mockResolvedValue({ ...trackedChannel, skip_video_folder: false });
+
+      await loadModule();
+      await settleAsync();
+
+      expect(moveWithRetries).toHaveBeenCalledWith(
+        tempVideoPath,
+        '/library/Channel/Video Title [abc123].mp4',
+        expect.any(Object)
+      );
+    });
+
+    it('untracked channel falls through to the global default', async () => {
+      configModule.__setConfig({
+        writeChannelPosters: false,
+        writeVideoNfoFiles: true,
+        ffmpegPath: '/usr/bin/ffmpeg',
+        defaultSkipVideoFolder: true,
+      });
+      Channel.findOne.mockResolvedValue(null);
+
+      await loadModule();
+      await settleAsync();
+
+      expect(moveWithRetries).toHaveBeenCalledWith(
+        tempVideoPath,
+        '/library/Channel/Video Title [abc123].mp4',
+        expect.any(Object)
+      );
+    });
+
+    it('fixed mode ignores the channel setting (regression guard)', async () => {
+      delete process.env.YOUTARR_STRUCTURE_PER_VIDEO;
+      Channel.findOne.mockResolvedValue({ ...trackedChannel, skip_video_folder: true });
+
+      await loadModule();
+      await settleAsync();
+
+      // Incoming nested + fixed mode: whole-directory move, channel setting not consulted.
+      expect(moveWithRetries).toHaveBeenCalledWith(
+        '/tmp/youtarr-downloads/Channel/Video Title - abc123',
+        '/library/Channel/Video Title - abc123',
+        expect.any(Object)
+      );
     });
   });
 });

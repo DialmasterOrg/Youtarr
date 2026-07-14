@@ -1,5 +1,4 @@
 import React from 'react';
-import { Link as RouterLink } from 'react-router-dom';
 import { Card, Typography, Chip, Box, Checkbox, IconButton, Tooltip } from '../../ui';
 import {
   AlertCircle as ErrorOutlineIcon,
@@ -20,6 +19,7 @@ import ProtectionShieldButton from '../../shared/ProtectionShieldButton';
 import ThumbnailClickOverlay from '../../shared/ThumbnailClickOverlay';
 import AvailabilityChip from '../../shared/AvailabilityChip';
 import { SHARED_STATUS_CHIP_SMALL_STYLE } from '../../shared/chipStyles';
+import ChannelNameDisplay from './ChannelNameDisplay';
 
 export interface VideoCardProps {
   video: VideoData;
@@ -32,6 +32,7 @@ export interface VideoCardProps {
   onToggleProtection: (videoId: number) => void;
   onDeleteSingle: (videoId: number) => void;
   onImageError: (youtubeId: string) => void;
+  onAddChannel: (channelName: string, channelUrl: string) => void;
 }
 
 function VideoCard({
@@ -45,6 +46,7 @@ function VideoCard({
   onToggleProtection,
   onDeleteSingle,
   onImageError,
+  onAddChannel,
 }: VideoCardProps) {
   const isSelectable = !video.removed;
   const channelId = getEnabledChannelId(video.youTubeChannelName, video.channel_id, enabledChannels);
@@ -227,21 +229,14 @@ function VideoCard({
           >
             {video.youTubeVideoName}
           </Typography>
-          {channelId ? (
-            <Typography
-              component={RouterLink}
-              to={`/channel/${channelId}`}
-              variant="caption"
-              className="text-primary no-underline hover:underline block"
-              onClick={(e: React.MouseEvent) => e.stopPropagation()}
-            >
-              {video.youTubeChannelName}
-            </Typography>
-          ) : (
-            <Typography variant="caption" color="text.secondary" className="block">
-              {video.youTubeChannelName}
-            </Typography>
-          )}
+          <ChannelNameDisplay
+            channelName={video.youTubeChannelName}
+            enabledChannelId={channelId}
+            videoChannelId={video.channel_id}
+            variant="caption"
+            className="block"
+            onAddChannel={onAddChannel}
+          />
         </Box>
 
         <Box className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs">

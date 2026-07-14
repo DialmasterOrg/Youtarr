@@ -3,6 +3,7 @@ const jobModule = require('../jobModule');
 const MessageEmitter = require('../messageEmitter');
 const logger = require('../../logger');
 const { mergeDiagnoses } = require('./failureAdvisor');
+const { MANUAL_DOWNLOAD_LABEL } = require('./jobTypes');
 
 // A "run" groups the multiple download jobs produced by a single
 // channel-and-playlist sweep (one channel job plus one job per playlist
@@ -12,6 +13,7 @@ const RUN_LABEL_BOTH = 'Channel & playlist update';
 // Value must stay 'Channel Downloads' so the client renders it as "Channel update".
 const RUN_LABEL_CHANNEL = 'Channel Downloads';
 const RUN_LABEL_PLAYLIST = 'Playlist downloads';
+const RUN_LABEL_MANUAL = 'Manual downloads';
 const PLAYLIST_LABEL_PREFIX = 'Playlist: ';
 
 const TERMINAL_STATUSES = new Set([
@@ -27,10 +29,12 @@ function deriveLabel(jobTypes) {
   const hasChannel = types.some((t) => t.includes('Channel Downloads'));
   const playlistTypes = types.filter((t) => t.startsWith(PLAYLIST_LABEL_PREFIX));
   const hasPlaylist = playlistTypes.length > 0;
+  const hasManual = types.some((t) => t.includes(MANUAL_DOWNLOAD_LABEL));
 
   if (hasChannel && hasPlaylist) return RUN_LABEL_BOTH;
   if (hasChannel) return RUN_LABEL_CHANNEL;
   if (hasPlaylist) return playlistTypes.length === 1 ? playlistTypes[0] : RUN_LABEL_PLAYLIST;
+  if (hasManual) return RUN_LABEL_MANUAL;
   return RUN_LABEL_CHANNEL;
 }
 

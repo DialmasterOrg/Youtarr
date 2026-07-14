@@ -9,6 +9,7 @@ import {
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
   FileDownload as DownloadedIcon,
+  Plus as AddIcon,
 } from '../../../../lib/icons';
 import { formatDate, formatDateTime } from '../../../../utils/formatters';
 import { VideoModalData, VideoExtendedMetadata } from '../types';
@@ -17,6 +18,7 @@ interface VideoMetadataProps {
   video: VideoModalData;
   metadata: VideoExtendedMetadata | null;
   loading: boolean;
+  onAddChannel?: () => void;
 }
 
 const DESCRIPTION_PREVIEW_LENGTH = 300;
@@ -42,7 +44,7 @@ function formatDuration(seconds: number): string {
   return `${minutes}:${String(secs).padStart(2, '0')}`;
 }
 
-function VideoMetadata({ video, metadata, loading }: VideoMetadataProps) {
+function VideoMetadata({ video, metadata, loading, onAddChannel }: VideoMetadataProps) {
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const [tagsExpanded, setTagsExpanded] = useState(false);
   const isMobile = useMediaQuery('(max-width: 599px)');
@@ -73,9 +75,35 @@ function VideoMetadata({ video, metadata, loading }: VideoMetadataProps) {
   return (
     <Box style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <Box style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: isMobile ? 'wrap' : 'nowrap', overflowX: isMobile ? 'visible' : 'auto' }}>
-        <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
-          {video.channelName}
-        </Typography>
+        {onAddChannel ? (
+          <Typography
+            variant="body2"
+            sx={{ fontWeight: 600 }}
+            className="text-primary cursor-pointer hover:underline"
+            role="button"
+            tabIndex={0}
+            title={`Add ${video.channelName} to your channels`}
+            onClick={onAddChannel}
+            onKeyDown={(e: React.KeyboardEvent) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onAddChannel();
+              }
+            }}
+          >
+            <AddIcon
+              size={14}
+              className="mr-0.5 inline-block align-[-2px]"
+              data-testid="add-channel-icon"
+              aria-hidden
+            />
+            {video.channelName}
+          </Typography>
+        ) : (
+          <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
+            {video.channelName}
+          </Typography>
+        )}
 
         {publishDate && (
           <>

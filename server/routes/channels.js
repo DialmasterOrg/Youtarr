@@ -17,6 +17,7 @@ const parseFilterMode = (value) =>
  */
 module.exports = function createChannelRoutes({ verifyToken, channelModule, archiveModule, channelDownloadAllModule, ratingMapper }) {
   const router = express.Router();
+  const logger = require('../logger');
   const channelSettingsModule = require('../modules/channelSettingsModule');
   const ChannelVideo = require('../models/channelvideo');
   const { VALID_TAB_TYPES } = require('../modules/tabsUtils');
@@ -622,6 +623,42 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
       res.json(result);
     } catch (error) {
       console.error('Error getting channels using default subfolder:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/channels/using-global-file-structure:
+   *   get:
+   *     summary: Get channels using the global file structure setting
+   *     description: Get count and names of enabled channels that inherit the global flat-folder-structure default (no per-channel override).
+   *     tags: [Channels]
+   *     responses:
+   *       200:
+   *         description: Count and names of channels inheriting the global file structure
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 count:
+   *                   type: integer
+   *                   description: Total number of channels inheriting the global setting
+   *                 channelNames:
+   *                   type: array
+   *                   items:
+   *                     type: string
+   *                   description: Channel names for display, capped at the first 10; count reflects the true total
+   *       500:
+   *         description: Failed to get count
+   */
+  router.get('/api/channels/using-global-file-structure', verifyToken, async (req, res) => {
+    try {
+      const result = await channelSettingsModule.getChannelsUsingGlobalFileStructure();
+      res.json(result);
+    } catch (error) {
+      logger.error({ err: error }, 'Error getting channels using global file structure');
       res.status(500).json({ error: error.message });
     }
   });

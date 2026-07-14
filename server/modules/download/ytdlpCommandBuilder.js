@@ -470,6 +470,23 @@ class YtdlpCommandBuilder {
     return args;
   }
 
+  static buildChannelSearchArgs(query, count) {
+    const config = configModule.getConfig();
+    // sp=EgIQAg%3D%3D is YouTube's "type: channel" search filter; the results
+    // page yields one flat-playlist entry per channel.
+    const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=EgIQAg%3D%3D`;
+    return [
+      ...this.buildCommonArgs(config, { skipSleepRequests: true }),
+      '--flat-playlist',
+      '--dump-json',
+      '--no-warnings',
+      '--playlist-items', `1-${count}`,
+      // Custom user args last (yt-dlp last-wins) but before the URL operand
+      ...this.buildCustomArgs(config),
+      searchUrl,
+    ];
+  }
+
   /**
    * Build yt-dlp command args array for channel downloads
    * @param {string} resolution - Video resolution

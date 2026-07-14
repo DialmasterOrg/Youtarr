@@ -15,8 +15,15 @@ const { buildChannelPath, cleanupEmptyParents, moveWithRetries, ensureDirWithRet
 
 const activeJobId = process.env.YOUTARR_JOB_ID;
 
-// Flat mode: skip video subfolder, files go directly in channel folder
+// Flat mode: skip video subfolder, files go directly in channel folder.
+// Describes the INCOMING temp layout written by the yt-dlp output template.
 const isFlatMode = process.env.YOUTARR_SKIP_VIDEO_FOLDER === 'true';
+
+// Per-video structure mode (manual downloads): the final flat-vs-subfolder
+// decision is made here per video (override -> channel -> global) instead of
+// being fixed per job. Incoming temp layout is always nested in this mode.
+const perVideoStructure = process.env.YOUTARR_STRUCTURE_PER_VIDEO === 'true';
+const skipVideoFolderOverrideEnv = process.env.YOUTARR_SKIP_VIDEO_FOLDER_OVERRIDE;
 
 const videoPath = process.argv[2]; // get the media file path (video or audio)
 const parsedPath = path.parse(videoPath);
@@ -177,9 +184,19 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
 
     const tracked = await Channel.findAll({
       where: { channel_id: unique },
-      attributes: ['channel_id'],
+      attributes: ['channel_id', 'enabled'],
     });
+    const enabledIds = new Set(tracked.filter((c) => c.enabled).map((c) => c.channel_id));
     const trackedIds = new Set(tracked.map((c) => c.channel_id));
+    // Prefer an enabled owner: only enabled channels contribute routing
+    // settings downstream, so a disabled candidate (e.g. a hidden auto-created
+    // playlist source channel) must not shadow a later enabled association.
+    // A disabled-only match still returns so metadata backfill keeps working.
+    for (const candidate of unique) {
+      if (enabledIds.has(candidate)) {
+        return candidate;
+      }
+    }
     for (const candidate of unique) {
       if (trackedIds.has(candidate)) {
         return candidate;
@@ -273,7 +290,7 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
         const channelId = lookupChannelId;
         channelRecord = await Channel.findOne({
           where: { channel_id: channelId },
-          attributes: ['id', 'sub_folder', 'title', 'uploader', 'folder_name', 'default_rating', 'enabled']
+          attributes: ['id', 'sub_folder', 'title', 'uploader', 'folder_name', 'default_rating', 'enabled', 'skip_video_folder']
         });
 
         logger.info({ channelId, ownerProvided: !!ownerChannelId, found: !!channelRecord }, 'Post-process channel lookup');
@@ -319,6 +336,21 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
     // playlist fallback -> global. channelRecord above is still used for metadata backfill
     // regardless of enabled state.
     const settingsChannelRecord = channelRecord && channelRecord.enabled ? channelRecord : null;
+
+    // Outgoing layout: in per-video mode, resolve flat-vs-subfolder from the
+    // video's real channel (hard override -> channel tri-state -> global);
+    // fixed mode keeps the per-job layout. Incoming per-video layout is always
+    // nested, so the only conversion ever performed is nested -> flat.
+    const outgoingFlat = perVideoStructure
+      ? downloadSettingsResolver.resolveSkipVideoFolder({
+        override: skipVideoFolderOverrideEnv === undefined
+          ? {}
+          : { skipVideoFolder: skipVideoFolderOverrideEnv === 'true' },
+        channel: settingsChannelRecord,
+        config: configModule.getConfig(),
+      })
+      : isFlatMode;
+    logger.info({ perVideoStructure, incomingFlat: isFlatMode, outgoingFlat }, 'Post-process resolved file structure');
 
     // Determine effective rating using strict priority order:
     // 1. Manual Override
@@ -366,7 +398,7 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
     if (targetChannelFolder) {
       // Channel has subfolder - calculate path with subfolder included
       const videoFileName = path.basename(videoPath);
-      if (isFlatMode) {
+      if (outgoingFlat) {
         finalVideoPathForJson = path.join(targetChannelFolder, videoFileName);
       } else {
         const videoDirectoryName = path.basename(videoDirectory);
@@ -374,7 +406,16 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
       }
     } else {
       // No subfolder - use standard temp-to-final conversion
-      finalVideoPathForJson = tempPathManager.convertTempToFinal(videoPath);
+      const standardFinalPath = tempPathManager.convertTempToFinal(videoPath);
+      if (outgoingFlat && !isFlatMode) {
+        // Incoming nested, outgoing flat: hoist the file out of its video folder
+        finalVideoPathForJson = path.join(
+          path.dirname(path.dirname(standardFinalPath)),
+          path.basename(standardFinalPath)
+        );
+      } else {
+        finalVideoPathForJson = standardFinalPath;
+      }
     }
 
     // Add the actual video filepath to the JSON data before moving it
@@ -567,27 +608,22 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
       let targetChannelFolderForMove;
 
       if (targetChannelFolder) {
-        if (isFlatMode) {
-          // Flat mode with subfolder - files go directly into channel folder
-          targetVideoDirectory = targetChannelFolder;
-        } else {
-          // Nested mode with subfolder - move video directory into subfolder location (atomic move)
-          targetVideoDirectory = path.join(targetChannelFolder, videoDirectoryName);
-        }
+        targetVideoDirectory = outgoingFlat
+          ? targetChannelFolder
+          : path.join(targetChannelFolder, videoDirectoryName);
         targetChannelFolderForMove = targetChannelFolder;
         console.log(`[Post-Process] Moving to subfolder location: ${channelSubFolder}`);
       } else {
         // No subfolder - move to standard location
         const standardFinalPath = tempPathManager.convertTempToFinal(videoPath);
-        if (isFlatMode) {
-          // Flat mode without subfolder - channel folder is parent of final file
-          targetChannelFolderForMove = path.dirname(standardFinalPath);
-          targetVideoDirectory = targetChannelFolderForMove;
-        } else {
-          const standardChannelFolder = path.dirname(path.dirname(standardFinalPath));
-          targetVideoDirectory = path.join(standardChannelFolder, videoDirectoryName);
-          targetChannelFolderForMove = standardChannelFolder;
-        }
+        // standardFinalPath mirrors the INCOMING temp layout; derive the
+        // channel folder from that layout before applying the outgoing one.
+        targetChannelFolderForMove = isFlatMode
+          ? path.dirname(standardFinalPath)
+          : path.dirname(path.dirname(standardFinalPath));
+        targetVideoDirectory = outgoingFlat
+          ? targetChannelFolderForMove
+          : path.join(targetChannelFolderForMove, videoDirectoryName);
       }
 
       logger.info({ from: videoDirectory, to: targetVideoDirectory, isFlatMode }, '[Post-Process] Moving video directory');
@@ -621,7 +657,7 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
           }
         }
 
-        if (isFlatMode) {
+        if (outgoingFlat) {
           // Flat mode: move individual files from temp channel folder to final channel folder
           // Filter by video ID to avoid moving files belonging to other downloads
           const allFilesInDir = await fs.readdir(videoDirectory);
@@ -667,7 +703,9 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
 
         // Clean up empty parent directories in the temp path (e.g., empty channel folder)
         const tempBasePath = tempPathManager.getTempBasePath();
-        const parentDir = isFlatMode ? videoDirectory : path.dirname(videoDirectory);
+        const parentDir = (outgoingFlat && !isFlatMode)
+          ? videoDirectory
+          : (isFlatMode ? videoDirectory : path.dirname(videoDirectory));
         await cleanupEmptyParents(parentDir, tempBasePath);
 
         // Verify the final file exists
@@ -771,7 +809,7 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
     // Copy channel thumbnail as poster.jpg to channel folder (must be done AFTER all moves)
     // Calculate the final channel folder path based on the final video path
     // In flat mode, the file is directly in the channel folder
-    const finalChannelFolderPath = isFlatMode
+    const finalChannelFolderPath = outgoingFlat
       ? path.dirname(finalVideoPath)
       : path.dirname(path.dirname(finalVideoPath));
     if (jsonData.channel_id) {

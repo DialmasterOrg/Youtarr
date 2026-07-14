@@ -177,6 +177,67 @@ describe('VideoPlayer', () => {
     );
   });
 
+  describe('MP3-only playback', () => {
+    const mp3OnlyOverride: Partial<VideoModalData> = {
+      filePath: null,
+      fileSize: null,
+      audioFilePath: '/audio/test.mp3',
+      audioFileSize: 1048576,
+    };
+
+    test('shows play button labeled "Play audio" when only an audio file exists', () => {
+      renderPlayer(mp3OnlyOverride);
+
+      expect(screen.getByRole('button', { name: 'Play audio' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Play video' })).not.toBeInTheDocument();
+    });
+
+    test('clicking play streams audio with type=audio and keeps thumbnail visible', async () => {
+      const user = userEvent.setup();
+      renderPlayer(mp3OnlyOverride);
+
+      await user.click(screen.getByRole('button', { name: 'Play audio' }));
+
+      const audioEl = screen.getByTestId('audio-stream-element');
+      expect(audioEl).toHaveAttribute(
+        'src',
+        '/api/videos/abc123/stream?token=my-test-token&type=audio'
+      );
+      expect(screen.getByRole('img', { name: 'Test Video' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Stop playback' })).toBeInTheDocument();
+      expect(screen.queryByTestId('video-stream-element')).not.toBeInTheDocument();
+    });
+
+    test('audio stream error shows fallback UI with YouTube link', async () => {
+      const user = userEvent.setup();
+      renderPlayer(mp3OnlyOverride);
+
+      await user.click(screen.getByRole('button', { name: 'Play audio' }));
+      fireEvent.error(screen.getByTestId('audio-stream-element'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Unable to stream audio')).toBeInTheDocument();
+      });
+      expect(screen.getByRole('link', { name: 'Open in YouTube' })).toHaveAttribute(
+        'href',
+        'https://www.youtube.com/watch?v=abc123'
+      );
+    });
+
+    test('plays the video stream when both video and audio files exist', async () => {
+      const user = userEvent.setup();
+      renderPlayer({ audioFilePath: '/audio/test.mp3', audioFileSize: 1048576 });
+
+      await user.click(screen.getByRole('button', { name: 'Play video' }));
+
+      expect(screen.getByTestId('video-stream-element')).toHaveAttribute(
+        'src',
+        '/api/videos/abc123/stream?token=my-test-token'
+      );
+      expect(screen.queryByTestId('audio-stream-element')).not.toBeInTheDocument();
+    });
+  });
+
   test('state resets when video.youtubeId changes', async () => {
     const user = userEvent.setup();
 

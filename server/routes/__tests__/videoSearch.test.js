@@ -1,4 +1,5 @@
 const express = require('express');
+const http = require('http');
 const request = require('supertest');
 
 jest.mock('express-rate-limit', () => () => (_req, _res, next) => next());
@@ -108,5 +109,68 @@ describe('POST /api/videos/search behavior', () => {
     await request(app).post('/api/videos/search').send({ query: 'x' });
     const callOpts = searchVideos.mock.calls[0][2];
     expect(callOpts.signal).toBeInstanceOf(AbortSignal);
+  });
+});
+
+describe('POST /api/videos/search request cancellation', () => {
+  const verifyToken = (_req, _res, next) => next();
+
+  test('does not abort a normal request whose search resolves asynchronously', async () => {
+    // On Node >= 16, req 'close' fires once the request body is consumed, not
+    // only on client disconnect. Cancellation keyed to req 'close' aborts every
+    // normal request whose search has any real latency.
+    let capturedSignal;
+    const searchVideos = jest.fn().mockImplementation((_q, _c, { signal }) => {
+      capturedSignal = signal;
+      return new Promise((resolve) => {
+        setTimeout(() => resolve([{ youtubeId: 'a', title: 'A' }]), 25);
+      });
+    });
+    const app = buildApp({ verifyToken, searchVideos });
+
+    const res = await request(app).post('/api/videos/search').send({ query: 'slow' });
+
+    expect(res.status).toBe(200);
+    expect(capturedSignal.aborted).toBe(false);
+  });
+
+  test('aborts the in-flight search when the client disconnects', async () => {
+    let capturedSignal;
+    const searchVideos = jest.fn().mockImplementation((_q, _c, { signal }) => {
+      capturedSignal = signal;
+      return new Promise(() => {}); // stays pending; only the abort signal matters
+    });
+    const app = buildApp({ verifyToken, searchVideos });
+    const server = app.listen(0);
+
+    try {
+      const port = server.address().port;
+      await new Promise((resolve) => {
+        const clientReq = http.request(
+          { port, path: '/api/videos/search', method: 'POST', headers: { 'Content-Type': 'application/json' } },
+          () => {}
+        );
+        clientReq.on('error', () => {}); // ECONNRESET from our own destroy
+        clientReq.end(JSON.stringify({ query: 'slow' }));
+        setTimeout(() => {
+          clientReq.destroy();
+          resolve();
+        }, 50);
+      });
+
+      await new Promise((resolve, reject) => {
+        const deadline = Date.now() + 1000;
+        const poll = () => {
+          if (capturedSignal && capturedSignal.aborted) return resolve();
+          if (Date.now() > deadline) return reject(new Error('signal was not aborted after client disconnect'));
+          setTimeout(poll, 10);
+        };
+        poll();
+      });
+
+      expect(capturedSignal.aborted).toBe(true);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
   });
 });

@@ -337,6 +337,27 @@ class ChannelSettingsModule {
   }
 
   /**
+   * Get channels that follow the global file-structure setting
+   * (skip_video_folder is NULL = inherit). Only enabled channels are counted:
+   * disabled channels include hidden auto-created playlist source channels.
+   * @returns {Promise<Object>} - { count, channelNames }
+   */
+  async getChannelsUsingGlobalFileStructure() {
+    const channels = await Channel.findAll({
+      attributes: ['uploader'],
+      where: {
+        enabled: true,
+        skip_video_folder: null
+      }
+    });
+
+    return {
+      count: channels.length,
+      channelNames: channels.map(ch => ch.uploader).slice(0, 10) // First 10 for display
+    };
+  }
+
+  /**
    * Get all known subfolders (with __ prefix), sourced from the subfolder registry
    * unioned with the in-memory config default and Plex mappings.
    * @returns {Promise<Array<string>>}
@@ -453,6 +474,7 @@ class ChannelSettingsModule {
 
     return {
       channel_id: channel.channel_id,
+      enabled: Boolean(channel.enabled),
       uploader: channel.uploader,
       sub_folder: channel.sub_folder,
       video_quality: channel.video_quality,

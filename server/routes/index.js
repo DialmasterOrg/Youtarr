@@ -10,6 +10,7 @@ const createApiKeyRoutes = require('./apikeys');
 const createSubscriptionRoutes = require('./subscriptions');
 const createVideoDetailRoutes = require('./videoDetail');
 const createVideoSearchRoutes = require('./videoSearch');
+const createChannelSearchRoutes = require('./channelSearch');
 const createPlaylistRoutes = require('./playlists');
 const createMediaServerRoutes = require('./mediaServers');
 const createYoutubeApiKeyRoutes = require('./youtubeApiKey');
@@ -49,6 +50,7 @@ function registerRoutes(app, deps) {
     archiveModule,
     subscriptionImportModule,
     videoSearchModule,
+    channelSearchModule,
     youtubeApi,
     getCachedYtDlpVersion,
     refreshYtDlpVersionCache,
@@ -78,6 +80,9 @@ function registerRoutes(app, deps) {
 
   // Video search routes
   app.use(createVideoSearchRoutes({ verifyToken, videoSearchModule }));
+
+  // Channel search routes
+  app.use(createChannelSearchRoutes({ verifyToken, channelSearchModule }));
 
   // YouTube API key test route
   app.use(createYoutubeApiKeyRoutes({ verifyToken, youtubeApiKeyTestLimiter, youtubeApi, configModule }));

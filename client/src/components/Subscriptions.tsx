@@ -299,6 +299,32 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
     }
   };
 
+  // Auto-add handoff from Find on YouTube / AddChannelDialog: consume the
+  // navigation state once, prefill the add bar, and kick off the existing add flow.
+  const autoAddConsumedRef = useRef(false);
+  useEffect(() => {
+    const navState = location.state as { addChannelUrl?: unknown } | null;
+    const addChannelUrl = typeof navState?.addChannelUrl === 'string' ? navState.addChannelUrl : null;
+    if (!addChannelUrl || autoAddConsumedRef.current) return;
+    autoAddConsumedRef.current = true;
+    // Clear history state so refresh/back does not re-trigger the add.
+    navigate(location.pathname, { replace: true });
+    setTypeFilter('channels');
+    setNewSubscriptionUrl(addChannelUrl);
+    addChannel(addChannelUrl).then((result) => {
+      if (!result.success) {
+        setDialogMessage(result.message || 'Failed to add channel');
+        setDialogOpen(true);
+        return;
+      }
+      setNewSubscriptionUrl('');
+      if (result.message) {
+        setDialogMessage(result.message);
+        setDialogOpen(true);
+      }
+    });
+  }, [location.state, location.pathname, navigate, addChannel]);
+
   const handleTypeFilterChange = (next: SubscriptionsFilterValue) => {
     setTypeFilter(next);
     setNewSubscriptionUrl('');

@@ -752,4 +752,185 @@ describe('youtubeApi/client', () => {
       );
     });
   });
+
+  describe('searchChannels', () => {
+    const searchItem = (id, title) => ({
+      id: { kind: 'youtube#channel', channelId: id },
+      snippet: {
+        title,
+        description: `${title} description`,
+        thumbnails: { high: { url: `https://yt3.ggpht.com/${id}=s176` } },
+      },
+    });
+
+    test('maps channel items and enriches with statistics and handle', async () => {
+      axios.get
+        .mockResolvedValueOnce({ data: { items: [searchItem('UCaaa', 'Alpha')] } })
+        .mockResolvedValueOnce({
+          data: {
+            items: [{
+              id: 'UCaaa',
+              snippet: {
+                customUrl: '@alpha',
+                thumbnails: { high: { url: 'https://yt3.ggpht.com/better=s176' } },
+              },
+              statistics: {
+                subscriberCount: '12345',
+                videoCount: '67',
+                hiddenSubscriberCount: false,
+              },
+            }],
+          },
+        });
+
+      const results = await client.searchChannels('key', 'alpha', 10);
+
+      expect(results).toEqual([{
+        channelId: 'UCaaa',
+        name: 'Alpha',
+        handle: '@alpha',
+        thumbnailUrl: 'https://yt3.ggpht.com/better=s176',
+        description: 'Alpha description',
+        subscriberCount: 12345,
+        videoCount: 67,
+      }]);
+      expect(axios.get).toHaveBeenCalledTimes(2);
+      expect(axios.get.mock.calls[0][1].params).toMatchObject({ q: 'alpha', type: 'channel', part: 'snippet' });
+      expect(axios.get.mock.calls[1][1].params).toMatchObject({ id: 'UCaaa', part: 'snippet,statistics' });
+    });
+
+    test('skips non-channel items and dedupes repeated channelIds', async () => {
+      axios.get
+        .mockResolvedValueOnce({
+          data: {
+            items: [
+              { id: { kind: 'youtube#video', videoId: 'v1' }, snippet: { title: 'nope' } },
+              searchItem('UCaaa', 'Alpha'),
+              searchItem('UCaaa', 'Alpha again'),
+            ],
+          },
+        })
+        .mockResolvedValueOnce({ data: { items: [] } });
+
+      const results = await client.searchChannels('key', 'alpha', 10);
+
+      expect(results).toHaveLength(1);
+      expect(results[0].channelId).toBe('UCaaa');
+    });
+
+    test('returns null subscriberCount when the channel hides it', async () => {
+      axios.get
+        .mockResolvedValueOnce({ data: { items: [searchItem('UCbbb', 'Beta')] } })
+        .mockResolvedValueOnce({
+          data: {
+            items: [{
+              id: 'UCbbb',
+              snippet: { customUrl: '@beta' },
+              statistics: { subscriberCount: '999', videoCount: '5', hiddenSubscriberCount: true },
+            }],
+          },
+        });
+
+      const results = await client.searchChannels('key', 'beta', 10);
+
+      expect(results[0].subscriberCount).toBeNull();
+      expect(results[0].videoCount).toBe(5);
+    });
+
+    test('falls back to un-enriched results when channels.list fails', async () => {
+      axios.get
+        .mockResolvedValueOnce({ data: { items: [searchItem('UCccc', 'Gamma')] } })
+        .mockRejectedValueOnce(new Error('boom'));
+
+      const results = await client.searchChannels('key', 'gamma', 10);
+
+      expect(results).toEqual([{
+        channelId: 'UCccc',
+        name: 'Gamma',
+        handle: null,
+        thumbnailUrl: 'https://yt3.ggpht.com/UCccc=s176',
+        description: 'Gamma description',
+        subscriberCount: null,
+        videoCount: null,
+      }]);
+    });
+
+    test('returns empty array without calling channels.list when search yields nothing', async () => {
+      axios.get.mockResolvedValueOnce({ data: { items: [] } });
+
+      const results = await client.searchChannels('key', 'nothing', 10);
+
+      expect(results).toEqual([]);
+      expect(axios.get).toHaveBeenCalledTimes(1);
+    });
+
+    test('paginates search.list until maxResults are collected', async () => {
+      const pageOne = Array.from({ length: 50 }, (_, i) => searchItem(`UCpage1_${i}`, `C${i}`));
+      const pageTwo = [searchItem('UCpage2_0', 'Last')];
+      axios.get
+        .mockResolvedValueOnce({ data: { items: pageOne, nextPageToken: 'tok' } })
+        .mockResolvedValueOnce({ data: { items: pageTwo } })
+        .mockResolvedValue({ data: { items: [] } });
+
+      const results = await client.searchChannels('key', 'many', 100);
+
+      expect(results.length).toBe(51);
+      expect(axios.get.mock.calls[1][1].params).toMatchObject({ pageToken: 'tok' });
+    });
+
+    test('prefers medium thumbnails over high to keep avatar payloads small', async () => {
+      const allSizes = (stem) => ({
+        default: { url: `https://yt3.ggpht.com/${stem}=s88` },
+        medium: { url: `https://yt3.ggpht.com/${stem}=s240` },
+        high: { url: `https://yt3.ggpht.com/${stem}=s800` },
+      });
+      axios.get
+        .mockResolvedValueOnce({
+          data: {
+            items: [{
+              id: { kind: 'youtube#channel', channelId: 'UCddd' },
+              snippet: { title: 'Delta', description: 'd', thumbnails: allSizes('d') },
+            }],
+          },
+        })
+        .mockResolvedValueOnce({
+          data: {
+            items: [{
+              id: 'UCddd',
+              snippet: { customUrl: '@delta', thumbnails: allSizes('d-enriched') },
+              statistics: { subscriberCount: '1', videoCount: '1', hiddenSubscriberCount: false },
+            }],
+          },
+        });
+
+      const results = await client.searchChannels('key', 'delta', 10);
+
+      expect(results[0].thumbnailUrl).toBe('https://yt3.ggpht.com/d-enriched=s240');
+    });
+
+    test('base results also prefer medium thumbnails when enrichment misses the channel', async () => {
+      axios.get
+        .mockResolvedValueOnce({
+          data: {
+            items: [{
+              id: { kind: 'youtube#channel', channelId: 'UCeee' },
+              snippet: {
+                title: 'Echo',
+                description: 'e',
+                thumbnails: {
+                  default: { url: 'https://yt3.ggpht.com/e=s88' },
+                  medium: { url: 'https://yt3.ggpht.com/e=s240' },
+                  high: { url: 'https://yt3.ggpht.com/e=s800' },
+                },
+              },
+            }],
+          },
+        })
+        .mockResolvedValueOnce({ data: { items: [] } });
+
+      const results = await client.searchChannels('key', 'echo', 10);
+
+      expect(results[0].thumbnailUrl).toBe('https://yt3.ggpht.com/e=s240');
+    });
+  });
 });

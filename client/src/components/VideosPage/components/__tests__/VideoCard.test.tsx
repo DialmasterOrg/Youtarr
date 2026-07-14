@@ -49,6 +49,7 @@ const renderCard = (overrides: Partial<React.ComponentProps<typeof VideoCard>> =
     onToggleProtection: jest.fn(),
     onDeleteSingle: jest.fn(),
     onImageError: jest.fn(),
+    onAddChannel: jest.fn(),
   };
   render(
     <MemoryRouter>
@@ -129,6 +130,7 @@ describe('VideoCard', () => {
           onToggleProtection={jest.fn()}
           onDeleteSingle={jest.fn()}
           onImageError={jest.fn()}
+          onAddChannel={jest.fn()}
         />
       </MemoryRouter>
     );
@@ -142,5 +144,21 @@ describe('VideoCard', () => {
     const { onDeleteSingle } = renderCard();
     fireEvent.click(screen.getByRole('button', { name: 'Delete video from disk' }));
     expect(onDeleteSingle).toHaveBeenCalledWith(1);
+  });
+
+  test('unsubscribed channel name opens the add-channel affordance', () => {
+    const onAddChannel = jest.fn();
+    renderCard({
+      video: { ...baseVideo, channel_id: 'UCnew', youTubeChannelName: 'New Channel' },
+      enabledChannels: [],
+      onAddChannel,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /new channel/i }));
+
+    expect(onAddChannel).toHaveBeenCalledWith(
+      'New Channel',
+      'https://www.youtube.com/channel/UCnew'
+    );
   });
 });

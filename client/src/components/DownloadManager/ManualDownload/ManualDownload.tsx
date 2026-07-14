@@ -53,7 +53,11 @@ async function enrichBulkImports(
 }
 
 interface ManualDownloadProps {
-  onStartDownload: (urls: string[], settings?: DownloadSettings | null) => void;
+  onStartDownload: (
+    urls: string[],
+    settings?: DownloadSettings | null,
+    videoChannelMap?: Record<string, string>
+  ) => void;
   token: string | null;
   defaultResolution?: string;
 }
@@ -197,7 +201,17 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
     setIsDownloading(true);
     try {
       const urls = validatedVideos.map(v => v.url);
-      await onStartDownload(urls, settings);
+      const videoChannelMap: Record<string, string> = {};
+      for (const video of validatedVideos) {
+        if (video.channelId) {
+          videoChannelMap[video.youtubeId] = video.channelId;
+        }
+      }
+      await onStartDownload(
+        urls,
+        settings,
+        Object.keys(videoChannelMap).length > 0 ? videoChannelMap : undefined
+      );
       const videoCount = validatedVideos.length;
       setSuccessMessage(`Started downloading ${videoCount} video${videoCount !== 1 ? 's' : ''}.`);
       setValidatedVideos([]);

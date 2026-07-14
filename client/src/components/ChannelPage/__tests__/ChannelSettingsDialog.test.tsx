@@ -65,6 +65,33 @@ describe('ChannelSettingsDialog', () => {
 
   const mockSubfolders = ['__Sports', '__Music', '__Tech'];
 
+  const buildUseConfigResult = (configOverrides: Partial<typeof DEFAULT_CONFIG> = {}) => ({
+    config: { ...DEFAULT_CONFIG, preferredResolution: '1080', ...configOverrides },
+    refetch: mockRefetchConfig,
+    loading: false,
+    error: null,
+    initialConfig: null,
+    isPlatformManaged: {
+      plexUrl: false,
+      authEnabled: true,
+      useTmpForDownloads: false,
+      ytdlpUpdates: false
+    },
+    deploymentEnvironment: {
+      platform: null,
+      isWsl: false,
+    },
+    setConfig: jest.fn(),
+    setInitialConfig: jest.fn(),
+  });
+
+  type FetchCall = [input: RequestInfo | URL, init?: RequestInit];
+
+  const findChannelSettingsPutCall = (): FetchCall | undefined =>
+    (mockFetch.mock.calls as FetchCall[]).find(
+      ([url, init]) => url === '/api/channels/channel123/settings' && init?.method === 'PUT'
+    );
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockFetch = jest.fn();
@@ -73,25 +100,7 @@ describe('ChannelSettingsDialog', () => {
     mockAxios.isAxiosError.mockReturnValue(false);
     mockRefetchConfig.mockResolvedValue(undefined);
     // Reset mockUseConfig to default
-    mockUseConfig.mockReturnValue({
-      config: { ...DEFAULT_CONFIG, preferredResolution: '1080' },
-      refetch: mockRefetchConfig,
-      loading: false,
-      error: null,
-      initialConfig: null,
-      isPlatformManaged: {
-        plexUrl: false,
-        authEnabled: true,
-        useTmpForDownloads: false,
-        ytdlpUpdates: false
-      },
-      deploymentEnvironment: {
-        platform: null,
-        isWsl: false,
-      },
-      setConfig: jest.fn(),
-      setInitialConfig: jest.fn(),
-    });
+    mockUseConfig.mockReturnValue(buildUseConfigResult());
   });
 
   async function openSettingsSection(sectionName: 'General' | 'Auto Download' | 'Filters' | 'Ratings') {
@@ -1243,13 +1252,15 @@ describe('ChannelSettingsDialog', () => {
     });
   });
 
-  describe('Skip Video Folder Toggle', () => {
-    test('renders the flat file structure toggle', async () => {
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        });
+  describe('Video File Structure Select', () => {
+    // The ui Select trigger's accessible name is its InputLabel text
+    // ("Video File Structure"), not the selected option, because it's
+    // labeled via labelId. Same query idiom as PlaylistSettingsDialog.test.tsx.
+    test('shows "Use global setting (Video subfolders)" when channel setting is null and global default is off', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
+      });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
 
@@ -1257,17 +1268,17 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      expect(screen.getByLabelText('Flat file structure (no video subfolders)')).toBeInTheDocument();
+      expect(screen.getByLabelText('Video File Structure')).toHaveTextContent(
+        'Use global setting (Video subfolders)'
+      );
     });
 
-    test('toggles skip_video_folder when switch is clicked', async () => {
-      const user = userEvent.setup();
-
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        });
+    test('shows "Use global setting (Flat)" when the global flat default is on', async () => {
+      mockUseConfig.mockReturnValue(buildUseConfigResult({ defaultSkipVideoFolder: true }));
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
+      });
 
       render(<ChannelSettingsDialog {...defaultProps} />);
 
@@ -1275,20 +1286,33 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      const toggle = screen.getByRole('checkbox', { name: /Flat file structure/i });
-      expect(toggle).not.toBeChecked();
-
-      await user.click(toggle);
-      expect(toggle).toBeChecked();
-
-      // Save button should now be enabled since there's a change
-      const saveButton = screen.getByRole('button', { name: 'Save' });
-      expect(saveButton).not.toBeDisabled();
+      expect(screen.getByLabelText('Video File Structure')).toHaveTextContent(
+        'Use global setting (Flat)'
+      );
     });
 
-    test('sends skip_video_folder in the API save call', async () => {
-      const user = userEvent.setup();
+    test('loads skip_video_folder true from server and shows Flat selected', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({
+          ...mockChannelSettings,
+          skip_video_folder: true,
+        }),
+      });
 
+      render(<ChannelSettingsDialog {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      });
+
+      expect(screen.getByLabelText('Video File Structure')).toHaveTextContent(
+        'Flat (no video subfolders)'
+      );
+    });
+
+    test('saves true when Flat is selected', async () => {
+      const user = userEvent.setup();
       mockFetch
         .mockResolvedValueOnce({
           ok: true,
@@ -1307,33 +1331,32 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      // Toggle the flat file structure switch
-      const toggle = screen.getByRole('checkbox', { name: /Flat file structure/i });
-      await user.click(toggle);
+      await user.click(screen.getByLabelText('Video File Structure'));
+      const flatOption = await screen.findByRole('option', { name: 'Flat (no video subfolders)' });
+      await user.click(flatOption);
 
-      // Click save
-      const saveButton = screen.getByRole('button', { name: 'Save' });
-      await user.click(saveButton);
+      await user.click(screen.getByRole('button', { name: 'Save' }));
 
-      // Verify the PUT call includes skip_video_folder: true
-      let putCall: any[];
+      let putCall: ReturnType<typeof findChannelSettingsPutCall>;
       await waitFor(() => {
-        putCall = mockFetch.mock.calls.find(
-          (call: any[]) => call[0] === '/api/channels/channel123/settings' && call[1]?.method === 'PUT'
-        );
+        putCall = findChannelSettingsPutCall();
         expect(putCall).toBeDefined();
       });
-      const body = JSON.parse(putCall![1].body);
+      const body = JSON.parse(String(putCall![1]?.body));
       expect(body.skip_video_folder).toBe(true);
     });
 
-    test('loads skip_video_folder true from server and shows toggle checked', async () => {
+    test('saves false when Video subfolders is selected explicitly', async () => {
+      const user = userEvent.setup();
       mockFetch
         .mockResolvedValueOnce({
           ok: true,
+          json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
           json: jest.fn().mockResolvedValueOnce({
-            ...mockChannelSettings,
-            skip_video_folder: true,
+            settings: { ...mockChannelSettings, skip_video_folder: false },
           }),
         });
 
@@ -1343,8 +1366,57 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      const toggle = screen.getByRole('checkbox', { name: /Flat file structure/i });
-      expect(toggle).toBeChecked();
+      await user.click(screen.getByLabelText('Video File Structure'));
+      const subfoldersOption = await screen.findByRole('option', { name: 'Video subfolders' });
+      await user.click(subfoldersOption);
+
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+
+      let putCall: ReturnType<typeof findChannelSettingsPutCall>;
+      await waitFor(() => {
+        putCall = findChannelSettingsPutCall();
+        expect(putCall).toBeDefined();
+      });
+      const body = JSON.parse(String(putCall![1]?.body));
+      expect(body.skip_video_folder).toBe(false);
+    });
+
+    test('saves null when Use global setting is selected to clear an override', async () => {
+      const user = userEvent.setup();
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce({
+            ...mockChannelSettings,
+            skip_video_folder: true,
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce({
+            settings: { ...mockChannelSettings, skip_video_folder: null },
+          }),
+        });
+
+      render(<ChannelSettingsDialog {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      });
+
+      await user.click(screen.getByLabelText('Video File Structure'));
+      const useGlobalOption = await screen.findByRole('option', { name: /Use global setting/ });
+      await user.click(useGlobalOption);
+
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+
+      let putCall: ReturnType<typeof findChannelSettingsPutCall>;
+      await waitFor(() => {
+        putCall = findChannelSettingsPutCall();
+        expect(putCall).toBeDefined();
+      });
+      const body = JSON.parse(String(putCall![1]?.body));
+      expect(body.skip_video_folder).toBeNull();
     });
   });
 

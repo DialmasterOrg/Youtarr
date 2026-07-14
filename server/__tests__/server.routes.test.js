@@ -208,7 +208,8 @@ const createServerModule = ({
 
         const downloadModuleMock = {
           doSpecificDownloads: jest.fn(),
-          doChannelAndPlaylistDownloads: jest.fn().mockResolvedValue(undefined)
+          doChannelAndPlaylistDownloads: jest.fn().mockResolvedValue(undefined),
+          doGroupedManualDownloads: jest.fn().mockResolvedValue(undefined)
         };
 
         const jobModuleMock = {
@@ -355,6 +356,12 @@ const createServerModule = ({
         jest.doMock('../modules/videoSearchModule', () => ({
           searchVideos: jest.fn().mockResolvedValue([]),
           ALLOWED_COUNTS: [10, 25, 50],
+          SearchCanceledError: class SearchCanceledError extends Error {},
+          SearchTimeoutError: class SearchTimeoutError extends Error {},
+        }));
+        jest.doMock('../modules/channelSearchModule', () => ({
+          searchChannels: jest.fn().mockResolvedValue([]),
+          ALLOWED_COUNTS: [10, 25, 50, 100],
           SearchCanceledError: class SearchCanceledError extends Error {},
           SearchTimeoutError: class SearchTimeoutError extends Error {},
         }));
@@ -1813,7 +1820,7 @@ describe('server routes - downloads', () => {
 
       await downloadHandler(req, res);
 
-      expect(downloadModuleMock.doSpecificDownloads).toHaveBeenCalledWith(req);
+      expect(downloadModuleMock.doGroupedManualDownloads).toHaveBeenCalledWith(req);
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({ status: 'success' });
     });
@@ -1876,7 +1883,7 @@ describe('server routes - downloads', () => {
 
       expect(res.statusCode).toBe(200);
       expect(req.body.overrideSettings.rating).toBeNull();
-      expect(downloadModuleMock.doSpecificDownloads).toHaveBeenCalledWith(req);
+      expect(downloadModuleMock.doGroupedManualDownloads).toHaveBeenCalledWith(req);
     });
 
     test('rejects a path-traversal subfolderFallback override', async () => {
@@ -1896,7 +1903,7 @@ describe('server routes - downloads', () => {
       await downloadHandler(req, res);
 
       expect(res.statusCode).toBe(400);
-      expect(downloadModuleMock.doSpecificDownloads).not.toHaveBeenCalled();
+      expect(downloadModuleMock.doGroupedManualDownloads).not.toHaveBeenCalled();
     });
 
     test('rejects an invalid ratingFallback override', async () => {
@@ -1917,7 +1924,7 @@ describe('server routes - downloads', () => {
 
       expect(res.statusCode).toBe(400);
       expect(res.body.error).toContain('Invalid rating');
-      expect(downloadModuleMock.doSpecificDownloads).not.toHaveBeenCalled();
+      expect(downloadModuleMock.doGroupedManualDownloads).not.toHaveBeenCalled();
     });
 
     test('forwards a valid subfolderFallback override', async () => {
@@ -1937,7 +1944,45 @@ describe('server routes - downloads', () => {
       await downloadHandler(req, res);
 
       expect(res.statusCode).toBe(200);
-      expect(downloadModuleMock.doSpecificDownloads).toHaveBeenCalledWith(req);
+      expect(downloadModuleMock.doGroupedManualDownloads).toHaveBeenCalledWith(req);
+    });
+
+    test('rejects a malformed videoChannelMap', async () => {
+      const { app, downloadModuleMock } = await createServerModule();
+      const handlers = findRouteHandlers(app, 'post', '/triggerspecificdownloads');
+      const downloadHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: {
+          urls: ['https://youtube.com/watch?v=dQw4w9WgXcQ'],
+          videoChannelMap: { dQw4w9WgXcQ: 'not-a-channel-id' }
+        }
+      });
+      const res = createMockResponse();
+
+      await downloadHandler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(downloadModuleMock.doGroupedManualDownloads).not.toHaveBeenCalled();
+    });
+
+    test('accepts a well-formed videoChannelMap', async () => {
+      const { app, downloadModuleMock } = await createServerModule();
+      const handlers = findRouteHandlers(app, 'post', '/triggerspecificdownloads');
+      const downloadHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: {
+          urls: ['https://youtube.com/watch?v=dQw4w9WgXcQ'],
+          videoChannelMap: { dQw4w9WgXcQ: 'UCuAXFkgsw1L7xaCfnd5JJOw' }
+        }
+      });
+      const res = createMockResponse();
+
+      await downloadHandler(req, res);
+
+      expect(downloadModuleMock.doGroupedManualDownloads).toHaveBeenCalledWith(req);
+      expect(res.json).toHaveBeenCalledWith({ status: 'success' });
     });
   });
 

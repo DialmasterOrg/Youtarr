@@ -151,6 +151,7 @@ describe('VideoValidationModule', () => {
           youtubeId: 'dQw4w9WgXcQ',
           url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
           channelName: 'RickAstleyVEVO',
+          channelId: null,
           videoTitle: 'Rick Astley - Never Gonna Give You Up',
           duration: 213,
           publishedAt: Math.floor(new Date('2009-10-25').getTime() / 1000),
@@ -420,6 +421,49 @@ describe('VideoValidationModule', () => {
         { availability: 'subscriber_only' },
         { where: { youtube_id: 'OOUclRI0Ae4' } },
       );
+    });
+  });
+
+  describe('channelId capture', () => {
+    it('includes the channel_id from yt-dlp metadata as channelId', async () => {
+      ytDlpRunner.fetchMetadata.mockResolvedValue({
+        title: 'Test Video',
+        channel: 'Test Channel',
+        duration: 100,
+        channel_id: 'UCuAXFkgsw1L7xaCfnd5JJOw',
+      });
+      archiveModule.isVideoInArchive.mockResolvedValue(false);
+
+      const result = await videoValidationModule.validateVideo('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+
+      expect(result.isValidUrl).toBe(true);
+      expect(result.metadata.channelId).toBe('UCuAXFkgsw1L7xaCfnd5JJOw');
+    });
+
+    it('returns channelId null when yt-dlp metadata has no channel_id', async () => {
+      ytDlpRunner.fetchMetadata.mockResolvedValue({
+        title: 'Test Video',
+        duration: 100,
+      });
+      archiveModule.isVideoInArchive.mockResolvedValue(false);
+
+      const result = await videoValidationModule.validateVideo('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+
+      expect(result.metadata.channelId).toBeNull();
+    });
+
+    it('getCachedChannelId returns the cached channelId, and null on a miss', async () => {
+      ytDlpRunner.fetchMetadata.mockResolvedValue({
+        title: 'Test Video',
+        duration: 100,
+        channel_id: 'UCuAXFkgsw1L7xaCfnd5JJOw',
+      });
+      archiveModule.isVideoInArchive.mockResolvedValue(false);
+
+      await videoValidationModule.validateVideo('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+
+      expect(videoValidationModule.getCachedChannelId('dQw4w9WgXcQ')).toBe('UCuAXFkgsw1L7xaCfnd5JJOw');
+      expect(videoValidationModule.getCachedChannelId('aaaaaaaaaaa')).toBeNull();
     });
   });
 

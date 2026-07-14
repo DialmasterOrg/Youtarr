@@ -388,6 +388,40 @@ describe('ChannelSettingsModule', () => {
     });
   });
 
+  describe('getChannelsUsingGlobalFileStructure', () => {
+    test('returns count and channelNames for enabled channels inheriting the global setting', async () => {
+      Channel.findAll.mockResolvedValue([
+        { uploader: 'Channel A' },
+        { uploader: 'Channel B' }
+      ]);
+
+      const result = await channelSettingsModule.getChannelsUsingGlobalFileStructure();
+
+      expect(Channel.findAll).toHaveBeenCalledWith({
+        attributes: ['uploader'],
+        where: {
+          enabled: true,
+          skip_video_folder: null
+        }
+      });
+      expect(result).toEqual({
+        count: 2,
+        channelNames: ['Channel A', 'Channel B']
+      });
+    });
+
+    test('caps channelNames at 10 while count reflects the real total', async () => {
+      const channels = Array.from({ length: 12 }, (_, i) => ({ uploader: `Channel ${i + 1}` }));
+      Channel.findAll.mockResolvedValue(channels);
+
+      const result = await channelSettingsModule.getChannelsUsingGlobalFileStructure();
+
+      expect(result.count).toBe(12);
+      expect(result.channelNames).toHaveLength(10);
+      expect(result.channelNames).toEqual(channels.slice(0, 10).map(ch => ch.uploader));
+    });
+  });
+
   describe('previewTitleFilter', () => {
     const mockChannelVideos = [
       {
@@ -533,6 +567,22 @@ describe('ChannelSettingsModule', () => {
       const result = await channelSettingsModule.getChannelSettings('UC123456');
 
       expect(result.auto_download_enabled_tabs).toBe('video,short');
+    });
+
+    test('includes enabled=true for an active subscription', async () => {
+      Channel.findOne.mockResolvedValue({ ...mockChannel, enabled: true });
+
+      const result = await channelSettingsModule.getChannelSettings('UC123456');
+
+      expect(result.enabled).toBe(true);
+    });
+
+    test('includes enabled=false for a soft-deleted channel row', async () => {
+      Channel.findOne.mockResolvedValue({ ...mockChannel, enabled: false });
+
+      const result = await channelSettingsModule.getChannelSettings('UC123456');
+
+      expect(result.enabled).toBe(false);
     });
   });
 

@@ -16,7 +16,7 @@ let mockLocationState: unknown = null;
 jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
   useNavigate: () => mockNavigate,
-  useLocation: () => ({ state: mockLocationState }),
+  useLocation: () => ({ state: mockLocationState, pathname: '/subscriptions' }),
 }));
 
 // Mock custom hooks
@@ -1558,6 +1558,35 @@ describe('Subscriptions Component', () => {
       await waitFor(() => {
         expect(screen.getByText('Total matching channels: 10')).toBeInTheDocument();
       });
+    });
+  });
+
+  describe('auto-add handoff via location.state.addChannelUrl', () => {
+    beforeEach(() => {
+      mockLocationState = { addChannelUrl: 'https://www.youtube.com/channel/UCabc' };
+      mockAddChannel.mockResolvedValue({ success: true });
+    });
+
+    afterEach(() => {
+      mockLocationState = null;
+    });
+
+    test('kicks off the add flow once and clears history state', async () => {
+      renderSubscriptions();
+
+      await waitFor(() => {
+        expect(mockAddChannel).toHaveBeenCalledWith('https://www.youtube.com/channel/UCabc');
+      });
+      expect(mockAddChannel).toHaveBeenCalledTimes(1);
+      expect(mockNavigate).toHaveBeenCalledWith('/subscriptions', { replace: true });
+    });
+
+    test('surfaces the failure dialog when the auto-add fails', async () => {
+      mockAddChannel.mockResolvedValue({ success: false, message: 'Channel already exists' });
+
+      renderSubscriptions();
+
+      expect(await screen.findByText('Channel already exists')).toBeInTheDocument();
     });
   });
 });

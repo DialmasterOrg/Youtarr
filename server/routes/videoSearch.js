@@ -112,8 +112,10 @@ function createVideoSearchRoutes({ verifyToken, videoSearchModule }) {
     }
 
     const controller = new AbortController();
-    req.on('close', () => {
-      if (!res.headersSent) controller.abort();
+    // res 'close' with writableEnded=false is the only reliable disconnect signal;
+    // req 'close' also fires on normal completion once the body is consumed (Node >= 16).
+    res.on('close', () => {
+      if (!res.writableEnded) controller.abort();
     });
 
     try {
