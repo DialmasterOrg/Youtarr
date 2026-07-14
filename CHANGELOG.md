@@ -1,5 +1,34 @@
 # Changelog
 
+## [v1.75.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.75.0) - 2026-07-14
+
+## [1.75.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.74.0...v1.75.0) (2026-07-14)
+
+
+### Features
+
+* add global flat folder structure option ([eb6a073](https://github.com/DialmasterOrg/Youtarr/commit/eb6a0730befea3f3d6b03b8298d2d025e1659545)), closes [#692](https://github.com/DialmasterOrg/Youtarr/issues/692)
+* add in-app youtube channel search ([f56cf23](https://github.com/DialmasterOrg/Youtarr/commit/f56cf231e73e8b0f5e31c82e296b86859e3aa4d7)), closes [#545](https://github.com/DialmasterOrg/Youtarr/issues/545)
+* add video only override to download dialog ([9db17bd](https://github.com/DialmasterOrg/Youtarr/commit/9db17bda9ea4f4402b351f8cf349aa7de85cbb4a)), closes [#711](https://github.com/DialmasterOrg/Youtarr/issues/711)
+* support mp3 playback in video modal ([ba4e765](https://github.com/DialmasterOrg/Youtarr/commit/ba4e765a3b76a2d5aa37ef6b22e5a22e2c8d7849))
+
+
+### Bug Fixes
+
+* honor channel settings for manual downloads ([f2e8b98](https://github.com/DialmasterOrg/Youtarr/commit/f2e8b988336293f810f40c7b770f18d870e36495)), closes [#692](https://github.com/DialmasterOrg/Youtarr/issues/692)
+
+
+### Documentation
+
+* make recent changelog entries user-facing [skip ci] ([7c45ad2](https://github.com/DialmasterOrg/Youtarr/commit/7c45ad2c00a5d5795d2d5ba1038d30305837df8a))
+* update CHANGELOG for v1.74.0 [skip ci] ([f5fd5a7](https://github.com/DialmasterOrg/Youtarr/commit/f5fd5a723f583a91d2460038136621927e99ddc9))
+* Update comparsion doc Github info ([0604943](https://github.com/DialmasterOrg/Youtarr/commit/06049434e5492edf6694179a3948eae5ef904b9a))
+* Update Youtarr comparison document ([cee3c8f](https://github.com/DialmasterOrg/Youtarr/commit/cee3c8fd0fd680e29e520b6bfe938ecbd5718515))
+
+
+
+
+
 ## [v1.74.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.74.0) - 2026-07-10
 
 ## [1.74.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.73.0...v1.74.0) (2026-07-10)
