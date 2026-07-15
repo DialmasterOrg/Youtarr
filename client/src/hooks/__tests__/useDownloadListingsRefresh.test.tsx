@@ -62,6 +62,20 @@ describe('useDownloadListingsRefresh', () => {
     expect(onRefresh).toHaveBeenCalledTimes(1);
   });
 
+  test('calls onRefresh for jobsUpdated broadcasts', () => {
+    const onRefresh = jest.fn();
+    renderHook(() => useDownloadListingsRefresh(onRefresh), { wrapper });
+
+    emitMessage({
+      destination: 'broadcast',
+      type: 'jobsUpdated',
+      payload: { jobId: 'job-1', status: 'In Progress' },
+    });
+    jest.advanceTimersByTime(1000);
+
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+
   test('coalesces a burst of messages into a single refresh', () => {
     const onRefresh = jest.fn();
     renderHook(() => useDownloadListingsRefresh(onRefresh), { wrapper });
