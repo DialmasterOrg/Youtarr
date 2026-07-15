@@ -13,6 +13,7 @@ import DownloadNew from './DownloadManager/DownloadNew';
 import DownloadProgress from './DownloadManager/DownloadProgress';
 import DownloadHistory from './DownloadManager/DownloadHistory';
 import WebSocketContext from '../contexts/WebSocketContext';
+import { useDownloadListingsRefresh } from '../hooks/useDownloadListingsRefresh';
 import { Job } from '../types/Job';
 
 interface DownloadManagerProps {
@@ -35,14 +36,6 @@ function DownloadManager({ token }: DownloadManagerProps) {
 
   const isMobile = useMediaQuery('(max-width: 599px)');
 
-  const { subscribe, unsubscribe } = wsContext;
-
-  const filter = useCallback((message: any) => {
-    return (
-      message.destination === 'broadcast' && message.type === 'downloadComplete'
-    );
-  }, []);
-
   const fetchRunningJobs = useCallback(() => {
     if (token) {
       axios
@@ -59,20 +52,11 @@ function DownloadManager({ token }: DownloadManagerProps) {
     }
   }, [token]);
 
-  const processMessagesCallback = useCallback(
-    (payload: any) => {
-      fetchRunningJobs();
-    },
-    [fetchRunningJobs]
-  );
-
   useEffect(() => {
     fetchRunningJobs();
-    subscribe(filter, processMessagesCallback);
-    return () => {
-      unsubscribe(processMessagesCallback);
-    };
-  }, [subscribe, unsubscribe, filter, processMessagesCallback]);
+  }, [fetchRunningJobs]);
+
+  useDownloadListingsRefresh(fetchRunningJobs);
 
   useEffect(() => {
     const timer = setInterval(() => {

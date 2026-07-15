@@ -451,6 +451,7 @@ class JobModule {
         timeInitiated: Date.now(),
       });
       jobId = jobData.id;
+      this.emitJobsUpdated(jobId, 'In Progress');
     } else {
       logger.warn('Cannot start next job as a job is already in progress');
     }
@@ -912,6 +913,14 @@ class JobModule {
     return this.jobs;
   }
 
+  // Lets listing pages (e.g. Download History) refetch when a job is enqueued or starts.
+  emitJobsUpdated(jobId, status) {
+    MessageEmitter.emitMessage('broadcast', null, 'download', 'jobsUpdated', {
+      jobId,
+      status,
+    });
+  }
+
   async addJob(job) {
     const jobId = uuidv4(); // Generate a new UUID
     job.timeInitiated = Date.now();
@@ -929,6 +938,7 @@ class JobModule {
         timeInitiated: job.timeInitiated,
         timeCreated: job.timeCreated,
       });
+      this.emitJobsUpdated(jobId, job.status);
       return jobId;
     } catch (error) {
       logger.error({ err: error }, 'Error saving job');

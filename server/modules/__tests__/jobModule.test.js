@@ -949,6 +949,38 @@ describe('JobModule', () => {
       expect(result).toBeUndefined();
 
     });
+
+    test('should emit jobsUpdated when flipping next job to In Progress', async () => {
+      JobModule.jobs = {};
+
+      const jobData = { id: 'next-job', jobType: 'download' };
+      await JobModule.addOrUpdateJob(jobData, true);
+
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
+        'broadcast',
+        null,
+        'download',
+        'jobsUpdated',
+        { jobId: 'next-job', status: 'In Progress' }
+      );
+    });
+
+    test('should not emit jobsUpdated when next job cannot start', async () => {
+      JobModule.jobs = {
+        'existing-job': { status: 'In Progress' }
+      };
+
+      const jobData = { id: 'next-job', jobType: 'download' };
+      await JobModule.addOrUpdateJob(jobData, true);
+
+      expect(MessageEmitter.emitMessage).not.toHaveBeenCalledWith(
+        'broadcast',
+        null,
+        'download',
+        'jobsUpdated',
+        expect.anything()
+      );
+    });
   });
 
   describe('addJob', () => {
@@ -991,6 +1023,33 @@ describe('JobModule', () => {
 
       expect(logger.error).toHaveBeenCalled();
 
+    });
+
+    test('should emit jobsUpdated broadcast after creating the job', async () => {
+      const jobData = { jobType: 'Channel Downloads', status: 'Pending' };
+      await JobModule.addJob(jobData);
+
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
+        'broadcast',
+        null,
+        'download',
+        'jobsUpdated',
+        { jobId: 'generated-uuid', status: 'Pending' }
+      );
+    });
+
+    test('should not emit jobsUpdated when saving the job fails', async () => {
+      Job.create.mockRejectedValue(new Error('Save failed'));
+
+      await expect(JobModule.addJob({ jobType: 'download' })).rejects.toThrow('Save failed');
+
+      expect(MessageEmitter.emitMessage).not.toHaveBeenCalledWith(
+        'broadcast',
+        null,
+        'download',
+        'jobsUpdated',
+        expect.anything()
+      );
     });
   });
 
