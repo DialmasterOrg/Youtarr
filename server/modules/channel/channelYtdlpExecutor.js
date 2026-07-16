@@ -23,6 +23,11 @@ class ChannelYtdlpExecutor {
       }
     });
 
+    // Attach immediately: if setup below throws before the promise adds its
+    // real handler, a spawn failure (e.g. ENOENT) would be an unhandled
+    // 'error' event and take down the whole process.
+    ytDlp.on('error', () => {});
+
     if (outputFile) {
       const writeStream = fs.createWriteStream(outputFile);
       ytDlp.stdout.pipe(writeStream);

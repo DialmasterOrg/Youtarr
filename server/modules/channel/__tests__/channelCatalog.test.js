@@ -4,6 +4,7 @@ const { Op } = require('sequelize');
 const mockFactories = require('./mockFactories');
 
 jest.mock('fs');
+jest.mock('child_process');
 jest.mock('../../../logger');
 jest.mock('../../../models/channel', () => mockFactories.mockChannelModel());
 jest.mock('../../configModule', () => mockFactories.mockConfigModule());
@@ -264,6 +265,9 @@ describe('channelCatalog', () => {
         .mockResolvedValue([{ url: 'https://youtube.com/@old', enabled: true }]);
 
       Channel.update = jest.fn().mockRejectedValue(new Error('DB Error'));
+
+      const channelProvisioning = require('../channelProvisioning');
+      jest.spyOn(channelProvisioning, 'getChannelInfo').mockResolvedValue({ id: 'UCnew' });
 
       await channelCatalog.writeChannels(['https://youtube.com/@new']);
 
