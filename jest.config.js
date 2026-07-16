@@ -1,7 +1,7 @@
 module.exports = {
     testEnvironment: 'node',
     roots: ['<rootDir>/server', '<rootDir>/migrations'],
-    testMatch: ['**/__tests__/**/*.js', '**/?(*.)+(spec|test).js'],
+    testMatch: ['**/__tests__/**/*.test.js', '**/?(*.)+(spec|test).js'],
     collectCoverageFrom: [
         'server/**/*.js',
         '!server/.eslintrc.js',
