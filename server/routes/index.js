@@ -103,7 +103,7 @@ function registerRoutes(app, deps) {
   app.use(createSubscriptionRoutes({ verifyToken, subscriptionImportModule }));
 
   // Video detail routes (metadata and streaming)
-  app.use(createVideoDetailRoutes({ verifyToken, videoMetadataModule }));
+  app.use(createVideoDetailRoutes({ verifyToken, videoMetadataModule, mediaServers }));
 
   // Playlist routes
   app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule }));

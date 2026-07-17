@@ -5,6 +5,7 @@ describe('VideosModule', () => {
   let VideosModule;
   let mockSequelize;
   let mockVideo;
+  let mockVideoWatchStatus;
   let mockFs;
   let mockConfigModule;
   let mockVideoValidationModule;
@@ -25,6 +26,10 @@ describe('VideosModule', () => {
 
     // Mock the Channel model
     const mockChannel = {
+      findAll: jest.fn().mockResolvedValue([])
+    };
+
+    mockVideoWatchStatus = {
       findAll: jest.fn().mockResolvedValue([])
     };
 
@@ -79,7 +84,8 @@ describe('VideosModule', () => {
 
     // Mock the models
     jest.doMock('../../models', () => ({
-      Video: mockVideo
+      Video: mockVideo,
+      VideoWatchStatus: mockVideoWatchStatus
     }));
 
     // Mock the Channel model
@@ -609,6 +615,60 @@ describe('VideosModule', () => {
       expect(query).toContain('WHERE');
       expect(query).toContain('AND');
       expect(query.match(/AND/g)).toHaveLength(3); // 3 AND operators for 4 conditions
+    });
+
+    test('attaches watchedBy server list from video_watch_status rows', async () => {
+      const mockVideos = [
+        {
+          id: 1,
+          youtubeId: 'abc123',
+          youTubeChannelName: 'Test Channel',
+          youTubeVideoName: 'Test Video',
+          filePath: null,
+          fileSize: null,
+          removed: false,
+          youtube_removed: false,
+          youtube_removed_checked_at: null
+        },
+        {
+          id: 2,
+          youtubeId: 'def456',
+          youTubeChannelName: 'Another Channel',
+          youTubeVideoName: 'Another Video',
+          filePath: null,
+          fileSize: null,
+          removed: false,
+          youtube_removed: false,
+          youtube_removed_checked_at: null
+        }
+      ];
+
+      mockSequelize.query.mockResolvedValueOnce([{ total: 2 }]);
+      mockSequelize.query.mockResolvedValueOnce(mockVideos);
+      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
+
+      mockVideoWatchStatus.findAll.mockResolvedValueOnce([
+        { video_id: 1, server_type: 'plex' },
+        { video_id: 1, server_type: 'jellyfin' },
+      ]);
+
+      const result = await VideosModule.getVideosPaginated({ page: 1, limit: 12 });
+
+      expect(mockVideoWatchStatus.findAll).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ played: true }) })
+      );
+      expect(result.videos[0].watchedBy).toEqual(['plex', 'jellyfin']);
+      expect(result.videos[1].watchedBy).toEqual([]);
+    });
+
+    test('does not query VideoWatchStatus when the page has no videos', async () => {
+      mockSequelize.query.mockResolvedValueOnce([{ total: 0 }]);
+      mockSequelize.query.mockResolvedValueOnce([]);
+      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
+
+      await VideosModule.getVideosPaginated();
+
+      expect(mockVideoWatchStatus.findAll).not.toHaveBeenCalled();
     });
   });
 

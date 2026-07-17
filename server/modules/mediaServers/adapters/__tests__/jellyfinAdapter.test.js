@@ -11,6 +11,10 @@ describe('JellyfinAdapter', () => {
 
   beforeEach(() => jest.clearAllMocks());
 
+  test('exposes the serverType contract used by orchestration', () => {
+    expect(new JellyfinAdapter(cfg).serverType).toBe('jellyfin');
+  });
+
   test('testConnection returns ok on successful ping', async () => {
     axios.get.mockResolvedValueOnce({ data: { Version: '10.9.0' } });
     const adapter = new JellyfinAdapter(cfg);
@@ -186,5 +190,69 @@ describe('JellyfinAdapter', () => {
       expect.objectContaining({ MediaType: 'Audio' }),
       expect.any(Object)
     );
+  });
+
+  describe('fetchWatchStates', () => {
+    test('maps UserData fields including ticks-to-ms conversion', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: {
+          Items: [
+            {
+              Id: 'A',
+              Path: '/media/Chan/Video A [id1].mp4',
+              UserData: { Played: true, PlayCount: 3, PlaybackPositionTicks: 0, LastPlayedDate: '2026-07-10T12:00:00Z' },
+            },
+            {
+              Id: 'B',
+              Path: '/media/Chan/Video B [id2].mp4',
+              UserData: { Played: false, PlayCount: 0, PlaybackPositionTicks: 1500000000, PlayedPercentage: 25 },
+            },
+            { Id: 'C', UserData: { Played: true } }, // no Path -> excluded
+          ],
+        },
+      });
+
+      const adapter = new JellyfinAdapter(cfg);
+      const entries = await adapter.fetchWatchStates();
+
+      expect(entries).toHaveLength(2);
+      expect(entries[0]).toEqual({
+        path: '/media/Chan/Video A [id1].mp4',
+        played: true,
+        playCount: 3,
+        positionMs: 0,
+        percentWatched: 100,
+        lastWatchedAt: new Date('2026-07-10T12:00:00Z'),
+      });
+      expect(entries[1].positionMs).toBe(150000);
+      expect(entries[1].percentWatched).toBe(25);
+      expect(entries[1].played).toBe(false);
+    });
+
+    test('requests items with UserData enabled for the configured user', async () => {
+      axios.get.mockResolvedValueOnce({ data: { Items: [] } });
+      const adapter = new JellyfinAdapter(cfg);
+      await adapter.fetchWatchStates();
+      expect(axios.get).toHaveBeenCalledWith(
+        expect.stringContaining('/Items'),
+        expect.objectContaining({
+          params: expect.objectContaining({
+            userId: 'USR',
+            enableUserData: true,
+            fields: 'Path',
+          }),
+        })
+      );
+    });
+
+    test('throws MediaServerUnavailableError when the server is unreachable', async () => {
+      const { MediaServerUnavailableError } = require('../baseAdapter');
+      const err = new Error('timeout');
+      err.isAxiosError = true;
+      err.code = 'ETIMEDOUT';
+      axios.get.mockRejectedValueOnce(err);
+      const adapter = new JellyfinAdapter(cfg);
+      await expect(adapter.fetchWatchStates()).rejects.toBeInstanceOf(MediaServerUnavailableError);
+    });
   });
 });

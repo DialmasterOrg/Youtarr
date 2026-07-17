@@ -1,4 +1,5 @@
 const ChannelVideo = require('../../models/channelvideo');
+const VideoWatchStatus = require('../../models/videowatchstatus');
 const fileCheckModule = require('../fileCheckModule');
 const { PUBLISHED_AT_SOURCE } = require('../constants/publishedAtSource');
 
@@ -80,6 +81,23 @@ class ChannelVideoQuery {
       }
     }
 
+    // Watched-on-any-server summary for the channel listings. Rows exist only
+    // for downloaded videos a media server actually reported, so a missing row
+    // means unknown - never-downloaded and unmatched videos fall through to [].
+    const videoDbIds = downloadedVideos.map((v) => v.id);
+    const watchRows = videoDbIds.length
+      ? await VideoWatchStatus.findAll({
+        where: { video_id: videoDbIds, played: true },
+        attributes: ['video_id', 'server_type'],
+        raw: true,
+      })
+      : [];
+    const watchedByVideoId = new Map();
+    for (const row of watchRows) {
+      if (!watchedByVideoId.has(row.video_id)) watchedByVideoId.set(row.video_id, []);
+      watchedByVideoId.get(row.video_id).push(row.server_type);
+    }
+
     return videos.map((video) => {
       const plainVideoObject = video.toJSON ? video.toJSON() : video;
       const videoId = plainVideoObject.youtube_id || plainVideoObject.youtubeId;
@@ -101,6 +119,7 @@ class ChannelVideoQuery {
         plainVideoObject.timeCreated = status.last_downloaded_at
           ? new Date(status.last_downloaded_at).toISOString()
           : null;
+        plainVideoObject.watchedBy = watchedByVideoId.get(status.id) || [];
       } else {
         // Video never downloaded
         plainVideoObject.added = false;
@@ -110,6 +129,7 @@ class ChannelVideoQuery {
         plainVideoObject.audioFilePath = null;
         plainVideoObject.audioFileSize = null;
         plainVideoObject.protected = false;
+        plainVideoObject.watchedBy = [];
       }
 
       // Replace thumbnail with template format (unless video is removed from YouTube)

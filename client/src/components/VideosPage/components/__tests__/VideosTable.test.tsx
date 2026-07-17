@@ -133,4 +133,16 @@ describe('VideosTable', () => {
       'https://www.youtube.com/channel/UCnew'
     );
   });
+
+  test('renders a Watched chip for a video watched on a server', () => {
+    renderTable({
+      videos: [{ ...sampleVideos[0], watchedBy: ['plex'] }],
+    });
+    expect(screen.getByText('Watched')).toBeInTheDocument();
+  });
+
+  test('does not render a Watched chip when watchedBy is absent', () => {
+    renderTable();
+    expect(screen.queryByText('Watched')).not.toBeInTheDocument();
+  });
 });

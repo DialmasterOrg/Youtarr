@@ -19,9 +19,10 @@ const metadataLimiter = rateLimit({
  * @param {Object} deps - Dependencies
  * @param {Function} deps.verifyToken - Token verification middleware
  * @param {Object} deps.videoMetadataModule - Video metadata module
+ * @param {Object} deps.mediaServers - Media server aggregate (watchStatusSync)
  * @returns {express.Router}
  */
-function createVideoDetailRoutes({ verifyToken, videoMetadataModule }) {
+function createVideoDetailRoutes({ verifyToken, videoMetadataModule, mediaServers }) {
   const router = express.Router();
 
   /**
@@ -72,6 +73,38 @@ function createVideoDetailRoutes({ verifyToken, videoMetadataModule }) {
     } catch (err) {
       req.log.error({ err, youtubeId }, 'Failed to get video metadata');
       res.status(500).json({ error: 'Failed to retrieve video metadata' });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/videos/{youtubeId}/watch-status:
+   *   get:
+   *     summary: Get per-media-server watch status for a video
+   *     tags: [Videos]
+   *     parameters:
+   *       - in: path
+   *         name: youtubeId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: Watch status rows, one per connected media server that has synced this video
+   *       400:
+   *         description: Invalid YouTube ID
+   */
+  router.get('/api/videos/:youtubeId/watch-status', verifyToken, async (req, res) => {
+    const { youtubeId } = req.params;
+    if (!youtubeId || !/^[A-Za-z0-9_-]{6,20}$/.test(youtubeId)) {
+      return res.status(400).json({ error: 'Invalid YouTube ID' });
+    }
+    try {
+      const statuses = await mediaServers.watchStatusSync.getStatusesForVideo(youtubeId);
+      res.json({ statuses });
+    } catch (err) {
+      req.log.error({ err, youtubeId }, 'Failed to get video watch status');
+      res.status(500).json({ error: 'Failed to retrieve watch status' });
     }
   });
 

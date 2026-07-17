@@ -5,12 +5,14 @@ const mockFactories = require('./mockFactories');
 jest.mock('../../../logger');
 jest.mock('../../../models/channelvideo', () => mockFactories.mockChannelVideoModel());
 jest.mock('../../../models/video', () => mockFactories.mockVideoModel());
+jest.mock('../../../models/videowatchstatus', () => mockFactories.mockVideoWatchStatusModel());
 jest.mock('../../../db', () => mockFactories.mockDb());
 jest.mock('../../fileCheckModule', () => mockFactories.mockFileCheckModule());
 
 describe('channelVideoQuery', () => {
   let channelVideoQuery;
   let ChannelVideo;
+  let VideoWatchStatus;
   let fileCheckModule;
 
   beforeEach(() => {
@@ -18,6 +20,8 @@ describe('channelVideoQuery', () => {
     jest.clearAllMocks();
 
     ChannelVideo = require('../../../models/channelvideo');
+    VideoWatchStatus = require('../../../models/videowatchstatus');
+    VideoWatchStatus.findAll.mockResolvedValue([]);
     fileCheckModule = require('../../fileCheckModule');
     channelVideoQuery = require('../channelVideoQuery');
   });
@@ -289,6 +293,47 @@ describe('channelVideoQuery', () => {
       expect(result[0].timeCreated).toBe(downloadedAt.toISOString());
       expect(result[1].timeCreated).toBeNull();
       expect(result[2].timeCreated).toBeUndefined();
+    });
+
+    test('stamps watchedBy from played watch-status rows onto downloaded videos', async () => {
+      const Video = require('../../../models/video');
+
+      const inputVideos = [
+        { youtube_id: 'vid1', toJSON: () => ({ youtube_id: 'vid1' }) },
+        { youtube_id: 'vid2', toJSON: () => ({ youtube_id: 'vid2' }) }
+      ];
+
+      Video.findAll = jest.fn().mockResolvedValue([
+        { id: 7, youtubeId: 'vid1', removed: false }
+      ]);
+      VideoWatchStatus.findAll.mockResolvedValueOnce([
+        { video_id: 7, server_type: 'plex' },
+        { video_id: 7, server_type: 'jellyfin' },
+      ]);
+
+      const result = await channelVideoQuery.enrichVideosWithDownloadStatus(inputVideos);
+
+      expect(VideoWatchStatus.findAll).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ played: true, video_id: [7] }) })
+      );
+      expect(result[0].watchedBy).toEqual(['plex', 'jellyfin']);
+      expect(result[1].watchedBy).toEqual([]);
+    });
+
+    test('does not query watch status when no videos are downloaded', async () => {
+      const Video = require('../../../models/video');
+
+      const inputVideos = [
+        { youtube_id: 'vid1', toJSON: () => ({ youtube_id: 'vid1' }) },
+        { youtube_id: 'vid2', toJSON: () => ({ youtube_id: 'vid2' }) }
+      ];
+
+      Video.findAll = jest.fn().mockResolvedValue([]);
+
+      const result = await channelVideoQuery.enrichVideosWithDownloadStatus(inputVideos);
+
+      expect(VideoWatchStatus.findAll).not.toHaveBeenCalled();
+      expect(result[0].watchedBy).toEqual([]);
     });
   });
 

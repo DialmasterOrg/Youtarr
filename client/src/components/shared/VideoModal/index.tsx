@@ -16,7 +16,9 @@ import VideoPlayer from './components/VideoPlayer';
 import VideoMetadata from './components/VideoMetadata';
 import VideoActions from './components/VideoActions';
 import VideoTechnical from './components/VideoTechnical';
+import VideoWatchStatusSection from './components/VideoWatchStatusSection';
 import { useVideoMetadata } from './hooks/useVideoMetadata';
+import { useWatchStatus } from './hooks/useWatchStatus';
 import { useVideoModalActions } from './hooks/useVideoModalActions';
 import { VideoModalProps } from './types';
 import DeleteVideosDialog from '../DeleteVideosDialog';
@@ -79,6 +81,11 @@ function VideoModal({
   const shouldFetchMetadata = open && !skipMetadataFetch;
   const { metadata, loading: metadataLoading } = useVideoMetadata(
     shouldFetchMetadata ? video.youtubeId : '',
+    token
+  );
+
+  const { statuses: watchStatuses } = useWatchStatus(
+    open && video.isDownloaded ? video.youtubeId : '',
     token
   );
 
@@ -273,6 +280,7 @@ function VideoModal({
               loading={metadataLoading}
               onAddChannel={canAddChannel ? () => setAddChannelOpen(true) : undefined}
             />
+            <VideoWatchStatusSection statuses={watchStatuses} />
             <VideoTechnical
               video={displayVideo}
               metadata={metadata}

@@ -33,4 +33,5 @@ export interface ChannelVideo {
   rating_source?: string | null;
   protected?: boolean;
   timeCreated?: string | null;
+  watchedBy?: string[];
 }

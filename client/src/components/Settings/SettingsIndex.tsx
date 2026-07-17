@@ -16,6 +16,7 @@ export const SETTINGS_PAGES = [
   { key: 'plex', title: 'Plex', description: 'Plex integration and library configuration.' },
   { key: 'jellyfin', title: 'Jellyfin', description: 'Jellyfin connection for native playlist sync.' },
   { key: 'emby', title: 'Emby', description: 'Emby connection for native playlist sync.' },
+  { key: 'watch-status', title: 'Watch Status', description: 'Sync watched state from your media servers into Youtarr.' },
   { key: 'security', title: 'Account Security', description: 'Authentication and password management.' },
   { key: 'sponsorblock', title: 'SponsorBlock', description: 'Skip segments and SponsorBlock settings.' },
   { key: 'youtube-api', title: 'YouTube API', description: 'Optional YouTube Data API v3 key for faster metadata fetches.' },

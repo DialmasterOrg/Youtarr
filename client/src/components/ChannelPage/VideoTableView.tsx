@@ -14,6 +14,7 @@ import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMedia
 import StillLiveDot from './StillLiveDot';
 import RatingBadge from '../shared/RatingBadge';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
+import WatchedChip from '../shared/WatchedChip';
 import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_THEMED_CHIP_SMALL_STYLE } from '../shared/chipStyles';
 import { getPublishedDateDisplay } from './publishedDateDisplay';
 
@@ -338,7 +339,7 @@ function VideoTableView({
                   ) : '-'}
                 </td>
                 <td style={{ whiteSpace: 'nowrap', padding: '8px 4px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap', overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     {mediaTypeInfo && (
                       <Chip
                         size="small"
@@ -349,6 +350,7 @@ function VideoTableView({
                         style={{ ...SHARED_STATUS_CHIP_SMALL_STYLE }}
                       />
                     )}
+                    <WatchedChip watchedBy={video.watchedBy || []} />
                     <Chip
                       icon={getStatusIcon(status)}
                       label={statusLabel}

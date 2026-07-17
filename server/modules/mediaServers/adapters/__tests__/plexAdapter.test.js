@@ -20,6 +20,10 @@ describe('PlexAdapter', () => {
 
   beforeEach(() => jest.clearAllMocks());
 
+  test('exposes the serverType contract used by orchestration', () => {
+    expect(new PlexAdapter(cfg).serverType).toBe('plex');
+  });
+
   // resolveItemIdByFilepath first enumerates video sections via /library/sections,
   // then queries each section's /all. This helper queues the enumeration response.
   const mockSections = (sections) =>
@@ -567,6 +571,206 @@ describe('PlexAdapter', () => {
       const adapter = new PlexAdapter(cfg);
       await expect(adapter.triggerLibraryScan(null, { mediaType: 'audio' })).resolves.not.toThrow();
       expect(plexModule.refreshLibrary).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('fetchWatchStates', () => {
+    const cfg = { plexUrl: 'http://plex:32400', plexApiKey: 'TOKEN', plexYoutubeLibraryId: '1' };
+
+    test('maps viewCount/viewOffset/lastViewedAt to watch state entries', async () => {
+      // _getSectionIds enumerates /library/sections first
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Directory: [{ type: 'movie', key: '1' }] } },
+      });
+      // section /all listing
+      axios.get.mockResolvedValueOnce({
+        data: {
+          MediaContainer: {
+            Metadata: [
+              {
+                ratingKey: '11',
+                viewCount: 2,
+                lastViewedAt: 1752624000,
+                duration: 600000,
+                Media: [{ Part: [{ file: '/media/Chan/Video A [id1].mp4' }] }],
+              },
+              {
+                ratingKey: '12',
+                viewOffset: 150000,
+                duration: 600000,
+                Media: [{ Part: [{ file: '/media/Chan/Video B [id2].mp4' }] }],
+              },
+              {
+                ratingKey: '13',
+                duration: 600000,
+                Media: [{ Part: [{ file: '/media/Chan/Video C [id3].mp4' }] }],
+              },
+            ],
+          },
+        },
+      });
+
+      const adapter = new PlexAdapter(cfg);
+      const entries = await adapter.fetchWatchStates();
+
+      expect(entries).toHaveLength(3);
+      expect(entries[0]).toEqual({
+        path: '/media/Chan/Video A [id1].mp4',
+        played: true,
+        playCount: 2,
+        positionMs: null,
+        percentWatched: 100,
+        lastWatchedAt: new Date(1752624000 * 1000),
+      });
+      expect(entries[1].played).toBe(false);
+      expect(entries[1].positionMs).toBe(150000);
+      expect(entries[1].percentWatched).toBe(25);
+      expect(entries[2].played).toBe(false);
+      expect(entries[2].percentWatched).toBeNull();
+    });
+
+    test('uses the admin token, not the playlist token', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Directory: [{ type: 'movie', key: '1' }] } },
+      });
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+
+      const adapter = new PlexAdapter({ ...cfg, plexPlaylistToken: 'OTHER' });
+      await adapter.fetchWatchStates();
+
+      // first call is the /library/sections enumeration; it must carry the admin token too
+      const enumCall = axios.get.mock.calls[0];
+      expect(enumCall[1].params['X-Plex-Token']).toBe('TOKEN');
+      // second call is the section listing; it must carry the admin token
+      const sectionCall = axios.get.mock.calls[1];
+      expect(sectionCall[1].params['X-Plex-Token']).toBe('TOKEN');
+    });
+
+    test('omits X-Plex-Token on all watch-state requests when plexPlaylistToken is the UNCLAIMED_SERVER sentinel', async () => {
+      // /library/sections enumeration, then the section /all listing
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Directory: [{ type: 'movie', key: '1' }] } },
+      });
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+
+      const adapter = new PlexAdapter({ ...cfg, plexPlaylistToken: 'UNCLAIMED_SERVER' });
+      await adapter.fetchWatchStates();
+
+      expect(axios.get).toHaveBeenCalledTimes(2);
+      for (const call of axios.get.mock.calls) {
+        expect(call[1].params).not.toHaveProperty('X-Plex-Token');
+      }
+    });
+
+    test('throws MediaServerUnavailableError when the server is unreachable', async () => {
+      const { MediaServerUnavailableError } = require('../baseAdapter');
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Directory: [{ type: 'movie', key: '1' }] } },
+      });
+      const err = new Error('connect ECONNREFUSED');
+      err.isAxiosError = true;
+      err.code = 'ECONNREFUSED';
+      axios.get.mockRejectedValueOnce(err);
+
+      const adapter = new PlexAdapter(cfg);
+      await expect(adapter.fetchWatchStates()).rejects.toBeInstanceOf(MediaServerUnavailableError);
+    });
+
+    test('lists show sections with type=4 so episode files are enumerated', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Directory: [{ type: 'movie', key: '1' }, { type: 'show', key: '5' }] } },
+      });
+      // movie section listing: plain /all
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+      // show section listing: episode leaves
+      axios.get.mockResolvedValueOnce({
+        data: {
+          MediaContainer: {
+            Metadata: [
+              { ratingKey: '51', viewCount: 1, Media: [{ Part: [{ file: '/tv/Chan/S01E01 [vid1].mp4' }] }] },
+            ],
+          },
+        },
+      });
+
+      const adapter = new PlexAdapter(cfg);
+      const entries = await adapter.fetchWatchStates();
+
+      const movieCall = axios.get.mock.calls[1];
+      expect(movieCall[1].params).not.toHaveProperty('type');
+      const showCall = axios.get.mock.calls[2];
+      expect(showCall[0]).toBe('http://plex:32400/library/sections/5/all');
+      expect(showCall[1].params.type).toBe(4);
+      expect(entries).toHaveLength(1);
+      expect(entries[0].path).toBe('/tv/Chan/S01E01 [vid1].mp4');
+      expect(entries[0].played).toBe(true);
+    });
+
+    test('throws when every section listing fails (e.g. expired admin token)', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Directory: [{ type: 'movie', key: '1' }, { type: 'movie', key: '2' }] } },
+      });
+      const unauthorized = new Error('Request failed with status code 401');
+      unauthorized.isAxiosError = true;
+      unauthorized.response = { status: 401 };
+      axios.get.mockRejectedValueOnce(unauthorized);
+      axios.get.mockRejectedValueOnce(unauthorized);
+
+      const adapter = new PlexAdapter(cfg);
+      await expect(adapter.fetchWatchStates()).rejects.toThrow(
+        /could not list any Plex library section \(HTTP 401\)/
+      );
+    });
+
+    test('throws when enumeration fails and no fallback library is configured', async () => {
+      const { WatchStateFetchError } = require('../baseAdapter');
+      // serverRegistry enables Plex on URL + API key alone, so the configured
+      // library id can legitimately be absent.
+      const unauthorized = new Error('Request failed with status code 401');
+      unauthorized.isAxiosError = true;
+      unauthorized.response = { status: 401 };
+      axios.get.mockRejectedValueOnce(unauthorized);
+
+      const adapter = new PlexAdapter({ plexUrl: 'http://plex:32400', plexApiKey: 'TOKEN' });
+      await expect(adapter.fetchWatchStates()).rejects.toThrow(WatchStateFetchError);
+    });
+
+    test('throws MediaServerUnavailableError when enumeration fails with a network error and no library is configured', async () => {
+      const { MediaServerUnavailableError } = require('../baseAdapter');
+      const err = new Error('connect ECONNREFUSED');
+      err.isAxiosError = true;
+      err.code = 'ECONNREFUSED';
+      axios.get.mockRejectedValueOnce(err);
+
+      const adapter = new PlexAdapter({ plexUrl: 'http://plex:32400', plexApiKey: 'TOKEN' });
+      await expect(adapter.fetchWatchStates()).rejects.toBeInstanceOf(MediaServerUnavailableError);
+    });
+
+    test('returns empty success when enumeration succeeds but the server has no video sections', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Directory: [{ type: 'artist', key: '40' }] } },
+      });
+
+      const adapter = new PlexAdapter({ plexUrl: 'http://plex:32400', plexApiKey: 'TOKEN' });
+      await expect(adapter.fetchWatchStates()).resolves.toEqual([]);
+    });
+
+    test('a single failed section does not abort the others', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Directory: [{ type: 'movie', key: '1' }, { type: 'movie', key: '2' }] } },
+      });
+      const notFound = new Error('Request failed with status code 404');
+      notFound.isAxiosError = true;
+      notFound.response = { status: 404 };
+      axios.get.mockRejectedValueOnce(notFound);
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Metadata: [{ viewCount: 1, Media: [{ Part: [{ file: '/media/Chan/V [x1].mp4' }] }] }] } },
+      });
+
+      const adapter = new PlexAdapter(cfg);
+      const entries = await adapter.fetchWatchStates();
+      expect(entries).toHaveLength(1);
+      expect(entries[0].path).toBe('/media/Chan/V [x1].mp4');
     });
   });
 });
