@@ -4,13 +4,25 @@ import { formatDate } from '../../../../utils/formatters';
 import { MEDIA_SERVER_LABELS } from '../../../../utils/mediaServerLabels';
 import { ServerWatchStatus } from '../hooks/useWatchStatus';
 
-function describeStatus(status: ServerWatchStatus): string {
-  if (status.played) {
-    const when = status.lastWatchedAt ? formatDate(status.lastWatchedAt) : null;
-    return when ? `Watched ${when}` : 'Watched';
+// One line per server, aggregated across that server's users: watched wins
+// (with the most recent date and the names of the users who watched), then
+// the furthest in-progress position, then unwatched.
+function describeServer(rows: ServerWatchStatus[]): string {
+  const played = rows.filter((row) => row.played);
+  if (played.length > 0) {
+    const newest = played
+      .map((row) => (row.lastWatchedAt ? new Date(row.lastWatchedAt).getTime() : 0))
+      .reduce((a, b) => Math.max(a, b), 0);
+    const when = newest ? formatDate(new Date(newest).toISOString()) : null;
+    const names = played
+      .map((row) => row.userName)
+      .filter((name): name is string => !!name);
+    const by = names.length > 0 ? ` by ${names.join(', ')}` : '';
+    return `${when ? `Watched ${when}` : 'Watched'}${by}`;
   }
-  if (status.percentWatched && status.percentWatched > 0) {
-    return `In progress (${Math.round(status.percentWatched)}%)`;
+  const bestPercent = rows.reduce((max, row) => Math.max(max, row.percentWatched || 0), 0);
+  if (bestPercent > 0) {
+    return `In progress (${Math.round(bestPercent)}%)`;
   }
   return 'Unwatched';
 }
@@ -22,21 +34,28 @@ interface VideoWatchStatusSectionProps {
 function VideoWatchStatusSection({ statuses }: VideoWatchStatusSectionProps) {
   if (statuses.length === 0) return null;
 
+  const byServer = new Map<string, ServerWatchStatus[]>();
+  for (const status of statuses) {
+    if (!byServer.has(status.server)) byServer.set(status.server, []);
+    const rows = byServer.get(status.server);
+    if (rows) rows.push(status);
+  }
+
   return (
     <Accordion defaultExpanded className="w-full">
       <AccordionSummary>Watch Status</AccordionSummary>
       <AccordionDetails>
         <Box>
-          {statuses.map((status) => (
+          {[...byServer.entries()].map(([server, rows]) => (
             <Box
-              key={status.server}
+              key={server}
               className="flex justify-between items-start gap-3 py-1"
             >
               <Typography variant="body2" color="text.secondary">
-                {MEDIA_SERVER_LABELS[status.server] || status.server}
+                {MEDIA_SERVER_LABELS[server] || server}
               </Typography>
               <Typography variant="body2" color="text.primary" className="font-medium text-right">
-                {describeStatus(status)}
+                {describeServer(rows)}
               </Typography>
             </Box>
           ))}

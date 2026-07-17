@@ -1,10 +1,12 @@
 // Minimal fake adapters; the orchestrator keys server type off the adapter's
 // serverType property (the BaseAdapter contract), never off class names.
+// fetchWatchStates resolves the adapter contract shape { entries, users }.
 const fakeAdapter = (serverType, fetchWatchStates) => ({ serverType, fetchWatchStates });
+const resolvedFetch = (entries, users = []) => jest.fn().mockResolvedValue({ entries, users });
 
 describe('watchStatusSync', () => {
   let watchStatusSync;
-  let serverRegistry, configModule, logger, Video, VideoWatchStatus;
+  let serverRegistry, configModule, logger, Video, VideoWatchStatus, MediaServerUser, WatchStatusSyncCursor;
 
   beforeEach(() => {
     jest.resetModules();
@@ -16,14 +18,22 @@ describe('watchStatusSync', () => {
     jest.doMock('../serverRegistry', () => ({ getEnabledAdapters: jest.fn() }));
     jest.doMock('../../../models', () => ({
       Video: { findAll: jest.fn(), findOne: jest.fn() },
-      VideoWatchStatus: { bulkCreate: jest.fn().mockResolvedValue([]), findAll: jest.fn() },
+      VideoWatchStatus: {
+        bulkCreate: jest.fn().mockResolvedValue([]),
+        findAll: jest.fn(),
+      },
+      MediaServerUser: { bulkCreate: jest.fn().mockResolvedValue([]), findAll: jest.fn().mockResolvedValue([]) },
+      WatchStatusSyncCursor: {
+        findOne: jest.fn().mockResolvedValue(null),
+        upsert: jest.fn().mockResolvedValue([]),
+      },
     }));
 
     watchStatusSync = require('../watchStatusSync');
     serverRegistry = require('../serverRegistry');
     configModule = require('../../configModule');
     logger = require('../../../logger');
-    ({ Video, VideoWatchStatus } = require('../../../models'));
+    ({ Video, VideoWatchStatus, MediaServerUser, WatchStatusSyncCursor } = require('../../../models'));
 
     configModule.getConfig.mockReturnValue({ jellyfinUserId: 'JF_USER' });
   });
@@ -36,14 +46,16 @@ describe('watchStatusSync', () => {
   });
 
   test('matches server entries to videos by basename and upserts rows', async () => {
-    const adapter = fakeAdapter('plex', jest.fn().mockResolvedValue([
+    const adapter = fakeAdapter('plex', resolvedFetch([
       {
         path: 'Q:\\Media\\Chan\\Video A [id1].mp4',
+        serverUserId: '1',
         played: true, playCount: 1, positionMs: null, percentWatched: 100,
         lastWatchedAt: new Date('2026-07-10T12:00:00Z'),
       },
       {
         path: '/mnt/other/Unrelated [zz9].mp4',
+        serverUserId: '1',
         played: true, playCount: 1, positionMs: null, percentWatched: 100, lastWatchedAt: null,
       },
     ]));
@@ -62,7 +74,7 @@ describe('watchStatusSync', () => {
     expect(rows[0]).toMatchObject({
       video_id: 7,
       server_type: 'plex',
-      server_user_id: null,
+      server_user_id: '1',
       played: true,
       play_count: 1,
       percent_watched: 100,
@@ -72,9 +84,30 @@ describe('watchStatusSync', () => {
     );
   });
 
-  test('records the configured user id for jellyfin rows', async () => {
-    const adapter = fakeAdapter('jellyfin', jest.fn().mockResolvedValue([
-      { path: '/media/Chan/Video A [id1].mp4', played: false, playCount: 0, positionMs: 5000, percentWatched: 1, lastWatchedAt: null },
+  test('persists one row per user for the same video and server', async () => {
+    const adapter = fakeAdapter('jellyfin', resolvedFetch([
+      { path: '/media/Chan/Video A [id1].mp4', serverUserId: 'u1', played: true, playCount: 2, positionMs: null, percentWatched: 100, lastWatchedAt: null },
+      { path: '/media/Chan/Video A [id1].mp4', serverUserId: 'u2', played: false, playCount: 0, positionMs: 5000, percentWatched: 1, lastWatchedAt: null },
+    ]));
+    serverRegistry.getEnabledAdapters.mockReturnValue([adapter]);
+    Video.findAll.mockResolvedValue([{ id: 7, filePath: '/data/Chan/Video A [id1].mp4' }]);
+
+    const summary = await watchStatusSync.syncAll();
+
+    // `updated` counts distinct videos, not (video, user) rows.
+    expect(summary.servers.jellyfin).toEqual({ updated: 1 });
+    const [rows] = VideoWatchStatus.bulkCreate.mock.calls[0];
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => r.server_user_id).sort()).toEqual(['u1', 'u2']);
+    expect(rows.every((r) => r.video_id === 7 && r.server_type === 'jellyfin')).toBe(true);
+  });
+
+  test('matches every user entry of the best-scoring path, not just one', async () => {
+    // Same basename in two paths; only the better-matching path's users count.
+    const adapter = fakeAdapter('jellyfin', resolvedFetch([
+      { path: '/media/Chan/Video A [id1].mp4', serverUserId: 'u1', played: true, playCount: 1, positionMs: null, percentWatched: 100, lastWatchedAt: null },
+      { path: '/media/Chan/Video A [id1].mp4', serverUserId: 'u2', played: false, playCount: 0, positionMs: null, percentWatched: null, lastWatchedAt: null },
+      { path: '/stale/Other/Video A [id1].mp4', serverUserId: 'u3', played: true, playCount: 1, positionMs: null, percentWatched: 100, lastWatchedAt: null },
     ]));
     serverRegistry.getEnabledAdapters.mockReturnValue([adapter]);
     Video.findAll.mockResolvedValue([{ id: 7, filePath: '/data/Chan/Video A [id1].mp4' }]);
@@ -82,29 +115,126 @@ describe('watchStatusSync', () => {
     await watchStatusSync.syncAll();
 
     const [rows] = VideoWatchStatus.bulkCreate.mock.calls[0];
-    expect(rows[0].server_user_id).toBe('JF_USER');
-    expect(rows[0].server_type).toBe('jellyfin');
+    expect(rows.map((r) => r.server_user_id).sort()).toEqual(['u1', 'u2']);
   });
 
-  test('records the configured user id for emby rows', async () => {
-    configModule.getConfig.mockReturnValue({ embyUserId: 'EMBY_USER' });
-    const adapter = fakeAdapter('emby', jest.fn().mockResolvedValue([
-      { path: '/media/Chan/Video A [id1].mp4', played: true, playCount: 2, positionMs: null, percentWatched: 100, lastWatchedAt: null },
+  test('upserts the media server user directory from the adapter user list', async () => {
+    const adapter = fakeAdapter('emby', resolvedFetch([], [
+      { id: 'u1', name: 'Alice' },
+      { id: 'u2', name: null },
     ]));
     serverRegistry.getEnabledAdapters.mockReturnValue([adapter]);
-    Video.findAll.mockResolvedValue([{ id: 7, filePath: '/data/Chan/Video A [id1].mp4' }]);
+    Video.findAll.mockResolvedValue([]);
+
+    await watchStatusSync.syncAll();
+
+    expect(MediaServerUser.bulkCreate).toHaveBeenCalledWith(
+      [
+        { server_type: 'emby', server_user_id: 'u1', server_user_name: 'Alice' },
+        { server_type: 'emby', server_user_id: 'u2', server_user_name: null },
+      ],
+      { updateOnDuplicate: ['server_user_name', 'updatedAt'] }
+    );
+  });
+
+  test('does not touch the user directory when the adapter reports no users', async () => {
+    const adapter = fakeAdapter('jellyfin', resolvedFetch([]));
+    serverRegistry.getEnabledAdapters.mockReturnValue([adapter]);
+    Video.findAll.mockResolvedValue([]);
+
+    await watchStatusSync.syncAll();
+
+    expect(MediaServerUser.bulkCreate).not.toHaveBeenCalled();
+  });
+
+  test('passes the stored cursor and known plex accounts to the plex adapter', async () => {
+    const stored = new Date('2026-07-17T10:00:00Z');
+    WatchStatusSyncCursor.findOne.mockResolvedValue({ cursor: stored });
+    MediaServerUser.findAll.mockResolvedValue([{ server_user_id: '55' }]);
+    const plex = fakeAdapter('plex', resolvedFetch([]));
+    const jellyfin = fakeAdapter('jellyfin', resolvedFetch([]));
+    serverRegistry.getEnabledAdapters.mockReturnValue([plex, jellyfin]);
+    Video.findAll.mockResolvedValue([]);
+
+    await watchStatusSync.syncAll();
+
+    // Pulled back 60s so a boundary event is never missed.
+    expect(plex.fetchWatchStates).toHaveBeenCalledWith({
+      since: new Date(stored.getTime() - 60_000),
+      knownUserIds: ['55'],
+    });
+    expect(jellyfin.fetchWatchStates).toHaveBeenCalledWith({});
+  });
+
+  test('persists the history cursor the adapter reports after rows are written', async () => {
+    const cursor = new Date('2026-07-17T11:00:00Z');
+    const plex = fakeAdapter('plex', jest.fn().mockResolvedValue({
+      entries: [], users: [], historyCursor: cursor,
+    }));
+    serverRegistry.getEnabledAdapters.mockReturnValue([plex]);
+    Video.findAll.mockResolvedValue([]);
+
+    await watchStatusSync.syncAll();
+
+    expect(WatchStatusSyncCursor.upsert).toHaveBeenCalledWith({ server_type: 'plex', cursor });
+  });
+
+  test('does not advance the cursor when the adapter reports none', async () => {
+    const plex = fakeAdapter('plex', resolvedFetch([]));
+    serverRegistry.getEnabledAdapters.mockReturnValue([plex]);
+    Video.findAll.mockResolvedValue([]);
+
+    await watchStatusSync.syncAll();
+
+    expect(WatchStatusSyncCursor.upsert).not.toHaveBeenCalled();
+  });
+
+  test('does not store new accounts when persisting their rows fails', async () => {
+    // If the account were stored despite the failed persist, the next sync
+    // would treat it as known and its backfill window would be lost forever.
+    VideoWatchStatus.bulkCreate.mockRejectedValueOnce(new Error('db down'));
+    const plex = fakeAdapter('plex', jest.fn().mockResolvedValue({
+      entries: [{
+        path: '/m/Video A [id1].mp4', serverUserId: '55', played: true,
+        playCount: 1, positionMs: null, percentWatched: 100, lastWatchedAt: null,
+      }],
+      users: [{ id: '55', name: 'kid1' }],
+      historyCursor: new Date('2026-07-17T11:00:00Z'),
+    }));
+    serverRegistry.getEnabledAdapters.mockReturnValue([plex]);
+    Video.findAll.mockResolvedValue([{ id: 7, filePath: '/data/Video A [id1].mp4' }]);
 
     const summary = await watchStatusSync.syncAll();
 
-    expect(summary.servers.emby).toEqual({ updated: 1 });
-    const [rows] = VideoWatchStatus.bulkCreate.mock.calls[0];
-    expect(rows[0].server_user_id).toBe('EMBY_USER');
-    expect(rows[0].server_type).toBe('emby');
+    expect(summary.servers.plex.error).toBeDefined();
+    expect(MediaServerUser.bulkCreate).not.toHaveBeenCalled();
+    expect(WatchStatusSyncCursor.upsert).not.toHaveBeenCalled();
+  });
+
+  test('stores accounts only after rows and the cursor are written', async () => {
+    const plex = fakeAdapter('plex', jest.fn().mockResolvedValue({
+      entries: [{
+        path: '/m/Video A [id1].mp4', serverUserId: '55', played: true,
+        playCount: 1, positionMs: null, percentWatched: 100, lastWatchedAt: null,
+      }],
+      users: [{ id: '55', name: 'kid1' }],
+      historyCursor: new Date('2026-07-17T11:00:00Z'),
+    }));
+    serverRegistry.getEnabledAdapters.mockReturnValue([plex]);
+    Video.findAll.mockResolvedValue([{ id: 7, filePath: '/data/Video A [id1].mp4' }]);
+
+    await watchStatusSync.syncAll();
+
+    const persistedAt = VideoWatchStatus.bulkCreate.mock.invocationCallOrder[0];
+    const cursorAt = WatchStatusSyncCursor.upsert.mock.invocationCallOrder[0];
+    const usersAt = MediaServerUser.bulkCreate.mock.invocationCallOrder[0];
+    expect(persistedAt).toBeLessThan(cursorAt);
+    expect(cursorAt).toBeLessThan(usersAt);
   });
 
   test('one failing server does not abort the others and is reported in the summary', async () => {
     const bad = fakeAdapter('plex', jest.fn().mockRejectedValue(new Error('boom')));
-    const good = fakeAdapter('jellyfin', jest.fn().mockResolvedValue([]));
+    const good = fakeAdapter('jellyfin', resolvedFetch([]));
     serverRegistry.getEnabledAdapters.mockReturnValue([bad, good]);
     Video.findAll.mockResolvedValue([]);
 
@@ -166,42 +296,4 @@ describe('watchStatusSync', () => {
     expect(status.lastRun.trigger).toBe('manual');
   });
 
-  describe('getStatusesForVideo', () => {
-    test('returns empty array for an unknown video', async () => {
-      Video.findOne.mockResolvedValue(null);
-      await expect(watchStatusSync.getStatusesForVideo('abc123def45')).resolves.toEqual([]);
-      expect(VideoWatchStatus.findAll).not.toHaveBeenCalled();
-    });
-
-    test('maps rows to the API shape ordered by server type', async () => {
-      Video.findOne.mockResolvedValue({ id: 7 });
-      VideoWatchStatus.findAll.mockResolvedValue([
-        {
-          server_type: 'plex',
-          played: 1,
-          play_count: 2,
-          percent_watched: 100,
-          last_watched_at: new Date('2026-07-10T12:00:00Z'),
-          last_synced_at: new Date('2026-07-16T00:00:00Z'),
-        },
-      ]);
-
-      const statuses = await watchStatusSync.getStatusesForVideo('abc123def45');
-
-      expect(VideoWatchStatus.findAll).toHaveBeenCalledWith({
-        where: { video_id: 7 },
-        order: [['server_type', 'ASC']],
-      });
-      expect(statuses).toEqual([
-        {
-          server: 'plex',
-          played: true,
-          playCount: 2,
-          percentWatched: 100,
-          lastWatchedAt: new Date('2026-07-10T12:00:00Z'),
-          lastSyncedAt: new Date('2026-07-16T00:00:00Z'),
-        },
-      ]);
-    });
-  });
 });

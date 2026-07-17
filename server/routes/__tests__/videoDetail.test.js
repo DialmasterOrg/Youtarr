@@ -514,7 +514,7 @@ describe('GET /api/videos/:youtubeId/watch-status', () => {
   };
 
   const mediaServers = {
-    watchStatusSync: { getStatusesForVideo: jest.fn() },
+    watchStatusQueries: { getStatusesForVideo: jest.fn() },
   };
 
   const getHandler = () => {
@@ -543,7 +543,7 @@ describe('GET /api/videos/:youtubeId/watch-status', () => {
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({ error: 'Invalid YouTube ID' });
-    expect(mediaServers.watchStatusSync.getStatusesForVideo).not.toHaveBeenCalled();
+    expect(mediaServers.watchStatusQueries.getStatusesForVideo).not.toHaveBeenCalled();
   });
 
   test('returns the statuses provided by the module', async () => {
@@ -557,20 +557,20 @@ describe('GET /api/videos/:youtubeId/watch-status', () => {
         lastSyncedAt: new Date('2026-07-16T00:00:00Z'),
       },
     ];
-    mediaServers.watchStatusSync.getStatusesForVideo.mockResolvedValue(statuses);
+    mediaServers.watchStatusQueries.getStatusesForVideo.mockResolvedValue(statuses);
     const handler = getHandler();
     const req = { params: { youtubeId: 'abc123def45' }, log: loggerMock };
     const res = createResponse();
 
     await handler(req, res);
 
-    expect(mediaServers.watchStatusSync.getStatusesForVideo).toHaveBeenCalledWith('abc123def45');
+    expect(mediaServers.watchStatusQueries.getStatusesForVideo).toHaveBeenCalledWith('abc123def45');
     expect(res.status).not.toHaveBeenCalled();
     expect(res.json).toHaveBeenCalledWith({ statuses });
   });
 
   test('returns 500 when the lookup throws', async () => {
-    mediaServers.watchStatusSync.getStatusesForVideo.mockRejectedValue(new Error('db down'));
+    mediaServers.watchStatusQueries.getStatusesForVideo.mockRejectedValue(new Error('db down'));
     const handler = getHandler();
     const req = { params: { youtubeId: 'abc123def45' }, log: loggerMock };
     const res = createResponse();

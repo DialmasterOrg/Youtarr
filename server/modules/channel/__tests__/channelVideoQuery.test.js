@@ -5,14 +5,14 @@ const mockFactories = require('./mockFactories');
 jest.mock('../../../logger');
 jest.mock('../../../models/channelvideo', () => mockFactories.mockChannelVideoModel());
 jest.mock('../../../models/video', () => mockFactories.mockVideoModel());
-jest.mock('../../../models/videowatchstatus', () => mockFactories.mockVideoWatchStatusModel());
+jest.mock('../../mediaServers/watchStatusQueries', () => ({ getWatchedByMap: jest.fn() }));
 jest.mock('../../../db', () => mockFactories.mockDb());
 jest.mock('../../fileCheckModule', () => mockFactories.mockFileCheckModule());
 
 describe('channelVideoQuery', () => {
   let channelVideoQuery;
   let ChannelVideo;
-  let VideoWatchStatus;
+  let watchStatusQueries;
   let fileCheckModule;
 
   beforeEach(() => {
@@ -20,8 +20,8 @@ describe('channelVideoQuery', () => {
     jest.clearAllMocks();
 
     ChannelVideo = require('../../../models/channelvideo');
-    VideoWatchStatus = require('../../../models/videowatchstatus');
-    VideoWatchStatus.findAll.mockResolvedValue([]);
+    watchStatusQueries = require('../../mediaServers/watchStatusQueries');
+    watchStatusQueries.getWatchedByMap.mockResolvedValue(new Map());
     fileCheckModule = require('../../fileCheckModule');
     channelVideoQuery = require('../channelVideoQuery');
   });
@@ -306,21 +306,18 @@ describe('channelVideoQuery', () => {
       Video.findAll = jest.fn().mockResolvedValue([
         { id: 7, youtubeId: 'vid1', removed: false }
       ]);
-      VideoWatchStatus.findAll.mockResolvedValueOnce([
-        { video_id: 7, server_type: 'plex' },
-        { video_id: 7, server_type: 'jellyfin' },
-      ]);
+      watchStatusQueries.getWatchedByMap.mockResolvedValueOnce(
+        new Map([[7, ['plex', 'jellyfin']]])
+      );
 
       const result = await channelVideoQuery.enrichVideosWithDownloadStatus(inputVideos);
 
-      expect(VideoWatchStatus.findAll).toHaveBeenCalledWith(
-        expect.objectContaining({ where: expect.objectContaining({ played: true, video_id: [7] }) })
-      );
+      expect(watchStatusQueries.getWatchedByMap).toHaveBeenCalledWith([7]);
       expect(result[0].watchedBy).toEqual(['plex', 'jellyfin']);
       expect(result[1].watchedBy).toEqual([]);
     });
 
-    test('does not query watch status when no videos are downloaded', async () => {
+    test('stamps empty watchedBy when no videos are downloaded', async () => {
       const Video = require('../../../models/video');
 
       const inputVideos = [
@@ -332,7 +329,7 @@ describe('channelVideoQuery', () => {
 
       const result = await channelVideoQuery.enrichVideosWithDownloadStatus(inputVideos);
 
-      expect(VideoWatchStatus.findAll).not.toHaveBeenCalled();
+      expect(watchStatusQueries.getWatchedByMap).toHaveBeenCalledWith([]);
       expect(result[0].watchedBy).toEqual([]);
     });
   });

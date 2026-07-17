@@ -1,9 +1,10 @@
 const { Sequelize, sequelize } = require('../db.js');
-const { Video, VideoWatchStatus } = require('../models');
+const { Video } = require('../models');
 const fs = require('fs').promises;
 const path = require('path');
 const configModule = require('./configModule');
 const fileCheckModule = require('./fileCheckModule');
+const watchStatusQueries = require('./mediaServers/watchStatusQueries');
 const logger = require('../logger');
 const messageEmitter = require('./messageEmitter');
 const { AUDIO_EXTENSIONS, MEDIA_EXTENSIONS } = require('./filesystem/constants');
@@ -209,21 +210,9 @@ class VideosModule {
         );
       }
 
-      // Watched-on-any-server summary for the list UI. Only played=true rows
-      // matter here; per-server detail lives behind /api/videos/:id/watch-status.
-      const videoIds = videos.map((v) => v.id);
-      const watchRows = videoIds.length
-        ? await VideoWatchStatus.findAll({
-          where: { video_id: videoIds, played: true },
-          attributes: ['video_id', 'server_type'],
-          raw: true,
-        })
-        : [];
-      const watchedByVideoId = new Map();
-      for (const row of watchRows) {
-        if (!watchedByVideoId.has(row.video_id)) watchedByVideoId.set(row.video_id, []);
-        watchedByVideoId.get(row.video_id).push(row.server_type);
-      }
+      // Watched-servers summary for the list UI, honoring the configured
+      // watched rule; per-server detail lives behind /api/videos/:id/watch-status.
+      const watchedByVideoId = await watchStatusQueries.getWatchedByMap(videos.map((v) => v.id));
       for (const video of videos) {
         video.watchedBy = watchedByVideoId.get(video.id) || [];
       }

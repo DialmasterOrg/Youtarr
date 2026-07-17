@@ -200,4 +200,35 @@ describe('WatchStatusSection', () => {
     renderWithProviders(<WatchStatusSection {...defaultProps} config={config} />);
     expect(screen.getByRole('button', { name: /every 15 minutes/i })).toBeInTheDocument();
   });
+
+  test('shows an all-users toggle per connected server and reports changes', async () => {
+    mediaServerStatusReturn.status = { plex: true, jellyfin: true, emby: false };
+    renderWithProviders(<WatchStatusSection {...defaultProps} />);
+
+    expect(screen.getByRole('checkbox', { name: /include all jellyfin users/i })).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /include all emby users/i })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /include all plex users/i }));
+    expect(defaultProps.onConfigChange).toHaveBeenCalledWith({ plexWatchStatusAllUsers: false });
+  });
+
+  test('renders no all-users toggles when no servers are connected', () => {
+    mediaServerStatusReturn.status = { plex: false, jellyfin: false, emby: false };
+    mediaServerStatusReturn.anyConfigured = false;
+    renderWithProviders(<WatchStatusSection {...defaultProps} />);
+    expect(screen.queryByRole('checkbox', { name: /include all/i })).not.toBeInTheDocument();
+  });
+
+  test('changing the watched rule reports watchStatusWatchedRule', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<WatchStatusSection {...defaultProps} />);
+
+    await user.click(screen.getByRole('button', { name: /any user has watched/i }));
+    const primaryOption = await screen.findByRole('option', {
+      name: 'Only the primary account has watched',
+    });
+    await user.click(primaryOption);
+
+    expect(defaultProps.onConfigChange).toHaveBeenCalledWith({ watchStatusWatchedRule: 'primary' });
+  });
 });

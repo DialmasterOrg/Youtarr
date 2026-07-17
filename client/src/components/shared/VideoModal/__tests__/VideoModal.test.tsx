@@ -32,6 +32,8 @@ jest.mock('../hooks/useVideoMetadata', () => ({
 const watchStatusReturn = {
   statuses: [] as Array<{
     server: string;
+    serverUserId: string;
+    userName: string | null;
     played: boolean;
     playCount: number;
     percentWatched: number | null;
@@ -280,6 +282,8 @@ describe('VideoModal', () => {
       watchStatusReturn.statuses = [
         {
           server: 'plex',
+          serverUserId: '1',
+          userName: null,
           played: true,
           playCount: 1,
           percentWatched: 100,

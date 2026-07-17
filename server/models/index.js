@@ -11,6 +11,8 @@ const PlaylistVideo = require('./playlistvideo');
 const PlaylistSyncState = require('./playlistsyncstate');
 const Subfolder = require('./subfolder');
 const VideoWatchStatus = require('./videowatchstatus');
+const MediaServerUser = require('./mediaserveruser');
+const WatchStatusSyncCursor = require('./watchstatussynccursor');
 
 Job.hasMany(JobVideo, { foreignKey: 'job_id', as: 'jobVideos' });
 Job.hasMany(JobVideoDownload, { foreignKey: 'job_id', as: 'jobVideoDownloads' });
@@ -44,4 +46,6 @@ module.exports = {
   PlaylistSyncState,
   Subfolder,
   VideoWatchStatus,
+  MediaServerUser,
+  WatchStatusSyncCursor,
 };

@@ -3,6 +3,8 @@ import axios from 'axios';
 
 export interface ServerWatchStatus {
   server: string;
+  serverUserId: string;
+  userName: string | null;
   played: boolean;
   playCount: number;
   percentWatched: number | null;

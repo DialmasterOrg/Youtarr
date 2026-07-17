@@ -30,6 +30,19 @@ const FREQUENCY_OPTIONS = Object.keys(FREQUENCY_MAPPING).filter(
   (key) => !SUB_HOURLY_OPTIONS.has(key)
 );
 
+type ServerKey = 'plex' | 'jellyfin' | 'emby';
+
+const ALL_USERS_CONFIG_KEY = {
+  plex: 'plexWatchStatusAllUsers',
+  jellyfin: 'jellyfinWatchStatusAllUsers',
+  emby: 'embyWatchStatusAllUsers',
+} as const;
+
+const WATCHED_RULE_OPTIONS: Array<{ value: 'any' | 'primary'; label: string }> = [
+  { value: 'any', label: 'Any user has watched' },
+  { value: 'primary', label: 'Only the primary account has watched' },
+];
+
 interface WatchStatusSectionProps {
   config: ConfigState;
   token: string | null;
@@ -80,8 +93,8 @@ export function WatchStatusSection({ config, token, onConfigChange }: WatchStatu
   } = useMediaServerStatus(token);
   const { syncState, running, starting, startError, pollError, startSync } = useWatchStatusSync(token);
 
-  const connectedServers = Object.keys(MEDIA_SERVER_LABELS).filter(
-    (key) => serverStatus[key as keyof typeof serverStatus]
+  const connectedServers = (Object.keys(MEDIA_SERVER_LABELS) as ServerKey[]).filter(
+    (key) => serverStatus[key]
   );
 
   const handleToggle = (event: ChangeEvent<HTMLInputElement>) => {
@@ -91,6 +104,10 @@ export function WatchStatusSection({ config, token, onConfigChange }: WatchStatu
   const handleFrequencyChange = (event: SelectChangeEvent) => {
     const mapped = FREQUENCY_MAPPING[String(event.target.value)];
     if (mapped) onConfigChange({ watchStatusSyncFrequency: mapped });
+  };
+
+  const handleRuleChange = (event: SelectChangeEvent) => {
+    onConfigChange({ watchStatusWatchedRule: event.target.value as 'any' | 'primary' });
   };
 
   const currentFrequency = reverseFrequencyMapping(config.watchStatusSyncFrequency);
@@ -105,9 +122,9 @@ export function WatchStatusSection({ config, token, onConfigChange }: WatchStatu
     <ConfigurationCard title="Watch Status Sync">
       <Typography variant="body2" color="text.secondary" className="mb-4">
         Periodically pulls each video&apos;s watch status (watched, progress, last watched date)
-        from your connected media servers into Youtarr. Plex uses the admin account; Jellyfin and
-        Emby use the user configured on their settings pages. Sync is one-way: nothing is written
-        back to your media servers.
+        from your connected media servers into Youtarr. By default every server user is included;
+        other Plex users are read from the server&apos;s play history. Sync is one-way: nothing is
+        written back to your media servers.
       </Typography>
 
       {statusError && (
@@ -143,6 +160,32 @@ export function WatchStatusSection({ config, token, onConfigChange }: WatchStatu
           />
         </Grid>
 
+        {connectedServers.length > 0 && (
+          <Grid item xs={12}>
+            <Box className="flex flex-col gap-2">
+              {connectedServers.map((server) => (
+                <FormControlLabel
+                  key={server}
+                  control={
+                    <Switch
+                      checked={config[ALL_USERS_CONFIG_KEY[server]]}
+                      onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                        onConfigChange({ [ALL_USERS_CONFIG_KEY[server]]: event.target.checked })
+                      }
+                      disabled={!config.watchStatusSyncEnabled}
+                    />
+                  }
+                  label={`Include all ${MEDIA_SERVER_LABELS[server]} users`}
+                />
+              ))}
+            </Box>
+            <FormHelperText>
+              When off, only the primary account is synced (Plex: the server owner; Jellyfin/Emby:
+              the configured user).
+            </FormHelperText>
+          </Grid>
+        )}
+
         <Grid item xs={12} md={6}>
           <InputLabel>Sync Frequency</InputLabel>
           <Select
@@ -158,6 +201,23 @@ export function WatchStatusSection({ config, token, onConfigChange }: WatchStatu
             ))}
           </Select>
           <FormHelperText>How often Youtarr checks your media servers.</FormHelperText>
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          <InputLabel>Show as watched when</InputLabel>
+          <Select
+            fullWidth
+            value={config.watchStatusWatchedRule}
+            onChange={handleRuleChange}
+            disabled={!config.watchStatusSyncEnabled}
+          >
+            {WATCHED_RULE_OPTIONS.map((option) => (
+              <MenuItem key={option.value} value={option.value}>
+                {option.label}
+              </MenuItem>
+            ))}
+          </Select>
+          <FormHelperText>Drives the Watched chip on the video listing pages.</FormHelperText>
         </Grid>
 
         <Grid item xs={12}>

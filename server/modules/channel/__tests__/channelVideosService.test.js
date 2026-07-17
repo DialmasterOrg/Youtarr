@@ -7,7 +7,9 @@ jest.mock('../../../logger');
 jest.mock('../../../models/channel', () => mockFactories.mockChannelModel());
 jest.mock('../../../models/channelvideo', () => mockFactories.mockChannelVideoModel());
 jest.mock('../../../models/video', () => mockFactories.mockVideoModel());
-jest.mock('../../../models/videowatchstatus', () => mockFactories.mockVideoWatchStatusModel());
+jest.mock('../../mediaServers/watchStatusQueries', () => ({
+  getWatchedByMap: jest.fn().mockResolvedValue(new Map()),
+}));
 jest.mock('../../configModule', () => mockFactories.mockConfigModule());
 jest.mock('../../fileCheckModule', () => mockFactories.mockFileCheckModule());
 jest.mock('../../youtubeApi', () => mockFactories.mockYoutubeApi());
