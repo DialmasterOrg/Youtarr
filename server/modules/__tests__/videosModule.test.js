@@ -5,7 +5,7 @@ describe('VideosModule', () => {
   let VideosModule;
   let mockSequelize;
   let mockVideo;
-  let mockVideoWatchStatus;
+  let mockWatchStatusQueries;
   let mockFs;
   let mockConfigModule;
   let mockVideoValidationModule;
@@ -29,8 +29,8 @@ describe('VideosModule', () => {
       findAll: jest.fn().mockResolvedValue([])
     };
 
-    mockVideoWatchStatus = {
-      findAll: jest.fn().mockResolvedValue([])
+    mockWatchStatusQueries = {
+      getWatchedByMap: jest.fn().mockResolvedValue(new Map())
     };
 
     // Mock the sequelize instance
@@ -84,9 +84,11 @@ describe('VideosModule', () => {
 
     // Mock the models
     jest.doMock('../../models', () => ({
-      Video: mockVideo,
-      VideoWatchStatus: mockVideoWatchStatus
+      Video: mockVideo
     }));
+
+    // Mock the watch status query module (owns the watchedBy aggregation)
+    jest.doMock('../mediaServers/watchStatusQueries', () => mockWatchStatusQueries);
 
     // Mock the Channel model
     jest.doMock('../../models/channel', () => mockChannel);
@@ -647,28 +649,25 @@ describe('VideosModule', () => {
       mockSequelize.query.mockResolvedValueOnce(mockVideos);
       mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
 
-      mockVideoWatchStatus.findAll.mockResolvedValueOnce([
-        { video_id: 1, server_type: 'plex' },
-        { video_id: 1, server_type: 'jellyfin' },
-      ]);
+      mockWatchStatusQueries.getWatchedByMap.mockResolvedValueOnce(
+        new Map([[1, ['plex', 'jellyfin']]])
+      );
 
       const result = await VideosModule.getVideosPaginated({ page: 1, limit: 12 });
 
-      expect(mockVideoWatchStatus.findAll).toHaveBeenCalledWith(
-        expect.objectContaining({ where: expect.objectContaining({ played: true }) })
-      );
+      expect(mockWatchStatusQueries.getWatchedByMap).toHaveBeenCalledWith([1, 2]);
       expect(result.videos[0].watchedBy).toEqual(['plex', 'jellyfin']);
       expect(result.videos[1].watchedBy).toEqual([]);
     });
 
-    test('does not query VideoWatchStatus when the page has no videos', async () => {
+    test('passes an empty id list when the page has no videos', async () => {
       mockSequelize.query.mockResolvedValueOnce([{ total: 0 }]);
       mockSequelize.query.mockResolvedValueOnce([]);
       mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
 
       await VideosModule.getVideosPaginated();
 
-      expect(mockVideoWatchStatus.findAll).not.toHaveBeenCalled();
+      expect(mockWatchStatusQueries.getWatchedByMap).toHaveBeenCalledWith([]);
     });
   });
 

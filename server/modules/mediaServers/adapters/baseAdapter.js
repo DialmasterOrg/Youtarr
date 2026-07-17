@@ -32,13 +32,17 @@ class BaseAdapter {
 
   /**
    * Watch state for file-backed items in the libraries the adapter tracks for
-   * watch state (video libraries in v1), as seen by the account this adapter
-   * is configured with (Plex: the admin token's account; Jellyfin/Emby: the
-   * configured userId). Returns
-   * Array<{ path, played, playCount, positionMs, percentWatched, lastWatchedAt }>.
-   * Throws MediaServerUnavailableError when the server is unreachable.
+   * watch state (video libraries in v1), per server user. Returns
+   *   { entries: Array<{ path, serverUserId, played, playCount, positionMs,
+   *                      percentWatched, lastWatchedAt }>,
+   *     users: Array<{ id, name }> }
+   * where `users` lists the accounts the adapter observed (empty in
+   * single-user mode so stored names are never clobbered). Adapters accept an
+   * opts object; `opts.since` is an incremental watermark only Plex uses (its
+   * non-owner data comes from the server's play history). Throws
+   * MediaServerUnavailableError when the server is unreachable.
    */
-  async fetchWatchStates() { throw new Error('not implemented'); }
+  async fetchWatchStates(/* opts: { since } */) { throw new Error('not implemented'); }
 }
 
 /**

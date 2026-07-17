@@ -23,6 +23,16 @@ const UNCLAIMED_SERVER_SENTINEL = 'UNCLAIMED_SERVER';
 // show-level items with no file parts; ?type=4 lists the episodes instead.
 const PLEX_TYPE_EPISODE = 4;
 
+// Server-local accountID of the server owner: always 1 in /accounts and the
+// play-history endpoint. The owner's watch state comes from section listings
+// (full fidelity); history rows for account 1 are skipped as duplicates.
+const PLEX_OWNER_ACCOUNT_ID = '1';
+
+// Play-history pagination. The page cap bounds a single sync on servers with
+// enormous history; anything past it is picked up by later incremental syncs.
+const HISTORY_PAGE_SIZE = 1000;
+const MAX_HISTORY_PAGES = 50;
+
 class PlexAdapter extends BaseAdapter {
   constructor(config) {
     super(config);
@@ -53,6 +63,7 @@ class PlexAdapter extends BaseAdapter {
     // LAN session, and watch state is recorded in that same anonymous scope.
     // fetchWatchStates uses this to read watch state tokenless in that mode.
     this.anonymousScope = override === UNCLAIMED_SERVER_SENTINEL;
+    this.allUsers = config.plexWatchStatusAllUsers !== false;
   }
 
   // Distinct, ordered lists of library section ids to search, discovered from
@@ -346,8 +357,14 @@ class PlexAdapter extends BaseAdapter {
   // account, since watch state is per Plex account and v1 reads the admin's. On
   // unclaimed servers (UNCLAIMED_SERVER sentinel) it reads the anonymous
   // session's watch state instead, the scope Plex Web itself uses there.
-  async fetchWatchStates() {
+  //
+  // When plexWatchStatusAllUsers is on (the default, claimed servers only),
+  // OTHER accounts' watch state is layered on from the server-local play
+  // history; see _fetchHistoryWatchStates. opts.since is that history's
+  // incremental watermark.
+  async fetchWatchStates(opts = {}) {
     const entries = [];
+    const ratingKeyPaths = new Map(); // ratingKey -> [file paths] for history mapping
     const sections = await this._getSectionIds(this.anonymousScope ? 'playlist' : 'admin');
     let sectionsListed = 0;
     let lastError = null;
@@ -367,7 +384,13 @@ class PlexAdapter extends BaseAdapter {
           const state = this._itemWatchState(item);
           for (const media of item.Media || []) {
             for (const part of media.Part || []) {
-              if (part.file) entries.push({ path: part.file, ...state });
+              if (!part.file) continue;
+              entries.push({ path: part.file, serverUserId: PLEX_OWNER_ACCOUNT_ID, ...state });
+              if (item.ratingKey != null) {
+                const key = String(item.ratingKey);
+                if (!ratingKeyPaths.has(key)) ratingKeyPaths.set(key, []);
+                ratingKeyPaths.get(key).push(part.file);
+              }
             }
           }
         }
@@ -389,7 +412,145 @@ class PlexAdapter extends BaseAdapter {
       const info = describeHttpError(failure);
       throw new WatchStateFetchError(`could not list any Plex library section (${info.status ? `HTTP ${info.status}` : info.message})`);
     }
-    return entries;
+
+    // Unclaimed servers have no accounts, so all-users mode only applies to
+    // claimed ones.
+    let users = [];
+    let historyCursor = null;
+    if (this.allUsers && !this.anonymousScope) {
+      users = await this._fetchAccounts();
+      // A server account the caller has never stored may carry history that
+      // predates the incremental cursor; do one full pull to backfill it.
+      const known = opts.knownUserIds ? new Set(opts.knownUserIds.map(String)) : null;
+      let since = opts.since || null;
+      if (since && known && users.some((u) => u.id !== PLEX_OWNER_ACCOUNT_ID && !known.has(u.id))) {
+        logger.info('plex: new server account detected; performing a full watch-history pull');
+        since = null;
+      }
+      const history = await this._fetchHistoryWatchStates(ratingKeyPaths, since);
+      entries.push(...history.entries);
+      // Advance the stored cursor only when every section listed successfully:
+      // with a partial ratingKey map, events skipped as "unknown item" may
+      // belong to the failed section and must be rescanned next sync.
+      const listingComplete = sectionsListed === sections.video.length;
+      historyCursor = listingComplete ? history.scannedThrough : null;
+      // On an incomplete scan, withhold not-yet-known accounts from the user
+      // list: reporting one would mark it "known" and consume its one-time
+      // full-history backfill even though this scan may have skipped its
+      // events. The next sync re-detects it and repeats the full pull until a
+      // complete scan records it. (Keyed off listingComplete, not
+      // historyCursor: a complete scan with zero history events also yields a
+      // null cursor, and those accounts must still be recorded.)
+      if (!listingComplete && known) {
+        users = users.filter((u) => u.id === PLEX_OWNER_ACCOUNT_ID || known.has(u.id));
+      }
+    }
+    return { entries, users, historyCursor };
+  }
+
+  // Server-local account directory (/accounts): every account with activity on
+  // this server, owner included (id 1). Names are enrichment for the users
+  // table; a failure here must not abort the history fetch itself.
+  async _fetchAccounts() {
+    try {
+      const res = await axios.get(`${this.url}/accounts`, {
+        params: { 'X-Plex-Token': this.token },
+        timeout: REQUEST_TIMEOUT_MS,
+      });
+      const accounts = res.data?.MediaContainer?.Account || [];
+      return accounts
+        .filter((a) => a.id != null && Number(a.id) > 0)
+        .map((a) => ({ id: String(a.id), name: a.name || null }));
+    } catch (err) {
+      logger.warn({ ...describeHttpError(err) }, 'plex: could not list server accounts; user names unavailable');
+      return [];
+    }
+  }
+
+  // Watch state for NON-owner accounts comes from the server-local play
+  // history (/status/sessions/history/all): the admin token cannot read other
+  // accounts' per-item state, but it can read everyone's play events (the
+  // endpoint Tautulli builds on; no plex.tv involvement). History is
+  // played-only fidelity: any event marks the item watched (percent 100, no
+  // position), an accepted v1 trade-off. `since` is an incremental watermark
+  // over viewedAt so recurring syncs only page new events.
+  //
+  // Returns { entries, scannedThrough }: scannedThrough is the newest viewedAt
+  // actually SCANNED (matched or not, capped or not), the safe value for a
+  // durable cursor. Null when no events were scanned (nothing to advance).
+  async _fetchHistoryWatchStates(ratingKeyPaths, since) {
+    const byAccountItem = new Map(); // `${accountID}:${ratingKey}` -> max viewedAt (unix s)
+    const sinceSeconds = since ? Math.floor(since.getTime() / 1000) : null;
+    let maxScannedViewedAt = 0;
+    let start = 0;
+    let pages = 0;
+    for (;;) {
+      if (pages >= MAX_HISTORY_PAGES) {
+        logger.warn(
+          { pages, fetched: start },
+          'plex: watch history page cap reached; the next sync resumes from the stored cursor'
+        );
+        break;
+      }
+      let res;
+      try {
+        res = await axios.get(`${this.url}/status/sessions/history/all`, {
+          params: {
+            sort: 'viewedAt:asc',
+            'X-Plex-Container-Start': start,
+            'X-Plex-Container-Size': HISTORY_PAGE_SIZE,
+            'X-Plex-Token': this.token,
+            ...(sinceSeconds != null ? { 'viewedAt>': sinceSeconds } : {}),
+          },
+          timeout: REQUEST_TIMEOUT_MS,
+        });
+      } catch (err) {
+        if (isServerUnavailableError(err)) throw new MediaServerUnavailableError(describeHttpError(err));
+        // Owner data alone must not report success while every other user
+        // goes silently stale, so a failed history fetch fails the server.
+        const info = describeHttpError(err);
+        throw new WatchStateFetchError(
+          `could not fetch Plex watch history for other users (${info.status ? `HTTP ${info.status}` : info.message})`
+        );
+      }
+      const rows = res.data?.MediaContainer?.Metadata || [];
+      for (const row of rows) {
+        const viewedAt = Number(row.viewedAt) || 0;
+        if (viewedAt > maxScannedViewedAt) maxScannedViewedAt = viewedAt;
+        if (row.accountID == null || String(row.accountID) === PLEX_OWNER_ACCOUNT_ID) continue;
+        const key = row.ratingKey != null ? String(row.ratingKey) : null;
+        if (!key || !ratingKeyPaths.has(key)) continue;
+        const mapKey = `${row.accountID}:${key}`;
+        if (!byAccountItem.has(mapKey) || viewedAt > byAccountItem.get(mapKey)) {
+          byAccountItem.set(mapKey, viewedAt);
+        }
+      }
+      pages += 1;
+      if (rows.length < HISTORY_PAGE_SIZE) break;
+      start += HISTORY_PAGE_SIZE;
+    }
+
+    const entries = [];
+    for (const [mapKey, viewedAt] of byAccountItem) {
+      const separator = mapKey.indexOf(':');
+      const accountId = mapKey.slice(0, separator);
+      const ratingKey = mapKey.slice(separator + 1);
+      for (const path of ratingKeyPaths.get(ratingKey)) {
+        entries.push({
+          path,
+          serverUserId: accountId,
+          played: true,
+          playCount: 1,
+          positionMs: null,
+          percentWatched: 100,
+          lastWatchedAt: viewedAt ? new Date(viewedAt * 1000) : null,
+        });
+      }
+    }
+    return {
+      entries,
+      scannedThrough: maxScannedViewedAt ? new Date(maxScannedViewedAt * 1000) : null,
+    };
   }
 
   _itemWatchState(item) {
@@ -414,3 +575,4 @@ class PlexAdapter extends BaseAdapter {
 }
 
 module.exports = PlexAdapter;
+module.exports.PLEX_OWNER_ACCOUNT_ID = PLEX_OWNER_ACCOUNT_ID;

@@ -19,7 +19,7 @@ const metadataLimiter = rateLimit({
  * @param {Object} deps - Dependencies
  * @param {Function} deps.verifyToken - Token verification middleware
  * @param {Object} deps.videoMetadataModule - Video metadata module
- * @param {Object} deps.mediaServers - Media server aggregate (watchStatusSync)
+ * @param {Object} deps.mediaServers - Media server aggregate (watchStatusQueries)
  * @returns {express.Router}
  */
 function createVideoDetailRoutes({ verifyToken, videoMetadataModule, mediaServers }) {
@@ -90,7 +90,7 @@ function createVideoDetailRoutes({ verifyToken, videoMetadataModule, mediaServer
    *           type: string
    *     responses:
    *       200:
-   *         description: Watch status rows, one per connected media server that has synced this video
+   *         description: Watch status rows, one per (media server, user) that has synced this video, with resolved user names
    *       400:
    *         description: Invalid YouTube ID
    */
@@ -100,7 +100,7 @@ function createVideoDetailRoutes({ verifyToken, videoMetadataModule, mediaServer
       return res.status(400).json({ error: 'Invalid YouTube ID' });
     }
     try {
-      const statuses = await mediaServers.watchStatusSync.getStatusesForVideo(youtubeId);
+      const statuses = await mediaServers.watchStatusQueries.getStatusesForVideo(youtubeId);
       res.json({ statuses });
     } catch (err) {
       req.log.error({ err, youtubeId }, 'Failed to get video watch status');

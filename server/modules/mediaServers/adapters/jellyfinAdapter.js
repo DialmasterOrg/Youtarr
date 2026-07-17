@@ -19,6 +19,7 @@ class JellyfinAdapter extends BaseAdapter {
     this.url = config.jellyfinUrl;
     this.apiKey = config.jellyfinApiKey;
     this.userId = config.jellyfinUserId;
+    this.allUsers = config.jellyfinWatchStatusAllUsers !== false;
   }
 
   _headers() { return { 'X-Emby-Token': this.apiKey }; }
@@ -74,28 +75,47 @@ class JellyfinAdapter extends BaseAdapter {
     }
   }
 
-  // Watch state for the configured user, from the same /Items listing used for
-  // file resolution. UserData rides along when enableUserData is set and a
-  // userId is supplied (API-key auth returns no UserData otherwise).
+  // Watch state per user, from the same /Items listing used for file
+  // resolution, run once per target user. Targets are every server user when
+  // jellyfinWatchStatusAllUsers is on (the default), else just the configured
+  // one. UserData rides along when enableUserData is set and a userId is
+  // supplied (API-key auth returns no UserData otherwise). A failed /Users
+  // fetch fails the whole call: silently syncing nobody would masquerade as
+  // an empty success.
   async fetchWatchStates() {
     try {
-      const params = {
-        userId: this.userId,
-        includeItemTypes: 'Video,Movie,Episode',
-        recursive: true,
-        fields: 'Path',
-        enableUserData: true,
-      };
-      const res = await axios.get(`${this.url}/Items`, { headers: this._headers(), params, timeout: REQUEST_TIMEOUT_MS });
-      const items = res.data?.Items || [];
-      return items.filter((i) => i.Path).map((i) => this._itemWatchState(i));
+      let users = [];
+      let targets;
+      if (this.allUsers) {
+        const res = await axios.get(`${this.url}/Users`, { headers: this._headers(), timeout: REQUEST_TIMEOUT_MS });
+        users = (res.data || []).map((u) => ({ id: String(u.Id), name: u.Name || null }));
+        targets = users;
+      } else {
+        targets = [{ id: this.userId, name: null }];
+      }
+      const entries = [];
+      for (const user of targets) {
+        const params = {
+          userId: user.id,
+          includeItemTypes: 'Video,Movie,Episode',
+          recursive: true,
+          fields: 'Path',
+          enableUserData: true,
+        };
+        const res = await axios.get(`${this.url}/Items`, { headers: this._headers(), params, timeout: REQUEST_TIMEOUT_MS });
+        const items = res.data?.Items || [];
+        for (const item of items) {
+          if (item.Path) entries.push(this._itemWatchState(item, user.id));
+        }
+      }
+      return { entries, users };
     } catch (err) {
       if (isServerUnavailableError(err)) throw new MediaServerUnavailableError(describeHttpError(err));
       throw err;
     }
   }
 
-  _itemWatchState(item) {
+  _itemWatchState(item, serverUserId) {
     const ud = item.UserData || {};
     const played = !!ud.Played;
     const positionTicks = ud.PlaybackPositionTicks != null ? Number(ud.PlaybackPositionTicks) : null;
@@ -107,6 +127,7 @@ class JellyfinAdapter extends BaseAdapter {
     }
     return {
       path: item.Path,
+      serverUserId,
       played,
       playCount: ud.PlayCount != null ? Number(ud.PlayCount) : 0,
       positionMs: positionTicks != null ? Math.round(positionTicks / TICKS_PER_MS) : null,

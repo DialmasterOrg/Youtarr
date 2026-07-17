@@ -1,5 +1,5 @@
 const ChannelVideo = require('../../models/channelvideo');
-const VideoWatchStatus = require('../../models/videowatchstatus');
+const watchStatusQueries = require('../mediaServers/watchStatusQueries');
 const fileCheckModule = require('../fileCheckModule');
 const { PUBLISHED_AT_SOURCE } = require('../constants/publishedAtSource');
 
@@ -81,22 +81,13 @@ class ChannelVideoQuery {
       }
     }
 
-    // Watched-on-any-server summary for the channel listings. Rows exist only
-    // for downloaded videos a media server actually reported, so a missing row
-    // means unknown - never-downloaded and unmatched videos fall through to [].
-    const videoDbIds = downloadedVideos.map((v) => v.id);
-    const watchRows = videoDbIds.length
-      ? await VideoWatchStatus.findAll({
-        where: { video_id: videoDbIds, played: true },
-        attributes: ['video_id', 'server_type'],
-        raw: true,
-      })
-      : [];
-    const watchedByVideoId = new Map();
-    for (const row of watchRows) {
-      if (!watchedByVideoId.has(row.video_id)) watchedByVideoId.set(row.video_id, []);
-      watchedByVideoId.get(row.video_id).push(row.server_type);
-    }
+    // Watched-servers summary for the channel listings, honoring the
+    // configured watched rule. Rows exist only for downloaded videos a media
+    // server actually reported, so a missing row means unknown -
+    // never-downloaded and unmatched videos fall through to [].
+    const watchedByVideoId = await watchStatusQueries.getWatchedByMap(
+      downloadedVideos.map((v) => v.id)
+    );
 
     return videos.map((video) => {
       const plainVideoObject = video.toJSON ? video.toJSON() : video;

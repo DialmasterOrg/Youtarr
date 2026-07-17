@@ -8,7 +8,7 @@ VideoWatchStatus.init(
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true, allowNull: false },
     video_id: { type: DataTypes.INTEGER, allowNull: false },
     server_type: { type: DataTypes.ENUM('plex', 'jellyfin', 'emby'), allowNull: false },
-    server_user_id: { type: DataTypes.STRING, allowNull: true },
+    server_user_id: { type: DataTypes.STRING, allowNull: false },
     played: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     play_count: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     position_ms: { type: DataTypes.BIGINT, allowNull: true },

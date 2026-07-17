@@ -2,6 +2,7 @@ module.exports = {
   serverRegistry: require('./serverRegistry'),
   mediaServerSync: require('./mediaServerSync'),
   watchStatusSync: require('./watchStatusSync'),
+  watchStatusQueries: require('./watchStatusQueries'),
   watchStatusScheduler: require('./watchStatusScheduler'),
   adapters: {
     BaseAdapter: require('./adapters/baseAdapter'),

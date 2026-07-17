@@ -283,8 +283,12 @@ These fields work like the Jellyfin fields above, with `emby*` names. They're re
 | :--------- | :--- | :------ | :---------- |
 | `watchStatusSyncEnabled` | `boolean` | `true` | Periodically pull per-video watch status (watched, percent, last watched) from connected media servers (Plex, Jellyfin, Emby) into Youtarr. No-op when no media server is connected. |
 | `watchStatusSyncFrequency` | `string` (cron) | `"0 */4 * * *"` | How often the watch status sync runs. |
+| `plexWatchStatusAllUsers` | `boolean` | `true` | Also sync watch status for every Plex account on the server (from the server's play history; the owner keeps full fidelity). When `false`, only the server owner's state is synced. |
+| `jellyfinWatchStatusAllUsers` | `boolean` | `true` | Sync watch status for every Jellyfin user. When `false`, only the configured `jellyfinUserId`. |
+| `embyWatchStatusAllUsers` | `boolean` | `true` | Sync watch status for every Emby user. When `false`, only the configured `embyUserId`. |
+| `watchStatusWatchedRule` | `string` | `"any"` | When a video counts as "Watched" in listings: `"any"` (any synced user watched it) or `"primary"` (only the Plex owner / configured Jellyfin/Emby user). |
 
-Watch state is read for the Plex admin account and the configured Jellyfin/Emby user. Sync is one-way (server -> Youtarr).
+Sync is one-way (server -> Youtarr). Non-owner Plex users come from the server's play history, which records plays but not in-progress positions: any play marks the video watched for that user. User names are stored in the `media_server_users` table so the video modal can show who watched what. The history pull is incremental via a durable cursor in the `watch_status_sync_cursors` table; deleting that table's `plex` row forces a full history re-scan on the next sync (useful after repairing a path mismatch that had prevented videos from matching).
 
 ## YouTube Data API (Optional)
 

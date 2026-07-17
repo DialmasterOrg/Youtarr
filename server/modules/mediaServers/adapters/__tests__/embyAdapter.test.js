@@ -215,6 +215,9 @@ describe('EmbyAdapter', () => {
   });
 
   describe('fetchWatchStates', () => {
+    // Most tests run in single-user mode to keep one queued /Items response.
+    const singleUserCfg = { ...cfg, embyWatchStatusAllUsers: false };
+
     test('maps UserData fields including ticks-to-ms conversion', async () => {
       axios.get.mockResolvedValueOnce({
         data: {
@@ -234,12 +237,14 @@ describe('EmbyAdapter', () => {
         },
       });
 
-      const adapter = new EmbyAdapter(cfg);
-      const entries = await adapter.fetchWatchStates();
+      const adapter = new EmbyAdapter(singleUserCfg);
+      const { entries, users } = await adapter.fetchWatchStates();
 
+      expect(users).toEqual([]);
       expect(entries).toHaveLength(2);
       expect(entries[0]).toEqual({
         path: '/media/Chan/Video A [id1].mp4',
+        serverUserId: 'USR',
         played: true,
         playCount: 3,
         positionMs: 0,
@@ -253,8 +258,9 @@ describe('EmbyAdapter', () => {
 
     test('requests items with UserData enabled for the configured user', async () => {
       axios.get.mockResolvedValueOnce({ data: { Items: [] } });
-      const adapter = new EmbyAdapter(cfg);
+      const adapter = new EmbyAdapter(singleUserCfg);
       await adapter.fetchWatchStates();
+      expect(axios.get).toHaveBeenCalledTimes(1);
       expect(axios.get).toHaveBeenCalledWith(
         expect.stringContaining('/Items'),
         expect.objectContaining({
@@ -267,13 +273,41 @@ describe('EmbyAdapter', () => {
       );
     });
 
+    test('lists every user when all-users is enabled (the default)', async () => {
+      axios.get.mockResolvedValueOnce({ data: [{ Id: 'u1', Name: 'Alice' }, { Id: 'u2', Name: 'Bob' }] });
+      axios.get.mockResolvedValueOnce({
+        data: { Items: [{ Path: '/m/a.mp4', UserData: { Played: true, PlayCount: 2 } }] },
+      });
+      axios.get.mockResolvedValueOnce({
+        data: { Items: [{ Path: '/m/a.mp4', UserData: { Played: false } }] },
+      });
+
+      const adapter = new EmbyAdapter(cfg);
+      const { entries, users } = await adapter.fetchWatchStates();
+
+      expect(users).toEqual([{ id: 'u1', name: 'Alice' }, { id: 'u2', name: 'Bob' }]);
+      expect(entries.map((e) => e.serverUserId)).toEqual(['u1', 'u2']);
+      expect(axios.get.mock.calls[0][0]).toContain('/Users');
+      expect(axios.get.mock.calls[1][1].params.userId).toBe('u1');
+      expect(axios.get.mock.calls[2][1].params.userId).toBe('u2');
+    });
+
+    test('fails the fetch when the user listing fails', async () => {
+      const forbidden = new Error('Request failed with status code 403');
+      forbidden.isAxiosError = true;
+      forbidden.response = { status: 403 };
+      axios.get.mockRejectedValueOnce(forbidden);
+      const adapter = new EmbyAdapter(cfg);
+      await expect(adapter.fetchWatchStates()).rejects.toThrow('403');
+    });
+
     test('throws MediaServerUnavailableError when the server is unreachable', async () => {
       const { MediaServerUnavailableError } = require('../baseAdapter');
       const err = new Error('timeout');
       err.isAxiosError = true;
       err.code = 'ETIMEDOUT';
       axios.get.mockRejectedValueOnce(err);
-      const adapter = new EmbyAdapter(cfg);
+      const adapter = new EmbyAdapter(singleUserCfg);
       await expect(adapter.fetchWatchStates()).rejects.toBeInstanceOf(MediaServerUnavailableError);
     });
   });

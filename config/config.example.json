@@ -76,5 +76,9 @@
   "embyUserId": "",
   "embyVideoLibraryIds": [],
   "watchStatusSyncEnabled": true,
-  "watchStatusSyncFrequency": "0 */4 * * *"
+  "watchStatusSyncFrequency": "0 */4 * * *",
+  "plexWatchStatusAllUsers": true,
+  "jellyfinWatchStatusAllUsers": true,
+  "embyWatchStatusAllUsers": true,
+  "watchStatusWatchedRule": "any"
 }
