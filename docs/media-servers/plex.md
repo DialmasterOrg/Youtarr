@@ -127,7 +127,7 @@ Once Plex is connected with the settings above, Youtarr can mirror your subscrib
 Most people can ignore this. Under **Settings -> Plex -> Advanced: playlist visibility scope**, you can control which account owns Youtarr's playlists:
 
 - **Use my Plex admin account (default)**: the normal claimed-server case. Playlists are created under your account and are visible to you.
-- **Unclaimed server (anonymous LAN access)**: for an unclaimed server on your LAN, where Plex Web browses without a token. If a connection test detects an unclaimed server, Youtarr nudges you toward this option.
+- **Unclaimed server (anonymous LAN access)**: for an unclaimed server on your LAN, where Plex Web browses without a token. If a connection test detects an unclaimed server, Youtarr nudges you toward this option. Watch status sync also reads the anonymous session's watch state in this mode.
 - **A specific Plex user account**: routes the playlists through a token you paste in.
 
 Plex playlists are always owned by a single account, so there's no automatic "public" setting. To let another Plex user see a playlist, open it in Plex Web and share it (playlist menu -> Share), or use **Settings -> Manage Library Access -> [user] -> Media**. Youtarr can't grant per-user access for you.

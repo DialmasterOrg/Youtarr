@@ -41,6 +41,12 @@ function mockVideoModel() {
   return MockVideo;
 }
 
+function mockVideoWatchStatusModel() {
+  return {
+    findAll: jest.fn(),
+  };
+}
+
 function mockConfigModule() {
   const EventEmitter = require('events');
   const mockConfig = new EventEmitter();
@@ -107,6 +113,7 @@ module.exports = {
   mockChannelModel,
   mockChannelVideoModel,
   mockVideoModel,
+  mockVideoWatchStatusModel,
   mockConfigModule,
   mockYoutubeApi,
   mockDb,

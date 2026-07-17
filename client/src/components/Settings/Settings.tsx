@@ -15,6 +15,7 @@ import AppearanceSettingsSection from '../Configuration/sections/AppearanceSetti
 import { PlexIntegrationSection } from '../Configuration/sections/PlexIntegrationSection';
 import JellyfinSection from '../Configuration/sections/JellyfinSection';
 import EmbySection from '../Configuration/sections/EmbySection';
+import WatchStatusSection from '../Configuration/sections/WatchStatusSection';
 import { SponsorBlockSection } from '../Configuration/sections/SponsorBlockSection';
 import { CookieConfigSection } from '../Configuration/sections/CookieConfigSection';
 import { NotificationsSection } from '../Configuration/sections/NotificationsSection';
@@ -325,6 +326,16 @@ export function Settings({ token }: SettingsProps) {
             path="emby"
             element={
               <EmbySection
+                config={config}
+                token={token}
+                onConfigChange={handleConfigChange}
+              />
+            }
+          />
+          <Route
+            path="watch-status"
+            element={
+              <WatchStatusSection
                 config={config}
                 token={token}
                 onConfigChange={handleConfigChange}

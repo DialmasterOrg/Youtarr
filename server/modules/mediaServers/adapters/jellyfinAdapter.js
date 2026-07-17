@@ -9,9 +9,13 @@ const {
 } = require('./baseAdapter');
 const logger = require('../../../logger');
 
+// Jellyfin/Emby report playback position in ticks (100ns units).
+const TICKS_PER_MS = 10000;
+
 class JellyfinAdapter extends BaseAdapter {
   constructor(config) {
     super(config);
+    this.serverType = 'jellyfin';
     this.url = config.jellyfinUrl;
     this.apiKey = config.jellyfinApiKey;
     this.userId = config.jellyfinUserId;
@@ -68,6 +72,47 @@ class JellyfinAdapter extends BaseAdapter {
       logger.warn({ ...describeHttpError(err), filepath }, 'jellyfin: could not look up library item by file path');
       return null;
     }
+  }
+
+  // Watch state for the configured user, from the same /Items listing used for
+  // file resolution. UserData rides along when enableUserData is set and a
+  // userId is supplied (API-key auth returns no UserData otherwise).
+  async fetchWatchStates() {
+    try {
+      const params = {
+        userId: this.userId,
+        includeItemTypes: 'Video,Movie,Episode',
+        recursive: true,
+        fields: 'Path',
+        enableUserData: true,
+      };
+      const res = await axios.get(`${this.url}/Items`, { headers: this._headers(), params, timeout: REQUEST_TIMEOUT_MS });
+      const items = res.data?.Items || [];
+      return items.filter((i) => i.Path).map((i) => this._itemWatchState(i));
+    } catch (err) {
+      if (isServerUnavailableError(err)) throw new MediaServerUnavailableError(describeHttpError(err));
+      throw err;
+    }
+  }
+
+  _itemWatchState(item) {
+    const ud = item.UserData || {};
+    const played = !!ud.Played;
+    const positionTicks = ud.PlaybackPositionTicks != null ? Number(ud.PlaybackPositionTicks) : null;
+    let percentWatched = null;
+    if (played) {
+      percentWatched = 100;
+    } else if (ud.PlayedPercentage != null) {
+      percentWatched = Math.round(Number(ud.PlayedPercentage) * 10) / 10;
+    }
+    return {
+      path: item.Path,
+      played,
+      playCount: ud.PlayCount != null ? Number(ud.PlayCount) : 0,
+      positionMs: positionTicks != null ? Math.round(positionTicks / TICKS_PER_MS) : null,
+      percentWatched,
+      lastWatchedAt: ud.LastPlayedDate ? new Date(ud.LastPlayedDate) : null,
+    };
   }
 
   async createPlaylist(name, itemIds, opts = {}) {

@@ -1109,4 +1109,17 @@ describe('VideoTableView Component', () => {
       expect(onToggleProtection).toHaveBeenCalledWith('test123');
     });
   });
+
+  describe('Watched Chip', () => {
+    test('renders Watched chip when the video has been watched on a server', () => {
+      const watchedVideo = { ...mockVideo, added: true, removed: false, watchedBy: ['plex'] };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[watchedVideo]} />);
+      expect(screen.getByText('Watched')).toBeInTheDocument();
+    });
+
+    test('does not render Watched chip when watchedBy is absent', () => {
+      renderWithProviders(<VideoTableView {...defaultProps} />);
+      expect(screen.queryByText('Watched')).not.toBeInTheDocument();
+    });
+  });
 });

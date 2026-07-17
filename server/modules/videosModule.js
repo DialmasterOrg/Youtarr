@@ -1,5 +1,5 @@
 const { Sequelize, sequelize } = require('../db.js');
-const { Video } = require('../models');
+const { Video, VideoWatchStatus } = require('../models');
 const fs = require('fs').promises;
 const path = require('path');
 const configModule = require('./configModule');
@@ -207,6 +207,25 @@ class VideosModule {
           { youtube_removed_checked_at: new Date() },
           { where: { id: timestampUpdates.map(u => u.id) } }
         );
+      }
+
+      // Watched-on-any-server summary for the list UI. Only played=true rows
+      // matter here; per-server detail lives behind /api/videos/:id/watch-status.
+      const videoIds = videos.map((v) => v.id);
+      const watchRows = videoIds.length
+        ? await VideoWatchStatus.findAll({
+          where: { video_id: videoIds, played: true },
+          attributes: ['video_id', 'server_type'],
+          raw: true,
+        })
+        : [];
+      const watchedByVideoId = new Map();
+      for (const row of watchRows) {
+        if (!watchedByVideoId.has(row.video_id)) watchedByVideoId.set(row.video_id, []);
+        watchedByVideoId.get(row.video_id).push(row.server_type);
+      }
+      for (const video of videos) {
+        video.watchedBy = watchedByVideoId.get(video.id) || [];
       }
 
       // Get all unique channels for the filter dropdown

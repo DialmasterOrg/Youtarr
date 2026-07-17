@@ -8,6 +8,7 @@ const {
   isServerUnavailableError,
   describeHttpError,
   MediaServerUnavailableError,
+  WatchStateFetchError,
 } = require('./baseAdapter');
 const logger = require('../../../logger');
 const plexModule = require('../../plexModule');
@@ -18,14 +19,20 @@ const plexModule = require('../../plexModule');
 // LAN access. Deliberately distinctive so no real token could collide.
 const UNCLAIMED_SERVER_SENTINEL = 'UNCLAIMED_SERVER';
 
+// Plex metadata type for episode leaves. Listing a show section's /all returns
+// show-level items with no file parts; ?type=4 lists the episodes instead.
+const PLEX_TYPE_EPISODE = 4;
+
 class PlexAdapter extends BaseAdapter {
   constructor(config) {
     super(config);
+    this.serverType = 'plex';
     this.url = config.plexUrl;
     this.token = config.plexApiKey;
     this.libraryId = config.plexYoutubeLibraryId;
-    // Section ids to search when resolving files, split { video, music }.
-    // Populated lazily on first resolve; see _getSectionIds.
+    // Section ids to search when resolving files, split { video, music }, keyed
+    // by scope ('playlist' | 'admin', see _getSectionIds). Populated lazily
+    // per scope on first use.
     this._sectionIds = null;
     // Optional override for playlist-scoped operations. Useful when the admin
     // token belongs to a different Plex account than the one used by the Plex
@@ -42,6 +49,10 @@ class PlexAdapter extends BaseAdapter {
     } else {
       this.playlistToken = this.token;
     }
+    // Unclaimed servers have no accounts: Plex Web browses as the anonymous
+    // LAN session, and watch state is recorded in that same anonymous scope.
+    // fetchWatchStates uses this to read watch state tokenless in that mode.
+    this.anonymousScope = override === UNCLAIMED_SERVER_SENTINEL;
   }
 
   // Distinct, ordered lists of library section ids to search, discovered from
@@ -49,31 +60,55 @@ class PlexAdapter extends BaseAdapter {
   // library). video: 'movie' covers "Other Videos"/Personal Media libraries,
   // 'show' covers TV-type ones. music: 'artist' covers Music libraries, which
   // hold audio-only downloads. The configured YouTube library is placed first
-  // as the most likely location. Result is cached for the lifetime of the
-  // adapter instance (one sync). Falls back to the configured library if
-  // enumeration fails.
-  async _getSectionIds() {
-    if (this._sectionIds) return this._sectionIds;
+  // as the most likely location. Result is cached per scope for the lifetime
+  // of the adapter instance (one sync). Falls back to the configured library
+  // if enumeration fails.
+  //
+  // scope controls which token enumerates /library/sections: 'playlist' (the
+  // default) uses the playlist-scoped token, matching every other caller of
+  // this method (file resolution, library scans). 'admin' uses the admin token,
+  // for fetchWatchStates on claimed servers, since watch state is read from the
+  // admin account and must see the same sections that account can. (Unclaimed
+  // servers pass 'playlist', which is tokenless there; see anonymousScope.)
+  async _getSectionIds(scope = 'playlist') {
+    if (!this._sectionIds) this._sectionIds = {};
+    if (this._sectionIds[scope]) return this._sectionIds[scope];
     const video = [];
     const music = [];
+    // Subset of `video`: section ids of type 'show'. Their default /all listing
+    // returns show-level items with no file parts, so callers needing
+    // file-backed leaves must request episodes explicitly for these sections.
+    const shows = [];
     const add = (list, id) => {
       if (id == null) return;
       const s = String(id).trim();
       if (s && /^\d+$/.test(s) && !video.includes(s) && !music.includes(s)) list.push(s);
     };
     add(video, this.libraryId);
+    // Preserved so callers with no configured fallback library can tell
+    // "enumeration failed" apart from "server genuinely has no sections".
+    let enumerationError = null;
     try {
-      const res = await axios.get(`${this.url}/library/sections`, { params: this._plParams(), timeout: REQUEST_TIMEOUT_MS });
+      const params = scope === 'admin' ? { 'X-Plex-Token': this.token } : this._plParams();
+      const res = await axios.get(`${this.url}/library/sections`, { params, timeout: REQUEST_TIMEOUT_MS });
       const dirs = res.data?.MediaContainer?.Directory || [];
       for (const dir of dirs) {
-        if (dir.type === 'movie' || dir.type === 'show') add(video, dir.key);
-        else if (dir.type === 'artist') add(music, dir.key);
+        if (dir.type === 'movie' || dir.type === 'show') {
+          add(video, dir.key);
+          const key = String(dir.key ?? '').trim();
+          // Also covers the configured library already added above turning out
+          // to be a show section.
+          if (dir.type === 'show' && video.includes(key) && !shows.includes(key)) shows.push(key);
+        } else if (dir.type === 'artist') {
+          add(music, dir.key);
+        }
       }
     } catch (err) {
+      enumerationError = err;
       logger.warn({ ...describeHttpError(err) }, 'plex: could not enumerate library sections; searching configured library only');
     }
-    this._sectionIds = { video, music };
-    return this._sectionIds;
+    this._sectionIds[scope] = { video, music, shows, enumerationError };
+    return this._sectionIds[scope];
   }
 
   // Build params for playlist-scoped requests. Conditionally omits X-Plex-Token
@@ -302,6 +337,79 @@ class PlexAdapter extends BaseAdapter {
     }
 
     return this._replaceInPlace(playlistId, itemIds, opts);
+  }
+
+  // Watch state comes from the same section listings used for file resolution:
+  // every item carries viewCount (completed plays), viewOffset (in-progress
+  // position, ms) and lastViewedAt (unix seconds). On claimed servers this
+  // reads the ADMIN account's watch state, not the 'user'-mode plexPlaylistToken
+  // account, since watch state is per Plex account and v1 reads the admin's. On
+  // unclaimed servers (UNCLAIMED_SERVER sentinel) it reads the anonymous
+  // session's watch state instead, the scope Plex Web itself uses there.
+  async fetchWatchStates() {
+    const entries = [];
+    const sections = await this._getSectionIds(this.anonymousScope ? 'playlist' : 'admin');
+    let sectionsListed = 0;
+    let lastError = null;
+    for (const libraryId of sections.video) {
+      // Show sections need type=4 to list episode leaves, which carry both the
+      // file paths and the per-episode watch state; the default /all would
+      // return file-less show items and nothing could match.
+      const typeParams = sections.shows.includes(libraryId) ? { type: PLEX_TYPE_EPISODE } : {};
+      try {
+        const res = await axios.get(`${this.url}/library/sections/${libraryId}/all`, {
+          params: this.anonymousScope ? this._plParams(typeParams) : { ...typeParams, 'X-Plex-Token': this.token },
+          timeout: REQUEST_TIMEOUT_MS,
+        });
+        sectionsListed += 1;
+        const items = res.data?.MediaContainer?.Metadata || [];
+        for (const item of items) {
+          const state = this._itemWatchState(item);
+          for (const media of item.Media || []) {
+            for (const part of media.Part || []) {
+              if (part.file) entries.push({ path: part.file, ...state });
+            }
+          }
+        }
+      } catch (err) {
+        if (isServerUnavailableError(err)) throw new MediaServerUnavailableError(describeHttpError(err));
+        // A single section failing shouldn't abort the fetch of the others.
+        lastError = err;
+        logger.warn({ ...describeHttpError(err), libraryId }, 'plex: could not list library section during watch-state fetch');
+      }
+    }
+    // Every section failing (e.g. an expired admin token 401s everywhere) is a
+    // failed sync, not a successful empty one; swallowing it would record
+    // "0 updated" and hide the problem from the sync summary. This includes
+    // enumeration itself failing with no configured library to fall back on
+    // (sections.video is empty then, but the fetch still didn't succeed).
+    if (sectionsListed === 0 && (sections.video.length > 0 || sections.enumerationError)) {
+      const failure = lastError || sections.enumerationError;
+      if (isServerUnavailableError(failure)) throw new MediaServerUnavailableError(describeHttpError(failure));
+      const info = describeHttpError(failure);
+      throw new WatchStateFetchError(`could not list any Plex library section (${info.status ? `HTTP ${info.status}` : info.message})`);
+    }
+    return entries;
+  }
+
+  _itemWatchState(item) {
+    const playCount = item.viewCount != null ? Number(item.viewCount) : 0;
+    const played = playCount > 0;
+    const positionMs = item.viewOffset != null ? Number(item.viewOffset) : null;
+    const durationMs = item.duration != null ? Number(item.duration) : null;
+    let percentWatched = null;
+    if (played) {
+      percentWatched = 100;
+    } else if (positionMs != null && durationMs > 0) {
+      percentWatched = Math.round((positionMs / durationMs) * 1000) / 10;
+    }
+    return {
+      played,
+      playCount,
+      positionMs,
+      percentWatched,
+      lastWatchedAt: item.lastViewedAt ? new Date(Number(item.lastViewedAt) * 1000) : null,
+    };
   }
 }
 

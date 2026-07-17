@@ -20,6 +20,7 @@ import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
 import ProtectionShieldButton from '../shared/ProtectionShieldButton';
 import RatingBadge from '../shared/RatingBadge';
 import ThumbnailClickOverlay from '../shared/ThumbnailClickOverlay';
+import WatchedChip from '../shared/WatchedChip';
 interface VideoListItemProps {
   video: ChannelVideo;
   checkedBoxes: string[];
@@ -367,6 +368,7 @@ function VideoListItem({
               showNA
               style={{ ...SHARED_STATUS_CHIP_SMALL_STYLE }}
             />
+            <WatchedChip watchedBy={video.watchedBy || []} />
             <Chip
               icon={getStatusIcon(status)}
               label={statusLabel}

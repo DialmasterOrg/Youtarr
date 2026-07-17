@@ -17,21 +17,19 @@ const createResponse = () => {
 
 // Mock adapter classes
 class MockJellyfinAdapter {
-  constructor(config) { this.config = config; }
+  constructor(config) { this.config = config; this.serverType = 'jellyfin'; }
   async testConnection() { return { ok: true, version: '10.8.0' }; }
   async listUsers() { return [{ id: 'u1', name: 'Alice' }]; }
 }
-MockJellyfinAdapter.prototype.constructor = { name: 'JellyfinAdapter' };
 
 class MockEmbyAdapter {
-  constructor(config) { this.config = config; }
+  constructor(config) { this.config = config; this.serverType = 'emby'; }
   async testConnection() { return { ok: true, version: '4.7.0' }; }
   async listUsers() { return [{ id: 'u2', name: 'Bob' }]; }
 }
-MockEmbyAdapter.prototype.constructor = { name: 'EmbyAdapter' };
 
 class MockPlexAdapter {
-  constructor(config) { this.config = config; }
+  constructor(config) { this.config = config; this.serverType = 'plex'; }
 }
 
 const buildDeps = (overrides = {}) => ({
@@ -48,6 +46,10 @@ const buildDeps = (overrides = {}) => ({
     },
     serverRegistry: {
       getEnabledAdapters: jest.fn().mockReturnValue([]),
+    },
+    watchStatusSync: {
+      getStatus: jest.fn().mockReturnValue({ running: false, lastRun: null }),
+      syncAll: jest.fn().mockResolvedValue({}),
     },
     ...overrides.mediaServers,
   },
@@ -79,11 +81,12 @@ describe('GET /api/mediaservers/status', () => {
     expect(res.json).toHaveBeenCalledWith({ plex: false, jellyfin: false, emby: false });
   });
 
-  test('correctly identifies enabled Jellyfin adapter', async () => {
+  test('reports each enabled adapter by its serverType', async () => {
     const deps = buildDeps();
-    const jellyfinInstance = new MockJellyfinAdapter({});
-    Object.defineProperty(jellyfinInstance, 'constructor', { value: { name: 'JellyfinAdapter' } });
-    deps.mediaServers.serverRegistry.getEnabledAdapters.mockReturnValue([jellyfinInstance]);
+    deps.mediaServers.serverRegistry.getEnabledAdapters.mockReturnValue([
+      new MockJellyfinAdapter({}),
+      new MockPlexAdapter({}),
+    ]);
 
     const handler = getHandler('get', '/api/mediaservers/status', deps);
     const req = { log: loggerMock };
@@ -91,9 +94,7 @@ describe('GET /api/mediaservers/status', () => {
 
     await handler(req, res);
 
-    // Status returns based on constructor.name — we check the mock was called
-    expect(deps.mediaServers.serverRegistry.getEnabledAdapters).toHaveBeenCalled();
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ plex: false, emby: false }));
+    expect(res.json).toHaveBeenCalledWith({ plex: true, jellyfin: true, emby: false });
   });
 
   test('returns 500 on error', async () => {
@@ -233,5 +234,74 @@ describe('POST /api/mediaservers/emby/users', () => {
     await handler(req, res);
 
     expect(res.json).toHaveBeenCalledWith({ users: [{ id: 'u2', name: 'Bob' }] });
+  });
+});
+
+describe('GET /api/mediaservers/watch-status', () => {
+  test('returns sync status', async () => {
+    const deps = buildDeps();
+    deps.mediaServers.watchStatusSync.getStatus.mockReturnValue({ running: false, lastRun: { trigger: 'manual' } });
+
+    const handler = getHandler('get', '/api/mediaservers/watch-status', deps);
+    const req = { log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.json).toHaveBeenCalledWith({ running: false, lastRun: { trigger: 'manual' } });
+  });
+});
+
+describe('POST /api/mediaservers/watch-status/sync', () => {
+  test('starts a sync', async () => {
+    const deps = buildDeps();
+    deps.mediaServers.watchStatusSync.getStatus.mockReturnValue({ running: false, lastRun: null });
+
+    const handler = getHandler('post', '/api/mediaservers/watch-status/sync', deps);
+    const req = { log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(202);
+    expect(res.json).toHaveBeenCalledWith({ started: true });
+    expect(deps.mediaServers.watchStatusSync.syncAll).toHaveBeenCalledWith('manual');
+  });
+
+  test('returns 409 when already running', async () => {
+    const deps = buildDeps();
+    deps.mediaServers.watchStatusSync.getStatus.mockReturnValue({ running: true, lastRun: null });
+
+    const handler = getHandler('post', '/api/mediaservers/watch-status/sync', deps);
+    const req = { log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Watch status sync is already running' });
+    expect(deps.mediaServers.watchStatusSync.syncAll).not.toHaveBeenCalled();
+  });
+
+  test('does not crash the request when syncAll rejects', async () => {
+    const deps = buildDeps();
+    deps.mediaServers.watchStatusSync.getStatus.mockReturnValue({ running: false, lastRun: null });
+    deps.mediaServers.watchStatusSync.syncAll.mockRejectedValue(new Error('adapter exploded'));
+
+    const handler = getHandler('post', '/api/mediaservers/watch-status/sync', deps);
+    const req = { log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+    // Flush the fire-and-forget promise's microtask queue so its .catch runs
+    // before the test asserts on it.
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(res.status).toHaveBeenCalledWith(202);
+    expect(res.json).toHaveBeenCalledWith({ started: true });
+    expect(loggerMock.error).toHaveBeenCalledWith(
+      expect.objectContaining({ err: expect.any(Error) }),
+      'Manual watch status sync failed'
+    );
   });
 });

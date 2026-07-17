@@ -74,5 +74,7 @@
   "embyUrl": "",
   "embyApiKey": "",
   "embyUserId": "",
-  "embyVideoLibraryIds": []
+  "embyVideoLibraryIds": [],
+  "watchStatusSyncEnabled": true,
+  "watchStatusSyncFrequency": "0 */4 * * *"
 }

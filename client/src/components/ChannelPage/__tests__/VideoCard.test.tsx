@@ -873,4 +873,17 @@ describe('VideoCard Component', () => {
       expect(blockIcons.length).toBeGreaterThan(0);
     });
   });
+
+  describe('Watched Chip', () => {
+    test('renders Watched chip when the video has been watched on a server', () => {
+      const watchedVideo = { ...mockVideo, added: true, removed: false, watchedBy: ['plex'] };
+      renderWithProviders(<VideoCard {...defaultProps} video={watchedVideo} />);
+      expect(screen.getByText('Watched')).toBeInTheDocument();
+    });
+
+    test('does not render Watched chip when watchedBy is absent', () => {
+      renderWithProviders(<VideoCard {...defaultProps} />);
+      expect(screen.queryByText('Watched')).not.toBeInTheDocument();
+    });
+  });
 });

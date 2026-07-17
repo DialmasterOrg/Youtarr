@@ -876,4 +876,17 @@ describe('VideoListItem Component', () => {
       expect(onToggleProtection).toHaveBeenCalledWith('test123');
     });
   });
+
+  describe('Watched Chip', () => {
+    test('renders Watched chip when the video has been watched on a server', () => {
+      const watchedVideo = { ...mockVideo, added: true, removed: false, watchedBy: ['plex'] };
+      renderWithProviders(<VideoListItem {...defaultProps} video={watchedVideo} />);
+      expect(screen.getByText('Watched')).toBeInTheDocument();
+    });
+
+    test('does not render Watched chip when watchedBy is absent', () => {
+      renderWithProviders(<VideoListItem {...defaultProps} />);
+      expect(screen.queryByText('Watched')).not.toBeInTheDocument();
+    });
+  });
 });
