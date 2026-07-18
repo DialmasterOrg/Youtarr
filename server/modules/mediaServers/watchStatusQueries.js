@@ -37,6 +37,30 @@ class WatchStatusQueries {
     }));
   }
 
+  // Raw-SQL twin of getWatchedByMap's where clause, for queries that must
+  // filter on watched state inside SQL (videosModule's paginated listing);
+  // callers negate it with NOT for the "unwatched" side. Keep the rule in
+  // sync with getWatchedByMap below.
+  buildWatchedExistsSql() {
+    const config = configModule.getConfig();
+    const conditions = ['vws.video_id = Videos.id', 'vws.played = 1'];
+    const replacements = {};
+    if (config.watchStatusWatchedRule === 'primary') {
+      conditions.push(
+        '((vws.server_type = \'plex\' AND vws.server_user_id = :watchedPlexOwnerId)' +
+        ' OR (vws.server_type = \'jellyfin\' AND vws.server_user_id = :watchedJellyfinUserId)' +
+        ' OR (vws.server_type = \'emby\' AND vws.server_user_id = :watchedEmbyUserId))'
+      );
+      replacements.watchedPlexOwnerId = PLEX_OWNER_ACCOUNT_ID;
+      replacements.watchedJellyfinUserId = config.jellyfinUserId || '';
+      replacements.watchedEmbyUserId = config.embyUserId || '';
+    }
+    return {
+      sql: `EXISTS (SELECT 1 FROM video_watch_status vws WHERE ${conditions.join(' AND ')})`,
+      replacements,
+    };
+  }
+
   // Watched-on-which-servers summary for the listing pages: video id -> the
   // deduped server types with a played row, honoring watchStatusWatchedRule.
   // 'any' (the default) counts every synced user; 'primary' restores the

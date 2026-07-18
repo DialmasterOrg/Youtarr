@@ -754,6 +754,13 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *           type: string
    *           enum: [videos, shorts, streams]
    *           default: videos
+   *       - in: query
+   *         name: watchedFilter
+   *         schema:
+   *           type: string
+   *           enum: [off, only, exclude]
+   *           default: off
+   *         description: Tri-state filter on watched status (per the configured watched rule). `only` keeps watched videos, `exclude` hides them.
    *     responses:
    *       200:
    *         description: List of channel videos
@@ -778,7 +785,8 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
     const protectedFilter = parseFilterMode(req.query.protectedFilter);
     const missingFilter = parseFilterMode(req.query.missingFilter);
     const ignoredFilter = parseFilterMode(req.query.ignoredFilter);
-    const result = await channelModule.getChannelVideos(channelId, page, pageSize, downloadedFilter, searchQuery, sortBy, sortOrder, tabType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter);
+    const watchedFilter = parseFilterMode(req.query.watchedFilter);
+    const result = await channelModule.getChannelVideos(channelId, page, pageSize, downloadedFilter, searchQuery, sortBy, sortOrder, tabType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter);
 
     if (Array.isArray(result)) {
       res.status(200).json({ videos: result });

@@ -1,8 +1,7 @@
 const express = require('express');
-const { Op } = require('sequelize');
 const { createOverrideSettingsValidator } = require('./overrideSettingsValidator');
 
-function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule }) {
+function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters }) {
   const router = express.Router();
   const { Playlist, PlaylistVideo, Video } = models;
 
@@ -17,6 +16,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
   const VIDEO_SORT_DIRECTIONS = { asc: 'ASC', desc: 'DESC' };
   const DEFAULT_VIDEO_SORT_DIRECTION = 'ASC';
   const VIDEO_DOWNLOAD_STATES = new Set(['all', 'downloaded', 'not_downloaded']);
+  const VIDEO_WATCHED_STATES = new Set(['all', 'watched', 'not_watched']);
   const VALID_SORT_ORDERS = new Set(['default', 'reversed']);
 
   const validateOverrideSettings = createOverrideSettingsValidator({
@@ -434,11 +434,17 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    *         schema:
    *           type: string
    *           enum: [all, downloaded, not_downloaded]
+   *       - in: query
+   *         name: watchedState
+   *         schema:
+   *           type: string
+   *           enum: [all, watched, not_watched]
+   *         description: Filter on watched status (per the configured watched rule); not_watched includes videos with no watch data
    *     responses:
    *       200:
    *         description: Paginated playlist videos
    *       400:
-   *         description: Invalid downloadState
+   *         description: Invalid downloadState or watchedState
    *       404:
    *         description: Playlist not found
    *       500:
@@ -456,45 +462,31 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       if (!VIDEO_DOWNLOAD_STATES.has(downloadState)) {
         return res.status(400).json({ error: 'Invalid downloadState; expected all, downloaded, or not_downloaded' });
       }
+      const watchedState = String(req.query.watchedState || 'all').toLowerCase();
+      if (!VIDEO_WATCHED_STATES.has(watchedState)) {
+        return res.status(400).json({ error: 'Invalid watchedState; expected all, watched, or not_watched' });
+      }
       // 'recent' = first-seen order (what auto-download considers newest);
       // otherwise position in the owner's playlist order.
       const order = sortOrder === 'recent'
         ? [['added_at', 'DESC'], ['position', 'ASC']]
         : [['position', VIDEO_SORT_DIRECTIONS[sortOrder] || DEFAULT_VIDEO_SORT_DIRECTION]];
 
+      // The list is paginated, so active filters must narrow the page query
+      // itself.
+      const idFilter = await playlistVideoFilters.resolveVideoIdFilter({
+        playlistId: req.params.playlistId,
+        downloadState,
+        watchedState,
+        PlaylistVideo,
+        Video,
+        watchStatusQueries: mediaServers.watchStatusQueries,
+      });
+      if (idFilter.empty) return res.json({ total: 0, videos: [] });
+
       const where = { playlist_id: req.params.playlistId };
-      if (downloadState !== 'all') {
-        // The list is paginated, so the filter must narrow the page query
-        // itself. Build the downloaded id set with the same usable-file
-        // predicate as the per-row `downloaded` flag below so the two can
-        // never disagree. Rows with a Videos record but no usable file
-        // (downloaded, then deleted) count as not downloaded.
-        const members = await PlaylistVideo.findAll({
-          where: { playlist_id: req.params.playlistId },
-          attributes: ['youtube_id'],
-        });
-        const memberIds = members.map((m) => m.youtube_id).filter(Boolean);
-        let downloadedIds = [];
-        if (memberIds.length > 0 && Video) {
-          const existing = await Video.findAll({
-            where: { youtubeId: memberIds },
-            attributes: ['youtubeId', 'removed', 'filePath', 'audioFilePath'],
-          });
-          downloadedIds = existing
-            .filter((v) => !v.removed && (v.filePath || v.audioFilePath))
-            .map((v) => v.youtubeId);
-        }
-        if (downloadState === 'downloaded') {
-          // Op.in with an empty list matches nothing anyway; short-circuit to
-          // skip the pointless page query.
-          if (downloadedIds.length === 0) return res.json({ total: 0, videos: [] });
-          where.youtube_id = { [Op.in]: downloadedIds };
-        } else if (downloadedIds.length > 0) {
-          // Op.notIn with an empty list would generate NOT IN (NULL), which
-          // matches nothing; with no downloaded ids every row qualifies, so
-          // add no filter at all.
-          where.youtube_id = { [Op.notIn]: downloadedIds };
-        }
+      if (idFilter.youtubeIdWhere) {
+        where.youtube_id = idFilter.youtubeIdWhere;
       }
 
       const { count, rows } = await PlaylistVideo.findAndCountAll({

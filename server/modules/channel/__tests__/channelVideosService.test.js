@@ -161,6 +161,38 @@ describe('channelVideosService', () => {
       expect(result.oldestVideoDate).toBe('2023-01-01');
     });
 
+    test('passes watchedFilter through to the video query and stats', async () => {
+      const Video = require('../../../models/video');
+      const watchStatusQueries = require('../../mediaServers/watchStatusQueries');
+      const fileCheckModule = require('../../fileCheckModule');
+      fileCheckModule.checkVideoFiles.mockImplementation(async (videos) => ({ videos, updates: [] }));
+      const mockChannel = {
+        ...mockChannelData,
+        lastFetchedByTab: JSON.stringify({ video: new Date().toISOString() }),
+        auto_download_enabled_tabs: 'video'
+      };
+      const mockVideos = [
+        { youtube_id: 'video1', publishedAt: new Date().toISOString(), toJSON() { return this; } },
+        { youtube_id: 'video2', publishedAt: new Date().toISOString(), toJSON() { return this; } }
+      ];
+
+      Channel.findOne.mockResolvedValue(mockChannel);
+      ChannelVideo.findAll.mockResolvedValue(mockVideos);
+      Video.findAll = jest.fn().mockResolvedValue([
+        { id: 1, youtubeId: 'video1', removed: false, fileSize: 1000, filePath: '/path' },
+        { id: 2, youtubeId: 'video2', removed: false, fileSize: 1000, filePath: '/path' }
+      ]);
+      watchStatusQueries.getWatchedByMap.mockResolvedValue(new Map([[1, ['plex']]]));
+
+      const result = await channelVideosService.getChannelVideos(
+        'UC123', 1, 50, 'off', '', 'date', 'desc', 'videos',
+        null, null, null, null, 'off', 'off', 'off', 'only'
+      );
+
+      expect(result.videos.map((v) => v.youtube_id)).toEqual(['video1']);
+      expect(result.totalCount).toBe(1);
+    });
+
     test('should skip auto-refresh when fetch already in progress', async () => {
       const Video = require('../../../models/video');
       const mockChannel = { ...mockChannelData, lastFetchedByTab: null, auto_download_enabled_tabs: 'video' };

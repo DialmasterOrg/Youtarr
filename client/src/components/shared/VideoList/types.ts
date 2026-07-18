@@ -50,6 +50,11 @@ export type FilterConfig =
       onChange: (value: ChipFilterMode) => void;
     }
   | {
+      id: 'watched';
+      value: ChipFilterMode;
+      onChange: (value: ChipFilterMode) => void;
+    }
+  | {
       id: 'duration';
       min: number | null;
       max: number | null;

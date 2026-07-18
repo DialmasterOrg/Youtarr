@@ -1,13 +1,19 @@
 import React from 'react';
-import { Button, Card, CardContent, Checkbox, Chip, Typography } from '../../ui';
+import { Button, Card, CardContent, Checkbox, Chip, Tooltip, Typography } from '../../ui';
 import { PlaylistVideo } from '../../../types/playlist';
 import { formatDurationClock } from '../../../utils';
 import { isDownloadable, statusLabel, PublishedDate, toDownloadFileProps } from './playlistVideoHelpers';
 import DownloadFormatIndicator from '../../shared/DownloadFormatIndicator';
 import WatchedChip from '../../shared/WatchedChip';
+import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_COMPACT_CHIP_OVERRIDES } from '../../shared/chipStyles';
 
 const THUMB_WIDTH = 120;
 const THUMB_HEIGHT = 68;
+
+const compactStatusChipStyle: React.CSSProperties = {
+  ...SHARED_STATUS_CHIP_SMALL_STYLE,
+  ...SHARED_COMPACT_CHIP_OVERRIDES,
+};
 
 interface PlaylistVideoCardProps {
   video: PlaylistVideo;
@@ -76,21 +82,48 @@ const PlaylistVideoCard: React.FC<PlaylistVideoCardProps> = ({
           <PublishedDate value={video.published_at} />
           <span className="whitespace-nowrap">{formatDurationClock(video.duration) || '-'}</span>
           {video.downloaded ? (
-            <DownloadFormatIndicator {...toDownloadFileProps(video)} orientation="horizontal" />
+            <>
+              <DownloadFormatIndicator {...toDownloadFileProps(video)} orientation="horizontal" compact />
+              {video.ignored && (
+                <Chip label={status.label} color={status.color} size="small" style={compactStatusChipStyle} />
+              )}
+            </>
           ) : (
-            <Chip label={status.label} color={status.color} size="small" />
+            <Chip label={status.label} color={status.color} size="small" style={compactStatusChipStyle} />
           )}
-          <WatchedChip watchedBy={video.watched_by || []} />
+          <WatchedChip watchedBy={video.watched_by || []} compact />
         </div>
         <div className="mt-2" onClick={(e) => e.stopPropagation()}>
           {video.ignored ? (
-            <Button size="sm" variant="outlined" onClick={() => onUnignore(video.youtube_id)} disabled={isPending}>
-              Unignore
-            </Button>
+            <Tooltip title="Include this video in this playlist's downloads and server sync again">
+              <Button
+                size="sm"
+                variant="outlined"
+                className="h-7 px-2.5"
+                onClick={() => onUnignore(video.youtube_id)}
+                disabled={isPending}
+              >
+                Include
+              </Button>
+            </Tooltip>
           ) : (
-            <Button size="sm" variant="outlined" onClick={() => onIgnore(video.youtube_id)} disabled={isPending}>
-              Ignore
-            </Button>
+            <Tooltip
+              title={
+                video.downloaded
+                  ? 'Exclude from this playlist: removed from synced server playlists and M3U files; the file stays on disk'
+                  : 'Exclude from this playlist: skipped when downloading this playlist'
+              }
+            >
+              <Button
+                size="sm"
+                variant="outlined"
+                className="h-7 px-2.5"
+                onClick={() => onIgnore(video.youtube_id)}
+                disabled={isPending}
+              >
+                Exclude
+              </Button>
+            </Tooltip>
           )}
         </div>
       </CardContent>

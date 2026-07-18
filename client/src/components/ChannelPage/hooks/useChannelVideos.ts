@@ -22,6 +22,7 @@ interface UseChannelVideosParams {
   protectedFilter?: ChipFilterMode;
   missingFilter?: ChipFilterMode;
   ignoredFilter?: ChipFilterMode;
+  watchedFilter?: ChipFilterMode;
   onFirstLoad?: (channelId: string) => void;
 }
 
@@ -56,6 +57,7 @@ export function useChannelVideos({
   protectedFilter,
   missingFilter,
   ignoredFilter,
+  watchedFilter,
   onFirstLoad,
 }: UseChannelVideosParams): UseChannelVideosResult {
   const [videos, setVideos] = useState<ChannelVideo[]>([]);
@@ -71,10 +73,16 @@ export function useChannelVideos({
   const firstLoadFiredFor = useRef<string | null>(null);
   const onFirstLoadRef = useRef(onFirstLoad);
   onFirstLoadRef.current = onFirstLoad;
+  // Guards against out-of-order responses: a filter change while above page 1
+  // fires a request for the old page and then the page-1 reset request, and
+  // applying the stale old-page response after the reset would append it out
+  // of order (e.g. page 3 directly after page 1).
+  const latestRequestId = useRef(0);
 
   const fetchVideos = useCallback(async () => {
     if (!channelId || !token || !tabType) return;
 
+    const requestId = ++latestRequestId.current;
     setLoading(true);
     setError(null);
 
@@ -123,6 +131,9 @@ export function useChannelVideos({
       if (ignoredFilter && ignoredFilter !== 'off') {
         queryParams.append('ignoredFilter', ignoredFilter);
       }
+      if (watchedFilter && watchedFilter !== 'off') {
+        queryParams.append('watchedFilter', watchedFilter);
+      }
 
       const response = await fetch(`/getchannelvideos/${channelId}?${queryParams}`, {
         headers: {
@@ -135,6 +146,10 @@ export function useChannelVideos({
       }
 
       const data = await response.json();
+
+      if (requestId !== latestRequestId.current) {
+        return;
+      }
 
       const incomingVideos: ChannelVideo[] = data.videos || [];
       const isReset = resetKeyRef.current !== resetKey;
@@ -176,12 +191,17 @@ export function useChannelVideos({
         onFirstLoadRef.current?.(channelId);
       }
     } catch (err) {
+      if (requestId !== latestRequestId.current) {
+        return;
+      }
       console.error('Error fetching channel videos:', err);
       setError(err instanceof Error ? err : new Error('Unknown error'));
     } finally {
-      setLoading(false);
+      if (requestId === latestRequestId.current) {
+        setLoading(false);
+      }
     }
-  }, [channelId, page, pageSize, downloadedFilter, searchQuery, sortBy, sortOrder, tabType, maxRating, token, append, resetKey, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter]);
+  }, [channelId, page, pageSize, downloadedFilter, searchQuery, sortBy, sortOrder, tabType, maxRating, token, append, resetKey, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter]);
 
   useEffect(() => {
     fetchVideos();

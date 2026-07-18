@@ -143,6 +143,7 @@ jest.mock('../shared/VideoList', () => {
       const count = selection?.count ?? 0;
 
       const channelFilter = (props.filters || []).find((f: any) => f.id === 'channel');
+      const watchedFilter = (props.filters || []).find((f: any) => f.id === 'watched');
       const sort = props.sort;
 
       const actionButtons =
@@ -275,6 +276,16 @@ jest.mock('../shared/VideoList', () => {
         props.headerSlot,
         searchBar,
         channelFilter && React.createElement(ChannelFilterMenu, { filter: channelFilter }),
+        watchedFilter &&
+          React.createElement(
+            'button',
+            {
+              type: 'button',
+              'data-testid': 'watched-filter-only',
+              onClick: () => watchedFilter.onChange('only'),
+            },
+            `Watched: ${watchedFilter.value}`
+          ),
         sortControls,
         selectionBar,
         content,
@@ -521,6 +532,27 @@ describe('VideosPage Component', () => {
       });
       expect(screen.getByText('React Tutorial')).toBeInTheDocument();
       expect(screen.queryByText('Game Review')).not.toBeInTheDocument();
+    });
+
+    test('setting the watched filter refetches with watchedFilter in the query', async () => {
+      const user = setupUser();
+      axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
+      axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse([mockVideos[0]]) });
+
+      render(<VideosPage token={mockToken} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('How to Code')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByTestId('watched-filter-only'));
+
+      await waitFor(() => {
+        expect(axios.get).toHaveBeenCalledTimes(2);
+      });
+      const url = axios.get.mock.calls[1][0] as string;
+      expect(url).toContain('watchedFilter=only');
+      expect(url).toContain('page=1');
     });
 
     test('resets filter when "All" is selected', async () => {

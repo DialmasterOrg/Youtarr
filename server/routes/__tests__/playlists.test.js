@@ -61,6 +61,9 @@ const buildDeps = (overrides = {}) => ({
   // Real ratingMapper: it is a pure module with no DB/IO deps, so route tests
   // exercise the actual rating validation/normalization.
   ratingMapper: require('../../modules/ratingMapper'),
+  // Real playlistVideoFilters: it receives models/watchStatusQueries at call
+  // time, so the filter tests exercise the actual set logic through the route.
+  playlistVideoFilters: require('../../modules/playlistVideoFilters'),
   models: {
     Playlist: {
       findAndCountAll: jest.fn(),
@@ -1273,6 +1276,122 @@ describe('GET /api/playlists/:playlistId/videos downloadState filter', () => {
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({ error: expect.stringContaining('downloadState') });
+    expect(deps.models.PlaylistVideo.findAndCountAll).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/playlists/:playlistId/videos watchedState filter', () => {
+  // watched1 is downloaded and watched; dl2 is downloaded and unwatched;
+  // new3 has no Video row at all (unknown watch state, never downloaded).
+  const memberRows = [
+    { youtube_id: 'watched1' },
+    { youtube_id: 'dl2' },
+    { youtube_id: 'new3' },
+  ];
+  const videoRows = [
+    { id: 11, youtubeId: 'watched1', removed: false, filePath: '/videos/watched1.mp4', audioFilePath: null },
+    { id: 12, youtubeId: 'dl2', removed: false, filePath: '/videos/dl2.mp4', audioFilePath: null },
+  ];
+
+  test('watchedState=watched restricts the page query to watched ids', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.findAll.mockResolvedValue(memberRows);
+    deps.models.Video.findAll.mockResolvedValue(videoRows);
+    deps.mediaServers.watchStatusQueries.getWatchedByMap.mockResolvedValue(
+      new Map([[11, ['plex']]])
+    );
+    deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue({
+      count: 1,
+      rows: [{ id: 1, playlist_id: 'PLtest123', youtube_id: 'watched1', position: 1, ignored: false, ignored_at: null, added_at: null, channel_id: null }],
+    });
+
+    const handler = getHandler('get', '/api/playlists/:playlistId/videos', deps);
+    const req = { params: { playlistId: 'PLtest123' }, query: { watchedState: 'watched' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.models.PlaylistVideo.findAndCountAll).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { playlist_id: 'PLtest123', youtube_id: { [Op.in]: ['watched1'] } },
+      })
+    );
+  });
+
+  test('watchedState=not_watched excludes watched ids but keeps unknown ones', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.findAll.mockResolvedValue(memberRows);
+    deps.models.Video.findAll.mockResolvedValue(videoRows);
+    deps.mediaServers.watchStatusQueries.getWatchedByMap.mockResolvedValue(
+      new Map([[11, ['plex']]])
+    );
+    deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue({ count: 0, rows: [] });
+
+    const handler = getHandler('get', '/api/playlists/:playlistId/videos', deps);
+    const req = { params: { playlistId: 'PLtest123' }, query: { watchedState: 'not_watched' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.models.PlaylistVideo.findAndCountAll).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { playlist_id: 'PLtest123', youtube_id: { [Op.notIn]: ['watched1'] } },
+      })
+    );
+  });
+
+  test('watchedState=watched short-circuits to an empty page when nothing is watched', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.findAll.mockResolvedValue(memberRows);
+    deps.models.Video.findAll.mockResolvedValue(videoRows);
+
+    const handler = getHandler('get', '/api/playlists/:playlistId/videos', deps);
+    const req = { params: { playlistId: 'PLtest123' }, query: { watchedState: 'watched' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.json).toHaveBeenCalledWith({ total: 0, videos: [] });
+    expect(deps.models.PlaylistVideo.findAndCountAll).not.toHaveBeenCalled();
+  });
+
+  test('combines downloadState=downloaded with watchedState=not_watched', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.findAll.mockResolvedValue(memberRows);
+    deps.models.Video.findAll.mockResolvedValue(videoRows);
+    deps.mediaServers.watchStatusQueries.getWatchedByMap.mockResolvedValue(
+      new Map([[11, ['plex']]])
+    );
+    deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue({ count: 0, rows: [] });
+
+    const handler = getHandler('get', '/api/playlists/:playlistId/videos', deps);
+    const req = {
+      params: { playlistId: 'PLtest123' },
+      query: { downloadState: 'downloaded', watchedState: 'not_watched' },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.models.PlaylistVideo.findAndCountAll).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { playlist_id: 'PLtest123', youtube_id: { [Op.in]: ['dl2'] } },
+      })
+    );
+  });
+
+  test('rejects an invalid watchedState with 400', async () => {
+    const deps = buildDeps();
+
+    const handler = getHandler('get', '/api/playlists/:playlistId/videos', deps);
+    const req = { params: { playlistId: 'PLtest123' }, query: { watchedState: 'sideways' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: expect.stringContaining('watchedState') });
     expect(deps.models.PlaylistVideo.findAndCountAll).not.toHaveBeenCalled();
   });
 });

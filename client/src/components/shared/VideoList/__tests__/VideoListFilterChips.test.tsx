@@ -231,4 +231,45 @@ describe('VideoListFilterChips', () => {
     expect(countActiveFilters(filters)).toBe(1);
     expect(hasActiveFilters(filters)).toBe(true);
   });
+
+  test('renders watched chip with "Only: Watched" label in only mode', () => {
+    const filters: FilterConfig[] = [
+      { id: 'watched', value: 'only', onChange: jest.fn() },
+    ];
+    renderWithProviders(<VideoListFilterChips filters={filters} />);
+    expect(screen.getByText(/Only: Watched/i)).toBeInTheDocument();
+  });
+
+  test('renders watched chip with "Hide: Watched" label in exclude mode', () => {
+    const filters: FilterConfig[] = [
+      { id: 'watched', value: 'exclude', onChange: jest.fn() },
+    ];
+    renderWithProviders(<VideoListFilterChips filters={filters} />);
+    expect(screen.getByText(/Hide: Watched/i)).toBeInTheDocument();
+  });
+
+  test('watched chip is not rendered when value is off', () => {
+    const filters: FilterConfig[] = [
+      { id: 'watched', value: 'off', onChange: jest.fn() },
+    ];
+    renderWithProviders(<VideoListFilterChips filters={filters} />);
+    expect(screen.queryByText(/Watched/i)).not.toBeInTheDocument();
+  });
+
+  test('clearAllFilters resets an active watched filter', () => {
+    const onWatchedChange = jest.fn();
+    const filters: FilterConfig[] = [
+      { id: 'watched', value: 'exclude', onChange: onWatchedChange },
+    ];
+    clearAllFilters(filters);
+    expect(onWatchedChange).toHaveBeenCalledWith('off');
+  });
+
+  test('countActiveFilters counts watched when active', () => {
+    const filters: FilterConfig[] = [
+      { id: 'watched', value: 'exclude', onChange: jest.fn() },
+    ];
+    expect(countActiveFilters(filters)).toBe(1);
+    expect(hasActiveFilters(filters)).toBe(true);
+  });
 });

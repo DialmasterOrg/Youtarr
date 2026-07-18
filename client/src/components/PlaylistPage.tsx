@@ -15,7 +15,7 @@ import {
 } from './ui';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useConfig } from '../hooks/useConfig';
-import { usePlaylistDetail, PlaylistSortOrder, PlaylistDownloadState } from '../hooks/usePlaylistDetail';
+import { usePlaylistDetail, PlaylistSortOrder, PlaylistDownloadState, PlaylistWatchedState } from '../hooks/usePlaylistDetail';
 import { useDownloadListingsRefresh } from '../hooks/useDownloadListingsRefresh';
 import { usePlaylistMutations } from '../hooks/usePlaylistMutations';
 import { useMediaServerStatus } from '../hooks/useMediaServerStatus';
@@ -25,6 +25,7 @@ import NoMediaServerWarning from './PlaylistPage/components/NoMediaServerWarning
 import PlaylistVideoList from './PlaylistPage/components/PlaylistVideoList';
 import PlaylistSortControl from './PlaylistPage/components/PlaylistSortControl';
 import PlaylistDownloadFilterControl from './PlaylistPage/components/PlaylistDownloadFilterControl';
+import PlaylistWatchedFilterControl from './PlaylistPage/components/PlaylistWatchedFilterControl';
 import { useVideoSelection } from './shared/VideoList/hooks/useVideoSelection';
 import VideoListSelectionPill from './shared/VideoList/VideoListSelectionPill';
 import { SelectionAction } from './shared/VideoList/types';
@@ -81,6 +82,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
 
   const [sortOrder, setSortOrder] = useState<PlaylistSortOrder>('asc');
   const [downloadState, setDownloadState] = useState<PlaylistDownloadState>('all');
+  const [watchedState, setWatchedState] = useState<PlaylistWatchedState>('all');
 
   const {
     playlist,
@@ -100,7 +102,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     sync,
     regenerateM3U,
     triggerDownload,
-  } = usePlaylistDetail({ token, playlistId, sortOrder, downloadState });
+  } = usePlaylistDetail({ token, playlistId, sortOrder, downloadState, watchedState });
 
   useDownloadListingsRefresh(refetch);
 
@@ -238,6 +240,13 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     selectionClearRef.current = selection.clear;
   }, [selection.clear]);
 
+  // Clear selection when a filter changes so bulk actions can't fire on
+  // videos hidden by the new filter. Sort is deliberately excluded: it does
+  // not change the selection's eligible set.
+  useEffect(() => {
+    selection.clear();
+  }, [downloadState, watchedState, selection.clear]);
+
   useEffect(() => {
     if (!loadMoreRef.current) return;
     if (loading || loadingMore || !hasMore) return;
@@ -300,10 +309,16 @@ function PlaylistPage({ token }: PlaylistPageProps) {
         // Update the row in place and refresh only the count, so the user's
         // scroll position in a long (paginated) list is preserved.
         markVideoIgnored(ytId, true);
+        const isDownloaded = videos.find((v) => v.youtube_id === ytId)?.downloaded;
+        showSnackbar(
+          isDownloaded
+            ? 'Excluded from this playlist. It will be removed from synced server playlists; the file stays on disk.'
+            : 'Excluded from this playlist. It won\'t be auto-downloaded.'
+        );
         await refetchMeta();
       }
     },
-    [playlist, ignoreVideo, markVideoIgnored, refetchMeta]
+    [playlist, ignoreVideo, markVideoIgnored, refetchMeta, videos, showSnackbar]
   );
 
   const handleVideoDeleted = useCallback(
@@ -322,10 +337,11 @@ function PlaylistPage({ token }: PlaylistPageProps) {
       setPendingVideoId(null);
       if (ok) {
         markVideoIgnored(ytId, false);
+        showSnackbar('Included in this playlist again.');
         await refetchMeta();
       }
     },
-    [playlist, unignoreVideo, markVideoIgnored, refetchMeta]
+    [playlist, unignoreVideo, markVideoIgnored, refetchMeta, showSnackbar]
   );
 
   const handleSettingsSaved = useCallback(
@@ -408,6 +424,11 @@ function PlaylistPage({ token }: PlaylistPageProps) {
               <PlaylistDownloadFilterControl
                 value={downloadState}
                 onChange={setDownloadState}
+                disabled={loading && videos.length === 0}
+              />
+              <PlaylistWatchedFilterControl
+                value={watchedState}
+                onChange={setWatchedState}
                 disabled={loading && videos.length === 0}
               />
               <PlaylistSortControl

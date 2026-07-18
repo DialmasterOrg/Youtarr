@@ -535,6 +535,7 @@ describe('server initialization', () => {
       channelFilter: 'channel123',
       protectedFilter: 'off',
       missingFilter: 'off',
+      watchedFilter: 'off',
     });
 
     expect(res.statusCode).toBe(200);
@@ -631,6 +632,7 @@ describe('server initialization', () => {
       channelFilter: '',
       protectedFilter: 'off',
       missingFilter: 'off',
+      watchedFilter: 'off',
     });
 
     expect(res.statusCode).toBe(200);
