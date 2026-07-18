@@ -261,13 +261,15 @@ describe('EmbyAdapter', () => {
       const adapter = new EmbyAdapter(singleUserCfg);
       await adapter.fetchWatchStates();
       expect(axios.get).toHaveBeenCalledTimes(1);
+      // Emby list responses drop LastPlayedDate and zero PlayCount unless the
+      // UserData* fields are requested explicitly.
       expect(axios.get).toHaveBeenCalledWith(
         expect.stringContaining('/Items'),
         expect.objectContaining({
           params: expect.objectContaining({
             userId: 'USR',
             enableUserData: true,
-            fields: 'Path',
+            fields: 'Path,UserDataLastPlayedDate,UserDataPlayCount',
           }),
         })
       );
