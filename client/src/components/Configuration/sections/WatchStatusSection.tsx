@@ -121,10 +121,11 @@ export function WatchStatusSection({ config, token, onConfigChange }: WatchStatu
   return (
     <ConfigurationCard title="Watch Status Sync">
       <Typography variant="body2" color="text.secondary" className="mb-4">
-        Periodically pulls each video&apos;s watch status (watched, progress, last watched date)
+        Periodically pulls each video&apos;s watch status
         from your connected media servers into Youtarr. By default every server user is included;
         other Plex users are read from the server&apos;s play history. Sync is one-way: nothing is
-        written back to your media servers.
+        written back to your media servers.<br/>
+        <strong>Note:</strong> Youtarr syncs the watch status reported by your media servers. Some media servers (e.g. Plex) only report a video as watched when it has been played to completion, while others (e.g. Jellyfin) report a video as watched after a configurable percentage of the video has been played. Youtarr does not modify this behavior.
       </Typography>
 
       {statusError && (

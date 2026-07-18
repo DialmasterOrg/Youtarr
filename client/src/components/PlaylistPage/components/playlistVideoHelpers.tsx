@@ -26,7 +26,9 @@ export function toDownloadFileProps(v: PlaylistVideo): {
 }
 
 export function statusLabel(v: PlaylistVideo): { label: string; color: PlaylistVideoStatusColor } {
-  if (v.ignored) return { label: 'Ignored', color: 'warning' };
+  // "Excluded" is the user-facing name for the per-playlist `ignored` flag:
+  // left out of this playlist's downloads, server sync, and M3U files.
+  if (v.ignored) return { label: 'Excluded', color: 'warning' };
   if (v.youtube_removed) return { label: 'Removed on YT', color: 'error' };
   if (v.downloaded) return { label: 'Downloaded', color: 'success' };
   if (v.previously_downloaded) return { label: 'Missing', color: 'error' };

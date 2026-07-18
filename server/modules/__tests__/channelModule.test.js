@@ -76,7 +76,7 @@ describe('channelModule facade', () => {
       ['getChannelsPaginated', '../channel/channelCatalog', 'getChannelsPaginated', [{ page: 2, pageSize: 10 }], 'async'],
       ['writeChannels', '../channel/channelCatalog', 'writeChannels', [['https://www.youtube.com/@a']], 'async'],
       ['updateChannelsByDelta', '../channel/channelCatalog', 'updateChannelsByDelta', [{ enableUrls: ['https://www.youtube.com/@a'], disableUrls: [] }], 'async'],
-      ['getChannelVideos', '../channel/channelVideosService', 'getChannelVideos', ['UC1', 2, 25, 'only', 'q', 'title', 'asc', 'shorts', 60, 600, '2026-01-01', '2026-02-01', 'only', 'exclude', 'off'], 'async'],
+      ['getChannelVideos', '../channel/channelVideosService', 'getChannelVideos', ['UC1', 2, 25, 'only', 'q', 'title', 'asc', 'shorts', 60, 600, '2026-01-01', '2026-02-01', 'only', 'exclude', 'off', 'only'], 'async'],
       ['fetchAllChannelVideos', '../channel/channelVideosService', 'fetchAllChannelVideos', ['UC1', 2, 25, 'only', 'shorts'], 'async'],
       ['getChannelAvailableTabs', '../channel/tabManager', 'getChannelAvailableTabs', ['UC1'], 'async'],
       ['updateAutoDownloadForTab', '../channel/tabManager', 'updateAutoDownloadForTab', ['UC1', 'shorts', true], 'async'],

@@ -30,7 +30,11 @@ describe('VideosModule', () => {
     };
 
     mockWatchStatusQueries = {
-      getWatchedByMap: jest.fn().mockResolvedValue(new Map())
+      getWatchedByMap: jest.fn().mockResolvedValue(new Map()),
+      buildWatchedExistsSql: jest.fn().mockReturnValue({
+        sql: 'EXISTS (SELECT 1 FROM video_watch_status vws WHERE vws.video_id = Videos.id AND vws.played = 1)',
+        replacements: {}
+      })
     };
 
     // Mock the sequelize instance
@@ -430,6 +434,59 @@ describe('VideosModule', () => {
 
       const query = mockSequelize.query.mock.calls[0][0];
       expect(query).not.toContain('Videos.removed');
+    });
+
+    test('should apply watchedFilter=only as an EXISTS clause in count and page queries', async () => {
+      mockSequelize.query.mockResolvedValueOnce([{ total: 0 }]);
+      mockSequelize.query.mockResolvedValueOnce([]);
+      mockSequelize.query.mockResolvedValueOnce([]);
+
+      await VideosModule.getVideosPaginated({ watchedFilter: 'only' });
+
+      const countQuery = mockSequelize.query.mock.calls[0][0];
+      const pageQuery = mockSequelize.query.mock.calls[1][0];
+      expect(countQuery).toContain('EXISTS (SELECT 1 FROM video_watch_status');
+      expect(countQuery).not.toContain('NOT EXISTS');
+      expect(pageQuery).toContain('EXISTS (SELECT 1 FROM video_watch_status');
+      expect(pageQuery).not.toContain('NOT EXISTS');
+    });
+
+    test('should apply watchedFilter=exclude as a NOT EXISTS clause', async () => {
+      mockSequelize.query.mockResolvedValueOnce([{ total: 0 }]);
+      mockSequelize.query.mockResolvedValueOnce([]);
+      mockSequelize.query.mockResolvedValueOnce([]);
+
+      await VideosModule.getVideosPaginated({ watchedFilter: 'exclude' });
+
+      const countQuery = mockSequelize.query.mock.calls[0][0];
+      expect(countQuery).toContain('NOT EXISTS (SELECT 1 FROM video_watch_status');
+    });
+
+    test('should merge watched-rule replacements into the query replacements', async () => {
+      mockWatchStatusQueries.buildWatchedExistsSql.mockReturnValue({
+        sql: 'EXISTS (SELECT 1 FROM video_watch_status vws WHERE vws.video_id = Videos.id AND vws.played = 1 AND vws.server_user_id = :watchedPlexOwnerId)',
+        replacements: { watchedPlexOwnerId: '1' }
+      });
+      mockSequelize.query.mockResolvedValueOnce([{ total: 0 }]);
+      mockSequelize.query.mockResolvedValueOnce([]);
+      mockSequelize.query.mockResolvedValueOnce([]);
+
+      await VideosModule.getVideosPaginated({ watchedFilter: 'only' });
+
+      const replacements = mockSequelize.query.mock.calls[0][1].replacements;
+      expect(replacements.watchedPlexOwnerId).toBe('1');
+    });
+
+    test('should omit the watched clause by default', async () => {
+      mockSequelize.query.mockResolvedValueOnce([{ total: 0 }]);
+      mockSequelize.query.mockResolvedValueOnce([]);
+      mockSequelize.query.mockResolvedValueOnce([]);
+
+      await VideosModule.getVideosPaginated();
+
+      const countQuery = mockSequelize.query.mock.calls[0][0];
+      expect(countQuery).not.toContain('video_watch_status');
+      expect(mockWatchStatusQueries.buildWatchedExistsSql).not.toHaveBeenCalled();
     });
 
     test('should update file metadata when file exists', async () => {

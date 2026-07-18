@@ -3,10 +3,11 @@ import {
   CloudOff as CloudOffIcon,
   Block as BlockIcon,
   Download as DownloadIcon,
+  Eye as EyeIcon,
 } from '../../../lib/icons';
 import type { FilterConfig } from './types';
 
-export type StatusChipId = 'protected' | 'missing' | 'ignored' | 'downloaded';
+export type StatusChipId = 'protected' | 'missing' | 'ignored' | 'downloaded' | 'watched';
 export type StatusFilterConfig = Extract<FilterConfig, { id: StatusChipId }>;
 
 // Shape kept deliberately thin: the Icon component (not an element) so each
@@ -23,6 +24,7 @@ export const STATUS_CHIP_DESCRIPTORS: Record<StatusChipId, StatusChipDescriptor>
   missing: { Icon: CloudOffIcon, noun: 'Missing' },
   ignored: { Icon: BlockIcon, noun: 'Ignored' },
   downloaded: { Icon: DownloadIcon, noun: 'Downloaded' },
+  watched: { Icon: EyeIcon, noun: 'Watched' },
 };
 
 export function isStatusChipId(id: string): id is StatusChipId {

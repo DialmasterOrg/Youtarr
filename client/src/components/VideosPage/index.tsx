@@ -81,6 +81,7 @@ function VideosPage({ token }: VideosPageProps) {
   const [maxRatingFilter, setMaxRatingFilter] = useState('');
   const [protectedFilter, setProtectedFilter] = useState<ChipFilterMode>('off');
   const [missingFilter, setMissingFilter] = useState<ChipFilterMode>('off');
+  const [watchedFilter, setWatchedFilter] = useState<ChipFilterMode>('off');
 
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -137,6 +138,7 @@ function VideosPage({ token }: VideosPageProps) {
     maxRatingFilter,
     protectedFilter,
     missingFilter,
+    watchedFilter,
     useInfiniteScroll,
   });
 
@@ -266,6 +268,7 @@ function VideosPage({ token }: VideosPageProps) {
     maxRatingFilter,
     protectedFilter,
     missingFilter,
+    watchedFilter,
     selection.clear,
   ]);
 
@@ -330,6 +333,7 @@ function VideosPage({ token }: VideosPageProps) {
       { id: 'maxRating', value: maxRatingFilter, onChange: withPageReset(setMaxRatingFilter) },
       { id: 'protected', value: protectedFilter, onChange: withPageReset(setProtectedFilter) },
       { id: 'missing', value: missingFilter, onChange: withPageReset(setMissingFilter) },
+      { id: 'watched', value: watchedFilter, onChange: withPageReset(setWatchedFilter) },
       {
         id: 'channel',
         value: channelFilter,
@@ -338,7 +342,7 @@ function VideosPage({ token }: VideosPageProps) {
       },
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateFrom, dateTo, maxRatingFilter, protectedFilter, missingFilter, channelFilter, uniqueChannels]);
+  }, [dateFrom, dateTo, maxRatingFilter, protectedFilter, missingFilter, watchedFilter, channelFilter, uniqueChannels]);
 
   const sortConfig: SortConfig = useMemo(
     () => ({

@@ -63,11 +63,24 @@ describe('PlaylistVideoTable selection', () => {
     expect(el.tagName.toLowerCase()).toBe('em');
   });
 
-  test('renders the Ignore action and fires onIgnore', () => {
+  test('renders the Exclude action and fires onIgnore', () => {
     const onIgnore = jest.fn();
     render(<PlaylistVideoTable {...baseProps} onIgnore={onIgnore} videos={[makeVideo({ youtube_id: 'x' })]} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Ignore' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Exclude' }));
     expect(onIgnore).toHaveBeenCalledWith('x');
+  });
+
+  test('renders the Include action for an excluded video and fires onUnignore', () => {
+    const onUnignore = jest.fn();
+    render(
+      <PlaylistVideoTable
+        {...baseProps}
+        onUnignore={onUnignore}
+        videos={[makeVideo({ youtube_id: 'x', ignored: true })]}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Include' }));
+    expect(onUnignore).toHaveBeenCalledWith('x');
   });
 
   test('header checkbox calls onClearSelection when all are already selected', () => {
@@ -118,6 +131,43 @@ describe('PlaylistVideoTable selection', () => {
       render(<PlaylistVideoTable {...baseProps} videos={[makeVideo({ youtube_id: 'trk' })]} />);
       expect(screen.getByText('Tracked')).toBeInTheDocument();
       expect(screen.queryByTestId('download-format-indicator')).not.toBeInTheDocument();
+    });
+
+    test('keeps the Excluded chip visible next to the indicator for a downloaded excluded video', () => {
+      render(
+        <PlaylistVideoTable
+          {...baseProps}
+          videos={[makeVideo({
+            youtube_id: 'exdl', downloaded: true, ignored: true,
+            file_path: '/data/v.mp4', file_size: 1024,
+          })]}
+        />
+      );
+      expect(screen.getByTestId('download-format-indicator')).toBeInTheDocument();
+      expect(screen.getByText('Excluded')).toBeInTheDocument();
+    });
+
+    test('renders a Watched chip for a video watched on a server', () => {
+      render(
+        <PlaylistVideoTable
+          {...baseProps}
+          videos={[makeVideo({
+            youtube_id: 'seen', downloaded: true,
+            file_path: '/data/v.mp4', file_size: 1024, watched_by: ['plex'],
+          })]}
+        />
+      );
+      expect(screen.getByText('Watched')).toBeInTheDocument();
+    });
+
+    test('does not render a Watched chip when watched_by is empty', () => {
+      render(
+        <PlaylistVideoTable
+          {...baseProps}
+          videos={[makeVideo({ youtube_id: 'done', downloaded: true, file_path: '/data/v.mp4', file_size: 1024 })]}
+        />
+      );
+      expect(screen.queryByText('Watched')).not.toBeInTheDocument();
     });
   });
 });

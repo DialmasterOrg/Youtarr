@@ -62,6 +62,37 @@ describe('watchStatusQueries', () => {
     });
   });
 
+  describe('buildWatchedExistsSql', () => {
+    test('rule=any builds an EXISTS probe on played rows with no replacements', () => {
+      const { sql, replacements } = watchStatusQueries.buildWatchedExistsSql();
+
+      expect(sql).toMatch(/^EXISTS \(SELECT 1 FROM video_watch_status/);
+      expect(sql).toContain('video_id = Videos.id');
+      expect(sql).toContain('played = 1');
+      expect(sql).not.toContain('server_type');
+      expect(replacements).toEqual({});
+    });
+
+    test('rule=primary restricts the probe to the owner and configured users', () => {
+      configModule.getConfig.mockReturnValue({
+        watchStatusWatchedRule: 'primary',
+        jellyfinUserId: 'JF_USER',
+      });
+
+      const { sql, replacements } = watchStatusQueries.buildWatchedExistsSql();
+
+      expect(sql).toContain('played = 1');
+      expect(sql).toContain(':watchedPlexOwnerId');
+      expect(sql).toContain(':watchedJellyfinUserId');
+      expect(sql).toContain(':watchedEmbyUserId');
+      expect(replacements).toEqual({
+        watchedPlexOwnerId: '1',
+        watchedJellyfinUserId: 'JF_USER',
+        watchedEmbyUserId: '',
+      });
+    });
+  });
+
   describe('getStatusesForVideo', () => {
     test('returns empty array for an unknown video', async () => {
       Video.findOne.mockResolvedValue(null);

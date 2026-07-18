@@ -720,6 +720,51 @@ describe('channelVideoQuery', () => {
       expect(result[0].youtube_id).toBe('video2');
     });
 
+    test('watchedFilter=only keeps only videos with a watched-by entry', async () => {
+      const Video = require('../../../models/video');
+      const mockVideos = [
+        { youtube_id: 'video1', title: 'Watched', publishedAt: '2024-01-03', toJSON() { return this; } },
+        { youtube_id: 'video2', title: 'Unwatched', publishedAt: '2024-01-02', toJSON() { return this; } },
+        { youtube_id: 'video3', title: 'Never downloaded', publishedAt: '2024-01-01', toJSON() { return this; } },
+      ];
+      ChannelVideo.findAll.mockResolvedValue(mockVideos);
+      Video.findAll = jest.fn().mockResolvedValue([
+        { id: 1, youtubeId: 'video1', removed: false, fileSize: 1000, filePath: '/path' },
+        { id: 2, youtubeId: 'video2', removed: false, fileSize: 1000, filePath: '/path' }
+      ]);
+      watchStatusQueries.getWatchedByMap.mockResolvedValue(new Map([[1, ['plex']]]));
+
+      const result = await channelVideoQuery.fetchNewestVideosFromDb(
+        'UC123', 50, 0, false, '', 'date', 'desc', false, 'video',
+        null, null, null, null, 'off', 'off', 'off', 'only'
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0].youtube_id).toBe('video1');
+    });
+
+    test('watchedFilter=exclude drops watched videos but keeps never-downloaded ones', async () => {
+      const Video = require('../../../models/video');
+      const mockVideos = [
+        { youtube_id: 'video1', title: 'Watched', publishedAt: '2024-01-03', toJSON() { return this; } },
+        { youtube_id: 'video2', title: 'Unwatched', publishedAt: '2024-01-02', toJSON() { return this; } },
+        { youtube_id: 'video3', title: 'Never downloaded', publishedAt: '2024-01-01', toJSON() { return this; } },
+      ];
+      ChannelVideo.findAll.mockResolvedValue(mockVideos);
+      Video.findAll = jest.fn().mockResolvedValue([
+        { id: 1, youtubeId: 'video1', removed: false, fileSize: 1000, filePath: '/path' },
+        { id: 2, youtubeId: 'video2', removed: false, fileSize: 1000, filePath: '/path' }
+      ]);
+      watchStatusQueries.getWatchedByMap.mockResolvedValue(new Map([[1, ['plex']]]));
+
+      const result = await channelVideoQuery.fetchNewestVideosFromDb(
+        'UC123', 50, 0, false, '', 'date', 'desc', false, 'video',
+        null, null, null, null, 'off', 'off', 'off', 'exclude'
+      );
+
+      expect(result.map(v => v.youtube_id).sort()).toEqual(['video2', 'video3']);
+    });
+
     test('missingFilter=only and ignoredFilter=only combine with AND semantics', async () => {
       const Video = require('../../../models/video');
       const mockVideos = [
@@ -845,6 +890,27 @@ describe('channelVideoQuery', () => {
       const result = await channelVideoQuery.getChannelVideoStats('UC123', 'off', 'cook');
 
       expect(result.totalCount).toBe(2); // Only videos with 'cook' in title
+    });
+
+    test('should count only watched videos when watchedFilter=only', async () => {
+      const Video = require('../../../models/video');
+      const mockVideos = [
+        { youtube_id: 'video1', publishedAt: '2024-01-02', toJSON() { return this; } },
+        { youtube_id: 'video2', publishedAt: '2024-01-01', toJSON() { return this; } }
+      ];
+      ChannelVideo.findAll.mockResolvedValue(mockVideos);
+      Video.findAll = jest.fn().mockResolvedValue([
+        { id: 1, youtubeId: 'video1', removed: false, fileSize: 1000, filePath: '/path' },
+        { id: 2, youtubeId: 'video2', removed: false, fileSize: 1000, filePath: '/path' }
+      ]);
+      watchStatusQueries.getWatchedByMap.mockResolvedValue(new Map([[2, ['jellyfin']]]));
+
+      const result = await channelVideoQuery.getChannelVideoStats(
+        'UC123', 'off', '', 'video', null, null, null, null, 'off', 'off', 'off', 'only'
+      );
+
+      expect(result.totalCount).toBe(1);
+      expect(result.oldestVideoDate).toBe('2024-01-01');
     });
 
     test('should combine downloadedFilter="exclude" and search filters', async () => {

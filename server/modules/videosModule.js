@@ -26,6 +26,7 @@ class VideosModule {
       channelFilter = '',
       protectedFilter = 'off',
       missingFilter = 'off',
+      watchedFilter = 'off',
     } = options;
 
     try {
@@ -65,6 +66,12 @@ class VideosModule {
         whereConditions.push('Videos.removed = 1');
       } else if (missingFilter === 'exclude') {
         whereConditions.push('Videos.removed = 0');
+      }
+
+      if (watchedFilter === 'only' || watchedFilter === 'exclude') {
+        const watched = watchStatusQueries.buildWatchedExistsSql();
+        whereConditions.push(watchedFilter === 'only' ? watched.sql : `NOT ${watched.sql}`);
+        Object.assign(replacements, watched.replacements);
       }
 
       const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';

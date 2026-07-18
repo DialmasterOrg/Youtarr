@@ -170,6 +170,18 @@ jest.mock('../../shared/VideoList', () => {
         : (typeof props.renderContent === 'function'
             ? props.renderContent(props.state?.viewMode ?? 'grid')
             : null);
+      const watchedFilter = (props.filters || []).find((f: any) => f.id === 'watched');
+      const watchedControl = watchedFilter
+        ? React.createElement(
+            'button',
+            {
+              type: 'button',
+              'data-testid': 'watched-filter-only',
+              onClick: () => watchedFilter.onChange('only'),
+            },
+            `Watched: ${watchedFilter.value}`
+          )
+        : null;
       return React.createElement(
         'div',
         {
@@ -179,6 +191,7 @@ jest.mock('../../shared/VideoList', () => {
         },
         props.headerSlot,
         props.tabsSlot,
+        watchedControl,
         content,
         props.infiniteScrollSentinel,
         props.pagination,
@@ -427,6 +440,25 @@ describe('ChannelVideos Component', () => {
       ).not.toBeInTheDocument();
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
       expect(screen.getByTestId('video-list-empty-state')).toBeInTheDocument();
+    });
+  });
+
+  describe('Watched filter', () => {
+    test('setting the watched filter re-fetches with watchedFilter=only and resets the page', async () => {
+      const user = userEvent.setup();
+      renderChannelVideos();
+
+      expect(useChannelVideos).toHaveBeenLastCalledWith(
+        expect.objectContaining({ watchedFilter: 'off' })
+      );
+
+      await user.click(screen.getByTestId('watched-filter-only'));
+
+      await waitFor(() => {
+        expect(useChannelVideos).toHaveBeenLastCalledWith(
+          expect.objectContaining({ watchedFilter: 'only', page: 1 })
+        );
+      });
     });
   });
 

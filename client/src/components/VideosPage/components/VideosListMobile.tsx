@@ -11,6 +11,7 @@ import DownloadFormatIndicator from '../../shared/DownloadFormatIndicator';
 import ProtectionShieldButton from '../../shared/ProtectionShieldButton';
 import ThumbnailClickOverlay from '../../shared/ThumbnailClickOverlay';
 import AvailabilityChip from '../../shared/AvailabilityChip';
+import WatchedChip from '../../shared/WatchedChip';
 import { SHARED_STATUS_CHIP_SMALL_STYLE } from '../../shared/chipStyles';
 import ChannelNameDisplay from './ChannelNameDisplay';
 
@@ -280,6 +281,7 @@ function VideosListMobile({
                     audioFilePath={video.audioFilePath}
                     fileSize={video.fileSize}
                     audioFileSize={video.audioFileSize}
+                    compact
                   />
                 )}
                 {mediaTypeInfo && (
@@ -304,6 +306,7 @@ function VideosListMobile({
                 ) : video.fileSize ? (
                   <AvailabilityChip isAvailable={true} compact />
                 ) : null}
+                <WatchedChip watchedBy={video.watchedBy || []} compact />
               </Stack>
               <Typography
                 variant="caption"

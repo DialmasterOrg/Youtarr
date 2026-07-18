@@ -107,6 +107,8 @@ The library and metadata setup above is all you need for downloaded videos to sh
 
 Once connected, open a playlist in Youtarr and turn on its Emby sync chip. See [Media Server Playlists](../MEDIA_SERVER_PLAYLISTS.md) for how syncing, ordering, and updates work.
 
+Connecting Emby also enables watch status sync: Youtarr periodically pulls per-video watch state (played, percent watched, last watched) for every user on the server and shows it as Watched chips and filters on its listing pages. It's one-way; Youtarr never marks anything watched on Emby. Settings live under **Settings -> Watch Status**; see [Track Watch Status from Media Servers](../USAGE_GUIDE.md#track-watch-status-from-media-servers).
+
 ### Visibility
 
 A playlist marked **Public** in Youtarr is created as a server-wide (shared) Emby playlist that all users can see; a **Private** one is owned by the configured user account only. Emby sets this when the playlist is created, so changing Public/Private for a playlist that already exists takes effect on the next sync that recreates it. Emby also shows shared playlists as read-only, which is expected: Youtarr owns these playlists and rewrites them on every sync.

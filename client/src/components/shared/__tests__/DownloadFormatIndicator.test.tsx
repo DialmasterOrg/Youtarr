@@ -92,6 +92,35 @@ describe('DownloadFormatIndicator', () => {
     });
   });
 
+  describe('Compact sizing', () => {
+    test('applies compact sizing to both chips when compact is true', () => {
+      render(
+        <DownloadFormatIndicator
+          filePath="/videos/test.mp4"
+          fileSize={104857600}
+          audioFilePath="/audio/test.mp3"
+          audioFileSize={52428800}
+          compact
+        />
+      );
+
+      expect(screen.getByTestId('video-format-chip')).toHaveStyle({
+        height: '20px',
+        fontSize: '0.65rem',
+      });
+      expect(screen.getByTestId('audio-format-chip')).toHaveStyle({
+        height: '20px',
+        fontSize: '0.65rem',
+      });
+    });
+
+    test('keeps standard sizing when compact is not set', () => {
+      render(<DownloadFormatIndicator filePath="/videos/test.mp4" fileSize={104857600} />);
+
+      expect(screen.getByTestId('video-format-chip')).not.toHaveStyle({ height: '20px' });
+    });
+  });
+
   describe('Tooltip path', () => {
     test('strips Docker internal path prefix but keeps the filename in the tooltip', async () => {
       const user = userEvent.setup();
