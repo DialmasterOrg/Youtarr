@@ -98,7 +98,9 @@ class EmbyAdapter extends BaseAdapter {
           userId: user.id,
           includeItemTypes: 'Video,Movie,Episode',
           recursive: true,
-          fields: 'Path',
+          // List responses trim UserData (LastPlayedDate dropped, PlayCount
+          // zeroed) unless the UserData* fields are requested explicitly.
+          fields: 'Path,UserDataLastPlayedDate,UserDataPlayCount',
           enableUserData: true,
         };
         const res = await axios.get(`${this.url}/Items`, { headers: this._headers(), params, timeout: REQUEST_TIMEOUT_MS });

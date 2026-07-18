@@ -482,6 +482,7 @@ If you've connected Plex, Jellyfin, or Emby, Youtarr can pull watch status from 
 - On a schedule (every 4 hours by default) Youtarr asks each connected server who has watched what and stores the results.
 - Only videos a server actually reports on get recorded. A video with no watch data means "never synced" or "unknown", not "unwatched".
 - By default Youtarr syncs every user account on the server, not just yours. Jellyfin and Emby report full detail (played, percent watched, last watched) for every user. Plex reports full detail for the server owner; other Plex accounts come from the server's play history, which only records completed plays, so those users show as watched or not with no in-progress positions.
+- Videos Youtarr marks as missing still sync. If a file was moved somewhere Youtarr can't see but a media server still has it, its watch status keeps updating; files are recognized by the `[video-id]` at the end of the filename, so this works even if the file was renamed.
 - Watching a video in Youtarr's built-in player doesn't mark it watched. Watch status only comes from your media servers.
 
 ### Settings
