@@ -4,7 +4,7 @@
 ![Frontend Coverage](https://img.shields.io/badge/Frontend_Coverage-87%25-brightgreen)
 ![CI Status](https://github.com/DialmasterOrg/Youtarr/workflows/CI%20-%20Lint%20and%20Test/badge.svg)
 
-Youtarr is a self-hosted YouTube downloader that automatically downloads videos from your favorite channels and playlists. It provides metadata for multiple media servers, mirrors your subscribed YouTube playlists into Plex, Jellyfin, and Emby as native playlists, and offers optional Plex integration for automatic library refreshes.
+Youtarr is a self-hosted YouTube downloader that automatically downloads videos from your favorite channels and playlists. It provides metadata for multiple media servers, mirrors your subscribed YouTube playlists into Plex, Jellyfin, and Emby as native playlists, pulls watch status back from those servers so you can filter your library by what's been watched, and offers optional Plex integration for automatic library refreshes.
 
 > Don't want to self-host? You can also run Youtarr on [ElfHosted](https://store.elfhosted.com/product/youtarr/) with a managed deployment – see their [Youtarr docs](https://docs.elfhosted.com/app/youtarr/).
 
@@ -34,6 +34,7 @@ https://github.com/user-attachments/assets/a80548fc-bcf9-4ad0-889c-dbd5aac250ee
 - **SponsorBlock Integration**: Remove sponsored segments automatically
 - **Quality Control**: Global and per-channel resolution settings (360p to 4K)
 - **Download History**: Track what you've downloaded with smart duplicate prevention
+- **Watch Status Sync**: Pull per-video watched state from Plex, Jellyfin, and Emby (every user on the server, not just yours), show a Watched chip on listing pages, and filter your library by watched or unwatched. One-way sync; Youtarr never writes back to your servers
 - **Metadata Generation**: NFO files, poster images and embedded MP4 metadata for all media servers
 - **Scheduled Downloads**: Configure automatic downloads on your schedule (cron-based)
 - **Auto-Cleanup**: Age and space-based removal of videos with dry-run previews
@@ -49,7 +50,7 @@ https://github.com/user-attachments/assets/a80548fc-bcf9-4ad0-889c-dbd5aac250ee
 
 ## How Youtarr compares
 
-Youtarr predates [Pinchflat](https://github.com/kieraneglin/pinchflat) (first commits May 2023 vs. January 2024); the two arrived at similar solutions independently and have evolved in parallel since. For a side-by-side of where Youtarr, Pinchflat, and [Tube Archivist](https://github.com/tubearchivist/tubearchivist) differ on Plex integration, in-app playback, content ratings, REST API, filename templating, and transcript search, see the [comparison doc](docs/YOUTARR_VS_ALTERNATIVES.md).
+Youtarr predates [Pinchflat](https://github.com/kieraneglin/pinchflat) (first commits May 2023 vs. January 2024); the two arrived at similar solutions independently and have evolved in parallel since. For a side-by-side of where Youtarr, Pinchflat, and [Tube Archivist](https://github.com/tubearchivist/tubearchivist) differ on Plex integration, in-app playback, watch-status tracking, content ratings, REST API, filename templating, and transcript search, see the [comparison doc](docs/YOUTARR_VS_ALTERNATIVES.md).
 
 ## Quick Start
 

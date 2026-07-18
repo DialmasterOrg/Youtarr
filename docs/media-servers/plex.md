@@ -7,6 +7,7 @@ Complete guide for integrating Youtarr with Plex Media Server.
 - [Library Setup](#library-setup)
 - [Youtarr Configuration](#youtarr-configuration)
 - [Native Playlist Sync](#native-playlist-sync)
+- [Watch Status Sync](#watch-status-sync)
 - [Multi-Library Organization](#multi-library-organization)
 - [What You'll See](#what-youll-see)
 - [Tips and Best Practices](#tips-and-best-practices)
@@ -21,6 +22,7 @@ Youtarr provides full Plex integration with:
 - OAuth authentication for API token retrieval
 - Multi-library support through subfolders
 - Native playlist sync: subscribed YouTube playlists appear as Plex playlists (see [Native Playlist Sync](#native-playlist-sync))
+- Watch status sync: Youtarr pulls who has watched what from Plex (see [Watch Status Sync](#watch-status-sync))
 
 ## Library Setup
 
@@ -135,6 +137,18 @@ Plex playlists are always owned by a single account, so there's no automatic "pu
 Heads up: shared playlists do not appear in the recipient's **Playlists** section - Plex lists playlists shared by another account under a separate sidebar source named **Media**. If a user reports the playlist is missing even though the share looks correct, have them check there. See [Shared Playlists Don't Appear for Other Users](../TROUBLESHOOTING.md#shared-playlists-dont-appear-for-other-users-plex) for related gotchas (library access, content-rating restrictions).
 
 For how syncing, ordering, and playlist updates work across all servers, see [Media Server Playlists](../MEDIA_SERVER_PLAYLISTS.md).
+
+## Watch Status Sync
+
+The same Plex connection you set up above also enables watch status sync: on a schedule (every 4 hours by default), Youtarr pulls per-video watch state from Plex and shows it as Watched chips and filters on its listing pages. The sync is one-way; Youtarr never marks anything watched on Plex.
+
+A couple of Plex-specific details:
+
+- The server owner's account gets full detail: played, percent watched, and last watched time.
+- Other Plex accounts come from the server's play history, which only records completed plays. Those users show as watched or not, with no in-progress positions.
+- On an unclaimed server (see the playlist visibility scope above), Youtarr reads the anonymous session's watch state instead.
+
+Settings live under **Settings -> Watch Status**, including a per-server toggle for syncing all users vs. just the owner. See [Track Watch Status from Media Servers](../USAGE_GUIDE.md#track-watch-status-from-media-servers) for the full workflow.
 
 ## Multi-Library Organization
 
