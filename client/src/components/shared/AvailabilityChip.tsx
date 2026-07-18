@@ -4,7 +4,7 @@ import {
   AlertCircle as ErrorOutlineIcon,
   CheckCircle as CheckCircleIcon,
 } from 'lucide-react';
-import { SHARED_THEMED_CHIP_SMALL_STYLE } from './chipStyles';
+import { SHARED_THEMED_CHIP_SMALL_STYLE, SHARED_COMPACT_CHIP_OVERRIDES } from './chipStyles';
 
 export interface AvailabilityChipProps {
   isAvailable: boolean;
@@ -23,14 +23,9 @@ const baseMissingStyle: React.CSSProperties = {
   color: 'var(--destructive-foreground)',
 };
 
-const COMPACT_OVERRIDES: React.CSSProperties = {
-  height: 20,
-  fontSize: '0.65rem',
-};
-
 function AvailabilityChip({ isAvailable, compact = false }: AvailabilityChipProps) {
   const baseStyle = isAvailable ? baseAvailableStyle : baseMissingStyle;
-  const style = compact ? { ...baseStyle, ...COMPACT_OVERRIDES } : baseStyle;
+  const style = compact ? { ...baseStyle, ...SHARED_COMPACT_CHIP_OVERRIDES } : baseStyle;
   const tooltip = isAvailable ? 'Video file exists on disk' : 'Video file not found on disk';
   const label = isAvailable ? 'Available' : 'Missing';
   const icon = isAvailable ? <CheckCircleIcon size={12} /> : <ErrorOutlineIcon size={12} />;

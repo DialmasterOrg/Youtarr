@@ -98,6 +98,23 @@ describe('VideosListMobile', () => {
     expect(onToggleSelect).toHaveBeenCalledWith(1);
   });
 
+  test('renders the download format chips compact', () => {
+    renderList();
+    expect(screen.getByTestId('video-format-chip')).toHaveStyle({ height: '20px' });
+  });
+
+  test('renders a Watched chip for a video watched on a server', () => {
+    renderList({
+      videos: [{ ...sampleVideo, watchedBy: ['plex'] }],
+    });
+    expect(screen.getByText('Watched')).toBeInTheDocument();
+  });
+
+  test('does not render a Watched chip when watchedBy is absent', () => {
+    renderList();
+    expect(screen.queryByText('Watched')).not.toBeInTheDocument();
+  });
+
   test('unsubscribed channel name opens the add-channel affordance without selecting the row', () => {
     const { onToggleSelect, onAddChannel } = renderList({
       videos: [{

@@ -2,7 +2,7 @@ import React from 'react';
 import { Box, Chip, Tooltip } from '../ui';
 import { MovieOutlined as VideoFormatIcon, AudioIcon as AudioFormatIcon } from '../../lib/icons';
 import { formatFileSize } from '../../utils/formatters';
-import { SHARED_THEMED_CHIP_SMALL_STYLE } from './chipStyles';
+import { SHARED_THEMED_CHIP_SMALL_STYLE, SHARED_COMPACT_CHIP_OVERRIDES } from './chipStyles';
 
 interface DownloadFormatIndicatorProps {
   filePath?: string | null;
@@ -11,6 +11,7 @@ interface DownloadFormatIndicatorProps {
   audioFileSize?: number | string | null;
   // 'vertical' stacks the chips to fit narrow table columns
   orientation?: 'horizontal' | 'vertical';
+  compact?: boolean;
 }
 
 // Strip internal Docker paths from display
@@ -32,7 +33,8 @@ const DownloadFormatIndicator: React.FC<DownloadFormatIndicatorProps> = ({
   audioFilePath,
   fileSize,
   audioFileSize,
-  orientation = 'horizontal'
+  orientation = 'horizontal',
+  compact = false
 }) => {
   const hasVideo = !!filePath;
   const hasAudio = !!audioFilePath;
@@ -70,6 +72,10 @@ const DownloadFormatIndicator: React.FC<DownloadFormatIndicatorProps> = ({
       ? 'inline-flex flex-col items-start gap-1'
       : 'inline-flex items-center gap-1';
 
+  const chipStyle = compact
+    ? { ...SHARED_THEMED_CHIP_SMALL_STYLE, ...SHARED_COMPACT_CHIP_OVERRIDES }
+    : SHARED_THEMED_CHIP_SMALL_STYLE;
+
   return (
     <Box
       className={containerClassName}
@@ -84,7 +90,8 @@ const DownloadFormatIndicator: React.FC<DownloadFormatIndicatorProps> = ({
             icon={<VideoFormatIcon size={14} className="text-primary" data-testid="VideoFormatIcon" />}
             label={videoSizeLabel}
             variant="outlined"
-            style={SHARED_THEMED_CHIP_SMALL_STYLE}
+            style={chipStyle}
+            data-testid="video-format-chip"
           />
         </Tooltip>
       )}
@@ -95,7 +102,8 @@ const DownloadFormatIndicator: React.FC<DownloadFormatIndicatorProps> = ({
             icon={<AudioFormatIcon size={14} className="text-secondary" data-testid="AudioFormatIcon" />}
             label={audioSizeLabel}
             variant="outlined"
-            style={SHARED_THEMED_CHIP_SMALL_STYLE}
+            style={chipStyle}
+            data-testid="audio-format-chip"
           />
         </Tooltip>
       )}

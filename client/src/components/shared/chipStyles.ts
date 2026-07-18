@@ -30,6 +30,12 @@ export const SHARED_STATUS_CHIP_SMALL_STYLE: React.CSSProperties = {
   fontSize: 'var(--ui-chip-small-font-size, 0.75rem)',
 };
 
+// Merge over a *_SMALL_STYLE for the tighter chips used in mobile list rows.
+export const SHARED_COMPACT_CHIP_OVERRIDES: React.CSSProperties = {
+  height: 20,
+  fontSize: '0.65rem',
+};
+
 export const SHARED_THEMED_CHIP_STYLE: React.CSSProperties = {
   ...SHARED_STATUS_CHIP_STYLE,
   border: 'var(--rating-chip-border)',
