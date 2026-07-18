@@ -54,6 +54,8 @@ export interface PlaylistVideo {
   file_size: number | null;
   audio_file_path: string | null;
   audio_file_size: number | null;
+  // Media server types with a played watch-status row for this video.
+  watched_by?: string[];
 }
 
 export interface MediaServerStatus {

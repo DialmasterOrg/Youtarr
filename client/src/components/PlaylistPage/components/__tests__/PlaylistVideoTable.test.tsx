@@ -119,5 +119,28 @@ describe('PlaylistVideoTable selection', () => {
       expect(screen.getByText('Tracked')).toBeInTheDocument();
       expect(screen.queryByTestId('download-format-indicator')).not.toBeInTheDocument();
     });
+
+    test('renders a Watched chip for a video watched on a server', () => {
+      render(
+        <PlaylistVideoTable
+          {...baseProps}
+          videos={[makeVideo({
+            youtube_id: 'seen', downloaded: true,
+            file_path: '/data/v.mp4', file_size: 1024, watched_by: ['plex'],
+          })]}
+        />
+      );
+      expect(screen.getByText('Watched')).toBeInTheDocument();
+    });
+
+    test('does not render a Watched chip when watched_by is empty', () => {
+      render(
+        <PlaylistVideoTable
+          {...baseProps}
+          videos={[makeVideo({ youtube_id: 'done', downloaded: true, file_path: '/data/v.mp4', file_size: 1024 })]}
+        />
+      );
+      expect(screen.queryByText('Watched')).not.toBeInTheDocument();
+    });
   });
 });

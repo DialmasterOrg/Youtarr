@@ -70,5 +70,25 @@ describe('PlaylistVideoCard', () => {
       expect(screen.getByText('Tracked')).toBeInTheDocument();
       expect(screen.queryByTestId('download-format-indicator')).not.toBeInTheDocument();
     });
+
+    test('renders a Watched chip for a video watched on a server', () => {
+      render(
+        <PlaylistVideoCard
+          {...baseProps}
+          video={makeVideo({ downloaded: true, file_path: '/data/v.mp4', watched_by: ['plex'] })}
+        />
+      );
+      expect(screen.getByText('Watched')).toBeInTheDocument();
+    });
+
+    test('does not render a Watched chip when watched_by is empty', () => {
+      render(
+        <PlaylistVideoCard
+          {...baseProps}
+          video={makeVideo({ downloaded: true, file_path: '/data/v.mp4' })}
+        />
+      );
+      expect(screen.queryByText('Watched')).not.toBeInTheDocument();
+    });
   });
 });

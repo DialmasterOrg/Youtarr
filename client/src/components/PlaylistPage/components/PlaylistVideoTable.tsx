@@ -14,6 +14,7 @@ import { PlaylistVideo } from '../../../types/playlist';
 import { formatDurationClock } from '../../../utils';
 import { isDownloadable, statusLabel, PublishedDate, toDownloadFileProps } from './playlistVideoHelpers';
 import DownloadFormatIndicator from '../../shared/DownloadFormatIndicator';
+import WatchedChip from '../../shared/WatchedChip';
 
 const THUMB_WIDTH = 120;
 const THUMB_HEIGHT = 67;
@@ -126,11 +127,14 @@ const PlaylistVideoTable: React.FC<PlaylistVideoTableProps> = ({
                 {formatDurationClock(v.duration) || '-'}
               </TableCell>
               <TableCell>
-                {v.downloaded ? (
-                  <DownloadFormatIndicator {...toDownloadFileProps(v)} orientation="vertical" />
-                ) : (
-                  <Chip label={status.label} color={status.color} size="small" />
-                )}
+                <div className="flex flex-col items-start gap-1">
+                  {v.downloaded ? (
+                    <DownloadFormatIndicator {...toDownloadFileProps(v)} orientation="vertical" />
+                  ) : (
+                    <Chip label={status.label} color={status.color} size="small" />
+                  )}
+                  <WatchedChip watchedBy={v.watched_by || []} />
+                </div>
               </TableCell>
               <TableCell align="right" onClick={(e) => e.stopPropagation()}>
                 {v.ignored ? (

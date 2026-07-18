@@ -45,6 +45,9 @@ const buildDeps = (overrides = {}) => ({
     mediaServerSync: {
       syncPlaylist: jest.fn().mockResolvedValue(undefined),
     },
+    watchStatusQueries: {
+      getWatchedByMap: jest.fn().mockResolvedValue(new Map()),
+    },
     ...overrides.mediaServers,
   },
   channelSettingsModule: {
@@ -1083,6 +1086,81 @@ describe('GET /api/playlists/:playlistId/videos', () => {
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith({ error: 'Playlist not found' });
     expect(deps.models.PlaylistVideo.findAndCountAll).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/playlists/:playlistId/videos watched_by', () => {
+  const playlistRows = (youtubeIds) => ({
+    count: youtubeIds.length,
+    rows: youtubeIds.map((youtubeId, i) => ({
+      id: i + 1,
+      playlist_id: 'PLtest123',
+      youtube_id: youtubeId,
+      position: i + 1,
+      ignored: false,
+      ignored_at: null,
+      added_at: null,
+      channel_id: null,
+    })),
+  });
+
+  test('stamps watched_by from watch-status rows keyed by the Videos id', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue(playlistRows(['watched1', 'tracked2']));
+    deps.models.Video.findAll.mockResolvedValue([
+      {
+        id: 42,
+        youtubeId: 'watched1',
+        removed: false,
+        youtube_removed: false,
+        filePath: '/videos/watched1.mp4',
+        fileSize: 1024,
+      },
+    ]);
+    deps.mediaServers.watchStatusQueries.getWatchedByMap.mockResolvedValue(
+      new Map([[42, ['plex', 'jellyfin']]])
+    );
+
+    const handler = getHandler('get', '/api/playlists/:playlistId/videos', deps);
+    const req = { params: { playlistId: 'PLtest123' }, query: {}, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.mediaServers.watchStatusQueries.getWatchedByMap).toHaveBeenCalledWith([42]);
+    const payload = res.json.mock.calls[0][0];
+    expect(payload.videos[0].watched_by).toEqual(['plex', 'jellyfin']);
+    expect(payload.videos[1].watched_by).toEqual([]);
+  });
+
+  test('keeps watched_by for a previously-downloaded video whose file is gone', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue(playlistRows(['gone1']));
+    deps.models.Video.findAll.mockResolvedValue([
+      {
+        id: 7,
+        youtubeId: 'gone1',
+        removed: true,
+        youtube_removed: false,
+        filePath: '/videos/gone1.mp4',
+        fileSize: 1024,
+      },
+    ]);
+    deps.mediaServers.watchStatusQueries.getWatchedByMap.mockResolvedValue(
+      new Map([[7, ['emby']]])
+    );
+
+    const handler = getHandler('get', '/api/playlists/:playlistId/videos', deps);
+    const req = { params: { playlistId: 'PLtest123' }, query: {}, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    const payload = res.json.mock.calls[0][0];
+    expect(payload.videos[0]).toMatchObject({
+      previously_downloaded: true,
+      watched_by: ['emby'],
+    });
   });
 });
 

@@ -102,6 +102,10 @@ const options = {
         name: 'API Keys',
         description: 'API key management for external integrations',
       },
+      {
+        name: 'Playlists',
+        description: 'YouTube playlist subscriptions and downloads',
+      },
     ],
   },
   // Use absolute paths based on __dirname to work in both local dev and Docker
@@ -117,6 +121,7 @@ const options = {
     path.join(__dirname, 'routes', 'videos.js'),
     path.join(__dirname, 'routes', 'videoSearch.js'),
     path.join(__dirname, 'routes', 'apikeys.js'),
+    path.join(__dirname, 'routes', 'playlists.js'),
   ],
 };
 

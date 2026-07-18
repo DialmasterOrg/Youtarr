@@ -4,6 +4,7 @@ import { PlaylistVideo } from '../../../types/playlist';
 import { formatDurationClock } from '../../../utils';
 import { isDownloadable, statusLabel, PublishedDate, toDownloadFileProps } from './playlistVideoHelpers';
 import DownloadFormatIndicator from '../../shared/DownloadFormatIndicator';
+import WatchedChip from '../../shared/WatchedChip';
 
 const THUMB_WIDTH = 120;
 const THUMB_HEIGHT = 68;
@@ -79,6 +80,7 @@ const PlaylistVideoCard: React.FC<PlaylistVideoCardProps> = ({
           ) : (
             <Chip label={status.label} color={status.color} size="small" />
           )}
+          <WatchedChip watchedBy={video.watched_by || []} />
         </div>
         <div className="mt-2" onClick={(e) => e.stopPropagation()}>
           {video.ignored ? (
