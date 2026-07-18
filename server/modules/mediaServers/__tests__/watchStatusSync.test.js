@@ -84,6 +84,74 @@ describe('watchStatusSync', () => {
     );
   });
 
+  test('does not exclude videos marked missing from the candidate query', async () => {
+    // A file moved out of Youtarr's view may still be on a media server;
+    // `removed` must not exclude videos from the sync.
+    const adapter = fakeAdapter('plex', resolvedFetch([]));
+    serverRegistry.getEnabledAdapters.mockReturnValue([adapter]);
+    Video.findAll.mockResolvedValue([]);
+
+    await watchStatusSync.syncAll();
+
+    const { where } = Video.findAll.mock.calls[0][0];
+    expect(where.removed).toBeUndefined();
+    expect(where.filePath).toBeDefined();
+  });
+
+  test('matches a moved and renamed file by its [youtube-id] filename suffix', async () => {
+    const adapter = fakeAdapter('plex', resolvedFetch([
+      {
+        path: '/mnt/old-drive/Chan/Renamed Title [id1].mp4',
+        serverUserId: '1',
+        played: true, playCount: 1, positionMs: null, percentWatched: 100, lastWatchedAt: null,
+      },
+    ]));
+    serverRegistry.getEnabledAdapters.mockReturnValue([adapter]);
+    Video.findAll.mockResolvedValue([
+      { id: 7, youtubeId: 'id1', filePath: '/usr/src/app/data/Chan/Video A [id1]/Video A [id1].mp4' },
+    ]);
+
+    const summary = await watchStatusSync.syncAll();
+
+    expect(summary.servers.plex).toEqual({ updated: 1 });
+    const [rows] = VideoWatchStatus.bulkCreate.mock.calls[0];
+    expect(rows[0]).toMatchObject({ video_id: 7, played: true });
+  });
+
+  test('falls back to basename matching for files without an id suffix', async () => {
+    const adapter = fakeAdapter('jellyfin', resolvedFetch([
+      { path: '/media/Chan/Legacy Video.mp4', serverUserId: 'u1', played: true, playCount: 1, positionMs: null, percentWatched: 100, lastWatchedAt: null },
+    ]));
+    serverRegistry.getEnabledAdapters.mockReturnValue([adapter]);
+    Video.findAll.mockResolvedValue([
+      { id: 9, youtubeId: 'legacy1', filePath: '/data/Chan/Legacy Video.mp4' },
+    ]);
+
+    const summary = await watchStatusSync.syncAll();
+
+    expect(summary.servers.jellyfin).toEqual({ updated: 1 });
+    const [rows] = VideoWatchStatus.bulkCreate.mock.calls[0];
+    expect(rows[0]).toMatchObject({ video_id: 9, server_user_id: 'u1' });
+  });
+
+  test('prefers the copy closest to the stored path when two files share an id', async () => {
+    const adapter = fakeAdapter('plex', resolvedFetch([
+      { path: '/mnt/old/OldChan/Video A [id1].mp4', serverUserId: '1', played: true, playCount: 1, positionMs: null, percentWatched: 100, lastWatchedAt: null },
+      { path: '/mnt/new/Chan/Video A [id1].mp4', serverUserId: '1', played: false, playCount: 0, positionMs: null, percentWatched: null, lastWatchedAt: null },
+    ]));
+    serverRegistry.getEnabledAdapters.mockReturnValue([adapter]);
+    Video.findAll.mockResolvedValue([
+      { id: 7, youtubeId: 'id1', filePath: '/data/Chan/Video A [id1].mp4' },
+    ]);
+
+    await watchStatusSync.syncAll();
+
+    // The stale duplicate's state must not win over the current copy's.
+    const [rows] = VideoWatchStatus.bulkCreate.mock.calls[0];
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ video_id: 7, played: false });
+  });
+
   test('persists one row per user for the same video and server', async () => {
     const adapter = fakeAdapter('jellyfin', resolvedFetch([
       { path: '/media/Chan/Video A [id1].mp4', serverUserId: 'u1', played: true, playCount: 2, positionMs: null, percentWatched: 100, lastWatchedAt: null },

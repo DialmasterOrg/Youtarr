@@ -20,6 +20,10 @@ const UPSERT_CHUNK_SIZE = 500;
 // incremental watermark, so an event on the boundary second is never missed.
 const WATERMARK_OVERLAP_MS = 60_000;
 
+// Trailing "[<youtube-id>].<ext>" token every Youtarr download carries
+// (see filesystem/constants.js); same pattern the filesystem rescan uses.
+const YOUTUBE_ID_SUFFIX_RE = /\[([^[\]]+)\]\.[a-z0-9]+$/i;
+
 // Reduce an arbitrary sync failure to a message safe to render in the UI.
 // Adapter-produced errors are already user-presentable; raw HTTP failures keep
 // only their status; anything else (Sequelize, programming errors) is
@@ -65,9 +69,12 @@ class WatchStatusSync {
         return summary;
       }
 
+      // Missing (removed) videos are candidates too: the file may have moved
+      // out of Youtarr's view but still exist on a media server and keep
+      // accruing watch state.
       const videos = await Video.findAll({
-        where: { removed: false, filePath: { [Op.ne]: null } },
-        attributes: ['id', 'filePath'],
+        where: { filePath: { [Op.ne]: null } },
+        attributes: ['id', 'youtubeId', 'filePath'],
         raw: true,
       });
       logger.info({ trigger, videoCount: videos.length, serverCount: adapters.length }, 'Starting watch status sync');
@@ -155,11 +162,12 @@ class WatchStatusSync {
     });
   }
 
-  // Basename matching with trailing-segment disambiguation, the same strategy
-  // the adapters use for file resolution (mount views differ between Youtarr
-  // and the servers; YouTube ids in filenames are globally unique). Entries
-  // are grouped by path first: several users' entries share one path, and a
-  // video must match ALL entries of its best-scoring path, not just one.
+  // Match primarily by the trailing "[<youtube-id>].<ext>" filename token
+  // (ids are globally unique), so files moved or renamed on the server side
+  // still match; basename is the fallback. Ties go to the path closest to
+  // the stored filePath (mount views differ between Youtarr and the
+  // servers). A video matches ALL user entries of its best-scoring path,
+  // not just one.
   _matchVideos(videos, entries) {
     const entriesByPath = new Map();
     for (const entry of entries) {
@@ -167,15 +175,23 @@ class WatchStatusSync {
       entriesByPath.get(entry.path).push(entry);
     }
     const candidatesByBasename = new Map(); // base -> [{ path, segments }]
+    const candidatesById = new Map(); // youtube id -> [{ path, segments }]
     for (const path of entriesByPath.keys()) {
       const base = extractBasename(path);
       if (!base) continue;
+      const candidate = { path, segments: pathSegments(path) };
       if (!candidatesByBasename.has(base)) candidatesByBasename.set(base, []);
-      candidatesByBasename.get(base).push({ path, segments: pathSegments(path) });
+      candidatesByBasename.get(base).push(candidate);
+      const idMatch = base.match(YOUTUBE_ID_SUFFIX_RE);
+      if (idMatch) {
+        if (!candidatesById.has(idMatch[1])) candidatesById.set(idMatch[1], []);
+        candidatesById.get(idMatch[1]).push(candidate);
+      }
     }
     const matches = [];
     for (const video of videos) {
-      const candidates = candidatesByBasename.get(extractBasename(video.filePath));
+      const candidates = candidatesById.get(video.youtubeId)
+        || candidatesByBasename.get(extractBasename(video.filePath));
       if (!candidates) continue;
       const targetSegments = pathSegments(video.filePath);
       let best = null;
