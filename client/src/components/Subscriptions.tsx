@@ -328,6 +328,11 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
   const handleTypeFilterChange = (next: SubscriptionsFilterValue) => {
     setTypeFilter(next);
     setNewSubscriptionUrl('');
+    // The channel toolbar popups are hidden in playlists view; close any left open.
+    setFilterAnchorEl(null);
+    setFolderMenuAnchor(null);
+    setMobileActionsAnchorEl(null);
+    setMobileFilterOpen(false);
   };
 
   const handleSaveChanges = async () => {
@@ -497,8 +502,8 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
             counts={{ channels: total, playlists: playlistTotal }}
           />
 
-          {/* ── Mobile toolbar: view toggle + filter + actions ── */}
-          {isMobile && (
+          {/* ── Mobile toolbar: view toggle + filter + actions (channels only) ── */}
+          {isMobile && typeFilter === 'channels' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               {/* Grid / List view toggle */}
               <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 'var(--radius-ui)', overflow: 'hidden', flexShrink: 0 }}>
@@ -578,8 +583,8 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
             </div>
           )}
 
-          {/* ── Desktop toolbar ── */}
-          {!isMobile && (
+          {/* ── Desktop toolbar (channels only) ── */}
+          {!isMobile && typeFilter === 'channels' && (
           <div
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}
           >
