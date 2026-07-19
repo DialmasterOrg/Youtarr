@@ -1,5 +1,44 @@
 # Changelog
 
+## [v1.76.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.76.0) - 2026-07-19
+
+## [1.76.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.75.0...v1.76.0) (2026-07-19)
+
+
+### Features
+
+* auto-refresh download history page ([246099c](https://github.com/DialmasterOrg/Youtarr/commit/246099cd773797462e2ddf4b93e4f4dabba33e77))
+* filter video listings by watched status ([174dc5d](https://github.com/DialmasterOrg/Youtarr/commit/174dc5d6aa9a7f834229076fb319af6d7f1cf185)), closes [#706](https://github.com/DialmasterOrg/Youtarr/issues/706)
+* show watched chip on playlist page videos ([6a0fa89](https://github.com/DialmasterOrg/Youtarr/commit/6a0fa89af7867719bacb1af6fe7dec2621222a16)), closes [#706](https://github.com/DialmasterOrg/Youtarr/issues/706)
+* sync watch status for all media server users ([20bb6b1](https://github.com/DialmasterOrg/Youtarr/commit/20bb6b1f2ef68d1303f473d941164d54c69206b7)), closes [#706](https://github.com/DialmasterOrg/Youtarr/issues/706)
+* sync watch status from media servers ([56edc40](https://github.com/DialmasterOrg/Youtarr/commit/56edc40485b08244b0968374892368e7e2740bfb)), closes [#706](https://github.com/DialmasterOrg/Youtarr/issues/706)
+
+
+### Bug Fixes
+
+* correct watched-threshold info in ui and docs ([2924e61](https://github.com/DialmasterOrg/Youtarr/commit/2924e615038c0e3cb9a5df11a7503a98c66c77f6)), closes [#706](https://github.com/DialmasterOrg/Youtarr/issues/706)
+* hide channel toolbar in playlists view ([bd8ece6](https://github.com/DialmasterOrg/Youtarr/commit/bd8ece67523c46d8ed28e568314250c9e35e4af2))
+* sync emby last-watched time and play count ([c450d68](https://github.com/DialmasterOrg/Youtarr/commit/c450d6899bf1c128f0b97f60245c5bcbdab5ca8c)), closes [#706](https://github.com/DialmasterOrg/Youtarr/issues/706)
+* sync watch status for missing videos ([2de2f61](https://github.com/DialmasterOrg/Youtarr/commit/2de2f61c8c5d135beeb4a48656eb53710a62b257)), closes [#706](https://github.com/DialmasterOrg/Youtarr/issues/706)
+* unhandled yt-dlp spawn error crashing tests ([ca49e14](https://github.com/DialmasterOrg/Youtarr/commit/ca49e14c74f9a166d970edccaf6a461bc477a551)), closes [#653](https://github.com/DialmasterOrg/Youtarr/issues/653)
+* watched chip missing from mobile videos list ([ab939d1](https://github.com/DialmasterOrg/Youtarr/commit/ab939d1511762e9fec04aaa7fbf22ce03f8efe79)), closes [#706](https://github.com/DialmasterOrg/Youtarr/issues/706)
+
+
+### Code Refactoring
+
+* decompose channelModule into sub-modules ([9082862](https://github.com/DialmasterOrg/Youtarr/commit/90828621d22afe3b95604b25a58af70a2ecf5f56)), closes [#653](https://github.com/DialmasterOrg/Youtarr/issues/653)
+
+
+### Documentation
+
+* add watch status sync to the user docs ([a570350](https://github.com/DialmasterOrg/Youtarr/commit/a570350c366f77edd0dd04726ecb9c856d2dec97)), closes [#706](https://github.com/DialmasterOrg/Youtarr/issues/706)
+* link to youtarr.com homepage in readme ([599fe46](https://github.com/DialmasterOrg/Youtarr/commit/599fe460e84cd37691a069e871920f0c815cc954))
+* update CHANGELOG for v1.75.0 [skip ci] ([fb06f45](https://github.com/DialmasterOrg/Youtarr/commit/fb06f45603235279f1782da1329a1461d7365c09))
+
+
+
+
+
 ## [v1.75.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.75.0) - 2026-07-14
 
 ## [1.75.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.74.0...v1.75.0) (2026-07-14)
