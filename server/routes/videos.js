@@ -112,6 +112,27 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
    *         schema:
    *           type: string
    *         description: Filter by channel
+   *       - in: query
+   *         name: protectedFilter
+   *         schema:
+   *           type: string
+   *           enum: [off, only, exclude]
+   *           default: off
+   *         description: Tri-state filter on protected videos
+   *       - in: query
+   *         name: missingFilter
+   *         schema:
+   *           type: string
+   *           enum: [off, only, exclude]
+   *           default: off
+   *         description: Tri-state filter on missing (file removed) videos
+   *       - in: query
+   *         name: watchedFilter
+   *         schema:
+   *           type: string
+   *           enum: [off, only, exclude]
+   *           default: off
+   *         description: Tri-state filter on watched videos (per the configured watched rule)
    *     responses:
    *       200:
    *         description: Paginated list of videos
@@ -122,7 +143,7 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
     req.log.info('Getting videos');
 
     try {
-      const { page, limit, search, dateFrom, dateTo, sortBy, sortOrder, channelFilter, protectedFilter, missingFilter } = req.query;
+      const { page, limit, search, dateFrom, dateTo, sortBy, sortOrder, channelFilter, protectedFilter, missingFilter, watchedFilter } = req.query;
 
       const parseFilterMode = (value) => (value === 'only' || value === 'exclude' ? value : 'off');
 
@@ -137,6 +158,7 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
         channelFilter: channelFilter || '',
         protectedFilter: parseFilterMode(protectedFilter),
         missingFilter: parseFilterMode(missingFilter),
+        watchedFilter: parseFilterMode(watchedFilter),
       };
 
       const result = await videosModule.getVideosPaginated(options);

@@ -9,12 +9,17 @@ const {
 } = require('./baseAdapter');
 const logger = require('../../../logger');
 
+// Jellyfin/Emby report playback position in ticks (100ns units).
+const TICKS_PER_MS = 10000;
+
 class EmbyAdapter extends BaseAdapter {
   constructor(config) {
     super(config);
+    this.serverType = 'emby';
     this.url = config.embyUrl;
     this.apiKey = config.embyApiKey;
     this.userId = config.embyUserId;
+    this.allUsers = config.embyWatchStatusAllUsers !== false;
   }
 
   _headers() { return { 'X-Emby-Token': this.apiKey }; }
@@ -67,6 +72,69 @@ class EmbyAdapter extends BaseAdapter {
       logger.warn({ ...describeHttpError(err), filepath }, 'emby: could not look up library item by file path');
       return null;
     }
+  }
+
+  // Watch state per user, from the same /Items listing used for file
+  // resolution, run once per target user. Targets are every server user when
+  // embyWatchStatusAllUsers is on (the default), else just the configured
+  // one. UserData rides along when enableUserData is set and a userId is
+  // supplied (API-key auth returns no UserData otherwise). A failed /Users
+  // fetch fails the whole call: silently syncing nobody would masquerade as
+  // an empty success.
+  async fetchWatchStates() {
+    try {
+      let users = [];
+      let targets;
+      if (this.allUsers) {
+        const res = await axios.get(`${this.url}/Users`, { headers: this._headers(), timeout: REQUEST_TIMEOUT_MS });
+        users = (res.data || []).map((u) => ({ id: String(u.Id), name: u.Name || null }));
+        targets = users;
+      } else {
+        targets = [{ id: this.userId, name: null }];
+      }
+      const entries = [];
+      for (const user of targets) {
+        const params = {
+          userId: user.id,
+          includeItemTypes: 'Video,Movie,Episode',
+          recursive: true,
+          // List responses trim UserData (LastPlayedDate dropped, PlayCount
+          // zeroed) unless the UserData* fields are requested explicitly.
+          fields: 'Path,UserDataLastPlayedDate,UserDataPlayCount',
+          enableUserData: true,
+        };
+        const res = await axios.get(`${this.url}/Items`, { headers: this._headers(), params, timeout: REQUEST_TIMEOUT_MS });
+        const items = res.data?.Items || [];
+        for (const item of items) {
+          if (item.Path) entries.push(this._itemWatchState(item, user.id));
+        }
+      }
+      return { entries, users };
+    } catch (err) {
+      if (isServerUnavailableError(err)) throw new MediaServerUnavailableError(describeHttpError(err));
+      throw err;
+    }
+  }
+
+  _itemWatchState(item, serverUserId) {
+    const ud = item.UserData || {};
+    const played = !!ud.Played;
+    const positionTicks = ud.PlaybackPositionTicks != null ? Number(ud.PlaybackPositionTicks) : null;
+    let percentWatched = null;
+    if (played) {
+      percentWatched = 100;
+    } else if (ud.PlayedPercentage != null) {
+      percentWatched = Math.round(Number(ud.PlayedPercentage) * 10) / 10;
+    }
+    return {
+      path: item.Path,
+      serverUserId,
+      played,
+      playCount: ud.PlayCount != null ? Number(ud.PlayCount) : 0,
+      positionMs: positionTicks != null ? Math.round(positionTicks / TICKS_PER_MS) : null,
+      percentWatched,
+      lastWatchedAt: ud.LastPlayedDate ? new Date(ud.LastPlayedDate) : null,
+    };
   }
 
   async createPlaylist(name, itemIds, opts = {}) {

@@ -10,9 +10,7 @@ function createMediaServerRoutes({ verifyToken, configModule, mediaServers }) {
       const enabled = mediaServers.serverRegistry.getEnabledAdapters(cfg);
       const out = { plex: false, jellyfin: false, emby: false };
       for (const a of enabled) {
-        if (a.constructor.name === 'PlexAdapter') out.plex = true;
-        if (a.constructor.name === 'JellyfinAdapter') out.jellyfin = true;
-        if (a.constructor.name === 'EmbyAdapter') out.emby = true;
+        if (a.serverType in out) out[a.serverType] = true;
       }
       res.json(out);
     } catch (err) {
@@ -52,6 +50,44 @@ function createMediaServerRoutes({ verifyToken, configModule, mediaServers }) {
     testAndRespond(EmbyAdapter, req.body, res, req.log));
   router.post('/api/mediaservers/emby/users', verifyToken, (req, res) =>
     usersAndRespond(EmbyAdapter, req.body, res, req.log));
+
+  /**
+   * @swagger
+   * /api/mediaservers/watch-status:
+   *   get:
+   *     summary: Get watch status sync state
+   *     tags: [Media Servers]
+   *     responses:
+   *       200:
+   *         description: Whether a sync is running and the last run's summary
+   */
+  router.get('/api/mediaservers/watch-status', verifyToken, (req, res) => {
+    res.json(mediaServers.watchStatusSync.getStatus());
+  });
+
+  /**
+   * @swagger
+   * /api/mediaservers/watch-status/sync:
+   *   post:
+   *     summary: Trigger a watch status sync now
+   *     tags: [Media Servers]
+   *     responses:
+   *       202:
+   *         description: Sync started
+   *       409:
+   *         description: A sync is already running
+   */
+  router.post('/api/mediaservers/watch-status/sync', verifyToken, (req, res) => {
+    if (mediaServers.watchStatusSync.getStatus().running) {
+      return res.status(409).json({ error: 'Watch status sync is already running' });
+    }
+    // Fire-and-forget: syncAll never rejects for per-server failures; this
+    // catch covers unexpected rejections so no unhandled rejection escapes.
+    mediaServers.watchStatusSync.syncAll('manual').catch((err) => {
+      req.log.error({ err }, 'Manual watch status sync failed');
+    });
+    res.status(202).json({ started: true });
+  });
 
   return router;
 }

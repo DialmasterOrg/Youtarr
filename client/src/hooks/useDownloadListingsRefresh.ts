@@ -9,9 +9,10 @@ interface BroadcastMessage {
 }
 
 /**
- * Calls onRefresh (debounced) when a download batch persists a video
- * (videosUpdated) or a job finishes (downloadComplete), so listing pages
- * can refetch without a manual reload.
+ * Calls onRefresh (debounced) when a download job is enqueued or starts
+ * (jobsUpdated), a download batch persists a video (videosUpdated), or a
+ * job finishes (downloadComplete), so listing pages can refetch without
+ * a manual reload.
  */
 export function useDownloadListingsRefresh(onRefresh: () => void): void {
   const wsContext = useContext(WebSocketContext);
@@ -28,7 +29,9 @@ export function useDownloadListingsRefresh(onRefresh: () => void): void {
 
     const filter = (message: BroadcastMessage) =>
       message.destination === 'broadcast' &&
-      (message.type === 'videosUpdated' || message.type === 'downloadComplete');
+      (message.type === 'videosUpdated' ||
+        message.type === 'downloadComplete' ||
+        message.type === 'jobsUpdated');
 
     const callback = () => {
       if (debounceTimer) {

@@ -583,6 +583,7 @@ router.get('/api/your-endpoint', verifyToken, async (req, res) => {
 WebSocket shares the HTTP port (3011 in container, 3087 on host) and emits:
 - `downloadProgress` - Download progress updates
 - `downloadComplete` - Video download finished
+- `jobsUpdated` - Download job enqueued or started
 - `channelsUpdated` - Channel list changed
 
 ## Contributing

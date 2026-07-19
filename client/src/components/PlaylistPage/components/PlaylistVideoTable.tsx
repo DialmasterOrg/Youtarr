@@ -8,12 +8,14 @@ import {
   TableCell,
   TableHead,
   TableRow,
+  Tooltip,
   Typography,
 } from '../../ui';
 import { PlaylistVideo } from '../../../types/playlist';
 import { formatDurationClock } from '../../../utils';
 import { isDownloadable, statusLabel, PublishedDate, toDownloadFileProps } from './playlistVideoHelpers';
 import DownloadFormatIndicator from '../../shared/DownloadFormatIndicator';
+import WatchedChip from '../../shared/WatchedChip';
 
 const THUMB_WIDTH = 120;
 const THUMB_HEIGHT = 67;
@@ -126,21 +128,39 @@ const PlaylistVideoTable: React.FC<PlaylistVideoTableProps> = ({
                 {formatDurationClock(v.duration) || '-'}
               </TableCell>
               <TableCell>
-                {v.downloaded ? (
-                  <DownloadFormatIndicator {...toDownloadFileProps(v)} orientation="vertical" />
-                ) : (
-                  <Chip label={status.label} color={status.color} size="small" />
-                )}
+                <div className="flex flex-col items-start gap-1">
+                  {v.downloaded ? (
+                    <>
+                      <DownloadFormatIndicator {...toDownloadFileProps(v)} orientation="vertical" />
+                      {v.ignored && (
+                        <Chip label={status.label} color={status.color} size="small" />
+                      )}
+                    </>
+                  ) : (
+                    <Chip label={status.label} color={status.color} size="small" />
+                  )}
+                  <WatchedChip watchedBy={v.watched_by || []} />
+                </div>
               </TableCell>
               <TableCell align="right" onClick={(e) => e.stopPropagation()}>
                 {v.ignored ? (
-                  <Button size="sm" variant="outlined" onClick={() => onUnignore(v.youtube_id)} disabled={isPending}>
-                    Unignore
-                  </Button>
+                  <Tooltip title="Include this video in this playlist's downloads and server sync again">
+                    <Button size="sm" variant="outlined" onClick={() => onUnignore(v.youtube_id)} disabled={isPending}>
+                      Include
+                    </Button>
+                  </Tooltip>
                 ) : (
-                  <Button size="sm" variant="outlined" onClick={() => onIgnore(v.youtube_id)} disabled={isPending}>
-                    Ignore
-                  </Button>
+                  <Tooltip
+                    title={
+                      v.downloaded
+                        ? 'Exclude from this playlist: removed from synced server playlists and M3U files; the file stays on disk'
+                        : 'Exclude from this playlist: skipped when downloading this playlist'
+                    }
+                  >
+                    <Button size="sm" variant="outlined" onClick={() => onIgnore(v.youtube_id)} disabled={isPending}>
+                      Exclude
+                    </Button>
+                  </Tooltip>
                 )}
               </TableCell>
             </TableRow>

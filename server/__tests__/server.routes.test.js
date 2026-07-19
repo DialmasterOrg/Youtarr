@@ -396,6 +396,7 @@ const createServerModule = ({
         }));
         jest.doMock('../modules/webSocketServer.js', () => jest.fn());
         jest.doMock('node-cron', () => cronMock);
+        jest.doMock('../modules/mediaServers/watchStatusScheduler', () => ({ scheduleTask: jest.fn(), subscribe: jest.fn() }));
         jest.doMock('express-rate-limit', () => Object.assign(rateLimitMiddleware, { ipKeyGenerator: rateLimitMiddleware.ipKeyGenerator }));
         jest.doMock('multer', () => multerMock);
         jest.doMock('https', () => httpsMock);
@@ -1022,7 +1023,8 @@ describe('server routes - channels', () => {
         null, // default dateTo
         'off', // default protectedFilter
         'off', // default missingFilter
-        'off' // default ignoredFilter
+        'off', // default ignoredFilter
+        'off' // default watchedFilter
       );
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
@@ -1067,7 +1069,8 @@ describe('server routes - channels', () => {
           downloadedFilter: 'exclude',
           searchQuery: 'test search',
           sortBy: 'title',
-          sortOrder: 'asc'
+          sortOrder: 'asc',
+          watchedFilter: 'only'
         }
       });
       const res = createMockResponse();
@@ -1089,7 +1092,8 @@ describe('server routes - channels', () => {
         null, // default dateTo
         'off', // default protectedFilter
         'off', // default missingFilter
-        'off' // default ignoredFilter
+        'off', // default ignoredFilter
+        'only' // watchedFilter
       );
       expect(res.statusCode).toBe(200);
     });
@@ -1131,7 +1135,8 @@ describe('server routes - channels', () => {
         null, // default dateTo
         'off', // default protectedFilter
         'off', // default missingFilter
-        'off' // default ignoredFilter
+        'off', // default ignoredFilter
+        'off' // default watchedFilter
       );
       expect(res.statusCode).toBe(200);
     });
@@ -1413,6 +1418,7 @@ describe('server routes - videos', () => {
         channelFilter: '',
         protectedFilter: 'off',
         missingFilter: 'off',
+        watchedFilter: 'off',
       });
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
@@ -1444,7 +1450,8 @@ describe('server routes - videos', () => {
           dateTo: '2024-12-31',
           sortBy: 'title',
           sortOrder: 'asc',
-          channelFilter: 'channel123'
+          channelFilter: 'channel123',
+          watchedFilter: 'exclude'
         }
       });
       const res = createMockResponse();
@@ -1462,6 +1469,7 @@ describe('server routes - videos', () => {
         channelFilter: 'channel123',
         protectedFilter: 'off',
         missingFilter: 'off',
+        watchedFilter: 'exclude',
       });
       expect(res.statusCode).toBe(200);
     });

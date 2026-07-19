@@ -21,6 +21,7 @@ const baseParams = {
   maxRatingFilter: '',
   protectedFilter: 'off' as const,
   missingFilter: 'off' as const,
+  watchedFilter: 'off' as const,
   useInfiniteScroll: false,
 };
 
@@ -71,6 +72,7 @@ describe('useVideosData', () => {
         maxRatingFilter: 'TV-MA',
         protectedFilter: 'only',
         missingFilter: 'exclude',
+        watchedFilter: 'exclude',
       })
     );
 
@@ -87,6 +89,7 @@ describe('useVideosData', () => {
     expect(url).toContain('maxRating=TV-MA');
     expect(url).toContain('protectedFilter=only');
     expect(url).toContain('missingFilter=exclude');
+    expect(url).toContain('watchedFilter=exclude');
   });
 
   test('omits missingFilter from query string when off', async () => {
@@ -96,6 +99,7 @@ describe('useVideosData', () => {
     const url = axios.get.mock.calls[0][0] as string;
     expect(url).not.toContain('missingFilter');
     expect(url).not.toContain('protectedFilter');
+    expect(url).not.toContain('watchedFilter');
   });
 
   test('replaces videos when not using infinite scroll', async () => {

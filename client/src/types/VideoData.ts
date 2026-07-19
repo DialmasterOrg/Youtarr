@@ -25,6 +25,7 @@ export interface VideoData {
   normalized_rating?: string | null;
   rating_source?: string | null;
   protected?: boolean;
+  watchedBy?: string[];
 }
 
 export interface EnabledChannel {

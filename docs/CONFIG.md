@@ -228,7 +228,7 @@ Configuration can be modified through:
 - **Description**: Optional override for the token used on playlist-scoped Plex API calls.
 - **Values**:
   - `""` / unset: fall back to `plexApiKey`. This is the standard claimed-server case; playlists are visible to the authenticated user.
-  - `"UNCLAIMED_SERVER"`: send playlist requests with no `X-Plex-Token` header. Use this for unclaimed-server LAN setups where Plex Web also accepts unauthenticated calls.
+  - `"UNCLAIMED_SERVER"`: send playlist requests with no `X-Plex-Token` header. Use this for unclaimed-server LAN setups where Plex Web also accepts unauthenticated calls. Watch status sync also reads the anonymous session's watch state in this mode.
   - Any other string: use that exact token (route Youtarr-managed playlists through a specific Plex user account other than the admin).
 - **Usage**: Surface in the UI as an "Advanced" toggle inside the Plex Settings section. Most users do not need to set this.
 
@@ -276,6 +276,19 @@ These fields work like the Jellyfin fields above, with `emby*` names. They're re
 | `embyApiKey` | `string` | `""` | Created in Emby under **Settings -> Advanced -> API Keys**. Redacted in logs. |
 | `embyUserId` | `string` | `""` | User account that will own Youtarr-managed playlists. Open the **Emby User** dropdown in the UI to load accounts from your server and pick one. |
 | `embyVideoLibraryIds` | `array<string>` | `[]` | Library IDs that contain your Youtarr videos. Optional and safe to leave blank; Youtarr matches videos across all of your libraries. |
+
+## Watch Status Sync
+
+| Config Key | Type | Default | Description |
+| :--------- | :--- | :------ | :---------- |
+| `watchStatusSyncEnabled` | `boolean` | `true` | Periodically pull per-video watch status (watched, percent, last watched) from connected media servers (Plex, Jellyfin, Emby) into Youtarr. No-op when no media server is connected. |
+| `watchStatusSyncFrequency` | `string` (cron) | `"0 */4 * * *"` | How often the watch status sync runs. |
+| `plexWatchStatusAllUsers` | `boolean` | `true` | Also sync watch status for every Plex account on the server (from the server's play history; the owner keeps full fidelity). When `false`, only the server owner's state is synced. |
+| `jellyfinWatchStatusAllUsers` | `boolean` | `true` | Sync watch status for every Jellyfin user. When `false`, only the configured `jellyfinUserId`. |
+| `embyWatchStatusAllUsers` | `boolean` | `true` | Sync watch status for every Emby user. When `false`, only the configured `embyUserId`. |
+| `watchStatusWatchedRule` | `string` | `"any"` | When a video counts as "Watched" in listings: `"any"` (any synced user watched it) or `"primary"` (only the Plex owner / configured Jellyfin/Emby user). |
+
+Sync is one-way (server -> Youtarr). Non-owner Plex users come from the server's play history, which records plays but not in-progress positions: any play marks the video watched for that user. User names are stored in the `media_server_users` table so the video modal can show who watched what. The history pull is incremental via a durable cursor in the `watch_status_sync_cursors` table; deleting that table's `plex` row forces a full history re-scan on the next sync (useful after repairing a path mismatch that had prevented videos from matching).
 
 ## YouTube Data API (Optional)
 

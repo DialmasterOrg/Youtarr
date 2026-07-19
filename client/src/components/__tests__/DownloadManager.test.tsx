@@ -257,38 +257,83 @@ describe('DownloadManager', () => {
       expect(mockUnsubscribe).toHaveBeenCalledWith(expect.any(Function));
     });
 
-    test('filter function correctly identifies download complete messages', () => {
+    test('filter function matches job lifecycle and video broadcasts', () => {
       renderWithContext(<DownloadManager token={mockToken} />);
 
       const [filterFunction] = mockSubscribe.mock.calls[0];
 
       expect(filterFunction({ destination: 'broadcast', type: 'downloadComplete' })).toBe(true);
-      expect(filterFunction({ destination: 'broadcast', type: 'other' })).toBe(false);
+      expect(filterFunction({ destination: 'broadcast', type: 'jobsUpdated' })).toBe(true);
+      expect(filterFunction({ destination: 'broadcast', type: 'videosUpdated' })).toBe(true);
+      expect(filterFunction({ destination: 'broadcast', type: 'downloadProgress' })).toBe(false);
       expect(filterFunction({ destination: 'private', type: 'downloadComplete' })).toBe(false);
     });
 
-    test('processes download complete message by fetching jobs', async () => {
-      mockedAxios.get.mockResolvedValueOnce({ data: [] });
+    test('processes download complete message by fetching jobs after debounce', async () => {
+      jest.useFakeTimers();
+      try {
+        mockedAxios.get.mockResolvedValueOnce({ data: [] });
 
-      renderWithContext(<DownloadManager token={mockToken} />, '/history');
+        renderWithContext(<DownloadManager token={mockToken} />, '/history');
 
-      await waitFor(() => {
+        await waitFor(() => {
+          expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+        });
+
+        const [, processCallback] = mockSubscribe.mock.calls[0];
+
+        mockedAxios.get.mockResolvedValueOnce({ data: mockJobs });
+
+        act(() => {
+          processCallback({ type: 'downloadComplete' });
+        });
         expect(mockedAxios.get).toHaveBeenCalledTimes(1);
-      });
 
-      const [, processCallback] = mockSubscribe.mock.calls[0];
+        await act(async () => {
+          jest.advanceTimersByTime(1000);
+        });
 
-      mockedAxios.get.mockResolvedValueOnce({ data: mockJobs });
-
-      await act(async () => {
-        processCallback({ type: 'downloadComplete' });
-      });
-
-      await waitFor(() => {
         expect(mockedAxios.get).toHaveBeenCalledTimes(2);
-      });
+        expect(screen.getByText('Jobs Count: 2')).toBeInTheDocument();
+      } finally {
+        act(() => {
+          jest.runOnlyPendingTimers();
+        });
+        jest.useRealTimers();
+      }
+    });
 
-      expect(screen.getByText('Jobs Count: 2')).toBeInTheDocument();
+    test('refetches jobs when a jobsUpdated broadcast arrives', async () => {
+      jest.useFakeTimers();
+      try {
+        mockedAxios.get.mockResolvedValueOnce({ data: [] });
+
+        renderWithContext(<DownloadManager token={mockToken} />, '/history');
+
+        await waitFor(() => {
+          expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+        });
+
+        const [, processCallback] = mockSubscribe.mock.calls[0];
+
+        mockedAxios.get.mockResolvedValueOnce({ data: mockJobs });
+
+        act(() => {
+          processCallback({ jobId: 'job-1', status: 'In Progress' });
+        });
+
+        await act(async () => {
+          jest.advanceTimersByTime(1000);
+        });
+
+        expect(mockedAxios.get).toHaveBeenCalledTimes(2);
+        expect(screen.getByText('Jobs Count: 2')).toBeInTheDocument();
+      } finally {
+        act(() => {
+          jest.runOnlyPendingTimers();
+        });
+        jest.useRealTimers();
+      }
     });
   });
 

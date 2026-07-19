@@ -20,6 +20,10 @@ describe('PlexAdapter', () => {
 
   beforeEach(() => jest.clearAllMocks());
 
+  test('exposes the serverType contract used by orchestration', () => {
+    expect(new PlexAdapter(cfg).serverType).toBe('plex');
+  });
+
   // resolveItemIdByFilepath first enumerates video sections via /library/sections,
   // then queries each section's /all. This helper queues the enumeration response.
   const mockSections = (sections) =>
@@ -567,6 +571,477 @@ describe('PlexAdapter', () => {
       const adapter = new PlexAdapter(cfg);
       await expect(adapter.triggerLibraryScan(null, { mediaType: 'audio' })).resolves.not.toThrow();
       expect(plexModule.refreshLibrary).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('fetchWatchStates', () => {
+    // Single-user mode for most tests so the queued responses stay minimal;
+    // all-users behavior gets its own tests below.
+    const cfg = { plexUrl: 'http://plex:32400', plexApiKey: 'TOKEN', plexYoutubeLibraryId: '1', plexWatchStatusAllUsers: false };
+    const allUsersCfg = { plexUrl: 'http://plex:32400', plexApiKey: 'TOKEN', plexYoutubeLibraryId: '1' };
+
+    test('maps viewCount/viewOffset/lastViewedAt to watch state entries', async () => {
+      // _getSectionIds enumerates /library/sections first
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Directory: [{ type: 'movie', key: '1' }] } },
+      });
+      // section /all listing
+      axios.get.mockResolvedValueOnce({
+        data: {
+          MediaContainer: {
+            Metadata: [
+              {
+                ratingKey: '11',
+                viewCount: 2,
+                lastViewedAt: 1752624000,
+                duration: 600000,
+                Media: [{ Part: [{ file: '/media/Chan/Video A [id1].mp4' }] }],
+              },
+              {
+                ratingKey: '12',
+                viewOffset: 150000,
+                duration: 600000,
+                Media: [{ Part: [{ file: '/media/Chan/Video B [id2].mp4' }] }],
+              },
+              {
+                ratingKey: '13',
+                duration: 600000,
+                Media: [{ Part: [{ file: '/media/Chan/Video C [id3].mp4' }] }],
+              },
+            ],
+          },
+        },
+      });
+
+      const adapter = new PlexAdapter(cfg);
+      const { entries } = await adapter.fetchWatchStates();
+
+      expect(entries).toHaveLength(3);
+      expect(entries[0]).toEqual({
+        path: '/media/Chan/Video A [id1].mp4',
+        serverUserId: '1',
+        played: true,
+        playCount: 2,
+        positionMs: null,
+        percentWatched: 100,
+        lastWatchedAt: new Date(1752624000 * 1000),
+      });
+      expect(entries[1].played).toBe(false);
+      expect(entries[1].positionMs).toBe(150000);
+      expect(entries[1].percentWatched).toBe(25);
+      expect(entries[2].played).toBe(false);
+      expect(entries[2].percentWatched).toBeNull();
+    });
+
+    test('uses the admin token, not the playlist token', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Directory: [{ type: 'movie', key: '1' }] } },
+      });
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+
+      const adapter = new PlexAdapter({ ...cfg, plexPlaylistToken: 'OTHER' });
+      await adapter.fetchWatchStates();
+
+      // first call is the /library/sections enumeration; it must carry the admin token too
+      const enumCall = axios.get.mock.calls[0];
+      expect(enumCall[1].params['X-Plex-Token']).toBe('TOKEN');
+      // second call is the section listing; it must carry the admin token
+      const sectionCall = axios.get.mock.calls[1];
+      expect(sectionCall[1].params['X-Plex-Token']).toBe('TOKEN');
+    });
+
+    test('omits X-Plex-Token on all watch-state requests when plexPlaylistToken is the UNCLAIMED_SERVER sentinel', async () => {
+      // /library/sections enumeration, then the section /all listing
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Directory: [{ type: 'movie', key: '1' }] } },
+      });
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+
+      const adapter = new PlexAdapter({ ...cfg, plexPlaylistToken: 'UNCLAIMED_SERVER' });
+      await adapter.fetchWatchStates();
+
+      expect(axios.get).toHaveBeenCalledTimes(2);
+      for (const call of axios.get.mock.calls) {
+        expect(call[1].params).not.toHaveProperty('X-Plex-Token');
+      }
+    });
+
+    test('throws MediaServerUnavailableError when the server is unreachable', async () => {
+      const { MediaServerUnavailableError } = require('../baseAdapter');
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Directory: [{ type: 'movie', key: '1' }] } },
+      });
+      const err = new Error('connect ECONNREFUSED');
+      err.isAxiosError = true;
+      err.code = 'ECONNREFUSED';
+      axios.get.mockRejectedValueOnce(err);
+
+      const adapter = new PlexAdapter(cfg);
+      await expect(adapter.fetchWatchStates()).rejects.toBeInstanceOf(MediaServerUnavailableError);
+    });
+
+    test('lists show sections with type=4 so episode files are enumerated', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Directory: [{ type: 'movie', key: '1' }, { type: 'show', key: '5' }] } },
+      });
+      // movie section listing: plain /all
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+      // show section listing: episode leaves
+      axios.get.mockResolvedValueOnce({
+        data: {
+          MediaContainer: {
+            Metadata: [
+              { ratingKey: '51', viewCount: 1, Media: [{ Part: [{ file: '/tv/Chan/S01E01 [vid1].mp4' }] }] },
+            ],
+          },
+        },
+      });
+
+      const adapter = new PlexAdapter(cfg);
+      const { entries } = await adapter.fetchWatchStates();
+
+      const movieCall = axios.get.mock.calls[1];
+      expect(movieCall[1].params).not.toHaveProperty('type');
+      const showCall = axios.get.mock.calls[2];
+      expect(showCall[0]).toBe('http://plex:32400/library/sections/5/all');
+      expect(showCall[1].params.type).toBe(4);
+      expect(entries).toHaveLength(1);
+      expect(entries[0].path).toBe('/tv/Chan/S01E01 [vid1].mp4');
+      expect(entries[0].played).toBe(true);
+    });
+
+    test('throws when every section listing fails (e.g. expired admin token)', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Directory: [{ type: 'movie', key: '1' }, { type: 'movie', key: '2' }] } },
+      });
+      const unauthorized = new Error('Request failed with status code 401');
+      unauthorized.isAxiosError = true;
+      unauthorized.response = { status: 401 };
+      axios.get.mockRejectedValueOnce(unauthorized);
+      axios.get.mockRejectedValueOnce(unauthorized);
+
+      const adapter = new PlexAdapter(cfg);
+      await expect(adapter.fetchWatchStates()).rejects.toThrow(
+        /could not list any Plex library section \(HTTP 401\)/
+      );
+    });
+
+    test('throws when enumeration fails and no fallback library is configured', async () => {
+      const { WatchStateFetchError } = require('../baseAdapter');
+      // serverRegistry enables Plex on URL + API key alone, so the configured
+      // library id can legitimately be absent.
+      const unauthorized = new Error('Request failed with status code 401');
+      unauthorized.isAxiosError = true;
+      unauthorized.response = { status: 401 };
+      axios.get.mockRejectedValueOnce(unauthorized);
+
+      const adapter = new PlexAdapter({ plexUrl: 'http://plex:32400', plexApiKey: 'TOKEN' });
+      await expect(adapter.fetchWatchStates()).rejects.toThrow(WatchStateFetchError);
+    });
+
+    test('throws MediaServerUnavailableError when enumeration fails with a network error and no library is configured', async () => {
+      const { MediaServerUnavailableError } = require('../baseAdapter');
+      const err = new Error('connect ECONNREFUSED');
+      err.isAxiosError = true;
+      err.code = 'ECONNREFUSED';
+      axios.get.mockRejectedValueOnce(err);
+
+      const adapter = new PlexAdapter({ plexUrl: 'http://plex:32400', plexApiKey: 'TOKEN' });
+      await expect(adapter.fetchWatchStates()).rejects.toBeInstanceOf(MediaServerUnavailableError);
+    });
+
+    test('returns empty success when enumeration succeeds but the server has no video sections', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Directory: [{ type: 'artist', key: '40' }] } },
+      });
+
+      const adapter = new PlexAdapter({ plexUrl: 'http://plex:32400', plexApiKey: 'TOKEN', plexWatchStatusAllUsers: false });
+      await expect(adapter.fetchWatchStates()).resolves.toEqual({ entries: [], users: [], historyCursor: null });
+    });
+
+    test('a single failed section does not abort the others', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Directory: [{ type: 'movie', key: '1' }, { type: 'movie', key: '2' }] } },
+      });
+      const notFound = new Error('Request failed with status code 404');
+      notFound.isAxiosError = true;
+      notFound.response = { status: 404 };
+      axios.get.mockRejectedValueOnce(notFound);
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Metadata: [{ viewCount: 1, Media: [{ Part: [{ file: '/media/Chan/V [x1].mp4' }] }] }] } },
+      });
+
+      const adapter = new PlexAdapter(cfg);
+      const { entries } = await adapter.fetchWatchStates();
+      expect(entries).toHaveLength(1);
+      expect(entries[0].path).toBe('/media/Chan/V [x1].mp4');
+    });
+
+    test('makes no accounts or history requests when all-users is disabled', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Directory: [{ type: 'movie', key: '1' }] } },
+      });
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+
+      const adapter = new PlexAdapter(cfg);
+      await adapter.fetchWatchStates();
+
+      expect(axios.get).toHaveBeenCalledTimes(2);
+    });
+
+    test('pulls history for non-owner accounts and maps it through ratingKeys', async () => {
+      // enumeration + one movie section listing
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Directory: [{ type: 'movie', key: '1' }] } },
+      });
+      axios.get.mockResolvedValueOnce({
+        data: {
+          MediaContainer: {
+            Metadata: [
+              { ratingKey: '11', duration: 600000, Media: [{ Part: [{ file: '/m/a.mp4' }] }] },
+            ],
+          },
+        },
+      });
+      // /accounts
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Account: [{ id: 1, name: 'chris' }, { id: 55, name: 'kid1' }] } },
+      });
+      // history (single short page)
+      axios.get.mockResolvedValueOnce({
+        data: {
+          MediaContainer: {
+            Metadata: [
+              { accountID: 55, ratingKey: '11', viewedAt: 1752624000 },
+              { accountID: 55, ratingKey: '11', viewedAt: 1752624100 }, // dedupe, keep max
+              { accountID: 1, ratingKey: '11', viewedAt: 1752624200 },  // owner: listing covers it
+              { accountID: 55, ratingKey: '99', viewedAt: 1752624300 }, // unknown ratingKey
+            ],
+          },
+        },
+      });
+
+      const adapter = new PlexAdapter(allUsersCfg);
+      const { entries, users, historyCursor } = await adapter.fetchWatchStates();
+
+      expect(users).toEqual([{ id: '1', name: 'chris' }, { id: '55', name: 'kid1' }]);
+      const kid = entries.find((e) => e.serverUserId === '55');
+      expect(kid).toMatchObject({
+        path: '/m/a.mp4',
+        played: true,
+        playCount: 1,
+        positionMs: null,
+        percentWatched: 100,
+      });
+      expect(kid.lastWatchedAt).toEqual(new Date(1752624100 * 1000));
+      // Owner comes from the listing, never duplicated from history.
+      expect(entries.filter((e) => e.serverUserId === '1')).toHaveLength(1);
+      // The cursor reflects the newest SCANNED event, matched or not: the
+      // unknown-ratingKey event at 1752624300 counts.
+      expect(historyCursor).toEqual(new Date(1752624300 * 1000));
+    });
+
+    test('performs a full history pull when an account unknown to the caller appears', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Directory: [{ type: 'movie', key: '1' }] } },
+      });
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Account: [{ id: 1, name: 'chris' }, { id: 99, name: 'newkid' }] } },
+      });
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+
+      const adapter = new PlexAdapter(allUsersCfg);
+      await adapter.fetchWatchStates({
+        since: new Date(1752620000 * 1000),
+        knownUserIds: ['55'],
+      });
+
+      const historyCall = axios.get.mock.calls[3];
+      expect(historyCall[1].params).not.toHaveProperty('viewedAt>');
+    });
+
+    test('keeps the incremental window when all accounts are already known', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Directory: [{ type: 'movie', key: '1' }] } },
+      });
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Account: [{ id: 1, name: 'chris' }, { id: 55, name: 'kid1' }] } },
+      });
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+
+      const adapter = new PlexAdapter(allUsersCfg);
+      await adapter.fetchWatchStates({
+        since: new Date(1752620000 * 1000),
+        knownUserIds: ['55'],
+      });
+
+      const historyCall = axios.get.mock.calls[3];
+      expect(historyCall[1].params['viewedAt>']).toBe(1752620000);
+    });
+
+    test('does not advance the cursor when a section listing fails', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Directory: [{ type: 'movie', key: '1' }, { type: 'movie', key: '2' }] } },
+      });
+      // Section 1 lists fine; section 2 fails with a 404.
+      axios.get.mockResolvedValueOnce({
+        data: {
+          MediaContainer: {
+            Metadata: [{ ratingKey: '11', Media: [{ Part: [{ file: '/m/a.mp4' }] }] }],
+          },
+        },
+      });
+      const notFound = new Error('Request failed with status code 404');
+      notFound.isAxiosError = true;
+      notFound.response = { status: 404 };
+      axios.get.mockRejectedValueOnce(notFound);
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Account: [] } } });
+      axios.get.mockResolvedValueOnce({
+        data: {
+          MediaContainer: {
+            Metadata: [{ accountID: 55, ratingKey: '11', viewedAt: 1752624000 }],
+          },
+        },
+      });
+
+      const adapter = new PlexAdapter(allUsersCfg);
+      const { entries, historyCursor } = await adapter.fetchWatchStates();
+
+      // History entries still flow, but the cursor must not advance: skipped
+      // events may belong to the failed section's items.
+      expect(entries.some((e) => e.serverUserId === '55')).toBe(true);
+      expect(historyCursor).toBeNull();
+    });
+
+    test('withholds a new account from the user list when a section listing fails', async () => {
+      // Pre-existing cursor + new account 99 -> full backfill pull, but one
+      // section fails mid-scan. If 99 were reported (and stored as known),
+      // the next sync would resume from the old cursor and permanently skip
+      // 99's pre-cursor events for the failed section's items.
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Directory: [{ type: 'movie', key: '1' }, { type: 'movie', key: '2' }] } },
+      });
+      axios.get.mockResolvedValueOnce({
+        data: {
+          MediaContainer: {
+            Metadata: [{ ratingKey: '11', Media: [{ Part: [{ file: '/m/a.mp4' }] }] }],
+          },
+        },
+      });
+      const notFound = new Error('Request failed with status code 404');
+      notFound.isAxiosError = true;
+      notFound.response = { status: 404 };
+      axios.get.mockRejectedValueOnce(notFound);
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Account: [{ id: 1, name: 'chris' }, { id: 55, name: 'kid1' }, { id: 99, name: 'newkid' }] } },
+      });
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+
+      const adapter = new PlexAdapter(allUsersCfg);
+      const { users, historyCursor } = await adapter.fetchWatchStates({
+        since: new Date(1752620000 * 1000),
+        knownUserIds: ['55'],
+      });
+
+      // The full pull still ran (new account detected)...
+      const historyCall = axios.get.mock.calls[4];
+      expect(historyCall[1].params).not.toHaveProperty('viewedAt>');
+      // ...but the unknown account is not reported, so the caller cannot mark
+      // it known off an incomplete scan; owner and known accounts still flow.
+      expect(users).toEqual([{ id: '1', name: 'chris' }, { id: '55', name: 'kid1' }]);
+      expect(historyCursor).toBeNull();
+    });
+
+    test('advances the cursor to the last scanned event when the page cap truncates', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Directory: [{ type: 'movie', key: '1' }] } },
+      });
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Account: [] } } });
+      const fullPage = Array.from({ length: 1000 }, (_, i) => ({
+        accountID: 55, ratingKey: '99', viewedAt: 1752600000 + i,
+      }));
+      for (let page = 0; page < 50; page++) {
+        axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: fullPage } } });
+      }
+
+      const adapter = new PlexAdapter(allUsersCfg);
+      const { historyCursor } = await adapter.fetchWatchStates();
+
+      // 50 pages scanned, then capped; the cursor records the newest scanned
+      // event so the next sync resumes instead of refetching the same window.
+      expect(axios.get).toHaveBeenCalledTimes(3 + 50);
+      expect(historyCursor).toEqual(new Date((1752600000 + 999) * 1000));
+    });
+
+    test('passes the since watermark to the history request', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Directory: [{ type: 'movie', key: '1' }] } },
+      });
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Account: [] } } });
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+
+      const adapter = new PlexAdapter(allUsersCfg);
+      await adapter.fetchWatchStates({ since: new Date(1752620000 * 1000) });
+
+      const historyCall = axios.get.mock.calls[3];
+      expect(historyCall[0]).toBe('http://plex:32400/status/sessions/history/all');
+      expect(historyCall[1].params['viewedAt>']).toBe(1752620000);
+      expect(historyCall[1].params.sort).toBe('viewedAt:asc');
+    });
+
+    test('pages history until a short page', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Directory: [{ type: 'movie', key: '1' }] } },
+      });
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Account: [] } } });
+      const fullPage = Array.from({ length: 1000 }, (_, i) => ({
+        accountID: 55, ratingKey: '99', viewedAt: 1752620000 + i,
+      }));
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: fullPage } } });
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+
+      const adapter = new PlexAdapter(allUsersCfg);
+      await adapter.fetchWatchStates();
+
+      const firstHistory = axios.get.mock.calls[3][1].params;
+      const secondHistory = axios.get.mock.calls[4][1].params;
+      expect(firstHistory['X-Plex-Container-Start']).toBe(0);
+      expect(secondHistory['X-Plex-Container-Start']).toBe(1000);
+      expect(axios.get).toHaveBeenCalledTimes(5);
+    });
+
+    test('throws WatchStateFetchError when the history request fails', async () => {
+      const { WatchStateFetchError } = require('../baseAdapter');
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Directory: [{ type: 'movie', key: '1' }] } },
+      });
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Account: [] } } });
+      const unauthorized = new Error('Request failed with status code 401');
+      unauthorized.isAxiosError = true;
+      unauthorized.response = { status: 401 };
+      axios.get.mockRejectedValueOnce(unauthorized);
+
+      const adapter = new PlexAdapter(allUsersCfg);
+      await expect(adapter.fetchWatchStates()).rejects.toThrow(WatchStateFetchError);
+    });
+
+    test('skips accounts and history on unclaimed (anonymous) servers even with all-users on', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Directory: [{ type: 'movie', key: '1' }] } },
+      });
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+
+      const adapter = new PlexAdapter({ ...allUsersCfg, plexPlaylistToken: 'UNCLAIMED_SERVER' });
+      const { users } = await adapter.fetchWatchStates();
+
+      expect(users).toEqual([]);
+      expect(axios.get).toHaveBeenCalledTimes(2);
     });
   });
 });

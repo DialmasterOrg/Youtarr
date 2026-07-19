@@ -10,6 +10,9 @@ const Playlist = require('./playlist');
 const PlaylistVideo = require('./playlistvideo');
 const PlaylistSyncState = require('./playlistsyncstate');
 const Subfolder = require('./subfolder');
+const VideoWatchStatus = require('./videowatchstatus');
+const MediaServerUser = require('./mediaserveruser');
+const WatchStatusSyncCursor = require('./watchstatussynccursor');
 
 Job.hasMany(JobVideo, { foreignKey: 'job_id', as: 'jobVideos' });
 Job.hasMany(JobVideoDownload, { foreignKey: 'job_id', as: 'jobVideoDownloads' });
@@ -27,6 +30,9 @@ PlaylistVideo.belongsTo(Playlist, { foreignKey: 'playlist_id', targetKey: 'playl
 Playlist.hasMany(PlaylistSyncState, { foreignKey: 'playlist_id', sourceKey: 'id' });
 PlaylistSyncState.belongsTo(Playlist, { foreignKey: 'playlist_id', targetKey: 'id' });
 
+Video.hasMany(VideoWatchStatus, { foreignKey: 'video_id', as: 'watchStatuses' });
+VideoWatchStatus.belongsTo(Video, { foreignKey: 'video_id', as: 'video' });
+
 module.exports = {
   Job,
   JobVideo,
@@ -39,4 +45,7 @@ module.exports = {
   PlaylistVideo,
   PlaylistSyncState,
   Subfolder,
+  VideoWatchStatus,
+  MediaServerUser,
+  WatchStatusSyncCursor,
 };

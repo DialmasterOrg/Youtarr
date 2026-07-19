@@ -1,16 +1,5 @@
-/* eslint-env jest */
-
-// Dummy test to satisfy Jest requirement that test files must contain at least one test
-// This file is a utility module, not a test file
-describe('testUtils', () => {
-  test('exports findRouteHandlers', () => {
-    expect(typeof findRouteHandlers).toBe('function');
-  });
-
-  test('exports findRouteHandler', () => {
-    expect(typeof findRouteHandler).toBe('function');
-  });
-});
+// Test utility module, not a test suite: jest's testMatch only collects
+// *.test.js files, so this helper is never run directly.
 
 /**
  * Finds route handlers in an Express app, including nested routers

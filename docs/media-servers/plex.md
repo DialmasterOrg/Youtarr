@@ -7,6 +7,7 @@ Complete guide for integrating Youtarr with Plex Media Server.
 - [Library Setup](#library-setup)
 - [Youtarr Configuration](#youtarr-configuration)
 - [Native Playlist Sync](#native-playlist-sync)
+- [Watch Status Sync](#watch-status-sync)
 - [Multi-Library Organization](#multi-library-organization)
 - [What You'll See](#what-youll-see)
 - [Tips and Best Practices](#tips-and-best-practices)
@@ -21,6 +22,7 @@ Youtarr provides full Plex integration with:
 - OAuth authentication for API token retrieval
 - Multi-library support through subfolders
 - Native playlist sync: subscribed YouTube playlists appear as Plex playlists (see [Native Playlist Sync](#native-playlist-sync))
+- Watch status sync: Youtarr pulls who has watched what from Plex (see [Watch Status Sync](#watch-status-sync))
 
 ## Library Setup
 
@@ -127,7 +129,7 @@ Once Plex is connected with the settings above, Youtarr can mirror your subscrib
 Most people can ignore this. Under **Settings -> Plex -> Advanced: playlist visibility scope**, you can control which account owns Youtarr's playlists:
 
 - **Use my Plex admin account (default)**: the normal claimed-server case. Playlists are created under your account and are visible to you.
-- **Unclaimed server (anonymous LAN access)**: for an unclaimed server on your LAN, where Plex Web browses without a token. If a connection test detects an unclaimed server, Youtarr nudges you toward this option.
+- **Unclaimed server (anonymous LAN access)**: for an unclaimed server on your LAN, where Plex Web browses without a token. If a connection test detects an unclaimed server, Youtarr nudges you toward this option. Watch status sync also reads the anonymous session's watch state in this mode.
 - **A specific Plex user account**: routes the playlists through a token you paste in.
 
 Plex playlists are always owned by a single account, so there's no automatic "public" setting. To let another Plex user see a playlist, open it in Plex Web and share it (playlist menu -> Share), or use **Settings -> Manage Library Access -> [user] -> Media**. Youtarr can't grant per-user access for you.
@@ -135,6 +137,19 @@ Plex playlists are always owned by a single account, so there's no automatic "pu
 Heads up: shared playlists do not appear in the recipient's **Playlists** section - Plex lists playlists shared by another account under a separate sidebar source named **Media**. If a user reports the playlist is missing even though the share looks correct, have them check there. See [Shared Playlists Don't Appear for Other Users](../TROUBLESHOOTING.md#shared-playlists-dont-appear-for-other-users-plex) for related gotchas (library access, content-rating restrictions).
 
 For how syncing, ordering, and playlist updates work across all servers, see [Media Server Playlists](../MEDIA_SERVER_PLAYLISTS.md).
+
+## Watch Status Sync
+
+The same Plex connection you set up above also enables watch status sync: on a schedule (every 4 hours by default), Youtarr pulls per-video watch state from Plex and shows it as Watched chips and filters on its listing pages. The sync is one-way; Youtarr never marks anything watched on Plex.
+
+A couple of Plex-specific details:
+
+- The server owner's account gets full detail: played, percent watched, and last watched time.
+- Other Plex accounts come from the server's play history, which only records completed plays. Those users show as watched or not, with no in-progress positions.
+- On an unclaimed server (see the playlist visibility scope above), Youtarr reads the anonymous session's watch state instead.
+- Plex decides when a video counts as played, not Youtarr: the **Video Played Threshold** setting under Settings -> Library (90% by default).
+
+Settings live under **Settings -> Watch Status**, including a per-server toggle for syncing all users vs. just the owner. See [Track Watch Status from Media Servers](../USAGE_GUIDE.md#track-watch-status-from-media-servers) for the full workflow.
 
 ## Multi-Library Organization
 

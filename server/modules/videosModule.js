@@ -4,6 +4,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const configModule = require('./configModule');
 const fileCheckModule = require('./fileCheckModule');
+const watchStatusQueries = require('./mediaServers/watchStatusQueries');
 const logger = require('../logger');
 const messageEmitter = require('./messageEmitter');
 const { AUDIO_EXTENSIONS, MEDIA_EXTENSIONS } = require('./filesystem/constants');
@@ -25,6 +26,7 @@ class VideosModule {
       channelFilter = '',
       protectedFilter = 'off',
       missingFilter = 'off',
+      watchedFilter = 'off',
     } = options;
 
     try {
@@ -64,6 +66,12 @@ class VideosModule {
         whereConditions.push('Videos.removed = 1');
       } else if (missingFilter === 'exclude') {
         whereConditions.push('Videos.removed = 0');
+      }
+
+      if (watchedFilter === 'only' || watchedFilter === 'exclude') {
+        const watched = watchStatusQueries.buildWatchedExistsSql();
+        whereConditions.push(watchedFilter === 'only' ? watched.sql : `NOT ${watched.sql}`);
+        Object.assign(replacements, watched.replacements);
       }
 
       const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
@@ -207,6 +215,13 @@ class VideosModule {
           { youtube_removed_checked_at: new Date() },
           { where: { id: timestampUpdates.map(u => u.id) } }
         );
+      }
+
+      // Watched-servers summary for the list UI, honoring the configured
+      // watched rule; per-server detail lives behind /api/videos/:id/watch-status.
+      const watchedByVideoId = await watchStatusQueries.getWatchedByMap(videos.map((v) => v.id));
+      for (const video of videos) {
+        video.watchedBy = watchedByVideoId.get(video.id) || [];
       }
 
       // Get all unique channels for the filter dropdown

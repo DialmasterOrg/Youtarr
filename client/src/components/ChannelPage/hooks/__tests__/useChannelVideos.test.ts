@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { useChannelVideos } from '../useChannelVideos';
 import { ChannelVideo } from '../../../../types/ChannelVideo';
 import type { ChipFilterMode } from '../../../shared/VideoList/types';
@@ -167,6 +167,100 @@ describe('useChannelVideos', () => {
 
       const url = mockFetch.mock.calls[0][0];
       expect(url).not.toContain('downloadedFilter');
+    });
+
+    test('discards a stale response that resolves after a newer request', async () => {
+      // Simulates a filter change while at page 3 with infinite scroll on:
+      // the old-page request is still in flight when the page-1 reset request
+      // fires.
+      type HookProps = Parameters<typeof useChannelVideos>[0];
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValue({ ...mockResponse, videos: [mockVideos[0]] }),
+      });
+
+      const initialProps: HookProps = { ...defaultParams, page: 3, append: true, resetKey: 'k1' };
+      const { result, rerender } = renderHook(
+        (props: HookProps) => useChannelVideos(props),
+        { initialProps }
+      );
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      // Filter change: the stale request for the old page fires first...
+      let resolveStale: (value: unknown) => void = () => {};
+      mockFetch.mockReturnValueOnce(new Promise((resolve) => { resolveStale = resolve; }));
+      rerender({
+        ...defaultParams,
+        page: 3,
+        append: true,
+        resetKey: 'k2',
+        watchedFilter: 'only' as ChipFilterMode,
+      });
+
+      // ...then the page-1 reset request supersedes it.
+      let resolveFresh: (value: unknown) => void = () => {};
+      mockFetch.mockReturnValueOnce(new Promise((resolve) => { resolveFresh = resolve; }));
+      rerender({
+        ...defaultParams,
+        page: 1,
+        append: true,
+        resetKey: 'k2',
+        watchedFilter: 'only' as ChipFilterMode,
+      });
+
+      await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(3));
+
+      // The fresh page-1 response resolves first.
+      resolveFresh({
+        ok: true,
+        json: jest.fn().mockResolvedValue({
+          ...mockResponse,
+          videos: [{ ...mockVideos[1], youtube_id: 'fresh1' }],
+        }),
+      });
+      await waitFor(() =>
+        expect(result.current.videos.map((v) => v.youtube_id)).toEqual(['fresh1'])
+      );
+
+      // The stale page-3 response resolves late and must be discarded.
+      resolveStale({
+        ok: true,
+        json: jest.fn().mockResolvedValue({
+          ...mockResponse,
+          videos: [{ ...mockVideos[0], youtube_id: 'stale1' }],
+        }),
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(result.current.videos.map((v) => v.youtube_id)).toEqual(['fresh1']);
+    });
+
+    test('sends watchedFilter when mode is active and omits it when off', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue(mockResponse),
+      });
+
+      renderHook(() =>
+        useChannelVideos({
+          ...defaultParams,
+          watchedFilter: 'exclude' as ChipFilterMode,
+        })
+      );
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+      });
+      expect(mockFetch.mock.calls[0][0]).toContain('watchedFilter=exclude');
+
+      renderHook(() => useChannelVideos(defaultParams));
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+      });
+      expect(mockFetch.mock.calls[1][0]).not.toContain('watchedFilter');
     });
 
     test('includes correct authentication header', async () => {

@@ -322,6 +322,7 @@ const createServerModule = ({
         }));
         jest.doMock('../modules/webSocketServer.js', () => jest.fn());
         jest.doMock('node-cron', () => ({ schedule: jest.fn() }));
+        jest.doMock('../modules/mediaServers/watchStatusScheduler', () => ({ scheduleTask: jest.fn(), subscribe: jest.fn() }));
         jest.doMock('express-rate-limit', () => jest.fn(() => (req, res, next) => next()));
         jest.doMock('https', () => ({ get: jest.fn() }));
         jest.doMock('fs', () => ({

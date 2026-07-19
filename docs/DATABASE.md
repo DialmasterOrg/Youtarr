@@ -34,6 +34,9 @@ Youtarr uses MariaDB/MySQL for storing:
 | `playlistvideos`   | `PlaylistVideo`   | One row per (playlist, video) with the YouTube playlist position |
 | `playlist_sync_state` | `PlaylistSyncState` | Per-(playlist, server) sync state: server playlist id, last_synced_at, last_error |
 | `subfolders`       | `Subfolder`       | Durable registry of known subfolder names (id, name unique, createdAt, updatedAt). Backfilled from channels, playlists, and video file paths by the `add-subfolders-table` migration; kept current by register-on-create and register-on-download-override. |
+| `video_watch_status` | `VideoWatchStatus` | Per-video, per-media-server, per-user watch state pulled by the watch status sync. Absence of a row means never synced/unknown, not unwatched. Columns: `video_id`, `server_type` (`plex`/`jellyfin`/`emby`), `server_user_id` (Plex owner is `'1'`), `played`, `play_count`, `position_ms`, `percent_watched`, `last_watched_at`, `last_synced_at`. Unique index on `(video_id, server_type, server_user_id)`. |
+| `media_server_users` | `MediaServerUser` | Media-server account directory populated during watch status sync: `server_type`, `server_user_id`, `server_user_name`. Unique index on `(server_type, server_user_id)`. Used to display which users watched a video. |
+| `watch_status_sync_cursors` | `WatchStatusSyncCursor` | Durable per-server watch-status sync cursor (unique `server_type`, `cursor` DATETIME). Today only Plex uses it: the newest play-history event scanned, so incremental pulls never permanently skip events. Deleting a row forces a full history re-scan on the next sync. |
 | `SequelizeMeta`    | NA                | Sequelize ORM migration tracking  |
 
 ## Internal Database (Default)

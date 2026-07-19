@@ -17,6 +17,7 @@ This guide provides step-by-step instructions for common tasks in Youtarr. After
 - [Browse and Filter Channel Videos](#browse-and-filter-channel-videos)
 - [Find Videos on YouTube](#find-videos-on-youtube)
 - [Preview and Play Videos](#preview-and-play-videos)
+- [Track Watch Status from Media Servers](#track-watch-status-from-media-servers)
 - [External Access with API Keys](#external-access-with-api-keys)
 - [Content Ratings](#content-ratings)
 
@@ -189,7 +190,7 @@ Open a playlist to manage it:
 - **Public on media servers**: makes the playlist visible to other users on Jellyfin and Emby. Plex playlists are always created under one account and shared manually, so this setting doesn't affect Plex.
 - **Sync now** and **Rebuild .m3u file**: push the current state to your servers or regenerate the `.m3u` on demand. Sync runs in the background and can take a minute or two while your media server's library scan finishes.
 
-In the video list you can sort newest- or oldest-first, filter by download state with the **Show** control (All videos / Downloaded / Not downloaded), ignore videos you don't want, and select specific videos to download with **Download Selected**. Videos whose file was deleted after downloading count as not downloaded.
+In the video list you can sort newest- or oldest-first, filter by download state with the **Show** control (All videos / Downloaded / Not downloaded), filter by watch status with the **Watched** control (see [Track Watch Status from Media Servers](#track-watch-status-from-media-servers)), exclude videos you don't want, and select specific videos to download with **Download Selected**. Excluded videos are skipped when downloading the playlist and removed from synced server playlists; if the file is already on disk, it stays there. Videos whose file was deleted after downloading count as not downloaded.
 
 ### Playlist files (.m3u)
 
@@ -471,6 +472,46 @@ Click any thumbnail on the Videos page or a channel page to open a video detail 
 4. **Actions from the modal**
    - Download, protect, delete, ignore, and rate actions are all available inside the modal
    - Changes sync back to the source page when the modal closes
+
+## Track Watch Status from Media Servers
+
+If you've connected Plex, Jellyfin, or Emby, Youtarr can pull watch status from them: which videos have been played, how far through, and when. The sync is one-way; Youtarr only reads from your servers and never writes anything back.
+
+### How it works
+
+- On a schedule (every 4 hours by default) Youtarr asks each connected server who has watched what and stores the results.
+- Only videos a server actually reports on get recorded. A video with no watch data means "never synced" or "unknown", not "unwatched".
+- By default Youtarr syncs every user account on the server, not just yours. Jellyfin and Emby report full detail (played, percent watched, last watched) for every user. Plex reports full detail for the server owner; other Plex accounts come from the server's play history, which only records completed plays, so those users show as watched or not with no in-progress positions.
+- Videos Youtarr marks as missing still sync. If a file was moved somewhere Youtarr can't see but a media server still has it, its watch status keeps updating; files are recognized by the `[video-id]` at the end of the filename, so this works even if the file was renamed.
+- Watching a video in Youtarr's built-in player doesn't mark it watched. Watch status only comes from your media servers.
+
+### Settings
+
+Open **Settings -> Watch Status** to:
+
+- Turn the sync on or off and change how often it runs
+- Run a manual **Sync Now** and see per-server results for the last run
+- Toggle whether all users are synced, per server (on by default)
+- Choose when a video counts as "Watched" in listings: when **any** synced user has watched it (the default), or only when the primary account (the Plex owner or your configured Jellyfin/Emby user) has
+
+### Where it shows up
+
+- A **Watched** chip appears on videos in the Videos page, channel pages, and playlist pages. Hover it to see which servers reported the watch.
+- The video detail modal lists per-user detail: who watched it, on which server, how far through, and when.
+- On the Videos page and channel pages, the **Watched** filter chip cycles through three states: off, show only watched, or hide watched.
+- On a playlist page, use the **Watched** dropdown (All / Watched / Not watched) next to the **Show** control.
+
+When you filter for unwatched videos, the results include videos that have never been synced. Youtarr can't tell "not watched" apart from "no data yet", so it errs on the side of showing them.
+
+### What determines if a video is "watched"
+
+Youtarr doesn't decide this; it shows whatever your media servers report. All three servers mark a video played once playback passes a percentage threshold (90% by default), and each one lets you change it:
+
+- **Plex**: Settings -> Library -> **Video Played Threshold**
+- **Emby**: Emby Server -> Library, edit the library, then **Max resume percentage** at the bottom of the dialog (this one is per-library)
+- **Jellyfin**: Server -> Playback -> Resume -> **Maximum resume percentage**
+
+On Emby and Jellyfin the same setting also controls resume: stop after the threshold and the title counts as fully played instead of resumable. If you finished a video and it isn't showing as watched in Youtarr, check this setting on the server you played it on, then run a sync.
 
 ## Common tasks
 

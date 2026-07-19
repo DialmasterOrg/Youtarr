@@ -19,6 +19,7 @@ Youtarr supports integration with multiple media servers, providing rich metadat
 |---------|------|------|----------|------|
 | Automatic Library Refresh via Youtarr | ✅ | ❌ | ❌ | ❌ |
 | Native Playlist Sync | ✅ | M3U only | ✅ | ✅ |
+| Watch Status Sync (into Youtarr) | ✅ | ❌ | ✅ | ✅ |
 | NFO Metadata | ❌ | ✅ | ✅ | ✅ |
 | Embedded MP4 Metadata | ✅ | Partial | ✅ | ✅ |
 | Channel Posters | ❌ | ✅ | ✅ | ✅ |
@@ -117,6 +118,10 @@ See [Youtarr Downloads Folder Structure](YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md)
 ## Native Playlist Sync
 
 Youtarr can mirror subscribed YouTube playlists into Plex, Jellyfin, and Emby as native playlists, plus emit a universal `.m3u` fallback. Per-server setup, visibility model, and replace semantics are documented separately in [Media Server Playlists](MEDIA_SERVER_PLAYLISTS.md).
+
+## Watch Status Sync
+
+Youtarr can pull per-video, per-user watch status from Plex, Jellyfin, and Emby, show a Watched chip on its listing pages, and let you filter your library by watched state. The sync is one-way; nothing is written back to your servers. See [Track Watch Status from Media Servers](USAGE_GUIDE.md#track-watch-status-from-media-servers) for the workflow and the [Configuration Reference](CONFIG.md#watch-status-sync) for the config keys.
 
 ## Quick Start Guides
 

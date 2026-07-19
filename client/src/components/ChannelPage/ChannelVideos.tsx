@@ -131,6 +131,7 @@ function ChannelVideos({
   const [protectedFilter, setProtectedFilter] = useState<ChipFilterMode>('off');
   const [missingFilter, setMissingFilter] = useState<ChipFilterMode>('off');
   const [ignoredFilter, setIgnoredFilter] = useState<ChipFilterMode>('off');
+  const [watchedFilter, setWatchedFilter] = useState<ChipFilterMode>('off');
 
   const [selectedTab, setSelectedTab] = useState<string | null>(null);
   const [availableTabs, setAvailableTabs] = useState<string[]>([]);
@@ -285,6 +286,7 @@ function ChannelVideos({
         protectedFilter,
         missingFilter,
         ignoredFilter,
+        watchedFilter,
         useInfiniteScroll,
       ].join('|'),
     [
@@ -302,6 +304,7 @@ function ChannelVideos({
       protectedFilter,
       missingFilter,
       ignoredFilter,
+      watchedFilter,
       useInfiniteScroll,
     ]
   );
@@ -334,6 +337,7 @@ function ChannelVideos({
     protectedFilter,
     missingFilter,
     ignoredFilter,
+    watchedFilter,
     onFirstLoad: onVideosLoaded,
   });
 
@@ -375,6 +379,7 @@ function ChannelVideos({
     protectedFilter,
     missingFilter,
     ignoredFilter,
+    watchedFilter,
     downloadedFilter,
     sortBy,
     sortOrder,
@@ -481,6 +486,7 @@ function ChannelVideos({
     protectedFilter,
     missingFilter,
     ignoredFilter,
+    watchedFilter,
     downloadedFilter,
     clearAllSelections,
   ]);
@@ -702,6 +708,7 @@ function ChannelVideos({
     setProtectedFilter('off');
     setMissingFilter('off');
     setIgnoredFilter('off');
+    setWatchedFilter('off');
     setDownloadedFilter('off');
   };
 
@@ -819,6 +826,7 @@ function ChannelVideos({
       { id: 'missing', value: missingFilter, onChange: setMissingFilter },
       { id: 'ignored', value: ignoredFilter, onChange: setIgnoredFilter },
       { id: 'downloaded', value: downloadedFilter, onChange: setDownloadedFilter },
+      { id: 'watched', value: watchedFilter, onChange: setWatchedFilter },
     ];
     return configs;
   }, [
@@ -836,6 +844,7 @@ function ChannelVideos({
     protectedFilter,
     missingFilter,
     ignoredFilter,
+    watchedFilter,
     downloadedFilter,
     selectedTab,
   ]);

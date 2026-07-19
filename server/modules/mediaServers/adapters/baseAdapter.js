@@ -1,6 +1,9 @@
 /**
  * BaseAdapter — interface contract for media-server adapters.
- * Concrete adapters (plex, jellyfin, emby) extend this and implement all methods.
+ * Concrete adapters (plex, jellyfin, emby) extend this and implement all
+ * methods. Each concrete adapter must also set `this.serverType` in its
+ * constructor ('plex' | 'jellyfin' | 'emby'); orchestration and routes key on
+ * that property, never on class names.
  */
 class BaseAdapter {
   constructor(config) { this.config = config; }
@@ -26,6 +29,20 @@ class BaseAdapter {
   }
   async createPlaylist(/* name, itemIds, opts */) { throw new Error('not implemented'); }
   async replacePlaylistItems(/* id, itemIds */) { throw new Error('not implemented'); }
+
+  /**
+   * Watch state for file-backed items in the libraries the adapter tracks for
+   * watch state (video libraries in v1), per server user. Returns
+   *   { entries: Array<{ path, serverUserId, played, playCount, positionMs,
+   *                      percentWatched, lastWatchedAt }>,
+   *     users: Array<{ id, name }> }
+   * where `users` lists the accounts the adapter observed (empty in
+   * single-user mode so stored names are never clobbered). Adapters accept an
+   * opts object; `opts.since` is an incremental watermark only Plex uses (its
+   * non-owner data comes from the server's play history). Throws
+   * MediaServerUnavailableError when the server is unreachable.
+   */
+  async fetchWatchStates(/* opts: { since } */) { throw new Error('not implemented'); }
 }
 
 /**
@@ -86,6 +103,17 @@ class MediaServerUnavailableError extends Error {
   }
 }
 
+// Raised by an adapter when a watch-state fetch failed with a message that is
+// already user-presentable. watchStatusSync passes it through to the sync
+// summary (and thus the UI) verbatim; other unexpected errors are reduced to
+// a generic message there.
+class WatchStateFetchError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'WatchStateFetchError';
+  }
+}
+
 // True when an axios error means the server itself is unreachable or not
 // responding, rather than a normal "queried fine, no such item" result. No
 // response at all (ECONNREFUSED / ETIMEDOUT / ENOTFOUND / timeout) or any 5xx
@@ -113,5 +141,6 @@ module.exports.pathSegments = pathSegments;
 module.exports.trailingSegmentMatch = trailingSegmentMatch;
 module.exports.REQUEST_TIMEOUT_MS = REQUEST_TIMEOUT_MS;
 module.exports.MediaServerUnavailableError = MediaServerUnavailableError;
+module.exports.WatchStateFetchError = WatchStateFetchError;
 module.exports.isServerUnavailableError = isServerUnavailableError;
 module.exports.describeHttpError = describeHttpError;

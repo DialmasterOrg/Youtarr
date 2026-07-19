@@ -7,3 +7,4 @@ export { useYtDlpUpdate } from './useYtDlpUpdate';
 export { useUnsavedChangesGuard } from './useUnsavedChangesGuard';
 export { useYouTubeApiKey } from './useYouTubeApiKey';
 export { useYtdlpArgsValidation } from './useYtdlpArgsValidation';
+export { useWatchStatusSync } from './useWatchStatusSync';

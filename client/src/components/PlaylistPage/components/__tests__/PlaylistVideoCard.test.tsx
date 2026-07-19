@@ -44,11 +44,24 @@ describe('PlaylistVideoCard', () => {
     expect(screen.getByText('Unknown').tagName.toLowerCase()).toBe('em');
   });
 
-  test('fires onIgnore from the ignore button', () => {
+  test('fires onIgnore from the Exclude button', () => {
     const onIgnore = jest.fn();
     render(<PlaylistVideoCard {...baseProps} onIgnore={onIgnore} video={makeVideo({ youtube_id: 'x' })} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Ignore' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Exclude' }));
     expect(onIgnore).toHaveBeenCalledWith('x');
+  });
+
+  test('fires onUnignore from the Include button on an excluded video', () => {
+    const onUnignore = jest.fn();
+    render(
+      <PlaylistVideoCard
+        {...baseProps}
+        onUnignore={onUnignore}
+        video={makeVideo({ youtube_id: 'x', ignored: true })}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Include' }));
+    expect(onUnignore).toHaveBeenCalledWith('x');
   });
 
   describe('downloaded status', () => {
@@ -69,6 +82,40 @@ describe('PlaylistVideoCard', () => {
       render(<PlaylistVideoCard {...baseProps} video={makeVideo()} />);
       expect(screen.getByText('Tracked')).toBeInTheDocument();
       expect(screen.queryByTestId('download-format-indicator')).not.toBeInTheDocument();
+    });
+
+    test('keeps the Excluded chip visible next to the indicator for a downloaded excluded video', () => {
+      render(
+        <PlaylistVideoCard
+          {...baseProps}
+          video={makeVideo({
+            downloaded: true, ignored: true,
+            file_path: '/data/v.mp4', file_size: 1024,
+          })}
+        />
+      );
+      expect(screen.getByTestId('download-format-indicator')).toBeInTheDocument();
+      expect(screen.getByText('Excluded')).toBeInTheDocument();
+    });
+
+    test('renders a Watched chip for a video watched on a server', () => {
+      render(
+        <PlaylistVideoCard
+          {...baseProps}
+          video={makeVideo({ downloaded: true, file_path: '/data/v.mp4', watched_by: ['plex'] })}
+        />
+      );
+      expect(screen.getByText('Watched')).toBeInTheDocument();
+    });
+
+    test('does not render a Watched chip when watched_by is empty', () => {
+      render(
+        <PlaylistVideoCard
+          {...baseProps}
+          video={makeVideo({ downloaded: true, file_path: '/data/v.mp4' })}
+        />
+      );
+      expect(screen.queryByText('Watched')).not.toBeInTheDocument();
     });
   });
 });

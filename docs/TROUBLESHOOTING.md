@@ -613,6 +613,19 @@ Related gotchas when sharing playlists with other users:
 2. **Content-rating restrictions hide YouTube videos.** Downloaded YouTube videos have no content rating, so rating-based parental restrictions filter them out. For kid accounts, use label-based restrictions instead.
 3. **Smart playlists can't be shared** - but Youtarr creates standard playlists, so this doesn't affect Youtarr-created playlists.
 
+## Watch Status Issues
+
+### Videos Not Showing as Watched
+
+**Problem**: You've watched videos on your media server, but Youtarr never shows the Watched chip for them.
+
+**Solutions**:
+1. Confirm the sync is on and has run: open **Settings -> Watch Status**, click **Sync Now**, and check the per-server results for the last run. A server that errors here is usually a connection or API-key problem; fix that first.
+2. Watching in Youtarr's built-in player doesn't count. Watch status only comes from your media servers.
+3. All three servers only mark a video played once playback passes a configurable percentage threshold (90% by default), so a video you stopped partway through may genuinely not count as watched yet. See [What determines if a video is "watched"](USAGE_GUIDE.md#what-determines-if-a-video-is-watched) for where to change the threshold on each server.
+4. Check for a path mismatch. Youtarr matches watch state to videos by filename, so if the server is indexing files from a different copy of your library (or files renamed to drop the `[<youtube-id>]` segment), nothing will match. Run a [rescan](USAGE_GUIDE.md#rescan-files-on-disk) if you've moved or renamed files.
+5. For non-owner Plex users specifically: their state comes from the server's play history, and that pull is incremental. If a path mismatch prevented matching for a while, plays from that period may have been scanned already and won't be picked up on later syncs. After fixing the mismatch, delete the `plex` row from the `watch_status_sync_cursors` table to force a full history re-scan on the next sync (see the [Configuration Reference](CONFIG.md#watch-status-sync)).
+
 ## Channel Import Issues
 
 ### Cookies Upload Fails or Returns No Channels

@@ -23,6 +23,33 @@ jest.mock('../hooks/useVideoMetadata', () => ({
   useVideoMetadata: () => videoMetadataReturn,
 }));
 
+// Mock useWatchStatus - it fires its own axios.get('/watch-status') call, which
+// would interleave with (and steal from) the channel-settings axios.get queue
+// used throughout the add-channel-affordance tests below. Isolate it here the
+// same way useVideoMetadata is isolated above, with a mutable return object so
+// individual tests can provide statuses, and a call log so the wiring from the
+// modal into the hook stays covered.
+const watchStatusReturn = {
+  statuses: [] as Array<{
+    server: string;
+    serverUserId: string;
+    userName: string | null;
+    played: boolean;
+    playCount: number;
+    percentWatched: number | null;
+    lastWatchedAt: string | null;
+    lastSyncedAt: string | null;
+  }>,
+  loading: false,
+};
+const watchStatusCalls: unknown[][] = [];
+jest.mock('../hooks/useWatchStatus', () => ({
+  useWatchStatus: (...args: unknown[]) => {
+    watchStatusCalls.push(args);
+    return watchStatusReturn;
+  },
+}));
+
 // Mock useVideoProtection - use plain object refs to survive resetMocks
 const mockToggleProtection = jest.fn();
 const protectionReturn = {
@@ -223,6 +250,9 @@ describe('VideoModal', () => {
     videoMetadataReturn.metadata = null;
     videoMetadataReturn.loading = false;
     videoMetadataReturn.error = null;
+    watchStatusReturn.statuses = [];
+    watchStatusReturn.loading = false;
+    watchStatusCalls.length = 0;
   });
 
   test('renders video title when open', () => {
@@ -233,6 +263,46 @@ describe('VideoModal', () => {
   test('renders status chip', () => {
     renderModal();
     expect(screen.getByText('Available')).toBeInTheDocument();
+  });
+
+  describe('watch status section', () => {
+    test('requests watch status for the opened downloaded video', () => {
+      renderModal();
+      expect(
+        watchStatusCalls.some((args) => args[0] === 'test123' && args[1] === 'test-token')
+      ).toBe(true);
+    });
+
+    test('does not request watch status for a never-downloaded video', () => {
+      renderModal({ video: neverDownloadedVideo });
+      expect(watchStatusCalls.every((args) => args[0] === '')).toBe(true);
+    });
+
+    test('renders per-server watch status when the hook returns data', () => {
+      watchStatusReturn.statuses = [
+        {
+          server: 'plex',
+          serverUserId: '1',
+          userName: null,
+          played: true,
+          playCount: 1,
+          percentWatched: 100,
+          lastWatchedAt: '2026-07-10T12:00:00Z',
+          lastSyncedAt: '2026-07-16T00:00:00Z',
+        },
+      ];
+
+      renderModal();
+
+      expect(screen.getByText('Watch Status')).toBeInTheDocument();
+      expect(screen.getByText('Plex')).toBeInTheDocument();
+      expect(screen.getByText(/Watched/)).toBeInTheDocument();
+    });
+
+    test('renders no watch status section when there are no statuses', () => {
+      renderModal();
+      expect(screen.queryByText('Watch Status')).not.toBeInTheDocument();
+    });
   });
 
   test('promotes status to Members Only when metadata reports subscriber_only', () => {

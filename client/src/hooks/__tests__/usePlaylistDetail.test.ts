@@ -244,6 +244,38 @@ describe('usePlaylistDetail sorting and pagination', () => {
     });
   });
 
+  test('forwards watchedState when it is not "all"', async () => {
+    axios.get.mockResolvedValue({ data: { playlist: { playlist_id: 'PL1' }, total: 0, videos: [] } });
+
+    renderHook(() =>
+      usePlaylistDetail({ token: 't', playlistId: 'PL1', watchedState: 'not_watched' })
+    );
+
+    await waitFor(() => {
+      expect(axios.get).toHaveBeenCalledWith(
+        '/api/playlists/PL1/videos',
+        expect.objectContaining({
+          params: expect.objectContaining({ page: 1, watchedState: 'not_watched' }),
+        })
+      );
+    });
+  });
+
+  test('omits watchedState from params when it is "all" (default)', async () => {
+    axios.get.mockResolvedValue({ data: { playlist: { playlist_id: 'PL1' }, total: 0, videos: [] } });
+
+    renderHook(() => usePlaylistDetail({ token: 't', playlistId: 'PL1' }));
+
+    await waitFor(() => {
+      expect(axios.get).toHaveBeenCalledWith(
+        '/api/playlists/PL1/videos',
+        expect.objectContaining({
+          params: expect.not.objectContaining({ watchedState: expect.anything() }),
+        })
+      );
+    });
+  });
+
   test('changing downloadState refetches page 1 with the new filter', async () => {
     axios.get.mockResolvedValue({ data: { playlist: { playlist_id: 'PL1' }, total: 0, videos: [] } });
 
@@ -295,6 +327,36 @@ describe('usePlaylistDetail sorting and pagination', () => {
 
     expect(result.current.videos.map((v) => v.id)).toEqual([1, 2, 3]);
     expect(result.current.hasMore).toBe(false);
+  });
+
+  test('loadMore carries the active watchedState filter', async () => {
+    axios.get.mockImplementation((url: string, config?: { params?: { page?: number } }) => {
+      if (url.endsWith('/videos')) {
+        const page = config?.params?.page ?? 1;
+        if (page === 1) {
+          return Promise.resolve({ data: { total: 3, videos: [makeVideo(1), makeVideo(2)] } });
+        }
+        return Promise.resolve({ data: { total: 3, videos: [makeVideo(3)] } });
+      }
+      return Promise.resolve({ data: { playlist: { playlist_id: 'PL1' } } });
+    });
+
+    const { result } = renderHook(() =>
+      usePlaylistDetail({ token: 't', playlistId: 'PL1', pageSize: 2, watchedState: 'watched' })
+    );
+
+    await waitFor(() => expect(result.current.videos).toHaveLength(2));
+
+    await act(async () => {
+      await result.current.loadMore();
+    });
+
+    expect(axios.get).toHaveBeenCalledWith(
+      '/api/playlists/PL1/videos',
+      expect.objectContaining({
+        params: expect.objectContaining({ page: 2, watchedState: 'watched' }),
+      })
+    );
   });
 
   test('markVideoIgnored flips the ignored flag locally without refetching', async () => {

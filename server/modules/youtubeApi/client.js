@@ -28,8 +28,7 @@ const SEARCH_LIST_EXTRA_PAGE_BUFFER = 1;
 // Per-tab auto-generated playlist prefixes. UU is all uploads combined;
 // UULF/UUSH/UULV are the same content partitioned by media type and correspond
 // exactly to the Videos/Shorts/Live tabs on the channel page. Undocumented by
-// Google but stable for years and used by the codebase's RSS feed path as well
-// (see server/modules/channelModule.js buildRssFeedUrl).
+// Google but stable for years.
 const TAB_PLAYLIST_PREFIX = {
   videos: 'UULF',
   shorts: 'UUSH',

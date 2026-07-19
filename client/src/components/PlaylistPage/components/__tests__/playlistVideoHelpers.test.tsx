@@ -48,9 +48,9 @@ describe('statusLabel', () => {
   test('returns Downloaded for a downloaded video', () => {
     expect(statusLabel(makeVideo({ downloaded: true })).label).toBe('Downloaded');
   });
-  test('returns Ignored (takes priority) for an ignored video', () => {
+  test('returns Excluded (takes priority) for an excluded video', () => {
     expect(statusLabel(makeVideo({ ignored: true, downloaded: true }))).toEqual({
-      label: 'Ignored',
+      label: 'Excluded',
       color: 'warning',
     });
   });

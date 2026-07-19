@@ -63,6 +63,14 @@ export const CONFIG_FIELDS = {
   embyUserId: { default: '', trackChanges: true },
   embyVideoLibraryIds: { default: [] as string[], trackChanges: true },
 
+  // Media server watch status sync
+  watchStatusSyncEnabled: { default: true, trackChanges: true },
+  watchStatusSyncFrequency: { default: '0 */4 * * *', trackChanges: true },
+  plexWatchStatusAllUsers: { default: true, trackChanges: true },
+  jellyfinWatchStatusAllUsers: { default: true, trackChanges: true },
+  embyWatchStatusAllUsers: { default: true, trackChanges: true },
+  watchStatusWatchedRule: { default: 'any' as 'any' | 'primary', trackChanges: true },
+
   // YouTube Data API
   youtubeApiKey: { default: '', trackChanges: true },
 
@@ -202,6 +210,12 @@ export const DEFAULT_CONFIG: ConfigState = {
   embyApiKey: CONFIG_FIELDS.embyApiKey.default,
   embyUserId: CONFIG_FIELDS.embyUserId.default,
   embyVideoLibraryIds: CONFIG_FIELDS.embyVideoLibraryIds.default,
+  watchStatusSyncEnabled: CONFIG_FIELDS.watchStatusSyncEnabled.default,
+  watchStatusSyncFrequency: CONFIG_FIELDS.watchStatusSyncFrequency.default,
+  plexWatchStatusAllUsers: CONFIG_FIELDS.plexWatchStatusAllUsers.default,
+  jellyfinWatchStatusAllUsers: CONFIG_FIELDS.jellyfinWatchStatusAllUsers.default,
+  embyWatchStatusAllUsers: CONFIG_FIELDS.embyWatchStatusAllUsers.default,
+  watchStatusWatchedRule: CONFIG_FIELDS.watchStatusWatchedRule.default,
   youtubeApiKey: CONFIG_FIELDS.youtubeApiKey.default,
   sponsorblockEnabled: CONFIG_FIELDS.sponsorblockEnabled.default,
   sponsorblockAction: CONFIG_FIELDS.sponsorblockAction.default,

@@ -499,3 +499,85 @@ describe('GET /api/videos/:youtubeId/stream', () => {
     expect(next).toHaveBeenCalled();
   });
 });
+
+describe('GET /api/videos/:youtubeId/watch-status', () => {
+  const loggerMock = {
+    info: jest.fn(),
+    error: jest.fn(),
+  };
+
+  const createResponse = () => {
+    const res = {};
+    res.status = jest.fn(() => res);
+    res.json = jest.fn(() => res);
+    return res;
+  };
+
+  const mediaServers = {
+    watchStatusQueries: { getStatusesForVideo: jest.fn() },
+  };
+
+  const getHandler = () => {
+    const router = createVideoDetailRoutes({
+      verifyToken: (req, res, next) => next(),
+      videoMetadataModule: {},
+      mediaServers,
+    });
+
+    const app = express();
+    app.use(router);
+
+    return findRouteHandler(app, 'get', '/api/videos/:youtubeId/watch-status');
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('returns 400 for an invalid id', async () => {
+    const handler = getHandler();
+    const req = { params: { youtubeId: '!!!' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Invalid YouTube ID' });
+    expect(mediaServers.watchStatusQueries.getStatusesForVideo).not.toHaveBeenCalled();
+  });
+
+  test('returns the statuses provided by the module', async () => {
+    const statuses = [
+      {
+        server: 'plex',
+        played: true,
+        playCount: 2,
+        percentWatched: 100,
+        lastWatchedAt: new Date('2026-07-10T12:00:00Z'),
+        lastSyncedAt: new Date('2026-07-16T00:00:00Z'),
+      },
+    ];
+    mediaServers.watchStatusQueries.getStatusesForVideo.mockResolvedValue(statuses);
+    const handler = getHandler();
+    const req = { params: { youtubeId: 'abc123def45' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(mediaServers.watchStatusQueries.getStatusesForVideo).toHaveBeenCalledWith('abc123def45');
+    expect(res.status).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ statuses });
+  });
+
+  test('returns 500 when the lookup throws', async () => {
+    mediaServers.watchStatusQueries.getStatusesForVideo.mockRejectedValue(new Error('db down'));
+    const handler = getHandler();
+    const req = { params: { youtubeId: 'abc123def45' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Failed to retrieve watch status' });
+  });
+});
