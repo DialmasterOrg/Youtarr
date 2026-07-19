@@ -1,5 +1,8 @@
 import React, { ChangeEvent } from 'react';
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   Box,
   Button,
@@ -124,9 +127,37 @@ export function WatchStatusSection({ config, token, onConfigChange }: WatchStatu
         Periodically pulls each video&apos;s watch status
         from your connected media servers into Youtarr. By default every server user is included;
         other Plex users are read from the server&apos;s play history. Sync is one-way: nothing is
-        written back to your media servers.<br/>
-        <strong>Note:</strong> Youtarr syncs the watch status reported by your media servers. Some media servers (e.g. Plex) only report a video as watched when it has been played to completion, while others (e.g. Jellyfin) report a video as watched after a configurable percentage of the video has been played. Youtarr does not modify this behavior.
+        written back to your media servers.
       </Typography>
+
+      <Accordion className="mb-4">
+        <AccordionSummary>What determines if a video is &quot;watched&quot;?</AccordionSummary>
+        <AccordionDetails>
+          <Typography variant="body2" color="text.secondary" className="mb-2">
+            Youtarr doesn&apos;t decide this; it shows whatever your media servers report. All
+            three servers mark a video played once playback passes a percentage threshold (90% by
+            default), and each server lets you change it:
+          </Typography>
+          <ul className="list-disc pl-5 mb-2 text-sm text-muted-foreground space-y-1">
+            <li>
+              <strong>Plex</strong>: Settings -&gt; Library -&gt;{' '}
+              <strong>Video Played Threshold</strong>
+            </li>
+            <li>
+              <strong>Emby</strong>: Emby Server -&gt; Library -&gt; edit the library -&gt;{' '}
+              <strong>Max resume percentage</strong> (at the bottom of the dialog, per library)
+            </li>
+            <li>
+              <strong>Jellyfin</strong>: Server -&gt; Playback -&gt; Resume -&gt;{' '}
+              <strong>Maximum resume percentage</strong>
+            </li>
+          </ul>
+          <Typography variant="body2" color="text.secondary">
+            If a video you finished isn&apos;t showing as watched here, check that setting on the
+            server you played it on, then run a sync.
+          </Typography>
+        </AccordionDetails>
+      </Accordion>
 
       {statusError && (
         <Alert severity="warning" className="mb-4">

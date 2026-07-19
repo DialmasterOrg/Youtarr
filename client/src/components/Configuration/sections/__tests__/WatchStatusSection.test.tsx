@@ -219,6 +219,21 @@ describe('WatchStatusSection', () => {
     expect(screen.queryByRole('checkbox', { name: /include all/i })).not.toBeInTheDocument();
   });
 
+  test('explains what counts as watched behind a collapsed disclosure', async () => {
+    renderWithProviders(<WatchStatusSection {...defaultProps} />);
+
+    const trigger = screen.getByRole('button', {
+      name: /what determines if a video is "watched"/i,
+    });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+    await userEvent.click(trigger);
+
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText(/video played threshold/i)).toBeInTheDocument();
+    expect(screen.getByText(/maximum resume percentage/i)).toBeInTheDocument();
+  });
+
   test('changing the watched rule reports watchStatusWatchedRule', async () => {
     const user = userEvent.setup();
     renderWithProviders(<WatchStatusSection {...defaultProps} />);
