@@ -503,7 +503,15 @@ Open **Settings -> Watch Status** to:
 
 When you filter for unwatched videos, the results include videos that have never been synced. Youtarr can't tell "not watched" apart from "no data yet", so it errs on the side of showing them.
 
-One note on what "watched" means: Youtarr reports whatever your server reports. Plex only marks a video watched once it's played to completion; Jellyfin marks it watched after a configurable percentage. Youtarr doesn't change that behavior.
+### What determines if a video is "watched"
+
+Youtarr doesn't decide this; it shows whatever your media servers report. All three servers mark a video played once playback passes a percentage threshold (90% by default), and each one lets you change it:
+
+- **Plex**: Settings -> Library -> **Video Played Threshold**
+- **Emby**: Emby Server -> Library, edit the library, then **Max resume percentage** at the bottom of the dialog (this one is per-library)
+- **Jellyfin**: Server -> Playback -> Resume -> **Maximum resume percentage**
+
+On Emby and Jellyfin the same setting also controls resume: stop after the threshold and the title counts as fully played instead of resumable. If you finished a video and it isn't showing as watched in Youtarr, check this setting on the server you played it on, then run a sync.
 
 ## Common tasks
 

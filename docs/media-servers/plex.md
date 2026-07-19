@@ -147,6 +147,7 @@ A couple of Plex-specific details:
 - The server owner's account gets full detail: played, percent watched, and last watched time.
 - Other Plex accounts come from the server's play history, which only records completed plays. Those users show as watched or not, with no in-progress positions.
 - On an unclaimed server (see the playlist visibility scope above), Youtarr reads the anonymous session's watch state instead.
+- Plex decides when a video counts as played, not Youtarr: the **Video Played Threshold** setting under Settings -> Library (90% by default).
 
 Settings live under **Settings -> Watch Status**, including a per-server toggle for syncing all users vs. just the owner. See [Track Watch Status from Media Servers](../USAGE_GUIDE.md#track-watch-status-from-media-servers) for the full workflow.
 
