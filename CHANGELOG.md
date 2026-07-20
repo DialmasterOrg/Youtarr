@@ -1,5 +1,23 @@
 # Changelog
 
+## [v1.76.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.76.1) - 2026-07-20
+
+### [1.76.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.76.0...v1.76.1) (2026-07-20)
+
+
+### Bug Fixes
+
+* surface emby/jellyfin api key auth failures ([1420bd1](https://github.com/DialmasterOrg/Youtarr/commit/1420bd1803cba5f64742a5bd07b5d593f3e73f40))
+
+
+### Documentation
+
+* update CHANGELOG for v1.76.0 [skip ci] ([ee965d4](https://github.com/DialmasterOrg/Youtarr/commit/ee965d4d644a6eb695a6da17aadea12bb884eb03))
+
+
+
+
+
 ## [v1.76.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.76.0) - 2026-07-19
 
 ## [1.76.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.75.0...v1.76.0) (2026-07-19)
