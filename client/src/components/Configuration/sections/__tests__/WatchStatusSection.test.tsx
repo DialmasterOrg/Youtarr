@@ -74,6 +74,15 @@ describe('WatchStatusSection', () => {
     expect(screen.getByText(/no media servers connected/i)).toBeInTheDocument();
   });
 
+  test('the no-servers warning links to each server settings page', () => {
+    mediaServerStatusReturn.status = { plex: false, jellyfin: false, emby: false };
+    mediaServerStatusReturn.anyConfigured = false;
+    renderWithProviders(<WatchStatusSection {...defaultProps} />);
+    expect(screen.getByRole('link', { name: 'Plex' })).toHaveAttribute('href', '/settings/plex');
+    expect(screen.getByRole('link', { name: 'Jellyfin' })).toHaveAttribute('href', '/settings/jellyfin');
+    expect(screen.getByRole('link', { name: 'Emby' })).toHaveAttribute('href', '/settings/emby');
+  });
+
   test('does not claim "no servers" while the status is still loading', () => {
     mediaServerStatusReturn.status = { plex: false, jellyfin: false, emby: false };
     mediaServerStatusReturn.anyConfigured = false;

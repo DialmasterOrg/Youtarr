@@ -2,7 +2,8 @@ const express = require('express');
 
 function createMediaServerRoutes({ verifyToken, configModule, mediaServers }) {
   const router = express.Router();
-  const { JellyfinAdapter, EmbyAdapter } = mediaServers.adapters;
+  const { JellyfinAdapter, EmbyAdapter, BaseAdapter } = mediaServers.adapters;
+  const { describeHttpError } = BaseAdapter;
 
   router.get('/api/mediaservers/status', verifyToken, async (req, res) => {
     try {
@@ -37,7 +38,16 @@ function createMediaServerRoutes({ verifyToken, configModule, mediaServers }) {
       const users = await adapter.listUsers();
       res.json({ users });
     } catch (err) {
-      reqLog.error({ err }, 'list users failed');
+      const status = err.response?.status;
+      if (status === 401 || status === 403) {
+        return res.status(502).json({
+          error: 'The server rejected the API key, so users could not be listed. Re-copy the key from the server dashboard (select only the key itself) and try again.',
+        });
+      }
+      reqLog.error(describeHttpError(err), 'list users failed');
+      if (err.isAxiosError) {
+        return res.status(502).json({ error: `Could not reach the server: ${err.message}` });
+      }
       res.status(500).json({ error: 'Failed to list users' });
     }
   }

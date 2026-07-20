@@ -2,6 +2,7 @@ const axios = require('axios');
 const BaseAdapter = require('./baseAdapter');
 const {
   extractBasename,
+  normalizeBaseUrl,
   REQUEST_TIMEOUT_MS,
   isServerUnavailableError,
   describeHttpError,
@@ -16,9 +17,9 @@ class EmbyAdapter extends BaseAdapter {
   constructor(config) {
     super(config);
     this.serverType = 'emby';
-    this.url = config.embyUrl;
-    this.apiKey = config.embyApiKey;
-    this.userId = config.embyUserId;
+    this.url = normalizeBaseUrl(config.embyUrl);
+    this.apiKey = String(config.embyApiKey || '').trim();
+    this.userId = String(config.embyUserId || '').trim() || undefined;
     this.allUsers = config.embyWatchStatusAllUsers !== false;
   }
 
@@ -26,21 +27,23 @@ class EmbyAdapter extends BaseAdapter {
 
   async testConnection() {
     try {
-      const res = await axios.get(`${this.url}/System/Info/Public`, { headers: this._headers(), timeout: REQUEST_TIMEOUT_MS });
+      const res = await axios.get(`${this.url}/System/Info`, { headers: this._headers(), timeout: REQUEST_TIMEOUT_MS });
       return { ok: true, version: res.data?.Version };
     } catch (err) {
+      const status = err.response?.status;
+      if (status === 401 || status === 403) {
+        return {
+          ok: false,
+          error: 'The server is reachable but rejected the API key. Re-copy the key from the server dashboard (select only the key itself) and try again.',
+        };
+      }
       return { ok: false, error: err.message };
     }
   }
 
   async listUsers() {
-    try {
-      const res = await axios.get(`${this.url}/Users`, { headers: this._headers(), timeout: REQUEST_TIMEOUT_MS });
-      return (res.data || []).map((u) => ({ id: u.Id, name: u.Name }));
-    } catch (err) {
-      logger.error({ err }, 'emby listUsers failed');
-      return [];
-    }
+    const res = await axios.get(`${this.url}/Users`, { headers: this._headers(), timeout: REQUEST_TIMEOUT_MS });
+    return (res.data || []).map((u) => ({ id: u.Id, name: u.Name }));
   }
 
   async triggerLibraryScan() {
