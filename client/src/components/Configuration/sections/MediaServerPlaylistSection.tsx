@@ -48,6 +48,9 @@ const truncateId = (id: string): string =>
     ? `${id.slice(0, ID_PREFIX_LEN)}...${id.slice(-ID_SUFFIX_LEN)}`
     : id;
 
+// Emby/Jellyfin user IDs are GUIDs: 32 hex chars, with or without dashes.
+const SERVER_USER_ID_PATTERN = /^[0-9a-f]{32}$|^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 type EnabledKey = 'jellyfinEnabled' | 'embyEnabled';
 type UrlKey = 'jellyfinUrl' | 'embyUrl';
 type ApiKeyKey = 'jellyfinApiKey' | 'embyApiKey';
@@ -217,6 +220,8 @@ export const MediaServerPlaylistSection: React.FC<MediaServerPlaylistSectionProp
       ? `Enter the ${label} URL and API key above, then open this dropdown to load users.`
       : userId
       ? `Account that will own Youtarr-managed playlists. ID: ${truncateId(userId)}`
+      : manualEntry
+      ? `The user's internal ID from ${label}, not the username.`
       : 'Account that will own Youtarr-managed playlists.';
 
   const chipLabel = !enabled
@@ -224,7 +229,7 @@ export const MediaServerPlaylistSection: React.FC<MediaServerPlaylistSectionProp
     : testStatus === 'ok'
     ? 'Connected'
     : testStatus === 'error'
-    ? 'Unreachable'
+    ? 'Connection Failed'
     : 'Not Tested';
   const chipColor: 'default' | 'success' | 'error' | 'warning' =
     !enabled
@@ -365,6 +370,12 @@ export const MediaServerPlaylistSection: React.FC<MediaServerPlaylistSectionProp
           )}
 
           <FormHelperText>{userHelperText}</FormHelperText>
+
+          {userId.trim() !== '' && !SERVER_USER_ID_PATTERN.test(userId.trim()) && (
+            <FormHelperText error>
+              {`This doesn't look like ${kind === 'emby' ? 'an' : 'a'} ${label} user ID; IDs are 32-character codes, not usernames. If you can't load the user list, fix the URL/API key above, then pick the user from the dropdown.`}
+            </FormHelperText>
+          )}
 
           <Button
             variant="link"
