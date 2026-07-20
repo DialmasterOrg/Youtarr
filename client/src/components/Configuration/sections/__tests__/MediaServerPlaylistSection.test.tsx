@@ -354,4 +354,75 @@ describe('MediaServerPlaylistSection', () => {
 
     expect(await screen.findByText('No users found')).toBeInTheDocument();
   });
+
+  test('shows Connection Failed on the chip after a failed test', async () => {
+    axios.post.mockRejectedValueOnce(new Error('boom'));
+    renderWithProviders(
+      <MediaServerPlaylistSection
+        kind="emby"
+        config={baseConfig()}
+        token="tok"
+        onConfigChange={jest.fn()}
+      />
+    );
+    await userEvent.click(screen.getByRole('button', { name: /test connection/i }));
+    expect(await screen.findByText('Connection Failed')).toBeInTheDocument();
+  });
+
+  test('warns when the saved user ID does not look like a server user ID', async () => {
+    // A non-empty saved userId triggers the mount-time eager fetch; resolve it so the
+    // effect settles inside the test instead of leaking a state update past teardown.
+    axios.post.mockResolvedValueOnce({ data: { users: [] } });
+
+    renderWithProviders(
+      <MediaServerPlaylistSection
+        kind="emby"
+        config={baseConfig({ embyUserId: 'admin' })}
+        token="tok"
+        onConfigChange={jest.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(axios.post).toHaveBeenCalledWith(
+        '/api/mediaservers/emby/users',
+        {
+          embyUrl: 'http://192.168.1.174:8096',
+          embyApiKey: 'secret-key',
+          embyUserId: 'admin',
+        },
+        { headers: { 'x-access-token': 'tok' } }
+      );
+    });
+
+    expect(screen.getByText(/doesn't look like an Emby user ID/i)).toBeInTheDocument();
+  });
+
+  test('does not warn for a 32-character hex user ID', async () => {
+    const hexUserId = 'a'.repeat(32);
+    axios.post.mockResolvedValueOnce({ data: { users: [] } });
+
+    renderWithProviders(
+      <MediaServerPlaylistSection
+        kind="emby"
+        config={baseConfig({ embyUserId: hexUserId })}
+        token="tok"
+        onConfigChange={jest.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(axios.post).toHaveBeenCalledWith(
+        '/api/mediaservers/emby/users',
+        {
+          embyUrl: 'http://192.168.1.174:8096',
+          embyApiKey: 'secret-key',
+          embyUserId: hexUserId,
+        },
+        { headers: { 'x-access-token': 'tok' } }
+      );
+    });
+
+    expect(screen.queryByText(/doesn't look like an Emby user ID/i)).not.toBeInTheDocument();
+  });
 });

@@ -2,6 +2,7 @@
 const express = require('express');
 const createMediaServerRoutes = require('../mediaServers');
 const { findRouteHandler } = require('../../__tests__/testUtils');
+const BaseAdapter = require('../../modules/mediaServers/adapters/baseAdapter');
 
 const loggerMock = {
   info: jest.fn(),
@@ -43,6 +44,7 @@ const buildDeps = (overrides = {}) => ({
       JellyfinAdapter: MockJellyfinAdapter,
       EmbyAdapter: MockEmbyAdapter,
       PlexAdapter: MockPlexAdapter,
+      BaseAdapter,
     },
     serverRegistry: {
       getEnabledAdapters: jest.fn().mockReturnValue([]),
@@ -174,6 +176,44 @@ describe('POST /api/mediaservers/jellyfin/users', () => {
     expect(res.json).toHaveBeenCalledWith({ users: [{ id: 'u1', name: 'Alice' }] });
   });
 
+  test('maps an upstream 401 to a clear API-key error', async () => {
+    const deps = buildDeps();
+    deps.mediaServers.adapters.JellyfinAdapter = class {
+      async listUsers() {
+        throw Object.assign(new Error('Request failed with status code 401'), {
+          isAxiosError: true,
+          response: { status: 401 },
+        });
+      }
+    };
+    const handler = getHandler('post', '/api/mediaservers/jellyfin/users', deps);
+    const res = createResponse();
+    await handler({ body: {}, log: loggerMock }, res);
+    expect(res.status).toHaveBeenCalledWith(502);
+    expect(res.json).toHaveBeenCalledWith({
+      error: expect.stringMatching(/rejected the API key/i),
+    });
+  });
+
+  test('maps an unreachable server to a 502 with the connection message', async () => {
+    const deps = buildDeps();
+    deps.mediaServers.adapters.JellyfinAdapter = class {
+      async listUsers() {
+        throw Object.assign(new Error('connect ECONNREFUSED'), {
+          isAxiosError: true,
+          code: 'ECONNREFUSED',
+        });
+      }
+    };
+    const handler = getHandler('post', '/api/mediaservers/jellyfin/users', deps);
+    const res = createResponse();
+    await handler({ body: {}, log: loggerMock }, res);
+    expect(res.status).toHaveBeenCalledWith(502);
+    expect(res.json).toHaveBeenCalledWith({
+      error: expect.stringContaining('connect ECONNREFUSED'),
+    });
+  });
+
   test('returns 500 when adapter throws', async () => {
     const deps = buildDeps();
     class ThrowingJellyfinAdapter {
@@ -234,6 +274,69 @@ describe('POST /api/mediaservers/emby/users', () => {
     await handler(req, res);
 
     expect(res.json).toHaveBeenCalledWith({ users: [{ id: 'u2', name: 'Bob' }] });
+  });
+
+  test('maps an upstream 401 to a clear API-key error', async () => {
+    const deps = buildDeps();
+    deps.mediaServers.adapters.EmbyAdapter = class {
+      async listUsers() {
+        throw Object.assign(new Error('Request failed with status code 401'), {
+          isAxiosError: true,
+          response: { status: 401 },
+        });
+      }
+    };
+    const handler = getHandler('post', '/api/mediaservers/emby/users', deps);
+    const res = createResponse();
+    await handler({ body: {}, log: loggerMock }, res);
+    expect(res.status).toHaveBeenCalledWith(502);
+    expect(res.json).toHaveBeenCalledWith({
+      error: expect.stringMatching(/rejected the API key/i),
+    });
+  });
+
+  test('maps an unreachable server to a 502 with the connection message', async () => {
+    const deps = buildDeps();
+    deps.mediaServers.adapters.EmbyAdapter = class {
+      async listUsers() {
+        throw Object.assign(new Error('connect ECONNREFUSED'), {
+          isAxiosError: true,
+          code: 'ECONNREFUSED',
+        });
+      }
+    };
+    const handler = getHandler('post', '/api/mediaservers/emby/users', deps);
+    const res = createResponse();
+    await handler({ body: {}, log: loggerMock }, res);
+    expect(res.status).toHaveBeenCalledWith(502);
+    expect(res.json).toHaveBeenCalledWith({
+      error: expect.stringContaining('connect ECONNREFUSED'),
+    });
+  });
+
+  test('logs a token-free error description, never the raw axios error', async () => {
+    const deps = buildDeps();
+    deps.mediaServers.adapters.EmbyAdapter = class {
+      async listUsers() {
+        throw Object.assign(new Error('connect ECONNREFUSED'), {
+          isAxiosError: true,
+          code: 'ECONNREFUSED',
+          config: { headers: { 'X-Emby-Token': 'SECRET' } },
+        });
+      }
+    };
+    const handler = getHandler('post', '/api/mediaservers/emby/users', deps);
+    const res = createResponse();
+    await handler({ body: {}, log: loggerMock }, res);
+
+    expect(loggerMock.error).toHaveBeenCalledWith(
+      expect.not.objectContaining({ err: expect.anything() }),
+      'list users failed'
+    );
+    expect(loggerMock.error).toHaveBeenCalledWith(
+      expect.objectContaining({ status: null, code: 'ECONNREFUSED', message: 'connect ECONNREFUSED' }),
+      'list users failed'
+    );
   });
 });
 

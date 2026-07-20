@@ -1,4 +1,5 @@
 import React, { ChangeEvent } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Accordion,
   AccordionDetails,
@@ -166,8 +167,11 @@ export function WatchStatusSection({ config, token, onConfigChange }: WatchStatu
       )}
       {!statusLoading && !statusError && !anyConfigured && (
         <Alert severity="info" className="mb-4">
-          No media servers connected. Configure Plex, Jellyfin, or Emby first; watch status sync
-          has nothing to do until then.
+          No media servers connected. Watch status sync needs at least one; connect{' '}
+          <RouterLink to="/settings/plex" className="underline font-medium">Plex</RouterLink>,{' '}
+          <RouterLink to="/settings/jellyfin" className="underline font-medium">Jellyfin</RouterLink>, or{' '}
+          <RouterLink to="/settings/emby" className="underline font-medium">Emby</RouterLink>{' '}
+          in Settings first.
         </Alert>
       )}
       {/* useMediaServerStatus keeps the last successful status when a later

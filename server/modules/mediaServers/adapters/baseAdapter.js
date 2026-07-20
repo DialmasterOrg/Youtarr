@@ -114,6 +114,14 @@ class WatchStateFetchError extends Error {
   }
 }
 
+/**
+ * Normalize a user-entered media server base URL: trim whitespace and strip
+ * trailing slashes so `${url}/Users` never produces `//Users`.
+ */
+function normalizeBaseUrl(value) {
+  return String(value || '').trim().replace(/\/+$/, '');
+}
+
 // True when an axios error means the server itself is unreachable or not
 // responding, rather than a normal "queried fine, no such item" result. No
 // response at all (ECONNREFUSED / ETIMEDOUT / ENOTFOUND / timeout) or any 5xx
@@ -139,6 +147,7 @@ module.exports = BaseAdapter;
 module.exports.extractBasename = extractBasename;
 module.exports.pathSegments = pathSegments;
 module.exports.trailingSegmentMatch = trailingSegmentMatch;
+module.exports.normalizeBaseUrl = normalizeBaseUrl;
 module.exports.REQUEST_TIMEOUT_MS = REQUEST_TIMEOUT_MS;
 module.exports.MediaServerUnavailableError = MediaServerUnavailableError;
 module.exports.WatchStateFetchError = WatchStateFetchError;

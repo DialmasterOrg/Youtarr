@@ -11,6 +11,22 @@ describe('EmbyAdapter', () => {
 
   beforeEach(() => jest.clearAllMocks());
 
+  test('normalizes a URL with a trailing slash and whitespace around the key', () => {
+    const adapter = new EmbyAdapter({
+      embyUrl: 'http://emby:8096/ ',
+      embyApiKey: ' KEY \n',
+      embyUserId: ' USR ',
+    });
+    expect(adapter.url).toBe('http://emby:8096');
+    expect(adapter.apiKey).toBe('KEY');
+    expect(adapter.userId).toBe('USR');
+  });
+
+  test('leaves userId undefined when not configured', () => {
+    const adapter = new EmbyAdapter({ embyUrl: 'http://emby:8096', embyApiKey: 'KEY' });
+    expect(adapter.userId).toBeUndefined();
+  });
+
   test('exposes the serverType contract used by orchestration', () => {
     expect(new EmbyAdapter(cfg).serverType).toBe('emby');
   });
@@ -22,11 +38,47 @@ describe('EmbyAdapter', () => {
     expect(result.ok).toBe(true);
   });
 
+  test('testConnection pings the authenticated System/Info endpoint', async () => {
+    axios.get.mockResolvedValueOnce({ data: { Version: '4.9.2' } });
+    const adapter = new EmbyAdapter(cfg);
+    const result = await adapter.testConnection();
+    expect(result).toEqual({ ok: true, version: '4.9.2' });
+    expect(axios.get).toHaveBeenCalledWith(
+      'http://emby:8096/System/Info',
+      expect.objectContaining({ headers: { 'X-Emby-Token': 'KEY' } })
+    );
+  });
+
+  test('testConnection reports a rejected API key distinctly from an unreachable server', async () => {
+    axios.get.mockRejectedValueOnce({ isAxiosError: true, response: { status: 401 }, message: 'Request failed with status code 401' });
+    const adapter = new EmbyAdapter(cfg);
+    const result = await adapter.testConnection();
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/rejected the API key/i);
+  });
+
+  test('testConnection still reports connection errors by message', async () => {
+    axios.get.mockRejectedValueOnce(Object.assign(new Error('connect ECONNREFUSED'), { isAxiosError: true, code: 'ECONNREFUSED' }));
+    const adapter = new EmbyAdapter(cfg);
+    const result = await adapter.testConnection();
+    expect(result).toEqual({ ok: false, error: 'connect ECONNREFUSED' });
+  });
+
   test('listUsers returns user list', async () => {
     axios.get.mockResolvedValueOnce({ data: [{ Id: 'u1', Name: 'Alice' }, { Id: 'u2', Name: 'Bob' }] });
     const adapter = new EmbyAdapter(cfg);
     const users = await adapter.listUsers();
     expect(users).toEqual([{ id: 'u1', name: 'Alice' }, { id: 'u2', name: 'Bob' }]);
+  });
+
+  test('listUsers throws on failure instead of returning an empty list', async () => {
+    const authError = Object.assign(new Error('Request failed with status code 401'), {
+      isAxiosError: true,
+      response: { status: 401 },
+    });
+    axios.get.mockRejectedValueOnce(authError);
+    const adapter = new EmbyAdapter(cfg);
+    await expect(adapter.listUsers()).rejects.toBe(authError);
   });
 
   test('createPlaylist POSTs with query params and CSV Ids (Emby-style)', async () => {
@@ -145,7 +197,7 @@ describe('EmbyAdapter', () => {
     const adapter = new EmbyAdapter(cfg);
     await adapter.testConnection();
     expect(axios.get).toHaveBeenCalledWith(
-      expect.stringContaining('/System/Info/Public'),
+      expect.stringContaining('/System/Info'),
       expect.objectContaining({ timeout: REQUEST_TIMEOUT_MS })
     );
   });
