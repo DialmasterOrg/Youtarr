@@ -122,6 +122,10 @@ export const CONFIG_FIELDS = {
   autoRemovalEnabled: { default: false, trackChanges: true },
   autoRemovalFreeSpaceThreshold: { default: '', trackChanges: true },
   autoRemovalVideoAgeThreshold: { default: '', trackChanges: true },
+  autoRemovalWatchedEnabled: { default: false, trackChanges: true },
+  autoRemovalWatchedMinDaysSinceWatched: { default: '', trackChanges: true },
+  autoRemovalWatchedMinVideoAgeDays: { default: '', trackChanges: true },
+  autoRemovalKeepRecentCount: { default: 0, trackChanges: true },
 
   // Storage
   useTmpForDownloads: { default: false, trackChanges: true },
@@ -240,6 +244,10 @@ export const DEFAULT_CONFIG: ConfigState = {
   autoRemovalEnabled: CONFIG_FIELDS.autoRemovalEnabled.default,
   autoRemovalFreeSpaceThreshold: CONFIG_FIELDS.autoRemovalFreeSpaceThreshold.default,
   autoRemovalVideoAgeThreshold: CONFIG_FIELDS.autoRemovalVideoAgeThreshold.default,
+  autoRemovalWatchedEnabled: CONFIG_FIELDS.autoRemovalWatchedEnabled.default,
+  autoRemovalWatchedMinDaysSinceWatched: CONFIG_FIELDS.autoRemovalWatchedMinDaysSinceWatched.default,
+  autoRemovalWatchedMinVideoAgeDays: CONFIG_FIELDS.autoRemovalWatchedMinVideoAgeDays.default,
+  autoRemovalKeepRecentCount: CONFIG_FIELDS.autoRemovalKeepRecentCount.default,
   useTmpForDownloads: CONFIG_FIELDS.useTmpForDownloads.default,
   tmpFilePath: CONFIG_FIELDS.tmpFilePath.default,
   subtitlesEnabled: CONFIG_FIELDS.subtitlesEnabled.default,

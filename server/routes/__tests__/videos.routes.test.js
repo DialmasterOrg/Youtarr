@@ -7,6 +7,11 @@ jest.mock('../../modules/jobModule', () => ({
 }));
 const jobModuleShared = require('../../modules/jobModule');
 
+jest.mock('../../modules/videoDeletionModule', () => ({
+  performAutomaticCleanup: jest.fn(),
+}));
+const videoDeletionModuleShared = require('../../modules/videoDeletionModule');
+
 describe('POST /api/videos/rating', () => {
   const loggerMock = {
     info: jest.fn(),
@@ -77,6 +82,103 @@ describe('POST /api/videos/rating', () => {
       success: false,
       error: expect.stringContaining('Invalid rating'),
     }));
+  });
+});
+
+describe('POST /api/auto-removal/dry-run', () => {
+  const loggerMock = {
+    info: jest.fn(),
+    error: jest.fn(),
+  };
+
+  const createResponse = () => {
+    const res = {};
+    res.status = jest.fn(() => res);
+    res.json = jest.fn(() => res);
+    return res;
+  };
+
+  const getHandler = () => {
+    const router = createVideoRoutes({
+      verifyToken: (req, res, next) => next(),
+      videosModule: {},
+      downloadModule: {}
+    });
+    const app = express();
+    app.use(router);
+    return findRouteHandler(app, 'post', '/api/auto-removal/dry-run');
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    videoDeletionModuleShared.performAutomaticCleanup.mockResolvedValue({
+      success: true,
+      dryRun: true,
+      errors: []
+    });
+  });
+
+  test('forwards the watched and keep-recent overrides to the cleanup module', async () => {
+    const handler = getHandler();
+    const req = {
+      body: {
+        autoRemovalEnabled: true,
+        autoRemovalVideoAgeThreshold: '30',
+        autoRemovalWatchedEnabled: true,
+        autoRemovalWatchedMinDaysSinceWatched: '7',
+        autoRemovalWatchedMinVideoAgeDays: '14',
+        autoRemovalKeepRecentCount: 5
+      },
+      log: loggerMock
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(videoDeletionModuleShared.performAutomaticCleanup).toHaveBeenCalledWith({
+      dryRun: true,
+      overrides: {
+        autoRemovalEnabled: true,
+        autoRemovalVideoAgeThreshold: '30',
+        autoRemovalWatchedEnabled: true,
+        autoRemovalWatchedMinDaysSinceWatched: '7',
+        autoRemovalWatchedMinVideoAgeDays: '14',
+        autoRemovalKeepRecentCount: 5
+      }
+    });
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ dryRun: true }));
+  });
+
+  test('coerces a string autoRemovalWatchedEnabled to boolean', async () => {
+    const handler = getHandler();
+    const req = {
+      body: { autoRemovalWatchedEnabled: 'true' },
+      log: loggerMock
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(videoDeletionModuleShared.performAutomaticCleanup).toHaveBeenCalledWith({
+      dryRun: true,
+      overrides: { autoRemovalWatchedEnabled: true }
+    });
+  });
+
+  test('omits overrides that are not present in the request body', async () => {
+    const handler = getHandler();
+    const req = {
+      body: { autoRemovalEnabled: true },
+      log: loggerMock
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(videoDeletionModuleShared.performAutomaticCleanup).toHaveBeenCalledWith({
+      dryRun: true,
+      overrides: { autoRemovalEnabled: true }
+    });
   });
 });
 
