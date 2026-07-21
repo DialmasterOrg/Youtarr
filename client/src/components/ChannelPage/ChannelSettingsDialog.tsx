@@ -40,6 +40,12 @@ import { RATING_OPTIONS } from '../../utils/ratings';
 import RatingBadge from '../shared/RatingBadge';
 import TabsEditor, { TabsEditorRefreshResult } from './components/TabsEditor';
 
+const M3U_SORT_ORDERS = ['oldest_first', 'newest_first'] as const;
+type M3uSortOrder = (typeof M3U_SORT_ORDERS)[number];
+
+const toM3uSortOrder = (value: unknown): M3uSortOrder =>
+  M3U_SORT_ORDERS.includes(value as M3uSortOrder) ? (value as M3uSortOrder) : 'oldest_first';
+
 interface ChannelSettings {
   sub_folder: string | null;
   video_quality: string | null;
@@ -51,6 +57,8 @@ interface ChannelSettings {
   audio_format: string | null;
   skip_video_folder: boolean | null;
   hidden_tabs: string[];
+  m3u_enabled: boolean;
+  m3u_sort_order: M3uSortOrder;
 }
 
 interface ChannelTabsState {
@@ -132,7 +140,9 @@ function ChannelSettingsDialog({
     audio_format: null,
     auto_download_enabled_tabs: null,
     skip_video_folder: null,
-    hidden_tabs: []
+    hidden_tabs: [],
+    m3u_enabled: false,
+    m3u_sort_order: 'oldest_first',
   });
   const [originalSettings, setOriginalSettings] = useState<ChannelSettings>({
     sub_folder: null,
@@ -144,7 +154,9 @@ function ChannelSettingsDialog({
     audio_format: null,
     auto_download_enabled_tabs: null,
     skip_video_folder: null,
-    hidden_tabs: []
+    hidden_tabs: [],
+    m3u_enabled: false,
+    m3u_sort_order: 'oldest_first',
   });
   const [detectedTabs, setDetectedTabs] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -230,6 +242,8 @@ function ChannelSettingsDialog({
             ? settingsData.skip_video_folder
             : null,
           hidden_tabs: Array.isArray(settingsData.hidden_tabs) ? settingsData.hidden_tabs : [],
+          m3u_enabled: settingsData.m3u_enabled === true,
+          m3u_sort_order: toM3uSortOrder(settingsData.m3u_sort_order),
         };
         setSettings(loadedSettings);
         setOriginalSettings(loadedSettings);
@@ -274,7 +288,9 @@ function ChannelSettingsDialog({
           audio_format: settings.audio_format || null,
           auto_download_enabled_tabs: settings.auto_download_enabled_tabs,
           skip_video_folder: settings.skip_video_folder,
-          hidden_tabs: settings.hidden_tabs
+          hidden_tabs: settings.hidden_tabs,
+          m3u_enabled: settings.m3u_enabled,
+          m3u_sort_order: settings.m3u_sort_order
         })
       });
 
@@ -321,6 +337,8 @@ function ChannelSettingsDialog({
           ? result.settings.skip_video_folder
           : settings.skip_video_folder ?? null,
         hidden_tabs: resultHiddenTabs,
+        m3u_enabled: result?.settings?.m3u_enabled ?? settings.m3u_enabled,
+        m3u_sort_order: toM3uSortOrder(result?.settings?.m3u_sort_order ?? settings.m3u_sort_order),
       };
 
       setSettings(updatedSettings);
@@ -371,6 +389,8 @@ function ChannelSettingsDialog({
            settings.default_rating !== originalSettings.default_rating ||
            settings.auto_download_enabled_tabs !== originalSettings.auto_download_enabled_tabs ||
            settings.skip_video_folder !== originalSettings.skip_video_folder ||
+           settings.m3u_enabled !== originalSettings.m3u_enabled ||
+           settings.m3u_sort_order !== originalSettings.m3u_sort_order ||
            tabsChanged;
   };
 
@@ -608,6 +628,43 @@ function ChannelSettingsDialog({
               <Typography variant="caption" color="text.secondary" className="mt-1 mb-2 block">
                 Flat saves video files directly in the channel folder instead of individual video subfolders. Only affects new downloads.
               </Typography>
+            </div>
+
+            <div className="mt-2">
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={settings.m3u_enabled}
+                    onChange={(e) => setSettings({
+                      ...settings,
+                      m3u_enabled: e.target.checked
+                    })}
+                  />
+                }
+                label="Generate channel playlist file (.m3u)"
+              />
+              <Typography variant="caption" color="text.secondary" className="mt-1 block">
+                Writes a playlist of this channel&apos;s downloaded videos to the top of the
+                channel folder. Jellyfin and Emby import it automatically; it updates after
+                downloads and deletions, and refreshes nightly.
+              </Typography>
+              {settings.m3u_enabled && (
+                <FormControl fullWidth className="mt-2">
+                  <InputLabel id="m3u-sort-order-label">Playlist Order</InputLabel>
+                  <Select
+                    labelId="m3u-sort-order-label"
+                    value={settings.m3u_sort_order}
+                    onChange={(e: SelectChangeEvent<string>) => setSettings({
+                      ...settings,
+                      m3u_sort_order: toM3uSortOrder(e.target.value)
+                    })}
+                    label="Playlist Order"
+                  >
+                    <MenuItem value="oldest_first">Oldest first (chronological)</MenuItem>
+                    <MenuItem value="newest_first">Newest first</MenuItem>
+                  </Select>
+                </FormControl>
+              )}
             </div>
 
             <Alert severity="info" style={{ marginBottom: 16 }}>

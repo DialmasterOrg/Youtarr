@@ -4,6 +4,7 @@ const Channel = require('../../models/channel');
 const channelMappers = require('./channelMappers');
 const channelThumbnails = require('./channelThumbnails');
 const channelProvisioning = require('./channelProvisioning');
+const m3uGenerator = require('../m3uGenerator');
 
 const SUB_FOLDER_DEFAULT_KEY = '__default__';
 
@@ -212,6 +213,24 @@ class ChannelCatalog {
   }
 
   /**
+   * Disable channels by URL and delete their generated channel .m3u files.
+   * The m3u_enabled flag itself is untouched so the setting survives a
+   * later re-enable.
+   * @param {Array<string>} urls - Channel URLs to disable
+   * @returns {Promise<void>}
+   */
+  async _disableChannelsByUrl(urls) {
+    const disabling = await Channel.findAll({
+      where: { url: urls, m3u_enabled: true },
+      attributes: ['channel_id'],
+    });
+    await Channel.update({ enabled: false }, { where: { url: urls } });
+    for (const channel of disabling) {
+      m3uGenerator.deleteChannelM3UInBackground(channel.channel_id, 'channel-disable');
+    }
+  }
+
+  /**
    * Update the list of enabled channels in the database.
    * Enables new channels, disables removed ones, and fetches metadata for new additions.
    * @param {Array<string>} channelUrls - Array of channel URLs to enable
@@ -240,11 +259,12 @@ class ChannelCatalog {
         // Use channel_id to ensure we update the correct channel regardless of URL format
         if (channelInfo && channelInfo.id) {
           await Channel.update({ enabled: true }, { where: { channel_id: channelInfo.id } });
+          m3uGenerator.generateChannelM3UInBackground(channelInfo.id, 'channel-enable');
         }
       }
 
       if (toDisable.length > 0) {
-        await Channel.update({ enabled: false }, { where: { url: toDisable } });
+        await this._disableChannelsByUrl(toDisable);
       }
     } catch (err) {
       logger.error({ err }, 'Error updating channels in database');
@@ -296,16 +316,18 @@ class ChannelCatalog {
           const channelInfo = await channelProvisioning.getChannelInfo(url, false, true);
           if (channelInfo && channelInfo.id) {
             await Channel.update({ enabled: true }, { where: { channel_id: channelInfo.id } });
+            m3uGenerator.generateChannelM3UInBackground(channelInfo.id, 'channel-enable');
           }
         } else {
           // Channel exists, just enable it
           await foundChannel.update({ enabled: true });
           logger.info({ url, channel_id: foundChannel.channel_id }, 'Enabled existing channel');
+          m3uGenerator.generateChannelM3UInBackground(foundChannel.channel_id, 'channel-enable');
         }
       }
 
       if (toDisable.length > 0) {
-        await Channel.update({ enabled: false }, { where: { url: toDisable } });
+        await this._disableChannelsByUrl(toDisable);
       }
     } catch (err) {
       logger.error({ err }, 'Error applying channel delta updates');

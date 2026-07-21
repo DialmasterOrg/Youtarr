@@ -3,12 +3,17 @@
 // Mock logger before any imports
 jest.mock('../../logger');
 
+jest.mock('../m3uGenerator', () => ({
+  generateChannelM3UInBackground: jest.fn()
+}));
+
 describe('VideoDeletionModule', () => {
   let VideoDeletionModule;
   let mockVideo;
   let mockFs;
   let mockLogger;
   let mockFilesystem;
+  let m3uGenerator;
 
   beforeEach(() => {
     jest.resetModules();
@@ -16,6 +21,8 @@ describe('VideoDeletionModule', () => {
 
     // Get the mocked logger
     mockLogger = require('../../logger');
+
+    m3uGenerator = require('../m3uGenerator');
 
     // Mock the Video model
     mockVideo = {
@@ -743,6 +750,40 @@ describe('VideoDeletionModule', () => {
     });
   });
 
+  describe('channel m3u regeneration after deletion', () => {
+    // Uses the no-file-path branch of deleteVideoById: the video is marked
+    // removed without any fs interaction, so only the Video model mock matters.
+    const makeVideo = (id, channelId) => ({
+      id,
+      youtubeId: `yt${id}`,
+      channel_id: channelId,
+      removed: false,
+      filePath: null,
+      update: jest.fn().mockResolvedValue(undefined)
+    });
+
+    test('regenerates once per unique channel after deleteVideos', async () => {
+      mockVideo.findByPk
+        .mockResolvedValueOnce(makeVideo(1, 'UC1'))
+        .mockResolvedValueOnce(makeVideo(2, 'UC1'))
+        .mockResolvedValueOnce(makeVideo(3, 'UC2'));
+
+      await VideoDeletionModule.deleteVideos([1, 2, 3]);
+
+      expect(m3uGenerator.generateChannelM3UInBackground).toHaveBeenCalledTimes(2);
+      expect(m3uGenerator.generateChannelM3UInBackground).toHaveBeenCalledWith('UC1', expect.any(String));
+      expect(m3uGenerator.generateChannelM3UInBackground).toHaveBeenCalledWith('UC2', expect.any(String));
+    });
+
+    test('does not regenerate when nothing was deleted', async () => {
+      mockVideo.findByPk.mockResolvedValue(null);
+
+      await VideoDeletionModule.deleteVideos([99]);
+
+      expect(m3uGenerator.generateChannelM3UInBackground).not.toHaveBeenCalled();
+    });
+  });
+
   describe('formatVideoForPlan', () => {
     test('should format video metadata correctly', () => {
       const video = {
@@ -1037,6 +1078,7 @@ describe('VideoDeletionModule', () => {
 
       jest.resetModules();
       mockLogger = require('../../logger');
+      m3uGenerator = require('../m3uGenerator');
       VideoDeletionModule = require('../videoDeletionModule');
     });
 
@@ -1180,6 +1222,50 @@ describe('VideoDeletionModule', () => {
       expect(result.plan.spaceStrategy.needsCleanup).toBe(true);
       expect(result.plan.spaceStrategy.candidateCount).toBeGreaterThan(0);
       expect(result.simulationTotals.bySpace).toBeGreaterThan(0);
+    });
+
+    test('regenerates m3u once per unique channel after space-based cleanup', async () => {
+      mockConfigModule.getConfig.mockReturnValue({
+        autoRemovalEnabled: true,
+        autoRemovalVideoAgeThreshold: null,
+        autoRemovalFreeSpaceThreshold: '10GB'
+      });
+
+      mockConfigModule.getStorageStatus.mockResolvedValue({
+        available: 5 * 1024 ** 3, // 5GB
+        availableGB: 5
+      });
+
+      mockConfigModule.isStorageBelowThreshold.mockReturnValue(true);
+      mockConfigModule.convertStorageThresholdToBytes.mockReturnValue(10 * 1024 ** 3); // need to free 5GB
+
+      // Three videos across two channels (UC1 duplicated) whose combined size
+      // crosses the 5GB space-to-free threshold, so all three get deleted in
+      // a single batch.
+      const mockOldestVideos = [
+        { id: 1, youtubeId: 'yt1', fileSize: String(2 * 1024 ** 3), timeCreated: new Date('2023-01-01') },
+        { id: 2, youtubeId: 'yt2', fileSize: String(2 * 1024 ** 3), timeCreated: new Date('2023-01-02') },
+        { id: 3, youtubeId: 'yt3', fileSize: String(2 * 1024 ** 3), timeCreated: new Date('2023-01-03') }
+      ];
+
+      mockSequelize.query.mockResolvedValueOnce(mockOldestVideos);
+
+      const channelByVideoId = { 1: 'UC1', 2: 'UC1', 3: 'UC2' };
+      mockVideo.findByPk.mockImplementation((id) => Promise.resolve({
+        id,
+        youtubeId: `yt${id}`,
+        channel_id: channelByVideoId[id],
+        removed: false,
+        filePath: null,
+        update: jest.fn().mockResolvedValue(undefined)
+      }));
+
+      const result = await VideoDeletionModule.performAutomaticCleanup({ dryRun: false });
+
+      expect(result.deletedBySpace).toBe(3);
+      expect(m3uGenerator.generateChannelM3UInBackground).toHaveBeenCalledTimes(2);
+      expect(m3uGenerator.generateChannelM3UInBackground).toHaveBeenCalledWith('UC1', expect.any(String));
+      expect(m3uGenerator.generateChannelM3UInBackground).toHaveBeenCalledWith('UC2', expect.any(String));
     });
 
     test('should skip space cleanup when storage is above threshold', async () => {

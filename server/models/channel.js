@@ -103,6 +103,16 @@ Channel.init(
       defaultValue: null,
       comment: 'When true, videos are stored directly in the channel folder without per-video subfolders',
     },
+    m3u_enabled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    m3u_sort_order: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'oldest_first',
+    },
     terminated_at: {
       type: DataTypes.DATE,
       allowNull: true,

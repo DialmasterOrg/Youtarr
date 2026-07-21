@@ -3,6 +3,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const logger = require('../logger');
 const { isVideoDirectory, cleanupEmptyChannelDirectory, cleanupEmptyParents, isSubfolderDir, listSubdirectories, removeDirectoryResilient } = require('./filesystem');
+const m3uGenerator = require('./m3uGenerator');
 
 class VideoDeletionModule {
   constructor() {}
@@ -104,6 +105,7 @@ class VideoDeletionModule {
         return {
           success: true,
           videoId,
+          channelId: video.channel_id,
           message: 'Video marked as removed (no file path)'
         };
       }
@@ -177,6 +179,7 @@ class VideoDeletionModule {
       return {
         success: true,
         videoId,
+        channelId: video.channel_id,
         message: 'Video deleted successfully'
       };
     } catch (error) {
@@ -197,6 +200,7 @@ class VideoDeletionModule {
   async deleteVideos(videoIds) {
     const deleted = [];
     const failed = [];
+    const affectedChannelIds = [];
 
     // Process deletions sequentially to avoid overwhelming the file system
     for (const videoId of videoIds) {
@@ -204,6 +208,7 @@ class VideoDeletionModule {
 
       if (result.success) {
         deleted.push(videoId);
+        affectedChannelIds.push(result.channelId);
       } else {
         failed.push({
           videoId,
@@ -211,6 +216,8 @@ class VideoDeletionModule {
         });
       }
     }
+
+    this._regenerateM3usForChannels(affectedChannelIds);
 
     return {
       success: failed.length === 0,
@@ -227,6 +234,7 @@ class VideoDeletionModule {
   async deleteVideosByYoutubeIds(youtubeIds) {
     const deleted = [];
     const failed = [];
+    const affectedChannelIds = [];
 
     for (const youtubeId of youtubeIds) {
       try {
@@ -248,6 +256,7 @@ class VideoDeletionModule {
 
         if (result.success) {
           deleted.push(youtubeId);
+          affectedChannelIds.push(result.channelId);
         } else {
           failed.push({
             youtubeId,
@@ -262,11 +271,24 @@ class VideoDeletionModule {
       }
     }
 
+    this._regenerateM3usForChannels(affectedChannelIds);
+
     return {
       success: failed.length === 0,
       deleted,
       failed
     };
+  }
+
+  /**
+   * Regenerate the channel .m3u playlist for each affected channel, deduped.
+   * @param {Array<string|undefined>} channelIds
+   */
+  _regenerateM3usForChannels(channelIds) {
+    const unique = [...new Set((channelIds || []).filter(Boolean))];
+    for (const channelId of unique) {
+      m3uGenerator.generateChannelM3UInBackground(channelId, 'video-deletion');
+    }
   }
 
   /**
@@ -647,6 +669,7 @@ ${excludeClause}        ORDER BY timeCreated ASC
               } else {
                 let freedSoFar = 0;
                 let iterations = 0;
+                const affectedChannelIds = [];
 
                 while (freedSoFar < spaceToFree && iterations < maxIterations) {
                   const oldestVideos = await this.getOldestVideos(batchSize);
@@ -675,6 +698,7 @@ ${excludeClause}        ORDER BY timeCreated ASC
                       freedSoFar += videoSize;
                       batchFreed += videoSize;
                       batchDeletedCount += 1;
+                      affectedChannelIds.push(deleteResult.channelId);
 
                       result.deletedBySpace += 1;
                       result.plan.spaceStrategy.deletedCount += 1;
@@ -712,6 +736,8 @@ ${excludeClause}        ORDER BY timeCreated ASC
                   logger.warn('[Auto-Removal] Reached maximum iterations for space-based cleanup');
                   result.errors.push('Reached maximum iterations, may need additional cleanup');
                 }
+
+                this._regenerateM3usForChannels(affectedChannelIds);
               }
             } else {
               logger.info({ availableGB: storageStatus.availableGB }, '[Auto-Removal] Storage is above threshold, no space-based cleanup needed');
