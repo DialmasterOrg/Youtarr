@@ -22,7 +22,7 @@ Youtarr uses MariaDB/MySQL for storing:
 ### Database Tables
 | Table              | Model             | Description                       |
 | :----------------- | :-------------    | :-------------------------------- |
-| `channels`         | `Channel`         | YouTube channel information       |
+| `channels`         | `Channel`         | YouTube channel information. `m3u_enabled` (boolean, default false): generate a `.m3u` playlist file in the channel folder. `m3u_sort_order` (string, default `oldest_first`): `.m3u` entry order, `oldest_first` or `newest_first`. |
 | `Videos`           | `Video`           | Downloaded video metadata         |
 | `channelvideos`    | `ChannelVideo`    | Channel <-> video associations. `published_at_source` tracks publishedAt provenance: `exact` (.info.json), `approximate` (yt-dlp flat-playlist date), `estimated` (ordering-only placeholder assigned when YouTube returns a listing with no dates; never displayed), NULL (legacy, treated as approximate) |
 | `Jobs`             | `Job`             | Download job queue                |

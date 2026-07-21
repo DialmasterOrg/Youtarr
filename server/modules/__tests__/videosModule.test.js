@@ -12,6 +12,7 @@ describe('VideosModule', () => {
   let mockLogger;
   let mockNfoGenerator;
   let mockMessageEmitter;
+  let mockM3uGenerator;
 
   beforeEach(() => {
     jest.resetModules();
@@ -80,6 +81,10 @@ describe('VideosModule', () => {
       emitMessage: jest.fn()
     };
 
+    mockM3uGenerator = {
+      regenerateAllChannelM3Us: jest.fn().mockResolvedValue({ attempted: 0, succeeded: 0 })
+    };
+
     // Mock the database module
     jest.doMock('../../db.js', () => ({
       Sequelize,
@@ -110,6 +115,8 @@ describe('VideosModule', () => {
     jest.doMock('../nfoGenerator', () => mockNfoGenerator);
 
     jest.doMock('../messageEmitter', () => mockMessageEmitter);
+
+    jest.doMock('../m3uGenerator', () => mockM3uGenerator);
 
     // Mock logger
     jest.doMock('../../logger', () => mockLogger);
@@ -1062,6 +1069,15 @@ describe('VideosModule', () => {
       await VideosModule.backfillVideoMetadata({ trigger: 'manual' });
 
       expect(VideosModule._backfillRunning).toBe(false);
+    });
+
+    test('kicks off a channel m3u sweep after the rescan completes', async () => {
+      mockFs.readdir.mockResolvedValueOnce([]);
+      mockVideo.count.mockResolvedValueOnce(0);
+
+      await VideosModule.backfillVideoMetadata({ trigger: 'manual' });
+
+      expect(mockM3uGenerator.regenerateAllChannelM3Us).toHaveBeenCalledTimes(1);
     });
 
     test('should release lock on error', async () => {

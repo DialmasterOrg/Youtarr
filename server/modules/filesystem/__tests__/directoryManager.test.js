@@ -242,6 +242,14 @@ describe('filesystem/directoryManager', () => {
 
       expect(result).toBe(false);
     });
+
+    it('should return true for directory containing only poster and a channel .m3u', async () => {
+      fsPromises.readdir.mockResolvedValueOnce(['poster.jpg', 'Chan A.m3u']);
+
+      const result = await isDirectoryEffectivelyEmpty('/path/channel');
+
+      expect(result).toBe(true);
+    });
   });
 
   describe('isIgnorableEntry', () => {
@@ -257,6 +265,15 @@ describe('filesystem/directoryManager', () => {
       expect(isIgnorableEntry('._video.mp4')).toBe(true);
       expect(isIgnorableEntry('._poster.jpg')).toBe(true);
       expect(isIgnorableEntry('._.DS_Store')).toBe(true);
+    });
+
+    it('returns true for .m3u playlist files (case-insensitive)', () => {
+      expect(isIgnorableEntry('Chan A.m3u')).toBe(true);
+      expect(isIgnorableEntry('CHANNEL.M3U')).toBe(true);
+    });
+
+    it('returns true for a .m3u.tmp staging file stranded by a crash', () => {
+      expect(isIgnorableEntry('Chan A.m3u.tmp')).toBe(true);
     });
 
     it('returns false for real video files', () => {

@@ -7,6 +7,7 @@ const fileCheckModule = require('./fileCheckModule');
 const watchStatusQueries = require('./mediaServers/watchStatusQueries');
 const logger = require('../logger');
 const messageEmitter = require('./messageEmitter');
+const m3uGenerator = require('./m3uGenerator');
 const { AUDIO_EXTENSIONS, MEDIA_EXTENSIONS } = require('./filesystem/constants');
 
 class VideosModule {
@@ -757,6 +758,13 @@ class VideosModule {
         });
       } catch (emitErr) {
         logger.error({ err: emitErr }, 'Failed to emit rescanStatus completion');
+      }
+
+      if (result) {
+        // Reconcile channel .m3u files with what the rescan found on disk.
+        m3uGenerator.regenerateAllChannelM3Us().catch((err) => {
+          logger.error({ err }, 'Failed to refresh channel M3Us after rescan');
+        });
       }
     }
   }
