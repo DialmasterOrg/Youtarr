@@ -39,6 +39,17 @@ class VideoDeletionModule {
   }
 
   /**
+   * Parse a config value as a positive integer, treating anything absent or
+   * invalid (older configs won't have the newer auto-removal fields) as 0.
+   * @param {*} value
+   * @returns {number}
+   */
+  _parsePositiveInt(value) {
+    const parsed = parseInt(value, 10);
+    return Number.isNaN(parsed) || parsed <= 0 ? 0 : parsed;
+  }
+
+  /**
    * Attempt to clean up an empty channel directory after video deletion
    * Best-effort: errors are logged as warnings and do not propagate
    * @param {string} filePath - The deleted video's file path
@@ -297,10 +308,14 @@ class VideoDeletionModule {
    * @param {number} ageInDays - Age threshold in days
    * @returns {Promise<Array<{id: number, youtubeId: string, youTubeVideoName: string, timeCreated: Date, fileSize: number}>>}
    */
-  async getVideosOlderThanThreshold(ageInDays) {
+  async getVideosOlderThanThreshold(ageInDays, excludeIds = []) {
     const { Sequelize, sequelize } = require('../db.js');
 
     try {
+      const excludeClause = excludeIds && excludeIds.length > 0
+        ? '          AND Videos.id NOT IN (:excludeIds)\n'
+        : '';
+
       // Use raw SQL query to match the timeCreated calculation in videosModule.js
       const query = `
         SELECT DISTINCT
@@ -317,11 +332,16 @@ class VideoDeletionModule {
           AND Videos.protected = 0
           AND COALESCE(Videos.last_downloaded_at, Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, '%Y%m%d')) IS NOT NULL
           AND COALESCE(Videos.last_downloaded_at, Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, '%Y%m%d')) < DATE_SUB(NOW(), INTERVAL :ageInDays DAY)
-        ORDER BY timeCreated ASC
+${excludeClause}        ORDER BY timeCreated ASC
       `;
 
+      const replacements = { ageInDays };
+      if (excludeIds && excludeIds.length > 0) {
+        replacements.excludeIds = excludeIds;
+      }
+
       const videos = await sequelize.query(query, {
-        replacements: { ageInDays },
+        replacements,
         type: Sequelize.QueryTypes.SELECT
       });
 
@@ -461,13 +481,18 @@ ${excludeClause}        ORDER BY timeCreated ASC
   async performAutomaticCleanup(options = {}) {
     const { dryRun = false, overrides = {}, includeSamples = true } = options;
     const configModule = require('./configModule');
+    const autoRemovalQueries = require('./autoRemovalQueries');
     const baseConfig = configModule.getConfig();
     const config = { ...baseConfig, ...overrides };
+
+    const watchedEnabled = config.autoRemovalWatchedEnabled === true;
+    const keepRecentCount = this._parsePositiveInt(config.autoRemovalKeepRecentCount);
 
     const result = {
       success: true,
       dryRun,
       deletedByAge: 0,
+      deletedByWatched: 0,
       deletedBySpace: 0,
       totalDeleted: 0,
       freedBytes: 0,
@@ -481,6 +506,21 @@ ${excludeClause}        ORDER BY timeCreated ASC
           deletedCount: 0,
           failedCount: 0,
           sampleVideos: []
+        },
+        watchedStrategy: {
+          enabled: false,
+          minDaysSinceWatched: null,
+          minVideoAgeDays: null,
+          candidateCount: 0,
+          estimatedFreedBytes: 0,
+          deletedCount: 0,
+          failedCount: 0,
+          skippedReason: null,
+          sampleVideos: []
+        },
+        keepRecent: {
+          count: keepRecentCount,
+          protectedCount: 0
         },
         spaceStrategy: {
           enabled: false,
@@ -500,13 +540,16 @@ ${excludeClause}        ORDER BY timeCreated ASC
       },
       simulationTotals: dryRun ? {
         byAge: 0,
+        byWatched: 0,
         bySpace: 0,
         total: 0,
         estimatedFreedBytes: 0
       } : null
     };
 
-    const dryRunAgeCandidateIds = dryRun ? new Set() : null;
+    // In dry-run mode nothing is actually deleted, so later strategies must
+    // exclude the ids earlier strategies already claimed to avoid double counting.
+    const dryRunProcessedIds = dryRun ? new Set() : null;
 
     logger.info({ dryRun }, '[Auto-Removal] Starting automatic video cleanup');
 
@@ -518,9 +561,26 @@ ${excludeClause}        ORDER BY timeCreated ASC
       return result;
     }
 
-    if (!hasAgeThreshold && !hasSpaceThreshold) {
+    if (!hasAgeThreshold && !hasSpaceThreshold && !watchedEnabled) {
       logger.info('[Auto-Removal] No thresholds configured, skipping cleanup');
       return result;
+    }
+
+    // The N most recently downloaded videos are protected from every strategy.
+    // If the guard query fails we abort: running without it would delete the
+    // videos this setting exists to keep.
+    let keepRecentIds = [];
+    if (keepRecentCount > 0) {
+      try {
+        keepRecentIds = await autoRemovalQueries.getRecentVideoIds(keepRecentCount);
+        result.plan.keepRecent.protectedCount = keepRecentIds.length;
+        logger.info({ keepRecentCount, protectedCount: keepRecentIds.length }, '[Auto-Removal] Protecting most recent downloads from cleanup');
+      } catch (error) {
+        logger.error({ err: error, keepRecentCount }, '[Auto-Removal] Could not determine the most recent downloads, aborting cleanup');
+        result.errors.push('Could not determine the most recent downloads; cleanup aborted for safety');
+        result.success = false;
+        return result;
+      }
     }
 
     // Age-based cleanup
@@ -535,11 +595,11 @@ ${excludeClause}        ORDER BY timeCreated ASC
 
         try {
           logger.info({ thresholdDays }, '[Auto-Removal] Checking for videos older than threshold');
-          const oldVideos = await this.getVideosOlderThanThreshold(thresholdDays);
+          const oldVideos = await this.getVideosOlderThanThreshold(thresholdDays, keepRecentIds);
           const estimatedFreed = oldVideos.reduce((sum, v) => sum + (parseInt(v.fileSize) || 0), 0);
 
-          if (dryRun && dryRunAgeCandidateIds) {
-            oldVideos.forEach(video => dryRunAgeCandidateIds.add(video.id));
+          if (dryRun && dryRunProcessedIds) {
+            oldVideos.forEach(video => dryRunProcessedIds.add(video.id));
           }
 
           result.plan.ageStrategy.candidateCount = oldVideos.length;
@@ -593,6 +653,87 @@ ${excludeClause}        ORDER BY timeCreated ASC
       }
     }
 
+    // Watched-based cleanup
+    if (watchedEnabled) {
+      if (config.watchStatusSyncEnabled === false) {
+        result.plan.watchedStrategy.skippedReason = 'Watched-based cleanup skipped: watch status sync is disabled';
+        logger.warn('[Auto-Removal] Watch status sync is disabled, skipping watched-based cleanup');
+      } else {
+        const minDaysSinceWatched = this._parsePositiveInt(config.autoRemovalWatchedMinDaysSinceWatched);
+        const minVideoAgeDays = this._parsePositiveInt(config.autoRemovalWatchedMinVideoAgeDays);
+
+        result.plan.watchedStrategy.enabled = true;
+        result.plan.watchedStrategy.minDaysSinceWatched = minDaysSinceWatched;
+        result.plan.watchedStrategy.minVideoAgeDays = minVideoAgeDays;
+
+        try {
+          logger.info({ minDaysSinceWatched, minVideoAgeDays }, '[Auto-Removal] Checking for watched videos eligible for removal');
+          // Real runs can't overlap (age deletions are already marked
+          // removed), so only dry-run needs the explicit exclusion.
+          const watchedExcludeIds = dryRun && dryRunProcessedIds
+            ? Array.from(new Set([...keepRecentIds, ...dryRunProcessedIds]))
+            : keepRecentIds;
+          const watchedVideos = await autoRemovalQueries.getWatchedRemovalCandidates({
+            minDaysSinceWatched,
+            minVideoAgeDays,
+            excludeIds: watchedExcludeIds
+          });
+          const estimatedFreed = watchedVideos.reduce((sum, v) => sum + (parseInt(v.fileSize) || 0), 0);
+
+          if (dryRun && dryRunProcessedIds) {
+            watchedVideos.forEach(video => dryRunProcessedIds.add(video.id));
+          }
+
+          result.plan.watchedStrategy.candidateCount = watchedVideos.length;
+          result.plan.watchedStrategy.estimatedFreedBytes = estimatedFreed;
+          if (includeSamples) {
+            result.plan.watchedStrategy.sampleVideos = watchedVideos.slice(0, 10).map(video => this.formatVideoForPlan(video));
+          }
+
+          if (dryRun) {
+            if (result.simulationTotals) {
+              result.simulationTotals.byWatched = watchedVideos.length;
+              result.simulationTotals.total += watchedVideos.length;
+              result.simulationTotals.estimatedFreedBytes += estimatedFreed;
+            }
+          } else if (watchedVideos.length > 0) {
+            logger.info({ count: watchedVideos.length }, '[Auto-Removal] Deleting watched videos');
+            const videoIds = watchedVideos.map(v => v.id);
+            const deleteResult = await this.deleteVideos(videoIds);
+
+            result.deletedByWatched = deleteResult.deleted.length;
+            result.plan.watchedStrategy.deletedCount = deleteResult.deleted.length;
+            result.plan.watchedStrategy.failedCount = deleteResult.failed.length;
+            result.totalDeleted += deleteResult.deleted.length;
+
+            if (deleteResult.failed.length > 0) {
+              result.errors.push(`Failed to delete ${deleteResult.failed.length} watched videos`);
+              deleteResult.failed.forEach(f => {
+                logger.error({ videoId: f.videoId, error: f.error }, '[Auto-Removal] Failed to delete video');
+              });
+            }
+
+            const deletedVideos = watchedVideos.filter(v => deleteResult.deleted.includes(v.id));
+            const freed = deletedVideos.reduce((sum, v) => sum + (parseInt(v.fileSize) || 0), 0);
+            result.freedBytes += freed;
+            result.plan.watchedStrategy.estimatedFreedBytes = freed;
+
+            if (includeSamples) {
+              result.plan.watchedStrategy.sampleVideos = deletedVideos.slice(0, 10).map(video => this.formatVideoForPlan(video));
+            }
+
+            logger.info({ deletedCount: deleteResult.deleted.length, freedGB: (freed / (1024 ** 3)).toFixed(2) }, '[Auto-Removal] Watched-based cleanup completed');
+          } else {
+            logger.info('[Auto-Removal] No watched videos eligible for removal');
+          }
+        } catch (error) {
+          logger.error({ err: error }, '[Auto-Removal] Error during watched-based cleanup');
+          result.errors.push(`Watched-based cleanup error: ${error.message}`);
+          result.success = false;
+        }
+      }
+    }
+
     // Space-based cleanup
     if (hasSpaceThreshold) {
       try {
@@ -629,7 +770,8 @@ ${excludeClause}        ORDER BY timeCreated ASC
               const maxIterations = 10;
 
               if (dryRun) {
-                const processedIds = new Set(dryRunAgeCandidateIds || []);
+                const processedIds = new Set(dryRunProcessedIds || []);
+                keepRecentIds.forEach(id => processedIds.add(id));
                 let freedSoFar = 0;
                 let iterations = 0;
 
@@ -672,7 +814,7 @@ ${excludeClause}        ORDER BY timeCreated ASC
                 const affectedChannelIds = [];
 
                 while (freedSoFar < spaceToFree && iterations < maxIterations) {
-                  const oldestVideos = await this.getOldestVideos(batchSize);
+                  const oldestVideos = await this.getOldestVideos(batchSize, keepRecentIds);
 
                   if (oldestVideos.length === 0) {
                     logger.info('[Auto-Removal] No more videos available to delete');
@@ -755,6 +897,7 @@ ${excludeClause}        ORDER BY timeCreated ASC
       dryRun,
       totalDeleted: result.totalDeleted,
       deletedByAge: result.deletedByAge,
+      deletedByWatched: result.deletedByWatched,
       deletedBySpace: result.deletedBySpace,
       totalFreedGB: (result.freedBytes / (1024 ** 3)).toFixed(2),
       errorCount: result.errors.length
@@ -763,6 +906,7 @@ ${excludeClause}        ORDER BY timeCreated ASC
     if (dryRun && result.simulationTotals) {
       logger.info({
         simulatedByAge: result.simulationTotals.byAge,
+        simulatedByWatched: result.simulationTotals.byWatched,
         simulatedBySpace: result.simulationTotals.bySpace,
         estimatedFreedGB: (result.simulationTotals.estimatedFreedBytes / (1024 ** 3)).toFixed(2)
       }, '[Auto-Removal] Dry-run simulation summary');

@@ -110,12 +110,24 @@ describe('AutoRemovalSection', () => {
     renderWithProviders(<AutoRemovalSection {...props} />);
 
     expect(
-      screen.getByText(/You must configure at least one removal threshold/i)
+      screen.getByText(/Enable at least one removal rule/i)
     ).toBeInTheDocument();
 
     const previewButton = screen.getByRole('button', { name: /Preview Automatic Removal/i });
     expect(previewButton).toBeDisabled();
-    expect(screen.getByText(/Select at least one threshold to run a preview/i)).toBeInTheDocument();
+    expect(screen.getByText(/Enable at least one rule to run a preview/i)).toBeInTheDocument();
+  });
+
+  test('presents the rules as alternatives joined by OR', () => {
+    const props = createSectionProps({
+      config: createConfig({ autoRemovalEnabled: true }),
+    });
+    renderWithProviders(<AutoRemovalSection {...props} />);
+
+    expect(
+      screen.getByText(/Videos are removed when they match any enabled rule below/i)
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('OR')).toHaveLength(2);
   });
 
   test('renders storage unavailable warning when free-space data is missing', async () => {
@@ -128,7 +140,7 @@ describe('AutoRemovalSection', () => {
     renderWithProviders(<AutoRemovalSection {...props} />);
 
     expect(screen.getByText(/Space-Based Removal Unavailable/i)).toBeInTheDocument();
-    expect(screen.queryByLabelText('Free Space Threshold (Optional)')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('When free space falls below')).not.toBeInTheDocument();
   });
 
   test('calls onConfigChange when selecting space and age thresholds', async () => {
@@ -139,13 +151,13 @@ describe('AutoRemovalSection', () => {
 
     renderWithProviders(<AutoRemovalSection {...props} />);
 
-    const freeSpaceSelect = screen.getByLabelText('Free Space Threshold (Optional)');
+    const freeSpaceSelect = screen.getByLabelText('When free space falls below');
     fireEvent.mouseDown(freeSpaceSelect);
 
     const freeSpaceOption = await screen.findByRole('option', { name: '1 GB' });
     await user.click(freeSpaceOption);
 
-    const ageSelect = screen.getByLabelText('Video Age Threshold (Optional)');
+    const ageSelect = screen.getByLabelText('Delete videos older than');
     fireEvent.mouseDown(ageSelect);
 
     const ageOption = await screen.findByRole('option', { name: '30 days' });
@@ -176,6 +188,10 @@ describe('AutoRemovalSection', () => {
       autoRemovalEnabled: true,
       autoRemovalFreeSpaceThreshold: '',
       autoRemovalVideoAgeThreshold: '30',
+      autoRemovalWatchedEnabled: false,
+      autoRemovalWatchedMinDaysSinceWatched: '',
+      autoRemovalWatchedMinVideoAgeDays: '',
+      autoRemovalKeepRecentCount: 0,
     });
 
     expect(await screen.findByText('Preview Summary')).toBeInTheDocument();
@@ -203,6 +219,71 @@ describe('AutoRemovalSection', () => {
     await user.click(previewButton);
 
     expect(await screen.findByText('Preview failed')).toBeInTheDocument();
+  });
+
+  test('notes that protected videos are never removed', () => {
+    const props = createSectionProps({
+      config: createConfig({ autoRemovalEnabled: true }),
+    });
+    renderWithProviders(<AutoRemovalSection {...props} />);
+
+    expect(
+      screen.getByText(/Videos marked as Protected are never automatically removed/i)
+    ).toBeInTheDocument();
+  });
+
+  test('toggling watched removal calls onConfigChange', async () => {
+    const user = userEvent.setup();
+    const props = createSectionProps({
+      config: createConfig({ autoRemovalEnabled: true }),
+    });
+    renderWithProviders(<AutoRemovalSection {...props} />);
+
+    const toggle = screen.getByRole('checkbox', { name: /Remove watched videos/i });
+    await user.click(toggle);
+
+    expect(props.onConfigChange).toHaveBeenCalledWith({ autoRemovalWatchedEnabled: true });
+  });
+
+  test('watched-only configuration counts as a removal strategy', () => {
+    const props = createSectionProps({
+      config: createConfig({
+        autoRemovalEnabled: true,
+        autoRemovalWatchedEnabled: true,
+      }),
+    });
+    renderWithProviders(<AutoRemovalSection {...props} />);
+
+    expect(
+      screen.queryByText(/Enable at least one removal rule/i)
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Preview Automatic Removal/i })
+    ).toBeEnabled();
+  });
+
+  test('updates the keep recent count', () => {
+    const props = createSectionProps({
+      config: createConfig({ autoRemovalEnabled: true }),
+    });
+    renderWithProviders(<AutoRemovalSection {...props} />);
+
+    const input = screen.getByLabelText(/Keep this many newest downloads/i);
+    fireEvent.change(input, { target: { value: '25' } });
+
+    expect(props.onConfigChange).toHaveBeenCalledWith({ autoRemovalKeepRecentCount: 25 });
+  });
+
+  test('clearing the keep recent count disables the guard', () => {
+    const props = createSectionProps({
+      config: createConfig({ autoRemovalEnabled: true, autoRemovalKeepRecentCount: 25 }),
+    });
+    renderWithProviders(<AutoRemovalSection {...props} />);
+
+    const input = screen.getByLabelText(/Keep this many newest downloads/i);
+    fireEvent.change(input, { target: { value: '' } });
+
+    expect(props.onConfigChange).toHaveBeenCalledWith({ autoRemovalKeepRecentCount: 0 });
   });
 
   test('clears dry run results when relevant configuration values change', async () => {

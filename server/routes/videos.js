@@ -378,6 +378,18 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
    *               autoRemovalFreeSpaceThreshold:
    *                 type: integer
    *                 description: Free space threshold in GB
+   *               autoRemovalWatchedEnabled:
+   *                 type: boolean
+   *                 description: Enable watched-based removal
+   *               autoRemovalWatchedMinDaysSinceWatched:
+   *                 type: integer
+   *                 description: Only remove videos whose latest watch is at least this many days old
+   *               autoRemovalWatchedMinVideoAgeDays:
+   *                 type: integer
+   *                 description: Only remove watched videos downloaded at least this many days ago
+   *               autoRemovalKeepRecentCount:
+   *                 type: integer
+   *                 description: Never remove the N most recently downloaded videos
    *     responses:
    *       200:
    *         description: Dry run results
@@ -389,19 +401,23 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
       const {
         autoRemovalEnabled,
         autoRemovalVideoAgeThreshold,
-        autoRemovalFreeSpaceThreshold
+        autoRemovalFreeSpaceThreshold,
+        autoRemovalWatchedEnabled,
+        autoRemovalWatchedMinDaysSinceWatched,
+        autoRemovalWatchedMinVideoAgeDays,
+        autoRemovalKeepRecentCount
       } = req.body || {};
+
+      const coerceBoolean = (value) => {
+        if (typeof value === 'boolean') return value;
+        if (typeof value === 'string') return value.toLowerCase() === 'true';
+        return Boolean(value);
+      };
 
       const overrides = {};
 
       if (autoRemovalEnabled !== undefined) {
-        if (typeof autoRemovalEnabled === 'boolean') {
-          overrides.autoRemovalEnabled = autoRemovalEnabled;
-        } else if (typeof autoRemovalEnabled === 'string') {
-          overrides.autoRemovalEnabled = autoRemovalEnabled.toLowerCase() === 'true';
-        } else {
-          overrides.autoRemovalEnabled = Boolean(autoRemovalEnabled);
-        }
+        overrides.autoRemovalEnabled = coerceBoolean(autoRemovalEnabled);
       }
 
       if (autoRemovalVideoAgeThreshold !== undefined) {
@@ -410,6 +426,22 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
 
       if (autoRemovalFreeSpaceThreshold !== undefined) {
         overrides.autoRemovalFreeSpaceThreshold = autoRemovalFreeSpaceThreshold;
+      }
+
+      if (autoRemovalWatchedEnabled !== undefined) {
+        overrides.autoRemovalWatchedEnabled = coerceBoolean(autoRemovalWatchedEnabled);
+      }
+
+      if (autoRemovalWatchedMinDaysSinceWatched !== undefined) {
+        overrides.autoRemovalWatchedMinDaysSinceWatched = autoRemovalWatchedMinDaysSinceWatched;
+      }
+
+      if (autoRemovalWatchedMinVideoAgeDays !== undefined) {
+        overrides.autoRemovalWatchedMinVideoAgeDays = autoRemovalWatchedMinVideoAgeDays;
+      }
+
+      if (autoRemovalKeepRecentCount !== undefined) {
+        overrides.autoRemovalKeepRecentCount = autoRemovalKeepRecentCount;
       }
 
       const videoDeletionModule = require('../modules/videoDeletionModule');

@@ -114,8 +114,37 @@ describe('useAutoRemovalDryRun', () => {
           autoRemovalEnabled: true,
           autoRemovalVideoAgeThreshold: '30',
           autoRemovalFreeSpaceThreshold: '10',
+          autoRemovalWatchedEnabled: false,
+          autoRemovalWatchedMinDaysSinceWatched: '',
+          autoRemovalWatchedMinVideoAgeDays: '',
+          autoRemovalKeepRecentCount: 0,
         }),
       });
+    });
+
+    test('sends watched and keep-recent settings when provided', async () => {
+      const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: jest.fn().mockResolvedValueOnce(mockSuccessResponse),
+      } as any);
+
+      const { result } = renderHook(() => useAutoRemovalDryRun({ token: mockToken }));
+
+      await result.current.runDryRun({
+        ...mockConfig,
+        autoRemovalWatchedEnabled: true,
+        autoRemovalWatchedMinDaysSinceWatched: '7',
+        autoRemovalWatchedMinVideoAgeDays: '30',
+        autoRemovalKeepRecentCount: 5,
+      });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(callBody.autoRemovalWatchedEnabled).toBe(true);
+      expect(callBody.autoRemovalWatchedMinDaysSinceWatched).toBe('7');
+      expect(callBody.autoRemovalWatchedMinVideoAgeDays).toBe('30');
+      expect(callBody.autoRemovalKeepRecentCount).toBe(5);
     });
 
     test('returns dry run result on success', async () => {
@@ -165,6 +194,10 @@ describe('useAutoRemovalDryRun', () => {
           autoRemovalEnabled: true,
           autoRemovalVideoAgeThreshold: '',
           autoRemovalFreeSpaceThreshold: '',
+          autoRemovalWatchedEnabled: false,
+          autoRemovalWatchedMinDaysSinceWatched: '',
+          autoRemovalWatchedMinVideoAgeDays: '',
+          autoRemovalKeepRecentCount: 0,
         }),
       });
     });
@@ -326,6 +359,10 @@ describe('useAutoRemovalDryRun', () => {
           autoRemovalEnabled: false,
           autoRemovalVideoAgeThreshold: '30',
           autoRemovalFreeSpaceThreshold: '10',
+          autoRemovalWatchedEnabled: false,
+          autoRemovalWatchedMinDaysSinceWatched: '',
+          autoRemovalWatchedMinVideoAgeDays: '',
+          autoRemovalKeepRecentCount: 0,
         }),
       });
     });
