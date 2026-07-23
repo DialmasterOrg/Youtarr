@@ -3,12 +3,17 @@
 // Mock logger before any imports
 jest.mock('../../logger');
 
+jest.mock('../m3uGenerator', () => ({
+  generateChannelM3UInBackground: jest.fn()
+}));
+
 describe('VideoDeletionModule', () => {
   let VideoDeletionModule;
   let mockVideo;
   let mockFs;
   let mockLogger;
   let mockFilesystem;
+  let m3uGenerator;
 
   beforeEach(() => {
     jest.resetModules();
@@ -16,6 +21,8 @@ describe('VideoDeletionModule', () => {
 
     // Get the mocked logger
     mockLogger = require('../../logger');
+
+    m3uGenerator = require('../m3uGenerator');
 
     // Mock the Video model
     mockVideo = {
@@ -743,6 +750,40 @@ describe('VideoDeletionModule', () => {
     });
   });
 
+  describe('channel m3u regeneration after deletion', () => {
+    // Uses the no-file-path branch of deleteVideoById: the video is marked
+    // removed without any fs interaction, so only the Video model mock matters.
+    const makeVideo = (id, channelId) => ({
+      id,
+      youtubeId: `yt${id}`,
+      channel_id: channelId,
+      removed: false,
+      filePath: null,
+      update: jest.fn().mockResolvedValue(undefined)
+    });
+
+    test('regenerates once per unique channel after deleteVideos', async () => {
+      mockVideo.findByPk
+        .mockResolvedValueOnce(makeVideo(1, 'UC1'))
+        .mockResolvedValueOnce(makeVideo(2, 'UC1'))
+        .mockResolvedValueOnce(makeVideo(3, 'UC2'));
+
+      await VideoDeletionModule.deleteVideos([1, 2, 3]);
+
+      expect(m3uGenerator.generateChannelM3UInBackground).toHaveBeenCalledTimes(2);
+      expect(m3uGenerator.generateChannelM3UInBackground).toHaveBeenCalledWith('UC1', expect.any(String));
+      expect(m3uGenerator.generateChannelM3UInBackground).toHaveBeenCalledWith('UC2', expect.any(String));
+    });
+
+    test('does not regenerate when nothing was deleted', async () => {
+      mockVideo.findByPk.mockResolvedValue(null);
+
+      await VideoDeletionModule.deleteVideos([99]);
+
+      expect(m3uGenerator.generateChannelM3UInBackground).not.toHaveBeenCalled();
+    });
+  });
+
   describe('formatVideoForPlan', () => {
     test('should format video metadata correctly', () => {
       const video = {
@@ -888,6 +929,26 @@ describe('VideoDeletionModule', () => {
       const queryString = mockSequelize.query.mock.calls[0][0];
       expect(queryString).toContain('Videos.protected = 0');
     });
+
+    test('should exclude the provided video ids', async () => {
+      mockSequelize.query.mockResolvedValue([]);
+
+      await VideoDeletionModule.getVideosOlderThanThreshold(30, [7, 9]);
+
+      const [queryString, options] = mockSequelize.query.mock.calls[0];
+      expect(queryString).toContain('Videos.id NOT IN (:excludeIds)');
+      expect(options.replacements).toEqual({ ageInDays: 30, excludeIds: [7, 9] });
+    });
+
+    test('should not add an exclusion clause for an empty exclude list', async () => {
+      mockSequelize.query.mockResolvedValue([]);
+
+      await VideoDeletionModule.getVideosOlderThanThreshold(30, []);
+
+      const [queryString, options] = mockSequelize.query.mock.calls[0];
+      expect(queryString).not.toContain(':excludeIds');
+      expect(options.replacements).toEqual({ ageInDays: 30 });
+    });
   });
 
   describe('getOldestVideos', () => {
@@ -1014,6 +1075,7 @@ describe('VideoDeletionModule', () => {
   describe('performAutomaticCleanup', () => {
     let mockConfigModule;
     let mockSequelize;
+    let mockAutoRemovalQueries;
 
     beforeEach(() => {
       mockConfigModule = {
@@ -1027,6 +1089,11 @@ describe('VideoDeletionModule', () => {
         query: jest.fn()
       };
 
+      mockAutoRemovalQueries = {
+        getRecentVideoIds: jest.fn().mockResolvedValue([]),
+        getWatchedRemovalCandidates: jest.fn().mockResolvedValue([])
+      };
+
       jest.doMock('../configModule', () => mockConfigModule);
       jest.doMock('../../db.js', () => ({
         Sequelize: {
@@ -1034,9 +1101,11 @@ describe('VideoDeletionModule', () => {
         },
         sequelize: mockSequelize
       }));
+      jest.doMock('../autoRemovalQueries', () => mockAutoRemovalQueries);
 
       jest.resetModules();
       mockLogger = require('../../logger');
+      m3uGenerator = require('../m3uGenerator');
       VideoDeletionModule = require('../videoDeletionModule');
     });
 
@@ -1096,6 +1165,7 @@ describe('VideoDeletionModule', () => {
       expect(result.dryRun).toBe(true);
       expect(result.simulationTotals).toEqual({
         byAge: 1,
+        byWatched: 0,
         bySpace: 0,
         total: 1,
         estimatedFreedBytes: 1000000
@@ -1180,6 +1250,50 @@ describe('VideoDeletionModule', () => {
       expect(result.plan.spaceStrategy.needsCleanup).toBe(true);
       expect(result.plan.spaceStrategy.candidateCount).toBeGreaterThan(0);
       expect(result.simulationTotals.bySpace).toBeGreaterThan(0);
+    });
+
+    test('regenerates m3u once per unique channel after space-based cleanup', async () => {
+      mockConfigModule.getConfig.mockReturnValue({
+        autoRemovalEnabled: true,
+        autoRemovalVideoAgeThreshold: null,
+        autoRemovalFreeSpaceThreshold: '10GB'
+      });
+
+      mockConfigModule.getStorageStatus.mockResolvedValue({
+        available: 5 * 1024 ** 3, // 5GB
+        availableGB: 5
+      });
+
+      mockConfigModule.isStorageBelowThreshold.mockReturnValue(true);
+      mockConfigModule.convertStorageThresholdToBytes.mockReturnValue(10 * 1024 ** 3); // need to free 5GB
+
+      // Three videos across two channels (UC1 duplicated) whose combined size
+      // crosses the 5GB space-to-free threshold, so all three get deleted in
+      // a single batch.
+      const mockOldestVideos = [
+        { id: 1, youtubeId: 'yt1', fileSize: String(2 * 1024 ** 3), timeCreated: new Date('2023-01-01') },
+        { id: 2, youtubeId: 'yt2', fileSize: String(2 * 1024 ** 3), timeCreated: new Date('2023-01-02') },
+        { id: 3, youtubeId: 'yt3', fileSize: String(2 * 1024 ** 3), timeCreated: new Date('2023-01-03') }
+      ];
+
+      mockSequelize.query.mockResolvedValueOnce(mockOldestVideos);
+
+      const channelByVideoId = { 1: 'UC1', 2: 'UC1', 3: 'UC2' };
+      mockVideo.findByPk.mockImplementation((id) => Promise.resolve({
+        id,
+        youtubeId: `yt${id}`,
+        channel_id: channelByVideoId[id],
+        removed: false,
+        filePath: null,
+        update: jest.fn().mockResolvedValue(undefined)
+      }));
+
+      const result = await VideoDeletionModule.performAutomaticCleanup({ dryRun: false });
+
+      expect(result.deletedBySpace).toBe(3);
+      expect(m3uGenerator.generateChannelM3UInBackground).toHaveBeenCalledTimes(2);
+      expect(m3uGenerator.generateChannelM3UInBackground).toHaveBeenCalledWith('UC1', expect.any(String));
+      expect(m3uGenerator.generateChannelM3UInBackground).toHaveBeenCalledWith('UC2', expect.any(String));
     });
 
     test('should skip space cleanup when storage is above threshold', async () => {
@@ -1352,6 +1466,281 @@ describe('VideoDeletionModule', () => {
       expect(result.plan.ageStrategy.deletedCount).toBe(1);
       expect(result.plan.ageStrategy.failedCount).toBe(1);
       expect(result.errors.length).toBeGreaterThan(0);
+    });
+
+    test('should perform watched-based cleanup in dry-run mode', async () => {
+      mockConfigModule.getConfig.mockReturnValue({
+        autoRemovalEnabled: true,
+        autoRemovalVideoAgeThreshold: null,
+        autoRemovalFreeSpaceThreshold: null,
+        autoRemovalWatchedEnabled: true
+      });
+
+      mockAutoRemovalQueries.getWatchedRemovalCandidates.mockResolvedValue([
+        {
+          id: 1,
+          youtubeId: 'abc123',
+          youTubeVideoName: 'Watched Video 1',
+          youTubeChannelName: 'Channel',
+          fileSize: '1000000',
+          timeCreated: new Date('2026-01-01')
+        },
+        {
+          id: 2,
+          youtubeId: 'def456',
+          youTubeVideoName: 'Watched Video 2',
+          youTubeChannelName: 'Channel',
+          fileSize: '2000000',
+          timeCreated: new Date('2026-02-01')
+        }
+      ]);
+
+      const result = await VideoDeletionModule.performAutomaticCleanup({ dryRun: true });
+
+      expect(mockAutoRemovalQueries.getWatchedRemovalCandidates).toHaveBeenCalledWith({
+        minDaysSinceWatched: 0,
+        minVideoAgeDays: 0,
+        excludeIds: []
+      });
+      expect(result.plan.watchedStrategy.enabled).toBe(true);
+      expect(result.plan.watchedStrategy.candidateCount).toBe(2);
+      expect(result.plan.watchedStrategy.estimatedFreedBytes).toBe(3000000);
+      expect(result.plan.watchedStrategy.sampleVideos).toHaveLength(2);
+      expect(result.simulationTotals).toEqual({
+        byAge: 0,
+        byWatched: 2,
+        bySpace: 0,
+        total: 2,
+        estimatedFreedBytes: 3000000
+      });
+      expect(mockFilesystem.removeDirectoryResilient).not.toHaveBeenCalled();
+    });
+
+    test('should pass configured watched thresholds to the candidate query', async () => {
+      mockConfigModule.getConfig.mockReturnValue({
+        autoRemovalEnabled: true,
+        autoRemovalVideoAgeThreshold: null,
+        autoRemovalFreeSpaceThreshold: null,
+        autoRemovalWatchedEnabled: true,
+        autoRemovalWatchedMinDaysSinceWatched: '7',
+        autoRemovalWatchedMinVideoAgeDays: '30'
+      });
+
+      const result = await VideoDeletionModule.performAutomaticCleanup({ dryRun: true });
+
+      expect(mockAutoRemovalQueries.getWatchedRemovalCandidates).toHaveBeenCalledWith({
+        minDaysSinceWatched: 7,
+        minVideoAgeDays: 30,
+        excludeIds: []
+      });
+      expect(result.plan.watchedStrategy.minDaysSinceWatched).toBe(7);
+      expect(result.plan.watchedStrategy.minVideoAgeDays).toBe(30);
+    });
+
+    test('should perform actual watched-based cleanup', async () => {
+      mockConfigModule.getConfig.mockReturnValue({
+        autoRemovalEnabled: true,
+        autoRemovalVideoAgeThreshold: null,
+        autoRemovalFreeSpaceThreshold: null,
+        autoRemovalWatchedEnabled: true
+      });
+
+      mockAutoRemovalQueries.getWatchedRemovalCandidates.mockResolvedValue([
+        {
+          id: 1,
+          youtubeId: 'abc123',
+          youTubeVideoName: 'Watched Video',
+          youTubeChannelName: 'Channel',
+          fileSize: '1000000',
+          timeCreated: new Date('2026-01-01')
+        }
+      ]);
+
+      const mockVideoRecord = {
+        id: 1,
+        youtubeId: 'abc123',
+        filePath: '/test/Channel/Channel - Watched Video - abc123/video.mp4',
+        removed: false,
+        update: jest.fn().mockResolvedValue()
+      };
+      mockVideo.findByPk.mockResolvedValue(mockVideoRecord);
+
+      const result = await VideoDeletionModule.performAutomaticCleanup();
+
+      expect(result.deletedByWatched).toBe(1);
+      expect(result.totalDeleted).toBe(1);
+      expect(result.freedBytes).toBe(1000000);
+      expect(result.plan.watchedStrategy.deletedCount).toBe(1);
+      expect(mockFilesystem.removeDirectoryResilient).toHaveBeenCalled();
+    });
+
+    test('should skip watched cleanup when watch status sync is disabled', async () => {
+      mockConfigModule.getConfig.mockReturnValue({
+        autoRemovalEnabled: true,
+        autoRemovalVideoAgeThreshold: null,
+        autoRemovalFreeSpaceThreshold: null,
+        autoRemovalWatchedEnabled: true,
+        watchStatusSyncEnabled: false
+      });
+
+      const result = await VideoDeletionModule.performAutomaticCleanup({ dryRun: true });
+
+      expect(mockAutoRemovalQueries.getWatchedRemovalCandidates).not.toHaveBeenCalled();
+      expect(result.plan.watchedStrategy.enabled).toBe(false);
+      expect(result.plan.watchedStrategy.skippedReason).toMatch(/watch status sync/i);
+      expect(result.errors).toEqual([]);
+      expect(result.success).toBe(true);
+    });
+
+    test('should exclude age candidates from the watched query in dry-run mode', async () => {
+      mockConfigModule.getConfig.mockReturnValue({
+        autoRemovalEnabled: true,
+        autoRemovalVideoAgeThreshold: '30',
+        autoRemovalFreeSpaceThreshold: null,
+        autoRemovalWatchedEnabled: true
+      });
+
+      mockSequelize.query.mockResolvedValue([
+        {
+          id: 7,
+          youtubeId: 'old123',
+          youTubeVideoName: 'Old And Watched',
+          youTubeChannelName: 'Channel',
+          fileSize: '1000000',
+          timeCreated: new Date('2025-01-01')
+        }
+      ]);
+
+      await VideoDeletionModule.performAutomaticCleanup({ dryRun: true });
+
+      expect(mockAutoRemovalQueries.getWatchedRemovalCandidates).toHaveBeenCalledWith({
+        minDaysSinceWatched: 0,
+        minVideoAgeDays: 0,
+        excludeIds: [7]
+      });
+    });
+
+    test('should not add dry-run exclusions to the watched query during a real run', async () => {
+      mockConfigModule.getConfig.mockReturnValue({
+        autoRemovalEnabled: true,
+        autoRemovalVideoAgeThreshold: null,
+        autoRemovalFreeSpaceThreshold: null,
+        autoRemovalWatchedEnabled: true
+      });
+
+      await VideoDeletionModule.performAutomaticCleanup();
+
+      expect(mockAutoRemovalQueries.getWatchedRemovalCandidates).toHaveBeenCalledWith({
+        minDaysSinceWatched: 0,
+        minVideoAgeDays: 0,
+        excludeIds: []
+      });
+    });
+
+    test('should abort cleanup when the keep-recent guard query fails', async () => {
+      mockConfigModule.getConfig.mockReturnValue({
+        autoRemovalEnabled: true,
+        autoRemovalVideoAgeThreshold: '30',
+        autoRemovalFreeSpaceThreshold: null,
+        autoRemovalWatchedEnabled: true,
+        autoRemovalKeepRecentCount: 5
+      });
+
+      mockAutoRemovalQueries.getRecentVideoIds.mockRejectedValue(new Error('db down'));
+
+      const result = await VideoDeletionModule.performAutomaticCleanup();
+
+      expect(result.success).toBe(false);
+      expect(result.totalDeleted).toBe(0);
+      expect(result.errors).toEqual(
+        expect.arrayContaining([expect.stringMatching(/most recent downloads/i)])
+      );
+      expect(mockSequelize.query).not.toHaveBeenCalled();
+      expect(mockAutoRemovalQueries.getWatchedRemovalCandidates).not.toHaveBeenCalled();
+    });
+
+    test('should exclude the most recent downloads from age and watched strategies', async () => {
+      mockConfigModule.getConfig.mockReturnValue({
+        autoRemovalEnabled: true,
+        autoRemovalVideoAgeThreshold: '30',
+        autoRemovalFreeSpaceThreshold: null,
+        autoRemovalWatchedEnabled: true,
+        autoRemovalKeepRecentCount: 2
+      });
+
+      mockAutoRemovalQueries.getRecentVideoIds.mockResolvedValue([101, 102]);
+      mockSequelize.query.mockResolvedValue([]);
+
+      const result = await VideoDeletionModule.performAutomaticCleanup({ dryRun: true });
+
+      expect(mockAutoRemovalQueries.getRecentVideoIds).toHaveBeenCalledWith(2);
+      const [, ageOptions] = mockSequelize.query.mock.calls[0];
+      expect(ageOptions.replacements.excludeIds).toEqual([101, 102]);
+      expect(mockAutoRemovalQueries.getWatchedRemovalCandidates).toHaveBeenCalledWith({
+        minDaysSinceWatched: 0,
+        minVideoAgeDays: 0,
+        excludeIds: [101, 102]
+      });
+      expect(result.plan.keepRecent).toEqual({ count: 2, protectedCount: 2 });
+    });
+
+    test('should exclude keep-recent ids and watched candidates from dry-run space cleanup', async () => {
+      mockConfigModule.getConfig.mockReturnValue({
+        autoRemovalEnabled: true,
+        autoRemovalVideoAgeThreshold: null,
+        autoRemovalFreeSpaceThreshold: '10GB',
+        autoRemovalWatchedEnabled: true,
+        autoRemovalKeepRecentCount: 1
+      });
+
+      mockAutoRemovalQueries.getRecentVideoIds.mockResolvedValue([50]);
+      mockAutoRemovalQueries.getWatchedRemovalCandidates.mockResolvedValue([
+        {
+          id: 1,
+          youtubeId: 'abc123',
+          youTubeVideoName: 'Watched Video',
+          youTubeChannelName: 'Channel',
+          fileSize: '1000000',
+          timeCreated: new Date('2026-01-01')
+        }
+      ]);
+      mockConfigModule.getStorageStatus.mockResolvedValue({
+        available: 5 * 1024 ** 3,
+        availableGB: 5
+      });
+      mockConfigModule.isStorageBelowThreshold.mockReturnValue(true);
+      mockConfigModule.convertStorageThresholdToBytes.mockReturnValue(10 * 1024 ** 3);
+      mockSequelize.query.mockResolvedValue([]);
+
+      await VideoDeletionModule.performAutomaticCleanup({ dryRun: true });
+
+      const [, spaceOptions] = mockSequelize.query.mock.calls[0];
+      expect(spaceOptions.replacements.excludeIds).toEqual(
+        expect.arrayContaining([50, 1])
+      );
+    });
+
+    test('should exclude keep-recent ids from real space cleanup', async () => {
+      mockConfigModule.getConfig.mockReturnValue({
+        autoRemovalEnabled: true,
+        autoRemovalVideoAgeThreshold: null,
+        autoRemovalFreeSpaceThreshold: '10GB',
+        autoRemovalKeepRecentCount: 1
+      });
+
+      mockAutoRemovalQueries.getRecentVideoIds.mockResolvedValue([50]);
+      mockConfigModule.getStorageStatus.mockResolvedValue({
+        available: 5 * 1024 ** 3,
+        availableGB: 5
+      });
+      mockConfigModule.isStorageBelowThreshold.mockReturnValue(true);
+      mockConfigModule.convertStorageThresholdToBytes.mockReturnValue(10 * 1024 ** 3);
+      mockSequelize.query.mockResolvedValue([]);
+
+      await VideoDeletionModule.performAutomaticCleanup({ dryRun: false });
+
+      const [, spaceOptions] = mockSequelize.query.mock.calls[0];
+      expect(spaceOptions.replacements.excludeIds).toEqual([50]);
     });
   });
 

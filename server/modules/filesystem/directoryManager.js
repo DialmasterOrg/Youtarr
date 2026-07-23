@@ -7,13 +7,14 @@ const fs = require('fs-extra');
 const fsPromises = require('fs').promises;
 const path = require('path');
 const logger = require('../../logger');
-const { YOUTUBE_ID_PATTERN, SUBFOLDER_PREFIX, MAIN_VIDEO_FILE_PATTERN, FRAGMENT_FILE_PATTERN, CHANNEL_CLEANUP_IGNORABLE_FILES, APPLEDOUBLE_FILE_PATTERN } = require('./constants');
+const { YOUTUBE_ID_PATTERN, SUBFOLDER_PREFIX, MAIN_VIDEO_FILE_PATTERN, FRAGMENT_FILE_PATTERN, CHANNEL_CLEANUP_IGNORABLE_FILES, M3U_FILE_PATTERN, APPLEDOUBLE_FILE_PATTERN } = require('./constants');
 const { sleep } = require('./fileOperations');
 
 /**
  * Decide whether a directory entry can be ignored when judging emptiness or
- * sweeping junk before rmdir. Covers both the explicit ignore list (poster.jpg,
- * .DS_Store, etc.) and AppleDouble sidecar files written by macOS SMB clients.
+ * sweeping junk before rmdir. Covers the explicit ignore list (poster.jpg,
+ * .DS_Store, etc.), AppleDouble sidecar files written by macOS SMB clients,
+ * and generated channel .m3u playlist files.
  *
  * @param {string} entryName - Bare file name (no path)
  * @returns {boolean}
@@ -21,6 +22,7 @@ const { sleep } = require('./fileOperations');
 function isIgnorableEntry(entryName) {
   if (!entryName) return false;
   if (APPLEDOUBLE_FILE_PATTERN.test(entryName)) return true;
+  if (M3U_FILE_PATTERN.test(entryName)) return true;
   return CHANNEL_CLEANUP_IGNORABLE_FILES.includes(entryName.toLowerCase());
 }
 

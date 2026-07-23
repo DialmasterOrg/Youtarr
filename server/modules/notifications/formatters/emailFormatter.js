@@ -240,8 +240,9 @@ function buildAutoRemovalEmailHtml(title, subtitle, content) {
  * @returns {Object} Object with title and HTML body strings
  */
 function formatAutoRemovalMessage(cleanupResult) {
-  const { totalDeleted, deletedByAge, deletedBySpace, freedBytes, plan = {} } = cleanupResult;
+  const { totalDeleted, deletedByAge, deletedByWatched = 0, deletedBySpace, freedBytes, plan = {} } = cleanupResult;
   const ageStrategy = plan.ageStrategy || {};
+  const watchedStrategy = plan.watchedStrategy || {};
   const spaceStrategy = plan.spaceStrategy || {};
 
   const title = buildAutoRemovalTitle(totalDeleted);
@@ -254,6 +255,23 @@ function formatAutoRemovalMessage(cleanupResult) {
     content += `<h3 style="color: #e65100; margin-top: 20px;">🕐 Removed by age (exceeded ${threshold}-day limit): ${deletedByAge} ${deletedByAge === 1 ? 'video' : 'videos'}</h3>`;
 
     const { groups, truncatedCount } = groupVideosByChannel(ageStrategy.sampleVideos, 5, deletedByAge);
+    for (const group of groups) {
+      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
+      content += `
+      <div class="video-card" style="border-left-color: #f57c00;">
+        <div class="channel-name">📺 ${escapeHtml(group.channel)} (${videoLabel})</div>
+        <div class="video-title">${group.titles.map(t => escapeHtml(t)).join(', ')}</div>
+      </div>`;
+    }
+    if (truncatedCount > 0) {
+      content += `<p class="more-videos">...and ${truncatedCount} more videos</p>`;
+    }
+  }
+
+  if (deletedByWatched > 0) {
+    content += `<h3 style="color: #e65100; margin-top: 20px;">👁️ Removed after being watched: ${deletedByWatched} ${deletedByWatched === 1 ? 'video' : 'videos'}</h3>`;
+
+    const { groups, truncatedCount } = groupVideosByChannel(watchedStrategy.sampleVideos, 5, deletedByWatched);
     for (const group of groups) {
       const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
       content += `

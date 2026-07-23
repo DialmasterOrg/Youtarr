@@ -661,6 +661,33 @@ volumes:
 - **Description**: Delete videos older than this age
 - **Examples**: `"30d"` (30 days), `"3m"` (3 months), `"1y"` (1 year)
 
+### Watched-Based Removal
+- **Config Key**: `autoRemovalWatchedEnabled`
+- **Type**: `boolean`
+- **Default**: `false`
+- **Description**: Delete videos after they have been watched on a connected media server (Plex/Jellyfin/Emby). What counts as watched follows `watchStatusWatchedRule`. Videos with no synced watch data are treated as unwatched and never removed by this rule. Requires watch status sync to be enabled (`watchStatusSyncEnabled`); when sync is disabled this strategy is skipped.
+
+### Watched Removal: Days Since Watched
+- **Config Key**: `autoRemovalWatchedMinDaysSinceWatched`
+- **Type**: `string`
+- **Default**: `""` (remove as soon as watched)
+- **Description**: Only remove a watched video once its most recent qualifying watch is at least this many days old
+- **Examples**: `"7"`, `"30"`
+
+### Watched Removal: Minimum Video Age
+- **Config Key**: `autoRemovalWatchedMinVideoAgeDays`
+- **Type**: `string`
+- **Default**: `""` (any age)
+- **Description**: Only remove watched videos downloaded at least this many days ago
+- **Examples**: `"30"`, `"90"`
+
+### Always Keep Newest Downloads
+- **Config Key**: `autoRemovalKeepRecentCount`
+- **Type**: `number`
+- **Default**: `0` (disabled)
+- **Description**: The N most recently downloaded videos are excluded from every auto-removal strategy (age, watched, and free-space)
+- **Note**: Videos marked as Protected are always excluded from auto-removal, independent of this setting, and do not count toward the N (each keep-recent slot goes to a video that would otherwise be removable)
+
 ## API Keys & External Access
 
 Settings for API key authentication used by bookmarklets, mobile shortcuts, and automation tools.

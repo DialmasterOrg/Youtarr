@@ -546,6 +546,12 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *                 type: string
    *               title_filter_regex:
    *                 type: string
+   *               m3u_enabled:
+   *                 type: boolean
+   *                 description: Generate a .m3u playlist file in the channel folder
+   *               m3u_sort_order:
+   *                 type: string
+   *                 enum: [oldest_first, newest_first]
    *     responses:
    *       200:
    *         description: Settings updated successfully

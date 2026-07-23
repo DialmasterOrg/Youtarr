@@ -13,6 +13,7 @@ is also used for manually downloaded files from channels that are not setup in `
 <YOUTUBE_OUTPUT_DIR>/
 ├── Channel Name/
 │   ├── poster.jpg                             # Channel poster
+│   ├── Channel Name.m3u                       # Optional; written when the channel's "Generate channel playlist file" setting is on
 │   └── Channel - Video [id]/
 │       ├── Channel - Video [id].mp4           # Video file
 │       ├── Channel - Video [id].nfo           # Video metadata
