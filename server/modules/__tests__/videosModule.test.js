@@ -995,6 +995,54 @@ describe('VideosModule', () => {
       expect(updateCalls.length).toBe(100);
     });
 
+    test('runs ffprobes concurrently but never more than 4 at once', async () => {
+      const VIDEO_COUNT = 20;
+      mockFs.readdir.mockResolvedValueOnce(
+        Array.from({ length: VIDEO_COUNT }, (_, i) => ({
+          name: `Video [id${i}].mp4`,
+          isDirectory: () => false,
+          isFile: () => true
+        }))
+      );
+      mockFs.stat.mockResolvedValue({ size: 1000 });
+
+      let inFlight = 0;
+      let maxInFlight = 0;
+      mockExecFile.mockImplementation((file, args, opts, cb) => {
+        inFlight++;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        setImmediate(() => {
+          inFlight--;
+          cb(null, '1920,1080\n');
+        });
+      });
+
+      mockVideo.count.mockResolvedValueOnce(VIDEO_COUNT);
+      mockVideo.findAll.mockResolvedValueOnce(
+        Array.from({ length: VIDEO_COUNT }, (_, i) => ({
+          id: i + 1,
+          youtubeId: `id${i}`,
+          filePath: `/test/output/dir/Video [id${i}].mp4`,
+          fileSize: '1000',
+          audioFilePath: null,
+          audioFileSize: null,
+          removed: false,
+          video_resolution: null
+        }))
+      );
+      mockSequelize.query.mockResolvedValue([]);
+
+      await VideosModule.backfillVideoMetadata();
+
+      expect(mockExecFile).toHaveBeenCalledTimes(VIDEO_COUNT);
+      expect(maxInFlight).toBeGreaterThan(1);
+      expect(maxInFlight).toBeLessThanOrEqual(4);
+      const updateCalls = mockSequelize.query.mock.calls.filter(
+        ([sql]) => typeof sql === 'string' && sql.startsWith('UPDATE Videos SET')
+      );
+      expect(updateCalls.length).toBe(VIDEO_COUNT);
+    });
+
     test('stamps the 0 sentinel when ffprobe fails', async () => {
       mockFs.readdir.mockResolvedValueOnce([
         { name: 'Video [abc12345678].mp4', isDirectory: () => false, isFile: () => true }

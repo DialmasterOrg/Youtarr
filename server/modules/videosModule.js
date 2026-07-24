@@ -10,11 +10,16 @@ const messageEmitter = require('./messageEmitter');
 const m3uGenerator = require('./m3uGenerator');
 const { AUDIO_EXTENSIONS, MEDIA_EXTENSIONS } = require('./filesystem/constants');
 const { probeVideoDimensions } = require('./resolutionTier');
+const createLimiter = require('./subscriptionImport/concurrencyLimiter');
 
 // Backfill row updates are applied in parameterized batches of this size,
 // and flushed mid-chunk at the same cadence so completed work survives a
 // time-limit abort.
 const BACKFILL_UPDATE_BATCH_SIZE = 100;
+
+// ffprobes are I/O-bound, so running 4 at once cuts backfill wall time
+// ~4x without piling up subprocesses next to downloads and Plex.
+const BACKFILL_PROBE_CONCURRENCY = 4;
 
 class VideosModule {
   constructor() {
@@ -574,6 +579,7 @@ class VideosModule {
 
       // Process videos in chunks to avoid memory issues
       const VIDEO_CHUNK_SIZE = 1000; // Process 1000 videos at a time
+      const probeLimit = createLimiter(BACKFILL_PROBE_CONCURRENCY);
       let offset = 0;
 
       // Get total count first
@@ -597,117 +603,118 @@ class VideosModule {
         let chunkUpdated = 0;
         let chunkRemoved = 0;
 
-        // Process this chunk
-        for (const video of videos) {
-          // Yield control periodically to keep event loop responsive
-          if ((totalProcessed + bulkUpdates.length) % 100 === 0) {
-            await new Promise(resolve => setImmediate(resolve));
-            checkTimeLimit();
-          }
+        // Process the chunk in 100-row slices: probe, apply the row logic, flush.
+        for (let sliceStart = 0; sliceStart < videos.length; sliceStart += BACKFILL_UPDATE_BATCH_SIZE) {
+          checkTimeLimit();
+          await new Promise(resolve => setImmediate(resolve)); // Yield control
 
-          const fileInfo = fileMap.get(video.youtubeId);
+          const slice = videos.slice(sliceStart, sliceStart + BACKFILL_UPDATE_BATCH_SIZE);
 
-          if (fileInfo) {
-            // Check if any file exists (video or audio)
-            const hasVideoFile = !!fileInfo.videoFilePath;
-            const hasAudioFile = !!fileInfo.audioFilePath;
-            const hasAnyFile = hasVideoFile || hasAudioFile;
+          // Backfill dimensions for rows that predate the video_resolution
+          // column. ffprobe on the actual file is ground truth; only probed
+          // while the column is NULL. "0x0" = probed but undeterminable,
+          // which stops failed rows from being re-probed every night (the
+          // file may sit on a network share); a later re-download re-stamps
+          // at download time regardless.
+          const probeResults = new Map();
+          await Promise.all(slice.map((video) => {
+            const fileInfo = fileMap.get(video.youtubeId);
+            if (!fileInfo || !fileInfo.videoFilePath || video.video_resolution != null) {
+              return null;
+            }
+            return probeLimit(async () => {
+              const probed = await probeVideoDimensions(fileInfo.videoFilePath);
+              probeResults.set(video.youtubeId, probed === null ? '0x0' : probed);
+            });
+          }).filter(Boolean));
 
-            if (hasAnyFile) {
-              // Check if update needed for video file
-              const videoPathChanged = hasVideoFile && video.filePath !== fileInfo.videoFilePath;
-              const videoSizeChanged = hasVideoFile && (!video.fileSize || video.fileSize !== fileInfo.videoFileSize.toString());
+          for (const video of slice) {
+            const fileInfo = fileMap.get(video.youtubeId);
 
-              // Check if update needed for audio file
-              const audioPathChanged = hasAudioFile && video.audioFilePath !== fileInfo.audioFilePath;
-              const audioSizeChanged = hasAudioFile && (!video.audioFileSize || video.audioFileSize !== fileInfo.audioFileSize.toString());
+            if (fileInfo) {
+              // Check if any file exists (video or audio)
+              const hasVideoFile = !!fileInfo.videoFilePath;
+              const hasAudioFile = !!fileInfo.audioFilePath;
+              const hasAnyFile = hasVideoFile || hasAudioFile;
 
-              // Check if we need to clear audio fields (audio file was deleted)
-              const audioFileRemoved = !hasAudioFile && (video.audioFilePath || video.audioFileSize);
+              if (hasAnyFile) {
+                // Check if update needed for video file
+                const videoPathChanged = hasVideoFile && video.filePath !== fileInfo.videoFilePath;
+                const videoSizeChanged = hasVideoFile && (!video.fileSize || video.fileSize !== fileInfo.videoFileSize.toString());
 
-              // Check if we need to clear video fields (video file was deleted but audio exists)
-              const videoFileRemoved = !hasVideoFile && hasAudioFile && (video.filePath || video.fileSize);
+                // Check if update needed for audio file
+                const audioPathChanged = hasAudioFile && video.audioFilePath !== fileInfo.audioFilePath;
+                const audioSizeChanged = hasAudioFile && (!video.audioFileSize || video.audioFileSize !== fileInfo.audioFileSize.toString());
 
-              // Backfill dimensions for rows that predate the
-              // video_resolution column. ffprobe on the actual file is ground
-              // truth; only probed while the column is NULL. "0x0" = probed
-              // but undeterminable, which stops failed rows from being
-              // re-probed every night (the file may sit on a network share);
-              // a later re-download re-stamps at download time regardless.
-              let probedResolution = null;
-              if (hasVideoFile && video.video_resolution == null) {
-                probedResolution = await probeVideoDimensions(fileInfo.videoFilePath);
-                if (probedResolution === null) {
-                  probedResolution = '0x0';
+                // Check if we need to clear audio fields (audio file was deleted)
+                const audioFileRemoved = !hasAudioFile && (video.audioFilePath || video.audioFileSize);
+
+                // Check if we need to clear video fields (video file was deleted but audio exists)
+                const videoFileRemoved = !hasVideoFile && hasAudioFile && (video.filePath || video.fileSize);
+
+                const probedResolution = probeResults.get(video.youtubeId) ?? null;
+
+                // Sequelize BOOLEAN columns come back as 0/1 in raw mode, so use a
+                // truthy check; `=== true` would never match the raw integer.
+                if (videoPathChanged || videoSizeChanged || audioPathChanged || audioSizeChanged ||
+                    audioFileRemoved || videoFileRemoved || video.removed || probedResolution !== null) {
+                  const update = {
+                    id: video.id,
+                    removed: false
+                  };
+
+                  // Update video file info
+                  if (hasVideoFile) {
+                    update.filePath = fileInfo.videoFilePath;
+                    update.fileSize = fileInfo.videoFileSize;
+                  } else if (videoFileRemoved) {
+                    update.filePath = null;
+                    update.fileSize = null;
+                    // The stored dimensions belong to the deleted file; clearing
+                    // them lets a reappearing file be re-probed instead of
+                    // keeping a stale label.
+                    update.video_resolution = null;
+                  }
+
+                  // Update audio file info
+                  if (hasAudioFile) {
+                    update.audioFilePath = fileInfo.audioFilePath;
+                    update.audioFileSize = fileInfo.audioFileSize;
+                  } else if (audioFileRemoved) {
+                    update.audioFilePath = null;
+                    update.audioFileSize = null;
+                  }
+
+                  if (probedResolution !== null) {
+                    update.video_resolution = probedResolution;
+                  }
+
+                  bulkUpdates.push(update);
+                  chunkUpdated++;
                 }
               }
-
-              // Sequelize BOOLEAN columns come back as 0/1 in raw mode, so use a
-              // truthy check; `=== true` would never match the raw integer.
-              if (videoPathChanged || videoSizeChanged || audioPathChanged || audioSizeChanged ||
-                  audioFileRemoved || videoFileRemoved || video.removed || probedResolution !== null) {
-                const update = {
+            } else {
+              // No files exist in fileMap for this video
+              if (!video.removed) {
+                // Only mark as removed, don't touch filePath or fileSize
+                // They might still be valid even if we can't find the file right now
+                bulkUpdates.push({
                   id: video.id,
-                  removed: false
-                };
-
-                // Update video file info
-                if (hasVideoFile) {
-                  update.filePath = fileInfo.videoFilePath;
-                  update.fileSize = fileInfo.videoFileSize;
-                } else if (videoFileRemoved) {
-                  update.filePath = null;
-                  update.fileSize = null;
-                  // The stored dimensions belong to the deleted file; clearing
-                  // them lets a reappearing file be re-probed instead of
-                  // keeping a stale label.
-                  update.video_resolution = null;
-                }
-
-                // Update audio file info
-                if (hasAudioFile) {
-                  update.audioFilePath = fileInfo.audioFilePath;
-                  update.audioFileSize = fileInfo.audioFileSize;
-                } else if (audioFileRemoved) {
-                  update.audioFilePath = null;
-                  update.audioFileSize = null;
-                }
-
-                if (probedResolution !== null) {
-                  update.video_resolution = probedResolution;
-                }
-
-                bulkUpdates.push(update);
-                chunkUpdated++;
+                  removed: true
+                  // DO NOT include filePath or fileSize here - leave them unchanged
+                });
+                chunkRemoved++;
               }
-            }
-          } else {
-            // No files exist in fileMap for this video
-            if (!video.removed) {
-              // Only mark as removed, don't touch filePath or fileSize
-              // They might still be valid even if we can't find the file right now
-              bulkUpdates.push({
-                id: video.id,
-                removed: true
-                // DO NOT include filePath or fileSize here - leave them unchanged
-              });
-              chunkRemoved++;
             }
           }
 
-          // Flush completed work periodically instead of once per chunk: on a
-          // slow network share a chunk's ffprobes can exceed the whole time
-          // budget, and losing the chunk's pending updates on abort would
-          // re-probe the same rows next run and never converge.
-          if (bulkUpdates.length >= BACKFILL_UPDATE_BATCH_SIZE) {
+          // Flush each slice's updates right away: on a slow network share the
+          // probes can outlast the whole time budget, and work lost to an abort
+          // would get re-probed next run and never converge.
+          if (bulkUpdates.length > 0) {
+            logProgress(`Updating ${bulkUpdates.length} records (chunk ${Math.floor(offset / VIDEO_CHUNK_SIZE) + 1})...`);
             await this._flushBackfillUpdates(bulkUpdates.splice(0));
           }
-        }
-
-        // Flush the chunk's remaining updates
-        if (bulkUpdates.length > 0) {
-          logProgress(`Updating ${bulkUpdates.length} records (chunk ${Math.floor(offset / VIDEO_CHUNK_SIZE) + 1})...`);
-          await this._flushBackfillUpdates(bulkUpdates.splice(0));
         }
 
         totalProcessed += videos.length;
