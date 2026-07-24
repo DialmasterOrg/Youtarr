@@ -151,6 +151,93 @@ describe('VideoMetadataModule', () => {
       expect(result.thumbnails).toBeUndefined();
     });
 
+    test('does not include a downloadedTier field (tier is derived client-side)', async () => {
+      const rawInfoJson = {
+        width: 608,
+        height: 1080,
+        format_note: '480p',
+        upload_date: '20240315',
+      };
+
+      mockFs.access.mockResolvedValue(undefined);
+      mockFs.readFile.mockResolvedValue(JSON.stringify(rawInfoJson));
+      mockVideo.findOne.mockResolvedValue(null);
+
+      const result = await videoMetadataModule.getVideoMetadata('vert123');
+
+      expect(result.width).toBe(608);
+      expect(result.height).toBe(1080);
+      expect(result).not.toHaveProperty('downloadedTier');
+    });
+
+    test('extracts landscape available resolutions from format_note', async () => {
+      const rawInfoJson = {
+        width: 1920,
+        height: 1080,
+        formats: [
+          { vcodec: 'avc1', width: 1280, height: 720, format_note: '720p' },
+          { vcodec: 'avc1', width: 1920, height: 1080, format_note: '1080p' },
+          { vcodec: 'avc1', width: 1920, height: 1080, format_note: '1080p60' },
+          { vcodec: 'none', format_note: '2160p' },
+        ],
+      };
+
+      mockFs.access.mockResolvedValue(undefined);
+      mockFs.readFile.mockResolvedValue(JSON.stringify(rawInfoJson));
+      mockVideo.findOne.mockResolvedValue(null);
+
+      const result = await videoMetadataModule.getVideoMetadata('land123');
+
+      expect(result.availableResolutions).toEqual([720, 1080]);
+    });
+
+    test('maps vertical available resolutions to selection classes, not format_note', async () => {
+      // Real shorts ladder: YouTube labels vertical formats by short edge
+      // (1080x1920 -> "1080p", 608x1080 -> "480p"); the app labels by
+      // selection class (smallest rung >= height).
+      const rawInfoJson = {
+        width: 1080,
+        height: 1920,
+        formats: [
+          { vcodec: 'avc1', width: 144, height: 256, format_note: '144p' },
+          { vcodec: 'avc1', width: 240, height: 426, format_note: '240p' },
+          { vcodec: 'avc1', width: 360, height: 640, format_note: '360p' },
+          { vcodec: 'avc1', width: 480, height: 854, format_note: '480p' },
+          { vcodec: 'avc1', width: 608, height: 1080, format_note: '480p' },
+          { vcodec: 'avc1', width: 720, height: 1280, format_note: '720p' },
+          { vcodec: 'avc1', width: 1080, height: 1920, format_note: '1080p' },
+        ],
+      };
+
+      mockFs.access.mockResolvedValue(undefined);
+      mockFs.readFile.mockResolvedValue(JSON.stringify(rawInfoJson));
+      mockVideo.findOne.mockResolvedValue(null);
+
+      const result = await videoMetadataModule.getVideoMetadata('short123');
+
+      // 256->360, 426->480, 640->720, 854 and 1080->1080, 1280->1440, 1920->2160
+      expect(result.availableResolutions).toEqual([360, 480, 720, 1080, 1440, 2160]);
+    });
+
+    test('includes the 4320 class for native-4K vertical sources', async () => {
+      const rawInfoJson = {
+        width: 2160,
+        height: 3840,
+        formats: [
+          { vcodec: 'avc1', width: 1080, height: 1920, format_note: '1080p' },
+          { vcodec: 'avc1', width: 2160, height: 3840, format_note: '2160p' },
+        ],
+      };
+
+      mockFs.access.mockResolvedValue(undefined);
+      mockFs.readFile.mockResolvedValue(JSON.stringify(rawInfoJson));
+      mockVideo.findOne.mockResolvedValue(null);
+
+      const result = await videoMetadataModule.getVideoMetadata('vert4k');
+
+      expect(result.availableResolutions).toEqual([2160, 4320]);
+    });
+
     test('fetches from yt-dlp when cached file does not exist', async () => {
       const ytdlpData = {
         description: 'Fetched description',

@@ -54,6 +54,8 @@ export interface PlaylistVideo {
   file_size: number | null;
   audio_file_path: string | null;
   audio_file_size: number | null;
+  // Actual downloaded pixel dimensions, e.g. "1920x1080"; "0x0" = probe failed
+  video_resolution?: string | null;
   // Media server types with a played watch-status row for this video.
   watched_by?: string[];
 }

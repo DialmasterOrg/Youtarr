@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Chip, Tooltip } from '../ui';
 import { MovieOutlined as VideoFormatIcon, AudioIcon as AudioFormatIcon } from '../../lib/icons';
 import { formatFileSize } from '../../utils/formatters';
+import { resolutionTierLabel } from '../../utils/videoResolution';
 import { SHARED_THEMED_CHIP_SMALL_STYLE, SHARED_COMPACT_CHIP_OVERRIDES } from './chipStyles';
 
 interface DownloadFormatIndicatorProps {
@@ -9,6 +10,10 @@ interface DownloadFormatIndicatorProps {
   audioFilePath?: string | null;
   fileSize?: number | string | null;
   audioFileSize?: number | string | null;
+  // Actual downloaded pixel dimensions ("1920x1080"); the tier label is
+  // derived at render time. Chip hidden when null/undefined, malformed, or
+  // the backend's "0x0" probe-failed sentinel.
+  videoResolution?: string | null;
   // 'vertical' stacks the chips to fit narrow table columns
   orientation?: 'horizontal' | 'vertical';
   compact?: boolean;
@@ -33,6 +38,7 @@ const DownloadFormatIndicator: React.FC<DownloadFormatIndicatorProps> = ({
   audioFilePath,
   fileSize,
   audioFileSize,
+  videoResolution,
   orientation = 'horizontal',
   compact = false
 }) => {
@@ -50,6 +56,7 @@ const DownloadFormatIndicator: React.FC<DownloadFormatIndicatorProps> = ({
 
   const displayVideoPath = filePath ? getDisplayPath(filePath) : '';
   const displayAudioPath = audioFilePath ? getDisplayPath(audioFilePath) : '';
+  const resolutionLabel = resolutionTierLabel(videoResolution);
 
   // Format size labels
   const videoSizeLabel = videoSizeNum ? formatFileSize(videoSizeNum) : 'Unknown';
@@ -92,6 +99,17 @@ const DownloadFormatIndicator: React.FC<DownloadFormatIndicatorProps> = ({
             variant="outlined"
             style={chipStyle}
             data-testid="video-format-chip"
+          />
+        </Tooltip>
+      )}
+      {hasVideo && resolutionLabel && (
+        <Tooltip title={`Downloaded resolution (${videoResolution})`} arrow placement="top" enterTouchDelay={0}>
+          <Chip
+            size="small"
+            label={resolutionLabel}
+            variant="outlined"
+            style={chipStyle}
+            data-testid="video-resolution-chip"
           />
         </Tooltip>
       )}

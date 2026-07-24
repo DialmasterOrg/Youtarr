@@ -352,6 +352,7 @@ function VideoCard({
                     audioFilePath={video.audioFilePath}
                     fileSize={video.fileSize}
                     audioFileSize={video.audioFileSize}
+                    videoResolution={video.video_resolution}
                   />
                 )}
               </div>

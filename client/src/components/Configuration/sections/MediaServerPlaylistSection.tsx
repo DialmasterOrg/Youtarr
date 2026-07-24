@@ -250,8 +250,7 @@ export const MediaServerPlaylistSection: React.FC<MediaServerPlaylistSectionProp
         <AlertTitle>For native playlist support</AlertTitle>
         <Typography variant="body2">
           Connecting {label} is required for Youtarr-managed YouTube playlists to appear as native
-          playlists in {label}. Channel downloads still work without this connection; this is
-          specifically for the Playlists feature.
+          playlists in {label} and Watch Status syncing. All downloads still work without this connection.
         </Typography>
       </Alert>
 

@@ -16,12 +16,14 @@ export function toDownloadFileProps(v: PlaylistVideo): {
   audioFilePath: string | null;
   fileSize: number | null;
   audioFileSize: number | null;
+  videoResolution: string | null;
 } {
   return {
     filePath: v.file_path,
     audioFilePath: v.audio_file_path,
     fileSize: v.file_size,
     audioFileSize: v.audio_file_size,
+    videoResolution: v.video_resolution ?? null,
   };
 }
 
