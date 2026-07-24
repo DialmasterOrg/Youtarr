@@ -74,14 +74,14 @@ describe('VideosListMobile', () => {
     expect(onToggleSelect).toHaveBeenCalledWith(1);
   });
 
-  test('omits checkbox and row-click for removed videos', () => {
+  test('renders checkbox and row-click for removed videos', () => {
     const { onToggleSelect } = renderList({
       videos: [{ ...sampleVideo, removed: true }],
     });
-    expect(screen.queryByRole('checkbox', { name: /Select Compact Row Video/ })).not.toBeInTheDocument();
-    // Row should not be a button when not selectable.
-    expect(screen.queryByRole('button', { name: /Compact Row Video/ })).not.toBeInTheDocument();
-    expect(onToggleSelect).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('checkbox', { name: /Select Compact Row Video/ }));
+    expect(onToggleSelect).toHaveBeenCalledWith(1);
+    fireEvent.click(screen.getByRole('button', { name: /Compact Row Video/ }));
+    expect(onToggleSelect).toHaveBeenCalledTimes(2);
   });
 
   test('allows selection for audio-only downloads with no video fileSize', () => {

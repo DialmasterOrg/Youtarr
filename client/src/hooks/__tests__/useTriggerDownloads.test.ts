@@ -97,6 +97,36 @@ describe('useTriggerDownloads', () => {
     expect(body.channelId).toBe('UCabc');
   });
 
+  test('includes videoChannelMap in the request body when non-empty', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true });
+    const { result } = renderHook(() => useTriggerDownloads(token));
+
+    await act(async () => {
+      await result.current.triggerDownloads({
+        urls: ['https://www.youtube.com/watch?v=abc123def45'],
+        videoChannelMap: { abc123def45: 'UCabcdefghijklmnopqrstuv' },
+      });
+    });
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+    expect(body.videoChannelMap).toEqual({ abc123def45: 'UCabcdefghijklmnopqrstuv' });
+  });
+
+  test('omits videoChannelMap from the request body when empty', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true });
+    const { result } = renderHook(() => useTriggerDownloads(token));
+
+    await act(async () => {
+      await result.current.triggerDownloads({
+        urls: ['https://www.youtube.com/watch?v=abc123def45'],
+        videoChannelMap: {},
+      });
+    });
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+    expect(body).not.toHaveProperty('videoChannelMap');
+  });
+
   test('returns false and sets error when response is not ok', async () => {
     mockFetch.mockResolvedValueOnce({ ok: false, statusText: 'Bad Request' });
     const { result } = renderHook(() => useTriggerDownloads(token));
