@@ -765,7 +765,7 @@ For user-facing documentation on when and how to use the filesystem rescan (movi
     "errorMessage": null
   }
   ```
-- **Description**: Records the outcome of the most recent filesystem reconciliation pass (the `backfillVideoMetadata` run). Written by the daily cron, the server-startup pass, and the manual "Rescan files on disk" action on the Maintenance settings page. Surfaced read-only on that page so users can see when the last scan ran and what it found or fixed.
+- **Description**: Records the outcome of the most recent filesystem reconciliation pass (the `backfillVideoMetadata` run). Written by the daily cron, the server-startup pass, and the manual "Rescan files on disk" action on the Maintenance & Rescan settings page. Surfaced read-only on that page so users can see when the last scan ran and what it found or fixed.
 - **Note**: Managed by the application; do not edit by hand.
 
 ## Account & Security

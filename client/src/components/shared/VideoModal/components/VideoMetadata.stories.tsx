@@ -49,7 +49,6 @@ const richMetadata: VideoExtendedMetadata = {
   webpageUrl: 'https://www.youtube.com/watch?v=meta123',
   relatedFiles: null,
   availableResolutions: [360, 720, 1080],
-  downloadedTier: 1080,
 };
 
 const meta: Meta<typeof VideoMetadata> = {

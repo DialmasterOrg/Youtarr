@@ -7,6 +7,7 @@ const logger = require('../logger');
 const youtubeApi = require('./youtubeApi');
 const ChannelVideo = require('../models/channelvideo');
 const channelVideoReanchor = require('./channelVideoReanchor');
+const { parseTierFromFormatNote, selectionTierForHeight } = require('./resolutionTier');
 
 const NULL_METADATA = {
   description: null,
@@ -30,7 +31,6 @@ const NULL_METADATA = {
   webpageUrl: null,
   relatedFiles: null,
   availableResolutions: null,
-  downloadedTier: null,
 };
 
 const YTDLP_FETCH_TIMEOUT_MS = 60000;
@@ -48,7 +48,7 @@ function uploadDateToIso(uploadDate) {
   return isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-const SUPPORTED_HEIGHTS = [360, 480, 720, 1080, 1440, 2160];
+const SUPPORTED_HEIGHTS = [360, 480, 720, 1080, 1440, 2160, 4320];
 
 const FILE_EXTENSION_CATEGORIES = {
   '.jpg': 'Thumbnail', '.jpeg': 'Thumbnail', '.png': 'Thumbnail', '.webp': 'Thumbnail',
@@ -220,11 +220,6 @@ class VideoMetadataModule {
       // Extract available resolutions from the formats array
       const availableResolutions = this._extractAvailableResolutions(rawData.formats);
 
-      // Extract downloaded tier from top-level format_note (e.g. "1080p+medium" -> 1080).
-      // This is the YouTube quality tier, which differs from the actual pixel height
-      // for non-16:9 aspect ratios (e.g. a 2:1 video's "1080p" tier has 960 actual height).
-      const downloadedTier = this._extractTierFromFormatNote(rawData.format_note);
-
       return {
         description: rawData.description ?? null,
         viewCount: rawData.view_count ?? null,
@@ -247,7 +242,6 @@ class VideoMetadataModule {
         webpageUrl: rawData.webpage_url ?? null,
         relatedFiles,
         availableResolutions,
-        downloadedTier,
       };
     } catch (err) {
       logger.error({ err, youtubeId }, 'Unexpected error in getVideoMetadata');
@@ -375,13 +369,20 @@ class VideoMetadataModule {
   }
 
   /**
-   * Extract available download resolutions from the yt-dlp formats array.
-   * Only returns resolutions we support downloading (360p-2160p).
+   * Extract available download resolutions from the yt-dlp formats array,
+   * as tiers matching the labels shown elsewhere in the app.
    *
-   * Prefers format_note (e.g. "1080p") over raw height because for non-16:9
-   * aspect ratios the actual pixel height differs from the quality tier label
-   * (e.g. a 2:1 video's "1080p" format has 960 actual height, not 1080).
-   * Falls back to height when format_note isn't present or parseable.
+   * Landscape: prefers format_note (e.g. "1080p") over raw height because for
+   * non-16:9 aspect ratios the actual pixel height differs from the quality
+   * tier label (e.g. a 2:1 video's "1080p" format has 960 actual height, not
+   * 1080). Falls back to height when format_note isn't present or parseable.
+   *
+   * Vertical (height > width): uses the selection class (smallest ladder rung
+   * >= pixel height) instead of format_note, because YouTube labels vertical
+   * formats by short edge (a 1080x1920 short's format_note is "1080p") while
+   * the app labels downloads by selection class (1080x1920 -> 2160p). Without
+   * this, a top-of-ladder vertical download's tier would be missing from the
+   * list and the modal could not mark it as downloaded.
    */
   _extractAvailableResolutions(formats) {
     if (!Array.isArray(formats) || formats.length === 0) return null;
@@ -391,9 +392,14 @@ class VideoMetadataModule {
     for (const fmt of formats) {
       if (!fmt.vcodec || fmt.vcodec === 'none') continue;
 
-      let tier = this._extractTierFromFormatNote(fmt.format_note);
-      if (tier === null && fmt.height) {
-        tier = fmt.height;
+      let tier;
+      if (fmt.height && fmt.width && fmt.height > fmt.width) {
+        tier = selectionTierForHeight(fmt.height);
+      } else {
+        tier = this._extractTierFromFormatNote(fmt.format_note);
+        if (tier === null && fmt.height) {
+          tier = fmt.height;
+        }
       }
 
       if (tier !== null && SUPPORTED_HEIGHTS.includes(tier)) {
@@ -412,9 +418,7 @@ class VideoMetadataModule {
    * Returns null if the string isn't present or doesn't start with a tier.
    */
   _extractTierFromFormatNote(formatNote) {
-    if (!formatNote || typeof formatNote !== 'string') return null;
-    const match = formatNote.match(/^(\d+)p/);
-    return match ? parseInt(match[1], 10) : null;
+    return parseTierFromFormatNote(formatNote);
   }
 
   _categorizeFileExtension(ext) {

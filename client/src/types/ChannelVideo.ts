@@ -33,5 +33,7 @@ export interface ChannelVideo {
   rating_source?: string | null;
   protected?: boolean;
   timeCreated?: string | null;
+  // Actual downloaded pixel dimensions, e.g. "1920x1080"; "0x0" = probe failed
+  video_resolution?: string | null;
   watchedBy?: string[];
 }

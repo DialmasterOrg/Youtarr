@@ -23,7 +23,7 @@ Youtarr uses MariaDB/MySQL for storing:
 | Table              | Model             | Description                       |
 | :----------------- | :-------------    | :-------------------------------- |
 | `channels`         | `Channel`         | YouTube channel information. `m3u_enabled` (boolean, default false): generate a `.m3u` playlist file in the channel folder. `m3u_sort_order` (string, default `oldest_first`): `.m3u` entry order, `oldest_first` or `newest_first`. |
-| `Videos`           | `Video`           | Downloaded video metadata         |
+| `Videos`           | `Video`           | Downloaded video metadata. `video_resolution` (VARCHAR(20), nullable): actual pixel dimensions of the downloaded file, e.g. `"1920x1080"`, measured by ffprobe at download time and backfilled by the filesystem rescan; the displayed tier label (e.g. "1080p") is derived client-side (`client/src/utils/videoResolution.ts`), so labeling rules can change without re-probing; NULL = not yet checked or audio-only, `"0x0"` = probe failed (never shown in the UI). |
 | `channelvideos`    | `ChannelVideo`    | Channel <-> video associations. `published_at_source` tracks publishedAt provenance: `exact` (.info.json), `approximate` (yt-dlp flat-playlist date), `estimated` (ordering-only placeholder assigned when YouTube returns a listing with no dates; never displayed), NULL (legacy, treated as approximate) |
 | `Jobs`             | `Job`             | Download job queue                |
 | `JobVideos`        | `JobVideo`        | Job <-> video associations        |

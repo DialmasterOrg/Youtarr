@@ -331,7 +331,7 @@ Common cases:
 - You restored a backup of your downloads folder to a different location.
 - You manually moved files between channel or subfolder directories.
 
-1. **Open Settings -> Maintenance**
+1. **Open Settings -> Maintenance & Rescan**
 2. Click **Rescan files on disk**
 3. The page shows progress in real time and a summary of the last run (videos updated, files marked missing)
 

@@ -9,6 +9,12 @@ const logger = require('../logger');
 const messageEmitter = require('./messageEmitter');
 const m3uGenerator = require('./m3uGenerator');
 const { AUDIO_EXTENSIONS, MEDIA_EXTENSIONS } = require('./filesystem/constants');
+const { probeVideoDimensions } = require('./resolutionTier');
+
+// Backfill row updates are applied in parameterized batches of this size,
+// and flushed mid-chunk at the same cadence so completed work survives a
+// time-limit abort.
+const BACKFILL_UPDATE_BATCH_SIZE = 100;
 
 class VideosModule {
   constructor() {
@@ -119,10 +125,12 @@ class VideosModule {
           Videos.audioFileSize,
           Videos.removed,
           Videos.youtube_removed,
+          Videos.youtube_removed_checked_at,
           Videos.media_type,
           Videos.normalized_rating,
           Videos.rating_source,
           Videos.protected,
+          Videos.video_resolution,
           COALESCE(Videos.last_downloaded_at, Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, '%Y%m%d')) AS timeCreated
         FROM Videos
         LEFT JOIN JobVideos ON Videos.id = JobVideos.video_id
@@ -432,6 +440,75 @@ class VideosModule {
     return { fileMap, duplicates };
   }
 
+  /**
+   * Apply backfill row updates in small parameterized batches. Deliberately
+   * does not check the run's time limit: once a flush starts it completes,
+   * so the expensive work already done (ffprobes, file stats) is never
+   * discarded. A flush of <= 1000 plain UPDATEs overruns the limit by
+   * seconds at most.
+   */
+  async _flushBackfillUpdates(updates) {
+    for (let i = 0; i < updates.length; i += BACKFILL_UPDATE_BATCH_SIZE) {
+      await new Promise(resolve => setImmediate(resolve)); // Yield control
+
+      const batch = updates.slice(i, i + BACKFILL_UPDATE_BATCH_SIZE);
+
+      // Use individual parameterized updates to handle special characters properly
+      let batchSuccess = 0;
+      let batchFailed = 0;
+
+      for (const update of batch) {
+        const setClauses = [];
+        const replacements = [];
+
+        if (update.filePath !== undefined) {
+          setClauses.push('filePath = ?');
+          replacements.push(update.filePath);
+        }
+        if (update.fileSize !== undefined) {
+          setClauses.push('fileSize = ?');
+          replacements.push(update.fileSize);
+        }
+        if (update.audioFilePath !== undefined) {
+          setClauses.push('audioFilePath = ?');
+          replacements.push(update.audioFilePath);
+        }
+        if (update.audioFileSize !== undefined) {
+          setClauses.push('audioFileSize = ?');
+          replacements.push(update.audioFileSize);
+        }
+        if (update.video_resolution !== undefined) {
+          setClauses.push('video_resolution = ?');
+          replacements.push(update.video_resolution);
+        }
+        if (update.removed !== undefined) {
+          setClauses.push('removed = ?');
+          replacements.push(update.removed ? 1 : 0);
+        }
+
+        if (setClauses.length > 0) {
+          replacements.push(update.id);
+          const query = `UPDATE Videos SET ${setClauses.join(', ')} WHERE id = ?`;
+
+          try {
+            await sequelize.query(query, {
+              replacements: replacements,
+              type: Sequelize.QueryTypes.UPDATE
+            });
+            batchSuccess++;
+          } catch (err) {
+            batchFailed++;
+            logger.error({ err, videoId: update.id }, 'Failed to update video');
+          }
+        }
+      }
+
+      if (batchFailed > 0) {
+        logger.info({ batchSuccess, batchFailed }, 'Batch update results');
+      }
+    }
+  }
+
   async backfillVideoMetadata(arg = {}) {
     const opts = typeof arg === 'number' ? { timeLimit: arg } : arg;
     const timeLimit = opts.timeLimit ?? 5 * 60 * 1000;
@@ -508,7 +585,7 @@ class VideosModule {
 
         // Fetch a chunk of videos
         const videos = await Video.findAll({
-          attributes: ['id', 'youtubeId', 'filePath', 'fileSize', 'audioFilePath', 'audioFileSize', 'removed'],
+          attributes: ['id', 'youtubeId', 'filePath', 'fileSize', 'audioFilePath', 'audioFileSize', 'removed', 'video_resolution'],
           limit: VIDEO_CHUNK_SIZE,
           offset: offset,
           raw: true
@@ -551,10 +628,24 @@ class VideosModule {
               // Check if we need to clear video fields (video file was deleted but audio exists)
               const videoFileRemoved = !hasVideoFile && hasAudioFile && (video.filePath || video.fileSize);
 
+              // Backfill dimensions for rows that predate the
+              // video_resolution column. ffprobe on the actual file is ground
+              // truth; only probed while the column is NULL. "0x0" = probed
+              // but undeterminable, which stops failed rows from being
+              // re-probed every night (the file may sit on a network share);
+              // a later re-download re-stamps at download time regardless.
+              let probedResolution = null;
+              if (hasVideoFile && video.video_resolution == null) {
+                probedResolution = await probeVideoDimensions(fileInfo.videoFilePath);
+                if (probedResolution === null) {
+                  probedResolution = '0x0';
+                }
+              }
+
               // Sequelize BOOLEAN columns come back as 0/1 in raw mode, so use a
               // truthy check; `=== true` would never match the raw integer.
               if (videoPathChanged || videoSizeChanged || audioPathChanged || audioSizeChanged ||
-                  audioFileRemoved || videoFileRemoved || video.removed) {
+                  audioFileRemoved || videoFileRemoved || video.removed || probedResolution !== null) {
                 const update = {
                   id: video.id,
                   removed: false
@@ -567,6 +658,10 @@ class VideosModule {
                 } else if (videoFileRemoved) {
                   update.filePath = null;
                   update.fileSize = null;
+                  // The stored dimensions belong to the deleted file; clearing
+                  // them lets a reappearing file be re-probed instead of
+                  // keeping a stale label.
+                  update.video_resolution = null;
                 }
 
                 // Update audio file info
@@ -576,6 +671,10 @@ class VideosModule {
                 } else if (audioFileRemoved) {
                   update.audioFilePath = null;
                   update.audioFileSize = null;
+                }
+
+                if (probedResolution !== null) {
+                  update.video_resolution = probedResolution;
                 }
 
                 bulkUpdates.push(update);
@@ -595,71 +694,20 @@ class VideosModule {
               chunkRemoved++;
             }
           }
+
+          // Flush completed work periodically instead of once per chunk: on a
+          // slow network share a chunk's ffprobes can exceed the whole time
+          // budget, and losing the chunk's pending updates on abort would
+          // re-probe the same rows next run and never converge.
+          if (bulkUpdates.length >= BACKFILL_UPDATE_BATCH_SIZE) {
+            await this._flushBackfillUpdates(bulkUpdates.splice(0));
+          }
         }
 
-        // Perform bulk update if there are changes
+        // Flush the chunk's remaining updates
         if (bulkUpdates.length > 0) {
           logProgress(`Updating ${bulkUpdates.length} records (chunk ${Math.floor(offset / VIDEO_CHUNK_SIZE) + 1})...`);
-
-          // Process updates in batches to avoid query size limits
-          const BATCH_SIZE = 100;
-
-          for (let i = 0; i < bulkUpdates.length; i += BATCH_SIZE) {
-            checkTimeLimit();
-            await new Promise(resolve => setImmediate(resolve)); // Yield control
-
-            const batch = bulkUpdates.slice(i, i + BATCH_SIZE);
-
-            // Use individual parameterized updates to handle special characters properly
-            let batchSuccess = 0;
-            let batchFailed = 0;
-
-            for (const update of batch) {
-              const setClauses = [];
-              const replacements = [];
-
-              if (update.filePath !== undefined) {
-                setClauses.push('filePath = ?');
-                replacements.push(update.filePath);
-              }
-              if (update.fileSize !== undefined) {
-                setClauses.push('fileSize = ?');
-                replacements.push(update.fileSize);
-              }
-              if (update.audioFilePath !== undefined) {
-                setClauses.push('audioFilePath = ?');
-                replacements.push(update.audioFilePath);
-              }
-              if (update.audioFileSize !== undefined) {
-                setClauses.push('audioFileSize = ?');
-                replacements.push(update.audioFileSize);
-              }
-              if (update.removed !== undefined) {
-                setClauses.push('removed = ?');
-                replacements.push(update.removed ? 1 : 0);
-              }
-
-              if (setClauses.length > 0) {
-                replacements.push(update.id);
-                const query = `UPDATE Videos SET ${setClauses.join(', ')} WHERE id = ?`;
-
-                try {
-                  await sequelize.query(query, {
-                    replacements: replacements,
-                    type: Sequelize.QueryTypes.UPDATE
-                  });
-                  batchSuccess++;
-                } catch (err) {
-                  batchFailed++;
-                  logger.error({ err, videoId: update.id }, 'Failed to update video');
-                }
-              }
-            }
-
-            if (batchFailed > 0) {
-              logger.info({ batchSuccess, batchFailed }, 'Batch update results');
-            }
-          }
+          await this._flushBackfillUpdates(bulkUpdates.splice(0));
         }
 
         totalProcessed += videos.length;
