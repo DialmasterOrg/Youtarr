@@ -59,7 +59,6 @@ const downloadedMetadata: VideoExtendedMetadata = {
     },
   ],
   availableResolutions: [360, 720, 1080, 1440],
-  downloadedTier: 1440,
 };
 
 const meta: Meta<typeof VideoTechnical> = {

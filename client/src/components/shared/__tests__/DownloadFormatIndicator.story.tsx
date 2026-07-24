@@ -50,3 +50,18 @@ export const AudioOnly: Story = {
     await expect(canvas.getByText('3MB')).toBeInTheDocument();
   },
 };
+
+export const VideoWithResolution: Story = {
+  args: {
+    filePath: '/downloads/video.mp4',
+    audioFilePath: null,
+    fileSize: 1024 * 1024,
+    audioFileSize: null,
+    videoResolution: '1920x1080',
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('1MB')).toBeInTheDocument();
+    await expect(canvas.getByText('1080p')).toBeInTheDocument();
+  },
+};

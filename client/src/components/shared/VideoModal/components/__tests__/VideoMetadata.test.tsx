@@ -67,7 +67,6 @@ const baseMetadata: VideoExtendedMetadata = {
   webpageUrl: null,
   relatedFiles: null,
   availableResolutions: null,
-  downloadedTier: null,
 };
 
 const renderMetadata = (

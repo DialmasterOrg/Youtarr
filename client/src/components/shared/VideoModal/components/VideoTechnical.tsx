@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Typography, Skeleton, Tooltip, Chip, Accordion, AccordionSummary, AccordionDetails } from '../../../ui';
 import { formatDate } from '../../../../utils/formatters';
+import { tierFromDimensions } from '../../../../utils/videoResolution';
 import { VideoModalData, VideoExtendedMetadata } from '../types';
 
 interface VideoTechnicalProps {
@@ -48,9 +49,12 @@ function formatDownloadedResolution(
 ): string | null {
   if (!height) return null;
   const base = width ? `${width}x${height}` : `${height}p`;
-  // Show the tier label when it differs from the actual height (non-16:9 videos).
-  // For 16:9 videos the tier matches the height, so appending it would be redundant.
-  if (tier && tier !== height) {
+  // Show the tier label when it differs from the actual height (non-16:9
+  // landscape) and always for portrait videos, whose tier is the selection
+  // class rather than either pixel dimension (e.g. "608x1080 (1080p)").
+  // For 16:9 landscape the tier matches the height, so it would be redundant.
+  const isPortrait = width != null && width < height;
+  if (tier && (tier !== height || isPortrait)) {
     return `${base} (${tier}p)`;
   }
   return base;
@@ -115,13 +119,16 @@ function VideoTechnical({ video, metadata, loading }: VideoTechnicalProps) {
   // Build metadata-dependent technical details (YouTube ID always shown first)
   const metaTechDetails: DetailRowProps[] = [];
   const availableResolutions = metadata?.availableResolutions ?? null;
+  // Derived with the same mapping the listing chips use, so modal and chips
+  // always agree on the tier label.
+  const downloadedTier = tierFromDimensions(metadata?.width, metadata?.height);
 
   if (!loading) {
     if (video.isDownloaded && metadata?.height) {
       const downloadRes = formatDownloadedResolution(
         metadata.width,
         metadata.height,
-        metadata.downloadedTier
+        downloadedTier
       );
       if (downloadRes) {
         metaTechDetails.push({ label: 'Downloaded', value: downloadRes });
@@ -178,7 +185,7 @@ function VideoTechnical({ video, metadata, loading }: VideoTechnicalProps) {
                   {availableResolutions.map((h) => {
                     // Match by tier when available (handles non-16:9 videos correctly),
                     // fall back to raw height for backward-compatible info.json files.
-                    const downloadedMarker = metadata?.downloadedTier ?? metadata?.height ?? null;
+                    const downloadedMarker = downloadedTier ?? metadata?.height ?? null;
                     const isDownloaded = video.isDownloaded && downloadedMarker === h;
                     return (
                       <Chip

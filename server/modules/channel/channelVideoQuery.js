@@ -33,7 +33,8 @@ class ChannelVideoQuery {
         'normalized_rating',
         'rating_source',
         'protected',
-        'last_downloaded_at'
+        'last_downloaded_at',
+        'video_resolution'
       ]
     });
 
@@ -52,7 +53,8 @@ class ChannelVideoQuery {
         audioFileSize: v.audioFileSize,
         normalized_rating: v.normalized_rating,
         protected: v.protected,
-        last_downloaded_at: v.last_downloaded_at
+        last_downloaded_at: v.last_downloaded_at,
+        video_resolution: v.video_resolution
       });
 
       // Collect videos that need file checking (only if checkFiles is true and have any file path)
@@ -107,6 +109,7 @@ class ChannelVideoQuery {
         }
         plainVideoObject.id = status.id;
         plainVideoObject.protected = status.protected;
+        plainVideoObject.video_resolution = status.video_resolution ?? null;
         plainVideoObject.timeCreated = status.last_downloaded_at
           ? new Date(status.last_downloaded_at).toISOString()
           : null;
@@ -120,6 +123,7 @@ class ChannelVideoQuery {
         plainVideoObject.audioFilePath = null;
         plainVideoObject.audioFileSize = null;
         plainVideoObject.protected = false;
+        plainVideoObject.video_resolution = null;
         plainVideoObject.watchedBy = [];
       }
 

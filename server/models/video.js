@@ -106,6 +106,12 @@ Video.init(
       allowNull: false,
       defaultValue: false,
     },
+    video_resolution: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+      defaultValue: null,
+      comment: 'Actual downloaded pixel dimensions, e.g. "1920x1080"; "0x0" = probe failed',
+    },
   },
   {
     sequelize,

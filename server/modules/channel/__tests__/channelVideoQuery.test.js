@@ -48,7 +48,7 @@ describe('channelVideoQuery', () => {
         where: {
           youtubeId: ['video1', 'video2', 'video3']
         },
-        attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at']
+        attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at', 'video_resolution']
       });
       expect(result[0].added).toBe(true);
       expect(result[0].removed).toBe(false);
@@ -56,6 +56,24 @@ describe('channelVideoQuery', () => {
       expect(result[1].removed).toBe(true);
       expect(result[2].added).toBe(false);
       expect(result[2].removed).toBe(false);
+    });
+
+    test('carries video_resolution from the Videos row onto the enriched video', async () => {
+      const Video = require('../../../models/video');
+
+      const videos = [
+        { youtube_id: 'video1' },
+        { youtube_id: 'video2' }
+      ];
+
+      Video.findAll = jest.fn().mockResolvedValue([
+        { id: 7, youtubeId: 'video1', removed: false, video_resolution: '1920x1080' }
+      ]);
+
+      const result = await channelVideoQuery.enrichVideosWithDownloadStatus(videos);
+
+      expect(result[0].video_resolution).toBe('1920x1080');
+      expect(result[1].video_resolution).toBeNull();
     });
 
     test('should handle plain objects without toJSON', async () => {
@@ -77,7 +95,7 @@ describe('channelVideoQuery', () => {
         where: {
           youtubeId: ['video1', 'video2']
         },
-        attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at']
+        attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at', 'video_resolution']
       });
       expect(result[0].added).toBe(true);
       expect(result[0].removed).toBe(false);
@@ -134,7 +152,7 @@ describe('channelVideoQuery', () => {
         where: {
           youtubeId: ['video1', 'video2']
         },
-        attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at']
+        attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at', 'video_resolution']
       });
       expect(result[0].added).toBe(true);
       expect(result[0].removed).toBe(false);
@@ -163,7 +181,7 @@ describe('channelVideoQuery', () => {
         where: {
           youtubeId: ['video1', 'video2', 'video3']
         },
-        attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at']
+        attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at', 'video_resolution']
       });
 
       // Video1 - not downloaded
@@ -191,7 +209,7 @@ describe('channelVideoQuery', () => {
         where: {
           youtubeId: []
         },
-        attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at']
+        attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at', 'video_resolution']
       });
       expect(result).toEqual([]);
     });
@@ -358,7 +376,7 @@ describe('channelVideoQuery', () => {
         where: {
           youtubeId: ['video1', 'video2']
         },
-        attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at']
+        attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at', 'video_resolution']
       });
       expect(result[0].added).toBe(true);
       expect(result[0].removed).toBe(false);

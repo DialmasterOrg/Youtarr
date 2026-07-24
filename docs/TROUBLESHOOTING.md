@@ -128,7 +128,7 @@ See [Authentication - Cannot Find the Setup Token](AUTHENTICATION.md#cannot-find
 
 **Problem**: After moving downloaded files to a new location, renaming a folder, or restoring from backup, videos display with a cloud-off icon as if they were deleted.
 
-**Solution**: Open **Settings -> Maintenance** and click **Rescan files on disk**. Youtarr walks the downloads folder, matches files by the `[<youtube-id>]` segment in each filename, and updates the stored paths and "missing" flags. The same scan also runs daily on a schedule and at server startup.
+**Solution**: Open **Settings -> Maintenance & Rescan** and click **Rescan files on disk**. Youtarr walks the downloads folder, matches files by the `[<youtube-id>]` segment in each filename, and updates the stored paths and "missing" flags. The same scan also runs daily on a schedule and at server startup.
 
 The rescan recognizes `.mp4`, `.webm`, `.mkv`, `.m4v`, `.avi`, and `.mp3`. Files that no longer have the `[<youtube-id>]` segment in their name (for example, if you renamed `Channel - Video [abc123XYZ01].mp4` to `My Movie.mp4`) cannot be matched and will continue to show as missing.
 
@@ -136,7 +136,7 @@ The rescan recognizes `.mp4`, `.webm`, `.mkv`, `.m4v`, `.avi`, and `.mp3`. Files
 
 **Problem**: You used ffmpeg or another tool to convert downloaded `.mp4` videos to `.mkv` (or another container), and Youtarr now lists those videos as missing.
 
-**Solution**: Run **Settings -> Maintenance -> Rescan files on disk**. As long as the converted file kept the original `[<youtube-id>]` segment in its filename and uses one of the supported extensions (`.mp4`, `.webm`, `.mkv`, `.m4v`, `.avi`, `.mp3`), Youtarr will detect the new file, update the stored path, and clear the "missing" flag. See [Rescan Files on Disk](USAGE_GUIDE.md#rescan-files-on-disk) for full details on supported formats and limitations.
+**Solution**: Run **Settings -> Maintenance & Rescan -> Rescan files on disk**. As long as the converted file kept the original `[<youtube-id>]` segment in its filename and uses one of the supported extensions (`.mp4`, `.webm`, `.mkv`, `.m4v`, `.avi`, `.mp3`), Youtarr will detect the new file, update the stored path, and clear the "missing" flag. See [Rescan Files on Disk](USAGE_GUIDE.md#rescan-files-on-disk) for full details on supported formats and limitations.
 
 ### Video Downloads Fine but Never Appears in Plex (Windows Path Length)
 
@@ -146,7 +146,7 @@ The rescan recognizes `.mp4`, `.webm`, `.mkv`, `.m4v`, `.avi`, and `.mp3`. Files
 
 **Diagnosis**: Measure the full path as Plex sees it (drive letter through `.mp4`). At 260 characters or more, this is your problem.
 
-**Solution**: Shorten the video's folder and file names on disk, keeping the `[<youtube-id>]` segment in the filename. Then run **Settings -> Maintenance -> Rescan files on disk** so Youtarr picks up the new path, let Plex scan the library, and (for playlists) run **Sync now**. To prevent recurrence, shorten the filename template under **Settings -> Core Settings -> Video Filename Template**: reduce the title truncation to the current recommended `%(title).64B` (or smaller), or use a preset without the channel-name prefix; see [Video Filename Template](CONFIG.md#video-filename-template). Only new downloads are affected; existing files keep their names.
+**Solution**: Shorten the video's folder and file names on disk, keeping the `[<youtube-id>]` segment in the filename. Then run **Settings -> Maintenance & Rescan -> Rescan files on disk** so Youtarr picks up the new path, let Plex scan the library, and (for playlists) run **Sync now**. To prevent recurrence, shorten the filename template under **Settings -> Core Settings -> Video Filename Template**: reduce the title truncation to the current recommended `%(title).64B` (or smaller), or use a preset without the channel-name prefix; see [Video Filename Template](CONFIG.md#video-filename-template). Only new downloads are affected; existing files keep their names.
 
 ## Docker Issues
 
