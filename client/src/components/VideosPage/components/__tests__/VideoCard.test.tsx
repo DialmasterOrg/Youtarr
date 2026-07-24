@@ -111,9 +111,11 @@ describe('VideoCard', () => {
     expect(onToggleSelect).toHaveBeenCalledWith(1);
   });
 
-  test('omits selection checkbox when video is removed', () => {
-    renderCard({ video: { ...baseVideo, removed: true } });
-    expect(screen.queryByRole('checkbox', { name: /Select Test Video/ })).not.toBeInTheDocument();
+  test('renders selection checkbox when video is removed', () => {
+    const { onToggleSelect } = renderCard({ video: { ...baseVideo, removed: true } });
+    const checkbox = screen.getByRole('checkbox', { name: /Select Test Video/ });
+    fireEvent.click(checkbox);
+    expect(onToggleSelect).toHaveBeenCalledWith(1);
   });
 
   test('shows Available chip for present files and Missing chip for removed', () => {

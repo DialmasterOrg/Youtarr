@@ -33,6 +33,47 @@ jest.mock('../../hooks/useConfig', () => ({
   })),
 }));
 
+const mockNavigate = jest.fn();
+jest.mock('react-router-dom', () => ({
+  ...jest.requireActual('react-router-dom'),
+  useNavigate: () => mockNavigate,
+}));
+
+const mockTriggerDownloads = jest.fn();
+jest.mock('../../hooks/useTriggerDownloads', () => ({
+  useTriggerDownloads: () => ({
+    triggerDownloads: mockTriggerDownloads,
+    loading: false,
+    error: null,
+  }),
+}));
+
+jest.mock('../DownloadManager/ManualDownload/DownloadSettingsDialog', () => ({
+  __esModule: true,
+  default: function MockDownloadSettingsDialog(props: any) {
+    const React = require('react');
+    if (!props.open) return null;
+    return React.createElement(
+      'div',
+      { 'data-testid': 'download-settings-dialog' },
+      React.createElement('div', { 'data-testid': 'download-video-count' }, String(props.videoCount ?? 0)),
+      React.createElement('div', { 'data-testid': 'download-missing-count' }, String(props.missingVideoCount ?? 0)),
+      React.createElement('div', { 'data-testid': 'download-replace-count' }, String(props.replaceVideoCount ?? 0)),
+      React.createElement('div', { 'data-testid': 'download-unavailable-count' }, String(props.unavailableVideoCount ?? 0)),
+      React.createElement(
+        'button',
+        { 'data-testid': 'download-dialog-confirm', onClick: () => props.onConfirm({ allowRedownload: true }) },
+        'Start Download'
+      ),
+      React.createElement(
+        'button',
+        { 'data-testid': 'download-dialog-close', onClick: props.onClose },
+        'Close'
+      )
+    );
+  },
+}));
+
 jest.mock('../shared/DeleteVideosDialog', () => ({
   __esModule: true,
   default: function MockDeleteVideosDialog(props: any) {
@@ -41,6 +82,7 @@ jest.mock('../shared/DeleteVideosDialog', () => ({
       'data-testid': 'delete-videos-dialog',
       'data-open': props.open,
       'data-video-count': props.videoCount,
+      'data-skipped-count': props.skippedCount,
     }, [
       React.createElement('button', {
         key: 'cancel',
@@ -384,6 +426,8 @@ describe('VideosPage Component', () => {
       loading: false,
       error: null
     });
+
+    mockTriggerDownloads.mockResolvedValue(true);
   });
 
   // Helper: force a particular view mode before rendering.
@@ -1118,13 +1162,13 @@ describe('VideosPage Component', () => {
         });
       });
 
-      test('select all checkbox selects all non-removed videos', async () => {
+      test('select all checkbox selects all videos including removed ones', async () => {
         const user = setupUser();
         const videosWithRemoved = [
           ...mockVideos,
           {
             id: 4,
-            youtubeId: 'removed123',
+            youtubeId: 'removed12345',
             youTubeChannelName: 'Test Channel',
             youTubeVideoName: 'Removed Video',
             timeCreated: '2024-01-15T10:30:00',
@@ -1148,9 +1192,8 @@ describe('VideosPage Component', () => {
 
         await user.click(selectAllCheckbox);
 
-        // Should show that 3 videos are selected (excluding the removed one)
         await waitFor(() => {
-          expect(screen.getByText(/3 videos selected/)).toBeInTheDocument();
+          expect(screen.getByText(/4 videos selected/)).toBeInTheDocument();
         });
       });
 
@@ -1267,7 +1310,8 @@ describe('VideosPage Component', () => {
         expect(dialog.getAttribute('data-video-count')).toBe('1');
       });
 
-      test('removed videos cannot be selected', async () => {
+      test('removed videos can be selected', async () => {
+        const user = setupUser();
         const removedVideo = {
           ...mockVideos[0],
           removed: true
@@ -1282,8 +1326,13 @@ describe('VideosPage Component', () => {
 
         const checkboxes = screen.getAllByRole('checkbox');
         const videoCheckbox = checkboxes[1]; // First video checkbox (after select all)
+        expect(videoCheckbox).toBeEnabled();
 
-        expect(videoCheckbox).toBeDisabled();
+        await user.click(videoCheckbox);
+
+        await waitFor(() => {
+          expect(screen.getByText(/1 video selected/)).toBeInTheDocument();
+        });
       });
     });
 
@@ -1641,6 +1690,231 @@ describe('VideosPage Component', () => {
         await waitFor(() => {
           expect(screen.getByText(/Failed to delete videos: Network error/)).toBeInTheDocument();
         });
+      });
+    });
+  });
+
+  describe('Bulk download', () => {
+    const CHANNEL_ID = 'UCabcdefghijklmnopqrstuv';
+    const downloadVideos: VideoData[] = [
+      {
+        id: 11,
+        youtubeId: 'missing0001',
+        youTubeChannelName: 'Tech Channel',
+        youTubeVideoName: 'Missing Video',
+        timeCreated: '2024-01-15T10:30:00',
+        originalDate: '20240110',
+        duration: 600,
+        description: null,
+        removed: true,
+        fileSize: null,
+        channel_id: CHANNEL_ID,
+      },
+      {
+        id: 12,
+        youtubeId: 'present0001',
+        youTubeChannelName: 'Tech Channel',
+        youTubeVideoName: 'Present Video',
+        timeCreated: '2024-01-14T10:30:00',
+        originalDate: '20240109',
+        duration: 600,
+        description: null,
+        removed: false,
+        fileSize: '1073741824',
+        channel_id: CHANNEL_ID,
+      },
+      {
+        id: 13,
+        youtubeId: 'gone0000001',
+        youTubeChannelName: 'Tech Channel',
+        youTubeVideoName: 'Gone Video',
+        timeCreated: '2024-01-13T10:30:00',
+        originalDate: '20240108',
+        duration: 600,
+        description: null,
+        removed: true,
+        youtube_removed: true,
+        fileSize: null,
+        channel_id: CHANNEL_ID,
+      },
+    ];
+
+    const selectByName = async (user: ReturnType<typeof setupUser>, name: string) => {
+      await user.click(screen.getByRole('checkbox', { name: `Select ${name}` }));
+    };
+
+    const renderWithDownloadVideos = async () => {
+      useTableView();
+      axios.get.mockResolvedValue({ data: mockPaginatedResponse(downloadVideos) });
+      render(<VideosPage token={mockToken} />);
+      await waitFor(() => {
+        expect(screen.getByText('Missing Video')).toBeInTheDocument();
+      });
+    };
+
+    test('download action opens the dialog with eligible, missing, replace and unavailable counts', async () => {
+      const user = setupUser();
+      await renderWithDownloadVideos();
+
+      await selectByName(user, 'Missing Video');
+      await selectByName(user, 'Present Video');
+      await selectByName(user, 'Gone Video');
+
+      await user.click(screen.getByRole('button', { name: 'Download' }));
+
+      expect(screen.getByTestId('download-settings-dialog')).toBeInTheDocument();
+      expect(screen.getByTestId('download-video-count')).toHaveTextContent('2');
+      expect(screen.getByTestId('download-missing-count')).toHaveTextContent('1');
+      expect(screen.getByTestId('download-replace-count')).toHaveTextContent('1');
+      expect(screen.getByTestId('download-unavailable-count')).toHaveTextContent('1');
+    });
+
+    test('confirming posts eligible urls with videoChannelMap, clears selection and navigates', async () => {
+      const user = setupUser();
+      await renderWithDownloadVideos();
+
+      await selectByName(user, 'Missing Video');
+      await selectByName(user, 'Present Video');
+      await selectByName(user, 'Gone Video');
+
+      await user.click(screen.getByRole('button', { name: 'Download' }));
+      await user.click(screen.getByTestId('download-dialog-confirm'));
+
+      await waitFor(() => {
+        expect(mockTriggerDownloads).toHaveBeenCalledWith({
+          urls: [
+            'https://www.youtube.com/watch?v=missing0001',
+            'https://www.youtube.com/watch?v=present0001',
+          ],
+          overrideSettings: {
+            resolution: undefined,
+            allowRedownload: true,
+            subfolder: undefined,
+            audioFormat: undefined,
+            rating: undefined,
+            skipVideoFolder: undefined,
+          },
+          videoChannelMap: {
+            missing0001: CHANNEL_ID,
+            present0001: CHANNEL_ID,
+          },
+        });
+      });
+      expect(mockNavigate).toHaveBeenCalledWith('/downloads/activity');
+      expect(screen.queryByText(/videos selected/)).not.toBeInTheDocument();
+    });
+
+    test('videos without a valid channel id are downloaded but omitted from videoChannelMap', async () => {
+      const user = setupUser();
+      useTableView();
+      axios.get.mockResolvedValue({
+        data: mockPaginatedResponse([
+          { ...downloadVideos[0], channel_id: null },
+        ]),
+      });
+      render(<VideosPage token={mockToken} />);
+      await waitFor(() => {
+        expect(screen.getByText('Missing Video')).toBeInTheDocument();
+      });
+
+      await selectByName(user, 'Missing Video');
+      await user.click(screen.getByRole('button', { name: 'Download' }));
+      await user.click(screen.getByTestId('download-dialog-confirm'));
+
+      await waitFor(() => {
+        expect(mockTriggerDownloads).toHaveBeenCalledWith(
+          expect.objectContaining({
+            urls: ['https://www.youtube.com/watch?v=missing0001'],
+            videoChannelMap: {},
+          })
+        );
+      });
+    });
+
+    test('Download is disabled when only videos gone from YouTube are selected', async () => {
+      const user = setupUser();
+      await renderWithDownloadVideos();
+
+      await selectByName(user, 'Gone Video');
+
+      expect(screen.getByRole('button', { name: 'Download' })).toBeDisabled();
+    });
+
+    test('Delete stays enabled for a mixed selection and Rating stays enabled', async () => {
+      const user = setupUser();
+      await renderWithDownloadVideos();
+
+      await selectByName(user, 'Missing Video');
+      await selectByName(user, 'Present Video');
+
+      expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Rating' })).toBeEnabled();
+    });
+
+    test('Delete is disabled when only missing videos are selected', async () => {
+      const user = setupUser();
+      await renderWithDownloadVideos();
+
+      await selectByName(user, 'Missing Video');
+      await selectByName(user, 'Gone Video');
+
+      expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled();
+    });
+
+    test('Delete stays enabled when only present videos are selected', async () => {
+      const user = setupUser();
+      await renderWithDownloadVideos();
+
+      await selectByName(user, 'Present Video');
+
+      expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled();
+    });
+
+    test('shows an error and keeps selection when the trigger fails', async () => {
+      const user = setupUser();
+      mockTriggerDownloads.mockResolvedValue(false);
+      await renderWithDownloadVideos();
+
+      await selectByName(user, 'Missing Video');
+      await user.click(screen.getByRole('button', { name: 'Download' }));
+      await user.click(screen.getByTestId('download-dialog-confirm'));
+
+      await waitFor(() => {
+        expect(
+          screen.getByText('Failed to queue selected videos for download. Please try again.')
+        ).toBeInTheDocument();
+      });
+      expect(mockNavigate).not.toHaveBeenCalled();
+      expect(screen.getByText(/1 video selected/)).toBeInTheDocument();
+    });
+
+    test('delete dialog shows deletable count and skipped count for a mixed selection', async () => {
+      const user = setupUser();
+      await renderWithDownloadVideos();
+
+      await selectByName(user, 'Missing Video');
+      await selectByName(user, 'Present Video');
+
+      await user.click(screen.getByRole('button', { name: 'Delete' }));
+
+      const dialog = screen.getByTestId('delete-videos-dialog');
+      expect(dialog.getAttribute('data-video-count')).toBe('1');
+      expect(dialog.getAttribute('data-skipped-count')).toBe('1');
+    });
+
+    test('confirming deletion passes only on-disk video ids to deleteVideos', async () => {
+      const user = setupUser();
+      mockDeleteVideos.mockResolvedValue({ success: true, deleted: [12], failed: [] });
+      await renderWithDownloadVideos();
+
+      await selectByName(user, 'Missing Video');
+      await selectByName(user, 'Present Video');
+
+      await user.click(screen.getByRole('button', { name: 'Delete' }));
+      await user.click(screen.getByTestId('dialog-confirm'));
+
+      await waitFor(() => {
+        expect(mockDeleteVideos).toHaveBeenCalledWith([12], mockToken);
       });
     });
   });

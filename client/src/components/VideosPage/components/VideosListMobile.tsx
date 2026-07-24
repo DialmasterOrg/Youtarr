@@ -55,7 +55,6 @@ function VideosListMobile({
   return (
     <Box>
       {videos.map((video) => {
-        const isSelectable = !video.removed;
         const isSelected = selectedVideos.includes(video.id);
         const channelId = getEnabledChannelId(
           video.youTubeChannelName,
@@ -72,13 +71,11 @@ function VideosListMobile({
         return (
           <Box
             key={video.id}
-            role={isSelectable ? 'button' : undefined}
-            tabIndex={isSelectable ? 0 : undefined}
-            onClick={() => {
-              if (isSelectable) onToggleSelect(video.id);
-            }}
+            role="button"
+            tabIndex={0}
+            onClick={() => onToggleSelect(video.id)}
             onKeyDown={(event) => {
-              if (isSelectable && (event.key === 'Enter' || event.key === ' ')) {
+              if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
                 onToggleSelect(video.id);
               }
@@ -88,7 +85,7 @@ function VideosListMobile({
               gap: 10,
               padding: '10px 4px',
               borderBottom: '1px solid var(--border)',
-              cursor: isSelectable ? 'pointer' : 'default',
+              cursor: 'pointer',
               backgroundColor: isSelected ? 'var(--muted)' : undefined,
               transition: 'background-color 0.15s ease',
               alignItems: 'flex-start',
@@ -201,26 +198,24 @@ function VideosListMobile({
                   }}
                 />
               ) : null}
-              {isSelectable && (
-                <Checkbox
-                  checked={isSelected}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(event) => {
-                    event.stopPropagation();
-                    onToggleSelect(video.id);
-                  }}
-                  inputProps={{ 'aria-label': `Select ${video.youTubeVideoName}` }}
-                  style={{
-                    position: 'absolute',
-                    top: 2,
-                    left: 2,
-                    padding: 2,
-                    backgroundColor: 'var(--media-overlay-background)',
-                    color: 'var(--media-overlay-foreground)',
-                    zIndex: 3,
-                  }}
-                />
-              )}
+              <Checkbox
+                checked={isSelected}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(event) => {
+                  event.stopPropagation();
+                  onToggleSelect(video.id);
+                }}
+                inputProps={{ 'aria-label': `Select ${video.youTubeVideoName}` }}
+                style={{
+                  position: 'absolute',
+                  top: 2,
+                  left: 2,
+                  padding: 2,
+                  backgroundColor: 'var(--media-overlay-background)',
+                  color: 'var(--media-overlay-foreground)',
+                  zIndex: 3,
+                }}
+              />
               {!video.removed && (
                 <ProtectionShieldButton
                   isProtected={video.protected || false}

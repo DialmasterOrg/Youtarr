@@ -52,6 +52,10 @@ interface DownloadSettingsDialogProps {
   onConfirm: (settings: DownloadSettings | null) => void;
   videoCount?: number; // For manual downloads
   missingVideoCount?: number; // Number of videos that were previously downloaded but are now missing
+  // Number of selected videos whose file exists on disk and will be overwritten
+  replaceVideoCount?: number;
+  // Number of selected videos excluded because they are no longer on YouTube
+  unavailableVideoCount?: number;
   defaultResolution?: string;
   defaultVideoCount?: number; // For channel downloads
   mode?: 'manual' | 'channel'; // To differentiate between modes
@@ -70,6 +74,8 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   onConfirm,
   videoCount,
   missingVideoCount = 0,
+  replaceVideoCount = 0,
+  unavailableVideoCount = 0,
   defaultResolution = '1080',
   defaultVideoCount = 3,
   mode = 'manual',
@@ -136,14 +142,14 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
       setChannelVideoCount(defaultVideoCount);
       setAudioFormat(null);
       // Open the custom section too so the user can see the re-download toggle is on.
-      if (missingVideoCount > 0 && !hideRedownloadOption) {
+      if ((missingVideoCount > 0 || replaceVideoCount > 0) && !hideRedownloadOption) {
         setAllowRedownload(true);
         setUseCustomSettings(true);
       } else {
         setAllowRedownload(false);
       }
     }
-  }, [open, hasUserInteracted, mode, missingVideoCount, defaultVideoCount, hideRedownloadOption]);
+  }, [open, hasUserInteracted, mode, missingVideoCount, replaceVideoCount, defaultVideoCount, hideRedownloadOption]);
 
   useEffect(() => {
     if (!open) {
@@ -293,6 +299,26 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                     ? 'Re-downloading 1 previously downloaded video.'
                     : `Re-downloading ${missingVideoCount} previously downloaded videos.`
                 )}
+              </Typography>
+            </Alert>
+          )}
+
+          {replaceVideoCount > 0 && (
+            <Alert severity="warning" className="mb-4">
+              <Typography variant="body2">
+                {replaceVideoCount === 1
+                  ? '1 video already exists on disk and will be re-downloaded and replaced.'
+                  : `${replaceVideoCount} videos already exist on disk and will be re-downloaded and replaced.`}
+              </Typography>
+            </Alert>
+          )}
+
+          {unavailableVideoCount > 0 && (
+            <Alert severity="info" className="mb-4">
+              <Typography variant="body2">
+                {unavailableVideoCount === 1
+                  ? '1 selected video is no longer available on YouTube and will be skipped.'
+                  : `${unavailableVideoCount} selected videos are no longer available on YouTube and will be skipped.`}
               </Typography>
             </Alert>
           )}

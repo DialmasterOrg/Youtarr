@@ -18,13 +18,16 @@ interface DeleteVideosDialogProps {
   onClose: () => void;
   onConfirm: () => void;
   videoCount: number;
+  // Selected videos excluded from deletion because their file is already missing
+  skippedCount?: number;
 }
 
 const DeleteVideosDialog: React.FC<DeleteVideosDialogProps> = ({
   open,
   onClose,
   onConfirm,
-  videoCount
+  videoCount,
+  skippedCount = 0
 }) => {
   return (
     <Dialog
@@ -33,9 +36,11 @@ const DeleteVideosDialog: React.FC<DeleteVideosDialogProps> = ({
       maxWidth="sm"
       fullWidth
     >
-      <DialogTitle style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <WarningIcon size={20} data-testid="WarningIcon" />
-        Confirm Video Deletion
+      <DialogTitle>
+        <span className="flex items-center gap-2">
+          <WarningIcon size={20} data-testid="WarningIcon" />
+          Confirm Video Deletion
+        </span>
       </DialogTitle>
 
       <DialogContent>
@@ -45,6 +50,16 @@ const DeleteVideosDialog: React.FC<DeleteVideosDialogProps> = ({
               You are about to permanently delete {videoCount} {videoCount === 1 ? 'video' : 'videos'} from disk.
             </Typography>
           </Alert>
+
+          {skippedCount > 0 && (
+            <Alert severity="info" style={{ marginBottom: 16 }}>
+              <Typography variant="body2">
+                {skippedCount === 1
+                  ? '1 selected video will not be affected because its file is already missing from disk.'
+                  : `${skippedCount} selected videos will not be affected because their files are already missing from disk.`}
+              </Typography>
+            </Alert>
+          )}
 
           <Typography variant="body2" color="text.secondary" style={{ marginBottom: 16 }}>
             This action will:

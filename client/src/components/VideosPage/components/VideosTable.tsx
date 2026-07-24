@@ -69,12 +69,10 @@ function VideosTable({
   onImageError,
   onAddChannel,
 }: VideosTableProps) {
-  const selectableVideos = videos.filter((v) => !v.removed);
-  const selectableIds = selectableVideos.map((v) => v.id);
-  const allSelectableSelected =
-    selectableIds.length > 0 && selectableIds.every((id) => selectedVideos.includes(id));
-  const someSelectableSelected =
-    !allSelectableSelected && selectableIds.some((id) => selectedVideos.includes(id));
+  const allIds = videos.map((v) => v.id);
+  const allSelected =
+    allIds.length > 0 && allIds.every((id) => selectedVideos.includes(id));
+  const someSelected = !allSelected && allIds.some((id) => selectedVideos.includes(id));
 
   return (
     <Paper style={{ overflow: 'hidden' }}>
@@ -84,8 +82,8 @@ function VideosTable({
             <TableRow>
               <TableCell component="th" style={{ width: 48 }}>
                 <Checkbox
-                  indeterminate={someSelectableSelected}
-                  checked={allSelectableSelected}
+                  indeterminate={someSelected}
+                  checked={allSelected}
                   onChange={(event) => onSelectAll(event.target.checked)}
                   inputProps={{ 'aria-label': 'Select all videos' }}
                 />
@@ -120,7 +118,6 @@ function VideosTable({
           </TableHead>
           <TableBody>
             {videos.map((video) => {
-              const isSelectable = !video.removed;
               const isSelected = selectedVideos.includes(video.id);
               const channelId = getEnabledChannelId(
                 video.youTubeChannelName,
@@ -139,18 +136,15 @@ function VideosTable({
                   key={video.id}
                   hover
                   style={{
-                    cursor: isSelectable ? 'pointer' : 'default',
+                    cursor: 'pointer',
                     backgroundColor: isSelected ? 'var(--muted)' : undefined,
                     transition: 'background-color 0.15s ease',
                   }}
-                  onClick={() => {
-                    if (isSelectable) onToggleSelect(video.id);
-                  }}
+                  onClick={() => onToggleSelect(video.id)}
                 >
                   <TableCell>
                     <Checkbox
                       checked={isSelected}
-                      disabled={!isSelectable}
                       onClick={(e) => e.stopPropagation()}
                       onChange={() => onToggleSelect(video.id)}
                       inputProps={{ 'aria-label': `Select ${video.youTubeVideoName}` }}
