@@ -557,7 +557,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
         </Box>
       </DialogContent>
 
-      <DialogActions className="px-6 pb-4">
+      <DialogActions>
         <Button onClick={handleCancel} color="inherit">
           Cancel
         </Button>

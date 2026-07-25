@@ -37,22 +37,25 @@ const DeleteVideosDialog: React.FC<DeleteVideosDialogProps> = ({
       fullWidth
     >
       <DialogTitle>
-        <span className="flex items-center gap-2">
-          <WarningIcon size={20} data-testid="WarningIcon" />
-          Confirm Video Deletion
-        </span>
+        <WarningIcon
+          size={20}
+          color="var(--warning)"
+          className="shrink-0"
+          data-testid="WarningIcon"
+        />
+        Confirm Video Deletion
       </DialogTitle>
 
       <DialogContent>
-        <div style={{ paddingTop: 8 }}>
-          <Alert severity="warning" style={{ marginBottom: 16 }}>
+        <div className="space-y-4">
+          <Alert severity="warning">
             <Typography variant="body2">
               You are about to permanently delete {videoCount} {videoCount === 1 ? 'video' : 'videos'} from disk.
             </Typography>
           </Alert>
 
           {skippedCount > 0 && (
-            <Alert severity="info" style={{ marginBottom: 16 }}>
+            <Alert severity="info">
               <Typography variant="body2">
                 {skippedCount === 1
                   ? '1 selected video will not be affected because its file is already missing from disk.'
@@ -61,23 +64,25 @@ const DeleteVideosDialog: React.FC<DeleteVideosDialogProps> = ({
             </Alert>
           )}
 
-          <Typography variant="body2" color="text.secondary" style={{ marginBottom: 16 }}>
-            This action will:
-          </Typography>
-          <ul style={{ marginLeft: 16, marginBottom: 16 }}>
-            <Typography component="li" variant="body2" color="text.secondary">
-              Remove the video {videoCount === 1 ? 'file' : 'files'} and associated metadata from your disk
+          <div>
+            <Typography variant="body2" color="text.secondary" className="mb-2">
+              This action will:
             </Typography>
-            <Typography component="li" variant="body2" color="text.secondary">
-              Mark the {videoCount === 1 ? 'video' : 'videos'} as removed in the database
-            </Typography>
-            <Typography component="li" variant="body2" color="text.secondary">
-              Free up storage space on your system
-            </Typography>
-          </ul>
+            <ul className="list-disc pl-5 space-y-1.5">
+              <Typography component="li" variant="body2" color="text.secondary">
+                Remove the video {videoCount === 1 ? 'file' : 'files'} and associated metadata from your disk
+              </Typography>
+              <Typography component="li" variant="body2" color="text.secondary">
+                Mark the {videoCount === 1 ? 'video' : 'videos'} as removed in the database
+              </Typography>
+              <Typography component="li" variant="body2" color="text.secondary">
+                Free up storage space on your system
+              </Typography>
+            </ul>
+          </div>
 
-          <Alert severity="error" style={{ marginBottom: 8 }}>
-            <Typography variant="body2" style={{ fontWeight: 'bold' }}>
+          <Alert severity="error">
+            <Typography variant="body2" className="font-bold">
               This action cannot be undone!
             </Typography>
           </Alert>
@@ -88,7 +93,7 @@ const DeleteVideosDialog: React.FC<DeleteVideosDialogProps> = ({
         </div>
       </DialogContent>
 
-      <DialogActions style={{ paddingLeft: 24, paddingRight: 24, paddingBottom: 16 }}>
+      <DialogActions>
         <Button
           onClick={onClose}
           variant="contained"

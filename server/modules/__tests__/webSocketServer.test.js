@@ -1,7 +1,8 @@
 /* eslint-env jest */
 
 const mockServerInstance = {
-  on: jest.fn()
+  on: jest.fn(),
+  clients: new Set()
 };
 
 const mockServerConstructor = jest.fn(() => mockServerInstance);
@@ -24,6 +25,7 @@ const logger = require('../../logger');
 describe('webSocketServer', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockServerInstance.clients.clear();
     delete global.wss;
   });
 
@@ -117,5 +119,93 @@ describe('webSocketServer', () => {
     closeHandler();
 
     expect(logger.debug).toHaveBeenCalledWith('WebSocket client disconnected');
+  });
+
+  describe('heartbeat', () => {
+    const HEARTBEAT_INTERVAL_MS = 30 * 1000;
+
+    const createClient = () => ({
+      readyState: 1,
+      send: jest.fn(),
+      on: jest.fn(),
+      ping: jest.fn(),
+      terminate: jest.fn()
+    });
+
+    const connectClient = (wsClient) => {
+      const [, connectionHandler] = mockServerInstance.on.mock.calls.find(
+        ([eventName]) => eventName === 'connection'
+      );
+      mockServerInstance.clients.add(wsClient);
+      connectionHandler(wsClient);
+    };
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+      mockGetLastMessages.mockReturnValue([]);
+    });
+
+    afterEach(() => {
+      jest.clearAllTimers();
+      jest.useRealTimers();
+    });
+
+    test('pings connected clients on the heartbeat interval', () => {
+      initializeWebSocketServer({});
+      const wsClient = createClient();
+      connectClient(wsClient);
+
+      jest.advanceTimersByTime(HEARTBEAT_INTERVAL_MS);
+
+      expect(wsClient.ping).toHaveBeenCalledTimes(1);
+      expect(wsClient.terminate).not.toHaveBeenCalled();
+    });
+
+    test('terminates clients that never answer a ping', () => {
+      initializeWebSocketServer({});
+      const wsClient = createClient();
+      connectClient(wsClient);
+
+      jest.advanceTimersByTime(HEARTBEAT_INTERVAL_MS);
+      jest.advanceTimersByTime(HEARTBEAT_INTERVAL_MS);
+
+      expect(wsClient.terminate).toHaveBeenCalledTimes(1);
+    });
+
+    test('keeps clients that answer pings alive', () => {
+      initializeWebSocketServer({});
+      const wsClient = createClient();
+      connectClient(wsClient);
+
+      const pongCall = wsClient.on.mock.calls.find(
+        ([eventName]) => eventName === 'pong'
+      );
+      expect(pongCall).toBeDefined();
+      const [, pongHandler] = pongCall;
+
+      jest.advanceTimersByTime(HEARTBEAT_INTERVAL_MS);
+      pongHandler();
+      jest.advanceTimersByTime(HEARTBEAT_INTERVAL_MS);
+
+      expect(wsClient.terminate).not.toHaveBeenCalled();
+      expect(wsClient.ping).toHaveBeenCalledTimes(2);
+    });
+
+    test('stops the heartbeat when the server closes', () => {
+      initializeWebSocketServer({});
+      const wsClient = createClient();
+      connectClient(wsClient);
+
+      const serverCloseCall = mockServerInstance.on.mock.calls.find(
+        ([eventName]) => eventName === 'close'
+      );
+      expect(serverCloseCall).toBeDefined();
+      const [, serverCloseHandler] = serverCloseCall;
+
+      serverCloseHandler();
+      jest.advanceTimersByTime(HEARTBEAT_INTERVAL_MS * 2);
+
+      expect(wsClient.ping).not.toHaveBeenCalled();
+    });
   });
 });

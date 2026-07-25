@@ -10,7 +10,7 @@ const pendingJobs: Job[] = [
   {
     id: 'job-1',
     jobType: 'Channel Downloads',
-    status: 'Queued',
+    status: 'Pending',
     output: 'Queued',
     timeCreated: Date.now() - 1000 * 60 * 2,
     timeInitiated: Date.now() - 1000 * 60 * 2,
@@ -48,7 +48,7 @@ const meta: Meta<typeof DownloadProgress> = {
     );
   },
   args: {
-    pendingJobs,
+    jobs: pendingJobs,
     token: 'storybook-token',
   },
 };

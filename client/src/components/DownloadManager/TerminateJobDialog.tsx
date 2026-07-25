@@ -28,38 +28,45 @@ const TerminateJobDialog: React.FC<TerminateJobDialogProps> = ({
       maxWidth="sm"
       fullWidth
     >
-      <DialogTitle style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <WarningIcon size={20} color="var(--warning)" data-testid="WarningIcon" />
+      <DialogTitle>
+        <WarningIcon
+          size={20}
+          color="var(--warning)"
+          className="shrink-0"
+          data-testid="WarningIcon"
+        />
         Confirm Download Termination
       </DialogTitle>
 
       <DialogContent>
-        <div style={{ paddingTop: 8 }}>
-          <Alert severity="warning" style={{ marginBottom: 16 }}>
+        <div className="space-y-4">
+          <Alert severity="warning">
             <Typography variant="body2">
               You are about to terminate the currently running download job.
             </Typography>
           </Alert>
 
-          <Typography variant="body2" color="text.secondary" style={{ marginBottom: 16 }}>
-            This action will:
-          </Typography>
-          <ul style={{ marginLeft: 16, marginBottom: 16 }}>
-            <Typography component="li" variant="body2" color="text.secondary">
-              Stop the current download, terminating the download currently in progress.
+          <div>
+            <Typography variant="body2" color="text.secondary" className="mb-2">
+              This action will:
             </Typography>
-            <Typography component="li" variant="body2" color="text.secondary">
-              Save all videos that have already been downloaded
-            </Typography>
-            <Typography component="li" variant="body2" color="text.secondary">
-              Clean up the partial video download in progress
-            </Typography>
-            <Typography component="li" variant="body2" color="text.secondary">
-              NOT affect any queued jobs (they will continue after this one)
-            </Typography>
-          </ul>
+            <ul className="list-disc pl-5 space-y-1.5">
+              <Typography component="li" variant="body2" color="text.secondary">
+                Stop the entire running job, including the video currently downloading - no further videos from this job will be downloaded
+              </Typography>
+              <Typography component="li" variant="body2" color="text.secondary">
+                Save all videos that have already been downloaded
+              </Typography>
+              <Typography component="li" variant="body2" color="text.secondary">
+                Clean up the partial video download in progress
+              </Typography>
+              <Typography component="li" variant="body2" color="text.secondary">
+                NOT affect any queued jobs (they will continue after this one)
+              </Typography>
+            </ul>
+          </div>
 
-          <Alert severity="info" style={{ marginBottom: 8 }}>
+          <Alert severity="info">
             <Typography variant="body2">
               The job will show as &quot;Terminated&quot; in your download history with a list of completed videos.
             </Typography>
@@ -67,7 +74,7 @@ const TerminateJobDialog: React.FC<TerminateJobDialogProps> = ({
         </div>
       </DialogContent>
 
-      <DialogActions style={{ padding: '0 24px 16px' }}>
+      <DialogActions>
         <Button
           onClick={onClose}
           variant="contained"

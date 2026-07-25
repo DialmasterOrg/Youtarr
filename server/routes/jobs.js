@@ -92,6 +92,55 @@ module.exports = function createJobRoutes({ verifyToken, jobModule, downloadModu
 
   /**
    * @swagger
+   * /api/jobs/current-activity:
+   *   get:
+   *     summary: Get current download activity
+   *     description: >
+   *       Snapshot of the current (or most recent) download run for the
+   *       activity page. Combines the live progress monitor state with the
+   *       last stored final-state message so a freshly-opened page can render
+   *       immediately without waiting for a WebSocket broadcast.
+   *     tags: [Jobs]
+   *     responses:
+   *       200:
+   *         description: Current activity snapshot
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 jobId:
+   *                   type: string
+   *                   nullable: true
+   *                 capturedAt:
+   *                   type: number
+   *                   nullable: true
+   *                   description: Epoch ms of the monitor's last activity
+   *                 terminal:
+   *                   type: boolean
+   *                   description: True when yt-dlp is not currently running
+   *                 activity:
+   *                   type: object
+   *                   nullable: true
+   *                   description: Structured progress payload (same shape as downloadProgress broadcasts)
+   *                 lastFinalActivity:
+   *                   type: object
+   *                   nullable: true
+   *                   description: Last stored final-state downloadProgress payload, if any
+   *       500:
+   *         description: Failed to get current download activity
+   */
+  router.get('/api/jobs/current-activity', verifyToken, (req, res) => {
+    try {
+      res.json(downloadModule.getCurrentActivitySnapshot());
+    } catch (error) {
+      req.log.error({ err: error }, 'Failed to get current download activity');
+      res.status(500).json({ error: 'Failed to get current download activity' });
+    }
+  });
+
+  /**
+   * @swagger
    * /api/jobs/terminate:
    *   post:
    *     summary: Terminate current job

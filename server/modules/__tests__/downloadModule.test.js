@@ -51,6 +51,11 @@ jest.mock('../../logger', () => ({
 jest.mock('uuid', () => ({
   v4: jest.fn(() => 'test-uuid-123')
 }));
+jest.mock('../messageEmitter', () => ({
+  emitMessage: jest.fn(),
+  getLastMessages: jest.fn(() => []),
+  getLastFinalActivity: jest.fn(() => null)
+}));
 
 const fs = require('fs');
 
@@ -2493,6 +2498,43 @@ describe('DownloadModule', () => {
 
       // Verify it updated the module's config
       expect(freshDownloadModule.config).toEqual(newConfig);
+    });
+  });
+
+  describe('getCurrentActivitySnapshot', () => {
+    it('returns the executor snapshot with the last final activity attached', () => {
+      mockDownloadExecutor.getActivitySnapshot = jest.fn().mockReturnValue({
+        jobId: 'job-9',
+        capturedAt: 111,
+        terminal: false,
+        activity: { state: 'downloading_video' }
+      });
+      const messageEmitterMock = require('../messageEmitter');
+      messageEmitterMock.getLastFinalActivity.mockReturnValue({
+        finalSummary: { totalDownloaded: 2 }
+      });
+
+      expect(downloadModule.getCurrentActivitySnapshot()).toEqual({
+        jobId: 'job-9',
+        capturedAt: 111,
+        terminal: false,
+        activity: { state: 'downloading_video' },
+        lastFinalActivity: { finalSummary: { totalDownloaded: 2 } }
+      });
+    });
+
+    it('returns an empty snapshot when no download has run', () => {
+      mockDownloadExecutor.getActivitySnapshot = jest.fn().mockReturnValue(null);
+      const messageEmitterMock = require('../messageEmitter');
+      messageEmitterMock.getLastFinalActivity.mockReturnValue(null);
+
+      expect(downloadModule.getCurrentActivitySnapshot()).toEqual({
+        jobId: null,
+        capturedAt: null,
+        terminal: true,
+        activity: null,
+        lastFinalActivity: null
+      });
     });
   });
 });

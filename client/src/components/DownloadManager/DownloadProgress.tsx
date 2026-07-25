@@ -4,6 +4,7 @@ import React, {
   useState,
   useCallback,
   useMemo,
+  useRef,
 } from 'react';
 import {
   Grid,
@@ -22,8 +23,16 @@ import {
 import { ChevronDown as ExpandMoreIcon, List as QueueIcon, PlaySquare as PlaylistPlayIcon, Square as StopIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import WebSocketContext from '../../contexts/WebSocketContext';
-import { Job, FailedVideo, DownloadDiagnosis } from '../../types/Job';
+import { Job } from '../../types/Job';
 import { groupFailuresByDiagnosis } from './failureGrouping';
+import { jobTypeLabel } from '../../utils/jobTypeLabel';
+import { useCurrentActivitySeed } from './hooks/useCurrentActivitySeed';
+import {
+  DownloadProgressPayload,
+  FinalSummary,
+  StructuredProgress,
+  VideoCount,
+} from './types';
 import TerminateJobDialog from './TerminateJobDialog';
 
 interface DownloadProgressProps {
@@ -32,61 +41,13 @@ interface DownloadProgressProps {
     message: string;
   }>;
   downloadInitiatedRef: React.MutableRefObject<boolean>;
-  pendingJobs: Job[];
+  jobs: Job[];
   token: string | null;
 }
 
 interface ErrorDetails {
   message: string;
   code?: string;
-}
-
-interface ParsedProgress {
-  percent: number;
-  downloadedBytes: number;
-  totalBytes: number;
-  speedBytesPerSecond: number;
-  etaSeconds: number;
-}
-
-interface VideoInfo {
-  channel: string;
-  title: string;
-  displayTitle: string;
-}
-
-interface StructuredProgress {
-  jobId: string;
-  progress: ParsedProgress;
-  stalled: boolean;
-  state?: string;
-  videoInfo?: VideoInfo;
-  downloadType?: string;
-  currentChannelName?: string;
-  videoCount?: { current: number; total: number; completed: number; skipped: number, skippedThisChannel: number };
-}
-
-interface TerminatedChannelSummary {
-  channelId: string;
-  uploader?: string | null;
-  url?: string | null;
-  terminatedAt?: string | null;
-}
-
-interface FinalSummary {
-  totalDownloaded: number;
-  totalSkipped: number;
-  totalFailed?: number;
-  totalAutoRetried?: number;
-  totalMembersOnly?: number;
-  totalTerminatedChannels?: number;
-  totalTerminationFailures?: number;
-  failedVideos?: FailedVideo[];
-  diagnoses?: DownloadDiagnosis[];
-  terminatedChannels?: TerminatedChannelSummary[];
-  terminationFailures?: string[];
-  jobType: string;
-  completedAt?: string;
 }
 
 // Format ETA seconds to human readable format (e.g., "2m5s", "1h5m", "45s")
@@ -108,11 +69,11 @@ export const formatEta = (seconds: number): string => {
 const DownloadProgress: React.FC<DownloadProgressProps> = ({
   downloadProgressRef,
   downloadInitiatedRef,
-  pendingJobs,
+  jobs,
   token,
 }) => {
   const [currentProgress, setCurrentProgress] = useState<StructuredProgress | null>(null);
-  const [videoCount, setVideoCount] = useState<{ current: number; total: number; completed: number; skipped: number, skippedThisChannel: number }>({
+  const [videoCount, setVideoCount] = useState<VideoCount>({
     current: 0,
     total: 0,
     completed: 0,
@@ -131,6 +92,26 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
     throw new Error('WebSocketContext not found');
   }
   const { subscribe, unsubscribe } = wsContext;
+
+  const pendingJobs = useMemo(
+    () => jobs.filter((job) => job.status === 'Pending'),
+    [jobs]
+  );
+  const activeJob = useMemo(
+    () => jobs.find((job) => job.status === 'In Progress') ?? null,
+    [jobs]
+  );
+
+  // Live payloads usually carry the jobType; job records cover the quiet
+  // windows with no broadcasts.
+  const activityLabel = useMemo(() => {
+    const jobType =
+      (currentProgress && showProgress ? currentProgress.downloadType : null) ||
+      activeJob?.jobType ||
+      pendingJobs[0]?.jobType ||
+      null;
+    return jobTypeLabel(jobType);
+  }, [currentProgress, showProgress, activeJob, pendingJobs]);
 
   // Derive color from state (using CSS vars)
   const progressColor = useMemo(() => {
@@ -271,8 +252,8 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
     );
   }, []);
 
-  const processMessagesCallback = useCallback(
-    (payload: any) => {
+  const applyPayload = useCallback(
+    (payload: DownloadProgressPayload) => {
       // Clear previous summary if explicitly requested
       if (payload.clearPreviousSummary) {
         setFinalSummary(null);
@@ -299,7 +280,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
 
       // Handle enhanced structured progress with video counts
       if (payload.progress) {
-        const progress = payload.progress as StructuredProgress;
+        const progress = payload.progress;
         setCurrentProgress(progress);
         setShowProgress(true);
 
@@ -389,6 +370,29 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
     [downloadInitiatedRef]
   );
 
+  // Bumped per live broadcast; lets the seed skip probes that raced a message.
+  const liveMessageGenerationRef = useRef(0);
+
+  const processMessagesCallback = useCallback(
+    (payload: DownloadProgressPayload) => {
+      liveMessageGenerationRef.current += 1;
+      applyPayload(payload);
+    },
+    [applyPayload]
+  );
+
+  // Clears progress, error, warning, and summary so a replay fully replaces them.
+  const resetActivityState = useCallback(() => {
+    setShowProgress(false);
+    setCurrentProgress(null);
+    setVideoCount({ current: 0, total: 0, completed: 0, skipped: 0, skippedThisChannel: 0 });
+    setErrorDetails(null);
+    setWarningDetails(null);
+    setFinalSummary(null);
+  }, []);
+
+  useCurrentActivitySeed({ token, liveMessageGenerationRef, applyPayload, resetActivityState });
+
   useEffect(() => {
     subscribe(filter, processMessagesCallback);
     return () => {
@@ -407,12 +411,22 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
   return (
     <Grid item xs={12} md={12} paddingBottom={'8px'}>
       <Box>
-        <Box className="flex items-center justify-center relative py-4 px-4 border-b border-border">
+        <Box className="relative py-4 px-4 border-b border-border">
           <Typography variant="h6" component="h2" className="text-center">
             Download Progress
           </Typography>
+          {activityLabel && (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              className="text-center"
+              data-testid="activity-type-header"
+            >
+              {activityLabel}
+            </Typography>
+          )}
           {showTerminateButton && (
-            <Box style={{ position: 'absolute', right: 16 }}>
+            <Box style={{ position: 'absolute', right: 16, top: 12 }}>
               <Tooltip title="Stop the current download job">
                 <Button
                   aria-label="Stop the current download job"
@@ -453,7 +467,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                 <Box className="flex flex-wrap gap-2">
                   {pendingJobs.map((job, index) => {
                     const isChannelDownload = job.jobType.includes('Channel Downloads');
-                    const label = isChannelDownload ? 'Channel Update' : 'Manual Download';
+                    const label = jobTypeLabel(job.jobType);
                     const icon = isChannelDownload ?
                       <PlaylistPlayIcon size={16} /> :
                       <QueueIcon size={16} />;
@@ -571,18 +585,8 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                 })()}
               </Typography>
               <Typography variant="caption" className={`mt-1 block ${textClass}`}>
-                {(() => {
-                  let jobTypeLabel: string;
-                  if (finalSummary.jobType.includes('Channel Downloads')) {
-                    jobTypeLabel = 'Channel update';
-                  } else if (finalSummary.jobType.includes('Manually Added Urls')) {
-                    const apiKeyMatch = finalSummary.jobType.match(/\(via API: (.+)\)/);
-                    jobTypeLabel = apiKeyMatch ? `API: ${apiKeyMatch[1]}` : 'Manual download';
-                  } else {
-                    jobTypeLabel = finalSummary.jobType;
-                  }
-                  return jobTypeLabel + (finalSummary.completedAt ? ` • Completed ${formatTimestamp(finalSummary.completedAt)}` : '');
-                })()}
+                {jobTypeLabel(finalSummary.jobType) +
+                  (finalSummary.completedAt ? ` • Completed ${formatTimestamp(finalSummary.completedAt)}` : '')}
               </Typography>
             </Box>
 
@@ -771,8 +775,30 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
           </Box>
         )}
 
+        {/* A job is active but no live progress yet: startup, between job
+            groups, or post-processing. Never claim "no activity" here. */}
+        {!currentProgress && !errorDetails && (activeJob || pendingJobs.length > 0) && (
+          <Box className="px-4 pb-4">
+            <Box
+              className="p-6 text-center text-muted-foreground border-t border-border"
+              data-testid="job-active-waiting"
+            >
+              <Typography variant="body2">
+                {activeJob
+                  ? `${jobTypeLabel(activeJob.jobType)} is running`
+                  : pendingJobs.length === 1
+                    ? '1 download job is queued'
+                    : `${pendingJobs.length} download jobs are queued`}
+              </Typography>
+              <Typography variant="caption" className="mt-2 block">
+                {activeJob ? 'Waiting for progress updates...' : 'Starting soon...'}
+              </Typography>
+            </Box>
+          </Box>
+        )}
+
         {/* Show placeholder when no activity */}
-        {!currentProgress && !finalSummary && (
+        {!currentProgress && !finalSummary && !activeJob && pendingJobs.length === 0 && (
           <Box className="px-4 pb-4">
             <Box className="p-6 text-center text-muted-foreground border-t border-border">
               <Typography variant="body2">
