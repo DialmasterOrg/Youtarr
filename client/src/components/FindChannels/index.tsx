@@ -46,7 +46,7 @@ export default function FindChannels({ token }: FindChannelsProps) {
 
   return (
     <Box className="flex flex-col gap-4 py-4">
-      <Typography variant="h5">Find on YouTube</Typography>
+      <Typography variant="h5">Find Channels on YouTube</Typography>
       <SearchBar
         query={query}
         pageSize={pageSize}
