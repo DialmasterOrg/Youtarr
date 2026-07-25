@@ -10,6 +10,7 @@ const ratingMapper = require('./ratingMapper');
 const { MEDIA_TAB_TYPE_MAP, VALID_TAB_TYPES, parseTabCsv } = require('./tabsUtils');
 const { validateSubFolderName } = require('./filesystem/subfolderValidation');
 const subfolderModule = require('./subfolderModule');
+const m3uGenerator = require('./m3uGenerator');
 const {
   GLOBAL_DEFAULT_SENTINEL,
   buildChannelPath,
@@ -193,6 +194,31 @@ class ChannelSettingsModule {
       };
     }
 
+    return { valid: true };
+  }
+
+  /**
+   * Validate m3u_enabled setting
+   * @param {*} value - m3u_enabled value to validate
+   * @returns {Object} - { valid: boolean, error?: string }
+   */
+  validateM3uEnabled(value) {
+    if (typeof value !== 'boolean') {
+      return { valid: false, error: 'Invalid m3u_enabled: must be a boolean' };
+    }
+    return { valid: true };
+  }
+
+  /**
+   * Validate m3u_sort_order setting
+   * @param {*} value - m3u_sort_order value to validate
+   * @returns {Object} - { valid: boolean, error?: string }
+   */
+  validateM3uSortOrder(value) {
+    const validOrders = ['oldest_first', 'newest_first'];
+    if (!validOrders.includes(value)) {
+      return { valid: false, error: 'Invalid m3u_sort_order. Valid values: oldest_first, newest_first' };
+    }
     return { valid: true };
   }
 
@@ -484,6 +510,8 @@ class ChannelSettingsModule {
       audio_format: channel.audio_format,
       default_rating: channel.default_rating,
       skip_video_folder: channel.skip_video_folder,
+      m3u_enabled: Boolean(channel.m3u_enabled),
+      m3u_sort_order: channel.m3u_sort_order || 'oldest_first',
       auto_download_enabled_tabs: channel.auto_download_enabled_tabs,
       detected_tabs: detectedTabs,
       hidden_tabs: Array.from(hiddenTabsSet),
@@ -628,6 +656,19 @@ class ChannelSettingsModule {
       }
     }
 
+    if (settings.m3u_enabled !== undefined) {
+      const validation = this.validateM3uEnabled(settings.m3u_enabled);
+      if (!validation.valid) {
+        throw new Error(validation.error);
+      }
+    }
+    if (settings.m3u_sort_order !== undefined) {
+      const validation = this.validateM3uSortOrder(settings.m3u_sort_order);
+      if (!validation.valid) {
+        throw new Error(validation.error);
+      }
+    }
+
     // Validate hidden_tabs if provided
     let normalizedHiddenTabs = null;
     if (settings.hidden_tabs !== undefined) {
@@ -658,6 +699,9 @@ class ChannelSettingsModule {
 
     // Store old subfolder for potential move
     const oldSubFolder = channel.sub_folder;
+    const oldM3uEnabled = Boolean(channel.m3u_enabled);
+    const oldM3uSortOrder = channel.m3u_sort_order;
+    const oldAudioFormat = channel.audio_format;
     const newSubFolder = settings.sub_folder !== undefined ?
       (settings.sub_folder ? settings.sub_folder.trim() : null) :
       oldSubFolder;
@@ -692,6 +736,12 @@ class ChannelSettingsModule {
     }
     if (settings.skip_video_folder !== undefined) {
       updateData.skip_video_folder = settings.skip_video_folder;
+    }
+    if (settings.m3u_enabled !== undefined) {
+      updateData.m3u_enabled = settings.m3u_enabled;
+    }
+    if (settings.m3u_sort_order !== undefined) {
+      updateData.m3u_sort_order = settings.m3u_sort_order;
     }
     if (normalizedAutoDownloadTabs !== null) {
       updateData.auto_download_enabled_tabs = normalizedAutoDownloadTabs;
@@ -760,6 +810,19 @@ class ChannelSettingsModule {
       await subfolderModule.register(newSubFolder);
     }
 
+    // Keep the channel .m3u in sync without ever failing the save. Audio format
+    // changes the mp3-vs-video entry preference, so it regenerates too. Compare
+    // values, not payload presence: the dialog always sends every field.
+    const m3uNowEnabled = Boolean(updatedChannel.m3u_enabled);
+    const m3uAffected = m3uNowEnabled !== oldM3uEnabled ||
+      updatedChannel.m3u_sort_order !== oldM3uSortOrder ||
+      updatedChannel.audio_format !== oldAudioFormat;
+    if (oldM3uEnabled && !m3uNowEnabled) {
+      m3uGenerator.deleteChannelM3UInBackground(updatedChannel.channel_id, 'settings-update');
+    } else if (m3uNowEnabled && (m3uAffected || subFolderChanged)) {
+      m3uGenerator.generateChannelM3UInBackground(updatedChannel.channel_id, 'settings-update');
+    }
+
     const detectedTabsAfter = parseTabCsv(updatedChannel.available_tabs);
     const hiddenTabsAfter = parseTabCsv(updatedChannel.hidden_tabs);
     const hiddenSetAfter = new Set(hiddenTabsAfter);
@@ -777,6 +840,8 @@ class ChannelSettingsModule {
         audio_format: updatedChannel.audio_format,
         default_rating: updatedChannel.default_rating,
         skip_video_folder: updatedChannel.skip_video_folder,
+        m3u_enabled: Boolean(updatedChannel.m3u_enabled),
+        m3u_sort_order: updatedChannel.m3u_sort_order || 'oldest_first',
         auto_download_enabled_tabs: updatedChannel.auto_download_enabled_tabs,
         detected_tabs: detectedTabsAfter,
         hidden_tabs: hiddenTabsAfter,
@@ -889,13 +954,13 @@ class ChannelSettingsModule {
     logger.info({ channelId, oldBasePath, newBasePath }, 'Updating video file paths for channel');
 
     try {
-      // Get all videos for this channel that have file paths
       const videos = await Video.findAll({
         where: {
           channel_id: channelId,
-          filePath: {
-            [Op.ne]: null
-          }
+          [Op.or]: [
+            { filePath: { [Op.ne]: null } },
+            { audioFilePath: { [Op.ne]: null } }
+          ]
         }
       });
 
@@ -903,14 +968,26 @@ class ChannelSettingsModule {
 
       let updateCount = 0;
       for (const video of videos) {
-        const oldFilePath = video.filePath;
-        const newFilePath = calculateRelocatedPath(oldBasePath, newBasePath, oldFilePath);
-
-        if (newFilePath) {
-          await video.update({ filePath: newFilePath });
-          logger.info({ oldFilePath, newFilePath }, 'Updated video file path');
-          updateCount++;
+        const update = {};
+        if (video.filePath) {
+          const relocated = calculateRelocatedPath(oldBasePath, newBasePath, video.filePath);
+          if (relocated) {
+            update.filePath = relocated;
+          }
         }
+        if (video.audioFilePath) {
+          const relocated = calculateRelocatedPath(oldBasePath, newBasePath, video.audioFilePath);
+          if (relocated) {
+            update.audioFilePath = relocated;
+          }
+        }
+        if (Object.keys(update).length === 0) {
+          continue;
+        }
+
+        await video.update(update);
+        logger.info({ videoId: video.id, update }, 'Updated video file paths');
+        updateCount++;
       }
 
       logger.info({ count: updateCount }, 'Updated video file paths');

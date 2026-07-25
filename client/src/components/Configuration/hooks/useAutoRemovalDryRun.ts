@@ -9,6 +9,10 @@ interface AutoRemovalDryRunConfig {
   autoRemovalEnabled: boolean;
   autoRemovalVideoAgeThreshold: string;
   autoRemovalFreeSpaceThreshold: string;
+  autoRemovalWatchedEnabled?: boolean;
+  autoRemovalWatchedMinDaysSinceWatched?: string;
+  autoRemovalWatchedMinVideoAgeDays?: string;
+  autoRemovalKeepRecentCount?: number;
 }
 
 export const useAutoRemovalDryRun = ({ token }: UseAutoRemovalDryRunParams) => {
@@ -22,7 +26,11 @@ export const useAutoRemovalDryRun = ({ token }: UseAutoRemovalDryRunParams) => {
       body: JSON.stringify({
         autoRemovalEnabled: config.autoRemovalEnabled,
         autoRemovalVideoAgeThreshold: config.autoRemovalVideoAgeThreshold || '',
-        autoRemovalFreeSpaceThreshold: config.autoRemovalFreeSpaceThreshold || ''
+        autoRemovalFreeSpaceThreshold: config.autoRemovalFreeSpaceThreshold || '',
+        autoRemovalWatchedEnabled: config.autoRemovalWatchedEnabled ?? false,
+        autoRemovalWatchedMinDaysSinceWatched: config.autoRemovalWatchedMinDaysSinceWatched || '',
+        autoRemovalWatchedMinVideoAgeDays: config.autoRemovalWatchedMinVideoAgeDays || '',
+        autoRemovalKeepRecentCount: config.autoRemovalKeepRecentCount ?? 0
       })
     });
 

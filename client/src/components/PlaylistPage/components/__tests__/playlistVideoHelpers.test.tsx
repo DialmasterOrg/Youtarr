@@ -78,13 +78,20 @@ describe('toDownloadFileProps', () => {
       file_size: 1000,
       audio_file_path: '/data/audio.m4a',
       audio_file_size: 500,
+      video_resolution: '1920x1080',
     });
     expect(toDownloadFileProps(v)).toEqual({
       filePath: '/data/video.mp4',
       audioFilePath: '/data/audio.m4a',
       fileSize: 1000,
       audioFileSize: 500,
+      videoResolution: '1920x1080',
     });
+  });
+
+  test('maps a missing video_resolution to null', () => {
+    const v = makeVideo({ file_path: '/data/video.mp4', file_size: 1000 });
+    expect(toDownloadFileProps(v).videoResolution).toBeNull();
   });
 
   test('preserves nulls when no audio file exists', () => {
@@ -94,6 +101,7 @@ describe('toDownloadFileProps', () => {
       audioFilePath: null,
       fileSize: 1000,
       audioFileSize: null,
+      videoResolution: null,
     });
   });
 });

@@ -9,11 +9,16 @@ jest.mock('../../../logger');
 jest.mock('../../../models/channel', () => mockFactories.mockChannelModel());
 jest.mock('../../configModule', () => mockFactories.mockConfigModule());
 jest.mock('../../filesystem', () => mockFactories.mockFilesystem());
+jest.mock('../../m3uGenerator', () => ({
+  generateChannelM3UInBackground: jest.fn(),
+  deleteChannelM3UInBackground: jest.fn(),
+}));
 
 describe('channelCatalog', () => {
   let channelCatalog;
   let Channel;
   let logger;
+  let m3uGenerator;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -23,6 +28,7 @@ describe('channelCatalog', () => {
     Channel.findOne.mockResolvedValue(null);
 
     logger = require('../../../logger');
+    m3uGenerator = require('../../m3uGenerator');
 
     channelCatalog = require('../channelCatalog');
   });
@@ -290,6 +296,7 @@ describe('channelCatalog', () => {
       };
 
       Channel.findOne = jest.fn().mockResolvedValue(mockChannel);
+      Channel.findAll = jest.fn().mockResolvedValue([]);
       Channel.update = jest.fn().mockResolvedValue([1]);
       const channelProvisioning = require('../channelProvisioning');
       jest.spyOn(channelProvisioning, 'getChannelInfo');
@@ -384,6 +391,100 @@ describe('channelCatalog', () => {
       await expect(
         channelCatalog.updateChannelsByDelta({ enableUrls: ['https://youtube.com/@new'] })
       ).rejects.toThrow('Failed');
+    });
+  });
+
+  describe('channel m3u hooks', () => {
+    describe('writeChannels', () => {
+      test('regenerates m3u for newly enabled channels', async () => {
+        Channel.findAll = jest.fn().mockResolvedValue([
+          { url: 'https://youtube.com/@channel1', enabled: true }
+        ]);
+        Channel.update = jest.fn().mockResolvedValue([1]);
+        const channelProvisioning = require('../channelProvisioning');
+        jest.spyOn(channelProvisioning, 'getChannelInfo').mockResolvedValue({
+          id: 'UCnew'
+        });
+
+        await channelCatalog.writeChannels([
+          'https://youtube.com/@channel1',
+          'https://youtube.com/@new'
+        ]);
+
+        expect(m3uGenerator.generateChannelM3UInBackground).toHaveBeenCalledWith('UCnew', expect.any(String));
+      });
+
+      test('deletes m3u files for channels being disabled with m3u enabled', async () => {
+        Channel.findAll = jest
+          .fn()
+          .mockResolvedValueOnce([
+            { url: 'https://youtube.com/@old', enabled: true, channel_id: 'UCold' }
+          ]) // existing channels lookup
+          .mockResolvedValueOnce([{ channel_id: 'UCold' }]); // disabling lookup (m3u_enabled channels)
+        Channel.update = jest.fn().mockResolvedValue([1]);
+
+        await channelCatalog.writeChannels([]);
+
+        expect(Channel.findAll).toHaveBeenNthCalledWith(2, {
+          where: { url: ['https://youtube.com/@old'], m3u_enabled: true },
+          attributes: ['channel_id'],
+        });
+        expect(m3uGenerator.deleteChannelM3UInBackground).toHaveBeenCalledWith('UCold', expect.any(String));
+      });
+    });
+
+    describe('updateChannelsByDelta', () => {
+      test('regenerates m3u when falling back to a fresh YouTube fetch on enable', async () => {
+        Channel.findOne = jest.fn().mockResolvedValue(null);
+        Channel.update = jest.fn().mockResolvedValue([1]);
+        const channelProvisioning = require('../channelProvisioning');
+        jest.spyOn(channelProvisioning, 'getChannelInfo').mockResolvedValue({
+          id: 'UCfallback'
+        });
+
+        await channelCatalog.updateChannelsByDelta({
+          enableUrls: ['https://youtube.com/@fallback']
+        });
+
+        expect(m3uGenerator.generateChannelM3UInBackground).toHaveBeenCalledWith('UCfallback', expect.any(String));
+      });
+
+      test('regenerates m3u for re-enabled channel found in the database', async () => {
+        const found = { channel_id: 'UC1', update: jest.fn().mockResolvedValue({}) };
+        Channel.findOne = jest.fn().mockResolvedValue(found);
+
+        await channelCatalog.updateChannelsByDelta({
+          enableUrls: ['https://youtube.com/@chan']
+        });
+
+        expect(m3uGenerator.generateChannelM3UInBackground).toHaveBeenCalledWith('UC1', expect.any(String));
+      });
+
+      test('deletes m3u files for channels being disabled with m3u enabled', async () => {
+        Channel.findAll = jest.fn().mockResolvedValue([{ channel_id: 'UCdisabled' }]);
+        Channel.update = jest.fn().mockResolvedValue([1]);
+
+        await channelCatalog.updateChannelsByDelta({
+          disableUrls: ['https://youtube.com/@toDisable']
+        });
+
+        expect(Channel.findAll).toHaveBeenCalledWith({
+          where: { url: ['https://youtube.com/@toDisable'], m3u_enabled: true },
+          attributes: ['channel_id'],
+        });
+        expect(m3uGenerator.deleteChannelM3UInBackground).toHaveBeenCalledWith('UCdisabled', expect.any(String));
+      });
+
+      test('does not delete m3u for disabled channels without m3u enabled', async () => {
+        Channel.findAll = jest.fn().mockResolvedValue([]);
+        Channel.update = jest.fn().mockResolvedValue([1]);
+
+        await channelCatalog.updateChannelsByDelta({
+          disableUrls: ['https://youtube.com/@toDisable']
+        });
+
+        expect(m3uGenerator.deleteChannelM3UInBackground).not.toHaveBeenCalled();
+      });
     });
   });
 });

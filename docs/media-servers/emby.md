@@ -49,12 +49,17 @@ In the library configuration:
 1. **NFO** (enable and move to top)
 2. Disable all internet providers (TheMovieDb, etc.)
 
+**Metadata savers**:
+- **Disable**: Nfo ("Save metadata to NFO")
+
+> **Warning**: Do NOT enable Emby's NFO metadata saver. Youtarr generates and maintains the `.nfo` file for every video it downloads. If the saver is enabled, Emby will update and overwrite those files with its own data (for example, incorrectly guessed season/episode tags), which can cause problems for your library.
+
 **Image fetchers**:
 - **Local Images** (enable)
 - Disable all internet image providers
 
 **Advanced Settings**:
-- **Save artwork and metadata into media folders**: Yes
+- **Save artwork and metadata into media folders**: No (see the NFO saver warning above)
 - **Prefer embedded metadata**: Yes
 - **Enable real-time monitoring**: Optional
 
@@ -164,7 +169,7 @@ Configure in Advanced settings:
 
 **Metadata Settings**:
 - **Prefer local metadata**: Yes
-- **Save metadata within media folders**: Yes
+- **Save metadata within media folders**: No (Emby would overwrite Youtarr's `.nfo` files; see the NFO saver warning in [Library Setup](#library-setup))
 - **Save subtitles within media folders**: Yes (if using)
 
 **Image Settings**:

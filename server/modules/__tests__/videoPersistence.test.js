@@ -106,6 +106,28 @@ describe('videoPersistence', () => {
       expect(data.removed).toBeUndefined();
       expect(data.last_downloaded_at).toBeUndefined();
     });
+
+    test('drops video_resolution on update when no verified video file exists', () => {
+      const data = videoPersistence.prepareVideoDataForSave({
+        youtubeId: 'abc123',
+        audioFilePath: '/videos/a.mp3',
+        audioFileSize: '500',
+        video_resolution: null,
+      }, false);
+
+      expect(data).not.toHaveProperty('video_resolution');
+    });
+
+    test('keeps video_resolution when the video file is verified', () => {
+      const data = videoPersistence.prepareVideoDataForSave({
+        youtubeId: 'abc123',
+        filePath: '/videos/a.mp4',
+        fileSize: '1000',
+        video_resolution: 1080,
+      }, false);
+
+      expect(data.video_resolution).toBe(1080);
+    });
   });
 
   describe('persistDownloadedVideoForJob', () => {

@@ -93,6 +93,49 @@ describe('watchStatusQueries', () => {
     });
   });
 
+  describe('buildWatchedEligibilitySql', () => {
+    test('with no minimum days builds the same probe as buildWatchedExistsSql', () => {
+      const { sql, replacements } = watchStatusQueries.buildWatchedEligibilitySql();
+
+      expect(sql).toBe(watchStatusQueries.buildWatchedExistsSql().sql);
+      expect(replacements).toEqual({});
+    });
+
+    test('minDaysSinceWatched adds a NOT EXISTS probe for recent or undated watches', () => {
+      const { sql, replacements } = watchStatusQueries.buildWatchedEligibilitySql({
+        minDaysSinceWatched: 7,
+      });
+
+      expect(sql).toMatch(/^\(EXISTS \(SELECT 1 FROM video_watch_status/);
+      expect(sql).toContain('AND NOT EXISTS (SELECT 1 FROM video_watch_status');
+      expect(sql).toContain('last_watched_at IS NULL');
+      expect(sql).toContain(
+        'last_watched_at > DATE_SUB(NOW(), INTERVAL :watchedMinDaysSinceWatched DAY)'
+      );
+      expect(replacements).toEqual({ watchedMinDaysSinceWatched: 7 });
+    });
+
+    test('rule=primary applies the user restriction to both probes', () => {
+      configModule.getConfig.mockReturnValue({
+        watchStatusWatchedRule: 'primary',
+        jellyfinUserId: 'JF_USER',
+      });
+
+      const { sql, replacements } = watchStatusQueries.buildWatchedEligibilitySql({
+        minDaysSinceWatched: 30,
+      });
+
+      const ownerMatches = sql.match(/:watchedPlexOwnerId/g) || [];
+      expect(ownerMatches).toHaveLength(2);
+      expect(replacements).toEqual({
+        watchedPlexOwnerId: '1',
+        watchedJellyfinUserId: 'JF_USER',
+        watchedEmbyUserId: '',
+        watchedMinDaysSinceWatched: 30,
+      });
+    });
+  });
+
   describe('getStatusesForVideo', () => {
     test('returns empty array for an unknown video', async () => {
       Video.findOne.mockResolvedValue(null);

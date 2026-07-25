@@ -1212,6 +1212,31 @@ describe('Plain Formatter - Auto-Removal', () => {
     expect(message.title).toBe('🗑️ 1 Video Auto-Removed');
     expect(message.body).toContain('1 video');
   });
+
+  it('should include a watched removal section when watched removals occurred', () => {
+    const withWatched = {
+      ...baseCleanupResult,
+      totalDeleted: 6,
+      deletedByWatched: 1,
+      plan: {
+        ...baseCleanupResult.plan,
+        watchedStrategy: {
+          sampleVideos: [{ id: 9, title: 'Watched Video', channel: 'Tech Channel' }]
+        }
+      }
+    };
+
+    const message = plainFormatter.formatAutoRemovalMessage(withWatched);
+
+    expect(message.body).toContain('Removed after being watched: 1 video');
+    expect(message.body).toContain('Tech Channel (1 video): Watched Video');
+  });
+
+  it('should not mention watched removals when none occurred', () => {
+    const message = plainFormatter.formatAutoRemovalMessage(baseCleanupResult);
+
+    expect(message.body).not.toContain('Removed after being watched');
+  });
 });
 
 describe('Discord Formatter - Auto-Removal', () => {
@@ -1274,5 +1299,32 @@ describe('Discord Formatter - Auto-Removal', () => {
     expect(message.embeds[0].fields).toHaveLength(2);
     expect(message.embeds[0].fields[0].name).toContain('age');
     expect(message.embeds[0].fields[1].name).toContain('storage');
+  });
+
+  it('should include a watched field between age and storage when watched removals occurred', () => {
+    const withWatched = {
+      ...baseCleanupResult,
+      deletedByWatched: 2,
+      deletedBySpace: 1,
+      totalDeleted: 6,
+      plan: {
+        ...baseCleanupResult.plan,
+        watchedStrategy: {
+          sampleVideos: [{ id: 9, title: 'Watched Video', channel: 'Gaming' }]
+        },
+        spaceStrategy: {
+          threshold: '50GB',
+          sampleVideos: [{ id: 4, title: 'Space Video', channel: 'Gaming' }]
+        }
+      }
+    };
+
+    const message = discordFormatter.formatAutoRemovalMessage(withWatched);
+
+    expect(message.embeds[0].fields).toHaveLength(3);
+    expect(message.embeds[0].fields[0].name).toContain('age');
+    expect(message.embeds[0].fields[1].name).toContain('watched');
+    expect(message.embeds[0].fields[1].value).toContain('Gaming');
+    expect(message.embeds[0].fields[2].name).toContain('storage');
   });
 });

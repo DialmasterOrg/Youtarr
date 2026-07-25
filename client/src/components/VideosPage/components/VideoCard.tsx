@@ -49,7 +49,6 @@ function VideoCard({
   onImageError,
   onAddChannel,
 }: VideoCardProps) {
-  const isSelectable = !video.removed;
   const channelId = getEnabledChannelId(video.youTubeChannelName, video.channel_id, enabledChannels);
   const mediaTypeInfo = getMediaTypeInfo(video.media_type);
   const fileSizeNumber = video.fileSize
@@ -168,26 +167,24 @@ function VideoCard({
           </Box>
         )}
 
-        {isSelectable && (
-          <Checkbox
-            checked={selected}
-            onClick={(e) => e.stopPropagation()}
-            onChange={(event) => {
-              event.stopPropagation();
-              onToggleSelect(video.id);
-            }}
-            inputProps={{ 'aria-label': `Select ${video.youTubeVideoName}` }}
-            style={{
-              position: 'absolute',
-              top: 4,
-              left: 4,
-              backgroundColor: 'var(--media-overlay-background)',
-              color: 'var(--media-overlay-foreground)',
-              transition: 'all 0.2s',
-              zIndex: 3,
-            }}
-          />
-        )}
+        <Checkbox
+          checked={selected}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(event) => {
+            event.stopPropagation();
+            onToggleSelect(video.id);
+          }}
+          inputProps={{ 'aria-label': `Select ${video.youTubeVideoName}` }}
+          style={{
+            position: 'absolute',
+            top: 4,
+            left: 4,
+            backgroundColor: 'var(--media-overlay-background)',
+            color: 'var(--media-overlay-foreground)',
+            transition: 'all 0.2s',
+            zIndex: 3,
+          }}
+        />
 
         {!video.removed && (
           <ProtectionShieldButton
@@ -286,6 +283,7 @@ function VideoCard({
                 audioFilePath={video.audioFilePath}
                 fileSize={video.fileSize}
                 audioFileSize={video.audioFileSize}
+                videoResolution={video.video_resolution}
               />
             )}
             {mediaTypeInfo && (

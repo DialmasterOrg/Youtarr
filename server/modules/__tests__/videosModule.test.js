@@ -12,6 +12,8 @@ describe('VideosModule', () => {
   let mockLogger;
   let mockNfoGenerator;
   let mockMessageEmitter;
+  let mockM3uGenerator;
+  let mockExecFile;
 
   beforeEach(() => {
     jest.resetModules();
@@ -55,7 +57,8 @@ describe('VideosModule', () => {
     mockConfigModule = {
       directoryPath: '/test/output/dir',
       getConfig: jest.fn().mockReturnValue({}),
-      updateConfig: jest.fn()
+      updateConfig: jest.fn(),
+      getJobsPath: jest.fn().mockReturnValue('/test/jobs')
     };
 
     mockVideoValidationModule = {
@@ -80,6 +83,10 @@ describe('VideosModule', () => {
       emitMessage: jest.fn()
     };
 
+    mockM3uGenerator = {
+      regenerateAllChannelM3Us: jest.fn().mockResolvedValue({ attempted: 0, succeeded: 0 })
+    };
+
     // Mock the database module
     jest.doMock('../../db.js', () => ({
       Sequelize,
@@ -102,6 +109,13 @@ describe('VideosModule', () => {
       promises: mockFs
     }));
 
+    // Mock child_process for the ffprobe resolution fallback; fails by
+    // default so only tests that opt in exercise the success path.
+    mockExecFile = jest.fn((file, args, opts, cb) => cb(new Error('ffprobe unavailable')));
+    jest.doMock('child_process', () => ({
+      execFile: mockExecFile
+    }));
+
     // Mock configModule
     jest.doMock('../configModule', () => mockConfigModule);
 
@@ -110,6 +124,8 @@ describe('VideosModule', () => {
     jest.doMock('../nfoGenerator', () => mockNfoGenerator);
 
     jest.doMock('../messageEmitter', () => mockMessageEmitter);
+
+    jest.doMock('../m3uGenerator', () => mockM3uGenerator);
 
     // Mock logger
     jest.doMock('../../logger', () => mockLogger);
@@ -228,7 +244,11 @@ describe('VideosModule', () => {
       expect(sqlQuery).toContain('Videos.fileSize');
       expect(sqlQuery).toContain('Videos.removed');
       expect(sqlQuery).toContain('Videos.youtube_removed');
+      // Feeds the 24h existence-check throttle; without it every page load
+      // fires a YouTube oembed check per video.
+      expect(sqlQuery).toContain('Videos.youtube_removed_checked_at');
       expect(sqlQuery).toContain('Videos.media_type');
+      expect(sqlQuery).toContain('Videos.video_resolution');
       expect(sqlQuery).toContain('COALESCE(Videos.last_downloaded_at, Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, \'%Y%m%d\')) AS timeCreated');
 
       // Verify the JOINs
@@ -891,6 +911,241 @@ describe('VideosModule', () => {
       expect(result.timeElapsed).toBeDefined();
     });
 
+    test('probes the file with ffprobe when video_resolution is NULL', async () => {
+      mockFs.readdir.mockResolvedValueOnce([
+        { name: 'Video [abc12345678].mp4', isDirectory: () => false, isFile: () => true }
+      ]);
+      mockFs.stat.mockResolvedValueOnce({ size: 1000 });
+      mockExecFile.mockImplementation((file, args, opts, cb) => cb(null, '1280,720\n'));
+
+      mockVideo.count.mockResolvedValueOnce(1);
+      mockVideo.findAll.mockResolvedValueOnce([
+        {
+          id: 1,
+          youtubeId: 'abc12345678',
+          filePath: '/test/output/dir/Video [abc12345678].mp4',
+          fileSize: '1000',
+          audioFilePath: null,
+          audioFileSize: null,
+          removed: false,
+          video_resolution: null
+        }
+      ]);
+      mockSequelize.query.mockResolvedValue([]);
+
+      await VideosModule.backfillVideoMetadata();
+
+      expect(mockExecFile).toHaveBeenCalledWith(
+        'ffprobe',
+        expect.arrayContaining(['/test/output/dir/Video [abc12345678].mp4']),
+        expect.objectContaining({ timeout: expect.any(Number) }),
+        expect.any(Function)
+      );
+      const updateCalls = mockSequelize.query.mock.calls.filter(
+        ([sql]) => typeof sql === 'string' && sql.startsWith('UPDATE Videos SET')
+      );
+      expect(updateCalls.length).toBe(1);
+      const [, options] = updateCalls[0];
+      expect(options.replacements).toEqual(['/test/output/dir/Video [abc12345678].mp4', 1000, '1280x720', 0, 1]);
+    });
+
+    test('preserves already-flushed probe results when the time limit trips mid-chunk', async () => {
+      // Fake clock: each ffprobe costs 1s, so the 50s limit trips after the
+      // first 100 probes have been flushed but before the chunk completes.
+      let clock = 0;
+      const nowSpy = jest.spyOn(Date, 'now').mockImplementation(() => clock);
+      mockExecFile.mockImplementation((file, args, opts, cb) => {
+        clock += 1000;
+        cb(null, '1920,1080\n');
+      });
+
+      const VIDEO_COUNT = 150;
+      mockFs.readdir.mockResolvedValueOnce(
+        Array.from({ length: VIDEO_COUNT }, (_, i) => ({
+          name: `Video [id${i}].mp4`,
+          isDirectory: () => false,
+          isFile: () => true
+        }))
+      );
+      mockFs.stat.mockResolvedValue({ size: 1000 });
+
+      mockVideo.count.mockResolvedValueOnce(VIDEO_COUNT);
+      mockVideo.findAll.mockResolvedValueOnce(
+        Array.from({ length: VIDEO_COUNT }, (_, i) => ({
+          id: i + 1,
+          youtubeId: `id${i}`,
+          filePath: `/test/output/dir/Video [id${i}].mp4`,
+          fileSize: '1000',
+          audioFilePath: null,
+          audioFileSize: null,
+          removed: false,
+          video_resolution: null
+        }))
+      );
+      mockSequelize.query.mockResolvedValue([]);
+
+      const result = await VideosModule.backfillVideoMetadata({ timeLimit: 50000 });
+      nowSpy.mockRestore();
+
+      expect(result.timedOut).toBe(true);
+      const updateCalls = mockSequelize.query.mock.calls.filter(
+        ([sql]) => typeof sql === 'string' && sql.startsWith('UPDATE Videos SET')
+      );
+      // The first flush of 100 completed probes was persisted before the abort.
+      expect(updateCalls.length).toBe(100);
+    });
+
+    test('runs ffprobes concurrently but never more than 4 at once', async () => {
+      const VIDEO_COUNT = 20;
+      mockFs.readdir.mockResolvedValueOnce(
+        Array.from({ length: VIDEO_COUNT }, (_, i) => ({
+          name: `Video [id${i}].mp4`,
+          isDirectory: () => false,
+          isFile: () => true
+        }))
+      );
+      mockFs.stat.mockResolvedValue({ size: 1000 });
+
+      let inFlight = 0;
+      let maxInFlight = 0;
+      mockExecFile.mockImplementation((file, args, opts, cb) => {
+        inFlight++;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        setImmediate(() => {
+          inFlight--;
+          cb(null, '1920,1080\n');
+        });
+      });
+
+      mockVideo.count.mockResolvedValueOnce(VIDEO_COUNT);
+      mockVideo.findAll.mockResolvedValueOnce(
+        Array.from({ length: VIDEO_COUNT }, (_, i) => ({
+          id: i + 1,
+          youtubeId: `id${i}`,
+          filePath: `/test/output/dir/Video [id${i}].mp4`,
+          fileSize: '1000',
+          audioFilePath: null,
+          audioFileSize: null,
+          removed: false,
+          video_resolution: null
+        }))
+      );
+      mockSequelize.query.mockResolvedValue([]);
+
+      await VideosModule.backfillVideoMetadata();
+
+      expect(mockExecFile).toHaveBeenCalledTimes(VIDEO_COUNT);
+      expect(maxInFlight).toBeGreaterThan(1);
+      expect(maxInFlight).toBeLessThanOrEqual(4);
+      const updateCalls = mockSequelize.query.mock.calls.filter(
+        ([sql]) => typeof sql === 'string' && sql.startsWith('UPDATE Videos SET')
+      );
+      expect(updateCalls.length).toBe(VIDEO_COUNT);
+    });
+
+    test('stamps the 0 sentinel when ffprobe fails', async () => {
+      mockFs.readdir.mockResolvedValueOnce([
+        { name: 'Video [abc12345678].mp4', isDirectory: () => false, isFile: () => true }
+      ]);
+      mockFs.stat.mockResolvedValueOnce({ size: 1000 });
+
+      mockVideo.count.mockResolvedValueOnce(1);
+      mockVideo.findAll.mockResolvedValueOnce([
+        {
+          id: 1,
+          youtubeId: 'abc12345678',
+          filePath: '/test/output/dir/Video [abc12345678].mp4',
+          fileSize: '1000',
+          audioFilePath: null,
+          audioFileSize: null,
+          removed: false,
+          video_resolution: null
+        }
+      ]);
+      mockSequelize.query.mockResolvedValue([]);
+
+      await VideosModule.backfillVideoMetadata();
+
+      const updateCalls = mockSequelize.query.mock.calls.filter(
+        ([sql]) => typeof sql === 'string' && sql.startsWith('UPDATE Videos SET')
+      );
+      expect(updateCalls.length).toBe(1);
+      const [sql, options] = updateCalls[0];
+      expect(sql).toContain('video_resolution = ?');
+      // filePath, fileSize, video_resolution = '0x0' (sentinel), removed = 0, id = 1
+      expect(options.replacements).toEqual(['/test/output/dir/Video [abc12345678].mp4', 1000, '0x0', 0, 1]);
+    });
+
+    test('clears video_resolution when the video file is gone but audio remains', async () => {
+      mockFs.readdir.mockResolvedValueOnce([
+        { name: 'Video [abc12345678].mp3', isDirectory: () => false, isFile: () => true }
+      ]);
+      mockFs.stat.mockResolvedValueOnce({ size: 500 });
+
+      mockVideo.count.mockResolvedValueOnce(1);
+      mockVideo.findAll.mockResolvedValueOnce([
+        {
+          id: 1,
+          youtubeId: 'abc12345678',
+          filePath: '/test/output/dir/Video [abc12345678].mp4',
+          fileSize: '1000',
+          audioFilePath: '/test/output/dir/Video [abc12345678].mp3',
+          audioFileSize: '500',
+          removed: false,
+          video_resolution: '1920x1080'
+        }
+      ]);
+      mockSequelize.query.mockResolvedValue([]);
+
+      await VideosModule.backfillVideoMetadata();
+
+      expect(mockExecFile).not.toHaveBeenCalled();
+      const updateCalls = mockSequelize.query.mock.calls.filter(
+        ([sql]) => typeof sql === 'string' && sql.startsWith('UPDATE Videos SET')
+      );
+      expect(updateCalls.length).toBe(1);
+      const [sql, options] = updateCalls[0];
+      expect(sql).toContain('video_resolution = ?');
+      // filePath = null, fileSize = null, audioFilePath, audioFileSize,
+      // video_resolution = null (stale dims cleared), removed = 0, id = 1
+      expect(options.replacements).toEqual([
+        null,
+        null,
+        '/test/output/dir/Video [abc12345678].mp3',
+        500,
+        null,
+        0,
+        1
+      ]);
+    });
+
+    test('does not probe when video_resolution is already set', async () => {
+      mockFs.readdir.mockResolvedValueOnce([
+        { name: 'Video [abc12345678].mp4', isDirectory: () => false, isFile: () => true }
+      ]);
+      mockFs.stat.mockResolvedValueOnce({ size: 1000 });
+
+      mockVideo.count.mockResolvedValueOnce(1);
+      mockVideo.findAll.mockResolvedValueOnce([
+        {
+          id: 1,
+          youtubeId: 'abc12345678',
+          filePath: '/test/output/dir/Video [abc12345678].mp4',
+          fileSize: '1000',
+          audioFilePath: null,
+          audioFileSize: null,
+          removed: false,
+          video_resolution: '1920x1080'
+        }
+      ]);
+      mockSequelize.query.mockResolvedValue([]);
+
+      const result = await VideosModule.backfillVideoMetadata();
+
+      expect(mockExecFile).not.toHaveBeenCalled();
+      expect(result.updated).toBe(0);
+    });
+
     test('should respect time limit', async () => {
       // Create a long-running scenario
       // Mock readdir to take a long time (this will cause time limit to exceed during file scanning)
@@ -1062,6 +1317,15 @@ describe('VideosModule', () => {
       await VideosModule.backfillVideoMetadata({ trigger: 'manual' });
 
       expect(VideosModule._backfillRunning).toBe(false);
+    });
+
+    test('kicks off a channel m3u sweep after the rescan completes', async () => {
+      mockFs.readdir.mockResolvedValueOnce([]);
+      mockVideo.count.mockResolvedValueOnce(0);
+
+      await VideosModule.backfillVideoMetadata({ trigger: 'manual' });
+
+      expect(mockM3uGenerator.regenerateAllChannelM3Us).toHaveBeenCalledTimes(1);
     });
 
     test('should release lock on error', async () => {

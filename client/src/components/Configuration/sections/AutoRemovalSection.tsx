@@ -12,12 +12,15 @@ import {
   Typography,
   Button,
   CircularProgress,
+  TextField,
 } from '../../ui';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { ConfigState, AutoRemovalDryRunResult } from '../types';
-import { formatBytes } from '../helpers';
 import { useAutoRemovalDryRun } from '../hooks/useAutoRemovalDryRun';
+import { AutoRemovalWatchedControls } from './components/AutoRemovalWatchedControls';
+import { AutoRemovalPreview } from './components/AutoRemovalPreview';
+import { AutoRemovalRulesSummary } from './components/AutoRemovalRulesSummary';
 
 interface AutoRemovalSectionProps {
   token: string | null;
@@ -26,6 +29,18 @@ interface AutoRemovalSectionProps {
   onConfigChange: (updates: Partial<ConfigState>) => void;
   onMobileTooltipClick?: (text: string) => void;
 }
+
+const OrDivider: React.FC = () => (
+  <Grid item xs={12}>
+    <Box className="flex items-center gap-3">
+      <Box className="flex-1 border-t border-border" />
+      <Typography variant="body2" className="text-muted-foreground font-medium">
+        OR
+      </Typography>
+      <Box className="flex-1 border-t border-border" />
+    </Box>
+  </Grid>
+);
 
 export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
   token,
@@ -62,7 +77,11 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
   }, [
     config.autoRemovalEnabled,
     config.autoRemovalFreeSpaceThreshold,
-    config.autoRemovalVideoAgeThreshold
+    config.autoRemovalVideoAgeThreshold,
+    config.autoRemovalWatchedEnabled,
+    config.autoRemovalWatchedMinDaysSinceWatched,
+    config.autoRemovalWatchedMinVideoAgeDays,
+    config.autoRemovalKeepRecentCount
   ]);
 
   const handleRunDryRun = async () => {
@@ -72,7 +91,11 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
       const result = await runDryRun({
         autoRemovalEnabled: config.autoRemovalEnabled,
         autoRemovalVideoAgeThreshold: config.autoRemovalVideoAgeThreshold,
-        autoRemovalFreeSpaceThreshold: config.autoRemovalFreeSpaceThreshold
+        autoRemovalFreeSpaceThreshold: config.autoRemovalFreeSpaceThreshold,
+        autoRemovalWatchedEnabled: config.autoRemovalWatchedEnabled,
+        autoRemovalWatchedMinDaysSinceWatched: config.autoRemovalWatchedMinDaysSinceWatched,
+        autoRemovalWatchedMinVideoAgeDays: config.autoRemovalWatchedMinVideoAgeDays,
+        autoRemovalKeepRecentCount: config.autoRemovalKeepRecentCount
       });
 
       setAutoRemovalDryRun({
@@ -80,22 +103,26 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
         result,
         error: null
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       setAutoRemovalDryRun({
         loading: false,
         result: null,
-        error: err?.message || 'Failed to preview automatic removal'
+        error: err instanceof Error ? err.message : 'Failed to preview automatic removal'
       });
     }
   };
 
-  const autoRemovalHasStrategy = Boolean(config.autoRemovalFreeSpaceThreshold) || Boolean(config.autoRemovalVideoAgeThreshold);
-  const dryRunPlan = autoRemovalDryRun.result?.plan;
-  const dryRunSimulation = autoRemovalDryRun.result?.simulationTotals;
-  const dryRunSampleVideos = dryRunPlan
-    ? [...(dryRunPlan.ageStrategy.sampleVideos || []), ...(dryRunPlan.spaceStrategy.sampleVideos || [])].slice(0, 5)
-    : [];
-  const hasDryRunSpaceThreshold = dryRunPlan?.spaceStrategy.thresholdBytes != null;
+  const handleKeepRecentChange = (rawValue: string) => {
+    const parsed = parseInt(rawValue, 10);
+    onConfigChange({
+      autoRemovalKeepRecentCount: Number.isNaN(parsed) || parsed < 0 ? 0 : parsed
+    });
+  };
+
+  const autoRemovalHasStrategy =
+    Boolean(config.autoRemovalFreeSpaceThreshold) ||
+    Boolean(config.autoRemovalVideoAgeThreshold) ||
+    config.autoRemovalWatchedEnabled;
 
   return (
     <ConfigurationAccordion
@@ -114,10 +141,9 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
       <Alert severity="warning" className="mb-4">
         <AlertTitle>Automatic Deletion</AlertTitle>
         <Typography variant="body2">
-          This feature automatically deletes downloaded videos based on your configured thresholds.
-          Deletions run nightly at 2:00 AM and are permanent - deleted videos cannot be recovered.
-          <br /><br />
-          Use this feature to manage storage automatically and keep only recent content.
+          This feature automatically deletes downloaded videos based on your configured rules.
+          Deletions run nightly at 2:00 AM and remove the files from disk. A deleted video can
+          only be restored by downloading it again (if it&apos;s still available on YouTube).
         </Typography>
       </Alert>
 
@@ -128,7 +154,8 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
               <Grid item xs={12}>
                 <Alert severity="error" className="mb-2">
                   <Typography variant="body2">
-                    You must configure at least one removal threshold (Free Space or Video Age) when automatic removal is enabled.
+                    Enable at least one removal rule below (old videos, watched videos, or
+                    low disk space) when automatic removal is enabled.
                   </Typography>
                 </Alert>
               </Grid>
@@ -139,7 +166,7 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
                 <Alert severity="warning" className="mb-2">
                   <AlertTitle>Space-Based Removal Unavailable</AlertTitle>
                     <Typography variant="body2" className="mb-2">
-                    Storage reporting is not available on your system, so the Free Space Threshold option is disabled.
+                    Storage reporting is not available on your system, so the Low disk space rule is unavailable.
                     This can happen with certain mount types like network shares, cloud storage, or virtual filesystems.
                   </Typography>
                   <Typography variant="body2" className="mb-2">
@@ -147,103 +174,155 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
                     storage-based auto-removal will not work.
                   </Typography>
                   <Typography variant="body2">
-                    <strong>You can still use Age-Based Removal</strong> (see below), which doesn't require storage reporting.
+                    <strong>You can still use the Old videos and Watched videos rules</strong>, which don&apos;t require storage reporting.
                   </Typography>
                 </Alert>
               </Grid>
             )}
 
-            {storageAvailable !== false && (
-              <Grid item xs={12} md={6}>
-                <Box className="flex items-center">
-                  <FormControl fullWidth disabled={storageAvailable === null}>
-                    <InputLabel id={freeSpaceLabelId}>Free Space Threshold (Optional)</InputLabel>
-                    <Select
-                      labelId={freeSpaceLabelId}
-                      inputProps={{
-                        'data-testid': 'auto-removal-free-space-select',
-                      }}
-                      value={config.autoRemovalFreeSpaceThreshold || ''}
-                      onChange={(e) => onConfigChange({ autoRemovalFreeSpaceThreshold: e.target.value })}
-                      label="Free Space Threshold (Optional)"
-                    >
-                      <MenuItem value="">
-                        <em>Disabled</em>
-                      </MenuItem>
-                      <MenuItem value="500MB">500 MB</MenuItem>
-                      <MenuItem value="1GB">1 GB</MenuItem>
-                      <MenuItem value="2GB">2 GB</MenuItem>
-                      <MenuItem value="5GB">5 GB</MenuItem>
-                      <MenuItem value="10GB">10 GB</MenuItem>
-                      <MenuItem value="20GB">20 GB</MenuItem>
-                      <MenuItem value="50GB">50 GB</MenuItem>
-                      <MenuItem value="100GB">100 GB</MenuItem>
-                    </Select>
-                    <FormHelperText>
-                      {storageAvailable === null
-                        ? 'Checking storage availability...'
-                        : 'Delete oldest videos when free space falls below this threshold'}
-                    </FormHelperText>
-                  </FormControl>
-                  <InfoTooltip
-                    text="Some mount types (network shares, overlays, bind mounts) may report incorrect free space. Before enabling this, verify that the storage display at the top of this page shows accurate values. If the reported storage is incorrect, do not use space-based removal."
-                    onMobileClick={onMobileTooltipClick}
-                  />
-                </Box>
-              </Grid>
-            )}
-
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel id={ageLabelId}>Video Age Threshold (Optional)</InputLabel>
-                <Select
-                  labelId={ageLabelId}
-                  inputProps={{
-                    'data-testid': 'auto-removal-age-select',
-                  }}
-                  value={config.autoRemovalVideoAgeThreshold || ''}
-                  onChange={(e) => onConfigChange({ autoRemovalVideoAgeThreshold: e.target.value })}
-                  label="Video Age Threshold (Optional)"
-                >
-                  <MenuItem value="">
-                    <em>Disabled</em>
-                  </MenuItem>
-                  <MenuItem value="7">7 days</MenuItem>
-                  <MenuItem value="14">14 days</MenuItem>
-                  <MenuItem value="30">30 days</MenuItem>
-                  <MenuItem value="60">60 days</MenuItem>
-                  <MenuItem value="120">120 days</MenuItem>
-                  <MenuItem value="180">180 days</MenuItem>
-                  <MenuItem value="365">1 year</MenuItem>
-                  <MenuItem value="730">2 years</MenuItem>
-                  <MenuItem value="1095">3 years</MenuItem>
-                  <MenuItem value="1825">5 years</MenuItem>
-                </Select>
-                <FormHelperText>
-                  Delete videos older than this threshold
-                </FormHelperText>
-              </FormControl>
+            <Grid item xs={12}>
+              <Typography variant="body2">
+                Videos are removed when they match any enabled rule below.
+              </Typography>
             </Grid>
 
-            {(config.autoRemovalFreeSpaceThreshold || config.autoRemovalVideoAgeThreshold) && (
+            <Grid item xs={12}>
+              <Box className="rounded-lg border border-border p-4">
+                <Typography variant="subtitle2" className="mb-3">
+                  Old videos
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <FormControl fullWidth>
+                      <InputLabel id={ageLabelId}>Delete videos older than</InputLabel>
+                      <Select
+                        labelId={ageLabelId}
+                        inputProps={{
+                          'data-testid': 'auto-removal-age-select',
+                        }}
+                        value={config.autoRemovalVideoAgeThreshold || ''}
+                        onChange={(e) => onConfigChange({ autoRemovalVideoAgeThreshold: e.target.value })}
+                        label="Delete videos older than"
+                      >
+                        <MenuItem value="">
+                          <em>Off</em>
+                        </MenuItem>
+                        <MenuItem value="7">7 days</MenuItem>
+                        <MenuItem value="14">14 days</MenuItem>
+                        <MenuItem value="30">30 days</MenuItem>
+                        <MenuItem value="60">60 days</MenuItem>
+                        <MenuItem value="120">120 days</MenuItem>
+                        <MenuItem value="180">180 days</MenuItem>
+                        <MenuItem value="365">1 year</MenuItem>
+                        <MenuItem value="730">2 years</MenuItem>
+                        <MenuItem value="1095">3 years</MenuItem>
+                        <MenuItem value="1825">5 years</MenuItem>
+                      </Select>
+                      <FormHelperText>
+                        Applies to every video, watched or not
+                      </FormHelperText>
+                    </FormControl>
+                  </Grid>
+                </Grid>
+              </Box>
+            </Grid>
+
+            <OrDivider />
+
+            <AutoRemovalWatchedControls
+              config={config}
+              onConfigChange={onConfigChange}
+              onMobileTooltipClick={onMobileTooltipClick}
+            />
+
+            {storageAvailable !== false && (
+              <>
+                <OrDivider />
+                <Grid item xs={12}>
+                  <Box className="rounded-lg border border-border p-4">
+                    <Typography variant="subtitle2" className="mb-3">
+                      Low disk space
+                    </Typography>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} md={6}>
+                        <Box className="flex items-center">
+                          <FormControl fullWidth disabled={storageAvailable === null}>
+                            <InputLabel id={freeSpaceLabelId}>When free space falls below</InputLabel>
+                            <Select
+                              labelId={freeSpaceLabelId}
+                              inputProps={{
+                                'data-testid': 'auto-removal-free-space-select',
+                              }}
+                              value={config.autoRemovalFreeSpaceThreshold || ''}
+                              onChange={(e) => onConfigChange({ autoRemovalFreeSpaceThreshold: e.target.value })}
+                              label="When free space falls below"
+                            >
+                              <MenuItem value="">
+                                <em>Off</em>
+                              </MenuItem>
+                              <MenuItem value="500MB">500 MB</MenuItem>
+                              <MenuItem value="1GB">1 GB</MenuItem>
+                              <MenuItem value="2GB">2 GB</MenuItem>
+                              <MenuItem value="5GB">5 GB</MenuItem>
+                              <MenuItem value="10GB">10 GB</MenuItem>
+                              <MenuItem value="20GB">20 GB</MenuItem>
+                              <MenuItem value="50GB">50 GB</MenuItem>
+                              <MenuItem value="100GB">100 GB</MenuItem>
+                            </Select>
+                            <FormHelperText>
+                              {storageAvailable === null
+                                ? 'Checking storage availability...'
+                                : 'The oldest videos are deleted until enough space is freed'}
+                            </FormHelperText>
+                          </FormControl>
+                          <InfoTooltip
+                            text="Some mount types (network shares, overlays, bind mounts) may report incorrect free space. Before enabling this, verify that the storage display at the top of this page shows accurate values. If the reported storage is incorrect, do not use space-based removal."
+                            onMobileClick={onMobileTooltipClick}
+                          />
+                        </Box>
+                      </Grid>
+                    </Grid>
+                  </Box>
+                </Grid>
+              </>
+            )}
+
+            <Grid item xs={12}>
+              <Box className="rounded-lg border border-border p-4 bg-muted/30">
+                <Typography variant="subtitle2" className="mb-1">
+                  Always kept
+                </Typography>
+                <Typography variant="body2" className="text-muted-foreground mb-2">
+                  Exceptions that every rule respects.
+                </Typography>
+                <Typography variant="body2" className="mb-3">
+                  • Videos marked as Protected are never automatically removed.
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <Box className="flex items-center">
+                      <TextField
+                        fullWidth
+                        type="number"
+                        label="Keep this many newest downloads"
+                        value={config.autoRemovalKeepRecentCount > 0 ? String(config.autoRemovalKeepRecentCount) : ''}
+                        onChange={(e) => handleKeepRecentChange(e.target.value)}
+                        helperText="Blank or 0 to disable"
+                        inputProps={{ min: 0, 'data-testid': 'auto-removal-keep-recent-input' }}
+                      />
+                      <InfoTooltip
+                        text="Protects the newest downloads from every removal rule on this page. For example, with a value of 50, the 50 most recently downloaded videos are always kept, no matter their age or watched state. Protected videos do not count toward this limit. Leave blank or 0 to disable."
+                        onMobileClick={onMobileTooltipClick}
+                      />
+                    </Box>
+                  </Grid>
+                </Grid>
+              </Box>
+            </Grid>
+
+            {autoRemovalHasStrategy && (
               <Grid item xs={12}>
-                <Alert severity="success" className="mt-2">
-                  <Typography variant="body2" className="font-medium mb-2">
-                    Active Removal Strategy:
-                  </Typography>
-                  <Typography variant="body2" component="div">
-                    {config.autoRemovalFreeSpaceThreshold && (
-                      <>• Delete oldest videos when free space &lt; <strong>{config.autoRemovalFreeSpaceThreshold}</strong><br /></>
-                    )}
-                    {config.autoRemovalVideoAgeThreshold && (
-                      <>• Delete videos older than <strong>{
-                        parseInt(config.autoRemovalVideoAgeThreshold) >= 365
-                          ? `${Math.round(parseInt(config.autoRemovalVideoAgeThreshold) / 365)} year${Math.round(parseInt(config.autoRemovalVideoAgeThreshold) / 365) > 1 ? 's' : ''}`
-                          : `${config.autoRemovalVideoAgeThreshold} days`
-                      }</strong></>
-                    )}
-                  </Typography>
-                </Alert>
+                <AutoRemovalRulesSummary config={config} />
               </Grid>
             )}
 
@@ -260,7 +339,7 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
               </Box>
               {!autoRemovalHasStrategy && (
                 <FormHelperText className="mt-2">
-                  Select at least one threshold to run a preview.
+                  Enable at least one rule to run a preview.
                 </FormHelperText>
               )}
             </Grid>
@@ -273,58 +352,9 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
               </Grid>
             )}
 
-            {autoRemovalDryRun.result && dryRunSimulation && (
+            {autoRemovalDryRun.result && (
               <Grid item xs={12}>
-                <Alert
-                  severity={autoRemovalDryRun.result.errors.length > 0 ? 'warning' : 'info'}
-                  className="mt-2"
-                >
-                  <Typography variant="body2" className="font-medium">
-                    Preview Summary
-                  </Typography>
-                  <Typography variant="body2">
-                    Would remove <strong>{dryRunSimulation.total}</strong> videos (~{formatBytes(dryRunSimulation.estimatedFreedBytes)}).
-                  </Typography>
-                  {dryRunPlan?.ageStrategy.enabled && dryRunPlan.ageStrategy.candidateCount > 0 && (
-                    <Typography variant="body2">
-                      • Age threshold: {dryRunPlan.ageStrategy.candidateCount} videos (~{formatBytes(dryRunPlan.ageStrategy.estimatedFreedBytes)})
-                    </Typography>
-                  )}
-                  {dryRunPlan?.spaceStrategy.enabled && dryRunPlan.spaceStrategy.needsCleanup && (
-                    <Typography variant="body2">
-                      • Space threshold: {dryRunPlan.spaceStrategy.candidateCount} videos (~{formatBytes(dryRunPlan.spaceStrategy.estimatedFreedBytes)})
-                    </Typography>
-                  )}
-                  {hasDryRunSpaceThreshold && dryRunPlan?.spaceStrategy.needsCleanup === false && (
-                    <Typography variant="body2">
-                      Storage is currently above the free space threshold; no space-based deletions are needed.
-                    </Typography>
-                  )}
-                  {dryRunSampleVideos.length > 0 && (
-                    <Box className="mt-2">
-                      <Typography variant="body2" className="font-medium">
-                        Sample videos
-                      </Typography>
-                      {dryRunSampleVideos.map((video) => (
-                        <Typography key={`dryrun-video-${video.id}`} variant="body2">
-                          {video.title} ({video.youtubeId}) • {formatBytes(video.fileSize)}
-                        </Typography>
-                      ))}
-                    </Box>
-                  )}
-                  {autoRemovalDryRun.result.errors.length > 0 && (
-                    <Box className="mt-2">
-                      <Typography variant="body2" className="font-medium">
-                        Warnings
-                      </Typography>
-                      {autoRemovalDryRun.result.errors.map((err, index) => (
-                        <Typography key={`dryrun-warning-${index}`} variant="body2">
-                          {err}
-                        </Typography>
-                      ))}
-                    </Box>
-                  )}
-                </Alert>
+                <AutoRemovalPreview result={autoRemovalDryRun.result} />
               </Grid>
             )}
           </>

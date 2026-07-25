@@ -23,6 +23,10 @@ jest.mock('../youtubeApi', () => mockFactories.mockYoutubeApi());
 jest.mock('../../db', () => mockFactories.mockDb());
 jest.mock('../filesystem', () => mockFactories.mockFilesystem());
 jest.mock('../fileCheckModule', () => mockFactories.mockFileCheckModule());
+jest.mock('../m3uGenerator', () => ({
+  generateChannelM3UInBackground: jest.fn(),
+  deleteChannelM3UInBackground: jest.fn(),
+}));
 
 jest.mock('../downloadModule', () => ({
   doChannelDownloads: jest.fn(),

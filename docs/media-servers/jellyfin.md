@@ -58,6 +58,8 @@ In the library settings:
 **Metadata savers**:
 - **Disable**: Nfo
 
+> **Warning**: Do NOT enable the Nfo metadata saver. Youtarr generates and maintains the `.nfo` file for every video it downloads. If the saver is enabled, Jellyfin will update and overwrite those files with its own data, which can cause problems for your library.
+
 **Image fetchers**:
 - Disable all internet fetchers
 - Local images will be used automatically

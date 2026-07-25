@@ -30,12 +30,14 @@ export interface DialogContentProps extends React.ComponentPropsWithoutRef<typeo
   PaperProps?: { className?: string };
 }
 
+// MUI-flavored sizes tuned to Tailwind steps: sm is the 600px confirm-dialog
+// width, wider sizes scale up moderately without sprawling on laptops.
 const maxWidthMap: Record<string, string> = {
-  xs: 'max-w-xs',
-  sm: 'max-w-sm',
-  md: 'max-w-lg',
-  lg: 'max-w-2xl',
-  xl: 'max-w-4xl',
+  xs: 'max-w-md', // 448px
+  sm: 'max-w-[600px]',
+  md: 'max-w-3xl', // 768px
+  lg: 'max-w-4xl', // 896px
+  xl: 'max-w-6xl', // 1152px
 };
 
 const DialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.Content>, DialogContentProps>(
@@ -125,12 +127,15 @@ const Dialog: React.FC<DialogProps> = ({
 const DialogTitle = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement> & { onClose?: () => void }>(
   ({ className, children, onClose, ...props }, ref) => {
     const isInsideDialog = React.useContext(DialogCompatContext);
+    // Flex row so icons passed alongside the title text sit inline with it
+    // (Tailwind preflight makes svg display:block, which would stack them)
+    const titleSpanClassName = 'flex-1 flex items-center gap-2';
     const titleContent = isInsideDialog ? (
       <DialogPrimitive.Title asChild>
-        <span className="flex-1">{children}</span>
+        <span className={titleSpanClassName}>{children}</span>
       </DialogPrimitive.Title>
     ) : (
-      <span className="flex-1">{children}</span>
+      <span className={titleSpanClassName}>{children}</span>
     );
 
     return (

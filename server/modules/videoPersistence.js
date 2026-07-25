@@ -36,6 +36,7 @@ class VideoPersistence {
     if (!hasVerifiedVideoFile && !isNewVideo) {
       delete data.filePath;
       delete data.fileSize;
+      delete data.video_resolution;
     }
     if (!hasVerifiedAudioFile && !isNewVideo) {
       delete data.audioFilePath;

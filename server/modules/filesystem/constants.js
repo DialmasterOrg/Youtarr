@@ -152,6 +152,14 @@ const CHANNEL_CLEANUP_IGNORABLE_FILES = [
 ];
 
 /**
+ * Channel .m3u playlist files (e.g., "Channel Name.m3u") are derived,
+ * regenerable metadata. Their presence must not keep an otherwise-empty
+ * channel directory alive after its videos are deleted. Also matches a
+ * ".m3u.tmp" staging file stranded by a crash mid-write.
+ */
+const M3U_FILE_PATTERN = /\.m3u(\.tmp)?$/i;
+
+/**
  * AppleDouble metadata files written by macOS SMB clients (e.g., "._video.mp4").
  * These are sidecar metadata for an underlying file; once the underlying file
  * is gone, the sidecar is orphaned junk and safe to remove. Mac SMB also tends
@@ -179,5 +187,6 @@ module.exports = {
   MAIN_VIDEO_FILE_PATTERN,
   FRAGMENT_FILE_PATTERN,
   CHANNEL_CLEANUP_IGNORABLE_FILES,
+  M3U_FILE_PATTERN,
   APPLEDOUBLE_FILE_PATTERN
 };

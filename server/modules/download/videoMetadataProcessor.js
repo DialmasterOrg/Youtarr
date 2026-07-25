@@ -3,6 +3,7 @@ const fsPromises = fs.promises;
 const path = require('path');
 const configModule = require('../configModule');
 const logger = require('../../logger');
+const { probeVideoDimensions } = require('../resolutionTier');
 
 class VideoMetadataProcessor {
   static normalizeChannelName(value) {
@@ -184,6 +185,7 @@ class VideoMetadataProcessor {
           audioFilePath: null,
           audioFileSize: null,
           removed: false,
+          video_resolution: null,
         };
 
         // Get file paths from JSON (supports dual-format downloads)
@@ -227,6 +229,8 @@ class VideoMetadataProcessor {
           if (videoStats) {
             videoMetadata.filePath = videoFilePath;
             videoMetadata.fileSize = videoStats.size.toString();
+            // The file on disk is ground truth for the downloaded resolution.
+            videoMetadata.video_resolution = await probeVideoDimensions(videoFilePath);
             logger.info({ filepath: videoFilePath, fileSize: videoStats.size, videoId: id }, 'Found video file');
           } else {
             videoMetadata.filePath = videoFilePath; // Store expected path anyway

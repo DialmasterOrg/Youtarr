@@ -154,4 +154,32 @@ describe('DeleteVideosDialog', () => {
       expect(screen.getByRole('button', { name: 'Delete Videos' })).toBeInTheDocument();
     });
   });
+
+  describe('Skipped Videos Notice', () => {
+    test('shows singular skipped notice when skippedCount is 1', () => {
+      render(<DeleteVideosDialog {...defaultProps} videoCount={2} skippedCount={1} />);
+
+      expect(
+        screen.getByText(
+          '1 selected video will not be affected because its file is already missing from disk.'
+        )
+      ).toBeInTheDocument();
+    });
+
+    test('shows plural skipped notice when skippedCount is greater than 1', () => {
+      render(<DeleteVideosDialog {...defaultProps} videoCount={3} skippedCount={2} />);
+
+      expect(
+        screen.getByText(
+          '2 selected videos will not be affected because their files are already missing from disk.'
+        )
+      ).toBeInTheDocument();
+    });
+
+    test('renders no skipped notice when skippedCount is omitted', () => {
+      render(<DeleteVideosDialog {...defaultProps} />);
+
+      expect(screen.queryByText(/will not be affected/)).not.toBeInTheDocument();
+    });
+  });
 });

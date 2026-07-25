@@ -61,6 +61,8 @@ describe('ChannelSettingsDialog', () => {
     audio_format: null,
     default_rating: null,
     skip_video_folder: null,
+    m3u_enabled: false,
+    m3u_sort_order: 'oldest_first',
   };
 
   const mockSubfolders = ['__Sports', '__Music', '__Tech'];
@@ -1883,6 +1885,56 @@ describe('ChannelSettingsDialog', () => {
       const body = JSON.parse(saveCall[1].body as string);
       expect(body.auto_download_enabled_tabs).toBe('video');
       expect(body.hidden_tabs).toEqual(['shorts']);
+    });
+  });
+
+  describe('Channel playlist file (.m3u) settings', () => {
+    // The ui Switch renders as role="checkbox" and gets its label via
+    // FormControlLabel, so query with getByLabelText.
+    test('renders the m3u toggle off by default and hides the order select', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
+      });
+
+      render(<ChannelSettingsDialog {...defaultProps} />);
+      await screen.findByText(/Generate channel playlist file/i);
+
+      const toggle = screen.getByLabelText(/Generate channel playlist file/i);
+      expect(toggle).not.toBeChecked();
+      expect(screen.queryByLabelText(/Playlist Order/i)).not.toBeInTheDocument();
+    });
+
+    test('enabling the toggle reveals the order select and saves both fields', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce({
+            settings: { ...mockChannelSettings, m3u_enabled: true, m3u_sort_order: 'newest_first' },
+          }),
+        });
+
+      render(<ChannelSettingsDialog {...defaultProps} />);
+      await screen.findByText(/Generate channel playlist file/i);
+      const user = userEvent.setup();
+
+      await user.click(screen.getByLabelText(/Generate channel playlist file/i));
+      await user.click(screen.getByLabelText(/Playlist Order/i));
+      await user.click(await screen.findByRole('option', { name: /Newest first/i }));
+      await user.click(screen.getByRole('button', { name: /Save/i }));
+
+      let putCall: ReturnType<typeof findChannelSettingsPutCall>;
+      await waitFor(() => {
+        putCall = findChannelSettingsPutCall();
+        expect(putCall).toBeDefined();
+      });
+      const body = JSON.parse(String(putCall![1]!.body));
+      expect(body.m3u_enabled).toBe(true);
+      expect(body.m3u_sort_order).toBe('newest_first');
     });
   });
 });

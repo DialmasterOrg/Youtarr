@@ -90,10 +90,26 @@ describe('VideosTable', () => {
     expect(screen.getByText('Removed Video')).toBeInTheDocument();
   });
 
-  test('removed video has a disabled checkbox', () => {
-    renderTable();
+  test('renders the resolution chip for a downloaded video with a known tier', () => {
+    renderTable({
+      videos: [
+        {
+          ...sampleVideos[0],
+          filePath: '/data/Tech Channel/First Video [a].mp4',
+          video_resolution: '1920x1080',
+        },
+      ],
+    });
+    expect(screen.getByTestId('video-resolution-chip')).toBeInTheDocument();
+    expect(screen.getByText('1080p')).toBeInTheDocument();
+  });
+
+  test('removed video has an enabled checkbox that toggles selection', () => {
+    const { onToggleSelect } = renderTable();
     const removedRowCheckbox = screen.getByRole('checkbox', { name: /Select Removed Video/ });
-    expect(removedRowCheckbox).toBeDisabled();
+    expect(removedRowCheckbox).toBeEnabled();
+    fireEvent.click(removedRowCheckbox);
+    expect(onToggleSelect).toHaveBeenCalledWith(2);
   });
 
   test('clicking the Published header fires onSortChange with published', () => {

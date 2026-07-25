@@ -49,7 +49,6 @@ const baseMetadata: VideoExtendedMetadata = {
   webpageUrl: null,
   relatedFiles: null,
   availableResolutions: null,
-  downloadedTier: null,
 };
 
 const renderTech = (
@@ -73,19 +72,29 @@ describe('VideoTechnical', () => {
       expect(screen.getByText('YT_ID_1')).toBeInTheDocument();
     });
 
-    test('shows downloaded resolution as WIDTHxHEIGHT when matching tier', () => {
-      renderTech({}, { ...baseMetadata, width: 1920, height: 1080, downloadedTier: 1080 });
+    test('shows downloaded resolution as WIDTHxHEIGHT for 16:9 (tier redundant)', () => {
+      renderTech({}, { ...baseMetadata, width: 1920, height: 1080 });
       expect(screen.getByText('Downloaded')).toBeInTheDocument();
       expect(screen.getByText('1920x1080')).toBeInTheDocument();
     });
 
-    test('appends tier label when tier differs from height (non-16:9)', () => {
-      renderTech({}, { ...baseMetadata, width: 1080, height: 1440, downloadedTier: 1080 });
-      expect(screen.getByText('1080x1440 (1080p)')).toBeInTheDocument();
+    test('appends the selection-class tier for portrait videos', () => {
+      renderTech({}, { ...baseMetadata, width: 608, height: 1080 });
+      expect(screen.getByText('608x1080 (1080p)')).toBeInTheDocument();
+    });
+
+    test('labels portrait videos by the smallest rung >= height', () => {
+      renderTech({}, { ...baseMetadata, width: 1080, height: 1440 });
+      expect(screen.getByText('1080x1440 (1440p)')).toBeInTheDocument();
+    });
+
+    test('appends the tier when it differs from the height (cinemascope)', () => {
+      renderTech({}, { ...baseMetadata, width: 1920, height: 816 });
+      expect(screen.getByText('1920x816 (1080p)')).toBeInTheDocument();
     });
 
     test('falls back to "Hp" format when width is missing', () => {
-      renderTech({}, { ...baseMetadata, width: null, height: 720, downloadedTier: null });
+      renderTech({}, { ...baseMetadata, width: null, height: 720 });
       expect(screen.getByText('720p')).toBeInTheDocument();
     });
 

@@ -115,8 +115,9 @@ function formatTestMessage(name) {
  * @returns {Object} Object with title and body strings
  */
 function formatAutoRemovalMessage(cleanupResult) {
-  const { totalDeleted, deletedByAge, deletedBySpace, freedBytes, plan = {} } = cleanupResult;
+  const { totalDeleted, deletedByAge, deletedByWatched = 0, deletedBySpace, freedBytes, plan = {} } = cleanupResult;
   const ageStrategy = plan.ageStrategy || {};
+  const watchedStrategy = plan.watchedStrategy || {};
   const spaceStrategy = plan.spaceStrategy || {};
 
   const title = buildAutoRemovalTitle(totalDeleted);
@@ -127,6 +128,19 @@ function formatAutoRemovalMessage(cleanupResult) {
     body += `\nRemoved by age (exceeded ${threshold}-day limit): ${deletedByAge} ${deletedByAge === 1 ? 'video' : 'videos'}`;
 
     const { groups, truncatedCount } = groupVideosByChannel(ageStrategy.sampleVideos, 5, deletedByAge);
+    for (const group of groups) {
+      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
+      body += `\n  ${group.channel} (${videoLabel}): ${group.titles.join(', ')}`;
+    }
+    if (truncatedCount > 0) {
+      body += `\n  ...and ${truncatedCount} more videos`;
+    }
+  }
+
+  if (deletedByWatched > 0) {
+    body += `\nRemoved after being watched: ${deletedByWatched} ${deletedByWatched === 1 ? 'video' : 'videos'}`;
+
+    const { groups, truncatedCount } = groupVideosByChannel(watchedStrategy.sampleVideos, 5, deletedByWatched);
     for (const group of groups) {
       const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
       body += `\n  ${group.channel} (${videoLabel}): ${group.titles.join(', ')}`;

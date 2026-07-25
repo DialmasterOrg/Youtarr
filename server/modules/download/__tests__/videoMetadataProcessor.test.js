@@ -10,6 +10,7 @@ jest.mock('../../configModule', () => ({
   getJobsPath: jest.fn(),
   directoryPath: '/output/directory'
 }));
+jest.mock('child_process', () => ({ execFile: jest.fn() }));
 
 // Set up fs.promises mock before requiring the module
 fs.promises = {
@@ -20,6 +21,7 @@ fs.promises = {
 const VideoMetadataProcessor = require('../videoMetadataProcessor');
 const configModule = require('../../configModule');
 const logger = require('../../../logger');
+const { execFile: mockExecFile } = require('child_process');
 
 const createDirent = (name, { directory = false, file = false } = {}) => ({
   name,
@@ -33,6 +35,8 @@ describe('VideoMetadataProcessor', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     configModule.getJobsPath.mockReturnValue(mockJobsPath);
+    // ffprobe fails by default; resolution-capture tests opt in to success.
+    mockExecFile.mockImplementation((file, args, opts, cb) => cb(new Error('ffprobe unavailable')));
   });
 
   afterEach(() => {
@@ -144,7 +148,8 @@ describe('VideoMetadataProcessor', () => {
         fileSize: '1024000',
         audioFilePath: null,
         audioFileSize: null,
-        removed: false
+        removed: false,
+        video_resolution: null
       });
 
       expect(fs.existsSync).toHaveBeenCalledWith(
@@ -397,7 +402,8 @@ describe('VideoMetadataProcessor', () => {
         fileSize: null,
         audioFilePath: null,
         audioFileSize: null,
-        removed: false
+        removed: false,
+        video_resolution: null
       });
     });
 
@@ -533,6 +539,64 @@ describe('VideoMetadataProcessor', () => {
       expect(result[0].description).toBeUndefined();
       expect(result[0].originalDate).toBeNull();
       expect(result[0].channel_id).toBeUndefined();
+    });
+
+    describe('resolution capture', () => {
+      const baseInfoJson = {
+        id: 'abc12345678',
+        title: 'Test Video',
+        uploader: 'Test Channel',
+        channel_id: 'UC123',
+        duration: 100,
+        upload_date: '20260101',
+        _actual_video_filepath: '/output/directory/Test Channel/Test Video [abc12345678].mp4'
+      };
+
+      beforeEach(() => {
+        fs.existsSync.mockReturnValue(true);
+        fs.promises.stat.mockResolvedValue({ size: 1000 });
+        fs.readFileSync.mockReturnValue(JSON.stringify(baseInfoJson));
+      });
+
+      it('probes the downloaded file with ffprobe and stores the raw dimensions', async () => {
+        mockExecFile.mockImplementation((file, args, opts, cb) => cb(null, '1920,1080\n'));
+
+        const [video] = await VideoMetadataProcessor.processVideoMetadata(['youtu.be/abc12345678']);
+
+        expect(video.video_resolution).toBe('1920x1080');
+        expect(mockExecFile).toHaveBeenCalledWith(
+          'ffprobe',
+          expect.arrayContaining(['/output/directory/Test Channel/Test Video [abc12345678].mp4']),
+          expect.objectContaining({ timeout: expect.any(Number) }),
+          expect.any(Function)
+        );
+      });
+
+      it('stores vertical dimensions uninterpreted', async () => {
+        mockExecFile.mockImplementation((file, args, opts, cb) => cb(null, '608,1080\n'));
+
+        const [video] = await VideoMetadataProcessor.processVideoMetadata(['youtu.be/abc12345678']);
+
+        expect(video.video_resolution).toBe('608x1080');
+      });
+
+      it('leaves video_resolution null when ffprobe fails', async () => {
+        const [video] = await VideoMetadataProcessor.processVideoMetadata(['youtu.be/abc12345678']);
+
+        expect(video.video_resolution).toBeNull();
+      });
+
+      it('does not probe audio-only downloads', async () => {
+        const audioOnly = { ...baseInfoJson };
+        delete audioOnly._actual_video_filepath;
+        audioOnly._actual_audio_filepath = '/output/directory/Test Channel/Test Video [abc12345678].mp3';
+        fs.readFileSync.mockReturnValue(JSON.stringify(audioOnly));
+
+        const [video] = await VideoMetadataProcessor.processVideoMetadata(['youtu.be/abc12345678']);
+
+        expect(video.video_resolution).toBeNull();
+        expect(mockExecFile).not.toHaveBeenCalled();
+      });
     });
   });
 

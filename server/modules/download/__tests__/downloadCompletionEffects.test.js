@@ -58,12 +58,17 @@ jest.mock('../../subfolderModule', () => ({
   register: jest.fn().mockResolvedValue(undefined),
 }));
 
+jest.mock('../../m3uGenerator', () => ({
+  generateChannelM3UInBackground: jest.fn(),
+}));
+
 const plexModule = require('../../plexModule');
 const jobModule = require('../../jobModule');
 const channelModule = require('../../channelModule');
 const downloadModule = require('../../downloadModule');
 const playlistModule = require('../../playlistModule');
 const subfolderModule = require('../../subfolderModule');
+const m3uGenerator = require('../../m3uGenerator');
 const { JobVideoDownload } = require('../../../models');
 const Channel = require('../../../models/channel');
 const logger = require('../../../logger');
@@ -353,6 +358,40 @@ describe('downloadCompletionEffects', () => {
 
       expect(plexModule.refreshLibrariesForSubfolders).not.toHaveBeenCalled();
       expect(jobModule.startNextJob).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('channel m3u regeneration', () => {
+    it('regenerates once per unique channel in the batch', async () => {
+      await runCompletionSideEffects({
+        jobId: 'job-1',
+        videoData: [
+          { youtubeId: 'v1', channel_id: 'UC1', filePath: '/mock/output/ChanA/v1/v1.mp4' },
+          { youtubeId: 'v2', channel_id: 'UC1', filePath: '/mock/output/ChanA/v2/v2.mp4' },
+          { youtubeId: 'v3', channel_id: 'UC2', filePath: '/mock/output/ChanB/v3/v3.mp4' },
+        ],
+        skipJobTransition: false,
+        tempChannelsFile: null,
+        onTempChannelsFileCleaned: jest.fn(),
+      });
+      await flushPromises();
+
+      expect(m3uGenerator.generateChannelM3UInBackground).toHaveBeenCalledTimes(2);
+      expect(m3uGenerator.generateChannelM3UInBackground).toHaveBeenCalledWith('UC1', expect.any(String));
+      expect(m3uGenerator.generateChannelM3UInBackground).toHaveBeenCalledWith('UC2', expect.any(String));
+    });
+
+    it('does not regenerate when videoData is empty', async () => {
+      await runCompletionSideEffects({
+        jobId: 'job-1',
+        videoData: [],
+        skipJobTransition: true,
+        tempChannelsFile: null,
+        onTempChannelsFileCleaned: jest.fn(),
+      });
+      await flushPromises();
+
+      expect(m3uGenerator.generateChannelM3UInBackground).not.toHaveBeenCalled();
     });
   });
 });

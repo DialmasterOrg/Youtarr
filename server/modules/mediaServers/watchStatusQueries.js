@@ -37,11 +37,10 @@ class WatchStatusQueries {
     }));
   }
 
-  // Raw-SQL twin of getWatchedByMap's where clause, for queries that must
-  // filter on watched state inside SQL (videosModule's paginated listing);
-  // callers negate it with NOT for the "unwatched" side. Keep the rule in
-  // sync with getWatchedByMap below.
-  buildWatchedExistsSql() {
+  // Shared qualifying-row conditions for the SQL probes below: played rows,
+  // restricted per watchStatusWatchedRule ('any' counts every synced user,
+  // 'primary' only the Plex owner + configured Jellyfin/Emby users).
+  _watchedRuleConditions() {
     const config = configModule.getConfig();
     const conditions = ['vws.video_id = Videos.id', 'vws.played = 1'];
     const replacements = {};
@@ -55,9 +54,42 @@ class WatchStatusQueries {
       replacements.watchedJellyfinUserId = config.jellyfinUserId || '';
       replacements.watchedEmbyUserId = config.embyUserId || '';
     }
+    return { conditions, replacements };
+  }
+
+  // Raw-SQL twin of getWatchedByMap's where clause, for queries that must
+  // filter on watched state inside SQL (videosModule's paginated listing);
+  // callers negate it with NOT for the "unwatched" side. Keep the rule in
+  // sync with getWatchedByMap below.
+  buildWatchedExistsSql() {
+    const { conditions, replacements } = this._watchedRuleConditions();
     return {
       sql: `EXISTS (SELECT 1 FROM video_watch_status vws WHERE ${conditions.join(' AND ')})`,
       replacements,
+    };
+  }
+
+  // Auto-removal's "safe to delete as watched" predicate. With
+  // minDaysSinceWatched set it also requires that NO qualifying watch is
+  // newer than the cutoff. A played row with a NULL last_watched_at blocks
+  // deletion (we can't prove when it was watched), so unknown watch dates
+  // always err on the side of keeping files.
+  buildWatchedEligibilitySql({ minDaysSinceWatched = 0 } = {}) {
+    const watched = this.buildWatchedExistsSql();
+    if (!minDaysSinceWatched || minDaysSinceWatched <= 0) {
+      return watched;
+    }
+    const { conditions, replacements } = this._watchedRuleConditions();
+    const recentConditions = conditions.concat(
+      '(vws.last_watched_at IS NULL OR vws.last_watched_at > DATE_SUB(NOW(), INTERVAL :watchedMinDaysSinceWatched DAY))'
+    );
+    return {
+      sql: `(${watched.sql} AND NOT EXISTS (SELECT 1 FROM video_watch_status vws WHERE ${recentConditions.join(' AND ')}))`,
+      replacements: {
+        ...watched.replacements,
+        ...replacements,
+        watchedMinDaysSinceWatched: minDaysSinceWatched,
+      },
     };
   }
 

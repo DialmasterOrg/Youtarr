@@ -184,8 +184,9 @@ function formatPlainMessage(title, body) {
  * @returns {Object} Discord webhook message payload with embeds
  */
 function formatAutoRemovalMessage(cleanupResult) {
-  const { totalDeleted, deletedByAge, deletedBySpace, freedBytes, plan = {} } = cleanupResult;
+  const { totalDeleted, deletedByAge, deletedByWatched = 0, deletedBySpace, freedBytes, plan = {} } = cleanupResult;
   const ageStrategy = plan.ageStrategy || {};
+  const watchedStrategy = plan.watchedStrategy || {};
   const spaceStrategy = plan.spaceStrategy || {};
 
   const title = buildAutoRemovalTitle(totalDeleted);
@@ -209,6 +210,26 @@ function formatAutoRemovalMessage(cleanupResult) {
 
     fields.push({
       name: `🕐 Removed by age (exceeded ${threshold}-day limit): ${deletedByAge}`,
+      value,
+      inline: false
+    });
+  }
+
+  if (deletedByWatched > 0) {
+    const { groups, truncatedCount } = groupVideosByChannel(watchedStrategy.sampleVideos, 5, deletedByWatched);
+    let value = groups.map(group => {
+      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
+      return `📺 **${group.channel}** (${videoLabel})\n${group.titles.join(', ')}`;
+    }).join('\n\n');
+
+    if (truncatedCount > 0) {
+      value += `\n\n...and ${truncatedCount} more videos`;
+    }
+
+    if (!value) value = `${deletedByWatched} ${deletedByWatched === 1 ? 'video' : 'videos'}`;
+
+    fields.push({
+      name: `👁️ Removed after being watched: ${deletedByWatched}`,
       value,
       inline: false
     });

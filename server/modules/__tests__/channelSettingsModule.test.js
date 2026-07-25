@@ -50,6 +50,11 @@ jest.mock('../subfolderModule', () => ({
   register: jest.fn().mockResolvedValue(undefined),
 }));
 
+jest.mock('../m3uGenerator', () => ({
+  generateChannelM3UInBackground: jest.fn(),
+  deleteChannelM3UInBackground: jest.fn(),
+}));
+
 describe('ChannelSettingsModule', () => {
   let channelSettingsModule;
   let fs;
@@ -60,6 +65,7 @@ describe('ChannelSettingsModule', () => {
   let Video;
   let jobModule;
   let plexModule;
+  let m3uGenerator;
 
   const mockChannel = {
     channel_id: 'UC123456',
@@ -69,6 +75,9 @@ describe('ChannelSettingsModule', () => {
     min_duration: null,
     max_duration: null,
     title_filter_regex: null,
+    m3u_enabled: false,
+    m3u_sort_order: 'oldest_first',
+    enabled: true,
     update: jest.fn()
   };
 
@@ -84,6 +93,7 @@ describe('ChannelSettingsModule', () => {
     Video = require('../../models/video');
     jobModule = require('../jobModule');
     plexModule = require('../plexModule');
+    m3uGenerator = require('../m3uGenerator');
 
     // Reset mock implementations
     Channel.findOne.mockResolvedValue(null);
@@ -1237,6 +1247,51 @@ describe('ChannelSettingsModule', () => {
       expect(count).toBe(0);
     });
 
+    test('relocates audioFilePath alongside filePath', async () => {
+      const mockVideos = [
+        {
+          filePath: '/old/path/TestChannel/video1.mp4',
+          audioFilePath: '/old/path/TestChannel/video1.mp3',
+          update: jest.fn()
+        }
+      ];
+      Video.findAll.mockResolvedValue(mockVideos);
+
+      const count = await channelSettingsModule.updateVideoFilePaths(
+        'UC123456',
+        '/old/path/TestChannel',
+        '/new/path/TestChannel'
+      );
+
+      expect(count).toBe(1);
+      expect(mockVideos[0].update).toHaveBeenCalledWith({
+        filePath: '/new/path/TestChannel/video1.mp4',
+        audioFilePath: '/new/path/TestChannel/video1.mp3'
+      });
+    });
+
+    test('relocates audio-only videos that have no filePath', async () => {
+      const mockVideos = [
+        {
+          filePath: null,
+          audioFilePath: '/old/path/TestChannel/video1.mp3',
+          update: jest.fn()
+        }
+      ];
+      Video.findAll.mockResolvedValue(mockVideos);
+
+      const count = await channelSettingsModule.updateVideoFilePaths(
+        'UC123456',
+        '/old/path/TestChannel',
+        '/new/path/TestChannel'
+      );
+
+      expect(count).toBe(1);
+      expect(mockVideos[0].update).toHaveBeenCalledWith({
+        audioFilePath: '/new/path/TestChannel/video1.mp3'
+      });
+    });
+
     test('should handle errors gracefully', async () => {
       Video.findAll.mockRejectedValue(new Error('Database error'));
 
@@ -1252,6 +1307,105 @@ describe('ChannelSettingsModule', () => {
         expect.objectContaining({ err: 'Database error' }),
         'Error updating video file paths'
       );
+    });
+  });
+
+  describe('m3u settings', () => {
+    const makeChannel = (overrides = {}) => {
+      const channel = {
+        ...mockChannel,
+        available_tabs: null,
+        hidden_tabs: null,
+        m3u_enabled: false,
+        m3u_sort_order: 'oldest_first',
+        ...overrides,
+      };
+      channel.update = jest.fn().mockImplementation(async (data) => {
+        Object.assign(channel, data);
+        return channel;
+      });
+      return channel;
+    };
+
+    test('getChannelSettings includes m3u fields', async () => {
+      Channel.findOne.mockResolvedValue(makeChannel({ m3u_enabled: true, m3u_sort_order: 'newest_first' }));
+
+      const settings = await channelSettingsModule.getChannelSettings('UC123456');
+
+      expect(settings.m3u_enabled).toBe(true);
+      expect(settings.m3u_sort_order).toBe('newest_first');
+    });
+
+    test('rejects non-boolean m3u_enabled', async () => {
+      Channel.findOne.mockResolvedValue(makeChannel());
+      await expect(
+        channelSettingsModule.updateChannelSettings('UC123456', { m3u_enabled: 'yes' })
+      ).rejects.toThrow('Invalid m3u_enabled');
+    });
+
+    test('rejects invalid m3u_sort_order', async () => {
+      Channel.findOne.mockResolvedValue(makeChannel());
+      await expect(
+        channelSettingsModule.updateChannelSettings('UC123456', { m3u_sort_order: 'random' })
+      ).rejects.toThrow('Invalid m3u_sort_order');
+    });
+
+    test('enabling m3u persists and triggers generation', async () => {
+      Channel.findOne.mockResolvedValue(makeChannel());
+
+      const result = await channelSettingsModule.updateChannelSettings('UC123456', { m3u_enabled: true });
+
+      expect(result.settings.m3u_enabled).toBe(true);
+      expect(m3uGenerator.generateChannelM3UInBackground).toHaveBeenCalledWith('UC123456', expect.any(String));
+      expect(m3uGenerator.deleteChannelM3UInBackground).not.toHaveBeenCalled();
+    });
+
+    test('disabling m3u triggers file deletion', async () => {
+      Channel.findOne.mockResolvedValue(makeChannel({ m3u_enabled: true }));
+
+      await channelSettingsModule.updateChannelSettings('UC123456', { m3u_enabled: false });
+
+      expect(m3uGenerator.deleteChannelM3UInBackground).toHaveBeenCalledWith('UC123456', expect.any(String));
+      expect(m3uGenerator.generateChannelM3UInBackground).not.toHaveBeenCalled();
+    });
+
+    test('changing sort order while enabled regenerates', async () => {
+      Channel.findOne.mockResolvedValue(makeChannel({ m3u_enabled: true }));
+
+      await channelSettingsModule.updateChannelSettings('UC123456', { m3u_sort_order: 'newest_first' });
+
+      expect(m3uGenerator.generateChannelM3UInBackground).toHaveBeenCalledWith('UC123456', expect.any(String));
+    });
+
+    test('changing audio format while enabled regenerates', async () => {
+      Channel.findOne.mockResolvedValue(makeChannel({ m3u_enabled: true }));
+
+      await channelSettingsModule.updateChannelSettings('UC123456', { audio_format: 'mp3_only' });
+
+      expect(m3uGenerator.generateChannelM3UInBackground).toHaveBeenCalledWith('UC123456', expect.any(String));
+    });
+
+    test('unrelated settings changes do not touch the m3u', async () => {
+      Channel.findOne.mockResolvedValue(makeChannel());
+
+      await channelSettingsModule.updateChannelSettings('UC123456', { video_quality: '720' });
+
+      expect(m3uGenerator.generateChannelM3UInBackground).not.toHaveBeenCalled();
+      expect(m3uGenerator.deleteChannelM3UInBackground).not.toHaveBeenCalled();
+    });
+
+    test('resending unchanged m3u fields (dialog save) does not regenerate', async () => {
+      // The settings dialog always sends every field.
+      Channel.findOne.mockResolvedValue(makeChannel({ m3u_enabled: true }));
+
+      await channelSettingsModule.updateChannelSettings('UC123456', {
+        m3u_enabled: true,
+        m3u_sort_order: 'oldest_first',
+        video_quality: '720'
+      });
+
+      expect(m3uGenerator.generateChannelM3UInBackground).not.toHaveBeenCalled();
+      expect(m3uGenerator.deleteChannelM3UInBackground).not.toHaveBeenCalled();
     });
   });
 });

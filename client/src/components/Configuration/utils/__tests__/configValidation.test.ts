@@ -37,7 +37,7 @@ describe('validateConfig', () => {
     });
 
     expect(validateConfig(config)).toBe(
-      'Cannot save: Automatic removal is enabled but no thresholds are configured'
+      'Cannot save: Automatic removal is enabled but no removal rules are configured'
     );
   });
 
@@ -45,6 +45,17 @@ describe('validateConfig', () => {
     const config = createConfig({
       autoRemovalEnabled: true,
       autoRemovalFreeSpaceThreshold: '50GB'
+    });
+
+    expect(validateConfig(config)).toBeNull();
+  });
+
+  test('passes when only watched-based removal is enabled', () => {
+    const config = createConfig({
+      autoRemovalEnabled: true,
+      autoRemovalFreeSpaceThreshold: '',
+      autoRemovalVideoAgeThreshold: '',
+      autoRemovalWatchedEnabled: true
     });
 
     expect(validateConfig(config)).toBeNull();

@@ -264,6 +264,56 @@ describe('FileCheckModule', () => {
       expect(mockFs.stat).not.toHaveBeenCalled();
     });
 
+    test('runs checks concurrently but never more than 16 at once', async () => {
+      const videos = Array.from({ length: 40 }, (_, i) => ({
+        id: i + 1,
+        youtubeId: `id${i}`,
+        filePath: `/videos/channel/video${i}.mp4`,
+        fileSize: '100',
+        removed: false
+      }));
+
+      let inFlight = 0;
+      let maxInFlight = 0;
+      mockFs.stat.mockImplementation(() => {
+        inFlight++;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        return new Promise((resolve) => {
+          setImmediate(() => {
+            inFlight--;
+            resolve({ size: 100 });
+          });
+        });
+      });
+
+      const result = await fileCheckModule.checkVideoFiles(videos);
+
+      expect(mockFs.stat).toHaveBeenCalledTimes(40);
+      expect(maxInFlight).toBeGreaterThan(1);
+      expect(maxInFlight).toBeLessThanOrEqual(16);
+      expect(result.updates).toEqual([]);
+    });
+
+    test('keeps updates in input order under concurrency', async () => {
+      const videos = [
+        { id: 1, youtubeId: 'a', filePath: '/videos/a.mp4', fileSize: '100', removed: false },
+        { id: 2, youtubeId: 'b', filePath: '/videos/b.mp4', fileSize: '100', removed: false },
+        { id: 3, youtubeId: 'c', filePath: '/videos/c.mp4', fileSize: '100', removed: false }
+      ];
+
+      // The first video's stat resolves last; its update must still come first.
+      mockFs.stat.mockImplementation((p) => {
+        const delay = p.includes('/a.mp4') ? 20 : 1;
+        return new Promise((resolve) => {
+          setTimeout(() => resolve({ size: 999 }), delay);
+        });
+      });
+
+      const result = await fileCheckModule.checkVideoFiles(videos);
+
+      expect(result.updates.map((u) => u.id)).toEqual([1, 2, 3]);
+    });
+
     test('should not mutate original videos array', async () => {
       const videos = [
         {

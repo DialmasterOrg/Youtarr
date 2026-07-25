@@ -9,6 +9,7 @@ const plexModule = require('../plexModule');
 const jobModule = require('../jobModule');
 const filesystem = require('../filesystem');
 const subfolderModule = require('../subfolderModule');
+const m3uGenerator = require('../m3uGenerator');
 const { JobVideoDownload } = require('../../models');
 const Channel = require('../../models/channel');
 
@@ -88,6 +89,13 @@ async function runCompletionSideEffects({
       require('../downloadModule').afterDownloadHook(downloadedIds).catch((err) => {
         logger.error({ err }, 'afterDownloadHook failed');
       });
+    }
+  }
+
+  if (videoData && videoData.length > 0) {
+    const m3uChannelIds = [...new Set(videoData.map((v) => v.channel_id).filter(Boolean))];
+    for (const channelId of m3uChannelIds) {
+      m3uGenerator.generateChannelM3UInBackground(channelId, 'download-completion');
     }
   }
 

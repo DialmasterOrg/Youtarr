@@ -11,7 +11,7 @@ export const SETTINGS_PAGES = [
   { key: 'appearance', title: 'Appearance', description: 'Theme, animations, and visual preferences.' },
   { key: 'autoremove', title: 'Auto Removal', description: 'Automated cleanup and retention policies.' },
   { key: 'cookies', title: 'Cookies', description: 'Cookie configuration and login helpers.' },
-  { key: 'maintenance', title: 'Maintenance', description: 'Rescan files on disk and other maintenance actions.' },
+  { key: 'maintenance', title: 'Maintenance & Rescan', description: 'Rescan files on disk and other maintenance actions.' },
   { key: 'notifications', title: 'Notifications', description: 'Toast notifications and alert behavior.' },
   { key: 'plex', title: 'Plex', description: 'Plex integration and library configuration.' },
   { key: 'jellyfin', title: 'Jellyfin', description: 'Jellyfin connection for native playlist sync.' },
@@ -30,12 +30,12 @@ export function SettingsIndex() {
       <Grid container spacing={2}>
         {SETTINGS_PAGES.map((page) => (
           <Grid item xs={12} md={6} lg={4} key={page.key} style={{ display: 'flex' }}>
-            <Card 
+            <Card
               className="settings-splash-card"
-              variant="outlined" 
-              style={{ 
-                borderRadius: 'var(--radius-ui)', 
-                width: '100%', 
+              variant="outlined"
+              style={{
+                borderRadius: 'var(--radius-ui)',
+                width: '100%',
                 height: '100%',
                 border: 'var(--border-weight) solid var(--border)',
               }}

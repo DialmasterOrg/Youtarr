@@ -1273,4 +1273,70 @@ describe('DownloadSettingsDialog', () => {
       expect(videoCountSelect).toHaveTextContent('8 videos');
     });
   });
+
+  describe('Replace and unavailable counts', () => {
+    test('shows singular replace warning when replaceVideoCount is 1', () => {
+      render(<DownloadSettingsDialog {...defaultProps} replaceVideoCount={1} />);
+
+      expect(
+        screen.getByText('1 video already exists on disk and will be re-downloaded and replaced.')
+      ).toBeInTheDocument();
+    });
+
+    test('shows plural replace warning when replaceVideoCount is greater than 1', () => {
+      render(<DownloadSettingsDialog {...defaultProps} replaceVideoCount={4} />);
+
+      expect(
+        screen.getByText('4 videos already exist on disk and will be re-downloaded and replaced.')
+      ).toBeInTheDocument();
+    });
+
+    test('auto-opens custom settings and enables re-download when replaceVideoCount > 0', () => {
+      render(<DownloadSettingsDialog {...defaultProps} replaceVideoCount={2} />);
+
+      const customToggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
+      expect(customToggle).toBeChecked();
+
+      const redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
+      expect(redownloadToggle).toBeChecked();
+    });
+
+    test('emits allowRedownload when auto-enabled via replaceVideoCount and confirmed untouched', () => {
+      render(<DownloadSettingsDialog {...defaultProps} replaceVideoCount={2} mode="manual" />);
+
+      fireEvent.click(screen.getByRole('button', { name: /Start Download/i }));
+
+      expect(mockOnConfirm).toHaveBeenCalledWith({ allowRedownload: true });
+    });
+
+    test('shows singular skip note when unavailableVideoCount is 1', () => {
+      render(<DownloadSettingsDialog {...defaultProps} unavailableVideoCount={1} />);
+
+      expect(
+        screen.getByText('1 selected video is no longer available on YouTube and will be skipped.')
+      ).toBeInTheDocument();
+    });
+
+    test('shows plural skip note when unavailableVideoCount is greater than 1', () => {
+      render(<DownloadSettingsDialog {...defaultProps} unavailableVideoCount={3} />);
+
+      expect(
+        screen.getByText('3 selected videos are no longer available on YouTube and will be skipped.')
+      ).toBeInTheDocument();
+    });
+
+    test('unavailableVideoCount alone does not auto-enable re-download', () => {
+      render(<DownloadSettingsDialog {...defaultProps} unavailableVideoCount={2} />);
+
+      const customToggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
+      expect(customToggle).not.toBeChecked();
+    });
+
+    test('renders neither new alert when the new props are omitted', () => {
+      render(<DownloadSettingsDialog {...defaultProps} />);
+
+      expect(screen.queryByText(/already exists? on disk/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/no longer available on YouTube/)).not.toBeInTheDocument();
+    });
+  });
 });

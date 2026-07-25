@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 import { useSwipeable } from 'react-swipeable';
 import { Alert, Box, Grid, Snackbar, Typography } from '../ui';
-import { Trash2 as DeleteIcon, Star as RatingIcon } from '../../lib/icons';
+import { Trash2 as DeleteIcon, Star as RatingIcon, Download as DownloadIcon } from '../../lib/icons';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useConfig } from '../../hooks/useConfig';
 import { useDownloadListingsRefresh } from '../../hooks/useDownloadListingsRefresh';
+import { useTriggerDownloads } from '../../hooks/useTriggerDownloads';
 import { VideoData } from '../../types/VideoData';
 import AddChannelDialog from '../shared/AddChannelDialog';
 import DeleteVideosDialog from '../shared/DeleteVideosDialog';
@@ -14,6 +16,8 @@ import ChangeRatingDialog from '../shared/ChangeRatingDialog';
 import { useVideoProtection } from '../shared/useVideoProtection';
 import VideoModal from '../shared/VideoModal';
 import { VideoModalData } from '../shared/VideoModal/types';
+import DownloadSettingsDialog from '../DownloadManager/ManualDownload/DownloadSettingsDialog';
+import { DownloadSettings } from '../DownloadManager/ManualDownload/types';
 import VideoCard from './components/VideoCard';
 import VideosTable from './components/VideosTable';
 import VideosListMobile from './components/VideosListMobile';
@@ -38,6 +42,15 @@ interface VideosPageProps {
 }
 
 const VIEW_MODE_STORAGE_KEY = 'youtarr:videosPageViewMode';
+
+const YOUTUBE_CHANNEL_ID_PATTERN = /^UC[a-zA-Z0-9_-]{22}$/;
+
+interface VideoSelectionMeta {
+  youtubeId: string;
+  channelId: string | null;
+  removed: boolean;
+  youtubeRemoved: boolean;
+}
 
 function videoDataToModalData(video: VideoData): VideoModalData {
   return {
@@ -95,6 +108,10 @@ function VideosPage({ token }: VideosPageProps) {
     []
   );
 
+  const navigate = useNavigate();
+  const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
+  const { triggerDownloads } = useTriggerDownloads(token);
+
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const { deleteVideos, loading: deleteLoading } = useVideoDeletion();
@@ -142,6 +159,19 @@ function VideosPage({ token }: VideosPageProps) {
     useInfiniteScroll,
   });
 
+  const videoMetaRef = useRef<Map<number, VideoSelectionMeta>>(new Map());
+
+  useEffect(() => {
+    for (const video of videos) {
+      videoMetaRef.current.set(video.id, {
+        youtubeId: video.youtubeId,
+        channelId: video.channel_id || null,
+        removed: Boolean(video.removed),
+        youtubeRemoved: Boolean(video.youtube_removed),
+      });
+    }
+  }, [videos]);
+
   useDownloadListingsRefresh(refetch);
 
   useEffect(() => {
@@ -186,7 +216,12 @@ function VideosPage({ token }: VideosPageProps) {
 
   const handleDeleteConfirm = async (selectedIds: number[]) => {
     setDeleteDialogOpen(false);
-    const result = await deleteVideos(selectedIds, token);
+    const deletableIds = selectedIds.filter((id) => {
+      const meta = videoMetaRef.current.get(id);
+      return Boolean(meta && !meta.removed);
+    });
+    if (deletableIds.length === 0) return;
+    const result = await deleteVideos(deletableIds, token);
     if (result.success) {
       setSuccessMessage(
         `Successfully deleted ${result.deleted.length} video${result.deleted.length !== 1 ? 's' : ''}`
@@ -235,6 +270,18 @@ function VideosPage({ token }: VideosPageProps) {
   const selectionActions = useMemo<SelectionAction<number>[]>(
     () => [
       {
+        id: 'download',
+        label: 'Download',
+        icon: <DownloadIcon size={14} />,
+        intent: 'success',
+        disabled: (ids) =>
+          !ids.some((id) => {
+            const meta = videoMetaRef.current.get(id);
+            return Boolean(meta && !meta.youtubeRemoved);
+          }),
+        onClick: () => setDownloadDialogOpen(true),
+      },
+      {
         id: 'rating',
         label: 'Rating',
         icon: <RatingIcon size={14} />,
@@ -246,7 +293,12 @@ function VideosPage({ token }: VideosPageProps) {
         label: 'Delete',
         icon: <DeleteIcon size={14} />,
         intent: 'danger',
-        disabled: () => deleteLoading,
+        disabled: (ids) =>
+          deleteLoading ||
+          !ids.some((id) => {
+            const meta = videoMetaRef.current.get(id);
+            return Boolean(meta && !meta.removed);
+          }),
         onClick: () => setDeleteDialogOpen(true),
       },
     ],
@@ -278,11 +330,81 @@ function VideosPage({ token }: VideosPageProps) {
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      const selectable = videos.filter((v) => !v.removed).map((v) => v.id);
-      selection.set(selectable);
+      selection.set(videos.map((v) => v.id));
     } else {
       selection.clear();
     }
+  };
+
+  const getDownloadCounts = () => {
+    let missing = 0;
+    let replace = 0;
+    let unavailable = 0;
+    for (const id of selection.selectedIds) {
+      const meta = videoMetaRef.current.get(id);
+      if (!meta) continue;
+      if (meta.youtubeRemoved) {
+        unavailable += 1;
+      } else if (meta.removed) {
+        missing += 1;
+      } else {
+        replace += 1;
+      }
+    }
+    return { missing, replace, unavailable, eligible: missing + replace };
+  };
+
+  const downloadCounts = downloadDialogOpen
+    ? getDownloadCounts()
+    : { missing: 0, replace: 0, unavailable: 0, eligible: 0 };
+
+  const getDeleteCounts = () => {
+    let deletable = 0;
+    let skipped = 0;
+    for (const id of selection.selectedIds) {
+      const meta = videoMetaRef.current.get(id);
+      if (meta && !meta.removed) {
+        deletable += 1;
+      } else {
+        skipped += 1;
+      }
+    }
+    return { deletable, skipped };
+  };
+  const deleteCounts = getDeleteCounts();
+
+  const handleDownloadConfirm = async (settings: DownloadSettings | null) => {
+    setDownloadDialogOpen(false);
+    const eligible = selection.selectedIds
+      .map((id) => videoMetaRef.current.get(id))
+      .filter((meta): meta is VideoSelectionMeta => Boolean(meta && !meta.youtubeRemoved));
+    if (eligible.length === 0) return;
+
+    const urls = eligible.map((meta) => `https://www.youtube.com/watch?v=${meta.youtubeId}`);
+    const videoChannelMap: Record<string, string> = {};
+    for (const meta of eligible) {
+      if (meta.channelId && YOUTUBE_CHANNEL_ID_PATTERN.test(meta.channelId)) {
+        videoChannelMap[meta.youtubeId] = meta.channelId;
+      }
+    }
+    const overrideSettings = settings
+      ? {
+          resolution: settings.resolution,
+          allowRedownload: settings.allowRedownload,
+          subfolder: settings.subfolder,
+          audioFormat: settings.audioFormat,
+          rating: settings.rating,
+          skipVideoFolder: settings.skipVideoFolder,
+        }
+      : undefined;
+
+    const success = await triggerDownloads({ urls, overrideSettings, videoChannelMap });
+    if (!success) {
+      setErrorMessage('Failed to queue selected videos for download. Please try again.');
+      return;
+    }
+    selection.clear();
+    navigate('/downloads/activity');
   };
 
   const handleDeleteSingleVideo = (videoId: number) => {
@@ -511,7 +633,8 @@ function VideosPage({ token }: VideosPageProps) {
         open={deleteDialogOpen}
         onClose={() => setDeleteDialogOpen(false)}
         onConfirm={() => handleDeleteConfirm(selection.selectedIds)}
-        videoCount={selection.count}
+        videoCount={deleteCounts.deletable}
+        skippedCount={deleteCounts.skipped}
       />
 
       <ChangeRatingDialog
@@ -519,6 +642,20 @@ function VideosPage({ token }: VideosPageProps) {
         onClose={() => setRatingDialogOpen(false)}
         onApply={(rating) => handleApplyRating(rating, selection.selectedIds)}
         selectedCount={selection.count}
+      />
+
+      <DownloadSettingsDialog
+        open={downloadDialogOpen}
+        onClose={() => setDownloadDialogOpen(false)}
+        onConfirm={handleDownloadConfirm}
+        videoCount={downloadCounts.eligible}
+        missingVideoCount={downloadCounts.missing}
+        replaceVideoCount={downloadCounts.replace}
+        unavailableVideoCount={downloadCounts.unavailable}
+        defaultResolution={configState?.config?.preferredResolution || '1080'}
+        defaultResolutionSource="global"
+        mode="manual"
+        token={token}
       />
 
       <Snackbar

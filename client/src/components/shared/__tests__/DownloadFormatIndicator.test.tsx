@@ -56,6 +56,49 @@ describe('DownloadFormatIndicator', () => {
       expect(screen.getByText('Unknown')).toBeInTheDocument();
     });
 
+    test('renders a resolution chip when a video file and resolution are present', () => {
+      render(
+        <DownloadFormatIndicator
+          filePath="/videos/test.mp4"
+          fileSize={104857600}
+          videoResolution="1920x1080"
+        />
+      );
+
+      expect(screen.getByTestId('video-resolution-chip')).toBeInTheDocument();
+      expect(screen.getByText('1080p')).toBeInTheDocument();
+    });
+
+    test('does not render a resolution chip without a video file', () => {
+      render(
+        <DownloadFormatIndicator
+          audioFilePath="/audio/test.mp3"
+          audioFileSize={52428800}
+          videoResolution="1920x1080"
+        />
+      );
+
+      expect(screen.queryByTestId('video-resolution-chip')).not.toBeInTheDocument();
+    });
+
+    test('does not render a resolution chip when resolution is unknown', () => {
+      render(<DownloadFormatIndicator filePath="/videos/test.mp4" fileSize={104857600} />);
+
+      expect(screen.queryByTestId('video-resolution-chip')).not.toBeInTheDocument();
+    });
+
+    test('does not render a resolution chip for the probed-but-unknown sentinel (0)', () => {
+      render(
+        <DownloadFormatIndicator
+          filePath="/videos/test.mp4"
+          fileSize={104857600}
+          videoResolution="0x0"
+        />
+      );
+
+      expect(screen.queryByTestId('video-resolution-chip')).not.toBeInTheDocument();
+    });
+
     test('handles file size as string', () => {
       render(<DownloadFormatIndicator filePath="/videos/test.mp4" fileSize="104857600" />);
 

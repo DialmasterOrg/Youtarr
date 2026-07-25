@@ -43,9 +43,10 @@ export const validateConfig = (config: ConfigState): string | null => {
   if (
     config.autoRemovalEnabled &&
     !config.autoRemovalFreeSpaceThreshold &&
-    !config.autoRemovalVideoAgeThreshold
+    !config.autoRemovalVideoAgeThreshold &&
+    !config.autoRemovalWatchedEnabled
   ) {
-    return 'Cannot save: Automatic removal is enabled but no thresholds are configured';
+    return 'Cannot save: Automatic removal is enabled but no removal rules are configured';
   }
 
   // Proxy URL validation

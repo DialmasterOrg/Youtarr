@@ -6,6 +6,7 @@ const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const tempPathManager = require('./download/tempPathManager');
 const downloadSettingsResolver = require('./download/downloadSettingsResolver');
 const { MANUAL_DOWNLOAD_LABEL, playlistJobLabel, autoRetryJobLabel } = require('./download/jobTypes');
+const MessageEmitter = require('./messageEmitter');
 const ChannelVideo = require('../models/channelvideo');
 const logger = require('../logger');
 
@@ -1087,6 +1088,21 @@ class DownloadModule {
   terminateCurrentDownload() {
     const terminatedJobId = this.downloadExecutor.terminateCurrentJob('User requested termination');
     return terminatedJobId;
+  }
+
+  // Snapshot for GET /api/jobs/current-activity: the executor's live monitor
+  // state plus the same final-state payload the WebSocket replays on connect.
+  getCurrentActivitySnapshot() {
+    const snapshot = this.downloadExecutor.getActivitySnapshot() || {
+      jobId: null,
+      capturedAt: null,
+      terminal: true,
+      activity: null,
+    };
+    return {
+      ...snapshot,
+      lastFinalActivity: MessageEmitter.getLastFinalActivity(),
+    };
   }
 }
 

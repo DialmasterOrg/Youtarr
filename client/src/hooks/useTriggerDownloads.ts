@@ -13,6 +13,7 @@ interface TriggerDownloadsParams {
   urls: string[];
   overrideSettings?: DownloadOverrideSettings;
   channelId?: string | null;
+  videoChannelMap?: Record<string, string>;
 }
 
 interface UseTriggerDownloadsResult {
@@ -26,7 +27,7 @@ export function useTriggerDownloads(token: string | null): UseTriggerDownloadsRe
   const [error, setError] = useState<Error | null>(null);
 
   const triggerDownloads = useCallback(
-    async ({ urls, overrideSettings, channelId }: TriggerDownloadsParams): Promise<boolean> => {
+    async ({ urls, overrideSettings, channelId, videoChannelMap }: TriggerDownloadsParams): Promise<boolean> => {
       if (!token) {
         setError(new Error('No authentication token provided'));
         return false;
@@ -51,6 +52,10 @@ export function useTriggerDownloads(token: string | null): UseTriggerDownloadsRe
 
         if (channelId) {
           requestBody.channelId = channelId;
+        }
+
+        if (videoChannelMap && Object.keys(videoChannelMap).length > 0) {
+          requestBody.videoChannelMap = videoChannelMap;
         }
 
         const response = await fetch('/triggerspecificdownloads', {

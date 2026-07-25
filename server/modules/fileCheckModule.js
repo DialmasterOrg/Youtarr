@@ -1,6 +1,12 @@
 const fs = require('fs').promises;
 const path = require('path');
 const { VIDEO_EXTENSIONS, AUDIO_EXTENSIONS } = require('./filesystem/constants');
+const createLimiter = require('./subscriptionImport/concurrencyLimiter');
+
+// Per-video checks run concurrently up to this bound: each stat costs a full
+// round trip on network-backed mounts (NAS, WSL drvfs), so checking a
+// 128-row page sequentially takes ~1s of wall time there.
+const MAX_CONCURRENT_FILE_CHECKS = 16;
 
 /**
  * Check file existence and update video metadata.
@@ -53,11 +59,13 @@ class FileCheckModule {
   }
 
   async checkVideoFiles(videos) {
-    const updates = [];
     const updatedVideos = [...videos];
+    const limit = createLimiter(MAX_CONCURRENT_FILE_CHECKS);
+    // One slot per video keeps `updates` in input order no matter which
+    // check finishes first.
+    const updateSlots = new Array(updatedVideos.length).fill(null);
 
-    for (let i = 0; i < updatedVideos.length; i++) {
-      const video = updatedVideos[i];
+    await Promise.all(updatedVideos.map((video, i) => limit(async () => {
       const update = { id: video.id };
       let hasUpdates = false;
       let videoFileExists = false;
@@ -120,7 +128,7 @@ class FileCheckModule {
       }
 
       if (hasUpdates) {
-        updates.push(update);
+        updateSlots[i] = update;
         updatedVideos[i] = {
           ...video,
           ...(update.filePath !== undefined && { filePath: update.filePath }),
@@ -130,9 +138,9 @@ class FileCheckModule {
           ...(update.removed !== undefined && { removed: update.removed })
         };
       }
-    }
+    })));
 
-    return { videos: updatedVideos, updates };
+    return { videos: updatedVideos, updates: updateSlots.filter(Boolean) };
   }
 
   async applyVideoUpdates(sequelize, Sequelize, updates) {
