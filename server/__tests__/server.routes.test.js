@@ -209,7 +209,14 @@ const createServerModule = ({
         const downloadModuleMock = {
           doSpecificDownloads: jest.fn(),
           doChannelAndPlaylistDownloads: jest.fn().mockResolvedValue(undefined),
-          doGroupedManualDownloads: jest.fn().mockResolvedValue(undefined)
+          doGroupedManualDownloads: jest.fn().mockResolvedValue(undefined),
+          getCurrentActivitySnapshot: jest.fn().mockReturnValue({
+            jobId: null,
+            capturedAt: null,
+            terminal: true,
+            activity: null,
+            lastFinalActivity: null
+          })
         };
 
         const jobModuleMock = {
@@ -292,7 +299,12 @@ const createServerModule = ({
 
         const fsMock = {
           readFileSync: jest.fn(() => ''),
-          unlink: jest.fn((path, cb) => cb(null))
+          unlink: jest.fn((path, cb) => cb(null)),
+          // path-scurry (glob, via swagger-jsdoc) dereferences
+          // fs.realpathSync.native at module load
+          realpathSync: Object.assign(jest.fn((p) => p), {
+            native: jest.fn((p) => p)
+          })
         };
 
         const childProcessMock = {
@@ -1806,6 +1818,50 @@ describe('server routes - jobs', () => {
         { id: 'job-1', status: 'In Progress' },
         { id: 'job-2', status: 'In Progress' }
       ]);
+    });
+  });
+
+  describe('GET /api/jobs/current-activity', () => {
+    test('returns the current activity snapshot', async () => {
+      const { app, downloadModuleMock } = await createServerModule();
+      const snapshot = {
+        jobId: 'job-1',
+        capturedAt: 12345,
+        terminal: false,
+        activity: { state: 'downloading_video', downloadType: 'Channel Downloads' },
+        lastFinalActivity: null
+      };
+      downloadModuleMock.getCurrentActivitySnapshot.mockReturnValueOnce(snapshot);
+
+      const handlers = findRouteHandlers(app, 'get', '/api/jobs/current-activity');
+      const handler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({});
+      const res = createMockResponse();
+
+      await handler(req, res);
+
+      expect(downloadModuleMock.getCurrentActivitySnapshot).toHaveBeenCalled();
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual(snapshot);
+    });
+
+    test('returns 500 with the standard error shape on failure', async () => {
+      const { app, downloadModuleMock } = await createServerModule();
+      downloadModuleMock.getCurrentActivitySnapshot.mockImplementationOnce(() => {
+        throw new Error('boom');
+      });
+
+      const handlers = findRouteHandlers(app, 'get', '/api/jobs/current-activity');
+      const handler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({});
+      const res = createMockResponse();
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.body).toEqual({ error: 'Failed to get current download activity' });
     });
   });
 });

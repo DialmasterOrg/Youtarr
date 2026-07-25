@@ -161,6 +161,8 @@ describe('DownloadExecutor', () => {
 
     // Setup DownloadProgressMonitor mock
     const mockMonitor = {
+      jobId: 'job-123',
+      lastActivityAt: 12345,
       videoCount: {
         current: 1,
         total: 0,
@@ -174,6 +176,10 @@ describe('DownloadExecutor', () => {
       processProgress: jest.fn().mockReturnValue({ state: 'downloading_video' }),
       snapshot: jest.fn().mockReturnValue({
         state: 'initiating',
+        videoCount: { current: 1, total: 0, completed: 0, skipped: 0 }
+      }),
+      toPayload: jest.fn().mockReturnValue({
+        state: 'downloading_video',
         videoCount: { current: 1, total: 0, completed: 0, skipped: 0 }
       })
     };
@@ -2024,6 +2030,67 @@ describe('DownloadExecutor', () => {
 
       // Should remove from archive even if no metadata was available
       expect(archiveModule.removeVideoFromArchive).toHaveBeenCalledWith('nodata123');
+    });
+  });
+
+  describe('getActivitySnapshot', () => {
+    const mockArgs = ['--format', 'best', 'https://youtube.com/watch?v=test'];
+
+    it('returns null before any download has run', () => {
+      expect(executor.getActivitySnapshot()).toBeNull();
+    });
+
+    it('retains the monitor after finalization instead of clearing it', async () => {
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, 'job-123', 'Channel Downloads');
+
+      expect(executor.currentMonitor).toEqual(
+        expect.objectContaining({ jobId: 'job-123' })
+      );
+    });
+
+    it('reports a non-terminal snapshot while the process is running', async () => {
+      const downloadPromise = executor.doDownload(mockArgs, 'job-123', 'Channel Downloads');
+      // Let doDownload reach the spawn before inspecting
+      await new Promise((resolve) => setTimeout(resolve, 5));
+
+      let snapshot;
+      let snapshotError;
+      try {
+        snapshot = executor.getActivitySnapshot();
+      } catch (err) {
+        snapshotError = err;
+      } finally {
+        // Always finish the run, or the timeout controller's interval
+        // outlives the test and hangs Jest
+        mockProcess.emit('exit', 0, null);
+        await downloadPromise;
+      }
+
+      expect(snapshotError).toBeUndefined();
+      expect(snapshot).not.toBeNull();
+      expect(snapshot.terminal).toBe(false);
+      expect(snapshot.jobId).toBe('job-123');
+    });
+
+    it('reports a terminal snapshot with monitor payload after the process exits', async () => {
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, 'job-123', 'Channel Downloads');
+
+      const snapshot = executor.getActivitySnapshot();
+      expect(snapshot.terminal).toBe(true);
+      expect(snapshot.jobId).toBe('job-123');
+      expect(snapshot.capturedAt).toBe(12345);
+      expect(snapshot.activity).toEqual({
+        state: 'downloading_video',
+        videoCount: { current: 1, total: 0, completed: 0, skipped: 0 }
+      });
     });
   });
 

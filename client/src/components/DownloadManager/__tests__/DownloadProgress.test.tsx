@@ -10,6 +10,12 @@ jest.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }));
 
+jest.mock('axios', () => ({
+  get: jest.fn(),
+}));
+
+const axios = require('axios');
+
 // Mock TerminateJobDialog component
 jest.mock('../TerminateJobDialog', () => ({
   __esModule: true,
@@ -46,8 +52,23 @@ describe('DownloadProgress', () => {
     );
   };
 
+  // The component registers multiple subscriptions (live progress + the
+  // activity-seed hook); pick the one filtering downloadProgress broadcasts
+  const getProcessCallback = () => {
+    const call = mockSubscribe.mock.calls.find(([filter]) =>
+      filter({ destination: 'broadcast', type: 'downloadProgress' })
+    );
+    if (!call) {
+      throw new Error('downloadProgress subscription not found');
+    }
+    return call[1];
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
+    // Default: the activity-seed probe stays pending so tests drive state
+    // exclusively through WebSocket messages unless they opt in
+    axios.get.mockImplementation(() => new Promise(() => {}));
   });
 
   test('renders with initial state showing no download activity', () => {
@@ -55,7 +76,7 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
@@ -70,7 +91,7 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
@@ -90,12 +111,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     const progressPayload = {
       progress: {
@@ -135,12 +156,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     const states = [
       { state: 'initiating', message: 'Initiating download...' },
@@ -186,12 +207,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     await act(async () => {
       processCallback({
@@ -220,12 +241,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     await act(async () => {
       processCallback({
@@ -262,12 +283,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     await act(async () => {
       processCallback({
@@ -292,12 +313,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     await act(async () => {
       processCallback({
@@ -323,12 +344,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     await act(async () => {
       processCallback({
@@ -358,12 +379,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     await act(async () => {
       processCallback({
@@ -391,12 +412,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     await act(async () => {
       processCallback({
@@ -419,12 +440,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     await act(async () => {
       processCallback({
@@ -447,12 +468,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     await act(async () => {
       processCallback({
@@ -475,12 +496,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     await act(async () => {
       processCallback({
@@ -504,12 +525,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     await act(async () => {
       processCallback({
@@ -534,12 +555,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     await act(async () => {
       processCallback({
@@ -560,12 +581,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     await act(async () => {
       processCallback({
@@ -599,12 +620,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     await act(async () => {
       processCallback({
@@ -643,12 +664,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     await act(async () => {
       processCallback({
@@ -683,12 +704,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     await act(async () => {
       processCallback({
@@ -724,12 +745,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     const subtitleStates = ['preparing_subtitles', 'downloading_subtitles', 'processing_metadata'];
 
@@ -769,7 +790,7 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={[]}
+          jobs={[]}
         token="test-token"
         />
       );
@@ -781,12 +802,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     // Test single case with 5MB
     await act(async () => {
@@ -817,12 +838,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     await act(async () => {
       processCallback({
@@ -859,12 +880,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     await act(async () => {
       processCallback({
@@ -908,12 +929,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     // Use downloading_video state instead of initiating to see progress details
     await act(async () => {
@@ -944,12 +965,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     // First show progress
     await act(async () => {
@@ -1003,12 +1024,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     const indeterminateStates = ['merging', 'metadata', 'processing', 'preparing', 'preparing_subtitles', 'processing_metadata'];
 
@@ -1043,12 +1064,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     const determinateStates = ['downloading_video', 'downloading_audio', 'downloading_subtitles', 'downloading_thumbnail'];
 
@@ -1126,12 +1147,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     const progressPayload = {
       progress: {
@@ -1168,12 +1189,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     const progressPayload = {
       progress: {
@@ -1210,12 +1231,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     const progressPayload = {
       progress: {
@@ -1252,12 +1273,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     const nonDownloadStates = ['preparing', 'preparing_subtitles', 'processing_metadata', 'merging', 'metadata', 'processing'];
 
@@ -1296,12 +1317,12 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
-        pendingJobs={[]}
+        jobs={[]}
         token="test-token"
       />
     );
 
-    const [, processCallback] = mockSubscribe.mock.calls[0];
+    const processCallback = getProcessCallback();
 
     const downloadStates = ['downloading_video', 'downloading_audio', 'downloading_subtitles'];
 
@@ -1343,12 +1364,12 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={[]}
+          jobs={[]}
         token="test-token"
         />
       );
 
-      const [, processCallback] = mockSubscribe.mock.calls[0];
+      const processCallback = getProcessCallback();
 
       // First show progress
       await act(async () => {
@@ -1417,12 +1438,12 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={[]}
+          jobs={[]}
         token="test-token"
         />
       );
 
-      const [, processCallback] = mockSubscribe.mock.calls[0];
+      const processCallback = getProcessCallback();
 
       await act(async () => {
         processCallback({
@@ -1471,12 +1492,12 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={[]}
+          jobs={[]}
         token="test-token"
         />
       );
 
-      const [, processCallback] = mockSubscribe.mock.calls[0];
+      const processCallback = getProcessCallback();
 
       await act(async () => {
         processCallback({
@@ -1523,12 +1544,12 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={[]}
+          jobs={[]}
         token="test-token"
         />
       );
 
-      const [, processCallback] = mockSubscribe.mock.calls[0];
+      const processCallback = getProcessCallback();
 
       await act(async () => {
         processCallback({
@@ -1559,12 +1580,12 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={[]}
+          jobs={[]}
         token="test-token"
         />
       );
 
-      const [, processCallback] = mockSubscribe.mock.calls[0];
+      const processCallback = getProcessCallback();
 
       // First show terminated state with warning
       await act(async () => {
@@ -1629,7 +1650,7 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={[]}
+          jobs={[]}
         token="test-token"
         />
       );
@@ -1655,7 +1676,7 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={pendingJobs}
+          jobs={pendingJobs}
           token="test-token"
         />
       );
@@ -1667,7 +1688,7 @@ describe('DownloadProgress', () => {
       await user.click(accordion);
 
       await waitFor(() => {
-        expect(screen.getByText('1. Channel Update')).toBeInTheDocument();
+        expect(screen.getByText('1. Channel update')).toBeInTheDocument();
       });
     });
 
@@ -1698,7 +1719,7 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={pendingJobs}
+          jobs={pendingJobs}
           token="test-token"
         />
       );
@@ -1710,9 +1731,9 @@ describe('DownloadProgress', () => {
       await user.click(accordion);
 
       await waitFor(() => {
-        expect(screen.getByText('1. Channel Update')).toBeInTheDocument();
+        expect(screen.getByText('1. Channel update')).toBeInTheDocument();
       });
-      expect(screen.getByText('2. Manual Download')).toBeInTheDocument();
+      expect(screen.getByText('2. Manual download')).toBeInTheDocument();
     });
 
     test('displays job types correctly', async () => {
@@ -1733,7 +1754,7 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={pendingJobs}
+          jobs={pendingJobs}
           token="test-token"
         />
       );
@@ -1743,8 +1764,469 @@ describe('DownloadProgress', () => {
       await user.click(accordion);
 
       await waitFor(() => {
-        expect(screen.getByText('1. Manual Download')).toBeInTheDocument();
+        expect(screen.getByText('1. Manual download')).toBeInTheDocument();
       });
+    });
+  });
+
+  describe('activity awareness', () => {
+    const buildJob = (overrides: Record<string, unknown> = {}) => ({
+      id: 'job-active',
+      jobType: 'Channel Downloads',
+      status: 'In Progress',
+      timeCreated: Date.now(),
+      timeInitiated: Date.now(),
+      output: '',
+      data: { videos: [] },
+      ...overrides,
+    });
+
+    test('shows the running job instead of the empty placeholder when a job is in progress without live progress', () => {
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+          jobs={[buildJob()]}
+          token="test-token"
+        />
+      );
+
+      expect(
+        screen.queryByText('No download activity at the moment')
+      ).not.toBeInTheDocument();
+      expect(screen.getByText('Channel update is running')).toBeInTheDocument();
+      expect(screen.getByText('Waiting for progress updates...')).toBeInTheDocument();
+    });
+
+    test('shows queued state instead of the empty placeholder when only pending jobs exist', () => {
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+          jobs={[
+            buildJob({ id: 'job-pending', status: 'Pending', jobType: 'Manually Added Urls' }),
+          ]}
+          token="test-token"
+        />
+      );
+
+      expect(
+        screen.queryByText('No download activity at the moment')
+      ).not.toBeInTheDocument();
+      expect(screen.getByText('1 download job is queued')).toBeInTheDocument();
+      expect(screen.getByText('Starting soon...')).toBeInTheDocument();
+    });
+
+    test('shows an activity-type header derived from live progress downloadType', async () => {
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+          jobs={[]}
+          token="test-token"
+        />
+      );
+
+      const processCallback = getProcessCallback();
+
+      await act(async () => {
+        processCallback({
+          progress: {
+            jobId: 'job-1',
+            progress: {
+              percent: 20,
+              downloadedBytes: 100,
+              totalBytes: 500,
+              speedBytesPerSecond: 50,
+              etaSeconds: 8,
+            },
+            stalled: false,
+            state: 'downloading_video',
+            downloadType: 'Playlist: My Mix',
+            videoInfo: {
+              channel: 'Test Channel',
+              title: 'Test Video',
+              displayTitle: 'Test Video',
+            },
+          },
+        });
+      });
+
+      expect(screen.getByTestId('activity-type-header')).toHaveTextContent(
+        'Playlist download: My Mix'
+      );
+    });
+
+    test('shows the header from the in-progress job when there is no live progress', () => {
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+          jobs={[buildJob({ jobType: 'Channel Download All: TechChannel' })]}
+          token="test-token"
+        />
+      );
+
+      expect(screen.getByTestId('activity-type-header')).toHaveTextContent(
+        'Full channel download: TechChannel'
+      );
+    });
+
+    test('shows no activity header when idle', () => {
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+          jobs={[]}
+          token="test-token"
+        />
+      );
+
+      expect(screen.queryByTestId('activity-type-header')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('activity seeding', () => {
+    test('seeds current progress from the REST snapshot on mount', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: {
+          jobId: 'job-1',
+          capturedAt: Date.now(),
+          terminal: false,
+          activity: {
+            jobId: 'job-1',
+            progress: {
+              percent: 42,
+              downloadedBytes: 420,
+              totalBytes: 1000,
+              speedBytesPerSecond: 100,
+              etaSeconds: 6,
+            },
+            stalled: false,
+            state: 'downloading_video',
+            downloadType: 'Playlist: My Mix',
+            videoInfo: {
+              channel: 'Seed Channel',
+              title: 'Seed Video',
+              displayTitle: 'Seed Video',
+            },
+          },
+          lastFinalMessage: null,
+        },
+      });
+
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+          jobs={[]}
+          token="test-token"
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Downloading video stream...')).toBeInTheDocument();
+      });
+      expect(screen.getByTestId('activity-type-header')).toHaveTextContent(
+        'Playlist download: My Mix'
+      );
+    });
+
+    test('seeds the last job summary from the REST snapshot when idle', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: {
+          jobId: null,
+          capturedAt: null,
+          terminal: true,
+          activity: null,
+          lastFinalActivity: {
+            text: 'done',
+            finalSummary: {
+              totalDownloaded: 3,
+              totalSkipped: 1,
+              jobType: 'Channel Downloads',
+            },
+          },
+        },
+      });
+
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+          jobs={[]}
+          token="test-token"
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Summary of last job')).toBeInTheDocument();
+      });
+      expect(screen.getByText(/3 videos downloaded/)).toBeInTheDocument();
+    });
+
+    test('clears stale progress when a reconnect probe reports the job finished', async () => {
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+          jobs={[]}
+          token="test-token"
+        />
+      );
+
+      // Live progress arrives, then the socket silently dies and the job
+      // completes while disconnected
+      const processCallback = getProcessCallback();
+      await act(async () => {
+        processCallback({
+          progress: {
+            jobId: 'job-1',
+            progress: {
+              percent: 45,
+              downloadedBytes: 450,
+              totalBytes: 1000,
+              speedBytesPerSecond: 100,
+              etaSeconds: 5,
+            },
+            stalled: false,
+            state: 'downloading_video',
+            downloadType: 'Channel Downloads',
+            videoInfo: { channel: 'C', title: 'Live Video', displayTitle: 'Live Video' },
+          },
+        });
+      });
+      expect(screen.getByText('Downloading video stream...')).toBeInTheDocument();
+
+      // Reconnect: the probe returns a terminal snapshot with the missed summary
+      axios.get.mockResolvedValueOnce({
+        data: {
+          jobId: 'job-1',
+          capturedAt: Date.now(),
+          terminal: true,
+          activity: { state: 'complete' },
+          lastFinalActivity: {
+            text: 'done',
+            finalSummary: {
+              totalDownloaded: 5,
+              totalSkipped: 0,
+              jobType: 'Channel Downloads',
+            },
+          },
+        },
+      });
+      const restoredCall = mockSubscribe.mock.calls.find(([filter]) =>
+        filter({ destination: 'local', type: 'connectionRestored' })
+      );
+      expect(restoredCall).toBeDefined();
+      await act(async () => {
+        restoredCall![1]({});
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Summary of last job')).toBeInTheDocument();
+      });
+      expect(screen.queryByText('Downloading video stream...')).not.toBeInTheDocument();
+      expect(screen.getByText(/5 videos downloaded/)).toBeInTheDocument();
+    });
+
+    test('a terminal replay clears a stale error so the new summary is visible', async () => {
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+          jobs={[]}
+          token="test-token"
+        />
+      );
+
+      // A job fails live, then the socket dies and a later job completes
+      // while disconnected
+      const processCallback = getProcessCallback();
+      await act(async () => {
+        processCallback({ error: true, text: 'Download failed: network error' });
+      });
+      expect(screen.getByText('Download Failed')).toBeInTheDocument();
+
+      axios.get.mockResolvedValueOnce({
+        data: {
+          jobId: 'job-2',
+          capturedAt: Date.now(),
+          terminal: true,
+          activity: { state: 'complete' },
+          lastFinalActivity: {
+            text: 'done',
+            finalSummary: {
+              totalDownloaded: 2,
+              totalSkipped: 0,
+              jobType: 'Channel Downloads',
+            },
+          },
+        },
+      });
+      const restoredCall = mockSubscribe.mock.calls.find(([filter]) =>
+        filter({ destination: 'local', type: 'connectionRestored' })
+      );
+      expect(restoredCall).toBeDefined();
+      await act(async () => {
+        restoredCall![1]({});
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Summary of last job')).toBeInTheDocument();
+      });
+      expect(screen.queryByText('Download Failed')).not.toBeInTheDocument();
+      expect(screen.getByText(/2 videos downloaded/)).toBeInTheDocument();
+    });
+
+    test('a fresh recovery snapshot clears stale error state from the previous job', async () => {
+      jest.useFakeTimers();
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+          jobs={[]}
+          token="test-token"
+        />
+      );
+
+      // Job A fails live, then Job B's initiating broadcast is missed while
+      // the tab is hidden
+      const processCallback = getProcessCallback();
+      await act(async () => {
+        processCallback({ error: true, text: 'Download failed: network error' });
+      });
+      expect(screen.getByText('Download Failed')).toBeInTheDocument();
+
+      // Tab wakes: the probe finds Job B mid-run in a state that never
+      // incidentally clears error state
+      axios.get.mockResolvedValueOnce({
+        data: {
+          jobId: 'job-B',
+          capturedAt: Date.now(),
+          terminal: false,
+          activity: {
+            jobId: 'job-B',
+            progress: {
+              percent: 30,
+              downloadedBytes: 300,
+              totalBytes: 1000,
+              speedBytesPerSecond: 100,
+              etaSeconds: 7,
+            },
+            stalled: false,
+            state: 'downloading_audio',
+            downloadType: 'Playlist: Mix',
+            videoInfo: { channel: 'C', title: 'Track', displayTitle: 'Track' },
+          },
+          lastFinalActivity: null,
+        },
+      });
+      Object.defineProperty(document, 'visibilityState', {
+        value: 'visible',
+        configurable: true,
+      });
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+
+      expect(screen.getByText('Downloading audio stream...')).toBeInTheDocument();
+
+      // Job B finishes live; its summary must not be suppressed by Job A's
+      // stale error re-emerging once the progress bar clears
+      await act(async () => {
+        processCallback({
+          progress: {
+            jobId: 'job-B',
+            progress: {
+              percent: 100,
+              downloadedBytes: 1000,
+              totalBytes: 1000,
+              speedBytesPerSecond: 0,
+              etaSeconds: 0,
+            },
+            stalled: false,
+            state: 'complete',
+          },
+          finalSummary: { totalDownloaded: 4, totalSkipped: 0, jobType: 'Playlist: Mix' },
+        });
+      });
+      act(() => {
+        jest.advanceTimersByTime(2000);
+      });
+
+      expect(screen.getByText('Summary of last job')).toBeInTheDocument();
+      expect(screen.queryByText('Download Failed')).not.toBeInTheDocument();
+      jest.useRealTimers();
+    });
+
+    test('a stale REST response never overwrites live progress that arrived first', async () => {
+      let resolveProbe: (value: unknown) => void = () => {};
+      axios.get.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveProbe = resolve;
+          })
+      );
+
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+          jobs={[]}
+          token="test-token"
+        />
+      );
+
+      const processCallback = getProcessCallback();
+      await act(async () => {
+        processCallback({
+          progress: {
+            jobId: 'job-2',
+            progress: {
+              percent: 80,
+              downloadedBytes: 800,
+              totalBytes: 1000,
+              speedBytesPerSecond: 100,
+              etaSeconds: 2,
+            },
+            stalled: false,
+            state: 'downloading_video',
+            downloadType: 'Channel Downloads',
+            videoInfo: { channel: 'C', title: 'Live Video', displayTitle: 'Live Video' },
+          },
+        });
+      });
+
+      // The slow mount-time probe resolves afterwards with older data
+      await act(async () => {
+        resolveProbe({
+          data: {
+            jobId: 'job-2',
+            capturedAt: Date.now(),
+            terminal: false,
+            activity: {
+              jobId: 'job-2',
+              progress: {
+                percent: 10,
+                downloadedBytes: 100,
+                totalBytes: 1000,
+                speedBytesPerSecond: 100,
+                etaSeconds: 9,
+              },
+              stalled: false,
+              state: 'downloading_video',
+              downloadType: 'Channel Downloads',
+              videoInfo: { channel: 'C', title: 'Stale Video', displayTitle: 'Stale Video' },
+            },
+            lastFinalActivity: null,
+          },
+        });
+      });
+
+      expect(screen.getByText('Live Video')).toBeInTheDocument();
+      expect(screen.queryByText('Stale Video')).not.toBeInTheDocument();
+      expect(screen.getByText(/80\.0%/)).toBeInTheDocument();
     });
   });
 
@@ -1754,12 +2236,12 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={[]}
+          jobs={[]}
           token="test-token"
         />
       );
 
-      const [, processCallback] = mockSubscribe.mock.calls[0];
+      const processCallback = getProcessCallback();
 
       await act(async () => {
         processCallback({
@@ -1803,12 +2285,12 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={[]}
+          jobs={[]}
           token="test-token"
         />
       );
 
-      const [, processCallback] = mockSubscribe.mock.calls[0];
+      const processCallback = getProcessCallback();
 
       await act(async () => {
         processCallback({
@@ -1855,12 +2337,12 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={[]}
+          jobs={[]}
           token="test-token"
         />
       );
 
-      const [, processCallback] = mockSubscribe.mock.calls[0];
+      const processCallback = getProcessCallback();
 
       await act(async () => {
         processCallback({
@@ -1918,12 +2400,12 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={[]}
+          jobs={[]}
           token="test-token"
         />
       );
 
-      const [, processCallback] = mockSubscribe.mock.calls[0];
+      const processCallback = getProcessCallback();
 
       await act(async () => {
         processCallback({
@@ -1975,12 +2457,12 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={[]}
+          jobs={[]}
           token="test-token"
         />
       );
 
-      const [, processCallback] = mockSubscribe.mock.calls[0];
+      const processCallback = getProcessCallback();
 
       await act(async () => {
         processCallback({
@@ -2021,12 +2503,12 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={[]}
+          jobs={[]}
           token="test-token"
         />
       );
 
-      const [, processCallback] = mockSubscribe.mock.calls[0];
+      const processCallback = getProcessCallback();
 
       await act(async () => {
         processCallback({
@@ -2072,12 +2554,12 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={[]}
+          jobs={[]}
           token="test-token"
         />
       );
 
-      const [, processCallback] = mockSubscribe.mock.calls[0];
+      const processCallback = getProcessCallback();
 
       await act(async () => {
         processCallback({
@@ -2112,12 +2594,12 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={[]}
+          jobs={[]}
           token="test-token"
         />
       );
 
-      const [, processCallback] = mockSubscribe.mock.calls[0];
+      const processCallback = getProcessCallback();
 
       await act(async () => {
         processCallback({
@@ -2161,12 +2643,12 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={[]}
+          jobs={[]}
           token="test-token"
         />
       );
 
-      const [, processCallback] = mockSubscribe.mock.calls[0];
+      const processCallback = getProcessCallback();
 
       await act(async () => {
         processCallback({
@@ -2220,7 +2702,7 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={[]}
+          jobs={[]}
           token="test-token"
         />
       );
@@ -2233,12 +2715,12 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={[]}
+          jobs={[]}
           token="test-token"
         />
       );
 
-      const [, processCallback] = mockSubscribe.mock.calls[0];
+      const processCallback = getProcessCallback();
 
       await act(async () => {
         processCallback({
@@ -2267,12 +2749,12 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={[]}
+          jobs={[]}
           token="test-token"
         />
       );
 
-      const [, processCallback] = mockSubscribe.mock.calls[0];
+      const processCallback = getProcessCallback();
 
       await act(async () => {
         processCallback({
@@ -2302,12 +2784,12 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={[]}
+          jobs={[]}
           token="test-token"
         />
       );
 
-      const [, processCallback] = mockSubscribe.mock.calls[0];
+      const processCallback = getProcessCallback();
 
       await act(async () => {
         processCallback({
@@ -2337,12 +2819,12 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={[]}
+          jobs={[]}
           token="test-token"
         />
       );
 
-      const [, processCallback] = mockSubscribe.mock.calls[0];
+      const processCallback = getProcessCallback();
 
       await act(async () => {
         processCallback({
@@ -2372,12 +2854,12 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={[]}
+          jobs={[]}
           token="test-token"
         />
       );
 
-      const [, processCallback] = mockSubscribe.mock.calls[0];
+      const processCallback = getProcessCallback();
 
       await act(async () => {
         processCallback({
@@ -2408,12 +2890,12 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={[]}
+          jobs={[]}
           token="test-token"
         />
       );
 
-      const [, processCallback] = mockSubscribe.mock.calls[0];
+      const processCallback = getProcessCallback();
 
       // Start download
       await act(async () => {
@@ -2455,12 +2937,12 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={[]}
+          jobs={[]}
           token="test-token"
         />
       );
 
-      const [, processCallback] = mockSubscribe.mock.calls[0];
+      const processCallback = getProcessCallback();
 
       // Start download
       await act(async () => {
@@ -2505,12 +2987,12 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={[]}
+          jobs={[]}
           token="test-token"
         />
       );
 
-      const [, processCallback] = mockSubscribe.mock.calls[0];
+      const processCallback = getProcessCallback();
 
       // Start download
       await act(async () => {
@@ -2550,12 +3032,12 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={[]}
+          jobs={[]}
           token="test-token"
         />
       );
 
-      const [, processCallback] = mockSubscribe.mock.calls[0];
+      const processCallback = getProcessCallback();
 
       // Start download
       await act(async () => {
@@ -2588,12 +3070,12 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={[]}
+          jobs={[]}
           token="test-token"
         />
       );
 
-      const [, processCallback] = mockSubscribe.mock.calls[0];
+      const processCallback = getProcessCallback();
 
       // Start download
       await act(async () => {
@@ -2622,12 +3104,12 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
-          pendingJobs={[]}
+          jobs={[]}
           token="test-token"
         />
       );
 
-      const [, processCallback] = mockSubscribe.mock.calls[0];
+      const processCallback = getProcessCallback();
 
       const activeStates = [
         'initiating',

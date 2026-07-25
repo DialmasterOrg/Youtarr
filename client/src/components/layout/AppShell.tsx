@@ -48,7 +48,7 @@ export function AppShell({
   const isLandscape = useMediaQuery('(orientation: landscape)');
   const { themeMode } = useThemeEngine();
   const isLandscapeMobile = isMobile && isLandscape;
-  
+
   const currentTheme = getThemeById(themeMode);
   const layoutPolicy = resolveThemeLayoutPolicy(currentTheme, isMobile ? 'mobile' : 'desktop');
   const layoutCssVars = getThemeLayoutCssVars(layoutPolicy);
@@ -94,7 +94,7 @@ export function AppShell({
   const channelsSubItems = useMemo(
     () => [
       { key: 'subscriptions-list', label: 'Channels & Playlists', to: '/subscriptions' },
-      { key: 'subscriptions-find', label: 'Find on YouTube', to: '/subscriptions/find' },
+      { key: 'subscriptions-find', label: 'Find Channels on YouTube', to: '/subscriptions/find' },
       { key: 'subscriptions-imports', label: 'Import Channels', to: '/subscriptions/imports' },
     ],
     []
@@ -103,7 +103,7 @@ export function AppShell({
   const videosSubItems = useMemo(
     () => [
       { key: 'videos-downloaded', label: 'Downloaded Videos', to: '/videos' },
-      { key: 'videos-find', label: 'Find on YouTube', to: '/videos/find' },
+      { key: 'videos-find', label: 'Find Videos on YouTube', to: '/videos/find' },
     ],
     []
   );

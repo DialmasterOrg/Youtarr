@@ -32,6 +32,25 @@ class DownloadExecutor {
     this.currentJobId = null;
     this.manualTerminationReason = null;
     this.forceKillTimeout = null;
+    // Last run's monitor, replaced when the next run starts. Never cleared:
+    // post-processing and between-group windows still serve the last known state.
+    this.currentMonitor = null;
+  }
+
+  // Read-only view of the current (or most recent) download run for REST
+  // reads. terminal means yt-dlp is not running right now; combined with job
+  // status the client distinguishes "downloading" from "starting/finishing".
+  getActivitySnapshot() {
+    const monitor = this.currentMonitor;
+    if (!monitor) {
+      return null;
+    }
+    return {
+      jobId: monitor.jobId,
+      capturedAt: monitor.lastActivityAt,
+      terminal: this.currentProcess === null,
+      activity: monitor.toPayload(),
+    };
   }
 
   // Fire-and-forget persistence so we don't block the stdout/stderr stream
@@ -127,6 +146,7 @@ class DownloadExecutor {
     const initialCount = downloadResultProcessor.getCountOfDownloadedVideos();
     const config = configModule.getConfig();
     const monitor = new DownloadProgressMonitor(jobId, jobType);
+    this.currentMonitor = monitor;
 
     // Capture the run id up front: terminal updateJob() calls replace job.data
     // with a fresh object that omits runId, so reading it at completion would

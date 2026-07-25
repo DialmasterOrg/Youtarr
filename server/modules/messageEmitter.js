@@ -53,4 +53,9 @@ module.exports = {
     // Return only the final state if available, not progress history
     return lastDownloadState ? [lastDownloadState] : [];
   },
+  // The stored final-state payload without the WebSocket transport envelope,
+  // for REST consumers (GET /api/jobs/current-activity)
+  getLastFinalActivity: () => {
+    return lastDownloadState ? lastDownloadState.payload : null;
+  },
 };

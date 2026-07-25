@@ -1008,7 +1008,7 @@ function ChannelSettingsDialog({
           )}
         </div>
       </DialogContent>
-      <DialogActions style={{ padding: isMobile ? '12px' : '16px 24px', borderTop: '1px solid var(--border)' }}>
+      <DialogActions>
         <Button onClick={handleCancel} disabled={saving} variant="outlined">
           Cancel
         </Button>

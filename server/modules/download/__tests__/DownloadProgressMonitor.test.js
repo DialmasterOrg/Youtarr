@@ -664,6 +664,73 @@ describe('DownloadProgressMonitor', () => {
       expect(snapshot.progress.percent).toBe(50);
       expect(snapshot.progress.downloadedBytes).toBe(500);
     });
+
+    it('should refresh lastActivityAt', () => {
+      monitor.lastActivityAt = 0;
+
+      monitor.snapshot();
+
+      expect(monitor.lastActivityAt).toBe(1000000);
+    });
+  });
+
+  describe('toPayload', () => {
+    it('returns the same payload shape as snapshot', () => {
+      monitor.jobType = 'Manual';
+      monitor.currentState = 'downloading_video';
+      monitor.videoCount.current = 2;
+      monitor.videoCount.total = 5;
+
+      const payload = monitor.toPayload();
+
+      expect(payload.jobId).toBe(mockJobId);
+      expect(payload.state).toBe('downloading_video');
+      expect(payload.stalled).toBe(false);
+      expect(payload.downloadType).toBe('Manual');
+      expect(payload.videoCount.current).toBe(2);
+      expect(payload.videoCount.total).toBe(5);
+      expect(payload.videoInfo).toEqual({
+        channel: '',
+        title: '',
+        displayTitle: ''
+      });
+    });
+
+    it('does not commit any monitor state', () => {
+      const payload = monitor.toPayload('downloading_video');
+
+      expect(payload.state).toBe('downloading_video');
+      expect(monitor.currentState).toBe('initiating');
+      expect(monitor.lastParsed).toBeNull();
+      expect(monitor.lastEmittedState).toBeNull();
+      expect(monitor.lastVideoInfo).toBeNull();
+    });
+
+    it('does not suppress the initial emission gate', () => {
+      // processProgress emits the initial payload only while lastParsed is
+      // null; a read-only payload must not consume that gate
+      monitor.toPayload();
+      expect(monitor.lastParsed).toBeNull();
+    });
+
+    it('does not mark stalled state as raised', () => {
+      monitor.toPayload('stalled');
+      expect(monitor.stallRaised).toBe(false);
+    });
+  });
+
+  describe('lastActivityAt', () => {
+    it('is stamped at construction', () => {
+      expect(new DownloadProgressMonitor('job-1', 'Manual').lastActivityAt).toBe(1000000);
+    });
+
+    it('is refreshed when processProgress handles a line', () => {
+      monitor.lastActivityAt = 0;
+
+      monitor.processProgress('{}', '[download] Destination: /tmp/video.mp4', mockConfig);
+
+      expect(monitor.lastActivityAt).toBe(1000000);
+    });
   });
 
   describe('processProgress', () => {

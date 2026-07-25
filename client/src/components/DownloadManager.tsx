@@ -73,9 +73,6 @@ function DownloadManager({ token }: DownloadManagerProps) {
     }));
   };
 
-  // Filter pending jobs
-  const pendingJobs = jobs.filter(job => job.status === 'Pending');
-
   return (
     <Routes>
       <Route index element={<Navigate to="manual" replace />} />
@@ -100,7 +97,7 @@ function DownloadManager({ token }: DownloadManagerProps) {
             <DownloadProgress
               downloadProgressRef={downloadProgressRef}
               downloadInitiatedRef={downloadInitiatedRef}
-              pendingJobs={pendingJobs}
+              jobs={jobs}
               token={token}
             />
           </Grid>

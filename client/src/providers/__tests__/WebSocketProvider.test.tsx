@@ -6,6 +6,11 @@ import WebSocketContext from '../../contexts/WebSocketContext';
 
 // Mock WebSocket
 class MockWebSocket {
+  static CONNECTING = 0;
+  static OPEN = 1;
+  static CLOSING = 2;
+  static CLOSED = 3;
+
   url: string;
   readyState: number;
   onopen: ((event: Event) => void) | null = null;
@@ -749,5 +754,200 @@ describe('WebSocketProvider', () => {
     expect(contextValue).toHaveProperty('unsubscribe');
     expect(typeof contextValue.subscribe).toBe('function');
     expect(typeof contextValue.unsubscribe).toBe('function');
+  });
+
+  describe('connection resilience', () => {
+    test('does not close the socket after a successful reconnect', async () => {
+      render(
+        <WebSocketProvider>
+          <TestConsumer />
+        </WebSocketProvider>
+      );
+
+      const ws1 = MockWebSocket.instances[0];
+
+      // Fail the first connection: error increments retries, close schedules reconnect
+      act(() => {
+        ws1.onerror?.(new Event('error'));
+        ws1.readyState = WebSocket.CLOSED;
+        ws1.onclose?.(new CloseEvent('close'));
+      });
+
+      // Backoff for retries=1 is 2000ms
+      await act(async () => {
+        jest.advanceTimersByTime(2000);
+        await Promise.resolve();
+      });
+
+      const ws2 = MockWebSocket.instances[MockWebSocket.instances.length - 1];
+      expect(ws2).not.toBe(ws1);
+      const closeSpy = jest.spyOn(ws2, 'close');
+
+      // Successful reconnect resets the retry counter; the freshly opened
+      // socket must stay open (no effect-cleanup teardown).
+      act(() => {
+        ws2.onopen?.(new Event('open'));
+      });
+
+      await act(async () => {
+        jest.advanceTimersByTime(5000);
+        await Promise.resolve();
+      });
+
+      expect(closeSpy).not.toHaveBeenCalled();
+      expect(MockWebSocket.instances).toHaveLength(2);
+    });
+
+    test('StrictMode double-mount results in a single live socket', () => {
+      render(
+        <React.StrictMode>
+          <WebSocketProvider>
+            <div data-testid="child" />
+          </WebSocketProvider>
+        </React.StrictMode>
+      );
+
+      const liveSockets = MockWebSocket.instances.filter(
+        (ws) => ws.readyState !== WebSocket.CLOSED
+      );
+      expect(liveSockets).toHaveLength(1);
+    });
+
+    test('reconnects immediately when the browser comes back online', () => {
+      render(
+        <WebSocketProvider>
+          <TestConsumer />
+        </WebSocketProvider>
+      );
+
+      const ws1 = MockWebSocket.instances[0];
+      act(() => {
+        ws1.onopen?.(new Event('open'));
+      });
+
+      // An online event while the socket is healthy must not stack connections
+      act(() => {
+        window.dispatchEvent(new Event('online'));
+      });
+      expect(MockWebSocket.instances).toHaveLength(1);
+
+      // Kill the socket with a large pending backoff (5 errors -> 30s)
+      act(() => {
+        for (let i = 0; i < 5; i++) {
+          ws1.onerror?.(new Event('error'));
+        }
+        ws1.readyState = WebSocket.CLOSED;
+        ws1.onclose?.(new CloseEvent('close'));
+      });
+      expect(MockWebSocket.instances).toHaveLength(1);
+
+      act(() => {
+        window.dispatchEvent(new Event('online'));
+      });
+
+      expect(MockWebSocket.instances).toHaveLength(2);
+    });
+
+    test('reconnects when the tab becomes visible with a dead socket', () => {
+      render(
+        <WebSocketProvider>
+          <TestConsumer />
+        </WebSocketProvider>
+      );
+
+      const ws1 = MockWebSocket.instances[0];
+      act(() => {
+        ws1.onopen?.(new Event('open'));
+        ws1.readyState = WebSocket.CLOSED;
+        ws1.onclose?.(new CloseEvent('close'));
+      });
+
+      Object.defineProperty(document, 'visibilityState', {
+        value: 'visible',
+        configurable: true,
+      });
+      act(() => {
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+
+      expect(MockWebSocket.instances).toHaveLength(2);
+    });
+
+    test('reports a disconnected socket while the connection is down', async () => {
+      render(
+        <WebSocketProvider>
+          <TestConsumer />
+        </WebSocketProvider>
+      );
+
+      const ws1 = MockWebSocket.instances[0];
+      act(() => {
+        ws1.onopen?.(new Event('open'));
+      });
+      expect(screen.getByTestId('socket-status')).toHaveTextContent('connected');
+
+      // The socket dies; until the reconnect succeeds, consumers must not
+      // see the closed instance as a live connection
+      act(() => {
+        ws1.readyState = WebSocket.CLOSED;
+        ws1.onclose?.(new CloseEvent('close'));
+      });
+
+      expect(screen.getByTestId('socket-status')).toHaveTextContent('disconnected');
+    });
+
+    test('dispatches a local connectionRestored message to subscribers on reconnect', async () => {
+      const callback = jest.fn();
+
+      const TestComponent = () => {
+        const context = React.useContext(WebSocketContext);
+        const [subscribed, setSubscribed] = React.useState(false);
+
+        React.useEffect(() => {
+          if (context && !subscribed) {
+            context.subscribe(
+              (message) => message.type === 'connectionRestored',
+              callback
+            );
+            setSubscribed(true);
+          }
+        }, [context, subscribed]);
+
+        return null;
+      };
+
+      render(
+        <WebSocketProvider>
+          <TestComponent />
+        </WebSocketProvider>
+      );
+
+      const ws1 = MockWebSocket.instances[0];
+      act(() => {
+        ws1.onopen?.(new Event('open'));
+      });
+
+      // First connect is not a reconnect
+      expect(callback).not.toHaveBeenCalled();
+
+      act(() => {
+        ws1.readyState = WebSocket.CLOSED;
+        ws1.onclose?.(new CloseEvent('close'));
+      });
+
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+        await Promise.resolve();
+      });
+
+      const ws2 = MockWebSocket.instances[MockWebSocket.instances.length - 1];
+      expect(ws2).not.toBe(ws1);
+
+      act(() => {
+        ws2.onopen?.(new Event('open'));
+      });
+
+      expect(callback).toHaveBeenCalledTimes(1);
+    });
   });
 });

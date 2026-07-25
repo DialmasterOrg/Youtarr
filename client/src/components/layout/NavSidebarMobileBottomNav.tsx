@@ -1,8 +1,11 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import type { Location, NavigateFunction } from 'react-router-dom';
 import { Paper } from '../ui';
 import { NavItem, isNavPathActive } from './navigation';
 import { MOBILE_NAV_PRIMARY_HEIGHT, NAV_SUB_FONT_SIZE } from './navLayoutConstants';
+import { useScrollEdges } from './useScrollEdges';
+
+const SUBNAV_SCROLL_FADE_WIDTH = 24;
 
 interface NavSidebarMobileBottomNavProps {
   navItems: NavItem[];
@@ -26,10 +29,34 @@ export const NavSidebarMobileBottomNav: React.FC<NavSidebarMobileBottomNavProps>
   const activeIndex = navItems.findIndex((item) => item === activeItem);
   const subNavBottom = `calc(${MOBILE_NAV_PRIMARY_HEIGHT}px + env(safe-area-inset-bottom))`;
 
+  const { scrollRef, recompute, canScrollLeft, canScrollRight } = useScrollEdges();
+  const selectedChipRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    recompute();
+    selectedChipRef.current?.scrollIntoView?.({ inline: 'nearest', block: 'nearest' });
+  }, [recompute, location.pathname, activeItemWithSubItems]);
+
+  // Fade the chips out at whichever edge has more content, so overflow is
+  // visible without a scrollbar. A mask (rather than a gradient overlay)
+  // keeps this theme-agnostic: the surface background shows through.
+  const scrollFadeMask =
+    canScrollLeft || canScrollRight
+      ? `linear-gradient(to right, ${
+          canScrollLeft ? `transparent, black ${SUBNAV_SCROLL_FADE_WIDTH}px` : 'black'
+        }, ${
+          canScrollRight ? `black calc(100% - ${SUBNAV_SCROLL_FADE_WIDTH}px), transparent` : 'black'
+        })`
+      : undefined;
+
   return (
     <>
       {activeItemWithSubItems && (
         <div
+          ref={scrollRef}
+          data-testid="mobile-subnav"
+          data-can-scroll-left={String(canScrollLeft)}
+          data-can-scroll-right={String(canScrollRight)}
           style={{
             position: 'fixed',
             bottom: subNavBottom,
@@ -44,6 +71,10 @@ export const NavSidebarMobileBottomNav: React.FC<NavSidebarMobileBottomNavProps>
             gap: 8,
             overflowX: 'auto',
             scrollbarWidth: 'none',
+            overscrollBehaviorX: 'contain',
+            scrollPaddingInline: SUBNAV_SCROLL_FADE_WIDTH,
+            maskImage: scrollFadeMask,
+            WebkitMaskImage: scrollFadeMask,
             marginBottom: 'var(--mobile-subnav-surface-margin-bottom)',
             paddingBottom: 'var(--mobile-subnav-surface-padding-bottom)',
           }}
@@ -53,6 +84,7 @@ export const NavSidebarMobileBottomNav: React.FC<NavSidebarMobileBottomNavProps>
             return (
               <button
                 key={subItem.key}
+                ref={subSelected ? selectedChipRef : undefined}
                 onClick={() => navigate(subItem.to)}
                 style={{
                   background: subSelected ? 'var(--nav-item-bg-selected)' : 'var(--nav-item-bg)',

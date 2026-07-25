@@ -191,7 +191,7 @@ export default function FindVideos({ token }: FindVideosProps) {
 
   return (
     <Box className="flex flex-col gap-4 py-4">
-      <Typography variant="h5">Find on YouTube</Typography>
+      <Typography variant="h5">Find Videos on YouTube</Typography>
       <SearchBar
         query={query}
         pageSize={pageSize}

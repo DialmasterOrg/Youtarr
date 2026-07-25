@@ -94,6 +94,38 @@ describe('messageEmitter', () => {
     expect(closedClient.send).not.toHaveBeenCalled();
   });
 
+  describe('getLastFinalActivity', () => {
+    test('returns null when no final state is stored', () => {
+      expect(MessageEmitter.getLastFinalActivity()).toBeNull();
+    });
+
+    test('returns the stored final payload without the transport envelope', () => {
+      const payload = { finalSummary: { downloaded: 3 } };
+
+      MessageEmitter.emitMessage('broadcast', null, 'downloader', 'downloadProgress', payload);
+
+      const activity = MessageEmitter.getLastFinalActivity();
+      expect(activity).toMatchObject({
+        finalSummary: { downloaded: 3 },
+        dateTimeStamp: expect.any(Number)
+      });
+      expect(activity.destination).toBeUndefined();
+      expect(activity.type).toBeUndefined();
+    });
+
+    test('returns null again after a new download clears the stored state', () => {
+      MessageEmitter.emitMessage('broadcast', null, 'downloader', 'downloadProgress', {
+        progress: { state: 'complete' }
+      });
+      expect(MessageEmitter.getLastFinalActivity()).not.toBeNull();
+
+      MessageEmitter.emitMessage('broadcast', null, 'downloader', 'downloadProgress', {
+        progress: { state: 'initiating' }
+      });
+      expect(MessageEmitter.getLastFinalActivity()).toBeNull();
+    });
+  });
+
   test('handles undefined payload by creating empty object with timestamp', () => {
     MessageEmitter.emitMessage('broadcast', null, 'server', 'ping');
 

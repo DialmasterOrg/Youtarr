@@ -210,7 +210,7 @@ function DownloadAllVideosDialog({
           </div>
         </DialogContent>
 
-        <DialogActions style={{ paddingLeft: 24, paddingRight: 24, paddingBottom: 16 }}>
+        <DialogActions>
           <Button onClick={onClose} variant="contained" color="primary" autoFocus>
             Cancel
           </Button>

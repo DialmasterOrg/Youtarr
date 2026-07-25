@@ -7,6 +7,9 @@ class DownloadProgressMonitor {
     this.jobId = jobId;
     this.jobType = jobType;
     this.lastUpdateTimestamp = Date.now();
+    // When this monitor last saw yt-dlp output or produced a snapshot;
+    // read by the current-activity endpoint as a staleness signal.
+    this.lastActivityAt = Date.now();
     this.lastPercent = 0;
     this.lastParsed = null;
     this.stallRaised = false;
@@ -172,7 +175,26 @@ class DownloadProgressMonitor {
     this.smoothedEta = null;
   }
 
-  snapshot(stateOverride, videoInfoOverride) {
+  // Single structured-progress envelope builder shared by toPayload() (REST
+  // reads / snapshot) and processProgress() (live parsing), so the two paths
+  // cannot drift apart.
+  buildPayload(state, progress, videoInfo) {
+    return {
+      jobId: this.jobId,
+      progress,
+      stalled: state === 'stalled',
+      state,
+      videoInfo,
+      videoCount: { ...this.videoCount },
+      downloadType: this.jobType,
+      currentChannelName: this.currentChannelName
+    };
+  }
+
+  // Pure read: builds the structured-progress payload without committing any
+  // monitor state. Safe to call from REST reads; snapshot() is the mutating
+  // variant used on the emission path.
+  toPayload(stateOverride, videoInfoOverride) {
     const state = stateOverride || this.currentState || 'initiating';
     const baseProgress = this.lastParsed && this.lastParsed.progress
       ? { ...this.lastParsed.progress }
@@ -199,23 +221,19 @@ class DownloadProgressMonitor {
       displayTitle: ''
     };
 
-    const payload = {
-      jobId: this.jobId,
-      progress: baseProgress,
-      stalled: state === 'stalled',
-      state,
-      videoInfo,
-      videoCount: { ...this.videoCount },
-      downloadType: this.jobType,
-      currentChannelName: this.currentChannelName
-    };
+    return this.buildPayload(state, baseProgress, videoInfo);
+  }
 
-    this.currentState = state;
+  snapshot(stateOverride, videoInfoOverride) {
+    const payload = this.toPayload(stateOverride, videoInfoOverride);
+
+    this.currentState = payload.state;
     this.lastParsed = payload;
-    this.lastEmittedState = state;
-    this.lastVideoInfo = videoInfo;
-    this.stallRaised = state === 'stalled';
-    if (state === 'error' || state === 'failed') {
+    this.lastEmittedState = payload.state;
+    this.lastVideoInfo = payload.videoInfo;
+    this.stallRaised = payload.state === 'stalled';
+    this.lastActivityAt = Date.now();
+    if (payload.state === 'error' || payload.state === 'failed') {
       this.hasError = true;
     }
 
@@ -490,6 +508,7 @@ class DownloadProgressMonitor {
   }
 
   processProgress(line, rawLine, config) {
+    this.lastActivityAt = Date.now();
     const parsed = this.parseProgressJson(line);
 
     const newState = this.determineState(rawLine);
@@ -549,26 +568,21 @@ class DownloadProgressMonitor {
     const rawEta = this.calculateRawEta(parsed.downloaded, parsed.total, smoothedSpeed);
     const smoothedEta = this.applyEtaSmoothing(rawEta);
 
-    const structuredPayload = {
-      jobId: this.jobId,
-      progress: {
+    const structuredPayload = this.buildPayload(
+      stalled ? 'stalled' : this.currentState,
+      {
         percent: parsed.percent,
         downloadedBytes: parsed.downloaded,
         totalBytes: parsed.total,
         speedBytesPerSecond: smoothedSpeed,
         etaSeconds: smoothedEta
       },
-      stalled,
-      state: stalled ? 'stalled' : this.currentState,
-      videoInfo: videoInfo || this.lastParsed?.videoInfo || this.lastVideoInfo || {
+      videoInfo || this.lastParsed?.videoInfo || this.lastVideoInfo || {
         channel: '',
         title: '',
         displayTitle: ''
-      },
-      videoCount: { ...this.videoCount },
-      downloadType: this.jobType,
-      currentChannelName: this.currentChannelName
-    };
+      }
+    );
 
     this.lastParsed = structuredPayload;
     this.lastEmittedState = structuredPayload.state;

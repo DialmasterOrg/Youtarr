@@ -8,6 +8,10 @@
 // Several pipeline stages (progress seeding, per-item counting, processed-URL
 // derivation, completion gating) treat both URL-list kinds identically. Use the
 // helpers below rather than bare string comparisons so every label is covered.
+//
+// Display labels for these job types are mirrored client-side in
+// client/src/utils/jobTypeLabel.ts (activity header, queued chips, job
+// summaries). When adding or renaming a job type, update both files.
 
 const MANUAL_DOWNLOAD_LABEL = 'Manually Added Urls';
 const CHANNEL_DOWNLOAD_LABEL = 'Channel Downloads';
