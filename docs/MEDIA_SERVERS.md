@@ -19,6 +19,7 @@ Youtarr supports integration with multiple media servers, providing rich metadat
 |---------|------|------|----------|------|
 | Automatic Library Refresh via Youtarr | ✅ | ❌ | ❌ | ❌ |
 | Native Playlist Sync | ✅ | M3U only | ✅ | ✅ |
+| Channel Playlist (.m3u) Auto-Import | ❌ | Manual import | Mixed-type libraries only | Mixed-type libraries only |
 | Watch Status Sync (into Youtarr) | ✅ | ❌ | ✅ | ✅ |
 | NFO Metadata | ❌ | ✅ | ✅ | ✅ |
 | Embedded MP4 Metadata | ✅ | Partial | ✅ | ✅ |

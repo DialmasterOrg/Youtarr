@@ -7,6 +7,7 @@ Complete guide for integrating Youtarr with Jellyfin Media Server.
 - [Library Setup](#library-setup)
 - [Metadata Configuration](#metadata-configuration)
 - [Native Playlist Sync](#native-playlist-sync)
+- [Channel Playlist Files (.m3u)](#channel-playlist-files-m3u)
 - [Multi-Library Organization](#multi-library-organization)
 - [Troubleshooting](#troubleshooting)
 
@@ -27,9 +28,16 @@ Youtarr provides full Jellyfin support through:
 1. In Jellyfin, go to Dashboard → Libraries
 2. Click "Add Media Library"
 3. Configure basic settings:
-   - **Content Type**: `Movies` or `Mixed Movies and Shows`
-     - Youtarr currently only supports downloading videos as "movies"
+   - **Content Type**: `Movies` (current recommendation; see [Choosing a library type](#choosing-a-library-type) below)
    - **Display Name**: YouTube (or your preference)
+
+#### Choosing a library type
+
+Youtarr writes each video as a standalone "movie" with its own NFO metadata, so two Jellyfin content types can read the library:
+
+- **`Movies` (current recommendation)**: the most reliable option. Every video displays as a movie with full metadata and artwork. Limitation: Jellyfin will NOT automatically import Youtarr's optional per-channel `.m3u` playlist files; Jellyfin only imports playlist files from libraries whose content type is Mixed or Music. See [Channel Playlist Files (.m3u)](#channel-playlist-files-m3u).
+- **`Mixed Movies and Shows`**: automatically imports the per-channel `.m3u` files as Jellyfin playlists, but comes with real risks. [Jellyfin's own documentation](https://jellyfin.org/docs/general/server/media/mixed-movies-and-shows/) says this library type "is broken and deprecated" and recommends against using it, and its TV-detection heuristics can misclassify channel content as TV series: video titles that look episode-like ("Season 3", "Episode 12") or folder names starting with digits can be picked up as episodes, and a single misdetected video folder can flip an entire channel folder into displaying as a series. This tends to work on smaller libraries and break as the library grows, since more titles means more chances for a false match.
+- **`Shows`**: not currently supported. Writing videos and metadata in a way that is compatible with Shows-type libraries is on our roadmap but is not supported yet.
 
 ### Step 2: Add Folders
 
@@ -110,6 +118,17 @@ Connecting Jellyfin also enables watch status sync: Youtarr periodically pulls p
 
 A playlist marked **Public** in Youtarr is visible to all users on the server; a **Private** one is visible only to the configured user account.
 
+## Channel Playlist Files (.m3u)
+
+Separately from playlist sync, each channel has an optional "Generate channel playlist file (.m3u)" setting that writes a `<Channel Name>.m3u` playlist at the top of the channel folder (see [Channel playlist file](../USAGE_GUIDE.md#channel-playlist-file-m3u)).
+
+Whether Jellyfin picks that file up as a playlist depends entirely on the library's content type:
+
+- **Mixed Movies and Shows**: Jellyfin imports the file automatically as a (read-only) playlist during library scans, and picks up changes on later scans.
+- **Movies**: Jellyfin ignores the file. This is expected; Jellyfin only imports playlist files from Mixed or Music libraries.
+
+If you keep the recommended Movies library type, you can still use the file outside Jellyfin: any `.m3u`-capable player (VLC, mpv, Kodi) opens it directly, or a third-party tool such as [m3u-to-jellyfin](https://github.com/warreth/m3u-to-jellyfin) can import it into Jellyfin as a native, editable playlist via the API.
+
 ## Multi-Library Organization
 
 ### Creating Separate Libraries
@@ -161,6 +180,20 @@ Organize content by type:
    ```
 3. Disable other metadata providers
 4. Manually refresh metadata for items
+
+### Channel .m3u Not Appearing as a Playlist
+
+**Problem**: A channel's "Generate channel playlist file (.m3u)" setting is on and the file exists on disk, but no playlist shows up in Jellyfin
+
+**Cause**: The library's content type is `Movies`. Jellyfin only imports playlist files from Mixed or Music libraries; this is expected behavior, not a bug. See [Channel Playlist Files (.m3u)](#channel-playlist-files-m3u) for alternatives.
+
+### Channel Displays as a TV Series
+
+**Problem**: In a `Mixed Movies and Shows` library, a channel (or some of its videos) shows up as a TV series with seasons/episodes and broken metadata
+
+**Cause**: Jellyfin's mixed-library TV-detection heuristics misread episode-like video titles or folder names starting with digits. Jellyfin has deprecated this library type.
+
+**Solution**: Change the library's content type to `Movies` (or recreate the library as `Movies`) and rescan. Channel `.m3u` playlists will no longer auto-import; see [Choosing a library type](#choosing-a-library-type) for the tradeoff.
 
 ### Poster Issues
 
