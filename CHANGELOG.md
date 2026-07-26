@@ -1,5 +1,34 @@
 # Changelog
 
+## [v1.77.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.77.0) - 2026-07-25
+
+## [1.77.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.76.1...v1.77.0) (2026-07-25)
+
+
+### Features
+
+* add per-channel .m3u playlist generation ([20c45c7](https://github.com/DialmasterOrg/Youtarr/commit/20c45c798125b8dfbc538d4cb17285149a95638d)), closes [#357](https://github.com/DialmasterOrg/Youtarr/issues/357)
+* add watched and keep-recent auto-removal ([77f9efb](https://github.com/DialmasterOrg/Youtarr/commit/77f9efb99fff1dde7971574c1896360e274d78f5)), closes [#316](https://github.com/DialmasterOrg/Youtarr/issues/316)
+* bulk re-download from videos page selection ([9186d6a](https://github.com/DialmasterOrg/Youtarr/commit/9186d6a88823b4db70e523f40d8af2ace4b7fb5f)), closes [#578](https://github.com/DialmasterOrg/Youtarr/issues/578)
+* capture and show downloaded video resolution ([cf74325](https://github.com/DialmasterOrg/Youtarr/commit/cf74325043b2ac956d489523e558d85f6793184d)), closes [#578](https://github.com/DialmasterOrg/Youtarr/issues/578)
+* clearer nav labels, mobile subnav scroll hint ([bf9328f](https://github.com/DialmasterOrg/Youtarr/commit/bf9328f9403dfcadd50aa3d38d6c77b1a68f53b5))
+* keep the download activity page accurate ([7a8cfbc](https://github.com/DialmasterOrg/Youtarr/commit/7a8cfbc6d8b6a6fa93d0ba241552a8238f1f28c7))
+
+
+### Performance Improvements
+
+* run backfill ffprobes 4 at a time ([9383aee](https://github.com/DialmasterOrg/Youtarr/commit/9383aeeb2e318ec701cfa41743dcf2f75455694f)), closes [#578](https://github.com/DialmasterOrg/Youtarr/issues/578)
+
+
+### Documentation
+
+* update CHANGELOG for v1.76.1 [skip ci] ([8103449](https://github.com/DialmasterOrg/Youtarr/commit/8103449a3475b5cd04bd74380d5f931cf3d60c9a))
+* warn against enabling nfo metadata savers ([75569a9](https://github.com/DialmasterOrg/Youtarr/commit/75569a955f24dd0551eab5308fb83d62f5a53544)), closes [#696](https://github.com/DialmasterOrg/Youtarr/issues/696)
+
+
+
+
+
 ## [v1.76.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.76.1) - 2026-07-20
 
 ### [1.76.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.76.0...v1.76.1) (2026-07-20)
