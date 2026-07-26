@@ -7,6 +7,7 @@ Complete guide for integrating Youtarr with Emby Media Server.
 - [Library Setup](#library-setup)
 - [Metadata Configuration](#metadata-configuration)
 - [Native Playlist Sync](#native-playlist-sync)
+- [Channel Playlist Files (.m3u)](#channel-playlist-files-m3u)
 - [Multi-Library Organization](#multi-library-organization)
 - [Advanced Settings](#advanced-settings)
 - [Troubleshooting](#troubleshooting)
@@ -28,8 +29,16 @@ Youtarr provides comprehensive Emby support through:
 1. In Emby, go to Settings → Library
 2. Click "Add Media Library"
 3. Select library type:
-   - **Type**: Movies or Mixed Content
+   - **Type**: `Movies` (current recommendation; see [Choosing a library type](#choosing-a-library-type) below)
    - **Display Name**: YouTube (or your preference)
+
+#### Choosing a library type
+
+Youtarr writes each video as a standalone "movie" with its own NFO metadata, so two Emby library types can read the library:
+
+- **`Movies` (current recommendation)**: the most reliable option. Every video displays as a movie with full metadata and artwork. Limitation: Emby will NOT automatically import Youtarr's optional per-channel `.m3u` playlist files as playlists; that only happens in Mixed Content libraries. See [Channel Playlist Files (.m3u)](#channel-playlist-files-m3u).
+- **`Mixed Content`**: automatically imports the per-channel `.m3u` files as Emby playlists, but [Emby's own documentation](https://emby.media/support/articles/Library-Setup.html) notes that "support for mixed content is limited", and its TV-detection heuristics can misclassify channel content as TV series: video titles that look episode-like ("Season 3", "Episode 12") can be picked up as episodes and display with wrong metadata. This tends to work on smaller libraries and break as the library grows, since more titles means more chances for a false match.
+- **`TV Shows`**: not currently supported. Writing videos and metadata in a way that is compatible with TV Shows libraries is on our roadmap but is not supported yet.
 
 ### Step 2: Add Media Folders
 
@@ -118,6 +127,17 @@ Connecting Emby also enables watch status sync: Youtarr periodically pulls per-v
 
 A playlist marked **Public** in Youtarr is created as a server-wide (shared) Emby playlist that all users can see; a **Private** one is owned by the configured user account only. Emby sets this when the playlist is created, so changing Public/Private for a playlist that already exists takes effect on the next sync that recreates it. Emby also shows shared playlists as read-only, which is expected: Youtarr owns these playlists and rewrites them on every sync.
 
+## Channel Playlist Files (.m3u)
+
+Separately from playlist sync, each channel has an optional "Generate channel playlist file (.m3u)" setting that writes a `<Channel Name>.m3u` playlist at the top of the channel folder (see [Channel playlist file](../USAGE_GUIDE.md#channel-playlist-file-m3u)).
+
+Whether Emby picks that file up as a playlist depends on the library type:
+
+- **Mixed Content**: Emby imports the file automatically as a (read-only) playlist during library scans, and picks up changes on later scans.
+- **Movies**: Emby ignores the file. This is expected behavior, not a bug.
+
+If you keep the recommended Movies library type, you can still open the file directly in any `.m3u`-capable player (VLC, mpv, Kodi).
+
 ## Multi-Library Organization
 
 ### Setting Up Multiple Libraries
@@ -194,6 +214,20 @@ Configure in Advanced settings:
    ```bash
    tail -f /var/lib/emby/logs/embyserver.txt
    ```
+
+### Channel .m3u Not Appearing as a Playlist
+
+**Problem**: A channel's "Generate channel playlist file (.m3u)" setting is on and the file exists on disk, but no playlist shows up in Emby
+
+**Cause**: The library type is `Movies`. Emby only imports playlist files from Mixed Content libraries; this is expected behavior, not a bug. See [Channel Playlist Files (.m3u)](#channel-playlist-files-m3u) for alternatives.
+
+### Channel Displays as a TV Series
+
+**Problem**: In a `Mixed Content` library, a channel (or some of its videos) shows up as a TV series with seasons/episodes and broken metadata
+
+**Cause**: Emby's mixed-library TV-detection heuristics misread episode-like video titles. Emby's own documentation notes that support for mixed content is limited.
+
+**Solution**: Change the library to `Movies` (or recreate it as `Movies`) and rescan. Channel `.m3u` playlists will no longer auto-import; see [Choosing a library type](#choosing-a-library-type) for the tradeoff.
 
 ### Metadata Not Loading
 

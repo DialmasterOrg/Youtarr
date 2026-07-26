@@ -102,6 +102,8 @@ Organize content by type using subfolders:
 
 Youtarr doesn't push native playlists into Kodi the way it does for Plex, Jellyfin, and Emby. If you subscribe to YouTube playlists, Youtarr writes a standard `.m3u` file for each one into a `__playlists__` folder next to your videos. Import that file as a playlist source in Kodi to get the same list. See [Media Server Playlists](../MEDIA_SERVER_PLAYLISTS.md#m3u-fallback) for details.
 
+Channels can also write their own `.m3u`: enable "Generate channel playlist file (.m3u)" in a channel's settings and Youtarr writes a `<Channel Name>.m3u` at the top of that channel's folder, importable into Kodi the same way.
+
 ## File Structure
 
 See [docs/YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md](../YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md)
