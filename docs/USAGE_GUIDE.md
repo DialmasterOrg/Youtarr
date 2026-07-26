@@ -78,10 +78,16 @@ Subscribe to YouTube channels to automatically download new videos as they're pu
 Enable "Generate channel playlist file (.m3u)" in a channel's settings to have
 Youtarr write a `<Channel Name>.m3u` playlist at the top of that channel's
 folder, listing every downloaded video (oldest first by default, or newest
-first). Jellyfin and Emby import the file automatically as a playlist. The
-file updates after downloads and deletions and refreshes nightly after the
-scheduled file rescan; files deleted outside Youtarr drop out of the
-playlist at the next refresh.
+first). Jellyfin and Emby import the file automatically as a playlist, but
+only when the library's content type is Mixed (Jellyfin: "Mixed Movies and
+Shows", Emby: "Mixed Content"); in a Movies-type library (the current
+recommendation) the server ignores the file, though it still opens in any
+`.m3u`-capable player such as VLC, mpv, or Kodi. See the
+[Jellyfin](media-servers/jellyfin.md#channel-playlist-files-m3u) and
+[Emby](media-servers/emby.md#channel-playlist-files-m3u) guides for the
+library-type tradeoff. The file updates after downloads and deletions and
+refreshes nightly after the scheduled file rescan; files deleted outside
+Youtarr drop out of the playlist at the next refresh.
 Turning the setting off (or unsubscribing from the channel) deletes the file.
 
 ## Import YouTube Subscriptions
