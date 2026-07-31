@@ -50,7 +50,8 @@
   "author": "",
   "license": "ISC",
   "overrides": {
-    "form-data": "^4.0.6"
+    "form-data": "^4.0.6",
+    "brace-expansion": "5.0.8"
   },
   "dependencies": {
     "axios": "^1.12.0",
