@@ -215,6 +215,67 @@ describe('CoreSettingsSection Component', () => {
     });
   });
 
+  describe('Create backdrop images Checkbox', () => {
+    test('renders Create backdrop images checkbox', () => {
+      const props = createSectionProps();
+      renderWithProviders(<CoreSettingsSection {...props} />);
+
+      expect(screen.getByRole('checkbox', { name: /Create backdrop images/i })).toBeInTheDocument();
+    });
+
+    test('checkbox reflects writeBackdropImages state when false', async () => {
+      const props = createSectionProps({
+        config: createConfig({ writeBackdropImages: false })
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+
+      const checkbox = screen.getByRole('checkbox', { name: /Create backdrop images/i });
+      expect(checkbox).not.toBeChecked();
+    });
+
+    test('checkbox reflects writeBackdropImages state when true', async () => {
+      const props = createSectionProps({
+        config: createConfig({ writeBackdropImages: true })
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+
+      const checkbox = screen.getByRole('checkbox', { name: /Create backdrop images/i });
+      expect(checkbox).toBeChecked();
+    });
+
+    test('calls onConfigChange when checkbox is toggled from false to true', async () => {
+      const user = userEvent.setup();
+      const onConfigChange = jest.fn();
+      const props = createSectionProps({
+        config: createConfig({ writeBackdropImages: false }),
+        onConfigChange
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+
+      const checkbox = screen.getByRole('checkbox', { name: /Create backdrop images/i });
+      await user.click(checkbox);
+
+      expect(onConfigChange).toHaveBeenCalledTimes(1);
+      expect(onConfigChange).toHaveBeenCalledWith({ writeBackdropImages: true });
+    });
+
+    test('calls onConfigChange when checkbox is toggled from true to false', async () => {
+      const user = userEvent.setup();
+      const onConfigChange = jest.fn();
+      const props = createSectionProps({
+        config: createConfig({ writeBackdropImages: true }),
+        onConfigChange
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+
+      const checkbox = screen.getByRole('checkbox', { name: /Create backdrop images/i });
+      await user.click(checkbox);
+
+      expect(onConfigChange).toHaveBeenCalledTimes(1);
+      expect(onConfigChange).toHaveBeenCalledWith({ writeBackdropImages: false });
+    });
+  });
+
   describe('YouTube Output Directory Field', () => {
     test('renders YouTube Output Directory field', () => {
       const props = createSectionProps();

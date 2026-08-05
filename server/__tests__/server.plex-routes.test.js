@@ -180,6 +180,7 @@ const setupServer = async ({ authEnabled = 'false', passwordHash = null } = {}) 
 
   jest.doMock('node-cron', () => ({ schedule: jest.fn() }));
   jest.doMock('../modules/mediaServers/watchStatusScheduler', () => ({ scheduleTask: jest.fn(), subscribe: jest.fn() }));
+  jest.doMock('../modules/channel/channelBackdropBackfill', () => ({ subscribe: jest.fn() }));
   jest.doMock('express-rate-limit', () => jest.fn(() => (req, res, next) => next()));
 
   const serverModule = require('../server');

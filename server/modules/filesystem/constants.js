@@ -146,6 +146,7 @@ const CHANNEL_CLEANUP_IGNORABLE_FILES = [
   'poster.jpg',
   'poster.png',
   'poster.jpeg',
+  'backdrop.jpg',
   '.ds_store',
   'thumbs.db',
   'desktop.ini',

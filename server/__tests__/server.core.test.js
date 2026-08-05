@@ -255,6 +255,7 @@ const createServerModule = ({
         }));
         jest.doMock('../modules/cronJobs', () => cronJobsMock);
         jest.doMock('../modules/mediaServers/watchStatusScheduler', () => watchStatusSchedulerMock);
+        jest.doMock('../modules/channel/channelBackdropBackfill', () => ({ subscribe: jest.fn() }));
         jest.doMock('../modules/webSocketServer.js', () => jest.fn());
         jest.doMock('node-cron', () => cronMock);
         jest.doMock('express-rate-limit', () => Object.assign(rateLimitMiddleware, { ipKeyGenerator: rateLimitMiddleware.ipKeyGenerator }));
