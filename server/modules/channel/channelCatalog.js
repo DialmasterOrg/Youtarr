@@ -97,8 +97,7 @@ class ChannelCatalog {
         where: { enabled: true },
       });
 
-      // Backfill poster.jpg for existing channel folders
-      channelThumbnails.backfillChannelPosters(channels);
+      channelThumbnails.backfillChannelImages(channels);
 
       return channels.map((channel) => channelMappers.mapChannelListEntry(channel));
     } catch (err) {
@@ -178,7 +177,7 @@ class ChannelCatalog {
         raw: true,
       });
 
-      channelThumbnails.backfillChannelPosters(rows);
+      channelThumbnails.backfillChannelImages(rows);
 
       const totalPages = count > 0 ? Math.ceil(count / safePageSize) : 0;
       const normalizedSubFolders = distinctSubFolders

@@ -61,8 +61,8 @@ async function runCompletionSideEffects({
         });
 
         if (channelsToBackfill.length > 0) {
-          await require('../channelModule').backfillChannelPosters(channelsToBackfill);
-          logger.info({ channelCount: channelsToBackfill.length }, 'Backfilled channel posters for downloaded videos');
+          await require('../channelModule').backfillChannelImages(channelsToBackfill);
+          logger.info({ channelCount: channelsToBackfill.length }, 'Backfilled channel images for downloaded videos');
         }
       }
     } catch (err) {

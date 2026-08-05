@@ -70,13 +70,12 @@ class ChannelModule {
   }
 
   /**
-   * Backfill poster.jpg files for existing channel folders.
-   * Copies channelthumb to each channel's folder as poster.jpg if it doesn't exist.
+   * Backfill poster.jpg and backdrop.jpg files for existing channel folders.
    * @param {Array} channels - Array of channel database records
    * @returns {Promise<void>}
    */
-  async backfillChannelPosters(channels) {
-    return channelThumbnails.backfillChannelPosters(channels);
+  async backfillChannelImages(channels) {
+    return channelThumbnails.backfillChannelImages(channels);
   }
 
   /**

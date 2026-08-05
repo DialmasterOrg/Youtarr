@@ -43,7 +43,7 @@ jest.mock('../../../models/channel', () => ({
 }));
 
 jest.mock('../../channelModule', () => ({
-  backfillChannelPosters: jest.fn().mockResolvedValue(),
+  backfillChannelImages: jest.fn().mockResolvedValue(),
 }));
 
 jest.mock('../../downloadModule', () => ({
@@ -171,12 +171,12 @@ describe('downloadCompletionEffects', () => {
       expect(Channel.findAll).toHaveBeenCalledWith({
         where: { channel_id: ['UC1'] }
       });
-      expect(channelModule.backfillChannelPosters).toHaveBeenCalledWith(channels);
+      expect(channelModule.backfillChannelImages).toHaveBeenCalledWith(channels);
     });
 
     it('swallows backfill errors without throwing', async () => {
       Channel.findAll.mockResolvedValue([{ channel_id: 'UC1' }]);
-      channelModule.backfillChannelPosters.mockRejectedValue(new Error('poster fail'));
+      channelModule.backfillChannelImages.mockRejectedValue(new Error('poster fail'));
 
       await expect(runCompletionSideEffects({
         jobId: 'job-1',

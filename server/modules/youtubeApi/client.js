@@ -215,7 +215,7 @@ async function getChannelInfo(apiKey, channelUrl, { signal } = {}) {
     ENDPOINTS.channels,
     {
       ...selector,
-      part: 'snippet,contentDetails,statistics',
+      part: 'snippet,contentDetails,statistics,brandingSettings',
     },
     { signal }
   );
@@ -244,6 +244,7 @@ async function getChannelInfo(apiKey, channelUrl, { signal } = {}) {
     thumbnailUrl: snippet.thumbnails?.high?.url
       || snippet.thumbnails?.default?.url
       || null,
+    bannerUrl: item.brandingSettings?.image?.bannerExternalUrl || null,
   };
 }
 

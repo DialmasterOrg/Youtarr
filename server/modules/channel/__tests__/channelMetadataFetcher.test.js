@@ -315,5 +315,48 @@ describe('channelMetadataFetcher', () => {
       await channelMetadataFetcher.fetchChannelMetadata('https://www.youtube.com/@my').catch(() => {});
       expect(youtubeApi.client.getChannelInfo).not.toHaveBeenCalled();
     });
+
+    test('includes banner_uncropped thumbnail when the API returns a banner', async () => {
+      youtubeApi.isAvailable.mockReturnValue(true);
+      youtubeApi.getApiKey.mockReturnValue('key');
+      youtubeApi.client.getChannelInfo.mockResolvedValue({
+        channelId: 'UC123',
+        title: 'Chan',
+        description: 'desc',
+        customUrl: '@chan',
+        uploadsPlaylistId: 'UU123',
+        videoCount: 5,
+        thumbnailUrl: 'https://a/avatar.jpg',
+        bannerUrl: 'https://a/banner.jpg',
+      });
+
+      const result = await channelMetadataFetcher.fetchChannelMetadata('https://www.youtube.com/@chan');
+
+      expect(result.thumbnails).toEqual(expect.arrayContaining([
+        { id: 'banner_uncropped', url: 'https://a/banner.jpg' },
+      ]));
+      expect(result.thumbnails).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: 'avatar_uncropped', url: 'https://a/avatar.jpg' }),
+      ]));
+    });
+
+    test('omits banner_uncropped when the API returns no banner', async () => {
+      youtubeApi.isAvailable.mockReturnValue(true);
+      youtubeApi.getApiKey.mockReturnValue('key');
+      youtubeApi.client.getChannelInfo.mockResolvedValue({
+        channelId: 'UC123',
+        title: 'Chan',
+        description: 'desc',
+        customUrl: '@chan',
+        uploadsPlaylistId: 'UU123',
+        videoCount: 5,
+        thumbnailUrl: 'https://a/avatar.jpg',
+        bannerUrl: null,
+      });
+
+      const result = await channelMetadataFetcher.fetchChannelMetadata('https://www.youtube.com/@chan');
+
+      expect(result.thumbnails.some((t) => t.id === 'banner_uncropped')).toBe(false);
+    });
   });
 });

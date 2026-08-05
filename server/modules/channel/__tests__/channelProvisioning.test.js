@@ -533,4 +533,42 @@ describe('channelProvisioning', () => {
       expect(result.sub_folder).toBe('MyFolder');
     });
   });
+
+  describe('getChannelInfo with new channel', () => {
+    test('caches the channel banner after processing the thumbnail', async () => {
+      const channelIdentity = require('../channelIdentity');
+      const channelMetadataFetcher = require('../channelMetadataFetcher');
+      const channelThumbnails = require('../channelThumbnails');
+      const tabManager = require('../tabManager');
+
+      jest.spyOn(channelIdentity, 'findChannelByUrlOrId').mockResolvedValue({
+        foundChannel: null,
+        channelUrl: 'https://www.youtube.com/@newchan',
+      });
+      jest.spyOn(channelMetadataFetcher, 'fetchChannelMetadata').mockResolvedValue({
+        channel_id: 'UC999',
+        title: 'New Channel',
+        description: 'desc',
+        uploader: 'New Channel',
+        folder_name: 'New Channel',
+        entries: [{ id: 'vid1' }],
+        thumbnails: [{ id: 'banner_uncropped', url: 'https://a/banner.jpg' }],
+      });
+      jest.spyOn(channelThumbnails, 'processChannelThumbnail').mockResolvedValue();
+      const bannerSpy = jest.spyOn(channelThumbnails, 'processChannelBanner').mockResolvedValue();
+      jest.spyOn(tabManager, 'detectAndSaveChannelTabs').mockResolvedValue({
+        autoDownloadEnabledTabs: 'video',
+        availableTabs: ['video'],
+      });
+      Channel.findOne.mockResolvedValue(null);
+      Channel.create.mockResolvedValue({ enabled: true, update: jest.fn() });
+
+      await channelProvisioning.getChannelInfo('https://www.youtube.com/@newchan', false, true);
+
+      expect(bannerSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ channel_id: 'UC999' }),
+        'UC999'
+      );
+    });
+  });
 });
