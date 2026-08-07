@@ -171,6 +171,14 @@ describe('filesystem/directoryManager', () => {
       expect(result).toBe(true);
     });
 
+    it('should return true for directory containing only backdrop.jpg', async () => {
+      fsPromises.readdir.mockResolvedValueOnce(['backdrop.jpg']);
+
+      const result = await isDirectoryEffectivelyEmpty('/path/channel');
+
+      expect(result).toBe(true);
+    });
+
     it('should return true with case-insensitive match (Poster.JPG)', async () => {
       fsPromises.readdir.mockResolvedValueOnce(['Poster.JPG']);
 

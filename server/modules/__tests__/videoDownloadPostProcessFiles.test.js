@@ -1413,6 +1413,114 @@ describe('videoDownloadPostProcessFiles', () => {
     });
   });
 
+  describe('writeBackdropImages', () => {
+    const imagePath = '/library/Channel/Video Title [abc123].jpg';
+    const backdropPath = '/library/Channel/Video Title [abc123]-backdrop.jpg';
+    const channelBannerCachePath = '/mock/images/channelbanner-channel123.jpg';
+    const channelBackdropPath = '/library/Channel/backdrop.jpg';
+
+    afterEach(() => {
+      delete process.env.YOUTARR_SKIP_VIDEO_FOLDER;
+    });
+
+    it('creates video backdrop when writeBackdropImages is true and image exists', async () => {
+      configModule.__setConfig({
+        writeChannelPosters: false,
+        writeVideoNfoFiles: true,
+        writeBackdropImages: true,
+      });
+      fs.existsSync.mockImplementation((p) => p === jsonPath || p === imagePath);
+
+      await loadModule();
+      await settleAsync();
+
+      expect(fs.copySync).toHaveBeenCalledWith(imagePath, backdropPath, { overwrite: true });
+      expect(logger.info).toHaveBeenCalledWith(
+        { backdropPath },
+        '[Post-Process] Created video backdrop file'
+      );
+    });
+
+    it('does not create video backdrop when writeBackdropImages is false', async () => {
+      configModule.__setConfig({
+        writeChannelPosters: false,
+        writeVideoNfoFiles: true,
+        writeBackdropImages: false,
+      });
+      fs.existsSync.mockImplementation((p) => p === jsonPath || p === imagePath);
+
+      await loadModule();
+      await settleAsync();
+
+      const backdropCopied = fs.copySync.mock.calls.some(([, dest]) => dest === backdropPath);
+      expect(backdropCopied).toBe(false);
+    });
+
+    it('does not create video backdrop when writeBackdropImages is absent from config', async () => {
+      configModule.__setConfig({
+        writeChannelPosters: false,
+        writeVideoNfoFiles: true,
+      });
+      fs.existsSync.mockImplementation((p) => p === jsonPath || p === imagePath);
+
+      await loadModule();
+      await settleAsync();
+
+      const backdropCopied = fs.copySync.mock.calls.some(([, dest]) => dest === backdropPath);
+      expect(backdropCopied).toBe(false);
+    });
+
+    it('copies the cached channel banner to channel backdrop.jpg', async () => {
+      // Flat layout: the video sits directly in the channel folder
+      process.env.YOUTARR_SKIP_VIDEO_FOLDER = 'true';
+      configModule.__setConfig({
+        writeChannelPosters: false,
+        writeVideoNfoFiles: true,
+        writeBackdropImages: true,
+      });
+      fs.existsSync.mockImplementation((p) => p === jsonPath || p === channelBannerCachePath);
+
+      await loadModule();
+      await settleAsync();
+
+      expect(fs.copySync).toHaveBeenCalledWith(channelBannerCachePath, channelBackdropPath, { overwrite: true });
+    });
+
+    it('skips channel backdrop when the banner cache is missing', async () => {
+      process.env.YOUTARR_SKIP_VIDEO_FOLDER = 'true';
+      configModule.__setConfig({
+        writeChannelPosters: false,
+        writeVideoNfoFiles: true,
+        writeBackdropImages: true,
+      });
+      fs.existsSync.mockImplementation((p) => p === jsonPath);
+
+      await loadModule();
+      await settleAsync();
+
+      const channelBackdropCopied = fs.copySync.mock.calls.some(([, dest]) => dest === channelBackdropPath);
+      expect(channelBackdropCopied).toBe(false);
+    });
+
+    it('skips channel backdrop when backdrop.jpg already exists', async () => {
+      process.env.YOUTARR_SKIP_VIDEO_FOLDER = 'true';
+      configModule.__setConfig({
+        writeChannelPosters: false,
+        writeVideoNfoFiles: true,
+        writeBackdropImages: true,
+      });
+      fs.existsSync.mockImplementation((p) =>
+        p === jsonPath || p === channelBannerCachePath || p === channelBackdropPath
+      );
+
+      await loadModule();
+      await settleAsync();
+
+      const channelBackdropCopied = fs.copySync.mock.calls.some(([, dest]) => dest === channelBackdropPath);
+      expect(channelBackdropCopied).toBe(false);
+    });
+  });
+
   describe('per-video structure mode (YOUTARR_STRUCTURE_PER_VIDEO)', () => {
     const { moveWithRetries } = require('../filesystem');
     const tempVideoPath = '/tmp/youtarr-downloads/Channel/Video Title - abc123/Video Title [abc123].mp4';

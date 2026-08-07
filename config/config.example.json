@@ -46,6 +46,7 @@
   "writeChannelPosters": true,
   "writeVideoNfoFiles": true,
   "writeVideoFanart": false,
+  "writeBackdropImages": false,
   "notificationsEnabled": false,
   "appriseUrls": [],
   "autoRemovalEnabled": false,

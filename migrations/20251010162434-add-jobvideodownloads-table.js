@@ -5,10 +5,16 @@ const {
   dropTableIfExists,
   addIndexIfMissing
 } = require('./helpers');
+const { ensureJobsUuidBinaryCollation } = require('./lib/jobsUuidCollation');
 
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up (queryInterface, Sequelize) {
+    // On databases converted to utf8mb4 by the 20250907 migration, Jobs.id and
+    // JobVideos.job_id lost their utf8mb4_bin collation, and the job_id FK
+    // below would fail with errno 150. Restore it first.
+    await ensureJobsUuidBinaryCollation(queryInterface);
+
     await createTableIfNotExists(queryInterface, 'JobVideoDownloads', {
       id: {
         type: Sequelize.INTEGER,

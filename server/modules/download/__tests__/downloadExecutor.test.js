@@ -65,7 +65,7 @@ jest.mock('../../notificationModule', () => ({
 }));
 
 jest.mock('../../channelModule', () => ({
-  backfillChannelPosters: jest.fn().mockResolvedValue()
+  backfillChannelImages: jest.fn().mockResolvedValue()
 }));
 
 jest.mock('../DownloadProgressMonitor');
@@ -950,7 +950,7 @@ describe('DownloadExecutor', () => {
       expect(Channel.findAll).toHaveBeenCalledWith({
         where: { channel_id: ['UC123'] }
       });
-      expect(channelModule.backfillChannelPosters).toHaveBeenCalledWith(mockChannels);
+      expect(channelModule.backfillChannelImages).toHaveBeenCalledWith(mockChannels);
     });
 
     it('should persist videos to database before updateJob for manual downloads', async () => {
@@ -1145,7 +1145,7 @@ describe('DownloadExecutor', () => {
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
 
-      expect(channelModule.backfillChannelPosters).not.toHaveBeenCalled();
+      expect(channelModule.backfillChannelImages).not.toHaveBeenCalled();
     });
 
     it('should handle channel poster backfill errors gracefully', async () => {
@@ -1154,7 +1154,7 @@ describe('DownloadExecutor', () => {
       ]);
       archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/abc123']);
       Channel.findAll.mockResolvedValue([{ channel_id: 'UC123' }]);
-      channelModule.backfillChannelPosters.mockRejectedValue(new Error('Backfill failed'));
+      channelModule.backfillChannelImages.mockRejectedValue(new Error('Backfill failed'));
 
       setTimeout(() => {
         mockProcess.emit('exit', 0, null);

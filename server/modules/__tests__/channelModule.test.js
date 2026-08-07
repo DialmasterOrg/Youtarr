@@ -43,7 +43,7 @@ jest.mock('../ytDlpRunner', () => ({
 
 // Flush the facade constructor's fire-and-forget populateMissingChannelInfo()
 // chain: with Channel.findAll unconfigured, channelCatalog.readChannels()
-// still calls channelThumbnails.backfillChannelPosters(channels)
+// still calls channelThumbnails.backfillChannelImages(channels)
 // unconditionally before its own catch block runs, so that call lands on the
 // microtask queue unless flushed. Flushing (rather than configuring model
 // mocks) keeps this file free of shared mock-value state that could race
@@ -88,7 +88,7 @@ describe('channelModule facade', () => {
       ['resolveChannelFolderName', '../channel/channelMetadataFetcher', 'resolveChannelFolderName', [{ channel_id: 'UC1' }], 'async'],
       ['generateChannelsFile', '../channel/autoDownloadScheduler', 'generateChannelsFile', [], 'async'],
       ['getEnabledChannelDownloadUrls', '../channel/autoDownloadScheduler', 'getEnabledChannelDownloadUrls', [], 'async'],
-      ['backfillChannelPosters', '../channel/channelThumbnails', 'backfillChannelPosters', [[{ channel_id: 'UC1' }]], 'async'],
+      ['backfillChannelImages', '../channel/channelThumbnails', 'backfillChannelImages', [[{ channel_id: 'UC1' }]], 'async'],
     ];
 
     test.each(CASES)('%s delegates with arguments and result intact', async (method, modulePath, target, args, kind) => {

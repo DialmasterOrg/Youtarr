@@ -4,7 +4,12 @@ const path = require('path');
 const { execSync } = require('child_process');
 const configModule = require('../configModule');
 const logger = require('../../logger');
-const { copySyncWithFallback } = require('../filesystem');
+const {
+  copySyncWithFallback,
+  resolveEffectiveSubfolder,
+  buildChannelPath,
+  resolveChannelFolderName,
+} = require('../filesystem');
 const channelYtdlpExecutor = require('./channelYtdlpExecutor');
 
 class ChannelThumbnails {
@@ -55,27 +60,40 @@ class ChannelThumbnails {
   }
 
   /**
-   * Download channel thumbnail directly from URL
-   * @param {string} thumbnailUrl - Direct URL to the thumbnail image
-   * @param {string} channelId - Channel ID for naming the file
+   * Extract the uncropped banner URL from channel metadata
+   * @param {Object} channelData - Channel metadata from yt-dlp or the YouTube API
+   * @returns {string|null} - Banner URL or null if the channel has no banner
+   */
+  extractBannerThumbnailUrl(channelData) {
+    if (!channelData.thumbnails || !Array.isArray(channelData.thumbnails)) {
+      return null;
+    }
+    const bannerThumb = channelData.thumbnails.find(t => t.id === 'banner_uncropped');
+    return bannerThumb?.url || null;
+  }
+
+  /**
+   * Download an image from a URL into the image cache directory
+   * @param {string} imageUrl - Direct URL to the image
+   * @param {string} targetFileName - File name to write inside the image directory
    * @returns {Promise<void>}
    */
-  async downloadChannelThumbnailFromUrl(thumbnailUrl, channelId) {
+  async downloadImageToFile(imageUrl, targetFileName) {
     const https = require('https');
     const http = require('http');
     const imageDir = configModule.getImagePath();
-    const imagePath = path.join(imageDir, `channelthumb-${channelId}.jpg`);
+    const imagePath = path.join(imageDir, targetFileName);
 
     return new Promise((resolve, reject) => {
-      const protocol = thumbnailUrl.startsWith('https') ? https : http;
+      const protocol = imageUrl.startsWith('https') ? https : http;
       const file = fs.createWriteStream(imagePath);
 
-      const req = protocol.get(thumbnailUrl, { timeout: 15000 }, (response) => {
+      const req = protocol.get(imageUrl, { timeout: 15000 }, (response) => {
         // Handle redirects
         if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
           file.close();
           fs.unlinkSync(imagePath);
-          return this.downloadChannelThumbnailFromUrl(response.headers.location, channelId)
+          return this.downloadImageToFile(response.headers.location, targetFileName)
             .then(resolve)
             .catch(reject);
         }
@@ -89,7 +107,7 @@ class ChannelThumbnails {
         response.pipe(file);
         file.on('finish', () => {
           file.close();
-          logger.debug({ channelId, imagePath }, 'Channel thumbnail downloaded via HTTP');
+          logger.debug({ targetFileName, imagePath }, 'Image downloaded via HTTP');
           resolve();
         });
       });
@@ -143,7 +161,7 @@ class ChannelThumbnails {
 
     if (thumbnailUrl) {
       try {
-        await this.downloadChannelThumbnailFromUrl(thumbnailUrl, channelId);
+        await this.downloadImageToFile(thumbnailUrl, `channelthumb-${channelId}.jpg`);
       } catch (err) {
         logger.warn({ err, channelId }, 'Failed to download thumbnail via HTTP, falling back to yt-dlp');
         await this.downloadChannelThumbnailViaYtdlp(channelUrl);
@@ -157,17 +175,38 @@ class ChannelThumbnails {
   }
 
   /**
-   * Backfill poster.jpg files for existing channel folders.
-   * Copies channelthumb to each channel's folder as poster.jpg if it doesn't exist.
+   * Cache the channel banner image (used for backdrop.jpg generation).
+   * Best-effort: never throws.
+   * @param {Object} channelData - Channel metadata containing thumbnails array
+   * @param {string} channelId - Channel ID
+   * @returns {Promise<void>}
+   */
+  async processChannelBanner(channelData, channelId) {
+    const bannerUrl = this.extractBannerThumbnailUrl(channelData);
+    if (!bannerUrl) {
+      logger.debug({ channelId }, 'No banner_uncropped thumbnail in channel metadata, skipping banner cache');
+      return;
+    }
+    try {
+      await this.downloadImageToFile(bannerUrl, `channelbanner-${channelId}.jpg`);
+      logger.info({ channelId }, 'Channel banner cached');
+    } catch (err) {
+      logger.warn({ err, channelId }, 'Failed to download channel banner');
+    }
+  }
+
+  /**
+   * Backfill poster.jpg and backdrop.jpg files for existing channel folders.
    * @param {Array} channels - Array of channel database records
    * @returns {Promise<void>}
    */
-  async backfillChannelPosters(channels) {
+  async backfillChannelImages(channels) {
     try {
       const config = configModule.getConfig() || {};
-      const shouldWriteChannelPosters = config.writeChannelPosters !== false;
+      const shouldWritePosters = config.writeChannelPosters !== false;
+      const shouldWriteBackdrops = config.writeBackdropImages === true;
 
-      if (!shouldWriteChannelPosters) {
+      if (!shouldWritePosters && !shouldWriteBackdrops) {
         return;
       }
 
@@ -181,28 +220,56 @@ class ChannelThumbnails {
       for (const channel of channels) {
         if (!channel.channel_id) continue;
 
-        // Use folder_name (sanitized by yt-dlp) if available, fall back to uploader
-        const channelFolderName = channel.folder_name || channel.uploader;
+        const channelFolderName = resolveChannelFolderName(channel);
         if (!channelFolderName) continue;
 
-        const channelFolderPath = path.join(outputDir, channelFolderName);
-        const channelPosterPath = path.join(channelFolderPath, 'poster.jpg');
+        // Channels can live under a __subfolder (explicit or via the global
+        // default); resolve the real folder path the same way downloads do.
+        let channelFolderPath;
+        try {
+          const subfolder = resolveEffectiveSubfolder(channel.sub_folder, configModule.getDefaultSubfolder());
+          channelFolderPath = buildChannelPath(outputDir, subfolder, channelFolderName);
+        } catch (pathErr) {
+          logger.warn({ err: pathErr, channelId: channel.channel_id }, 'Skipping channel with unresolvable folder path during image backfill');
+          continue;
+        }
+        if (!fs.existsSync(channelFolderPath)) continue;
 
-        // Check if channel folder exists and poster.jpg doesn't exist
-        if (fs.existsSync(channelFolderPath) && !fs.existsSync(channelPosterPath)) {
-          const channelThumbPath = path.join(imageDir, `channelthumb-${channel.channel_id}.jpg`);
-
-          if (fs.existsSync(channelThumbPath)) {
-            try {
-              copySyncWithFallback(channelThumbPath, channelPosterPath);
-            } catch (copyErr) {
-              logger.error({ err: copyErr, channelFolderName }, 'Error backfilling poster for channel');
-            }
-          }
+        if (shouldWritePosters) {
+          this.copyChannelImageIfMissing(
+            path.join(imageDir, `channelthumb-${channel.channel_id}.jpg`),
+            path.join(channelFolderPath, 'poster.jpg'),
+            channelFolderName
+          );
+        }
+        if (shouldWriteBackdrops) {
+          this.copyChannelImageIfMissing(
+            path.join(imageDir, `channelbanner-${channel.channel_id}.jpg`),
+            path.join(channelFolderPath, 'backdrop.jpg'),
+            channelFolderName
+          );
         }
       }
     } catch (err) {
-      logger.error({ err }, 'Error during channel poster backfill');
+      logger.error({ err }, 'Error during channel image backfill');
+    }
+  }
+
+  /**
+   * Copy a cached channel image to a target path if the source exists and the
+   * target doesn't.
+   * @param {string} sourcePath - Cached image path in the image directory
+   * @param {string} targetPath - Destination path inside the channel folder
+   * @param {string} channelFolderName - For error logging context
+   */
+  copyChannelImageIfMissing(sourcePath, targetPath, channelFolderName) {
+    if (!fs.existsSync(sourcePath) || fs.existsSync(targetPath)) {
+      return;
+    }
+    try {
+      copySyncWithFallback(sourcePath, targetPath);
+    } catch (copyErr) {
+      logger.error({ err: copyErr, channelFolderName, targetPath }, 'Error backfilling channel image');
     }
   }
 }

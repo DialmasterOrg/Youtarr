@@ -67,7 +67,7 @@ describe('Channel Poster Functionality', () => {
     logger = require('../../logger');
   });
 
-  describe('backfillChannelPosters', () => {
+  describe('backfillChannelImages', () => {
     it('should copy channelthumb to channel folder as poster.jpg if it doesn\'t exist', async () => {
       const channels = [
         {
@@ -98,7 +98,7 @@ describe('Channel Poster Functionality', () => {
         return false;
       });
 
-      await channelModule.backfillChannelPosters(channels);
+      await channelModule.backfillChannelImages(channels);
 
       // Should copy poster for channel 1 but not channel 2
       expect(fs.copySync).toHaveBeenCalledTimes(1);
@@ -116,7 +116,7 @@ describe('Channel Poster Functionality', () => {
 
       fs.existsSync.mockReturnValue(false);
 
-      await channelModule.backfillChannelPosters(channels);
+      await channelModule.backfillChannelImages(channels);
 
       expect(fs.copySync).not.toHaveBeenCalled();
     });
@@ -136,7 +136,7 @@ describe('Channel Poster Functionality', () => {
         return false;
       });
 
-      await channelModule.backfillChannelPosters(channels);
+      await channelModule.backfillChannelImages(channels);
 
       // Should only process the valid channel
       expect(fs.copySync).toHaveBeenCalledTimes(1);
@@ -154,7 +154,7 @@ describe('Channel Poster Functionality', () => {
         { channel_id: 'UC123', uploader: 'Test Channel' }
       ];
 
-      await channelModule.backfillChannelPosters(channels);
+      await channelModule.backfillChannelImages(channels);
 
       // fs.existsSync may be called during module initialization, but copySync should not be called
       expect(fs.copySync).not.toHaveBeenCalled();
@@ -178,14 +178,14 @@ describe('Channel Poster Functionality', () => {
         throw testError;
       });
 
-      await channelModule.backfillChannelPosters(channels);
+      await channelModule.backfillChannelImages(channels);
 
       expect(logger.error).toHaveBeenCalledWith(
         expect.objectContaining({
           err: testError,
           channelFolderName: 'Test Channel'
         }),
-        'Error backfilling poster for channel'
+        'Error backfilling channel image'
       );
     });
 
@@ -202,9 +202,124 @@ describe('Channel Poster Functionality', () => {
         return false;
       });
 
-      await channelModule.backfillChannelPosters(channels);
+      await channelModule.backfillChannelImages(channels);
 
       expect(fs.copySync).not.toHaveBeenCalled();
+    });
+
+    it('copies cached banner to backdrop.jpg when writeBackdropImages is true', async () => {
+      configModule.getConfig.mockReturnValue({ writeChannelPosters: false, writeBackdropImages: true });
+
+      const channels = [
+        { channel_id: 'UC123', uploader: 'Test Channel' }
+      ];
+
+      fs.existsSync.mockImplementation((path) => {
+        if (path === '/videos') return true;
+        if (path === '/videos/Test Channel') return true;
+        if (path === '/videos/Test Channel/backdrop.jpg') return false;
+        if (path === '/images/channelbanner-UC123.jpg') return true;
+        return false;
+      });
+
+      await channelModule.backfillChannelImages(channels);
+
+      expect(fs.copySync).toHaveBeenCalledTimes(1);
+      expect(fs.copySync).toHaveBeenCalledWith(
+        '/images/channelbanner-UC123.jpg',
+        '/videos/Test Channel/backdrop.jpg',
+        { overwrite: true }
+      );
+    });
+
+    it('does not copy backdrop when writeBackdropImages is not enabled', async () => {
+      configModule.getConfig.mockReturnValue({ writeChannelPosters: false });
+
+      const channels = [
+        { channel_id: 'UC123', uploader: 'Test Channel' }
+      ];
+
+      fs.existsSync.mockReturnValue(true);
+
+      await channelModule.backfillChannelImages(channels);
+
+      expect(fs.copySync).not.toHaveBeenCalled();
+    });
+
+    it('backfills backdrop.jpg for a channel using the global default subfolder', async () => {
+      configModule.getConfig.mockReturnValue({ writeChannelPosters: false, writeBackdropImages: true });
+      configModule.getDefaultSubfolder.mockReturnValue('GlobalDefault');
+
+      const channels = [
+        { channel_id: 'UC123', uploader: 'Test Channel', sub_folder: '##USE_GLOBAL_DEFAULT##' }
+      ];
+
+      fs.existsSync.mockImplementation((path) => {
+        if (path === '/videos') return true;
+        if (path === '/videos/__GlobalDefault/Test Channel') return true;
+        if (path === '/videos/__GlobalDefault/Test Channel/backdrop.jpg') return false;
+        if (path === '/images/channelbanner-UC123.jpg') return true;
+        return false;
+      });
+
+      await channelModule.backfillChannelImages(channels);
+
+      expect(fs.copySync).toHaveBeenCalledTimes(1);
+      expect(fs.copySync).toHaveBeenCalledWith(
+        '/images/channelbanner-UC123.jpg',
+        '/videos/__GlobalDefault/Test Channel/backdrop.jpg',
+        { overwrite: true }
+      );
+    });
+
+    it('backfills poster.jpg for a channel with an explicit subfolder', async () => {
+      configModule.getConfig.mockReturnValue({ writeChannelPosters: true, writeBackdropImages: false });
+
+      const channels = [
+        { channel_id: 'UC123', uploader: 'Test Channel', sub_folder: 'Library1' }
+      ];
+
+      fs.existsSync.mockImplementation((path) => {
+        if (path === '/videos') return true;
+        if (path === '/videos/__Library1/Test Channel') return true;
+        if (path === '/videos/__Library1/Test Channel/poster.jpg') return false;
+        if (path === '/images/channelthumb-UC123.jpg') return true;
+        return false;
+      });
+
+      await channelModule.backfillChannelImages(channels);
+
+      expect(fs.copySync).toHaveBeenCalledTimes(1);
+      expect(fs.copySync).toHaveBeenCalledWith(
+        '/images/channelthumb-UC123.jpg',
+        '/videos/__Library1/Test Channel/poster.jpg',
+        { overwrite: true }
+      );
+    });
+
+    it('poster backfill still runs independently of the backdrop setting', async () => {
+      configModule.getConfig.mockReturnValue({ writeChannelPosters: true, writeBackdropImages: false });
+
+      const channels = [
+        { channel_id: 'UC123', uploader: 'Test Channel' }
+      ];
+
+      fs.existsSync.mockImplementation((path) => {
+        if (path === '/videos') return true;
+        if (path === '/videos/Test Channel') return true;
+        if (path === '/videos/Test Channel/poster.jpg') return false;
+        if (path === '/images/channelthumb-UC123.jpg') return true;
+        return false;
+      });
+
+      await channelModule.backfillChannelImages(channels);
+
+      expect(fs.copySync).toHaveBeenCalledTimes(1);
+      expect(fs.copySync).toHaveBeenCalledWith(
+        '/images/channelthumb-UC123.jpg',
+        '/videos/Test Channel/poster.jpg',
+        { overwrite: true }
+      );
     });
   });
 });
