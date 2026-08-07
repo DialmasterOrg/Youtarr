@@ -1,5 +1,35 @@
 # Changelog
 
+## [v1.78.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.78.0) - 2026-08-07
+
+## [1.78.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.77.0...v1.78.0) (2026-08-07)
+
+
+### Features
+
+* add backdrop images for Emby and Jellyfin ([63e6b1f](https://github.com/DialmasterOrg/Youtarr/commit/63e6b1fd4e6aa489b0d24a4c960062750c28a16a)), closes [#753](https://github.com/DialmasterOrg/Youtarr/issues/753)
+
+
+### Bug Fixes
+
+* restore utf8mb4_bin on jobs uuid fk columns ([d0759d3](https://github.com/DialmasterOrg/Youtarr/commit/d0759d304bebebbd27be580391748451844bb41f)), closes [#752](https://github.com/DialmasterOrg/Youtarr/issues/752)
+
+
+### Build Systems
+
+* bump brace-expansion and ip-address for npm audit ([c7f4938](https://github.com/DialmasterOrg/Youtarr/commit/c7f4938e92c8a8b25b743ca6989c4356a0612c20)), closes [#752](https://github.com/DialmasterOrg/Youtarr/issues/752)
+
+
+### Documentation
+
+* qualify channel .m3u import by library type [skip ci] ([e4ed1c3](https://github.com/DialmasterOrg/Youtarr/commit/e4ed1c323889bbe648e3a6d687c5f5838757aa8f))
+* qualify channel .m3u import by library type [skip ci] ([9681a05](https://github.com/DialmasterOrg/Youtarr/commit/9681a05f6f63c7f40f7708bbd124b304e2f8a416))
+* update CHANGELOG for v1.77.0 [skip ci] ([7d3b962](https://github.com/DialmasterOrg/Youtarr/commit/7d3b962145bfbbbd9d404bf06f03ad8075782e28))
+
+
+
+
+
 ## [v1.77.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.77.0) - 2026-07-25
 
 ## [1.77.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.76.1...v1.77.0) (2026-07-25)
