@@ -174,7 +174,7 @@ describe('youtubeApi/client', () => {
           params: expect.objectContaining({
             key: 'api-key',
             forHandle: '@example',
-            part: 'snippet,contentDetails,statistics',
+            part: 'snippet,contentDetails,statistics,brandingSettings',
           }),
         })
       );
@@ -204,7 +204,7 @@ describe('youtubeApi/client', () => {
 
       expect(axios.get.mock.calls[0][1].params).toEqual(expect.objectContaining({
         id: 'UCxxxxx',
-        part: 'snippet,contentDetails,statistics',
+        part: 'snippet,contentDetails,statistics,brandingSettings',
       }));
     });
 
@@ -224,6 +224,43 @@ describe('youtubeApi/client', () => {
       const info = await client.getChannelInfo('api-key', 'https://www.youtube.com/channel/UCxxxxx');
 
       expect(info.videoCount).toBeNull();
+    });
+
+    test('returns bannerUrl from brandingSettings', async () => {
+      axios.get.mockResolvedValueOnce({
+        status: 200,
+        data: {
+          items: [{
+            id: 'UCxxxxx',
+            snippet: { title: 'T' },
+            contentDetails: { relatedPlaylists: { uploads: 'UUxxxxx' } },
+            statistics: { videoCount: '1' },
+            brandingSettings: { image: { bannerExternalUrl: 'https://yt3.googleusercontent.com/banner' } },
+          }],
+        },
+      });
+
+      const info = await client.getChannelInfo('api-key', 'https://www.youtube.com/channel/UCxxxxx');
+
+      expect(info.bannerUrl).toBe('https://yt3.googleusercontent.com/banner');
+    });
+
+    test('returns bannerUrl null when the channel has no banner', async () => {
+      axios.get.mockResolvedValueOnce({
+        status: 200,
+        data: {
+          items: [{
+            id: 'UCxxxxx',
+            snippet: { title: 'T' },
+            contentDetails: { relatedPlaylists: { uploads: 'UUxxxxx' } },
+            statistics: { videoCount: '1' },
+          }],
+        },
+      });
+
+      const info = await client.getChannelInfo('api-key', 'https://www.youtube.com/channel/UCxxxxx');
+
+      expect(info.bannerUrl).toBeNull();
     });
 
     test('returns null when no items match', async () => {

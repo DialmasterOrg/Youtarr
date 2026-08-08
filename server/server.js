@@ -245,6 +245,7 @@ const initialize = async () => {
     const youtubeApi = require('./modules/youtubeApi');
     const messageEmitter = require('./modules/messageEmitter');
     const watchStatusScheduler = require('./modules/mediaServers/watchStatusScheduler');
+    const channelBackdropBackfill = require('./modules/channel/channelBackdropBackfill');
     const { Channel } = require('./models');
     const { registerRoutes } = require('./routes');
 
@@ -285,6 +286,7 @@ const initialize = async () => {
 
     watchStatusScheduler.scheduleTask();
     watchStatusScheduler.subscribe();
+    channelBackdropBackfill.subscribe();
     subscriptionImportModule.init({
       channelModule,
       jobModule,

@@ -370,6 +370,13 @@ Sync is one-way (server -> Youtarr). Non-owner Plex users come from the server's
 - **Description**: Create fanart image files for video backgrounds in media servers
 - **Note**: Creates a `-fanart.jpg` file alongside each video with the video thumbnail. Some Plex clients (notably NVIDIA Shield) use this as the background preview image instead of or alongside the poster. When enabled with `writeChannelPosters`, videos will display correctly on all Plex clients with both a poster (from channel thumbnail) and background (from video thumbnail).
 
+### Write Backdrop Images
+- **Config Key**: `writeBackdropImages`
+- **Type**: `boolean`
+- **Default**: `false`
+- **Description**: Generate backdrop image files for Emby and Jellyfin background art
+- **Note**: Creates `backdrop.jpg` in each channel directory (from the channel's YouTube banner) and a `-backdrop.jpg` file alongside each video (copy of the video thumbnail). When enabled, channel-level backdrops are backfilled for existing channel folders; video-level backdrops are created for new downloads only.
+
 ## Cookie Config
 
 ### Enable Cookies

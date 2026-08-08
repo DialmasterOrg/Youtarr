@@ -28,6 +28,14 @@ class ChannelMetadataFetcher {
           const hasVideos = info.videoCount === null || info.videoCount > 0;
           const entries = hasVideos ? [{ id: info.channelId }] : [];
 
+          const thumbnails = [];
+          if (info.thumbnailUrl) {
+            thumbnails.push({ id: 'avatar_uncropped', url: info.thumbnailUrl, width: 800, height: 800 });
+          }
+          if (info.bannerUrl) {
+            thumbnails.push({ id: 'banner_uncropped', url: info.bannerUrl });
+          }
+
           return {
             channel_id: info.channelId,
             id: info.channelId,
@@ -36,9 +44,7 @@ class ChannelMetadataFetcher {
             uploader: info.title,
             uploader_id: info.customUrl || info.channelId,
             uploads_playlist_id: info.uploadsPlaylistId,
-            thumbnails: info.thumbnailUrl
-              ? [{ id: 'avatar_uncropped', url: info.thumbnailUrl, width: 800, height: 800 }]
-              : [],
+            thumbnails,
             folder_name: sanitizedFolderName,
             entries,
           };

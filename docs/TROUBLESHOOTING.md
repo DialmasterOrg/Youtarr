@@ -319,6 +319,37 @@ tables are still on the wrong character set.
 **Prevention**: If you run your own database, create it as `utf8mb4` from the start and this conversion
 never has to run. See the [External Database Guide](platforms/external-db.md).
 
+### Migration Fails Creating JobVideoDownloads (errno 150)
+
+**Problem**: A fresh install (or an upgrade of an older install) fails partway through migrations with:
+```
+Can't create table `youtarr`.`JobVideoDownloads` (errno: 150 "Foreign key constraint is incorrectly formed")
+```
+and the server starts in degraded mode.
+
+**Cause**: This happens when the database was not created with `utf8mb4` defaults - an external database,
+or a MariaDB service running without the compose file's `--character-set-server=utf8mb4` arguments. The
+`Jobs.id` and `JobVideos.job_id` columns are UUIDs stored as `CHAR(36)` with the binary collation
+`utf8mb4_bin`. When the utf8mb4 conversion above runs, `ALTER TABLE ... CONVERT TO CHARACTER SET` coerces
+them to `utf8mb4_unicode_ci`. The `JobVideoDownloads` migration then creates its `job_id` column as
+`utf8mb4_bin`, and InnoDB refuses the foreign key because the collations on the two sides no longer match.
+
+**Solution**: Update Youtarr. The migrations now restore the binary collation automatically - the utf8mb4
+conversion re-applies it right after converting, and the `JobVideoDownloads` migration repairs it before
+creating the table, so a restart on the latest image finishes the job.
+
+To fix it by hand instead, connect to the database as root and run:
+```sql
+SET FOREIGN_KEY_CHECKS = 0;
+ALTER TABLE Jobs MODIFY id CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL;
+ALTER TABLE JobVideos MODIFY job_id CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL;
+SET FOREIGN_KEY_CHECKS = 1;
+```
+then restart the Youtarr container; the remaining migrations will complete.
+
+**Prevention**: Same as the previous section - create your own database as `utf8mb4` from the start, or
+keep the charset arguments from the bundled `docker-compose.yml`.
+
 ### Database Connection Failed
 
 **Problem**: Cannot connect to database errors.
@@ -335,6 +366,21 @@ never has to run. See the [External Database Guide](platforms/external-db.md).
    ```
 
 3. Verify database credentials in environment
+
+### Stuck on "Waiting for database"
+
+**Problem**: The youtarr container loops `Waiting for database... (attempt N/30)` and finally exits with
+`Failed to connect to database after 30 attempts`, with no other error in its logs.
+
+**Cause**: Usually a credentials mismatch that stays silent because the startup wait loop only reports
+that the connection failed, not why. A common one when connecting as root: `DB_ROOT_PASSWORD` sets the
+bundled MariaDB's root password, while the app connects using `DB_PASSWORD`. Both default to the same
+value, so setting only one of them in `.env` makes the two sides disagree and the app can never log in.
+
+**Solution**: When connecting as root, set `DB_ROOT_PASSWORD` and `DB_PASSWORD` to the same value in
+`.env` (or set neither). If the database volume was already initialized with a different root password,
+either use that password or wipe the database directory and let it re-initialize (**this deletes all DB
+data**). `docker logs youtarr-db` will show `Access denied` warnings when it's a credentials problem.
 
 ### Access Denied for Custom Database User
 

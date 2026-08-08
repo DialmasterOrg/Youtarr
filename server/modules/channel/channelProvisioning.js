@@ -163,6 +163,8 @@ class ChannelProvisioning {
     await channelThumbnails.processChannelThumbnail(channelData, properChannelId, channelUrl);
     logger.info('Channel thumbnail processed successfully');
 
+    await channelThumbnails.processChannelBanner(channelData, properChannelId);
+
     // When skipTabDetection is true (e.g. bulk import), leave available_tabs as null
     // so the frontend's lazy-load system detects tabs on first channel page visit.
     let tabResult = null;

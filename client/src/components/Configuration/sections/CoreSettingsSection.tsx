@@ -503,6 +503,29 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                     />
                   </FormControl>
                 </Grid>
+
+                <Grid item xs={12} md={6} className="mt-3">
+                  <FormControl>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          name="writeBackdropImages"
+                          checked={config.writeBackdropImages}
+                          onChange={handleCheckboxChange}
+                        />
+                      }
+                      label={
+                        <Box className="flex items-center">
+                          Create backdrop images
+                          <InfoTooltip
+                            text="Generates `backdrop` image files and places them in the video and channel directories for use by Emby and Jellyfin"
+                            onMobileClick={onMobileTooltipClick}
+                          />
+                        </Box>
+                      }
+                    />
+                  </FormControl>
+                </Grid>
               </Grid>
             </AccordionDetails>
           </Accordion>

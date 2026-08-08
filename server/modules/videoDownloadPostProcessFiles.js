@@ -63,6 +63,11 @@ function shouldWriteVideoFanart() {
   return config.writeVideoFanart === true;
 }
 
+function shouldWriteBackdropImages() {
+  const config = configModule.getConfig() || {};
+  return config.writeBackdropImages === true;
+}
+
 // Helper function to download channel thumbnail if needed
 async function downloadChannelThumbnailIfMissing(channelId) {
   const channelThumbPath = path.join(
@@ -135,6 +140,30 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
     }
   } catch (err) {
     logger.warn({ err }, 'Error copying channel poster');
+  }
+}
+
+// Copy-only: the banner cache is populated at channel-add time and by the on-enable sweep.
+async function copyChannelBackdropIfNeeded(channelId, channelFolderPath) {
+  if (!shouldWriteBackdropImages()) {
+    return;
+  }
+
+  try {
+    const channelBackdropPath = path.join(channelFolderPath, 'backdrop.jpg');
+    if (!fs.existsSync(channelBackdropPath)) {
+      const channelBannerPath = path.join(
+        configModule.getImagePath(),
+        `channelbanner-${channelId}.jpg`
+      );
+
+      if (fs.existsSync(channelBannerPath)) {
+        copySyncWithFallback(channelBannerPath, channelBackdropPath);
+        logger.info({ channelFolderPath }, 'Channel backdrop.jpg created');
+      }
+    }
+  } catch (err) {
+    logger.warn({ err }, 'Error copying channel backdrop');
   }
 }
 
@@ -806,6 +835,25 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
       }
     }
 
+    // Create -backdrop.jpg beside the video if enabled (Emby/Jellyfin background art)
+    if (shouldWriteBackdropImages()) {
+      try {
+        const videoDir = path.dirname(finalVideoPath);
+        const videoBaseName = path.parse(finalVideoPath).name;
+        const finalImagePath = path.join(videoDir, `${videoBaseName}.jpg`);
+        const backdropPath = path.join(videoDir, `${videoBaseName}-backdrop.jpg`);
+
+        if (fs.existsSync(finalImagePath) && !fs.existsSync(backdropPath)) {
+          copySyncWithFallback(finalImagePath, backdropPath);
+          logger.info({ backdropPath }, '[Post-Process] Created video backdrop file');
+        } else {
+          logger.debug({ finalImagePath }, '[Post-Process] No image copied for backdrop creation');
+        }
+      } catch (err) {
+        logger.warn({ err }, '[Post-Process] Error creating video backdrop');
+      }
+    }
+
     // Copy channel thumbnail as poster.jpg to channel folder (must be done AFTER all moves)
     // Calculate the final channel folder path based on the final video path
     // In flat mode, the file is directly in the channel folder
@@ -814,6 +862,7 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
       : path.dirname(path.dirname(finalVideoPath));
     if (jsonData.channel_id) {
       await copyChannelPosterIfNeeded(jsonData.channel_id, finalChannelFolderPath);
+      await copyChannelBackdropIfNeeded(jsonData.channel_id, finalChannelFolderPath);
     }
 
     // Save to the videos + channelvideos tables now so listing pages can show

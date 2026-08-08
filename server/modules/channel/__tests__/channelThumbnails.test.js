@@ -112,22 +112,86 @@ describe('channelThumbnails', () => {
     });
   });
 
+  describe('extractBannerThumbnailUrl', () => {
+    test('returns the banner_uncropped url', () => {
+      const channelData = {
+        channel_id: 'UC123',
+        thumbnails: [
+          { url: 'https://example.com/avatar.jpg', id: 'avatar_uncropped' },
+          { url: 'https://example.com/banner.jpg', id: 'banner_uncropped' }
+        ]
+      };
+      expect(channelThumbnails.extractBannerThumbnailUrl(channelData)).toBe('https://example.com/banner.jpg');
+    });
+
+    test('returns null when thumbnails is not an array', () => {
+      expect(channelThumbnails.extractBannerThumbnailUrl({ channel_id: 'UC123', thumbnails: null })).toBeNull();
+    });
+
+    test('returns null when no banner_uncropped entry exists', () => {
+      const channelData = {
+        channel_id: 'UC123',
+        thumbnails: [{ url: 'https://example.com/avatar.jpg', id: 'avatar_uncropped' }]
+      };
+      expect(channelThumbnails.extractBannerThumbnailUrl(channelData)).toBeNull();
+    });
+  });
+
+  describe('processChannelBanner', () => {
+    let originalDownloadImageToFile;
+
+    beforeEach(() => {
+      originalDownloadImageToFile = channelThumbnails.downloadImageToFile;
+    });
+
+    afterEach(() => {
+      channelThumbnails.downloadImageToFile = originalDownloadImageToFile;
+    });
+
+    test('downloads the banner to the channelbanner cache filename', async () => {
+      channelThumbnails.downloadImageToFile = jest.fn().mockResolvedValue();
+      await channelThumbnails.processChannelBanner({
+        channel_id: 'UC123',
+        thumbnails: [{ id: 'banner_uncropped', url: 'https://example.com/banner.jpg' }]
+      }, 'UC123');
+      expect(channelThumbnails.downloadImageToFile).toHaveBeenCalledWith(
+        'https://example.com/banner.jpg',
+        'channelbanner-UC123.jpg'
+      );
+    });
+
+    test('skips download when metadata has no banner', async () => {
+      channelThumbnails.downloadImageToFile = jest.fn().mockResolvedValue();
+      await channelThumbnails.processChannelBanner({ channel_id: 'UC123', thumbnails: [] }, 'UC123');
+      expect(channelThumbnails.downloadImageToFile).not.toHaveBeenCalled();
+    });
+
+    test('logs a warning and resolves when the download fails', async () => {
+      channelThumbnails.downloadImageToFile = jest.fn().mockRejectedValue(new Error('boom'));
+      await expect(channelThumbnails.processChannelBanner({
+        channel_id: 'UC123',
+        thumbnails: [{ id: 'banner_uncropped', url: 'https://example.com/banner.jpg' }]
+      }, 'UC123')).resolves.toBeUndefined();
+      expect(logger.warn).toHaveBeenCalled();
+    });
+  });
+
   describe('processChannelThumbnail', () => {
     let originalExtractAvatarThumbnailUrl;
-    let originalDownloadChannelThumbnailFromUrl;
+    let originalDownloadImageToFile;
     let originalDownloadChannelThumbnailViaYtdlp;
     let originalResizeChannelThumbnail;
 
     beforeEach(() => {
       originalExtractAvatarThumbnailUrl = channelThumbnails.extractAvatarThumbnailUrl;
-      originalDownloadChannelThumbnailFromUrl = channelThumbnails.downloadChannelThumbnailFromUrl;
+      originalDownloadImageToFile = channelThumbnails.downloadImageToFile;
       originalDownloadChannelThumbnailViaYtdlp = channelThumbnails.downloadChannelThumbnailViaYtdlp;
       originalResizeChannelThumbnail = channelThumbnails.resizeChannelThumbnail;
     });
 
     afterEach(() => {
       channelThumbnails.extractAvatarThumbnailUrl = originalExtractAvatarThumbnailUrl;
-      channelThumbnails.downloadChannelThumbnailFromUrl = originalDownloadChannelThumbnailFromUrl;
+      channelThumbnails.downloadImageToFile = originalDownloadImageToFile;
       channelThumbnails.downloadChannelThumbnailViaYtdlp = originalDownloadChannelThumbnailViaYtdlp;
       channelThumbnails.resizeChannelThumbnail = originalResizeChannelThumbnail;
     });
@@ -138,13 +202,13 @@ describe('channelThumbnails', () => {
       const channelUrl = 'https://www.youtube.com/@testchannel';
 
       channelThumbnails.extractAvatarThumbnailUrl = jest.fn().mockReturnValue('https://example.com/avatar.jpg');
-      channelThumbnails.downloadChannelThumbnailFromUrl = jest.fn().mockResolvedValue();
+      channelThumbnails.downloadImageToFile = jest.fn().mockResolvedValue();
       channelThumbnails.resizeChannelThumbnail = jest.fn().mockResolvedValue();
 
       await channelThumbnails.processChannelThumbnail(channelData, channelId, channelUrl);
 
       expect(channelThumbnails.extractAvatarThumbnailUrl).toHaveBeenCalledWith(channelData);
-      expect(channelThumbnails.downloadChannelThumbnailFromUrl).toHaveBeenCalledWith('https://example.com/avatar.jpg', channelId);
+      expect(channelThumbnails.downloadImageToFile).toHaveBeenCalledWith('https://example.com/avatar.jpg', 'channelthumb-UC123.jpg');
       expect(channelThumbnails.resizeChannelThumbnail).toHaveBeenCalledWith(channelId);
     });
 
@@ -154,13 +218,13 @@ describe('channelThumbnails', () => {
       const channelUrl = 'https://www.youtube.com/@testchannel';
 
       channelThumbnails.extractAvatarThumbnailUrl = jest.fn().mockReturnValue('https://example.com/avatar.jpg');
-      channelThumbnails.downloadChannelThumbnailFromUrl = jest.fn().mockRejectedValue(new Error('Download failed'));
+      channelThumbnails.downloadImageToFile = jest.fn().mockRejectedValue(new Error('Download failed'));
       channelThumbnails.downloadChannelThumbnailViaYtdlp = jest.fn().mockResolvedValue();
       channelThumbnails.resizeChannelThumbnail = jest.fn().mockResolvedValue();
 
       await channelThumbnails.processChannelThumbnail(channelData, channelId, channelUrl);
 
-      expect(channelThumbnails.downloadChannelThumbnailFromUrl).toHaveBeenCalled();
+      expect(channelThumbnails.downloadImageToFile).toHaveBeenCalled();
       expect(channelThumbnails.downloadChannelThumbnailViaYtdlp).toHaveBeenCalledWith(channelUrl);
       expect(logger.warn).toHaveBeenCalledWith(
         expect.objectContaining({ channelId }),
@@ -192,7 +256,7 @@ describe('channelThumbnails', () => {
       const channelUrl = 'https://www.youtube.com/@testchannel';
 
       channelThumbnails.extractAvatarThumbnailUrl = jest.fn().mockReturnValue('https://example.com/avatar.jpg');
-      channelThumbnails.downloadChannelThumbnailFromUrl = jest.fn().mockResolvedValue();
+      channelThumbnails.downloadImageToFile = jest.fn().mockResolvedValue();
       channelThumbnails.resizeChannelThumbnail = jest.fn().mockResolvedValue();
 
       await channelThumbnails.processChannelThumbnail(channelData, channelId, channelUrl);
@@ -201,7 +265,7 @@ describe('channelThumbnails', () => {
     });
   });
 
-  describe('downloadChannelThumbnailFromUrl', () => {
+  describe('downloadImageToFile', () => {
     let fsExtra;
     let mockWriteStream;
     let mockRequest;
@@ -245,7 +309,7 @@ describe('channelThumbnails', () => {
         return mockRequest;
       });
 
-      await channelThumbnails.downloadChannelThumbnailFromUrl('https://example.com/thumb.jpg', 'UC123');
+      await channelThumbnails.downloadImageToFile('https://example.com/thumb.jpg', 'channelthumb-UC123.jpg');
 
       expect(realHttps.get).toHaveBeenCalledWith(
         'https://example.com/thumb.jpg',
@@ -262,7 +326,7 @@ describe('channelThumbnails', () => {
         return mockRequest;
       });
 
-      const promise = channelThumbnails.downloadChannelThumbnailFromUrl('https://example.com/thumb.jpg', 'UC123');
+      const promise = channelThumbnails.downloadImageToFile('https://example.com/thumb.jpg', 'channelthumb-UC123.jpg');
 
       const timeoutHandler = mockRequest.on.mock.calls.find(c => c[0] === 'timeout')[1];
       timeoutHandler();
@@ -281,7 +345,7 @@ describe('channelThumbnails', () => {
         return mockRequest;
       });
 
-      const promise = channelThumbnails.downloadChannelThumbnailFromUrl('https://example.com/thumb.jpg', 'UC123');
+      const promise = channelThumbnails.downloadImageToFile('https://example.com/thumb.jpg', 'channelthumb-UC123.jpg');
 
       const errorHandler = mockRequest.on.mock.calls.find(c => c[0] === 'error')[1];
       errorHandler(new Error('ECONNREFUSED'));

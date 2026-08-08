@@ -1,5 +1,7 @@
 'use strict';
 
+const { findStaleUuidColumns, repairUuidColumns } = require('./lib/jobsUuidCollation');
+
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   up: async (queryInterface, Sequelize) => {
@@ -103,6 +105,16 @@ module.exports = {
            AND migration_date = (SELECT MAX(migration_date) FROM _charset_migration_log AS l2 WHERE l2.table_name = ?)`,
           { transaction, replacements: [table.TABLE_NAME, table.TABLE_NAME] }
         );
+      }
+
+      // CONVERT TO coerces CHAR(36) BINARY (utf8mb4_bin) UUID columns to
+      // utf8mb4_unicode_ci, which breaks foreign keys created by later
+      // migrations. Restore the binary collation while foreign key checks
+      // are still off, so a converted schema matches one born utf8mb4.
+      const staleUuidColumns = await findStaleUuidColumns(queryInterface, { transaction });
+      if (staleUuidColumns.length > 0) {
+        console.log('Restoring utf8mb4_bin collation on UUID foreign key columns');
+        await repairUuidColumns(queryInterface, staleUuidColumns, { transaction });
       }
 
       await queryInterface.sequelize.query('SET FOREIGN_KEY_CHECKS = 1', { transaction });

@@ -56,6 +56,7 @@ function mockConfigModule() {
   mockConfig.getImagePath = jest.fn().mockReturnValue('/path/to/images');
   mockConfig.directoryPath = '/path/to/videos';
   mockConfig.getCookiesPath = jest.fn().mockReturnValue(null);
+  mockConfig.getDefaultSubfolder = jest.fn().mockReturnValue(null);
   return mockConfig;
 }
 
@@ -89,10 +90,16 @@ function mockDb() {
 }
 
 function mockFilesystem() {
+  // Path construction stays real: these are pure functions and mocking them
+  // would just re-encode their behavior into every test.
+  const pathBuilder = require('../../filesystem/pathBuilder');
   return {
     sanitizeNameLikeYtDlp: jest.fn((name) => name),
     GLOBAL_DEFAULT_SENTINEL: '##USE_GLOBAL_DEFAULT##',
     copySyncWithFallback: jest.fn(),
+    resolveEffectiveSubfolder: pathBuilder.resolveEffectiveSubfolder,
+    buildChannelPath: pathBuilder.buildChannelPath,
+    resolveChannelFolderName: pathBuilder.resolveChannelFolderName,
   };
 }
 
