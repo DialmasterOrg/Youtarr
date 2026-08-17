@@ -32,6 +32,10 @@ Job.init(
       type: DataTypes.STRING,
       allowNull: false,
     },
+    aux_data: {
+      type: DataTypes.TEXT('medium'),
+      allowNull: true,
+    },
   },
   {
     sequelize,
