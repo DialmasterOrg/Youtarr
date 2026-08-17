@@ -160,7 +160,20 @@ describe('downloadResultProcessor', () => {
       });
     });
 
-    it('appends failed videos that have no metadata with Unknown title and channel', () => {
+    it('omits the Unknown Channel placeholder from failed records so enrichment can backfill', () => {
+      const videoData = [
+        { youtubeId: 'nochan12345', youTubeVideoName: 'Titled', youTubeChannelName: 'Unknown Channel', fileSize: null }
+      ];
+
+      const { failedVideosList } = partitionDownloadResults(
+        videoData, makeErrorTracker(), []
+      );
+
+      expect(failedVideosList[0].title).toBe('Titled');
+      expect(failedVideosList[0].channel).toBeUndefined();
+    });
+
+    it('appends failed videos that have no metadata with only id, error, and url', () => {
       const errorTracker = makeErrorTracker([
         ['nodata12345', { youtubeId: 'nodata12345', error: 'This video is not available', url: 'https://youtu.be/nodata12345' }]
       ]);
@@ -169,8 +182,6 @@ describe('downloadResultProcessor', () => {
 
       expect(failedVideosList).toEqual([{
         youtubeId: 'nodata12345',
-        title: 'Unknown',
-        channel: 'Unknown',
         error: 'This video is not available',
         url: 'https://youtu.be/nodata12345'
       }]);
