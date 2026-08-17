@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Typography } from '../ui';
 import { FailedVideo, DownloadDiagnosis } from '../../types/Job';
 import { groupFailuresByDiagnosis } from './failureGrouping';
+import FailedVideoLineList from './FailedVideoLineList';
 
 interface FailedDownloadsDetailProps {
   failedVideos: FailedVideo[];
@@ -36,14 +37,7 @@ function FailedDownloadsDetail({ failedVideos, diagnoses = [] }: FailedDownloads
               {group.message}
             </Typography>
           )}
-          {group.videos
-            .filter((video) => video.title)
-            .map((video) => (
-              <Typography key={video.youtubeId} variant="caption" color="secondary">
-                • {video.title}
-                {video.channel ? ` by ${video.channel}` : ''}
-              </Typography>
-            ))}
+          <FailedVideoLineList videos={group.videos} />
         </Box>
       ))}
     </Box>

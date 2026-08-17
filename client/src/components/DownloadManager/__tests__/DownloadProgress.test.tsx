@@ -2452,7 +2452,7 @@ describe('DownloadProgress', () => {
       expect(screen.getByText(/Mystery Video/)).toBeInTheDocument();
     });
 
-    test('hides unknown video titles in failed videos list', async () => {
+    test('shows YouTube ID links for failed videos with unknown titles', async () => {
       renderWithContext(
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
@@ -2494,8 +2494,12 @@ describe('DownloadProgress', () => {
       });
       expect(screen.getByText(/2 videos failed:/)).toBeInTheDocument();
       expect(screen.getByText('Video unavailable')).toBeInTheDocument();
-      // Should not show individual video details when titles are unknown
       expect(screen.queryByText(/Unknown/)).not.toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'video1' })).toHaveAttribute(
+        'href',
+        'https://www.youtube.com/watch?v=video1'
+      );
+      expect(screen.getByRole('link', { name: 'video2' })).toBeInTheDocument();
     });
 
     test('shows mixed known and unknown video titles', async () => {
@@ -2544,9 +2548,10 @@ describe('DownloadProgress', () => {
       await waitFor(() => {
         expect(screen.getByText('Summary of last job')).toBeInTheDocument();
       });
-      // Should show the known titles only
+      // Known titles render as text; unknown-titled videos render as ID links
       expect(screen.getByText(/Known Video Title/)).toBeInTheDocument();
       expect(screen.getByText(/Another Known Video/)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'video2' })).toBeInTheDocument();
     });
 
     test('displays failed videos with successful downloads in summary', async () => {

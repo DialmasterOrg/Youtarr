@@ -6,6 +6,11 @@ const logger = require('../../logger');
 const archiveModule = require('../archiveModule');
 const { isSpecificUrlDownloadJob } = require('./jobTypes');
 
+// videoMetadataProcessor writes this placeholder when info.json has no
+// uploader/channel field; treat it as missing so enrichment can backfill
+// the real channel name.
+const UNKNOWN_CHANNEL_PLACEHOLDER = 'Unknown Channel';
+
 function getCountOfDownloadedVideos() {
   return archiveModule.readCompleteListLines().length;
 }
@@ -70,7 +75,9 @@ function partitionDownloadResults(videoData, errorTracker, urlsToProcess) {
       failedVideosList.push({
         youtubeId: video.youtubeId,
         title: video.youTubeVideoName,
-        channel: video.youTubeChannelName,
+        channel: video.youTubeChannelName === UNKNOWN_CHANNEL_PLACEHOLDER
+          ? undefined
+          : video.youTubeChannelName,
         error: failureInfo.error,
         url: failureInfo.url
       });
@@ -91,8 +98,6 @@ function partitionDownloadResults(videoData, errorTracker, urlsToProcess) {
     if (!videoData.find(v => v.youtubeId === youtubeId)) {
       failedVideosList.push({
         youtubeId: youtubeId,
-        title: 'Unknown',
-        channel: 'Unknown',
         error: failureInfo.error,
         url: failureInfo.url
       });

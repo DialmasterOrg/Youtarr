@@ -34,6 +34,7 @@ import {
   VideoCount,
 } from './types';
 import TerminateJobDialog from './TerminateJobDialog';
+import FailedVideoLineList from './FailedVideoLineList';
 
 interface DownloadProgressProps {
   downloadProgressRef: React.MutableRefObject<{
@@ -664,19 +665,9 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                           {group.videos[0].error}
                         </Typography>
 
-                        {/* Only show individual video details if titles are known */}
-                        {group.videos.some(v => v.title !== 'Unknown') && (
-                          <Box className="mt-2 pl-4">
-                            {group.videos
-                              .filter(v => v.title !== 'Unknown')
-                              .map((video, index) => (
-                                <Typography key={video.youtubeId || index} variant="caption" component="div" color="text.secondary">
-                                  • {video.title}
-                                  {video.channel && video.channel !== 'Unknown' && ` by ${video.channel}`}
-                                </Typography>
-                              ))}
-                          </Box>
-                        )}
+                        <Box className="mt-2 pl-4">
+                          <FailedVideoLineList videos={group.videos} />
+                        </Box>
                       </Box>
                     ));
                   })()}

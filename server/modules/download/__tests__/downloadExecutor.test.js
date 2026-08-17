@@ -92,6 +92,10 @@ jest.mock('../../downloadModule', () => ({
   afterDownloadHook: jest.fn().mockResolvedValue(),
 }));
 
+jest.mock('../failedVideoEnricher', () => ({
+  enrichFailedVideos: jest.fn().mockResolvedValue()
+}));
+
 // Mock filesystem module
 jest.mock('../../filesystem', () => {
   const actualPathBuilder = jest.requireActual('../../filesystem/pathBuilder');
@@ -1810,8 +1814,6 @@ describe('DownloadExecutor', () => {
             failedVideos: expect.arrayContaining([
               expect.objectContaining({
                 youtubeId: 'nodata123',
-                title: 'Unknown',
-                channel: 'Unknown',
                 error: 'This video is not available'
               })
             ])

@@ -15,6 +15,7 @@ const downloadResultProcessor = require('./downloadResultProcessor');
 const downloadCleanup = require('./downloadCleanup');
 const transient403RetryPlanner = require('./transient403RetryPlanner');
 const failureAdvisor = require('./failureAdvisor');
+const failedVideoEnricher = require('./failedVideoEnricher');
 const { runCompletionSideEffects } = require('./downloadCompletionEffects');
 const {
   computeOutcomeFlags,
@@ -177,6 +178,10 @@ async function finalizeDownloadJob({
     const { successfulVideos, failedVideosList } = downloadResultProcessor.partitionDownloadResults(videoData, errorTracker, urlsToProcess);
     // Use successful videos for further processing (archive, database, etc.)
     videoData = successfulVideos;
+
+    // Best-effort: name failed videos from what the DB already knows so
+    // history, notifications, and run summaries can identify them.
+    await failedVideoEnricher.enrichFailedVideos(failedVideosList);
 
     await downloadResultProcessor.reconcileArchive({ allowRedownload, failedVideosList, videoData, errorTracker });
 
