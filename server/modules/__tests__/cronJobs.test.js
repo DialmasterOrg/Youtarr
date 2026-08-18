@@ -398,7 +398,7 @@ describe('CronJobs', () => {
     });
 
     test('records updated result and refreshes version cache on success with new version', async () => {
-      mockConfigStore = { autoUpdateYtdlp: true, otherField: 'preserved' };
+      mockConfigStore = { autoUpdateYtdlp: true, ytdlpUpdateChannel: 'nightly', otherField: 'preserved' };
       mockYtdlpModule.performUpdate.mockResolvedValue({
         success: true,
         reason: 'updated',
@@ -408,7 +408,7 @@ describe('CronJobs', () => {
 
       await autoUpdateCallback();
 
-      expect(mockYtdlpModule.performUpdate).toHaveBeenCalled();
+      expect(mockYtdlpModule.performUpdate).toHaveBeenCalledWith({ channel: 'nightly' });
       expect(mockConfigModule.updateConfig).toHaveBeenCalledTimes(1);
 
       const writtenConfig = mockConfigModule.updateConfig.mock.calls[0][0];

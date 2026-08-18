@@ -21,12 +21,14 @@ import { CookieConfigSection } from '../Configuration/sections/CookieConfigSecti
 import { NotificationsSection } from '../Configuration/sections/NotificationsSection';
 import { DownloadPerformanceSection } from '../Configuration/sections/DownloadPerformanceSection';
 import { YtdlpOptionsSection } from '../Configuration/sections/YtdlpOptionsSection';
+import { YtdlpUpdateSection } from '../Configuration/sections/YtdlpUpdateSection';
 import { AutoRemovalSection } from '../Configuration/sections/AutoRemovalSection';
 import { AccountSecuritySection } from '../Configuration/sections/AccountSecuritySection';
 import ApiKeysSection from '../Configuration/sections/ApiKeysSection';
 import { YouTubeApiSection } from '../Configuration/sections/YouTubeApiSection';
 import { SaveBar } from '../Configuration/sections/SaveBar';
 import { UnsavedChangesDialog } from '../Configuration/sections/UnsavedChangesDialog';
+import { YtdlpChannelApplyDialog } from '../Configuration/sections/components/YtdlpChannelApplyDialog';
 import {
   usePlexConnection,
   useConfigSave,
@@ -73,6 +75,7 @@ export function Settings({ token }: SettingsProps) {
   });
   const [mobileTooltip, setMobileTooltip] = useState<string | null>(null);
   const [filenamePreviewedPrefix, setFilenamePreviewedPrefix] = useState<string | null>(null);
+  const [channelApplyTarget, setChannelApplyTarget] = useState<'stable' | 'nightly' | null>(null);
 
   const hasPlexServerConfigured = isPlatformManaged.plexUrl || Boolean(config.plexIP);
 
@@ -180,6 +183,7 @@ export function Settings({ token }: SettingsProps) {
     successMessage: ytDlpSuccessMessage,
     performUpdate: performYtDlpUpdate,
     clearMessages: clearYtDlpMessages,
+    checkLatestVersion: checkYtDlpLatestVersion,
   } = useYtDlpUpdate(token);
 
   useEffect(() => {
@@ -200,7 +204,7 @@ export function Settings({ token }: SettingsProps) {
     }
   }, [ytDlpErrorMessage, ytDlpSuccessMessage, clearYtDlpMessages]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (validationError) {
       setSnackbar({
         open: true,
@@ -209,7 +213,17 @@ export function Settings({ token }: SettingsProps) {
       });
       return;
     }
-    saveConfig();
+    const previousChannel = initialConfig?.ytdlpUpdateChannel;
+    const ok = await saveConfig();
+    if (
+      ok &&
+      !isPlatformManaged.ytdlpUpdates &&
+      previousChannel !== undefined &&
+      previousChannel !== config.ytdlpUpdateChannel
+    ) {
+      setChannelApplyTarget(config.ytdlpUpdateChannel === 'nightly' ? 'nightly' : 'stable');
+      checkYtDlpLatestVersion();
+    }
   };
 
   const handleConfigChange = (updates: Partial<ConfigState>) => {
@@ -263,6 +277,12 @@ export function Settings({ token }: SettingsProps) {
         onSave={handleSaveAndContinue}
       />
 
+      <YtdlpChannelApplyDialog
+        targetChannel={channelApplyTarget}
+        onApply={performYtDlpUpdate}
+        onClose={() => setChannelApplyTarget(null)}
+      />
+
       <div style={{ marginBottom: 16 }}>
         <Typography variant="h5" style={{ fontWeight: 800 }}>
           {pageTitle}
@@ -286,9 +306,6 @@ export function Settings({ token }: SettingsProps) {
                 token={token}
                 filenameTemplateSaveRequirement={filenameTemplateSaveRequirement}
                 onFilenameTemplatePreviewSuccess={handleFilenameTemplatePreviewSuccess}
-                ytDlpVersionInfo={ytDlpVersionInfo}
-                ytDlpUpdateStatus={ytDlpUpdateStatus}
-                onYtDlpUpdate={performYtDlpUpdate}
               />
             }
           />
@@ -381,6 +398,16 @@ export function Settings({ token }: SettingsProps) {
             path="downloading"
             element={
               <>
+                <YtdlpUpdateSection
+                  config={config}
+                  deploymentEnvironment={deploymentEnvironment}
+                  isPlatformManaged={isPlatformManaged}
+                  onConfigChange={handleConfigChange}
+                  onMobileTooltipClick={setMobileTooltip}
+                  ytDlpVersionInfo={ytDlpVersionInfo}
+                  ytDlpUpdateStatus={ytDlpUpdateStatus}
+                  onYtDlpUpdate={performYtDlpUpdate}
+                />
                 <DownloadPerformanceSection
                   config={config}
                   onConfigChange={handleConfigChange}

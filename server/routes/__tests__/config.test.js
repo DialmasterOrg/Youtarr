@@ -133,6 +133,26 @@ describe('POST /updateconfig', () => {
     expect(res.body.error).toMatch(/2000/);
   });
 
+  test('returns 400 when ytdlpUpdateChannel is not a known channel', async () => {
+    const { app } = makeApp();
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ ytdlpUpdateChannel: 'master' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/ytdlpUpdateChannel/);
+  });
+
+  test('returns 200 and persists ytdlpUpdateChannel nightly', async () => {
+    const { app, configModule } = makeApp();
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ ytdlpUpdateChannel: 'nightly' });
+    expect(res.status).toBe(200);
+    expect(configModule.updateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ ytdlpUpdateChannel: 'nightly' })
+    );
+  });
+
   describe('ytdlpDownloadRateLimit validation', () => {
     test.each(['', '5M', '500K', '1.5M', '2G', '1500'])(
       'returns 200 for valid rate limit %s',
