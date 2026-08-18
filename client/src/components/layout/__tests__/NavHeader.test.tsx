@@ -87,7 +87,7 @@ describe('NavHeader shared update indicator', () => {
       updateAvailable: true,
       updateTooltip: 'New version (v1.60.0) available! Please shut down and pull the latest image and files to update.',
       ytDlpUpdateAvailable: true,
-      ytDlpUpdateTooltip: 'yt-dlp update available (2025.10.01). Go to Settings to update.',
+      ytDlpUpdateTooltip: 'yt-dlp update available (2025.10.01). Go to Settings > YT-DLP to update.',
     });
 
     const sharedIndicator = screen.getByRole('button', { name: /youtarr and yt-dlp updates available/i });
@@ -134,7 +134,7 @@ describe('NavHeader shared update indicator', () => {
       layoutPolicy: resolveThemeLayoutPolicy(getThemeById('playful'), 'desktop'),
       updateAvailable: false,
       ytDlpUpdateAvailable: true,
-      ytDlpUpdateTooltip: 'yt-dlp update available (2025.10.01). Go to Settings to update.',
+      ytDlpUpdateTooltip: 'yt-dlp update available (2025.10.01). Go to Settings > YT-DLP to update.',
     });
 
     expect(screen.getByRole('button', { name: /yt-dlp update available/i })).toBeInTheDocument();

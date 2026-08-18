@@ -145,6 +145,7 @@ export const CONFIG_FIELDS = {
 
   // yt-dlp auto-update
   autoUpdateYtdlp: { default: false, trackChanges: true },
+  ytdlpUpdateChannel: { default: 'stable' as 'stable' | 'nightly', trackChanges: true },
   ytdlpLastChecked: { default: null as string | null, trackChanges: false },
   ytdlpLastUpdated: { default: null as string | null, trackChanges: false },
   ytdlpLastResult: {
@@ -258,6 +259,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   channelVideosHotLoad: CONFIG_FIELDS.channelVideosHotLoad.default,
   apiKeyRateLimit: CONFIG_FIELDS.apiKeyRateLimit.default,
   autoUpdateYtdlp: CONFIG_FIELDS.autoUpdateYtdlp.default,
+  ytdlpUpdateChannel: CONFIG_FIELDS.ytdlpUpdateChannel.default,
   ytdlpLastChecked: CONFIG_FIELDS.ytdlpLastChecked.default,
   ytdlpLastUpdated: CONFIG_FIELDS.ytdlpLastUpdated.default,
   ytdlpLastResult: CONFIG_FIELDS.ytdlpLastResult.default,

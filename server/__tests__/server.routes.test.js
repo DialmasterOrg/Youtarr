@@ -393,11 +393,15 @@ const createServerModule = ({
           previewTemplate: jest.fn(),
           validateTemplate: jest.fn().mockResolvedValue({ ok: true })
         }));
-        jest.doMock('../modules/ytdlpModule', () => ({
+        const ytdlpModuleMock = {
           getLatestVersion: jest.fn().mockResolvedValue('2026.04.20'),
           isUpdateAvailable: jest.fn(() => false),
-          performUpdate: jest.fn().mockResolvedValue({ success: true, reason: 'up-to-date', message: 'yt-dlp is already up to date' })
-        }));
+          performUpdate: jest.fn().mockResolvedValue({ success: true, reason: 'up-to-date', message: 'yt-dlp is already up to date' }),
+          normalizeChannel: jest.fn((channel) => (channel === 'nightly' ? 'nightly' : 'stable')),
+          isNightlyVersion: jest.fn(() => false),
+          shouldReapplyChannel: jest.fn(() => false),
+        };
+        jest.doMock('../modules/ytdlpModule', () => ytdlpModuleMock);
         jest.doMock('../models/channelvideo', () => ({
           update: jest.fn().mockResolvedValue([1])
         }));
@@ -442,6 +446,7 @@ const createServerModule = ({
         state.channelModuleMock = channelModuleMock;
         state.cronMock = cronMock;
         state.configModuleMock = configModuleMock;
+        state.ytdlpModuleMock = ytdlpModuleMock;
         state.plexModuleMock = plexModuleMock;
         state.downloadModuleMock = downloadModuleMock;
         state.jobModuleMock = jobModuleMock;
@@ -2263,7 +2268,7 @@ describe('server routes - yt-dlp update', () => {
   });
 
   test('POST /api/ytdlp/update proceeds when not on Elfhosted', async () => {
-    const { app, configModuleMock } = await createServerModule();
+    const { app, configModuleMock, ytdlpModuleMock } = await createServerModule();
     configModuleMock.isElfhostedPlatform.mockReturnValue(false);
 
     const handlers = findRouteHandlers(app, 'post', '/api/ytdlp/update');
@@ -2276,5 +2281,36 @@ describe('server routes - yt-dlp update', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.success).toBe(true);
+    expect(ytdlpModuleMock.performUpdate).toHaveBeenCalledWith({ channel: 'stable' });
+  });
+
+  test('POST /api/ytdlp/update passes the configured nightly channel', async () => {
+    const { app, configModuleMock, ytdlpModuleMock } = await createServerModule();
+    configModuleMock.isElfhostedPlatform.mockReturnValue(false);
+    configModuleMock.getConfig.mockReturnValue({ ytdlpUpdateChannel: 'nightly' });
+
+    const handlers = findRouteHandlers(app, 'post', '/api/ytdlp/update');
+    const updateHandler = handlers[handlers.length - 1];
+
+    const req = createMockRequest({ username: 'tester' });
+    const res = createMockResponse();
+    await updateHandler(req, res);
+
+    expect(ytdlpModuleMock.performUpdate).toHaveBeenCalledWith({ channel: 'nightly' });
+  });
+
+  test('GET /api/ytdlp/latest-version checks the configured channel and echoes it', async () => {
+    const { app, configModuleMock, ytdlpModuleMock } = await createServerModule();
+    configModuleMock.getConfig.mockReturnValue({ ytdlpUpdateChannel: 'nightly' });
+
+    const handlers = findRouteHandlers(app, 'get', '/api/ytdlp/latest-version');
+    const handler = handlers[handlers.length - 1];
+
+    const req = createMockRequest({ username: 'tester' });
+    const res = createMockResponse();
+    await handler(req, res);
+
+    expect(ytdlpModuleMock.getLatestVersion).toHaveBeenCalledWith('nightly');
+    expect(res.body.channel).toBe('nightly');
   });
 });

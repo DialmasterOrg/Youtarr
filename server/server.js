@@ -243,6 +243,7 @@ const initialize = async () => {
     const videoSearchModule = require('./modules/videoSearchModule');
     const channelSearchModule = require('./modules/channelSearchModule');
     const youtubeApi = require('./modules/youtubeApi');
+    const ytdlpModule = require('./modules/ytdlpModule');
     const messageEmitter = require('./modules/messageEmitter');
     const watchStatusScheduler = require('./modules/mediaServers/watchStatusScheduler');
     const channelBackdropBackfill = require('./modules/channel/channelBackdropBackfill');
@@ -251,6 +252,36 @@ const initialize = async () => {
 
     // Cache yt-dlp version once during startup to keep the version endpoint fast
     refreshYtDlpVersionCache();
+
+    // Re-apply the configured yt-dlp channel if the installed binary drifted
+    // (a container recreation resets it to the image's baked-in stable build)
+    if (process.env.NODE_ENV !== 'test' && !configModule.isElfhostedPlatform()) {
+      const installedYtDlpVersion = getCachedYtDlpVersion();
+      const configuredChannel = ytdlpModule.normalizeChannel(
+        configModule.getConfig().ytdlpUpdateChannel
+      );
+      if (ytdlpModule.shouldReapplyChannel(configuredChannel, installedYtDlpVersion)) {
+        logger.info(
+          { configuredChannel, installedYtDlpVersion },
+          'Installed yt-dlp does not match configured update channel; re-applying'
+        );
+        ytdlpModule
+          .performUpdate({ channel: configuredChannel })
+          .then((result) => {
+            if (result.success) {
+              refreshYtDlpVersionCache();
+            } else {
+              logger.warn(
+                { message: result.message },
+                'Startup yt-dlp channel re-apply failed'
+              );
+            }
+          })
+          .catch((err) => {
+            logger.warn({ err }, 'Startup yt-dlp channel re-apply failed');
+          });
+      }
+    }
 
     // Apply ENV auth credentials if valid
     if (validateEnvAuthCredentials()) {

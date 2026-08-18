@@ -711,15 +711,23 @@ For detailed information on creating and using API keys, see [API Integration Gu
 
 ## yt-dlp Auto-Update
 
-Youtarr can optionally check for and install yt-dlp updates on a nightly schedule. The toggle and its status display live next to the manual yt-dlp update button on the Core Settings page.
+Youtarr can optionally check for and install yt-dlp updates on a daily schedule (4:00 AM). The channel picker, toggle, and status display live with the manual yt-dlp update button on the Settings -> YT-DLP page.
+
+### Update Channel
+- **Config Key**: `ytdlpUpdateChannel`
+- **Type**: `string`
+- **Default**: `'stable'`
+- **Values**: `'stable'` or `'nightly'`
+- **Description**: Which yt-dlp release channel Youtarr keeps the binary on. Every update (manual, automatic, or startup) runs `yt-dlp --update-to <channel>@latest`, so the configured channel is re-applied even after a container recreation resets the binary to the image's baked-in stable build. Switching back to `stable` from `nightly` downgrades to the latest stable release.
+- **Note**: Nightly builds get extractor fixes days earlier than stable but may occasionally break. On managed platforms (Elfhosted) the channel cannot be changed.
 
 ### Auto-Update Enabled
 - **Config Key**: `autoUpdateYtdlp`
 - **Type**: `boolean`
 - **Default**: `false`
-- **Description**: When `true`, Youtarr runs `yt-dlp -U` at 4:00 AM (server local time, controlled by the `TZ` env var) every night.
+- **Description**: When `true`, Youtarr runs `yt-dlp --update-to <channel>@latest` at 4:00 AM (server local time, controlled by the `TZ` env var) every night.
 - **Behavior**:
-  - The update is skipped while any download job is in progress and is retried the next night.
+  - Updates run even while downloads are in progress; the in-flight download finishes on the previous version and the next spawned download uses the new one.
   - If the update process itself fails (e.g., permission denied on managed platforms, network error, timeout), the failure is logged and Youtarr continues to run on the previous yt-dlp version.
   - On success, the in-process yt-dlp version cache is refreshed without requiring a server restart.
 
@@ -746,8 +754,8 @@ Youtarr can optionally check for and install yt-dlp updates on a nightly schedul
 - **Statuses**:
   - `updated` — a new version was installed; `version` holds the new version string.
   - `up-to-date` — yt-dlp was already current.
-  - `skipped` — the run was deferred (for example, a download was in progress); `message` describes why.
-  - `error` — `yt-dlp -U` failed; `message` holds a short error description.
+  - `skipped` — the run was deferred (another update was already running); `message` describes why.
+  - `error` — `yt-dlp --update-to` failed; `message` holds a short error description.
 - **Note**: Managed by the application; do not edit by hand.
 
 ## Filesystem Rescan

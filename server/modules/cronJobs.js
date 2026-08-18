@@ -124,7 +124,7 @@ function initialize(deps = {}) {
 
       logger.info('Running nightly yt-dlp auto-update');
       const checkedAt = new Date().toISOString();
-      const result = await ytdlpModule.performUpdate();
+      const result = await ytdlpModule.performUpdate({ channel: config.ytdlpUpdateChannel });
 
       const updatedConfig = { ...configModule.getConfig(), ytdlpLastChecked: checkedAt };
 
