@@ -29,6 +29,9 @@ RUN pip install --no-cache-dir --target=/opt/apprise apprise
 FROM node:20-slim AS release
 WORKDIR /app
 
+# Lets tools like Renovate resolve the source repo (and CHANGELOG) for this image
+LABEL org.opencontainers.image.source="https://github.com/DialmasterOrg/Youtarr"
+
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
