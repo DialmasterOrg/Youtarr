@@ -1,5 +1,34 @@
 # Changelog
 
+## [v1.79.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.79.0) - 2026-08-19
+
+## [1.79.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.78.0...v1.79.0) (2026-08-19)
+
+
+### Features
+
+* add yt-dlp stable/nightly update channel ([b7b325c](https://github.com/DialmasterOrg/Youtarr/commit/b7b325cd98fe21c85e990e07fd9dc9b58f5159fe))
+
+
+### Bug Fixes
+
+* persist download history across restarts ([c8159e2](https://github.com/DialmasterOrg/Youtarr/commit/c8159e2c67a7c84c29468d42aa7b2335b5d710cf)), closes [#762](https://github.com/DialmasterOrg/Youtarr/issues/762)
+* show failed video info in download history ([cb6a151](https://github.com/DialmasterOrg/Youtarr/commit/cb6a1515d948c1419036a9dcb63a83617a118901)), closes [#762](https://github.com/DialmasterOrg/Youtarr/issues/762)
+
+
+### Build Systems
+
+* bump js-yaml to 4.3.1 to clear security audit ([0221f4d](https://github.com/DialmasterOrg/Youtarr/commit/0221f4dd58908e869658691016cc9510f0b26081)), closes [#762](https://github.com/DialmasterOrg/Youtarr/issues/762)
+
+
+### Documentation
+
+* update CHANGELOG for v1.78.0 [skip ci] ([3501e4f](https://github.com/DialmasterOrg/Youtarr/commit/3501e4f1f1f485780903a92e7522d26ad4ee481d))
+
+
+
+
+
 ## [v1.78.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.78.0) - 2026-08-07
 
 ## [1.78.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.77.0...v1.78.0) (2026-08-07)
