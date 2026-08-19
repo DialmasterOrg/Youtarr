@@ -82,6 +82,7 @@ You'll need Docker, Docker Compose, Git, and a Bash shell (Git Bash on Windows).
 ### Platform Guides
 - [Synology NAS](docs/platforms/synology.md) - DSM 7+ optimized setup
 - [Unraid](docs/platforms/unraid.md) - Community Applications template
+- [Asustor NAS](docs/platforms/asustor.md) - App Central community package
 - [External Database](docs/platforms/external-db.md) - Using existing MariaDB/MySQL
 
 ### Advanced Topics
