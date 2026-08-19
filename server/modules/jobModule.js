@@ -13,9 +13,15 @@ const MessageEmitter = require('./messageEmitter.js'); // import the helper func
 const configModule = require('./configModule');
 const { isDownloadJob } = require('./download/jobTypes');
 const downloadCleanup = require('./download/downloadCleanup');
+const { serializeAuxData, parseAuxData } = require('./jobAuxData');
 const logger = require('../logger');
 
 const MAX_SAVE_RETRIES = 3;
+// Download History window: jobs older than this are purged from memory,
+// and at most MAX_HISTORY_JOBS are returned to the client. DB rows are
+// never deleted, so raising these resurfaces older persisted jobs.
+const JOB_RETENTION_DAYS = 42;
+const MAX_HISTORY_JOBS = 720;
 
 class JobModule {
   constructor() {
@@ -331,9 +337,11 @@ class JobModule {
       this.jobs = {};
 
       for (let job of jobs) {
+        const { aux_data: auxData, ...row } = job.dataValues;
         this.jobs[job.id] = {
-          ...job.dataValues,
+          ...row,
           data: {
+            ...parseAuxData(auxData),
             videos: [],
           },
           // Don't restore action functions - pending jobs will be terminated on startup
@@ -481,6 +489,7 @@ class JobModule {
 
     // Extract video data if present (download jobs); non-download jobs may not have data
     let videos = [];
+    jobData.aux_data = serializeAuxData(jobData.data);
     if (jobData.data) {
       videos = jobData.data.videos ? jobData.data.videos : [];
       delete jobData.data; // Remove videos from job data before DB update
@@ -533,6 +542,7 @@ class JobModule {
 
       // Extract video data if present (download jobs); non-download jobs may not have data
       let videos = [];
+      jobData.aux_data = serializeAuxData(jobData.data);
       if (jobData.data) {
         videos = jobData.data.videos ? jobData.data.videos : [];
         logger.debug({ jobId, videoCount: videos.length }, 'Job has videos to save');
@@ -848,7 +858,7 @@ class JobModule {
     }
 
     const now = Date.now();
-    const cutoff = now - 14 * 24 * 60 * 60 * 1000; // 14 days ago
+    const cutoff = now - JOB_RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
     // Delete jobs older than the cutoff
     for (let jobId in this.jobs) {
@@ -865,8 +875,8 @@ class JobModule {
     // Sort jobs by timeCreated in descending order
     jobsArray.sort((a, b) => b.timeCreated - a.timeCreated);
 
-    // Return the last 240 jobs (we may want to adjust this)
-    return jobsArray.slice(0, 240);
+    // Return the most recent jobs, capped at MAX_HISTORY_JOBS
+    return jobsArray.slice(0, MAX_HISTORY_JOBS);
   }
 
   // The in-memory job snapshot only refreshes at job completion or server

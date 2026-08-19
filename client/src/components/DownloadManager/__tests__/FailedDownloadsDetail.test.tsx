@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import FailedDownloadsDetail from '../FailedDownloadsDetail';
+import { MAX_VISIBLE_FAILED_VIDEOS } from '../FailedVideoLineList';
 import { FailedVideo, DownloadDiagnosis } from '../../../types/Job';
 
 describe('FailedDownloadsDetail', () => {
@@ -53,9 +54,54 @@ describe('FailedDownloadsDetail', () => {
     expect(screen.getByText('Postprocessing failed')).toBeInTheDocument();
   });
 
+  test('caps long failure lists with an overflow count', () => {
+    const videos = Array.from({ length: MAX_VISIBLE_FAILED_VIDEOS + 5 }, (_, i) =>
+      diagnosedVideo({
+        youtubeId: `vid${String(i).padStart(8, '0')}`,
+        title: undefined,
+        channel: undefined,
+      })
+    );
+
+    render(<FailedDownloadsDetail failedVideos={videos} diagnoses={diagnoses} />);
+
+    expect(screen.getAllByRole('link')).toHaveLength(MAX_VISIBLE_FAILED_VIDEOS);
+    expect(screen.getByText('...and 5 more')).toBeInTheDocument();
+  });
+
   test('renders nothing when there are no failed videos', () => {
     const { container } = render(<FailedDownloadsDetail failedVideos={[]} />);
 
     expect(container).toBeEmptyDOMElement();
+  });
+
+  test('shows a YouTube ID link for videos with no title', () => {
+    render(
+      <FailedDownloadsDetail
+        failedVideos={[
+          diagnosedVideo({ title: undefined, channel: undefined }),
+        ]}
+        diagnoses={diagnoses}
+      />
+    );
+
+    expect(screen.getByRole('link', { name: 'vid00000001' })).toHaveAttribute(
+      'href',
+      'https://www.youtube.com/watch?v=vid00000001'
+    );
+  });
+
+  test('does not render the legacy Unknown sentinel from old job records', () => {
+    render(
+      <FailedDownloadsDetail
+        failedVideos={[
+          diagnosedVideo({ title: 'Unknown', channel: 'Unknown' }),
+        ]}
+        diagnoses={diagnoses}
+      />
+    );
+
+    expect(screen.queryByText(/Unknown by Unknown/)).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'vid00000001' })).toBeInTheDocument();
   });
 });

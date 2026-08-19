@@ -51,6 +51,10 @@ jest.mock('../downloadCompletionEffects', () => ({
   runCompletionSideEffects: jest.fn().mockResolvedValue()
 }));
 
+jest.mock('../failedVideoEnricher', () => ({
+  enrichFailedVideos: jest.fn().mockResolvedValue()
+}));
+
 const jobModule = require('../../jobModule');
 const configModule = require('../../configModule');
 const failureAdvisor = require('../failureAdvisor');
@@ -60,6 +64,7 @@ const downloadRunTracker = require('../downloadRunTracker');
 const downloadResultProcessor = require('../downloadResultProcessor');
 const downloadCleanup = require('../downloadCleanup');
 const { runCompletionSideEffects } = require('../downloadCompletionEffects');
+const failedVideoEnricher = require('../failedVideoEnricher');
 const logger = require('../../../logger');
 const {
   finalizeDownloadJob,
@@ -260,6 +265,18 @@ describe('downloadJobFinalizer', () => {
         (call) => call[4] && call[4].finalSummary
       );
       expect(finalCall).toBeUndefined();
+    });
+
+    test('enriches failed videos with known metadata after partitioning', async () => {
+      const failedVideosList = [{ youtubeId: 'abc123def45', error: 'HTTP Error 403: Forbidden', url: null }];
+      downloadResultProcessor.partitionDownloadResults.mockReturnValue({
+        successfulVideos: [],
+        failedVideosList
+      });
+
+      await finalizeDownloadJob(makeContext({ code: 1 }));
+
+      expect(failedVideoEnricher.enrichFailedVideos).toHaveBeenCalledWith(failedVideosList);
     });
 
     it('runs completion side effects with the temp channels file passthrough', async () => {

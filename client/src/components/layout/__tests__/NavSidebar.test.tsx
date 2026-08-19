@@ -242,7 +242,7 @@ describe('NavSidebar – collapsed state', () => {
     renderSidebar('/channels', {
       versionLabel: 'v1.59.0 • yt-dlp: 2025.09.23',
       ytDlpUpdateAvailable: true,
-      ytDlpUpdateTooltip: 'yt-dlp update available (2025.10.01). Go to Settings to update.',
+      ytDlpUpdateTooltip: 'yt-dlp update available (2025.10.01). Go to Settings > YT-DLP to update.',
     });
 
     expect(screen.queryByLabelText(/yt-dlp update available/i)).not.toBeInTheDocument();

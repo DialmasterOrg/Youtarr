@@ -209,6 +209,17 @@ module.exports = function createConfigRoutes({ verifyToken, configModule, valida
       }
     }
 
+    // Update-channel gate: an unknown channel would make every yt-dlp update
+    // silently fall back to stable, hiding the user's intent.
+    if (
+      Object.prototype.hasOwnProperty.call(updateData, 'ytdlpUpdateChannel') &&
+      !['stable', 'nightly'].includes(updateData.ytdlpUpdateChannel)
+    ) {
+      return res.status(400).json({
+        error: 'ytdlpUpdateChannel must be "stable" or "nightly"',
+      });
+    }
+
     // Video filename template prefix validation
     if (Object.prototype.hasOwnProperty.call(updateData, 'videoFilenamePrefix')) {
       const basic = basicValidatePrefix(updateData.videoFilenamePrefix);

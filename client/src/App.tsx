@@ -100,7 +100,7 @@ function AppContent() {
 
   const ytDlpLabel = ytDlpVersion ? `yt-dlp: ${ytDlpVersion}` : '';
   const ytDlpUpdateTooltip = ytDlpUpdateAvailable && ytDlpLatestVersion
-    ? `yt-dlp update available (${ytDlpLatestVersion}). Go to Settings to update.`
+    ? `yt-dlp update available (${ytDlpLatestVersion}). Go to Settings > YT-DLP to update.`
     : undefined;
 
   // On first load, sync dark mode from server config if user hasn't set a local preference

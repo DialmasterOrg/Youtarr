@@ -163,7 +163,7 @@ module.exports = function createHealthRoutes({ getCachedYtDlpVersion, refreshYtD
    * /api/ytdlp/latest-version:
    *   get:
    *     summary: Get yt-dlp version information
-   *     description: Returns the current installed yt-dlp version and the latest available version from GitHub.
+   *     description: Returns the current installed yt-dlp version and the latest available version from GitHub for the configured update channel (stable or nightly).
    *     tags: [Health]
    *     security:
    *       - bearerAuth: []
@@ -184,6 +184,10 @@ module.exports = function createHealthRoutes({ getCachedYtDlpVersion, refreshYtD
    *                 updateAvailable:
    *                   type: boolean
    *                   description: Whether an update is available
+   *                 channel:
+   *                   type: string
+   *                   enum: [stable, nightly]
+   *                   description: Configured yt-dlp update channel
    *       401:
    *         description: Unauthorized
    *       500:
@@ -191,14 +195,16 @@ module.exports = function createHealthRoutes({ getCachedYtDlpVersion, refreshYtD
    */
   router.get('/api/ytdlp/latest-version', verifyToken, async (req, res) => {
     try {
+      const channel = ytdlpModule.normalizeChannel(configModule.getConfig().ytdlpUpdateChannel);
       const currentVersion = getCachedYtDlpVersion();
-      const latestVersion = await ytdlpModule.getLatestVersion();
+      const latestVersion = await ytdlpModule.getLatestVersion(channel);
       const updateAvailable = ytdlpModule.isUpdateAvailable(currentVersion, latestVersion);
 
       res.json({
         currentVersion,
         latestVersion,
         updateAvailable,
+        channel,
       });
     } catch (error) {
       logger.error({ err: error }, 'Failed to get yt-dlp version information');
@@ -211,7 +217,7 @@ module.exports = function createHealthRoutes({ getCachedYtDlpVersion, refreshYtD
    * /api/ytdlp/update:
    *   post:
    *     summary: Update yt-dlp
-   *     description: Performs a yt-dlp self-update to the latest version.
+   *     description: Updates yt-dlp to the latest release of the configured update channel (stable or nightly) via --update-to.
    *     tags: [Health]
    *     security:
    *       - bearerAuth: []
@@ -246,7 +252,8 @@ module.exports = function createHealthRoutes({ getCachedYtDlpVersion, refreshYtD
         });
       }
 
-      const result = await ytdlpModule.performUpdate();
+      const channel = ytdlpModule.normalizeChannel(configModule.getConfig().ytdlpUpdateChannel);
+      const result = await ytdlpModule.performUpdate({ channel });
 
       // Refresh the cached version after update
       if (result.success) {

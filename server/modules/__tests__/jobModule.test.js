@@ -1412,7 +1412,7 @@ describe('JobModule', () => {
 
     test('should delete old jobs and return recent ones', () => {
       const now = Date.now();
-      const oldTime = now - (15 * 24 * 60 * 60 * 1000); // 15 days ago
+      const oldTime = now - (50 * 24 * 60 * 60 * 1000); // 50 days ago
       const recentTime = now - (5 * 24 * 60 * 60 * 1000); // 5 days ago
 
       JobModule.jobs = {
@@ -1429,12 +1429,12 @@ describe('JobModule', () => {
       expect(result[1].id).toBe('recent-job-1');
     });
 
-    test('should limit to 240 most recent jobs', () => {
+    test('should limit to 720 most recent jobs', () => {
       JobModule.jobs = {};
       const now = Date.now();
 
-      // Create 250 jobs
-      for (let i = 0; i < 250; i++) {
+      // Create 750 jobs
+      for (let i = 0; i < 750; i++) {
         JobModule.jobs[`job-${i}`] = {
           timeCreated: now - i * 1000,
           status: 'Complete'
@@ -1443,9 +1443,45 @@ describe('JobModule', () => {
 
       const result = JobModule.getRunningJobs();
 
-      expect(result).toHaveLength(240);
+      expect(result).toHaveLength(720);
       expect(result[0].id).toBe('job-0'); // Most recent
-      expect(result[239].id).toBe('job-239');
+      expect(result[719].id).toBe('job-719');
+    });
+  });
+
+  describe('history retention', () => {
+    beforeEach(() => {
+      fs.existsSync.mockReturnValue(false);
+      fs.readFileSync.mockReturnValue(JSON.stringify({
+        plexApiKey: 'test-key',
+      }));
+      JobModule = require('../jobModule');
+    });
+
+    test('keeps jobs newer than 42 days and purges older ones', () => {
+      const now = Date.now();
+      JobModule.jobs = {
+        'recent-job': { status: 'Complete', timeCreated: now - 30 * 24 * 60 * 60 * 1000 },
+        'ancient-job': { status: 'Complete', timeCreated: now - 50 * 24 * 60 * 60 * 1000 }
+      };
+
+      const jobs = JobModule.getRunningJobs();
+
+      expect(jobs.map((j) => j.id)).toEqual(['recent-job']);
+      expect(JobModule.jobs['ancient-job']).toBeUndefined();
+    });
+
+    test('returns at most 720 jobs, newest first', () => {
+      const now = Date.now();
+      JobModule.jobs = {};
+      for (let i = 0; i < 725; i++) {
+        JobModule.jobs[`job-${i}`] = { status: 'Complete', timeCreated: now - i * 1000 };
+      }
+
+      const jobs = JobModule.getRunningJobs();
+
+      expect(jobs).toHaveLength(720);
+      expect(jobs[0].id).toBe('job-0');
     });
   });
 
@@ -2793,6 +2829,83 @@ describe('JobModule', () => {
       await expect(
         JobModule.upsertVideoForJob(videoData, jobInstance)
       ).rejects.toThrow('Database connection failed');
+    });
+  });
+
+  describe('aux data persistence', () => {
+    beforeEach(() => {
+      fs.existsSync.mockReturnValue(false);
+      fs.readFileSync.mockReturnValue(JSON.stringify({
+        plexApiKey: 'test-key',
+      }));
+      JobModule = require('../jobModule');
+    });
+
+    test('saveJobOnly writes failedVideos into aux_data and strips them from the row payload', async () => {
+      const jobInstance = { update: jest.fn().mockResolvedValue() };
+      Job.findOne.mockResolvedValue(jobInstance);
+
+      await JobModule.saveJobOnly('job-1', {
+        id: 'job-1',
+        status: 'Complete',
+        jobType: 'Channel Downloads',
+        data: {
+          videos: [],
+          failedVideos: [{ youtubeId: 'abc123def45', error: 'HTTP Error 403: Forbidden' }],
+          diagnoses: [{ key: 'http-403-no-cookies' }]
+        }
+      });
+
+      const written = jobInstance.update.mock.calls[0][0];
+      expect(written.data).toBeUndefined();
+      expect(JSON.parse(written.aux_data).failedVideos).toHaveLength(1);
+      expect(JSON.parse(written.aux_data).diagnoses).toHaveLength(1);
+    });
+
+    test('saveJobOnly writes null aux_data when data holds only videos', async () => {
+      const jobInstance = { update: jest.fn().mockResolvedValue() };
+      Job.findOne.mockResolvedValue(jobInstance);
+
+      await JobModule.saveJobOnly('job-2', {
+        id: 'job-2',
+        status: 'Complete',
+        jobType: 'Channel Downloads',
+        data: { videos: [] }
+      });
+
+      expect(jobInstance.update.mock.calls[0][0].aux_data).toBeNull();
+    });
+
+    test('loadJobsFromDB restores failedVideos from aux_data and drops the raw column', async () => {
+      Job.findAll.mockResolvedValue([{
+        id: 'job-3',
+        dataValues: {
+          id: 'job-3',
+          status: 'Complete',
+          jobType: 'Channel Downloads',
+          aux_data: JSON.stringify({ failedVideos: [{ youtubeId: 'abc123def45', error: 'err' }] })
+        }
+      }]);
+      JobVideo.findAll.mockResolvedValue([]);
+
+      await JobModule.loadJobsFromDB();
+
+      const job = JobModule.jobs['job-3'];
+      expect(job.data.failedVideos).toEqual([{ youtubeId: 'abc123def45', error: 'err' }]);
+      expect(job.data.videos).toEqual([]);
+      expect(job.aux_data).toBeUndefined();
+    });
+
+    test('loadJobsFromDB tolerates malformed aux_data', async () => {
+      Job.findAll.mockResolvedValue([{
+        id: 'job-4',
+        dataValues: { id: 'job-4', status: 'Complete', jobType: 'Channel Downloads', aux_data: '{broken' }
+      }]);
+      JobVideo.findAll.mockResolvedValue([]);
+
+      await JobModule.loadJobsFromDB();
+
+      expect(JobModule.jobs['job-4'].data).toEqual({ videos: [] });
     });
   });
 });
