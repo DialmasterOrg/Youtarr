@@ -146,6 +146,8 @@ class NfoGenerator {
       xml += '\n  <!-- Dates -->\n';
       if (premiered) {
         xml += `  <premiered>${premiered}</premiered>\n`;
+        // Without <year>, Emby guesses ProductionYear and breaks episode sorting
+        xml += `  <year>${premiered.substring(0, 4)}</year>\n`;
       }
       xml += `  <dateadded>${this.formatDateAdded()}</dateadded>\n`;
 
