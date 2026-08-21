@@ -31,6 +31,8 @@ import SubtitleLanguageSelector from '../SubtitleLanguageSelector';
 import { VideoFilenameTemplate } from './components/VideoFilenameTemplate';
 import { SubfolderAutocomplete } from '../../shared/SubfolderAutocomplete';
 import { ManageSubfoldersDialog } from '../../shared/ManageSubfoldersDialog';
+import { AddSubfolderDialog } from '../../shared/AddSubfolderDialog';
+import { Plus as AddIcon, Settings as SettingsIcon } from '../../../lib/icons';
 import { useSubfolders } from '../../../hooks/useSubfolders';
 import { ConfigState, DeploymentEnvironment, PlatformManagedState } from '../types';
 import { reverseFrequencyMapping, getChannelFilesOptions } from '../helpers';
@@ -62,14 +64,21 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
 
   // State for confirmation dialog when setting default subfolder
   const [manageOpen, setManageOpen] = useState(false);
+  const [addSubfolderOpen, setAddSubfolderOpen] = useState(false);
   const [pendingDefaultSubfolder, setPendingDefaultSubfolder] = useState<string | null>(null);
+  // True when the pending value came from the Add Subfolder dialog (already persisted);
+  // the confirmation dialog copy changes so Cancel doesn't read as undoing the add.
+  const [pendingIsNewSubfolder, setPendingIsNewSubfolder] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [affectedChannels, setAffectedChannels] = useState<{ count: number; channelNames: string[] }>({ count: 0, channelNames: [] });
   const [loadingAffectedChannels, setLoadingAffectedChannels] = useState(false);
   const [showAffectedList, setShowAffectedList] = useState(false);
 
   // Handle default subfolder change with confirmation
-  const handleDefaultSubfolderChange = async (newValue: string | null) => {
+  const handleDefaultSubfolderChange = async (
+    newValue: string | null,
+    meta?: { isNewlyCreated?: boolean }
+  ) => {
     const currentValue = config.defaultSubfolder || '';
     const newValueNormalized = newValue || '';
 
@@ -80,6 +89,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
 
     // Show dialog immediately with loading state
     setPendingDefaultSubfolder(newValue);
+    setPendingIsNewSubfolder(meta?.isNewlyCreated === true);
     setShowConfirmDialog(true);
     setLoadingAffectedChannels(true);
     setAffectedChannels({ count: 0, channelNames: [] });
@@ -105,13 +115,25 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
     onConfigChange({ defaultSubfolder: pendingDefaultSubfolder || '' });
     setShowConfirmDialog(false);
     setPendingDefaultSubfolder(null);
+    setPendingIsNewSubfolder(false);
     setShowAffectedList(false);
   };
 
   const handleCancelDefaultSubfolder = () => {
     setShowConfirmDialog(false);
     setPendingDefaultSubfolder(null);
+    setPendingIsNewSubfolder(false);
     setShowAffectedList(false);
+  };
+
+  // Page-level Add Subfolder action: persist the new name, then offer to set
+  // it as the default via the confirmation dialog
+  const handleAddSubfolderFromPage = (name: string) => {
+    setAddSubfolderOpen(false);
+    createSubfolder(name).catch((err) => {
+      console.error('Failed to persist subfolder:', err);
+    });
+    handleDefaultSubfolderChange(name, { isNewlyCreated: true });
   };
 
   const [pendingFlatDefault, setPendingFlatDefault] = useState<boolean | null>(null);
@@ -559,9 +581,9 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                       onChange={handleDefaultSubfolderChange}
                       subfolders={subfolders}
                       loading={subfoldersLoading}
-                      createSubfolder={createSubfolder}
                       label="Default Subfolder"
                       helperText="Default download location for channels using 'Default Subfolder'"
+                      showAddAction={false}
                     />
                     <Box className="flex items-center min-h-[48px] mt-5">
                       <InfoTooltip
@@ -570,9 +592,30 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                       />
                     </Box>
                   </Box>
-                  <Button variant="text" size="sm" onClick={() => setManageOpen(true)}>
-                    Manage Subfolders
-                  </Button>
+                  <Box className="mt-1 flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="text"
+                      size="sm"
+                      startIcon={<AddIcon size={14} />}
+                      onClick={() => setAddSubfolderOpen(true)}
+                    >
+                      Add Subfolder
+                    </Button>
+                    <Button
+                      variant="text"
+                      size="sm"
+                      startIcon={<SettingsIcon size={14} />}
+                      onClick={() => setManageOpen(true)}
+                    >
+                      Manage Subfolders
+                    </Button>
+                  </Box>
+                  <AddSubfolderDialog
+                    open={addSubfolderOpen}
+                    onClose={() => setAddSubfolderOpen(false)}
+                    onAdd={handleAddSubfolderFromPage}
+                    existingSubfolders={subfolders}
+                  />
                   <ManageSubfoldersDialog
                     open={manageOpen}
                     onClose={() => setManageOpen(false)}
@@ -652,10 +695,20 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
 
       {/* Confirmation Dialog for Default Subfolder */}
       <Dialog open={showConfirmDialog} onClose={handleCancelDefaultSubfolder}>
-        <DialogTitle>Set Default Subfolder?</DialogTitle>
+        <DialogTitle>
+          {pendingIsNewSubfolder ? 'Set New Subfolder as Default?' : 'Set Default Subfolder?'}
+        </DialogTitle>
         <DialogContent>
+          {pendingIsNewSubfolder && (
+            <DialogContentText className="mb-2">
+              Subfolder <strong>{`__${pendingDefaultSubfolder}`}</strong> has been created and is
+              available anywhere subfolders can be selected.
+            </DialogContentText>
+          )}
           <DialogContentText>
-            Setting a default subfolder will affect where videos are downloaded for:
+            {pendingIsNewSubfolder
+              ? 'Would you also like to make it the default subfolder? This will affect where videos are downloaded for:'
+              : 'Setting a default subfolder will affect where videos are downloaded for:'}
           </DialogContentText>
           <Box component="ul" className="mt-2 pl-4">
             <li>Untracked channels (manual URL downloads)</li>
@@ -707,13 +760,15 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
             </strong>
           </DialogContentText>
           <DialogContentText className="mt-2" style={{ fontStyle: 'italic' }}>
-            Existing videos will not be moved. Continue?
+            Existing videos will not be moved.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCancelDefaultSubfolder}>Cancel</Button>
+          <Button onClick={handleCancelDefaultSubfolder}>
+            {pendingIsNewSubfolder ? "Don't Set as Default" : 'Cancel'}
+          </Button>
           <Button onClick={handleConfirmDefaultSubfolder} variant="contained" color="primary">
-            Confirm
+            Set as Default
           </Button>
         </DialogActions>
       </Dialog>
