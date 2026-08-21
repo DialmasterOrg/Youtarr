@@ -313,7 +313,7 @@ describe('SubfolderAutocomplete', () => {
       expect(screen.queryByTestId('add-subfolder-dialog')).not.toBeInTheDocument();
     });
 
-    test('calls onChange and closes dialog when subfolder added', async () => {
+    test('calls onChange with isNewlyCreated meta and closes dialog when subfolder added', async () => {
       const user = userEvent.setup();
       render(
         <SubfolderAutocomplete
@@ -329,7 +329,7 @@ describe('SubfolderAutocomplete', () => {
       await user.click(screen.getByText('Add Subfolder'));
       await user.click(screen.getByTestId('dialog-add'));
 
-      expect(mockOnChange).toHaveBeenCalledWith('NewFolder');
+      expect(mockOnChange).toHaveBeenCalledWith('NewFolder', { isNewlyCreated: true });
       expect(screen.queryByTestId('add-subfolder-dialog')).not.toBeInTheDocument();
     });
 
@@ -356,6 +356,20 @@ describe('SubfolderAutocomplete', () => {
       expect(screen.getByText('__NewFolder')).toBeInTheDocument();
     });
 
+    test('hides the Add Subfolder action when showAddAction is false', () => {
+      render(
+        <SubfolderAutocomplete
+          mode="global"
+          value={null}
+          onChange={mockOnChange}
+          subfolders={defaultSubfolders}
+          showAddAction={false}
+        />
+      );
+
+      expect(screen.queryByText('Add Subfolder')).not.toBeInTheDocument();
+    });
+
     test('persists a newly added subfolder via createSubfolder when provided', async () => {
       const onChange = jest.fn();
       const createSubfolder = jest.fn().mockResolvedValue(undefined);
@@ -374,7 +388,7 @@ describe('SubfolderAutocomplete', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Add Subfolder' }));
 
       await waitFor(() => expect(createSubfolder).toHaveBeenCalledWith('Sports'));
-      expect(onChange).toHaveBeenCalledWith('Sports');
+      expect(onChange).toHaveBeenCalledWith('Sports', { isNewlyCreated: true });
     });
   });
 
