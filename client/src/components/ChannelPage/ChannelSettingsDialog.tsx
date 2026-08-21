@@ -546,7 +546,7 @@ function ChannelSettingsDialog({
               </Typography>
               <Alert severity="info" style={{ marginBottom: 12 }}>
                 <Typography variant="body2">
-                  Enable these to automatically download new content from this channel during scheduled tasks.
+                  Enable these to automatically download new content from this channel during scheduled tasks. Automatic downloads must be enabled in Settings -&gt; Core.
                 </Typography>
               </Alert>
               {availableMediaTypes.length === 0 ? (
@@ -894,9 +894,9 @@ function ChannelSettingsDialog({
               <Typography variant="caption" color="text.secondary">
                 Effective default rating:
               </Typography>
-              <RatingBadge 
-                rating={effectiveRatingLabel} 
-                size="small" 
+              <RatingBadge
+                rating={effectiveRatingLabel}
+                size="small"
               />
             </div>
           </div>
@@ -908,17 +908,17 @@ function ChannelSettingsDialog({
   };
 
   return (
-    <Dialog 
-      open={open} 
-      onClose={handleCancel} 
-      maxWidth="xl" 
+    <Dialog
+      open={open}
+      onClose={handleCancel}
+      maxWidth="xl"
       fullWidth
       className={isMobile ? 'w-[calc(100vw-24px)] max-w-none max-h-[calc(100dvh-24px)]' : 'max-h-[calc(100vh-120px)]'}
     >
       <DialogTitle style={{ paddingBottom: 8 }}>
         Channel Settings
       </DialogTitle>
-      
+
       {isMobile ? (
         <div style={{ borderBottom: '1px solid var(--border)', padding: '0 8px' }}>
           <Tabs
@@ -927,10 +927,10 @@ function ChannelSettingsDialog({
             variant="fullWidth"
           >
             {sections.map(section => (
-              <Tab 
-                key={section.id} 
-                value={section.id} 
-                label={section.label} 
+              <Tab
+                key={section.id}
+                value={section.id}
+                label={section.label}
                 icon={section.icon}
                 iconPosition="start"
                 style={{ minHeight: 40, textTransform: 'none', fontSize: '0.72rem', paddingLeft: 8, paddingRight: 8 }}
@@ -942,8 +942,8 @@ function ChannelSettingsDialog({
 
       <DialogContent style={{ padding: 0, display: 'flex', minHeight: 0 }}>
         {!isMobile && (
-          <div style={{ 
-            width: 200, 
+          <div style={{
+            width: 200,
             borderRight: '1px solid var(--border)',
             backgroundColor: 'var(--muted)',
             display: 'flex',
@@ -964,15 +964,15 @@ function ChannelSettingsDialog({
                   <ListItemIcon style={{ minWidth: 40, color: activeSection === section.id ? 'var(--primary)' : 'inherit' }}>
                     {section.icon}
                   </ListItemIcon>
-                  <ListItemText 
-                    primary={section.label} 
-                    primaryTypographyProps={{ 
+                  <ListItemText
+                    primary={section.label}
+                    primaryTypographyProps={{
                       variant: 'body2',
                       style: {
                         fontWeight: activeSection === section.id ? 600 : 400,
                         color: activeSection === section.id ? 'var(--primary)' : 'inherit'
                       }
-                    }} 
+                    }}
                   />
                 </ListItemButton>
               ))}
