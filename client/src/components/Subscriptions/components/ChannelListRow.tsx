@@ -9,7 +9,7 @@ import {
 } from '../../ui';
 import { Delete as DeleteIcon } from '../../../lib/icons';
 import { Channel } from '../../../types/Channel';
-import { SubFolderChip, QualityChip, AutoDownloadChips, DurationFilterChip, TitleFilterChip, DownloadFormatConfigIndicator, TerminatedChip } from './chips';
+import { SubFolderChip, QualityChip, AutoDownloadChips, DurationFilterChip, TitleFilterChip, DownloadFormatConfigIndicator, TerminatedChip, ProtectedChip } from './chips';
 import RatingBadge from '../../shared/RatingBadge';
 
 interface ChannelListRowProps {
@@ -77,6 +77,10 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
               <QualityChip videoQuality={channel.video_quality} globalPreferredResolution={globalPreferredResolution} />
               <SubFolderChip subFolder={channel.sub_folder} />
               <RatingBadge rating={channel.default_rating} />
+              <ProtectedChip
+                autoRemovalProtected={channel.auto_removal_protected}
+                keepRecentCount={channel.auto_removal_keep_recent_count}
+              />
             </div>)}
         </div>
         {isPendingAddition && <Chip label="Pending addition" size="small" color="warning" style={{ marginTop: 4 }} />}
@@ -182,6 +186,10 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
           <QualityChip videoQuality={channel.video_quality} globalPreferredResolution={globalPreferredResolution} />
           <SubFolderChip subFolder={channel.sub_folder} />
           <RatingBadge rating={channel.default_rating} />
+          <ProtectedChip
+            autoRemovalProtected={channel.auto_removal_protected}
+            keepRecentCount={channel.auto_removal_keep_recent_count}
+          />
         </div>
 
         {/* Auto Downloads Column */}

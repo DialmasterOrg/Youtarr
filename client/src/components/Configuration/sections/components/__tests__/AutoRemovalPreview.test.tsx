@@ -152,4 +152,22 @@ describe('AutoRemovalPreview', () => {
     expect(screen.queryByText(/Watched:/)).not.toBeInTheDocument();
     expect(screen.queryByText(/most recent downloads are protected/i)).not.toBeInTheDocument();
   });
+
+  test('shows the per-channel keep-recent summary line when channels are configured', () => {
+    const result = createResult();
+    result.plan.channelKeepRecent = { channelCount: 2, protectedCount: 30 };
+    renderWithProviders(<AutoRemovalPreview result={result} />);
+
+    expect(
+      screen.getByText('2 channels keep their newest downloads (30 videos protected).')
+    ).toBeInTheDocument();
+  });
+
+  test('omits the per-channel keep-recent line when no channels are configured', () => {
+    const result = createResult();
+    result.plan.channelKeepRecent = { channelCount: 0, protectedCount: 0 };
+    renderWithProviders(<AutoRemovalPreview result={result} />);
+
+    expect(screen.queryByText(/keep their newest downloads/)).not.toBeInTheDocument();
+  });
 });

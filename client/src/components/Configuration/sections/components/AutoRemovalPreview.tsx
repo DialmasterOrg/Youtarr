@@ -24,6 +24,7 @@ export const AutoRemovalPreview: React.FC<AutoRemovalPreviewProps> = ({ result }
   ].slice(0, MAX_SAMPLE_VIDEOS);
   const hasSpaceThreshold = plan.spaceStrategy.thresholdBytes != null;
   const keepRecent = plan.keepRecent;
+  const channelKeepRecent = plan.channelKeepRecent;
   const watchedSkippedReason = plan.watchedStrategy?.skippedReason;
   const hasWarnings = result.errors.length > 0 || Boolean(watchedSkippedReason);
 
@@ -63,6 +64,13 @@ export const AutoRemovalPreview: React.FC<AutoRemovalPreviewProps> = ({ result }
       {keepRecent && keepRecent.count > 0 && (
         <Typography variant="body2">
           The {keepRecent.protectedCount} most recent downloads are protected from removal.
+        </Typography>
+      )}
+      {channelKeepRecent && channelKeepRecent.channelCount > 0 && (
+        <Typography variant="body2">
+          {channelKeepRecent.channelCount === 1
+            ? `1 channel keeps its newest downloads (${channelKeepRecent.protectedCount} videos protected).`
+            : `${channelKeepRecent.channelCount} channels keep their newest downloads (${channelKeepRecent.protectedCount} videos protected).`}
         </Typography>
       )}
       {sampleVideos.length > 0 && (

@@ -1091,6 +1091,7 @@ describe('VideoDeletionModule', () => {
 
       mockAutoRemovalQueries = {
         getRecentVideoIds: jest.fn().mockResolvedValue([]),
+        getChannelKeepRecentIds: jest.fn().mockResolvedValue({ channelCount: 0, ids: [] }),
         getWatchedRemovalCandidates: jest.fn().mockResolvedValue([])
       };
 
@@ -1741,6 +1742,55 @@ describe('VideoDeletionModule', () => {
 
       const [, spaceOptions] = mockSequelize.query.mock.calls[0];
       expect(spaceOptions.replacements.excludeIds).toEqual([50]);
+    });
+
+    test('merges per-channel keep-recent ids into the exclusion set', async () => {
+      mockConfigModule.getConfig.mockReturnValue({
+        autoRemovalEnabled: true,
+        autoRemovalVideoAgeThreshold: '30',
+        autoRemovalFreeSpaceThreshold: null
+      });
+      mockAutoRemovalQueries.getChannelKeepRecentIds.mockResolvedValue({ channelCount: 2, ids: [7, 8] });
+      mockSequelize.query.mockResolvedValue([]);
+
+      const result = await VideoDeletionModule.performAutomaticCleanup();
+
+      expect(result.plan.channelKeepRecent).toEqual({ channelCount: 2, protectedCount: 2 });
+      const [, options] = mockSequelize.query.mock.calls[0];
+      expect(options.replacements.excludeIds).toEqual(expect.arrayContaining([7, 8]));
+    });
+
+    test('dedupes overlapping global and per-channel keep-recent ids', async () => {
+      mockConfigModule.getConfig.mockReturnValue({
+        autoRemovalEnabled: true,
+        autoRemovalVideoAgeThreshold: '30',
+        autoRemovalFreeSpaceThreshold: null,
+        autoRemovalKeepRecentCount: 2
+      });
+      mockAutoRemovalQueries.getRecentVideoIds.mockResolvedValue([7, 9]);
+      mockAutoRemovalQueries.getChannelKeepRecentIds.mockResolvedValue({ channelCount: 1, ids: [7, 8] });
+      mockSequelize.query.mockResolvedValue([]);
+
+      await VideoDeletionModule.performAutomaticCleanup();
+
+      const [, options] = mockSequelize.query.mock.calls[0];
+      expect([...options.replacements.excludeIds].sort()).toEqual([7, 8, 9]);
+    });
+
+    test('aborts cleanup when the per-channel keep-recent guard query fails', async () => {
+      mockConfigModule.getConfig.mockReturnValue({
+        autoRemovalEnabled: true,
+        autoRemovalVideoAgeThreshold: '30',
+        autoRemovalFreeSpaceThreshold: null
+      });
+      mockAutoRemovalQueries.getChannelKeepRecentIds.mockRejectedValue(new Error('db down'));
+
+      const result = await VideoDeletionModule.performAutomaticCleanup();
+
+      expect(result.success).toBe(false);
+      expect(result.totalDeleted).toBe(0);
+      expect(result.errors).toContain('Could not determine per-channel protected downloads; cleanup aborted for safety');
+      expect(mockSequelize.query).not.toHaveBeenCalled();
     });
   });
 
