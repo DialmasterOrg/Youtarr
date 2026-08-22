@@ -12,6 +12,8 @@ Before setting up Youtarr, ensure you have:
 
 Choose your preferred installation method
 
+> Running on a NAS or Unraid? There are dedicated platform guides for [Synology](platforms/synology.md), [Unraid](platforms/unraid.md), and [Asustor](platforms/asustor.md) - start there instead.
+
 ### Method 1: First-Time Installation via `./start.sh` helper
 
 1. **Clone the repository**:
@@ -257,6 +259,10 @@ If you use standard Docker Compose commands:
    ```bash
    docker compose up -d
    ```
+
+#### Method 3: Asustor App Central
+
+If you installed Youtarr from App Central on an Asustor NAS, updates come through App Central only. `docker pull` won't work because the package pins the Youtarr version. See the [Asustor guide](platforms/asustor.md#updating) for details.
 
 ### What Happens During Updates
 

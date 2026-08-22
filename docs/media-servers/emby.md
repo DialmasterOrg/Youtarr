@@ -80,6 +80,7 @@ Emby reads comprehensive NFO files containing:
 - **Title**: Video title with channel name
 - **Plot**: Complete YouTube description
 - **Premiered**: Original upload date
+- **Year**: Upload year (keeps Emby's production year accurate for sorting)
 - **Studios**: Channel/creator name
 - **Genres**: YouTube categories
 - **Tags**: Video keywords and topics

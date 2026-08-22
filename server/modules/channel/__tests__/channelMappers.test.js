@@ -141,4 +141,40 @@ describe('channelMappers', () => {
       expect(result.available_tabs).toBe('videos');
     });
   });
+
+  describe('mapChannelListEntry', () => {
+    test('exposes auto_removal_protected as a boolean', () => {
+      const entry = channelMappers.mapChannelListEntry({
+        url: 'https://youtube.com/@x',
+        uploader: 'X',
+        channel_id: 'UC-x',
+        auto_removal_protected: 1
+      });
+      expect(entry.auto_removal_protected).toBe(true);
+
+      const unprotectedEntry = channelMappers.mapChannelListEntry({
+        url: 'https://youtube.com/@y',
+        uploader: 'Y',
+        channel_id: 'UC-y'
+      });
+      expect(unprotectedEntry.auto_removal_protected).toBe(false);
+    });
+
+    test('exposes auto_removal_keep_recent_count, defaulting to null', () => {
+      const entry = channelMappers.mapChannelListEntry({
+        url: 'https://youtube.com/@x',
+        uploader: 'X',
+        channel_id: 'UC-x',
+        auto_removal_keep_recent_count: 25
+      });
+      expect(entry.auto_removal_keep_recent_count).toBe(25);
+
+      const unsetEntry = channelMappers.mapChannelListEntry({
+        url: 'https://youtube.com/@y',
+        uploader: 'Y',
+        channel_id: 'UC-y'
+      });
+      expect(unsetEntry.auto_removal_keep_recent_count).toBeNull();
+    });
+  });
 });

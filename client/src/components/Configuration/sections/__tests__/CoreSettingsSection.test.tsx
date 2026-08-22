@@ -1,5 +1,5 @@
 import React from 'react';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { CoreSettingsSection } from '../CoreSettingsSection';
@@ -8,13 +8,14 @@ import { ConfigState, DeploymentEnvironment, PlatformManagedState } from '../../
 import { DEFAULT_CONFIG } from '../../../../config/configSchema';
 
 // Mock useSubfolders hook to prevent network requests
+const mockCreateSubfolder = jest.fn(() => Promise.resolve());
 jest.mock('../../../../hooks/useSubfolders', () => ({
   useSubfolders: () => ({
     subfolders: ['__Sports', '__Music', '__Tech'],
     loading: false,
     error: null,
     refetch: jest.fn(),
-    createSubfolder: jest.fn(() => Promise.resolve()),
+    createSubfolder: mockCreateSubfolder,
     deleteSubfolder: jest.fn(() => Promise.resolve()),
   }),
 }));
@@ -41,7 +42,7 @@ jest.mock('../../SubtitleLanguageSelector', () => ({
 jest.mock('../../../shared/SubfolderAutocomplete', () => ({
   SubfolderAutocomplete: function MockSubfolderAutocomplete(props: {
     value: string | null;
-    onChange: (value: string | null) => void;
+    onChange: (value: string | null, meta?: { isNewlyCreated?: boolean }) => void;
     label: string;
   }) {
     const React = require('react');
@@ -94,6 +95,8 @@ const createSectionProps = (
 describe('CoreSettingsSection Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Jest's resetMocks wipes the implementation before each test; restore it
+    mockCreateSubfolder.mockResolvedValue(undefined);
   });
 
   describe('Component Rendering', () => {
@@ -1314,7 +1317,7 @@ describe('CoreSettingsSection Component', () => {
       await screen.findByText('No tracked channels are currently using Default Subfolder.');
 
       // Click confirm
-      const confirmButton = screen.getByRole('button', { name: 'Confirm' });
+      const confirmButton = screen.getByRole('button', { name: 'Set as Default' });
       await user.click(confirmButton);
 
       expect(onConfigChange).toHaveBeenCalledWith({ defaultSubfolder: 'NewFolder' });
@@ -1366,6 +1369,111 @@ describe('CoreSettingsSection Component', () => {
       await screen.findByText('No tracked channels are currently using Default Subfolder.');
 
       consoleSpy.mockRestore();
+    });
+
+    describe('when triggered by adding a new subfolder', () => {
+      // Drives the page-level Add Subfolder action: open the dialog, enter a
+      // name, and submit (scoped with within() because the page action and the
+      // dialog submit button share the accessible name 'Add Subfolder').
+      const openAddSubfolderDialog = async (user: ReturnType<typeof userEvent.setup>) => {
+        await user.click(screen.getByRole('button', { name: 'Add Subfolder' }));
+        const dialog = await screen.findByRole('dialog');
+        await user.type(within(dialog).getByLabelText('Subfolder Name'), 'NewFolder');
+        await user.click(within(dialog).getByRole('button', { name: 'Add Subfolder' }));
+      };
+
+      beforeEach(() => {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          json: jest.fn().mockResolvedValue({ count: 0, channelNames: [] })
+        });
+      });
+
+      test('renders Add Subfolder and Manage Subfolders as separate page actions', () => {
+        const props = createSectionProps();
+        renderWithProviders(<CoreSettingsSection {...props} />);
+
+        expect(screen.getByRole('button', { name: 'Add Subfolder' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Manage Subfolders' })).toBeInTheDocument();
+      });
+
+      test('persists the new subfolder via createSubfolder', async () => {
+        const user = userEvent.setup();
+        const props = createSectionProps({
+          config: createConfig({ defaultSubfolder: '' })
+        });
+        renderWithProviders(<CoreSettingsSection {...props} />);
+
+        await openAddSubfolderDialog(user);
+
+        await waitFor(() => expect(mockCreateSubfolder).toHaveBeenCalledWith('NewFolder'));
+      });
+
+      test('shows new-subfolder title and creation notice', async () => {
+        const user = userEvent.setup();
+        const props = createSectionProps({
+          config: createConfig({ defaultSubfolder: '' })
+        });
+        renderWithProviders(<CoreSettingsSection {...props} />);
+
+        await openAddSubfolderDialog(user);
+
+        await screen.findByText('Set New Subfolder as Default?');
+        expect(
+          screen.getByText(/has been created and is available anywhere subfolders can be selected/)
+        ).toBeInTheDocument();
+      });
+
+      test('"Don\'t Set as Default" closes the dialog without changing config', async () => {
+        const user = userEvent.setup();
+        const onConfigChange = jest.fn();
+        const props = createSectionProps({
+          config: createConfig({ defaultSubfolder: '' }),
+          onConfigChange
+        });
+        renderWithProviders(<CoreSettingsSection {...props} />);
+
+        await openAddSubfolderDialog(user);
+
+        await screen.findByText('Set New Subfolder as Default?');
+        await user.click(screen.getByRole('button', { name: "Don't Set as Default" }));
+
+        expect(onConfigChange).not.toHaveBeenCalled();
+        expect(screen.queryByText('Set New Subfolder as Default?')).not.toBeInTheDocument();
+      });
+
+      test('"Set as Default" applies the new subfolder as default', async () => {
+        const user = userEvent.setup();
+        const onConfigChange = jest.fn();
+        const props = createSectionProps({
+          config: createConfig({ defaultSubfolder: '' }),
+          onConfigChange
+        });
+        renderWithProviders(<CoreSettingsSection {...props} />);
+
+        await openAddSubfolderDialog(user);
+
+        await screen.findByText('Set New Subfolder as Default?');
+        await user.click(screen.getByRole('button', { name: 'Set as Default' }));
+
+        expect(onConfigChange).toHaveBeenCalledWith({ defaultSubfolder: 'NewFolder' });
+      });
+
+      test('selecting an existing subfolder keeps the standard title and Cancel button', async () => {
+        const user = userEvent.setup();
+        const props = createSectionProps({
+          config: createConfig({ defaultSubfolder: '' })
+        });
+        renderWithProviders(<CoreSettingsSection {...props} />);
+
+        await openSubfolderDialog(user);
+
+        await screen.findByText('Set Default Subfolder?');
+        expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+        expect(
+          screen.queryByText(/has been created and is available anywhere subfolders can be selected/)
+        ).not.toBeInTheDocument();
+      });
     });
   });
 });

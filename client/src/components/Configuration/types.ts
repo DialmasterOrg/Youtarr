@@ -49,6 +49,10 @@ export interface AutoRemovalDryRunResult {
       count: number;
       protectedCount: number;
     };
+    channelKeepRecent?: {
+      channelCount: number;
+      protectedCount: number;
+    };
     spaceStrategy: AutoRemovalDryRunPlanStrategy;
   };
   simulationTotals: {

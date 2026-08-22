@@ -94,6 +94,7 @@ See [Youtarr Downloads Folder Structure](YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md)
 | `<title>`            | Title with channel prefix                 |
 | `<plot>`             | Full description of video from YouTube    |
 | `<premiered>`        | Original upload/release date              |
+| `<year>`             | Year of the upload/release date           |
 | `<studio>`           | Channel name                              |
 | `<credits>`          | Channel name                              |
 | `<genre>`            | YouTube categories                        |

@@ -519,7 +519,9 @@ describe('ChannelSettingsModule', () => {
         video_quality: '1080',
         min_duration: 60,
         max_duration: 3600,
-        title_filter_regex: 'test.*'
+        title_filter_regex: 'test.*',
+        auto_removal_protected: 1,
+        auto_removal_keep_recent_count: 25
       };
       Channel.findOne.mockResolvedValue(channel);
 
@@ -531,7 +533,9 @@ describe('ChannelSettingsModule', () => {
         video_quality: '1080',
         min_duration: 60,
         max_duration: 3600,
-        title_filter_regex: 'test.*'
+        title_filter_regex: 'test.*',
+        auto_removal_protected: true,
+        auto_removal_keep_recent_count: 25
       });
     });
 
@@ -1019,6 +1023,84 @@ describe('ChannelSettingsModule', () => {
         expect(refreshed.auto_download_enabled_tabs).toBe('short,livestream');
       });
     });
+
+    test('updateChannelSettings persists a keep-recent count', async () => {
+      const channel = await Channel.findOne();
+
+      const result = await channelSettingsModule.updateChannelSettings('UC123456', {
+        auto_removal_keep_recent_count: 10
+      });
+
+      expect(channel.update).toHaveBeenCalledWith(
+        expect.objectContaining({ auto_removal_keep_recent_count: 10 })
+      );
+      expect(result.settings.auto_removal_keep_recent_count).toBe(10);
+    });
+
+    test('enabling protection clears a stored keep-recent count', async () => {
+      const channel = await Channel.findOne();
+      channel.auto_removal_keep_recent_count = 25;
+
+      const result = await channelSettingsModule.updateChannelSettings('UC123456', {
+        auto_removal_protected: true
+      });
+
+      expect(channel.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          auto_removal_protected: true,
+          auto_removal_keep_recent_count: null
+        })
+      );
+      expect(result.settings.auto_removal_protected).toBe(true);
+      expect(result.settings.auto_removal_keep_recent_count).toBeNull();
+    });
+
+    test('accepts protected true with an explicit null count in the same payload', async () => {
+      const result = await channelSettingsModule.updateChannelSettings('UC123456', {
+        auto_removal_protected: true,
+        auto_removal_keep_recent_count: null
+      });
+
+      expect(result.settings.auto_removal_protected).toBe(true);
+      expect(result.settings.auto_removal_keep_recent_count).toBeNull();
+    });
+
+    test('rejects a payload setting protection and a keep-recent count together', async () => {
+      const channel = await Channel.findOne();
+
+      await expect(
+        channelSettingsModule.updateChannelSettings('UC123456', {
+          auto_removal_protected: true,
+          auto_removal_keep_recent_count: 10
+        })
+      ).rejects.toThrow('auto_removal_keep_recent_count cannot be set while the channel is protected from auto-removal');
+      expect(channel.update).not.toHaveBeenCalled();
+    });
+
+    test('rejects a keep-recent count while the channel is already protected', async () => {
+      const channel = await Channel.findOne();
+      channel.auto_removal_protected = true;
+
+      await expect(
+        channelSettingsModule.updateChannelSettings('UC123456', {
+          auto_removal_keep_recent_count: 5
+        })
+      ).rejects.toThrow('auto_removal_keep_recent_count cannot be set while the channel is protected from auto-removal');
+      expect(channel.update).not.toHaveBeenCalled();
+    });
+
+    test('allows setting a keep-recent count while disabling protection in the same payload', async () => {
+      const channel = await Channel.findOne();
+      channel.auto_removal_protected = true;
+
+      const result = await channelSettingsModule.updateChannelSettings('UC123456', {
+        auto_removal_protected: false,
+        auto_removal_keep_recent_count: 5
+      });
+
+      expect(result.settings.auto_removal_protected).toBe(false);
+      expect(result.settings.auto_removal_keep_recent_count).toBe(5);
+    });
   });
 
   describe('moveChannelFolder', () => {
@@ -1406,6 +1488,29 @@ describe('ChannelSettingsModule', () => {
 
       expect(m3uGenerator.generateChannelM3UInBackground).not.toHaveBeenCalled();
       expect(m3uGenerator.deleteChannelM3UInBackground).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('auto-removal settings', () => {
+    test('validateAutoRemovalProtected rejects non-boolean values', () => {
+      expect(channelSettingsModule.validateAutoRemovalProtected('yes').valid).toBe(false);
+      expect(channelSettingsModule.validateAutoRemovalProtected(1).valid).toBe(false);
+      expect(channelSettingsModule.validateAutoRemovalProtected(true).valid).toBe(true);
+      expect(channelSettingsModule.validateAutoRemovalProtected(false).valid).toBe(true);
+    });
+
+    test('validateAutoRemovalKeepRecentCount accepts null and integers in range', () => {
+      expect(channelSettingsModule.validateAutoRemovalKeepRecentCount(null).valid).toBe(true);
+      expect(channelSettingsModule.validateAutoRemovalKeepRecentCount(1).valid).toBe(true);
+      expect(channelSettingsModule.validateAutoRemovalKeepRecentCount(10000).valid).toBe(true);
+    });
+
+    test('validateAutoRemovalKeepRecentCount rejects zero, negatives, floats, and out-of-range values', () => {
+      expect(channelSettingsModule.validateAutoRemovalKeepRecentCount(0).valid).toBe(false);
+      expect(channelSettingsModule.validateAutoRemovalKeepRecentCount(-3).valid).toBe(false);
+      expect(channelSettingsModule.validateAutoRemovalKeepRecentCount(2.5).valid).toBe(false);
+      expect(channelSettingsModule.validateAutoRemovalKeepRecentCount(10001).valid).toBe(false);
+      expect(channelSettingsModule.validateAutoRemovalKeepRecentCount('5').valid).toBe(false);
     });
   });
 });

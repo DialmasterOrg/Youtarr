@@ -217,6 +217,12 @@ This is a known Docker Desktop issue on Windows where mount points become corrup
    netstat -an | grep 3087
    ```
 
+### Asustor App Central: Stuck on an Old Version
+
+**Problem**: You installed Youtarr from App Central on an Asustor NAS, a newer Youtarr release exists, but pulling images via Docker or Portainer doesn't update anything.
+
+**Solution**: This is expected. The App Central package pins the exact Youtarr version in its docker-compose file, so the image tag doesn't change until the package maintainer publishes an updated package and Asustor approves it. That usually happens within a few days of a [GitHub release](https://github.com/DialmasterOrg/Youtarr/releases). Update through App Central when the new version appears there; your config, database, and videos are preserved. See the [Asustor guide](platforms/asustor.md) for details.
+
 ## Database Issues
 
 ### Table Corruption After Simultaneous Database and Youtarr Update

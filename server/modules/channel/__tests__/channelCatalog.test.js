@@ -84,6 +84,8 @@ describe('channelCatalog', () => {
           title_filter_regex: null,
           audio_format: null,
           terminated_at: null,
+          auto_removal_protected: false,
+          auto_removal_keep_recent_count: null,
         },
         {
           url: 'https://youtube.com/@channel2',
@@ -98,6 +100,8 @@ describe('channelCatalog', () => {
           title_filter_regex: null,
           audio_format: null,
           terminated_at: null,
+          auto_removal_protected: false,
+          auto_removal_keep_recent_count: null,
         }
       ]);
     });
@@ -185,6 +189,8 @@ describe('channelCatalog', () => {
             title_filter_regex: null,
             audio_format: null,
             terminated_at: null,
+            auto_removal_protected: false,
+            auto_removal_keep_recent_count: null,
           }
         ],
         total: 25,

@@ -63,6 +63,8 @@ describe('ChannelSettingsDialog', () => {
     skip_video_folder: null,
     m3u_enabled: false,
     m3u_sort_order: 'oldest_first',
+    auto_removal_protected: false,
+    auto_removal_keep_recent_count: null,
   };
 
   const mockSubfolders = ['__Sports', '__Music', '__Tech'];
@@ -105,7 +107,7 @@ describe('ChannelSettingsDialog', () => {
     mockUseConfig.mockReturnValue(buildUseConfigResult());
   });
 
-  async function openSettingsSection(sectionName: 'General' | 'Auto Download' | 'Filters' | 'Ratings') {
+  async function openSettingsSection(sectionName: 'General' | 'Auto Download' | 'Filters' | 'Ratings' | 'Auto-Removal') {
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: sectionName }));
     return user;
@@ -1935,6 +1937,118 @@ describe('ChannelSettingsDialog', () => {
       const body = JSON.parse(String(putCall![1]!.body));
       expect(body.m3u_enabled).toBe(true);
       expect(body.m3u_sort_order).toBe('newest_first');
+    });
+  });
+
+  describe('Auto-Removal section', () => {
+    test('renders protection toggle and keep-recent input', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
+      });
+
+      render(<ChannelSettingsDialog {...defaultProps} />);
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Auto-Removal' })).toBeInTheDocument();
+      });
+      await openSettingsSection('Auto-Removal');
+
+      expect(screen.getByLabelText('Protect this channel from auto-removal')).not.toBeChecked();
+      expect(screen.getByLabelText('Always keep newest downloads')).toBeEnabled();
+    });
+
+    test('disables the keep-recent input while full protection is enabled', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({
+          ...mockChannelSettings,
+          auto_removal_protected: true,
+        }),
+      });
+
+      render(<ChannelSettingsDialog {...defaultProps} />);
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Auto-Removal' })).toBeInTheDocument();
+      });
+      await openSettingsSection('Auto-Removal');
+
+      expect(screen.getByLabelText('Protect this channel from auto-removal')).toBeChecked();
+      expect(screen.getByLabelText('Always keep newest downloads')).toBeDisabled();
+    });
+
+    test('sends auto-removal fields in the PUT body on save', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce({
+            settings: {
+              ...mockChannelSettings,
+              auto_removal_protected: false,
+              auto_removal_keep_recent_count: 15,
+            },
+          }),
+        });
+
+      render(<ChannelSettingsDialog {...defaultProps} />);
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Auto-Removal' })).toBeInTheDocument();
+      });
+      const user = await openSettingsSection('Auto-Removal');
+
+      await user.type(screen.getByLabelText('Always keep newest downloads'), '15');
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+
+      await waitFor(() => {
+        expect(findChannelSettingsPutCall()).toBeDefined();
+      });
+      const [, init] = findChannelSettingsPutCall()!;
+      const body = JSON.parse(init!.body as string);
+      expect(body.auto_removal_protected).toBe(false);
+      expect(body.auto_removal_keep_recent_count).toBe(15);
+    });
+
+    test('enabling protection clears the keep-recent count and saves null', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce({
+            ...mockChannelSettings,
+            auto_removal_keep_recent_count: 25,
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce({
+            settings: {
+              ...mockChannelSettings,
+              auto_removal_protected: true,
+              auto_removal_keep_recent_count: null,
+            },
+          }),
+        });
+
+      render(<ChannelSettingsDialog {...defaultProps} />);
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Auto-Removal' })).toBeInTheDocument();
+      });
+      const user = await openSettingsSection('Auto-Removal');
+
+      expect(screen.getByLabelText('Always keep newest downloads')).toHaveValue(25);
+      await user.click(screen.getByLabelText('Protect this channel from auto-removal'));
+      expect(screen.getByLabelText('Always keep newest downloads')).toHaveValue(null);
+
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      await waitFor(() => {
+        expect(findChannelSettingsPutCall()).toBeDefined();
+      });
+      const [, init] = findChannelSettingsPutCall()!;
+      const body = JSON.parse(init!.body as string);
+      expect(body.auto_removal_protected).toBe(true);
+      expect(body.auto_removal_keep_recent_count).toBeNull();
     });
   });
 });

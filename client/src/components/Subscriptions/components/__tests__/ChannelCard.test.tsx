@@ -62,6 +62,15 @@ jest.mock('../chips', () => ({
       'data-terminated-at': terminatedAt,
     }, 'Terminated');
   },
+  ProtectedChip: function MockProtectedChip({ autoRemovalProtected, keepRecentCount }: any) {
+    const React = require('react');
+    if (!autoRemovalProtected && !keepRecentCount) return null;
+    return React.createElement('div', {
+      'data-testid': 'protected-chip',
+      'data-protected': autoRemovalProtected,
+      'data-keep-recent-count': keepRecentCount ?? undefined,
+    }, autoRemovalProtected ? 'Protected (All)' : `Protected (${keepRecentCount})`);
+  },
 }));
 
 describe('ChannelCard Component', () => {
@@ -216,6 +225,27 @@ describe('ChannelCard Component', () => {
         <ChannelCard {...defaultProps} channel={channelWithDuration} isMobile={true} />
       );
       expect(screen.getByTestId('duration-filter-chip')).toBeInTheDocument();
+    });
+
+    test('renders ProtectedChip for a fully protected channel', () => {
+      const protectedChannel = { ...mockChannel, auto_removal_protected: true };
+      renderWithProviders(
+        <ChannelCard {...defaultProps} channel={protectedChannel} />
+      );
+      expect(screen.getByTestId('protected-chip')).toHaveTextContent('Protected (All)');
+    });
+
+    test('passes the keep-recent count to ProtectedChip', () => {
+      const keepRecentChannel = { ...mockChannel, auto_removal_keep_recent_count: 25 };
+      renderWithProviders(
+        <ChannelCard {...defaultProps} channel={keepRecentChannel} />
+      );
+      expect(screen.getByTestId('protected-chip')).toHaveTextContent('Protected (25)');
+    });
+
+    test('does not render ProtectedChip without auto-removal settings', () => {
+      renderWithProviders(<ChannelCard {...defaultProps} />);
+      expect(screen.queryByTestId('protected-chip')).not.toBeInTheDocument();
     });
   });
 

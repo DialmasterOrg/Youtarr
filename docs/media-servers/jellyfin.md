@@ -80,6 +80,7 @@ Jellyfin reads NFO files containing:
 - **Title**: Video title with channel prefix
 - **Plot**: Full YouTube description
 - **Premiered**: Original upload date
+- **Year**: Upload year
 - **Studios**: Channel name
 - **Genres**: YouTube categories
 - **Tags**: Video keywords

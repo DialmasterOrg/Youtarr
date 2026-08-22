@@ -32,8 +32,8 @@ type SubfolderMode = 'global' | 'channel' | 'download';
 interface SubfolderAutocompleteProps {
   /** Current value (clean, without __ prefix). null = root (backwards compat), ##USE_GLOBAL_DEFAULT## = use default */
   value: string | null | undefined;
-  /** Callback when value changes */
-  onChange: (value: string | null) => void;
+  /** Callback when value changes. meta.isNewlyCreated is true when the value came from the Add Subfolder dialog */
+  onChange: (value: string | null, meta?: { isNewlyCreated?: boolean }) => void;
   /** List of existing subfolders (with __ prefix from API) */
   subfolders: string[];
   /** Global default subfolder for display purposes (without __ prefix) */
@@ -50,6 +50,8 @@ interface SubfolderAutocompleteProps {
   label?: string;
   /** Optional callback to persist a newly added subfolder (e.g. via API) */
   createSubfolder?: (name: string) => Promise<void>;
+  /** Whether to render the inline "Add Subfolder" action (default true). Set false when the parent provides its own add flow */
+  showAddAction?: boolean;
 }
 
 const ADD_NEW_SENTINEL = '__ADD_NEW__';
@@ -72,6 +74,7 @@ export function SubfolderAutocomplete({
   helperText,
   label = 'Subfolder',
   createSubfolder,
+  showAddAction = true,
 }: SubfolderAutocompleteProps) {
   // State for the Add Subfolder dialog
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -267,7 +270,7 @@ export function SubfolderAutocomplete({
   const handleAddSubfolder = (newName: string) => {
     // Optimistically show it immediately.
     setLocalSubfolders((prev) => [...prev, addSubfolderPrefix(newName)]);
-    onChange(newName);
+    onChange(newName, { isNewlyCreated: true });
     setAddDialogOpen(false);
     // Persist so it survives navigation and is reusable everywhere.
     if (createSubfolder) {
@@ -382,43 +385,47 @@ export function SubfolderAutocomplete({
           );
         })}
       </Select>
-      {/* "Add Subfolder" lives outside the Radix portal so it sits inside the
-          Dialog's DOM subtree and keeps pointer-events: auto even when a parent
-          Radix Dialog has set body pointer-events to none. */}
-      <button
-        type="button"
-        aria-label="Open add subfolder dialog"
-        onClick={() => { setIsOpen(false); setPendingAddDialog(true); }}
-        style={{
-          marginTop: 4,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          color: 'var(--primary)',
-          fontSize: '0.8rem',
-          fontWeight: 500,
-          padding: '2px 0',
-          pointerEvents: 'auto',
-        }}
-      >
-        <AddIcon size={14} style={{ color: 'var(--primary)' }} />
-        Add Subfolder
-      </button>
       {helperText && (
         <Typography variant="caption" color="text.secondary" style={{ marginTop: 4, display: 'block' }}>
           {helperText}
         </Typography>
       )}
+      {/* "Add Subfolder" lives outside the Radix portal so it sits inside the
+          Dialog's DOM subtree and keeps pointer-events: auto even when a parent
+          Radix Dialog has set body pointer-events to none. */}
+      {showAddAction && (
+        <button
+          type="button"
+          aria-label="Open add subfolder dialog"
+          onClick={() => { setIsOpen(false); setPendingAddDialog(true); }}
+          style={{
+            marginTop: 4,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: 'var(--primary)',
+            fontSize: '0.8rem',
+            fontWeight: 500,
+            padding: '2px 0',
+            pointerEvents: 'auto',
+          }}
+        >
+          <AddIcon size={14} style={{ color: 'var(--primary)' }} />
+          Add Subfolder
+        </button>
+      )}
       </div>
-      <AddSubfolderDialog
-        open={addDialogOpen}
-        onClose={() => setAddDialogOpen(false)}
-        onAdd={handleAddSubfolder}
-        existingSubfolders={allSubfolders}
-      />
+      {showAddAction && (
+        <AddSubfolderDialog
+          open={addDialogOpen}
+          onClose={() => setAddDialogOpen(false)}
+          onAdd={handleAddSubfolder}
+          existingSubfolders={allSubfolders}
+        />
+      )}
     </>
   );
 }

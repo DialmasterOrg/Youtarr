@@ -54,6 +54,8 @@ class ChannelMappers {
       title_filter_regex: channel.title_filter_regex || null,
       audio_format: channel.audio_format || null,
       terminated_at: channel.terminated_at || null,
+      auto_removal_protected: Boolean(channel.auto_removal_protected),
+      auto_removal_keep_recent_count: channel.auto_removal_keep_recent_count ?? null,
     };
 
     if (channel.default_rating != null) {

@@ -113,6 +113,18 @@ Channel.init(
       allowNull: false,
       defaultValue: 'oldest_first',
     },
+    auto_removal_protected: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      comment: 'When true, no videos from this channel are ever auto-removed',
+    },
+    auto_removal_keep_recent_count: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: null,
+      comment: 'Auto-removal always keeps this many of the channel\'s most recent downloads (null = disabled)',
+    },
     terminated_at: {
       type: DataTypes.DATE,
       allowNull: true,

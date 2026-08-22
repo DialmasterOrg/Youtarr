@@ -441,5 +441,40 @@ describe('NfoGenerator', () => {
       expect(nfoContent).toContain('<dateadded>');
       expect(nfoContent).not.toContain('<premiered>');
     });
+
+    it('should include year element derived from the upload date', () => {
+      const jsonData = {
+        title: 'Test Video',
+        upload_date: '20231225'
+      };
+
+      nfoGenerator.writeVideoNfoFile(mockVideoPath, jsonData);
+
+      const nfoContent = fs.writeFileSync.mock.calls[0][1];
+      expect(nfoContent).toContain('<year>2023</year>');
+    });
+
+    it('should omit year when upload_date is missing', () => {
+      const jsonData = {
+        title: 'No Upload Date Video'
+      };
+
+      nfoGenerator.writeVideoNfoFile(mockVideoPath, jsonData);
+
+      const nfoContent = fs.writeFileSync.mock.calls[0][1];
+      expect(nfoContent).not.toContain('<year>');
+    });
+
+    it('should omit year when upload_date is invalid', () => {
+      const jsonData = {
+        title: 'Test Video',
+        upload_date: 'invalid-date'
+      };
+
+      nfoGenerator.writeVideoNfoFile(mockVideoPath, jsonData);
+
+      const nfoContent = fs.writeFileSync.mock.calls[0][1];
+      expect(nfoContent).not.toContain('<year>');
+    });
   });
 });
