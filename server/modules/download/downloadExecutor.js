@@ -27,6 +27,7 @@ class DownloadExecutor {
     this.activityTimeoutMs = 30 * 60 * 1000; // 30 minutes of no activity (default)
     this.postProcessingTimeoutMs = 60 * 60 * 1000; // 60 minutes for post-processing operations
     this.maxAbsoluteTimeoutMs = 6 * 60 * 60 * 1000; // 6 hours maximum runtime
+    this.progressHeartbeatMs = 25 * 1000; // snapshot rebroadcast cadence while yt-dlp is quiet
     // Current process tracking for manual termination
     this.currentProcess = null;
     this.currentJobId = null;
@@ -252,6 +253,7 @@ class DownloadExecutor {
         errorTracker,
         timeoutController,
         cookiesEnabled: Boolean(configModule.getCookiesPath()),
+        heartbeatIntervalMs: this.progressHeartbeatMs,
       });
 
       // Emit initial state so the UI reflects the job start immediately
@@ -266,6 +268,9 @@ class DownloadExecutor {
           clearPreviousSummary: true
         }
       );
+
+      // Stopped by router.dispose() when the run ends.
+      router.startHeartbeat();
 
       proc.stdout.on('data', (chunk) => router.handleStdoutChunk(chunk));
       proc.stderr.on('data', (data) => router.handleStderrChunk(data));

@@ -172,9 +172,10 @@ describe('DownloadProgress', () => {
       { state: 'downloading_subtitles', message: 'Downloading subtitles...' },
       { state: 'downloading_thumbnail', message: 'Downloading thumbnail...' },
       { state: 'processing_metadata', message: 'Processing metadata...' },
-      { state: 'merging', message: 'Merging formats...' },
+      { state: 'merging', message: 'Merging formats... this can take a while for large files' },
       { state: 'metadata', message: 'Adding metadata...' },
-      { state: 'processing', message: 'Processing file...' },
+      { state: 'processing', message: 'Processing file... this can take a while for large files' },
+      { state: 'extracting_audio', message: 'Extracting audio...' },
       { state: 'complete', message: 'Download completed' },
     ];
 
@@ -1031,7 +1032,7 @@ describe('DownloadProgress', () => {
 
     const processCallback = getProcessCallback();
 
-    const indeterminateStates = ['merging', 'metadata', 'processing', 'preparing', 'preparing_subtitles', 'processing_metadata'];
+    const indeterminateStates = ['merging', 'metadata', 'processing', 'extracting_audio', 'preparing', 'preparing_subtitles', 'processing_metadata'];
 
     for (const state of indeterminateStates) {
       await act(async () => {
@@ -1280,7 +1281,7 @@ describe('DownloadProgress', () => {
 
     const processCallback = getProcessCallback();
 
-    const nonDownloadStates = ['preparing', 'preparing_subtitles', 'processing_metadata', 'merging', 'metadata', 'processing'];
+    const nonDownloadStates = ['preparing', 'preparing_subtitles', 'processing_metadata', 'merging', 'metadata', 'processing', 'extracting_audio'];
 
     for (const state of nonDownloadStates) {
       await act(async () => {
@@ -1795,7 +1796,9 @@ describe('DownloadProgress', () => {
         screen.queryByText('No download activity at the moment')
       ).not.toBeInTheDocument();
       expect(screen.getByText('Channel update is running')).toBeInTheDocument();
-      expect(screen.getByText('Waiting for progress updates...')).toBeInTheDocument();
+      expect(
+        screen.getByText('The download is still running. Progress updates will appear here shortly.')
+      ).toBeInTheDocument();
     });
 
     test('shows queued state instead of the empty placeholder when only pending jobs exist', () => {
@@ -3127,7 +3130,8 @@ describe('DownloadProgress', () => {
         'processing_metadata',
         'merging',
         'metadata',
-        'processing'
+        'processing',
+        'extracting_audio'
       ];
 
       for (const state of activeStates) {

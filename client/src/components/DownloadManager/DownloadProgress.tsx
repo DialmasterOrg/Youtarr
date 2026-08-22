@@ -189,9 +189,10 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
       case 'downloading_audio': return 'Downloading audio stream...';
       case 'downloading_thumbnail': return 'Downloading thumbnail...';
       case 'processing_metadata': return 'Processing metadata...';
-      case 'merging': return 'Merging formats...';
+      case 'merging': return 'Merging formats... this can take a while for large files';
       case 'metadata': return 'Adding metadata...';
-      case 'processing': return 'Processing file...';
+      case 'processing': return 'Processing file... this can take a while for large files';
+      case 'extracting_audio': return 'Extracting audio...';
       case 'complete': return 'Download completed';
       case 'terminated': return 'Download terminated';
       case 'error': return 'Download failed';
@@ -690,6 +691,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                   currentProgress.state === 'merging' ||
                   currentProgress.state === 'metadata' ||
                   currentProgress.state === 'processing' ||
+                  currentProgress.state === 'extracting_audio' ||
                   currentProgress.state === 'preparing' ||
                   currentProgress.state === 'preparing_subtitles' ||
                   currentProgress.state === 'processing_metadata'
@@ -782,7 +784,9 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                     : `${pendingJobs.length} download jobs are queued`}
               </Typography>
               <Typography variant="caption" className="mt-2 block">
-                {activeJob ? 'Waiting for progress updates...' : 'Starting soon...'}
+                {activeJob
+                  ? 'The download is still running. Progress updates will appear here shortly.'
+                  : 'Starting soon...'}
               </Typography>
             </Box>
           </Box>

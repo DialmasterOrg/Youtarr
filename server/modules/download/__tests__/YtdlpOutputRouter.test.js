@@ -427,6 +427,78 @@ describe('YtdlpOutputRouter', () => {
     });
   });
 
+  describe('heartbeat', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+      jest.clearAllMocks();
+    });
+
+    afterEach(() => {
+      router.dispose();
+      jest.useRealTimers();
+    });
+
+    it('rebroadcasts the current monitor snapshot after a quiet interval', () => {
+      monitor.snapshot.mockReturnValue({ state: 'merging' });
+
+      router.startHeartbeat();
+      jest.advanceTimersByTime(25000);
+
+      expect(monitor.snapshot).toHaveBeenCalledWith();
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
+        'broadcast',
+        null,
+        'download',
+        'downloadProgress',
+        { progress: { state: 'merging' } }
+      );
+    });
+
+    it('does not rebroadcast while output was recently emitted', () => {
+      router.startHeartbeat();
+
+      jest.advanceTimersByTime(20000);
+      router.emitProgressMessage('[Merger] Merging formats into "out.mp4"', { state: 'merging' });
+      MessageEmitter.emitMessage.mockClear();
+
+      jest.advanceTimersByTime(5000);
+
+      expect(MessageEmitter.emitMessage).not.toHaveBeenCalled();
+    });
+
+    it('resumes heartbeating once the quiet stretch reaches a full interval', () => {
+      router.startHeartbeat();
+
+      jest.advanceTimersByTime(20000);
+      router.emitProgressMessage('[Merger] Merging formats into "out.mp4"', { state: 'merging' });
+      MessageEmitter.emitMessage.mockClear();
+
+      // Ticks at 25s (5s of silence, skipped) and 50s (30s of silence, emits)
+      jest.advanceTimersByTime(30000);
+
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('dispose stops the heartbeat', () => {
+      router.startHeartbeat();
+      router.dispose();
+
+      jest.advanceTimersByTime(120000);
+
+      expect(MessageEmitter.emitMessage).not.toHaveBeenCalled();
+    });
+
+    it('restarting the heartbeat does not leak the previous interval', () => {
+      router.startHeartbeat();
+      router.startHeartbeat();
+      router.dispose();
+
+      jest.advanceTimersByTime(120000);
+
+      expect(MessageEmitter.emitMessage).not.toHaveBeenCalled();
+    });
+  });
+
   describe('dispose', () => {
     it('clears the flush timer and emits the pending message', () => {
       jest.useFakeTimers();

@@ -367,6 +367,14 @@ describe('DownloadProgressMonitor', () => {
         expect(monitor.determineState('[MoveFiles] Moving file')).toBe('processing');
       });
 
+      it('should identify extracting_audio state', () => {
+        expect(monitor.determineState('[ExtractAudio] Destination: /path/file.mp3')).toBe('extracting_audio');
+      });
+
+      it('should identify processing state for chapter modification', () => {
+        expect(monitor.determineState('[ModifyChapters] Removing chapters matching SponsorBlock segments')).toBe('processing');
+      });
+
       it('should identify complete state', () => {
         expect(monitor.determineState('Completed: file.mp4')).toBe('complete');
       });
