@@ -7,7 +7,7 @@ const DOWNLOAD_TIME_SQL =
   'COALESCE(Videos.last_downloaded_at, Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, \'%Y%m%d\'))';
 
 // Read-only candidate queries for auto-removal (the watched strategy and
-// the keep-most-recent guard); deletion itself stays in videoDeletionModule.
+// the keep-most-recent guard, including per-channel keep-recent); deletion itself stays in videoDeletionModule.
 class AutoRemovalQueries {
   /**
    * Ids of the N most recently downloaded videos (not marked removed).
@@ -30,8 +30,10 @@ class AutoRemovalQueries {
         FROM Videos
         LEFT JOIN JobVideos ON Videos.id = JobVideos.video_id
         LEFT JOIN Jobs ON Jobs.id = JobVideos.job_id
+        LEFT JOIN channels AS ProtChannel ON ProtChannel.channel_id = Videos.channel_id AND ProtChannel.enabled = 1
         WHERE Videos.removed = 0
           AND Videos.protected = 0
+          AND COALESCE(ProtChannel.auto_removal_protected, 0) = 0
         GROUP BY Videos.id
         HAVING timeCreated IS NOT NULL
         ORDER BY timeCreated DESC
@@ -46,6 +48,56 @@ class AutoRemovalQueries {
       return rows.map((row) => row.id);
     } catch (error) {
       logger.error({ err: error, count }, '[Auto-Removal] Error getting most recent video ids');
+      throw error;
+    }
+  }
+
+  /**
+   * Per-channel keep-recent guard: for each enabled, unprotected channel with a
+   * keep-recent count, the ids of its N most recently downloaded videos.
+   * Protected videos never consume a slot, matching the global guard. Errors
+   * propagate so callers can fail closed.
+   * @returns {Promise<{channelCount: number, ids: number[]}>}
+   */
+  async getChannelKeepRecentIds() {
+    const { Sequelize, sequelize } = require('../db.js');
+
+    try {
+      const channels = await sequelize.query(
+        `SELECT channel_id, auto_removal_keep_recent_count AS keepCount
+         FROM channels
+         WHERE auto_removal_keep_recent_count > 0
+           AND auto_removal_protected = 0
+           AND enabled = 1
+           AND channel_id IS NOT NULL`,
+        { type: Sequelize.QueryTypes.SELECT }
+      );
+
+      const ids = [];
+      for (const channel of channels) {
+        const query = `
+          SELECT Videos.id, MAX(${DOWNLOAD_TIME_SQL}) AS timeCreated
+          FROM Videos
+          LEFT JOIN JobVideos ON Videos.id = JobVideos.video_id
+          LEFT JOIN Jobs ON Jobs.id = JobVideos.job_id
+          WHERE Videos.removed = 0
+            AND Videos.protected = 0
+            AND Videos.channel_id = :channelId
+          GROUP BY Videos.id
+          HAVING timeCreated IS NOT NULL
+          ORDER BY timeCreated DESC
+          LIMIT :count
+        `;
+        const rows = await sequelize.query(query, {
+          replacements: { channelId: channel.channel_id, count: channel.keepCount },
+          type: Sequelize.QueryTypes.SELECT
+        });
+        rows.forEach((row) => ids.push(row.id));
+      }
+
+      return { channelCount: channels.length, ids };
+    } catch (error) {
+      logger.error({ err: error }, '[Auto-Removal] Error getting per-channel keep-recent video ids');
       throw error;
     }
   }
@@ -95,8 +147,10 @@ class AutoRemovalQueries {
         FROM Videos
         LEFT JOIN JobVideos ON Videos.id = JobVideos.video_id
         LEFT JOIN Jobs ON Jobs.id = JobVideos.job_id
+        LEFT JOIN channels AS ProtChannel ON ProtChannel.channel_id = Videos.channel_id AND ProtChannel.enabled = 1
         WHERE Videos.removed = 0
           AND Videos.protected = 0
+          AND COALESCE(ProtChannel.auto_removal_protected, 0) = 0
           AND ${watched.sql}
 ${excludeClause}        GROUP BY Videos.id
 ${havingClause}        ORDER BY timeCreated ASC

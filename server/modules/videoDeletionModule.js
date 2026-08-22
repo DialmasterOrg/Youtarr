@@ -328,8 +328,10 @@ class VideoDeletionModule {
         FROM Videos
         LEFT JOIN JobVideos ON Videos.id = JobVideos.video_id
         LEFT JOIN Jobs ON Jobs.id = JobVideos.job_id
+        LEFT JOIN channels AS ProtChannel ON ProtChannel.channel_id = Videos.channel_id AND ProtChannel.enabled = 1
         WHERE Videos.removed = 0
           AND Videos.protected = 0
+          AND COALESCE(ProtChannel.auto_removal_protected, 0) = 0
           AND COALESCE(Videos.last_downloaded_at, Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, '%Y%m%d')) IS NOT NULL
           AND COALESCE(Videos.last_downloaded_at, Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, '%Y%m%d')) < DATE_SUB(NOW(), INTERVAL :ageInDays DAY)
 ${excludeClause}        ORDER BY timeCreated ASC
@@ -378,8 +380,10 @@ ${excludeClause}        ORDER BY timeCreated ASC
         FROM Videos
         LEFT JOIN JobVideos ON Videos.id = JobVideos.video_id
         LEFT JOIN Jobs ON Jobs.id = JobVideos.job_id
+        LEFT JOIN channels AS ProtChannel ON ProtChannel.channel_id = Videos.channel_id AND ProtChannel.enabled = 1
         WHERE Videos.removed = 0
           AND Videos.protected = 0
+          AND COALESCE(ProtChannel.auto_removal_protected, 0) = 0
           AND COALESCE(Videos.last_downloaded_at, Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, '%Y%m%d')) IS NOT NULL
 ${excludeClause}        ORDER BY timeCreated ASC
         LIMIT :limit
@@ -522,6 +526,10 @@ ${excludeClause}        ORDER BY timeCreated ASC
           count: keepRecentCount,
           protectedCount: 0
         },
+        channelKeepRecent: {
+          channelCount: 0,
+          protectedCount: 0
+        },
         spaceStrategy: {
           enabled: false,
           threshold: config.autoRemovalFreeSpaceThreshold !== undefined && config.autoRemovalFreeSpaceThreshold !== null
@@ -581,6 +589,26 @@ ${excludeClause}        ORDER BY timeCreated ASC
         result.success = false;
         return result;
       }
+    }
+
+    // Per-channel keep-recent guard (channel settings). Runs regardless of the
+    // global count; fails closed for the same reason the global guard does.
+    try {
+      const channelKeep = await autoRemovalQueries.getChannelKeepRecentIds();
+      result.plan.channelKeepRecent.channelCount = channelKeep.channelCount;
+      result.plan.channelKeepRecent.protectedCount = channelKeep.ids.length;
+      if (channelKeep.ids.length > 0) {
+        keepRecentIds = Array.from(new Set([...keepRecentIds, ...channelKeep.ids]));
+        logger.info(
+          { channelCount: channelKeep.channelCount, protectedCount: channelKeep.ids.length },
+          '[Auto-Removal] Protecting per-channel most recent downloads from cleanup'
+        );
+      }
+    } catch (error) {
+      logger.error({ err: error }, '[Auto-Removal] Could not determine per-channel protected downloads, aborting cleanup');
+      result.errors.push('Could not determine per-channel protected downloads; cleanup aborted for safety');
+      result.success = false;
+      return result;
     }
 
     // Age-based cleanup

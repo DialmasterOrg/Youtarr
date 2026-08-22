@@ -552,6 +552,13 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *               m3u_sort_order:
    *                 type: string
    *                 enum: [oldest_first, newest_first]
+   *               auto_removal_protected:
+   *                 type: boolean
+   *                 description: Exclude every video of this channel from auto-removal while the channel is subscribed. Setting true clears auto_removal_keep_recent_count.
+   *               auto_removal_keep_recent_count:
+   *                 type: integer
+   *                 nullable: true
+   *                 description: Auto-removal always keeps this many of the channel's most recent downloads. Mutually exclusive with auto_removal_protected; rejected while the channel is protected.
    *     responses:
    *       200:
    *         description: Settings updated successfully

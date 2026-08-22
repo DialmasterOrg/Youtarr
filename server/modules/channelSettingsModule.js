@@ -223,6 +223,33 @@ class ChannelSettingsModule {
   }
 
   /**
+   * Validate auto_removal_protected setting
+   * @param {*} value
+   * @returns {Object} - { valid: boolean, error?: string }
+   */
+  validateAutoRemovalProtected(value) {
+    if (typeof value !== 'boolean') {
+      return { valid: false, error: 'Invalid auto_removal_protected: must be a boolean' };
+    }
+    return { valid: true };
+  }
+
+  /**
+   * Validate auto_removal_keep_recent_count setting
+   * @param {*} value
+   * @returns {Object} - { valid: boolean, error?: string }
+   */
+  validateAutoRemovalKeepRecentCount(value) {
+    if (value === null || value === undefined) {
+      return { valid: true };
+    }
+    if (!Number.isInteger(value) || value < 1 || value > 10000) {
+      return { valid: false, error: 'auto_removal_keep_recent_count must be an integer between 1 and 10000, or null' };
+    }
+    return { valid: true };
+  }
+
+  /**
    * Validate/normalize a channel default rating.
    * @param {string|null} defaultRating - Default rating to validate
    * @returns {Object} - { valid: boolean, value?: (string|null), error?: string }
@@ -512,6 +539,8 @@ class ChannelSettingsModule {
       skip_video_folder: channel.skip_video_folder,
       m3u_enabled: Boolean(channel.m3u_enabled),
       m3u_sort_order: channel.m3u_sort_order || 'oldest_first',
+      auto_removal_protected: Boolean(channel.auto_removal_protected),
+      auto_removal_keep_recent_count: channel.auto_removal_keep_recent_count ?? null,
       auto_download_enabled_tabs: channel.auto_download_enabled_tabs,
       detected_tabs: detectedTabs,
       hidden_tabs: Array.from(hiddenTabsSet),
@@ -669,6 +698,32 @@ class ChannelSettingsModule {
       }
     }
 
+    if (settings.auto_removal_protected !== undefined) {
+      const validation = this.validateAutoRemovalProtected(settings.auto_removal_protected);
+      if (!validation.valid) {
+        throw new Error(validation.error);
+      }
+    }
+    if (settings.auto_removal_keep_recent_count !== undefined) {
+      const validation = this.validateAutoRemovalKeepRecentCount(settings.auto_removal_keep_recent_count);
+      if (!validation.valid) {
+        throw new Error(validation.error);
+      }
+    }
+
+    // Full protection and a keep-recent count are mutually exclusive: the
+    // count is meaningless while every video is protected.
+    const effectiveAutoRemovalProtected = settings.auto_removal_protected !== undefined
+      ? settings.auto_removal_protected
+      : Boolean(channel.auto_removal_protected);
+    if (
+      effectiveAutoRemovalProtected &&
+      settings.auto_removal_keep_recent_count !== undefined &&
+      settings.auto_removal_keep_recent_count !== null
+    ) {
+      throw new Error('auto_removal_keep_recent_count cannot be set while the channel is protected from auto-removal');
+    }
+
     // Validate hidden_tabs if provided
     let normalizedHiddenTabs = null;
     if (settings.hidden_tabs !== undefined) {
@@ -742,6 +797,16 @@ class ChannelSettingsModule {
     }
     if (settings.m3u_sort_order !== undefined) {
       updateData.m3u_sort_order = settings.m3u_sort_order;
+    }
+    if (settings.auto_removal_protected !== undefined) {
+      updateData.auto_removal_protected = settings.auto_removal_protected;
+    }
+    if (settings.auto_removal_keep_recent_count !== undefined) {
+      updateData.auto_removal_keep_recent_count = settings.auto_removal_keep_recent_count;
+    }
+    // Conflicting payloads were rejected above, so this only clears a stored count.
+    if (settings.auto_removal_protected === true) {
+      updateData.auto_removal_keep_recent_count = null;
     }
     if (normalizedAutoDownloadTabs !== null) {
       updateData.auto_download_enabled_tabs = normalizedAutoDownloadTabs;
@@ -842,6 +907,8 @@ class ChannelSettingsModule {
         skip_video_folder: updatedChannel.skip_video_folder,
         m3u_enabled: Boolean(updatedChannel.m3u_enabled),
         m3u_sort_order: updatedChannel.m3u_sort_order || 'oldest_first',
+        auto_removal_protected: Boolean(updatedChannel.auto_removal_protected),
+        auto_removal_keep_recent_count: updatedChannel.auto_removal_keep_recent_count ?? null,
         auto_download_enabled_tabs: updatedChannel.auto_download_enabled_tabs,
         detected_tabs: detectedTabsAfter,
         hidden_tabs: hiddenTabsAfter,

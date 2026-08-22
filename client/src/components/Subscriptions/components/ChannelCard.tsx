@@ -2,7 +2,7 @@ import React from 'react';
 import { Avatar, Card, CardActionArea, CardContent, Chip, Tooltip, Typography } from '../../ui';
 import { Delete as DeleteIcon, Image as ImageIcon, Folder as FolderIcon } from '../../../lib/icons';
 import { Channel } from '../../../types/Channel';
-import { QualityChip, AutoDownloadChips, DurationFilterChip, TitleFilterChip, DownloadFormatConfigIndicator, TerminatedChip } from './chips';
+import { QualityChip, AutoDownloadChips, DurationFilterChip, TitleFilterChip, DownloadFormatConfigIndicator, TerminatedChip, ProtectedChip } from './chips';
 
 interface ChannelCardProps {
     channel: Channel;
@@ -145,7 +145,11 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
                                 <Typography variant="subtitle1" fontWeight={600} noWrap>
                                     {channel.uploader || 'Unknown Channel'}
                                 </Typography>
-                                <TerminatedChip terminatedAt={channel.terminated_at} />
+                                {channel.terminated_at && (
+                                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                                        <TerminatedChip terminatedAt={channel.terminated_at} />
+                                    </div>
+                                )}
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                                 <FolderIcon size={16} style={{ color: 'var(--muted-foreground)' }} data-testid="FolderIcon" />
@@ -183,6 +187,10 @@ const CardDetails: React.FC<CardDetailsProps> = ({ channel, isMobile, onRegexCli
                     availableTabs={channel.available_tabs}
                     autoDownloadTabs={channel.auto_download_enabled_tabs}
                     isMobile={isMobile}
+                />
+                <ProtectedChip
+                    autoRemovalProtected={channel.auto_removal_protected}
+                    keepRecentCount={channel.auto_removal_keep_recent_count}
                 />
             </div>
         </div>

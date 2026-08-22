@@ -17,4 +17,6 @@ export interface Channel {
   audio_format?: string | null;
   default_rating?: string | null;
   terminated_at?: string | null;
+  auto_removal_protected?: boolean;
+  auto_removal_keep_recent_count?: number | null;
 }

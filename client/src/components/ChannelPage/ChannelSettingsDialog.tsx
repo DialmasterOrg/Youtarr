@@ -28,7 +28,7 @@ import {
   Tabs,
   Chip,
 } from '../ui';
-import { CheckCircle as CheckCircleIcon, XCircle as CancelIcon, Info as InfoIcon, Copy as ContentCopyIcon, Settings as SettingsIcon, Download as DownloadIcon, Filter as FilterAltIcon, Shield as RatingIcon } from '../../lib/icons';
+import { CheckCircle as CheckCircleIcon, XCircle as CancelIcon, Info as InfoIcon, Copy as ContentCopyIcon, Settings as SettingsIcon, Download as DownloadIcon, Filter as FilterAltIcon, Shield as RatingIcon, ShieldCheck as AutoRemovalIcon } from '../../lib/icons';
 import useMediaQuery from '../../hooks/useMediaQuery';
 import { useConfig } from '../../hooks/useConfig';
 import { useSubfolders } from '../../hooks/useSubfolders';
@@ -59,6 +59,8 @@ interface ChannelSettings {
   hidden_tabs: string[];
   m3u_enabled: boolean;
   m3u_sort_order: M3uSortOrder;
+  auto_removal_protected: boolean;
+  auto_removal_keep_recent_count: number | null;
 }
 
 interface ChannelTabsState {
@@ -143,6 +145,8 @@ function ChannelSettingsDialog({
     hidden_tabs: [],
     m3u_enabled: false,
     m3u_sort_order: 'oldest_first',
+    auto_removal_protected: false,
+    auto_removal_keep_recent_count: null,
   });
   const [originalSettings, setOriginalSettings] = useState<ChannelSettings>({
     sub_folder: null,
@@ -157,6 +161,8 @@ function ChannelSettingsDialog({
     hidden_tabs: [],
     m3u_enabled: false,
     m3u_sort_order: 'oldest_first',
+    auto_removal_protected: false,
+    auto_removal_keep_recent_count: null,
   });
   const [detectedTabs, setDetectedTabs] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -173,6 +179,7 @@ function ChannelSettingsDialog({
   // Duration input state (in minutes for UI convenience)
   const [minDurationMinutes, setMinDurationMinutes] = useState<string>('');
   const [maxDurationMinutes, setMaxDurationMinutes] = useState<string>('');
+  const [keepRecentInput, setKeepRecentInput] = useState<string>('');
 
   // Preview state
   const [previewResult, setPreviewResult] = useState<FilterPreviewResult | null>(null);
@@ -189,7 +196,8 @@ function ChannelSettingsDialog({
   const sections = [
     { id: 'general', label: 'General', icon: <SettingsIcon size={18} /> },
     { id: 'filters', label: 'Filters', icon: <FilterAltIcon size={18} /> },
-    { id: 'ratings', label: 'Ratings', icon: <RatingIcon size={18} /> }
+    { id: 'ratings', label: 'Ratings', icon: <RatingIcon size={18} /> },
+    { id: 'autoremoval', label: 'Auto-Removal', icon: <AutoRemovalIcon size={18} /> }
   ];
 
   useEffect(() => {
@@ -244,6 +252,11 @@ function ChannelSettingsDialog({
           hidden_tabs: Array.isArray(settingsData.hidden_tabs) ? settingsData.hidden_tabs : [],
           m3u_enabled: settingsData.m3u_enabled === true,
           m3u_sort_order: toM3uSortOrder(settingsData.m3u_sort_order),
+          auto_removal_protected: settingsData.auto_removal_protected === true,
+          auto_removal_keep_recent_count:
+            typeof settingsData.auto_removal_keep_recent_count === 'number'
+              ? settingsData.auto_removal_keep_recent_count
+              : null,
         };
         setSettings(loadedSettings);
         setOriginalSettings(loadedSettings);
@@ -256,6 +269,11 @@ function ChannelSettingsDialog({
         if (settingsData.max_duration) {
           setMaxDurationMinutes(String(Math.floor(settingsData.max_duration / 60)));
         }
+        setKeepRecentInput(
+          typeof settingsData.auto_removal_keep_recent_count === 'number'
+            ? String(settingsData.auto_removal_keep_recent_count)
+            : ''
+        );
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load settings');
       } finally {
@@ -290,7 +308,9 @@ function ChannelSettingsDialog({
           skip_video_folder: settings.skip_video_folder,
           hidden_tabs: settings.hidden_tabs,
           m3u_enabled: settings.m3u_enabled,
-          m3u_sort_order: settings.m3u_sort_order
+          m3u_sort_order: settings.m3u_sort_order,
+          auto_removal_protected: settings.auto_removal_protected,
+          auto_removal_keep_recent_count: settings.auto_removal_keep_recent_count
         })
       });
 
@@ -339,6 +359,10 @@ function ChannelSettingsDialog({
         hidden_tabs: resultHiddenTabs,
         m3u_enabled: result?.settings?.m3u_enabled ?? settings.m3u_enabled,
         m3u_sort_order: toM3uSortOrder(result?.settings?.m3u_sort_order ?? settings.m3u_sort_order),
+        auto_removal_protected: result?.settings?.auto_removal_protected ?? settings.auto_removal_protected,
+        auto_removal_keep_recent_count: result?.settings && Object.prototype.hasOwnProperty.call(result.settings, 'auto_removal_keep_recent_count')
+          ? result.settings.auto_removal_keep_recent_count
+          : settings.auto_removal_keep_recent_count,
       };
 
       setSettings(updatedSettings);
@@ -391,6 +415,8 @@ function ChannelSettingsDialog({
            settings.skip_video_folder !== originalSettings.skip_video_folder ||
            settings.m3u_enabled !== originalSettings.m3u_enabled ||
            settings.m3u_sort_order !== originalSettings.m3u_sort_order ||
+           settings.auto_removal_protected !== originalSettings.auto_removal_protected ||
+           settings.auto_removal_keep_recent_count !== originalSettings.auto_removal_keep_recent_count ||
            tabsChanged;
   };
 
@@ -483,6 +509,17 @@ function ChannelSettingsDialog({
           max_duration: value ? parseInt(value) * 60 : null
         });
       }
+    }
+  };
+
+  const handleKeepRecentChange = (value: string) => {
+    if (value === '' || /^[1-9]\d*$/.test(value)) {
+      setKeepRecentInput(value);
+      const parsed = parseInt(value, 10);
+      setSettings({
+        ...settings,
+        auto_removal_keep_recent_count: value && parsed > 0 ? parsed : null
+      });
     }
   };
 
@@ -902,6 +939,60 @@ function ChannelSettingsDialog({
           </div>
         );
       }
+      case 'autoremoval':
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <Typography variant="subtitle2" gutterBottom style={{ fontWeight: 600 }}>
+              Auto-Removal Protection
+            </Typography>
+            <Alert severity="info">
+              <Typography variant="body2">
+                These settings limit what the automatic video cleanup (Settings -&gt; Auto-Removal)
+                may delete from this channel. Manual deletion is unaffected.
+              </Typography>
+            </Alert>
+            <div>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={settings.auto_removal_protected}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      // Full protection supersedes the keep-recent count.
+                      setSettings({
+                        ...settings,
+                        auto_removal_protected: checked,
+                        auto_removal_keep_recent_count: checked ? null : settings.auto_removal_keep_recent_count
+                      });
+                      if (checked) {
+                        setKeepRecentInput('');
+                      }
+                    }}
+                  />
+                }
+                label="Protect this channel from auto-removal"
+              />
+              <Typography variant="caption" color="text.secondary" className="block">
+                When enabled, no videos from this channel are ever deleted automatically.
+              </Typography>
+            </div>
+            <TextField
+              label="Always keep newest downloads"
+              type="number"
+              value={keepRecentInput}
+              onChange={(e) => handleKeepRecentChange(e.target.value)}
+              placeholder="No limit"
+              disabled={settings.auto_removal_protected}
+              fullWidth
+              size="small"
+              inputProps={{ min: 1, max: 10000 }}
+              InputLabelProps={{ shrink: true }}
+              helperText={settings.auto_removal_protected
+                ? 'Cleared while the whole channel is protected.'
+                : "Auto-removal always keeps this many of the channel's most recently downloaded videos. Leave empty for no per-channel limit."}
+            />
+          </div>
+        );
       default:
         return null;
     }

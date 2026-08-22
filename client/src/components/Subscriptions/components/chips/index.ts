@@ -5,3 +5,4 @@ export { default as DurationFilterChip } from './DurationFilterChip';
 export { default as TitleFilterChip } from './TitleFilterChip';
 export { default as DownloadFormatConfigIndicator } from './DownloadFormatConfigIndicator';
 export { default as TerminatedChip } from './TerminatedChip';
+export { default as ProtectedChip } from './ProtectedChip';
