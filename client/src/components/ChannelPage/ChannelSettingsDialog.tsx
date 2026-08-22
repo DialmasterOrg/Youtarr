@@ -197,6 +197,7 @@ function ChannelSettingsDialog({
     { id: 'general', label: 'General', icon: <SettingsIcon size={18} /> },
     { id: 'filters', label: 'Filters', icon: <FilterAltIcon size={18} /> },
     { id: 'ratings', label: 'Ratings', icon: <RatingIcon size={18} /> },
+    { id: 'tags', label: 'Tags', icon: <RatingIcon size={18} /> },
     { id: 'autoremoval', label: 'Auto-Removal', icon: <AutoRemovalIcon size={18} /> }
   ];
 
@@ -935,6 +936,37 @@ function ChannelSettingsDialog({
                 rating={effectiveRatingLabel}
                 size="small"
               />
+            </div>
+          </div>
+        );
+      }
+      case 'tags': {
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <Typography variant="subtitle2" gutterBottom style={{ fontWeight: 600 }}>
+              Video Tags
+            </Typography>
+            <Alert severity="info">
+              <Typography variant="body2">
+                Set a default tag additional to the found tags for videos from this channel.
+              </Typography>
+            </Alert>
+            <TextField
+                  label='Video Tags (multiple should be separated by "|")'
+                  value={settings.title_filter_regex || ''}
+                  onChange={(e) => setSettings({
+                    ...settings,
+                    title_filter_regex: e.target.value || null
+                  })}
+                  placeholder="e.g., (?i)podcast|interview"
+                  fullWidth
+                  size="small"
+                  InputLabelProps={{ shrink: true }}
+                />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <Typography variant="caption" color="text.secondary">
+                These can be useful in Jellyfin for organization and parental controls.
+              </Typography>
             </div>
           </div>
         );
