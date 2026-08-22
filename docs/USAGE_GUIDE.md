@@ -26,7 +26,7 @@ This guide provides step-by-step instructions for common tasks in Youtarr. After
 Download specific YouTube videos manually without subscribing to channels.
 
 1. **Navigate to the Downloads page**
-   - Click "Manage Downloads" in the navigation menu
+   - Click "Downloads" in the navigation menu
 
 2. **Paste YouTube URLs**
    - Paste a single YouTube URL into the field and press **Enter** or click the **+** icon to add it
@@ -35,7 +35,7 @@ Download specific YouTube videos manually without subscribing to channels.
 
 3. **Customize download settings** (optional)
    - Choose a specific resolution for this download, or leave it at the default to use your global quality setting
-   - Enable **Flat file structure (no video subfolders)** to download files directly into the channel folder without creating individual video subfolders
+   - Use the **Video File Structure** select (under **File Structure Override**) to force flat files (no video subfolders) or individual video subfolders for this download; the default applies each channel's own settings
 
 4. **Click "Start Download"**
    - The download will begin immediately
@@ -50,8 +50,7 @@ Subscribe to YouTube channels to automatically download new videos as they're pu
    - Click "Channels & Playlists" in the navigation menu
 
 2. **Add a channel**
-   - Click the "Add Channel" button
-   - Enter the channel URL or @handle
+   - Paste the channel URL or @handle into the **Add a new channel** field, then click the **Channel** button (or press Enter)
      - Examples:
        - `@MrBeast`
        - `https://youtube.com/@MrBeast`
@@ -59,19 +58,20 @@ Subscribe to YouTube channels to automatically download new videos as they're pu
 
 3. **Queue downloads when you're ready**
    - Newly added channels wait until you run a channel download or a scheduled cron cycle
-   - Use the **Manage Downloads -> Channel Download** tab and click **Download new from all channels** to fetch the latest videos immediately
+   - Go to **Downloads -> Manual Download**, switch to the **Channel/Playlist Downloads** tab, and click **Download new from all channels/playlists** to fetch the latest videos immediately
    - The dialog lets you override resolution/video count for that run; otherwise the global defaults apply
 
 4. **Configure channel-specific settings** (optional)
    - Click on a channel to open its detail page
-   - Click the settings icon (gear) to access channel settings:
-     - **Custom subfolder**: Organize channels into separate media libraries (e.g., `__kids`, `__music`)
-     - **Quality override**: Set a channel-specific resolution preference that overrides the global setting
-     - **Flat file structure**: Download videos directly into the channel folder without individual video subfolders (see [Folder Structure](YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md))
-     - **Auto-download controls**: Enable/disable automatic downloads separately for:
-       - `Videos`
-       - `Shorts`
-       - `Live`
+   - Click **Edit** (the gear button) in the **Channel Settings** bar to open channel settings. The dialog has four tabs:
+     - **General**:
+       - **Subfolder**: pick or create a subfolder to organize channels into separate media libraries (e.g., `__kids`, `__music`); the picker has an inline **Add Subfolder** action for new names
+       - **Resolution Override**: a **Channel Video Quality Override** that takes precedence over the global setting
+       - **Video File Structure**: download videos directly into the channel folder (flat) or into individual video subfolders (see [Folder Structure](YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md))
+       - **Auto Downloads**: separate toggles for **New Videos**, **New Shorts**, and **New Live/Streams**. These only take effect while the global **Enable Automatic Downloads** toggle in Settings -> Core is on.
+     - **Filters**: duration limits and a title regex to control which videos auto-download
+     - **Ratings**: a default content rating for this channel's downloads
+     - **Auto-Removal**: **Protect this channel from auto-removal**, or use **Always keep newest downloads** to keep the channel's newest N downloads out of automatic cleanup (see [Configure Automation](#configure-automation))
 
 ### Channel playlist file (.m3u)
 
@@ -79,8 +79,8 @@ Enable "Generate channel playlist file (.m3u)" in a channel's settings to have
 Youtarr write a `<Channel Name>.m3u` playlist at the top of that channel's
 folder, listing every downloaded video (oldest first by default, or newest
 first). Jellyfin and Emby import the file automatically as a playlist, but
-only when the library's content type is Mixed (Jellyfin: "Mixed Movies and
-Shows", Emby: "Mixed Content"); in a Movies-type library (the current
+only from certain library types (Jellyfin: "Mixed Movies and Shows" or Music,
+Emby: "Mixed Content"); in a Movies-type library (the current
 recommendation) the server ignores the file, though it still opens in any
 `.m3u`-capable player such as VLC, mpv, or Kodi. See the
 [Jellyfin](media-servers/jellyfin.md#channel-playlist-files-m3u) and
@@ -96,7 +96,7 @@ Bulk-import channels from your existing YouTube subscriptions instead of adding 
 
 1. **Open the import page**
    - Go to the Channels & Playlists page
-   - Click the **Import Channels** button
+   - Click the **Import** button
 
 ### Method 1: Google Takeout CSV
 
@@ -225,26 +225,32 @@ For per-server setup (API keys, user IDs, the Plex playlist visibility scope), t
 
 Set up automatic downloads on a schedule so Youtarr checks for new videos periodically.
 
-1. **Visit the Configuration page**
-   - Click "Configuration" in the navigation menu
+1. **Visit the Settings page**
+   - Click "Settings" in the navigation menu
 
 2. **Set download schedule**
-   - Open the Configuration -> Core Settings card
+   - Open **Settings -> Core** and find the **Download Frequency** drop-down
    - Pick how often the cron job should run (defaults to hourly)
    - Use the drop-down to choose one of the preset cron intervals
    - For in-depth field descriptions (and manual edits via config.json), see [Configuration Reference](CONFIG.md)
 
 3. **Choose video resolution**
-   - In the same Configuration card choose your preferred maximum resolution
+   - On the same Core page choose your preferred maximum resolution
    - Options range from 360p up through 2160p (4K); YouTube provides the best quality available up to that limit
 
 4. **Configure download limits** (optional)
    - Set maximum number of new videos to download per channel refresh
 
 5. **Enable Automatic Video Removal** (optional)
-   - Toggle "Enable Automatic Video Removal"
-   - Set age threshold (e.g., delete videos older than 30 days)
-   - Set free-space threshold (e.g., delete oldest videos when disk space drops below 50GB)
+   - Open **Settings -> Auto Removal** and toggle "Enable Automatic Video Removal"
+   - Turn on one or more removal rules; videos are removed when they match any enabled rule:
+     - **Old videos**: **Delete videos older than** a set number of days
+     - **Watched videos**: **Remove watched videos** once your media servers report them watched (see [Track Watch Status from Media Servers](#track-watch-status-from-media-servers)); you can add a **Wait after last watch** delay and a **Minimum time since download** so fresh downloads aren't removed right away
+     - **Low disk space**: delete the oldest videos **When free space falls below** a threshold
+   - Some videos are always kept, no matter which rules match:
+     - Videos you've marked as Protected
+     - The newest N downloads, if you set **Keep this many newest downloads**
+     - Videos from channels you've shielded in that channel's **Auto-Removal** settings tab (full protection or the channel's own keep-newest count)
    - **Use "Preview Automatic Removal"** to simulate deletions before saving
      - This shows you exactly which videos would be deleted without actually removing them
      - Highly recommended before enabling auto-cleanup
@@ -257,7 +263,7 @@ Set up automatic downloads on a schedule so Youtarr checks for new videos period
 
 Automatically remove or mark sponsored segments, intros, outros, and other unwanted content using the crowdsourced [SponsorBlock](https://sponsor.ajay.app/) database.
 
-1. **Go to Configuration page -> SponsorBlock Integration section**
+1. **Go to Settings -> SponsorBlock**
 
 2. **Enable SponsorBlock**
    - Toggle the "Enable SponsorBlock" switch
@@ -290,7 +296,7 @@ Get Discord notifications when new videos finish downloading.
    - Choose the channel for notifications
    - Copy the webhook URL
 
-2. **Open Youtarr Configuration -> Notifications**
+2. **Open Youtarr Settings -> Notifications**
 
 3. **Enable notifications**
    - Toggle notifications on
@@ -306,7 +312,7 @@ Get Discord notifications when new videos finish downloading.
 
 ## Re-download Missing Videos
 
-Videos can become "missing" if they're manually deleted from disk. This feature helps you recover them by fetching the file from YouTube again.
+Videos can become "missing" if they're manually deleted from disk. This feature helps you recover them by fetching the file from YouTube again. The same flow also works for videos still on disk (the new download replaces the existing file, which is handy for upgrading quality); videos that have been removed from YouTube are skipped automatically.
 
 > **Note**: If the file still exists somewhere (you moved it, renamed its folder, or converted it to a different format), use [Rescan Files on Disk](#rescan-files-on-disk) instead. Rescan reconciles Youtarr's database with what's already on disk without re-downloading.
 
@@ -316,21 +322,21 @@ Videos can become "missing" if they're manually deleted from disk. This feature 
    - The video metadata is still in Youtarr's database, but the file is gone
 
 2. **Select videos to re-download**
-   - Check the boxes next to the missing videos you want to restore
-   - Use **Select All This Page** if you want to grab everything currently visible
+   - Check the boxes next to the videos you want to fetch
+   - In table view, the header checkbox selects everything currently visible; grid and list views select one video at a time
 
 3. **Choose resolution**
    - Select your preferred resolution for the re-download
    - You can choose a different quality than the original when the download dialog opens
 
 4. **Queue for download**
-   - Click **Download Selected** and enable **Allow re-downloading previously fetched videos** in the dialog
+   - Click **Download** in the selection bar; the dialog turns on **Allow re-downloading previously fetched videos** for you when the selection includes missing or on-disk videos
    - Confirm with **Start Download**; the job will run through the normal downloads queue
    - Original metadata (watch status, etc.) is preserved
 
 ## Rescan Files on Disk
 
-Use this when you've moved, renamed, or converted downloaded files outside Youtarr and want Youtarr's database to catch up with what's actually on disk. The rescan walks your downloads folder and updates Youtarr's view of which files exist and where; it does not re-download anything.
+Use this when you've moved, renamed, or converted downloaded files outside Youtarr and want Youtarr's database to catch up with what's actually on disk. The rescan walks your downloads folder and updates Youtarr's view of which files exist and where; it does not re-download anything. It also probes files for their actual resolution, so on libraries downloaded before that was tracked, the quality chips on video listings fill in gradually as the nightly rescan works through them.
 
 Common cases:
 - You converted `.mp4` files to `.mkv` (or another supported container) using ffmpeg.
@@ -375,7 +381,7 @@ Create separate media server libraries for different content types (e.g., kids c
    - Go to the Channels & Playlists page
    - Click on a channel
    - Click the settings icon (gear)
-   - Enter the subfolder name in the "Custom Subfolder" field
+   - Pick or create a subfolder with the **Subfolder** field (use its **Add Subfolder** action for a new name)
    - Save changes
 
 3. **Configure your media server**
@@ -420,7 +426,7 @@ Explore all videos available from your subscribed channels, even if you haven't 
 
 5. **Download from the browser**
    - Select specific videos you want to download
-   - Click "Download Selected"
+   - Click "Download" in the selection bar
    - Choose quality and start the download
 
 6. **Publish date accuracy note**
@@ -440,7 +446,7 @@ Mark specific videos to exclude them from automatic channel downloads.
 
 3. **Bulk ignore**
    - Select multiple videos
-   - Click "Ignore Selected" to bulk-ignore
+   - Click "Ignore" in the selection bar
 
 4. **View ignored videos**
    - Ignored videos are tracked in `config/complete.list`
@@ -451,8 +457,8 @@ Mark specific videos to exclude them from automatic channel downloads.
 
 Search YouTube from inside Youtarr and see which results you already have, which are missing, and which are new.
 
-1. **Open Find on YouTube**
-   - In the sidebar, expand **Videos** and click **Find on YouTube**
+1. **Open Find Videos on YouTube**
+   - In the sidebar, expand **Videos** and click **Find Videos on YouTube**
    - Enter a search query (up to 200 characters)
    - Pick a result count (10, 25, 50, or 100), optionally choose a minimum duration, and click Search
 
@@ -479,6 +485,7 @@ Click any thumbnail on the Videos page or a channel page to open a video detail 
 
 2. **Extended metadata**
    - Description, tags, view count, likes, resolution, fps, file sizes, and related file paths
+   - For downloaded videos, the modal shows the downloaded format's dimensions from the video metadata, with the quality tier alongside when it isn't obvious from the numbers (e.g. `608x1080 (1080p)` for a vertical video); video listings show a small tier chip based on the file's measured on-disk resolution
    - For downloaded videos, data is served from the cached `.info.json`
    - For videos not yet downloaded, Youtarr fetches metadata on demand via yt-dlp (this can take a few seconds on the first open)
 
@@ -580,19 +587,15 @@ Send videos to Youtarr from anywhere using API keys. This enables one-click down
 
 ### Create an API Key
 
-1. **Navigate to Configuration**
-   - Click "Configuration" in the navigation menu
+1. **Open Settings -> API Keys**
+   - Click "Settings" in the navigation menu, then open the **API Keys** page
 
-2. **Open the API Keys section**
-   - Scroll to "API Keys & External Access"
-   - Click to expand the section
-
-3. **Create a new key**
+2. **Create a new key**
    - Click "Create Key"
    - Enter a descriptive name (e.g., "iPhone Shortcut", "Work Laptop")
    - Click "Create"
 
-4. **Save the key immediately**
+3. **Save the key immediately**
    - The full key is shown only once
    - Copy it to a secure location before closing the dialog
 
@@ -626,7 +629,7 @@ For detailed setup instructions and code examples, see the [API Integration Guid
 
 ### Manage Your API Keys
 
-- **View keys**: Configuration → API Keys & External Access shows all your keys
+- **View keys**: Settings -> API Keys shows all your keys
 - **Monitor usage**: Check "Last Used" and "Uses" columns to track activity
 - **Delete keys**: Click the trash icon to revoke a key instantly
 - **Rate limiting**: Adjust requests per minute to prevent abuse

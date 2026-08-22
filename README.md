@@ -27,7 +27,7 @@ https://github.com/user-attachments/assets/a80548fc-bcf9-4ad0-889c-dbd5aac250ee
 - **Channel Subscriptions**: Subscribe to channels and auto-download new videos, shorts, and streams with per-tab controls
 - **Playlist Subscriptions**: Subscribe to YouTube playlists and auto-download their videos into the right channel folders; Youtarr mirrors each playlist into Plex, Jellyfin, and Emby as a native playlist and writes a universal `.m3u` file for any other player
 - **Browse Channels**: View and search all videos from subscribed channels with advanced filtering, tabbed views for Videos/Shorts/Streams, and contextual publish date accuracy tips
-- **Find on YouTube**: Search YouTube from inside Youtarr, see which results are already downloaded or missing, and click any result to queue a download
+- **Find on YouTube**: Search YouTube from inside Youtarr on the Find Channels on YouTube and Find Videos on YouTube pages; video results show which ones are already downloaded or missing, and a click subscribes to a channel or queues a download
 - **In-App Playback**: Click any thumbnail to open a detail modal with extended metadata and in-browser streaming of downloaded videos; no media server required
 - **Channel Grouping & Multi-Library Support**: Organize channels into custom subfolders (e.g., `__kids`, `__music`, `__news`) to create separate media server libraries
 - **Smart Organization**: Videos organized by channel with metadata and thumbnails
@@ -37,8 +37,8 @@ https://github.com/user-attachments/assets/a80548fc-bcf9-4ad0-889c-dbd5aac250ee
 - **Watch Status Sync**: Pull per-video watched state from Plex, Jellyfin, and Emby (every user on the server, not just yours), show a Watched chip on listing pages, and filter your library by watched or unwatched. One-way sync; Youtarr never writes back to your servers
 - **Metadata Generation**: NFO files, poster images and embedded MP4 metadata for all media servers
 - **Scheduled Downloads**: Configure automatic downloads on your schedule (cron-based)
-- **Auto-Cleanup**: Age and space-based removal of videos with dry-run previews
-- **Filesystem Rescan**: Move, rename, or convert downloaded files outside Youtarr (e.g., `.mp4` to `.mkv`) and trigger a rescan from Settings -> Maintenance to reconcile the database; daily and startup scans pick up changes automatically
+- **Auto-Cleanup**: Age, free-space, and watched-based removal of videos with dry-run previews, plus per-video and per-channel protection and keep-recent guards
+- **Filesystem Rescan**: Move, rename, or convert downloaded files outside Youtarr (e.g., `.mp4` to `.mkv`) and trigger a rescan from Settings -> Maintenance & Rescan to reconcile the database; daily and startup scans pick up changes automatically
 - **Discord Notifications**: Optional webhook alerts for new downloads
 - **Web Interface**: Manage everything through a responsive (PC or mobile) web UI
 - **Secure Access**: Built-in authentication with admin controls
@@ -116,7 +116,7 @@ Interested in contributing to Youtarr? We welcome contributions of all kinds!
 ### Video Browser (using "Playful (Classic)" theme)
 <img width="1507" height="1298" alt="image" src="https://github.com/user-attachments/assets/b7b50a72-942c-4653-930f-270ca27ac888" />
 
-### Configuration (using "Bold Flat" theme)
+### Settings (using "Bold Flat" theme)
 <img width="1524" height="1296" alt="image" src="https://github.com/user-attachments/assets/3d6c28a6-c564-4972-b275-71da11dc39e9" />
 
 ### Download Manager (Dark Modern)

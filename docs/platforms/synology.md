@@ -385,7 +385,7 @@ http://your-nas-ip:3087
 - If you didn't set credentials, you'll be prompted to create an admin account with the one-time token from `docker compose logs youtarr` or `config/setup-token`
 
 **After logging in**:
-1. Navigate to **Configuration** page
+1. Navigate to the **Settings** page
 2. (Optional) Configure Plex integration if desired
 3. Add your first YouTube channel subscription
 4. Start downloading videos!
@@ -812,7 +812,7 @@ If you have existing data in `./database/` that you want to preserve:
 
 **Solutions**:
 - Schedule downloads during off-peak hours (configure via Youtarr UI)
-- Reduce concurrent download limits in Configuration
+- Lower **Files to Download per Channel/Playlist** in Settings -> Core, or set a **Download Rate Limit** in Settings -> YT-DLP
 - Lower video quality settings to reduce processing time
 - Disable SponsorBlock integration (if enabled)
 
@@ -827,9 +827,10 @@ If you have existing data in `./database/` that you want to preserve:
    ```
 
 2. Enable automatic cleanup in Youtarr:
-   - Configuration → Automatic Video Removal
+   - Settings -> Auto Removal
    - Set age threshold (e.g., remove videos older than 90 days)
    - Set free space threshold (e.g., maintain 100 GB free)
+   - Optionally enable watched-based removal to clean up videos you've already watched
 
 3. Manual cleanup:
    ```bash
@@ -962,7 +963,7 @@ If your NAS has SSD cache:
 ### Schedule Downloads During Low-Activity Periods
 
 Configure Youtarr's cron schedule for late night:
-- Configuration → Download Schedule
+- Settings -> Core, "Download Frequency" field
 - Example: `0 2 * * *` (runs at 2 AM daily)
 
 ---

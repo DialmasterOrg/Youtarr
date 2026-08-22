@@ -29,25 +29,25 @@ The codebase encodes these assumptions through four orthogonal environment varia
 
 ### `PLATFORM`
 
-The Elfhosted-specific switch. Detected by `configModule.isElfhostedPlatform()` in `server/modules/configModule.js:276` (case-insensitive `=== 'elfhosted'`). Also surfaced to the frontend as `deploymentEnvironment.platform` via `/getconfig` (`server/routes/config.js:73`).
+The Elfhosted-specific switch. Detected by `configModule.isElfhostedPlatform()` in `server/modules/configModule.js:276` (case-insensitive `=== 'elfhosted'`). Also surfaced to the frontend as `deploymentEnvironment.platform` via `/getconfig` (`server/routes/config.js:127-128`).
 
 When `PLATFORM=elfhosted`:
 
 - **Backend, on every config save and reload:** `useTmpForDownloads` is forced to `true` and `tmpFilePath` is forced to `/app/config/temp_downloads` (`configModule.js:61, 322, 429`). These overrides are runtime-only; they are stripped from the persisted `config.json` so they do not survive a platform switch (`configModule.js:343`).
 - **Backend, on startup with `DATA_PATH` also set:** the temp downloads directory `/app/config/temp_downloads` is auto-created (`configModule.js:295`).
 - **Backend, nightly cron (4:00 AM):** the yt-dlp auto-update job no-ops, regardless of the `autoUpdateYtdlp` config toggle (`server/modules/cronJobs.js:116`).
-- **Backend, manual update route:** `POST /api/ytdlp/update` returns `403` with `{ success: false, message: 'yt-dlp is managed by the platform and cannot be updated from Youtarr.' }` (`server/routes/health.js:242`).
-- **Backend, `/getconfig` response:** the `isPlatformManaged` object exposes `useTmpForDownloads: true` and `ytdlpUpdates: true` so the frontend can disable the corresponding controls (`server/routes/config.js:68-69`).
-- **Frontend:** the Youtarr-version-update banner is suppressed (`client/src/App.tsx:89, 93`). When the `/tmp` directory warning fires, an Elfhosted setup-guide link is appended (`App.tsx:570-583`). In Settings, the "Use external temp directory" and "yt-dlp" sections show "Managed by Elfhosted" chips and platform-managed messages (`client/src/components/Configuration/sections/CoreSettingsSection.tsx:502, 571, 578`).
+- **Backend, manual update route:** `POST /api/ytdlp/update` returns `403` with `{ success: false, message: 'yt-dlp is managed by the platform and cannot be updated from Youtarr.' }` (`server/routes/health.js:248-252`).
+- **Backend, `/getconfig` response:** the `isPlatformManaged` object exposes `useTmpForDownloads: true` and `ytdlpUpdates: true` so the frontend can disable the corresponding controls (`server/routes/config.js:123-124`).
+- **Frontend:** the Youtarr-version-update banner is suppressed (`client/src/App.tsx:91, 95`). When the `/tmp` directory warning fires, an Elfhosted setup-guide link is appended (`App.tsx:576-588`). In Settings, the "Use external temp directory" control (Settings -> Core) and the yt-dlp card (Settings -> YT-DLP) show "Managed by Elfhosted" chips and platform-managed messages (`client/src/components/Configuration/sections/CoreSettingsSection.tsx:640-652`, `client/src/components/Configuration/sections/YtdlpUpdateSection.tsx:104-116`).
 
 ### `AUTH_ENABLED`
 
 Independent of `PLATFORM`. When `AUTH_ENABLED=false`:
 
 - `/setup/status` returns `{ requiresSetup: false, platformManaged: true, message: 'Authentication is managed by the platform' }` (`server/routes/setup.js`).
-- The frontend auto-logs in with the synthetic token `'platform-managed-auth'` and skips the login screen (`client/src/App.tsx:342-345`).
-- All API endpoints accept requests without a token. The bypass is implemented in two places: `verifyToken` short-circuits when `AUTH_ENABLED === 'false'` (`server/server.js:320`), and the local-login route does the same (`server/routes/auth.js:95`).
-- Login and logout buttons are hidden in the UI; `isPlatformManaged.authEnabled` is `false` in `/getconfig` (`server/routes/config.js:67`). The frontend logout button gates on the App-level `isPlatformManaged` boolean (`client/src/components/layout/NavHeaderActions.tsx:154`), and the Youtarr-version-update tooltip is suppressed by the same flag (`NavHeaderActions.tsx:42`).
+- The frontend auto-logs in with the synthetic token `'platform-managed-auth'` and skips the login screen (`client/src/App.tsx:344-349`).
+- All API endpoints accept requests without a token. The bypass is implemented in two places: `verifyToken` short-circuits when `AUTH_ENABLED === 'false'` (`server/server.js:395`), and the local-login route does the same (`server/routes/auth.js:101`).
+- Login and logout buttons are hidden in the UI; `isPlatformManaged.authEnabled` is `false` in `/getconfig` (`server/routes/config.js:122`). The frontend logout button gates on the App-level `isPlatformManaged` boolean (`client/src/components/layout/NavHeaderActions.tsx:157`), and the Youtarr-version-update tooltip is suppressed by the same flag (`NavHeaderActions.tsx:43`).
 
 This is the standard way Elfhosted bypasses Youtarr's local-account flow. It can also be enabled in dev with the `--no-auth` flag to `start-dev.sh` (`scripts/_shared_start_tasks.sh:90-94`).
 
@@ -57,8 +57,8 @@ Independent of `PLATFORM`. Detected by `configModule.isPlatformDeployment()` (`c
 
 - The container reads/writes downloaded videos under `DATA_PATH` instead of the default `/usr/src/app/data` (`configModule.js:30, 533`).
 - Persistent data relocates from `./jobs` to `/app/config/jobs/`, and from `./server/images` to `/app/config/images/` (`configModule.js:304-316`).
-- `/getconfig` reports `isPlatformManaged.youtubeOutputDirectory: true` so the UI shows the path read-only (`server/routes/config.js:65`).
-- `youtubeOutputDirectory` in the UI resolves to `process.env.YOUTUBE_OUTPUT_DIR || process.env.DATA_PATH` (`server/routes/config.js:78`).
+- `/getconfig` reports `isPlatformManaged.youtubeOutputDirectory: true` so the UI shows the path read-only (`server/routes/config.js:120`).
+- `youtubeOutputDirectory` in the UI resolves to `process.env.YOUTUBE_OUTPUT_DIR || process.env.DATA_PATH` (`server/routes/config.js:133`).
 
 `DATA_PATH` is documented in `docs/ENVIRONMENT_VARIABLES.md` and `docs/DOCKER.md`. Most self-hosters never need it.
 
@@ -66,7 +66,7 @@ Independent of `PLATFORM`. Detected by `configModule.isPlatformDeployment()` (`c
 
 Independent of `PLATFORM`. When set:
 
-- The Plex IP, port, and HTTPS fields are disabled in the UI (`isPlatformManaged.plexUrl: true` from `server/routes/config.js:67`).
+- The Plex IP, port, and HTTPS fields are disabled in the UI (`isPlatformManaged.plexUrl: true` from `server/routes/config.js:121`).
 - The value seeds `config.plexUrl` on first-run config creation (`configModule.js:228-231`).
 - `config.plexUrl` takes precedence over `plexIP`/`plexPort`/`plexViaHttps` everywhere it is consulted (see `docs/CONFIG.md`).
 
@@ -89,7 +89,7 @@ The dev compose file (`docker-compose.dev.yml`) forwards all four Elfhosted-rele
 
 ### Recipes
 
-**Minimum viable Elfhosted spoof — for most Elfhosted-related work:**
+**Minimum viable Elfhosted spoof - for most Elfhosted-related work:**
 
 ```bash
 ./scripts/start-dev.sh --as-elfhosted
@@ -110,7 +110,7 @@ The flag does **not** set `DATA_PATH` or `PLEX_URL`, because those need real val
 
 That is fine for almost all dev work; downloads and the new yt-dlp gating both work end-to-end. Set the extra vars only when you specifically need to test code that consults `DATA_PATH` (storage-status path, persistent-data relocation, image/jobs directories) or `PLEX_URL` (Plex URL locking, `plexUrl` config seeding).
 
-**Full platform-deployment spoof — also relocates persistent data and locks the Plex URL:**
+**Full platform-deployment spoof - also relocates persistent data and locks the Plex URL:**
 
 Add to your `.env` for the duration of the test:
 
@@ -131,9 +131,9 @@ The flag picks up `DATA_PATH` and `PLEX_URL` from `.env` automatically (because 
 
 Even with all four env vars set, the local spoof cannot stand in for everything Elfhosted handles:
 
-- **Cloudflare Access / Authelia / external auth** — Elfhosted relies on an upstream auth proxy. `AUTH_ENABLED=false` only tells Youtarr to trust the upstream; there is no upstream in dev.
-- **rclone-backed remote storage** — the production `DATA_PATH` points at network storage with its own latency profile. The dev mount is local disk.
-- **The platform's own yt-dlp build** — Elfhosted ships yt-dlp via its container image, not via Youtarr's update path. Locally you still have whatever `yt-dlp` is in the dev container.
+- **Cloudflare Access / Authelia / external auth** - Elfhosted relies on an upstream auth proxy. `AUTH_ENABLED=false` only tells Youtarr to trust the upstream; there is no upstream in dev.
+- **rclone-backed remote storage** - the production `DATA_PATH` points at network storage with its own latency profile. The dev mount is local disk.
+- **The platform's own yt-dlp build** - Elfhosted ships yt-dlp via its container image, not via Youtarr's update path. Locally you still have whatever `yt-dlp` is in the dev container.
 
 These limitations are by design. If you need to verify behavior under those conditions, do it on a real Elfhosted deployment.
 
@@ -142,27 +142,27 @@ These limitations are by design. If you need to verify behavior under those cond
 After `./scripts/start-dev.sh --as-elfhosted`:
 
 - The startup log includes a `yt-warn` line "Spoofing Elfhosted deployment for this run." followed by what is and is not spoofed.
-- No login screen — the app auto-authenticates with the synthetic `'platform-managed-auth'` token (from the `AUTH_ENABLED=false` half of the spoof).
-- The logout button is hidden in the nav header (`NavHeaderActions.tsx:154`).
-- The Youtarr self-update banner does not appear, even when a newer Youtarr version is published to Docker Hub (suppressed via `isElfHosted` in `client/src/App.tsx:89, 93`).
-- Settings → Core Settings, in the **Use external temp directory** row: "Managed by Elfhosted" chip, the checkbox is disabled and forced on.
-- Settings → Core Settings, in the **yt-dlp** block: "Managed by Elfhosted" chip, no Update button, no auto-update toggle, replacement caption: "yt-dlp is managed by Elfhosted and cannot be updated from Youtarr. Updates are applied automatically by the platform."
+- No login screen - the app auto-authenticates with the synthetic `'platform-managed-auth'` token (from the `AUTH_ENABLED=false` half of the spoof).
+- The logout button is hidden in the nav header (`NavHeaderActions.tsx:157`).
+- The Youtarr self-update banner does not appear, even when a newer Youtarr version is published to Docker Hub (suppressed via `isElfHosted` in `client/src/App.tsx:91, 95`).
+- Settings -> Core Settings, in the **Use external temp directory** row: "Managed by Elfhosted" chip, the checkbox is disabled and forced on.
+- Settings -> YT-DLP, in the **yt-dlp Version & Updates** card: "Managed by Elfhosted" chip, no Update button, no release-channel picker, no auto-update toggle, replacement caption: "yt-dlp is managed by Elfhosted and cannot be updated from Youtarr. Updates are applied automatically by the platform."
 - `curl -i -X POST http://localhost:3087/api/ytdlp/update` returns `403` with the platform-managed message body.
 - Downloads still work; they stage in `./config/temp_downloads/` on the host (auto-created on first download).
-- If the `/tmp` warning fires (e.g., your `YOUTUBE_OUTPUT_DIR` resolves to a `/tmp` path), the warning Snackbar gets an extra "Elfhosted setup guide" link (`App.tsx:570-583`).
+- If the `/tmp` warning fires (e.g., your `YOUTUBE_OUTPUT_DIR` resolves to a `/tmp` path), the warning Snackbar gets an extra "Elfhosted setup guide" link (`App.tsx:576-588`).
 
 Additional behavior only when you also set `DATA_PATH` in `.env`:
 
-- Settings → Core Settings, the `youtubeOutputDirectory` field's helper text changes to "This path is configured by your platform deployment and cannot be changed here." (`CoreSettingsSection.tsx:458`).
+- Settings -> Core Settings, the `youtubeOutputDirectory` field's helper text changes to "This path is configured by your platform deployment and cannot be changed here." (`CoreSettingsSection.tsx:568-569`).
 - Persistent data is read from `/app/config/jobs/` and `/app/config/images/` (bind-mounted to `./config/jobs/` and `./config/images/` on the host) instead of `./jobs/` and `./server/images/`.
 
 Additional behavior only when you also set `PLEX_URL` in `.env`:
 
-- Settings → Plex Integration: the IP/port/HTTPS fields are disabled with helper text indicating the URL is platform-managed.
+- Settings -> Plex: the IP/port/HTTPS fields are disabled with helper text indicating the URL is platform-managed.
 
 ### Reverting
 
-Just stop using the flag — `./scripts/start-dev.sh` (without `--as-elfhosted`) returns to normal behavior. The compose-file passthroughs are zero-impact when `PLATFORM`, `DATA_PATH`, and `PLEX_URL` are unset on the host (each forwards as an empty string, which all consumer code paths treat the same as undefined). If you set `DATA_PATH` or `PLEX_URL` in `.env` for a test, remove or comment those lines.
+Just stop using the flag - `./scripts/start-dev.sh` (without `--as-elfhosted`) returns to normal behavior. The compose-file passthroughs are zero-impact when `PLATFORM`, `DATA_PATH`, and `PLEX_URL` are unset on the host (each forwards as an empty string, which all consumer code paths treat the same as undefined). If you set `DATA_PATH` or `PLEX_URL` in `.env` for a test, remove or comment those lines.
 
 ## Code Touchpoints
 
@@ -171,46 +171,47 @@ When you make a change that depends on Elfhosted detection, audit these location
 **Backend**
 
 - `server/modules/configModule.js`
-  - `isElfhostedPlatform()` (line 276) — the canonical check
-  - `isPlatformDeployment()` (line 272) — `DATA_PATH`-based, often paired with the above
-  - `getImagePath()`, `getJobsPath()`, `getStorageStatus()` — relocate paths when `DATA_PATH` is set
+  - `isElfhostedPlatform()` (line 276) - the canonical check
+  - `isPlatformDeployment()` (line 272) - `DATA_PATH`-based, often paired with the above
+  - `getImagePath()`, `getJobsPath()`, `getStorageStatus()` - relocate paths when `DATA_PATH` is set
   - The constructor and `updateConfig()` / `saveConfig()` / `watchConfig()` re-apply the temp-downloads override
-- `server/modules/cronJobs.js:116` — nightly yt-dlp auto-update skip
-- `server/routes/health.js:242` — `POST /api/ytdlp/update` returns 403
-- `server/routes/config.js:64-78` — `/getconfig` exposes `isPlatformManaged.{useTmpForDownloads, ytdlpUpdates, youtubeOutputDirectory, plexUrl, authEnabled}` and `deploymentEnvironment.platform`
-- `server/routes/setup.js:41-49` — `AUTH_ENABLED=false` short-circuits setup status (returns `platformManaged: true`)
-- `server/routes/auth.js:95` — local-login route is a no-op when `AUTH_ENABLED=false`
-- `server/server.js:320` — the `verifyToken` middleware bypasses auth when `AUTH_ENABLED=false`
+- `server/modules/cronJobs.js:116` - nightly yt-dlp auto-update skip
+- `server/routes/health.js:248` - `POST /api/ytdlp/update` returns 403
+- `server/routes/config.js:119-133` - `/getconfig` exposes `isPlatformManaged.{useTmpForDownloads, ytdlpUpdates, youtubeOutputDirectory, plexUrl, authEnabled}` and `deploymentEnvironment.platform`
+- `server/routes/setup.js:74-81` - `AUTH_ENABLED=false` short-circuits setup status (returns `platformManaged: true`)
+- `server/routes/auth.js:101` - local-login route is a no-op when `AUTH_ENABLED=false`
+- `server/server.js:395` - the `verifyToken` middleware bypasses auth when `AUTH_ENABLED=false`
 
 **Frontend**
 
 - `client/src/App.tsx`
-  - `isPlatformManaged` boolean state (line 74), set from the `/setup/status` response and threaded into the layout (lines 492, 509)
-  - `isElfHosted` (line 89) and version-banner suppression (line 93)
-  - `/setup/status` `platformManaged` handling and synthetic-token auto-login (lines 342-345)
-  - `/tmp` warning Elfhosted link (lines 570-583)
-- `client/src/hooks/useConfig.ts:28-66` — `isPlatformManaged` (the per-flag object) and `deploymentEnvironment` are split out of the `/getconfig` response and exposed via context to the rest of the app. Note: this is a different object from the App-level `isPlatformManaged` boolean above; both exist for historical reasons.
+  - `isPlatformManaged` boolean state (line 76), set from the `/setup/status` response and threaded into the layout (lines 494, 511)
+  - `isElfHosted` (line 91) and version-banner suppression (line 95)
+  - `/setup/status` `platformManaged` handling and synthetic-token auto-login (lines 344-349)
+  - `/tmp` warning Elfhosted link (lines 576-588)
+- `client/src/hooks/useConfig.ts:22-70` - `isPlatformManaged` (the per-flag object) and `deploymentEnvironment` are split out of the `/getconfig` response and exposed via context to the rest of the app. Note: this is a different object from the App-level `isPlatformManaged` boolean above; both exist for historical reasons.
 - `client/src/components/layout/NavHeaderActions.tsx`
-  - Hides the logout button when the App-level `isPlatformManaged` boolean is true (line 154)
-  - Suppresses the Youtarr-version-update tooltip via the same flag (line 42)
-- `client/src/components/layout/NavHeader.tsx:28, 245` and `client/src/components/layout/AppShell.tsx:20, 202` — thread `isPlatformManaged` from `App.tsx` down to `NavHeaderActions.tsx`
+  - Hides the logout button when the App-level `isPlatformManaged` boolean is true (line 157)
+  - Suppresses the Youtarr-version-update tooltip via the same flag (line 43)
+- `client/src/components/layout/NavHeader.tsx:28, 245` and `client/src/components/layout/AppShell.tsx:20, 203` - thread `isPlatformManaged` from `App.tsx` down to `NavHeaderActions.tsx`
 - `client/src/components/Settings/Settings.tsx`
-  - Uses `isPlatformManaged.plexUrl` to determine whether a Plex server is "configured" (line 65)
-  - Passes `isPlatformManaged` and `isPlatformManaged.authEnabled` into Plex and Account-Security sections (lines 247, 263, 341)
+  - Uses `isPlatformManaged.plexUrl` to determine whether a Plex server is "configured" (line 80)
+  - Passes `isPlatformManaged` into the Core, Plex, and YT-DLP sections and `isPlatformManaged.authEnabled` into Account Security (lines 303, 318, 404, 445)
+  - Skips the post-save yt-dlp version re-check when `isPlatformManaged.ytdlpUpdates` is true (line 220)
 - `client/src/components/Configuration/sections/CoreSettingsSection.tsx`
-  - YouTube Output Directory helper text branches on `deploymentEnvironment.platform === 'elfhosted'` (line 458)
-  - "Use external temp directory" chip and disabled state (lines 494-516)
-  - yt-dlp section: version display, Update button, auto-update toggle, platform-managed message and chip (lines 540-602)
-- `client/src/components/Configuration/sections/PlexIntegrationSection.tsx:149-167` — Plex URL field locking when `PLEX_URL` is set
-- `client/src/components/Configuration/types.ts:70-74` — `PlatformManagedState` type; add a new flag here when you add a new platform-managed control
+  - YouTube Output Directory helper text branches on `deploymentEnvironment.platform === 'elfhosted'` (lines 568-569)
+  - "Use external temp directory" chip and disabled state (lines 627-657)
+- `client/src/components/Configuration/sections/YtdlpUpdateSection.tsx` - the whole yt-dlp card: version display, Update button, release-channel picker, auto-update toggle. When `isPlatformManaged.ytdlpUpdates` is true, all of those are replaced by the chip and the platform-managed caption (lines 59-60, 104-116)
+- `client/src/components/Configuration/sections/PlexIntegrationSection.tsx:160-180` - Plex URL field locking when `PLEX_URL` is set
+- `client/src/components/Configuration/types.ts:78-83` - `PlatformManagedState` type; add a new flag here when you add a new platform-managed control
 
 **Tests**
 
-- `server/modules/__tests__/configModule.test.js:407-560` — covers `isElfhostedPlatform()`, `isPlatformDeployment()`, and the temp-download override behavior. Uses `process.env.PLATFORM = 'elfhosted'` directly.
-- `server/modules/__tests__/cronJobs.test.js` — see the `'yt-dlp auto-update cron job (4:00 AM)'` describe block; `mockConfigModule.isElfhostedPlatform.mockReturnValue(true)` is the gating pattern.
-- `server/__tests__/server.routes.test.js` — `'server routes - configuration'` and `'server routes - yt-dlp update'` describe blocks; `configModuleMock.isElfhostedPlatform.mockReturnValue(true)` toggles platform mode per-test.
-- `client/src/App.test.tsx:435-540` — frontend Elfhosted-detection tests; injects `deploymentEnvironment: { platform: 'elfhosted' }` into the mocked `useConfig`.
-- `client/src/components/Configuration/sections/__tests__/CoreSettingsSection.test.tsx` — `'yt-dlp Section on Platform-Managed Deployments'` describe block uses `createPlatformManagedState({ ytdlpUpdates: true })` and `createDeploymentEnvironment({ platform: 'elfhosted' })`.
+- `server/modules/__tests__/configModule.test.js:406-568` - covers `isElfhostedPlatform()`, `isPlatformDeployment()`, and the temp-download override behavior. Uses `process.env.PLATFORM = 'elfhosted'` directly.
+- `server/modules/__tests__/cronJobs.test.js` - see the `'yt-dlp auto-update cron job (4:00 AM)'` describe block; `mockConfigModule.isElfhostedPlatform.mockReturnValue(true)` is the gating pattern.
+- `server/__tests__/server.routes.test.js` - `'server routes - configuration'` and `'server routes - yt-dlp update'` describe blocks; `configModuleMock.isElfhostedPlatform.mockReturnValue(true)` toggles platform mode per-test.
+- `client/src/App.test.tsx:429-540` - frontend Elfhosted-detection tests; injects `deploymentEnvironment: { platform: 'elfhosted' }` into the mocked `useConfig`.
+- `client/src/components/Configuration/sections/__tests__/YtdlpUpdateSection.test.tsx` - platform-managed coverage for the yt-dlp card; uses `createPlatformManagedState({ ytdlpUpdates: true })` and `createDeploymentEnvironment({ platform: 'elfhosted' })`.
 
 ## Testing Patterns
 
@@ -220,7 +221,7 @@ When you add a new behavior gated on Elfhosted, write tests at three layers:
 2. **Route-level**: prove `/getconfig` exposes any new `isPlatformManaged.*` flag, and any new gated route returns the right status. The `createServerModule` helper in `server/__tests__/server.routes.test.js` already mocks `configModule`; just call `configModuleMock.isElfhostedPlatform.mockReturnValue(true)` in the test.
 3. **UI**: prove the new control hides or disables when `isPlatformManaged.<your-flag>` is true. Use `createPlatformManagedState({ <yourFlag>: true })` and `createDeploymentEnvironment({ platform: 'elfhosted' })` in the section's test file.
 
-Always test the `false` case too — most regressions are "the control is now permanently disabled."
+Always test the `false` case too - most regressions are "the control is now permanently disabled."
 
 ## Common Pitfalls
 
@@ -233,7 +234,7 @@ Always test the `false` case too — most regressions are "the control is now pe
 
 ## See Also
 
-- `docs/CONFIG.md` — config field reference (some fields are noted as platform-managed)
-- `docs/DOCKER.md` § Platform Deployment Configuration — operator-facing summary
-- `docs/ENVIRONMENT_VARIABLES.md` — full env var reference
-- `docs/AUTHENTICATION.md` — `AUTH_ENABLED=false` behavior
+- `docs/CONFIG.md` - config field reference (some fields are noted as platform-managed)
+- `docs/DOCKER.md` § Platform Deployment Configuration - operator-facing summary
+- `docs/ENVIRONMENT_VARIABLES.md` - full env var reference
+- `docs/AUTHENTICATION.md` - `AUTH_ENABLED=false` behavior

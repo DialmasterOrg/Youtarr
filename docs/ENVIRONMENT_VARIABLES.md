@@ -44,7 +44,7 @@ When using the bundled MariaDB container, these variables typically use their de
 
 ### DB_HOST
 **Required**: No
-**Default**: `youtarr-db` (internal container name)
+**Default**: `youtarr-db` (the internal container name, set by docker-compose; the application itself falls back to `localhost` when the variable is unset)
 **Description**: Database hostname or IP address
 **Example**: `192.168.1.100` (for external database)
 
@@ -180,7 +180,7 @@ Note: *The `/path/to/youtube/videos` is just an example. Use the path you have c
 **Default**: None
 **Description**: Pre-configured Plex server URL
 **Example**: `http://plex:32400`
-**Note**: Overrides plexIp, plexPort and plexViaHttps from config.json
+**Note**: Overrides plexIP, plexPort and plexViaHttps from config.json
 
 > **Jellyfin and Emby have no environment variables.** Their playlist-sync settings (URL, API key, user ID) are managed in `config/config.json` through the web UI under Settings, not via env vars. There is no `JELLYFIN_URL` or `EMBY_URL` equivalent to `PLEX_URL`.
 

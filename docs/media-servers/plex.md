@@ -5,7 +5,7 @@ Complete guide for integrating Youtarr with Plex Media Server.
 ## Table of Contents
 - [Overview](#overview)
 - [Library Setup](#library-setup)
-- [Youtarr Configuration](#youtarr-configuration)
+- [Youtarr Settings](#youtarr-settings)
 - [Native Playlist Sync](#native-playlist-sync)
 - [Watch Status Sync](#watch-status-sync)
 - [Multi-Library Organization](#multi-library-organization)
@@ -89,12 +89,12 @@ Choose the appropriate agent:
 
 It is also recommended to disable the settings that scan shows, like intro detection, credit detection, and voice activity detection. They do not work for this content, but Plex will still spend time scanning for them if left enabled.
 
-## Youtarr Configuration
+## Youtarr Settings
 
 ### Obtaining Plex Token
 
 #### Method 1: OAuth (Recommended)
-1. Go to Youtarr Configuration page
+1. In Youtarr, open Settings -> Plex
 2. Click "Get Key" next to Plex API Key field
 3. Log in with your Plex account
 4. Authorize Youtarr
@@ -102,11 +102,11 @@ It is also recommended to disable the settings that scan shows, like intro detec
 
 #### Method 2: Manual
 1. Follow [official Plex token guide](https://www.plexopedia.com/plex-media-server/general/plex-token/)
-2. Enter token in Configuration page
+2. Enter the token under Settings -> Plex
 
 ### Required Settings
 
-In Youtarr Configuration:
+Under Settings -> Plex:
 - **Plex API Key**: Your X-Plex-Token
 - **Plex IP**: Server IP or hostname
 - **Plex Port**: Usually 32400

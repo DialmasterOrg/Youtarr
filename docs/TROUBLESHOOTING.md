@@ -64,7 +64,7 @@ See [Authentication - Cannot Find the Setup Token](AUTHENTICATION.md#cannot-find
 
 **Solution**:
 1. **Get a new API key automatically**:
-   - Go to Configuration page
+   - Go to **Settings -> Plex**
    - Click "Get Key" button next to Plex API Key field
    - Log in with your Plex account (must have admin access to your server)
    - Save configuration
@@ -85,14 +85,14 @@ See [Authentication - Cannot Find the Setup Token](AUTHENTICATION.md#cannot-find
 **Problem**: You never receive Discord alerts after downloads.
 
 **Solution**:
-1. Open Configuration → Optional: Notifications and confirm **Enable Notifications** is on.
-2. Verify the Discord webhook URL is correct and saved; click "Send Test Notification" to confirm delivery.
+1. Open **Settings -> Notifications** and confirm **Enable Notifications** is on.
+2. Verify the Discord webhook URL is correct and saved; use the test notification button next to the saved URL to confirm delivery.
 3. Notifications only send when at least one new video downloads successfully—skipped runs will not trigger an alert.
 4. Check the server logs (`docker compose logs -f`) for `Failed to send notification` errors that may indicate network or webhook permission issues.
 
 ### Test Notification Fails
 
-**Problem**: "Send Test Notification" shows an error.
+**Problem**: Sending a test notification shows an error.
 
 **Solution**:
 1. Ensure the webhook URL is saved and not blank or whitespace.
@@ -107,7 +107,7 @@ See [Authentication - Cannot Find the Setup Token](AUTHENTICATION.md#cannot-find
 **Problem**: Previewing automatic removal returns an error, or the space-based strategy is disabled.
 
 **Solution**:
-- Confirm the storage indicator at the top of the Configuration page is visible and shows valid values. Space-based removal requires the server to resolve the download directory path and gather disk usage via `df`.
+- Confirm the storage indicator (shown in the app header and at the bottom of the navigation sidebar) is visible and shows valid values. Space-based removal requires the server to resolve the download directory path and gather disk usage via `df`.
 - Ensure the `DATA_PATH` (or selected YouTube directory) exists within the container/host and is mounted with read access to filesystem metadata.
 - If you're running on network storage or uncommon mounts, try remounting with `df` support or rely on age-based cleanup instead.
 - Retry the preview after saving the configuration again. The preview endpoint requires a valid auth token; log back in if necessary.
@@ -117,10 +117,11 @@ See [Authentication - Cannot Find the Setup Token](AUTHENTICATION.md#cannot-find
 **Problem**: Automatic cleanup runs at 2:00 AM but no videos are removed.
 
 **Solution**:
-- Verify Automatic Video Removal is enabled and at least one threshold (age or free space) is configured on the Configuration page.
-- Run the dry-run preview to see how many videos currently match the thresholds and adjust values if needed (for example, lower the free-space threshold or reduce the age requirement).
-- Check server logs around 2:00 AM for messages prefixed with `[CRON]` or `[Auto-Removal]` to confirm the job is executing (`docker compose logs -f youtarr`).
-- If errors appear in the logs (e.g., permission issues deleting files), resolve those first—the cron job will skip files it cannot delete.
+- Verify Automatic Video Removal is enabled on **Settings -> Auto Removal** and at least one rule is configured: an age threshold, a free-space threshold, or watched-based removal. Note that watched-based removal only runs while watch status sync is enabled.
+- Remember the exclusions. Videos you've marked as Protected, videos of channels with auto-removal protection enabled, and the newest downloads kept by "Keep this many newest downloads" (the global setting plus any per-channel keep counts) are never removed, so a run can legitimately delete nothing.
+- Run the dry-run preview to see how many videos currently match the rules - it also shows how many videos the protection settings are keeping. Adjust values if needed (for example, lower the free-space threshold or reduce the age requirement).
+- Check server logs around 2:00 AM for `[Auto-Removal]` messages to confirm the job is executing (`docker compose logs -f youtarr`).
+- If errors appear in the logs (e.g., permission issues deleting files), resolve those first - the cron job will skip files it cannot delete.
 
 ## Library / File Issues
 
@@ -452,7 +453,7 @@ ERROR 1396 (HY000) at line 21: Operation CREATE USER failed for 'root'@'%'
    - Connect to MariaDB: `docker compose exec youtarr-db mysql -u root -p youtarr`
    - Drop the duplicate column or table mentioned in the error (for example `ALTER TABLE Videos DROP COLUMN media_type;`), **or** restore a known-good backup.
    - Exit MySQL and restart the stack.
-4. Once the stack is back online, verify the latest schema under **Configuration → System → Database Health**.
+4. Once the stack is back online, confirm the schema is healthy: `curl http://localhost:3087/api/db-status` reports whether the database connection and schema checks passed, and the startup logs (`docker compose logs youtarr`) show the migration results.
 
 Tip: run with a named volume (see Docker Desktop/ARM/Synology sections) so filesystem corruption is less likely to recur.
 
@@ -517,7 +518,11 @@ COMPOSE_FILE=docker-compose.yml:docker-compose.arm.yml
 
 **Solution #1**:
 
-Youtarr's Docker image includes yt-dlp which auto-updates on every release, update to the latest version if behind:
+Update yt-dlp. Most download failures are extractor breakage that a newer yt-dlp fixes.
+
+- The fastest fix is in-app: go to **Settings -> YT-DLP** and update yt-dlp manually. With **Automatically update yt-dlp daily (4:00 AM)** enabled this happens each night on its own.
+- If the latest stable yt-dlp still fails, switch the **Update Channel** to **Nightly** on the same page. Nightly gets extractor fixes days earlier than stable.
+- Youtarr's Docker image also bundles the latest yt-dlp at release time, so pulling a new image updates it too:
   - Via docker compose:
       ```bash
       docker compose down
@@ -534,7 +539,7 @@ Youtarr's Docker image includes yt-dlp which auto-updates on every release, upda
 
 YouTube is blocking your downloads.
 1. If cookies are **not** enabled, try enabling and uploading cookies in Settings -> Cookies. If cookies **are** enabled, they may be the cause - see "Downloads Fail with HTTP 403" below.
-2. If only some videos are failing, try increasing the "Sleep Between Requests" value in Configuration -> Advanced Settings
+2. If only some videos are failing, try increasing the **Sleep Between Requests (seconds)** value in the yt-dlp Options section of **Settings -> YT-DLP**
 3. Try using a proxy, or switching to a VPN
 
 **NOTE**: In some cases YouTube may temporarily blacklist your IP address if too many requests were happening from your IP. You may just need to wait in order to download again. You can manually test downloading a video from YouTube to rule out Youtarr-specific issues by downloading yt-dlp and attempting to manually download a single video.
@@ -560,13 +565,13 @@ The 403 is sometimes a temporary block on YouTube's side - retrying later can wo
 
 ### No Download Progress Shown (Downloads Work, Videos "Just Appear")
 
-**Problem**: Downloads complete successfully, but the **Downloads -> Activity** page always shows "No download activity at the moment". Videos simply appear in the library when finished. Other real-time updates (channel refresh status, download complete notifications) are also missing.
+**Problem**: Downloads complete successfully, but the **Downloads -> Activity** page never updates live: progress percentages stay frozen (or the page shows "Waiting for progress updates...") until you refresh the page or switch back to the tab. Other real-time updates (channel refresh status, download complete notifications) are also missing.
 
-**Cause**: Youtarr delivers all real-time updates over a WebSocket connection that shares the same host and port as the web UI. Regular page loads and downloads use plain HTTP, so everything else works - but if something between your browser and Youtarr (most commonly a reverse proxy) doesn't forward WebSocket upgrade requests, the progress display never gets any updates.
+**Cause**: Youtarr delivers all real-time updates over a WebSocket connection that shares the same host and port as the web UI. Regular page loads and downloads use plain HTTP, so everything else works - but if something between your browser and Youtarr (most commonly a reverse proxy) doesn't forward WebSocket upgrade requests, the progress display never gets live updates.
 
 **How to confirm**:
 1. Open your browser devtools (F12) -> **Network** tab -> filter by "WS", then reload the Youtarr page. A working setup shows a WebSocket connection with status `101 Switching Protocols`. If it fails or keeps retrying, the WebSocket is being blocked.
-2. While a download is running, open **Downloads -> History** and refresh the page. That page fetches over HTTP, so if the job shows as In Progress there while the Activity page stays empty, the WebSocket is the problem.
+2. While a download is running, watch the Activity page. It seeds its state over plain HTTP, so it will show the running job and catch up whenever you refresh or refocus the tab - but live progress between refreshes only arrives over the WebSocket. If the page stays frozen until you refresh, the WebSocket is the problem.
 
 **Solution**: Enable WebSocket support for the Youtarr host in your reverse proxy:
 - **Nginx Proxy Manager**: edit the proxy host and enable the **Websockets Support** toggle.
@@ -794,7 +799,7 @@ The cookies preview endpoint is rate-limited to 3 requests per minute because ea
 
 **Solution**:
 - Verify poster.jpg exists in each channel folder
-- Check that "Copy channel poster.jpg files" is enabled in Configuration
+- Check that "Copy channel poster.jpg files" is enabled in **Settings -> Core**
 - Ensure media server has read permissions for image files
 - Some servers cache artwork - try:
   - Clearing server cache
@@ -818,7 +823,7 @@ The cookies preview endpoint is rate-limited to 3 requests per minute because ea
 **Problem**: Videos download but no .nfo files are generated.
 
 **Solution**:
-- Check that "Generate video .nfo files" is enabled in Configuration
+- Check that "Generate video .nfo files" is enabled in **Settings -> Core**
 - Verify post-processing completed (check container logs)
 - Ensure write permissions in video directories
 - Look for errors in logs during post-processing phase

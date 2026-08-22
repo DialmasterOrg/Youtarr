@@ -1,12 +1,15 @@
 # Configuration Reference (config.json)
 
 This document provides a comprehensive reference for all configuration options in Youtarr's `config.json` file.
-These settings can be changed from the Configuration page in the web UI.
+These settings can be changed from the Settings pages in the web UI.
 
 ## Table of Contents
 - [Configuration File Location](#configuration-file-location)
 - [Core Settings](#core-settings)
 - [Plex Integration](#plex-integration)
+- [Jellyfin Integration](#jellyfin-integration)
+- [Emby Integration](#emby-integration)
+- [Watch Status Sync](#watch-status-sync)
 - [YouTube Data API](#youtube-data-api-optional)
 - [SponsorBlock Settings](#sponsorblock-settings)
 - [Kodi, Emby and Jellyfin Compatibility](#kodi-emby-and-jellyfin-compatibility)
@@ -17,6 +20,7 @@ These settings can be changed from the Configuration page in the web UI.
 - [Auto-Removal Settings](#auto-removal-settings)
 - [API Keys & External Access](#api-keys--external-access)
 - [yt-dlp Auto-Update](#yt-dlp-auto-update)
+- [Filesystem Rescan](#filesystem-rescan)
 - [Account & Security](#account--security)
 - [System Fields](#system-fields)
 - [Configuration Examples](#configuration-examples)
@@ -32,7 +36,7 @@ The `config.json` is automatically created on first startup if it doesn't exist,
 
 ### Editing Configuration
 Configuration can be modified through:
-1. **Web UI** (recommended) - Configuration page in the application
+1. **Web UI** (recommended) - Settings pages in the application
 2. **Manual editing** - Stop Youtarr, edit the JSON file, restart
 3. **Environment variables** - Some values can be overridden (see [ENVIRONMENT_VARIABLES.md](ENVIRONMENT_VARIABLES.md))
 
@@ -82,9 +86,9 @@ Configuration can be modified through:
 - **Config Key**: preferredResolution
 - **Type**: `string`
 - **Default**: `"1080"`
-- **Options**: `"4320"`, `"2160"`, `"1440"`, `"1080"`, `"720"`, `"480"`, `"360"`, `"240"`, `"144"`
+- **Options**: `"2160"`, `"1440"`, `"1080"`, `"720"`, `"480"`, `"360"`
 - **Description**: Global setting for preferred download resolution
-- **Note**: Downloads from YouTube at best available quality up to this limit
+- **Note**: Downloads from YouTube at best available quality up to this limit. Other values hand-edited into `config.json` are passed to yt-dlp as-is, but the UI only offers the options above.
 - **Codec implication**: YouTube only provides H.264 in MP4 up to 1080p. Selecting 1440p or 2160p forces Youtarr to pick a VP9 or AV1 source stream (YouTube does not offer H.264 at those resolutions) and remux it into MP4 via `--merge-output-format mp4`. The remux is lossless (no re-encode), but Plex clients without native VP9/AV1 hardware decode (Apple TV HD, older Apple TV 4K, iOS, older Rokus) will transcode at playback. If direct-play compatibility matters more than resolution, keep this at 1080p or set `videoCodec` to `h264`.
 
 ### Preferred Video Codec
@@ -96,8 +100,7 @@ Configuration can be modified through:
 - **Compatibility**:
   - `h264`: Best compatibility with all devices
   - `h265`: Better compression, requires modern devices
-  - `vp9`: YouTube's preferred codec
-  - `av1`: Best compression, limited device support
+  - `default`: YouTube picks the stream, typically VP9 or AV1 above 1080p. Best compression, but older devices may need to transcode. (VP9 and AV1 are not selectable values for this key; they are just what YouTube serves when no codec preference is forced.)
 
 ### Default Subfolder
 - **Config Key**: `defaultSubfolder`
@@ -298,12 +301,12 @@ Sync is one-way (server -> Youtarr). Non-owner Plex users come from the server's
 - **Default**: `""` (empty)
 - **Description**: Optional YouTube Data API v3 key. When set, Youtarr uses the API for faster channel metadata, video metadata, and search fetches. On any failure (invalid key, quota exhausted, API disabled, network error), Youtarr silently falls back to yt-dlp with no user-visible error.
 - **Notes**:
-  - API keys do not expire. The configuration page shows "last validated" timestamp instead of an expiration.
+  - API keys do not expire. The Settings -> YouTube API page shows a "last validated" timestamp instead of an expiration.
   - Default quota is 10,000 units per day per Google Cloud project, resetting at midnight Pacific time. Search calls cost 100 units; metadata and channel/playlist calls cost 1 unit per call.
   - On a 403 `quotaExceeded` response, Youtarr enters an in-memory cooldown until the next Pacific-midnight reset and uses yt-dlp exclusively during that window.
   - When a key is configured, channel video listing and tab auto-detection use the API for all three tabs (Videos, Shorts, Streams) via the per-tab auto-generated playlist IDs (`UULF`/`UUSH`/`UULV`). yt-dlp remains the fallback.
   - Search results filter out live/upcoming broadcasts and Shorts under 60s to match yt-dlp's behavior. The Shorts filter requires a follow-up `videos.list` enrichment call to read each result's duration; if that enrichment fails (e.g., quota burned mid-search), the search returns the un-enriched results and a small number of Shorts may slip through. Live/upcoming filtering still applies in that fallback path.
-  - Set up instructions and a test button are in the Configuration page under Integrations.
+  - Set up instructions and a test button are on the Settings -> YouTube API page.
 
 ## SponsorBlock Settings
 
@@ -504,7 +507,7 @@ The old `discordWebhookUrl` and `notificationService` fields are automatically r
 - **Type**: `number`
 - **Default**: `30`
 - **Description**: Network timeout for download connections (seconds)
-- **Range**: 10-300
+- **Options**: `5`, `10`, `20`, `30` (the values offered in the UI)
 - **Note**: Corresponds to yt-dlp `--socket-timeout` setting. Time to wait before giving up, in seconds.
 
 ### Download Throttled Rate
@@ -520,7 +523,7 @@ The old `discordWebhookUrl` and `notificationService` fields are automatically r
 - **Type**: `number`
 - **Default**: `2`
 - **Description**: Number of retry attempts for failed downloads
-- **Range**: 0-10
+- **Options**: `0`, `1`, `2`, `3` (the values offered in the UI)
 - **Note**: Used for yt-dlp `--fragment-retries` and `--retries` settings.
 
 ### Auto-Retry Failed Videos
@@ -528,7 +531,7 @@ The old `discordWebhookUrl` and `notificationService` fields are automatically r
 - **Type**: `number`
 - **Default**: `1`
 - **Description**: Number of times a video that fails with a transient HTTP 403 is automatically re-queued in a fresh download job
-- **Range**: 0-3 (`0` disables auto-retry)
+- **Options**: `0`, `1`, `2`, `3` (the values offered in the UI; `0` disables auto-retry)
 - **Note**: YouTube sometimes rejects an already-issued stream URL mid-download with HTTP 403. yt-dlp's own retries (`downloadRetryCount`) re-request the same rejected URL and cannot recover; only a fresh yt-dlp run with a fresh extraction can. When a video fails with the 403 signature, Youtarr queues an "Auto-retry" job for just that video. Permanent failures (members-only, terminated channels, bot detection) are never auto-retried.
 
 ### Enable Stall Detection
@@ -688,12 +691,19 @@ volumes:
 - **Description**: Only remove watched videos downloaded at least this many days ago
 - **Examples**: `"30"`, `"90"`
 
-### Always Keep Newest Downloads
+### Keep This Many Newest Downloads
 - **Config Key**: `autoRemovalKeepRecentCount`
 - **Type**: `number`
 - **Default**: `0` (disabled)
 - **Description**: The N most recently downloaded videos are excluded from every auto-removal strategy (age, watched, and free-space)
-- **Note**: Videos marked as Protected are always excluded from auto-removal, independent of this setting, and do not count toward the N (each keep-recent slot goes to a video that would otherwise be removable)
+- **Note**: Videos marked as Protected are always excluded from auto-removal, independent of this setting, and do not count toward the N (each keep-recent slot goes to a video that would otherwise be removable). Videos of channels protected at the channel level are treated the same way.
+
+### Per-Channel Auto-Removal Settings
+Two more guards live in each channel's settings dialog (the Auto-Removal tab), not in `config.json`:
+- **Protect this channel from auto-removal**: excludes every video of the channel from all three strategies. These videos don't consume keep-recent slots either.
+- **Always keep newest downloads**: a per-channel version of `autoRemovalKeepRecentCount` (1-10000).
+
+The two are mutually exclusive: enabling protection clears the channel's keep-recent count. Both only apply while the channel is subscribed; they go dormant if you unsubscribe.
 
 ## API Keys & External Access
 
@@ -806,8 +816,8 @@ These fields are managed automatically by the application:
 ### uuid
 **Type**: `string`
 **Default**: Auto-generated
-**Description**: Unique installation identifier
-**Note**: Currently unused
+**Description**: Unique installation identifier, used as the Plex client identifier
+**Note**: Sent to Plex as `X-Plex-Client-Identifier` and as the `clientID` in the Plex OAuth URL. Editing it by hand changes the device identity Plex sees, so leave it alone.
 
 ## Configuration Examples
 

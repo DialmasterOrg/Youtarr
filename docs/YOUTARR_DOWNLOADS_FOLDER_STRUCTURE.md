@@ -7,20 +7,25 @@ By default, videos in each channel folder are placed into their own subfolders w
 ### Expected Default Layout
 
 This is the folder/file layout for channels that do not have a configured subfolder setting and
-is also used for manually downloaded files from channels that are not setup in `Your Channels`
+is also used for manually downloaded files from channels that are not setup in `Channels & Playlists`
 
 ```
 <YOUTUBE_OUTPUT_DIR>/
 ├── Channel Name/
 │   ├── poster.jpg                             # Channel poster
+│   ├── backdrop.jpg                           # Optional; written from the channel banner when "Create backdrop images" is on
 │   ├── Channel Name.m3u                       # Optional; written when the channel's "Generate channel playlist file" setting is on
 │   └── Channel - Video [id]/
 │       ├── Channel - Video [id].mp4           # Video file
 │       ├── Channel - Video [id].nfo           # Video metadata
 │       ├── Channel - Video [id].[lang].srt    # Subtitle file(s)
-│       └── Channel - Video [id].jpg           # Video thumbnail
+│       ├── Channel - Video [id].jpg           # Video thumbnail
+│       ├── Channel - Video [id]-fanart.jpg    # Optional; written when "Create video fanart files" is on
+│       └── Channel - Video [id]-backdrop.jpg  # Optional; written when "Create backdrop images" is on
 ├── Another Channel/
 ```
+
+The optional artwork and `.m3u` files follow the channel wherever it lives; they are written the same way in the subfolder and flat layouts below.
 
 ## Layout For Channels with Subfolder Settings
 
@@ -29,6 +34,7 @@ YouTube Downloads/
 ├── __Kids/                                        # Kids subfolder
 │   └── Channel Name/
 │       ├── poster.jpg                             # Channel poster
+│       ├── Channel Name.m3u                       # Optional channel playlist file
 │       └── Channel - Video [id]/
 │           ├── Channel - Video [id].mp4           # Video file
 │           ├── Channel - Video [id].nfo           # Video metadata
@@ -43,7 +49,7 @@ YouTube Downloads/
 
 ## Layout For Channels with Flat File Structure (No Video Subfolders)
 
-Channels can be configured to use a flat file structure, where video files are placed directly in the channel folder instead of individual video subfolders. This is a per-channel setting configured in the channel settings dialog ("Flat file structure (no video subfolders)") and only affects new downloads.
+Channels can be configured to use a flat file structure, where video files are placed directly in the channel folder instead of individual video subfolders. This is a per-channel setting: in the channel settings dialog, set "Video File Structure" to "Flat (no video subfolders)". It only affects new downloads.
 
 The same option is available as a one-time override in the manual download settings dialog.
 
@@ -51,6 +57,7 @@ The same option is available as a one-time override in the manual download setti
 <YOUTUBE_OUTPUT_DIR>/
 ├── Channel Name/
 │   ├── poster.jpg                             # Channel poster
+│   ├── Channel Name.m3u                       # Optional channel playlist file
 │   ├── Channel - Video [id].mp4              # Video file
 │   ├── Channel - Video [id].nfo              # Video metadata
 │   ├── Channel - Video [id].[lang].srt       # Subtitle file(s)
@@ -68,6 +75,7 @@ YouTube Downloads/
 ├── __Kids/
 │   └── Channel Name/                              # Flat structure + subfolder
 │       ├── poster.jpg
+│       ├── Channel Name.m3u
 │       ├── Channel - Video [id].mp4
 │       ├── Channel - Video [id].nfo
 │       ├── Channel - Video [id].[lang].srt
@@ -81,13 +89,14 @@ If you subscribe to any YouTube playlists, Youtarr creates a `__playlists__` fol
 ```
 <YOUTUBE_OUTPUT_DIR>/
 ├── __playlists__/
+│   ├── .ignore                                # Marker so Jellyfin/Emby skip this folder during library scans
 │   ├── My Favorite Talks.m3u
 │   └── Workout Mix.m3u
 ├── Channel Name/
 │   └── [videos]
 ```
 
-The `.m3u` files use relative paths, so they keep working if you move your library to a different location. Each one lists only the items you've actually downloaded, in playlist order (for MP3 Only playlists the entries are the MP3 files).
+The `.m3u` files use relative paths, so they keep working if you move your library to a different location. Each one lists only the items you've actually downloaded, in playlist order (for MP3 Only playlists the entries are the MP3 files). The empty `.ignore` file is deliberate: it keeps Jellyfin and Emby from auto-importing every playlist during library scans.
 
 `playlists` is a reserved subfolder name, so Youtarr won't let you assign a channel to a subfolder called `playlists`. Channel subfolders also can't start with `__`, so they never collide with the `__playlists__` folder itself. See [Media Server Playlists](MEDIA_SERVER_PLAYLISTS.md) for how playlists download and sync.
 

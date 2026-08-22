@@ -38,11 +38,10 @@ API keys are the recommended authentication method for external integrations. Th
 
 #### Creating an API Key
 
-1. Navigate to **Configuration** in Youtarr
-2. Scroll to **API Keys & External Access**
-3. Click **Create Key**
-4. Enter a descriptive name (e.g., "iPhone Shortcut", "Bookmarklet")
-5. **Important**: Copy and save the key immediately - it will not be shown again!
+1. Navigate to **Settings -> API Keys** in Youtarr
+2. Click **Create Key**
+3. Enter a descriptive name (e.g., "iPhone Shortcut", "Bookmarklet")
+4. **Important**: Copy and save the key immediately - it will not be shown again!
 
 #### Using API Keys
 
@@ -151,7 +150,7 @@ Delete an API key.
 
 API keys are rate-limited to prevent abuse. The default limit is **10 requests per minute** per API key.
 
-You can adjust this limit in **Configuration → API Keys & External Access → Rate Limit**.
+You can adjust this limit with the **Rate Limit (requests/min)** field on **Settings -> API Keys**.
 
 When rate limited, you'll receive a `429` response with:
 ```json
@@ -351,7 +350,7 @@ The bookmarklet only works on youtube.com or youtu.be pages. Make sure you're on
 
 ### 429 Rate Limited
 - Wait a minute before trying again
-- Consider increasing the rate limit in Configuration
+- Consider increasing the rate limit in Settings -> API Keys
 
 ### CORS Error / Blocked by External Auth (Cloudflare Zero Trust, Authelia, etc.)
 
