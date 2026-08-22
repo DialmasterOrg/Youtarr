@@ -1,5 +1,32 @@
 # Changelog
 
+## [v1.80.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.80.0) - 2026-08-22
+
+## [1.80.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.79.0...v1.80.0) (2026-08-22)
+
+
+### Features
+
+* add channel-level auto-removal protection ([87ae5fe](https://github.com/DialmasterOrg/Youtarr/commit/87ae5fee74a721b214805a3c08140ff400f8bc19)), closes [#748](https://github.com/DialmasterOrg/Youtarr/issues/748)
+* add year tag to video NFO files ([c1bfb44](https://github.com/DialmasterOrg/Youtarr/commit/c1bfb442856f51774696aa1ab4b3881ebedc7cf7))
+* clarify channel auto-download requirements ([a6466a5](https://github.com/DialmasterOrg/Youtarr/commit/a6466a5fd6eeda552d519a27eb4b192b22e94d18))
+* clarify subfolder add flow in settings ([41b2d78](https://github.com/DialmasterOrg/Youtarr/commit/41b2d7829516f0be1e7931fd321d721d4eae5b50))
+
+
+### Bug Fixes
+
+* add OCI source label to release image ([f432a22](https://github.com/DialmasterOrg/Youtarr/commit/f432a223ac14d5f1f38f8963c8cd5b0d8accb388)), closes [#768](https://github.com/DialmasterOrg/Youtarr/issues/768)
+
+
+### Documentation
+
+* add Asustor App Central platform guide ([10e96af](https://github.com/DialmasterOrg/Youtarr/commit/10e96afa3c933fe946856df9dcfb79b1cb420884))
+* update CHANGELOG for v1.79.0 [skip ci] ([6debab5](https://github.com/DialmasterOrg/Youtarr/commit/6debab5d24efcc9560c0d998854f9b2169a108fb))
+
+
+
+
+
 ## [v1.79.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.79.0) - 2026-08-19
 
 ## [1.79.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.78.0...v1.79.0) (2026-08-19)
