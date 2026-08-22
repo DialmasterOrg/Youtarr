@@ -103,7 +103,7 @@ If the stored `server_playlist_id` no longer exists on the server (manual deleti
 
 ## Removing a playlist
 
-Removing a playlist in Youtarr (trashcan icon on the Subscriptions page) is a soft delete: it stops auto-downloads, hides the playlist from the UI and API, and stops future syncs. It does **not** delete downloaded videos, does not remove the playlist from your media server (delete it there directly if you want it gone), and does not delete the `.m3u` file. Re-adding the same playlist later restores it with its previous settings and download history intact.
+Removing a playlist in Youtarr (trashcan icon on the Channels & Playlists page) is a soft delete: it stops auto-downloads, hides the playlist from the UI and API, and stops future syncs. It does **not** delete downloaded videos, does not remove the playlist from your media server (delete it there directly if you want it gone), and does not delete the `.m3u` file. Re-adding the same playlist later restores it with its previous settings and download history intact.
 
 ## M3U fallback
 
@@ -119,6 +119,8 @@ The M3U uses **relative paths** so the file remains valid when the storage volum
 - **mpv**: `mpv "/path/to/Athlete Collabs.m3u"`
 - **Kodi**: import the M3U as a playlist source.
 - **Plex / Jellyfin / Emby**: most clients can also import M3U directly if you do not want to enable the native sync.
+
+Note that Youtarr writes a `.ignore` marker file inside `__playlists__`, so Jellyfin and Emby skip the folder during library scans and never auto-import these files (unlike the per-channel `.m3u` files, which have no marker). Importing them into those servers is a manual step.
 
 The reserved `__playlists__` subfolder is rejected by the channel sub_folder validator so users cannot accidentally collide with it.
 

@@ -585,6 +585,12 @@ WebSocket shares the HTTP port (3011 in container, 3087 on host) and emits:
 - `downloadComplete` - Video download finished
 - `jobsUpdated` - Download job enqueued or started
 - `channelsUpdated` - Channel list changed
+- `videosUpdated` - A video's database rows were persisted mid-batch
+- `rescanStatus` - Filesystem rescan started or finished
+- `channelTabsDetected` - Tab detection finished for a channel
+- `progress` / `complete` / `error` (source `subscriptionImport`) - Subscription import job updates
+
+The client also synthesizes a local `connectionRestored` message after every reconnect (`client/src/providers/WebSocketProvider.tsx`); the server never sends it.
 
 ## Contributing
 

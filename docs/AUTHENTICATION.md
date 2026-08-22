@@ -135,11 +135,10 @@ API Keys provide persistent authentication for external integrations like bookma
 
 ### Creating API Keys
 
-1. Navigate to **Configuration** in the web UI
-2. Scroll to **API Keys & External Access**
-3. Click **Create Key**
-4. Enter a descriptive name (e.g., "iPhone Shortcut", "Bookmarklet")
-5. **Important**: Copy and save the key immediately - it will not be shown again!
+1. Navigate to **Settings -> API Keys** in the web UI
+2. Click **Create Key**
+3. Enter a descriptive name (e.g., "iPhone Shortcut", "Bookmarklet")
+4. **Important**: Copy and save the key immediately - it will not be shown again!
 
 ### Using API Keys
 
@@ -162,7 +161,7 @@ curl -X POST https://your-server.com/api/videos/download \
 ### API Key Management
 
 #### Via Web UI
-- View all keys in Configuration → API Keys & External Access
+- View all keys in Settings -> API Keys
 - Delete keys by clicking the trash icon
 - See last usage time for each key
 
@@ -288,7 +287,7 @@ Plex OAuth is used to obtain API tokens for Plex integration, not for Youtarr au
 
 ### Setup Process
 
-1. Navigate to Configuration page
+1. Navigate to Settings -> Plex
 2. Click "Get Key" next to Plex API Key field
 3. Redirected to Plex authentication
 4. Log in with Plex account (must be server admin)
@@ -301,7 +300,7 @@ Plex OAuth is used to obtain API tokens for Plex integration, not for Youtarr au
 If OAuth fails, get token manually:
 1. Visit [Plex Token Guide](https://www.plexopedia.com/plex-media-server/general/plex-token/)
 2. Follow instructions to get X-Plex-Token
-3. Enter token in Configuration page
+3. Enter token on the Settings -> Plex page
 4. Save changes
 
 ### Token Management
