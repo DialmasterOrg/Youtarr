@@ -10,9 +10,12 @@ const { JobVideoDownload } = require('../../models');
 const { VIDEO_PERSISTED_MARKER } = require('../constants/outputMarkers');
 
 const PROGRESS_THROTTLE_MS = 250;
+// Must stay well under the client's 60s STALE_ACTIVITY_MS (useCurrentActivitySeed)
+// so the /api/jobs/current-activity snapshot is never considered stale mid-run.
+const PROGRESS_HEARTBEAT_MS = 25 * 1000;
 
 class YtdlpOutputRouter {
-  constructor({ jobId, config, monitor, errorTracker, timeoutController, cookiesEnabled = false }) {
+  constructor({ jobId, config, monitor, errorTracker, timeoutController, cookiesEnabled = false, heartbeatIntervalMs = PROGRESS_HEARTBEAT_MS }) {
     this.jobId = jobId;
     this.config = config;
     this.monitor = monitor;
@@ -32,6 +35,33 @@ class YtdlpOutputRouter {
     this.pendingProgressMessage = null;
     this.progressFlushTimer = null;
     this.lastEmittedProgressState = null;
+    this.heartbeatIntervalMs = heartbeatIntervalMs;
+    this.heartbeatTimer = null;
+  }
+
+  // yt-dlp goes silent for minutes during large merges and audio extraction.
+  // Rebroadcast the snapshot so clients and the monitor's lastActivityAt stay fresh.
+  startHeartbeat() {
+    this.stopHeartbeat();
+    this.heartbeatTimer = setInterval(() => {
+      if (Date.now() - this.lastProgressEmitTime < this.heartbeatIntervalMs) {
+        return;
+      }
+      MessageEmitter.emitMessage('broadcast', null, 'download', 'downloadProgress', {
+        progress: this.monitor.snapshot(),
+      });
+      this.lastProgressEmitTime = Date.now();
+    }, this.heartbeatIntervalMs);
+    if (typeof this.heartbeatTimer.unref === 'function') {
+      this.heartbeatTimer.unref();
+    }
+  }
+
+  stopHeartbeat() {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
   }
 
   handleStdoutChunk(chunk) {
@@ -347,6 +377,7 @@ class YtdlpOutputRouter {
 
   // Flush any pending throttled message before the final status broadcast.
   dispose() {
+    this.stopHeartbeat();
     if (this.progressFlushTimer) {
       clearTimeout(this.progressFlushTimer);
       this.progressFlushTimer = null;
