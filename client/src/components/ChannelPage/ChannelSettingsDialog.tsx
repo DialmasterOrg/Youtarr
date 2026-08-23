@@ -965,7 +965,6 @@ function ChannelSettingsDialog({
                     ...settings,
                     additional_tags: e.target.value || null
                   })}
-                  placeholder="e.g., (?i)podcast|interview"
                   fullWidth
                   size="small"
                   InputLabelProps={{ shrink: true }}
