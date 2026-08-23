@@ -176,6 +176,31 @@ class ChannelSettingsModule {
   }
 
   /**
+   * Validate title filter regex pattern (Python regex syntax)
+   * Uses Python directly to test regex validity - same as yt-dlp
+   * @param {string|null} additionalTags - Python regex pattern to validate
+   * @returns {Object} - { valid: boolean, error?: string }
+   */
+  validateAdditionalTags(additionalTags) {
+    // NULL or empty string is valid (no title filtering)
+    if (!additionalTags || additionalTags.trim() === '') {
+      return { valid: true };
+    }
+
+    const trimmed = additionalTags.trim();
+
+    // Check length
+    if (trimmed.length > 1000) {
+      return {
+        valid: false,
+        error: 'Additional tags must be 1000 characters or less',
+      };
+    }
+
+    return { valid: true };
+  }
+
+  /**
    * Validate audio format setting
    * @param {string|null} audioFormat - Audio format setting to validate
    * @returns {Object} - { valid: boolean, error?: string }
@@ -534,6 +559,7 @@ class ChannelSettingsModule {
       min_duration: channel.min_duration,
       max_duration: channel.max_duration,
       title_filter_regex: channel.title_filter_regex,
+      additional_tags: channel.additional_tags,
       audio_format: channel.audio_format,
       default_rating: channel.default_rating,
       skip_video_folder: channel.skip_video_folder,
@@ -653,6 +679,14 @@ class ChannelSettingsModule {
     // Validate title filter regex if provided
     if (settings.title_filter_regex !== undefined) {
       const validation = this.validateTitleRegex(settings.title_filter_regex);
+      if (!validation.valid) {
+        throw new Error(validation.error);
+      }
+    }
+
+    // Validate additional tags if provided
+    if (settings.additional_tags !== undefined) {
+      const validation = this.validateAdditionalTags(settings.additional_tags);
       if (!validation.valid) {
         throw new Error(validation.error);
       }
@@ -783,6 +817,11 @@ class ChannelSettingsModule {
         ? settings.title_filter_regex.trim()
         : null;
     }
+    if (settings.additional_tags !== undefined) {
+      updateData.additional_tags = settings.additional_tags
+        ? settings.additional_tags.trim()
+        : null;
+    }
     if (settings.default_rating !== undefined) {
       updateData.default_rating = normalizedDefaultRating;
     }
@@ -902,6 +941,7 @@ class ChannelSettingsModule {
         min_duration: updatedChannel.min_duration,
         max_duration: updatedChannel.max_duration,
         title_filter_regex: updatedChannel.title_filter_regex,
+        additional_tags: updatedChannel.additional_tags,
         audio_format: updatedChannel.audio_format,
         default_rating: updatedChannel.default_rating,
         skip_video_folder: updatedChannel.skip_video_folder,
