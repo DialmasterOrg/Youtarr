@@ -534,6 +534,50 @@ describe('channelProvisioning', () => {
     });
   });
 
+  describe('getChannelInfo with empty channel', () => {
+    const setupEmptyChannel = (metadata) => {
+      const channelIdentity = require('../channelIdentity');
+      const channelMetadataFetcher = require('../channelMetadataFetcher');
+      const tabManager = require('../tabManager');
+
+      jest.spyOn(channelIdentity, 'findChannelByUrlOrId').mockResolvedValue({
+        foundChannel: null,
+        channelUrl: 'https://www.youtube.com/@artistchan',
+      });
+      jest.spyOn(channelMetadataFetcher, 'fetchChannelMetadata').mockResolvedValue(metadata);
+      return jest.spyOn(tabManager, 'checkTabExistsViaYtdlp');
+    };
+
+    test('throws CHANNEL_RELEASES_ONLY when a channel with no videos has a releases tab', async () => {
+      const releasesProbe = setupEmptyChannel({ channel_id: 'UC999', entries: [] })
+        .mockResolvedValue(true);
+
+      await expect(
+        channelProvisioning.getChannelInfo('https://www.youtube.com/@artistchan', false)
+      ).rejects.toMatchObject({ code: 'CHANNEL_RELEASES_ONLY' });
+
+      expect(releasesProbe).toHaveBeenCalledWith('UC999', 'releases');
+    });
+
+    test('throws CHANNEL_EMPTY when a channel with no videos has no releases tab', async () => {
+      setupEmptyChannel({ channel_id: 'UC999', entries: [] }).mockResolvedValue(false);
+
+      await expect(
+        channelProvisioning.getChannelInfo('https://www.youtube.com/@artistchan', false)
+      ).rejects.toMatchObject({ code: 'CHANNEL_EMPTY' });
+    });
+
+    test('throws CHANNEL_EMPTY without probing when metadata has no channel id', async () => {
+      const releasesProbe = setupEmptyChannel({ entries: [] }).mockResolvedValue(true);
+
+      await expect(
+        channelProvisioning.getChannelInfo('https://www.youtube.com/@artistchan', false)
+      ).rejects.toMatchObject({ code: 'CHANNEL_EMPTY' });
+
+      expect(releasesProbe).not.toHaveBeenCalled();
+    });
+  });
+
   describe('getChannelInfo with new channel', () => {
     test('caches the channel banner after processing the thumbnail', async () => {
       const channelIdentity = require('../channelIdentity');
