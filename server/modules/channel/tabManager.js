@@ -14,7 +14,7 @@ class TabManager {
    * Check if a tab exists for a channel by probing with yt-dlp.
    * Attempts to fetch 1 entry from the tab URL. If entries exist, the tab is available.
    * @param {string} channelId - Channel ID
-   * @param {string} tabType - Tab type to check ('videos', 'shorts', or 'streams')
+   * @param {string} tabType - Tab path to check ('videos', 'shorts', 'streams', or 'releases')
    * @returns {Promise<boolean>} - True if tab exists
    */
   async checkTabExistsViaYtdlp(channelId, tabType) {
