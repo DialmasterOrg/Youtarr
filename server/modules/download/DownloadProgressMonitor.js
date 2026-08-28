@@ -329,6 +329,8 @@ class DownloadProgressMonitor {
     if (line.includes('[Merger]')) return 'merging';
     if (line.includes('[Metadata]')) return 'metadata';
     if (line.includes('[MoveFiles]')) return 'processing';
+    if (line.includes('[ExtractAudio]')) return 'extracting_audio';
+    if (line.includes('[ModifyChapters]')) return 'processing';
     if (line.includes('Completed:')) return 'complete';
     if (line.includes('ERROR:')) {
       this.hasError = true;

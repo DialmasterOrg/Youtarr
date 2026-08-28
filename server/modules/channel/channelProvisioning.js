@@ -127,8 +127,20 @@ class ChannelProvisioning {
     const channelData = await channelMetadataFetcher.fetchChannelMetadata(channelUrl);
     logger.info('Channel metadata fetched successfully');
 
-    // Reject channels with no videos - these can't be usefully added
+    // Reject channels with no videos - these can't be usefully added.
+    // Verified Artist channels can have an empty Videos tab with all content
+    // published as album playlists on the Releases tab; distinguish that case
+    // so the UI can point the user at playlist subscriptions instead.
     if (!channelData.entries || channelData.entries.length === 0) {
+      const emptyChannelId = channelData.channel_id || channelData.id;
+      const hasReleases = emptyChannelId
+        ? await tabManager.checkTabExistsViaYtdlp(emptyChannelId, 'releases')
+        : false;
+      if (hasReleases) {
+        const error = new Error('Channel has no videos but has a releases tab');
+        error.code = 'CHANNEL_RELEASES_ONLY';
+        throw error;
+      }
       const error = new Error('Channel has no videos');
       error.code = 'CHANNEL_EMPTY';
       throw error;
