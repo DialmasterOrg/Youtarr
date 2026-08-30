@@ -563,6 +563,14 @@ The 403 is sometimes a temporary block on YouTube's side - retrying later can wo
 
 **Note**: The same failure on one machine but not another usually comes down to this cookies difference, not the network - both machines can share an IP and behave differently.
 
+### Subtitle Downloads Time Out
+
+**Problem**: With subtitles enabled, downloads log `[download] Got error: HTTPSConnectionPool(host='www.youtube.com', port=443): Read timed out` right after `Writing video subtitles to: ...`, and each affected video takes a couple of extra minutes.
+
+This is the subtitle request (YouTube's timedtext endpoint), not the video: video streams come from `googlevideo.com`. YouTube throttles or hangs subtitle requests that don't look like they come from a browser, so yt-dlp sends them with browser impersonation, which needs the `curl_cffi` library. Youtarr's Docker image includes it; if you see `WARNING: The extractor specified to use impersonation for this download, but no impersonate target is available` in the logs, you are on an older image and should pull the latest.
+
+Even with impersonation, YouTube's subtitle endpoint is flaky at times. When the subtitle fetch fails, yt-dlp still downloads the video; Youtarr keeps the video, does not count it as a failed download, and marks the job "Complete with Warnings". If the extra retry time bothers you, disable subtitles in **Settings -> Core** until it settles.
+
 ### No Download Progress Shown (Downloads Work, Videos "Just Appear")
 
 **Problem**: Downloads complete successfully, but the **Downloads -> Activity** page never updates live: progress percentages stay frozen (or the page shows "Waiting for progress updates...") until you refresh the page or switch back to the tab. Other real-time updates (channel refresh status, download complete notifications) are also missing.

@@ -261,7 +261,8 @@ async function finalizeDownloadJob({
       failedCount: failedVideosList.length,
       unexpectedErrorCount: errorTracker.unexpectedErrorCount,
       botDetected,
-      httpForbiddenDetected
+      httpForbiddenDetected,
+      subtitleFailureCount: errorTracker.subtitleFailureCount || 0
     });
 
     const dataPayload = buildJobDataPayload({
@@ -338,7 +339,8 @@ async function finalizeDownloadJob({
         httpForbiddenDetected,
         cookiesEnabled,
         flags,
-        failureDetails
+        failureDetails,
+        subtitleFailureCount: errorTracker.subtitleFailureCount || 0
       });
       status = nonZero.status;
       output = nonZero.output;
@@ -461,7 +463,8 @@ async function finalizeDownloadJob({
       unexpectedErrorCount: errorTracker.unexpectedErrorCount,
       httpForbiddenDetected,
       cookiesEnabled,
-      autoRetryQueuedCount
+      autoRetryQueuedCount,
+      subtitleFailureCount: errorTracker.subtitleFailureCount || 0
     });
     const { debugFlags } = presentation;
 
@@ -478,6 +481,7 @@ async function finalizeDownloadJob({
       unexpectedErrorCount: errorTracker.unexpectedErrorCount,
       hasOnlyExpectedSkips: flags.hasOnlyExpectedSkips,
       hasOnlyHandledErrors: flags.hasOnlyHandledErrors,
+      hasOnlySubtitleFailures: flags.hasOnlySubtitleFailures,
       terminatedChannelCount: errorTracker.terminatedChannelIds.size,
       successCount: videoData.length,
       failureCount: failedVideosList.length,

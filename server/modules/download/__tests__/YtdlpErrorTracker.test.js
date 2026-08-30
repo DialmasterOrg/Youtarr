@@ -176,6 +176,87 @@ describe('YtdlpErrorTracker', () => {
     });
   });
 
+  describe('handleWarningLine', () => {
+    const SUBTITLE_ERROR_LINE = 'ERROR: [download] Got error: HTTPSConnectionPool(host=\'www.youtube.com\', port=443): Read timed out. (read timeout=30.0). Giving up after 2 retries';
+    const SUBTITLE_WARNING_LINE = 'WARNING: Unable to download video subtitles for \'en\': HTTPSConnectionPool(host=\'www.youtube.com\', port=443): Read timed out. (read timeout=30.0)';
+
+    it('drops the failure recorded from a subtitle download ERROR when the subtitle WARNING follows', () => {
+      const { tracker } = createTracker();
+      tracker.trackVideoStart('vid12345678');
+      tracker.handleErrorLine(SUBTITLE_ERROR_LINE, 'stderr');
+
+      const consumed = tracker.handleWarningLine(SUBTITLE_WARNING_LINE, 'stderr');
+
+      expect(consumed).toBe(true);
+      expect(tracker.failedVideos.size).toBe(0);
+      expect(tracker.unexpectedErrorCount).toBe(0);
+    });
+
+    it('counts each dropped subtitle failure', () => {
+      const { tracker } = createTracker();
+      tracker.trackVideoStart('vid12345678');
+      tracker.handleErrorLine(SUBTITLE_ERROR_LINE, 'stderr');
+      tracker.handleWarningLine(SUBTITLE_WARNING_LINE, 'stderr');
+      tracker.trackVideoStart('vid87654321');
+      tracker.handleErrorLine(SUBTITLE_ERROR_LINE, 'stderr');
+      tracker.handleWarningLine(SUBTITLE_WARNING_LINE, 'stderr');
+
+      expect(tracker.subtitleFailureCount).toBe(2);
+    });
+
+    it('keeps an earlier unrelated failure when the subtitle WARNING explains a later error', () => {
+      const { tracker } = createTracker();
+      tracker.trackVideoStart('vid12345678');
+      tracker.handleErrorLine('ERROR: Something bad happened', 'stderr');
+      tracker.handleErrorLine(SUBTITLE_ERROR_LINE, 'stderr');
+
+      const consumed = tracker.handleWarningLine(SUBTITLE_WARNING_LINE, 'stderr');
+
+      expect(consumed).toBe(false);
+      expect(tracker.failedVideos.get('vid12345678').error).toBe('Something bad happened');
+      expect(tracker.unexpectedErrorCount).toBe(2);
+    });
+
+    it('handles one subtitle failure per language independently', () => {
+      const { tracker } = createTracker();
+      tracker.trackVideoStart('vid12345678');
+      tracker.handleErrorLine(SUBTITLE_ERROR_LINE, 'stderr');
+      tracker.handleWarningLine(SUBTITLE_WARNING_LINE, 'stderr');
+      tracker.handleErrorLine(SUBTITLE_ERROR_LINE, 'stderr');
+
+      const consumed = tracker.handleWarningLine(SUBTITLE_WARNING_LINE.replace('\'en\'', '\'de\''), 'stderr');
+
+      expect(consumed).toBe(true);
+      expect(tracker.failedVideos.size).toBe(0);
+      expect(tracker.unexpectedErrorCount).toBe(0);
+    });
+
+    it('returns false and changes nothing for a WARNING that is not about subtitles', () => {
+      const { tracker } = createTracker();
+      tracker.trackVideoStart('vid12345678');
+      tracker.handleErrorLine(SUBTITLE_ERROR_LINE, 'stderr');
+
+      const consumed = tracker.handleWarningLine(
+        'WARNING: The extractor specified to use impersonation for this download, but no impersonate target is available.',
+        'stderr'
+      );
+
+      expect(consumed).toBe(false);
+      expect(tracker.failedVideos.size).toBe(1);
+      expect(tracker.unexpectedErrorCount).toBe(1);
+    });
+
+    it('returns false when no video is being tracked', () => {
+      const { tracker } = createTracker();
+      tracker.handleErrorLine(SUBTITLE_ERROR_LINE, 'stderr');
+
+      const consumed = tracker.handleWarningLine(SUBTITLE_WARNING_LINE, 'stderr');
+
+      expect(consumed).toBe(false);
+      expect(tracker.unexpectedErrorCount).toBe(1);
+    });
+  });
+
   describe('video tracking', () => {
     it('trackVideoStart clears lastErrorMessage', () => {
       const { tracker } = createTracker();

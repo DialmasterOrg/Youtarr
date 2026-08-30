@@ -20,37 +20,52 @@ describe('downloadStatusResolver', () => {
 
     it('treats exit 1 with only expected skips as both flags true', () => {
       const flags = computeOutcomeFlags({ ...baseInput, expectedSkipCount: 2 });
-      expect(flags).toEqual({ hasOnlyExpectedSkips: true, hasOnlyHandledErrors: true });
+      expect(flags).toEqual({ hasOnlyExpectedSkips: true, hasOnlyHandledErrors: true, hasOnlySubtitleFailures: false });
     });
 
     it('returns both flags false when skips are mixed with unexpected errors', () => {
       const flags = computeOutcomeFlags({ ...baseInput, expectedSkipCount: 2, unexpectedErrorCount: 1 });
-      expect(flags).toEqual({ hasOnlyExpectedSkips: false, hasOnlyHandledErrors: false });
+      expect(flags).toEqual({ hasOnlyExpectedSkips: false, hasOnlyHandledErrors: false, hasOnlySubtitleFailures: false });
     });
 
     it('returns both flags false when skips are mixed with failed videos', () => {
       const flags = computeOutcomeFlags({ ...baseInput, expectedSkipCount: 2, failedCount: 1 });
-      expect(flags).toEqual({ hasOnlyExpectedSkips: false, hasOnlyHandledErrors: false });
+      expect(flags).toEqual({ hasOnlyExpectedSkips: false, hasOnlyHandledErrors: false, hasOnlySubtitleFailures: false });
     });
 
     it('treats terminations-only as handled errors but not expected skips', () => {
       const flags = computeOutcomeFlags({ ...baseInput, terminatedChannelCount: 1 });
-      expect(flags).toEqual({ hasOnlyExpectedSkips: false, hasOnlyHandledErrors: true });
+      expect(flags).toEqual({ hasOnlyExpectedSkips: false, hasOnlyHandledErrors: true, hasOnlySubtitleFailures: false });
     });
 
     it('forces both flags false when bot detection fired', () => {
       const flags = computeOutcomeFlags({ ...baseInput, expectedSkipCount: 2, terminatedChannelCount: 1, botDetected: true });
-      expect(flags).toEqual({ hasOnlyExpectedSkips: false, hasOnlyHandledErrors: false });
+      expect(flags).toEqual({ hasOnlyExpectedSkips: false, hasOnlyHandledErrors: false, hasOnlySubtitleFailures: false });
     });
 
     it('forces both flags false when HTTP 403 was detected', () => {
       const flags = computeOutcomeFlags({ ...baseInput, expectedSkipCount: 2, terminatedChannelCount: 1, httpForbiddenDetected: true });
-      expect(flags).toEqual({ hasOnlyExpectedSkips: false, hasOnlyHandledErrors: false });
+      expect(flags).toEqual({ hasOnlyExpectedSkips: false, hasOnlyHandledErrors: false, hasOnlySubtitleFailures: false });
     });
 
     it('returns both flags false on exit code 0', () => {
       const flags = computeOutcomeFlags({ ...baseInput, code: 0, expectedSkipCount: 2, terminatedChannelCount: 1 });
-      expect(flags).toEqual({ hasOnlyExpectedSkips: false, hasOnlyHandledErrors: false });
+      expect(flags).toEqual({ hasOnlyExpectedSkips: false, hasOnlyHandledErrors: false, hasOnlySubtitleFailures: false });
+    });
+
+    it('flags exit 1 as subtitle-failures-only when nothing else went wrong', () => {
+      const flags = computeOutcomeFlags({ ...baseInput, subtitleFailureCount: 1 });
+      expect(flags).toEqual({ hasOnlyExpectedSkips: false, hasOnlyHandledErrors: false, hasOnlySubtitleFailures: true });
+    });
+
+    it('does not flag subtitle-failures-only when a video also failed', () => {
+      const flags = computeOutcomeFlags({ ...baseInput, subtitleFailureCount: 1, failedCount: 1 });
+      expect(flags.hasOnlySubtitleFailures).toBe(false);
+    });
+
+    it('does not flag subtitle-failures-only on a clean exit', () => {
+      const flags = computeOutcomeFlags({ ...baseInput, code: 0, subtitleFailureCount: 1 });
+      expect(flags.hasOnlySubtitleFailures).toBe(false);
     });
   });
 
@@ -152,6 +167,30 @@ describe('downloadStatusResolver', () => {
       expect(result.notes).toBe('Some videos failed (exit 1)');
     });
 
+    it('describes subtitle-only failures without calling the videos failed', () => {
+      const result = describeNonZeroExit({
+        ...baseInput,
+        videoCount: 2,
+        videoDataCount: 2,
+        subtitleFailureCount: 2,
+        flags: { ...noFlags, hasOnlySubtitleFailures: true }
+      });
+      expect(result.output).toBe('2 videos.');
+      expect(result.notes).toBe('2 subtitle downloads failed; the videos themselves downloaded');
+      expect(result.errorCode).toBeUndefined();
+    });
+
+    it('uses singular wording for a single subtitle failure', () => {
+      const result = describeNonZeroExit({
+        ...baseInput,
+        videoCount: 1,
+        videoDataCount: 1,
+        subtitleFailureCount: 1,
+        flags: { ...noFlags, hasOnlySubtitleFailures: true }
+      });
+      expect(result.notes).toBe('1 subtitle download failed; the videos themselves downloaded');
+    });
+
     it('includes stall detection details in the failure reason', () => {
       const result = describeNonZeroExit({
         ...baseInput,
@@ -227,6 +266,16 @@ describe('downloadStatusResolver', () => {
         hasPartialSuccess: false
       });
       expect(status).toBe('Killed');
+    });
+
+    it('upgrades to Complete with Warnings for subtitle-only failures', () => {
+      const status = resolveTerminalStatus({
+        status: 'Error',
+        flags: { ...noFlags, hasOnlySubtitleFailures: true },
+        terminatedChannelCount: 0,
+        hasPartialSuccess: false
+      });
+      expect(status).toBe('Complete with Warnings');
     });
   });
 
@@ -357,6 +406,20 @@ describe('downloadStatusResolver', () => {
       });
       expect(result.finalState).toBe('warning');
       expect(result.finalText).toBe('Download completed with errors: 2 videos downloaded, 1 failed');
+    });
+
+    it('reports subtitle-only failures as warnings, not errors', () => {
+      const result = resolveFinalPresentation({
+        ...baseInput,
+        code: 1,
+        flags: { ...noFlags, hasOnlySubtitleFailures: true },
+        videoDataCount: 2,
+        videoCount: 2,
+        monitorCompletedCount: 2,
+        subtitleFailureCount: 1
+      });
+      expect(result.finalState).toBe('warning');
+      expect(result.finalText).toBe('Download completed with warnings: 2 videos downloaded, 1 subtitle download failed');
     });
 
     it('reports a fully handed-off failure as queued for auto-retry, not failed', () => {
