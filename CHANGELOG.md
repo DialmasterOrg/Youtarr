@@ -1,5 +1,29 @@
 # Changelog
 
+## [v1.81.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.81.0) - 2026-08-28
+
+## [1.81.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.80.0...v1.81.0) (2026-08-28)
+
+
+### Features
+
+* suggest playlists for releases-only channels ([dc984ca](https://github.com/DialmasterOrg/Youtarr/commit/dc984caabd4c1ed5c9a78606a44270d523504188)), closes [#616](https://github.com/DialmasterOrg/Youtarr/issues/616)
+
+
+### Bug Fixes
+
+* download progress stuck during processing ([2da339d](https://github.com/DialmasterOrg/Youtarr/commit/2da339d25a780bbc1bcab97b2f6be4f378f290c4)), closes [#749](https://github.com/DialmasterOrg/Youtarr/issues/749)
+
+
+### Documentation
+
+* update CHANGELOG for v1.80.0 [skip ci] ([587de1f](https://github.com/DialmasterOrg/Youtarr/commit/587de1f5da1a27168f7bf9eaa732dcd0b64b8054))
+* update docs for v1.80.0 [skip ci] ([95b95f3](https://github.com/DialmasterOrg/Youtarr/commit/95b95f3c802f3f46e96cf6c79b03c098ffef45b4))
+
+
+
+
+
 ## [v1.80.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.80.0) - 2026-08-22
 
 ## [1.80.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.79.0...v1.80.0) (2026-08-22)
