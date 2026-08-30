@@ -17,6 +17,7 @@ const {
 
 const jvdMigration = require('../20251010162434-add-jobvideodownloads-table');
 const utf8mb4Migration = require('../20250907000000-upgrade-to-utf8mb4-if-needed');
+const repairMigration = require('../20260830191259-repair-jobs-uuid-fk-collation');
 
 // Minimal queryInterface double. `collations` maps 'Table.column' to a
 // collation name; a missing key means the table/column does not exist.
@@ -240,5 +241,51 @@ describe('upgrade-to-utf8mb4-if-needed migration', () => {
     await utf8mb4Migration.up(qi, Sequelize);
 
     expect(sqlIndex(qi.ops, /ALTER TABLE/)).toBe(-1);
+  });
+});
+
+describe('repair-jobs-uuid-fk-collation migration', () => {
+  test('repairs a mixed collation state left behind by earlier migrations', async () => {
+    // Only JobVideos.job_id was coerced; Jobs.id and JobVideoDownloads.job_id
+    // are already binary. This is the state a partial CONVERT TO run leaves.
+    const qi = createDouble({
+      collations: {
+        'Jobs.id': 'utf8mb4_bin',
+        'JobVideos.job_id': 'utf8mb4_unicode_ci',
+        'JobVideoDownloads.job_id': 'utf8mb4_bin',
+      },
+    });
+    await repairMigration.up(qi);
+
+    const fkOff = sqlIndex(qi.ops, /SET FOREIGN_KEY_CHECKS = 0/);
+    const alterJobVideos = sqlIndex(qi.ops, /ALTER TABLE `JobVideos` MODIFY `job_id`.*COLLATE utf8mb4_bin NOT NULL/);
+    const fkOn = sqlIndex(qi.ops, /SET FOREIGN_KEY_CHECKS = 1/);
+
+    expect(alterJobVideos).not.toBe(-1);
+    expect(fkOff).toBeLessThan(alterJobVideos);
+    expect(alterJobVideos).toBeLessThan(fkOn);
+    expect(sqlIndex(qi.ops, /ALTER TABLE `Jobs`/)).toBe(-1);
+    expect(sqlIndex(qi.ops, /ALTER TABLE `JobVideoDownloads`/)).toBe(-1);
+    expect(qi.transactions[0].committed).toBe(true);
+  });
+
+  test('does nothing when every UUID FK column is already utf8mb4_bin', async () => {
+    const qi = createDouble({
+      collations: {
+        'Jobs.id': 'utf8mb4_bin',
+        'JobVideos.job_id': 'utf8mb4_bin',
+        'JobVideoDownloads.job_id': 'utf8mb4_bin',
+      },
+    });
+    await repairMigration.up(qi);
+
+    expect(qi.ops).toEqual([]);
+  });
+
+  test('down is a no-op', async () => {
+    const qi = createDouble();
+    await repairMigration.down(qi);
+
+    expect(qi.ops).toEqual([]);
   });
 });
