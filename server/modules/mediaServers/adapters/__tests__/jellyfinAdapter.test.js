@@ -45,8 +45,18 @@ describe('JellyfinAdapter', () => {
     expect(result).toEqual({ ok: true, version: '10.9.2' });
     expect(axios.get).toHaveBeenCalledWith(
       'http://jf:8096/System/Info',
-      expect.objectContaining({ headers: { 'X-Emby-Token': 'KEY' } })
+      expect.objectContaining({ headers: { Authorization: 'MediaBrowser Token="KEY"' } })
     );
+  });
+
+  // Jellyfin 12.0 disables the legacy X-Emby-Token header by default; the
+  // Authorization: MediaBrowser scheme is accepted by both 10.x and 12.x.
+  test('does not send the legacy X-Emby-Token header', async () => {
+    axios.get.mockResolvedValueOnce({ data: { Version: '12.0.0' } });
+    const adapter = new JellyfinAdapter(cfg);
+    await adapter.testConnection();
+    const { headers } = axios.get.mock.calls[0][1];
+    expect(headers).not.toHaveProperty('X-Emby-Token');
   });
 
   test('testConnection reports a rejected API key distinctly from an unreachable server', async () => {
@@ -193,7 +203,7 @@ describe('JellyfinAdapter', () => {
       isAxiosError: true,
       response: { status: 404 },
       message: 'Request failed with status code 404',
-      config: { headers: { 'X-Emby-Token': 'SUPER_SECRET_TOKEN' } },
+      config: { headers: { Authorization: 'MediaBrowser Token="SUPER_SECRET_TOKEN"' } },
     });
     const id = await adapter.resolveItemIdByFilepath('/x/v.mp4');
     expect(id).toBeNull();
