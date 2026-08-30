@@ -8,7 +8,8 @@ function computeOutcomeFlags({
   failedCount,
   unexpectedErrorCount,
   botDetected,
-  httpForbiddenDetected
+  httpForbiddenDetected,
+  subtitleFailureCount = 0
 }) {
   // yt-dlp exited with code 1 only because every error it emitted was an
   // expected skip (members-only, upcoming live, premiere, etc.). Treat
@@ -32,7 +33,19 @@ function computeOutcomeFlags({
     !botDetected &&
     !httpForbiddenDetected;
 
-  return { hasOnlyExpectedSkips, hasOnlyHandledErrors };
+  // yt-dlp exits 1 after any ERROR line, even a subtitle fetch that gave up
+  // while the video downloaded fine. When that's all that went wrong, the job
+  // is a warning-shaped success, not a partial failure.
+  const hasOnlySubtitleFailures = code === 1 &&
+    subtitleFailureCount > 0 &&
+    expectedSkipCount === 0 &&
+    terminatedChannelCount === 0 &&
+    failedCount === 0 &&
+    unexpectedErrorCount === 0 &&
+    !botDetected &&
+    !httpForbiddenDetected;
+
+  return { hasOnlyExpectedSkips, hasOnlyHandledErrors, hasOnlySubtitleFailures };
 }
 
 function describeNonZeroExit({
@@ -44,7 +57,8 @@ function describeNonZeroExit({
   httpForbiddenDetected,
   cookiesEnabled = false,
   flags,
-  failureDetails
+  failureDetails,
+  subtitleFailureCount = 0
 }) {
   let status = signal === 'SIGKILL' ? 'Killed' : 'Error';
   const hasPartialSuccess = code === 1 && videoDataCount > 0;
@@ -59,6 +73,9 @@ function describeNonZeroExit({
     // Code 1 but every error was recognized: warning-shaped success.
     output = `${videoCount} videos, ${terminatedChannelCount} channel${terminatedChannelCount !== 1 ? 's' : ''} marked terminated.`;
     notes = `${terminatedChannelCount} channel${terminatedChannelCount !== 1 ? 's' : ''} marked terminated by YouTube`;
+  } else if (flags.hasOnlySubtitleFailures) {
+    output = `${videoCount} videos.`;
+    notes = `${subtitleFailureCount} subtitle download${subtitleFailureCount !== 1 ? 's' : ''} failed; the videos themselves downloaded`;
   } else if (httpForbiddenDetected) {
     // Failed with 403 errors - likely authentication issue. With cookies
     // already enabled, "configure cookies" is the wrong advice: stale or
@@ -92,7 +109,7 @@ function resolveTerminalStatus({ status, flags, terminatedChannelCount, hasParti
     terminalStatus = 'Complete with Warnings';
   } else if (flags.hasOnlyExpectedSkips) {
     terminalStatus = 'Complete';
-  } else if (hasPartialSuccess) {
+  } else if (hasPartialSuccess || flags.hasOnlySubtitleFailures) {
     terminalStatus = 'Complete with Warnings';
   }
   return terminalStatus;
@@ -118,7 +135,8 @@ function resolveFinalPresentation({
   cookiesEnabled = false,
   // Failures already handed off to a queued auto-retry job. Affects only the
   // presented text; state derivation still counts them as failures.
-  autoRetryQueuedCount = 0
+  autoRetryQueuedCount = 0,
+  subtitleFailureCount = 0
 }) {
   // Consider it successful if:
   // - Exit code is 0 (normal success), OR
@@ -210,9 +228,14 @@ function resolveFinalPresentation({
     if (terminationFailureCount > 0) {
       parts.push(`${terminationFailureCount} termination${terminationFailureCount !== 1 ? 's' : ''} could not be auto-disabled`);
     }
+    if (subtitleFailureCount > 0) {
+      parts.push(`${subtitleFailureCount} subtitle download${subtitleFailureCount !== 1 ? 's' : ''} failed`);
+    }
 
     if (parts.length > 0) {
-      const statusText = finalState === 'warning' ? 'completed with errors' : 'completed';
+      const statusText = finalState !== 'warning'
+        ? 'completed'
+        : flags.hasOnlySubtitleFailures ? 'completed with warnings' : 'completed with errors';
       finalText = `Download ${statusText}: ${parts.join(', ')}`;
     } else {
       finalText = 'Download completed: No new videos to download';

@@ -143,6 +143,10 @@ class YtdlpOutputRouter {
           return;
         }
 
+        if (line.includes('WARNING:')) {
+          this.errorTracker.handleWarningLine(line, 'stdout');
+        }
+
         // Always try to process for state updates
         let structuredProgress = this.monitor.processProgress('{}', line, this.config);
 
@@ -180,17 +184,21 @@ class YtdlpOutputRouter {
       this.emitCookiesSuggestion();
     }
 
-    // Detect and track ERROR messages from stderr. Node streams can
-    // coalesce multiple lines into one chunk, so iterate per line rather
+    // Detect and track ERROR and WARNING messages from stderr. Node streams
+    // can coalesce multiple lines into one chunk, so iterate per line rather
     // than running a single regex over the whole chunk (which would only
-    // catch the first ERROR: occurrence).
-    if (dataStr.includes('ERROR:')) {
+    // catch the first occurrence). Order matters: a subtitle-failure WARNING
+    // undoes the ERROR before it.
+    if (dataStr.includes('ERROR:') || dataStr.includes('WARNING:')) {
       dataStr
         .split('\n')
         .map(line => line.trim())
-        .filter(line => line.includes('ERROR:'))
         .forEach(line => {
-          this.errorTracker.handleErrorLine(line, 'stderr');
+          if (line.includes('ERROR:')) {
+            this.errorTracker.handleErrorLine(line, 'stderr');
+          } else if (line.includes('WARNING:')) {
+            this.errorTracker.handleWarningLine(line, 'stderr');
+          }
         });
     }
 
