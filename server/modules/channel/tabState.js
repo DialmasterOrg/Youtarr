@@ -66,8 +66,8 @@ class TabState {
     // COALESCE handles the case where lastFetchedByTab is NULL
     await sequelize.query(`
       UPDATE channels
-      SET lastFetchedByTab = JSON_SET(
-        COALESCE(lastFetchedByTab, '{}'),
+      SET last_fetched_by_tab = JSON_SET(
+        COALESCE(last_fetched_by_tab, '{}'),
         :jsonPath,
         :timestamp
       )

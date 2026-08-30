@@ -56,8 +56,9 @@ Session.init(
   {
     sequelize,
     modelName: 'Session',
-    tableName: 'Sessions',
+    tableName: 'sessions',
     timestamps: true,
+    underscored: true,
     indexes: [
       { fields: ['session_token'] },
       { fields: ['expires_at'] },

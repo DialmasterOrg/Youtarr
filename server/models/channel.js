@@ -136,6 +136,7 @@ Channel.init(
     modelName: 'Channel',
     timestamps: false,
     tableName: 'channels',
+    underscored: true,
   }
 );
 

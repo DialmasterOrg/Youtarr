@@ -15,7 +15,7 @@ JobVideoDownload.init(
       type: DataTypes.UUID,
       allowNull: false,
       references: {
-        model: 'Jobs',
+        model: 'jobs',
         key: 'id',
       },
       onUpdate: 'CASCADE',
@@ -44,7 +44,7 @@ JobVideoDownload.init(
     sequelize,
     modelName: 'JobVideoDownload',
     timestamps: false,
-    tableName: 'JobVideoDownloads',
+    tableName: 'jobvideodownloads',
     indexes: [
       {
         fields: ['job_id']

@@ -927,7 +927,7 @@ describe('VideoDeletionModule', () => {
       await VideoDeletionModule.getVideosOlderThanThreshold(30);
 
       const queryString = mockSequelize.query.mock.calls[0][0];
-      expect(queryString).toContain('Videos.protected = 0');
+      expect(queryString).toContain('videos.protected = 0');
     });
 
     test('should exclude the provided video ids', async () => {
@@ -936,7 +936,7 @@ describe('VideoDeletionModule', () => {
       await VideoDeletionModule.getVideosOlderThanThreshold(30, [7, 9]);
 
       const [queryString, options] = mockSequelize.query.mock.calls[0];
-      expect(queryString).toContain('Videos.id NOT IN (:excludeIds)');
+      expect(queryString).toContain('videos.id NOT IN (:excludeIds)');
       expect(options.replacements).toEqual({ ageInDays: 30, excludeIds: [7, 9] });
     });
 
@@ -1068,7 +1068,7 @@ describe('VideoDeletionModule', () => {
       await VideoDeletionModule.getOldestVideos(10);
 
       const queryString = mockSequelize.query.mock.calls[0][0];
-      expect(queryString).toContain('Videos.protected = 0');
+      expect(queryString).toContain('videos.protected = 0');
     });
   });
 

@@ -9,7 +9,13 @@ WatchStatusSyncCursor.init(
     server_type: { type: DataTypes.ENUM('plex', 'jellyfin', 'emby'), allowNull: false, unique: true },
     cursor: { type: DataTypes.DATE, allowNull: true },
   },
-  { sequelize, modelName: 'WatchStatusSyncCursor', tableName: 'watch_status_sync_cursors', timestamps: true }
+  {
+    sequelize,
+    modelName: 'WatchStatusSyncCursor',
+    tableName: 'watch_status_sync_cursors',
+    timestamps: true,
+    underscored: true,
+  }
 );
 
 module.exports = WatchStatusSyncCursor;

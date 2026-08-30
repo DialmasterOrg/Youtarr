@@ -4,7 +4,7 @@ const watchStatusQueries = require('./mediaServers/watchStatusQueries');
 // Matches the timeCreated calculation used by videosModule.js and the other
 // auto-removal candidate queries in videoDeletionModule.js.
 const DOWNLOAD_TIME_SQL =
-  'COALESCE(Videos.last_downloaded_at, Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, \'%Y%m%d\'))';
+  'COALESCE(videos.last_downloaded_at, jobs.time_created, STR_TO_DATE(videos.original_date, \'%Y%m%d\'))';
 
 // Read-only candidate queries for auto-removal (the watched strategy and
 // the keep-most-recent guard, including per-channel keep-recent); deletion itself stays in videoDeletionModule.
@@ -26,15 +26,15 @@ class AutoRemovalQueries {
 
     try {
       const query = `
-        SELECT Videos.id, MAX(${DOWNLOAD_TIME_SQL}) AS timeCreated
-        FROM Videos
-        LEFT JOIN JobVideos ON Videos.id = JobVideos.video_id
-        LEFT JOIN Jobs ON Jobs.id = JobVideos.job_id
-        LEFT JOIN channels AS ProtChannel ON ProtChannel.channel_id = Videos.channel_id AND ProtChannel.enabled = 1
-        WHERE Videos.removed = 0
-          AND Videos.protected = 0
-          AND COALESCE(ProtChannel.auto_removal_protected, 0) = 0
-        GROUP BY Videos.id
+        SELECT videos.id, MAX(${DOWNLOAD_TIME_SQL}) AS timeCreated
+        FROM videos
+        LEFT JOIN jobvideos ON videos.id = jobvideos.video_id
+        LEFT JOIN jobs ON jobs.id = jobvideos.job_id
+        LEFT JOIN channels AS protchannel ON protchannel.channel_id = videos.channel_id AND protchannel.enabled = 1
+        WHERE videos.removed = 0
+          AND videos.protected = 0
+          AND COALESCE(protchannel.auto_removal_protected, 0) = 0
+        GROUP BY videos.id
         HAVING timeCreated IS NOT NULL
         ORDER BY timeCreated DESC
         LIMIT :count
@@ -64,7 +64,7 @@ class AutoRemovalQueries {
 
     try {
       const channels = await sequelize.query(
-        `SELECT channel_id, auto_removal_keep_recent_count AS keepCount
+        `SELECT channel_id, auto_removal_keep_recent_count AS "keepCount"
          FROM channels
          WHERE auto_removal_keep_recent_count > 0
            AND auto_removal_protected = 0
@@ -76,14 +76,14 @@ class AutoRemovalQueries {
       const ids = [];
       for (const channel of channels) {
         const query = `
-          SELECT Videos.id, MAX(${DOWNLOAD_TIME_SQL}) AS timeCreated
-          FROM Videos
-          LEFT JOIN JobVideos ON Videos.id = JobVideos.video_id
-          LEFT JOIN Jobs ON Jobs.id = JobVideos.job_id
-          WHERE Videos.removed = 0
-            AND Videos.protected = 0
-            AND Videos.channel_id = :channelId
-          GROUP BY Videos.id
+          SELECT videos.id, MAX(${DOWNLOAD_TIME_SQL}) AS timeCreated
+          FROM videos
+          LEFT JOIN jobvideos ON videos.id = jobvideos.video_id
+          LEFT JOIN jobs ON jobs.id = jobvideos.job_id
+          WHERE videos.removed = 0
+            AND videos.protected = 0
+            AND videos.channel_id = :channelId
+          GROUP BY videos.id
           HAVING timeCreated IS NOT NULL
           ORDER BY timeCreated DESC
           LIMIT :count
@@ -132,27 +132,27 @@ class AutoRemovalQueries {
 
       let excludeClause = '';
       if (excludeIds.length > 0) {
-        excludeClause = '          AND Videos.id NOT IN (:excludeIds)\n';
+        excludeClause = '          AND videos.id NOT IN (:excludeIds)\n';
         replacements.excludeIds = excludeIds;
       }
 
       const query = `
         SELECT
-          Videos.id,
-          Videos.youtubeId,
-          Videos.youTubeVideoName,
-          Videos.youTubeChannelName,
-          Videos.fileSize,
+          videos.id,
+          videos.youtube_id AS "youtubeId",
+          videos.youtube_video_name AS "youTubeVideoName",
+          videos.youtube_channel_name AS "youTubeChannelName",
+          videos.file_size AS "fileSize",
           MAX(${DOWNLOAD_TIME_SQL}) AS timeCreated
-        FROM Videos
-        LEFT JOIN JobVideos ON Videos.id = JobVideos.video_id
-        LEFT JOIN Jobs ON Jobs.id = JobVideos.job_id
-        LEFT JOIN channels AS ProtChannel ON ProtChannel.channel_id = Videos.channel_id AND ProtChannel.enabled = 1
-        WHERE Videos.removed = 0
-          AND Videos.protected = 0
-          AND COALESCE(ProtChannel.auto_removal_protected, 0) = 0
+        FROM videos
+        LEFT JOIN jobvideos ON videos.id = jobvideos.video_id
+        LEFT JOIN jobs ON jobs.id = jobvideos.job_id
+        LEFT JOIN channels AS protchannel ON protchannel.channel_id = videos.channel_id AND protchannel.enabled = 1
+        WHERE videos.removed = 0
+          AND videos.protected = 0
+          AND COALESCE(protchannel.auto_removal_protected, 0) = 0
           AND ${watched.sql}
-${excludeClause}        GROUP BY Videos.id
+${excludeClause}        GROUP BY videos.id
 ${havingClause}        ORDER BY timeCreated ASC
       `;
 

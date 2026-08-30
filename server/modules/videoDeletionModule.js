@@ -313,27 +313,27 @@ class VideoDeletionModule {
 
     try {
       const excludeClause = excludeIds && excludeIds.length > 0
-        ? '          AND Videos.id NOT IN (:excludeIds)\n'
+        ? '          AND videos.id NOT IN (:excludeIds)\n'
         : '';
 
       // Use raw SQL query to match the timeCreated calculation in videosModule.js
       const query = `
         SELECT DISTINCT
-          Videos.id,
-          Videos.youtubeId,
-          Videos.youTubeVideoName,
-          Videos.youTubeChannelName,
-          Videos.fileSize,
-          COALESCE(Videos.last_downloaded_at, Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, '%Y%m%d')) AS timeCreated
-        FROM Videos
-        LEFT JOIN JobVideos ON Videos.id = JobVideos.video_id
-        LEFT JOIN Jobs ON Jobs.id = JobVideos.job_id
-        LEFT JOIN channels AS ProtChannel ON ProtChannel.channel_id = Videos.channel_id AND ProtChannel.enabled = 1
-        WHERE Videos.removed = 0
-          AND Videos.protected = 0
-          AND COALESCE(ProtChannel.auto_removal_protected, 0) = 0
-          AND COALESCE(Videos.last_downloaded_at, Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, '%Y%m%d')) IS NOT NULL
-          AND COALESCE(Videos.last_downloaded_at, Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, '%Y%m%d')) < DATE_SUB(NOW(), INTERVAL :ageInDays DAY)
+          videos.id,
+          videos.youtube_id AS "youtubeId",
+          videos.youtube_video_name AS "youTubeVideoName",
+          videos.youtube_channel_name AS "youTubeChannelName",
+          videos.file_size AS "fileSize",
+          COALESCE(videos.last_downloaded_at, jobs.time_created, STR_TO_DATE(videos.original_date, '%Y%m%d')) AS timeCreated
+        FROM videos
+        LEFT JOIN jobvideos ON videos.id = jobvideos.video_id
+        LEFT JOIN jobs ON jobs.id = jobvideos.job_id
+        LEFT JOIN channels AS protchannel ON protchannel.channel_id = videos.channel_id AND protchannel.enabled = 1
+        WHERE videos.removed = 0
+          AND videos.protected = 0
+          AND COALESCE(protchannel.auto_removal_protected, 0) = 0
+          AND COALESCE(videos.last_downloaded_at, jobs.time_created, STR_TO_DATE(videos.original_date, '%Y%m%d')) IS NOT NULL
+          AND COALESCE(videos.last_downloaded_at, jobs.time_created, STR_TO_DATE(videos.original_date, '%Y%m%d')) < DATE_SUB(NOW(), INTERVAL :ageInDays DAY)
 ${excludeClause}        ORDER BY timeCreated ASC
       `;
 
@@ -366,25 +366,25 @@ ${excludeClause}        ORDER BY timeCreated ASC
 
     try {
       const excludeClause = excludeIds && excludeIds.length > 0
-        ? '          AND Videos.id NOT IN (:excludeIds)\n'
+        ? '          AND videos.id NOT IN (:excludeIds)\n'
         : '';
 
       const query = `
         SELECT DISTINCT
-          Videos.id,
-          Videos.youtubeId,
-          Videos.youTubeVideoName,
-          Videos.youTubeChannelName,
-          Videos.fileSize,
-          COALESCE(Videos.last_downloaded_at, Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, '%Y%m%d')) AS timeCreated
-        FROM Videos
-        LEFT JOIN JobVideos ON Videos.id = JobVideos.video_id
-        LEFT JOIN Jobs ON Jobs.id = JobVideos.job_id
-        LEFT JOIN channels AS ProtChannel ON ProtChannel.channel_id = Videos.channel_id AND ProtChannel.enabled = 1
-        WHERE Videos.removed = 0
-          AND Videos.protected = 0
-          AND COALESCE(ProtChannel.auto_removal_protected, 0) = 0
-          AND COALESCE(Videos.last_downloaded_at, Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, '%Y%m%d')) IS NOT NULL
+          videos.id,
+          videos.youtube_id AS "youtubeId",
+          videos.youtube_video_name AS "youTubeVideoName",
+          videos.youtube_channel_name AS "youTubeChannelName",
+          videos.file_size AS "fileSize",
+          COALESCE(videos.last_downloaded_at, jobs.time_created, STR_TO_DATE(videos.original_date, '%Y%m%d')) AS timeCreated
+        FROM videos
+        LEFT JOIN jobvideos ON videos.id = jobvideos.video_id
+        LEFT JOIN jobs ON jobs.id = jobvideos.job_id
+        LEFT JOIN channels AS protchannel ON protchannel.channel_id = videos.channel_id AND protchannel.enabled = 1
+        WHERE videos.removed = 0
+          AND videos.protected = 0
+          AND COALESCE(protchannel.auto_removal_protected, 0) = 0
+          AND COALESCE(videos.last_downloaded_at, jobs.time_created, STR_TO_DATE(videos.original_date, '%Y%m%d')) IS NOT NULL
 ${excludeClause}        ORDER BY timeCreated ASC
         LIMIT :limit
       `;

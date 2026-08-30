@@ -67,7 +67,7 @@ describe('watchStatusQueries', () => {
       const { sql, replacements } = watchStatusQueries.buildWatchedExistsSql();
 
       expect(sql).toMatch(/^EXISTS \(SELECT 1 FROM video_watch_status/);
-      expect(sql).toContain('video_id = Videos.id');
+      expect(sql).toContain('video_id = videos.id');
       expect(sql).toContain('played = 1');
       expect(sql).not.toContain('server_type');
       expect(replacements).toEqual({});

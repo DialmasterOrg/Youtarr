@@ -15,7 +15,7 @@ JobVideo.init(
       type: DataTypes.UUID,
       allowNull: false,
       references: {
-        model: 'Jobs',
+        model: 'jobs',
         key: 'id',
       },
       onUpdate: 'CASCADE',
@@ -24,7 +24,7 @@ JobVideo.init(
       type: DataTypes.INTEGER,
       allowNull: false,
       references: {
-        model: 'Videos',
+        model: 'videos',
         key: 'id',
       },
       onUpdate: 'CASCADE',
@@ -34,7 +34,7 @@ JobVideo.init(
     sequelize,
     modelName: 'JobVideo',
     timestamps: false,
-    tableName: 'JobVideos',
+    tableName: 'jobvideos',
   }
 );
 

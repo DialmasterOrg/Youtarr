@@ -46,7 +46,7 @@ async function validateDatabaseSchema(sequelize, models) {
         const dbColumnSet = new Set(dbColumns);
 
         // Get model attributes
-        const modelAttributes = model.rawAttributes;
+        const modelAttributes = Object.fromEntries(Object.values(model.rawAttributes).map((attr) => [attr.field, attr]));
         const modelColumns = Object.keys(modelAttributes);
 
         // Check for missing columns in database

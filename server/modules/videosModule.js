@@ -49,35 +49,35 @@ class VideosModule {
       const replacements = {};
 
       if (search) {
-        whereConditions.push('(Videos.youTubeVideoName LIKE :search OR Videos.youTubeChannelName LIKE :search)');
+        whereConditions.push('(videos.youtube_video_name LIKE :search OR videos.youtube_channel_name LIKE :search)');
         replacements.search = `%${search}%`;
       }
 
       if (channelFilter) {
-        whereConditions.push('Videos.youTubeChannelName = :channelFilter');
+        whereConditions.push('videos.youtube_channel_name = :channelFilter');
         replacements.channelFilter = channelFilter;
       }
 
       if (dateFrom) {
-        whereConditions.push('Videos.originalDate >= :dateFrom');
+        whereConditions.push('videos.original_date >= :dateFrom');
         replacements.dateFrom = dateFrom.replace(/-/g, '');
       }
 
       if (dateTo) {
-        whereConditions.push('Videos.originalDate <= :dateTo');
+        whereConditions.push('videos.original_date <= :dateTo');
         replacements.dateTo = dateTo.replace(/-/g, '');
       }
 
       if (protectedFilter === 'only') {
-        whereConditions.push('Videos.protected = 1');
+        whereConditions.push('videos.protected = 1');
       } else if (protectedFilter === 'exclude') {
-        whereConditions.push('Videos.protected = 0');
+        whereConditions.push('videos.protected = 0');
       }
 
       if (missingFilter === 'only') {
-        whereConditions.push('Videos.removed = 1');
+        whereConditions.push('videos.removed = 1');
       } else if (missingFilter === 'exclude') {
-        whereConditions.push('Videos.removed = 0');
+        whereConditions.push('videos.removed = 0');
       }
 
       if (watchedFilter === 'only' || watchedFilter === 'exclude') {
@@ -91,18 +91,18 @@ class VideosModule {
       // Build ORDER BY
       let orderByColumn;
       if (sortBy === 'published') {
-        orderByColumn = 'Videos.originalDate';
+        orderByColumn = 'videos.original_date';
       } else {
-        orderByColumn = 'COALESCE(Videos.last_downloaded_at, Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, \'%Y%m%d\'))';
+        orderByColumn = 'COALESCE(videos.last_downloaded_at, jobs.time_created, STR_TO_DATE(videos.original_date, \'%Y%m%d\'))';
       }
       const orderByClause = `ORDER BY ${orderByColumn} ${sortOrder.toUpperCase()}`;
 
       // Get total count
       const countQuery = `
-        SELECT COUNT(DISTINCT Videos.id) as total
-        FROM Videos
-        LEFT JOIN JobVideos ON Videos.id = JobVideos.video_id
-        LEFT JOIN Jobs ON Jobs.id = JobVideos.job_id
+        SELECT COUNT(DISTINCT videos.id) as total
+        FROM videos
+        LEFT JOIN jobvideos ON videos.id = jobvideos.video_id
+        LEFT JOIN jobs ON jobs.id = jobvideos.job_id
         ${whereClause}
       `;
 
@@ -116,30 +116,30 @@ class VideosModule {
       // Get paginated videos
       const query = `
         SELECT
-          Videos.id,
-          Videos.youtubeId,
-          Videos.youTubeChannelName,
-          Videos.youTubeVideoName,
-          Videos.duration,
-          Videos.originalDate,
-          Videos.description,
-          Videos.channel_id,
-          Videos.filePath,
-          Videos.fileSize,
-          Videos.audioFilePath,
-          Videos.audioFileSize,
-          Videos.removed,
-          Videos.youtube_removed,
-          Videos.youtube_removed_checked_at,
-          Videos.media_type,
-          Videos.normalized_rating,
-          Videos.rating_source,
-          Videos.protected,
-          Videos.video_resolution,
-          COALESCE(Videos.last_downloaded_at, Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, '%Y%m%d')) AS timeCreated
-        FROM Videos
-        LEFT JOIN JobVideos ON Videos.id = JobVideos.video_id
-        LEFT JOIN Jobs ON Jobs.id = JobVideos.job_id
+          videos.id,
+          videos.youtube_id AS "youtubeId",
+          videos.youtube_channel_name AS "youTubeChannelName",
+          videos.youtube_video_name AS "youTubeVideoName",
+          videos.duration,
+          videos.original_date AS "originalDate",
+          videos.description,
+          videos.channel_id,
+          videos.file_path AS "filePath",
+          videos.file_size AS "fileSize",
+          videos.audio_file_path AS "audioFilePath",
+          videos.audio_file_size AS "audioFileSize",
+          videos.removed,
+          videos.youtube_removed,
+          videos.youtube_removed_checked_at,
+          videos.media_type,
+          videos.normalized_rating,
+          videos.rating_source,
+          videos.protected,
+          videos.video_resolution,
+          COALESCE(videos.last_downloaded_at, jobs.time_created, STR_TO_DATE(videos.original_date, '%Y%m%d')) AS timeCreated
+        FROM videos
+        LEFT JOIN jobvideos ON videos.id = jobvideos.video_id
+        LEFT JOIN jobs ON jobs.id = jobvideos.job_id
         ${whereClause}
         ${orderByClause}
         LIMIT :limit OFFSET :offset
@@ -215,7 +215,7 @@ class VideosModule {
         }
       }
 
-      // Bulk update Videos table for removed videos
+      // Bulk update videos table for removed videos
       if (youtubeUpdates.length > 0) {
         await Video.update(
           { youtube_removed: true, youtube_removed_checked_at: new Date() },
@@ -223,7 +223,7 @@ class VideosModule {
         );
       }
 
-      // Bulk update Videos table for timestamp-only updates
+      // Bulk update videos table for timestamp-only updates
       if (timestampUpdates.length > 0) {
         await Video.update(
           { youtube_removed_checked_at: new Date() },
@@ -339,10 +339,10 @@ class VideosModule {
 
       // Get all unique channel names from videos table
       const videoChannelsQuery = `
-        SELECT DISTINCT youTubeChannelName
-        FROM Videos
-        WHERE youTubeChannelName IS NOT NULL
-        ORDER BY youTubeChannelName
+        SELECT DISTINCT youtube_channel_name AS "youTubeChannelName"
+        FROM videos
+        WHERE youtube_channel_name IS NOT NULL
+        ORDER BY youtube_channel_name
       `;
 
       const videoChannels = await sequelize.query(videoChannelsQuery, {
@@ -467,19 +467,19 @@ class VideosModule {
         const replacements = [];
 
         if (update.filePath !== undefined) {
-          setClauses.push('filePath = ?');
+          setClauses.push('file_path = ?');
           replacements.push(update.filePath);
         }
         if (update.fileSize !== undefined) {
-          setClauses.push('fileSize = ?');
+          setClauses.push('file_size = ?');
           replacements.push(update.fileSize);
         }
         if (update.audioFilePath !== undefined) {
-          setClauses.push('audioFilePath = ?');
+          setClauses.push('audio_file_path = ?');
           replacements.push(update.audioFilePath);
         }
         if (update.audioFileSize !== undefined) {
-          setClauses.push('audioFileSize = ?');
+          setClauses.push('audio_file_size = ?');
           replacements.push(update.audioFileSize);
         }
         if (update.video_resolution !== undefined) {
@@ -493,7 +493,7 @@ class VideosModule {
 
         if (setClauses.length > 0) {
           replacements.push(update.id);
-          const query = `UPDATE Videos SET ${setClauses.join(', ')} WHERE id = ?`;
+          const query = `UPDATE videos SET ${setClauses.join(', ')} WHERE id = ?`;
 
           try {
             await sequelize.query(query, {

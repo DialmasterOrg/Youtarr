@@ -19,7 +19,13 @@ PlaylistVideo.init(
     ignored: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     ignored_at: { type: DataTypes.DATE, allowNull: true },
   },
-  { sequelize, modelName: 'PlaylistVideo', tableName: 'playlistvideos', timestamps: true }
+  {
+    sequelize,
+    modelName: 'PlaylistVideo',
+    tableName: 'playlistvideos',
+    timestamps: true,
+    underscored: true,
+  }
 );
 
 module.exports = PlaylistVideo;

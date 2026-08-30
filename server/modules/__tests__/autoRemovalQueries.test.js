@@ -48,7 +48,7 @@ describe('autoRemovalQueries', () => {
 
       expect(ids).toEqual([5, 3, 9]);
       const [sql, options] = mockSequelize.query.mock.calls[0];
-      expect(sql).toContain('Videos.removed = 0');
+      expect(sql).toContain('videos.removed = 0');
       expect(sql).toContain('ORDER BY timeCreated DESC');
       expect(sql).toContain('LIMIT :count');
       expect(options.replacements).toEqual({ count: 3 });
@@ -60,7 +60,7 @@ describe('autoRemovalQueries', () => {
       await autoRemovalQueries.getRecentVideoIds(5);
 
       const [sql] = mockSequelize.query.mock.calls[0];
-      expect(sql).toContain('Videos.protected = 0');
+      expect(sql).toContain('videos.protected = 0');
     });
 
     test('rethrows when the query fails so callers can fail closed', async () => {
@@ -76,8 +76,8 @@ describe('autoRemovalQueries', () => {
       await autoRemovalQueries.getRecentVideoIds(5);
 
       const [sql] = mockSequelize.query.mock.calls[0];
-      expect(sql).toContain('LEFT JOIN channels AS ProtChannel ON ProtChannel.channel_id = Videos.channel_id AND ProtChannel.enabled = 1');
-      expect(sql).toContain('COALESCE(ProtChannel.auto_removal_protected, 0) = 0');
+      expect(sql).toContain('LEFT JOIN channels AS protchannel ON protchannel.channel_id = videos.channel_id AND protchannel.enabled = 1');
+      expect(sql).toContain('COALESCE(protchannel.auto_removal_protected, 0) = 0');
     });
   });
 
@@ -102,8 +102,8 @@ describe('autoRemovalQueries', () => {
         minDaysSinceWatched: 0
       });
       const [sql, options] = mockSequelize.query.mock.calls[0];
-      expect(sql).toContain('Videos.removed = 0');
-      expect(sql).toContain('Videos.protected = 0');
+      expect(sql).toContain('videos.removed = 0');
+      expect(sql).toContain('videos.protected = 0');
       expect(sql).toContain('EXISTS (WATCHED_PROBE)');
       expect(sql).not.toContain(':minVideoAgeDays');
       expect(sql).not.toContain(':excludeIds');
@@ -114,7 +114,7 @@ describe('autoRemovalQueries', () => {
       await autoRemovalQueries.getWatchedRemovalCandidates();
 
       const [sql] = mockSequelize.query.mock.calls[0];
-      expect(sql).toContain('GROUP BY Videos.id');
+      expect(sql).toContain('GROUP BY videos.id');
       expect(sql).toMatch(/MAX\(COALESCE\(/);
       expect(sql).not.toContain('DISTINCT');
     });
@@ -147,7 +147,7 @@ describe('autoRemovalQueries', () => {
       await autoRemovalQueries.getWatchedRemovalCandidates({ excludeIds: [4, 8] });
 
       const [sql, options] = mockSequelize.query.mock.calls[0];
-      expect(sql).toContain('Videos.id NOT IN (:excludeIds)');
+      expect(sql).toContain('videos.id NOT IN (:excludeIds)');
       expect(options.replacements).toEqual({ excludeIds: [4, 8] });
     });
 
@@ -162,8 +162,8 @@ describe('autoRemovalQueries', () => {
       await autoRemovalQueries.getWatchedRemovalCandidates();
 
       const [sql] = mockSequelize.query.mock.calls[0];
-      expect(sql).toContain('LEFT JOIN channels AS ProtChannel ON ProtChannel.channel_id = Videos.channel_id AND ProtChannel.enabled = 1');
-      expect(sql).toContain('COALESCE(ProtChannel.auto_removal_protected, 0) = 0');
+      expect(sql).toContain('LEFT JOIN channels AS protchannel ON protchannel.channel_id = videos.channel_id AND protchannel.enabled = 1');
+      expect(sql).toContain('COALESCE(protchannel.auto_removal_protected, 0) = 0');
     });
   });
 
@@ -196,8 +196,8 @@ describe('autoRemovalQueries', () => {
       expect(result).toEqual({ channelCount: 2, ids: [10, 11, 20] });
       expect(mockSequelize.query).toHaveBeenCalledTimes(3);
       const [perChannelSql, perChannelOptions] = mockSequelize.query.mock.calls[1];
-      expect(perChannelSql).toContain('Videos.channel_id = :channelId');
-      expect(perChannelSql).toContain('Videos.protected = 0');
+      expect(perChannelSql).toContain('videos.channel_id = :channelId');
+      expect(perChannelSql).toContain('videos.protected = 0');
       expect(perChannelSql).toContain('ORDER BY timeCreated DESC');
       expect(perChannelSql).toContain('LIMIT :count');
       expect(perChannelOptions.replacements).toEqual({ channelId: 'UC-aaa', count: 2 });

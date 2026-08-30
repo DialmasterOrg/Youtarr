@@ -40,8 +40,9 @@ Job.init(
   {
     sequelize,
     modelName: 'Job',
-    tableName: 'Jobs',
+    tableName: 'jobs',
     timestamps: false,
+    underscored: true,
   }
 );
 

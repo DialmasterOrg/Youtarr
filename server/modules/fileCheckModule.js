@@ -153,19 +153,19 @@ class FileCheckModule {
       const values = [];
 
       if (update.filePath !== undefined) {
-        setClauses.push('filePath = ?');
+        setClauses.push('file_path = ?');
         values.push(update.filePath);
       }
       if (update.fileSize !== undefined) {
-        setClauses.push('fileSize = ?');
+        setClauses.push('file_size = ?');
         values.push(update.fileSize);
       }
       if (update.audioFilePath !== undefined) {
-        setClauses.push('audioFilePath = ?');
+        setClauses.push('audio_file_path = ?');
         values.push(update.audioFilePath);
       }
       if (update.audioFileSize !== undefined) {
-        setClauses.push('audioFileSize = ?');
+        setClauses.push('audio_file_size = ?');
         values.push(update.audioFileSize);
       }
       if (update.removed !== undefined) {
@@ -176,7 +176,7 @@ class FileCheckModule {
       if (setClauses.length > 0) {
         values.push(update.id);
         await sequelize.query(
-          `UPDATE Videos SET ${setClauses.join(', ')} WHERE id = ?`,
+          `UPDATE videos SET ${setClauses.join(', ')} WHERE id = ?`,
           {
             replacements: values,
             type: Sequelize.QueryTypes.UPDATE

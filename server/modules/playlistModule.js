@@ -551,15 +551,15 @@ class PlaylistModule {
     // then the upload date.
     const downloaded = await sequelize.query(
       `SELECT
-         Videos.youtubeId,
-         Videos.channel_id,
-         Videos.youTubeChannelName,
-         COALESCE(Videos.last_downloaded_at, MAX(Jobs.timeCreated), STR_TO_DATE(Videos.originalDate, '%Y%m%d')) AS downloadedAt
-       FROM Videos
-       LEFT JOIN JobVideos ON Videos.id = JobVideos.video_id
-       LEFT JOIN Jobs ON Jobs.id = JobVideos.job_id
-       WHERE Videos.youtubeId IN (:youtubeIds)
-       GROUP BY Videos.id`,
+         videos.youtube_id AS "youtubeId",
+         videos.channel_id,
+         videos.youtube_channel_name AS "youTubeChannelName",
+         COALESCE(videos.last_downloaded_at, MAX(jobs.time_created), STR_TO_DATE(videos.original_date, '%Y%m%d')) AS downloadedAt
+       FROM videos
+       LEFT JOIN jobvideos ON videos.id = jobvideos.video_id
+       LEFT JOIN jobs ON jobs.id = jobvideos.job_id
+       WHERE videos.youtube_id IN (:youtubeIds)
+       GROUP BY videos.id`,
       { replacements: { youtubeIds }, type: Sequelize.QueryTypes.SELECT }
     );
     if (!downloaded || !downloaded.length) return;

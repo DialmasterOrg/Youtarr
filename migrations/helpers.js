@@ -169,6 +169,7 @@ async function removeIndexIfExists(queryInterface, tableName, identifier) {
 }
 
 module.exports = {
+  extractTableName,
   tableExists,
   columnExists,
   createTableIfNotExists,

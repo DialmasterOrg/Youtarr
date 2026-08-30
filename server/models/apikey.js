@@ -45,7 +45,7 @@ ApiKey.init(
   {
     sequelize,
     modelName: 'ApiKey',
-    tableName: 'ApiKeys',
+    tableName: 'apikeys',
     timestamps: false,
   }
 );
