@@ -13,6 +13,9 @@ const Subfolder = require('./subfolder');
 const VideoWatchStatus = require('./videowatchstatus');
 const MediaServerUser = require('./mediaserveruser');
 const WatchStatusSyncCursor = require('./watchstatussynccursor');
+const ApiKeyChannelGrant = require('./apikeychannelgrant');
+const ExternalRequest = require('./externalrequest');
+const ExternalApiUsageBucket = require('./externalapiusagebucket');
 
 Job.hasMany(JobVideo, { foreignKey: 'job_id', as: 'jobVideos' });
 Job.hasMany(JobVideoDownload, { foreignKey: 'job_id', as: 'jobVideoDownloads' });
@@ -33,6 +36,22 @@ PlaylistSyncState.belongsTo(Playlist, { foreignKey: 'playlist_id', targetKey: 'i
 Video.hasMany(VideoWatchStatus, { foreignKey: 'video_id', as: 'watchStatuses' });
 VideoWatchStatus.belongsTo(Video, { foreignKey: 'video_id', as: 'video' });
 
+const externalApiModels = [ApiKey, Channel, Job, ApiKeyChannelGrant, ExternalRequest, ExternalApiUsageBucket];
+if (externalApiModels.every((model) => model?.sequelize)) {
+  ApiKey.hasMany(ApiKeyChannelGrant, { foreignKey: 'api_key_id', as: 'channelGrants' });
+  ApiKeyChannelGrant.belongsTo(ApiKey, { foreignKey: 'api_key_id', as: 'apiKey' });
+  Channel.hasMany(ApiKeyChannelGrant, { foreignKey: 'channel_id', as: 'apiKeyGrants' });
+  ApiKeyChannelGrant.belongsTo(Channel, { foreignKey: 'channel_id', as: 'channel' });
+  ApiKey.hasMany(ExternalRequest, { foreignKey: 'api_key_id', as: 'externalRequests' });
+  ExternalRequest.belongsTo(ApiKey, { foreignKey: 'api_key_id', as: 'apiKey' });
+  Channel.hasMany(ExternalRequest, { foreignKey: 'channel_id', as: 'externalRequests' });
+  ExternalRequest.belongsTo(Channel, { foreignKey: 'channel_id', as: 'channel' });
+  Job.hasMany(ExternalRequest, { foreignKey: 'job_id', as: 'externalRequests' });
+  ExternalRequest.belongsTo(Job, { foreignKey: 'job_id', as: 'job' });
+  ApiKey.hasMany(ExternalApiUsageBucket, { foreignKey: 'api_key_id', as: 'usageBuckets' });
+  ExternalApiUsageBucket.belongsTo(ApiKey, { foreignKey: 'api_key_id', as: 'apiKey' });
+}
+
 module.exports = {
   Job,
   JobVideo,
@@ -48,4 +67,7 @@ module.exports = {
   VideoWatchStatus,
   MediaServerUser,
   WatchStatusSyncCursor,
+  ApiKeyChannelGrant,
+  ExternalRequest,
+  ExternalApiUsageBucket,
 };

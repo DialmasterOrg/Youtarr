@@ -30,6 +30,9 @@ Youtarr uses MariaDB/MySQL for storing:
 | `JobVideoDownloads`| `JobVideoDownload`| Download progress tracking        |
 | `Sessions`         | `Session`         | User authentication sessions      |
 | `ApiKeys`          | `ApiKey`          | API key credentials for external integrations (bookmarklets, shortcuts, automation) |
+| `api_key_channel_grants` | `ApiKeyChannelGrant` | Explicit API-key/channel allow-list rows; no row means no external channel access. |
+| `external_requests` | `ExternalRequest` | Durable external request ownership, lifecycle, deduplication, idempotency, and optional job linkage. Inactive until the external API control plane is enabled. |
+| `external_api_usage_buckets` | `ExternalApiUsageBucket` | Per-key hourly/daily write accounting used by the future external API quota layer. |
 | `playlists`        | `Playlist`        | Subscribed YouTube playlists with per-playlist sync targets and seeded settings. `auto_download_baseline_at` (DATETIME, nullable): seed-then-track baseline for playlist auto-downloads; NULL until the first auto-download run. `sort_order` (STRING NOT NULL, default `'default'`): saved output order for the `.m3u` file and media server sync; `'reversed'` flips the YouTube playlist order. |
 | `playlistvideos`   | `PlaylistVideo`   | One row per (playlist, video) with the YouTube playlist position |
 | `playlist_sync_state` | `PlaylistSyncState` | Per-(playlist, server) sync state: server playlist id, last_synced_at, last_error |
