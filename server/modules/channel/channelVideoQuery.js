@@ -12,7 +12,6 @@ class ChannelVideoQuery {
    */
   async enrichVideosWithDownloadStatus(videos, checkFiles = false) {
     const Video = require('../../models/video');
-    const { sequelize, Sequelize } = require('../../db');
 
     // Get all youtube IDs from the input videos
     const youtubeIds = videos.map(v => v.youtube_id || v.youtubeId);
@@ -79,7 +78,7 @@ class ChannelVideoQuery {
 
       // Apply database updates for file status changes
       if (updates.length > 0) {
-        await fileCheckModule.applyVideoUpdates(sequelize, Sequelize, updates);
+        await fileCheckModule.applyVideoUpdates(updates);
       }
     }
 

@@ -167,7 +167,7 @@ class VideosModule {
       }
 
       // Batch update the database if there are changes
-      await fileCheckModule.applyVideoUpdates(sequelize, Sequelize, updates);
+      await fileCheckModule.applyVideoUpdates(updates);
 
       // Check if videos still exist on YouTube and mark as removed if they don't
       const videoValidationModule = require('./videoValidationModule');

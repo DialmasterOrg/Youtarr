@@ -538,10 +538,18 @@ describe('VideosModule', () => {
       expect(result.videos[0].fileSize).toBe('2000');
       expect(result.videos[0].removed).toBe(false);
 
-      // Check update query was called
-      expect(mockSequelize.query).toHaveBeenCalledTimes(4);
-      const updateQuery = mockSequelize.query.mock.calls[2][0];
-      expect(updateQuery).toContain('UPDATE videos SET');
+      // Check update was called
+      expect(mockVideo.update).toHaveBeenCalledTimes(2);
+      expect(mockVideo.update).toHaveBeenNthCalledWith(
+        1,
+        { fileSize: 2000 },
+        { where: { id: 1 } },
+      );
+      expect(mockVideo.update).toHaveBeenNthCalledWith(
+        2,
+        { youtube_removed_checked_at: result.videos[0].youtube_removed_checked_at },
+        { where: { id: [1] } },
+      );
     });
 
     test('should mark video as removed when file does not exist', async () => {
@@ -572,11 +580,18 @@ describe('VideosModule', () => {
 
       expect(result.videos[0].removed).toBe(true);
 
-      // Check update query was called
-      expect(mockSequelize.query).toHaveBeenCalledTimes(4);
-      const updateQuery = mockSequelize.query.mock.calls[2][0];
-      expect(updateQuery).toContain('UPDATE videos SET');
-      expect(updateQuery).toContain('removed = ?');
+      // Check update was called
+      expect(mockVideo.update).toHaveBeenCalledTimes(2);
+      expect(mockVideo.update).toHaveBeenNthCalledWith(
+        1,
+        { removed: true },
+        { where: { id: 1 } },
+      );
+      expect(mockVideo.update).toHaveBeenNthCalledWith(
+        2,
+        { youtube_removed_checked_at: result.videos[0].youtube_removed_checked_at },
+        { where: { id: [1] } },
+      );
     });
 
     test('should mark video as YouTube removed when validation fails', async () => {
