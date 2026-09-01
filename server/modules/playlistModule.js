@@ -1,8 +1,8 @@
 const { spawn } = require('child_process');
 const { Op } = require('sequelize');
 const logger = require('../logger');
-const { sequelize, Sequelize } = require('../db');
-const { Playlist, PlaylistVideo, Channel } = require('../models');
+const { sequelize } = require('../db');
+const { Playlist, PlaylistVideo, Channel, Video, Job, JobVideo } = require('../models');
 const youtubeApi = require('./youtubeApi');
 const { MAX_PLAYLIST_VIDEOS } = require('./playlistConstants');
 
@@ -657,19 +657,36 @@ class PlaylistModule {
 
     // Use recorded download/job times. A publication date cannot tell us when
     // the local file was downloaded; leave unknown download times unset.
-    const downloaded = await sequelize.query(
-      `SELECT
-         videos.youtube_id AS "youtubeId",
-         videos.channel_id,
-         videos.youtube_channel_name AS "youTubeChannelName",
-         COALESCE(videos.last_downloaded_at, MAX(jobs.time_created)) AS downloadedAt
-       FROM videos
-       LEFT JOIN jobvideos ON videos.id = jobvideos.video_id
-       LEFT JOIN jobs ON jobs.id = jobvideos.job_id
-       WHERE videos.youtube_id IN (:youtubeIds)
-       GROUP BY videos.id`,
-      { replacements: { youtubeIds }, type: Sequelize.QueryTypes.SELECT }
-    );
+    const downloaded = await Video.findAll({
+      attributes: [
+        'youtubeId',
+        'channel_id',
+        'youTubeChannelName',
+        [
+          sequelize.fn(
+            'COALESCE',
+            sequelize.col('Video.last_downloaded_at'),
+            sequelize.fn('MAX', sequelize.col('jobVideos->job.time_created')),
+          ),
+          'downloadedAt',
+        ],
+      ],
+      include: [{
+        model: JobVideo,
+        as: 'jobVideos',
+        attributes: [],
+        include: [{
+          model: Job,
+          as: 'job',
+          attributes: [],
+        }],
+      }],
+      where: {
+        youtubeId: youtubeIds,
+      },
+      group: 'Video.id',
+      raw: true,
+    });
     if (!downloaded || !downloaded.length) return;
 
     await this.backfillDownloadedVideoChannels(downloaded.map((v) => {
