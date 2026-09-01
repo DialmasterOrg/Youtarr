@@ -52,6 +52,7 @@ interface ChannelSettings {
   min_duration: number | null;
   max_duration: number | null;
   title_filter_regex: string | null;
+  additional_tags: string | null;
   default_rating: string | null;
   auto_download_enabled_tabs: string | null;
   audio_format: string | null;
@@ -138,6 +139,7 @@ function ChannelSettingsDialog({
     min_duration: null,
     max_duration: null,
     title_filter_regex: null,
+    additional_tags: null,
     default_rating: null,
     audio_format: null,
     auto_download_enabled_tabs: null,
@@ -154,6 +156,7 @@ function ChannelSettingsDialog({
     min_duration: null,
     max_duration: null,
     title_filter_regex: null,
+    additional_tags: null,
     default_rating: null,
     audio_format: null,
     auto_download_enabled_tabs: null,
@@ -197,6 +200,7 @@ function ChannelSettingsDialog({
     { id: 'general', label: 'General', icon: <SettingsIcon size={18} /> },
     { id: 'filters', label: 'Filters', icon: <FilterAltIcon size={18} /> },
     { id: 'ratings', label: 'Ratings', icon: <RatingIcon size={18} /> },
+    { id: 'tags', label: 'Tags', icon: <RatingIcon size={18} /> },
     { id: 'autoremoval', label: 'Auto-Removal', icon: <AutoRemovalIcon size={18} /> }
   ];
 
@@ -241,6 +245,7 @@ function ChannelSettingsDialog({
           min_duration: settingsData.min_duration || null,
           max_duration: settingsData.max_duration || null,
           title_filter_regex: settingsData.title_filter_regex || null,
+          additional_tags: settingsData.additional_tags || null,
           auto_download_enabled_tabs: settingsData.auto_download_enabled_tabs ?? 'video',
           audio_format: settingsData.audio_format || null,
           default_rating: Object.prototype.hasOwnProperty.call(settingsData, 'default_rating')
@@ -302,6 +307,7 @@ function ChannelSettingsDialog({
           min_duration: settings.min_duration,
           max_duration: settings.max_duration,
           title_filter_regex: settings.title_filter_regex || null,
+          additional_tags: settings.additional_tags || null,
           default_rating: settings.default_rating || null,
           audio_format: settings.audio_format || null,
           auto_download_enabled_tabs: settings.auto_download_enabled_tabs,
@@ -348,6 +354,7 @@ function ChannelSettingsDialog({
         min_duration: result?.settings?.min_duration ?? settings.min_duration ?? null,
         max_duration: result?.settings?.max_duration ?? settings.max_duration ?? null,
         title_filter_regex: result?.settings?.title_filter_regex ?? settings.title_filter_regex ?? null,
+        additional_tags: result?.settings?.additional_tags ?? settings.additional_tags ?? null,
         audio_format: result?.settings?.audio_format ?? settings.audio_format ?? null,
         default_rating: result?.settings && Object.prototype.hasOwnProperty.call(result.settings, 'default_rating')
           ? result.settings.default_rating
@@ -409,6 +416,7 @@ function ChannelSettingsDialog({
            settings.min_duration !== originalSettings.min_duration ||
            settings.max_duration !== originalSettings.max_duration ||
            settings.title_filter_regex !== originalSettings.title_filter_regex ||
+           settings.additional_tags !== originalSettings.additional_tags ||
            settings.audio_format !== originalSettings.audio_format ||
            settings.default_rating !== originalSettings.default_rating ||
            settings.auto_download_enabled_tabs !== originalSettings.auto_download_enabled_tabs ||
@@ -935,6 +943,36 @@ function ChannelSettingsDialog({
                 rating={effectiveRatingLabel}
                 size="small"
               />
+            </div>
+          </div>
+        );
+      }
+      case 'tags': {
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <Typography variant="subtitle2" gutterBottom style={{ fontWeight: 600 }}>
+              Video Tags
+            </Typography>
+            <Alert severity="info">
+              <Typography variant="body2">
+                Set a default tag additional to the found tags for videos from this channel.
+              </Typography>
+            </Alert>
+            <TextField
+                  label='Video Tags (multiple should be separated by "|")'
+                  value={settings.additional_tags || ''}
+                  onChange={(e) => setSettings({
+                    ...settings,
+                    additional_tags: e.target.value || null
+                  })}
+                  fullWidth
+                  size="small"
+                  InputLabelProps={{ shrink: true }}
+                />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <Typography variant="caption" color="text.secondary">
+                These can be useful in Jellyfin for organization and parental controls.
+              </Typography>
             </div>
           </div>
         );

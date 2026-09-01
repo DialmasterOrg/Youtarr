@@ -319,7 +319,7 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
         const channelId = lookupChannelId;
         channelRecord = await Channel.findOne({
           where: { channel_id: channelId },
-          attributes: ['id', 'sub_folder', 'title', 'uploader', 'folder_name', 'default_rating', 'enabled', 'skip_video_folder']
+          attributes: ['id', 'sub_folder', 'title', 'uploader', 'folder_name', 'default_rating', 'enabled', 'skip_video_folder', 'additional_tags']
         });
 
         logger.info({ channelId, ownerProvided: !!ownerChannelId, found: !!channelRecord }, 'Post-process channel lookup');
@@ -456,7 +456,7 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
 
     // Generate NFO file for Jellyfin/Kodi/Emby compatibility if enabled
     if (shouldWriteVideoNfoFiles()) {
-      nfoGenerator.writeVideoNfoFile(videoPath, jsonData);
+      nfoGenerator.writeVideoNfoFile(videoPath, jsonData, ...(channelRecord ? [channelRecord.additional_tags] : []));
     }
 
     // Check if this is an audio file (MP3) - skip video-specific metadata embedding

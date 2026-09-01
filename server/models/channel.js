@@ -81,6 +81,11 @@ Channel.init(
       allowNull: true,
       defaultValue: null,
     },
+    additional_tags: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      defaultValue: null,
+    },
     title_filter_regex: {
       type: DataTypes.TEXT,
       allowNull: true,
