@@ -1,5 +1,25 @@
 # Changelog
 
+## [v1.81.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.81.1) - 2026-09-01
+
+### [1.81.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.81.0...v1.81.1) (2026-09-01)
+
+
+### Bug Fixes
+
+* repair jobs uuid fk collation on existing dbs ([6eee944](https://github.com/DialmasterOrg/Youtarr/commit/6eee94481d531dd44fb8df597377f1c3296d21a0))
+* stop counting subtitle timeouts as failed ([7c6d111](https://github.com/DialmasterOrg/Youtarr/commit/7c6d111eeead55d81a8f3da137135ceac3dc4b7b)), closes [#793](https://github.com/DialmasterOrg/Youtarr/issues/793)
+* support Jellyfin 12.0 API key auth ([8a8f675](https://github.com/DialmasterOrg/Youtarr/commit/8a8f675dc76c19e4531ab60f23ecf94803d48338)), closes [#789](https://github.com/DialmasterOrg/Youtarr/issues/789)
+
+
+### Documentation
+
+* update CHANGELOG for v1.81.0 [skip ci] ([27f9b26](https://github.com/DialmasterOrg/Youtarr/commit/27f9b26e8e8f6fcd0a089a6563f2492629029de6))
+
+
+
+
+
 ## [v1.81.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.81.0) - 2026-08-28
 
 ## [1.81.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.80.0...v1.81.0) (2026-08-28)
