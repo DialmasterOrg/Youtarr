@@ -131,8 +131,8 @@ class NfoGenerator {
         .map(t => t.trim())
         .filter(t => t.length > 0);
 
-      // Build tag elements from jsonData.tags merged with additional_tags
-      const tags = [...(jsonData.tags || []), ...additionalTagsArray]
+      // Build tag elements from additional_tags merged with jsonData.tags
+      const tags = [...additionalTagsArray, ...(jsonData.tags || [])]
         .map(tag => `  <tag>${this.escapeXml(tag)}</tag>`)
         .join('\n');
 
