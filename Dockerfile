@@ -21,9 +21,16 @@ COPY server/ ./server/
 COPY client/build/ ./client/build/
 COPY migrations/ ./migrations/
 
-# ---- Apprise ----
+# ---- Python deps for the runtime image ----
+# Keep this on the same Python minor as node:20-slim's python3 (bookworm -> 3.11);
+# curl_cffi ships compiled extensions.
 FROM python:3.11-slim AS apprise
 RUN pip install --no-cache-dir --target=/opt/apprise apprise
+# yt-dlp wants an impersonation target for YouTube subtitle requests and the
+# zipimport binary doesn't bundle one. Pinned one minor behind the newest
+# version yt-dlp accepts (yt_dlp/networking/_curlcffi.py) so an older
+# self-updated yt-dlp still loads it.
+RUN pip install --no-cache-dir --target=/opt/curl_cffi "curl-cffi>=0.10,<0.16"
 
 # ---- Release ----
 FROM node:20-slim AS release
@@ -53,9 +60,10 @@ ENV PATH="/opt/yt-dlp:${PATH}"
 ENV DENO_INSTALL="/usr/local"
 RUN curl -fsSL https://deno.land/install.sh | sh
 
-# Copy Apprise from builder stage
+# Copy Apprise and curl_cffi from the Python deps stage
 COPY --from=apprise /opt/apprise /opt/apprise
-ENV PYTHONPATH="/opt/apprise"
+COPY --from=apprise /opt/curl_cffi /opt/curl_cffi
+ENV PYTHONPATH="/opt/apprise:/opt/curl_cffi"
 
 # Create apprise wrapper (the pip-installed script has wrong shebang for this image)
 RUN printf '#!/bin/sh\nexec python3 -c "from apprise.cli import main; main()" "$@"\n' > /usr/local/bin/apprise && \

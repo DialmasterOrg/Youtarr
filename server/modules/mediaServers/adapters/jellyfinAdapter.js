@@ -23,7 +23,9 @@ class JellyfinAdapter extends BaseAdapter {
     this.allUsers = config.jellyfinWatchStatusAllUsers !== false;
   }
 
-  _headers() { return { 'X-Emby-Token': this.apiKey }; }
+  // Jellyfin 12.0 disables the legacy X-Emby-Token header by default; the
+  // Authorization: MediaBrowser scheme is accepted by 10.x and 12.x alike.
+  _headers() { return { Authorization: `MediaBrowser Token="${this.apiKey}"` }; }
 
   async testConnection() {
     try {

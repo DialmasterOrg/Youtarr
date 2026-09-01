@@ -27,6 +27,9 @@ function isMembersOnlyMessage(message = '') {
   return ytDlpRunner.isMembersOnlyError(message);
 }
 
+// yt-dlp prints this after a subtitle download fails; the video still downloads.
+const SUBTITLE_DOWNLOAD_WARNING_PATTERN = /WARNING:\s*Unable to download video subtitles for/i;
+
 function extractYoutubeIdFromYtdlpError(message = '') {
   const match = String(message).match(/\[youtube\]\s+([a-zA-Z0-9_-]{11}):/);
   return match ? match[1] : null;
@@ -62,6 +65,10 @@ class YtdlpErrorTracker {
     // is known, so unassociated errors still block the
     // "complete with only expected skips" classification.
     this.unexpectedErrorCount = 0;
+    // Subtitle failures undone by handleWarningLine. yt-dlp still exits 1 for
+    // them, so the finalizer needs this to tell a subtitle-only exit 1 from a
+    // real partial failure.
+    this.subtitleFailureCount = 0;
     // seenTerminatedChannelIds: sync dedupe across stdout/stderr.
     // terminatedChannelIds: only successful persists; drives hasOnlyHandledErrors.
     // terminatedChannels: rich entries for the summary, populated on success only.
@@ -168,6 +175,31 @@ class YtdlpErrorTracker {
       logger.info({ youtubeId: this.currentVideoId, error: this.lastErrorMessage }, 'Recorded video failure');
     }
     return false;
+  }
+
+  // yt-dlp prints the subtitle downloader's ERROR first, then this WARNING,
+  // then still downloads the video. handleErrorLine already recorded that
+  // ERROR as a failure of the current video; drop it here. Only the most
+  // recent error is undone so an earlier real failure stays recorded.
+  // Returns true when a failure was dropped.
+  handleWarningLine(line, source) {
+    if (!SUBTITLE_DOWNLOAD_WARNING_PATTERN.test(line)) return false;
+    if (!this.currentVideoId) return false;
+
+    const failure = this.failedVideos.get(this.currentVideoId);
+    if (!failure || this.lastErrorMessage === null || failure.error !== this.lastErrorMessage) {
+      return false;
+    }
+
+    this.failedVideos.delete(this.currentVideoId);
+    this.unexpectedErrorCount -= 1;
+    this.subtitleFailureCount += 1;
+    this.lastErrorMessage = null;
+    logger.warn(
+      { youtubeId: this.currentVideoId, error: failure.error, source },
+      'Subtitle download failed; video download continues and is not counted as failed'
+    );
+    return true;
   }
 
   // Barrier before final-state derivation so the final broadcast can name

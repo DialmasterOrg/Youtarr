@@ -186,6 +186,34 @@ describe('downloadJobFinalizer', () => {
       expect(finalCall[4].text).not.toMatch(/set cookies/i);
     });
 
+    it('marks a subtitle-only exit 1 Complete with Warnings without calling the videos failed', async () => {
+      downloadResultProcessor.resolveUrlsToProcess.mockReturnValue(['https://youtu.be/abc123def45']);
+      downloadResultProcessor.partitionDownloadResults.mockReturnValue({
+        successfulVideos: [{ youtubeId: 'abc123def45', fileSize: '1000' }],
+        failedVideosList: []
+      });
+
+      await finalizeDownloadJob(makeContext({
+        code: 1,
+        errorTracker: makeErrorTracker({ subtitleFailureCount: 1 }),
+        router: makeRouter({
+          stderrBuffer: 'ERROR: [download] Got error: Read timed out. Giving up after 2 retries\n' +
+            'WARNING: Unable to download video subtitles for \'en\': Read timed out.\n'
+        })
+      }));
+
+      expect(jobModule.updateJob).toHaveBeenCalledWith(mockJobId, expect.objectContaining({
+        status: 'Complete with Warnings',
+        output: '1 videos.',
+        notes: '1 subtitle download failed; the videos themselves downloaded'
+      }));
+      const finalCall = MessageEmitter.emitMessage.mock.calls.find(
+        (call) => call[3] === 'downloadProgress' && call[4] && call[4].finalSummary
+      );
+      expect(finalCall[4].text).toBe('Download completed with warnings: 1 video downloaded, 1 subtitle download failed');
+      expect(finalCall[4].finalSummary.totalFailed).toBe(0);
+    });
+
     it('detects bot detection from the stderr buffer rescan', async () => {
       await finalizeDownloadJob(makeContext({
         code: 1,
