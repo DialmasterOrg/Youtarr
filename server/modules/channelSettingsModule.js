@@ -176,13 +176,12 @@ class ChannelSettingsModule {
   }
 
   /**
-   * Validate title filter regex pattern (Python regex syntax)
-   * Uses Python directly to test regex validity - same as yt-dlp
-   * @param {string|null} additionalTags - Python regex pattern to validate
+   * Validate additionalTags
+   * @param {string|null} additionalTags - tags string to validate
    * @returns {Object} - { valid: boolean, error?: string }
    */
   validateAdditionalTags(additionalTags) {
-    // NULL or empty string is valid (no title filtering)
+    // NULL or empty string is valid
     if (!additionalTags || additionalTags.trim() === '') {
       return { valid: true };
     }
