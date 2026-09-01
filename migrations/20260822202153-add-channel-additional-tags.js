@@ -5,7 +5,7 @@ const { addColumnIfMissing, removeColumnIfExists } = require('./helpers');
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up (queryInterface, Sequelize) {
-    // Add title_filter_regex column for filtering videos by title using regex
+    // Add additional_tags column for adding additional tags to downloaded videos
     await addColumnIfMissing(queryInterface, 'channels', 'additional_tags', {
       type: Sequelize.TEXT,
       allowNull: true,
