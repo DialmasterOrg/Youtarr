@@ -367,6 +367,19 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
     // regardless of enabled state.
     const settingsChannelRecord = channelRecord && channelRecord.enabled ? channelRecord : null;
 
+    // Merge per-channel custom tags into jsonData.tags (prepended, before YouTube tags).
+    // This ensures AtomicParsley keywords, the NFO writer, and any future
+    // .info.json consumers (e.g. bulkUpdateVideoRatings) see them.
+    if (settingsChannelRecord && settingsChannelRecord.additional_tags) {
+      const customTags = settingsChannelRecord.additional_tags
+        .split('|')
+        .map(t => t.trim())
+        .filter(t => t.length > 0);
+      if (customTags.length > 0) {
+        jsonData.tags = [...customTags, ...(jsonData.tags || [])];
+      }
+    }
+
     // Outgoing layout: in per-video mode, resolve flat-vs-subfolder from the
     // video's real channel (hard override -> channel tri-state -> global);
     // fixed mode keeps the per-job layout. Incoming per-video layout is always
