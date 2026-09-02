@@ -560,6 +560,7 @@ describe('ChannelSettingsModule', () => {
         min_duration: 60,
         max_duration: 3600,
         title_filter_regex: 'test.*',
+        additional_tags: 'approved|tag',
         auto_removal_protected: 1,
         auto_removal_keep_recent_count: 25
       };
@@ -574,6 +575,7 @@ describe('ChannelSettingsModule', () => {
         min_duration: 60,
         max_duration: 3600,
         title_filter_regex: 'test.*',
+        additional_tags: 'approved|tag',
         auto_removal_protected: true,
         auto_removal_keep_recent_count: 25
       });
