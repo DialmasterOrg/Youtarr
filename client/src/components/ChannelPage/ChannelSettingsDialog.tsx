@@ -28,7 +28,7 @@ import {
   Tabs,
   Chip,
 } from '../ui';
-import { CheckCircle as CheckCircleIcon, XCircle as CancelIcon, Info as InfoIcon, Copy as ContentCopyIcon, Settings as SettingsIcon, Download as DownloadIcon, Filter as FilterAltIcon, Shield as RatingIcon, ShieldCheck as AutoRemovalIcon } from '../../lib/icons';
+import { CheckCircle as CheckCircleIcon, XCircle as CancelIcon, Info as InfoIcon, Copy as ContentCopyIcon, Settings as SettingsIcon, Download as DownloadIcon, Filter as FilterAltIcon, Shield as RatingIcon, Tag as TagIcon, ShieldCheck as AutoRemovalIcon } from '../../lib/icons';
 import useMediaQuery from '../../hooks/useMediaQuery';
 import { useConfig } from '../../hooks/useConfig';
 import { useSubfolders } from '../../hooks/useSubfolders';
@@ -200,7 +200,7 @@ function ChannelSettingsDialog({
     { id: 'general', label: 'General', icon: <SettingsIcon size={18} /> },
     { id: 'filters', label: 'Filters', icon: <FilterAltIcon size={18} /> },
     { id: 'ratings', label: 'Ratings', icon: <RatingIcon size={18} /> },
-    { id: 'tags', label: 'Tags', icon: <RatingIcon size={18} /> },
+    { id: 'tags', label: 'Tags', icon: <TagIcon size={18} /> },
     { id: 'autoremoval', label: 'Auto-Removal', icon: <AutoRemovalIcon size={18} /> }
   ];
 
