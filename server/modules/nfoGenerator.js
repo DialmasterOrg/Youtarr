@@ -85,7 +85,6 @@ class NfoGenerator {
    * Generates and writes an NFO file for a video
    * @param {string} videoPath - Path to the video file
    * @param {object} jsonData - Parsed .info.json data
-   * @param {string} additional_tags - Optional additional tags for the video
    * @returns {boolean} True if successful, false otherwise
    */
   writeVideoNfoFile(videoPath, jsonData, additional_tags) {
@@ -124,15 +123,8 @@ class NfoGenerator {
         .map(cat => `  <genre>${this.escapeXml(cat)}</genre>`)
         .join('\n');
 
-      // Parse additional_tags (pipe-separated string) into an array,
-      // trimming whitespace and dropping empty entries. Handles null/undefined/empty safely.
-      const additionalTagsArray = (additional_tags || '')
-        .split('|')
-        .map(t => t.trim())
-        .filter(t => t.length > 0);
-
-      // Build tag elements from additional_tags merged with jsonData.tags
-      const tags = [...additionalTagsArray, ...(jsonData.tags || [])]
+      // Build tag elements from tags array
+      const tags = (jsonData.tags || [])
         .map(tag => `  <tag>${this.escapeXml(tag)}</tag>`)
         .join('\n');
 
