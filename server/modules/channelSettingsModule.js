@@ -186,6 +186,14 @@ class ChannelSettingsModule {
       return { valid: true };
     }
 
+    // Check for characters that aren't a-z, A-Z, underscore, dash, space, pipe, or some acceptable variant
+    if (/[^a-zA-Z0-9_\s\p{L}\p{Nd}|-]/u.test(additionalTags)) {
+      return {
+        valid: false,
+        error: 'Additional tags must only contain alphanumeric characters, underscores, dashes, or spaces.'
+      }
+    }
+
     const trimmed = additionalTags.trim();
 
     // Check length
@@ -194,6 +202,25 @@ class ChannelSettingsModule {
         valid: false,
         error: 'Additional tags must be 1000 characters or less',
       };
+    }
+
+    // Reject whitespace-only tags and duplicate tags
+    const seen = new Set();
+    for (const tag of trimmed.split('|')) {
+      const normalized = tag.trim();
+      if (normalized === '') {
+        return {
+          valid: false,
+          error: 'Tags cannot be empty or whitespace-only (check for stray | characters)',
+        };
+      }
+      if (seen.has(normalized)) {
+        return {
+          valid: false,
+          error: `Duplicate tags are not allowed: ${normalized}`,
+        };
+      }
+      seen.add(normalized);
     }
 
     return { valid: true };
