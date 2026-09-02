@@ -87,7 +87,7 @@ class NfoGenerator {
    * @param {object} jsonData - Parsed .info.json data
    * @returns {boolean} True if successful, false otherwise
    */
-  writeVideoNfoFile(videoPath, jsonData, additional_tags) {
+  writeVideoNfoFile(videoPath, jsonData) {
     logger.info({ videoPath }, 'Writing NFO file for video');
     try {
       // Generate NFO path (same as video but with .nfo extension)
