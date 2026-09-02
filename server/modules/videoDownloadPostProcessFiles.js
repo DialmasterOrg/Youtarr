@@ -470,7 +470,7 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
 
     // Generate NFO file for Jellyfin/Kodi/Emby compatibility if enabled
     if (shouldWriteVideoNfoFiles()) {
-      nfoGenerator.writeVideoNfoFile(videoPath, jsonData, ...(settingsChannelRecord ? [settingsChannelRecord.additional_tags] : []));
+      nfoGenerator.writeVideoNfoFile(videoPath, jsonData);
     }
 
     // Check if this is an audio file (MP3) - skip video-specific metadata embedding
