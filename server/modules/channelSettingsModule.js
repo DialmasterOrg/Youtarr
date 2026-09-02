@@ -191,7 +191,7 @@ class ChannelSettingsModule {
       return {
         valid: false,
         error: 'Additional tags must only contain alphanumeric characters, underscores, dashes, or spaces.'
-      }
+      };
     }
 
     const trimmed = additionalTags.trim();
