@@ -118,6 +118,8 @@ Once connected, open a playlist in Youtarr and turn on its Jellyfin sync chip. S
 
 Connecting Jellyfin also enables watch status sync: Youtarr periodically pulls per-video watch state (played, percent watched, last watched) for every user on the server and shows it as Watched chips and filters on its listing pages. It's one-way; Youtarr never marks anything watched on Jellyfin. Jellyfin decides when a video counts as played: **Maximum resume percentage** under Server -> Playback -> Resume. Settings live under **Settings -> Watch Status**; see [Track Watch Status from Media Servers](../USAGE_GUIDE.md#track-watch-status-from-media-servers).
 
+Videos inside Jellyfin Collections remain available for watch status and native playlist sync with **Group movies into collections** enabled. You do not need to change that display setting.
+
 ### Visibility
 
 A playlist marked **Public** in Youtarr is visible to all users on the server; a **Private** one is visible only to the configured user account.
