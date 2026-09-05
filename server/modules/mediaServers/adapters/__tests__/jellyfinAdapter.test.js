@@ -136,6 +136,17 @@ describe('JellyfinAdapter', () => {
     expect(id).toBe('X');
   });
 
+  test('resolves a movie inside a collection when grouping is enabled', async () => {
+    axios.get.mockImplementationOnce(async (_url, { params }) => ({
+      data: { Items: params.collapseBoxSetItems === false
+        ? [{ Id: 'movie', Type: 'Movie', Path: '/media/Chan/video.mp4' }]
+        : [{ Id: 'collection', Type: 'BoxSet', Path: '/collections/Chan [boxset]' }] },
+    }));
+
+    const adapter = new JellyfinAdapter(cfg);
+    await expect(adapter.resolveItemIdByFilepath('/youtube/Chan/video.mp4')).resolves.toBe('movie');
+  });
+
   test('replacePlaylistItems deletes old playlist and recreates, returning the new id', async () => {
     axios.delete.mockResolvedValueOnce({});
     axios.post.mockResolvedValueOnce({ data: { Id: 'new-pl-id' } });
@@ -257,6 +268,31 @@ describe('JellyfinAdapter', () => {
   describe('fetchWatchStates', () => {
     // Most tests run in single-user mode to keep one queued /Items response.
     const singleUserCfg = { ...cfg, jellyfinWatchStatusAllUsers: false };
+
+    test.each([false, true])('fetches individual movie watch states with collection grouping (allUsers=%s)', async (allUsers) => {
+      const groupedResponse = async (url, { params }) => {
+        if (url.endsWith('/Users')) {
+          return { data: [{ Id: 'u1', Name: 'Alice' }, { Id: 'u2', Name: 'Bob' }] };
+        }
+        return { data: { Items: params.collapseBoxSetItems === false
+          ? [{
+            Id: 'movie', Type: 'Movie', Path: '/media/Chan/video.mp4',
+            UserData: { Played: params.userId !== 'u2', PlayCount: params.userId !== 'u2' ? 1 : 0 },
+          }]
+          : [{ Id: 'collection', Type: 'BoxSet', Path: '/collections/Chan [boxset]' }] } };
+      };
+      for (let call = 0; call < (allUsers ? 3 : 1); call++) {
+        axios.get.mockImplementationOnce(groupedResponse);
+      }
+
+      const adapter = new JellyfinAdapter({ ...cfg, jellyfinWatchStatusAllUsers: allUsers });
+      const { entries } = await adapter.fetchWatchStates();
+      expect(entries.map(({ path, serverUserId, played }) => ({ path, serverUserId, played }))).toEqual(
+        (allUsers ? ['u1', 'u2'] : ['USR']).map((serverUserId) => ({
+          path: '/media/Chan/video.mp4', serverUserId, played: serverUserId !== 'u2',
+        }))
+      );
+    });
 
     test('maps UserData fields including ticks-to-ms conversion', async () => {
       axios.get.mockResolvedValueOnce({
