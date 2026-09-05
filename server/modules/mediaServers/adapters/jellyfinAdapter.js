@@ -66,6 +66,8 @@ class JellyfinAdapter extends BaseAdapter {
       const params = {
         userId: this.userId,
         includeItemTypes: isAudio ? 'Audio' : 'Video,Movie,Episode',
+        // Data lookups need individual movies even when Jellyfin groups collections.
+        collapseBoxSetItems: false,
         recursive: true,
         fields: 'Path',
       };
@@ -103,6 +105,8 @@ class JellyfinAdapter extends BaseAdapter {
         const params = {
           userId: user.id,
           includeItemTypes: 'Video,Movie,Episode',
+          // Collection containers do not carry the individual videos' watch state.
+          collapseBoxSetItems: false,
           recursive: true,
           fields: 'Path',
           enableUserData: true,
