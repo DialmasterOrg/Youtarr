@@ -41,9 +41,9 @@ describe('DatabaseHealthModule', () => {
         Channel: {
           getTableName: () => 'channels',
           rawAttributes: {
-            id: { type: { constructor: { name: 'INTEGER' } }, allowNull: false },
-            channel_id: { type: { constructor: { name: 'STRING' } }, allowNull: true },
-            title: { type: { constructor: { name: 'STRING' } }, allowNull: true },
+            id: { type: { constructor: { name: 'INTEGER' } }, allowNull: false, field: 'id' },
+            channelId: { type: { constructor: { name: 'STRING' } }, allowNull: true, field: 'channel_id' },
+            title: { type: { constructor: { name: 'STRING' } }, allowNull: true, field: 'title' },
           },
         },
       };
@@ -69,13 +69,13 @@ describe('DatabaseHealthModule', () => {
         Channel: {
           getTableName: () => 'channels',
           rawAttributes: {
-            id: { type: { constructor: { name: 'INTEGER' } }, allowNull: false },
+            id: { type: { constructor: { name: 'INTEGER' } }, allowNull: false, field: 'id' },
           },
         },
         Video: {
           getTableName: () => 'videos',
           rawAttributes: {
-            id: { type: { constructor: { name: 'INTEGER' } }, allowNull: false },
+            id: { type: { constructor: { name: 'INTEGER' } }, allowNull: false, field: 'id' },
           },
         },
       };
@@ -101,9 +101,9 @@ describe('DatabaseHealthModule', () => {
         Channel: {
           getTableName: () => 'channels',
           rawAttributes: {
-            id: { type: { constructor: { name: 'INTEGER' } }, allowNull: false },
-            channel_id: { type: { constructor: { name: 'STRING' } }, allowNull: true },
-            new_field: { type: { constructor: { name: 'STRING' } }, allowNull: true },
+            id: { type: { constructor: { name: 'INTEGER' } }, allowNull: false, field: 'id' },
+            channel_id: { type: { constructor: { name: 'STRING' } }, allowNull: true, field: 'channel_id' },
+            new_field: { type: { constructor: { name: 'STRING' } }, allowNull: true, field: 'new_field' },
           },
         },
       };
@@ -130,8 +130,8 @@ describe('DatabaseHealthModule', () => {
         Channel: {
           getTableName: () => 'channels',
           rawAttributes: {
-            id: { type: { constructor: { name: 'INTEGER' } }, allowNull: false },
-            channel_id: { type: { constructor: { name: 'STRING' } }, allowNull: false }, // Model says not nullable
+            id: { type: { constructor: { name: 'INTEGER' } }, allowNull: false, field: 'id' },
+            channel_id: { type: { constructor: { name: 'STRING' } }, allowNull: false, field: 'channel_id' }, // Model says not nullable
           },
         },
       };

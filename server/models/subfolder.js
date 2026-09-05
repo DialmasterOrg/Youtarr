@@ -9,7 +9,13 @@ Subfolder.init(
     // Stored clean (no __ prefix). Unique under utf8mb4_unicode_ci (case-insensitive).
     name: { type: DataTypes.STRING(100), allowNull: false, unique: true },
   },
-  { sequelize, modelName: 'Subfolder', tableName: 'subfolders', timestamps: true }
+  {
+    sequelize,
+    modelName: 'Subfolder',
+    tableName: 'subfolders',
+    timestamps: true,
+    underscored: true,
+  }
 );
 
 module.exports = Subfolder;

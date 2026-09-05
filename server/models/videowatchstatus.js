@@ -16,7 +16,13 @@ VideoWatchStatus.init(
     last_watched_at: { type: DataTypes.DATE, allowNull: true },
     last_synced_at: { type: DataTypes.DATE, allowNull: false },
   },
-  { sequelize, modelName: 'VideoWatchStatus', tableName: 'video_watch_status', timestamps: true }
+  {
+    sequelize,
+    modelName: 'VideoWatchStatus',
+    tableName: 'video_watch_status',
+    timestamps: true,
+    underscored: true,
+  }
 );
 
 module.exports = VideoWatchStatus;

@@ -42,7 +42,7 @@ class WatchStatusQueries {
   // 'primary' only the Plex owner + configured Jellyfin/Emby users).
   _watchedRuleConditions() {
     const config = configModule.getConfig();
-    const conditions = ['vws.video_id = Videos.id', 'vws.played = 1'];
+    const conditions = ['vws.video_id = videos.id', 'vws.played = 1'];
     const replacements = {};
     if (config.watchStatusWatchedRule === 'primary') {
       conditions.push(

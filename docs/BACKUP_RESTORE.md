@@ -12,6 +12,12 @@ On Debian/Ubuntu, install jq with: `sudo apt install jq`
 
 ## Quick Start
 
+The `backup.sh` and database restore steps below operate on the bundled
+`youtarr-db` container. They do not back up or restore an external database
+configured through `DB_HOST`. External database users must use their database
+provider's backup tools or a database dump connected to the actual external
+server, and preserve their local configuration and metadata separately.
+
 ### Create a Backup
 
 ```bash
@@ -124,6 +130,49 @@ Restores only configuration files, skipping the database. Useful when:
 Skips the confirmation prompt. Use with caution in scripts.
 
 ## Migration Scenarios
+
+### Before Updating or Returning to an Earlier Version
+
+Create a backup before updating Youtarr, especially when an update changes the
+database schema. Stop Youtarr first so downloads, settings, and metadata do not
+change while the backup is taken. For the bundled database:
+
+```bash
+./stop.sh
+./scripts/backup.sh
+```
+
+Wait for the backup to finish successfully before updating. Keep the archive
+and record the Youtarr image version you were running. For an external database,
+back up the actual external database using your provider's tools or a database
+dump; `backup.sh` alone does not cover that database.
+
+The table and column rename migration changes the names expected by older
+Youtarr versions. **Changing the Docker image back to an older version alone
+does not undo the migration.** To return to the version you backed up:
+
+1. Stop Youtarr and keep it stopped throughout recovery.
+2. Restore the backup taken before the update. For the bundled database, use
+   `./scripts/restore.sh /path/to/pre-update-backup.tar.gz`. For an external
+   database, restore the pre-update database backup and matching local settings
+   and metadata using your external backup procedure.
+3. After restoring, select the previous image version before starting Youtarr.
+   For the standard Compose setup, set
+   `YOUTARR_IMAGE=dialmaster/youtarr:<previous-version-tag>` in `.env`, replacing
+   the placeholder with the recorded version. Do this after restoration because
+   `restore.sh` also restores `.env`. Avoid `latest` or `dev` for this recovery.
+4. Start Youtarr using the normal startup command for your database setup and
+   verify your settings and download history.
+
+The bundled database restore replaces the database, including its schema and
+`SequelizeMeta` migration history. Starting the newer image against the restored
+database would apply the new migrations again.
+
+Restoring returns database state, settings, and backed-up metadata to the backup
+time; changes made since then are not retained in the restored database. Video
+files are not included in these backups. Files downloaded or deleted after the
+backup are not reverted, so the restored history may differ from the files on
+disk. Back up the output directory separately if you need to restore those files.
 
 ### Moving to a New Computer
 

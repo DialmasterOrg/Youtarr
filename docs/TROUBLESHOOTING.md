@@ -451,7 +451,7 @@ ERROR 1396 (HY000) at line 21: Operation CREATE USER failed for 'root'@'%'
 2. If the error persists, check `docker compose logs youtarr` to see which migration is still failing.
 3. Manually reconcile the schema for that migration:
    - Connect to MariaDB: `docker compose exec youtarr-db mysql -u root -p youtarr`
-   - Drop the duplicate column or table mentioned in the error (for example `ALTER TABLE Videos DROP COLUMN media_type;`), **or** restore a known-good backup.
+   - Drop the duplicate column or table mentioned in the error (for example `ALTER TABLE videos DROP COLUMN media_type;`), **or** restore a known-good backup.
    - Exit MySQL and restart the stack.
 4. Once the stack is back online, confirm the schema is healthy: `curl http://localhost:3087/api/db-status` reports whether the database connection and schema checks passed, and the startup logs (`docker compose logs youtarr`) show the migration results.
 

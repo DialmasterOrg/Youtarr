@@ -12,7 +12,13 @@ PlaylistSyncState.init(
     last_synced_at: { type: DataTypes.DATE, allowNull: true },
     last_error: { type: DataTypes.TEXT, allowNull: true },
   },
-  { sequelize, modelName: 'PlaylistSyncState', tableName: 'playlist_sync_state', timestamps: true }
+  {
+    sequelize,
+    modelName: 'PlaylistSyncState',
+    tableName: 'playlist_sync_state',
+    timestamps: true,
+    underscored: true,
+  }
 );
 
 module.exports = PlaylistSyncState;

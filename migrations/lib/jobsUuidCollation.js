@@ -7,6 +7,13 @@
 // column created afterwards (errno 150). These helpers detect and
 // restore the canonical utf8mb4_bin collation so referencing and referenced
 // columns always match.
+//
+// LEGACY: do not call from new migrations. This helper targets the
+// pre-rename table names (Jobs, JobVideos, JobVideoDownloads) and exists
+// only to serve the three historical migrations that already use it,
+// all of which sort before 20260830201917-lowercased-table-column-names.
+// Any new collation repair must target jobs, jobvideos, and
+// jobvideodownloads and should live in a new helper.
 
 const REQUIRED_COLLATION = 'utf8mb4_bin';
 

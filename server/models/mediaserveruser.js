@@ -10,7 +10,13 @@ MediaServerUser.init(
     server_user_id: { type: DataTypes.STRING, allowNull: false },
     server_user_name: { type: DataTypes.STRING, allowNull: true },
   },
-  { sequelize, modelName: 'MediaServerUser', tableName: 'media_server_users', timestamps: true }
+  {
+    sequelize,
+    modelName: 'MediaServerUser',
+    tableName: 'media_server_users',
+    timestamps: true,
+    underscored: true,
+  }
 );
 
 module.exports = MediaServerUser;

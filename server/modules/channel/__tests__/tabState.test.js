@@ -155,7 +155,7 @@ describe('tabState', () => {
       // Verify it uses JSON_SET with COALESCE to handle NULL
       const sqlQuery = sequelize.query.mock.calls[0][0];
       expect(sqlQuery).toContain('JSON_SET');
-      expect(sqlQuery).toContain('COALESCE(lastFetchedByTab, \'{}\')');
+      expect(sqlQuery).toContain('COALESCE(last_fetched_by_tab, \'{}\')');
       expect(sequelize.query).toHaveBeenCalledWith(
         expect.any(String),
         {

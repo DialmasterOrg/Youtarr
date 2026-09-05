@@ -19,10 +19,12 @@ Video.init(
     youTubeChannelName: {
       type: DataTypes.STRING,
       allowNull: false,
+      field: 'youtube_channel_name',
     },
     youTubeVideoName: {
       type: DataTypes.STRING,
       allowNull: false,
+      field: 'youtube_video_name',
     },
     duration: {
       type: DataTypes.INTEGER,
@@ -116,8 +118,9 @@ Video.init(
   {
     sequelize,
     modelName: 'Video',
-    tableName: 'Videos',
+    tableName: 'videos',
     timestamps: false,
+    underscored: true,
   }
 );
 

@@ -170,13 +170,13 @@ curl -X POST https://your-server.com/api/videos/download \
 # List active API keys
 docker exec youtarr-db mysql -u root -p123qweasd youtarr -e "
 SELECT id, name, key_prefix, created_at, last_used_at
-FROM ApiKeys
+FROM apikeys
 WHERE is_active = 1;
 "
 
 # Revoke a key by ID
 docker exec youtarr-db mysql -u root -p123qweasd youtarr -e "
-UPDATE ApiKeys SET is_active = 0 WHERE id = 1;
+UPDATE apikeys SET is_active = 0 WHERE id = 1;
 "
 ```
 
@@ -186,7 +186,7 @@ For detailed API documentation and examples (bookmarklets, mobile shortcuts, Pyt
 
 ### Session Configuration
 - **Duration**: 7 days
-- **Storage**: Database table `Sessions`
+- **Storage**: Database table `sessions`
 - **Browser storage**: Token persisted as `authToken` in `localStorage`
 - **Client header**: Token forwarded on each API request via `x-access-token`
 
@@ -202,7 +202,7 @@ For detailed API documentation and examples (bookmarklets, mobile shortcuts, Pyt
 ```bash
 docker exec youtarr-db mysql -u root -p123qweasd youtarr -e "
 SELECT id, session_token, username, expires_at, is_active
-FROM Sessions
+FROM sessions
 WHERE expires_at > NOW()
   AND is_active = 1;
 "
@@ -211,7 +211,7 @@ WHERE expires_at > NOW()
 #### Clear All Sessions (Force Re-login)
 ```bash
 docker exec youtarr-db mysql -u root -p123qweasd youtarr -e "
-DELETE FROM Sessions;
+DELETE FROM sessions;
 "
 ```
 

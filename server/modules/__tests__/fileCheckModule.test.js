@@ -528,7 +528,7 @@ describe('FileCheckModule', () => {
 
       expect(mockSequelize.query).toHaveBeenCalledTimes(1);
       expect(mockSequelize.query).toHaveBeenCalledWith(
-        'UPDATE Videos SET fileSize = ? WHERE id = ?',
+        'UPDATE videos SET file_size = ? WHERE id = ?',
         {
           replacements: [2000, 1],
           type: 'UPDATE'
@@ -545,7 +545,7 @@ describe('FileCheckModule', () => {
 
       expect(mockSequelize.query).toHaveBeenCalledTimes(1);
       expect(mockSequelize.query).toHaveBeenCalledWith(
-        'UPDATE Videos SET removed = ? WHERE id = ?',
+        'UPDATE videos SET removed = ? WHERE id = ?',
         {
           replacements: [1, 1],
           type: 'UPDATE'
@@ -562,7 +562,7 @@ describe('FileCheckModule', () => {
 
       expect(mockSequelize.query).toHaveBeenCalledTimes(1);
       expect(mockSequelize.query).toHaveBeenCalledWith(
-        'UPDATE Videos SET fileSize = ?, removed = ? WHERE id = ?',
+        'UPDATE videos SET file_size = ?, removed = ? WHERE id = ?',
         {
           replacements: [2000, 0, 1],
           type: 'UPDATE'
@@ -582,7 +582,7 @@ describe('FileCheckModule', () => {
       expect(mockSequelize.query).toHaveBeenCalledTimes(3);
       expect(mockSequelize.query).toHaveBeenNthCalledWith(
         1,
-        'UPDATE Videos SET fileSize = ?, removed = ? WHERE id = ?',
+        'UPDATE videos SET file_size = ?, removed = ? WHERE id = ?',
         {
           replacements: [2000, 0, 1],
           type: 'UPDATE'
@@ -590,7 +590,7 @@ describe('FileCheckModule', () => {
       );
       expect(mockSequelize.query).toHaveBeenNthCalledWith(
         2,
-        'UPDATE Videos SET removed = ? WHERE id = ?',
+        'UPDATE videos SET removed = ? WHERE id = ?',
         {
           replacements: [1, 2],
           type: 'UPDATE'
@@ -598,7 +598,7 @@ describe('FileCheckModule', () => {
       );
       expect(mockSequelize.query).toHaveBeenNthCalledWith(
         3,
-        'UPDATE Videos SET fileSize = ? WHERE id = ?',
+        'UPDATE videos SET file_size = ? WHERE id = ?',
         {
           replacements: [5000, 3],
           type: 'UPDATE'
@@ -614,7 +614,7 @@ describe('FileCheckModule', () => {
       await fileCheckModule.applyVideoUpdates(mockSequelize, mockSequelizeLib, updates);
 
       expect(mockSequelize.query).toHaveBeenCalledWith(
-        'UPDATE Videos SET removed = ? WHERE id = ?',
+        'UPDATE videos SET removed = ? WHERE id = ?',
         {
           replacements: [0, 1],
           type: 'UPDATE'
@@ -630,7 +630,7 @@ describe('FileCheckModule', () => {
       await fileCheckModule.applyVideoUpdates(mockSequelize, mockSequelizeLib, updates);
 
       expect(mockSequelize.query).toHaveBeenCalledWith(
-        'UPDATE Videos SET removed = ? WHERE id = ?',
+        'UPDATE videos SET removed = ? WHERE id = ?',
         {
           replacements: [1, 1],
           type: 'UPDATE'
@@ -657,7 +657,7 @@ describe('FileCheckModule', () => {
       await fileCheckModule.applyVideoUpdates(mockSequelize, mockSequelizeLib, updates);
 
       expect(mockSequelize.query).toHaveBeenCalledWith(
-        'UPDATE Videos SET fileSize = ? WHERE id = ?',
+        'UPDATE videos SET file_size = ? WHERE id = ?',
         {
           replacements: [largeSize, 1],
           type: 'UPDATE'
@@ -673,7 +673,7 @@ describe('FileCheckModule', () => {
       await fileCheckModule.applyVideoUpdates(mockSequelize, mockSequelizeLib, updates);
 
       expect(mockSequelize.query).toHaveBeenCalledWith(
-        'UPDATE Videos SET fileSize = ? WHERE id = ?',
+        'UPDATE videos SET file_size = ? WHERE id = ?',
         {
           replacements: [0, 1],
           type: 'UPDATE'
@@ -702,7 +702,7 @@ describe('FileCheckModule', () => {
       await fileCheckModule.applyVideoUpdates(mockSequelize, mockSequelizeLib, updates);
 
       expect(mockSequelize.query).toHaveBeenCalledWith(
-        'UPDATE Videos SET filePath = ?, fileSize = ?, removed = ? WHERE id = ?',
+        'UPDATE videos SET file_path = ?, file_size = ?, removed = ? WHERE id = ?',
         expect.objectContaining({
           replacements: ['/videos/channel/video [abc123].mkv', 5000, 0, 1]
         })

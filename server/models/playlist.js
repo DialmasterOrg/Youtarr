@@ -38,7 +38,13 @@ Playlist.init(
     // baseline for "download videos added after this timestamp".
     auto_download_baseline_at: { type: DataTypes.DATE, allowNull: true },
   },
-  { sequelize, modelName: 'Playlist', tableName: 'playlists', timestamps: true }
+  {
+    sequelize,
+    modelName: 'Playlist',
+    tableName: 'playlists',
+    timestamps: true,
+    underscored: true,
+  }
 );
 
 module.exports = Playlist;

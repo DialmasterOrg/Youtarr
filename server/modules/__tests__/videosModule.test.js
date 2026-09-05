@@ -34,7 +34,7 @@ describe('VideosModule', () => {
     mockWatchStatusQueries = {
       getWatchedByMap: jest.fn().mockResolvedValue(new Map()),
       buildWatchedExistsSql: jest.fn().mockReturnValue({
-        sql: 'EXISTS (SELECT 1 FROM video_watch_status vws WHERE vws.video_id = Videos.id AND vws.played = 1)',
+        sql: 'EXISTS (SELECT 1 FROM video_watch_status vws WHERE vws.video_id = videos.id AND vws.played = 1)',
         replacements: {}
       })
     };
@@ -232,33 +232,33 @@ describe('VideosModule', () => {
       const sqlQuery = mockSequelize.query.mock.calls[1][0];
 
       // Verify the query contains all expected columns
-      expect(sqlQuery).toContain('Videos.id');
-      expect(sqlQuery).toContain('Videos.youtubeId');
-      expect(sqlQuery).toContain('Videos.youTubeChannelName');
-      expect(sqlQuery).toContain('Videos.youTubeVideoName');
-      expect(sqlQuery).toContain('Videos.duration');
-      expect(sqlQuery).toContain('Videos.originalDate');
-      expect(sqlQuery).toContain('Videos.description');
-      expect(sqlQuery).toContain('Videos.channel_id');
-      expect(sqlQuery).toContain('Videos.filePath');
-      expect(sqlQuery).toContain('Videos.fileSize');
-      expect(sqlQuery).toContain('Videos.removed');
-      expect(sqlQuery).toContain('Videos.youtube_removed');
+      expect(sqlQuery).toContain('videos.id');
+      expect(sqlQuery).toContain('videos.youtube_id AS "youtubeId"');
+      expect(sqlQuery).toContain('videos.youtube_channel_name AS "youTubeChannelName"');
+      expect(sqlQuery).toContain('videos.youtube_video_name AS "youTubeVideoName"');
+      expect(sqlQuery).toContain('videos.duration');
+      expect(sqlQuery).toContain('videos.original_date AS "originalDate"');
+      expect(sqlQuery).toContain('videos.description');
+      expect(sqlQuery).toContain('videos.channel_id');
+      expect(sqlQuery).toContain('videos.file_path AS "filePath"');
+      expect(sqlQuery).toContain('videos.file_size AS "fileSize"');
+      expect(sqlQuery).toContain('videos.removed');
+      expect(sqlQuery).toContain('videos.youtube_removed');
       // Feeds the 24h existence-check throttle; without it every page load
       // fires a YouTube oembed check per video.
-      expect(sqlQuery).toContain('Videos.youtube_removed_checked_at');
-      expect(sqlQuery).toContain('Videos.media_type');
-      expect(sqlQuery).toContain('Videos.video_resolution');
-      expect(sqlQuery).toContain('COALESCE(Videos.last_downloaded_at, Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, \'%Y%m%d\')) AS timeCreated');
+      expect(sqlQuery).toContain('videos.youtube_removed_checked_at');
+      expect(sqlQuery).toContain('videos.media_type');
+      expect(sqlQuery).toContain('videos.video_resolution');
+      expect(sqlQuery).toContain('COALESCE(videos.last_downloaded_at, jobs.time_created, STR_TO_DATE(videos.original_date, \'%Y%m%d\')) AS timeCreated');
 
       // Verify the JOINs
       expect(sqlQuery).toContain('LEFT JOIN');
-      expect(sqlQuery).toContain('JobVideos ON Videos.id = JobVideos.video_id');
-      expect(sqlQuery).toContain('Jobs ON Jobs.id = JobVideos.job_id');
+      expect(sqlQuery).toContain('jobvideos ON videos.id = jobvideos.video_id');
+      expect(sqlQuery).toContain('jobs ON jobs.id = jobvideos.job_id');
 
       // Verify the ORDER BY clause
       expect(sqlQuery).toContain('ORDER BY');
-      expect(sqlQuery).toContain('COALESCE(Videos.last_downloaded_at, Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, \'%Y%m%d\')) DESC');
+      expect(sqlQuery).toContain('COALESCE(videos.last_downloaded_at, jobs.time_created, STR_TO_DATE(videos.original_date, \'%Y%m%d\')) DESC');
 
       // Verify the LIMIT and OFFSET
       expect(sqlQuery).toContain('LIMIT :limit OFFSET :offset');
@@ -306,7 +306,7 @@ describe('VideosModule', () => {
     });
 
     test('should handle sequelize-specific errors', async () => {
-      const sequelizeError = new Error('SequelizeDatabaseError: Table Videos does not exist');
+      const sequelizeError = new Error('SequelizeDatabaseError: Table videos does not exist');
       mockSequelize.query.mockRejectedValue(sequelizeError);
 
       await expect(VideosModule.getVideosPaginated()).rejects.toThrow('SequelizeDatabaseError');
@@ -326,8 +326,8 @@ describe('VideosModule', () => {
       const replacements = mockSequelize.query.mock.calls[1][1].replacements;
 
       expect(countQuery).toContain('WHERE');
-      expect(countQuery).toContain('(Videos.youTubeVideoName LIKE :search OR Videos.youTubeChannelName LIKE :search)');
-      expect(videosQuery).toContain('(Videos.youTubeVideoName LIKE :search OR Videos.youTubeChannelName LIKE :search)');
+      expect(countQuery).toContain('(videos.youtube_video_name LIKE :search OR videos.youtube_channel_name LIKE :search)');
+      expect(videosQuery).toContain('(videos.youtube_video_name LIKE :search OR videos.youtube_channel_name LIKE :search)');
       expect(replacements.search).toBe('%test video%');
     });
 
@@ -353,7 +353,7 @@ describe('VideosModule', () => {
       await VideosModule.getVideosPaginated({ sortBy: 'published', sortOrder: 'asc' });
 
       const query1 = mockSequelize.query.mock.calls[1][0];
-      expect(query1).toContain('ORDER BY Videos.originalDate ASC');
+      expect(query1).toContain('ORDER BY videos.original_date ASC');
 
       jest.clearAllMocks();
 
@@ -365,7 +365,7 @@ describe('VideosModule', () => {
       await VideosModule.getVideosPaginated();
 
       const query2 = mockSequelize.query.mock.calls[1][0];
-      expect(query2).toContain('ORDER BY COALESCE(Videos.last_downloaded_at, Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, \'%Y%m%d\')) DESC');
+      expect(query2).toContain('ORDER BY COALESCE(videos.last_downloaded_at, jobs.time_created, STR_TO_DATE(videos.original_date, \'%Y%m%d\')) DESC');
     });
 
     test('should handle date filters correctly', async () => {
@@ -381,8 +381,8 @@ describe('VideosModule', () => {
       const query = mockSequelize.query.mock.calls[0][0];
       const replacements = mockSequelize.query.mock.calls[0][1].replacements;
 
-      expect(query).toContain('Videos.originalDate >= :dateFrom');
-      expect(query).toContain('Videos.originalDate <= :dateTo');
+      expect(query).toContain('videos.original_date >= :dateFrom');
+      expect(query).toContain('videos.original_date <= :dateTo');
       expect(replacements.dateFrom).toBe('20240101'); // Dates formatted without dashes
       expect(replacements.dateTo).toBe('20241231');
     });
@@ -397,7 +397,7 @@ describe('VideosModule', () => {
       const query = mockSequelize.query.mock.calls[0][0];
       const replacements = mockSequelize.query.mock.calls[0][1].replacements;
 
-      expect(query).toContain('Videos.youTubeChannelName = :channelFilter');
+      expect(query).toContain('videos.youtube_channel_name = :channelFilter');
       expect(replacements.channelFilter).toBe('Test Channel');
     });
 
@@ -409,7 +409,7 @@ describe('VideosModule', () => {
       await VideosModule.getVideosPaginated({ protectedFilter: 'only' });
 
       const query = mockSequelize.query.mock.calls[0][0];
-      expect(query).toContain('Videos.protected = 1');
+      expect(query).toContain('videos.protected = 1');
     });
 
     test('should apply protectedFilter=exclude to the WHERE clause', async () => {
@@ -420,7 +420,7 @@ describe('VideosModule', () => {
       await VideosModule.getVideosPaginated({ protectedFilter: 'exclude' });
 
       const query = mockSequelize.query.mock.calls[0][0];
-      expect(query).toContain('Videos.protected = 0');
+      expect(query).toContain('videos.protected = 0');
     });
 
     test('should apply missingFilter=only to the WHERE clause', async () => {
@@ -431,7 +431,7 @@ describe('VideosModule', () => {
       await VideosModule.getVideosPaginated({ missingFilter: 'only' });
 
       const query = mockSequelize.query.mock.calls[0][0];
-      expect(query).toContain('Videos.removed = 1');
+      expect(query).toContain('videos.removed = 1');
     });
 
     test('should apply missingFilter=exclude to the WHERE clause', async () => {
@@ -442,7 +442,7 @@ describe('VideosModule', () => {
       await VideosModule.getVideosPaginated({ missingFilter: 'exclude' });
 
       const query = mockSequelize.query.mock.calls[0][0];
-      expect(query).toContain('Videos.removed = 0');
+      expect(query).toContain('videos.removed = 0');
     });
 
     test('should omit missingFilter from the WHERE clause by default', async () => {
@@ -453,7 +453,7 @@ describe('VideosModule', () => {
       await VideosModule.getVideosPaginated();
 
       const query = mockSequelize.query.mock.calls[0][0];
-      expect(query).not.toContain('Videos.removed');
+      expect(query).not.toContain('videos.removed');
     });
 
     test('should apply watchedFilter=only as an EXISTS clause in count and page queries', async () => {
@@ -484,7 +484,7 @@ describe('VideosModule', () => {
 
     test('should merge watched-rule replacements into the query replacements', async () => {
       mockWatchStatusQueries.buildWatchedExistsSql.mockReturnValue({
-        sql: 'EXISTS (SELECT 1 FROM video_watch_status vws WHERE vws.video_id = Videos.id AND vws.played = 1 AND vws.server_user_id = :watchedPlexOwnerId)',
+        sql: 'EXISTS (SELECT 1 FROM video_watch_status vws WHERE vws.video_id = videos.id AND vws.played = 1 AND vws.server_user_id = :watchedPlexOwnerId)',
         replacements: { watchedPlexOwnerId: '1' }
       });
       mockSequelize.query.mockResolvedValueOnce([{ total: 0 }]);
@@ -541,7 +541,7 @@ describe('VideosModule', () => {
       // Check update query was called
       expect(mockSequelize.query).toHaveBeenCalledTimes(4);
       const updateQuery = mockSequelize.query.mock.calls[2][0];
-      expect(updateQuery).toContain('UPDATE Videos SET');
+      expect(updateQuery).toContain('UPDATE videos SET');
     });
 
     test('should mark video as removed when file does not exist', async () => {
@@ -575,7 +575,7 @@ describe('VideosModule', () => {
       // Check update query was called
       expect(mockSequelize.query).toHaveBeenCalledTimes(4);
       const updateQuery = mockSequelize.query.mock.calls[2][0];
-      expect(updateQuery).toContain('UPDATE Videos SET');
+      expect(updateQuery).toContain('UPDATE videos SET');
       expect(updateQuery).toContain('removed = ?');
     });
 
@@ -942,7 +942,7 @@ describe('VideosModule', () => {
         expect.any(Function)
       );
       const updateCalls = mockSequelize.query.mock.calls.filter(
-        ([sql]) => typeof sql === 'string' && sql.startsWith('UPDATE Videos SET')
+        ([sql]) => typeof sql === 'string' && sql.startsWith('UPDATE videos SET')
       );
       expect(updateCalls.length).toBe(1);
       const [, options] = updateCalls[0];
@@ -989,7 +989,7 @@ describe('VideosModule', () => {
 
       expect(result.timedOut).toBe(true);
       const updateCalls = mockSequelize.query.mock.calls.filter(
-        ([sql]) => typeof sql === 'string' && sql.startsWith('UPDATE Videos SET')
+        ([sql]) => typeof sql === 'string' && sql.startsWith('UPDATE videos SET')
       );
       // The first flush of 100 completed probes was persisted before the abort.
       expect(updateCalls.length).toBe(100);
@@ -1038,7 +1038,7 @@ describe('VideosModule', () => {
       expect(maxInFlight).toBeGreaterThan(1);
       expect(maxInFlight).toBeLessThanOrEqual(4);
       const updateCalls = mockSequelize.query.mock.calls.filter(
-        ([sql]) => typeof sql === 'string' && sql.startsWith('UPDATE Videos SET')
+        ([sql]) => typeof sql === 'string' && sql.startsWith('UPDATE videos SET')
       );
       expect(updateCalls.length).toBe(VIDEO_COUNT);
     });
@@ -1067,7 +1067,7 @@ describe('VideosModule', () => {
       await VideosModule.backfillVideoMetadata();
 
       const updateCalls = mockSequelize.query.mock.calls.filter(
-        ([sql]) => typeof sql === 'string' && sql.startsWith('UPDATE Videos SET')
+        ([sql]) => typeof sql === 'string' && sql.startsWith('UPDATE videos SET')
       );
       expect(updateCalls.length).toBe(1);
       const [sql, options] = updateCalls[0];
@@ -1101,7 +1101,7 @@ describe('VideosModule', () => {
 
       expect(mockExecFile).not.toHaveBeenCalled();
       const updateCalls = mockSequelize.query.mock.calls.filter(
-        ([sql]) => typeof sql === 'string' && sql.startsWith('UPDATE Videos SET')
+        ([sql]) => typeof sql === 'string' && sql.startsWith('UPDATE videos SET')
       );
       expect(updateCalls.length).toBe(1);
       const [sql, options] = updateCalls[0];
