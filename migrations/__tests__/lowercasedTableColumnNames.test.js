@@ -72,7 +72,7 @@ const applyLCTN = (template, lctn) => {
   );
 };
 
-const createMockInterface = ({ template, lctn }) => {
+const createMockInterface = ({ template, lctn, interruptTable }) => {
   const transforms = LCTNS[lctn];
   const schema = applyLCTN(template, lctn);
 
@@ -95,6 +95,11 @@ const createMockInterface = ({ template, lctn }) => {
     },
 
     renameTable: async (from, to) => {
+      // Fail after the first rename has committed, before the second begins.
+      if (from.endsWith('-tmp') && from.toLowerCase() === `${interruptTable}-tmp`) {
+        interruptTable = undefined;
+        throw new Error('Simulated interruption between table renames');
+      }
       const realFrom = findTable(from);
       if (realFrom === undefined) {
         throw new Error(`Table ${from} doesn't exist.`);
@@ -147,6 +152,70 @@ const createMockInterface = ({ template, lctn }) => {
 describe('lowercasedTableColumnNames', () => {
   for (const lctn of [0, 1, 2]) {
     describe(`with lower_case_table_names=${lctn}`, () => {
+      for (const direction of ['up', 'down']) {
+        for (const recovery of ['up', 'down']) {
+          for (const table of ['apikeys', 'jobvideodownloads', 'jobvideos', 'jobs', 'sessions', 'videos']) {
+            // LCTN=1 upgrades already have lowercase names and do not rename.
+            if (direction === 'up' && lctn === 1) continue;
+            test(`${recovery} recovers ${direction} interrupted at ${table}`, async () => {
+              const mockQueryInterface = createMockInterface({
+                template: direction === 'up' ? PRE_RENAME : POST_RENAME,
+                lctn,
+                interruptTable: table,
+              });
+
+              await expect(migration[direction](mockQueryInterface)).rejects.toThrow('Simulated interruption');
+              expect(Object.keys(mockQueryInterface.getSchema()).some((name) => name.endsWith('-tmp'))).toBe(true);
+
+              await migration[recovery](mockQueryInterface);
+
+              expect(mockQueryInterface.getSchema()).toEqual(applyLCTN(recovery === 'up' ? POST_RENAME : PRE_RENAME, lctn));
+            });
+          }
+        }
+      }
+
+      for (const direction of ['up', 'down']) {
+        for (const temporary of ['Videos-tmp', 'videos-tmp']) {
+          test(`${direction} recovers stored ${temporary}`, async () => {
+            const template = { ...PRE_RENAME, [temporary]: PRE_RENAME.Videos };
+            delete template.Videos;
+            const mockQueryInterface = createMockInterface({ template, lctn });
+
+            await migration[direction](mockQueryInterface);
+
+            expect(mockQueryInterface.getSchema()).toEqual(applyLCTN(direction === 'up' ? POST_RENAME : PRE_RENAME, lctn));
+          });
+        }
+
+        test(`${direction} rejects a missing required table`, async () => {
+          const template = { ...PRE_RENAME };
+          delete template.ApiKeys;
+          const mockQueryInterface = createMockInterface({ template, lctn });
+
+          await expect(migration[direction](mockQueryInterface)).rejects.toThrow('expected one table, found 0');
+          expect(mockQueryInterface.getSchema()).toEqual(applyLCTN(template, lctn));
+        });
+
+        test(`${direction} rejects a temporary table alongside the original`, async () => {
+          const template = { ...PRE_RENAME, 'ApiKeys-tmp': PRE_RENAME.ApiKeys };
+          const mockQueryInterface = createMockInterface({ template, lctn });
+
+          await expect(migration[direction](mockQueryInterface)).rejects.toThrow('expected one table, found 2');
+          expect(mockQueryInterface.getSchema()).toEqual(applyLCTN(template, lctn));
+        });
+
+        if (lctn === 0) {
+          test(`${direction} rejects distinct original and lowercase tables`, async () => {
+            const template = { ...PRE_RENAME, apikeys: PRE_RENAME.ApiKeys };
+            const mockQueryInterface = createMockInterface({ template, lctn });
+
+            await expect(migration[direction](mockQueryInterface)).rejects.toThrow('expected one table, found 2');
+            expect(mockQueryInterface.getSchema()).toEqual(template);
+          });
+        }
+      }
+
       test('up from clean state', async () => {
         const mockQueryInterface = createMockInterface({
           template: PRE_RENAME,

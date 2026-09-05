@@ -21,6 +21,37 @@ const TABLES = [
   ['Videos', 'videos'],
 ];
 
+async function renameTableResumably(queryInterface, original, lowercase, destination) {
+  // Recognize temporary names left by either an upgrade or a rollback.
+  // Compare stored names exactly so distinct tables on LCTN=0 are conflicts,
+  // while LCTN=1 naturally returns only the lowercase stored name.
+  const candidates = new Set([original, lowercase, `${original}-tmp`, `${lowercase}-tmp`]);
+  const tables = (await queryInterface.showAllTables()).map(extractTableName);
+  const matches = tables.filter((name) => candidates.has(name));
+  if (matches.length !== 1) {
+    throw new Error(`Cannot rename ${original}: expected one table, found ${matches.length} (${matches.join(', ')})`);
+  }
+
+  const source = matches[0];
+  if (source === destination) return;
+
+  if (source.endsWith('-tmp')) {
+    await queryInterface.renameTable(source, destination);
+  } else {
+    // A case-only rename fails on LCTN=2. Each step commits independently,
+    // so the temporary name must remain recoverable on the next invocation.
+    const temporary = `${source}-tmp`;
+    await queryInterface.renameTable(source, temporary);
+    await queryInterface.renameTable(temporary, destination);
+  }
+}
+
+async function normalizeTableNames(queryInterface) {
+  for (const [original, lowercase] of TABLES) {
+    await renameTableResumably(queryInterface, original, lowercase, lowercase);
+  }
+}
+
 const COLUMNS = [
   ['channels', 'lastFetchedByTab', 'last_fetched_by_tab'],
   ['channelvideos', 'publishedAt', 'published_at'],
@@ -55,14 +86,7 @@ const COLUMNS = [
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up (queryInterface, Sequelize) {
-    for (const [from, to] of TABLES) {
-      if (await tableExists(queryInterface, from)) {
-        // Use a temporary name that differs in more than just casing so we're compatible with lower_case_table_names=2.
-        const tmp = `${from}-tmp`;
-        await queryInterface.renameTable(from, tmp);
-        await queryInterface.renameTable(tmp, to);
-      }
-    }
+    await normalizeTableNames(queryInterface);
     for (const [tableName, from, to] of COLUMNS) {
       if (await tableAndColumnExist(queryInterface, tableName, from)) {
         await queryInterface.renameColumn(tableName, from, to);
@@ -79,6 +103,9 @@ module.exports = {
   },
 
   async down (queryInterface, Sequelize) {
+    // Recover tables before touching columns, including an interrupted upgrade
+    // or a rollback that already restored some original table names.
+    await normalizeTableNames(queryInterface);
     if (await tableAndColumnExist(queryInterface, 'sessions', 'created_at')) {
       await queryInterface.sequelize.query('ALTER TABLE sessions CHANGE created_at createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP');
     }
@@ -91,12 +118,8 @@ module.exports = {
         await queryInterface.renameColumn(tableName, from, to);
       }
     }
-    for (const [to, from] of TABLES) {
-      if (await tableExists(queryInterface, from)) {
-        const tmp = `${from}-tmp`;
-        await queryInterface.renameTable(from, tmp);
-        await queryInterface.renameTable(tmp, to);
-      }
+    for (const [original, lowercase] of TABLES) {
+      await renameTableResumably(queryInterface, original, lowercase, original);
     }
   }
 };
