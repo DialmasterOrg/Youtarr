@@ -87,10 +87,17 @@ class VideoDeletionModule {
    * @param {number} videoId - The database ID of the video to delete
    * @returns {Promise<{success: boolean, videoId: number, error?: string}>}
    */
-  async deleteVideoById(videoId) {
+  async deleteVideoById(videoId, options = {}) {
     try {
+      const { transaction = null, video: suppliedVideo = null } = options;
       // Fetch video from database
-      const video = await Video.findByPk(videoId);
+      const video = suppliedVideo || await Video.findByPk(
+        videoId,
+        ...(transaction ? [{
+          transaction,
+          lock: transaction.LOCK.UPDATE,
+        }] : [])
+      );
 
       if (!video) {
         return {
@@ -112,7 +119,10 @@ class VideoDeletionModule {
       // Check if we have a file path
       if (!video.filePath) {
         // No file path, just mark as removed in database
-        await video.update({ removed: true });
+        await video.update(
+          { removed: true },
+          ...(transaction ? [{ transaction }] : [])
+        );
         return {
           success: true,
           videoId,
@@ -182,7 +192,10 @@ class VideoDeletionModule {
       }
 
       // Mark video as removed in database
-      await video.update({ removed: true });
+      await video.update(
+        { removed: true },
+        ...(transaction ? [{ transaction }] : [])
+      );
 
       // Best-effort cleanup of empty channel directory
       await this._tryCleanupChannelDirectory(video.filePath, flat);

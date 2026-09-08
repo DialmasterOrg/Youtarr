@@ -195,6 +195,11 @@ const createServerModule = ({
         jest.doMock('../logger', () => loggerMock);
         jest.doMock('child_process', () => childProcessMock);
         jest.doMock('pino-http', () => pinoHttpMock);
+        jest.doMock('swagger-jsdoc', () => jest.fn(() => ({
+          openapi: '3.0.0',
+          paths: {},
+          components: { schemas: {} },
+        })));
 
         jest.doMock('../modules/channelModule', () => ({
           subscribe: jest.fn(),

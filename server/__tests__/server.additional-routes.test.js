@@ -337,6 +337,11 @@ const createServerModule = ({
         jest.doMock('fs', () => ({ readFileSync: jest.fn(() => '') }));
         jest.doMock('child_process', () => childProcessMock);
         jest.doMock('pino-http', () => pinoHttpMock);
+        jest.doMock('swagger-jsdoc', () => jest.fn(() => ({
+          openapi: '3.0.0',
+          paths: {},
+          components: { schemas: {} },
+        })));
 
         const setupTokenModuleMock = {
           setTokenPath: jest.fn(),

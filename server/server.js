@@ -12,7 +12,10 @@ const logger = require('./logger');
 const pinoHttp = require('pino-http');
 const { setupSwagger } = require('./swagger');
 const { isAuthConfigured } = require('./modules/authState');
+const { createExternalApiAuth } = require('./middleware/externalApiAuth');
+const { sendExternalError } = require('./modules/externalApiResponse');
 const app = express();
+app.disable('x-powered-by');
 app.set('trust proxy', parseTrustProxySetting(process.env.TRUST_PROXY));
 if (process.env.TRUST_PROXY === undefined || process.env.TRUST_PROXY === '') {
   logger.info('TRUST_PROXY is unset; defaulting Express proxy trust to true for backwards compatibility. Rate limits use the direct peer IP until TRUST_PROXY is explicitly configured.');
@@ -49,11 +52,7 @@ app.use(pinoHttp({
     }
   },
   // Generate unique request ID for correlation
-  genReqId: (req) => {
-    const existingId = req.id || req.headers['x-request-id'];
-    if (existingId) return existingId;
-    return require('crypto').randomUUID();
-  },
+  genReqId: () => require('crypto').randomUUID(),
   // Only log warnings and errors at info level, success at debug
   customLogLevel: (req, res, err) => {
     if (res.statusCode >= 400 && res.statusCode < 500) {
@@ -88,7 +87,27 @@ app.use(pinoHttp({
   },
 }));
 
-app.use(express.json());
+const defaultJsonParser = express.json();
+app.use((req, res, next) => {
+  if (req.path.startsWith('/external-api')) return next();
+  return defaultJsonParser(req, res, next);
+});
+// Express otherwise renders malformed/oversized JSON as an HTML error. Keep
+// every response in the public external namespace on the versioned envelope.
+app.use((error, req, res, next) => {
+  if (!req.path.startsWith('/external-api')) return next(error);
+  if (error?.type === 'entity.too.large') {
+    return sendExternalError(res, 413, 'Request body is too large', {
+      requestId: req.id,
+    });
+  }
+  if (error instanceof SyntaxError && error?.type === 'entity.parse.failed') {
+    return sendExternalError(res, 400, 'Request body contains invalid JSON', {
+      requestId: req.id,
+    });
+  }
+  return next(error);
+});
 const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
@@ -326,7 +345,7 @@ const initialize = async () => {
       subfolderModule,
     });
 
-    logger.info({ directoryPath: configModule.directoryPath }, 'YouTube downloads directory configured');
+    logger.info('YouTube downloads directory configured');
 
     // Degraded mode middleware - checks database health before processing requests
     const checkDatabaseHealth = function(req, res, next) {
@@ -380,6 +399,12 @@ const initialize = async () => {
           errorMessage = 'A database error has occurred. Please check the logs for details.';
         }
 
+        if (req.path.startsWith('/external-api')) {
+          return sendExternalError(res, 503, 'External API is temporarily unavailable', {
+            code: 'service_unavailable',
+            requestId: req.id,
+          });
+        }
         return res.status(503).json({
           error: errorType,
           message: errorMessage,
@@ -442,6 +467,17 @@ const initialize = async () => {
             return res.status(403).json({
               error: 'API keys can only access the download endpoint'
             });
+          }
+
+          // External API roles are deliberately not accepted by the legacy
+          // download endpoint. Missing role keeps pre-migration records and
+          // older test doubles compatible.
+          if (validKey.role !== undefined && validKey.role !== 'legacy_download') {
+            req.log.warn({
+              event: 'api_key_legacy_access_denied', keyId: validKey.id,
+              keyPrefix: validKey.key_prefix, role: validKey.role,
+            }, 'External API key attempted legacy download access');
+            return res.status(403).json({ error: 'External API keys cannot access the download endpoint' });
           }
 
           req.log.info({
@@ -620,6 +656,77 @@ const initialize = async () => {
       },
     });
 
+    const externalApiIngressLimiter = rateLimit({
+      windowMs: 60 * 1000,
+      max: 300,
+      standardHeaders: true,
+      legacyHeaders: false,
+      validate: { trustProxy: false, ip: false },
+      keyGenerator: (req) => `external-api-ingress:${getRateLimitAddress(req)}`,
+      handler: (req, res) => sendExternalError(
+        res,
+        429,
+        'External API ingress rate limit exceeded',
+        { code: 'rate_limited', requestId: req.id }
+      ),
+    });
+    const externalApiLimiter = rateLimit({
+      windowMs: 60 * 1000,
+      max: 120,
+      standardHeaders: true,
+      legacyHeaders: false,
+      validate: { trustProxy: false, ip: false },
+      keyGenerator: (req) => `external-api:${req.externalApiKey?.id || 'unknown'}`,
+      handler: (req, res) => sendExternalError(
+        res,
+        429,
+        'External API rate limit exceeded',
+        { code: 'rate_limited', requestId: req.id }
+      ),
+    });
+    const externalApiWriteLimiter = rateLimit({
+      windowMs: 60 * 1000,
+      max: 10,
+      standardHeaders: true,
+      legacyHeaders: false,
+      validate: { trustProxy: false, ip: false },
+      keyGenerator: (req) => `external-api-write:${req.externalApiKey?.id || 'unknown'}`,
+      handler: (req, res) => sendExternalError(
+        res,
+        429,
+        'External API write rate limit exceeded',
+        { code: 'rate_limited', requestId: req.id }
+      ),
+    });
+    const externalRequestReviewLimiter = rateLimit({
+      windowMs: 60 * 1000,
+      max: 30,
+      standardHeaders: true,
+      legacyHeaders: false,
+      validate: { trustProxy: false, ip: false },
+      keyGenerator: (req) => `external-request-review:${req.sessionId || getRateLimitAddress(req)}`,
+      handler: (_req, res) => res.status(429).json({
+        error: 'External request review rate limit exceeded',
+      }),
+    });
+    const externalApiAuth = createExternalApiAuth({
+      // Resolve the model-backed module only if an external request arrives.
+      // Startup must not initialize ApiKey outside the normal DB lifecycle.
+      validateApiKey: (key) => require('./modules/apiKeyModule')
+        .validateApiKey(key, { recordUsage: false }),
+    });
+    const recordExternalApiUse = async (req, res, next) => {
+      try {
+        await require('./modules/apiKeyModule').markApiKeyUsed(req.externalApiKey.id);
+        return next();
+      } catch (error) {
+        req.log?.error({ err: error }, 'External API usage timestamp update failed');
+        return sendExternalError(res, 500, 'External API authentication error', {
+          requestId: req.id,
+        });
+      }
+    };
+
     /**** ONLY ROUTES BELOW THIS LINE *********/
 
     // Setup Swagger documentation at /swagger
@@ -693,6 +800,21 @@ const initialize = async () => {
       setupTokenModule,
       getClientAddress,
       isWslEnvironment,
+      externalApiAuth,
+      externalApiIngressLimiter,
+      externalApiLimiter,
+      externalApiWriteLimiter,
+      recordExternalApiUse,
+      externalRequestReviewLimiter,
+      serverVersion: require('../package.json').version,
+    });
+
+    app.use((error, req, res, next) => {
+      if (!req.path.startsWith('/external-api')) return next(error);
+      req.log?.error({ err: error }, 'Unhandled external API request error');
+      return sendExternalError(res, 500, 'External API request failed', {
+        requestId: req.id,
+      });
     });
 
     // Handle any requests that don't match the ones above
