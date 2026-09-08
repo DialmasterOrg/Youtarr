@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { Dialog, DialogTitle, DialogContent, DialogActions } from '../dialog';
 
@@ -66,6 +66,26 @@ describe('Dialog', () => {
 
       const actions = screen.getByTestId('actions');
       expect(actions).toHaveClass('py-3', 'border-t');
+    });
+  });
+
+  describe('backdrop interaction', () => {
+    test('closes when the pointer starts on the backdrop', () => {
+      const onClose = jest.fn();
+
+      render(
+        <Dialog
+          open
+          onClose={onClose}
+          BackdropProps={{ 'data-testid': 'backdrop' }}
+        >
+          <DialogContent>content</DialogContent>
+        </Dialog>
+      );
+
+      fireEvent.pointerDown(screen.getByTestId('backdrop'));
+
+      expect(onClose).toHaveBeenCalledWith({}, 'backdropClick');
     });
   });
 });
