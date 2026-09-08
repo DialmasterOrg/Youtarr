@@ -1,16 +1,16 @@
 # Youtarr External API
 
 `/external-api/v1` is Youtarr's constrained integration boundary for approved
-clients. It is enabled by default and never accepts a Youtarr browser session
-or a legacy download key. Set `EXTERNAL_API_ENABLED=false` to disable the
-namespace for a deployment.
+clients. It is disabled by default and never accepts a Youtarr browser session
+or a legacy download key. Set `EXTERNAL_API_ENABLED=true` only after the
+external trust boundary and proxy rules have been reviewed.
 
 ## Enablement and authentication
 
 Create an external-role key in **Settings → API Keys → API Keys & External
 Access**. The key is revealed once. Send it only in the `x-api-key` header over
-HTTPS. Set `EXTERNAL_API_ENABLED=false` and restart Youtarr if the namespace
-should be disabled.
+HTTPS. Set `EXTERNAL_API_ENABLED=true` and restart Youtarr to enable the
+namespace; leave it unset or set to `false` to keep it disabled.
 
 Existing keys migrate as `legacy_download`. They continue to work only with
 `POST /api/videos/download`. Conversely, external-role keys cannot use that
@@ -363,8 +363,9 @@ The proxy must:
 Start with auto-approval disabled, a database and configuration backup, and a
 view-only key with the minimum channel grants. Confirm the private Youtarr
 application and proxy rules before exposing the service. Revoke a compromised
-key immediately; to shut down the whole namespace, set
-`EXTERNAL_API_ENABLED=false` and restart Youtarr.
+key immediately. Keep the namespace disabled unless the external trust boundary
+and proxy rules have been reviewed. To enable it, set
+`EXTERNAL_API_ENABLED=true` and restart Youtarr.
 
 Each key defaults to at most 5 active jobs, 30 accepted writes per UTC hour,
 and 200 per UTC day. Administrators may select lower limits. A shared
