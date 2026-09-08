@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, userEvent, within } from 'storybook/test';
+import { fireEvent } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter } from 'react-router-dom';
 import RequestsPage from './RequestsPage';
@@ -92,6 +93,50 @@ const page = {
   filterOptions: { requesters: [requests[0].requester] },
 };
 
+const pageFor = (data: ExternalRequestReview[]) => ({
+  data,
+  pagination: { page: 1, pageSize: 25, total: data.length, totalPages: data.length ? 1 : 0 },
+  filterOptions: { requesters: [requests[0].requester] },
+});
+
+const lifecycleStatuses: ExternalRequestReview['status'][] = [
+  'pending',
+  'approved',
+  'processing',
+  'completed',
+  'rejected',
+  'failed',
+  'cancelled',
+];
+const lifecycleRequests: ExternalRequestReview[] = lifecycleStatuses.map((status, index) => ({
+  ...requests[0],
+  id: `lifecycle-${index}`,
+  status,
+  target: {
+    ...requests[0].target,
+    title: `Lifecycle ${status} request`,
+  },
+}));
+const lifecyclePage = pageFor(lifecycleRequests);
+
+const staleRequestId = '1b89e5bc-8c90-4e72-b245-270fed2eacc2';
+const staleRequest: ExternalRequestReview = {
+  ...requests[0],
+  id: staleRequestId,
+  target: { ...requests[0].target, title: 'Request changed while open' },
+};
+const staleResponse: ExternalRequestReview = {
+  ...staleRequest,
+  status: 'completed',
+  job: {
+    id: 'stale-job',
+    status: 'completed',
+    type: 'External video request',
+    createdAt: staleRequest.createdAt,
+    startedAt: staleRequest.createdAt,
+  },
+};
+
 const meta: Meta<typeof RequestsPage> = {
   title: 'Pages/External Requests',
   component: RequestsPage,
@@ -105,6 +150,7 @@ const meta: Meta<typeof RequestsPage> = {
   ],
   parameters: {
     layout: 'fullscreen',
+    a11y: { disable: false },
     msw: {
       handlers: [
         http.get('/api/external-requests', () => HttpResponse.json(page)),
@@ -140,5 +186,98 @@ export const ReviewActions: Story = {
     await expect(await pageBody.findByText('Request details')).toBeInTheDocument();
     await userEvent.click(await pageBody.findByRole('button', { name: 'Approve' }));
     await expect(await pageBody.findByText('Confirm approval')).toBeInTheDocument();
+  },
+};
+
+export const LifecycleStates: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/external-requests', () => HttpResponse.json(lifecyclePage)),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    for (const status of ['Pending', 'Approved', 'Processing', 'Completed', 'Rejected', 'Failed', 'Cancelled']) {
+      await expect(await canvas.findByText(status, { exact: true })).toBeInTheDocument();
+    }
+  },
+};
+
+export const QueueErrorRetry: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/external-requests', () => HttpResponse.json(
+          { error: 'Request service unavailable' },
+          { status: 503 }
+        )),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText('Request service unavailable')).toBeInTheDocument();
+    await expect(await canvas.findByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  },
+};
+
+export const StaleDetail: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/external-requests', () => HttpResponse.json(pageFor([staleRequest]))),
+        http.get(`/api/external-requests/${staleRequestId}`, () => HttpResponse.json(staleResponse)),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const requestCard = within(await canvas.findByTestId(`request-card-${staleRequestId}`));
+    await userEvent.click(await requestCard.findByRole('button', { name: 'Details' }));
+    const pageBody = within(canvasElement.ownerDocument.body);
+    await expect(await pageBody.findByText('Completed', { exact: true })).toBeInTheDocument();
+    await expect(pageBody.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+  },
+};
+
+export const ThumbnailFailure: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/external-requests', () => HttpResponse.json(pageFor([requests[0]]))),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const image = await canvas.findByRole('img', { name: /Rick Astley.*thumbnail/ });
+    await fireEvent.error(image);
+    await expect(await canvas.findByTestId('request-thumbnail-fallback')).toBeInTheDocument();
+  },
+};
+
+export const ApprovalActionError: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/external-requests', () => HttpResponse.json(pageFor([requests[0]]))),
+        http.get(`/api/external-requests/${requestId}`, () => HttpResponse.json(requests[0])),
+        http.post(`/api/external-requests/${requestId}/approve`, () => HttpResponse.json(
+          { error: 'Request is no longer pending.' },
+          { status: 409 }
+        )),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const requestCard = within(await canvas.findByTestId(`request-card-${requestId}`));
+    await userEvent.click(await requestCard.findByRole('button', { name: 'Details' }));
+    const pageBody = within(canvasElement.ownerDocument.body);
+    await userEvent.click(await pageBody.findByRole('button', { name: 'Approve' }));
+    await userEvent.click(await pageBody.findByRole('button', { name: 'Confirm approval' }));
+    await expect(await pageBody.findByText('Request is no longer pending.')).toBeInTheDocument();
   },
 };
