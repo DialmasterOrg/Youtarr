@@ -169,7 +169,7 @@ const RequestTarget: React.FC<{
               className="h-full w-full object-cover"
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+            <div className="flex h-full w-full items-center justify-center text-muted-foreground" data-testid="request-thumbnail-fallback">
               <Video size={20} aria-hidden />
             </div>
           )}
