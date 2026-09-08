@@ -101,12 +101,13 @@ To use an external database:
 
 ### EXTERNAL_API_ENABLED
 **Required**: No
-**Default**: `true`
+**Default**: `false`
 **Options**: `true`, `false`
-**Description**: Enables the versioned `/external-api/v1` integration API by default
+**Description**: Enables the versioned `/external-api/v1` integration API when set to `true`
 **Security**: External API routes always require a non-legacy `x-api-key`, even when `AUTH_ENABLED=false`
 
-Set this to `false` only when the versioned API namespace should be disabled.
+Set this to `true` only after the external trust boundary, key policy, and
+reverse-proxy rules have been reviewed. The namespace is disabled by default.
 The routes remain protected until an administrator has assigned an API key an
 external role and policy. Existing API keys migrate as `legacy_download` and
 cannot use the versioned API. For endpoint-only public access, keep the Youtarr
