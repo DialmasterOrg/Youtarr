@@ -27,7 +27,9 @@
     "docs:generate": "npm --prefix website run generate",
     "docs:check": "npm --prefix website run check",
     "docs:build": "npm --prefix website run build",
-    "docs:serve": "npm --prefix website run serve"
+    "docs:serve": "npm --prefix website run serve",
+    "test:external-fixture": "jest --config jest.config.js server/modules/__tests__/externalContractFixtures.test.js --runInBand",
+    "test:external-contract-server": "node scripts/external-api-contract-server.js"
   },
   "lint-staged": {
     "./client/src/*.{ts,tsx},./server/*.js": [
