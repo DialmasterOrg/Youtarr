@@ -1,4 +1,5 @@
 export interface Channel {
+  database_id?: number;
   url: string;
   uploader: string;
   channel_id?: string;

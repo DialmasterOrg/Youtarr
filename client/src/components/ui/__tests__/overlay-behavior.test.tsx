@@ -168,6 +168,28 @@ describe('overlay positioning guards', () => {
     const content = screen.getByTestId('select-content');
     expect(content).toHaveStyle({ zIndex: '1470' });
   });
+
+  test('clicking a select trigger does not dismiss its containing dialog', async () => {
+    const user = userEvent.setup();
+    const onClose = jest.fn();
+    render(
+      <Dialog open onClose={onClose}>
+        <DialogTitle>Dialog title</DialogTitle>
+        <DialogContent>
+          <Select value="PG" onChange={jest.fn()} inputProps={{ 'aria-label': 'Rating' }}>
+            <MenuItem value="G">G</MenuItem>
+            <MenuItem value="PG">PG</MenuItem>
+          </Select>
+        </DialogContent>
+      </Dialog>
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Rating' }));
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByText('Dialog title')).toBeInTheDocument();
+    expect(await screen.findByRole('option', { name: 'PG' })).toBeInTheDocument();
+  });
 });
 
 describe('mobile tooltip interactions', () => {

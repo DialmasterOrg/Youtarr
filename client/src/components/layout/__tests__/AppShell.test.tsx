@@ -11,16 +11,21 @@ jest.mock('../BackgroundDecorations', () => ({
 }));
 
 jest.mock('../NavHeader', () => ({
-  NavHeader: ({ toggleDrawer, isCollapsed, layoutPolicy }: { toggleDrawer: () => void; isCollapsed: boolean; layoutPolicy: { breakpoint: string; navPlacement: string; showHeaderToggleOnMobile: boolean } }) => {
+  NavHeader: ({ toggleDrawer, isCollapsed, layoutPolicy, navItems }: { toggleDrawer: () => void; isCollapsed: boolean; layoutPolicy: { breakpoint: string; navPlacement: string; showHeaderToggleOnMobile: boolean }; navItems: Array<{ label: string }> }) => {
     const showToggle = layoutPolicy.breakpoint === 'mobile'
       ? layoutPolicy.showHeaderToggleOnMobile
       : layoutPolicy.navPlacement === 'sidebar';
 
-    return showToggle ? (
-      <button onClick={toggleDrawer} type="button">
-        toggle:{layoutPolicy.navPlacement}:{layoutPolicy.breakpoint}:{String(isCollapsed)}
-      </button>
-    ) : null;
+    return (
+      <>
+        <div data-testid="header-nav-items">{navItems.map((item) => item.label).join('|')}</div>
+        {showToggle ? (
+          <button onClick={toggleDrawer} type="button">
+            toggle:{layoutPolicy.navPlacement}:{layoutPolicy.breakpoint}:{String(isCollapsed)}
+          </button>
+        ) : null}
+      </>
+    );
   },
 }));
 
@@ -79,6 +84,23 @@ function getContentFrame() {
 describe('AppShell', () => {
   beforeEach(() => {
     localStorage.clear();
+  });
+
+  it('hides the Requests navigation item when configured off', () => {
+    setViewportMatch(false);
+    localStorage.setItem('uiThemeMode', 'playful');
+
+    render(
+      <MemoryRouter initialEntries={['/channels']}>
+        <ThemeEngineProvider>
+          <AppShell token="test-token" isPlatformManaged={false} showRequestsNavLink={false}>
+            <div>Shell content</div>
+          </AppShell>
+        </ThemeEngineProvider>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByTestId('header-nav-items')).not.toHaveTextContent('Requests');
   });
 
   it('updates nav width when desktop sidebar is collapsed', async () => {

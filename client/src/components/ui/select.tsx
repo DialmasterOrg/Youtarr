@@ -123,6 +123,32 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
           : normalizedValue;
       onChange?.({ target: { value: outputValue, name } } as unknown as SelectChangeEvent<string>);
     };
+    const selectContent = (
+      <SelectPrimitive.Content
+        position="popper"
+        sideOffset={4}
+        avoidCollisions
+        collisionPadding={overlayInsets}
+        data-testid="select-content"
+        style={{
+          zIndex: 1470,
+          minWidth: 'var(--radix-select-trigger-width)',
+          maxWidth: 'min(28rem, calc(100vw - 24px))',
+          maxHeight: 'min(var(--radix-select-content-available-height), calc(100dvh - var(--app-shell-overlay-top-offset, 0px) - var(--mobile-nav-total-offset, 0px) - 16px))',
+        }}
+        className={cn(
+          'relative min-w-[8rem] overflow-hidden',
+          'rounded-[var(--radius-ui)]',
+          'border-[length:var(--border-weight)] border-[var(--border-strong)]',
+          'bg-popover text-popover-foreground shadow-hard',
+          'data-[state=open]:animate-slide-down data-[state=closed]:animate-fade-in',
+        )}
+      >
+        <SelectPrimitive.Viewport className="max-h-[inherit] p-1 overflow-y-auto">
+          {children}
+        </SelectPrimitive.Viewport>
+      </SelectPrimitive.Content>
+    );
 
     return (
       <SelectPrimitive.Root
@@ -141,9 +167,11 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
           aria-labelledby={labelId}
           // Tests use fireEvent.mouseDown to open the Select.
           // Radix only responds to pointerdown, so we open directly here.
-          // We only open (not toggle) — Radix's own handler handles closing.
+          // A real pointer click has already been handled by Radix. Opening
+          // again from its subsequent mousedown can move the portaled menu
+          // under the active pointer and dismiss a containing dialog.
           onMouseDown={(e) => {
-            if (!e.defaultPrevented && !disabled && !isOpen) {
+            if (!e.nativeEvent.isTrusted && !e.defaultPrevented && !disabled && !isOpen) {
               handleOpenChange(true);
             }
           }}
@@ -170,32 +198,7 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
           </SelectPrimitive.Icon>
         </SelectPrimitive.Trigger>
 
-        <SelectPrimitive.Portal>
-          <SelectPrimitive.Content
-            position="popper"
-            sideOffset={4}
-            avoidCollisions
-            collisionPadding={overlayInsets}
-            data-testid="select-content"
-            style={{
-              zIndex: 1470,
-              minWidth: 'var(--radix-select-trigger-width)',
-              maxWidth: 'min(28rem, calc(100vw - 24px))',
-              maxHeight: 'min(var(--radix-select-content-available-height), calc(100dvh - var(--app-shell-overlay-top-offset, 0px) - var(--mobile-nav-total-offset, 0px) - 16px))',
-            }}
-            className={cn(
-              'relative min-w-[8rem] overflow-hidden',
-              'rounded-[var(--radius-ui)]',
-              'border-[length:var(--border-weight)] border-[var(--border-strong)]',
-              'bg-popover text-popover-foreground shadow-hard',
-              'data-[state=open]:animate-slide-down data-[state=closed]:animate-fade-in',
-            )}
-          >
-            <SelectPrimitive.Viewport className="max-h-[inherit] p-1 overflow-y-auto">
-              {children}
-            </SelectPrimitive.Viewport>
-          </SelectPrimitive.Content>
-        </SelectPrimitive.Portal>
+        <SelectPrimitive.Portal>{selectContent}</SelectPrimitive.Portal>
       </SelectPrimitive.Root>
     );
   }
