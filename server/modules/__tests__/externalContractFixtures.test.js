@@ -3,6 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { externalErrorBody } = require('../externalApiResponse');
 const { dto } = require('../externalRequestService');
+const configModule = require('../configModule');
 
 const fixtureDirectory = path.join(
   __dirname,
@@ -13,6 +14,10 @@ const canonicalFixtureBytes = Buffer.from(fixtureBytes.toString('utf8').replace(
 const fixture = JSON.parse(fixtureBytes.toString('utf8'));
 
 describe('external API shared contract fixture', () => {
+  afterAll(() => {
+    configModule.stopWatchingConfig();
+  });
+
   test('covers the complete Plinx-consumed v1 surface', () => {
     expect(fixture.fixtureVersion).toBe(4);
     expect(fixture.capabilities).toEqual(expect.objectContaining({
