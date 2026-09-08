@@ -51,6 +51,7 @@ const externalThumbnailProxy = require('../modules/externalThumbnailProxy');
 const { sharedExternalWorkLimiter } = require('../modules/externalWorkLimiter');
 const { createExternalRequestService } = require('../modules/externalRequestService');
 const { createExternalQuotaService } = require('../modules/externalQuotaService');
+const { isExternalApiEnabled } = require('../modules/externalApiConfig');
 
 /**
  * Registers all route modules with the Express app
@@ -171,9 +172,10 @@ function registerRoutes(app, deps) {
 
   // Log file download
   app.use(createLogRoutes({ verifyToken, logFilesModule, configModule }));
-  // The versioned external API is available by default. Keep an explicit
-  // false opt-out for deployments that do not want to expose the namespace.
-  if (process.env.EXTERNAL_API_ENABLED !== 'false') {
+
+  // The versioned external API stays unreachable until a deployment opts in
+  // explicitly. This fail-closed default is independent of AUTH_ENABLED.
+  if (isExternalApiEnabled()) {
     app.use('/external-api/v1', createExternalApiRoutes({
       externalApiAuth,
       externalApiIngressLimiter,
