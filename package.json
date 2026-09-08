@@ -29,6 +29,7 @@
     "docs:build": "npm --prefix website run build",
     "docs:serve": "npm --prefix website run serve",
     "test:external-fixture": "jest --config jest.config.js server/modules/__tests__/externalContractFixtures.test.js --runInBand",
+    "test:mariadb-migrations": "jest --config jest.config.js migrations/__tests__/externalApiMariaDb.integration.test.js --runInBand",
     "test:external-contract-server": "node scripts/external-api-contract-server.js"
   },
   "lint-staged": {
