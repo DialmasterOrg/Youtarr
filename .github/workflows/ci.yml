@@ -163,6 +163,53 @@ jobs:
             coverage/coverage-summary.json
             coverage/lcov.info
 
+  test-mariadb-migrations:
+    name: MariaDB Migration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      mariadb:
+        image: mariadb:10.3
+        env:
+          MYSQL_ROOT_PASSWORD: rootpass
+          MYSQL_DATABASE: youtarr
+        ports:
+          - 3321:3306
+        options: >-
+          --health-cmd="mysqladmin ping --protocol=tcp -h 127.0.0.1 -uroot -prootpass"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Pin npm
+        run: npm install -g npm@11.15.0 --ignore-scripts
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run MariaDB migration lifecycle tests
+        run: npm run test:mariadb-migrations
+        env:
+          MARIADB_MIGRATION_TEST: true
+          MARIADB_ROOT_USER: root
+          MARIADB_ROOT_PASSWORD: rootpass
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3321
+          DB_USER: root
+          DB_PASSWORD: rootpass
+          DB_NAME: youtarr
+
   test-frontend:
     name: Frontend Tests
     runs-on: ubuntu-latest
@@ -312,7 +359,7 @@ jobs:
   check-all:
     name: All Checks
     runs-on: ubuntu-latest
-    needs: [lint, test-backup-restore, test-cookie-validation, test-backend, test-frontend, test-storybook, security-audit]
+    needs: [lint, test-backup-restore, test-cookie-validation, test-backend, test-mariadb-migrations, test-frontend, test-storybook, security-audit]
     if: always()
     steps:
       - name: Check all results
@@ -322,6 +369,7 @@ jobs:
           echo "Backup/Restore Tests: ${{ needs.test-backup-restore.result }}"
           echo "Cookie Loader Tests: ${{ needs.test-cookie-validation.result }}"
           echo "Backend Tests: ${{ needs.test-backend.result }}"
+          echo "MariaDB Migration Tests: ${{ needs.test-mariadb-migrations.result }}"
           echo "Frontend Tests: ${{ needs.test-frontend.result }}"
           echo "Storybook Tests: ${{ needs.test-storybook.result }}"
           echo "Security Audit: ${{ needs.security-audit.result }}"
@@ -330,6 +378,7 @@ jobs:
              [ "${{ needs.test-backup-restore.result }}" != "success" ] || \
              [ "${{ needs.test-cookie-validation.result }}" != "success" ] || \
              [ "${{ needs.test-backend.result }}" != "success" ] || \
+             [ "${{ needs.test-mariadb-migrations.result }}" != "success" ] || \
              [ "${{ needs.test-frontend.result }}" != "success" ] || \
              [ "${{ needs.test-storybook.result }}" != "success" ] || \
              [ "${{ needs.security-audit.result }}" != "success" ]; then
@@ -341,6 +390,7 @@ jobs:
             [ "${{ needs.test-backup-restore.result }}" != "success" ] && echo "  - Backup/Restore Tests"
             [ "${{ needs.test-cookie-validation.result }}" != "success" ] && echo "  - Cookie Loader Tests"
             [ "${{ needs.test-backend.result }}" != "success" ] && echo "  - Backend Tests"
+            [ "${{ needs.test-mariadb-migrations.result }}" != "success" ] && echo "  - MariaDB Migration Tests"
             [ "${{ needs.test-frontend.result }}" != "success" ] && echo "  - Frontend Tests"
             [ "${{ needs.test-storybook.result }}" != "success" ] && echo "  - Storybook Tests"
             [ "${{ needs.security-audit.result }}" != "success" ] && echo "  - Security Audit"
