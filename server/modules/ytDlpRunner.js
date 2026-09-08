@@ -2,6 +2,7 @@ const { spawnYtDlp } = require('./ytdlpProcess');
 const path = require('path');
 const fs = require('fs');
 const tempPathManager = require('./download/tempPathManager');
+const { redactSensitiveText } = require('./safeCommandLogging');
 
 const MEMBERS_ONLY_PATTERNS = [
   /join this channel to get access to members-only content/i,
@@ -141,7 +142,9 @@ class YtDlpRunner {
           timeoutError.code = 'YTDLP_TIMEOUT';
           reject(timeoutError);
         } else {
-          const errorMessage = stderr || `yt-dlp process exited with code ${code}`;
+          const errorMessage = redactSensitiveText(
+            stderr || `yt-dlp process exited with code ${code}`
+          );
           reject(new Error(errorMessage));
         }
       });

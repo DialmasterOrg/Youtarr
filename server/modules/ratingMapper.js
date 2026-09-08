@@ -246,7 +246,7 @@ function mapToNumericRating(normalizedRating) {
   }
 
   // Level 2: PG and PG equivalents (family with some caution)
-  const level2 = ['PG', 'TV-PG'];
+  const level2 = ['PG', 'TV-Y7', 'TV-PG'];
   if (level2.includes(normalizedRating)) {
     return 2;
   }
