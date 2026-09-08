@@ -1,8 +1,8 @@
 'use strict';
 
-const policy = require('../20260726120000-add-external-api-key-policy');
-const permissions = require('../20260726152000-add-external-api-key-permissions');
-const channelIdentity = require('../20260726154000-unique-channel-identity');
+const policy = require('../20260908100000-add-external-api-key-policy');
+const permissions = require('../20260908105000-add-external-api-key-permissions');
+const channelIdentity = require('../20260908107000-unique-channel-identity');
 
 const qiFor = (columns = {}) => {
   const operations = [];
@@ -34,11 +34,11 @@ describe('external API persistence migrations', () => {
     expect(repeat.operations.filter(([op]) => op === 'add')).toEqual([]);
   });
 
-  test('granular permissions derive from full_access and revoke ambiguous policies on rollback', async () => {
+  test('granular permissions derive from admin and revoke ambiguous policies on rollback', async () => {
     const qi = qiFor();
     await permissions.up(qi, { BOOLEAN: 'BOOLEAN' });
     const sql = qi.operations.filter(([op]) => op === 'query').map(([, value]) => value).join('\n');
-    expect(sql).toContain("'full_access'");
+    expect(sql).toContain("'admin'");
     const rollback = qiFor({ is_active: {}, revoked_at: {}, allow_video_requests: {}, allow_channel_requests: {}, allow_delete_video_requests: {} });
     await permissions.down(rollback);
     expect(rollback.operations[0][1]).toContain('SET is_active = false');

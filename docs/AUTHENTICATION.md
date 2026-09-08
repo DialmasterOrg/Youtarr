@@ -123,7 +123,7 @@ API Keys provide persistent authentication for external integrations like bookma
 
 ### External API policy foundation
 
-The database now stores policy metadata for future versioned external API access without enabling a public endpoint. Existing keys are backfilled with the `legacy_download` role and retain their current single-video behavior. External roles use explicit permissions and channel grants; `full_access` is the broad role name. Keys may also carry approval, rating/media, quota, and revocation metadata. These fields are inert until the external API control plane is enabled.
+The database now stores policy metadata for future versioned external API access without enabling a public endpoint. Existing keys are backfilled with the `legacy_download` role and retain their current single-video behavior. External roles use explicit permissions and channel grants; `admin` is the broad role name. Keys may also carry approval, rating/media, quota, and revocation metadata. These fields are inert until the external API control plane is enabled.
 
 The schema and migration history are authoritative for field details. API-key values remain hashed and are never recoverable from the database; revocation is represented by `revoked_at` and inactive status.
 

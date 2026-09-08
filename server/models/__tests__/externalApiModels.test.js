@@ -5,7 +5,7 @@ const { ApiKey, ApiKeyChannelGrant, ExternalRequest, ExternalApiUsageBucket } = 
 describe('external API persistence models', () => {
   test('expose safe defaults and constrained policy values', () => {
     expect(ApiKey.rawAttributes.role.defaultValue).toBe('legacy_download');
-    expect(ApiKey.rawAttributes.role.validate.isIn[0]).toContain('full_access');
+    expect(ApiKey.rawAttributes.role.validate.isIn[0]).toContain('admin');
     expect(ApiKey.rawAttributes.allowed_media_types.defaultValue).toEqual(['video']);
     expect(ApiKeyChannelGrant.options.indexes).toEqual(expect.arrayContaining([
       expect.objectContaining({ unique: true, fields: ['api_key_id', 'channel_id'] }),
