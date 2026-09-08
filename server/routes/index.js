@@ -18,6 +18,9 @@ const createYtdlpOptionsRoutes = require('./ytdlpOptions');
 const createMaintenanceRoutes = require('./maintenance');
 const createSubfolderRoutes = require('./subfolders');
 const createSchedulesRoutes = require('./schedules');
+const createExternalRequestReviewRoutes = require('./externalRequests');
+const { createExternalApiRoutes } = require('./externalApi');
+const { sendExternalError } = require('../modules/externalApiResponse');
 const videoMetadataModule = require('../modules/videoMetadataModule');
 const videoOembedEnricher = require('../modules/videoOembedEnricher');
 const playlistModule = require('../modules/playlistModule');
@@ -37,6 +40,11 @@ const scheduledTaskRuns = require('../modules/scheduledTaskRuns');
 const scheduleConfig = require('../modules/scheduleConfig');
 const rescanRunSummary = require('../modules/rescanRunSummary');
 const ytdlpUpdateRunSummary = require('../modules/ytdlpUpdateRunSummary');
+const externalCatalogService = require('../modules/externalCatalogService');
+const externalThumbnailProxy = require('../modules/externalThumbnailProxy');
+const { sharedExternalWorkLimiter } = require('../modules/externalWorkLimiter');
+const { createExternalRequestService } = require('../modules/externalRequestService');
+const { createExternalQuotaService } = require('../modules/externalQuotaService');
 
 /**
  * Registers all route modules with the Express app
@@ -44,6 +52,8 @@ const ytdlpUpdateRunSummary = require('../modules/ytdlpUpdateRunSummary');
  * @param {Object} deps - Dependencies to inject into route modules
  */
 function registerRoutes(app, deps) {
+  const externalRequestService = createExternalRequestService();
+  const externalQuotaService = createExternalQuotaService();
   const {
     verifyToken,
     loginLimiter,
@@ -68,6 +78,13 @@ function registerRoutes(app, deps) {
     setupTokenModule,
     getClientAddress,
     isWslEnvironment,
+    externalApiAuth,
+    externalApiIngressLimiter,
+    externalApiLimiter,
+    externalApiWriteLimiter,
+    recordExternalApiUse,
+    externalRequestReviewLimiter,
+    serverVersion,
   } = deps;
 
   // Health routes (no auth required for health checks, but yt-dlp endpoints are authenticated)
@@ -111,6 +128,13 @@ function registerRoutes(app, deps) {
   // API Key routes
   app.use(createApiKeyRoutes({ verifyToken }));
 
+  // Session-authenticated administrator review of external requests
+  app.use(createExternalRequestReviewRoutes({
+    verifyToken,
+    reviewLimiter: externalRequestReviewLimiter,
+    requestService: externalRequestService,
+  }));
+
   // Subscription import routes
   app.use(createSubscriptionRoutes({ verifyToken, subscriptionImportModule }));
 
@@ -131,6 +155,31 @@ function registerRoutes(app, deps) {
 
   // Scheduled task status routes
   app.use(createSchedulesRoutes({ verifyToken, scheduledTaskManager, scheduledTaskRuns, scheduleConfig }));
+  // The versioned external API is available by default. Keep an explicit
+  // false opt-out for deployments that do not want to expose the namespace.
+  if (process.env.EXTERNAL_API_ENABLED !== 'false') {
+    app.use('/external-api/v1', createExternalApiRoutes({
+      externalApiAuth,
+      externalApiIngressLimiter,
+      externalApiLimiter,
+      externalApiWriteLimiter,
+      recordExternalApiUse,
+      serverVersion,
+      catalogService: externalCatalogService,
+      thumbnailProxy: externalThumbnailProxy,
+      externalWorkLimiter: sharedExternalWorkLimiter,
+      requestService: externalRequestService,
+      quotaService: externalQuotaService,
+    }));
+  }
+  // Do not allow unknown or disabled external routes to fall through to the
+  // SPA. Keep the public namespace on the same versioned error contract.
+  app.use('/external-api', (req, res) =>
+    sendExternalError(res, 404, 'External API route not found', {
+      code: 'not_found',
+      requestId: req.id,
+    })
+  );
 
   // Defensive redirect: /channels -> /subscriptions (frontend handles client-side routing,
   // this fallback covers direct server-side hits during the transition period)
