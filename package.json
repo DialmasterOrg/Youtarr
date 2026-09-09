@@ -22,7 +22,10 @@
     "test:frontend": "cd client && npm test -- --watchAll=false",
     "test:coverage": "npm run lint && jest --config jest.config.js --coverage && cd client && npm test -- --coverage --watchAll=false",
     "test:watch": "jest --config jest.config.js --watch",
-    "storybook": "cd client && npm run storybook"
+    "storybook": "cd client && npm run storybook",
+    "test:external-fixture": "jest --config jest.config.js server/modules/__tests__/externalContractFixtures.test.js --runInBand",
+    "test:mariadb-migrations": "jest --config jest.config.js migrations/__tests__/externalApiMariaDb.integration.test.js --runInBand",
+    "test:external-contract-server": "node scripts/external-api-contract-server.js"
   },
   "lint-staged": {
     "./client/src/*.{ts,tsx},./server/*.js": [
@@ -50,7 +53,11 @@
   "author": "",
   "license": "ISC",
   "overrides": {
-    "form-data": "^4.0.6"
+    "form-data": "^4.0.6",
+    "brace-expansion": "5.0.9",
+    "@apidevtools/json-schema-ref-parser": {
+      "js-yaml": "4.3.2"
+    }
   },
   "dependencies": {
     "axios": "^1.12.0",
@@ -59,7 +66,7 @@
     "express": "^4.18.2",
     "express-rate-limit": "^8.1.0",
     "fs-extra": "^11.1.1",
-    "multer": "^2.2.0",
+    "multer": "^2.3.0",
     "mysql2": "^3.9.4",
     "node-cron": "^3.0.2",
     "pino": "^10.0.0",
