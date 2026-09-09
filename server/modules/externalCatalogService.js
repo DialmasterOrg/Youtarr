@@ -5,6 +5,12 @@ const { QueryTypes } = require('sequelize');
 const { sequelize } = require('../db');
 const configModule = require('./configModule');
 const { normalizeExternalPolicy, ratingPolicy } = require('./externalEligibility');
+const {
+  CatalogError,
+  decodePageCursor,
+  encodePageCursor,
+  pagination,
+} = require('./externalPagination');
 
 const TAB_MEDIA_TYPES = { videos: 'video', shorts: 'short', streams: 'livestream' };
 const SAFE_THUMBNAIL_HOSTS = ['ytimg.com', 'ggpht.com', 'googleusercontent.com'];
@@ -19,13 +25,6 @@ function boundedString(value, maximum) {
   return String(value).slice(0, maximum);
 }
 
-class CatalogError extends Error {
-  constructor(message, status = 400) {
-    super(message);
-    this.name = 'CatalogError';
-    this.status = status;
-  }
-}
 
 function parseInteger(value, fallback, minimum, maximum, name) {
   if (value === undefined) return fallback;
@@ -74,36 +73,6 @@ function ratingSql(policy, effectiveRatingSql) {
   };
 }
 
-function decodePageCursor(value, maximumPage) {
-  if (value === undefined) return null;
-  if (typeof value !== 'string' || value.length > 200) {
-    throw new CatalogError('cursor is invalid');
-  }
-  try {
-    const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'));
-    if (parsed?.v !== 1 || !Number.isSafeInteger(parsed.page) ||
-        parsed.page < 1 || parsed.page > maximumPage) {
-      throw new Error('invalid cursor');
-    }
-    return parsed.page;
-  } catch (_error) {
-    throw new CatalogError('cursor is invalid');
-  }
-}
-
-function encodePageCursor(page) {
-  return Buffer.from(JSON.stringify({ v: 1, page }), 'utf8').toString('base64url');
-}
-
-function pagination(query, maximumPage = MAX_PAGE) {
-  if (query.cursor !== undefined && query.page !== undefined) {
-    throw new CatalogError('cursor and page cannot be used together');
-  }
-  const cursorPage = decodePageCursor(query.cursor, maximumPage);
-  const page = cursorPage || parseInteger(query.page, 1, 1, maximumPage, 'page');
-  const pageSize = parseInteger(query.pageSize, 50, 1, 100, 'pageSize');
-  return { page, pageSize, offset: (page - 1) * pageSize };
-}
 
 function paginationDto(page, pageSize, total, maximumPage = MAX_PAGE) {
   const totalPages = total === 0 ? 0 : Math.min(maximumPage, Math.ceil(total / pageSize));
