@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const { QueryTypes } = require('sequelize');
 const { sequelize } = require('../db');
 const configModule = require('./configModule');
-const { normalizeExternalPolicy, ratingPolicy } = require('./externalEligibility');
+const { normalizePolicy, ratingPolicy } = require('./externalEligibility');
 const {
   CatalogError,
   decodePageCursor,
@@ -55,10 +55,6 @@ function normalizeDate(value, name, endOfDay = false) {
   const parsed = new Date(candidate);
   if (Number.isNaN(parsed.getTime())) throw new CatalogError(`${name} must be a valid date`);
   return parsed.toISOString();
-}
-
-function normalizePolicy(policy) {
-  return normalizeExternalPolicy(policy, CatalogError);
 }
 
 function ratingSql(policy, effectiveRatingSql) {
