@@ -1,4 +1,5 @@
 const ratingMapper = require('./ratingMapper');
+const { CatalogError } = require('./externalPagination');
 
 const MEDIA_TYPES = ['video', 'short', 'livestream'];
 const RATING_LABELS = [
@@ -21,6 +22,10 @@ function normalizeExternalPolicy(policy, ErrorType = Error) {
     allowUnrated,
     allowedMediaTypes: [...new Set(allowedMediaTypes)],
   };
+}
+
+function normalizePolicy(policy) {
+  return normalizeExternalPolicy(policy, CatalogError);
 }
 
 function effectiveRating(videoRating, channelDefaultRating) {
@@ -56,6 +61,7 @@ module.exports = {
   MEDIA_TYPES,
   RATING_LABELS,
   normalizeExternalPolicy,
+  normalizePolicy,
   effectiveRating,
   isRatingEligible,
   isMediaTypeEligible,
