@@ -1,7 +1,6 @@
 const crypto = require('crypto');
 const { Op, UniqueConstraintError } = require('sequelize');
-const { normalizePolicy } = require('./externalCatalogService');
-const { isMediaTypeEligible, isRatingEligible } = require('./externalEligibility');
+const { normalizePolicy, isMediaTypeEligible, isRatingEligible } = require('./externalEligibility');
 const { hasExternalScope, normalizeExternalPermissions } = require('./externalPermissions');
 
 const REQUEST_STATUSES = [
