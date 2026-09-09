@@ -632,7 +632,17 @@ class DownloadModule {
     const requestedIds = requestedUrls.flatMap(url => {
       try { return [normalizeUrlToVideoId(url).id]; } catch { return []; }
     });
-    const jobId = await jobModule.addOrUpdateJob(
+    const externalRequestId = this.getJobDataValue(jobData, 'externalRequestId');
+    if (!isNextJob && externalRequestId) {
+      const existingExternalJob = jobModule.getJob(externalRequestId);
+      if (existingExternalJob) {
+        if (['Error', 'Killed', 'Terminated'].includes(existingExternalJob.status)) {
+          throw new Error('Existing external request job is terminal');
+        }
+        return externalRequestId;
+      }
+    }
+    const addJobArgs = [
       {
         jobType: jobType,
         status: '',
@@ -642,7 +652,9 @@ class DownloadModule {
         action: this.doSpecificDownloads.bind(this),
       },
       isNextJob
-    );
+    ];
+    if (externalRequestId) addJobArgs.push(externalRequestId);
+    const jobId = await jobModule.addOrUpdateJob(...addJobArgs);
 
     if (!jobId) return { queued: 0, acceptedIds: [], alreadyActiveIds: [...new Set(requestedIds)] };
     const job = jobModule.getJob(jobId);
@@ -798,6 +810,7 @@ class DownloadModule {
       await jobModule.startNextJob();
       throw err;
     }
+    if (externalRequestId) return jobId;
     return { queued: urls.length, acceptedIds: admission.acceptedIds, alreadyActiveIds: admission.alreadyActiveIds };
   }
 

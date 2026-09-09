@@ -587,7 +587,30 @@ How ratings are determined (priority):
 ## External Access with API Keys
 Send videos to Youtarr from anywhere using API keys. This enables one-click downloads from browser bookmarklets, mobile shortcuts, and automation tools.
 
-> **Note**: API keys currently support **single video downloads only**. Playlists and channels require the web UI.
+> **Legacy key note**: Bookmarklet keys support single direct video downloads.
+> Constrained external keys use `/external-api/v1` for approved catalog access
+> and approval-backed video, channel, and deletion requests.
+
+### Review external requests
+
+Open **Requests** in Youtarr's main navigation to review requests submitted by
+external clients. The page supports type, status, and requester filters, bounded
+paging, request/job details, loading and retry states, and explicit
+confirmation before approval or rejection.
+
+- **Approve** rechecks the requester's current role and policy, its current
+  channel grant, the enabled cached catalog entry, media type, rating, and
+  downloaded/duplicate state before it queues anything.
+- **Reject** requires a short reason. Rejection is final for that request, but
+  clears the active dedupe record so the client can submit a new request later.
+- Requests that are no longer safe or whose downloader job cannot be queued
+  are marked failed without exposing internal errors.
+- Channel approval provisions the canonical channel and grants it to the
+  requester by default. Video deletion approval removes only the downloaded
+  asset; it never removes the channel subscription.
+
+The Requests area uses the logged-in Youtarr session. External API keys cannot
+access the administrator queue or review actions.
 
 ### Create an API Key
 
@@ -597,11 +620,17 @@ Send videos to Youtarr from anywhere using API keys. This enables one-click down
 2. **Create a new key**
    - Click "Create Key"
    - Enter a descriptive name (e.g., "iPhone Shortcut", "Work Laptop")
+   - Choose a legacy download key or an external role and exact content policy
    - Click "Create"
 
 3. **Save the key immediately**
    - The full key is shown only once
    - Copy it to a secure location before closing the dialog
+
+4. **Grant channels for external keys**
+   - Use the edit action beside the key
+   - Search and select only the channels this integration may see
+   - Confirm any privilege increase and save
 
 ### Install a Browser Bookmarklet
 

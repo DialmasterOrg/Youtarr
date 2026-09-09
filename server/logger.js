@@ -15,18 +15,6 @@ const logLevel = process.env.LOG_LEVEL || 'info';
 const pinoConfig = {
   level: logLevel,
 
-  // Use pino-pretty
-  transport: {
-    target: 'pino-pretty',
-    options: {
-      colorize: true,
-      translateTime: 'UTC:yyyy-mm-dd HH:MM:ss.l o',
-      ignore: 'pid,hostname',
-      singleLine: true, // Keep structured data as compact JSON
-      messageFormat: '{if req.id}[{req.id}] {end}{msg}'
-    }
-  },
-
   // Redact sensitive data from logs
   redact: {
     paths: [
@@ -47,7 +35,13 @@ const pinoConfig = {
       'jellyfinApiKey',
       'embyApiKey',
       'youtubeApiKey',
+      'apiKey',
+      'key',
+      'key_hash',
+      'idempotencyKey',
       'req.body.apiKey',
+      'req.body.key',
+      'req.body.idempotencyKey',
       'req.headers.authorization',
       'req.headers["x-access-token"]',
       'req.headers["x-api-key"]',
@@ -73,6 +67,21 @@ const pinoConfig = {
     pid: process.pid,
   },
 };
+
+// pino-pretty uses a worker thread. Tests use Pino's synchronous destination
+// so Jest can prove the backend leaves no worker/message-port handles open.
+if (process.env.NODE_ENV !== 'test') {
+  pinoConfig.transport = {
+    target: 'pino-pretty',
+    options: {
+      colorize: true,
+      translateTime: 'UTC:yyyy-mm-dd HH:MM:ss.l o',
+      ignore: 'pid,hostname',
+      singleLine: true,
+      messageFormat: '{if req.id}[{req.id}] {end}{msg}',
+    },
+  };
+}
 
 const logger = pino(pinoConfig);
 
