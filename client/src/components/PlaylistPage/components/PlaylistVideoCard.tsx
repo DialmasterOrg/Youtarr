@@ -1,14 +1,12 @@
 import React from 'react';
+import { PlaylistSortOrder } from '../../../hooks/usePlaylistDetail';
 import { Button, Card, CardContent, Checkbox, Chip, Tooltip, Typography } from '../../ui';
 import { PlaylistVideo } from '../../../types/playlist';
 import { formatDurationClock } from '../../../utils';
-import { isDownloadable, statusLabel, PublishedDate, toDownloadFileProps } from './playlistVideoHelpers';
+import { isDownloadable, statusLabel, PlaylistVideoDates, toDownloadFileProps } from './playlistVideoHelpers';
 import DownloadFormatIndicator from '../../shared/DownloadFormatIndicator';
 import WatchedChip from '../../shared/WatchedChip';
 import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_COMPACT_CHIP_OVERRIDES } from '../../shared/chipStyles';
-
-const THUMB_WIDTH = 120;
-const THUMB_HEIGHT = 68;
 
 const compactStatusChipStyle: React.CSSProperties = {
   ...SHARED_STATUS_CHIP_SMALL_STYLE,
@@ -16,6 +14,7 @@ const compactStatusChipStyle: React.CSSProperties = {
 };
 
 interface PlaylistVideoCardProps {
+  sortOrder?: PlaylistSortOrder;
   video: PlaylistVideo;
   onIgnore: (ytId: string) => void;
   onUnignore: (ytId: string) => void;
@@ -26,6 +25,7 @@ interface PlaylistVideoCardProps {
 }
 
 const PlaylistVideoCard: React.FC<PlaylistVideoCardProps> = ({
+  sortOrder = 'asc',
   video,
   onIgnore,
   onUnignore,
@@ -45,15 +45,13 @@ const PlaylistVideoCard: React.FC<PlaylistVideoCardProps> = ({
       onClick={() => onVideoClick(video)}
     >
       <div
-        className="relative shrink-0 overflow-hidden bg-[var(--media-placeholder-background)] rounded-[var(--radius-thumb)] self-center ml-2"
-        style={{ width: THUMB_WIDTH, height: THUMB_HEIGHT }}
+        className="relative shrink-0 overflow-hidden bg-[var(--media-placeholder-background)] rounded-[var(--radius-thumb)] self-center ml-2 w-24 h-[54px] min-[400px]:w-[120px] min-[400px]:h-[68px]"
       >
         {video.thumbnail && (
           <img
             src={video.thumbnail}
             alt=""
-            className="block object-cover rounded-[var(--radius-thumb)]"
-            style={{ width: THUMB_WIDTH, height: THUMB_HEIGHT }}
+            className="block w-full h-full object-cover rounded-[var(--radius-thumb)]"
             loading="lazy"
           />
         )}
@@ -78,8 +76,10 @@ const PlaylistVideoCard: React.FC<PlaylistVideoCardProps> = ({
         <Typography variant="caption" className="text-muted-foreground line-clamp-1 block">
           {video.channel_name || '-'}
         </Typography>
+        <div className="mt-1">
+          <PlaylistVideoDates video={video} sortOrder={sortOrder} />
+        </div>
         <div className="flex items-center gap-2 flex-wrap mt-1 text-xs text-muted-foreground">
-          <PublishedDate value={video.published_at} />
           <span className="whitespace-nowrap">{formatDurationClock(video.duration) || '-'}</span>
           {video.downloaded ? (
             <>

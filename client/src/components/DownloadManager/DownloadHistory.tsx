@@ -32,6 +32,7 @@ import VideoThumbnail from './VideoThumbnail';
 import MissingVideoChip from './MissingVideoChip';
 import FailedVideoChip from './FailedVideoChip';
 import FailedDownloadsDetail from './FailedDownloadsDetail';
+import { jobTypeLabel } from '../../utils/jobTypeLabel';
 
 interface DownloadHistoryProps {
   jobs: Job[];
@@ -44,6 +45,7 @@ interface DownloadHistoryProps {
 }
 
 function cleanJobTypeLabel(jobType: string): string {
+  if (jobType.startsWith('Playlist Retry: ')) return jobTypeLabel(jobType);
   if (jobType.startsWith('Auto-retry')) return 'Auto-retry';
   if (jobType.includes('Channel Downloads')) return 'Channel Downloads';
   if (jobType.includes('Manually Added Urls')) {
@@ -249,6 +251,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
 
                     let formattedJobType = '';
                     if (job.jobType.startsWith('Auto-retry')) formattedJobType = 'Auto-retry';
+                    else if (job.jobType.startsWith('Playlist Retry: ')) formattedJobType = 'Playlist retries';
                     else if (job.jobType.includes('Channel Downloads')) formattedJobType = 'Channels';
                     else if (job.jobType.includes('Manually Added Urls')) {
                       const apiKeyMatch = job.jobType.match(/\(via API: (.+)\)/);
@@ -478,6 +481,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
 
                     let formattedJobType = '';
                     if (job.jobType.startsWith('Auto-retry')) formattedJobType = 'Auto-retry';
+                    else if (job.jobType.startsWith('Playlist Retry: ')) formattedJobType = 'Playlist retries';
                     else if (job.jobType.includes('Channel Downloads')) formattedJobType = 'Channels';
                     else if (job.jobType.includes('Manually Added Urls')) {
                       const apiKeyMatch = job.jobType.match(/\(via API: (.+)\)/);
@@ -635,4 +639,3 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
   };
 
   export default DownloadHistory;
-

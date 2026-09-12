@@ -114,6 +114,18 @@ describe('AddPlaylistDialog', () => {
     });
   });
 
+  test.each([false, true])('passes a setup warning to the playlist page (restored=%s)', async (restored) => {
+    const user = userEvent.setup();
+    const warning = 'Playlist saved. Auto-download setup needs attention.';
+    mockFetchPlaylistInfo.mockResolvedValue({ title: 'My List', uploader: 'Me', video_count: 5, thumbnail: '' });
+    mockSubscribe.mockResolvedValue({ playlist: { playlist_id: 'PL123' }, restored, warning });
+    renderWithProviders(<AddPlaylistDialog open token="t" onClose={jest.fn()} initialUrl={PLAYLIST_URL} />);
+    await user.click(await screen.findByRole('button', { name: /subscribe/i }));
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/playlist/PL123', {
+      state: { ...(restored && { restored: true }), warning },
+    }));
+  });
+
   test('notifies onSubscribed with the new playlist on success', async () => {
     const user = userEvent.setup();
     const onSubscribed = jest.fn();

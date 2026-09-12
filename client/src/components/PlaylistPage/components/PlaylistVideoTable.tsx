@@ -1,4 +1,5 @@
 import React from 'react';
+import { PlaylistSortOrder } from '../../../hooks/usePlaylistDetail';
 import {
   Button,
   Checkbox,
@@ -13,7 +14,7 @@ import {
 } from '../../ui';
 import { PlaylistVideo } from '../../../types/playlist';
 import { formatDurationClock } from '../../../utils';
-import { isDownloadable, statusLabel, PublishedDate, toDownloadFileProps } from './playlistVideoHelpers';
+import { isDownloadable, statusLabel, PlaylistVideoDates, toDownloadFileProps } from './playlistVideoHelpers';
 import DownloadFormatIndicator from '../../shared/DownloadFormatIndicator';
 import WatchedChip from '../../shared/WatchedChip';
 
@@ -21,6 +22,7 @@ const THUMB_WIDTH = 120;
 const THUMB_HEIGHT = 67;
 
 interface PlaylistVideoTableProps {
+  sortOrder?: PlaylistSortOrder;
   videos: PlaylistVideo[];
   onIgnore: (ytId: string) => void;
   onUnignore: (ytId: string) => void;
@@ -33,6 +35,7 @@ interface PlaylistVideoTableProps {
 }
 
 const PlaylistVideoTable: React.FC<PlaylistVideoTableProps> = ({
+  sortOrder = 'asc',
   videos,
   onIgnore,
   onUnignore,
@@ -66,7 +69,7 @@ const PlaylistVideoTable: React.FC<PlaylistVideoTableProps> = ({
           <TableCell component="th" className="w-[140px]">Thumbnail</TableCell>
           <TableCell component="th">Title</TableCell>
           <TableCell component="th" className="w-[18%]">Channel</TableCell>
-          <TableCell component="th" className="w-[110px] whitespace-nowrap">Published</TableCell>
+          <TableCell component="th" className="w-[180px]">Dates</TableCell>
           <TableCell component="th" className="w-[90px] whitespace-nowrap">Duration</TableCell>
           <TableCell component="th" className="w-[140px] whitespace-nowrap">Status</TableCell>
           <TableCell component="th" className="w-[120px] whitespace-nowrap" align="right">Actions</TableCell>
@@ -121,8 +124,8 @@ const PlaylistVideoTable: React.FC<PlaylistVideoTableProps> = ({
                   {v.channel_name || '-'}
                 </Typography>
               </TableCell>
-              <TableCell className="whitespace-nowrap">
-                <PublishedDate value={v.published_at} />
+              <TableCell>
+                <PlaylistVideoDates video={v} sortOrder={sortOrder} />
               </TableCell>
               <TableCell className="whitespace-nowrap">
                 {formatDurationClock(v.duration) || '-'}

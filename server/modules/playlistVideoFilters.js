@@ -1,12 +1,24 @@
-const { Op } = require('sequelize');
+const { Op, literal } = require('sequelize');
 
-// Resolves the youtube_id constraint for the paginated playlist-videos
+// Orders playlist videos by position, discovery, download, or publication
+// before pagination. Resolves the youtube_id constraint for the playlist-videos
 // listing from the request's downloadState/watchedState filters. Each active
 // filter contributes an allowed set ("only this") or an excluded set ("hide
 // this"); the final constraint is the allowed intersection minus every
 // exclusion. Models and watchStatusQueries are passed at call time so the
 // playlists route keeps its dependency-injection pattern.
 class PlaylistVideoFilters {
+  getVideoOrder(sortOrder) {
+    const dateOrders = {
+      recent: [['first_seen_at', 'DESC'], ['position', 'ASC']],
+      downloaded: [['downloaded_at', 'DESC'], ['position', 'ASC']],
+      published: [[literal('COALESCE(STR_TO_DATE(PlaylistVideo.published_at, \'%Y%m%d\'), (SELECT STR_TO_DATE(v.original_date, \'%Y%m%d\') FROM videos v WHERE v.youtube_id = PlaylistVideo.youtube_id LIMIT 1))'), 'DESC'], ['position', 'ASC']],
+    };
+    return Object.hasOwn(dateOrders, sortOrder)
+      ? dateOrders[sortOrder]
+      : [['position', sortOrder === 'desc' ? 'DESC' : 'ASC']];
+  }
+
   /**
    * @param {string} params.downloadState - 'all' | 'downloaded' | 'not_downloaded'
    * @param {string} params.watchedState - 'all' | 'watched' | 'not_watched'

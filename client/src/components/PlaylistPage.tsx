@@ -31,6 +31,7 @@ import { useVideoSelection } from './shared/VideoList/hooks/useVideoSelection';
 import VideoListSelectionPill from './shared/VideoList/VideoListSelectionPill';
 import { SelectionAction } from './shared/VideoList/types';
 import { Download as DownloadIcon } from '../lib/icons';
+import PlaylistFollowingDialog, { FollowingDialogMode } from './PlaylistPage/components/PlaylistFollowingDialog';
 import PlaylistSettingsDialog from './PlaylistPage/components/PlaylistSettingsDialog';
 import { toDownloadFileProps } from './PlaylistPage/components/playlistVideoHelpers';
 import DownloadSettingsDialog from './DownloadManager/ManualDownload/DownloadSettingsDialog';
@@ -46,7 +47,7 @@ interface PlaylistPageProps {
 interface SnackbarState {
   open: boolean;
   message: string;
-  severity: 'success' | 'error' | 'info';
+  severity: 'success' | 'error' | 'info' | 'warning';
 }
 
 function toModalData(v: PlaylistVideo): VideoModalData {
@@ -62,7 +63,7 @@ function toModalData(v: PlaylistVideo): VideoModalData {
     thumbnailUrl: v.thumbnail || `https://i.ytimg.com/vi/${v.youtube_id}/hqdefault.jpg`,
     duration: v.duration,
     publishedAt: v.published_at,
-    addedAt: v.added_at,
+    addedAt: v.downloaded_at ?? null,
     mediaType: 'video',
     status,
     isDownloaded: v.downloaded,
@@ -89,6 +90,8 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     playlist,
     videos: playlistVideos,
     notDownloadedCount,
+    followingExistingCount,
+    followingRequestedCount,
     unsyncableCount,
     loading,
     loadingMore,
@@ -134,6 +137,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
     ids: [],
   });
 
+  const [followingMode, setFollowingMode] = useState<FollowingDialogMode | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [confirmPublicOpen, setConfirmPublicOpen] = useState(false);
   const [pendingVideoId, setPendingVideoId] = useState<string | null>(null);
@@ -154,9 +158,9 @@ function PlaylistPage({ token }: PlaylistPageProps) {
   // notice once, then clear the state so refresh or back doesn't repeat it.
   const location = useLocation();
   useEffect(() => {
-    const navState = location.state as { restored?: boolean } | null;
-    if (navState?.restored) {
-      showSnackbar('Playlist restored with its previous settings');
+    const navState = location.state as { restored?: boolean; warning?: string } | null;
+    if (navState?.restored || navState?.warning) {
+      showSnackbar(navState.warning || 'Playlist restored with its previous settings', navState.warning ? 'warning' : 'success');
       navigate(location.pathname, { replace: true, state: null });
     }
   }, [location.pathname, location.state, navigate, showSnackbar]);
@@ -288,10 +292,16 @@ function PlaylistPage({ token }: PlaylistPageProps) {
   const handleToggleAutoDownload = useCallback(
     async (enabled: boolean) => {
       if (!playlist) return;
+      if (enabled && !playlist.auto_download_baseline_at) {
+        setFollowingMode('setup');
+        return;
+      }
       const updated = await toggleAutoDownload(playlist.playlist_id, enabled);
       if (updated) {
         await refetch();
-        showSnackbar(enabled ? 'Auto-download enabled' : 'Auto-download disabled');
+        showSnackbar(enabled ? 'Auto-download resumed; new additions will catch up on scheduled runs.' : 'Auto-download paused');
+      } else {
+        showSnackbar('Could not update auto-download. Please retry.', 'error');
       }
     },
     [playlist, toggleAutoDownload, refetch, showSnackbar]
@@ -411,6 +421,9 @@ function PlaylistPage({ token }: PlaylistPageProps) {
         serverStatus={serverStatus}
         anyConfigured={anyConfigured}
         newCount={notDownloadedCount}
+        followingExistingCount={followingExistingCount}
+        followingRequestedCount={followingRequestedCount}
+        onChooseExisting={() => setFollowingMode('batch')}
         unsyncableCount={unsyncableCount}
         togglePending={pending}
         actionRunning={actionRunning}
@@ -456,6 +469,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
           </Typography>
           <PlaylistVideoList
             videos={videos}
+            sortOrder={sortOrder}
             loading={loading}
             onIgnore={handleIgnoreVideo}
             onUnignore={handleUnignoreVideo}
@@ -484,7 +498,18 @@ function PlaylistPage({ token }: PlaylistPageProps) {
         token={token}
         onClose={() => setSettingsOpen(false)}
         onSaved={handleSettingsSaved}
+        onFollowFromNow={() => { setSettingsOpen(false); setFollowingMode('restart'); }}
       />
+
+      {followingMode && (
+        <PlaylistFollowingDialog
+          key={`${playlist.playlist_id}:${followingMode}`}
+          playlist={playlist} token={token} mode={followingMode}
+          defaultCount={config.channelFilesToDownload}
+          onClose={() => setFollowingMode(null)}
+          onSaved={(message) => { setFollowingMode(null); showSnackbar(message, 'info'); void refetch(); }}
+        />
+      )}
 
       <DownloadSettingsDialog
         open={downloadDialogOpen}

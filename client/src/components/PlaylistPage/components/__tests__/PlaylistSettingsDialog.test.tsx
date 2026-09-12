@@ -258,4 +258,38 @@ describe('PlaylistSettingsDialog', () => {
 
     expect(screen.queryByText(/applies the next time this playlist syncs/i)).not.toBeInTheDocument();
   });
+  test('opens reset confirmation from an established starting point', () => {
+    const props = setupDialog({
+      playlist: { ...basePlaylist, auto_download_baseline_at: '2026-09-01T00:00:00Z' },
+      onFollowFromNow: jest.fn(),
+    });
+    expect(screen.getByText(/This keeps automatic downloads running or paused/)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Follow from now...' }));
+    expect(props.onFollowFromNow).toHaveBeenCalledTimes(1);
+  });
+
+  test('hides the reset panel before a starting point exists', () => {
+    setupDialog({ onFollowFromNow: jest.fn() });
+    expect(screen.queryByRole('button', { name: 'Follow from now...' })).not.toBeInTheDocument();
+  });
+
+  test('requires saving or discarding settings edits before resetting', () => {
+    setupDialog({
+      playlist: { ...basePlaylist, auto_download_baseline_at: '2026-09-01T00:00:00Z' },
+      onFollowFromNow: jest.fn(),
+    });
+    fireEvent.click(screen.getByTestId('subfolder-mock'));
+    expect(screen.getByRole('button', { name: 'Follow from now...' })).toBeDisabled();
+    expect(screen.getByText('Save or discard your settings changes before changing the starting point.')).toBeVisible();
+  });
+
+  test('blocks reset while settings are being saved', () => {
+    mockMutationsReturn.pending = true;
+    setupDialog({
+      playlist: { ...basePlaylist, auto_download_baseline_at: '2026-09-01T00:00:00Z' },
+      onFollowFromNow: jest.fn(),
+    });
+    expect(screen.getByRole('button', { name: 'Follow from now...' })).toBeDisabled();
+  });
+
 });

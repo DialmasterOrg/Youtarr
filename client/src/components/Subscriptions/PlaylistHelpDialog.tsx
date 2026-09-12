@@ -1,4 +1,5 @@
 import React from 'react';
+import { MAX_PLAYLIST_VIDEOS } from '../PlaylistPage/playlistConstants';
 import {
   Dialog,
   DialogTitle,
@@ -96,21 +97,35 @@ function PlaylistHelpDialog({ open, onClose, isMobile }: PlaylistHelpDialogProps
 
           <Section icon={<FileDownloadIcon size={16} style={iconColor} />} title="Downloading automatically">
             <p>
-              Turn on auto-download for a playlist and Youtarr keeps it current on the regular
-              download schedule, the same way it does for channels. The first run grabs the
-              playlist&apos;s most recent videos, up to the count you set under{' '}
-              <strong className="text-foreground font-medium">
-                Settings &rarr; Core Settings &rarr; Download Settings
-              </strong>
-              . After that, every run downloads whatever has been newly added to the playlist, no
-              matter where in the playlist it was placed (top, middle, or bottom), skipping anything
-              you already have or have marked as ignored. If more videos arrive than the per-run
-              count, the extras catch up on later runs.
+              Enable auto-download to follow newly discovered entries on your regular download
+              schedule, wherever the owner places them. Setup refreshes the playlist and lets you
+              choose whether to download existing videos too. By default, existing videos are skipped.
+              Each scheduled run allows up to your global count in new discoveries, plus the same
+              number of older saved selections to retry. Older retries take turns. Pausing
+              and resuming preserves tracking, and reordering a playlist does not create new entries.
             </p>
             <p>
-              The &quot;Recently added first&quot; sort on a playlist&apos;s page shows these new
-              additions at the top. Videos that were already in the playlist when you subscribed keep
-              their playlist order.
+              Use <strong>Choose existing videos</strong> to preview a batch by publication date,
+              the beginning or end of the YouTube playlist, or manual selection. Previously downloaded
+              and excluded videos are skipped. Missing publication dates require a positional or manual
+              choice. The full selection queues immediately and does not reset automatic tracking.
+              A selected video that is also a new discovery uses only the discovery allowance.
+              Saved retries appear separately in Download History.
+            </p>
+            <p>
+              <strong>Recently discovered by Youtarr</strong> sorts by when this installation first
+              saw an entry. <strong>Recently downloaded</strong> uses download time, and
+              <strong> Newest published</strong> uses the video&apos;s publication date. These are
+              different dates; none tells you when the owner added a video to YouTube&apos;s playlist.
+              Videos discovered together keep their playlist order. Published stays visible in every
+              sort, with Discovered or Downloaded shown underneath when sorting by those dates.
+              Downloaded is only shown for videos with a local file.
+              Tap or click a discovery or download date to see its full timestamp.
+            </p>
+            <p>
+              Automatic following supports playlists with up to {MAX_PLAYLIST_VIDEOS.toLocaleString()} entries and requires a complete refresh.
+              In Playlist settings, <strong>Follow from now</strong> lets you skip the current
+              undownloaded backlog after reviewing the change. Automatic downloads stay running or paused as they are now. It keeps files and already queued downloads.
             </p>
           </Section>
 

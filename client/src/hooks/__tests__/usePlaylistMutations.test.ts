@@ -35,6 +35,17 @@ describe('usePlaylistMutations.subscribe', () => {
     expect(res).toEqual({ playlist, restored: true });
   });
 
+  test('preserves a successful subscription warning for the destination page', async () => {
+    const playlist = { playlist_id: 'PL1', auto_download: false };
+    const warning = 'Playlist saved. Auto-download was turned off; retry setup later.';
+    axios.post.mockResolvedValue({ data: { playlist, restored: true, warning } });
+    const { result } = renderHook(() => usePlaylistMutations({ token: 't' }));
+    let response: PlaylistSubscribeResult | null = null;
+    await act(async () => { response = await result.current.subscribe('https://youtube.com/playlist?list=PL1'); });
+    expect(response).toEqual({ playlist, restored: true, warning });
+    expect(result.current.error).toBeNull();
+  });
+
   test('defaults restored to false when the API omits it', async () => {
     const playlist = { playlist_id: 'PL1', title: 'New' };
     axios.post.mockResolvedValue({ data: { playlist } });

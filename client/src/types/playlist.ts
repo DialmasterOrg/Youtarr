@@ -12,6 +12,9 @@ export interface Playlist {
   video_count: number;
   enabled: boolean;
   auto_download: boolean;
+  auto_download_baseline_at?: string | null;
+  auto_download_baseline_id?: number | null;
+  auto_download_setup_error?: 'PLAYLIST_TOO_LARGE' | 'PLAYLIST_REFRESH_INCOMPLETE' | null;
   sync_to_plex: boolean;
   sync_to_jellyfin: boolean;
   sync_to_emby: boolean;
@@ -33,7 +36,10 @@ export interface PlaylistVideo {
   playlist_id: string;
   youtube_id: string;
   position: number;
-  added_at: string | null;
+  /** @deprecated Compatibility alias for first_seen_at. */
+  added_at?: string | null;
+  first_seen_at?: string | null;
+  downloaded_at?: string | null;
   channel_id: string | null;
   ignored: boolean;
   ignored_at: string | null;

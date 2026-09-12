@@ -246,6 +246,14 @@ describe('downloadRunTracker', () => {
     test('labels a mixed channel + playlist run', () => {
       expect(finalizeWith(['Channel Downloads', 'Playlist: A'])).toBe('Channel & playlist update');
     });
+
+    test.each([
+      [['Playlist Retry: A'], 'Playlist Retry: A'],
+      [['Playlist: A', 'Playlist Retry: A'], 'Playlist downloads'],
+      [['Channel Downloads', 'Playlist Retry: A'], 'Channel & playlist update'],
+    ])('labels runs containing saved retries: %j', (jobs, expected) => {
+      expect(finalizeWith(jobs)).toBe(expected);
+    });
   });
 
   describe('warnings, dedupe, and notifications', () => {

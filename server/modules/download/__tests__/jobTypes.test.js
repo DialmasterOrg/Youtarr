@@ -9,12 +9,23 @@ const {
   isSpecificUrlDownloadJob,
   isDownloadJob,
   playlistJobLabel,
+  playlistRetryJobLabel,
   channelDownloadAllJobLabel,
   autoRetryJobLabel,
   isChannelDownloadAllJob,
 } = require('../jobTypes');
 
 describe('jobTypes', () => {
+  test.each([
+    [{ title: 'Favorites', playlist_id: 'PL1' }, 'Playlist Retry: Favorites'],
+    [{ playlist_id: 'PL1' }, 'Playlist Retry: PL1'],
+  ])('saved playlist retries keep URL-list handling: %j', (playlist, expected) => {
+    const label = playlistRetryJobLabel(playlist);
+    expect(label).toBe(expected);
+    expect(isSpecificUrlDownloadJob(label)).toBe(true);
+    expect(isDownloadJob(label)).toBe(true);
+    expect(isChannelDownloadAllJob(label)).toBe(false);
+  });
   describe('isSpecificUrlDownloadJob', () => {
     it('matches manually-added URL jobs', () => {
       expect(isSpecificUrlDownloadJob(MANUAL_DOWNLOAD_LABEL)).toBe(true);

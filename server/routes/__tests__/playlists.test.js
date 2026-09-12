@@ -1,4 +1,6 @@
 /* eslint-env jest */
+jest.mock('../../logger', () => ({ error: jest.fn() }));
+jest.mock('../../modules/download/videoActivity', () => ({ isActive: jest.fn(() => false) }));
 const express = require('express');
 const { Op } = require('sequelize');
 const createPlaylistRoutes = require('../playlists');
@@ -22,6 +24,7 @@ const makePlaylist = (overrides = {}) => ({
   title: 'Test Playlist',
   enabled: true,
   update: jest.fn().mockResolvedValue(undefined),
+  reload: jest.fn().mockResolvedValue(undefined),
   ...overrides,
 });
 
@@ -29,8 +32,12 @@ const buildDeps = (overrides = {}) => ({
   verifyToken: (req, res, next) => next(),
   playlistModule: {
     getPlaylistInfo: jest.fn(),
+    isUnavailableTitle: jest.fn((title) => !title || /^\[(private|deleted)/i.test(title)),
     upsertPlaylist: jest.fn(),
     fetchAllPlaylistVideos: jest.fn(),
+    refreshForFollowing: jest.fn().mockResolvedValue(0),
+    isFollowingSetupError: (err) => ['PLAYLIST_TOO_LARGE', 'PLAYLIST_REFRESH_INCOMPLETE'].includes(err.message),
+    recoverFollowingSetup: jest.fn().mockResolvedValue('Playlist saved. Auto-download setup needs attention.'),
     ...overrides.playlistModule,
   },
   m3uGenerator: {
@@ -64,6 +71,7 @@ const buildDeps = (overrides = {}) => ({
   // Real playlistVideoFilters: it receives models/watchStatusQueries at call
   // time, so the filter tests exercise the actual set logic through the route.
   playlistVideoFilters: require('../../modules/playlistVideoFilters'),
+  playlistDownloadModule: require('../../modules/playlistDownloadModule'),
   models: {
     Playlist: {
       findAndCountAll: jest.fn(),
@@ -233,9 +241,9 @@ describe('GET /api/playlists/:playlistId not_downloaded_count', () => {
     const deps = buildDeps();
     deps.models.Playlist.findOne.mockResolvedValue(makePlaylist({ video_count: 3 }));
     deps.models.PlaylistVideo.findAll.mockResolvedValue([
-      { youtube_id: 'a' },
-      { youtube_id: 'b' },
-      { youtube_id: 'c' },
+      { youtube_id: 'a', title: 'Video a' },
+      { youtube_id: 'b', title: 'Video b' },
+      { youtube_id: 'c', title: 'Video c' },
     ]);
     deps.models.Video.findAll.mockResolvedValue([{ youtubeId: 'b' }]);
 
@@ -269,9 +277,9 @@ describe('GET /api/playlists/:playlistId unsyncable_count', () => {
     const deps = buildDeps();
     deps.models.Playlist.findOne.mockResolvedValue(makePlaylist({ audio_format: null }));
     deps.models.PlaylistVideo.findAll.mockResolvedValue([
-      { youtube_id: 'a' },
-      { youtube_id: 'b' },
-      { youtube_id: 'c' },
+      { youtube_id: 'a', title: 'Video a' },
+      { youtube_id: 'b', title: 'Video b' },
+      { youtube_id: 'c', title: 'Video c' },
     ]);
     deps.models.Video.findAll.mockResolvedValue([
       // Downloaded as mp3-only: no video file to sync.
@@ -295,8 +303,8 @@ describe('GET /api/playlists/:playlistId unsyncable_count', () => {
     const deps = buildDeps();
     deps.models.Playlist.findOne.mockResolvedValue(makePlaylist({ audio_format: 'mp3_only' }));
     deps.models.PlaylistVideo.findAll.mockResolvedValue([
-      { youtube_id: 'a' },
-      { youtube_id: 'b' },
+      { youtube_id: 'a', title: 'Video a' },
+      { youtube_id: 'b', title: 'Video b' },
     ]);
     deps.models.Video.findAll.mockResolvedValue([
       // Manually downloaded as video-only: no mp3 to sync.
@@ -410,7 +418,7 @@ describe('POST /api/playlists', () => {
     const created = makePlaylist();
     deps.playlistModule.getPlaylistInfo.mockResolvedValue(info);
     deps.playlistModule.upsertPlaylist.mockResolvedValue({ playlist: created, restored: false });
-    deps.playlistModule.fetchAllPlaylistVideos.mockResolvedValue(5);
+    deps.playlistModule.refreshForFollowing.mockResolvedValue(5);
 
     const handler = getHandler('post', '/api/playlists', deps);
     const req = { body: { url: 'https://youtube.com/playlist?list=PLtest' }, log: loggerMock };
@@ -420,7 +428,7 @@ describe('POST /api/playlists', () => {
 
     expect(deps.playlistModule.getPlaylistInfo).toHaveBeenCalledWith('https://youtube.com/playlist?list=PLtest');
     expect(deps.playlistModule.upsertPlaylist).toHaveBeenCalledWith(info, { enabled: true, settings: {} });
-    expect(deps.playlistModule.fetchAllPlaylistVideos).toHaveBeenCalledWith(created.playlist_id);
+    expect(deps.playlistModule.refreshForFollowing).toHaveBeenCalledWith(created, { followFromNow: false });
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({ playlist: created, restored: false });
   });
@@ -430,7 +438,7 @@ describe('POST /api/playlists', () => {
     const restoredPlaylist = makePlaylist();
     deps.playlistModule.getPlaylistInfo.mockResolvedValue({ playlist_id: 'PLtest123' });
     deps.playlistModule.upsertPlaylist.mockResolvedValue({ playlist: restoredPlaylist, restored: true });
-    deps.playlistModule.fetchAllPlaylistVideos.mockResolvedValue(5);
+    deps.playlistModule.refreshForFollowing.mockResolvedValue(5);
 
     const handler = getHandler('post', '/api/playlists', deps);
     const req = {
@@ -451,7 +459,7 @@ describe('POST /api/playlists', () => {
     const deps = buildDeps();
     deps.playlistModule.getPlaylistInfo.mockResolvedValue({ playlist_id: 'PLtest' });
     deps.playlistModule.upsertPlaylist.mockResolvedValue({ playlist: makePlaylist(), restored: false });
-    deps.playlistModule.fetchAllPlaylistVideos.mockResolvedValue(0);
+    deps.playlistModule.refreshForFollowing.mockResolvedValue(0);
 
     const handler = getHandler('post', '/api/playlists', deps);
     const req = {
@@ -1017,7 +1025,7 @@ describe('GET /api/playlists/:playlistId/videos', () => {
     );
   });
 
-  test('orders by added_at DESC with position tie-break when sortOrder=recent', async () => {
+  test('orders by first_seen_at DESC with position tie-break when sortOrder=recent', async () => {
     const deps = buildDeps();
     deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue({ count: 0, rows: [] });
 
@@ -1028,7 +1036,7 @@ describe('GET /api/playlists/:playlistId/videos', () => {
     await handler(req, res);
 
     expect(deps.models.PlaylistVideo.findAndCountAll).toHaveBeenCalledWith(
-      expect.objectContaining({ order: [['added_at', 'DESC'], ['position', 'ASC']] })
+      expect.objectContaining({ order: [['first_seen_at', 'DESC'], ['position', 'ASC']] })
     );
   });
 
@@ -1461,7 +1469,7 @@ describe('POST /api/playlists/:playlistId/refresh', () => {
     await handler(req, res);
 
     expect(res.status).toHaveBeenCalledWith(409);
-    expect(res.json).toHaveBeenCalledWith({ error: 'A fetch is already in progress for this playlist' });
+    expect(res.json).toHaveBeenCalledWith({ error: 'A refresh is already in progress for this playlist. Wait for it to finish, then try again.' });
   });
 
   test('returns 500 on fetch error', async () => {
@@ -1975,5 +1983,312 @@ describe('POST /api/playlists/:playlistId/videos/:ytId/unignore', () => {
 
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: 'Unignore failed' });
+  });
+});
+
+
+describe('playlist following and existing batches', () => {
+  const request = (body = {}, query = {}) => ({ params: { playlistId: 'PLtest123' }, body, query, log: loggerMock });
+  const candidates = [
+    { youtube_id: 'newest', title: 'Newest', position: 1, published_at: '20260901' },
+    { youtube_id: 'oldest', title: 'Oldest', position: 2, published_at: '20200101' },
+  ];
+
+  test('previews eligible entries across the full playlist', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.findAll.mockResolvedValue(candidates);
+    const res = createResponse();
+    await getHandler('get', '/api/playlists/:playlistId/download-preview', deps)(request({}, { order: 'published', count: '1' }), res);
+    expect(res.json).toHaveBeenCalledWith({ candidates, selectedIds: ['newest'], missingDates: 0 });
+    expect(deps.downloadModule.doPlaylistDownloads).not.toHaveBeenCalled();
+  });
+
+  test('date gaps are visible rather than silently selecting from an end', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.findAll.mockResolvedValue([{ ...candidates[0], published_at: null }, candidates[1]]);
+    const res = createResponse();
+    await getHandler('get', '/api/playlists/:playlistId/download-preview', deps)(request({}, { order: 'published', count: '1' }), res);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ selectedIds: [], missingDates: 1 }));
+  });
+
+  test.each(['0', '1001', '1.5', 'invalid'])('rejects invalid preview count %s', async (count) => {
+    const deps = buildDeps();
+    const res = createResponse();
+    await getHandler('get', '/api/playlists/:playlistId/download-preview', deps)(request({}, { count }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(deps.models.PlaylistVideo.findAll).not.toHaveBeenCalled();
+  });
+
+  test('first setup refreshes the snapshot without downloading existing entries', async () => {
+    const deps = buildDeps();
+    const p = makePlaylist({ auto_download: false });
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+    const res = createResponse();
+    await getHandler('post', '/api/playlists/:playlistId/following', deps)(request(), res);
+    expect(deps.playlistModule.refreshForFollowing).toHaveBeenCalledWith(p, { resetFollowing: false });
+    expect(p.update).toHaveBeenCalledWith({ auto_download: true });
+    expect(deps.downloadModule.doPlaylistDownloads).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ queued: 0 }));
+  });
+
+  test('a failed initial refresh does not enable following or queue a batch', async () => {
+    const deps = buildDeps();
+    const p = makePlaylist({ auto_download: false });
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+    deps.playlistModule.refreshForFollowing.mockRejectedValue(new Error('PLAYLIST_REFRESH_INCOMPLETE'));
+    const res = createResponse();
+    await getHandler('post', '/api/playlists/:playlistId/following', deps)(request({ videoIds: ['newest'] }), res);
+    expect(res.status).toHaveBeenCalledWith(503);
+    expect(p.update).not.toHaveBeenCalled();
+    expect(deps.downloadModule.doPlaylistDownloads).not.toHaveBeenCalled();
+  });
+
+  test('resuming preserves the saved cutoff', async () => {
+    const deps = buildDeps();
+    const p = makePlaylist({ auto_download_baseline_at: new Date('2026-01-01'), auto_download_baseline_id: 10 });
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+    const res = createResponse();
+    await getHandler('post', '/api/playlists/:playlistId/following', deps)(request(), res);
+    expect(deps.playlistModule.refreshForFollowing).not.toHaveBeenCalled();
+    expect(p.update).toHaveBeenCalledWith({ auto_download: true });
+  });
+
+  test('follow from now explicitly replaces the snapshot without queuing', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(makePlaylist({ auto_download_baseline_at: new Date('2026-01-01') }));
+    const res = createResponse();
+    await getHandler('post', '/api/playlists/:playlistId/following', deps)(request({ restart: true }), res);
+    expect(deps.playlistModule.refreshForFollowing).toHaveBeenCalledWith(expect.objectContaining({ playlist_id: 'PLtest123' }), { resetFollowing: true });
+    expect(deps.downloadModule.doPlaylistDownloads).not.toHaveBeenCalled();
+  });
+
+  test('keeps a selected older batch retryable when queuing fails', async () => {
+    const deps = buildDeps();
+    const p = makePlaylist({ auto_download: true, auto_download_baseline_at: new Date('2026-01-01') });
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+    deps.models.PlaylistVideo.findAll.mockResolvedValue(candidates);
+    deps.downloadModule.doPlaylistDownloads.mockRejectedValue(new Error('queue failed'));
+    const res = createResponse();
+    await getHandler('post', '/api/playlists/:playlistId/download-batch', deps)(request({ videoIds: ['oldest', 'not-in-playlist'] }), res);
+    expect(deps.models.PlaylistVideo.update).toHaveBeenCalledWith({ auto_download_requested: true }, {
+      where: { playlist_id: 'PLtest123', youtube_id: ['oldest'] },
+    });
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ queued: 0, warning: expect.any(String) }));
+    expect(p.update).not.toHaveBeenCalled();
+  });
+
+  test('an empty batch never turns into download-all', async () => {
+    const deps = buildDeps();
+    const res = createResponse();
+    await getHandler('post', '/api/playlists/:playlistId/download-batch', deps)(request({ videoIds: [] }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(deps.downloadModule.doPlaylistDownloads).not.toHaveBeenCalled();
+  });
+
+  test.each(['recent', 'downloaded'])('sorts %s before paginating', async (sortOrder) => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue({ count: 0, rows: [] });
+    await getHandler('get', '/api/playlists/:playlistId/videos', deps)(request({}, { sortOrder, page: '2', pageSize: '20' }), createResponse());
+    expect(deps.models.PlaylistVideo.findAndCountAll).toHaveBeenCalledWith(expect.objectContaining({
+      order: [[sortOrder === 'recent' ? 'first_seen_at' : 'downloaded_at', 'DESC'], ['position', 'ASC']],
+      offset: 20, limit: 20,
+    }));
+  });
+});
+
+describe('playlist following validation and errors', () => {
+  const req = (body = {}, query = {}) => ({ params: { playlistId: 'PLtest123' }, body, query, log: loggerMock });
+
+  test.each([
+    ['get', '/api/playlists/:playlistId/download-preview'],
+    ['post', '/api/playlists/:playlistId/download-batch'],
+    ['post', '/api/playlists/:playlistId/following'],
+  ])('%s %s returns 404 for a missing or disabled playlist', async (method, path) => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(null);
+    const res = createResponse();
+    await getHandler(method, path, deps)(req({ videoIds: ['video'] }), res);
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(deps.downloadModule.doPlaylistDownloads).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    { restart: 'true' }, { restart: null }, { videoIds: 'video' }, { videoIds: null },
+    { videoIds: Array.from({ length: 1001 }, (_, i) => `video${i}`) },
+    { restart: true, videoIds: ['video'] },
+  ])('rejects invalid following options %#', async (body) => {
+    const deps = buildDeps();
+    const res = createResponse();
+    await getHandler('post', '/api/playlists/:playlistId/following', deps)(req(body), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(deps.playlistModule.refreshForFollowing).not.toHaveBeenCalled();
+  });
+
+  test('rejects an unknown preview order', async () => {
+    const deps = buildDeps();
+    const res = createResponse();
+    await getHandler('get', '/api/playlists/:playlistId/download-preview', deps)(req({}, { order: 'random' }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(deps.models.PlaylistVideo.findAll).not.toHaveBeenCalled();
+  });
+
+  test('successfully queues the selected batch without resetting following', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.findAll.mockResolvedValue([{ youtube_id: 'video', title: 'Video' }]);
+    deps.downloadModule.doPlaylistDownloads.mockResolvedValue(1);
+    const res = createResponse();
+    await getHandler('post', '/api/playlists/:playlistId/download-batch', deps)(req({ videoIds: ['video'] }), res);
+    expect(res.status).toHaveBeenCalledWith(202);
+    expect(res.json).toHaveBeenCalledWith({ queued: 1 });
+    expect(deps.playlistModule.refreshForFollowing).not.toHaveBeenCalled();
+  });
+
+  test('a legacy playlist without a baseline gets an honest queue failure', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(makePlaylist({ auto_download: true, auto_download_baseline_at: null }));
+    deps.models.PlaylistVideo.findAll.mockResolvedValue([{ youtube_id: 'video', title: 'Video' }]);
+    deps.downloadModule.doPlaylistDownloads.mockRejectedValue(new Error('queue down'));
+    const res = createResponse();
+    await getHandler('post', '/api/playlists/:playlistId/download-batch', deps)(req({ videoIds: ['video'] }), res);
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(deps.models.PlaylistVideo.update).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ error: 'Failed to queue selected videos; please retry' });
+  });
+
+  test('PATCH establishes the first starting point before enabling downloads', async () => {
+    const deps = buildDeps();
+    const p = makePlaylist({ auto_download: false, auto_download_baseline_at: null });
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+    await getHandler('patch', '/api/playlists/:playlistId', deps)(req({ auto_download: true }), createResponse());
+    expect(deps.playlistModule.refreshForFollowing).toHaveBeenCalledWith(p);
+    expect(p.update).toHaveBeenCalledWith({ auto_download: true });
+    expect(deps.playlistModule.refreshForFollowing.mock.invocationCallOrder[0]).toBeLessThan(p.update.mock.invocationCallOrder[0]);
+  });
+
+  test.each([true, false])('resetting preserves auto_download=%s', async (autoDownload) => {
+    const deps = buildDeps();
+    const p = makePlaylist({ auto_download: autoDownload, auto_download_baseline_at: new Date() });
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+    const res = createResponse();
+    await getHandler('post', '/api/playlists/:playlistId/following', deps)(req({ restart: true }), res);
+    expect(p.update).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ playlist: expect.objectContaining({ auto_download: autoDownload }) }));
+  });
+
+  describe.each([
+    ['patch', '/api/playlists/:playlistId', { auto_download: true }],
+    ['post', '/api/playlists/:playlistId/following', {}],
+  ])('%s %s', (method, path, body) => {
+    test.each([
+      ['FETCH_IN_PROGRESS', 409, 'already in progress'],
+      ['PLAYLIST_TOO_LARGE', 422, '5,000'],
+      ['PLAYLIST_REFRESH_INCOMPLETE', 503, 'starting point was not changed'],
+    ])('maps %s to %s without enabling downloads', async (error, status, message) => {
+      const deps = buildDeps();
+      const p = makePlaylist({ auto_download: false });
+      deps.models.Playlist.findOne.mockResolvedValue(p);
+      deps.playlistModule.refreshForFollowing.mockRejectedValue(new Error(error));
+      const res = createResponse();
+      await getHandler(method, path, deps)(req(body), res);
+      expect(res.status).toHaveBeenCalledWith(status);
+      expect(res.json).toHaveBeenCalledWith({ error: expect.stringContaining(message) });
+      expect(p.update).not.toHaveBeenCalled();
+    });
+  });
+
+  test('returns the older existing count separately from future and requested entries', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(makePlaylist({ auto_download_baseline_at: new Date(), auto_download_baseline_id: 10 }));
+    deps.models.PlaylistVideo.findAll.mockResolvedValue([
+      { id: 1, youtube_id: 'old', title: 'Old' },
+      { id: 2, youtube_id: 'chosen', title: 'Chosen', auto_download_requested: true },
+      { id: 11, youtube_id: 'new', title: 'New' },
+    ]);
+    const res = createResponse();
+    await getHandler('get', '/api/playlists/:playlistId', deps)(req(), res);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ not_downloaded_count: 3, following_existing_count: 1, following_requested_count: 1 }));
+  });
+
+  test('orders by publication with downloaded metadata fallback before paginating', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.findAndCountAll.mockResolvedValue({ rows: [], count: 0 });
+    await getHandler('get', '/api/playlists/:playlistId/videos', deps)(req({}, { sortOrder: 'published', page: '2', pageSize: '20' }), createResponse());
+    expect(deps.models.PlaylistVideo.findAndCountAll).toHaveBeenCalledWith(expect.objectContaining({
+      order: [[expect.objectContaining({ val: 'COALESCE(STR_TO_DATE(PlaylistVideo.published_at, \'%Y%m%d\'), (SELECT STR_TO_DATE(v.original_date, \'%Y%m%d\') FROM videos v WHERE v.youtube_id = PlaylistVideo.youtube_id LIMIT 1))' }), 'DESC'], ['position', 'ASC']],
+      offset: 20, limit: 20,
+    }));
+  });
+});
+
+
+describe('playlist setup recovery and validation', () => {
+  const request = (body = {}) => ({ params: { playlistId: 'PLtest123' }, body, log: loggerMock });
+
+  test.each(['true', 1, null])('PATCH rejects non-boolean auto_download %j', async (value) => {
+    const deps = buildDeps();
+    const res = createResponse();
+    await getHandler('patch', '/api/playlists/:playlistId', deps)(request({ auto_download: value }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(deps.models.Playlist.findOne).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    [true, new Date('2026-09-01')], [false, new Date('2026-09-01')], [false, null],
+  ])('PATCH auto_download=%s with baseline=%s skips refresh', async (enabled, baseline) => {
+    const deps = buildDeps();
+    const p = makePlaylist({ auto_download_baseline_at: baseline });
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+    await getHandler('patch', '/api/playlists/:playlistId', deps)(request({ auto_download: enabled }), createResponse());
+    expect(deps.playlistModule.refreshForFollowing).not.toHaveBeenCalled();
+    expect(p.update).toHaveBeenCalledWith({ auto_download: enabled });
+  });
+
+  test.each(['following', 'download-batch'])('%s rejects a non-string id element', async (endpoint) => {
+    const deps = buildDeps();
+    const res = createResponse();
+    await getHandler('post', `/api/playlists/:playlistId/${endpoint}`, deps)(request({ videoIds: ['valid', 42] }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(deps.downloadModule.doPlaylistDownloads).not.toHaveBeenCalled();
+  });
+
+  describe.each([false, true])('subscribing with restored=%s', (restored) => {
+    const setup = () => {
+      const deps = buildDeps();
+      const p = makePlaylist({ auto_download: true });
+      deps.playlistModule.getPlaylistInfo.mockResolvedValue({ playlist_id: p.playlist_id });
+      deps.playlistModule.upsertPlaylist.mockResolvedValue({ playlist: p, restored });
+      return { deps, p };
+    };
+
+    test('sets up following when the saved setting is enabled', async () => {
+      const { deps, p } = setup();
+      const res = createResponse();
+      await getHandler('post', '/api/playlists', deps)(request({ url: 'https://youtube.com/playlist?list=PLtest123' }), res);
+      expect(deps.playlistModule.refreshForFollowing).toHaveBeenCalledWith(p, { followFromNow: true });
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json).toHaveBeenCalledWith({ playlist: p, restored });
+    });
+
+    test.each(['PLAYLIST_TOO_LARGE', 'PLAYLIST_REFRESH_INCOMPLETE'])('returns the saved subscription with a warning after %s', async (code) => {
+      const { deps, p } = setup();
+      const err = new Error(code);
+      deps.playlistModule.refreshForFollowing.mockRejectedValue(err);
+      const res = createResponse();
+      await getHandler('post', '/api/playlists', deps)(request({ url: 'https://youtube.com/playlist?list=PLtest123' }), res);
+      expect(deps.playlistModule.recoverFollowingSetup).toHaveBeenCalledWith(p, err, { disableAutoDownload: true });
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json).toHaveBeenCalledWith({ playlist: p, restored, warning: 'Playlist saved. Auto-download setup needs attention.' });
+    });
+
+    test('does not disable following just because another refresh is running', async () => {
+      const { deps, p } = setup();
+      deps.playlistModule.refreshForFollowing.mockRejectedValue(new Error('FETCH_IN_PROGRESS'));
+      const res = createResponse();
+      await getHandler('post', '/api/playlists', deps)(request({ url: 'https://youtube.com/playlist?list=PLtest123' }), res);
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json).toHaveBeenCalledWith({ playlist: p, restored, warning: expect.stringContaining('refresh is already in progress') });
+      expect(deps.playlistModule.recoverFollowingSetup).not.toHaveBeenCalled();
+      expect(p.update).not.toHaveBeenCalled();
+    });
   });
 });
