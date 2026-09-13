@@ -52,6 +52,10 @@ describe('notification utils - terminated channel helpers', () => {
       expect(getSubtitle('Playlist: 💯🔥 CHALLENGE VIDEOS')).toBe('Playlist Downloads');
     });
 
+    test('labels saved playlist retries separately', () => {
+      expect(getSubtitle('Playlist Retry: My Mix')).toBe('Saved Playlist Retries');
+    });
+
     test('does not misclassify a playlist whose title contains "Channel"', () => {
       expect(getSubtitle('Playlist: My Channel Mix')).toBe('Playlist Downloads');
     });

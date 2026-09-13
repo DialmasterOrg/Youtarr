@@ -14,10 +14,12 @@ interface UsePlaylistMutationsParams {
 interface PlaylistResponse {
   playlist: Playlist;
   restored?: boolean;
+  warning?: string;
 }
 
 export interface PlaylistSubscribeResult {
   playlist: Playlist;
+  warning?: string;
   // True when subscribing re-enabled a previously removed playlist, which
   // keeps its old settings instead of the ones submitted with the request.
   restored: boolean;
@@ -83,7 +85,7 @@ export const usePlaylistMutations = ({ token }: UsePlaylistMutationsParams) => {
           { url, settings },
           { headers: authHeaders(token) }
         );
-        return { playlist: res.data.playlist, restored: Boolean(res.data.restored) };
+        return { playlist: res.data.playlist, restored: Boolean(res.data.restored), ...(res.data.warning && { warning: res.data.warning }) };
       } catch (err: unknown) {
         setError(extractMessage(err, 'Failed to subscribe to playlist'));
         return null;

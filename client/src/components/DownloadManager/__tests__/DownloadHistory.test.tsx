@@ -668,6 +668,31 @@ describe('DownloadHistory', () => {
       expect(cellTexts.some(text => text === 'Playlists')).toBe(true);
     });
 
+    test.each([false, true])('labels saved playlist retries distinctly (mobile=%s)', (isMobile) => {
+      const job: Job = { ...makeMultiVideoJob('saved-retry', [makeVideo()]), jobType: 'Playlist Retry: My Mix' };
+      render(<DownloadHistory {...defaultProps} jobs={[job]} isMobile={isMobile} />);
+      expect(screen.getByText(/Playlist retries/)).toBeVisible();
+    });
+
+    test.each([false, true])('keeps the playlist name on a failed saved retry job (mobile=%s)', (isMobile) => {
+      const job: Job = {
+        ...makeMultiVideoJob('saved-retry', []),
+        status: 'Error',
+        jobType: 'Playlist Retry: My Mix',
+        data: {
+          videos: [],
+          failedVideos: [{
+            youtubeId: 'fail0000001',
+            title: 'Failed playlist video',
+            error: 'HTTP Error 403: Forbidden',
+          }],
+        },
+      };
+      render(<DownloadHistory {...defaultProps} jobs={[job]} isMobile={isMobile} />);
+      expect(screen.getByText('Saved playlist retries: My Mix')).toBeVisible();
+      expect(screen.getByText('1 failed')).toBeVisible();
+    });
+
     test('extracts API key name with special characters', () => {
       const apiJob: Job[] = [{
         id: 'api-job',
