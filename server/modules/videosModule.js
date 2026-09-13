@@ -1,5 +1,6 @@
 const { Sequelize, sequelize } = require('../db.js');
-const { Video } = require('../models');
+const { injectReplacements } = require('sequelize/lib/utils/sql');
+const { Video, JobVideo, Job } = require('../models');
 const fs = require('fs').promises;
 const path = require('path');
 const configModule = require('./configModule');
@@ -45,116 +46,99 @@ class VideosModule {
       const offset = (page - 1) * limit;
 
       // Build WHERE conditions
-      const whereConditions = [];
-      const replacements = {};
+      const where = {};
 
       if (search) {
-        whereConditions.push('(videos.youtube_video_name LIKE :search OR videos.youtube_channel_name LIKE :search)');
-        replacements.search = `%${search}%`;
+        where[Sequelize.Op.and] = [{
+          [Sequelize.Op.or]: [
+            { youTubeVideoName: { [Sequelize.Op.like]: `%${search}%` } },
+            { youTubeChannelName: { [Sequelize.Op.like]: `%${search}%` } },
+          ],
+        }];
       }
 
       if (channelFilter) {
-        whereConditions.push('videos.youtube_channel_name = :channelFilter');
-        replacements.channelFilter = channelFilter;
+        where.youTubeChannelName = channelFilter;
       }
 
       if (dateFrom) {
-        whereConditions.push('videos.original_date >= :dateFrom');
-        replacements.dateFrom = dateFrom.replace(/-/g, '');
+        where.originalDate = { [Sequelize.Op.gte]: dateFrom.replace(/-/g, '') };
       }
 
       if (dateTo) {
-        whereConditions.push('videos.original_date <= :dateTo');
-        replacements.dateTo = dateTo.replace(/-/g, '');
+        where.originalDate ??= {};
+        where.originalDate[Sequelize.Op.lte] = dateTo.replace(/-/g, '');
       }
 
       if (protectedFilter === 'only') {
-        whereConditions.push('videos.protected = 1');
+        where.protected = true;
       } else if (protectedFilter === 'exclude') {
-        whereConditions.push('videos.protected = 0');
+        where.protected = false;
       }
 
       if (missingFilter === 'only') {
-        whereConditions.push('videos.removed = 1');
+        where.removed = true;
       } else if (missingFilter === 'exclude') {
-        whereConditions.push('videos.removed = 0');
+        where.removed = false;
       }
 
       if (watchedFilter === 'only' || watchedFilter === 'exclude') {
-        const watched = watchStatusQueries.buildWatchedExistsSql();
-        whereConditions.push(watchedFilter === 'only' ? watched.sql : `NOT ${watched.sql}`);
-        Object.assign(replacements, watched.replacements);
+        const watched = watchStatusQueries.buildWatchedExistsSql('Video');
+        const sql = injectReplacements(watched.sql, sequelize.dialect, watched.replacements);
+        where[Sequelize.Op.and] ??= [];
+        where[Sequelize.Op.and].push(sequelize.literal(watchedFilter === 'only' ? sql : `NOT ${sql}`));
       }
 
-      const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
-
-      // Build ORDER BY
-      let orderByColumn;
-      if (sortBy === 'published') {
-        orderByColumn = 'videos.original_date';
-      } else {
-        orderByColumn = 'COALESCE(videos.last_downloaded_at, jobs.time_created, STR_TO_DATE(videos.original_date, \'%Y%m%d\'))';
-      }
-      const orderByClause = `ORDER BY ${orderByColumn} ${sortOrder.toUpperCase()}`;
+      const options = {
+        include: [{
+          model: JobVideo,
+          as: 'jobVideos',
+          attributes: [],
+          include: [{
+            model: Job,
+            as: 'job',
+            attributes: [],
+          }],
+        }],
+        where,
+      };
 
       // Get total count
-      const countQuery = `
-        SELECT COUNT(DISTINCT videos.id) as total
-        FROM videos
-        LEFT JOIN jobvideos ON videos.id = jobvideos.video_id
-        LEFT JOIN jobs ON jobs.id = jobvideos.job_id
-        ${whereClause}
-      `;
-
-      const countResult = await sequelize.query(countQuery, {
-        replacements,
-        type: Sequelize.QueryTypes.SELECT
+      const total = await Video.count({
+        ...options,
+        distinct: true,
       });
 
-      const total = countResult[0].total;
+      // Define attributes
+      options.attributes = {
+        include: [
+          [
+            sequelize.fn(
+              'COALESCE',
+              sequelize.col('Video.last_downloaded_at'),
+              sequelize.col('jobVideos->job.time_created'),
+              sequelize.fn('STR_TO_DATE', sequelize.col('Video.original_date'), '%Y%m%d'),
+            ),
+            'timeCreated',
+          ],
+        ],
+      };
+
+      // Add ordering
+      let orderByColumn;
+      if (sortBy === 'published') {
+        orderByColumn = sequelize.col('originalDate');
+      } else {
+        orderByColumn = sequelize.col('timeCreated');
+      }
+      options.order = [[orderByColumn, sortOrder.toUpperCase()]];
 
       // Get paginated videos
-      const query = `
-        SELECT
-          videos.id,
-          videos.youtube_id AS "youtubeId",
-          videos.youtube_channel_name AS "youTubeChannelName",
-          videos.youtube_video_name AS "youTubeVideoName",
-          videos.duration,
-          videos.original_date AS "originalDate",
-          videos.description,
-          videos.channel_id,
-          videos.file_path AS "filePath",
-          videos.file_size AS "fileSize",
-          videos.audio_file_path AS "audioFilePath",
-          videos.audio_file_size AS "audioFileSize",
-          videos.removed,
-          videos.youtube_removed,
-          videos.youtube_removed_checked_at,
-          videos.media_type,
-          videos.normalized_rating,
-          videos.rating_source,
-          videos.protected,
-          videos.video_resolution,
-          COALESCE(videos.last_downloaded_at, jobs.time_created, STR_TO_DATE(videos.original_date, '%Y%m%d')) AS timeCreated
-        FROM videos
-        LEFT JOIN jobvideos ON videos.id = jobvideos.video_id
-        LEFT JOIN jobs ON jobs.id = jobvideos.job_id
-        ${whereClause}
-        ${orderByClause}
-        LIMIT :limit OFFSET :offset
-      `;
-
-      replacements.limit = limit;
-      replacements.offset = offset;
-
-      const videos = await sequelize.query(query, {
-        replacements,
-        type: Sequelize.QueryTypes.SELECT,
-        model: Video,
-        mapToModel: true,
-        raw: true
-      });
+      options.limit = limit;
+      options.offset = offset;
+      options.subQuery = false;
+      options.raw = true;
+      const videos = await Video.findAll(options);
 
       // Real-time file check for videos that have a known file path
       // Only check videos with an existing filePath to avoid incorrectly marking videos as removed
