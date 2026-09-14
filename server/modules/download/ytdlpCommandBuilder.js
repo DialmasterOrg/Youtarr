@@ -393,7 +393,7 @@ class YtdlpCommandBuilder {
       '--write-auto-sub',      // Fallback to auto-generated if manual not available
       '--sub-langs', language,
       '--convert-subs', 'srt',
-      '--sleep-subtitles', '2' // Add 2 second delay between subtitle requests to avoid rate limiting
+      '--sleep-subtitles', '5' // Add 5 second delay between subtitle requests to avoid rate limiting
     );
 
     return args;
