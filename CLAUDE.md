@@ -61,6 +61,7 @@ For multi-part requests (e.g., "review this PR AND explain WebSocket handling"),
 
 ### Database
 - MariaDB 10.3 with utf8mb4. Migrations in `migrations/` run automatically on container startup. Create new migrations with `./scripts/db-create-migration.sh migration-name`.
+- Collation is `utf8mb4_unicode_ci` on every table from migration `20260907000000-normalize-utf8mb4-unicode-collation` onward (older installs had `utf8mb4_general_ci` legacy tables beside explicitly `unicode_ci` newer ones, which breaks any SQL comparing string columns across them). Migrations sorted before it must not compare string columns across tables; `migrations/lib/unicodeCollation.js` is the lowercase-table-name collation helper, `jobsUuidCollation.js` is legacy.
 
 - `server/modules/videoLocalStatus.js`: shared local download/file metadata lookup for search results and the local-status endpoint.
 - `server/modules/download/videoActivity.js`: transient per-video queued/downloading registry, duplicate admission claims, and revisioned snapshots.
