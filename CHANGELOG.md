@@ -1,5 +1,24 @@
 # Changelog
 
+## [v1.82.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.82.1) - 2026-09-14
+
+### [1.82.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.82.0...v1.82.1) (2026-09-14)
+
+
+### Bug Fixes
+
+* Change sleep subtitles duration from 2 to 5 seconds ([ee0f233](https://github.com/DialmasterOrg/Youtarr/commit/ee0f2334cc47538a05e864cfd84afa1efe5e93d8))
+* Increase subtitle request delay to 5 seconds to prevent 429 errors ([3172d91](https://github.com/DialmasterOrg/Youtarr/commit/3172d918a1bb29b09e1135d8bb0c29d3657f8fa0))
+
+
+### Documentation
+
+* update CHANGELOG for v1.82.0 [skip ci] ([4ff273b](https://github.com/DialmasterOrg/Youtarr/commit/4ff273b50ffc63a8b43be8ddb36bf390f01671a4))
+
+
+
+
+
 ## [v1.82.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.82.0) - 2026-09-08
 
 ## [1.82.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.81.1...v1.82.0) (2026-09-08)
