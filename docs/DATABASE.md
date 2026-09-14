@@ -45,7 +45,7 @@ Youtarr uses MariaDB/MySQL for storing:
 - **Image**: `mariadb:10.3`
 - **Container Name**: `youtarr-db`
 - **Port**: 3321 inside the Docker network only; the bundled database is not published to the host
-- **Character Set**: `utf8mb4` (full Unicode/emoji support)
+- **Character Set**: `utf8mb4` (full Unicode/emoji support), collation `utf8mb4_unicode_ci` on the database default and every table. The `20260907000000-normalize-utf8mb4-unicode-collation` migration converts older installs that still had `utf8mb4_general_ci` or three-byte `utf8` tables.
 - **Default Credentials**:
   - User: `root`
   - Password: `123qweasd` (change in production!)
@@ -359,6 +359,11 @@ ALTER DATABASE youtarr
   CHARACTER SET utf8mb4
   COLLATE utf8mb4_unicode_ci;
 ```
+
+Tables on mixed collations (`utf8mb4_general_ci` beside `utf8mb4_unicode_ci`) make any query that
+compares string columns across them fail with `Illegal mix of collations`. The
+`normalize-utf8mb4-unicode-collation` migration fixes this automatically on startup; see
+[Troubleshooting](TROUBLESHOOTING.md#startup-fails-with-illegal-mix-of-collations) for the manual steps.
 
 ## Storage Considerations
 

@@ -326,6 +326,50 @@ tables are still on the wrong character set.
 **Prevention**: If you run your own database, create it as `utf8mb4` from the start and this conversion
 never has to run. See the [External Database Guide](platforms/external-db.md).
 
+### Startup Fails with Illegal Mix of Collations
+
+**Problem**: On startup a migration fails with:
+```
+Failed to initialize database
+Illegal mix of collations (utf8mb4_general_ci,IMPLICIT) and (utf8mb4_unicode_ci,IMPLICIT) for operation '='
+```
+The first migration to hit it is `20260907174043-playlist-following-and-download-dates`, and the UI shows
+the "Database Schema Mismatch" overlay.
+
+**Cause**: The database has tables on two different collations. A database that was already `utf8mb4`
+when the September 2025 upgrade migration ran was skipped entirely (that version only checked the
+database default charset), so its original tables stayed on `utf8mb4_general_ci`, or even three-byte
+`utf8`. Tables created since then use an explicit `utf8mb4_unicode_ci`. MariaDB and MySQL refuse to
+compare string columns across the two, and the playlist following migration is the first to join
+`videos` to `playlistvideos` in SQL.
+
+**Solution**: Update Youtarr. The `20260907000000-normalize-utf8mb4-unicode-collation` migration
+converts every table and the database default to `utf8mb4_unicode_ci` before the playlist migration
+runs, and restores `utf8mb4_bin` on the UUID foreign key columns that the conversion coerces. It is safe
+to re-run and changes collations only, never data. Expect it to take a while on large `videos` and
+`channelvideos` tables, since each conversion rebuilds the table.
+
+To fix it by hand instead, take a backup, connect as root, and run the following with `youtarr` replaced
+by your database name and one `ALTER TABLE ... CONVERT TO` line per table the first query lists:
+```sql
+-- Which tables are off
+SELECT TABLE_NAME, TABLE_COLLATION FROM information_schema.tables
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE'
+  AND TABLE_COLLATION <> 'utf8mb4_unicode_ci';
+
+SET FOREIGN_KEY_CHECKS = 0;
+ALTER DATABASE youtarr CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+ALTER TABLE videos CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+-- ... one line per table from the query above ...
+ALTER TABLE jobs MODIFY id CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL;
+ALTER TABLE jobvideos MODIFY job_id CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL;
+ALTER TABLE jobvideodownloads MODIFY job_id CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL;
+SET FOREIGN_KEY_CHECKS = 1;
+```
+The three `MODIFY` lines are required: `CONVERT TO` changes the UUID key columns to
+`utf8mb4_unicode_ci`, and the `jobvideos` foreign key stops working until they are back on `utf8mb4_bin`.
+Restart Youtarr afterward and the pending migrations complete.
+
 ### Migration Fails Creating JobVideoDownloads (errno 150)
 
 **Problem**: A fresh install (or an upgrade of an older install) fails partway through migrations with:
