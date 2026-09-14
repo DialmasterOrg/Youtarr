@@ -468,7 +468,7 @@ describe('YtdlpCommandBuilder', () => {
         '--write-auto-sub',
         '--sub-langs', 'en',
         '--convert-subs', 'srt',
-        '--sleep-subtitles', '2'
+        '--sleep-subtitles', '5'
       ]);
     });
 
@@ -483,7 +483,7 @@ describe('YtdlpCommandBuilder', () => {
         '--write-auto-sub',
         '--sub-langs', 'es',
         '--convert-subs', 'srt',
-        '--sleep-subtitles', '2'
+        '--sleep-subtitles', '5'
       ]);
     });
 
@@ -498,7 +498,7 @@ describe('YtdlpCommandBuilder', () => {
         '--write-auto-sub',
         '--sub-langs', 'en,es,fr',
         '--convert-subs', 'srt',
-        '--sleep-subtitles', '2'
+        '--sleep-subtitles', '5'
       ]);
     });
 
