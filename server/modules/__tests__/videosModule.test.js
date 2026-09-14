@@ -1002,12 +1002,16 @@ describe('VideosModule', () => {
         expect.objectContaining({ timeout: expect.any(Number) }),
         expect.any(Function)
       );
-      const updateCalls = mockSequelize.query.mock.calls.filter(
-        ([sql]) => typeof sql === 'string' && sql.startsWith('UPDATE videos SET')
+      expect(mockVideo.update).toHaveBeenCalledTimes(1);
+      expect(mockVideo.update).toHaveBeenCalledWith(
+        {
+          filePath: '/test/output/dir/Video [abc12345678].mp4',
+          fileSize: 1000,
+          removed: false,
+          video_resolution: '1280x720',
+        },
+        { where: { id: 1 } },
       );
-      expect(updateCalls.length).toBe(1);
-      const [, options] = updateCalls[0];
-      expect(options.replacements).toEqual(['/test/output/dir/Video [abc12345678].mp4', 1000, '1280x720', 0, 1]);
     });
 
     test('preserves already-flushed probe results when the time limit trips mid-chunk', async () => {
@@ -1049,11 +1053,7 @@ describe('VideosModule', () => {
       nowSpy.mockRestore();
 
       expect(result.timedOut).toBe(true);
-      const updateCalls = mockSequelize.query.mock.calls.filter(
-        ([sql]) => typeof sql === 'string' && sql.startsWith('UPDATE videos SET')
-      );
-      // The first flush of 100 completed probes was persisted before the abort.
-      expect(updateCalls.length).toBe(100);
+      expect(mockVideo.update).toHaveBeenCalledTimes(100);
     });
 
     test('runs ffprobes concurrently but never more than 4 at once', async () => {
@@ -1098,10 +1098,7 @@ describe('VideosModule', () => {
       expect(mockExecFile).toHaveBeenCalledTimes(VIDEO_COUNT);
       expect(maxInFlight).toBeGreaterThan(1);
       expect(maxInFlight).toBeLessThanOrEqual(4);
-      const updateCalls = mockSequelize.query.mock.calls.filter(
-        ([sql]) => typeof sql === 'string' && sql.startsWith('UPDATE videos SET')
-      );
-      expect(updateCalls.length).toBe(VIDEO_COUNT);
+      expect(mockVideo.update).toHaveBeenCalledTimes(VIDEO_COUNT);
     });
 
     test('stamps the 0 sentinel when ffprobe fails', async () => {
@@ -1123,18 +1120,19 @@ describe('VideosModule', () => {
           video_resolution: null
         }
       ]);
-      mockSequelize.query.mockResolvedValue([]);
 
       await VideosModule.backfillVideoMetadata();
 
-      const updateCalls = mockSequelize.query.mock.calls.filter(
-        ([sql]) => typeof sql === 'string' && sql.startsWith('UPDATE videos SET')
+      expect(mockVideo.update).toHaveBeenCalledTimes(1);
+      expect(mockVideo.update).toHaveBeenCalledWith(
+        {
+          filePath: '/test/output/dir/Video [abc12345678].mp4',
+          fileSize: 1000,
+          removed: false,
+          video_resolution: '0x0',
+        },
+        { where: { id: 1 } },
       );
-      expect(updateCalls.length).toBe(1);
-      const [sql, options] = updateCalls[0];
-      expect(sql).toContain('video_resolution = ?');
-      // filePath, fileSize, video_resolution = '0x0' (sentinel), removed = 0, id = 1
-      expect(options.replacements).toEqual(['/test/output/dir/Video [abc12345678].mp4', 1000, '0x0', 0, 1]);
     });
 
     test('clears video_resolution when the video file is gone but audio remains', async () => {
@@ -1156,28 +1154,22 @@ describe('VideosModule', () => {
           video_resolution: '1920x1080'
         }
       ]);
-      mockSequelize.query.mockResolvedValue([]);
 
       await VideosModule.backfillVideoMetadata();
 
       expect(mockExecFile).not.toHaveBeenCalled();
-      const updateCalls = mockSequelize.query.mock.calls.filter(
-        ([sql]) => typeof sql === 'string' && sql.startsWith('UPDATE videos SET')
+      expect(mockVideo.update).toHaveBeenCalledTimes(1);
+      expect(mockVideo.update).toHaveBeenCalledWith(
+        {
+          filePath: null,
+          fileSize: null,
+          audioFilePath: '/test/output/dir/Video [abc12345678].mp3',
+          audioFileSize: 500,
+          removed: false,
+          video_resolution: null,
+        },
+        { where: { id: 1 } },
       );
-      expect(updateCalls.length).toBe(1);
-      const [sql, options] = updateCalls[0];
-      expect(sql).toContain('video_resolution = ?');
-      // filePath = null, fileSize = null, audioFilePath, audioFileSize,
-      // video_resolution = null (stale dims cleared), removed = 0, id = 1
-      expect(options.replacements).toEqual([
-        null,
-        null,
-        '/test/output/dir/Video [abc12345678].mp3',
-        500,
-        null,
-        0,
-        1
-      ]);
     });
 
     test('does not probe when video_resolution is already set', async () => {

@@ -446,43 +446,18 @@ class VideosModule {
       let batchFailed = 0;
 
       for (const update of batch) {
-        const setClauses = [];
-        const replacements = [];
+        const attributes = {
+          filePath: update.filePath,
+          fileSize: update.fileSize,
+          audioFilePath: update.audioFilePath,
+          audioFileSize: update.audioFileSize,
+          video_resolution: update.video_resolution,
+          removed: update.removed,
+        };
 
-        if (update.filePath !== undefined) {
-          setClauses.push('file_path = ?');
-          replacements.push(update.filePath);
-        }
-        if (update.fileSize !== undefined) {
-          setClauses.push('file_size = ?');
-          replacements.push(update.fileSize);
-        }
-        if (update.audioFilePath !== undefined) {
-          setClauses.push('audio_file_path = ?');
-          replacements.push(update.audioFilePath);
-        }
-        if (update.audioFileSize !== undefined) {
-          setClauses.push('audio_file_size = ?');
-          replacements.push(update.audioFileSize);
-        }
-        if (update.video_resolution !== undefined) {
-          setClauses.push('video_resolution = ?');
-          replacements.push(update.video_resolution);
-        }
-        if (update.removed !== undefined) {
-          setClauses.push('removed = ?');
-          replacements.push(update.removed ? 1 : 0);
-        }
-
-        if (setClauses.length > 0) {
-          replacements.push(update.id);
-          const query = `UPDATE videos SET ${setClauses.join(', ')} WHERE id = ?`;
-
+        if (Object.values(attributes).some((v) => v !== undefined)) {
           try {
-            await sequelize.query(query, {
-              replacements: replacements,
-              type: Sequelize.QueryTypes.UPDATE
-            });
+            await Video.update(attributes, { where: { id: update.id } });
             batchSuccess++;
           } catch (err) {
             batchFailed++;
