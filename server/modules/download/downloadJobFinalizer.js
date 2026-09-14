@@ -17,6 +17,7 @@ const downloadCleanup = require('./downloadCleanup');
 const transient403RetryPlanner = require('./transient403RetryPlanner');
 const failureAdvisor = require('./failureAdvisor');
 const failedVideoEnricher = require('./failedVideoEnricher');
+const { containsHttp403 } = require('./ytdlpStderrSignals');
 const { runCompletionSideEffects } = require('./downloadCompletionEffects');
 const {
   computeOutcomeFlags,
@@ -36,6 +37,13 @@ const BENIGN_STDERR_WARNING_PATTERNS = [
   // Emitted because our output template (-o) is an absolute temp path, so
   // yt-dlp ignores the --paths temp: redirect. The download still succeeds.
   /WARNING:.*--paths is ignored since an absolute path is given/i,
+  // Printed on every free-account cookie run: mweb's https formats need a PO
+  // token we don't have, so yt-dlp drops them and carries on with the other
+  // clients.
+  /WARNING:.*require a GVS PO Token/i,
+  // Account-level SABR experiment: the router already broadcast its own
+  // warning; the download itself completes on the fallback clients.
+  /WARNING:.*SABR-only streaming experiment/i,
 ];
 
 // True when everything yt-dlp wrote to stderr is known-benign warnings (or
@@ -159,13 +167,10 @@ async function finalizeDownloadJob({
       logger.info('Bot detection found in stderr buffer');
     }
 
-    if (!httpForbiddenDetected && stderrBuffer) {
-      const lowerStderr = stderrBuffer.toLowerCase();
-      if (lowerStderr.includes('http error 403') || lowerStderr.includes('403: forbidden')) {
-        httpForbiddenDetected = true;
-        logger.info('HTTP 403 detected in stderr buffer');
-        router.emitCookiesSuggestion();
-      }
+    if (!httpForbiddenDetected && stderrBuffer && containsHttp403(stderrBuffer)) {
+      httpForbiddenDetected = true;
+      logger.info('HTTP 403 detected in stderr buffer');
+      router.emitCookiesSuggestion();
     }
 
     // Wait for terminated-channel lookups before deriving finalState.

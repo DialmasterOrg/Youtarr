@@ -607,6 +607,21 @@ The 403 is sometimes a temporary block on YouTube's side - retrying later can wo
 
 **Note**: The same failure on one machine but not another usually comes down to this cookies difference, not the network - both machines can share an IP and behave differently.
 
+### Downloads Are Only 360p With Cookies Enabled
+
+**Problem**: With cookies enabled, videos download at 360p (yt-dlp logs `Downloading 1 format(s): 18`) even though the video is available in HD, and the video details modal lists 360p as the only available resolution. Disabling cookies brings HD back.
+
+This is a YouTube-side change, not stale cookies. With logged-in cookies, yt-dlp uses a different set of YouTube player clients, and YouTube has been moving those clients to "SABR-only" streaming on a per-account basis (tracked upstream in yt-dlp issues 12482 and 17666). For an affected account the logged-in clients return stream formats with no download URL, so the only stream left is the old progressive 360p one. The logs show `Some ... client https formats have been skipped as they are missing a URL. YouTube may have enabled the SABR-only streaming experiment for your account.`
+
+Youtarr works around this by asking yt-dlp for two additional player clients whenever cookies are enabled (`mweb` and `web_safari`, on top of yt-dlp's defaults), and shows a "SABR-only" warning on the Downloads page when YouTube strips formats for your account. What you get then depends on the account:
+
+- **YouTube Premium account**: full-quality separate video and audio streams, same as without cookies.
+- **Free account**: the HLS stream, which tops out at 1080p (H.264 with AAC audio). YouTube requires a Proof-of-Origin token for the higher-quality streams on free logged-in sessions, which Youtarr does not currently generate.
+
+If you only enabled cookies to get past a "Sign in to confirm you're not a bot" check, try disabling them (Settings -> Cookies) and see whether downloads still work; without cookies yt-dlp uses a client that is not affected. If you need cookies and want more than 1080p on a free account, the upstream SABR downloader (yt-dlp pull request 13515) is the eventual fix.
+
+**Note**: If you use a throwaway Google account for cookies, sign into it from a normal browser occasionally. Accounts used only from a server IP have been disabled by Google.
+
 ### Subtitle Downloads Time Out
 
 **Problem**: With subtitles enabled, downloads log `[download] Got error: HTTPSConnectionPool(host='www.youtube.com', port=443): Read timed out` right after `Writing video subtitles to: ...`, and each affected video takes a couple of extra minutes.
