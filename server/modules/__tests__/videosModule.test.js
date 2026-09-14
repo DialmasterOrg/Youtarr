@@ -22,6 +22,7 @@ describe('VideosModule', () => {
     mockVideo = {
       count: jest.fn(),
       findAll: jest.fn(),
+      aggregate: jest.fn(),
       update: jest.fn().mockResolvedValue([0]),
       findByPk: jest.fn().mockResolvedValue(null)
     };
@@ -196,7 +197,7 @@ describe('VideosModule', () => {
       // Mock count query
       mockVideo.count.mockResolvedValue(2);
       mockVideo.findAll.mockResolvedValue(mockVideos);
-      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
+      mockVideo.aggregate.mockResolvedValue([]);
 
       // Mock file stat checks for both videos
       mockFs.stat.mockResolvedValueOnce({ size: 1000 });
@@ -218,7 +219,7 @@ describe('VideosModule', () => {
         distinct: true,
       }));
       expect(mockVideo.findAll).toHaveBeenCalledTimes(1);
-      expect(mockSequelize.query).toHaveBeenCalledTimes(1);
+      expect(mockVideo.aggregate).toHaveBeenCalledTimes(1);
       expect(mockVideoValidationModule.checkVideoExistsOnYoutube).toHaveBeenCalledTimes(2);
       expect(mockVideo.update).toHaveBeenCalledTimes(1);
       expect(mockVideo.update).toHaveBeenCalledWith(
@@ -232,7 +233,7 @@ describe('VideosModule', () => {
 
       mockVideo.count.mockResolvedValue(0);
       mockVideo.findAll.mockResolvedValue([]);
-      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
+      mockVideo.aggregate.mockResolvedValue([]);
       mockSequelize.fn.mockImplementation((...args) => ['fn', ...args]);
 
       await VideosModule.getVideosPaginated();
@@ -270,22 +271,26 @@ describe('VideosModule', () => {
       });
     });
 
-    test('should pass correct query options to sequelize', async () => {
+    test('should execute the correct SQL query for channel names', async () => {
       mockVideo.count.mockResolvedValue(0);
       mockVideo.findAll.mockResolvedValue([]);
-      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
+      mockVideo.aggregate.mockResolvedValue([]);
 
       await VideosModule.getVideosPaginated();
 
-      const queryCall = mockSequelize.query.mock.calls[0];
-      expect(queryCall[0]).toContain('SELECT DISTINCT youtube_channel_name');
-      expect(queryCall[1].type).toBe(Sequelize.QueryTypes.SELECT);
+      expect(mockVideo.aggregate).toHaveBeenCalledWith('youTubeChannelName', 'distinct', expect.objectContaining({
+        where: {
+          youTubeChannelName: {
+            [Sequelize.Op.not]: null,
+          },
+        },
+      }));
     });
 
     test('should return empty array when no videos found', async () => {
       mockVideo.count.mockResolvedValue(0);
       mockVideo.findAll.mockResolvedValue([]);
-      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
+      mockVideo.aggregate.mockResolvedValue([]);
 
       const result = await VideosModule.getVideosPaginated();
 
@@ -294,7 +299,7 @@ describe('VideosModule', () => {
       expect(result.totalPages).toBe(0);
       expect(mockVideo.count).toHaveBeenCalledTimes(1);
       expect(mockVideo.findAll).toHaveBeenCalledTimes(1);
-      expect(mockSequelize.query).toHaveBeenCalledTimes(1);
+      expect(mockVideo.aggregate).toHaveBeenCalledTimes(1);
     });
 
     test('should handle database query errors', async () => {
@@ -319,7 +324,7 @@ describe('VideosModule', () => {
     test('should handle search filter correctly', async () => {
       mockVideo.count.mockResolvedValue(1);
       mockVideo.findAll.mockResolvedValue([]);
-      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
+      mockVideo.aggregate.mockResolvedValue([]);
 
       await VideosModule.getVideosPaginated({ search: 'test video' });
 
@@ -338,7 +343,7 @@ describe('VideosModule', () => {
     test('should handle pagination parameters correctly', async () => {
       mockVideo.count.mockResolvedValue(100);
       mockVideo.findAll.mockResolvedValue([]);
-      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
+      mockVideo.aggregate.mockResolvedValue([]);
 
       await VideosModule.getVideosPaginated({ page: 3, limit: 20 });
 
@@ -352,7 +357,7 @@ describe('VideosModule', () => {
       // Test sort by published date ascending
       mockVideo.count.mockResolvedValue(0);
       mockVideo.findAll.mockResolvedValue([]);
-      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
+      mockVideo.aggregate.mockResolvedValue([]);
 
       await VideosModule.getVideosPaginated({ sortBy: 'published', sortOrder: 'asc' });
 
@@ -365,7 +370,7 @@ describe('VideosModule', () => {
       // Test default sort (added date descending)
       mockVideo.count.mockResolvedValue(0);
       mockVideo.findAll.mockResolvedValue([]);
-      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
+      mockVideo.aggregate.mockResolvedValue([]);
 
       await VideosModule.getVideosPaginated();
 
@@ -377,7 +382,7 @@ describe('VideosModule', () => {
     test('should handle date filters correctly', async () => {
       mockVideo.count.mockResolvedValue(0);
       mockVideo.findAll.mockResolvedValue([]);
-      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
+      mockVideo.aggregate.mockResolvedValue([]);
 
       await VideosModule.getVideosPaginated({
         dateFrom: '2024-01-01',
@@ -398,7 +403,7 @@ describe('VideosModule', () => {
     test('should handle channel filter correctly', async () => {
       mockVideo.count.mockResolvedValue(5);
       mockVideo.findAll.mockResolvedValue([]);
-      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
+      mockVideo.aggregate.mockResolvedValue([]);
 
       await VideosModule.getVideosPaginated({ channelFilter: 'Test Channel' });
 
@@ -555,7 +560,7 @@ describe('VideosModule', () => {
       mockVideo.count.mockResolvedValue(1);
       mockVideo.findAll.mockResolvedValue(mockVideos);
       mockSequelize.query.mockResolvedValueOnce(); // Update query
-      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels query
+      mockVideo.aggregate.mockResolvedValue([]);
 
       // Mock file exists with different size
       mockFs.stat.mockResolvedValueOnce({ size: 2000 });
@@ -598,7 +603,7 @@ describe('VideosModule', () => {
       mockVideo.count.mockResolvedValue(1);
       mockVideo.findAll.mockResolvedValue(mockVideos);
       mockSequelize.query.mockResolvedValueOnce(); // Update query
-      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels query
+      mockVideo.aggregate.mockResolvedValue([]);
 
       // Mock file does not exist; fileCheckModule's same-dir fallback will
       // also try .webm/.mkv/.m4v/.avi variants, all of which must ENOENT.
@@ -639,7 +644,7 @@ describe('VideosModule', () => {
 
       mockVideo.count.mockResolvedValue(1);
       mockVideo.findAll.mockResolvedValue(mockVideos);
-      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
+      mockVideo.aggregate.mockResolvedValue([]);
 
       mockFs.stat.mockResolvedValueOnce({ size: 1000 });
       mockVideoValidationModule.checkVideoExistsOnYoutube.mockResolvedValueOnce(false);
@@ -676,7 +681,7 @@ describe('VideosModule', () => {
 
       mockVideo.count.mockResolvedValue(1);
       mockVideo.findAll.mockResolvedValue(mockVideos);
-      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
+      mockVideo.aggregate.mockResolvedValue([]);
 
       mockFs.stat.mockResolvedValueOnce({ size: 1000 });
 
@@ -707,7 +712,7 @@ describe('VideosModule', () => {
 
       mockVideo.count.mockResolvedValue(1);
       mockVideo.findAll.mockResolvedValue(mockVideos);
-      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
+      mockVideo.aggregate.mockResolvedValue([]);
 
       const result = await VideosModule.getVideosPaginated();
 
@@ -724,7 +729,7 @@ describe('VideosModule', () => {
     test('should handle multiple WHERE conditions', async () => {
       mockVideo.count.mockResolvedValue(0);
       mockVideo.findAll.mockResolvedValue([]);
-      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
+      mockVideo.aggregate.mockResolvedValue([]);
 
       await VideosModule.getVideosPaginated({
         search: 'test',
@@ -780,7 +785,7 @@ describe('VideosModule', () => {
 
       mockVideo.count.mockResolvedValue(2);
       mockVideo.findAll.mockResolvedValue(mockVideos);
-      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
+      mockVideo.aggregate.mockResolvedValue([]);
 
       mockWatchStatusQueries.getWatchedByMap.mockResolvedValueOnce(
         new Map([[1, ['plex', 'jellyfin']]])
@@ -796,7 +801,7 @@ describe('VideosModule', () => {
     test('passes an empty id list when the page has no videos', async () => {
       mockVideo.count.mockResolvedValue(0);
       mockVideo.findAll.mockResolvedValue([]);
-      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
+      mockVideo.aggregate.mockResolvedValue([]);
 
       await VideosModule.getVideosPaginated();
 

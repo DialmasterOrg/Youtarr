@@ -322,15 +322,14 @@ class VideosModule {
       });
 
       // Get all unique channel names from videos table
-      const videoChannelsQuery = `
-        SELECT DISTINCT youtube_channel_name AS "youTubeChannelName"
-        FROM videos
-        WHERE youtube_channel_name IS NOT NULL
-        ORDER BY youtube_channel_name
-      `;
-
-      const videoChannels = await sequelize.query(videoChannelsQuery, {
-        type: Sequelize.QueryTypes.SELECT
+      const videoChannels = await Video.aggregate('youTubeChannelName', 'distinct', {
+        where: {
+          youTubeChannelName: {
+            [Sequelize.Op.not]: null,
+          },
+        },
+        order: [['youTubeChannelName', 'ASC']],
+        plain: false,
       });
 
       // Combine both sets and deduplicate
@@ -345,8 +344,8 @@ class VideosModule {
 
       // Add channels from videos table
       videoChannels.forEach(row => {
-        if (row.youTubeChannelName) {
-          channelSet.add(row.youTubeChannelName);
+        if (row.distinct) {
+          channelSet.add(row.distinct);
         }
       });
 
