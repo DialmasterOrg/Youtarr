@@ -323,6 +323,11 @@ SET FOREIGN_KEY_CHECKS = 1;
 The character-set query in [UTF-8 Character Errors](#utf-8-character-errors) above will tell you which
 tables are still on the wrong character set.
 
+On MariaDB 10.4.31, 10.5.22, 10.6.15, 10.11.5, 11.x, 12.x and later, `SET FOREIGN_KEY_CHECKS = 0` no
+longer permits this, and the `CONVERT TO` fails with `Cannot change column 'job_id': used in a foreign
+key constraint`. Drop the two `job_id` foreign keys first and recreate them afterward, exactly as in the
+manual recipe under [Startup Fails with Illegal Mix of Collations](#startup-fails-with-illegal-mix-of-collations).
+
 **Prevention**: If you run your own database, create it as `utf8mb4` from the start and this conversion
 never has to run. See the [External Database Guide](platforms/external-db.md).
 
@@ -350,25 +355,66 @@ to re-run and changes collations only, never data. Expect it to take a while on 
 `channelvideos` tables, since each conversion rebuilds the table.
 
 To fix it by hand instead, take a backup, connect as root, and run the following with `youtarr` replaced
-by your database name and one `ALTER TABLE ... CONVERT TO` line per table the first query lists:
+by your database name, the two constraint names filled in from the second query, and one
+`ALTER TABLE ... CONVERT TO` line per table the first query lists. Before dropping the constraints,
+record their names and update/delete rules from the second query so you can preserve those rules
+when recreating them:
 ```sql
 -- Which tables are off
 SELECT TABLE_NAME, TABLE_COLLATION FROM information_schema.tables
 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE'
   AND TABLE_COLLATION <> 'utf8mb4_unicode_ci';
+-- The two job_id foreign keys (their names differ between installs)
+SELECT TABLE_NAME, CONSTRAINT_NAME, UPDATE_RULE, DELETE_RULE
+FROM information_schema.REFERENTIAL_CONSTRAINTS
+WHERE CONSTRAINT_SCHEMA = DATABASE() AND REFERENCED_TABLE_NAME = 'jobs';
 
 SET FOREIGN_KEY_CHECKS = 0;
+ALTER TABLE jobvideos DROP FOREIGN KEY `<jobvideos constraint name>`;
+ALTER TABLE jobvideodownloads DROP FOREIGN KEY `<jobvideodownloads constraint name>`;
 ALTER DATABASE youtarr CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ALTER TABLE videos CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
--- ... one line per table from the query above ...
+-- ... one line per table from the first query ...
 ALTER TABLE jobs MODIFY id CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL;
 ALTER TABLE jobvideos MODIFY job_id CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL;
 ALTER TABLE jobvideodownloads MODIFY job_id CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL;
+ALTER TABLE jobvideos ADD CONSTRAINT jobvideos_job_id_fk
+  FOREIGN KEY (job_id) REFERENCES jobs (id) ON UPDATE CASCADE;
+ALTER TABLE jobvideodownloads ADD CONSTRAINT jobvideodownloads_job_id_fk
+  FOREIGN KEY (job_id) REFERENCES jobs (id) ON UPDATE CASCADE ON DELETE CASCADE;
 SET FOREIGN_KEY_CHECKS = 1;
 ```
-The three `MODIFY` lines are required: `CONVERT TO` changes the UUID key columns to
+The `ADD CONSTRAINT` lines match the rules the migrations originally created (no `ON DELETE` clause on
+`jobvideos`, `ON DELETE CASCADE` on `jobvideodownloads`); if the second query showed different rules
+for your database, keep yours. The three `MODIFY` lines are required: `CONVERT TO` changes the UUID key columns to
 `utf8mb4_unicode_ci`, and the `jobvideos` foreign key stops working until they are back on `utf8mb4_bin`.
-Restart Youtarr afterward and the pending migrations complete.
+The foreign keys have to come off before the conversion and go back after it: MariaDB 10.4.31, 10.5.22,
+10.6.15, 10.11.5, 11.x, 12.x and later refuse to change the collation of a foreign key column even with
+`FOREIGN_KEY_CHECKS = 0`. Restart Youtarr afterward and the pending migrations complete.
+
+### Collation Migration Fails with "Cannot change column 'job_id'"
+
+**Problem**: On startup the `20260907000000-normalize-utf8mb4-unicode-collation` migration fails with:
+```
+Cannot change column 'job_id': used in a foreign key constraint 'JobVideoDownloads_ibfk_1'
+ALTER TABLE `jobvideodownloads` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+```
+or the same message for `jobs`.`id` (`Cannot change column 'id': used in a foreign key constraint ...`),
+and the UI shows the "Database Issue Detected" overlay. The bundled MariaDB 10.3 is not affected; this
+appears on external or platform-managed databases running MariaDB 10.4.31, 10.5.22, 10.6.15, 10.11.5,
+11.x, 12.x or later.
+
+**Cause**: Those MariaDB releases (MDEV-31086) refuse to change the character set or collation of a
+column that takes part in a foreign key, even with `FOREIGN_KEY_CHECKS = 0`. The first release of the
+normalization migration relied on that setting to convert the `jobs`, `jobvideos` and
+`jobvideodownloads` tables in place.
+
+**Solution**: Update Youtarr. The migration now reads the foreign keys on the jobs UUID chain from
+`information_schema`, drops them before converting, and recreates them with their original names and
+rules once the UUID columns are back on `utf8mb4_bin`. Because the migration never got recorded, it
+re-runs on the next start and picks up where it stopped: tables it already converted are left alone.
+The manual recipe in the previous section works on every supported MariaDB and MySQL release if you
+need the instance back before updating.
 
 ### Migration Fails Creating JobVideoDownloads (errno 150)
 
