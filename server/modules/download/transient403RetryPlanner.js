@@ -12,6 +12,12 @@ const DEFAULT_AUTO_RETRY_COUNT = 1;
 
 const HTTP_403_PATTERN = /http error 403|403[:\s]+forbidden/i;
 
+// Some videos can return "Video unavailable" only when authenticated
+// cookies are used, while anonymous extraction succeeds through a different
+// YouTube client. These are eligible for an anonymous retry.
+const COOKIE_VIDEO_UNAVAILABLE_PATTERN =
+  /^\s*(?:\[youtube\]\s+[^:]+:\s*)?Video unavailable\s*$/i;
+
 // Fragment-based 403 failures surface the 403 only in WARNING lines; the final
 // ERROR line just reports the data/fragment failure. When the run-level 403
 // flag is set, treat these error shapes as 403-caused.
@@ -54,6 +60,16 @@ function isTransient403Failure(failedVideo, { httpForbiddenDetected = false } = 
   return false;
 }
 
+function isCookieVideoUnavailableFailure(
+  failedVideo,
+  { cookiesEnabled = false } = {}
+) {
+  if (!cookiesEnabled) return false;
+
+  const error = String((failedVideo && failedVideo.error) || '');
+  return COOKIE_VIDEO_UNAVAILABLE_PATTERN.test(error);
+}
+
 // Decides whether (and for which videos) to enqueue an auto-retry job.
 // botDetected means a retry can't help (cookies are required); sourceJobData
 // carries the attempt counter. Returns { retryVideos, nextAttempt } or null.
@@ -64,6 +80,7 @@ function planAutoRetry({
   wasTerminated = false,
   sourceJobData = {},
   maxAttempts,
+  cookiesEnabled = false,
 } = {}) {
   if (botDetected || wasTerminated) return null;
   if (!Array.isArray(failedVideosList) || failedVideosList.length === 0) return null;
@@ -74,13 +91,24 @@ function planAutoRetry({
 
   const retryVideos = failedVideosList
     .filter((video) => video && video.youtubeId)
-    .filter((video) => isTransient403Failure(video, { httpForbiddenDetected }))
-    .map((video) => ({
-      youtubeId: video.youtubeId,
-      // Channel-sweep failures never enter the archive diff, so their url is
-      // usually null; reconstruct it from the youtube id.
-      url: video.url || `https://www.youtube.com/watch?v=${video.youtubeId}`,
-    }));
+    .filter((video) =>
+      isTransient403Failure(video, { httpForbiddenDetected }) ||
+      isCookieVideoUnavailableFailure(video, { cookiesEnabled })
+    )
+    .map((video) => {
+      const anonymousRetry = isCookieVideoUnavailableFailure(
+        video,
+        { cookiesEnabled }
+      );
+
+      return {
+        youtubeId: video.youtubeId,
+        // Channel-sweep failures never enter the archive diff, so their url is
+        // usually null; reconstruct it from the youtube id.
+        url: video.url || `https://www.youtube.com/watch?v=${video.youtubeId}`,
+        anonymousRetry,
+      };
+    });
 
   if (retryVideos.length === 0) return null;
 
@@ -90,6 +118,7 @@ function planAutoRetry({
 module.exports = {
   planAutoRetry,
   isTransient403Failure,
+  isCookieVideoUnavailableFailure,
   resolveRetryCount,
   MAX_AUTO_RETRY_COUNT,
   DEFAULT_AUTO_RETRY_COUNT,

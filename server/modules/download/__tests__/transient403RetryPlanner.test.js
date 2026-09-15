@@ -3,6 +3,7 @@
 const {
   planAutoRetry,
   isTransient403Failure,
+  isCookieVideoUnavailableFailure,
   resolveRetryCount,
   MAX_AUTO_RETRY_COUNT,
   DEFAULT_AUTO_RETRY_COUNT,
@@ -52,6 +53,45 @@ describe('transient403RetryPlanner', () => {
     });
   });
 
+  describe('isCookieVideoUnavailableFailure', () => {
+    it('matches Video unavailable only when cookies are enabled', () => {
+      const unavailable = failedVideo({ error: 'Video unavailable' });
+
+      expect(isCookieVideoUnavailableFailure(
+        unavailable,
+        { cookiesEnabled: true }
+      )).toBe(true);
+
+      expect(isCookieVideoUnavailableFailure(
+        unavailable,
+        { cookiesEnabled: false }
+      )).toBe(false);
+    });
+
+    it('matches the yt-dlp prefixed Video unavailable format', () => {
+      const unavailable = failedVideo({
+        error: '[youtube] abc123def45: Video unavailable',
+      });
+
+      expect(isCookieVideoUnavailableFailure(
+        unavailable,
+        { cookiesEnabled: true }
+      )).toBe(true);
+    });
+
+    it('does not classify unrelated failures as cookie-specific', () => {
+      expect(isCookieVideoUnavailableFailure(
+        failedVideo({ error: 'Postprocessing failed' }),
+        { cookiesEnabled: true }
+      )).toBe(false);
+
+      expect(isCookieVideoUnavailableFailure(
+        undefined,
+        { cookiesEnabled: true }
+      )).toBe(false);
+    });
+  });
+
   describe('resolveRetryCount', () => {
     it('falls back to the default when the config value is missing or invalid', () => {
       expect(resolveRetryCount(undefined)).toBe(DEFAULT_AUTO_RETRY_COUNT);
@@ -75,6 +115,7 @@ describe('transient403RetryPlanner', () => {
         retryVideos: [{
           youtubeId: 'abc123def45',
           url: 'https://www.youtube.com/watch?v=abc123def45',
+          anonymousRetry: false,
         }],
         nextAttempt: 1,
       });
@@ -106,6 +147,40 @@ describe('transient403RetryPlanner', () => {
       });
 
       expect(plan).toBeNull();
+    });
+
+    it('marks cookie-specific Video unavailable failures for anonymous retry', () => {
+      const plan = planAutoRetry({
+        failedVideosList: [failedVideo({ error: 'Video unavailable' })],
+        cookiesEnabled: true,
+      });
+
+      expect(plan).toEqual({
+        retryVideos: [{
+          youtubeId: 'abc123def45',
+          url: 'https://www.youtube.com/watch?v=abc123def45',
+          anonymousRetry: true,
+        }],
+        nextAttempt: 1,
+      });
+    });
+
+    it('does not retry Video unavailable anonymously when cookies are not enabled', () => {
+      const plan = planAutoRetry({
+        failedVideosList: [failedVideo({ error: 'Video unavailable' })],
+        cookiesEnabled: false,
+      });
+
+      expect(plan).toBeNull();
+    });
+
+    it('keeps ordinary 403 retries authenticated when cookies are enabled', () => {
+      const plan = planAutoRetry({
+        failedVideosList: [failedVideo()],
+        cookiesEnabled: true,
+      });
+
+      expect(plan.retryVideos[0].anonymousRetry).toBe(false);
     });
 
     it('returns null when bot detection fired', () => {

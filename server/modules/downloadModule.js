@@ -117,6 +117,34 @@ class DownloadModule {
   async enqueueAutoRetryJob({ retryVideos, autoRetryAttempt, runId, sourceJobData = {} }) {
     if (!Array.isArray(retryVideos) || retryVideos.length === 0) return;
 
+    // Keep normal transient-403 retries authenticated, while videos that
+    // specifically failed with cookie-induced "Video unavailable" are retried
+    // anonymously. Never mix the two modes in one yt-dlp invocation.
+    const anonymousVideos = retryVideos.filter(
+      (video) => video && video.anonymousRetry === true
+    );
+    const authenticatedVideos = retryVideos.filter(
+      (video) => !video || video.anonymousRetry !== true
+    );
+
+    if (anonymousVideos.length > 0 && authenticatedVideos.length > 0) {
+      await this.enqueueAutoRetryJob({
+        retryVideos: authenticatedVideos,
+        autoRetryAttempt,
+        runId,
+        sourceJobData,
+      });
+
+      await this.enqueueAutoRetryJob({
+        retryVideos: anonymousVideos,
+        autoRetryAttempt,
+        runId,
+        sourceJobData,
+      });
+
+      return;
+    }
+
     const ownerChannelMap = { ...(this.getJobDataValue(sourceJobData, 'ownerChannelMap') || {}) };
     const unmappedIds = retryVideos
       .map((video) => video.youtubeId)
@@ -151,6 +179,9 @@ class DownloadModule {
       overrideSettings: { ...this.getOverrideSettings(sourceJobData) },
       jobLabel: autoRetryJobLabel(retryVideos.length),
       autoRetryAttempt,
+      anonymousRetry: retryVideos.every(
+        (video) => video && video.anonymousRetry === true
+      ),
     };
     if (Object.keys(ownerChannelMap).length > 0) body.ownerChannelMap = ownerChannelMap;
     if (channelId) body.channelId = channelId;
@@ -712,6 +743,17 @@ class DownloadModule {
         // Subfolder override is passed to post-processor via environment variable
         // Pass audioFormat for MP3 downloads
         const args = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload(resolution, allowRedownload, audioFormat, skipVideoFolder);
+
+        // A targeted anonymous auto-retry overrides Youtarr's managed
+        // --cookies argument. yt-dlp processes these options in order, so the
+        // later --no-cookies wins while normal downloads still use cookies.
+        if (this.getJobDataValue(jobData, 'anonymousRetry')) {
+          args.push('--no-cookies');
+          logger.info(
+            { urls },
+            'Retrying cookie-specific Video unavailable failure without cookies'
+          );
+        }
 
         // Check if any URLs are for videos marked as ignored, and remove them from archive
         // This allows users to manually download videos they've marked to ignore for channel downloads

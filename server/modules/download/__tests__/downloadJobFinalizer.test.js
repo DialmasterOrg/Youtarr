@@ -383,7 +383,8 @@ describe('downloadJobFinalizer', () => {
         expect(enqueueAutoRetry).toHaveBeenCalledWith({
           retryVideos: [{
             youtubeId: 'vid403aaaa1',
-            url: 'https://www.youtube.com/watch?v=vid403aaaa1'
+            url: 'https://www.youtube.com/watch?v=vid403aaaa1',
+            anonymousRetry: false
           }],
           autoRetryAttempt: 1,
           runId: 'run-9',
