@@ -1,5 +1,23 @@
 # Changelog
 
+## [v1.83.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.83.1) - 2026-09-15
+
+### [1.83.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.83.0...v1.83.1) (2026-09-15)
+
+
+### Bug Fixes
+
+* collation migration failing on newer mariadb ([3f92739](https://github.com/DialmasterOrg/Youtarr/commit/3f92739885ab41dda60dfa65110755d2aed37d05))
+
+
+### Documentation
+
+* update CHANGELOG for v1.83.0 [skip ci] ([3616d9e](https://github.com/DialmasterOrg/Youtarr/commit/3616d9e702383bfbaf68b068df0801633a7e21d5))
+
+
+
+
+
 ## [v1.83.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.83.0) - 2026-09-15
 
 ## [1.83.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.82.1...v1.83.0) (2026-09-15)
