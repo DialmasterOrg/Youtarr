@@ -38,19 +38,54 @@ test('manifest validation rejects missing, duplicate, and unsafe entries', () =>
 test('same-page and cross-page links use rendered Docusaurus anchors', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'youtarr-docs-'));
   fs.mkdirSync(path.join(tmp, 'docs'));
-  fs.writeFileSync(path.join(tmp, 'docs', 'a.md'), '# Section\n[Section](#section)\n[B](b.md#part)');
-  fs.writeFileSync(path.join(tmp, 'docs', 'b.md'), '# Part');
+  const sectionHeading = 'Section';
+  const partHeading = 'Part';
+  const slugger = new GithubSlugger();
+  const sectionSlug = slugger.slug(sectionHeading);
+  const partSlug = slugger.slug(partHeading);
+  fs.writeFileSync(path.join(tmp, 'docs', 'a.md'), `# ${sectionHeading}\n[Section](#${sectionSlug})\n[B](b.md#${partSlug})`);
+  fs.writeFileSync(path.join(tmp, 'docs', 'b.md'), `# ${partHeading}`);
   const routes = new Map([['docs/a.md', 'a'], ['docs/b.md', 'b']]);
   const rewritten = rewriteLinks(fs.readFileSync(path.join(tmp, 'docs', 'a.md'), 'utf8'), 'docs/a.md', routes, tmp);
-  assert.match(rewritten, /\[Section\]\(#section\)/);
-  assert.match(rewritten, /\/docs\/b#part/);
+  assert.ok(rewritten.includes(`[Section](#${sectionSlug})`));
+  assert.ok(rewritten.includes(`/docs/b#${partSlug}`));
   assert.equal(rewriteLinks('[Missing](#missing)', 'docs/a.md', routes, tmp), '[Missing](#missing)');
   assert.throws(() => rewriteLinks('[X](missing.md)', 'docs/a.md', routes, tmp), /unresolved canonical link/);
   assert.throws(() => rewriteLinks('![x](missing.png)', 'docs/a.md', routes, tmp), /unresolved relative asset/);
 });
 
-test('heading extraction ignores fenced code blocks', () => {
-  assert.deepEqual(extractHeadingSlugs('```markdown\n# Not a heading\n```\n# Real heading\n'), ['real-heading']);
+test('heading extraction uses parsed headings and visible text', () => {
+  const linkedHeadingText = 'Linked heading';
+  const setextHeadingText = 'Setext heading';
+  const customHeadingText = 'Custom heading';
+  const realHeadingText = 'Real heading';
+  const markdown = [
+    `## [${linkedHeadingText}](https://example.com)`,
+    '',
+    '````markdown',
+    '```markdown',
+    '# Not a heading',
+    '```',
+    '````',
+    '',
+    setextHeadingText,
+    '================',
+    '',
+    `### ${customHeadingText} {#custom-anchor}`,
+    `# ${realHeadingText}`,
+  ].join('\n');
+  const slugger = new GithubSlugger();
+  const expected = [
+    slugger.slug(linkedHeadingText),
+    slugger.slug(setextHeadingText),
+    'custom-anchor',
+    slugger.slug(realHeadingText),
+  ];
+  assert.deepEqual(extractHeadingSlugs(markdown), expected);
+});
+
+test('heading extraction ignores headings inside fenced code blocks', () => {
+  assert.deepEqual(extractHeadingSlugs('````markdown\n```markdown\n# Not a heading\n```\n````\n# Real heading\n'), ['real-heading']);
 });
 
 test('emoji-prefixed Docker anchors use the actual Docusaurus slug', () => {
@@ -60,17 +95,32 @@ test('emoji-prefixed Docker anchors use the actual Docusaurus slug', () => {
   const dockerHeading = dockerSource.match(/^##\s+(.+Do Not Mount the Migrations Directory)$/m)?.[1];
   assert.ok(dockerHeading);
   const slugger = new GithubSlugger();
-  let expectedAnchor;
-  for (const heading of dockerSource.match(/^#{1,6}\s+(.+)$/gm) || []) {
-    const headingText = heading.replace(/^#{1,6}\s+/, '');
-    const slug = slugger.slug(headingText);
-    if (headingText === dockerHeading) expectedAnchor = `#${slug}`;
-  }
-  assert.ok(expectedAnchor);
+  const expectedAnchor = `#${slugger.slug(dockerHeading)}`;
+  assert.ok(expectedAnchor.slice(1).startsWith('\uFE0F-'));
   assert.equal(
     rewriteLinks(dockerLink, 'docs/DOCKER.md', new Map([['docs/DOCKER.md', 'docker']])),
     dockerLink.replace(/\((#[^)]+)\)/, `(/docs/docker${expectedAnchor})`),
   );
+});
+
+test('heading anchor resolution preserves exact IDs and rejects ambiguous normalized matches', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'youtarr-anchor-collision-'));
+  fs.mkdirSync(path.join(tmp, 'docs'));
+  const warningHeading = `${String.fromCodePoint(0x26a0)}${String.fromCodePoint(0xfe0f)} Warning`;
+  const hyphenHeading = '-Warning';
+  fs.writeFileSync(path.join(tmp, 'docs', 'a.md'), [
+    `[Exact](b.md#${new GithubSlugger().slug(warningHeading)})`,
+    `[Ambiguous](b.md#${String.fromCodePoint(0xfe0f)}-${String.fromCodePoint(0xfe0f)}warning)`,
+  ].join('\n'));
+  fs.writeFileSync(path.join(tmp, 'docs', 'b.md'), `## ${warningHeading}\n## ${hyphenHeading}`);
+  const routes = new Map([['docs/a.md', 'a'], ['docs/b.md', 'b']]);
+  const slugger = new GithubSlugger();
+  const exactSlug = slugger.slug(warningHeading);
+  const secondSlug = slugger.slug(hyphenHeading);
+  const rewritten = rewriteLinks(fs.readFileSync(path.join(tmp, 'docs', 'a.md'), 'utf8'), 'docs/a.md', routes, tmp);
+  assert.ok(rewritten.includes(`[Exact](/docs/b#${exactSlug})`));
+  assert.ok(rewritten.includes(`[Ambiguous](/docs/b#${String.fromCodePoint(0xfe0f)}-${String.fromCodePoint(0xfe0f)}warning)`));
+  assert.equal(secondSlug, '-warning');
 });
 test('safe MDX preserves intentional HTML, inline code, and escapes placeholders/braces', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'youtarr-html-'));

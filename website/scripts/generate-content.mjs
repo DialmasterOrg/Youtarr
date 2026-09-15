@@ -1,39 +1,29 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { parseMarkdownHeadingId } from '@docusaurus/utils';
 import GithubSlugger from 'github-slugger';
+import { toString } from 'mdast-util-to-string';
+import remarkGfm from 'remark-gfm';
+import remarkParse from 'remark-parse';
+import { unified } from 'unified';
+import { visit } from 'unist-util-visit';
 import { createManifest, ROOT } from './manifest.mjs';
 
 const stripFrontMatter = (markdown) => markdown.replace(/^---[\s\S]*?---\s*/, '');
 const normalizeAnchorForMatch = (anchor) => anchor.replace(/[\uFE0E\uFE0F]/g, '');
+const headingParser = unified().use(remarkParse).use(remarkGfm);
 
 export function extractHeadingSlugs(markdown) {
+  const tree = headingParser.parse(stripFrontMatter(markdown));
   const slugger = new GithubSlugger();
   const slugs = [];
-  let fenced = false;
-  let fenceCharacter;
-
-  for (const line of stripFrontMatter(markdown).split('\n')) {
-    const fence = line.match(/^\s{0,3}(`{3,}|~{3,})/);
-    if (fence) {
-      if (!fenced) {
-        fenced = true;
-        fenceCharacter = fence[1][0];
-      } else if (fence[1][0] === fenceCharacter) {
-        fenced = false;
-        fenceCharacter = undefined;
-      }
-      continue;
-    }
-
-    if (fenced) continue;
-
-    const heading = line.match(/^\s{0,3}#{1,6}[ \t]+(.+?)[ \t]*$/);
-    if (!heading) continue;
-
-    const headingText = heading[1].replace(/[ \t]+#+[ \t]*$/, '').trim();
-    slugs.push(slugger.slug(headingText));
-  }
+  visit(tree, 'heading', (headingNode) => {
+    const headingTextNodes = headingNode.children.filter(({type}) => !['html', 'jsx'].includes(type));
+    const headingText = toString(headingTextNodes.length > 0 ? headingTextNodes : headingNode);
+    const parsedHeading = parseMarkdownHeadingId(headingText);
+    slugs.push(parsedHeading.id ?? slugger.slug(headingText));
+  });
 
   return slugs;
 }
@@ -41,15 +31,25 @@ export function extractHeadingSlugs(markdown) {
 function createHeadingIndex(routes, root) {
   return new Map([...routes.keys()].map((source) => {
     const markdown = fs.readFileSync(path.join(root, source), 'utf8');
-    return [source, new Map(extractHeadingSlugs(markdown).map((slug) => [normalizeAnchorForMatch(slug), slug]))];
+    const slugs = extractHeadingSlugs(markdown);
+    const normalized = new Map();
+    for (const slug of slugs) {
+      const key = normalizeAnchorForMatch(slug);
+      const candidates = normalized.get(key) || [];
+      candidates.push(slug);
+      normalized.set(key, candidates);
+    }
+    return [source, {exact: new Set(slugs), normalized}];
   }));
 }
 
 function resolveAnchor(anchor, targetSource, headingIndex) {
   const requestedSlug = anchor.slice(1);
-  const targetSlugs = headingIndex.get(targetSource);
-  const resolvedSlug = targetSlugs?.get(normalizeAnchorForMatch(requestedSlug));
-  return resolvedSlug ? `#${resolvedSlug}` : anchor;
+  const targetHeadings = headingIndex.get(targetSource);
+  if (!targetHeadings) return anchor;
+  if (targetHeadings.exact.has(requestedSlug)) return anchor;
+  const candidates = targetHeadings.normalized.get(normalizeAnchorForMatch(requestedSlug));
+  return candidates?.length === 1 ? `#${candidates[0]}` : anchor;
 }
 
 export function rewriteLinks(body, source, routes, root = ROOT, headingIndex = createHeadingIndex(routes, root)) {
