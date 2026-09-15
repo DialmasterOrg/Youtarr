@@ -210,6 +210,7 @@ async function finalizeDownloadJob({
         wasTerminated,
         sourceJobData,
         maxAttempts: configModule.getConfig().downloadAutoRetryCount,
+        cookiesEnabled: Boolean(configModule.getCookiesPath()),
       });
       if (retryPlan) {
         try {

@@ -1035,6 +1035,64 @@ describe('DownloadModule', () => {
       });
     });
 
+    it('marks cookie-specific retries as anonymous', async () => {
+      await downloadModule.enqueueAutoRetryJob({
+        retryVideos: [{
+          ...retryVideo,
+          anonymousRetry: true,
+        }],
+        autoRetryAttempt: 1,
+        runId: 'run-cookie',
+        sourceJobData: {},
+      });
+
+      expect(doSpecificDownloadsSpy).toHaveBeenCalledWith({
+        body: expect.objectContaining({
+          urls: ['https://www.youtube.com/watch?v=abc123def45'],
+          anonymousRetry: true,
+          autoRetryAttempt: 1,
+          runId: 'run-cookie',
+        }),
+      });
+    });
+
+    it('splits mixed authenticated and anonymous retries into separate jobs', async () => {
+      const anonymousVideo = {
+        youtubeId: 'zzz999xxx11',
+        url: 'https://www.youtube.com/watch?v=zzz999xxx11',
+        anonymousRetry: true,
+      };
+
+      await downloadModule.enqueueAutoRetryJob({
+        retryVideos: [
+          { ...retryVideo, anonymousRetry: false },
+          anonymousVideo,
+        ],
+        autoRetryAttempt: 1,
+        runId: 'run-mixed',
+        sourceJobData: {},
+      });
+
+      expect(doSpecificDownloadsSpy).toHaveBeenCalledTimes(2);
+
+      const bodies = doSpecificDownloadsSpy.mock.calls.map(([{ body }]) => body);
+
+      expect(bodies).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          urls: ['https://www.youtube.com/watch?v=abc123def45'],
+          anonymousRetry: false,
+          autoRetryAttempt: 1,
+          runId: 'run-mixed',
+        }),
+        expect.objectContaining({
+          urls: ['https://www.youtube.com/watch?v=zzz999xxx11'],
+          anonymousRetry: true,
+          autoRetryAttempt: 1,
+          runId: 'run-mixed',
+        }),
+      ]));
+    });
+
     it('resolves owning channels for unmapped videos and passes channelId when unique', async () => {
       ChannelVideoMock.findAll.mockResolvedValue([
         { youtube_id: 'abc123def45', channel_id: 'UC-owner' },
@@ -1385,6 +1443,31 @@ describe('DownloadModule', () => {
       await downloadModule.doSpecificDownloads(request);
 
       expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('480', false, null, false);
+    });
+
+    it('adds --no-cookies only for anonymous auto-retry jobs', async () => {
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+
+      await downloadModule.doSpecificDownloads({
+        body: {
+          urls: ['https://youtube.com/watch?v=cookieRetry'],
+          anonymousRetry: true,
+        },
+      });
+
+      const anonymousArgs = mockDownloadExecutor.doDownload.mock.calls[0][0];
+      expect(anonymousArgs).toContain('--no-cookies');
+
+      mockDownloadExecutor.doDownload.mockClear();
+
+      await downloadModule.doSpecificDownloads({
+        body: {
+          urls: ['https://youtube.com/watch?v=normalRetry'],
+        },
+      });
+
+      const normalArgs = mockDownloadExecutor.doDownload.mock.calls[0][0];
+      expect(normalArgs).not.toContain('--no-cookies');
     });
 
     it('should respect channel-level quality override when present', async () => {

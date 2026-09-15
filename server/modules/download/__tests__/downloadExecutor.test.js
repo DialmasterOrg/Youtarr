@@ -480,7 +480,8 @@ describe('DownloadExecutor', () => {
       expect(enqueueAutoRetry).toHaveBeenCalledWith({
         retryVideos: [{
           youtubeId: 'abc123def45',
-          url: 'https://www.youtube.com/watch?v=abc123def45'
+          url: 'https://www.youtube.com/watch?v=abc123def45',
+          anonymousRetry: false
         }],
         autoRetryAttempt: 1,
         runId: null,
