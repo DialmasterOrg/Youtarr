@@ -18,6 +18,7 @@ const CHANNEL_DOWNLOAD_LABEL = 'Channel Downloads';
 // Playlist jobs are labelled `Playlist: <title>` so they are distinguishable in
 // the activity view. The title is dynamic, so detection matches on the prefix.
 const PLAYLIST_DOWNLOAD_LABEL_PREFIX = 'Playlist: ';
+const PLAYLIST_RETRY_LABEL_PREFIX = 'Playlist Retry: ';
 // "Download all videos for a channel" jobs. Must NOT contain
 // CHANNEL_DOWNLOAD_LABEL: isDownloadJob and the /triggerchanneldownloads
 // already-running guard match that substring, and a download-all job is a
@@ -39,6 +40,7 @@ function isSpecificUrlDownloadJob(jobType) {
   return (
     jobType.includes(MANUAL_DOWNLOAD_LABEL) ||
     jobType.startsWith(PLAYLIST_DOWNLOAD_LABEL_PREFIX) ||
+    jobType.startsWith(PLAYLIST_RETRY_LABEL_PREFIX) ||
     jobType.startsWith(CHANNEL_DOWNLOAD_ALL_LABEL_PREFIX) ||
     jobType.startsWith(AUTO_RETRY_LABEL_PREFIX)
   );
@@ -55,6 +57,10 @@ function isDownloadJob(jobType) {
 // Build the activity-view job label for a playlist download.
 function playlistJobLabel(playlist) {
   return `${PLAYLIST_DOWNLOAD_LABEL_PREFIX}${playlist.title || playlist.playlist_id}`;
+}
+
+function playlistRetryJobLabel(playlist) {
+  return `${PLAYLIST_RETRY_LABEL_PREFIX}${playlist.title || playlist.playlist_id}`;
 }
 
 // Build the activity-view job label for a channel download-all job.
@@ -78,12 +84,14 @@ module.exports = {
   MANUAL_DOWNLOAD_LABEL,
   CHANNEL_DOWNLOAD_LABEL,
   PLAYLIST_DOWNLOAD_LABEL_PREFIX,
+  PLAYLIST_RETRY_LABEL_PREFIX,
   CHANNEL_DOWNLOAD_ALL_LABEL_PREFIX,
   AUTO_RETRY_LABEL_PREFIX,
   PLAYLIST_SWEEP_LABEL,
   isSpecificUrlDownloadJob,
   isDownloadJob,
   playlistJobLabel,
+  playlistRetryJobLabel,
   channelDownloadAllJobLabel,
   autoRetryJobLabel,
   isChannelDownloadAllJob,

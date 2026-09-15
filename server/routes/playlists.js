@@ -1,9 +1,23 @@
 const express = require('express');
+const { MAX_PLAYLIST_VIDEOS, MAX_SELECTED_DOWNLOAD_IDS, DEFAULT_PREVIEW_COUNT, FETCH_IN_PROGRESS_MESSAGE } = require('../modules/playlistConstants');
 const { createOverrideSettingsValidator } = require('./overrideSettingsValidator');
 
-function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters }) {
+function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule }) {
   const router = express.Router();
   const { Playlist, PlaylistVideo, Video } = models;
+  const downloadDeps = { PlaylistVideo, Video, playlistModule, downloadModule };
+
+  const respondToFollowingError = (res, err) => {
+    const errors = {
+      FETCH_IN_PROGRESS: [409, FETCH_IN_PROGRESS_MESSAGE],
+      PLAYLIST_TOO_LARGE: [422, `Automatic following supports playlists with up to ${MAX_PLAYLIST_VIDEOS.toLocaleString('en-US')} entries. This playlist exceeds that limit.`],
+      PLAYLIST_REFRESH_INCOMPLETE: [503, 'YouTube did not provide a verifiably complete playlist. Your starting point was not changed. Try refreshing again later.'],
+    };
+    const response = Object.hasOwn(errors, err.message) ? errors[err.message] : null;
+    if (!response) return false;
+    res.status(response[0]).json({ error: response[1] });
+    return true;
+  };
 
   // Keep the subfolder registry in sync when a playlist persists a real
   // default subfolder. register() ignores null/empty/sentinels and never throws.
@@ -13,8 +27,6 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     }
   };
 
-  const VIDEO_SORT_DIRECTIONS = { asc: 'ASC', desc: 'DESC' };
-  const DEFAULT_VIDEO_SORT_DIRECTION = 'ASC';
   const VIDEO_DOWNLOAD_STATES = new Set(['all', 'downloaded', 'not_downloaded']);
   const VIDEO_WATCHED_STATES = new Set(['all', 'watched', 'not_watched']);
   const VALID_SORT_ORDERS = new Set(['default', 'reversed']);
@@ -88,7 +100,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    * /api/playlists/{playlistId}:
    *   get:
    *     summary: Get a playlist with download and sync counts
-   *     description: Includes not_downloaded_count and unsyncable_count alongside the playlist row.
+   *     description: Includes not_downloaded_count, unsyncable_count, following_existing_count (older eligible entries needing explicit selection), and following_requested_count (eligible saved selections not yet downloaded) alongside the playlist row.
    *     tags: [Playlists]
    *     parameters:
    *       - in: path
@@ -110,34 +122,8 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       const p = await findEnabledPlaylist(req.params.playlistId);
       if (!p) return res.status(404).json({ error: 'Playlist not found' });
 
-      // Mirrors the "download new" selection in downloadModule.doPlaylistDownloads:
-      // non-ignored playlist videos with no matching Video row yet.
-      const candidates = await PlaylistVideo.findAll({
-        where: { playlist_id: req.params.playlistId, ignored: false },
-        attributes: ['youtube_id'],
-      });
-      const candidateIds = candidates.map((c) => c.youtube_id).filter(Boolean);
-      let downloadedExisting = 0;
-      // Downloads lacking the file type the playlist syncs as (its Download
-      // Type setting: mp3 for MP3 Only playlists, video otherwise). Media
-      // server sync leaves these out; the count feeds the UI notice.
-      let unsyncable_count = 0;
-      if (candidateIds.length > 0 && Video) {
-        const existing = await Video.findAll({
-          where: { youtubeId: candidateIds },
-          attributes: ['youtubeId', 'filePath', 'audioFilePath'],
-        });
-        const existingIds = new Set(existing.map((v) => v.youtubeId));
-        downloadedExisting = candidateIds.filter((id) => existingIds.has(id)).length;
-        const targetsAudio = p.audio_format === 'mp3_only';
-        unsyncable_count = existing.filter((v) => {
-          const matching = targetsAudio ? v.audioFilePath : v.filePath;
-          return !matching && (v.filePath || v.audioFilePath);
-        }).length;
-      }
-      const not_downloaded_count = candidateIds.length - downloadedExisting;
-
-      res.json({ playlist: p, not_downloaded_count, unsyncable_count });
+      const counts = await playlistDownloadModule.getCounts(p, downloadDeps);
+      res.json({ playlist: p, ...counts });
     } catch (err) {
       req.log.error({ err }, 'GET /api/playlists/:playlistId failed');
       res.status(500).json({ error: 'Failed to fetch playlist' });
@@ -195,7 +181,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    * /api/playlists:
    *   post:
    *     summary: Subscribe to a playlist, restoring a soft-deleted one if present
-   *     description: Fetches the playlist's videos and kicks off media server sync and M3U generation in the background. A restored playlist keeps its saved settings.
+   *     description: Saves the subscription, fetches its videos, and starts background sync/M3U generation. Restores saved settings. Expected following setup failures return 201 with a warning and turn auto-download off for size/completeness errors; a concurrent refresh keeps the current setting.
    *     tags: [Playlists]
    *     requestBody:
    *       required: true
@@ -213,7 +199,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    *                 description: Optional per-playlist download settings
    *     responses:
    *       201:
-   *         description: Playlist subscribed
+   *         description: Saved playlist, restored flag, and optional following setup warning
    *       400:
    *         description: Missing url or invalid default_sub_folder
    *       500:
@@ -231,11 +217,23 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       // On restore the submitted settings are discarded in favor of the saved
       // ones, so the submitted subfolder must not enter the registry.
       if (!restored) registerSubfolder(settings.default_sub_folder);
-      await playlistModule.fetchAllPlaylistVideos(created.playlist_id);
+      let warning;
+      try {
+        await playlistModule.refreshForFollowing(created, { followFromNow: !!created.auto_download });
+      } catch (err) {
+        if (err.message === 'FETCH_IN_PROGRESS') {
+          warning = 'Playlist saved. A refresh is already in progress; check the video listing and following status when it finishes.';
+        } else if (playlistModule.isFollowingSetupError(err)) {
+          warning = await playlistModule.recoverFollowingSetup(created, err, { disableAutoDownload: true });
+        } else {
+          throw err;
+        }
+      }
       mediaServers.mediaServerSync.syncPlaylist(created.id).catch(logBgFailure(req, created.playlist_id, 'playlist sync'));
       m3uGenerator.generatePlaylistM3U(created.id).catch(logBgFailure(req, created.playlist_id, 'M3U generation'));
-      res.status(201).json({ playlist: created, restored });
+      res.status(201).json({ playlist: created, restored, ...(warning && { warning }) });
     } catch (err) {
+      if (respondToFollowingError(res, err)) return;
       req.log.error({ err }, 'subscribe failed');
       res.status(500).json({ error: 'Failed to subscribe to playlist' });
     }
@@ -279,7 +277,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    * /api/playlists/{playlistId}:
    *   patch:
    *     summary: Update playlist flags
-   *     description: Accepts enabled, auto_download, sync_to_plex, sync_to_jellyfin, sync_to_emby, and public_on_servers; other fields are ignored.
+   *     description: Accepts enabled, auto_download, sync_to_plex, sync_to_jellyfin, sync_to_emby, and public_on_servers; other fields are ignored. First enabling auto_download refreshes the full playlist and saves a starting point before enabling downloads; resuming with a saved starting point or disabling does not refresh.
    *     tags: [Playlists]
    *     parameters:
    *       - in: path
@@ -291,8 +289,16 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    *     responses:
    *       200:
    *         description: Updated playlist
+   *       400:
+   *         description: auto_download must be a boolean
    *       404:
    *         description: Playlist not found
+   *       409:
+   *         description: A playlist refresh is already in progress
+   *       422:
+   *         description: Playlist exceeds the 5000-entry automatic following limit
+   *       503:
+   *         description: A complete playlist snapshot could not be verified
    *       500:
    *         description: Internal server error
    */
@@ -300,13 +306,20 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     const allowed = ['enabled', 'auto_download', 'sync_to_plex', 'sync_to_jellyfin', 'sync_to_emby', 'public_on_servers'];
     const updates = {};
     for (const k of allowed) if (k in req.body) updates[k] = req.body[k];
+    if ('auto_download' in updates && typeof updates.auto_download !== 'boolean') {
+      return res.status(400).json({ error: 'auto_download must be a boolean' });
+    }
     try {
       const p = await findEnabledPlaylist(req.params.playlistId);
       if (!p) return res.status(404).json({ error: 'Playlist not found' });
+      if (updates.auto_download && !p.auto_download_baseline_at) {
+        await playlistModule.refreshForFollowing(p);
+      }
       await p.update(updates);
       res.json({ playlist: p });
     } catch (err) {
-      req.log.error({ err }, 'patch playlist failed');
+      if (respondToFollowingError(res, err)) return;
+      req.log.error({ err, playlist_id: req.params.playlistId }, 'patch playlist failed');
       res.status(500).json({ error: 'Failed to update playlist' });
     }
   });
@@ -427,8 +440,8 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    *         name: sortOrder
    *         schema:
    *           type: string
-   *           enum: [asc, desc, recent]
-   *         description: Position order, or first-seen order for recent
+   *           enum: [asc, desc, recent, downloaded, published]
+   *         description: Playlist position, discovery time, download time, or publication date; unknown dates sort last
    *       - in: query
    *         name: downloadState
    *         schema:
@@ -466,11 +479,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       if (!VIDEO_WATCHED_STATES.has(watchedState)) {
         return res.status(400).json({ error: 'Invalid watchedState; expected all, watched, or not_watched' });
       }
-      // 'recent' = first-seen order (what auto-download considers newest);
-      // otherwise position in the owner's playlist order.
-      const order = sortOrder === 'recent'
-        ? [['added_at', 'DESC'], ['position', 'ASC']]
-        : [['position', VIDEO_SORT_DIRECTIONS[sortOrder] || DEFAULT_VIDEO_SORT_DIRECTION]];
+      const order = playlistVideoFilters.getVideoOrder(sortOrder);
 
       // The list is paginated, so active filters must narrow the page query
       // itself.
@@ -525,7 +534,10 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
           playlist_id: row.playlist_id,
           youtube_id: youtubeId,
           position: row.position,
-          added_at: row.added_at,
+          // Deprecated response alias; retain for older API consumers.
+          added_at: row.first_seen_at || null,
+          first_seen_at: row.first_seen_at || null,
+          downloaded_at: row.downloaded_at || null,
           channel_id: row.channel_id || null,
           ignored: row.ignored,
           ignored_at: row.ignored_at,
@@ -595,7 +607,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       res.json({ fetched: count });
     } catch (err) {
       if (err.message === 'FETCH_IN_PROGRESS') {
-        return res.status(409).json({ error: 'A fetch is already in progress for this playlist' });
+        return res.status(409).json({ error: FETCH_IN_PROGRESS_MESSAGE });
       }
       req.log.error({ err }, 'refresh failed');
       res.status(500).json({ error: 'Failed to refresh playlist' });
@@ -639,7 +651,168 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     }
   });
 
-  const MAX_SELECTED_DOWNLOAD_IDS = 1000;
+  const validBatchIds = (ids) => Array.isArray(ids) && ids.length <= MAX_SELECTED_DOWNLOAD_IDS &&
+    ids.every((id) => typeof id === 'string' && id.length > 0);
+
+  // Preview all tracked eligible entries, never just the page visible in the UI.
+  /**
+   * @swagger
+   * /api/playlists/{playlistId}/download-preview:
+   *   get:
+   *     summary: Preview an explicit batch of existing playlist videos
+   *     description: Returns all eligible tracked candidates, selectedIds, and missingDates. Publication ordering selects nothing when any eligible date is unknown. Does not refresh or queue downloads.
+   *     tags: [Playlists]
+   *     parameters:
+   *       - in: path
+   *         name: playlistId
+   *         required: true
+   *         schema: { type: string }
+   *       - in: query
+   *         name: order
+   *         schema: { type: string, enum: [published, asc, desc], default: published }
+   *       - in: query
+   *         name: count
+   *         schema: { type: integer, minimum: 1, maximum: 1000, default: 5 }
+   *     responses:
+   *       200:
+   *         description: Eligible candidates and suggested selection
+   *       400:
+   *         description: Invalid order or count
+   *       404:
+   *         description: Playlist not found
+   *       500:
+   *         description: Preview failed
+   */
+  router.get('/api/playlists/:playlistId/download-preview', verifyToken, async (req, res) => {
+    const order = req.query.order || 'published';
+    const count = Number(req.query.count || DEFAULT_PREVIEW_COUNT);
+    if (!['asc', 'desc', 'published'].includes(order) || !Number.isInteger(count) || count < 1 || count > MAX_SELECTED_DOWNLOAD_IDS) {
+      return res.status(400).json({ error: `Choose a valid order and a count between 1 and ${MAX_SELECTED_DOWNLOAD_IDS}` });
+    }
+    try {
+      const p = await findEnabledPlaylist(req.params.playlistId);
+      if (!p) return res.status(404).json({ error: 'Playlist not found' });
+      res.json(await playlistDownloadModule.getPreview(p.playlist_id, { order, count }, downloadDeps));
+    } catch (err) {
+      req.log.error({ err }, 'preview playlist downloads failed');
+      res.status(500).json({ error: 'Failed to preview playlist downloads' });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/playlists/{playlistId}/following:
+   *   post:
+   *     summary: Start or resume following new playlist entries
+   *     description: First setup refreshes before saving the starting point. Resuming preserves it. An explicit restart skips the current backlog and saved batch requests and preserves whether downloads are paused; queued jobs and files are kept.
+   *     tags: [Playlists]
+   *     parameters:
+   *       - in: path
+   *         name: playlistId
+   *         required: true
+   *         schema: { type: string }
+   *     requestBody:
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               restart:
+   *                 type: boolean
+   *                 default: false
+   *               videoIds:
+   *                 type: array
+   *                 maxItems: 1000
+   *                 items: { type: string }
+   *                 description: Existing videos to queue and retry automatically; cannot be combined with restart
+   *     responses:
+   *       200:
+   *         description: Playlist, queued count, and optional queue failure warning
+   *       400:
+   *         description: Invalid following options
+   *       404:
+   *         description: Playlist not found
+   *       409:
+   *         description: A playlist refresh is already in progress
+   *       422:
+   *         description: Playlist exceeds the 5000-entry automatic following limit
+   *       503:
+   *         description: A complete playlist snapshot could not be verified
+   *       500:
+   *         description: Following setup failed
+   */
+  router.post('/api/playlists/:playlistId/following', verifyToken, async (req, res) => {
+    const { restart = false, videoIds = [] } = req.body || {};
+    if (typeof restart !== 'boolean' || !validBatchIds(videoIds) || (restart && videoIds.length)) {
+      return res.status(400).json({ error: 'Invalid following options' });
+    }
+    try {
+      const p = await findEnabledPlaylist(req.params.playlistId);
+      if (!p) return res.status(404).json({ error: 'Playlist not found' });
+      if (restart || !p.auto_download_baseline_at) {
+        await playlistModule.refreshForFollowing(p, { resetFollowing: restart });
+      }
+      // Resetting the starting point preserves the current running/paused state.
+      // First setup and explicit resume enable downloads.
+      if (!restart) await p.update({ auto_download: true });
+      const result = videoIds.length ? await playlistDownloadModule.queueBatch(p, videoIds, { ...downloadDeps, logger: req.log }) : { queued: 0 };
+      res.json({ playlist: p, ...result });
+    } catch (err) {
+      if (respondToFollowingError(res, err)) return;
+      req.log.error({ err, playlist_id: req.params.playlistId }, 'configure playlist following failed');
+      res.status(500).json({ error: 'Could not finish following setup. Please retry.' });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/playlists/{playlistId}/download-batch:
+   *   post:
+   *     summary: Queue selected eligible existing videos without resetting following
+   *     description: Applies saved download settings. Previously downloaded, unavailable, and ignored videos are excluded. When auto-download is enabled and a starting point exists, requests are saved for retry until downloaded or the starting point is reset. The original selection is queued in full. Scheduled runs allow up to the configured limit of discoveries plus the same number of older saved retries, rotating least-recently-attempted requests first. Requested discoveries use only the discovery allowance. Retry jobs are labelled separately; active downloads are excluded before selection.
+   *     tags: [Playlists]
+   *     parameters:
+   *       - in: path
+   *         name: playlistId
+   *         required: true
+   *         schema: { type: string }
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [videoIds]
+   *             properties:
+   *               videoIds:
+   *                 type: array
+   *                 minItems: 1
+   *                 maxItems: 1000
+   *                 items: { type: string }
+   *     responses:
+   *       202:
+   *         description: Queued count and optional queue failure warning
+   *       400:
+   *         description: Invalid video IDs
+   *       404:
+   *         description: Playlist not found
+   *       500:
+   *         description: Queueing failed
+   */
+  router.post('/api/playlists/:playlistId/download-batch', verifyToken, async (req, res) => {
+    const { videoIds } = req.body || {};
+    if (!validBatchIds(videoIds) || !videoIds.length) {
+      return res.status(400).json({ error: `Select between 1 and ${MAX_SELECTED_DOWNLOAD_IDS} videos` });
+    }
+    try {
+      const p = await findEnabledPlaylist(req.params.playlistId);
+      if (!p) return res.status(404).json({ error: 'Playlist not found' });
+      res.status(202).json(await playlistDownloadModule.queueBatch(p, videoIds, { ...downloadDeps, logger: req.log }));
+    } catch (err) {
+      req.log.error({ err }, 'queue playlist batch failed');
+      res.status(500).json({ error: 'Failed to queue selected videos; please retry' });
+    }
+  });
 
   // Manually trigger download of all not-yet-downloaded videos for this playlist.
   // Fire-and-forget; downloads are long-running. Returns 202 immediately. The

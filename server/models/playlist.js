@@ -34,9 +34,11 @@ Playlist.init(
     audio_format: { type: DataTypes.STRING, allowNull: true },
     default_rating: { type: DataTypes.STRING, allowNull: true },
     lastFetched: { type: DataTypes.DATE, allowNull: true },
-    // NULL until the playlist's first auto-download run; seed-then-track
-    // baseline for "download videos added after this timestamp".
+    // Existing timestamp cutoffs remain valid. New setups also capture an entry
+    // id so a later refresh in the same second cannot lose new additions.
     auto_download_baseline_at: { type: DataTypes.DATE, allowNull: true },
+    auto_download_baseline_id: { type: DataTypes.INTEGER, allowNull: true },
+    auto_download_setup_error: { type: DataTypes.STRING, allowNull: true },
   },
   {
     sequelize,

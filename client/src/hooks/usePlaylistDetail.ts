@@ -11,7 +11,7 @@ export interface DownloadOverrideSettings {
   skipVideoFolder?: boolean;
 }
 
-export type PlaylistSortOrder = 'asc' | 'desc' | 'recent';
+export type PlaylistSortOrder = 'asc' | 'desc' | 'recent' | 'published' | 'downloaded';
 export type PlaylistDownloadState = 'all' | 'downloaded' | 'not_downloaded';
 export type PlaylistWatchedState = 'all' | 'watched' | 'not_watched';
 
@@ -29,6 +29,8 @@ interface UsePlaylistDetailParams {
 interface PlaylistDetailResponse {
   playlist: Playlist;
   not_downloaded_count?: number;
+  following_existing_count?: number;
+  following_requested_count?: number;
   // Downloaded items lacking the file type the playlist syncs as (mp3 for
   // MP3 Only playlists, video otherwise); media server sync leaves them out.
   unsyncable_count?: number;
@@ -66,6 +68,8 @@ export const usePlaylistDetail = ({
   const [videos, setVideos] = useState<PlaylistVideo[]>([]);
   const [videoTotal, setVideoTotal] = useState(0);
   const [notDownloadedCount, setNotDownloadedCount] = useState<number | null>(null);
+  const [followingExistingCount, setFollowingExistingCount] = useState<number | null>(null);
+  const [followingRequestedCount, setFollowingRequestedCount] = useState<number | null>(null);
   const [unsyncableCount, setUnsyncableCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(!!(token && playlistId));
   const [loadingMore, setLoadingMore] = useState(false);
@@ -83,6 +87,8 @@ export const usePlaylistDetail = ({
       setVideoTotal(0);
       setNotDownloadedCount(null);
       setUnsyncableCount(null);
+      setFollowingExistingCount(null);
+      setFollowingRequestedCount(null);
       setLoading(false);
       setError(null);
       return;
@@ -112,6 +118,8 @@ export const usePlaylistDetail = ({
       ]);
       if (requestId !== requestIdRef.current) return;
       setPlaylist(playlistRes.data.playlist || null);
+      setFollowingExistingCount(playlistRes.data.following_existing_count ?? null);
+      setFollowingRequestedCount(playlistRes.data.following_requested_count ?? null);
       setNotDownloadedCount(
         typeof playlistRes.data.not_downloaded_count === 'number'
           ? playlistRes.data.not_downloaded_count
@@ -191,6 +199,8 @@ export const usePlaylistDetail = ({
         { headers: authHeaders(token) }
       );
       setPlaylist(res.data.playlist || null);
+      setFollowingExistingCount(res.data.following_existing_count ?? null);
+      setFollowingRequestedCount(res.data.following_requested_count ?? null);
       setNotDownloadedCount(
         typeof res.data.not_downloaded_count === 'number'
           ? res.data.not_downloaded_count
@@ -277,6 +287,8 @@ export const usePlaylistDetail = ({
     videos,
     videoTotal,
     notDownloadedCount,
+    followingExistingCount,
+    followingRequestedCount,
     unsyncableCount,
     loading,
     loadingMore,

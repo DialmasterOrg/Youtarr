@@ -6,6 +6,7 @@
 const AUTO_RETRY_PREFIX = 'Auto-retry: ';
 const CHANNEL_DOWNLOAD_ALL_PREFIX = 'Channel Download All: ';
 const PLAYLIST_DOWNLOAD_PREFIX = 'Playlist: ';
+const PLAYLIST_RETRY_PREFIX = 'Playlist Retry: ';
 const CHANNEL_DOWNLOAD_LABEL = 'Channel Downloads';
 const MANUAL_DOWNLOAD_LABEL = 'Manually Added Urls';
 // Synthetic already-Complete marker for an idle playlist auto-download sweep;
@@ -25,6 +26,9 @@ export function jobTypeLabel(jobType: string | null | undefined): string {
   }
   if (jobType.startsWith(PLAYLIST_DOWNLOAD_PREFIX)) {
     return `Playlist download: ${jobType.slice(PLAYLIST_DOWNLOAD_PREFIX.length)}`;
+  }
+  if (jobType.startsWith(PLAYLIST_RETRY_PREFIX)) {
+    return `Saved playlist retries: ${jobType.slice(PLAYLIST_RETRY_PREFIX.length)}`;
   }
   if (jobType.toLowerCase() === PLAYLIST_SWEEP_LABEL.toLowerCase()) {
     return 'Playlist downloads';

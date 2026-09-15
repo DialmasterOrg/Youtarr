@@ -326,6 +326,50 @@ tables are still on the wrong character set.
 **Prevention**: If you run your own database, create it as `utf8mb4` from the start and this conversion
 never has to run. See the [External Database Guide](platforms/external-db.md).
 
+### Startup Fails with Illegal Mix of Collations
+
+**Problem**: On startup a migration fails with:
+```
+Failed to initialize database
+Illegal mix of collations (utf8mb4_general_ci,IMPLICIT) and (utf8mb4_unicode_ci,IMPLICIT) for operation '='
+```
+The first migration to hit it is `20260907174043-playlist-following-and-download-dates`, and the UI shows
+the "Database Schema Mismatch" overlay.
+
+**Cause**: The database has tables on two different collations. A database that was already `utf8mb4`
+when the September 2025 upgrade migration ran was skipped entirely (that version only checked the
+database default charset), so its original tables stayed on `utf8mb4_general_ci`, or even three-byte
+`utf8`. Tables created since then use an explicit `utf8mb4_unicode_ci`. MariaDB and MySQL refuse to
+compare string columns across the two, and the playlist following migration is the first to join
+`videos` to `playlistvideos` in SQL.
+
+**Solution**: Update Youtarr. The `20260907000000-normalize-utf8mb4-unicode-collation` migration
+converts every table and the database default to `utf8mb4_unicode_ci` before the playlist migration
+runs, and restores `utf8mb4_bin` on the UUID foreign key columns that the conversion coerces. It is safe
+to re-run and changes collations only, never data. Expect it to take a while on large `videos` and
+`channelvideos` tables, since each conversion rebuilds the table.
+
+To fix it by hand instead, take a backup, connect as root, and run the following with `youtarr` replaced
+by your database name and one `ALTER TABLE ... CONVERT TO` line per table the first query lists:
+```sql
+-- Which tables are off
+SELECT TABLE_NAME, TABLE_COLLATION FROM information_schema.tables
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE'
+  AND TABLE_COLLATION <> 'utf8mb4_unicode_ci';
+
+SET FOREIGN_KEY_CHECKS = 0;
+ALTER DATABASE youtarr CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+ALTER TABLE videos CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+-- ... one line per table from the query above ...
+ALTER TABLE jobs MODIFY id CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL;
+ALTER TABLE jobvideos MODIFY job_id CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL;
+ALTER TABLE jobvideodownloads MODIFY job_id CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL;
+SET FOREIGN_KEY_CHECKS = 1;
+```
+The three `MODIFY` lines are required: `CONVERT TO` changes the UUID key columns to
+`utf8mb4_unicode_ci`, and the `jobvideos` foreign key stops working until they are back on `utf8mb4_bin`.
+Restart Youtarr afterward and the pending migrations complete.
+
 ### Migration Fails Creating JobVideoDownloads (errno 150)
 
 **Problem**: A fresh install (or an upgrade of an older install) fails partway through migrations with:
@@ -562,6 +606,21 @@ Uploaded cookies change which YouTube player client yt-dlp can use, and YouTube 
 The 403 is sometimes a temporary block on YouTube's side - retrying later can work. If it keeps failing, uploading YouTube cookies from your browser (Settings -> Cookies) often resolves it.
 
 **Note**: The same failure on one machine but not another usually comes down to this cookies difference, not the network - both machines can share an IP and behave differently.
+
+### Downloads Are Only 360p With Cookies Enabled
+
+**Problem**: With cookies enabled, videos download at 360p (yt-dlp logs `Downloading 1 format(s): 18`) even though the video is available in HD, and the video details modal lists 360p as the only available resolution. Disabling cookies brings HD back.
+
+This is a YouTube-side change, not stale cookies. With logged-in cookies, yt-dlp uses a different set of YouTube player clients, and YouTube has been moving those clients to "SABR-only" streaming on a per-account basis (tracked upstream in yt-dlp issues 12482 and 17666). For an affected account the logged-in clients return stream formats with no download URL, so the only stream left is the old progressive 360p one. The logs show `Some ... client https formats have been skipped as they are missing a URL. YouTube may have enabled the SABR-only streaming experiment for your account.`
+
+Youtarr works around this by asking yt-dlp for two additional player clients whenever cookies are enabled (`mweb` and `web_safari`, on top of yt-dlp's defaults), and shows a "SABR-only" warning on the Downloads page when YouTube strips formats for your account. What you get then depends on the account:
+
+- **YouTube Premium account**: full-quality separate video and audio streams, same as without cookies.
+- **Free account**: the HLS stream, which tops out at 1080p (H.264 with AAC audio). YouTube requires a Proof-of-Origin token for the higher-quality streams on free logged-in sessions, which Youtarr does not currently generate.
+
+If you only enabled cookies to get past a "Sign in to confirm you're not a bot" check, try disabling them (Settings -> Cookies) and see whether downloads still work; without cookies yt-dlp uses a client that is not affected. If you need cookies and want more than 1080p on a free account, the upstream SABR downloader (yt-dlp pull request 13515) is the eventual fix.
+
+**Note**: If you use a throwaway Google account for cookies, sign into it from a normal browser occasionally. Accounts used only from a server IP have been disabled by Google.
 
 ### Subtitle Downloads Time Out
 

@@ -3,6 +3,7 @@ const configModule = require('../configModule');
 const tempPathManager = require('./tempPathManager');
 const logger = require('../../logger');
 const customArgsParser = require('./customArgsParser');
+const { mergeCookiePlayerClients } = require('./cookiePlayerClients');
 const {
   CHANNEL_TEMPLATE,
   composeVideoFileTemplate,
@@ -286,6 +287,22 @@ class YtdlpCommandBuilder {
   }
 
   /**
+   * Custom args for commands that extract video formats. With cookies in play
+   * the cookie player clients get merged in; see cookiePlayerClients.js for
+   * why that's a merge and not a second token.
+   *
+   * @param {Object} config
+   * @returns {string[]}
+   */
+  static buildVideoExtractionCustomArgs(config) {
+    const customArgs = this.buildCustomArgs(config);
+    if (!configModule.getCookiesPath()) {
+      return customArgs;
+    }
+    return mergeCookiePlayerClients(customArgs);
+  }
+
+  /**
    * Build arguments for fetching metadata (channel info, video info, etc.)
    * @param {string} url - URL to fetch
    * @param {Object} options - Options object
@@ -319,7 +336,10 @@ class YtdlpCommandBuilder {
     }
 
     // Custom user args last (yt-dlp last-wins) but before URL operand
-    args.push(...this.buildCustomArgs(config));
+    // Flat listings don't make player requests, so they skip the cookie clients.
+    args.push(...(options.flatPlaylist
+      ? this.buildCustomArgs(config)
+      : this.buildVideoExtractionCustomArgs(config)));
 
     args.push(url);
     return args;
@@ -575,7 +595,7 @@ class YtdlpCommandBuilder {
     // Custom user args MUST be appended last so yt-dlp's last-wins semantics
     // let users override managed defaults like --retries / --fragment-retries.
     // The URL list (-a tempChannelsFile) is appended later by downloadModule.
-    args.push(...this.buildCustomArgs(config));
+    args.push(...this.buildVideoExtractionCustomArgs(config));
 
     return args;
   }
@@ -657,7 +677,7 @@ class YtdlpCommandBuilder {
     // Custom user args MUST be appended last so yt-dlp's last-wins semantics
     // let users override managed defaults like --retries / --fragment-retries.
     // URL operands are appended later by downloadModule.
-    args.push(...this.buildCustomArgs(config));
+    args.push(...this.buildVideoExtractionCustomArgs(config));
 
     return args;
   }

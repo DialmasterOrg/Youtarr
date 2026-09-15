@@ -1,5 +1,6 @@
 import React from 'react';
 import { CalendarToday as CalendarTodayIcon } from '../../../lib/icons';
+import { PlaylistSortOrder } from '../../../hooks/usePlaylistDetail';
 import { PlaylistVideo } from '../../../types/playlist';
 
 export type PlaylistVideoStatusColor = 'success' | 'default' | 'warning' | 'error' | 'info';
@@ -60,5 +61,43 @@ export const PublishedDate: React.FC<{ value: string | null }> = ({ value }) => 
       <CalendarTodayIcon size={12} />
       {formatted}
     </span>
+  );
+};
+
+export const PlaylistVideoDates: React.FC<{ video: PlaylistVideo; sortOrder: PlaylistSortOrder }> = ({ video, sortOrder }) => {
+  const label = sortOrder === 'recent' ? 'Discovered' : sortOrder === 'downloaded' && video.downloaded ? 'Downloaded' : null;
+  const value = sortOrder === 'recent' ? video.first_seen_at : video.downloaded_at;
+  const date = value ? new Date(value) : null;
+  const validDate = date && Number.isFinite(date.getTime()) ? date : null;
+  const fullDate = validDate?.toLocaleString(undefined, { timeZoneName: 'short' });
+  // Discovery/download timestamps use the local calendar date. Publication
+  // dates are already calendar dates, without a time zone to convert.
+  const shortDate = validDate && `${validDate.getFullYear()}-${String(validDate.getMonth() + 1).padStart(2, '0')}-${String(validDate.getDate()).padStart(2, '0')}`;
+
+  return (
+    <dl className="flex flex-col gap-1 text-xs">
+      <div className="flex flex-wrap items-baseline gap-x-1">
+        <dt className="text-muted-foreground">Published:</dt>
+        <dd className="m-0"><PublishedDate value={video.published_at} /></dd>
+      </div>
+      {label && (
+        <div className="flex flex-wrap items-baseline gap-x-1">
+          <dt className="text-muted-foreground">{label}:</dt>
+          <dd className="m-0 min-w-0">
+            {validDate ? (
+              <details onClick={(event) => event.stopPropagation()}>
+                <summary
+                  className="cursor-pointer list-none rounded-sm underline decoration-dotted underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
+                  aria-label={`${label}: ${fullDate}. Show full timestamp`}
+                >
+                  <time dateTime={validDate.toISOString()} className="whitespace-nowrap">{shortDate}</time>
+                </summary>
+                <p className="mt-1 whitespace-normal text-muted-foreground">{fullDate}</p>
+              </details>
+            ) : <em className="text-muted-foreground">Unknown</em>}
+          </dd>
+        </div>
+      )}
+    </dl>
   );
 };

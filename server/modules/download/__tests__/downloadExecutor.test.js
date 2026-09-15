@@ -139,6 +139,13 @@ describe('DownloadExecutor', () => {
   let executor;
   let mockProcess;
 
+  // The executor finalizes on 'close', which Node fires after 'exit' once
+  // stdio has drained. Ending a mock process means emitting both.
+  const endProcess = (code, signal) => {
+    mockProcess.emit('exit', code, signal);
+    mockProcess.emit('close', code, signal);
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
 
@@ -292,6 +299,112 @@ describe('DownloadExecutor', () => {
     });
   });
 
+  describe('stdio drain before finalization', () => {
+    const mockArgs = ['--format', 'best', 'https://youtube.com/watch?v=test'];
+    const mockJobId = 'job-123';
+    const mockJobType = 'Channel Downloads';
+    const ADVISORY_HEAD = 'WARNING: [youtube] abc: mweb client https formats require a GVS PO Token which was not provided. ';
+    const ADVISORY_TAIL = 'They will be skipped as they may yield HTTP Error 403.\n';
+    const DRAIN_TIMEOUT_MS = 5000;
+
+    const cookieHintCalls = () => MessageEmitter.emitMessage.mock.calls.filter(
+      (call) => call[4] && (call[4].errorCode === 'COOKIES_RECOMMENDED' || call[4].errorCode === 'COOKIES_MAY_BE_STALE')
+    );
+    const sabrCalls = () => MessageEmitter.emitMessage.mock.calls.filter(
+      (call) => call[4] && call[4].errorCode === 'SABR_RESTRICTED_FORMATS'
+    );
+    const completeCalls = () => jobModule.updateJob.mock.calls.filter(
+      (call) => call[0] === mockJobId && call[1] && call[1].status === 'Complete'
+    );
+
+    it('classifies a stderr line split around exit using the complete line', async () => {
+      setTimeout(() => {
+        mockProcess.stderr.emit('data', ADVISORY_HEAD);
+        mockProcess.emit('exit', 0, null);
+        mockProcess.stderr.emit('data', ADVISORY_TAIL);
+        mockProcess.emit('close', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(cookieHintCalls()).toHaveLength(0);
+      expect(completeCalls()).toHaveLength(1);
+    });
+
+    it('emits the SABR warning when its phrase completes after exit', async () => {
+      setTimeout(() => {
+        mockProcess.stderr.emit('data', 'WARNING: [youtube] abc: YouTube may have enabled the SABR-only streaming ');
+        mockProcess.emit('exit', 0, null);
+        mockProcess.stderr.emit('data', 'experiment for your account.\n');
+        mockProcess.emit('close', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(sabrCalls()).toHaveLength(1);
+    });
+
+    it('finalizes after the drain timeout when close never arrives, and a late close does not finalize again', async () => {
+      jest.useFakeTimers();
+      const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+      await jest.advanceTimersByTimeAsync(0);
+      expect(mockSpawn).toHaveBeenCalled();
+
+      mockProcess.emit('exit', 0, null);
+      await jest.advanceTimersByTimeAsync(DRAIN_TIMEOUT_MS - 1);
+      expect(completeCalls()).toHaveLength(0);
+
+      await jest.advanceTimersByTimeAsync(1);
+      await downloadPromise;
+      expect(completeCalls()).toHaveLength(1);
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ jobId: mockJobId }),
+        expect.stringMatching(/did not close/i)
+      );
+
+      mockProcess.emit('close', 0, null);
+      await jest.advanceTimersByTimeAsync(0);
+      expect(completeCalls()).toHaveLength(1);
+      expect(jobModule.startNextJob).toHaveBeenCalledTimes(1);
+    });
+
+    it('ignores output that arrives after fallback finalization', async () => {
+      jest.useFakeTimers();
+      const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+      await jest.advanceTimersByTimeAsync(0);
+      mockProcess.emit('exit', 0, null);
+      await jest.advanceTimersByTimeAsync(DRAIN_TIMEOUT_MS);
+      await downloadPromise;
+
+      mockProcess.stderr.emit('data', 'ERROR: unable to download video data: HTTP Error 403: Forbidden\n');
+      mockProcess.stdout.emit('data', '[download] Destination: /output/late.mp4\n');
+      await jest.advanceTimersByTimeAsync(0);
+
+      expect(cookieHintCalls()).toHaveLength(0);
+      expect(completeCalls()).toHaveLength(1);
+    });
+
+    it('clears the drain timer when the process errors after exit so nothing finalizes twice', async () => {
+      jest.useFakeTimers();
+      const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+      await jest.advanceTimersByTimeAsync(0);
+
+      mockProcess.emit('exit', 0, null);
+      mockProcess.emit('error', new Error('kill EPERM'));
+      await jest.advanceTimersByTimeAsync(0);
+      await downloadPromise;
+
+      expect(jest.getTimerCount()).toBe(0);
+
+      await jest.advanceTimersByTimeAsync(DRAIN_TIMEOUT_MS);
+      mockProcess.emit('close', 0, null);
+      await jest.advanceTimersByTimeAsync(0);
+
+      expect(completeCalls()).toHaveLength(0);
+      expect(jobModule.updateJob).toHaveBeenCalledWith(mockJobId, expect.objectContaining({ status: 'Error' }));
+    });
+  });
+
   describe('doDownload', () => {
     const mockArgs = ['--format', 'best', 'https://youtube.com/watch?v=test'];
     const mockJobId = 'job-123';
@@ -300,7 +413,7 @@ describe('DownloadExecutor', () => {
     it('should spawn yt-dlp process with correct arguments', async () => {
       // Trigger immediate exit with code 0
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -314,7 +427,7 @@ describe('DownloadExecutor', () => {
 
     it('should clean temp directory before starting', async () => {
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -374,7 +487,7 @@ describe('DownloadExecutor', () => {
       mockFsPromises.unlink.mockResolvedValue();
 
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -385,7 +498,7 @@ describe('DownloadExecutor', () => {
 
     it('should emit initial progress message', async () => {
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -406,7 +519,7 @@ describe('DownloadExecutor', () => {
       executor.progressHeartbeatMs = 20;
 
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 100);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -430,7 +543,7 @@ describe('DownloadExecutor', () => {
       archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/abc123']);
 
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -446,7 +559,7 @@ describe('DownloadExecutor', () => {
 
     it('should handle exit with error code', async () => {
       setTimeout(() => {
-        mockProcess.emit('exit', 1, null);
+        endProcess(1, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -472,7 +585,7 @@ describe('DownloadExecutor', () => {
           'data',
           Buffer.from('ERROR: unable to download video data: HTTP Error 403: Forbidden\n')
         );
-        mockProcess.emit('exit', 1, null);
+        endProcess(1, null);
       }, 10);
 
       await retryExecutor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -508,7 +621,7 @@ describe('DownloadExecutor', () => {
         .mockReturnValue({ data: {} });
 
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -540,7 +653,7 @@ describe('DownloadExecutor', () => {
       jobModule.getJob.mockReturnValue(mockJob);
 
       setTimeout(() => {
-        mockProcess.emit('exit', 1, null);
+        endProcess(1, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -597,7 +710,7 @@ describe('DownloadExecutor', () => {
     it('should handle bot detection', async () => {
       setTimeout(() => {
         mockProcess.stderr.emit('data', 'Sign in to confirm you\'re not a bot');
-        mockProcess.emit('exit', 1, null);
+        endProcess(1, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -615,7 +728,7 @@ describe('DownloadExecutor', () => {
     it('should handle HTTP 403 errors', async () => {
       setTimeout(() => {
         mockProcess.stdout.emit('data', 'HTTP Error 403: Forbidden');
-        mockProcess.emit('exit', 1, null);
+        endProcess(1, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -646,7 +759,7 @@ describe('DownloadExecutor', () => {
     it('should process stdout progress data', async () => {
       setTimeout(() => {
         mockProcess.stdout.emit('data', '[download] 50.0% of 10.00MiB at 1.00MiB/s ETA 00:05\n');
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -673,7 +786,7 @@ describe('DownloadExecutor', () => {
           'data',
           'WARNING: The extractor specified to use impersonation for this download, but no impersonate target is available. If you encounter errors, then see https://github.com/yt-dlp/yt-dlp#impersonation for information on installing the required dependencies\n'
         );
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, 'Manually Added Urls', 1);
@@ -688,7 +801,7 @@ describe('DownloadExecutor', () => {
     it('still marks job "Complete with Warnings" when stderr contains a non-benign warning', async () => {
       setTimeout(() => {
         mockProcess.stderr.emit('data', 'WARNING: Some unexpected non-whitelisted warning\n');
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, 'Manually Added Urls', 1);
@@ -704,7 +817,7 @@ describe('DownloadExecutor', () => {
     it('should track destination files for cleanup', async () => {
       setTimeout(() => {
         mockProcess.stdout.emit('data', '[download] Destination: /output/Channel - Title [abc123XYZ_d].mp4\n');
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -723,7 +836,7 @@ describe('DownloadExecutor', () => {
       const originalUrls = ['https://youtube.com/watch?v=abc123', 'https://youtube.com/watch?v=def456'];
 
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, 'Manually Added Urls', 2, originalUrls);
@@ -736,7 +849,7 @@ describe('DownloadExecutor', () => {
       VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
 
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, 'Manually Added Urls', 1, originalUrls);
@@ -755,7 +868,7 @@ describe('DownloadExecutor', () => {
       ]);
 
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, true);
@@ -773,7 +886,7 @@ describe('DownloadExecutor', () => {
       ]);
 
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -792,7 +905,7 @@ describe('DownloadExecutor', () => {
       ]);
 
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -821,7 +934,7 @@ describe('DownloadExecutor', () => {
       ]);
 
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -843,7 +956,7 @@ describe('DownloadExecutor', () => {
       ]);
 
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -854,7 +967,7 @@ describe('DownloadExecutor', () => {
     it('should NOT trigger Plex refresh when no videos were downloaded', async () => {
       // Default mock returns [] - no videos
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -872,7 +985,7 @@ describe('DownloadExecutor', () => {
       ]);
 
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       // skipJobTransition=true (7th positional arg)
@@ -883,7 +996,7 @@ describe('DownloadExecutor', () => {
 
     it('should start next job after completion', async () => {
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -923,7 +1036,7 @@ describe('DownloadExecutor', () => {
       archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/abc123XYZ_d']);
 
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -945,7 +1058,7 @@ describe('DownloadExecutor', () => {
 
     it('should cleanup JobVideoDownload entries after completion', async () => {
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -967,7 +1080,7 @@ describe('DownloadExecutor', () => {
       Channel.findAll.mockResolvedValue(mockChannels);
 
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -992,7 +1105,7 @@ describe('DownloadExecutor', () => {
       jobModule.getJob.mockReturnValue(mockJob);
 
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, 'Manually Added Urls');
@@ -1038,7 +1151,7 @@ describe('DownloadExecutor', () => {
       jobModule.getJob.mockReturnValue(mockJobAfterUpdate);
 
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       // Pass skipJobTransition=true to simulate multi-group download
@@ -1080,7 +1193,7 @@ describe('DownloadExecutor', () => {
       setTimeout(() => {
         mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://youtube.com/watch?v=failed12345\n');
         mockProcess.stdout.emit('data', 'ERROR: This video is members-only\n');
-        mockProcess.emit('exit', 1, null);
+        endProcess(1, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, true);
@@ -1132,7 +1245,7 @@ describe('DownloadExecutor', () => {
 
       setTimeout(() => {
         mockProcess.stdout.emit('data', 'ERROR: HTTP Error 403: Forbidden\n');
-        mockProcess.emit('exit', 1, null);
+        endProcess(1, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, true);
@@ -1151,7 +1264,7 @@ describe('DownloadExecutor', () => {
       archiveModule.getNewVideoUrlsSince.mockReturnValue([]);
 
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, 'Manually Added Urls');
@@ -1165,7 +1278,7 @@ describe('DownloadExecutor', () => {
       archiveModule.getNewVideoUrlsSince.mockReturnValue([]);
 
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -1182,7 +1295,7 @@ describe('DownloadExecutor', () => {
       channelModule.backfillChannelImages.mockRejectedValue(new Error('Backfill failed'));
 
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -1201,7 +1314,7 @@ describe('DownloadExecutor', () => {
     });
 
     it('should pass subfolderOverride to yt-dlp via environment variable', async () => {
-      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      setTimeout(() => { endProcess(0, null); }, 10);
       await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, { subfolderOverride: 'TestSubfolder' });
       expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
         env: expect.objectContaining({ YOUTARR_JOB_ID: mockJobId, YOUTARR_SUBFOLDER_OVERRIDE: 'TestSubfolder' })
@@ -1209,7 +1322,7 @@ describe('DownloadExecutor', () => {
     });
 
     it('should pass empty string subfolderOverride to yt-dlp', async () => {
-      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      setTimeout(() => { endProcess(0, null); }, 10);
       await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, { subfolderOverride: '' });
       expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
         env: expect.objectContaining({ YOUTARR_JOB_ID: mockJobId, YOUTARR_SUBFOLDER_OVERRIDE: '' })
@@ -1217,7 +1330,7 @@ describe('DownloadExecutor', () => {
     });
 
     it('should not set YOUTARR_SUBFOLDER_OVERRIDE when subfolderOverride is null', async () => {
-      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      setTimeout(() => { endProcess(0, null); }, 10);
       await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, { subfolderOverride: null });
       expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
         env: expect.not.objectContaining({ YOUTARR_SUBFOLDER_OVERRIDE: expect.anything() })
@@ -1225,7 +1338,7 @@ describe('DownloadExecutor', () => {
     });
 
     it('should not set YOUTARR_SUBFOLDER_OVERRIDE when no directives are passed', async () => {
-      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      setTimeout(() => { endProcess(0, null); }, 10);
       await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false);
       expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
         env: expect.not.objectContaining({ YOUTARR_SUBFOLDER_OVERRIDE: expect.anything() })
@@ -1233,7 +1346,7 @@ describe('DownloadExecutor', () => {
     });
 
     it('should set YOUTARR_SUBFOLDER_FALLBACK when subfolderFallback is provided', async () => {
-      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      setTimeout(() => { endProcess(0, null); }, 10);
       await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, { subfolderFallback: 'PlaylistFolder' });
       expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
         env: expect.objectContaining({ YOUTARR_SUBFOLDER_FALLBACK: 'PlaylistFolder' })
@@ -1241,7 +1354,7 @@ describe('DownloadExecutor', () => {
     });
 
     it('should set YOUTARR_RATING_FALLBACK when ratingFallback is provided', async () => {
-      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      setTimeout(() => { endProcess(0, null); }, 10);
       await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, { ratingFallback: 'PG' });
       expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
         env: expect.objectContaining({ YOUTARR_RATING_FALLBACK: 'PG' })
@@ -1249,7 +1362,7 @@ describe('DownloadExecutor', () => {
     });
 
     it('should set YOUTARR_OWNER_CHANNEL_ID when ownerChannelId is provided', async () => {
-      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      setTimeout(() => { endProcess(0, null); }, 10);
       await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, { ownerChannelId: 'UC-subscription' });
       expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
         env: expect.objectContaining({ YOUTARR_OWNER_CHANNEL_ID: 'UC-subscription' })
@@ -1257,7 +1370,7 @@ describe('DownloadExecutor', () => {
     });
 
     it('should not set YOUTARR_OWNER_CHANNEL_ID when ownerChannelId is null', async () => {
-      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      setTimeout(() => { endProcess(0, null); }, 10);
       await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, { ownerChannelId: null });
       expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
         env: expect.not.objectContaining({ YOUTARR_OWNER_CHANNEL_ID: expect.anything() })
@@ -1265,7 +1378,7 @@ describe('DownloadExecutor', () => {
     });
 
     it('should set YOUTARR_OWNER_CHANNEL_MAP (serialized) when ownerChannelMap is provided', async () => {
-      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      setTimeout(() => { endProcess(0, null); }, 10);
       const map = { abc123: 'UC-artist', def456: 'UC-other' };
       await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, { ownerChannelMap: map });
       expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
@@ -1274,7 +1387,7 @@ describe('DownloadExecutor', () => {
     });
 
     it('should not set YOUTARR_OWNER_CHANNEL_MAP when the map is empty', async () => {
-      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      setTimeout(() => { endProcess(0, null); }, 10);
       await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, { ownerChannelMap: {} });
       expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
         env: expect.not.objectContaining({ YOUTARR_OWNER_CHANNEL_MAP: expect.anything() })
@@ -1282,7 +1395,7 @@ describe('DownloadExecutor', () => {
     });
 
     it('should log subfolderOverride in info message', async () => {
-      setTimeout(() => { mockProcess.emit('exit', 0, null); }, 10);
+      setTimeout(() => { endProcess(0, null); }, 10);
       await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, { subfolderOverride: 'MyFolder' });
       expect(logger.info).toHaveBeenCalledWith(
         { jobType: mockJobType, args: mockArgs, subfolderOverride: 'MyFolder' },
@@ -1295,7 +1408,7 @@ describe('DownloadExecutor', () => {
         jobModule.updateJob.mockRejectedValueOnce(new Error('db down'));
 
         setTimeout(() => {
-          mockProcess.emit('exit', 0, null);
+          endProcess(0, null);
         }, 10);
 
         await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -1322,7 +1435,7 @@ describe('DownloadExecutor', () => {
         jobModule.updateJob.mockRejectedValueOnce(new Error('db down'));
 
         setTimeout(() => {
-          mockProcess.emit('exit', 0, null);
+          endProcess(0, null);
         }, 10);
 
         await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, true);
@@ -1406,7 +1519,7 @@ describe('DownloadExecutor', () => {
 
         // Node may emit 'exit' after 'error' for the same process; the exit
         // handler must not finalize the job a second time or start another job.
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
         await new Promise((resolve) => setImmediate(resolve));
 
         expect(jobModule.updateJob.mock.calls.length).toBe(updateCalls);
@@ -1415,7 +1528,7 @@ describe('DownloadExecutor', () => {
 
       it('ignores a late error event after the exit handler already finalized', async () => {
         setTimeout(() => {
-          mockProcess.emit('exit', 0, null);
+          endProcess(0, null);
         }, 5);
 
         await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -1445,7 +1558,7 @@ describe('DownloadExecutor', () => {
         });
 
         setTimeout(() => {
-          mockProcess.emit('exit', 0, null);
+          endProcess(0, null);
         }, 10);
 
         try {
@@ -1486,7 +1599,7 @@ describe('DownloadExecutor', () => {
         mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://youtube.com/watch?v=abc123XYZ_d\n');
         // Simulate an error for that video
         mockProcess.stdout.emit('data', 'ERROR: Video unavailable\n');
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -1509,7 +1622,7 @@ describe('DownloadExecutor', () => {
       setTimeout(() => {
         mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://youtube.com/watch?v=def456XYZ\n');
         mockProcess.stderr.emit('data', 'ERROR: Private video\n');
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -1535,7 +1648,7 @@ describe('DownloadExecutor', () => {
       setTimeout(() => {
         mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://youtube.com/watch?v=member12345\n');
         mockProcess.stdout.emit('data', 'ERROR: [youtube] member12345: Join this channel to get access to members-only content like this video, and other exclusive perks.\n');
-        mockProcess.emit('exit', 1, null);
+        endProcess(1, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -1594,7 +1707,7 @@ describe('DownloadExecutor', () => {
       setTimeout(() => {
         mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://youtube.com/watch?v=live1234567\n');
         mockProcess.stdout.emit('data', 'ERROR: [youtube] live1234567: This live event will begin in 21 hours.\n');
-        mockProcess.emit('exit', 1, null);
+        endProcess(1, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -1648,7 +1761,7 @@ describe('DownloadExecutor', () => {
         // still bump unexpectedErrorCount so the job is not classified as
         // "expected skips only".
         mockProcess.stdout.emit('data', 'ERROR: Generic unexpected failure\n');
-        mockProcess.emit('exit', 1, null);
+        endProcess(1, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -1677,7 +1790,7 @@ describe('DownloadExecutor', () => {
         // never calls monitor.processProgress, so monitor.hasError alone
         // would miss this case; unexpectedErrorCount must catch it.
         mockProcess.stderr.emit('data', 'ERROR: Generic unexpected failure\n');
-        mockProcess.emit('exit', 1, null);
+        endProcess(1, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -1706,7 +1819,7 @@ describe('DownloadExecutor', () => {
           'data',
           'ERROR: This video is members-only\nERROR: Generic unexpected failure\n'
         );
-        mockProcess.emit('exit', 1, null);
+        endProcess(1, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -1730,7 +1843,7 @@ describe('DownloadExecutor', () => {
       setTimeout(() => {
         mockProcess.stdout.emit('data', '[download] Destination: /output/Channel - Title [xyz789ABC_d].mp4\n');
         mockProcess.stdout.emit('data', 'ERROR: Download failed\n');
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -1749,7 +1862,7 @@ describe('DownloadExecutor', () => {
       archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/success123']);
 
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -1792,7 +1905,7 @@ describe('DownloadExecutor', () => {
       archiveModule.getNewVideoUrlsSince.mockReturnValue([]);
 
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -1818,7 +1931,7 @@ describe('DownloadExecutor', () => {
       setTimeout(() => {
         mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://youtube.com/watch?v=nodata123\n');
         mockProcess.stdout.emit('data', 'ERROR: This video is not available\n');
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -1851,7 +1964,7 @@ describe('DownloadExecutor', () => {
       archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/success1']);
 
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -1883,7 +1996,7 @@ describe('DownloadExecutor', () => {
       archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/ok1', 'https://youtu.be/ok2']);
 
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -1907,7 +2020,7 @@ describe('DownloadExecutor', () => {
         mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://youtube.com/watch?v=dup123\n');
         mockProcess.stdout.emit('data', 'ERROR: First error\n');
         mockProcess.stdout.emit('data', 'ERROR: Second error\n'); // Should not replace first
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -1933,7 +2046,7 @@ describe('DownloadExecutor', () => {
       setTimeout(() => {
         mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://youtube.com/watch?v=url123\n');
         mockProcess.stdout.emit('data', 'ERROR: Failed to download\n');
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -1962,7 +2075,7 @@ describe('DownloadExecutor', () => {
         mockProcess.stdout.emit('data', 'ERROR: Error for first video\n');
         // Start second video - should clear error
         mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://youtube.com/watch?v=second\n');
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -1986,7 +2099,7 @@ describe('DownloadExecutor', () => {
       archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/success1']);
 
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -2008,7 +2121,7 @@ describe('DownloadExecutor', () => {
         // Simulate yt-dlp explicitly reporting an error for failed1
         mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://youtube.com/watch?v=failed1\n');
         mockProcess.stdout.emit('data', 'ERROR: Failed to download\n');
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -2029,7 +2142,7 @@ describe('DownloadExecutor', () => {
       archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/success1']);
 
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       // allowRedownload = true (6th argument)
@@ -2046,7 +2159,7 @@ describe('DownloadExecutor', () => {
       setTimeout(() => {
         mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://youtube.com/watch?v=nodata123\n');
         mockProcess.stdout.emit('data', 'ERROR: This video is not available\n');
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -2065,7 +2178,7 @@ describe('DownloadExecutor', () => {
 
     it('retains the monitor after finalization instead of clearing it', async () => {
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, 'job-123', 'Channel Downloads');
@@ -2089,7 +2202,7 @@ describe('DownloadExecutor', () => {
       } finally {
         // Always finish the run, or the timeout controller's interval
         // outlives the test and hangs Jest
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
         await downloadPromise;
       }
 
@@ -2101,7 +2214,7 @@ describe('DownloadExecutor', () => {
 
     it('reports a terminal snapshot with monitor payload after the process exits', async () => {
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, 'job-123', 'Channel Downloads');
@@ -2215,7 +2328,7 @@ describe('DownloadExecutor', () => {
         processReference = executor.currentProcess;
         jobIdReference = executor.currentJobId;
 
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, 'job-123', 'Channel Downloads');
@@ -2328,7 +2441,7 @@ describe('DownloadExecutor', () => {
       setTimeout(() => {
         const termLine = 'ERROR: [youtube:tab] UC1234567890123456789012: YouTube said: This account has been terminated for violating Google\'s Terms of Service.\n';
         mockProcess.stderr.emit('data', Buffer.from(termLine));
-        setTimeout(() => mockProcess.emit('exit', 1, null), 5);
+        setTimeout(() => endProcess(1, null), 5);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -2359,7 +2472,7 @@ describe('DownloadExecutor', () => {
       setTimeout(() => {
         const termLine = 'ERROR: [youtube:tab] UC1234567890123456789012: YouTube said: This account has been terminated for violating Google\'s Terms of Service.\n';
         mockProcess.stderr.emit('data', Buffer.from(termLine));
-        setTimeout(() => mockProcess.emit('exit', 1, null), 5);
+        setTimeout(() => endProcess(1, null), 5);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -2384,7 +2497,7 @@ describe('DownloadExecutor', () => {
       setTimeout(() => {
         const termLine = 'ERROR: [youtube:tab] UC1234567890123456789012: YouTube said: This account has been terminated for violating Google\'s Terms of Service.\n';
         mockProcess.stderr.emit('data', Buffer.from(termLine));
-        setTimeout(() => mockProcess.emit('exit', 1, null), 5);
+        setTimeout(() => endProcess(1, null), 5);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -2407,7 +2520,7 @@ describe('DownloadExecutor', () => {
         const termLine = 'ERROR: [youtube:tab] UC1234567890123456789012: YouTube said: This account has been terminated for violating Google\'s Terms of Service.\n';
         mockProcess.stdout.emit('data', Buffer.from(termLine));
         mockProcess.stderr.emit('data', Buffer.from(termLine));
-        setTimeout(() => mockProcess.emit('exit', 1, null), 5);
+        setTimeout(() => endProcess(1, null), 5);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -2425,7 +2538,7 @@ describe('DownloadExecutor', () => {
       setTimeout(() => {
         const termLine = 'ERROR: [youtube:tab] UC1234567890123456789012: YouTube said: This account has been terminated for violating Google\'s Terms of Service.\n';
         mockProcess.stderr.emit('data', Buffer.from(termLine));
-        setTimeout(() => mockProcess.emit('exit', 1, null), 5);
+        setTimeout(() => endProcess(1, null), 5);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -2449,7 +2562,7 @@ describe('DownloadExecutor', () => {
       setTimeout(() => {
         const termLine = 'ERROR: [youtube:tab] UC1234567890123456789012: YouTube said: This account has been terminated for violating Google\'s Terms of Service.\n';
         mockProcess.stderr.emit('data', Buffer.from(termLine));
-        setTimeout(() => mockProcess.emit('exit', 1, null), 5);
+        setTimeout(() => endProcess(1, null), 5);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -2474,7 +2587,7 @@ describe('DownloadExecutor', () => {
       setTimeout(() => {
         const termLine = 'ERROR: [youtube:tab] UC1234567890123456789012: YouTube said: This account has been terminated for violating Google\'s Terms of Service.\n';
         mockProcess.stderr.emit('data', Buffer.from(termLine));
-        setTimeout(() => mockProcess.emit('exit', 1, null), 5);
+        setTimeout(() => endProcess(1, null), 5);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -2491,7 +2604,7 @@ describe('DownloadExecutor', () => {
       setTimeout(() => {
         const badLine = 'ERROR: account has been terminated for violating Google\'s Terms of Service.\n';
         mockProcess.stderr.emit('data', Buffer.from(badLine));
-        setTimeout(() => mockProcess.emit('exit', 1, null), 5);
+        setTimeout(() => endProcess(1, null), 5);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
@@ -2559,7 +2672,7 @@ describe('DownloadExecutor', () => {
 
       // Complete the download
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await downloadPromise;
@@ -2588,7 +2701,7 @@ describe('DownloadExecutor', () => {
 
       // Exit the process
       setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
+        endProcess(0, null);
       }, 10);
 
       await downloadPromise;
@@ -2653,7 +2766,7 @@ describe('DownloadExecutor', () => {
       // Process exits during grace period -> job is Terminated with timeout note
       mockProcess.exitCode = null;
       mockProcess.signalCode = 'SIGTERM';
-      mockProcess.emit('exit', null, 'SIGTERM');
+      endProcess(null, 'SIGTERM');
       await jest.advanceTimersByTimeAsync(0);
       await downloadPromise;
 
@@ -2721,7 +2834,7 @@ describe('DownloadExecutor', () => {
       // inactivity timeout) is what fired
       mockProcess.exitCode = null;
       mockProcess.signalCode = 'SIGTERM';
-      mockProcess.emit('exit', null, 'SIGTERM');
+      endProcess(null, 'SIGTERM');
       await jest.advanceTimersByTimeAsync(0);
       await downloadPromise;
 

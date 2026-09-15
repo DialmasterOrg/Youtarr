@@ -234,6 +234,37 @@ describe('downloadJobFinalizer', () => {
       expect(ctx.router.emitCookiesSuggestion).toHaveBeenCalled();
     });
 
+    it('does not treat the mweb PO-token advisory in the stderr buffer as a 403 or a warning', async () => {
+      const ctx = makeContext({
+        router: makeRouter({
+          stderrBuffer: 'WARNING: [youtube] abc: mweb client https formats require a GVS PO Token which was not provided. ' +
+            'They will be skipped as they may yield HTTP Error 403. You can manually pass a GVS PO Token\n'
+        })
+      });
+
+      await finalizeDownloadJob(ctx);
+
+      expect(ctx.router.emitCookiesSuggestion).not.toHaveBeenCalled();
+      expect(jobModule.updateJob).toHaveBeenCalledWith(mockJobId, expect.objectContaining({
+        status: 'Complete'
+      }));
+    });
+
+    it('still detects a real 403 in a stderr buffer that also carries the PO-token advisory', async () => {
+      const ctx = makeContext({
+        code: 1,
+        router: makeRouter({
+          stderrBuffer: 'WARNING: [youtube] abc: mweb client https formats require a GVS PO Token which was not provided. ' +
+            'They will be skipped as they may yield HTTP Error 403.\n' +
+            'ERROR: unable to download video data: HTTP Error 403: Forbidden\n'
+        })
+      });
+
+      await finalizeDownloadJob(ctx);
+
+      expect(ctx.router.emitCookiesSuggestion).toHaveBeenCalled();
+    });
+
     it('cleans up in-progress videos and marks Terminated with the manual reason', async () => {
       await finalizeDownloadJob(makeContext({
         code: null,
@@ -788,6 +819,15 @@ describe('downloadJobFinalizer', () => {
     it('returns false for empty stderr so callers keep their own guard', () => {
       expect(stderrHasOnlyBenignWarnings('')).toBe(false);
       expect(stderrHasOnlyBenignWarnings('   \n  ')).toBe(false);
+    });
+
+    it('treats the PO-token advisory and the SABR experiment warning as benign', () => {
+      const stderr = [
+        'WARNING: [youtube] abc: mweb client https formats require a GVS PO Token which was not provided. They will be skipped as they may yield HTTP Error 403.',
+        'WARNING: [youtube] abc: Some web_embedded client https formats have been skipped as they are missing a URL. YouTube may have enabled the SABR-only streaming experiment for your account.'
+      ].join('\n');
+
+      expect(stderrHasOnlyBenignWarnings(stderr)).toBe(true);
     });
   });
 });
