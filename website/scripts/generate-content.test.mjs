@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import GithubSlugger from 'github-slugger';
 import {manifest, discoverMarkdownSources} from './manifest.mjs';
-import {rewriteLinks, toDocusaurusAnchor, assertManifest, generate} from './generate-content.mjs';
+import {extractHeadingSlugs, rewriteLinks, assertManifest, generate} from './generate-content.mjs';
 
 test('manifest has unique ids and slugs', () => { assert.equal(new Set(manifest.map((x) => x.id)).size, manifest.length); assert.equal(new Set(manifest.map((x) => x.slug)).size, manifest.length); });
 test('canonical corpus covers every eligible source exactly once', () => {
@@ -37,19 +38,39 @@ test('manifest validation rejects missing, duplicate, and unsafe entries', () =>
 test('same-page and cross-page links use rendered Docusaurus anchors', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'youtarr-docs-'));
   fs.mkdirSync(path.join(tmp, 'docs'));
-  fs.writeFileSync(path.join(tmp, 'docs', 'a.md'), '[B](b.md#part)');
-  fs.writeFileSync(path.join(tmp, 'docs', 'b.md'), '# B');
-  const routes = new Map([['a.md', 'a'], ['b.md', 'b']]);
-  assert.equal(toDocusaurusAnchor('#-important-section'), '#important-section');
-  assert.equal(rewriteLinks('[Section](#section)', 'a.md', routes, tmp), '[Section](#section)');
-  assert.match(rewriteLinks('[B](b.md#-part)', 'a.md', routes, tmp), /\/docs\/b#part/);
-  assert.throws(() => rewriteLinks('[X](missing.md)', 'a.md', routes, tmp), /unresolved canonical link/);
-  assert.throws(() => rewriteLinks('![x](missing.png)', 'a.md', routes, tmp), /unresolved relative asset/);
+  fs.writeFileSync(path.join(tmp, 'docs', 'a.md'), '# Section\n[Section](#section)\n[B](b.md#part)');
+  fs.writeFileSync(path.join(tmp, 'docs', 'b.md'), '# Part');
+  const routes = new Map([['docs/a.md', 'a'], ['docs/b.md', 'b']]);
+  const rewritten = rewriteLinks(fs.readFileSync(path.join(tmp, 'docs', 'a.md'), 'utf8'), 'docs/a.md', routes, tmp);
+  assert.match(rewritten, /\[Section\]\(#section\)/);
+  assert.match(rewritten, /\/docs\/b#part/);
+  assert.equal(rewriteLinks('[Missing](#missing)', 'docs/a.md', routes, tmp), '[Missing](#missing)');
+  assert.throws(() => rewriteLinks('[X](missing.md)', 'docs/a.md', routes, tmp), /unresolved canonical link/);
+  assert.throws(() => rewriteLinks('![x](missing.png)', 'docs/a.md', routes, tmp), /unresolved relative asset/);
+});
 
+test('heading extraction ignores fenced code blocks', () => {
+  assert.deepEqual(extractHeadingSlugs('```markdown\n# Not a heading\n```\n# Real heading\n'), ['real-heading']);
+});
+
+test('emoji-prefixed Docker anchors use the actual Docusaurus slug', () => {
   const dockerSource = fs.readFileSync(path.resolve(new URL('../../docs/DOCKER.md', import.meta.url).pathname), 'utf8');
   const dockerLink = dockerSource.match(/\[[^\]]+\]\(#-important-do-not-mount-the-migrations-directory\)/)?.[0];
   assert.ok(dockerLink);
-  assert.match(rewriteLinks(dockerLink, 'docs/DOCKER.md', new Map([['docs/DOCKER.md', 'docker']])), /\/docs\/docker#important-do-not-mount-the-migrations-directory/);
+  const dockerHeading = dockerSource.match(/^##\s+(.+Do Not Mount the Migrations Directory)$/m)?.[1];
+  assert.ok(dockerHeading);
+  const slugger = new GithubSlugger();
+  let expectedAnchor;
+  for (const heading of dockerSource.match(/^#{1,6}\s+(.+)$/gm) || []) {
+    const headingText = heading.replace(/^#{1,6}\s+/, '');
+    const slug = slugger.slug(headingText);
+    if (headingText === dockerHeading) expectedAnchor = `#${slug}`;
+  }
+  assert.ok(expectedAnchor);
+  assert.equal(
+    rewriteLinks(dockerLink, 'docs/DOCKER.md', new Map([['docs/DOCKER.md', 'docker']])),
+    dockerLink.replace(/\((#[^)]+)\)/, `(/docs/docker${expectedAnchor})`),
+  );
 });
 test('safe MDX preserves intentional HTML, inline code, and escapes placeholders/braces', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'youtarr-html-'));

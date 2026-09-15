@@ -1,21 +1,70 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import GithubSlugger from 'github-slugger';
 import { createManifest, ROOT } from './manifest.mjs';
 
-export function toDocusaurusAnchor(anchor) {
-  return anchor.replace(/^#-/, '#');
+const stripFrontMatter = (markdown) => markdown.replace(/^---[\s\S]*?---\s*/, '');
+const normalizeAnchorForMatch = (anchor) => anchor.replace(/[\uFE0E\uFE0F]/g, '');
+
+export function extractHeadingSlugs(markdown) {
+  const slugger = new GithubSlugger();
+  const slugs = [];
+  let fenced = false;
+  let fenceCharacter;
+
+  for (const line of stripFrontMatter(markdown).split('\n')) {
+    const fence = line.match(/^\s{0,3}(`{3,}|~{3,})/);
+    if (fence) {
+      if (!fenced) {
+        fenced = true;
+        fenceCharacter = fence[1][0];
+      } else if (fence[1][0] === fenceCharacter) {
+        fenced = false;
+        fenceCharacter = undefined;
+      }
+      continue;
+    }
+
+    if (fenced) continue;
+
+    const heading = line.match(/^\s{0,3}#{1,6}[ \t]+(.+?)[ \t]*$/);
+    if (!heading) continue;
+
+    const headingText = heading[1].replace(/[ \t]+#+[ \t]*$/, '').trim();
+    slugs.push(slugger.slug(headingText));
+  }
+
+  return slugs;
 }
 
-export function rewriteLinks(body, source, routes, root = ROOT) {
+function createHeadingIndex(routes, root) {
+  return new Map([...routes.keys()].map((source) => {
+    const markdown = fs.readFileSync(path.join(root, source), 'utf8');
+    return [source, new Map(extractHeadingSlugs(markdown).map((slug) => [normalizeAnchorForMatch(slug), slug]))];
+  }));
+}
+
+function resolveAnchor(anchor, targetSource, headingIndex) {
+  const requestedSlug = anchor.slice(1);
+  const targetSlugs = headingIndex.get(targetSource);
+  const resolvedSlug = targetSlugs?.get(normalizeAnchorForMatch(requestedSlug));
+  return resolvedSlug ? `#${resolvedSlug}` : anchor;
+}
+
+export function rewriteLinks(body, source, routes, root = ROOT, headingIndex = createHeadingIndex(routes, root)) {
   const sourceFile = source.startsWith('docs/') ? path.join(root, source) : path.join(root, source);
   let fenced = false;
   const htmlTags = new Set(['details','summary','img','br','a','div','span','p','table','thead','tbody','tr','th','td','figure','figcaption','video','source','sup','sub']);
   const sanitize = (text) => text.replace(/<([A-Z][A-Z0-9_ -]*)>/g, '&lt;$1&gt;').replace(/<\/?([A-Za-z][A-Za-z0-9-]*)(?:\s[^>]*)?>/g, (tag, name) => htmlTags.has(name.toLowerCase()) ? tag : tag.replace(/</g, '&lt;').replace(/>/g, '&gt;')).replace(/<(?=[^A-Za-z\/])/g, '&lt;').replace(/\{/g, '&#123;').replace(/\}/g, '&#125;');
   const safeMdx = body.split('\n').map((line) => { if (/^\s*(```|~~~)/.test(line)) { fenced = !fenced; return line; } if (fenced) return line; let output = ''; let cursor = 0; const codeSpan = /(`+)([\s\S]*?)\1/g; let match; while ((match = codeSpan.exec(line))) { output += sanitize(line.slice(cursor, match.index)) + match[0]; cursor = codeSpan.lastIndex; } return output + sanitize(line.slice(cursor)); }).join('\n');
   return safeMdx.replace(/(!?\[[^\]]*\])\(([^)]+)\)/g, (all, label, href) => {
-    if (href.startsWith('#-')) return `${label}(/docs/${routes.get(source)}${toDocusaurusAnchor(href)})`;
-    if (/^(?:[a-z]+:|\/\/|#|data:)/i.test(href)) return all;
+    if (href.startsWith('#')) {
+      const anchor = resolveAnchor(href, source, headingIndex);
+      if (href.startsWith('#-')) return `${label}(/docs/${routes.get(source)}${anchor})`;
+      return anchor === href ? all : `${label}(${anchor})`;
+    }
+    if (/^(?:[a-z]+:|\/\/|data:)/i.test(href)) return all;
     const [target, ...anchorParts] = href.split('#');
     if (!target) return all;
     if (!target.toLowerCase().endsWith('.md')) {
@@ -25,7 +74,7 @@ export function rewriteLinks(body, source, routes, root = ROOT) {
     const resolved = path.normalize(path.relative(root, path.resolve(path.dirname(sourceFile), target))).replaceAll('\\', '/');
     const canonical = resolved;
     if (!routes.has(canonical)) throw new Error(`unresolved canonical link ${source}:${href}`);
-    const anchor = anchorParts.length ? toDocusaurusAnchor(`#${anchorParts.join('#')}`) : '';
+    const anchor = anchorParts.length ? resolveAnchor(`#${anchorParts.join('#')}`, canonical, headingIndex) : '';
     return `${label}(/docs/${routes.get(canonical)}${anchor})`;
   });
 }
@@ -49,10 +98,11 @@ export async function generate({root = ROOT, outputRoot, swaggerSpec} = {}) {
   fs.mkdirSync(path.join(outRoot, 'docs'), { recursive: true });
   const manifest = createManifest(root); assertManifest(manifest, root);
   const routes = new Map(manifest.map((item) => [item.source, item.slug]));
+  const headingIndex = createHeadingIndex(routes, root);
   for (const item of manifest) {
     const sourceFile = path.join(root, item.source);
     const body = fs.readFileSync(sourceFile, 'utf8').replace(/^---[\s\S]*?---\s*/, '');
-    const rewritten = rewriteLinks(body, item.source, routes);
+    const rewritten = rewriteLinks(body, item.source, routes, root, headingIndex);
     const dest = path.join(outRoot, 'docs', `${item.slug}.md`);
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.writeFileSync(dest, `---\nid: ${item.id}\ntitle: ${item.title}\nslug: /${item.slug}\neditUrl: ${item.sourceEditUrl}\n---\n\n${rewritten.trim()}\n`);
