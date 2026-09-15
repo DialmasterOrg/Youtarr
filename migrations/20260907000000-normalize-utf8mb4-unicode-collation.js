@@ -14,10 +14,16 @@ module.exports = {
     // lowercase names) and before the playlist following migration, whose
     // backfill join is the first such comparison.
     const result = await normalizeUnicodeCollation(queryInterface);
-    if (result.databaseChanged || result.convertedTables.length > 0 || result.restoredUuidColumns.length > 0) {
+    const changed =
+      result.databaseChanged ||
+      result.convertedTables.length > 0 ||
+      result.restoredUuidColumns.length > 0 ||
+      result.restoredForeignKeys.length > 0;
+    if (changed) {
       console.log(
         `Normalized collation to utf8mb4_unicode_ci: database=${result.databaseChanged}, ` +
-        `tables=[${result.convertedTables.join(', ')}], uuidColumns=[${result.restoredUuidColumns.join(', ')}]`
+        `tables=[${result.convertedTables.join(', ')}], uuidColumns=[${result.restoredUuidColumns.join(', ')}], ` +
+        `foreignKeys=[${result.restoredForeignKeys.join(', ')}]`
       );
     }
   },

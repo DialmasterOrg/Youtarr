@@ -35,6 +35,25 @@ describe('normalize utf8mb4 unicode collation migration', () => {
     expect(qi.state.foreignKeyChecks).toBe(1);
   });
 
+  test('completes on a server that refuses to alter foreign key columns', async () => {
+    const jobsFk = (name, deleteRule) => ({
+      name, columns: ['job_id'], referencedTable: 'jobs', referencedColumns: ['id'], updateRule: 'CASCADE', deleteRule,
+    });
+    const qi = createCollationSchemaDouble({
+      rejectForeignKeyColumnChanges: true,
+      tables: {
+        jobs: { collation: 'utf8mb4_general_ci', columns: { id: 'utf8mb4_bin' } },
+        jobvideos: { collation: 'utf8mb4_general_ci', columns: { job_id: 'utf8mb4_bin' }, foreignKeys: [jobsFk('JobVideos_ibfk_1', 'RESTRICT')] },
+        jobvideodownloads: { collation: 'utf8mb4_general_ci', columns: { job_id: 'utf8mb4_bin' }, foreignKeys: [jobsFk('JobVideoDownloads_ibfk_1', 'CASCADE')] },
+      },
+    });
+    await migration.up(qi);
+    expect(qi.tables.jobvideodownloads.collation).toBe('utf8mb4_unicode_ci');
+    expect(qi.tables.jobvideodownloads.foreignKeys).toEqual([jobsFk('JobVideoDownloads_ibfk_1', 'CASCADE')]);
+    expect(qi.tables.jobvideos.foreignKeys).toEqual([jobsFk('JobVideos_ibfk_1', 'RESTRICT')]);
+    expect(qi.state.foreignKeyChecks).toBe(1);
+  });
+
   test('is a no-op on a second run', async () => {
     const qi = createCollationSchemaDouble({
       tables: {
