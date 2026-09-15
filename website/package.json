@@ -1,0 +1,37 @@
+{
+  "name": "youtarr-docs",
+  "private": true,
+  "scripts": {
+    "generate": "node scripts/generate-content.mjs",
+    "check": "npm run generate && node --test scripts/generate-content.test.mjs",
+    "test": "npm run check",
+    "typecheck": "tsc --noEmit",
+    "start": "npm run generate && node node_modules/@docusaurus/core/bin/docusaurus.mjs start",
+    "build": "npm run generate && node node_modules/@docusaurus/core/bin/docusaurus.mjs build",
+    "serve": "node node_modules/@docusaurus/core/bin/docusaurus.mjs serve"
+  },
+  "dependencies": {
+    "@cmfcmf/docusaurus-search-local": "2.0.1",
+    "@docusaurus/core": "3.8.1",
+    "@docusaurus/preset-classic": "3.8.1",
+    "@docusaurus/utils": "3.8.1",
+    "github-slugger": "1.5.0",
+    "mdast-util-to-string": "4.0.0",
+    "prism-react-renderer": "2.4.1",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "remark-gfm": "4.0.1",
+    "remark-parse": "11.0.0",
+    "unified": "11.0.5",
+    "unist-util-visit": "5.1.0"
+  },
+  "devDependencies": {
+    "@docusaurus/module-type-aliases": "3.8.1",
+    "@docusaurus/tsconfig": "3.8.1",
+    "@docusaurus/types": "3.8.1",
+    "typescript": "~5.6.2"
+  },
+  "overrides": {
+    "webpack": "5.98.0"
+  }
+}
