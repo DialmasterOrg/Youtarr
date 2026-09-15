@@ -369,6 +369,46 @@ describe('ChannelSettingsModule', () => {
     });
   });
 
+  describe('validateAdditionalTags', () => {
+    test('accepts null, empty string, and whitespace-only string', () => {
+      expect(channelSettingsModule.validateAdditionalTags(null).valid).toBe(true);
+      expect(channelSettingsModule.validateAdditionalTags('').valid).toBe(true);
+      expect(channelSettingsModule.validateAdditionalTags('   ').valid).toBe(true);
+    });
+
+    test('accepts a valid | separated tag list', () => {
+      expect(channelSettingsModule.validateAdditionalTags('tag1|tag2|tag3').valid).toBe(true);
+      expect(channelSettingsModule.validateAdditionalTags(' single ').valid).toBe(true);
+    });
+
+    test('rejects more than 1000 characters', () => {
+      expect(channelSettingsModule.validateAdditionalTags('a'.repeat(1001)).valid).toBe(false);
+      expect(channelSettingsModule.validateAdditionalTags('a'.repeat(1000)).valid).toBe(true);
+    });
+
+    test('rejects whitespace-only tags from stray | characters', () => {
+      expect(channelSettingsModule.validateAdditionalTags('a||b').valid).toBe(false);
+      expect(channelSettingsModule.validateAdditionalTags('a| |b').valid).toBe(false);
+      expect(channelSettingsModule.validateAdditionalTags('|a').valid).toBe(false);
+      expect(channelSettingsModule.validateAdditionalTags('a|').valid).toBe(false);
+      expect(channelSettingsModule.validateAdditionalTags(' |a').valid).toBe(false);
+    });
+
+    test('rejects duplicate tags', () => {
+      expect(channelSettingsModule.validateAdditionalTags('a|b|a').valid).toBe(false);
+      expect(channelSettingsModule.validateAdditionalTags('a| a').valid).toBe(false);
+    });
+
+    test('rejects a tag containing disallowed characters', () => {
+      expect(channelSettingsModule.validateAdditionalTags('tag1!tag2').valid).toBe(false);
+      expect(channelSettingsModule.validateAdditionalTags('bad/tag').valid).toBe(false);
+      expect(channelSettingsModule.validateAdditionalTags('tag@2').valid).toBe(false);
+      expect(channelSettingsModule.validateAdditionalTags('🚀').valid).toBe(false);
+      expect(channelSettingsModule.validateAdditionalTags('>').valid).toBe(false);
+      expect(channelSettingsModule.validateAdditionalTags(';').valid).toBe(false);
+    });
+  });
+
   describe('hasActiveDownloads', () => {
     test('should return false when no jobs are running', async () => {
       jobModule.getAllJobs.mockReturnValue({});
@@ -520,6 +560,7 @@ describe('ChannelSettingsModule', () => {
         min_duration: 60,
         max_duration: 3600,
         title_filter_regex: 'test.*',
+        additional_tags: 'approved|tag',
         auto_removal_protected: 1,
         auto_removal_keep_recent_count: 25
       };
@@ -534,6 +575,7 @@ describe('ChannelSettingsModule', () => {
         min_duration: 60,
         max_duration: 3600,
         title_filter_regex: 'test.*',
+        additional_tags: 'approved|tag',
         auto_removal_protected: true,
         auto_removal_keep_recent_count: 25
       });
