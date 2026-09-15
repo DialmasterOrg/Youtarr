@@ -407,6 +407,65 @@ describe('YtdlpOutputRouter', () => {
     });
   });
 
+  describe('context-aware hints during anonymous retry', () => {
+    let anonymousRouter;
+
+    beforeEach(() => {
+      anonymousRouter = new YtdlpOutputRouter({
+        jobId: 'job-123',
+        config: { enableStallDetection: false },
+        monitor: makeMonitor(),
+        errorTracker: makeErrorTracker(),
+        timeoutController: makeTimeoutController(),
+        cookiesEnabled: false,
+        anonymousRetry: true
+      });
+    });
+
+    afterEach(() => {
+      if (anonymousRouter.progressFlushTimer) {
+        clearTimeout(anonymousRouter.progressFlushTimer);
+        anonymousRouter.progressFlushTimer = null;
+      }
+    });
+
+    it('reports a recoverable 403 during the no-cookies fallback without recommending cookies', () => {
+      anonymousRouter.handleStderrChunk('HTTP Error 403: Forbidden\n');
+
+      const call = MessageEmitter.emitMessage.mock.calls.find(
+        (c) => c[4] && c[4].errorCode === 'NO_COOKIES_FALLBACK_403'
+      );
+
+      expect(call).toBeDefined();
+      expect(call[4].text).toMatch(/no-cookies fallback/i);
+      expect(call[4].text).toMatch(/if this retry fails/i);
+      expect(call[4].text).toMatch(/genuinely unavailable/i);
+      expect(call[4].text).not.toMatch(/fallback also failed/i);
+      expect(call[4].text).not.toMatch(/set.*cookies|enable.*cookies|re-export/i);
+      expect(
+        MessageEmitter.emitMessage.mock.calls.some(
+          (c) => c[4] && (
+            c[4].errorCode === 'COOKIES_RECOMMENDED' ||
+            c[4].errorCode === 'COOKIES_MAY_BE_STALE'
+          )
+        )
+      ).toBe(false);
+    });
+
+    it('reports bot detection as a failed no-cookies fallback instead of recommending cookies', () => {
+      anonymousRouter.handleStderrChunk('Sign in to confirm you\'re not a bot\n');
+
+      const call = MessageEmitter.emitMessage.mock.calls.find(
+        (c) => c[4] && c[4].progress && c[4].progress.state === 'bot_detected'
+      );
+
+      expect(call).toBeDefined();
+      expect(call[4].text).toMatch(/no-cookies fallback/i);
+      expect(call[4].text).toMatch(/genuinely unavailable/i);
+      expect(call[4].text).not.toMatch(/set.*cookies|enable.*cookies|re-export/i);
+    });
+  });
+
   describe('isImportantMessage', () => {
     it('should identify download destination messages as important', () => {
       const line = '[download] Destination: /output/Channel - Title [abc123].mp4';

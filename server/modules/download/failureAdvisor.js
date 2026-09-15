@@ -31,6 +31,12 @@ const ADVICE = {
       'cookies from your browser (Settings -> Cookies) often ' +
       'resolves it.',
   },
+  'http-403-anonymous-retry': {
+    title: 'No-cookies fallback also failed',
+    message:
+      'The no-cookies fallback was also blocked by YouTube. This video may ' +
+      'be genuinely unavailable.',
+  },
   'bot-check-cookies-enabled': {
     title: 'YouTube bot check despite cookies',
     message:
@@ -45,6 +51,12 @@ const ADVICE = {
       'from your browser in Settings -> Cookies to resolve ' +
       'this.',
   },
+  'bot-check-anonymous-retry': {
+    title: 'No-cookies fallback also failed',
+    message:
+      'YouTube rejected the no-cookies fallback with a bot check. This video ' +
+      'may be genuinely unavailable.',
+  },
 };
 
 // Ordered registry; first match wins. Bot-check outranks http-403 because a
@@ -58,13 +70,21 @@ const REGISTRY = [
       return context.botDetected === true && DOWNLOAD_FAILURE_PATTERN.test(error);
     },
     keyFor: (context) =>
-      context.cookiesEnabled ? 'bot-check-cookies-enabled' : 'bot-check-cookies-disabled',
+      context.anonymousRetry
+        ? 'bot-check-anonymous-retry'
+        : context.cookiesEnabled
+          ? 'bot-check-cookies-enabled'
+          : 'bot-check-cookies-disabled',
   },
   {
     matches: (video, context) =>
       isTransient403Failure(video, { httpForbiddenDetected: context.httpForbiddenDetected === true }),
     keyFor: (context) =>
-      context.cookiesEnabled ? 'http-403-cookies-enabled' : 'http-403-cookies-disabled',
+      context.anonymousRetry
+        ? 'http-403-anonymous-retry'
+        : context.cookiesEnabled
+          ? 'http-403-cookies-enabled'
+          : 'http-403-cookies-disabled',
   },
 ];
 
