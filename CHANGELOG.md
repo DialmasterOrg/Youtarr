@@ -1,5 +1,30 @@
 # Changelog
 
+## [v1.83.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.83.0) - 2026-09-15
+
+## [1.83.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.82.1...v1.83.0) (2026-09-15)
+
+
+### Features
+
+* rework playlist auto-download starting point ([8126a54](https://github.com/DialmasterOrg/Youtarr/commit/8126a54523305a1e17749454b42fd2900bdb10a0)), closes [#804](https://github.com/DialmasterOrg/Youtarr/issues/804)
+
+
+### Bug Fixes
+
+* 360p-only downloads when cookies are enabled ([a29ae65](https://github.com/DialmasterOrg/Youtarr/commit/a29ae657ad032ca9cb959be7e9077a8adb3224c6)), closes [#799](https://github.com/DialmasterOrg/Youtarr/issues/799)
+* bump multer and js-yaml to clear npm audit ([db030ef](https://github.com/DialmasterOrg/Youtarr/commit/db030ef996a85491a6993ed3f1d82f2a7e64538e))
+* normalize legacy table collations on startup ([10cf9a8](https://github.com/DialmasterOrg/Youtarr/commit/10cf9a8b7d4bcc4265ac265317f930b979c1da6d))
+
+
+### Documentation
+
+* update CHANGELOG for v1.82.1 [skip ci] ([7240478](https://github.com/DialmasterOrg/Youtarr/commit/724047873ff61d08b14817e93b659341cfdde178))
+
+
+
+
+
 ## [v1.82.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.82.1) - 2026-09-14
 
 ### [1.82.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.82.0...v1.82.1) (2026-09-14)
