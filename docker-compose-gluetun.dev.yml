@@ -1,4 +1,28 @@
 services:
+  gluetun:
+    image: ${GLUETUN_IMAGE:-qmcgaw/gluetun:latest}
+    restart: unless-stopped
+    container_name: ${GLUETUN_CONTAINER_NAME:-gluetun}
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      VPN_SERVICE_PROVIDER: ${VPN_SERVICE_PROVIDER}
+      VPN_TYPE: ${VPN_TYPE:-wireguard}
+      WIREGUARD_PRIVATE_KEY: ${WIREGUARD_PRIVATE_KEY}
+      WIREGUARD_PRESHARED_KEY: ${WIREGUARD_PRESHARED_KEY}
+      WIREGUARD_ADDRESSES: ${WIREGUARD_ADDRESSES}
+      WIREGUARD_MTU: ${WIREGUARD_MTU:-1420}
+      UPDATER_VPN_SERVICE_PROVIDERS: ${VPN_SERVICE_PROVIDER}
+      TZ: ${TZ:-UTC}
+      FIREWALL_OUTBOUND_SUBNETS: ${FIREWALL_OUTBOUND_SUBNETS:-192.168.0.0/16}
+    ports:
+      - "${YOUTARR_HOST_PORT:-3087}:3011"
+    volumes:
+      - gluetun:/gluetun
+      - /lib/modules:/lib/modules
+
   youtarr-db:
     image: mariadb:10.3
     container_name: youtarr-db-dev
@@ -9,6 +33,10 @@ services:
       MYSQL_DATABASE: ${DB_NAME:-youtarr}
       MYSQL_USER: ${DB_USER:-youtarr}
       MYSQL_PASSWORD: ${DB_PASSWORD:-youtarrpassword}
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    network_mode: "service:${GLUETUN_CONTAINER_NAME:-gluetun}"
     command: ['--character-set-server=utf8mb4', '--collation-server=utf8mb4_unicode_ci']
 
   youtarr:
@@ -57,8 +85,12 @@ services:
       - DATA_PATH=${DATA_PATH:-}
       - PLEX_URL=${PLEX_URL:-}
     depends_on:
-      - youtarr-db
+      youtarr-db:
+        condition: service_started
+      gluetun:
+        condition: service_healthy
     # Use Node 18+'s built-in watch mode for auto-restart on server changes
+    network_mode: "service:${GLUETUN_CONTAINER_NAME:-gluetun}"
     command: ["node", "--watch", "server/server.js"]
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--output", "/dev/null", "http://localhost:3011/api/health"]
@@ -68,4 +100,5 @@ services:
       start_period: 40s
 
 volumes:
+  gluetun:
   youtarr-db-data-dev:
