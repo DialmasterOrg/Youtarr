@@ -13,7 +13,7 @@ This is a basic guide to configuring Youtarr to use Gluetun for downloading medi
    - Switch to a Docker Compose file with Gluetun integrated, like [docker-compose-gluetun.yml](https://github.com/DialmasterOrg/Youtarr/blob/main/docker-compose-gluetun.yml)
 3. Switching `.env` files
    - Switch to an `.env` file with Gluetun integrated, like [.env.gluetun-example](https://github.com/DialmasterOrg/Youtarr/blob/main/.env.gluetun-example)
-4. Recreate Youtarr's container by running
+4. Recreate the Youtarr container and add Gluetun by running
    ```
    docker compose up -d --force-recreate
    ```
@@ -24,7 +24,3 @@ This is a basic guide to configuring Youtarr to use Gluetun for downloading medi
 Sources:
 - [Gluetun](https://github.com/qdm12/gluetun)
 - [Gluetun Wiki](https://github.com/qdm12/gluetun-wiki)
-- [inter-containers-networking.md](https://github.com/qdm12/gluetun-wiki/blob/main/setup/inter-containers-networking.md)
-- [providers](https://github.com/qdm12/gluetun-wiki/tree/main/setup/providers)
-- [firewall.md](https://github.com/qdm12/gluetun-wiki/blob/main/setup/options/firewall.md)
-- [connect-a-container-to-gluetun.md](https://github.com/qdm12/gluetun-wiki/blob/main/setup/connect-a-container-to-gluetun.md)
