@@ -1,8 +1,8 @@
 # IMPORTANT NOTES:
-# 1) UID/GID and folders setup:
-# By default the youtarr service runs as ROOT (UID 0, GID 0) for compatibility with existing setups.
+# 1) UID/GID and folder setup:
+# By default, the youtarr service runs as ROOT (UID 0, GID 0) for compatibility with existing setups.
 # For improved security, you can set YOUTARR_UID and YOUTARR_GID environment variables to run the container as a non-root user.
-# If you do so, ensure that the following directories to exist on the host with the correct ownership/permissions before
+# If you do so, ensure that the following directories exist on the host with the correct ownership/permissions before
 # starting the container:
 # - ./config
 # - ./jobs
@@ -18,7 +18,7 @@
 # 2) Database setup notes:
 # The default bundled MariaDB uses ./database as a bind mount for backwards compatibility.
 # On Docker Desktop (Windows/macOS), ARM hosts, and some NAS/virtualized filesystems,
-# bind-mounted MariaDB data can corrupt during schema migrations. For a safer named
+# bind-mounted MariaDB data can become corrupted during schema migrations. For a safer named
 # volume, use docker-compose.arm.yml or run ./scripts/migrate-to-named-volume.sh
 # for an existing bind-mounted install.
 
@@ -79,7 +79,7 @@ services:
       # This is just informational and lets the app know where the videos will be stored on the host
       YOUTUBE_OUTPUT_DIR: ${YOUTUBE_OUTPUT_DIR}
       # Optional: Custom data path for platforms like Elfhosted (defaults to /usr/src/app/data)
-      # This is the internal path where videos download inside the container and is not needed for most users
+      # This is the internal path where videos are downloaded inside the container and is not needed for most users
       # DATA_PATH: /storage/rclone/storagebox/youtube
 
     ports:
