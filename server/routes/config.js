@@ -124,6 +124,11 @@ module.exports = function createConfigRoutes({ verifyToken, configModule, valida
    *                   type: string
    *                 ytdlpUpdateFrequency:
    *                   type: string
+   *                 isPlatformManaged:
+   *                   type: object
+   *                   properties:
+   *                     externalApiEnabled:
+   *                       type: boolean
    */
   router.get('/getconfig', verifyToken, (req, res) => {
     const config = configModule.getConfig();
