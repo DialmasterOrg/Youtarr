@@ -351,7 +351,7 @@ interface ApiKeysSectionProps {
   token: string | null;
   apiKeyRateLimit: number;
   onRateLimitChange: (value: number) => void;
-  externalApiEnabled: boolean;
+  externalApiEnabled?: boolean;
   showRequestsNavLink: boolean;
   onShowRequestsNavLinkChange: (value: boolean) => void;
 }
@@ -360,7 +360,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
   token,
   apiKeyRateLimit,
   onRateLimitChange,
-  externalApiEnabled,
+  externalApiEnabled = true,
   showRequestsNavLink,
   onShowRequestsNavLinkChange,
 }) => {
