@@ -103,6 +103,23 @@ describe('AppShell', () => {
     expect(screen.getByTestId('header-nav-items')).not.toHaveTextContent('Requests');
   });
 
+  it('shows the Requests navigation item when the effective gate is enabled', () => {
+    setViewportMatch(false);
+    localStorage.setItem('uiThemeMode', 'playful');
+
+    render(
+      <MemoryRouter initialEntries={['/requests']}>
+        <ThemeEngineProvider>
+          <AppShell token="test-token" isPlatformManaged={false} showRequestsNavLink>
+            <div>Shell content</div>
+          </AppShell>
+        </ThemeEngineProvider>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByTestId('header-nav-items')).toHaveTextContent('Requests');
+  });
+
   it('updates nav width when desktop sidebar is collapsed', async () => {
     const user = userEvent.setup();
     renderShell('playful');
