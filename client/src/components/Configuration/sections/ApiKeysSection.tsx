@@ -693,7 +693,9 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
         toggleTestId: 'requests-nav-link-switch',
       } : undefined}
     >
-      {externalApiEnabled ? (\n        <>\n      <Box className="mb-4 flex flex-wrap items-start justify-between gap-3">
+      {externalApiEnabled ? (
+        <>
+      <Box className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <Typography variant="subtitle1">External access keys</Typography>
           <Typography variant="body2" color="secondary" className="mt-1 max-w-2xl">
@@ -921,7 +923,14 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
         </div>
       )}
 
-        </>\n      ) : (\n        <Alert severity="info" className="mb-4">\n          External API access is disabled by the EXTERNAL_API_ENABLED environment setting.\n        </Alert>\n      )}\n\n      <Divider className="my-6" />
+        </>
+      ) : (
+        <Alert severity="info" className="mb-4">
+          External API access is disabled by the EXTERNAL_API_ENABLED environment setting.
+        </Alert>
+      )}
+
+      <Divider className="my-6" />
 
       <Box className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
