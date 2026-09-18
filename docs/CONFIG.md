@@ -821,6 +821,13 @@ Settings for API key authentication used by bookmarklets, mobile shortcuts, and 
 - **Range**: 1-100
 - **Note**: Helps prevent abuse from external integrations. Each API key is rate-limited independently.
 
+### Requests Navigation Link
+- **Config Key**: `showRequestsNavLink`
+- **Type**: `boolean`
+- **Default**: `true`
+- **Description**: Controls whether the administrator Requests page appears in the application navigation when the versioned external API is enabled.
+- **Note**: This setting cannot enable the Requests page when `EXTERNAL_API_ENABLED` is unset or anything other than the exact string `true`; the environment capability is the controlling gate.
+
 For detailed information on creating and using API keys, see [API Integration Guide](API_INTEGRATION.md).
 
 ## yt-dlp Auto-Update
