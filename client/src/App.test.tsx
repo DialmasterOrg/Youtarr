@@ -81,6 +81,15 @@ jest.mock('./components/ChannelPage', () => {
   };
 });
 
+jest.mock('./components/Settings/Settings', () => ({
+  Settings: () => <div data-testid="settings-page">Settings Component</div>,
+}));
+
+jest.mock('./components/ExternalRequests/RequestsPage', () => ({
+  __esModule: true,
+  default: () => <div data-testid="requests-page">Requests Component</div>,
+}));
+
 jest.mock('./components/ChangelogPage', () => {
   return function ChangelogPage() {
     return <div data-testid="changelog-page">Changelog Page Component</div>;
@@ -444,6 +453,36 @@ describe('App Component', () => {
       expect(screen.getByAltText('Youtarr')).toBeInTheDocument();
     });
     // ElfHosted platform sets token via platform-managed auth
+  });
+
+  test('redirects direct Requests navigation when external API is disabled', async () => {
+    localStorageMock.getItem.mockReturnValue('test-token');
+    setMockLocation('http://localhost/requests');
+    (global.fetch as jest.Mock).mockImplementation((url) => {
+      if (url === '/getconfig') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ isPlatformManaged: { externalApiEnabled: false } }),
+        });
+      }
+      if (url === '/api/db-status') {
+        return Promise.resolve({ ok: true, json: async () => ({ status: 'healthy' }) });
+      }
+      if (url === '/setup/status') {
+        return Promise.resolve({ ok: true, json: async () => ({ requiresSetup: false }) });
+      }
+      if (url === '/auth/validate') {
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('settings-page')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('requests-page')).not.toBeInTheDocument();
   });
 
   test('renders authenticated pages when user has token', async () => {
