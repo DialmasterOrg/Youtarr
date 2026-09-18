@@ -145,6 +145,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
   const [editLoadError, setEditLoadError] = useState<string | null>(null);
   const [channelsLoadError, setChannelsLoadError] = useState<string | null>(null);
   const [grantsLoadError, setGrantsLoadError] = useState<string | null>(null);
+  const [pendingExternalUpdate, setPendingExternalUpdate] = useState<{ keyId: number; policy: ApiKeyPolicy; channelIds: number[] } | null>(null);
   const editLoadSequence = useRef(0);
   const apiKeyApi = useApiKeys(token);
   const [externalKeySearch, setExternalKeySearch] = useState('');
@@ -278,11 +279,31 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
   const closeEditDialog = () => {
     ++editLoadSequence.current;
     setEditKey(null);
+    setPendingExternalUpdate(null);
     setEditLoadError(null);
     setChannelsLoadError(null);
     setGrantsLoadError(null);
     setChannelsLoading(false);
     setGrantsLoading(false);
+  };
+
+  const submitExternalAccess = async (update: { keyId: number; policy: ApiKeyPolicy; channelIds: number[] }) => {
+    if (savingPolicy) return;
+    setSavingPolicy(true);
+    try {
+      await apiKeyApi.updateExternalAccess(update.keyId, {
+        policy: update.policy,
+        channelIds: update.channelIds,
+      });
+      setPendingExternalUpdate(null);
+      setSnackbar({ open: true, message: 'External access updated' });
+      closeEditDialog();
+      await fetchApiKeys();
+    } catch (err) {
+      setEditLoadError(err instanceof Error ? err.message : 'Failed to save external access');
+    } finally {
+      setSavingPolicy(false);
+    }
   };
 
   const saveExternalAccess = async () => {
@@ -293,6 +314,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
       return;
     }
     const normalizedPolicy = normalized.policy;
+    const update = { keyId: editKey.id, policy: normalizedPolicy, channelIds: selectedChannelIds };
     const increasesPrivilege =
       (normalizedPolicy.allowVideoRequests && !permissionsFromKey(editKey).allowVideoRequests) ||
       (normalizedPolicy.allowChannelRequests && !permissionsFromKey(editKey).allowChannelRequests) ||
@@ -309,20 +331,20 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
       normalizedPolicy.hourlyWriteLimit > (editKey.hourly_write_limit ?? 30) ||
       normalizedPolicy.dailyWriteLimit > (editKey.daily_write_limit ?? 200) ||
       selectedChannelIds.some((channelId) => !originalChannelIds.includes(channelId));
-    if (increasesPrivilege && !window.confirm(
-      'This change may increase what the external integration can view or request. Continue?'
-    )) return;
-    setSavingPolicy(true);
-    try {
-      await apiKeyApi.updateExternalAccess(editKey.id, { policy: normalizedPolicy, channelIds: selectedChannelIds });
-      setSnackbar({ open: true, message: 'External access updated' });
-      closeEditDialog();
-      await fetchApiKeys();
-    } catch (err) {
-      setEditLoadError(err instanceof Error ? err.message : 'Failed to save external access');
-    } finally {
-      setSavingPolicy(false);
+    if (increasesPrivilege) {
+      setPendingExternalUpdate(update);
+      return;
     }
+    await submitExternalAccess(update);
+  };
+
+  const cancelPrivilegeConfirmation = () => {
+    if (!savingPolicy) setPendingExternalUpdate(null);
+  };
+
+  const confirmPrivilegeIncrease = async () => {
+    if (!pendingExternalUpdate) return;
+    await submitExternalAccess(pendingExternalUpdate);
   };
 
   const handleDeleteKey = async () => {
@@ -830,6 +852,33 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
             disabled={savingPolicy || channelsLoading || grantsLoading || Boolean(editLoadError) || !editKey}
           >
             {savingPolicy ? 'Saving…' : 'Save External Access'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(pendingExternalUpdate)}
+        onClose={cancelPrivilegeConfirmation}
+      >
+        <DialogTitle>Confirm expanded external access?</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" className="mb-3">
+            This change may increase what the external integration can view or request.
+          </Alert>
+          <Typography variant="body2">
+            Continue saving these expanded permissions and channel grants?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={cancelPrivilegeConfirmation} disabled={savingPolicy}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={confirmPrivilegeIncrease}
+            disabled={savingPolicy}
+          >
+            {savingPolicy ? 'Saving...' : 'Continue'}
           </Button>
         </DialogActions>
       </Dialog>
