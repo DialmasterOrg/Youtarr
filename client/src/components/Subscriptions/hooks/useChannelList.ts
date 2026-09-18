@@ -13,7 +13,7 @@ interface UseChannelListParams {
   append?: boolean;
 }
 
-interface ChannelListResponse {
+export interface ChannelListResponse {
   channels: Channel[];
   total: number;
   totalPages: number;
