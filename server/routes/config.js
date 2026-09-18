@@ -109,6 +109,11 @@ module.exports = function createConfigRoutes({ verifyToken, configModule, valida
    *                   type: integer
    *                 cronSchedule:
    *                   type: string
+   *                 isPlatformManaged:
+   *                   type: object
+   *                   properties:
+   *                     externalApiEnabled:
+   *                       type: boolean
    */
   router.get('/getconfig', verifyToken, (req, res) => {
     const config = configModule.getConfig();
