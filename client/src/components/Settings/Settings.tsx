@@ -461,6 +461,7 @@ export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
                 token={token}
                 apiKeyRateLimit={config.apiKeyRateLimit}
                 onRateLimitChange={(value) => handleConfigChange({ apiKeyRateLimit: value })}
+                externalApiEnabled={isPlatformManaged.externalApiEnabled}
                 showRequestsNavLink={config.showRequestsNavLink}
                 onShowRequestsNavLinkChange={(value) => {
                   handleConfigChange({ showRequestsNavLink: value });
