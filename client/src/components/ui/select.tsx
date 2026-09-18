@@ -123,8 +123,8 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
           : normalizedValue;
       onChange?.({ target: { value: outputValue, name } } as unknown as SelectChangeEvent<string>);
     };
-    const selectContent = (
-      <SelectPrimitive.Content
+        <SelectPrimitive.Portal>
+          <SelectPrimitive.Content
         position="popper"
         sideOffset={4}
         avoidCollisions
@@ -147,8 +147,8 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
         <SelectPrimitive.Viewport className="max-h-[inherit] p-1 overflow-y-auto">
           {children}
         </SelectPrimitive.Viewport>
-      </SelectPrimitive.Content>
-    );
+          </SelectPrimitive.Content>
+        </SelectPrimitive.Portal>
 
     return (
       <SelectPrimitive.Root
@@ -198,7 +198,6 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
           </SelectPrimitive.Icon>
         </SelectPrimitive.Trigger>
 
-        <SelectPrimitive.Portal>{selectContent}</SelectPrimitive.Portal>
       </SelectPrimitive.Root>
     );
   }
