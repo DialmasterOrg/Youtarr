@@ -42,9 +42,9 @@ export interface ApiKeyPolicy {
   maxRatingLevel: number;
   allowUnrated: boolean;
   allowedMediaTypes: MediaType[];
-  maxActiveJobs: number;
-  hourlyWriteLimit: number;
-  dailyWriteLimit: number;
+  maxActiveJobs: number | string;
+  hourlyWriteLimit: number | string;
+  dailyWriteLimit: number | string;
 }
 
 export interface ApiKeyCreatedResponse {
@@ -59,6 +59,30 @@ export interface ApiKeyCreatedResponse {
 interface ApiKeyListResponse { keys: ApiKey[] }
 interface ChannelGrantsResponse { keyId: number; channelIds: number[] }
 interface ApiKeyRequest { policy: ApiKeyPolicy; channelIds: number[] }
+
+export interface NormalizedPolicyResult {
+  policy?: ApiKeyPolicy;
+  error?: string;
+}
+
+export const normalizePolicy = (policy: ApiKeyPolicy): NormalizedPolicyResult => {
+  const fields: Array<[keyof Pick<ApiKeyPolicy, 'maxActiveJobs' | 'hourlyWriteLimit' | 'dailyWriteLimit'>, string, number, number]> = [
+    ['maxActiveJobs', 'Active jobs', 1, 5],
+    ['hourlyWriteLimit', 'Writes per hour', 1, 30],
+    ['dailyWriteLimit', 'Writes per day', 1, 200],
+  ];
+  const normalized = { ...policy };
+  for (const [field, label, min, max] of fields) {
+    const value = String(policy[field]).trim();
+    if (!/^\d+$/.test(value) || Number(value) < min || Number(value) > max) {
+      return { error: `${label} must be an integer from ${min} to ${max}.` };
+    }
+    normalized[field] = Number(value);
+  }
+  return { policy: normalized };
+};
+
+
 
 export const useApiKeys = (token: string | null) => {
   const headers = token ? { 'x-access-token': token } : undefined;

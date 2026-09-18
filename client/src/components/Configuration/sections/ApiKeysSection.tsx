@@ -40,64 +40,15 @@ import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
 import { InfoTooltip } from '../common/InfoTooltip';
 
 import { locationUtils } from '../../../utils/location';
+import PolicyEditor from './ApiKeysSection/PolicyEditor';
+import ChannelGrantPicker from './ApiKeysSection/ChannelGrantPicker';
+import { ApiKey, ApiKeyPolicy, ApiKeyRole, ApiKeyCreatedResponse } from './ApiKeysSection/useApiKeys';
 import {
   EXTERNAL_RATING_BANDS,
   formatExternalRatingBand,
   getExternalRatingBand,
 } from '../../../utils/externalRatingPolicy';
 import RatingBadge from '../../shared/RatingBadge';
-
-interface ApiKey {
-  id: number;
-  name: string;
-  key_prefix: string;
-  created_at: string;
-  last_used_at: string | null;
-  is_active: boolean;
-  usage_count: number;
-  channel_grant_count?: number;
-  role: ApiKeyRole;
-  auto_approve_video_requests: boolean;
-  auto_approve_channel_requests: boolean;
-  auto_approve_delete_requests: boolean;
-  allow_video_requests: boolean;
-  allow_channel_requests: boolean;
-  allow_delete_video_requests: boolean;
-  max_rating_level: number;
-  allow_unrated: boolean;
-  allowed_media_types: MediaType[];
-  max_active_jobs?: number;
-  hourly_write_limit?: number;
-  daily_write_limit?: number;
-  revoked_at: string | null;
-}
-
-type ApiKeyRole = 'legacy_download' | 'view' | 'request' | 'delete' | 'admin';
-type MediaType = 'video' | 'short' | 'livestream';
-
-interface ApiKeyPolicy {
-  role: ApiKeyRole;
-  allowVideoRequests: boolean;
-  allowChannelRequests: boolean;
-  allowDeleteVideoRequests: boolean;
-  autoApproveVideoRequests: boolean;
-  autoApproveChannelRequests: boolean;
-  autoApproveDeleteRequests: boolean;
-  maxRatingLevel: number;
-  allowUnrated: boolean;
-  allowedMediaTypes: MediaType[];
-  maxActiveJobs: number;
-  hourlyWriteLimit: number;
-  dailyWriteLimit: number;
-}
-
-interface ChannelOption {
-  database_id?: number;
-  channel_id?: string;
-  uploader: string;
-  title?: string;
-  terminated_at?: string | null;
-}
 
 const defaultPolicy: ApiKeyPolicy = {
   role: 'view',
@@ -152,201 +103,6 @@ const policyFromKey = (key: ApiKey): ApiKeyPolicy => ({
   dailyWriteLimit: key.daily_write_limit ?? 200,
 });
 
-const PolicyEditor: React.FC<{
-  policy: ApiKeyPolicy;
-  onChange: (policy: ApiKeyPolicy) => void;
-}> = ({ policy, onChange }) => {
-  const updatePolicy = (changes: Partial<ApiKeyPolicy>) => {
-    const next = { ...policy, ...changes };
-    onChange({ ...next, role: roleForPolicy(next) });
-  };
-  const togglePermission = (
-    permission: 'allowVideoRequests' | 'allowChannelRequests' | 'allowDeleteVideoRequests',
-    autoApprove: 'autoApproveVideoRequests' | 'autoApproveChannelRequests' |
-      'autoApproveDeleteRequests',
-    enabled: boolean
-  ) => updatePolicy({
-    [permission]: enabled,
-    ...(!enabled ? { [autoApprove]: false } : {}),
-  });
-  const toggleMedia = (mediaType: MediaType) => {
-    const selected = policy.allowedMediaTypes.includes(mediaType);
-    if (selected && policy.allowedMediaTypes.length === 1) return;
-    updatePolicy({
-      allowedMediaTypes: selected
-        ? policy.allowedMediaTypes.filter((value) => value !== mediaType)
-        : [...policy.allowedMediaTypes, mediaType],
-    });
-  };
-  return (
-    <Box className="mt-4 space-y-5">
-      <Box className="space-y-1">
-        <Typography variant="caption" color="secondary">
-          Maximum allowed rating
-        </Typography>
-        <Select
-          fullWidth
-          aria-label="Maximum allowed rating"
-          inputProps={{ 'aria-label': 'Maximum allowed rating' }}
-          value={policy.maxRatingLevel}
-          onChange={(event) => updatePolicy({
-            maxRatingLevel: Number(event.target.value),
-          })}
-        >
-          {EXTERNAL_RATING_BANDS.map((band) => (
-            <MenuItem key={band.level} value={band.level}>
-              {formatExternalRatingBand(band.level)}
-            </MenuItem>
-          ))}
-        </Select>
-        <Typography variant="caption" color="secondary">
-          Uses the video rating first, then the channel&apos;s manually assigned default.
-        </Typography>
-      </Box>
-
-      <Box className="space-y-2">
-        <Typography variant="subtitle2">Content access</Typography>
-        <FormControlLabel
-          control={<Switch checked={policy.allowUnrated} onChange={(event) =>
-            updatePolicy({ allowUnrated: event.target.checked })
-          } />}
-          label="Allow unrated or unrecognized ratings"
-        />
-        <Box className="flex flex-wrap gap-x-5 gap-y-2">
-          {(['video', 'short', 'livestream'] as MediaType[]).map((mediaType) => (
-            <FormControlLabel
-              key={mediaType}
-              control={<Switch
-                size="small"
-                checked={policy.allowedMediaTypes.includes(mediaType)}
-                onChange={() => toggleMedia(mediaType)}
-              />}
-              label={mediaType.charAt(0).toUpperCase() + mediaType.slice(1)}
-            />
-          ))}
-        </Box>
-      </Box>
-
-      <Box className="space-y-2">
-        <div className="flex items-center gap-2">
-          <Typography variant="subtitle2">Request permissions</Typography>
-          <Tooltip title="Catalog viewing and request-status access are included with every external key.">
-            <Chip
-              size="small"
-              variant="outlined"
-              icon={<ViewIcon size={13} />}
-              label="View included"
-            />
-          </Tooltip>
-        </div>
-        {([
-          {
-            permission: 'allowVideoRequests' as const,
-            autoApprove: 'autoApproveVideoRequests' as const,
-            label: 'Request videos',
-            description: 'Submit requests to download eligible videos.',
-          },
-          {
-            permission: 'allowChannelRequests' as const,
-            autoApprove: 'autoApproveChannelRequests' as const,
-            label: 'Request channels',
-            description: 'Submit requests to add supported YouTube channels.',
-          },
-          {
-            permission: 'allowDeleteVideoRequests' as const,
-            autoApprove: 'autoApproveDeleteRequests' as const,
-            label: 'Delete downloaded videos',
-            description: 'Submit approval-backed requests to remove downloaded video assets.',
-          },
-        ]).map((item) => {
-          const enabled = policy[item.permission];
-          return (
-            <Paper key={item.permission} className="border border-border bg-muted/20 p-3 shadow-none">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <Typography variant="body2" className="font-medium">{item.label}</Typography>
-                  <Typography variant="caption" color="secondary">{item.description}</Typography>
-                </div>
-                <Switch
-                  checked={enabled}
-                  onChange={(event) => togglePermission(
-                    item.permission,
-                    item.autoApprove,
-                    event.target.checked
-                  )}
-                  aria-label={item.label}
-                />
-              </div>
-              {enabled && (
-                <div className="mt-3 flex items-center justify-between gap-4 border-t border-border pt-3">
-                  <div>
-                    <Typography variant="body2">Auto-approve</Typography>
-                    <Typography variant="caption" color="secondary">
-                      Skip manual review when all current policy checks pass.
-                    </Typography>
-                  </div>
-                  <Switch
-                    checked={policy[item.autoApprove]}
-                    onChange={(event) => updatePolicy({
-                      [item.autoApprove]: event.target.checked,
-                    })}
-                    aria-label={`Auto-approve ${item.label.toLowerCase()}`}
-                  />
-                </div>
-              )}
-            </Paper>
-          );
-        })}
-      </Box>
-
-      <Box className="space-y-2">
-        <Typography variant="subtitle2">Workload limits</Typography>
-        <Typography variant="caption" color="secondary">
-          Durable per-key ceilings. Limits can be reduced below the system defaults.
-        </Typography>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <TextField
-            type="number"
-            label="Active jobs"
-            value={policy.maxActiveJobs}
-            inputProps={{ min: 1, max: 5 }}
-            onChange={(event) => updatePolicy({
-              maxActiveJobs: Number(event.target.value),
-            })}
-          />
-          <TextField
-            type="number"
-            label="Writes per hour"
-            value={policy.hourlyWriteLimit}
-            inputProps={{ min: 1, max: 30 }}
-            onChange={(event) => updatePolicy({
-              hourlyWriteLimit: Number(event.target.value),
-            })}
-          />
-          <TextField
-            type="number"
-            label="Writes per day"
-            value={policy.dailyWriteLimit}
-            inputProps={{ min: 1, max: 200 }}
-            onChange={(event) => updatePolicy({
-              dailyWriteLimit: Number(event.target.value),
-            })}
-          />
-        </div>
-      </Box>
-    </Box>
-  );
-};
-
-interface ApiKeyCreatedResponse {
-  success: boolean;
-  message: string;
-  id: number;
-  name: string;
-  key: string;
-  prefix: string;
-}
-
 interface ApiKeysSectionProps {
   token: string | null;
   apiKeyRateLimit: number;
@@ -379,7 +135,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [editKey, setEditKey] = useState<ApiKey | null>(null);
   const [editPolicy, setEditPolicy] = useState<ApiKeyPolicy>(defaultPolicy);
-  const [channelOptions, setChannelOptions] = useState<ChannelOption[]>([]);
+  const [channelOptions, setChannelOptions] = useState<import('../../../../types/Channel').Channel[]>([]);
   const [channelSearch, setChannelSearch] = useState('');
   const [selectedChannelIds, setSelectedChannelIds] = useState<number[]>([]);
   const [originalChannelIds, setOriginalChannelIds] = useState<number[]>([]);
@@ -1051,61 +807,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
                   Saving with zero approved channels is allowed, but the key will fail closed and cannot view or request catalog content until grants are added.
                 </Alert>
               )}
-              {channelOptions.length > 0 && (
-                <FormControlLabel
-                  control={<Checkbox
-                    checked={newKeyChannelIds.length === channelOptions.length}
-                    indeterminate={newKeyChannelIds.length > 0 &&
-                      newKeyChannelIds.length < channelOptions.length}
-                    onChange={(event) => setNewKeyChannelIds(event.target.checked
-                      ? channelOptions.map((channel) => channel.database_id as number)
-                        .sort((a, b) => a - b)
-                      : []
-                    )}
-                  />}
-                  label="Select all approved channels"
-                />
-              )}
-              <TextField
-                label="Search channels for new key"
-                value={newKeyChannelSearch}
-                onChange={(event) => setNewKeyChannelSearch(event.target.value)}
-                fullWidth
-                size="small"
-                className="mb-3"
-              />
-              {channelOptions.length === 0 ? (
-                <Typography variant="body2" color="secondary">
-                  No enabled, non-terminated channels are available.
-                </Typography>
-              ) : (
-                <Box className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[240px] overflow-auto">
-                  {channelOptions.filter((channel) => {
-                    const query = newKeyChannelSearch.trim().toLowerCase();
-                    if (!query) return true;
-                    return [channel.title, channel.uploader, channel.channel_id]
-                      .filter(Boolean)
-                      .some((value) => value?.toLowerCase().includes(query));
-                  }).map((channel) => {
-                    const databaseId = channel.database_id as number;
-                    return (
-                      <FormControlLabel
-                        key={databaseId}
-                        control={<Checkbox
-                          checked={newKeyChannelIds.includes(databaseId)}
-                          onChange={(event) => setNewKeyChannelIds((current) =>
-                            event.target.checked
-                              ? [...new Set([...current, databaseId])].sort((a, b) => a - b)
-                              : current.filter((id) => id !== databaseId)
-                          )}
-                        />}
-                        label={channel.title || channel.uploader ||
-                          channel.channel_id || `Channel ${databaseId}`}
-                      />
-                    );
-                  })}
-                </Box>
-              )}
+              <ChannelGrantPicker channels={channelOptions} selectedIds={newKeyChannelIds} search={newKeyChannelSearch} onSearchChange={setNewKeyChannelSearch} onSelectedIdsChange={setNewKeyChannelIds} />
             </>
           )}
         </DialogContent>
@@ -1142,60 +844,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
               Saving with zero approved channels is allowed, but this key will fail closed and cannot view or request catalog content until grants are added.
             </Alert>
           )}
-          {channelOptions.length > 0 && (
-            <FormControlLabel
-              control={<Checkbox
-                checked={selectedChannelIds.length === channelOptions.length}
-                indeterminate={selectedChannelIds.length > 0 &&
-                  selectedChannelIds.length < channelOptions.length}
-                onChange={(event) => setSelectedChannelIds(event.target.checked
-                  ? channelOptions.map((channel) => channel.database_id as number)
-                    .sort((a, b) => a - b)
-                  : []
-                )}
-              />}
-              label="Select all approved channels"
-            />
-          )}
-          <TextField
-            label="Search channels"
-            value={channelSearch}
-            onChange={(event) => setChannelSearch(event.target.value)}
-            fullWidth
-            size="small"
-            className="mb-3"
-          />
-          {channelOptions.length === 0 ? (
-            <Typography variant="body2" color="secondary">
-              No enabled, non-terminated channels are available.
-            </Typography>
-          ) : (
-            <Box className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[320px] overflow-auto">
-              {channelOptions.filter((channel) => {
-                const query = channelSearch.trim().toLowerCase();
-                if (!query) return true;
-                return [channel.title, channel.uploader, channel.channel_id]
-                  .filter(Boolean)
-                  .some((value) => value?.toLowerCase().includes(query));
-              }).map((channel) => {
-                const databaseId = channel.database_id as number;
-                return (
-                  <FormControlLabel
-                    key={databaseId}
-                    control={<Checkbox
-                      checked={selectedChannelIds.includes(databaseId)}
-                      onChange={(event) => setSelectedChannelIds((current) =>
-                        event.target.checked
-                          ? [...new Set([...current, databaseId])].sort((a, b) => a - b)
-                          : current.filter((id) => id !== databaseId)
-                      )}
-                    />}
-                    label={channel.title || channel.uploader || channel.channel_id || `Channel ${databaseId}`}
-                  />
-                );
-              })}
-            </Box>
-          )}
+          <ChannelGrantPicker channels={channelOptions} selectedIds={selectedChannelIds} search={channelSearch} onSearchChange={setChannelSearch} onSelectedIdsChange={setSelectedChannelIds} maxHeight="320px" />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditKey(null)}>Cancel</Button>
