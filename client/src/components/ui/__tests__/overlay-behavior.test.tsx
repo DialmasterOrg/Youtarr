@@ -148,6 +148,25 @@ describe('overlay positioning guards', () => {
     expect(content).toHaveStyle({ maxHeight: 'min(var(--radix-select-content-available-height), calc(100dvh - var(--app-shell-overlay-top-offset, 0px) - var(--mobile-nav-total-offset, 0px) - 16px))' });
   });
 
+  test('synthetic mouseDown opens Select while trusted mouseDown remains Radix-owned', async () => {
+    render(
+      <Select value="PG" onChange={jest.fn()}>
+        <MenuItem value="PG">PG</MenuItem>
+      </Select>
+    );
+
+    const trigger = screen.getByRole('button', { name: 'PG' });
+    fireEvent.mouseDown(trigger);
+    expect(await screen.findByRole('option', { name: 'PG' })).toBeInTheDocument();
+
+    fireEvent.keyDown(trigger, { key: 'Escape' });
+    const trustedMouseDown = new MouseEvent('mousedown', { bubbles: true });
+    Object.defineProperty(trustedMouseDown, 'isTrusted', { value: true });
+    fireEvent(trigger, trustedMouseDown);
+
+    expect(screen.getByRole('option', { name: 'PG' })).toBeInTheDocument();
+  });
+
   test('select content renders above dialog content when opened inside a modal', async () => {
     render(
       <Dialog open onClose={jest.fn()}>
