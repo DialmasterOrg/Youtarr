@@ -4,6 +4,14 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import ApiKeysSection from '../ApiKeysSection';
 import { renderWithProviders } from '../../../../test-utils';
+import { useApiKeys } from '../ApiKeysSection/useApiKeys';
+
+jest.mock('../ApiKeysSection/useApiKeys', () => {
+  const actual = jest.requireActual('../ApiKeysSection/useApiKeys');
+  return { ...actual, useApiKeys: jest.fn() };
+});
+
+const mockedUseApiKeys = useApiKeys as jest.MockedFunction<typeof useApiKeys>;
 
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
@@ -109,10 +117,33 @@ const installDefaultFetch = (
   });
 };
 
+const installApiKeyHook = () => {
+  const request = async (url: string, init?: RequestInit) => {
+    const response = await mockFetch(url, init);
+    return response.json();
+  };
+  mockedUseApiKeys.mockReturnValue({
+    fetchApiKeys: async () => (await request('/api/keys')).keys || [],
+    fetchAvailableChannels: async () => (await request('/getchannels?page=1&pageSize=100&sortOrder=asc')).channels || [],
+    fetchChannelGrants: async (keyId) => (await request(`/api/keys/${keyId}/channels`)).channelIds || [],
+    createApiKey: async (name, policy, channelIds) => request('/api/keys', {
+      method: 'POST',
+      body: JSON.stringify({ name, ...(policy ? { policy, channelIds: channelIds || [] } : {}) }),
+    }),
+    updateExternalAccess: async (keyId, body) => request(`/api/keys/${keyId}/external-access`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+    revokeApiKey: async (keyId) => request(`/api/keys/${keyId}`, { method: 'DELETE' }),
+    regenerateApiKey: async (keyId) => request(`/api/keys/${keyId}/regenerate`, { method: 'POST' }),
+  });
+};
+
 describe('ApiKeysSection', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     installDefaultFetch();
+    installApiKeyHook();
   });
 
   test('toggles the Requests navigation link setting', async () => {
@@ -162,6 +193,7 @@ describe('ApiKeysSection', () => {
 
   test('warns prominently when an external key has no effective channel grants', async () => {
     installDefaultFetch([{ ...externalKey, channel_grant_count: 0 }]);
+    installApiKeyHook();
     renderWithProviders(<ApiKeysSection {...props()} />);
 
     const cards = await screen.findByLabelText('External API key cards');
@@ -173,6 +205,7 @@ describe('ApiKeysSection', () => {
   test('uses a neutral state when an older management response omits the grant count', async () => {
     const { channel_grant_count: _omitted, ...olderExternalKey } = externalKey;
     installDefaultFetch([olderExternalKey]);
+    installApiKeyHook();
     renderWithProviders(<ApiKeysSection {...props()} />);
 
     const cards = await screen.findByLabelText('External API key cards');
@@ -200,6 +233,7 @@ describe('ApiKeysSection', () => {
       is_active: false,
     };
     installDefaultFetch([externalKey, alphaKey, revokedKey, inactiveKey]);
+    installApiKeyHook();
     const user = userEvent.setup();
     renderWithProviders(<ApiKeysSection {...props()} />);
 
@@ -233,6 +267,7 @@ describe('ApiKeysSection', () => {
 
   test('shows separate empty states for external and legacy keys', async () => {
     installDefaultFetch([]);
+    installApiKeyHook();
     renderWithProviders(<ApiKeysSection {...props()} />);
 
     expect(await screen.findByText('No external access keys yet.')).toBeInTheDocument();
@@ -251,6 +286,7 @@ describe('ApiKeysSection', () => {
       auto_approve_delete_requests: false,
     };
     installDefaultFetch([viewOnly]);
+    installApiKeyHook();
     const user = userEvent.setup();
     renderWithProviders(<ApiKeysSection {...props()} />);
 
@@ -276,7 +312,8 @@ describe('ApiKeysSection', () => {
       auto_approve_delete_requests: false,
     };
     installDefaultFetch([viewOnly]);
-    const confirm = jest.spyOn(window, 'confirm').mockReturnValue(true);
+    installApiKeyHook();
+    const confirm = jest.spyOn(window, 'confirm');
     const user = userEvent.setup();
     renderWithProviders(<ApiKeysSection {...props()} />);
 
@@ -286,6 +323,7 @@ describe('ApiKeysSection', () => {
     await user.click(screen.getByLabelText('Request videos'));
     await user.click(screen.getByLabelText('Safe Channel'));
     await user.click(screen.getByRole('button', { name: 'Save External Access' }));
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     await waitFor(() => expect(mockFetch.mock.calls.some(([url, init]) =>
       url === '/api/keys/7/external-access' && init?.method === 'PUT'
@@ -304,12 +342,13 @@ describe('ApiKeysSection', () => {
       }),
       channelIds: [12],
     });
-    expect(confirm).toHaveBeenCalled();
+    expect(confirm).not.toHaveBeenCalled();
     confirm.mockRestore();
   });
 
   test('selects and clears all approved channels when creating a key', async () => {
     installDefaultFetch([]);
+    installApiKeyHook();
     const user = userEvent.setup();
     renderWithProviders(<ApiKeysSection {...props()} />);
 
@@ -352,6 +391,7 @@ describe('ApiKeysSection', () => {
 
   test('creates an external key as view-only by default', async () => {
     installDefaultFetch([]);
+    installApiKeyHook();
     const user = userEvent.setup();
     renderWithProviders(<ApiKeysSection {...props()} />);
 
@@ -380,6 +420,7 @@ describe('ApiKeysSection', () => {
 
   test('creates legacy keys without an external policy', async () => {
     installDefaultFetch([]);
+    installApiKeyHook();
     const user = userEvent.setup();
     renderWithProviders(<ApiKeysSection {...props()} />);
 
@@ -444,7 +485,7 @@ describe('ApiKeysSection', () => {
   });
 
   test('shows API loading failures and allows dismissing the alert', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ error: 'Failed to fetch API keys' }, false));
+    mockFetch.mockRejectedValue(new Error('Failed to fetch API keys'));
     const user = userEvent.setup();
     renderWithProviders(<ApiKeysSection {...props()} />);
 
