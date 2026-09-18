@@ -367,9 +367,8 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
     // regardless of enabled state.
     const settingsChannelRecord = channelRecord && channelRecord.enabled ? channelRecord : null;
 
-    // Merge per-channel custom tags into jsonData.tags (prepended, before YouTube tags).
-    // This ensures AtomicParsley keywords, the NFO writer, and any future
-    // .info.json consumers (e.g. bulkUpdateVideoRatings) see them.
+    // Merge per-channel custom tags into jsonData.tags (prepended, before YouTube tags)
+    // so the AtomicParsley --keyword args and the NFO writer below pick them up
     if (settingsChannelRecord && settingsChannelRecord.additional_tags) {
       const customTags = settingsChannelRecord.additional_tags
         .split('|')
