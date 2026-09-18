@@ -17,7 +17,16 @@ const PROGRESS_THROTTLE_MS = 250;
 const PROGRESS_HEARTBEAT_MS = 25 * 1000;
 
 class YtdlpOutputRouter {
-  constructor({ jobId, config, monitor, errorTracker, timeoutController, cookiesEnabled = false, heartbeatIntervalMs = PROGRESS_HEARTBEAT_MS }) {
+  constructor({
+    jobId,
+    config,
+    monitor,
+    errorTracker,
+    timeoutController,
+    cookiesEnabled = false,
+    anonymousRetry = false,
+    heartbeatIntervalMs = PROGRESS_HEARTBEAT_MS,
+  }) {
     this.jobId = jobId;
     this.config = config;
     this.monitor = monitor;
@@ -26,6 +35,9 @@ class YtdlpOutputRouter {
     // Branches the mid-run 403/bot hints: with cookies enabled, "set cookies"
     // is exactly the wrong advice (stale cookies are the usual cause).
     this.cookiesEnabled = cookiesEnabled;
+    // Distinguishes an intentional no-cookies fallback from a normal run
+    // where the user has not configured cookies.
+    this.anonymousRetry = anonymousRetry;
     // Per-run detection state, read by the executor/finalizer after exit
     this.partialDestinations = new Set();
     this.stderrBuffer = '';
@@ -247,9 +259,11 @@ class YtdlpOutputRouter {
     // Check for bot detection message (handle different quote types and patterns)
     if (line.includes('Sign in to confirm') && line.includes('not a bot')) {
       this.botDetected = true;
-      const botMessage = this.cookiesEnabled
-        ? 'Bot detection encountered even though cookies are configured - they are likely expired or rotated. Re-export fresh cookies from your browser and upload them again.'
-        : 'Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.';
+      const botMessage = this.anonymousRetry
+        ? 'Bot detection encountered during the no-cookies fallback. The fallback also failed, so this video may be genuinely unavailable.'
+        : this.cookiesEnabled
+          ? 'Bot detection encountered even though cookies are configured - they are likely expired or rotated. Re-export fresh cookies from your browser and upload them again.'
+          : 'Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.';
       MessageEmitter.emitMessage(
         'broadcast',
         null,
@@ -269,9 +283,11 @@ class YtdlpOutputRouter {
       return;
     }
     this.cookiesSuggestionEmitted = true;
-    const message = this.cookiesEnabled
-      ? 'HTTP 403 detected while using your uploaded cookies. If the download fails, try re-exporting fresh cookies from your browser, or disable cookies in Settings -> Cookies.'
-      : 'HTTP 403 detected: YouTube may be blocking requests. If download fails, try setting cookies in Configuration.';
+    const message = this.anonymousRetry
+      ? 'HTTP 403 detected during the no-cookies fallback. If this retry fails, the video may be genuinely unavailable.'
+      : this.cookiesEnabled
+        ? 'HTTP 403 detected while using your uploaded cookies. If the download fails, try re-exporting fresh cookies from your browser, or disable cookies in Settings -> Cookies.'
+        : 'HTTP 403 detected: YouTube may be blocking requests. If download fails, try setting cookies in Configuration.';
     // Don't set monitor.hasError here - let the final exit code determine success/failure
     // 403s on HLS fragments are often recoverable and don't indicate actual failure
     MessageEmitter.emitMessage(
@@ -283,7 +299,11 @@ class YtdlpOutputRouter {
         text: message,
         progress: this.monitor.snapshot('warning'),
         warning: true,
-        errorCode: this.cookiesEnabled ? 'COOKIES_MAY_BE_STALE' : 'COOKIES_RECOMMENDED'
+        errorCode: this.anonymousRetry
+          ? 'NO_COOKIES_FALLBACK_403'
+          : this.cookiesEnabled
+            ? 'COOKIES_MAY_BE_STALE'
+            : 'COOKIES_RECOMMENDED'
       }
     );
   }

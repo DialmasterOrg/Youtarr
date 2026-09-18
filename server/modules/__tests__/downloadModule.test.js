@@ -17,13 +17,15 @@ jest.mock('../configModule', () => {
   };
   mockConfigModule.on = jest.fn();
   mockConfigModule.getDefaultSubfolder = jest.fn().mockReturnValue(null);
+  mockConfigModule.getCookiesPath = jest.fn().mockReturnValue('/cookies/file.txt');
   return mockConfigModule;
 });
 
 jest.mock('../jobModule', () => ({
   addOrUpdateJob: jest.fn(),
   updateJob: jest.fn(),
-  getJob: jest.fn().mockReturnValue({ status: 'Pending' })
+  getJob: jest.fn().mockReturnValue({ status: 'Pending' }),
+  startNextJob: jest.fn().mockResolvedValue()
 }));
 
 jest.mock('../download/downloadExecutor');
@@ -1028,11 +1030,71 @@ describe('DownloadModule', () => {
         body: expect.objectContaining({
           urls: ['https://www.youtube.com/watch?v=abc123def45'],
           overrideSettings: { resolution: '720' },
-          jobLabel: 'Auto-retry: 1 video (HTTP 403)',
+          jobLabel: 'Auto-retry: 1 video',
           autoRetryAttempt: 1,
           runId: 'run-1',
         }),
       });
+    });
+
+    it('marks cookie-specific retries as anonymous', async () => {
+      await downloadModule.enqueueAutoRetryJob({
+        retryVideos: [{
+          ...retryVideo,
+          anonymousRetry: true,
+        }],
+        autoRetryAttempt: 1,
+        runId: 'run-cookie',
+        sourceJobData: {},
+      });
+
+      expect(doSpecificDownloadsSpy).toHaveBeenCalledWith({
+        body: expect.objectContaining({
+          urls: ['https://www.youtube.com/watch?v=abc123def45'],
+          anonymousRetry: true,
+          autoRetryAttempt: 1,
+          runId: 'run-cookie',
+        }),
+      });
+    });
+
+    it('splits mixed authenticated and anonymous retries into separate jobs', async () => {
+      const anonymousVideo = {
+        youtubeId: 'zzz999xxx11',
+        url: 'https://www.youtube.com/watch?v=zzz999xxx11',
+        anonymousRetry: true,
+      };
+
+      await downloadModule.enqueueAutoRetryJob({
+        retryVideos: [
+          { ...retryVideo, anonymousRetry: false },
+          anonymousVideo,
+        ],
+        autoRetryAttempt: 1,
+        runId: 'run-mixed',
+        sourceJobData: {},
+      });
+
+      expect(doSpecificDownloadsSpy).toHaveBeenCalledTimes(2);
+
+      const bodies = doSpecificDownloadsSpy.mock.calls.map(([{ body }]) => body);
+
+      expect(bodies).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          urls: ['https://www.youtube.com/watch?v=abc123def45'],
+          jobLabel: 'Auto-retry: 1 video',
+          anonymousRetry: false,
+          autoRetryAttempt: 1,
+          runId: 'run-mixed',
+        }),
+        expect.objectContaining({
+          urls: ['https://www.youtube.com/watch?v=zzz999xxx11'],
+          jobLabel: 'Auto-retry: 1 video (no cookies)',
+          anonymousRetry: true,
+          autoRetryAttempt: 1,
+          runId: 'run-mixed',
+        }),
+      ]));
     });
 
     it('resolves owning channels for unmapped videos and passes channelId when unique', async () => {
@@ -1295,7 +1357,7 @@ describe('DownloadModule', () => {
         }),
         false
       );
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, false);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, false, { cookiesEnabled: true });
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
           '--format', 'best[height<=1080]',
@@ -1310,7 +1372,17 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=abc123', 'https://youtube.com/watch?v=def456'],
         false,
         false,
-        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false, ownerChannelId: null, ownerChannelMap: null }
+        expect.objectContaining({
+          subfolderOverride: null,
+          subfolderFallback: null,
+          ratingOverride: undefined,
+          ratingFallback: null,
+          skipVideoFolder: false,
+          ownerChannelId: null,
+          ownerChannelMap: null,
+          cookiesEnabled: true,
+          anonymousRetry: false
+        })
       );
     });
 
@@ -1341,7 +1413,17 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=xyz789'],
         false,
         false,
-        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false, ownerChannelId: null, ownerChannelMap: null }
+        expect.objectContaining({
+          subfolderOverride: null,
+          subfolderFallback: null,
+          ratingOverride: undefined,
+          ratingFallback: null,
+          skipVideoFolder: false,
+          ownerChannelId: null,
+          ownerChannelMap: null,
+          cookiesEnabled: true,
+          anonymousRetry: false
+        })
       );
     });
 
@@ -1367,7 +1449,17 @@ describe('DownloadModule', () => {
         ['-abc123', 'https://youtube.com/watch?v=def456'],
         false,
         false,
-        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false, ownerChannelId: null, ownerChannelMap: null }
+        expect.objectContaining({
+          subfolderOverride: null,
+          subfolderFallback: null,
+          ratingOverride: undefined,
+          ratingFallback: null,
+          skipVideoFolder: false,
+          ownerChannelId: null,
+          ownerChannelMap: null,
+          cookiesEnabled: true,
+          anonymousRetry: false
+        })
       );
     });
 
@@ -1384,7 +1476,61 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('480', false, null, false);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith(
+        '480',
+        false,
+        null,
+        false,
+        { cookiesEnabled: true }
+      );
+    });
+
+    it('disables cookies at command-build and execution time for anonymous auto-retry jobs', async () => {
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+
+      await downloadModule.doSpecificDownloads({
+        body: {
+          urls: ['https://youtube.com/watch?v=cookieRetry'],
+          anonymousRetry: true,
+        },
+      });
+
+      expect(
+        YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload
+      ).toHaveBeenLastCalledWith(
+        '1080',
+        false,
+        null,
+        false,
+        { cookiesEnabled: false }
+      );
+
+      let directives = mockDownloadExecutor.doDownload.mock.calls[0][7];
+      expect(directives.cookiesEnabled).toBe(false);
+      expect(directives.anonymousRetry).toBe(true);
+
+      YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload.mockClear();
+      mockDownloadExecutor.doDownload.mockClear();
+
+      await downloadModule.doSpecificDownloads({
+        body: {
+          urls: ['https://youtube.com/watch?v=normalRetry'],
+        },
+      });
+
+      expect(
+        YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload
+      ).toHaveBeenLastCalledWith(
+        '1080',
+        false,
+        null,
+        false,
+        { cookiesEnabled: true }
+      );
+
+      directives = mockDownloadExecutor.doDownload.mock.calls[0][7];
+      expect(directives.cookiesEnabled).toBe(true);
+      expect(directives.anonymousRetry).toBe(false);
     });
 
     it('should respect channel-level quality override when present', async () => {
@@ -1404,7 +1550,7 @@ describe('DownloadModule', () => {
         where: { channel_id: 'UC123456' },
         attributes: ['video_quality', 'audio_format', 'skip_video_folder']
       });
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', false, null, false);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', false, null, false, { cookiesEnabled: true });
     });
 
     it('should respect channel-level audio_format when no override provided', async () => {
@@ -1420,7 +1566,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', false, 'mp3_only', false);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', false, 'mp3_only', false, { cookiesEnabled: true });
     });
 
     it('should prioritize override audioFormat over channel audio_format', async () => {
@@ -1439,7 +1585,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', false, 'video_mp3', false);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', false, 'video_mp3', false, { cookiesEnabled: true });
     });
 
     it('should allow null audioFormat override to bypass channel mp3_only setting', async () => {
@@ -1458,7 +1604,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', false, null, false);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', false, null, false, { cookiesEnabled: true });
     });
 
     it('should handle allowRedownload override setting', async () => {
@@ -1475,7 +1621,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', true, null, false);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', true, null, false, { cookiesEnabled: true });
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
           '--format', 'best[height<=720]',
@@ -1489,7 +1635,17 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test1', 'https://youtube.com/watch?v=test2'],
         true,
         false,
-        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false, ownerChannelId: null, ownerChannelMap: null }
+        expect.objectContaining({
+          subfolderOverride: null,
+          subfolderFallback: null,
+          ratingOverride: undefined,
+          ratingFallback: null,
+          skipVideoFolder: false,
+          ownerChannelId: null,
+          ownerChannelMap: null,
+          cookiesEnabled: true,
+          anonymousRetry: false
+        })
       );
       // Verify that --download-archive is NOT in the arguments when allowRedownload is true
       const callArgs = mockDownloadExecutor.doDownload.mock.calls[0][0];
@@ -1510,7 +1666,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('480', false, null, false);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('480', false, null, false, { cookiesEnabled: true });
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
           '--format', 'best[height<=480]',
@@ -1524,7 +1680,17 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test'],
         false,
         false,
-        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false, ownerChannelId: null, ownerChannelMap: null }
+        expect.objectContaining({
+          subfolderOverride: null,
+          subfolderFallback: null,
+          ratingOverride: undefined,
+          ratingFallback: null,
+          skipVideoFolder: false,
+          ownerChannelId: null,
+          ownerChannelMap: null,
+          cookiesEnabled: true,
+          anonymousRetry: false
+        })
       );
     });
 
@@ -1541,7 +1707,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, false);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, false, { cookiesEnabled: true });
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
           '--download-archive', './config/complete.list',
@@ -1553,7 +1719,17 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=default'],
         false,
         false,
-        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false, ownerChannelId: null, ownerChannelMap: null }
+        expect.objectContaining({
+          subfolderOverride: null,
+          subfolderFallback: null,
+          ratingOverride: undefined,
+          ratingFallback: null,
+          skipVideoFolder: false,
+          ownerChannelId: null,
+          ownerChannelMap: null,
+          cookiesEnabled: true,
+          anonymousRetry: false
+        })
       );
     });
 
@@ -1581,7 +1757,17 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test'],
         false,
         false,
-        { subfolderOverride: 'Movies', subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false, ownerChannelId: null, ownerChannelMap: null }
+        expect.objectContaining({
+          subfolderOverride: 'Movies',
+          subfolderFallback: null,
+          ratingOverride: undefined,
+          ratingFallback: null,
+          skipVideoFolder: false,
+          ownerChannelId: null,
+          ownerChannelMap: null,
+          cookiesEnabled: true,
+          anonymousRetry: false
+        })
       );
     });
 
@@ -1607,7 +1793,17 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test'],
         false,
         false,
-        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false, ownerChannelId: null, ownerChannelMap: null }
+        expect.objectContaining({
+          subfolderOverride: null,
+          subfolderFallback: null,
+          ratingOverride: undefined,
+          ratingFallback: null,
+          skipVideoFolder: false,
+          ownerChannelId: null,
+          ownerChannelMap: null,
+          cookiesEnabled: true,
+          anonymousRetry: false
+        })
       );
     });
 
@@ -1632,7 +1828,17 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test'],
         false,
         false,
-        { subfolderOverride: '', subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false, ownerChannelId: null, ownerChannelMap: null }
+        expect.objectContaining({
+          subfolderOverride: '',
+          subfolderFallback: null,
+          ratingOverride: undefined,
+          ratingFallback: null,
+          skipVideoFolder: false,
+          ownerChannelId: null,
+          ownerChannelMap: null,
+          cookiesEnabled: true,
+          anonymousRetry: false
+        })
       );
     });
 
@@ -1649,7 +1855,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, true);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, true, { cookiesEnabled: true });
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.any(Array),
         mockJobId,
@@ -1658,7 +1864,17 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test'],
         false,
         false,
-        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: true, ownerChannelId: null, ownerChannelMap: null }
+        expect.objectContaining({
+          subfolderOverride: null,
+          subfolderFallback: null,
+          ratingOverride: undefined,
+          ratingFallback: null,
+          skipVideoFolder: true,
+          ownerChannelId: null,
+          ownerChannelMap: null,
+          cookiesEnabled: true,
+          anonymousRetry: false
+        })
       );
     });
 
@@ -1675,7 +1891,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, true);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, true, { cookiesEnabled: true });
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.any(Array),
         mockJobId,
@@ -1684,7 +1900,17 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test'],
         false,
         false,
-        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: true, ownerChannelId: 'UC123456', ownerChannelMap: null }
+        expect.objectContaining({
+          subfolderOverride: null,
+          subfolderFallback: null,
+          ratingOverride: undefined,
+          ratingFallback: null,
+          skipVideoFolder: true,
+          ownerChannelId: 'UC123456',
+          ownerChannelMap: null,
+          cookiesEnabled: true,
+          anonymousRetry: false
+        })
       );
     });
 
@@ -1704,7 +1930,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, false);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, false, { cookiesEnabled: true });
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.any(Array),
         mockJobId,
@@ -1713,7 +1939,17 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test'],
         false,
         false,
-        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false, ownerChannelId: 'UC123456', ownerChannelMap: null }
+        expect.objectContaining({
+          subfolderOverride: null,
+          subfolderFallback: null,
+          ratingOverride: undefined,
+          ratingFallback: null,
+          skipVideoFolder: false,
+          ownerChannelId: 'UC123456',
+          ownerChannelMap: null,
+          cookiesEnabled: true,
+          anonymousRetry: false
+        })
       );
     });
 
@@ -1732,7 +1968,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, true);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, true, { cookiesEnabled: true });
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.any(Array),
         mockJobId,
@@ -1741,7 +1977,17 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test'],
         false,
         false,
-        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: true, ownerChannelId: 'UC123456', ownerChannelMap: null }
+        expect.objectContaining({
+          subfolderOverride: null,
+          subfolderFallback: null,
+          ratingOverride: undefined,
+          ratingFallback: null,
+          skipVideoFolder: true,
+          ownerChannelId: 'UC123456',
+          ownerChannelMap: null,
+          cookiesEnabled: true,
+          anonymousRetry: false
+        })
       );
     });
 
@@ -1760,7 +2006,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, false);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null, false, { cookiesEnabled: true });
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.any(Array),
         mockJobId,
@@ -1769,7 +2015,17 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test'],
         false,
         false,
-        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false, ownerChannelId: 'UC123456', ownerChannelMap: null }
+        expect.objectContaining({
+          subfolderOverride: null,
+          subfolderFallback: null,
+          ratingOverride: undefined,
+          ratingFallback: null,
+          skipVideoFolder: false,
+          ownerChannelId: 'UC123456',
+          ownerChannelMap: null,
+          cookiesEnabled: true,
+          anonymousRetry: false
+        })
       );
     });
 
@@ -1827,7 +2083,17 @@ describe('DownloadModule', () => {
         [],
         false,
         false,
-        { subfolderOverride: null, subfolderFallback: null, ratingOverride: undefined, ratingFallback: null, skipVideoFolder: false, ownerChannelId: null, ownerChannelMap: null }
+        expect.objectContaining({
+          subfolderOverride: null,
+          subfolderFallback: null,
+          ratingOverride: undefined,
+          ratingFallback: null,
+          skipVideoFolder: false,
+          ownerChannelId: null,
+          ownerChannelMap: null,
+          cookiesEnabled: true,
+          anonymousRetry: false
+        })
       );
     });
 
@@ -1843,7 +2109,13 @@ describe('DownloadModule', () => {
       });
       // Template always nested: 4th arg (skipVideoFolder) is false
       expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload)
-        .toHaveBeenCalledWith(expect.anything(), false, null, false);
+        .toHaveBeenCalledWith(
+          expect.anything(),
+          false,
+          null,
+          false,
+          { cookiesEnabled: true }
+        );
       // Executor options (8th positional arg) carry the per-video directives
       const options = mockDownloadExecutor.doDownload.mock.calls[0][7];
       expect(options.structurePerVideo).toBe(true);

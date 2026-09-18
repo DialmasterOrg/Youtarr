@@ -123,6 +123,7 @@ const makeContext = (overrides = {}) => ({
   runId: null,
   tempChannelsFile: null,
   onTempChannelsFileCleaned: jest.fn(),
+  anonymousRetry: false,
   ...overrides
 });
 
@@ -184,6 +185,39 @@ describe('downloadJobFinalizer', () => {
       expect(finalCall).toBeDefined();
       expect(finalCall[4].text).toMatch(/expired or rotated/i);
       expect(finalCall[4].text).not.toMatch(/set cookies/i);
+    });
+
+    it('uses no-cookies fallback messaging when bot detection hits an anonymous retry', async () => {
+      configModule.getCookiesPath.mockReturnValue('/app/config/cookies.user.txt');
+
+      await finalizeDownloadJob(makeContext({
+        code: 1,
+        anonymousRetry: true,
+        cookiesEnabled: false,
+        router: makeRouter({ botDetected: true })
+      }));
+
+      expect(jobModule.updateJob).toHaveBeenCalledWith(mockJobId, expect.objectContaining({
+        status: 'Error',
+        error: 'NO_COOKIES_FALLBACK_FAILED',
+        output: expect.stringMatching(/no-cookies fallback/i),
+        notes: expect.stringMatching(/no-cookies fallback/i)
+      }));
+
+      const [, fields] = jobModule.updateJob.mock.calls.find(
+        ([id, update]) => id === mockJobId && update.error === 'NO_COOKIES_FALLBACK_FAILED'
+      );
+      expect(fields.output).toMatch(/genuinely unavailable/i);
+      expect(fields.notes).toMatch(/genuinely unavailable/i);
+      expect(fields.output).not.toMatch(/set.*cookies|enable.*cookies|re-export/i);
+      expect(fields.notes).not.toMatch(/set.*cookies|enable.*cookies|re-export/i);
+
+      const finalCall = MessageEmitter.emitMessage.mock.calls.find(
+        (call) => call[4] && call[4].text && call[4].text.startsWith('Download failed')
+      );
+      expect(finalCall).toBeDefined();
+      expect(finalCall[4].text).toMatch(/no-cookies fallback/i);
+      expect(finalCall[4].text).not.toMatch(/set.*cookies|enable.*cookies|re-export/i);
     });
 
     it('marks a subtitle-only exit 1 Complete with Warnings without calling the videos failed', async () => {
@@ -386,7 +420,7 @@ describe('downloadJobFinalizer', () => {
       expect(jobModule.startNextJob).toHaveBeenCalled();
     });
 
-    describe('auto-retry of transient 403 failures', () => {
+    describe('auto-retry of retryable download failures', () => {
       const make403Failure = (overrides = {}) => ({
         youtubeId: 'vid403aaaa1',
         title: 'Failing Video',
@@ -414,7 +448,8 @@ describe('downloadJobFinalizer', () => {
         expect(enqueueAutoRetry).toHaveBeenCalledWith({
           retryVideos: [{
             youtubeId: 'vid403aaaa1',
-            url: 'https://www.youtube.com/watch?v=vid403aaaa1'
+            url: 'https://www.youtube.com/watch?v=vid403aaaa1',
+            anonymousRetry: false
           }],
           autoRetryAttempt: 1,
           runId: 'run-9',
@@ -461,6 +496,46 @@ describe('downloadJobFinalizer', () => {
           totalFailed: 0,
           failedVideos: []
         }));
+      });
+
+      it('requeues cookie-specific Video unavailable anonymously when cookies are enabled', async () => {
+        const failure = make403Failure({
+          error: 'Video unavailable',
+        });
+        primeFailure(failure);
+        configModule.getCookiesPath.mockReturnValue('/app/config/cookies.user.txt');
+        const enqueueAutoRetry = jest.fn().mockResolvedValue();
+
+        await finalizeDownloadJob(makeContext({
+          code: 1,
+          enqueueAutoRetry,
+        }));
+
+        expect(enqueueAutoRetry).toHaveBeenCalledWith(expect.objectContaining({
+          retryVideos: [{
+            youtubeId: 'vid403aaaa1',
+            url: 'https://www.youtube.com/watch?v=vid403aaaa1',
+            anonymousRetry: true,
+          }],
+        }));
+        expect(failure.autoRetryQueued).toBe(true);
+      });
+
+      it('does not requeue cookie-specific Video unavailable after cookies were already disabled', async () => {
+        const failure = make403Failure({
+          error: 'Video unavailable',
+        });
+        primeFailure(failure);
+        const enqueueAutoRetry = jest.fn();
+
+        await finalizeDownloadJob(makeContext({
+          code: 1,
+          enqueueAutoRetry,
+          cookiesEnabled: false,
+        }));
+
+        expect(enqueueAutoRetry).not.toHaveBeenCalled();
+        expect(failure.autoRetryQueued).toBeUndefined();
       });
 
       it('does not enqueue when bot detection fired', async () => {
@@ -530,7 +605,7 @@ describe('downloadJobFinalizer', () => {
 
         expect(logger.error).toHaveBeenCalledWith(
           { err: expect.any(Error), jobId: mockJobId },
-          'Failed to enqueue auto-retry for transient 403 failures'
+          'Failed to enqueue auto-retry for retryable download failures'
         );
         expect(failure.autoRetryQueued).toBeUndefined();
         const finalCall = MessageEmitter.emitMessage.mock.calls.find(
