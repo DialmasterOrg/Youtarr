@@ -80,6 +80,7 @@ export interface PlatformManagedState {
   authEnabled: boolean;
   useTmpForDownloads: boolean;
   ytdlpUpdates: boolean;
+  externalApiEnabled: boolean;
 }
 
 export interface DeploymentEnvironment {
