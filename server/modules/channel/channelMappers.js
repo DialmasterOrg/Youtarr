@@ -42,6 +42,7 @@ class ChannelMappers {
   mapChannelListEntry(channel) {
     const effectiveTabs = tabState.computeEffectiveTabs(channel.available_tabs, channel.hidden_tabs);
     const out = {
+      database_id: channel.id,
       url: channel.url,
       uploader: channel.uploader || '',
       channel_id: channel.channel_id || '',
