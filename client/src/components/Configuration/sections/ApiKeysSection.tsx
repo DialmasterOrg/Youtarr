@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -42,7 +42,7 @@ import { InfoTooltip } from '../common/InfoTooltip';
 import { locationUtils } from '../../../utils/location';
 import PolicyEditor from './ApiKeysSection/PolicyEditor';
 import ChannelGrantPicker from './ApiKeysSection/ChannelGrantPicker';
-import { ApiKey, ApiKeyPolicy, ApiKeyRole, ApiKeyCreatedResponse } from './ApiKeysSection/useApiKeys';
+import { ApiKey, ApiKeyPolicy, ApiKeyRole, ApiKeyCreatedResponse, normalizePolicy, useApiKeys } from './ApiKeysSection/useApiKeys';
 import {
   EXTERNAL_RATING_BANDS,
   formatExternalRatingBand,
@@ -140,6 +140,13 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
   const [selectedChannelIds, setSelectedChannelIds] = useState<number[]>([]);
   const [originalChannelIds, setOriginalChannelIds] = useState<number[]>([]);
   const [savingPolicy, setSavingPolicy] = useState(false);
+  const [channelsLoading, setChannelsLoading] = useState(false);
+  const [grantsLoading, setGrantsLoading] = useState(false);
+  const [editLoadError, setEditLoadError] = useState<string | null>(null);
+  const [channelsLoadError, setChannelsLoadError] = useState<string | null>(null);
+  const [grantsLoadError, setGrantsLoadError] = useState<string | null>(null);
+  const editLoadSequence = useRef(0);
+  const apiKeyApi = useApiKeys(token);
   const [externalKeySearch, setExternalKeySearch] = useState('');
   const [showActiveExternalKeys, setShowActiveExternalKeys] = useState(true);
   const [snackbar, setSnackbar] = useState({ open: false, message: '' });
@@ -157,71 +164,30 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
     locationUtils.getProtocol() !== 'https:' && locationUtils.getHostname() !== 'localhost'
   );
 
-  const setAvailableChannels = (channels: ChannelOption[]) => {
-    setChannelOptions(
-      channels.filter((channel) =>
-        channel.database_id && !channel.terminated_at
-      )
-    );
-  };
-
   const fetchApiKeys = useCallback(async () => {
-    if (!token) return;
-    
     try {
-      const response = await fetch('/api/keys', {
-        headers: { 'x-access-token': token },
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setApiKeys(data.keys || []);
-      } else {
-        const errData = await response.json();
-        setError(errData.error || 'Failed to fetch API keys');
-      }
+      setApiKeys(await apiKeyApi.fetchApiKeys());
     } catch (err) {
-      setError('Failed to fetch API keys');
+      setError(err instanceof Error ? err.message : 'Failed to fetch API keys');
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [apiKeyApi]);
 
   useEffect(() => {
-    fetchApiKeys();
+    void fetchApiKeys();
   }, [fetchApiKeys]);
 
-  const fetchAvailableChannels = async (): Promise<ChannelOption[]> => {
-    if (!token) return [];
-
-    const channels: ChannelOption[] = [];
-    let page = 1;
-    let totalPages = 1;
-
-    do {
-      const response = await fetch(`/getchannels?page=${page}&pageSize=100&sortOrder=asc`, {
-        headers: { 'x-access-token': token },
-      });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || 'Failed to load channels');
-      channels.push(...(body.channels || []));
-      if (page === 1) {
-        const reportedTotalPages = Number(body.totalPages);
-        totalPages = Number.isInteger(reportedTotalPages) && reportedTotalPages > 0
-          ? reportedTotalPages
-          : 1;
-      }
-      page += 1;
-    } while (page <= totalPages);
-
-    return channels;
-  };
-
   const loadAvailableChannels = async () => {
+    setChannelsLoading(true);
+    setEditLoadError(null);
     try {
-      setAvailableChannels(await fetchAvailableChannels());
+      const channels = await apiKeyApi.fetchAvailableChannels();
+      setChannelOptions(channels.filter((channel) => channel.database_id && !channel.terminated_at));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load channels');
+      setEditLoadError(err instanceof Error ? err.message : 'Failed to load channels');
+    } finally {
+      setChannelsLoading(false);
     }
   };
 
@@ -241,25 +207,13 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
 
   const handleCreateKey = async () => {
     if (!token || !newKeyName.trim()) return;
-
     try {
-      const response = await fetch('/api/keys', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-access-token': token,
-        },
-        body: JSON.stringify({
-          name: newKeyName.trim(),
-          ...(createKeyType === 'legacy'
-            ? {}
-            : { policy: newKeyPolicy, channelIds: newKeyChannelIds }),
-        }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok && data.success) {
+      const data = await apiKeyApi.createApiKey(
+        newKeyName.trim(),
+        createKeyType === 'legacy' ? undefined : newKeyPolicy,
+        createKeyType === 'legacy' ? undefined : newKeyChannelIds
+      );
+      if (data.success) {
         setCreatedKey(data);
         setCreatedKeyAction('created');
         setCreatedKeyRole(createKeyType === 'legacy' ? 'legacy_download' : newKeyPolicy.role);
@@ -269,85 +223,103 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
         setNewKeyPolicy(defaultPolicy);
         setNewKeyChannelIds([]);
         setNewKeyChannelSearch('');
-        fetchApiKeys();
+        void fetchApiKeys();
       } else {
-        setError(data.error || 'Failed to create API key');
+        setError(data.message || 'Failed to create API key');
       }
     } catch (err) {
-      setError('Failed to create API key');
+      setError(err instanceof Error ? err.message : 'Failed to create API key');
     }
   };
 
-  const openEditDialog = async (key: ApiKey) => {
+  const loadEditData = useCallback(async (key: ApiKey) => {
+    const sequence = ++editLoadSequence.current;
+    setChannelsLoading(true);
+    setGrantsLoading(true);
+    setChannelsLoadError(null);
+    setGrantsLoadError(null);
+    setEditLoadError(null);
+    const [grantsResult, channelsResult] = await Promise.allSettled([
+      apiKeyApi.fetchChannelGrants(key.id),
+      apiKeyApi.fetchAvailableChannels(),
+    ]);
+    if (sequence !== editLoadSequence.current) return;
+    const nextGrantsError = grantsResult.status === 'rejected'
+      ? (grantsResult.reason instanceof Error ? grantsResult.reason.message : 'Failed to load channel grants')
+      : null;
+    const nextChannelsError = channelsResult.status === 'rejected'
+      ? (channelsResult.reason instanceof Error ? channelsResult.reason.message : 'Failed to load channels')
+      : null;
+    setGrantsLoadError(nextGrantsError);
+    setChannelsLoadError(nextChannelsError);
+    setEditLoadError(nextGrantsError || nextChannelsError);
+    if (grantsResult.status === 'fulfilled') {
+      setSelectedChannelIds(grantsResult.value);
+      setOriginalChannelIds(grantsResult.value);
+    }
+    if (channelsResult.status === 'fulfilled') {
+      setChannelOptions(channelsResult.value.filter((channel) => channel.database_id && !channel.terminated_at));
+    }
+    setChannelsLoading(false);
+    setGrantsLoading(false);
+  }, [apiKeyApi]);
+
+  const openEditDialog = (key: ApiKey) => {
     if (!token || key.role === 'legacy_download' || key.revoked_at) return;
+    ++editLoadSequence.current;
     setEditKey(key);
     setEditPolicy(policyFromKey(key));
     setSelectedChannelIds([]);
     setOriginalChannelIds([]);
     setChannelSearch('');
-    try {
-      const [grantsResponse, channels] = await Promise.all([
-        fetch(`/api/keys/${key.id}/channels`, {
-          headers: { 'x-access-token': token },
-        }),
-        fetchAvailableChannels(),
-      ]);
-      const grants = await grantsResponse.json();
-      if (!grantsResponse.ok) {
-        throw new Error(grants.error || 'Failed to load external access settings');
-      }
-      const grantedChannelIds = grants.channelIds || [];
-      setSelectedChannelIds(grantedChannelIds);
-      setOriginalChannelIds(grantedChannelIds);
-      setAvailableChannels(channels);
-    } catch (err) {
-      setEditKey(null);
-      setError(err instanceof Error ? err.message : 'Failed to load external access settings');
-    }
+    void loadEditData(key);
+  };
+
+  const closeEditDialog = () => {
+    ++editLoadSequence.current;
+    setEditKey(null);
+    setEditLoadError(null);
+    setChannelsLoadError(null);
+    setGrantsLoadError(null);
+    setChannelsLoading(false);
+    setGrantsLoading(false);
   };
 
   const saveExternalAccess = async () => {
-    if (!token || !editKey) return;
+    if (!token || !editKey || channelsLoading || grantsLoading || editLoadError) return;
+    const normalized = normalizePolicy(editPolicy);
+    if (!normalized.policy) {
+      setEditLoadError(normalized.error || 'Invalid policy values');
+      return;
+    }
+    const normalizedPolicy = normalized.policy;
     const increasesPrivilege =
-      (editPolicy.allowVideoRequests && !permissionsFromKey(editKey).allowVideoRequests) ||
-      (editPolicy.allowChannelRequests && !permissionsFromKey(editKey).allowChannelRequests) ||
-      (editPolicy.allowDeleteVideoRequests &&
-        !permissionsFromKey(editKey).allowDeleteVideoRequests) ||
-      (editPolicy.autoApproveVideoRequests && !editKey.auto_approve_video_requests) ||
-      (editPolicy.autoApproveChannelRequests && !editKey.auto_approve_channel_requests) ||
-      (editPolicy.autoApproveDeleteRequests && !editKey.auto_approve_delete_requests) ||
-      editPolicy.maxRatingLevel > editKey.max_rating_level ||
-      (editPolicy.allowUnrated && !editKey.allow_unrated) ||
-      editPolicy.allowedMediaTypes.some(
+      (normalizedPolicy.allowVideoRequests && !permissionsFromKey(editKey).allowVideoRequests) ||
+      (normalizedPolicy.allowChannelRequests && !permissionsFromKey(editKey).allowChannelRequests) ||
+      (normalizedPolicy.allowDeleteVideoRequests && !permissionsFromKey(editKey).allowDeleteVideoRequests) ||
+      (normalizedPolicy.autoApproveVideoRequests && !editKey.auto_approve_video_requests) ||
+      (normalizedPolicy.autoApproveChannelRequests && !editKey.auto_approve_channel_requests) ||
+      (normalizedPolicy.autoApproveDeleteRequests && !editKey.auto_approve_delete_requests) ||
+      normalizedPolicy.maxRatingLevel > editKey.max_rating_level ||
+      (normalizedPolicy.allowUnrated && !editKey.allow_unrated) ||
+      normalizedPolicy.allowedMediaTypes.some(
         (mediaType) => !editKey.allowed_media_types.includes(mediaType)
       ) ||
-      editPolicy.maxActiveJobs > (editKey.max_active_jobs ?? 5) ||
-      editPolicy.hourlyWriteLimit > (editKey.hourly_write_limit ?? 30) ||
-      editPolicy.dailyWriteLimit > (editKey.daily_write_limit ?? 200) ||
+      normalizedPolicy.maxActiveJobs > (editKey.max_active_jobs ?? 5) ||
+      normalizedPolicy.hourlyWriteLimit > (editKey.hourly_write_limit ?? 30) ||
+      normalizedPolicy.dailyWriteLimit > (editKey.daily_write_limit ?? 200) ||
       selectedChannelIds.some((channelId) => !originalChannelIds.includes(channelId));
     if (increasesPrivilege && !window.confirm(
       'This change may increase what the external integration can view or request. Continue?'
     )) return;
     setSavingPolicy(true);
     try {
-      const response = await fetch(`/api/keys/${editKey.id}/external-access`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-access-token': token,
-        },
-        body: JSON.stringify({
-          policy: editPolicy,
-          channelIds: selectedChannelIds,
-        }),
-      });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || 'Failed to save external access');
+      await apiKeyApi.updateExternalAccess(editKey.id, { policy: normalizedPolicy, channelIds: selectedChannelIds });
       setSnackbar({ open: true, message: 'External access updated' });
-      setEditKey(null);
+      closeEditDialog();
       await fetchApiKeys();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save external access');
+      setEditLoadError(err instanceof Error ? err.message : 'Failed to save external access');
     } finally {
       setSavingPolicy(false);
     }
@@ -355,22 +327,12 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
 
   const handleDeleteKey = async () => {
     if (!token || !deleteConfirmDialog.keyId) return;
-
     try {
-      const response = await fetch(`/api/keys/${deleteConfirmDialog.keyId}`, {
-        method: 'DELETE',
-        headers: { 'x-access-token': token },
-      });
-
-      if (response.ok) {
-        setSnackbar({ open: true, message: 'API key revoked' });
-        fetchApiKeys();
-      } else {
-        const data = await response.json();
-        setError(data.error || 'Failed to revoke API key');
-      }
+      await apiKeyApi.revokeApiKey(deleteConfirmDialog.keyId);
+      setSnackbar({ open: true, message: 'API key revoked' });
+      void fetchApiKeys();
     } catch (err) {
-      setError('Failed to revoke API key');
+      setError(err instanceof Error ? err.message : 'Failed to revoke API key');
     } finally {
       setDeleteConfirmDialog({ open: false, keyId: null, keyName: '' });
     }
@@ -385,12 +347,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
     const key = regenerateConfirmDialog.key;
     setRegenerating(true);
     try {
-      const response = await fetch(`/api/keys/${key.id}/regenerate`, {
-        method: 'POST',
-        headers: { 'x-access-token': token },
-      });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || 'Failed to regenerate API key');
+      const body = await apiKeyApi.regenerateApiKey(key.id);
       setRegenerateConfirmDialog({ open: false, key: null });
       setCreatedKey(body);
       setCreatedKeyRole(key.role);
@@ -825,7 +782,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
 
       <Dialog
         open={Boolean(editKey)}
-        onClose={() => setEditKey(null)}
+        onClose={closeEditDialog}
         maxWidth="md"
         fullWidth
       >
@@ -834,6 +791,25 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
           <Alert severity="info" className="mb-4">
             Permissions, policy, and channel grants are enforced by Youtarr on every request.
           </Alert>
+          {editLoadError && (
+            <Alert severity="error" className="mb-4">
+              <div className="space-y-2">
+                <Typography variant="body2">{channelsLoadError || grantsLoadError || editLoadError}</Typography>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => editKey && void loadEditData(editKey)}
+                >
+                  Retry
+                </Button>
+              </div>
+            </Alert>
+          )}
+          {!editLoadError && (channelsLoading || grantsLoading) && (
+            <Alert severity="info" className="mb-4">
+              Loading channel grants and available channels...
+            </Alert>
+          )}
           <PolicyEditor policy={editPolicy} onChange={setEditPolicy} />
           <Divider className="my-5" />
           <Typography variant="subtitle2" className="mb-2">
@@ -847,8 +823,12 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
           <ChannelGrantPicker channels={channelOptions} selectedIds={selectedChannelIds} search={channelSearch} onSearchChange={setChannelSearch} onSelectedIdsChange={setSelectedChannelIds} maxHeight="320px" />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setEditKey(null)}>Cancel</Button>
-          <Button variant="contained" onClick={saveExternalAccess} disabled={savingPolicy}>
+          <Button onClick={closeEditDialog}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={saveExternalAccess}
+            disabled={savingPolicy || channelsLoading || grantsLoading || Boolean(editLoadError) || !editKey}
+          >
             {savingPolicy ? 'Saving…' : 'Save External Access'}
           </Button>
         </DialogActions>
