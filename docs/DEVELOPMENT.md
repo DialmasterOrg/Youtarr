@@ -761,6 +761,27 @@ Releases are automated via GitHub Actions with a two-stage workflow:
    - Builds optimized Docker image (~600MB)
    - Pushes `latest` and `vX.X.X` tags to Docker Hub
 
+The production workflow uses `scripts/release-notes.js` to strip the generated
+version heading before sharing notes with GitHub Releases and Discord. Each
+`CHANGELOG.md` entry has one `##` release heading, followed by the category
+headings and a full comparison link. Dry runs prepare and display the same entry
+without updating the file or publishing a release.
+
+Tag creation passes the unprefixed `new_version` to the tagging action and pins
+the tag to the version-bump commit. Historical `vvX.X.X` tags are retained: they
+can still be selected as the commit-analysis baseline during the transition to
+new single-prefix tags. Public comparison links use the corresponding `vX.X.X`
+release tags, whose existence is checked before publishing. These old tag pairs
+can point to different commits, so canonical release comparisons can omit a
+version-bump commit present in the legacy range. The dry-run output shows both
+the canonical previous tag and the actual commit-analysis baseline.
+
+Release-note regression checks can be run separately from the application suites:
+
+```bash
+node --test --test-concurrency=1 scripts/tests/release-notes.test.js
+```
+
 ## Troubleshooting Development Issues
 
 ### Containers Won't Start
