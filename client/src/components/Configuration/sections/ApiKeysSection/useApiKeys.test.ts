@@ -1,4 +1,18 @@
-import { normalizePolicy, ApiKeyPolicy } from './useApiKeys';
+import { act, renderHook } from '@testing-library/react';
+import axios from 'axios';
+import { normalizePolicy, ApiKeyPolicy, useApiKeys } from './useApiKeys';
+
+jest.mock('axios', () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    delete: jest.fn(),
+  },
+}));
+
+const mockedAxios = axios as jest.Mocked<typeof axios>;
 
 const basePolicy: ApiKeyPolicy = {
   role: 'view',
@@ -37,5 +51,44 @@ describe('normalizePolicy', () => {
     });
     expect(result.error).toBeUndefined();
     expect(result.policy).toMatchObject({ maxActiveJobs: 4, hourlyWriteLimit: 12, dailyWriteLimit: 180 });
+  });
+});
+
+describe('useApiKeys', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('loads every channel page and preserves the canonical database_id response shape', async () => {
+    mockedAxios.get
+      .mockResolvedValueOnce({
+        data: {
+          channels: [{ database_id: 41, name: 'Alpha', terminated_at: null }],
+          totalPages: 2,
+        },
+      } as never)
+      .mockResolvedValueOnce({
+        data: {
+          channels: [{ database_id: 42, name: 'Beta', terminated_at: null }],
+          totalPages: 2,
+        },
+      } as never);
+
+    const { result } = renderHook(() => useApiKeys('token'));
+    let channels;
+    await act(async () => {
+      channels = await result.current.fetchAvailableChannels();
+    });
+
+    expect(channels).toEqual([
+      { database_id: 41, name: 'Alpha', terminated_at: null },
+      { database_id: 42, name: 'Beta', terminated_at: null },
+    ]);
+    expect(mockedAxios.get).toHaveBeenNthCalledWith(1, '/getchannels', expect.objectContaining({
+      params: { page: 1, pageSize: 100, sortOrder: 'asc' },
+    }));
+    expect(mockedAxios.get).toHaveBeenNthCalledWith(2, '/getchannels', expect.objectContaining({
+      params: { page: 2, pageSize: 100, sortOrder: 'asc' },
+    }));
   });
 });

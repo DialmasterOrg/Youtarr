@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import axios from 'axios';
 import { Channel } from '../../../../types/Channel';
 import { ChannelListResponse } from '../../../Subscriptions/hooks/useChannelList';
@@ -85,7 +85,7 @@ export const normalizePolicy = (policy: ApiKeyPolicy): NormalizedPolicyResult =>
 
 
 export const useApiKeys = (token: string | null) => {
-  const headers = token ? { 'x-access-token': token } : undefined;
+  const headers = useMemo(() => (token ? { 'x-access-token': token } : undefined), [token]);
   const fetchApiKeys = useCallback(async () => {
     if (!token) return [];
     const { data } = await axios.get<ApiKeyListResponse>('/api/keys', { headers });
@@ -138,7 +138,7 @@ export const useApiKeys = (token: string | null) => {
     return data;
   }, [headers]);
 
-  return {
+  return useMemo(() => ({
     fetchApiKeys,
     fetchAvailableChannels,
     fetchChannelGrants,
@@ -146,6 +146,14 @@ export const useApiKeys = (token: string | null) => {
     updateExternalAccess,
     revokeApiKey,
     regenerateApiKey,
-  };
+  }), [
+    createApiKey,
+    fetchApiKeys,
+    fetchAvailableChannels,
+    fetchChannelGrants,
+    regenerateApiKey,
+    revokeApiKey,
+    updateExternalAccess,
+  ]);
 };
 
