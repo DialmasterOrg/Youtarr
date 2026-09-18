@@ -23,7 +23,8 @@ export function useConfig(token: string | null): UseConfigResult {
     plexUrl: false,
     authEnabled: true,
     useTmpForDownloads: false,
-    ytdlpUpdates: false
+    ytdlpUpdates: false,
+    externalApiEnabled: false
   });
   const [deploymentEnvironment, setDeploymentEnvironment] = useState<DeploymentEnvironment>({
     platform: null,
