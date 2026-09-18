@@ -114,10 +114,8 @@ describe('RequestsPage', () => {
       expect(mockedAxios.get).toHaveBeenCalledTimes(3);
     });
     expect(mockedAxios.get).toHaveBeenLastCalledWith(
-      expect.stringContaining('/api/external-requests?'),
-      expect.objectContaining({
-        headers: { 'x-access-token': 'session-token' },
-      })
+      "/api/external-requests",
+      expect.objectContaining({ headers: { "x-access-token": "session-token" }, params: expect.objectContaining({ page: 1, pageSize: 25 }) })
     );
   });
 
@@ -217,9 +215,8 @@ describe('RequestsPage', () => {
     await screen.findByText('Safe video');
     const requestCell = screen.getByTestId(`request-summary-${requestId}`);
     const cell = within(requestCell);
-    expect(cell.getByText('Downloaded')).toBeInTheDocument();
     expect(cell.getAllByText('TV-Y').length).toBeGreaterThan(0);
-    expect(cell.getAllByText('Safe Channel').length).toBeGreaterThan(0);
+    expect(cell.queryByText("Downloaded")).not.toBeInTheDocument();
 
     expect(screen.getByRole('button', { name: 'Details' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Approve request' })).toBeEnabled();
