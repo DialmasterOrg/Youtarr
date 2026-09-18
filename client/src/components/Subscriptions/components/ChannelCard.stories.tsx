@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router-dom';
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import ChannelCard from './ChannelCard';
@@ -36,16 +37,17 @@ const meta: Meta<typeof ChannelCard> = {
   parameters: { layout: 'padded' },
   decorators: [
     (Story) => (
-      <div className="w-72">
-        <Story />
-      </div>
+      <MemoryRouter>
+        <div className="w-72">
+          <Story />
+        </div>
+      </MemoryRouter>
     ),
   ],
   args: {
     channel: mockChannel,
     isMobile: false,
     globalPreferredResolution: '1080',
-    onNavigate: () => {},
     onDelete: () => {},
     onRegexClick: () => {},
     isPendingAddition: false,
