@@ -197,9 +197,11 @@ See: [docs/YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md](../YOUTARR_DOWNLOADS_FOLDER_ST
 - **Studio**: Channel name for grouping
 - **Album**: Channel name (alternative grouping)
 - **Genre**: YouTube categories
-- **Release Date**: Original upload date
+- **Release Date**: Original upload instant (UTC), or the upload date when yt-dlp does not report a timestamp
 - **Poster**: Channel artwork (poster.jpg)
 - **Thumbnail**: Video thumbnail
+
+For new MP4 downloads, Youtarr embeds the full UTC upload instant (for example `2026-08-03T17:11:00Z`) when yt-dlp reports a usable timestamp, falling back to the date-only upload date otherwise. NFO release dates stay date-only for Jellyfin and Emby compatibility. Youtarr has no re-tagging feature, so previously downloaded files keep their date-only tag until they are downloaded again; refreshing the Plex library does not rewrite it.
 
 ## Tips and Best Practices
 
