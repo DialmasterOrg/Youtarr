@@ -1,4 +1,6 @@
 const fs = require('fs-extra');
+const os = require('os');
+const path = require('path');
 
 // Mock configModule BEFORE requiring tempPathManager
 jest.mock('../../configModule', () => ({
@@ -13,10 +15,18 @@ jest.mock('../../../logger');
 const tempPathManager = require('../tempPathManager');
 const configModule = require('../../configModule');
 const logger = require('../../../logger');
+const directoryManager = require('../../filesystem/directoryManager');
 
 describe('TempPathManager', () => {
+  let originalDirectoryPath;
+
   beforeEach(() => {
     jest.clearAllMocks();
+    originalDirectoryPath = configModule.directoryPath;
+  });
+
+  afterEach(() => {
+    configModule.directoryPath = originalDirectoryPath;
   });
 
   afterAll(() => {
@@ -265,50 +275,55 @@ describe('TempPathManager', () => {
   });
 
   describe('cleanTempDirectory', () => {
-    let mockPathExists;
+    let mockReaddir;
     let mockRemove;
     let mockEnsureDir;
 
     beforeEach(() => {
-      mockPathExists = jest.spyOn(fs, 'pathExists').mockResolvedValue(true);
-      mockRemove = jest.spyOn(fs, 'remove').mockResolvedValue(undefined);
+      mockReaddir = jest.spyOn(fs, 'readdir').mockResolvedValue(['Channel', '.leftover.part']);
+      mockRemove = jest.spyOn(directoryManager, 'removeDirectoryResilient').mockResolvedValue(undefined);
       mockEnsureDir = jest.spyOn(fs, 'ensureDir').mockResolvedValue(undefined);
     });
 
     afterEach(() => {
-      mockPathExists.mockRestore();
+      mockReaddir.mockRestore();
       mockRemove.mockRestore();
       mockEnsureDir.mockRestore();
     });
 
-    it('should remove and recreate external temp directory when useTmpForDownloads is true', async () => {
+    it('should clean external temp contents without removing the root', async () => {
       configModule.getConfig.mockReturnValue({
         useTmpForDownloads: true,
         tmpFilePath: '/tmp/youtarr-downloads'
       });
       await tempPathManager.cleanTempDirectory();
 
-      expect(mockPathExists).toHaveBeenCalledWith('/tmp/youtarr-downloads');
-      expect(mockRemove).toHaveBeenCalledWith('/tmp/youtarr-downloads');
+      expect(mockReaddir).toHaveBeenCalledWith('/tmp/youtarr-downloads');
+      expect(mockRemove).toHaveBeenCalledTimes(2);
+      expect(mockRemove).toHaveBeenCalledWith('/tmp/youtarr-downloads/Channel');
+      expect(mockRemove).toHaveBeenCalledWith('/tmp/youtarr-downloads/.leftover.part');
+      expect(mockRemove).not.toHaveBeenCalledWith('/tmp/youtarr-downloads');
       expect(mockEnsureDir).toHaveBeenCalledWith('/tmp/youtarr-downloads');
       expect(logger.info).toHaveBeenCalledWith(
         { tempBasePath: '/tmp/youtarr-downloads' },
         'Cleaning temp directory'
       );
-      expect(logger.info).toHaveBeenCalledWith('Removed temp directory');
       expect(logger.info).toHaveBeenCalledWith(
         { tempBasePath: '/tmp/youtarr-downloads' },
-        'Recreated temp directory'
+        'Cleaned temp directory contents'
       );
     });
 
-    it('should remove and recreate local .youtarr_tmp directory when useTmpForDownloads is false', async () => {
+    it('should clean local temp contents without removing the root', async () => {
       configModule.getConfig.mockReturnValue({ useTmpForDownloads: false });
       configModule.directoryPath = '/mnt/network/youtube';
       await tempPathManager.cleanTempDirectory();
 
-      expect(mockPathExists).toHaveBeenCalledWith('/mnt/network/youtube/.youtarr_tmp');
-      expect(mockRemove).toHaveBeenCalledWith('/mnt/network/youtube/.youtarr_tmp');
+      expect(mockReaddir).toHaveBeenCalledWith('/mnt/network/youtube/.youtarr_tmp');
+      expect(mockRemove).toHaveBeenCalledTimes(2);
+      expect(mockRemove).toHaveBeenCalledWith('/mnt/network/youtube/.youtarr_tmp/Channel');
+      expect(mockRemove).toHaveBeenCalledWith('/mnt/network/youtube/.youtarr_tmp/.leftover.part');
+      expect(mockRemove).not.toHaveBeenCalledWith('/mnt/network/youtube/.youtarr_tmp');
       expect(mockEnsureDir).toHaveBeenCalledWith('/mnt/network/youtube/.youtarr_tmp');
       expect(logger.info).toHaveBeenCalledWith(
         { tempBasePath: '/mnt/network/youtube/.youtarr_tmp' },
@@ -316,21 +331,20 @@ describe('TempPathManager', () => {
       );
     });
 
-    it('should create temp directory when it does not exist', async () => {
+    it('should leave an empty temp directory in place', async () => {
       configModule.getConfig.mockReturnValue({
         useTmpForDownloads: true,
         tmpFilePath: '/tmp/youtarr-downloads'
       });
-      mockPathExists.mockResolvedValue(false);
+      mockReaddir.mockResolvedValue([]);
       await tempPathManager.cleanTempDirectory();
 
-      expect(mockPathExists).toHaveBeenCalledWith('/tmp/youtarr-downloads');
+      expect(mockReaddir).toHaveBeenCalledWith('/tmp/youtarr-downloads');
       expect(mockRemove).not.toHaveBeenCalled();
       expect(mockEnsureDir).toHaveBeenCalledWith('/tmp/youtarr-downloads');
-      expect(logger.debug).toHaveBeenCalledWith('Temp directory doesn\'t exist, nothing to clean');
       expect(logger.info).toHaveBeenCalledWith(
         { tempBasePath: '/tmp/youtarr-downloads' },
-        'Recreated temp directory'
+        'Cleaned temp directory contents'
       );
     });
 
@@ -345,6 +359,149 @@ describe('TempPathManager', () => {
         { tempBasePath: '/tmp/youtarr-downloads', err: expect.any(Error) },
         'Error cleaning temp directory'
       );
+      expect(logger.info).not.toHaveBeenCalledWith(
+        expect.anything(), 'Cleaned temp directory contents'
+      );
+    });
+
+    it('should attempt every entry and aggregate failures after the sweep', async () => {
+      configModule.getConfig.mockReturnValue({
+        useTmpForDownloads: true,
+        tmpFilePath: '/tmp/youtarr-downloads'
+      });
+      mockReaddir.mockResolvedValue(['locked.part', 'Channel', '@eaDir', '.leftover.part']);
+      const locked = Object.assign(new Error('File is locked'), { code: 'EBUSY' });
+      const notEmpty = Object.assign(new Error('Directory is not empty'), { code: 'ENOTEMPTY' });
+      mockRemove.mockRejectedValueOnce(locked)
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(notEmpty)
+        .mockResolvedValueOnce(undefined);
+
+      const cleanup = tempPathManager.cleanTempDirectory();
+      await expect(cleanup).rejects.toBeInstanceOf(AggregateError);
+      await expect(cleanup).rejects.toMatchObject({
+        message: 'Failed to clean temp directory: could not remove 2 of 4 entries',
+        errors: [locked, notEmpty]
+      });
+      expect(mockRemove).toHaveBeenCalledTimes(4);
+      expect(mockRemove).toHaveBeenNthCalledWith(2, '/tmp/youtarr-downloads/Channel');
+      expect(mockRemove).toHaveBeenNthCalledWith(4, '/tmp/youtarr-downloads/.leftover.part');
+      expect(logger.error).toHaveBeenCalledWith(
+        { err: locked, entryPath: '/tmp/youtarr-downloads/locked.part' },
+        'Failed to remove temp entry'
+      );
+      expect(logger.error).toHaveBeenCalledWith(
+        { err: notEmpty, entryPath: '/tmp/youtarr-downloads/@eaDir' },
+        'Failed to remove temp entry'
+      );
+      expect(logger.info).not.toHaveBeenCalledWith(
+        expect.anything(), 'Cleaned temp directory contents'
+      );
+    });
+
+    it.each(['EACCES', 'EIO'])('should report directory read errors (%s)', async (code) => {
+      configModule.getConfig.mockReturnValue({
+        useTmpForDownloads: true,
+        tmpFilePath: '/tmp/youtarr-downloads'
+      });
+      const error = Object.assign(new Error('Cannot read temp directory'), { code });
+      mockReaddir.mockRejectedValue(error);
+
+      await expect(tempPathManager.cleanTempDirectory()).rejects.toThrow(
+        'Failed to clean temp directory: Cannot read temp directory'
+      );
+      expect(mockRemove).not.toHaveBeenCalled();
+      expect(logger.error).toHaveBeenCalledWith(
+        { tempBasePath: '/tmp/youtarr-downloads', err: error },
+        'Error cleaning temp directory'
+      );
+      expect(logger.info).not.toHaveBeenCalledWith(
+        expect.anything(), 'Cleaned temp directory contents'
+      );
+    });
+
+    it('should report directory creation errors before attempting cleanup', async () => {
+      configModule.getConfig.mockReturnValue({ useTmpForDownloads: true });
+      const error = Object.assign(new Error('Permission denied'), { code: 'EACCES' });
+      mockEnsureDir.mockRejectedValue(error);
+
+      await expect(tempPathManager.cleanTempDirectory()).rejects.toThrow(
+        'Cannot create temp directory: Permission denied'
+      );
+      expect(mockReaddir).not.toHaveBeenCalled();
+      expect(mockRemove).not.toHaveBeenCalled();
+      expect(logger.info).toHaveBeenCalledWith(
+        { tempBasePath: '/tmp/youtarr-downloads' }, 'Cleaning temp directory'
+      );
+      expect(logger.error).toHaveBeenCalledWith(
+        { tempBasePath: '/tmp/youtarr-downloads', err: error },
+        'Failed to create temp directory'
+      );
+    });
+  });
+
+  describe('cleanTempDirectory filesystem behavior', () => {
+    let workspace;
+    let tempBase;
+
+    beforeEach(async () => {
+      workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'youtarr-temp-cleanup-'));
+      tempBase = path.join(workspace, 'staging');
+      configModule.getConfig.mockReturnValue({
+        useTmpForDownloads: true,
+        tmpFilePath: tempBase
+      });
+    });
+
+    afterEach(async () => {
+      await fs.remove(workspace);
+    });
+
+    it('should create a missing temp directory and support repeated cleanup', async () => {
+      await tempPathManager.cleanTempDirectory();
+      const original = await fs.stat(tempBase);
+      await tempPathManager.cleanTempDirectory();
+
+      expect(await fs.readdir(tempBase)).toEqual([]);
+      const remaining = await fs.stat(tempBase);
+      expect(remaining.isDirectory()).toBe(true);
+      expect(remaining.ino).toBe(original.ino);
+    });
+
+    it.each([true, false])('should preserve the root and remove nested and hidden contents (external: %s)', async (external) => {
+      if (!external) {
+        configModule.getConfig.mockReturnValue({ useTmpForDownloads: false });
+        configModule.directoryPath = workspace;
+        tempBase = path.join(workspace, '.youtarr_tmp');
+      }
+      await fs.ensureDir(path.join(tempBase, 'Channel', 'Video'));
+      await fs.writeFile(path.join(tempBase, 'Channel', 'Video', 'video.mp4.part'), 'partial');
+      await fs.writeFile(path.join(tempBase, '.leftover'), 'hidden');
+      await fs.chmod(tempBase, 0o750);
+      const original = await fs.stat(tempBase);
+
+      await tempPathManager.cleanTempDirectory();
+
+      expect(await fs.readdir(tempBase)).toEqual([]);
+      const remaining = await fs.stat(tempBase);
+      expect(remaining.ino).toBe(original.ino);
+      expect(remaining.mode).toBe(original.mode);
+      expect(remaining.uid).toBe(original.uid);
+      expect(remaining.gid).toBe(original.gid);
+    });
+
+    it('should remove child symlinks without deleting their targets', async () => {
+      const outside = path.join(workspace, 'outside');
+      await fs.ensureDir(outside);
+      await fs.writeFile(path.join(outside, 'keep.txt'), 'keep');
+      await fs.ensureDir(path.join(tempBase, 'nested'));
+      await fs.symlink(outside, path.join(tempBase, 'linked-directory'), 'dir');
+      await fs.symlink(path.join(outside, 'keep.txt'), path.join(tempBase, 'nested', 'linked-file'), 'file');
+
+      await tempPathManager.cleanTempDirectory();
+
+      expect(await fs.readdir(tempBase)).toEqual([]);
+      expect(await fs.readFile(path.join(outside, 'keep.txt'), 'utf8')).toBe('keep');
     });
   });
 
