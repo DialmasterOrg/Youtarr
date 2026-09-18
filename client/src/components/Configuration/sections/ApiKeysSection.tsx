@@ -351,6 +351,7 @@ interface ApiKeysSectionProps {
   token: string | null;
   apiKeyRateLimit: number;
   onRateLimitChange: (value: number) => void;
+  externalApiEnabled: boolean;
   showRequestsNavLink: boolean;
   onShowRequestsNavLinkChange: (value: boolean) => void;
 }
@@ -359,6 +360,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
   token,
   apiKeyRateLimit,
   onRateLimitChange,
+  externalApiEnabled,
   showRequestsNavLink,
   onShowRequestsNavLinkChange,
 }) => {
@@ -682,16 +684,16 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
   return (
     <ConfigurationAccordion
       title="API Keys & External Access"
-      statusBanner={{
+      statusBanner={externalApiEnabled ? {
         enabled: showRequestsNavLink,
         label: 'Show Requests in navigation',
         onToggle: onShowRequestsNavLinkChange,
         onText: 'Requests navigation link shown',
         offText: 'Requests navigation link hidden',
         toggleTestId: 'requests-nav-link-switch',
-      }}
+      } : undefined}
     >
-      <Box className="mb-4 flex flex-wrap items-start justify-between gap-3">
+      {externalApiEnabled ? (\n        <>\n      <Box className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <Typography variant="subtitle1">External access keys</Typography>
           <Typography variant="body2" color="secondary" className="mt-1 max-w-2xl">
@@ -919,7 +921,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
         </div>
       )}
 
-      <Divider className="my-6" />
+        </>\n      ) : (\n        <Alert severity="info" className="mb-4">\n          External API access is disabled by the EXTERNAL_API_ENABLED environment setting.\n        </Alert>\n      )}\n\n      <Divider className="my-6" />
 
       <Box className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
