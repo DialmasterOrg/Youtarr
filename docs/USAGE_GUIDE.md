@@ -67,7 +67,7 @@ Subscribe to YouTube channels to automatically download new videos as they're pu
 
 4. **Configure channel-specific settings** (optional)
    - Click on a channel to open its detail page
-   - Click **Edit** (the gear button) in the **Channel Settings** bar to open channel settings. The dialog has four tabs:
+   - Click **Edit** (the gear button) in the **Channel Settings** bar to open channel settings. The dialog has five tabs:
      - **General**:
        - **Subfolder**: pick or create a subfolder to organize channels into separate media libraries (e.g., `__kids`, `__music`); the picker has an inline **Add Subfolder** action for new names
        - **Resolution Override**: a **Channel Video Quality Override** that takes precedence over the global setting
@@ -75,6 +75,7 @@ Subscribe to YouTube channels to automatically download new videos as they're pu
        - **Auto Downloads**: separate toggles for **New Videos**, **New Shorts**, and **New Live/Streams**. These only take effect while the global **Enable Automatic Downloads** toggle in Settings -> Core is on.
      - **Filters**: duration limits and a title regex to control which videos auto-download
      - **Ratings**: a default content rating for this channel's downloads
+     - **Tags**: custom tags that can be automatically added to downloaded videos separated by '|'. This applies only to videos downloaded in the future.
      - **Auto-Removal**: **Protect this channel from auto-removal**, or use **Always keep newest downloads** to keep the channel's newest N downloads out of automatic cleanup (see [Configure Automation](#configure-automation))
 
 ### Channel playlist file (.m3u)
