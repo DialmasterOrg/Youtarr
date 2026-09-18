@@ -178,3 +178,9 @@ describe('channelMappers', () => {
     });
   });
 });
+
+// database_id is required by API-key channel grants.
+test('mapChannelListEntry includes database_id', () => {
+  const result = channelMappers.mapChannelListEntry({ id: 42, url: 'https://youtube.com/@test', uploader: 'Test', channel_id: 'UC123' });
+  expect(result.database_id).toBe(42);
+});
