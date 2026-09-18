@@ -51,6 +51,7 @@ const createMockResponse = () => {
 
 const createServerModule = ({
   authEnabled = 'true',
+  externalApiEnabled,
   passwordHash = 'hashed-password',
   session,
   skipInitialize = false,
@@ -72,6 +73,11 @@ const createServerModule = ({
           delete process.env.AUTH_ENABLED;
         } else {
           process.env.AUTH_ENABLED = authEnabled;
+        }
+        if (externalApiEnabled === undefined) {
+          delete process.env.EXTERNAL_API_ENABLED;
+        } else {
+          process.env.EXTERNAL_API_ENABLED = externalApiEnabled;
         }
 
         const defaultSessionUpdate = jest.fn().mockResolvedValue();
@@ -391,6 +397,7 @@ const createServerModule = ({
 
 afterEach(() => {
   delete process.env.AUTH_ENABLED;
+  delete process.env.EXTERNAL_API_ENABLED;
 });
 
 describe('server routes - plex integration', () => {
@@ -1413,5 +1420,26 @@ describe('server routes - getplexlibraries with test params', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual([]);
+  });
+});
+
+
+describe('GET /getconfig external API capability', () => {
+  test.each([
+    ['true', true],
+    ['false', false],
+    [undefined, false],
+    ['TRUE', false],
+  ])('maps EXTERNAL_API_ENABLED=%s to externalApiEnabled=%s', async (externalApiEnabled, expected) => {
+    const { app } = await createServerModule({ externalApiEnabled });
+    const handlers = findRouteHandlers(app, 'get', '/getconfig');
+    const getConfigHandler = handlers[handlers.length - 1];
+    const req = createMockRequest({});
+    const res = createMockResponse();
+
+    await getConfigHandler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.isPlatformManaged.externalApiEnabled).toBe(expected);
   });
 });
