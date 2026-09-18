@@ -137,7 +137,8 @@ module.exports = function createConfigRoutes({ verifyToken, configModule, valida
       plexUrl: !!process.env.PLEX_URL,
       authEnabled: process.env.AUTH_ENABLED === 'false' ? false : true,
       useTmpForDownloads: configModule.isElfhostedPlatform(),
-      ytdlpUpdates: configModule.isElfhostedPlatform()
+      ytdlpUpdates: configModule.isElfhostedPlatform(),
+      externalApiEnabled: process.env.EXTERNAL_API_ENABLED === 'true'
     };
 
     safeConfig.deploymentEnvironment = {
