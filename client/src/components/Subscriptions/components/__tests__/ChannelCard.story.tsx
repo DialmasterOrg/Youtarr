@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router-dom';
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, within } from 'storybook/test';
@@ -6,6 +7,7 @@ import { Channel } from '../../../../types/Channel';
 
 const meta: Meta<typeof ChannelCard> = {
   title: 'Components/Subscriptions/ChannelCard',
+  decorators: [(Story) => <MemoryRouter><Story /></MemoryRouter>],
   component: ChannelCard,
   parameters: {
     docs: {
@@ -13,7 +15,6 @@ const meta: Meta<typeof ChannelCard> = {
     },
   },
   args: {
-    onNavigate: fn(),
     onDelete: fn(),
     onRegexClick: fn(),
   },
@@ -53,7 +54,7 @@ export const Default: Story = {
 
     const card = canvas.getByTestId(`channel-card-${mockChannel.channel_id}`);
     await userEvent.click(card);
-    await expect(args.onNavigate).toHaveBeenCalled();
+    await expect(card).toHaveAttribute('href', `/channel/${mockChannel.channel_id}`);
   },
 };
 
@@ -79,6 +80,7 @@ export const PendingAddition: Story = {
     await expect(pendingChip).toBeVisible();
 
     const card = canvas.getByTestId(`channel-card-${mockChannel.url}`);
-    await expect(card).toHaveAttribute('disabled');
+    await expect(card).toHaveAttribute('aria-disabled', 'true');
+    await expect(canvas.queryByRole('link')).not.toBeInTheDocument();
   },
 };

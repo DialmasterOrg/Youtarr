@@ -436,11 +436,6 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
   };
   const handleMobileActionsClose = () => setMobileActionsAnchorEl(null);
 
-  const handleNavigate = (channel: Channel) => {
-    if (!channel.channel_id) return;
-    navigate(`/channel/${channel.channel_id}`);
-  };
-
   const handleOpenSubscriptions = () => {
     navigate('/subscriptions/imports');
   };
@@ -715,7 +710,6 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
                           channel={channel}
                           isMobile={isMobile}
                           globalPreferredResolution={globalPreferredResolution}
-                          onNavigate={() => handleNavigate(channel)}
                           onDelete={() => handleDeleteClick(channel)}
                           onRegexClick={handleRegexClick}
                           isPendingAddition={pendingAdditionSet.has(channel.url)}
@@ -732,7 +726,6 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
                             channel={channel}
                             isMobile={isMobile}
                             globalPreferredResolution={globalPreferredResolution}
-                            onNavigate={() => handleNavigate(channel)}
                             onDelete={() => handleDeleteClick(channel)}
                             onRegexClick={handleRegexClick}
                             isPendingAddition={pendingAdditionSet.has(channel.url)}

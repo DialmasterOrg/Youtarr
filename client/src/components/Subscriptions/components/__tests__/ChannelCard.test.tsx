@@ -1,10 +1,19 @@
+import { useLocation } from 'react-router-dom';
 import React from 'react';
 import { screen, within, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import ChannelCard from '../ChannelCard';
 import { Channel } from '../../../../types/Channel';
-import { renderWithProviders } from '../../../../test-utils';
+import { renderWithProviders as renderWithBaseProviders } from '../../../../test-utils';
+
+function CurrentPath() {
+  return <output data-testid="current-path">{useLocation().pathname}</output>;
+}
+
+function renderWithProviders(ui: React.ReactElement) {
+  return renderWithBaseProviders(<>{ui}<CurrentPath /></>);
+}
 
 // Mock the chip components
 jest.mock('../chips', () => ({
@@ -91,7 +100,6 @@ describe('ChannelCard Component', () => {
     channel: mockChannel,
     isMobile: false,
     globalPreferredResolution: '1080',
-    onNavigate: jest.fn(),
     onDelete: jest.fn(),
     onRegexClick: jest.fn(),
     isPendingAddition: false,
@@ -271,30 +279,28 @@ describe('ChannelCard Component', () => {
 
     test('allows navigation when isPendingAddition is false', async () => {
       const user = userEvent.setup();
-      const onNavigate = jest.fn();
 
       renderWithProviders(
-        <ChannelCard {...defaultProps} onNavigate={onNavigate} isPendingAddition={false} />
+        <ChannelCard {...defaultProps} isPendingAddition={false} />
       );
 
       const card = screen.getByTestId('channel-card-UC1234567890');
       await user.click(card);
 
-      expect(onNavigate).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId('current-path')).toHaveTextContent('/channel/UC1234567890');
     });
   });
 
   describe('User Interactions', () => {
-    test('calls onNavigate when card is clicked', async () => {
+    test('navigates to the channel when the card is clicked', async () => {
       const user = userEvent.setup();
-      const onNavigate = jest.fn();
 
-      renderWithProviders(<ChannelCard {...defaultProps} onNavigate={onNavigate} />);
+      renderWithProviders(<ChannelCard {...defaultProps} />);
 
       const card = screen.getByTestId('channel-card-UC1234567890');
       await user.click(card);
 
-      expect(onNavigate).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId('current-path')).toHaveTextContent('/channel/UC1234567890');
     });
 
     test('calls onDelete when delete button is clicked', async () => {
@@ -309,20 +315,19 @@ describe('ChannelCard Component', () => {
       expect(onDelete).toHaveBeenCalledTimes(1);
     });
 
-    test('delete button click stops propagation and does not trigger navigation', async () => {
+    test('delete button click does not trigger navigation', async () => {
       const user = userEvent.setup();
       const onDelete = jest.fn();
-      const onNavigate = jest.fn();
 
       renderWithProviders(
-        <ChannelCard {...defaultProps} onDelete={onDelete} onNavigate={onNavigate} />
+        <ChannelCard {...defaultProps} onDelete={onDelete} />
       );
 
       const deleteButton = screen.getByRole('button', { name: /remove channel/i });
       await user.click(deleteButton);
 
       expect(onDelete).toHaveBeenCalledTimes(1);
-      expect(onNavigate).not.toHaveBeenCalled();
+      expect(screen.getByTestId('current-path')).toHaveTextContent(/^\/$/);
     });
 
     test('calls onRegexClick when title filter chip is clicked', async () => {
