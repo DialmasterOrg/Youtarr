@@ -19,6 +19,9 @@ services:
     image: ${GLUETUN_IMAGE:-qmcgaw/gluetun:latest}
     restart: unless-stopped
     container_name: ${GLUETUN_CONTAINER_NAME:-gluetun}
+    # Add extra_hosts for connecting to external DB on host
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     cap_add:
       - NET_ADMIN
     devices:
@@ -48,9 +51,6 @@ services:
     depends_on:
       gluetun:
         condition: service_healthy
-    # Add extra_hosts for connecting to external DB on host
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     environment:
       # DEPRECATED but retained for backwards compatibility with old images for now
       IN_DOCKER_CONTAINER: 1
