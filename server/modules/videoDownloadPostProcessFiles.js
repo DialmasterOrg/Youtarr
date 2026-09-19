@@ -341,7 +341,7 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
         const channelId = lookupChannelId;
         channelRecord = await Channel.findOne({
           where: { channel_id: channelId },
-          attributes: ['id', 'sub_folder', 'title', 'uploader', 'folder_name', 'default_rating', 'enabled', 'skip_video_folder']
+          attributes: ['id', 'sub_folder', 'title', 'uploader', 'folder_name', 'default_rating', 'enabled', 'skip_video_folder', 'additional_tags']
         });
 
         logger.info({ channelId, ownerProvided: !!ownerChannelId, found: !!channelRecord }, 'Post-process channel lookup');
@@ -387,6 +387,18 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
     // playlist fallback -> global. channelRecord above is still used for metadata backfill
     // regardless of enabled state.
     const settingsChannelRecord = channelRecord && channelRecord.enabled ? channelRecord : null;
+
+    // Merge per-channel custom tags into jsonData.tags (prepended, before YouTube tags)
+    // so the AtomicParsley --keyword args and the NFO writer below pick them up
+    if (settingsChannelRecord && settingsChannelRecord.additional_tags) {
+      const customTags = settingsChannelRecord.additional_tags
+        .split('|')
+        .map(t => t.trim())
+        .filter(t => t.length > 0);
+      if (customTags.length > 0) {
+        jsonData.tags = [...customTags, ...(jsonData.tags || [])];
+      }
+    }
 
     // Outgoing layout: in per-video mode, resolve flat-vs-subfolder from the
     // video's real channel (hard override -> channel tri-state -> global);
