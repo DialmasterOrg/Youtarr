@@ -156,6 +156,7 @@ Object.defineProperty(window, 'matchMedia', {
 beforeEach(() => {
   jest.clearAllMocks();
   setMockLocation('http://localhost/');
+  window.history.replaceState({}, '', '/');
   // Re-apply matchMedia mock - resetMocks:true in jest.config.cjs clears implementations
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
@@ -457,7 +458,7 @@ describe('App Component', () => {
 
   test('redirects direct Requests navigation when external API is disabled', async () => {
     localStorageMock.getItem.mockReturnValue('test-token');
-    setMockLocation('http://localhost/requests');
+    window.history.replaceState({}, '', '/requests');
     (global.fetch as jest.Mock).mockImplementation((url) => {
       if (url === '/getconfig') {
         return Promise.resolve({

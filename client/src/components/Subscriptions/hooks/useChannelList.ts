@@ -14,11 +14,13 @@ interface UseChannelListParams {
 }
 
 export interface ChannelListResponse {
-  channels: Channel[];
+  channels: ChannelListEntry[];
   total: number;
   totalPages: number;
   subFolders?: Array<string | null>;
 }
+
+export type ChannelListEntry = Channel & { database_id: number };
 
 export const useChannelList = ({
   token,

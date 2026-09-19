@@ -1,7 +1,9 @@
 import { useCallback, useMemo } from 'react';
 import axios from 'axios';
-import { Channel } from '../../../../types/Channel';
-import { ChannelListResponse } from '../../../Subscriptions/hooks/useChannelList';
+import {
+  ChannelListEntry,
+  ChannelListResponse,
+} from '../../../Subscriptions/hooks/useChannelList';
 
 export interface ApiKey {
   id: number;
@@ -47,6 +49,15 @@ export interface ApiKeyPolicy {
   dailyWriteLimit: number | string;
 }
 
+export type NormalizedApiKeyPolicy = Omit<
+  ApiKeyPolicy,
+  'maxActiveJobs' | 'hourlyWriteLimit' | 'dailyWriteLimit'
+> & {
+  maxActiveJobs: number;
+  hourlyWriteLimit: number;
+  dailyWriteLimit: number;
+};
+
 export interface ApiKeyCreatedResponse {
   success: boolean;
   message: string;
@@ -58,10 +69,10 @@ export interface ApiKeyCreatedResponse {
 
 interface ApiKeyListResponse { keys: ApiKey[] }
 interface ChannelGrantsResponse { keyId: number; channelIds: number[] }
-interface ApiKeyRequest { policy: ApiKeyPolicy; channelIds: number[] }
+interface ApiKeyRequest { policy: NormalizedApiKeyPolicy; channelIds: number[] }
 
 export interface NormalizedPolicyResult {
-  policy?: ApiKeyPolicy;
+  policy?: NormalizedApiKeyPolicy;
   error?: string;
 }
 
@@ -79,7 +90,7 @@ export const normalizePolicy = (policy: ApiKeyPolicy): NormalizedPolicyResult =>
     }
     normalized[field] = Number(value);
   }
-  return { policy: normalized };
+  return { policy: normalized as NormalizedApiKeyPolicy };
 };
 
 
@@ -94,7 +105,7 @@ export const useApiKeys = (token: string | null) => {
 
   const fetchAvailableChannels = useCallback(async () => {
     if (!token) return [];
-    const channels: Channel[] = [];
+    const channels: ChannelListEntry[] = [];
     let page = 1;
     let totalPages = 1;
     do {
@@ -115,7 +126,7 @@ export const useApiKeys = (token: string | null) => {
     return data.channelIds || [];
   }, [headers]);
 
-  const createApiKey = useCallback(async (name: string, policy?: ApiKeyPolicy, channelIds?: number[]) => {
+  const createApiKey = useCallback(async (name: string, policy?: NormalizedApiKeyPolicy, channelIds?: number[]) => {
     const { data } = await axios.post<ApiKeyCreatedResponse>('/api/keys', {
       name,
       ...(policy ? { policy, channelIds: channelIds || [] } : {}),
@@ -156,4 +167,3 @@ export const useApiKeys = (token: string | null) => {
     updateExternalAccess,
   ]);
 };
-
