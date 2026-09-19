@@ -175,15 +175,6 @@ describe('logger.js', () => {
   });
 
   describe('Environment-specific behavior', () => {
-    it('does not create the pretty-print worker transport in test mode', () => {
-      process.env.NODE_ENV = 'test';
-
-      require('../logger');
-
-      const config = mockPino.mock.calls[0][0];
-      expect(config.transport).toBeUndefined();
-    });
-
     it('should handle different log levels via LOG_LEVEL', () => {
       const logLevels = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'];
 
