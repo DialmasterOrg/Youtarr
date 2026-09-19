@@ -1,5 +1,59 @@
 # Changelog
 
+## [v1.84.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.84.0) - 2026-09-19
+
+### Features
+
+* enhance documentation link handling with GitHub slugs and heading extraction ([bbc6852](https://github.com/DialmasterOrg/Youtarr/commit/bbc6852fc3a063421e5f44fa181e6d1619ff5b1d))
+
+
+### Bug Fixes
+
+* align documentation anchors with Docusaurus ([8e6c7e1](https://github.com/DialmasterOrg/Youtarr/commit/8e6c7e1f25ea1c8305d4d99caa2b46b9f9fe8ae4))
+* cookie-specific Video unavailable fallback ([6952170](https://github.com/DialmasterOrg/Youtarr/commit/6952170e1ec326c1a580f21099b4855c424c7156))
+* embed full upload instant in mp4 metadata ([32dc613](https://github.com/DialmasterOrg/Youtarr/commit/32dc613cced2829578cd18baea51a8c6ab941de9)), closes [#832](https://github.com/DialmasterOrg/Youtarr/issues/832)
+* emit one version heading per release entry ([b4ec513](https://github.com/DialmasterOrg/Youtarr/commit/b4ec51373471c670b51827e84d63ec481b9c2f53)), closes [#811](https://github.com/DialmasterOrg/Youtarr/issues/811)
+* preserve generated documentation anchors ([43930a5](https://github.com/DialmasterOrg/Youtarr/commit/43930a5476375ddf6506ac9db27d7cabe724b61a))
+* preserve temp directory root on cleanup ([a094c31](https://github.com/DialmasterOrg/Youtarr/commit/a094c31b9a0d522235cb6b06c7e2dc3b670b0d50)), closes [#835](https://github.com/DialmasterOrg/Youtarr/issues/835)
+* respect TZ env var in console log timestamps ([a7c56ed](https://github.com/DialmasterOrg/Youtarr/commit/a7c56ed77b1485e5d6836b0e3dd4571c6d10e5e7)), closes [#838](https://github.com/DialmasterOrg/Youtarr/issues/838)
+* support ctrl-click on subscription channels ([c8220a8](https://github.com/DialmasterOrg/Youtarr/commit/c8220a83b0889673be11e81f32e89c812d8879aa)), closes [#815](https://github.com/DialmasterOrg/Youtarr/issues/815)
+* **docs:** correct generated compose instructions ([67066cc](https://github.com/DialmasterOrg/Youtarr/commit/67066cc339f2d57302847e90f4bbed4bb2751384))
+
+
+### Styles
+
+* render active filter badges below filter panel in video list ([41ce398](https://github.com/DialmasterOrg/Youtarr/commit/41ce398c837244086690c4f2c704bb294d76f7da))
+
+
+### Code Refactoring
+
+* Replace (majority of) raw query in getVideosPaginated ([a6498f5](https://github.com/DialmasterOrg/Youtarr/commit/a6498f5a5cfc540c559919924e7760f3575eabf0))
+* Replace raw query in _flushBackfillUpdates ([a30c8e9](https://github.com/DialmasterOrg/Youtarr/commit/a30c8e92e8d4a911af2a8b08689b95bcb36c50a1))
+* Replace raw query in applyVideoUpdates ([b135b72](https://github.com/DialmasterOrg/Youtarr/commit/b135b72bd91f50e24139f417ff1ddbdabf92f8b2))
+* Replace raw query in backfillFromDownloadedVideos ([6fb506b](https://github.com/DialmasterOrg/Youtarr/commit/6fb506bd71ede41e6e25a41bc9fb8ab3fc3f3cb9))
+* Replace raw query in getAllUniqueChannels ([e6f61a0](https://github.com/DialmasterOrg/Youtarr/commit/e6f61a03e0df92e30d5e8329d9c7e014f3cde8e9))
+
+
+### Tests
+
+* correct documentation content assertions ([634363a](https://github.com/DialmasterOrg/Youtarr/commit/634363a526c40bc13f583b473af2cbb370d9ab01))
+* cover dynamic documentation sources and anchors ([3c2785b](https://github.com/DialmasterOrg/Youtarr/commit/3c2785bc4eabb6b05f7dd092508e0436480a04ad))
+* derive documentation coverage from eligible sources ([05439bb](https://github.com/DialmasterOrg/Youtarr/commit/05439bb583e0702028f540bf062023e6b40d0e37))
+* include the upstream Asustor documentation ([981bf71](https://github.com/DialmasterOrg/Youtarr/commit/981bf71b5fcc5ed5f6dcbbf0f25369a33a3a9569))
+* match locale sorted documentation sources ([20d175b](https://github.com/DialmasterOrg/Youtarr/commit/20d175b00e87fac53187c373c0398fdb25c8012f))
+
+
+### Documentation
+
+* add automated branded Docusaurus site ([3dc75c0](https://github.com/DialmasterOrg/Youtarr/commit/3dc75c0f15f0a4d30faef55b0a43a3189c255c66))
+* Fix typos in .env.example comments ([cc784a5](https://github.com/DialmasterOrg/Youtarr/commit/cc784a5e5ab06f816af6e41d39903c7ea8f071c4))
+* Fix typos in docker-compose.external-db.yml comments ([5856487](https://github.com/DialmasterOrg/Youtarr/commit/58564870f093657183fa6d4586800816edd61808))
+* Fix typos in docker-compose.yml comments ([26912db](https://github.com/DialmasterOrg/Youtarr/commit/26912db168d734fd78c39b3b526b333645bac02f))
+* preserve upstream package formatting ([012bead](https://github.com/DialmasterOrg/Youtarr/commit/012bead9eabc9314b33fbd8159d779206034e1f5))
+* update CHANGELOG for v1.83.1 [skip ci] ([636a2b0](https://github.com/DialmasterOrg/Youtarr/commit/636a2b0d5aff157621a7c0ecddc6a9e1a8853acb))
+
+**Full Changelog**: https://github.com/DialmasterOrg/Youtarr/compare/v1.83.1...v1.84.0
+
 ## [v1.83.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.83.1) - 2026-09-15
 
 ### Bug Fixes
