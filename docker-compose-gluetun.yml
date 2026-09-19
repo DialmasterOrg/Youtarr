@@ -40,7 +40,7 @@ services:
       WIREGUARD_MTU: ${WIREGUARD_MTU:-1420}
       UPDATER_VPN_SERVICE_PROVIDERS: ${VPN_SERVICE_PROVIDER}
       TZ: ${TZ:-UTC}
-      FIREWALL_OUTBOUND_SUBNETS: ${FIREWALL_OUTBOUND_SUBNETS:-192.168.0.0/16}
+      FIREWALL_OUTBOUND_SUBNETS: ${FIREWALL_OUTBOUND_SUBNETS}
     ports:
       - "${YOUTARR_HOST_PORT:-3087}:3011"
     volumes:
@@ -66,7 +66,6 @@ services:
       MYSQL_COLLATION: utf8mb4_unicode_ci
     volumes:
       - ./database:/var/lib/mysql
-    network_mode: "service:${GLUETUN_CONTAINER_NAME:-gluetun}"
     command: --port=${DB_PORT:-3321} --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --innodb-file-per-table=1 --innodb-large-prefix=ON
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-P", "${DB_PORT:-3321}", "-u", "${DB_USER:-root}", "-p${DB_PASSWORD:-123qweasd}"]
@@ -107,7 +106,7 @@ services:
       # Logging configuration
       LOG_LEVEL: ${LOG_LEVEL:-info}
       # This is just informational and lets the app know where the videos will be stored on the host
-      YOUTUBE_OUTPUT_DIR: ${YOUTUBE_OUTPUT_DIR}
+      YOUTUBE_OUTPUT_DIR: ${YOUTUBE_OUTPUT_DIR:-}
       # Optional: Custom data path for platforms like Elfhosted (defaults to /usr/src/app/data)
       # This is the internal path where videos are downloaded inside the container and is not needed for most users
       # DATA_PATH: /storage/rclone/storagebox/youtube
@@ -116,13 +115,17 @@ services:
       - ./server/images:/app/server/images
       - ./config:/app/config
       - ./jobs:/app/jobs
-    network_mode: "service:${GLUETUN_CONTAINER_NAME:-gluetun}"
+    network_mode: "container:${GLUETUN_CONTAINER_NAME:-gluetun}"
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--output", "/dev/null", "http://localhost:3011/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+
+networks:
+  default:
+    name: youtarr-network
 
 # Named volume definition (used by docker-compose.arm.yml override)
 volumes:
