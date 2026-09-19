@@ -127,10 +127,14 @@ async function settleAsync(iterations = 5) {
 const ORIGINAL_ARGV = [...process.argv];
 const ORIGINAL_EXIT = process.exit;
 
+// Mirrors MAX_UPLOAD_TIMESTAMP_SKEW_MS in videoDownloadPostProcessFiles.js
+const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+
 describe('videoDownloadPostProcessFiles', () => {
   const videoPath = '/library/Channel/Video Title [abc123].mp4';
   const jsonPath = '/library/Channel/Video Title [abc123].info.json';
   let setTimeoutSpy;
+  let dateNowSpy;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -196,6 +200,8 @@ describe('videoDownloadPostProcessFiles', () => {
     process.argv = [...ORIGINAL_ARGV];
     process.exit = ORIGINAL_EXIT;
     setTimeoutSpy?.mockRestore();
+    dateNowSpy?.mockRestore();
+    dateNowSpy = null;
     delete process.env.YOUTARR_JOB_ID;
   });
 
@@ -366,7 +372,177 @@ describe('videoDownloadPostProcessFiles', () => {
     expect(process.exit).not.toHaveBeenCalled();
   });
 
-  it('includes --year when upload_date is present', async () => {
+  it.each([
+    '2026-08-03T17:11:00Z',
+    '2026-08-03T00:01:00Z',
+    '2026-08-03T23:59:00Z',
+  ])('embeds %s as the upload instant without shifting the day', async (isoTimestamp) => {
+    fs.readFileSync.mockReturnValue(JSON.stringify({
+      id: 'abc123',
+      title: 'Video Title',
+      uploader: 'Channel',
+      upload_date: '20260803',
+      timestamp: Date.parse(isoTimestamp) / 1000,
+    }));
+
+    await loadModule();
+    await settleAsync();
+
+    expect(childProcess.spawnSync).toHaveBeenCalledWith(
+      '/usr/bin/AtomicParsley',
+      expect.arrayContaining(['--year', isoTimestamp]),
+      expect.any(Object)
+    );
+  });
+
+  it('emits the upload instant as seconds-precision UTC', async () => {
+    fs.readFileSync.mockReturnValue(JSON.stringify({
+      id: 'abc123',
+      title: 'Video Title',
+      uploader: 'Channel',
+      upload_date: '20260803',
+      timestamp: Date.parse('2026-08-03T17:11:00.250Z') / 1000,
+    }));
+
+    await loadModule();
+    await settleAsync();
+
+    const spawnCalls = childProcess.spawnSync.mock.calls;
+    const apCall = spawnCalls.find(c => c[0] === '/usr/bin/AtomicParsley');
+    const args = apCall[1];
+    expect(args[args.indexOf('--year') + 1]).toBe('2026-08-03T17:11:00Z');
+  });
+
+  it('treats a timestamp of 0 as a real upload instant, not a missing one', async () => {
+    fs.readFileSync.mockReturnValue(JSON.stringify({
+      id: 'abc123',
+      title: 'Video Title',
+      uploader: 'Channel',
+      upload_date: '19700101',
+      timestamp: 0,
+    }));
+
+    await loadModule();
+    await settleAsync();
+
+    expect(childProcess.spawnSync).toHaveBeenCalledWith(
+      '/usr/bin/AtomicParsley',
+      expect.arrayContaining(['--year', '1970-01-01T00:00:00Z']),
+      expect.any(Object)
+    );
+  });
+
+  it('embeds the upload instant when upload_date is absent', async () => {
+    fs.readFileSync.mockReturnValue(JSON.stringify({
+      id: 'abc123',
+      title: 'Video Title',
+      uploader: 'Channel',
+      timestamp: Date.parse('2026-08-03T17:11:00Z') / 1000,
+    }));
+
+    await loadModule();
+    await settleAsync();
+
+    expect(childProcess.spawnSync).toHaveBeenCalledWith(
+      '/usr/bin/AtomicParsley',
+      expect.arrayContaining(['--year', '2026-08-03T17:11:00Z']),
+      expect.any(Object)
+    );
+  });
+
+  it('embeds a timestamp one second inside the future allowance', async () => {
+    const now = Date.parse('2026-09-18T12:00:00Z');
+    dateNowSpy = jest.spyOn(Date, 'now').mockReturnValue(now);
+    fs.readFileSync.mockReturnValue(JSON.stringify({
+      id: 'abc123',
+      title: 'Video Title',
+      uploader: 'Channel',
+      upload_date: '20240131',
+      timestamp: (now + TWENTY_FOUR_HOURS_MS - 1000) / 1000,
+    }));
+
+    await loadModule();
+    await settleAsync();
+
+    expect(childProcess.spawnSync).toHaveBeenCalledWith(
+      '/usr/bin/AtomicParsley',
+      expect.arrayContaining(['--year', '2026-09-19T11:59:59Z']),
+      expect.any(Object)
+    );
+  });
+
+  it('falls back to upload_date one second outside the future allowance', async () => {
+    const now = Date.parse('2026-09-18T12:00:00Z');
+    dateNowSpy = jest.spyOn(Date, 'now').mockReturnValue(now);
+    fs.readFileSync.mockReturnValue(JSON.stringify({
+      id: 'abc123',
+      title: 'Video Title',
+      uploader: 'Channel',
+      upload_date: '20240131',
+      timestamp: (now + TWENTY_FOUR_HOURS_MS + 1000) / 1000,
+    }));
+
+    await loadModule();
+    await settleAsync();
+
+    expect(childProcess.spawnSync).toHaveBeenCalledWith(
+      '/usr/bin/AtomicParsley',
+      expect.arrayContaining(['--year', '2024-01-31']),
+      expect.any(Object)
+    );
+  });
+
+  it('passes the date-only upload_date to the NFO generator', async () => {
+    fs.readFileSync.mockReturnValue(JSON.stringify({
+      id: 'abc123',
+      title: 'Video Title',
+      uploader: 'Channel',
+      upload_date: '20260803',
+      timestamp: Date.parse('2026-08-03T17:11:00Z') / 1000,
+    }));
+
+    await loadModule();
+    await settleAsync();
+
+    expect(nfoGenerator.writeVideoNfoFile).toHaveBeenCalledWith(
+      videoPath,
+      expect.objectContaining({ upload_date: '20260803' })
+    );
+  });
+
+  // jest-each spreads rows only when every row is an array, so a bare [] row in a
+  // mixed table already arrives as a single argument. Wrapping every row makes
+  // that explicit and keeps it true if the table ever becomes all-arrays.
+  it.each([
+    [null],
+    ['invalid'],
+    ['1785777060'],
+    [true],
+    [{}],
+    [[]],
+    [1e20],
+    [-1],
+    [Date.parse('2100-01-01T00:00:00Z') / 1000],
+  ])('falls back to upload_date for implausible timestamp %j', async (timestamp) => {
+    fs.readFileSync.mockReturnValue(JSON.stringify({
+      id: 'abc123',
+      title: 'Video Title',
+      uploader: 'Channel',
+      upload_date: '20240131',
+      timestamp,
+    }));
+
+    await loadModule();
+    await settleAsync();
+
+    expect(childProcess.spawnSync).toHaveBeenCalledWith(
+      '/usr/bin/AtomicParsley',
+      expect.arrayContaining(['--year', '2024-01-31']),
+      expect.any(Object)
+    );
+  });
+
+  it('falls back to upload_date when timestamp is missing', async () => {
     await loadModule();
     await settleAsync();
 
@@ -379,12 +555,13 @@ describe('videoDownloadPostProcessFiles', () => {
     );
   });
 
-  it('skips --year when upload_date is missing', async () => {
+  it.each([[undefined], ['invalid'], [1e20]])('skips --year without a valid timestamp (%j) or upload_date', async (timestamp) => {
     fs.readFileSync.mockReturnValue(JSON.stringify({
       id: 'abc123',
       title: 'Video Title',
       uploader: 'Channel',
-      channel_id: 'channel123'
+      channel_id: 'channel123',
+      timestamp,
     }));
 
     await loadModule();

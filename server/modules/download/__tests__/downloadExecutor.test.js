@@ -153,6 +153,7 @@ describe('DownloadExecutor', () => {
     configModule.getConfig.mockReturnValue({
       enableStallDetection: false,
     });
+    configModule.getCookiesPath.mockReturnValue(null);
 
     // Setup filesystem module mocks with sensible defaults
     filesystem.isMainVideoFile.mockReturnValue(true);
@@ -593,7 +594,82 @@ describe('DownloadExecutor', () => {
       expect(enqueueAutoRetry).toHaveBeenCalledWith({
         retryVideos: [{
           youtubeId: 'abc123def45',
-          url: 'https://www.youtube.com/watch?v=abc123def45'
+          url: 'https://www.youtube.com/watch?v=abc123def45',
+          anonymousRetry: false
+        }],
+        autoRetryAttempt: 1,
+        runId: null,
+        sourceJobData: {}
+      });
+    });
+
+    it('does not requeue cookie-specific Video unavailable when execution explicitly disabled cookies', async () => {
+      const enqueueAutoRetry = jest.fn().mockResolvedValue();
+      const retryExecutor = new DownloadExecutor({ enqueueAutoRetry });
+
+      // Model a Youtarr installation that has cookies configured globally.
+      configModule.getCookiesPath.mockReturnValue('/cookies/file.txt');
+
+      setTimeout(() => {
+        mockProcess.stdout.emit(
+          'data',
+          Buffer.from('[youtube] Extracting URL: https://www.youtube.com/watch?v=abc123def45\n')
+        );
+        mockProcess.stderr.emit(
+          'data',
+          Buffer.from('ERROR: [youtube] abc123def45: Video unavailable\n')
+        );
+        endProcess(1, null);
+      }, 10);
+
+      await retryExecutor.doDownload(
+        mockArgs,
+        mockJobId,
+        mockJobType,
+        0,
+        null,
+        false,
+        false,
+        { cookiesEnabled: false }
+      );
+
+      expect(enqueueAutoRetry).not.toHaveBeenCalled();
+    });
+
+    it('requeues cookie-specific Video unavailable anonymously when execution uses cookies', async () => {
+      const enqueueAutoRetry = jest.fn().mockResolvedValue();
+      const retryExecutor = new DownloadExecutor({ enqueueAutoRetry });
+
+      configModule.getCookiesPath.mockReturnValue('/cookies/file.txt');
+
+      setTimeout(() => {
+        mockProcess.stdout.emit(
+          'data',
+          Buffer.from('[youtube] Extracting URL: https://www.youtube.com/watch?v=abc123def45\n')
+        );
+        mockProcess.stderr.emit(
+          'data',
+          Buffer.from('ERROR: [youtube] abc123def45: Video unavailable\n')
+        );
+        endProcess(1, null);
+      }, 10);
+
+      await retryExecutor.doDownload(
+        mockArgs,
+        mockJobId,
+        mockJobType,
+        0,
+        null,
+        false,
+        false,
+        { cookiesEnabled: true }
+      );
+
+      expect(enqueueAutoRetry).toHaveBeenCalledWith({
+        retryVideos: [{
+          youtubeId: 'abc123def45',
+          url: 'https://www.youtube.com/watch?v=abc123def45',
+          anonymousRetry: true
         }],
         autoRetryAttempt: 1,
         runId: null,

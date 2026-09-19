@@ -22,7 +22,12 @@
     "test:frontend": "cd client && npm test -- --watchAll=false",
     "test:coverage": "npm run lint && jest --config jest.config.js --coverage && cd client && npm test -- --coverage --watchAll=false",
     "test:watch": "jest --config jest.config.js --watch",
-    "storybook": "cd client && npm run storybook"
+    "storybook": "cd client && npm run storybook",
+    "docs:start": "npm --prefix website run start",
+    "docs:generate": "npm --prefix website run generate",
+    "docs:check": "npm --prefix website run check",
+    "docs:build": "npm --prefix website run build",
+    "docs:serve": "npm --prefix website run serve"
   },
   "lint-staged": {
     "./client/src/*.{ts,tsx},./server/*.js": [

@@ -9,15 +9,7 @@ const { execFile, execFileSync } = require('child_process');
 const { promisify } = require('util');
 const execFileAsync = promisify(execFile);
 const logger = require('../../logger');
-
-/**
- * Sleep utility for retry delays
- * @param {number} ms - Milliseconds to sleep
- * @returns {Promise<void>}
- */
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+const { sleep } = require('./sleep');
 
 /**
  * Some FUSE-backed filesystems (e.g. rclone mounts) return EPERM instead of

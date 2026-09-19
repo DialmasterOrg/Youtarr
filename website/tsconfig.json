@@ -1,0 +1,1 @@
+{"extends":"@docusaurus/tsconfig","compilerOptions":{"noEmit":true,"skipLibCheck":true}}

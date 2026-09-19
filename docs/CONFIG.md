@@ -611,9 +611,9 @@ The old `discordWebhookUrl` and `notificationService` fields are automatically r
 - **Config Key**: `downloadAutoRetryCount`
 - **Type**: `number`
 - **Default**: `1`
-- **Description**: Number of times a video that fails with a transient HTTP 403 is automatically re-queued in a fresh download job
+- **Description**: Number of times a video with a retryable download failure is automatically re-queued in a fresh download job
 - **Options**: `0`, `1`, `2`, `3` (the values offered in the UI; `0` disables auto-retry)
-- **Note**: YouTube sometimes rejects an already-issued stream URL mid-download with HTTP 403. yt-dlp's own retries (`downloadRetryCount`) re-request the same rejected URL and cannot recover; only a fresh yt-dlp run with a fresh extraction can. When a video fails with the 403 signature, Youtarr queues an "Auto-retry" job for just that video. Permanent failures (members-only, terminated channels, bot detection) are never auto-retried.
+- **Note**: Auto-retry currently handles transient HTTP 403 failures by starting a fresh yt-dlp extraction, and cookie-specific `Video unavailable` failures by retrying anonymously without cookies. Permanent failures (members-only, terminated channels, bot detection) are never auto-retried.
 
 ### Enable Stall Detection
 - **Config Key**: `enableStallDetection`
@@ -691,6 +691,7 @@ The old `discordWebhookUrl` and `notificationService` fields are automatically r
 - **Default**: `"/tmp/youtarr-downloads"`
 - **Description**: External temporary directory for downloads when `useTmpForDownloads` is `true`
 - **Note**: Only used when `useTmpForDownloads` is enabled. Internal path in Youtarr container.
+- **Cleanup**: Use a directory dedicated to Youtarr. At startup and before each download job, Youtarr recursively deletes all contents, including hidden files and subdirectories, while preserving the directory itself. You can mount a Docker bind mount or volume directly at this path. The same cleanup applies to `.youtarr_tmp/` when external staging is disabled.
 
 ### NFS Output Directory Considerations
 

@@ -123,7 +123,7 @@ export const DownloadPerformanceSection: React.FC<DownloadPerformanceSectionProp
               <MenuItem value={3}>3 auto-retries</MenuItem>
             </Select>
             <FormHelperText>
-              Re-run videos that fail with a transient HTTP 403 in a fresh download job
+              Re-run videos after retryable download failures in a fresh download job
             </FormHelperText>
           </FormControl>
         </Grid>

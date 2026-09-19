@@ -56,6 +56,7 @@ function describeNonZeroExit({
   terminatedChannelCount,
   httpForbiddenDetected,
   cookiesEnabled = false,
+  anonymousRetry = false,
   flags,
   failureDetails,
   subtitleFailureCount = 0
@@ -81,10 +82,14 @@ function describeNonZeroExit({
     // already enabled, "configure cookies" is the wrong advice: stale or
     // rotated cookies are the usual cause.
     output = `${videoCount} videos. Error: YouTube returned HTTP 403 (Forbidden)`;
-    notes = cookiesEnabled
-      ? 'YouTube denied access (HTTP 403) while using your uploaded cookies. Re-export fresh cookies from your browser, or disable cookies in Settings -> Cookies.'
-      : 'YouTube denied access (HTTP 403). Configure cookies in Settings -> Cookies to resolve this issue.';
-    errorCode = 'COOKIES_RECOMMENDED';
+    notes = anonymousRetry
+      ? 'The no-cookies fallback was also blocked by YouTube. This video may be genuinely unavailable.'
+      : cookiesEnabled
+        ? 'YouTube denied access (HTTP 403) while using your uploaded cookies. Re-export fresh cookies from your browser, or disable cookies in Settings -> Cookies.'
+        : 'YouTube denied access (HTTP 403). Configure cookies in Settings -> Cookies to resolve this issue.';
+    errorCode = anonymousRetry
+      ? 'NO_COOKIES_FALLBACK_FAILED'
+      : 'COOKIES_RECOMMENDED';
   } else {
     // Failed with other error
     output = `${videoCount} videos. Error: Command exited with code ${code}`;
@@ -133,6 +138,7 @@ function resolveFinalPresentation({
   unexpectedErrorCount,
   httpForbiddenDetected,
   cookiesEnabled = false,
+  anonymousRetry = false,
   // Failures already handed off to a queued auto-retry job. Affects only the
   // presented text; state derivation still counts them as failures.
   autoRetryQueuedCount = 0,
@@ -192,12 +198,16 @@ function resolveFinalPresentation({
     finalText = `Download terminated: ${terminationReason}. ${completedCount} video${completedCount !== 1 ? 's' : ''} completed successfully.`;
   } else if (botDetected) {
     finalState = 'failed';
-    finalErrorCode = 'COOKIES_REQUIRED';
-    // With cookies already enabled, "set cookies" is the wrong advice: stale
-    // or rotated cookies are the usual cause.
-    finalText = cookiesEnabled
-      ? 'Download failed: Bot detection encountered even though cookies are configured - they are likely expired or rotated. Re-export fresh cookies from your browser and upload them in Settings -> Cookies.'
-      : 'Download failed: Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.';
+    finalErrorCode = anonymousRetry
+      ? 'NO_COOKIES_FALLBACK_FAILED'
+      : 'COOKIES_REQUIRED';
+    // Anonymous retries intentionally suppress configured cookies, so they
+    // need a third diagnostic state rather than ordinary "set cookies" advice.
+    finalText = anonymousRetry
+      ? 'Download failed: Bot detection encountered during the no-cookies fallback. The fallback also failed, so this video may be genuinely unavailable.'
+      : cookiesEnabled
+        ? 'Download failed: Bot detection encountered even though cookies are configured - they are likely expired or rotated. Re-export fresh cookies from your browser and upload them in Settings -> Cookies.'
+        : 'Download failed: Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.';
   } else if (monitorHasError && finalState === 'complete' && !flags.hasOnlyHandledErrors) {
     // Don't let a recognized termination flip the state back to error
     // via DownloadProgressMonitor's broad hasError flag.

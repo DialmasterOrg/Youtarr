@@ -13,6 +13,7 @@ const failedVideo = (overrides = {}) => ({
 
 const context = (overrides = {}) => ({
   cookiesEnabled: false,
+  anonymousRetry: false,
   httpForbiddenDetected: false,
   botDetected: false,
   ...overrides,
@@ -38,6 +39,20 @@ describe('failureAdvisor', () => {
 
       expect(videos[0].diagnosisKey).toBe('http-403-cookies-disabled');
       expect(diagnoses[0].message).toMatch(/uploading YouTube cookies/i);
+    });
+
+    it('diagnoses a 403 during the no-cookies fallback without recommending cookies', () => {
+      const videos = [failedVideo()];
+      const diagnoses = adviseFailures(videos, context({
+        cookiesEnabled: false,
+        anonymousRetry: true,
+      }));
+
+      expect(videos[0].diagnosisKey).toBe('http-403-anonymous-retry');
+      expect(diagnoses[0].key).toBe('http-403-anonymous-retry');
+      expect(diagnoses[0].message).toMatch(/no-cookies fallback/i);
+      expect(diagnoses[0].message).toMatch(/genuinely unavailable/i);
+      expect(diagnoses[0].message).not.toMatch(/upload.*cookies|set.*cookies|enable.*cookies|re-export/i);
     });
 
     it('matches fragment-shaped failures only when the run-level 403 flag is set', () => {
@@ -69,6 +84,20 @@ describe('failureAdvisor', () => {
 
       expect(videos[0].diagnosisKey).toBe('bot-check-cookies-disabled');
       expect(diagnoses[0].message).toMatch(/upload youtube cookies/i);
+    });
+
+    it('diagnoses a bot check during the no-cookies fallback without recommending cookies', () => {
+      const videos = [failedVideo({ error: 'Sign in to confirm you\'re not a bot' })];
+      const diagnoses = adviseFailures(videos, context({
+        cookiesEnabled: false,
+        anonymousRetry: true,
+      }));
+
+      expect(videos[0].diagnosisKey).toBe('bot-check-anonymous-retry');
+      expect(diagnoses[0].key).toBe('bot-check-anonymous-retry');
+      expect(diagnoses[0].message).toMatch(/no-cookies fallback/i);
+      expect(diagnoses[0].message).toMatch(/genuinely unavailable/i);
+      expect(diagnoses[0].message).not.toMatch(/upload.*cookies|set.*cookies|enable.*cookies|re-export/i);
     });
 
     it('applies bot-check advice to download failures when bot detection fired run-wide', () => {

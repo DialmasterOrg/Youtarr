@@ -39,6 +39,7 @@ services:
       - NODE_ENV=development
       - DEV_MODE=true
       - LOG_LEVEL=${LOG_LEVEL:-debug}
+      - TZ=${TZ:-UTC}
       - DB_HOST=youtarr-db
       - DB_PORT=3306
       - DB_NAME=${DB_NAME:-youtarr}

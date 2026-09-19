@@ -5,8 +5,8 @@ const pino = require('pino');
  *
  * Features:
  * - Configurable log level via LOG_LEVEL env var (default: info)
- * - Pretty printing in development for readability
- * - JSON structured logs in production
+ * - Pretty printing with compact structured data in all environments
+ * - Console timestamps use the local timezone configured via TZ
  * - Sensitive data redaction (passwords, tokens, API keys)
  * - Request correlation via request IDs
  */
@@ -20,7 +20,7 @@ const pinoConfig = {
     target: 'pino-pretty',
     options: {
       colorize: true,
-      translateTime: 'UTC:yyyy-mm-dd HH:MM:ss.l o',
+      translateTime: 'SYS:yyyy-mm-dd HH:MM:ss.l o',
       ignore: 'pid,hostname',
       singleLine: true, // Keep structured data as compact JSON
       messageFormat: '{if req.id}[{req.id}] {end}{msg}'

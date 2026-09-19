@@ -146,6 +146,8 @@ async function finalizeDownloadJob({
   tempChannelsFile,
   onTempChannelsFileCleaned,
   enqueueAutoRetry = null,
+  cookiesEnabled = Boolean(configModule.getCookiesPath()),
+  anonymousRetry = false,
 }) {
   // True once the job's terminal status has been persisted; the catch
   // below must not overwrite it with 'Error' for failures that happen
@@ -199,7 +201,7 @@ async function finalizeDownloadJob({
       videoActivity.finish(jobId, video.youtubeId);
     }
 
-    // Auto-retry transient 403 failures. Enqueue while this job is still
+    // Auto-retry eligible download failures. Enqueue while this job is still
     // In Progress so the retry queues as Pending behind it, and read job data
     // now, before the terminal update replaces it. Handed-off failures are
     // tagged so run summaries and notifications report the post-retry outcome
@@ -215,6 +217,7 @@ async function finalizeDownloadJob({
         wasTerminated,
         sourceJobData,
         maxAttempts: configModule.getConfig().downloadAutoRetryCount,
+        cookiesEnabled,
       });
       if (retryPlan) {
         try {
@@ -233,10 +236,10 @@ async function finalizeDownloadJob({
           autoRetryQueuedCount = retryPlan.retryVideos.length;
           logger.info(
             { jobId, count: autoRetryQueuedCount, attempt: retryPlan.nextAttempt },
-            'Queued auto-retry job for transient 403 failures'
+            'Queued auto-retry job for retryable download failures'
           );
         } catch (err) {
-          logger.error({ err, jobId }, 'Failed to enqueue auto-retry for transient 403 failures');
+          logger.error({ err, jobId }, 'Failed to enqueue auto-retry for retryable download failures');
         }
       }
     }
@@ -246,9 +249,8 @@ async function finalizeDownloadJob({
     const reportableFailedVideos = failedVideosList.filter((video) => !video.autoRetryQueued);
 
     // Cookie state drives both the failure diagnoses and the cookie-related
-    // terminal messages below: with cookies enabled, "set cookies" advice is
-    // exactly backwards (stale cookies are the usual cause).
-    const cookiesEnabled = Boolean(configModule.getCookiesPath());
+    // terminal messages below. Use the effective state supplied by the
+    // executor so anonymous retries remain anonymous throughout finalization.
 
     // Reportable failures are final by construction (the auto-retry already
     // failed or was never possible), so diagnose them. A diagnosis failure
@@ -257,6 +259,7 @@ async function finalizeDownloadJob({
     try {
       diagnoses = failureAdvisor.adviseFailures(reportableFailedVideos, {
         cookiesEnabled,
+        anonymousRetry,
         httpForbiddenDetected,
         botDetected,
       });
@@ -296,9 +299,11 @@ async function finalizeDownloadJob({
 
     if (botDetected) {
       status = 'Error';
-      output = cookiesEnabled
-        ? 'Bot detection encountered even though cookies are configured - they are likely expired or rotated.'
-        : 'Bot detection encountered. Please set cookies in your Configuration.';
+      output = anonymousRetry
+        ? 'Bot detection encountered during the no-cookies fallback. The fallback also failed, so this video may be genuinely unavailable.'
+        : cookiesEnabled
+          ? 'Bot detection encountered even though cookies are configured - they are likely expired or rotated.'
+          : 'Bot detection encountered. Please set cookies in your Configuration.';
 
       await persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, failedVideosList);
       await jobModule.updateJob(jobId, {
@@ -306,12 +311,14 @@ async function finalizeDownloadJob({
         endDate: Date.now(),
         output: output,
         data: dataPayload,
-        notes: cookiesEnabled
-          ? 'YouTube requires authentication and your uploaded cookies appear stale. Re-export fresh cookies from your browser and upload them in Settings -> Cookies.'
-          : 'YouTube requires authentication. Enable cookies in Configuration to resolve this issue.',
-        error: 'COOKIES_REQUIRED'
+        notes: anonymousRetry
+          ? 'The no-cookies fallback was also rejected by YouTube. This video may be genuinely unavailable.'
+          : cookiesEnabled
+            ? 'YouTube requires authentication and your uploaded cookies appear stale. Re-export fresh cookies from your browser and upload them in Settings -> Cookies.'
+            : 'YouTube requires authentication. Enable cookies in Configuration to resolve this issue.',
+        error: anonymousRetry ? 'NO_COOKIES_FALLBACK_FAILED' : 'COOKIES_REQUIRED'
       });
-      jobErrorCode = 'COOKIES_REQUIRED';
+      jobErrorCode = anonymousRetry ? 'NO_COOKIES_FALLBACK_FAILED' : 'COOKIES_REQUIRED';
     } else if (timeoutController.shutdownInProgress || timeoutController.shutdownReason || wasManuallyTerminated) {
       // Handle timeout/graceful shutdown or manual termination
       await downloadCleanup.cleanupInProgressVideos(jobId);
@@ -350,6 +357,7 @@ async function finalizeDownloadJob({
         terminatedChannelCount: errorTracker.terminatedChannelIds.size,
         httpForbiddenDetected,
         cookiesEnabled,
+        anonymousRetry,
         flags,
         failureDetails,
         subtitleFailureCount: errorTracker.subtitleFailureCount || 0
@@ -475,6 +483,7 @@ async function finalizeDownloadJob({
       unexpectedErrorCount: errorTracker.unexpectedErrorCount,
       httpForbiddenDetected,
       cookiesEnabled,
+      anonymousRetry,
       autoRetryQueuedCount,
       subtitleFailureCount: errorTracker.subtitleFailureCount || 0
     });
