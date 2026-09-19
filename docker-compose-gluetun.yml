@@ -24,7 +24,7 @@
 
 services:
   gluetun:
-    image: ${GLUETUN_IMAGE:-qmcgaw/gluetun:latest}
+    image: qmcgaw/gluetun:latest
     restart: unless-stopped
     container_name: ${GLUETUN_CONTAINER_NAME:-gluetun}
     cap_add:
