@@ -137,6 +137,14 @@ test('safe MDX preserves intentional HTML, inline code, and escapes placeholders
   assert.ok(output.includes(tick + 'echo ' + placeholder + tick));
 });
 test('generated OpenAPI is nonempty and representative quick-start is complete', () => { const spec = JSON.parse(fs.readFileSync(new URL('../.generated/static/openapi/youtarr.openapi.json', import.meta.url))); assert.ok(Object.keys(spec.paths).length); const quick = fs.readFileSync(new URL('../.generated/docs/quick-start.md', import.meta.url), 'utf8'); for (const script of ['start.sh', 'start-with-external-db.sh', 'scripts/start-dev.sh', 'scripts/start-dev-external-db.sh']) assert.ok(quick.includes(script)); assert.match(quick, /DB_HOST.*DB_USER.*DB_PASSWORD/s); });
+test('generated compose quick-start instructions stay runnable', () => {
+  const quick = fs.readFileSync(new URL('../.generated/docs/quick-start.md', import.meta.url), 'utf8');
+  assert.ok(quick.includes('docker compose -f docker-compose.external-db.yml up -d'));
+  assert.ok(!quick.includes('docker compose -f docker-compose.yml -f docker-compose.external-db.yml up -d'));
+  assert.ok(quick.includes('[Development Guide](/docs/development)'));
+  assert.ok(!quick.includes('docker compose -f docker-compose.dev.yml up -d'));
+  assert.ok(quick.includes('External database compose (standalone)'));
+});
 test('generator accepts injected output and applies OpenAPI security inheritance', async () => {
   const outputRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'youtarr-generated-'));
   await generate({
