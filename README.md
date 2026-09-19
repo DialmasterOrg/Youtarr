@@ -6,6 +6,8 @@
 
 Youtarr is a self-hosted YouTube downloader that automatically downloads videos from your favorite channels and playlists. It provides metadata for multiple media servers, mirrors your subscribed YouTube playlists into Plex, Jellyfin, and Emby as native playlists, pulls watch status back from those servers so you can filter your library by what's been watched, and offers optional Plex integration for automatic library refreshes. Learn more at [youtarr.com](https://youtarr.com).
 
+**Docs:** [dialmasterorg.github.io/Youtarr](https://dialmasterorg.github.io/Youtarr/) - searchable install, configuration, media server, and troubleshooting guides.
+
 > Don't want to self-host? You can also run Youtarr on [ElfHosted](https://store.elfhosted.com/product/youtarr/) with a managed deployment – see their [Youtarr docs](https://docs.elfhosted.com/app/youtarr/).
 
 > **Like Youtarr?** Consider [supporting the project on Patreon](https://www.patreon.com/c/ChrisDial) to help keep it free and actively developed!
