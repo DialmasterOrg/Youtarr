@@ -15,44 +15,27 @@ class AutoRemovalQueries {
   /**
    * Get the base options for Video.findAll to pick videos to be removed.
    */
-  _getBaseRemovalQueryOptions() {
+  _getBaseRemovalQueryOptions({ joinChannel = true } = {}) {
     const { Sequelize, sequelize } = require('../db.js');
 
-    return {
+    const options = {
       attributes: [
         'id',
         [sequelize.fn('MAX', TIME_CREATED_ATTRIBUTE), 'timeCreated'],
       ],
-      include: [
-        {
-          model: JobVideo,
-          as: 'jobVideos',
+      include: [{
+        model: JobVideo,
+        as: 'jobVideos',
+        attributes: [],
+        include: [{
+          model: Job,
+          as: 'job',
           attributes: [],
-          include: [{
-            model: Job,
-            as: 'job',
-            attributes: [],
-          }],
-        },
-        {
-          model: Channel,
-          as: 'channel',
-          attributes: [],
-          on: {
-            id: sequelize.col('Video.channel_id'),
-            enabled: true,
-          },
-        },
-      ],
+        }],
+      }],
       where: {
         removed: false,
         protected: false,
-        [Sequelize.Op.and]: [
-          sequelize.where(
-            sequelize.fn('COALESCE', sequelize.col('channel.auto_removal_protected'), false),
-            false,
-          ),
-        ],
       },
       group: sequelize.col('Video.id'),
       having: {
@@ -64,6 +47,26 @@ class AutoRemovalQueries {
       subQuery: false,
       raw: true,
     };
+
+    if (joinChannel) {
+      options.include.push({
+        model: Channel,
+        as: 'channel',
+        attributes: [],
+        on: {
+          id: sequelize.col('Video.channel_id'),
+          enabled: true,
+        },
+      });
+      options.where[Sequelize.Op.and] = [
+        sequelize.where(
+          sequelize.fn('COALESCE', sequelize.col('channel.auto_removal_protected'), false),
+          false,
+        ),
+      ];
+    }
+
+    return options;
   }
 
   /**
@@ -115,23 +118,12 @@ class AutoRemovalQueries {
 
       const ids = [];
       for (const channel of channels) {
-        const query = `
-          SELECT videos.id, MAX(${DOWNLOAD_TIME_SQL}) AS timeCreated
-          FROM videos
-          LEFT JOIN jobvideos ON videos.id = jobvideos.video_id
-          LEFT JOIN jobs ON jobs.id = jobvideos.job_id
-          WHERE videos.removed = 0
-            AND videos.protected = 0
-            AND videos.channel_id = :channelId
-          GROUP BY videos.id
-          HAVING timeCreated IS NOT NULL
-          ORDER BY timeCreated DESC
-          LIMIT :count
-        `;
-        const rows = await sequelize.query(query, {
-          replacements: { channelId: channel.channel_id, count: channel.keepCount },
-          type: Sequelize.QueryTypes.SELECT
+        const options = this._getBaseRemovalQueryOptions({
+          joinChannel: false,
         });
+        options.where.channel_id = channel.channel_id;
+        options.limit = channel.keepCount;
+        const rows = await Video.findAll(options);
         rows.forEach((row) => ids.push(row.id));
       }
 

@@ -95,8 +95,8 @@ describe('autoRemovalQueries', () => {
       }));
     });
 
-    test('should join & filter on channels', async () => {
-      const options = autoRemovalQueries._getBaseRemovalQueryOptions();
+    test('should join & filter on channels if enabled', async () => {
+      const options = autoRemovalQueries._getBaseRemovalQueryOptions({ joinChannel: true });
 
       expect(options).toMatchObject(expect.objectContaining({
         include: expect.arrayContaining([
@@ -117,6 +117,26 @@ describe('autoRemovalQueries', () => {
               false,
             ),
           ],
+        }),
+      }));
+    });
+
+    test('should not join or filter on channels if disabled', async () => {
+      const options = autoRemovalQueries._getBaseRemovalQueryOptions({ joinChannel: false });
+
+      expect(options).toMatchObject(expect.objectContaining({
+        include: expect.not.arrayContaining([
+          expect.objectContaining({
+            model: { _name: 'Channel' },
+          }),
+        ]),
+        where: expect.not.objectContaining({
+          [MockSequelize.Op.and]: expect.arrayContaining([
+            mockSequelize.where(
+              mockSequelize.fn('COALESCE', mockSequelize.col('channel.auto_removal_protected'), false),
+              false,
+            ),
+          ]),
         }),
       }));
     });
@@ -290,8 +310,6 @@ describe('autoRemovalQueries', () => {
 
   describe('getChannelKeepRecentIds', () => {
     test('returns zero channels and no ids when no channel sets a keep-recent count', async () => {
-      mockSequelize.query.mockResolvedValue([]);
-
       const result = await autoRemovalQueries.getChannelKeepRecentIds();
 
       expect(result).toEqual({ channelCount: 0, ids: [] });
@@ -305,23 +323,32 @@ describe('autoRemovalQueries', () => {
 
     test('queries each configured channel and merges the returned ids', async () => {
       mockSequelize.query
-        .mockResolvedValueOnce([
+        .mockResolvedValue([
           { channel_id: 'UC-aaa', keepCount: 2 },
           { channel_id: 'UC-bbb', keepCount: 1 }
-        ])
+        ]);
+      mockVideo.findAll
         .mockResolvedValueOnce([{ id: 10 }, { id: 11 }])
         .mockResolvedValueOnce([{ id: 20 }]);
 
       const result = await autoRemovalQueries.getChannelKeepRecentIds();
 
       expect(result).toEqual({ channelCount: 2, ids: [10, 11, 20] });
-      expect(mockSequelize.query).toHaveBeenCalledTimes(3);
-      const [perChannelSql, perChannelOptions] = mockSequelize.query.mock.calls[1];
-      expect(perChannelSql).toContain('videos.channel_id = :channelId');
-      expect(perChannelSql).toContain('videos.protected = 0');
-      expect(perChannelSql).toContain('ORDER BY timeCreated DESC');
-      expect(perChannelSql).toContain('LIMIT :count');
-      expect(perChannelOptions.replacements).toEqual({ channelId: 'UC-aaa', count: 2 });
+      expect(mockSequelize.query).toHaveBeenCalledTimes(1);
+      expect(mockVideo.findAll).toHaveBeenCalledTimes(2);
+      expect(mockVideo.findAll).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          protected: false,
+          channel_id: 'UC-aaa',
+        }),
+        order: [['timeCreated', 'DESC']],
+        limit: 2,
+        subQuery: false,
+      }));
+      expect(mockVideo.findAll).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({ channel_id: 'UC-bbb' }),
+        limit: 1,
+      }));
     });
 
     test('rethrows when a query fails so callers can fail closed', async () => {
