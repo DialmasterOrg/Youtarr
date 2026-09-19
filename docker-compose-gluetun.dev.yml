@@ -45,10 +45,6 @@ services:
     # Existing root/other-user-owned files need a one-time ownership repair;
     # see docs/DEVELOPMENT.md (Development container ownership).
     user: "${YOUTARR_UID:-0}:${YOUTARR_GID:-0}"
-    # Expose backend on host port 3087 by default (container still listens on 3011).
-    # The Vite dev server proxies to http://127.0.0.1:3087 by default.
-    ports:
-      - "${YOUTARR_HOST_PORT:-3087}:3011"
     volumes:
       - ${YOUTUBE_OUTPUT_DIR:-./downloads}:/usr/src/app/data
       - ./server/images:/app/server/images
