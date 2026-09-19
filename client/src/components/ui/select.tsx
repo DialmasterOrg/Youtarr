@@ -123,33 +123,6 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
           : normalizedValue;
       onChange?.({ target: { value: outputValue, name } } as unknown as SelectChangeEvent<string>);
     };
-        <SelectPrimitive.Portal>
-          <SelectPrimitive.Content
-        position="popper"
-        sideOffset={4}
-        avoidCollisions
-        collisionPadding={overlayInsets}
-        data-testid="select-content"
-        style={{
-          zIndex: 1470,
-          minWidth: 'var(--radix-select-trigger-width)',
-          maxWidth: 'min(28rem, calc(100vw - 24px))',
-          maxHeight: 'min(var(--radix-select-content-available-height), calc(100dvh - var(--app-shell-overlay-top-offset, 0px) - var(--mobile-nav-total-offset, 0px) - 16px))',
-        }}
-        className={cn(
-          'relative min-w-[8rem] overflow-hidden',
-          'rounded-[var(--radius-ui)]',
-          'border-[length:var(--border-weight)] border-[var(--border-strong)]',
-          'bg-popover text-popover-foreground shadow-hard',
-          'data-[state=open]:animate-slide-down data-[state=closed]:animate-fade-in',
-        )}
-      >
-        <SelectPrimitive.Viewport className="max-h-[inherit] p-1 overflow-y-auto">
-          {children}
-        </SelectPrimitive.Viewport>
-          </SelectPrimitive.Content>
-        </SelectPrimitive.Portal>
-
     return (
       <SelectPrimitive.Root
         value={primitiveValue}
@@ -198,6 +171,32 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
           </SelectPrimitive.Icon>
         </SelectPrimitive.Trigger>
 
+        <SelectPrimitive.Portal>
+          <SelectPrimitive.Content
+            position="popper"
+            sideOffset={4}
+            avoidCollisions
+            collisionPadding={overlayInsets}
+            data-testid="select-content"
+            style={{
+              zIndex: 1470,
+              minWidth: 'var(--radix-select-trigger-width)',
+              maxWidth: 'min(28rem, calc(100vw - 24px))',
+              maxHeight: 'min(var(--radix-select-content-available-height), calc(100dvh - var(--app-shell-overlay-top-offset, 0px) - var(--mobile-nav-total-offset, 0px) - 16px))',
+            }}
+            className={cn(
+              'relative min-w-[8rem] overflow-hidden',
+              'rounded-[var(--radius-ui)]',
+              'border-[length:var(--border-weight)] border-[var(--border-strong)]',
+              'bg-popover text-popover-foreground shadow-hard',
+              'data-[state=open]:animate-slide-down data-[state=closed]:animate-fade-in',
+            )}
+          >
+            <SelectPrimitive.Viewport className="max-h-[inherit] p-1 overflow-y-auto">
+              {children}
+            </SelectPrimitive.Viewport>
+          </SelectPrimitive.Content>
+        </SelectPrimitive.Portal>
       </SelectPrimitive.Root>
     );
   }

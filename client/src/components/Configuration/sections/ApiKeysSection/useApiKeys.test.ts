@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import axios from 'axios';
 import { normalizePolicy, ApiKeyPolicy, useApiKeys } from './useApiKeys';
+import type { ChannelListResponse } from '../../../Subscriptions/hooks/useChannelList';
 
 jest.mock('axios', () => ({
   __esModule: true,
@@ -60,19 +61,29 @@ describe('useApiKeys', () => {
   });
 
   it('loads every channel page and preserves the canonical database_id response shape', async () => {
+    const firstPage: ChannelListResponse = {
+      channels: [{
+        database_id: 41,
+        url: 'https://www.youtube.com/channel/UCALPHA',
+        uploader: 'Alpha',
+        terminated_at: null,
+      }],
+      total: 2,
+      totalPages: 2,
+    };
+    const secondPage: ChannelListResponse = {
+      channels: [{
+        database_id: 42,
+        url: 'https://www.youtube.com/channel/UCBETA',
+        uploader: 'Beta',
+        terminated_at: null,
+      }],
+      total: 2,
+      totalPages: 2,
+    };
     mockedAxios.get
-      .mockResolvedValueOnce({
-        data: {
-          channels: [{ database_id: 41, name: 'Alpha', terminated_at: null }],
-          totalPages: 2,
-        },
-      } as never)
-      .mockResolvedValueOnce({
-        data: {
-          channels: [{ database_id: 42, name: 'Beta', terminated_at: null }],
-          totalPages: 2,
-        },
-      } as never);
+      .mockResolvedValueOnce({ data: firstPage })
+      .mockResolvedValueOnce({ data: secondPage });
 
     const { result } = renderHook(() => useApiKeys('token'));
     let channels;
@@ -81,8 +92,8 @@ describe('useApiKeys', () => {
     });
 
     expect(channels).toEqual([
-      { database_id: 41, name: 'Alpha', terminated_at: null },
-      { database_id: 42, name: 'Beta', terminated_at: null },
+      firstPage.channels[0],
+      secondPage.channels[0],
     ]);
     expect(mockedAxios.get).toHaveBeenNthCalledWith(1, '/getchannels', expect.objectContaining({
       params: { page: 1, pageSize: 100, sortOrder: 'asc' },

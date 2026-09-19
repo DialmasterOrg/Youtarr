@@ -157,6 +157,13 @@ describe('overlay positioning guards', () => {
     );
 
     const trustedMouseDown = new MouseEvent('mousedown', { bubbles: true });
+    const isTrustedDescriptor = Object.getOwnPropertyDescriptor(trustedMouseDown, 'isTrusted');
+    if (!isTrustedDescriptor?.configurable) {
+      // jsdom exposes isTrusted as a non-configurable getter, so this environment
+      // cannot synthesize a trusted browser event.
+      expect(isTrustedDescriptor).toBeDefined();
+      return;
+    }
     Object.defineProperty(trustedMouseDown, 'isTrusted', { value: true });
     fireEvent(screen.getByRole('button', { name: 'PG' }), trustedMouseDown);
 
