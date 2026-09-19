@@ -16,7 +16,7 @@
 
 services:
   gluetun:
-    image: ${GLUETUN_IMAGE:-qmcgaw/gluetun:latest}
+    image: qmcgaw/gluetun:latest
     restart: unless-stopped
     container_name: ${GLUETUN_CONTAINER_NAME:-gluetun}
     # Add extra_hosts for connecting to external DB on host
