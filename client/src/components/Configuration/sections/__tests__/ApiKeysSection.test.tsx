@@ -5,6 +5,7 @@ import '@testing-library/jest-dom';
 import ApiKeysSection from '../ApiKeysSection';
 import { renderWithProviders } from '../../../../test-utils';
 import { useApiKeys } from '../ApiKeysSection/useApiKeys';
+import type { ChannelListResponse } from '../../../Subscriptions/hooks/useChannelList';
 
 jest.mock('../ApiKeysSection/useApiKeys', () => {
   const actual = jest.requireActual('../ApiKeysSection/useApiKeys');
@@ -68,6 +69,19 @@ const createdKey = {
   prefix: 'abc12345',
 };
 
+const channelListResponse: ChannelListResponse = {
+  channels: [{
+    database_id: 12,
+    url: 'https://www.youtube.com/channel/UC1234567890123456789012',
+    channel_id: 'UC1234567890123456789012',
+    uploader: 'Safe Channel',
+    title: 'Safe Channel',
+    terminated_at: null,
+  }],
+  total: 1,
+  totalPages: 1,
+};
+
 const jsonResponse = (body: unknown, ok = true) => ({
   ok,
   json: jest.fn().mockResolvedValue(body),
@@ -82,16 +96,7 @@ const installDefaultFetch = (
       return jsonResponse({ keys });
     }
     if (url === '/getchannels?page=1&pageSize=100&sortOrder=asc') {
-      return jsonResponse({
-        channels: [{
-          database_id: 12,
-          channel_id: 'UC1234567890123456789012',
-          uploader: 'Safe Channel',
-          title: 'Safe Channel',
-          terminated_at: null,
-        }],
-        totalPages: 1,
-      });
+      return jsonResponse(channelListResponse);
     }
     if (url === '/api/keys/7/channels') {
       return jsonResponse({ keyId: 7, channelIds: [] });

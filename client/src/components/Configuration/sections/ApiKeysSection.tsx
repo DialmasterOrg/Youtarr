@@ -42,7 +42,8 @@ import { InfoTooltip } from '../common/InfoTooltip';
 import { locationUtils } from '../../../utils/location';
 import PolicyEditor from './ApiKeysSection/PolicyEditor';
 import ChannelGrantPicker from './ApiKeysSection/ChannelGrantPicker';
-import { ApiKey, ApiKeyPolicy, ApiKeyRole, ApiKeyCreatedResponse, normalizePolicy, useApiKeys } from './ApiKeysSection/useApiKeys';
+import { ApiKey, ApiKeyPolicy, ApiKeyRole, ApiKeyCreatedResponse, NormalizedApiKeyPolicy, normalizePolicy, useApiKeys } from './ApiKeysSection/useApiKeys';
+import type { ChannelListEntry } from '../../Subscriptions/hooks/useChannelList';
 import {
   EXTERNAL_RATING_BANDS,
   formatExternalRatingBand,
@@ -135,7 +136,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [editKey, setEditKey] = useState<ApiKey | null>(null);
   const [editPolicy, setEditPolicy] = useState<ApiKeyPolicy>(defaultPolicy);
-  const [channelOptions, setChannelOptions] = useState<import('../../../../types/Channel').Channel[]>([]);
+  const [channelOptions, setChannelOptions] = useState<ChannelListEntry[]>([]);
   const [channelSearch, setChannelSearch] = useState('');
   const [selectedChannelIds, setSelectedChannelIds] = useState<number[]>([]);
   const [originalChannelIds, setOriginalChannelIds] = useState<number[]>([]);
@@ -145,7 +146,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
   const [editLoadError, setEditLoadError] = useState<string | null>(null);
   const [channelsLoadError, setChannelsLoadError] = useState<string | null>(null);
   const [grantsLoadError, setGrantsLoadError] = useState<string | null>(null);
-  const [pendingExternalUpdate, setPendingExternalUpdate] = useState<{ keyId: number; policy: ApiKeyPolicy; channelIds: number[] } | null>(null);
+  const [pendingExternalUpdate, setPendingExternalUpdate] = useState<{ keyId: number; policy: NormalizedApiKeyPolicy; channelIds: number[] } | null>(null);
   const editLoadSequence = useRef(0);
   const apiKeyApi = useApiKeys(token);
   const [externalKeySearch, setExternalKeySearch] = useState('');
@@ -208,10 +209,15 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
 
   const handleCreateKey = async () => {
     if (!token || !newKeyName.trim()) return;
+    const normalized = createKeyType === 'legacy' ? null : normalizePolicy(newKeyPolicy);
+    if (normalized && !normalized.policy) {
+      setError(normalized.error || 'Invalid policy values');
+      return;
+    }
     try {
       const data = await apiKeyApi.createApiKey(
         newKeyName.trim(),
-        createKeyType === 'legacy' ? undefined : newKeyPolicy,
+        normalized?.policy,
         createKeyType === 'legacy' ? undefined : newKeyChannelIds
       );
       if (data.success) {
@@ -287,7 +293,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
     setGrantsLoading(false);
   };
 
-  const submitExternalAccess = async (update: { keyId: number; policy: ApiKeyPolicy; channelIds: number[] }) => {
+  const submitExternalAccess = async (update: { keyId: number; policy: NormalizedApiKeyPolicy; channelIds: number[] }) => {
     if (savingPolicy) return;
     setSavingPolicy(true);
     try {

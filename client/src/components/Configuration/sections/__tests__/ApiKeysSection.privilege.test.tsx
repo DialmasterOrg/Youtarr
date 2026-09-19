@@ -1,10 +1,11 @@
 import React from 'react';
-import { screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import ApiKeysSection from '../ApiKeysSection';
 import { renderWithProviders } from '../../../../test-utils';
 import { useApiKeys } from '../ApiKeysSection/useApiKeys';
+import type { ChannelListEntry } from '../../../Subscriptions/hooks/useChannelList';
 
 jest.mock('../ApiKeysSection/useApiKeys', () => {
   const actual = jest.requireActual('../ApiKeysSection/useApiKeys');
@@ -45,18 +46,29 @@ const props = (): React.ComponentProps<typeof ApiKeysSection> => ({
   onShowRequestsNavLinkChange: jest.fn(),
 });
 
+const safeChannel: ChannelListEntry = {
+  database_id: 12,
+  url: 'https://www.youtube.com/channel/UC123',
+  channel_id: 'UC123',
+  uploader: 'Safe Channel',
+  title: 'Safe Channel',
+  terminated_at: null,
+};
+
+const deferred = <T,>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+};
+
 describe('ApiKeysSection privilege confirmation', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedUseApiKeys.mockReturnValue({
       fetchApiKeys: jest.fn().mockResolvedValue([externalKey]),
-      fetchAvailableChannels: jest.fn().mockResolvedValue([{
-        database_id: 12,
-        channel_id: 'UC123',
-        uploader: 'Safe Channel',
-        title: 'Safe Channel',
-        terminated_at: null,
-      }]),
+      fetchAvailableChannels: jest.fn().mockResolvedValue([safeChannel]),
       fetchChannelGrants: jest.fn().mockResolvedValue([]),
       createApiKey: jest.fn(),
       updateExternalAccess: jest.fn().mockResolvedValue({ success: true }),
@@ -116,5 +128,89 @@ describe('ApiKeysSection privilege confirmation', () => {
     const update = mockedUseApiKeys.mock.results[0].value.updateExternalAccess;
     await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
     expect(screen.queryByText('Confirm expanded external access?')).not.toBeInTheDocument();
+  });
+
+  it('keeps Save disabled until channel grants and channel options finish loading', async () => {
+    const grants = deferred<number[]>();
+    const channels = deferred<ChannelListEntry[]>();
+    const updateExternalAccess = jest.fn();
+    mockedUseApiKeys.mockReturnValue({
+      fetchApiKeys: jest.fn().mockResolvedValue([externalKey]),
+      fetchAvailableChannels: jest.fn().mockReturnValue(channels.promise),
+      fetchChannelGrants: jest.fn().mockReturnValue(grants.promise),
+      createApiKey: jest.fn(),
+      updateExternalAccess,
+      revokeApiKey: jest.fn(),
+      regenerateApiKey: jest.fn(),
+    });
+
+    const user = userEvent.setup();
+    renderWithProviders(<ApiKeysSection {...props()} />);
+    await user.click(await screen.findByRole('button', {
+      name: 'Edit External Client external access',
+    }));
+
+    const save = screen.getByRole('button', { name: 'Save External Access' });
+    expect(save).toBeDisabled();
+    await user.click(save);
+    expect(updateExternalAccess).not.toHaveBeenCalled();
+
+    await act(async () => {
+      grants.resolve([12]);
+      channels.resolve([safeChannel]);
+    });
+    await waitFor(() => expect(save).toBeEnabled());
+  });
+
+  it('ignores a slow response from a previously opened key', async () => {
+    const slowGrants = deferred<number[]>();
+    const slowChannels = deferred<ChannelListEntry[]>();
+    const secondChannel: ChannelListEntry = {
+      database_id: 22,
+      url: 'https://www.youtube.com/channel/UCSECOND',
+      channel_id: 'UCSECOND',
+      uploader: 'Second Channel',
+      title: 'Second Channel',
+      terminated_at: null,
+    };
+    const secondKey = { ...externalKey, id: 8, name: 'Second Client' };
+    const fetchAvailableChannels = jest.fn()
+      .mockReturnValueOnce(slowChannels.promise)
+      .mockResolvedValueOnce([secondChannel]);
+    const fetchChannelGrants = jest.fn((keyId: number) => (
+      keyId === externalKey.id ? slowGrants.promise : Promise.resolve([22])
+    ));
+    mockedUseApiKeys.mockReturnValue({
+      fetchApiKeys: jest.fn().mockResolvedValue([externalKey, secondKey]),
+      fetchAvailableChannels,
+      fetchChannelGrants,
+      createApiKey: jest.fn(),
+      updateExternalAccess: jest.fn(),
+      revokeApiKey: jest.fn(),
+      regenerateApiKey: jest.fn(),
+    });
+
+    const user = userEvent.setup();
+    renderWithProviders(<ApiKeysSection {...props()} />);
+    await user.click(await screen.findByRole('button', {
+      name: 'Edit External Client external access',
+    }));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', {
+      name: 'Edit Second Client external access',
+    }));
+
+    expect(await screen.findByText('Edit External Access — Second Client')).toBeInTheDocument();
+    const secondChannelCheckbox = await screen.findByLabelText('Second Channel');
+    await waitFor(() => expect(secondChannelCheckbox).toBeChecked());
+
+    await act(async () => {
+      slowGrants.resolve([12]);
+      slowChannels.resolve([safeChannel]);
+    });
+
+    expect(screen.getByText('Edit External Access — Second Client')).toBeInTheDocument();
+    expect(secondChannelCheckbox).toBeChecked();
+    expect(screen.queryByLabelText('Safe Channel')).not.toBeInTheDocument();
   });
 });

@@ -22,8 +22,11 @@ describe('useExternalRequests', () => {
     mockedAxios.get.mockResolvedValueOnce({ data: { ...page(0), data: [] } });
     act(() => result.current.setPage(3));
     await waitFor(() => expect(result.current.page).toBe(1));
-    expect(mockedAxios.get.mock.calls[1][0]).toBe("/api/external-requests");
-    expect(mockedAxios.get.mock.calls[1][1].params).toEqual(expect.objectContaining({ page: 3, pageSize: 25 }));
+    expect(mockedAxios.get).toHaveBeenNthCalledWith(
+      2,
+      '/api/external-requests',
+      expect.objectContaining({ params: expect.objectContaining({ page: 3, pageSize: 25 }) })
+    );
   });
   it('resets the channel grant choice for every new inline action', async () => {
     mockedAxios.get.mockResolvedValue({ data: page() });
