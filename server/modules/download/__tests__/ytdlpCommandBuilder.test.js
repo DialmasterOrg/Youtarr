@@ -5,7 +5,8 @@ jest.mock('../../configModule', () => ({
   getConfig: jest.fn(),
   directoryPath: '/mock/youtube/output',
   ffmpegPath: '/usr/bin/ffmpeg',
-  getCookiesPath: jest.fn()
+  getCookiesPath: jest.fn(),
+  hasUsableCookies: jest.fn()
 }));
 
 // Mock tempPathManager
@@ -43,6 +44,7 @@ describe('YtdlpCommandBuilder', () => {
 
     configModule.getConfig.mockReturnValue(mockConfig);
     configModule.getCookiesPath.mockReturnValue(null);
+    configModule.hasUsableCookies.mockReturnValue(false);
 
     // Default tempPathManager behavior - always returns a temp path (staging always enabled)
     tempPathManager.isEnabled.mockReturnValue(true);
@@ -515,6 +517,12 @@ describe('YtdlpCommandBuilder', () => {
   });
 
   describe('buildMatchFilters', () => {
+    it('includes members-only content when usable cookies are configured', () => {
+      configModule.hasUsableCookies.mockReturnValue(true);
+
+      expect(YtdlpCommandBuilder.buildMatchFilters()).toBe('!is_live & live_status!=is_upcoming');
+    });
+
     it('should return base filters when no filter config provided', () => {
       const result = YtdlpCommandBuilder.buildMatchFilters();
       expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming');

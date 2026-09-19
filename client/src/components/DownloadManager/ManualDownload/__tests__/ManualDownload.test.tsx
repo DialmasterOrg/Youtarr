@@ -196,7 +196,7 @@ describe('ManualDownload', () => {
     expect(screen.queryByText('Download Queue')).not.toBeInTheDocument();
   });
 
-  test('shows error for members-only videos', async () => {
+  test('shows an error for members-only videos without usable cookies', async () => {
     mockedAxios.post.mockResolvedValueOnce({
       data: {
         isValidUrl: true,
@@ -210,7 +210,24 @@ describe('ManualDownload', () => {
     fireEvent.click(validateButton);
 
     await waitFor(() => {
-      expect(screen.getByText('This video is members-only and cannot be downloaded.')).toBeInTheDocument();
+      expect(screen.getByText('This video is members-only and requires valid cookies from an account with channel access.')).toBeInTheDocument();
+    });
+  });
+
+  test('adds members-only videos when the server confirms usable cookies', async () => {
+    mockedAxios.post.mockResolvedValueOnce({
+      data: {
+        ...mockValidationResponse,
+        isMembersOnly: true,
+        canDownloadMembersOnly: true,
+      }
+    });
+
+    render(<ManualDownload onStartDownload={mockOnStartDownload} token={mockToken} />);
+    fireEvent.click(screen.getByTestId('validate-button'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('video-chip-test123')).toBeInTheDocument();
     });
   });
 

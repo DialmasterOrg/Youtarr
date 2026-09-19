@@ -462,20 +462,20 @@ npm run test:watch
 ### External Cookie Validation Tests
 
 The backend Jest suites cover external-file handling and process cleanup. A
-separate Python suite checks the helper against yt-dlp's actual cookie loader,
-including malformed records and suppression of cookie values in diagnostics.
-It runs locally without contacting YouTube or downloading videos:
+separate Python suite checks the helper's zipimport yt-dlp loader and its
+standalone-binary Netscape-cookie fallback, including malformed records and
+suppression of cookie values in diagnostics. It runs locally without contacting
+YouTube or downloading videos:
 
 ```bash
 python3 -m unittest discover -s server/utils/__tests__ -p 'test_validate_cookies.py'
 ```
 
-This requires Python and yt-dlp's platform-independent zipimport executable on
-`PATH`, the distribution used by the Docker image. Alternatively, set
-`YOUTARR_TEST_YTDLP` to that executable's absolute path. CI downloads the current
-release and runs this suite in the **yt-dlp Cookie Loader Tests** job, required
-by **All Checks**. The helper imports that executable so the parser follows
-yt-dlp updates; it does not maintain a separate installation or format parser.
+This requires Python and yt-dlp on `PATH`. Alternatively, set
+`YOUTARR_TEST_YTDLP` to its absolute path. CI downloads the current release and
+runs this suite in the **yt-dlp Cookie Loader Tests** job, required by **All
+Checks**. The helper uses yt-dlp's loader when importable and otherwise parses
+the standard Netscape cookie format without contacting YouTube.
 
 ### Frontend Tests
 

@@ -417,7 +417,7 @@ describe('PlaylistPage video list notices', () => {
     renderWithProviders(<PlaylistPage token="t" />);
 
     expect(
-      screen.getByText(/private, members-only, and deleted videos/i)
+      screen.getByText(/private and deleted videos/i)
     ).toBeInTheDocument();
     expect(
       screen.getByText(/fewer videos here than YouTube reports/i)

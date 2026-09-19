@@ -742,7 +742,7 @@ class DownloadModule {
             config: configModule.config,
           });
 
-        // For manual downloads, we don't apply duration filters but still exclude members-only
+        // Manual downloads omit duration filters; members-only admission depends on usable cookies.
         // Subfolder override is passed to post-processor via environment variable
         // Pass audioFormat for MP3 downloads
         const anonymousRetry = Boolean(this.getJobDataValue(jobData, 'anonymousRetry'));

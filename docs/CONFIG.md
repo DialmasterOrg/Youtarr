@@ -387,7 +387,7 @@ Sync is one-way (server -> Youtarr). Non-owner Plex users come from the server's
 - **Type**: `boolean`
 - **Default**: `false`
 - **Description**: Use cookies for YouTube authentication
-- **Note**: May be required in some cases to get around YouTube bot detection. Enable only when needed: logged-in sessions use different YouTube player clients, and YouTube has been restricting stream formats on those for some accounts. When cookies are enabled Youtarr adds the `mweb` and `web_safari` player clients to every video download and metadata fetch; free (non-Premium) accounts affected by the restriction top out at 1080p. See "Downloads Are Only 360p With Cookies Enabled" in [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+- **Note**: May be required in some cases to get around YouTube bot detection or access members-only content for an account with an active channel membership. Enable only when needed: logged-in sessions use different YouTube player clients, and YouTube has been restricting stream formats on those for some accounts. When cookies are enabled Youtarr adds the `mweb` and `web_safari` player clients to every video download and metadata fetch; free (non-Premium) accounts affected by the restriction top out at 1080p. See "Downloads Are Only 360p With Cookies Enabled" in [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 ### Custom Cookies Uploaded
 - **Config Key**: `customCookiesUploaded`
@@ -434,10 +434,11 @@ removed when the process closes. This applies wherever configured cookies are
 already used, including downloads, channel/metadata lookups, and thumbnails;
 one-time subscription imports retain their separate upload workflow.
 
-**Validation and failures.** Youtarr uses the installed yt-dlp cookie loader to
-check the private copy locally, without contacting YouTube. It uses the cookies
-yt-dlp successfully loads; malformed entries that yt-dlp skips are left out of
-the working copy and produce a warning. At least one cookie must load.
+**Validation and failures.** Youtarr uses the installed yt-dlp cookie loader when
+available, with a local Netscape-cookie parser fallback for standalone yt-dlp
+binaries, to check the private copy without contacting YouTube. It uses the
+cookies the loader accepts; malformed entries are left out of the working copy
+and produce a warning. At least one cookie must load.
 
 If the source is missing, unreadable, rejected, or contains no loadable cookies,
 operations **continue without cookies**. The same applies if validation or

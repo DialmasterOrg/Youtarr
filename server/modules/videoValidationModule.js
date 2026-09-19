@@ -1,5 +1,6 @@
 const ytDlpRunner = require('./ytDlpRunner');
 const archiveModule = require('./archiveModule');
+const configModule = require('./configModule');
 const logger = require('../logger');
 const ChannelVideo = require('../models/channelvideo');
 const youtubeUrlParser = require('./youtubeUrlParser');
@@ -82,6 +83,7 @@ class VideoValidationModule {
    */
   toValidationResponse(videoId, metadata, isDuplicate) {
     const isMembersOnly = metadata.availability === 'subscriber_only';
+    const canDownloadMembersOnly = isMembersOnly && configModule.hasUsableCookies();
     const availabilityProvided = Boolean(metadata.availability);
 
     const contentRating = metadata.contentRating || metadata.content_rating || null;
@@ -91,6 +93,7 @@ class VideoValidationModule {
       isValidUrl: true,
       isAlreadyDownloaded: isDuplicate,
       isMembersOnly: isMembersOnly,
+      ...(isMembersOnly ? { canDownloadMembersOnly } : {}),
       metadata: {
         youtubeId: videoId,
         url: `https://www.youtube.com/watch?v=${videoId}`,
@@ -267,6 +270,7 @@ class VideoValidationModule {
           isValidUrl: true,
           isAlreadyDownloaded: false,
           isMembersOnly: true,
+          canDownloadMembersOnly: configModule.hasUsableCookies(),
           metadata: {
             youtubeId: extractedVideoId,
             url: `https://www.youtube.com/watch?v=${extractedVideoId}`,

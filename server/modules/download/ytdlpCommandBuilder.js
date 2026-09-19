@@ -427,12 +427,15 @@ class YtdlpCommandBuilder {
    * @returns {string} - Complete match filter string for yt-dlp
    */
   static buildMatchFilters(filterConfig = null) {
-    // Base filters - always applied for channel downloads
+    // Members-only content can be downloaded only through an authenticated
+    // account. Keep excluding it when no usable cookie source is configured.
     const baseFilters = [
-      'availability!=subscriber_only',
       '!is_live',
       'live_status!=is_upcoming',
     ];
+    if (!configModule.hasUsableCookies?.()) {
+      baseFilters.unshift('availability!=subscriber_only');
+    }
 
     // If no filter config provided or no filters set, return base filters only
     if (
@@ -671,7 +674,7 @@ class YtdlpCommandBuilder {
       '--write-info-json',
       '--no-write-playlist-metafiles',
       '--extractor-args', 'youtubetab:tab=videos;sort=dd',
-      '--match-filter', 'availability!=subscriber_only & !is_live & live_status!=is_upcoming',
+      '--match-filter', this.buildMatchFilters(),
       '-o', outputPath,
       '--datebefore', 'now',
       '-o', `thumbnail:${thumbnailPath}`,
