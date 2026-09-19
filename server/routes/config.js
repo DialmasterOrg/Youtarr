@@ -3,6 +3,7 @@ const multer = require('multer');
 const customArgsParser = require('../modules/download/customArgsParser');
 const filenamePreview = require('../modules/filenamePreview');
 const { getExternalCookiesPath } = require('../modules/externalCookies');
+const { isExternalApiEnabled } = require('../modules/externalApiConfig');
 
 // Mirror of the frontend RATE_LIMIT_REGEX. Matches yt-dlp's --limit-rate
 // format: digits with optional decimal, optional K/M/G suffix.
@@ -109,6 +110,11 @@ module.exports = function createConfigRoutes({ verifyToken, configModule, valida
    *                   type: integer
    *                 cronSchedule:
    *                   type: string
+   *                 isPlatformManaged:
+   *                   type: object
+   *                   properties:
+   *                     externalApiEnabled:
+   *                       type: boolean
    */
   router.get('/getconfig', verifyToken, (req, res) => {
     const config = configModule.getConfig();
@@ -122,7 +128,8 @@ module.exports = function createConfigRoutes({ verifyToken, configModule, valida
       plexUrl: !!process.env.PLEX_URL,
       authEnabled: process.env.AUTH_ENABLED === 'false' ? false : true,
       useTmpForDownloads: configModule.isElfhostedPlatform(),
-      ytdlpUpdates: configModule.isElfhostedPlatform()
+      ytdlpUpdates: configModule.isElfhostedPlatform(),
+      externalApiEnabled: isExternalApiEnabled()
     };
 
     safeConfig.deploymentEnvironment = {

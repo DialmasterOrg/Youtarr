@@ -437,7 +437,7 @@ class JobModule {
     }
   }
 
-  async addOrUpdateJob(jobData, isNextJob = false) {
+  async addOrUpdateJob(jobData, isNextJob = false, preferredJobId = null) {
     let jobId;
     const inProgressJobId = this.getInProgressJobId();
     if (!isNextJob) {
@@ -445,12 +445,16 @@ class JobModule {
         // If there is a job in progress, create a new job with status Pending
         logger.info({ jobType: jobData.jobType }, 'A job is already in progress. Adding job to the queue');
         jobData.status = 'Pending';
-        jobId = await this.addJob(jobData);
+        jobId = preferredJobId
+          ? await this.addJob(jobData, preferredJobId)
+          : await this.addJob(jobData);
       } else {
         // Otherwise, add a job with status In Progress
         logger.info({ jobType: jobData.jobType }, 'Adding job to jobs list as In Progress');
         jobData.status = 'In Progress';
-        jobId = await this.addJob(jobData);
+        jobId = preferredJobId
+          ? await this.addJob(jobData, preferredJobId)
+          : await this.addJob(jobData);
       }
     } else if (isNextJob && !inProgressJobId) {
       // If this is a next job and there's no job in progress, update its status to In Progress
@@ -932,8 +936,10 @@ class JobModule {
     });
   }
 
-  async addJob(job) {
-    const jobId = uuidv4(); // Generate a new UUID
+  async addJob(job, preferredJobId = null) {
+    // Trusted internal callers may supply a stable UUID so enqueueing can be
+    // retried safely across an external-request persistence boundary.
+    const jobId = preferredJobId || uuidv4();
     if (isSpecificUrlDownloadJob(job.jobType) && Array.isArray(job.data?.urls)) {
       const admission = videoActivity.claim(jobId, job.data.urls);
       job.data.urls = admission.acceptedUrls;

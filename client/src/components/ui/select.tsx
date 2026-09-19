@@ -123,7 +123,6 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
           : normalizedValue;
       onChange?.({ target: { value: outputValue, name } } as unknown as SelectChangeEvent<string>);
     };
-
     return (
       <SelectPrimitive.Root
         value={primitiveValue}
@@ -141,9 +140,11 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
           aria-labelledby={labelId}
           // Tests use fireEvent.mouseDown to open the Select.
           // Radix only responds to pointerdown, so we open directly here.
-          // We only open (not toggle) — Radix's own handler handles closing.
+          // A real pointer click has already been handled by Radix. Opening
+          // again from its subsequent mousedown can move the portaled menu
+          // under the active pointer and dismiss a containing dialog.
           onMouseDown={(e) => {
-            if (!e.defaultPrevented && !disabled && !isOpen) {
+            if (!e.nativeEvent.isTrusted && !e.defaultPrevented && !disabled && !isOpen) {
               handleOpenChange(true);
             }
           }}
