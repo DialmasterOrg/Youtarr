@@ -1,6 +1,8 @@
+const { Video, JobVideo, Job, Channel } = require('../models');
 const logger = require('../logger');
 const watchStatusQueries = require('./mediaServers/watchStatusQueries');
 const { STORED_BYTES_SQL } = require('./storageUsage');
+const { TIME_CREATED_ATTRIBUTE } = require('./videosModule');
 
 // Matches the timeCreated calculation used by videosModule.js and the other
 // auto-removal candidate queries in videoDeletionModule.js.
@@ -10,6 +12,60 @@ const DOWNLOAD_TIME_SQL =
 // Read-only candidate queries for auto-removal (the watched strategy and
 // the keep-most-recent guard, including per-channel keep-recent); deletion itself stays in videoDeletionModule.
 class AutoRemovalQueries {
+  /**
+   * Get the base options for Video.findAll to pick videos to be removed.
+   */
+  _getBaseRemovalQueryOptions() {
+    const { Sequelize, sequelize } = require('../db.js');
+
+    return {
+      attributes: [
+        'id',
+        [sequelize.fn('MAX', TIME_CREATED_ATTRIBUTE), 'timeCreated'],
+      ],
+      include: [
+        {
+          model: JobVideo,
+          as: 'jobVideos',
+          attributes: [],
+          include: [{
+            model: Job,
+            as: 'job',
+            attributes: [],
+          }],
+        },
+        {
+          model: Channel,
+          as: 'channel',
+          attributes: [],
+          on: {
+            id: sequelize.col('Video.channel_id'),
+            enabled: true,
+          },
+        },
+      ],
+      where: {
+        removed: false,
+        protected: false,
+        [Sequelize.Op.and]: [
+          sequelize.where(
+            sequelize.fn('COALESCE', sequelize.col('channel.auto_removal_protected'), false),
+            false,
+          ),
+        ],
+      },
+      group: sequelize.col('Video.id'),
+      having: {
+        timeCreated: {
+          [Sequelize.Op.not]: null,
+        },
+      },
+      order: [['timeCreated', 'DESC']],
+      subQuery: false,
+      raw: true,
+    };
+  }
+
   /**
    * Ids of the N most recently downloaded videos (not marked removed).
    * Used as an exclusion set so auto-removal never touches the newest downloads.
@@ -23,28 +79,11 @@ class AutoRemovalQueries {
     if (!Number.isFinite(count) || count <= 0) {
       return [];
     }
-    const { Sequelize, sequelize } = require('../db.js');
 
     try {
-      const query = `
-        SELECT videos.id, MAX(${DOWNLOAD_TIME_SQL}) AS timeCreated
-        FROM videos
-        LEFT JOIN jobvideos ON videos.id = jobvideos.video_id
-        LEFT JOIN jobs ON jobs.id = jobvideos.job_id
-        LEFT JOIN channels AS protchannel ON protchannel.channel_id = videos.channel_id AND protchannel.enabled = 1
-        WHERE videos.removed = 0
-          AND videos.protected = 0
-          AND COALESCE(protchannel.auto_removal_protected, 0) = 0
-        GROUP BY videos.id
-        HAVING timeCreated IS NOT NULL
-        ORDER BY timeCreated DESC
-        LIMIT :count
-      `;
-
-      const rows = await sequelize.query(query, {
-        replacements: { count },
-        type: Sequelize.QueryTypes.SELECT
-      });
+      const options = this._getBaseRemovalQueryOptions();
+      options.limit = count;
+      const rows = await Video.findAll(options);
 
       return rows.map((row) => row.id);
     } catch (error) {

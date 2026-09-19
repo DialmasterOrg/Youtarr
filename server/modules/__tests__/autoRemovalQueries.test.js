@@ -7,13 +7,19 @@ describe('autoRemovalQueries', () => {
   let mockSequelize;
   let mockWatchStatusQueries;
   let mockLogger;
+  let mockVideo;
+  let MockSequelize;
 
   beforeEach(() => {
     jest.resetModules();
     jest.clearAllMocks();
 
     mockSequelize = {
-      query: jest.fn().mockResolvedValue([])
+      query: jest.fn().mockResolvedValue([]),
+      col: jest.fn((name) => name),
+      literal: jest.fn((sql) => sql),
+      fn: jest.fn((...args) => ['fn', args]),
+      where: jest.fn((...args) => ['where', args]),
     };
 
     mockWatchStatusQueries = {
@@ -23,9 +29,32 @@ describe('autoRemovalQueries', () => {
       })
     };
 
+    mockVideo = {
+      findAll: jest.fn().mockResolvedValue([]),
+    };
+
+    MockSequelize = {
+      QueryTypes: { SELECT: 'SELECT' },
+      Op: {
+        and: Symbol('and'),
+        lt: Symbol('lt'),
+        not: Symbol('not'),
+        notIn: Symbol('notIn'),
+      },
+    };
     jest.doMock('../../db.js', () => ({
-      Sequelize: { QueryTypes: { SELECT: 'SELECT' } },
-      sequelize: mockSequelize
+      Sequelize: MockSequelize,
+      sequelize: mockSequelize,
+    }));
+    jest.doMock('../../models', () => ({
+      Video: mockVideo,
+      Job: { _name: 'Job' },
+      JobVideo: { _name: 'JobVideo' },
+      Channel: { _name: 'Channel' },
+    }));
+
+    jest.doMock('../videosModule', () => ({
+      TIME_CREATED_ATTRIBUTE: 'stuff()',
     }));
     jest.doMock('../mediaServers/watchStatusQueries', () => mockWatchStatusQueries);
 
@@ -33,51 +62,143 @@ describe('autoRemovalQueries', () => {
     autoRemovalQueries = require('../autoRemovalQueries');
   });
 
+  describe('_getBaseRemovalQueryOptions', () => {
+    test('should group on video and include only id & max(timeCreated) attributes', async () => {
+      const options = autoRemovalQueries._getBaseRemovalQueryOptions();
+
+      expect(options).toMatchObject(expect.objectContaining({
+        attributes: [
+          'id',
+          [mockSequelize.fn('MAX', 'stuff()'), 'timeCreated'],
+        ],
+        group: mockSequelize.col('Video.id'),
+        raw: true,
+      }));
+    });
+
+    test('should join on jobs', async () => {
+      const options = autoRemovalQueries._getBaseRemovalQueryOptions();
+
+      expect(options).toMatchObject(expect.objectContaining({
+        include: expect.arrayContaining([
+          {
+            model: { _name: 'JobVideo' },
+            as: 'jobVideos',
+            attributes: [],
+            include: [{
+              model: { _name: 'Job' },
+              as: 'job',
+              attributes: [],
+            }],
+          },
+        ]),
+      }));
+    });
+
+    test('should join & filter on channels', async () => {
+      const options = autoRemovalQueries._getBaseRemovalQueryOptions();
+
+      expect(options).toMatchObject(expect.objectContaining({
+        include: expect.arrayContaining([
+          {
+            model: { _name: 'Channel' },
+            as: 'channel',
+            attributes: [],
+            on: {
+              id: mockSequelize.col('Video.channel_id'),
+              enabled: true,
+            },
+          },
+        ]),
+        where: expect.objectContaining({
+          [MockSequelize.Op.and]: [
+            mockSequelize.where(
+              mockSequelize.fn('COALESCE', mockSequelize.col('channel.auto_removal_protected'), false),
+              false,
+            ),
+          ],
+        }),
+      }));
+    });
+
+    test('should order & filter on timeCreated', async () => {
+      const options = autoRemovalQueries._getBaseRemovalQueryOptions();
+
+      expect(options).toMatchObject(expect.objectContaining({
+        having: {
+          timeCreated: {
+            [MockSequelize.Op.not]: null,
+          },
+        },
+        order: [['timeCreated', 'DESC']],
+        subQuery: false,
+      }));
+    });
+  });
+
   describe('getRecentVideoIds', () => {
     test('returns empty array without querying for zero, negative, or invalid counts', async () => {
       await expect(autoRemovalQueries.getRecentVideoIds(0)).resolves.toEqual([]);
       await expect(autoRemovalQueries.getRecentVideoIds(-5)).resolves.toEqual([]);
       await expect(autoRemovalQueries.getRecentVideoIds(NaN)).resolves.toEqual([]);
-      expect(mockSequelize.query).not.toHaveBeenCalled();
+      expect(mockVideo.findAll).not.toHaveBeenCalled();
     });
 
     test('returns the most recently downloaded video ids', async () => {
-      mockSequelize.query.mockResolvedValue([{ id: 5 }, { id: 3 }, { id: 9 }]);
+      mockVideo.findAll.mockResolvedValue([{ id: 5 }, { id: 3 }, { id: 9 }]);
 
       const ids = await autoRemovalQueries.getRecentVideoIds(3);
 
       expect(ids).toEqual([5, 3, 9]);
-      const [sql, options] = mockSequelize.query.mock.calls[0];
-      expect(sql).toContain('videos.removed = 0');
-      expect(sql).toContain('ORDER BY timeCreated DESC');
-      expect(sql).toContain('LIMIT :count');
-      expect(options.replacements).toEqual({ count: 3 });
+      expect(mockVideo.findAll).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          removed: false,
+        }),
+        order: [['timeCreated', 'DESC']],
+        limit: 3,
+        subQuery: false,
+      }));
     });
 
     test('does not count protected videos toward the recent N', async () => {
-      mockSequelize.query.mockResolvedValue([]);
-
       await autoRemovalQueries.getRecentVideoIds(5);
 
-      const [sql] = mockSequelize.query.mock.calls[0];
-      expect(sql).toContain('videos.protected = 0');
+      expect(mockVideo.findAll).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          protected: false,
+        }),
+      }));
     });
 
     test('rethrows when the query fails so callers can fail closed', async () => {
-      mockSequelize.query.mockRejectedValue(new Error('db down'));
+      mockVideo.findAll.mockRejectedValue(new Error('db down'));
 
       await expect(autoRemovalQueries.getRecentVideoIds(5)).rejects.toThrow('db down');
       expect(mockLogger.error).toHaveBeenCalled();
     });
 
     test('excludes videos of fully protected enabled channels from the recent N', async () => {
-      mockSequelize.query.mockResolvedValue([]);
-
       await autoRemovalQueries.getRecentVideoIds(5);
 
-      const [sql] = mockSequelize.query.mock.calls[0];
-      expect(sql).toContain('LEFT JOIN channels AS protchannel ON protchannel.channel_id = videos.channel_id AND protchannel.enabled = 1');
-      expect(sql).toContain('COALESCE(protchannel.auto_removal_protected, 0) = 0');
+      expect(mockVideo.findAll).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          [MockSequelize.Op.and]: [
+            mockSequelize.where(
+              mockSequelize.fn('COALESCE', mockSequelize.col('channel.auto_removal_protected'), false),
+              false,
+            ),
+          ],
+        }),
+        include: expect.arrayContaining([
+          expect.objectContaining({
+            as: 'channel',
+            on: {
+              id: mockSequelize.col('Video.channel_id'),
+              enabled: true,
+            },
+          }),
+        ]),
+      }));
     });
   });
 
