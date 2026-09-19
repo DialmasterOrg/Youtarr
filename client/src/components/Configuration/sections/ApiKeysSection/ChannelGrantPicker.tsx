@@ -42,4 +42,3 @@ const ChannelGrantPicker: React.FC<ChannelGrantPickerProps> = ({
 };
 
 export default ChannelGrantPicker;
-

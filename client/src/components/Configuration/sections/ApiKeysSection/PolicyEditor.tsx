@@ -67,4 +67,3 @@ const PolicyEditor: React.FC<PolicyEditorProps> = ({ policy, onChange }) => {
 };
 
 export default PolicyEditor;
-
