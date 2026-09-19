@@ -1424,13 +1424,14 @@ describe('server routes - getplexlibraries with test params', () => {
 });
 
 
-describe('GET /getconfig external API capability', () => {
+describe('external API capability consistency', () => {
   test.each([
     ['true', true],
+    [' true ', true],
+    ['TRUE', true],
     ['false', false],
     [undefined, false],
-    ['TRUE', false],
-  ])('maps EXTERNAL_API_ENABLED=%s to externalApiEnabled=%s', async (externalApiEnabled, expected) => {
+  ])('keeps the route gate and /getconfig aligned for EXTERNAL_API_ENABLED=%s', async (externalApiEnabled, expected) => {
     const { app } = await createServerModule({ externalApiEnabled });
     const handlers = findRouteHandlers(app, 'get', '/getconfig');
     const getConfigHandler = handlers[handlers.length - 1];
@@ -1441,5 +1442,6 @@ describe('GET /getconfig external API capability', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.isPlatformManaged.externalApiEnabled).toBe(expected);
+    expect(require('../modules/externalApiConfig').isExternalApiEnabled()).toBe(expected);
   });
 });
