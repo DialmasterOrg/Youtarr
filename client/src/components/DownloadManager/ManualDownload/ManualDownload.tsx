@@ -121,8 +121,8 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
         return false;
       }
 
-      if (data.isMembersOnly) {
-        setErrorMessage('This video is members-only and cannot be downloaded.');
+      if (data.isMembersOnly && !data.canDownloadMembersOnly) {
+        setErrorMessage('This video is members-only and requires valid cookies from an account with channel access.');
         return false;
       }
 

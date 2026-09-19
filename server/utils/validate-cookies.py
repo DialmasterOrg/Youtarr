@@ -1,6 +1,7 @@
 """Load a private cookie snapshot with the installed yt-dlp; never access YouTube."""
 
 import contextlib
+import http.cookiejar
 import io
 import json
 import sys
@@ -17,11 +18,14 @@ def validate(executable, snapshot):
         try:
             from yt_dlp.cookies import YoutubeDLCookieJar
         except Exception:
-            return {"valid": False, "error": "unavailable"}
+            # The self-updated standalone binary is executable but cannot be
+            # imported as a Python package. Its cookie format is Netscape, so
+            # validate and normalize it locally without contacting YouTube.
+            YoutubeDLCookieJar = http.cookiejar.MozillaCookieJar
 
         try:
             jar = YoutubeDLCookieJar(snapshot)
-            jar.load()
+            jar.load(ignore_discard=True, ignore_expires=True)
         except Exception:
             return {"valid": False, "error": "invalid"}
         if not len(jar):
@@ -30,7 +34,7 @@ def validate(executable, snapshot):
         try:
             # Use precisely the cookies the parser accepted, without passing
             # rejected lines to the eventual download or its logs a second time.
-            jar.save()
+            jar.save(ignore_discard=True, ignore_expires=True)
         except Exception:
             return {"valid": False, "error": "snapshot"}
         return {"valid": True, "warnings": bool(diagnostics.getvalue())}

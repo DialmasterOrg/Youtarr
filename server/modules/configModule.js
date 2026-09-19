@@ -486,6 +486,15 @@ class ConfigModule extends EventEmitter {
     return null;
   }
 
+  hasUsableCookies() {
+    const cookiesPath = this.getCookiesPath();
+    if (!cookiesPath) return false;
+
+    // External files are validated before every yt-dlp process receives its
+    // private snapshot. Do not admit members-only content when that check fails.
+    return !getExternalCookiesPath() || getExternalCookiesStatus()?.ready === true;
+  }
+
   getCookiesStatus() {
     const configDir = path.dirname(this.configPath);
     const customPath = path.join(configDir, 'cookies.user.txt');

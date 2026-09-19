@@ -9,11 +9,13 @@ jest.mock('../download/tempPathManager', () => ({
 jest.mock('../../models/channelvideo', () => ({
   update: jest.fn().mockResolvedValue([1]),
 }));
+jest.mock('../configModule', () => ({ hasUsableCookies: jest.fn() }));
 
 const videoValidationModule = require('../videoValidationModule');
 const ytDlpRunner = require('../ytDlpRunner');
 const archiveModule = require('../archiveModule');
 const ChannelVideo = require('../../models/channelvideo');
+const configModule = require('../configModule');
 const logger = require('../../logger');
 
 // Mock dependencies
@@ -46,6 +48,7 @@ describe('VideoValidationModule', () => {
     ChannelVideo.update.mockClear();
     ChannelVideo.update.mockResolvedValue([1]);
     ytDlpRunner.isMembersOnlyError.mockImplementation(isMembersOnlyMessage);
+    configModule.hasUsableCookies.mockReturnValue(false);
   });
 
   describe('normalizeUrlToVideoId', () => {
@@ -174,6 +177,17 @@ describe('VideoValidationModule', () => {
       const result = videoValidationModule.toValidationResponse(videoId, metadata, isDuplicate);
 
       expect(result.isMembersOnly).toBe(true);
+      expect(result.canDownloadMembersOnly).toBe(false);
+    });
+
+    it('allows a members-only validation result when usable cookies are configured', () => {
+      configModule.hasUsableCookies.mockReturnValue(true);
+
+      const result = videoValidationModule.toValidationResponse('member12345', {
+        availability: 'subscriber_only',
+      }, false);
+
+      expect(result.canDownloadMembersOnly).toBe(true);
     });
 
     it('should mark duplicates correctly', () => {

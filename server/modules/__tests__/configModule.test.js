@@ -963,6 +963,20 @@ describe('ConfigModule', () => {
       expect(cookiesPath).toContain('cookies.user.txt');
     });
 
+    test('reports uploaded cookies as usable when enabled and present', () => {
+      ConfigModule.config.cookiesEnabled = true;
+      ConfigModule.config.customCookiesUploaded = true;
+      fs.existsSync.mockReturnValue(true);
+
+      expect(ConfigModule.hasUsableCookies()).toBe(true);
+    });
+
+    test('does not report cookies as usable when disabled', () => {
+      ConfigModule.config.cookiesEnabled = false;
+
+      expect(ConfigModule.hasUsableCookies()).toBe(false);
+    });
+
     test('should return null and warn if cookies enabled but file missing', () => {
       // Arrange
       ConfigModule.config.cookiesEnabled = true;

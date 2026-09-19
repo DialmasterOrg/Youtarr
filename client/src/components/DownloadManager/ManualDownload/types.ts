@@ -27,6 +27,7 @@ export interface ValidationResponse {
   isValidUrl: boolean;
   isAlreadyDownloaded: boolean;
   isMembersOnly: boolean;
+  canDownloadMembersOnly?: boolean;
   metadata?: {
     youtubeId: string;
     url: string;
