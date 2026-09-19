@@ -9,12 +9,22 @@ jest.mock('fs', () => ({
 describe('FileCheckModule', () => {
   let fileCheckModule;
   let mockFs;
+  let mockVideo;
 
   beforeEach(() => {
     jest.resetModules();
     jest.clearAllMocks();
 
     mockFs = require('fs').promises;
+
+    // Mock the Video model
+    mockVideo = {
+      update: jest.fn().mockResolvedValue(),
+    };
+    jest.doMock('../../models', () => ({
+      Video: mockVideo
+    }));
+
     fileCheckModule = require('../fileCheckModule');
   });
 
@@ -498,25 +508,10 @@ describe('FileCheckModule', () => {
   });
 
   describe('applyVideoUpdates', () => {
-    let mockSequelize;
-    let mockSequelizeLib;
-
-    beforeEach(() => {
-      mockSequelize = {
-        query: jest.fn()
-      };
-
-      mockSequelizeLib = {
-        QueryTypes: {
-          UPDATE: 'UPDATE'
-        }
-      };
-    });
-
     test('should not execute queries when updates array is empty', async () => {
-      await fileCheckModule.applyVideoUpdates(mockSequelize, mockSequelizeLib, []);
+      await fileCheckModule.applyVideoUpdates([]);
 
-      expect(mockSequelize.query).not.toHaveBeenCalled();
+      expect(mockVideo.update).not.toHaveBeenCalled();
     });
 
     test('should update fileSize only', async () => {
@@ -524,15 +519,12 @@ describe('FileCheckModule', () => {
         { id: 1, fileSize: 2000 }
       ];
 
-      await fileCheckModule.applyVideoUpdates(mockSequelize, mockSequelizeLib, updates);
+      await fileCheckModule.applyVideoUpdates(updates);
 
-      expect(mockSequelize.query).toHaveBeenCalledTimes(1);
-      expect(mockSequelize.query).toHaveBeenCalledWith(
-        'UPDATE videos SET file_size = ? WHERE id = ?',
-        {
-          replacements: [2000, 1],
-          type: 'UPDATE'
-        }
+      expect(mockVideo.update).toHaveBeenCalledTimes(1);
+      expect(mockVideo.update).toHaveBeenCalledWith(
+        { fileSize: 2000 },
+        { where: { id: 1 } },
       );
     });
 
@@ -541,15 +533,12 @@ describe('FileCheckModule', () => {
         { id: 1, removed: true }
       ];
 
-      await fileCheckModule.applyVideoUpdates(mockSequelize, mockSequelizeLib, updates);
+      await fileCheckModule.applyVideoUpdates(updates);
 
-      expect(mockSequelize.query).toHaveBeenCalledTimes(1);
-      expect(mockSequelize.query).toHaveBeenCalledWith(
-        'UPDATE videos SET removed = ? WHERE id = ?',
-        {
-          replacements: [1, 1],
-          type: 'UPDATE'
-        }
+      expect(mockVideo.update).toHaveBeenCalledTimes(1);
+      expect(mockVideo.update).toHaveBeenCalledWith(
+        { removed: true },
+        { where: { id: 1 } },
       );
     });
 
@@ -558,15 +547,12 @@ describe('FileCheckModule', () => {
         { id: 1, fileSize: 2000, removed: false }
       ];
 
-      await fileCheckModule.applyVideoUpdates(mockSequelize, mockSequelizeLib, updates);
+      await fileCheckModule.applyVideoUpdates(updates);
 
-      expect(mockSequelize.query).toHaveBeenCalledTimes(1);
-      expect(mockSequelize.query).toHaveBeenCalledWith(
-        'UPDATE videos SET file_size = ?, removed = ? WHERE id = ?',
-        {
-          replacements: [2000, 0, 1],
-          type: 'UPDATE'
-        }
+      expect(mockVideo.update).toHaveBeenCalledTimes(1);
+      expect(mockVideo.update).toHaveBeenCalledWith(
+        { fileSize: 2000, removed: false },
+        { where: { id: 1 } },
       );
     });
 
@@ -577,32 +563,23 @@ describe('FileCheckModule', () => {
         { id: 3, fileSize: 5000 }
       ];
 
-      await fileCheckModule.applyVideoUpdates(mockSequelize, mockSequelizeLib, updates);
+      await fileCheckModule.applyVideoUpdates(updates);
 
-      expect(mockSequelize.query).toHaveBeenCalledTimes(3);
-      expect(mockSequelize.query).toHaveBeenNthCalledWith(
+      expect(mockVideo.update).toHaveBeenCalledTimes(3);
+      expect(mockVideo.update).toHaveBeenNthCalledWith(
         1,
-        'UPDATE videos SET file_size = ?, removed = ? WHERE id = ?',
-        {
-          replacements: [2000, 0, 1],
-          type: 'UPDATE'
-        }
+        { fileSize: 2000, removed: false },
+        { where: { id: 1 } },
       );
-      expect(mockSequelize.query).toHaveBeenNthCalledWith(
+      expect(mockVideo.update).toHaveBeenNthCalledWith(
         2,
-        'UPDATE videos SET removed = ? WHERE id = ?',
-        {
-          replacements: [1, 2],
-          type: 'UPDATE'
-        }
+        { removed: true },
+        { where: { id: 2 } },
       );
-      expect(mockSequelize.query).toHaveBeenNthCalledWith(
+      expect(mockVideo.update).toHaveBeenNthCalledWith(
         3,
-        'UPDATE videos SET file_size = ? WHERE id = ?',
-        {
-          replacements: [5000, 3],
-          type: 'UPDATE'
-        }
+        { fileSize: 5000 },
+        { where: { id: 3 } },
       );
     });
 
@@ -611,14 +588,11 @@ describe('FileCheckModule', () => {
         { id: 1, removed: false }
       ];
 
-      await fileCheckModule.applyVideoUpdates(mockSequelize, mockSequelizeLib, updates);
+      await fileCheckModule.applyVideoUpdates(updates);
 
-      expect(mockSequelize.query).toHaveBeenCalledWith(
-        'UPDATE videos SET removed = ? WHERE id = ?',
-        {
-          replacements: [0, 1],
-          type: 'UPDATE'
-        }
+      expect(mockVideo.update).toHaveBeenCalledWith(
+        { removed: false },
+        { where: { id: 1 } },
       );
     });
 
@@ -627,14 +601,11 @@ describe('FileCheckModule', () => {
         { id: 1, removed: true }
       ];
 
-      await fileCheckModule.applyVideoUpdates(mockSequelize, mockSequelizeLib, updates);
+      await fileCheckModule.applyVideoUpdates(updates);
 
-      expect(mockSequelize.query).toHaveBeenCalledWith(
-        'UPDATE videos SET removed = ? WHERE id = ?',
-        {
-          replacements: [1, 1],
-          type: 'UPDATE'
-        }
+      expect(mockVideo.update).toHaveBeenCalledWith(
+        { removed: true },
+        { where: { id: 1 } },
       );
     });
 
@@ -643,9 +614,9 @@ describe('FileCheckModule', () => {
         { id: 1 }
       ];
 
-      await fileCheckModule.applyVideoUpdates(mockSequelize, mockSequelizeLib, updates);
+      await fileCheckModule.applyVideoUpdates(updates);
 
-      expect(mockSequelize.query).not.toHaveBeenCalled();
+      expect(mockVideo.update).not.toHaveBeenCalled();
     });
 
     test('should handle large file sizes', async () => {
@@ -654,14 +625,11 @@ describe('FileCheckModule', () => {
         { id: 1, fileSize: largeSize }
       ];
 
-      await fileCheckModule.applyVideoUpdates(mockSequelize, mockSequelizeLib, updates);
+      await fileCheckModule.applyVideoUpdates(updates);
 
-      expect(mockSequelize.query).toHaveBeenCalledWith(
-        'UPDATE videos SET file_size = ? WHERE id = ?',
-        {
-          replacements: [largeSize, 1],
-          type: 'UPDATE'
-        }
+      expect(mockVideo.update).toHaveBeenCalledWith(
+        { fileSize: largeSize },
+        { where: { id: 1 } },
       );
     });
 
@@ -670,14 +638,11 @@ describe('FileCheckModule', () => {
         { id: 1, fileSize: 0 }
       ];
 
-      await fileCheckModule.applyVideoUpdates(mockSequelize, mockSequelizeLib, updates);
+      await fileCheckModule.applyVideoUpdates(updates);
 
-      expect(mockSequelize.query).toHaveBeenCalledWith(
-        'UPDATE videos SET file_size = ? WHERE id = ?',
-        {
-          replacements: [0, 1],
-          type: 'UPDATE'
-        }
+      expect(mockVideo.update).toHaveBeenCalledWith(
+        { fileSize: 0 },
+        { where: { id: 1 } },
       );
     });
 
@@ -687,10 +652,10 @@ describe('FileCheckModule', () => {
       ];
 
       const error = new Error('Database connection failed');
-      mockSequelize.query.mockRejectedValueOnce(error);
+      mockVideo.update.mockRejectedValueOnce(error);
 
       await expect(
-        fileCheckModule.applyVideoUpdates(mockSequelize, mockSequelizeLib, updates)
+        fileCheckModule.applyVideoUpdates(updates)
       ).rejects.toThrow('Database connection failed');
     });
 
@@ -699,13 +664,11 @@ describe('FileCheckModule', () => {
         { id: 1, filePath: '/videos/channel/video [abc123].mkv', fileSize: 5000, removed: false }
       ];
 
-      await fileCheckModule.applyVideoUpdates(mockSequelize, mockSequelizeLib, updates);
+      await fileCheckModule.applyVideoUpdates(updates);
 
-      expect(mockSequelize.query).toHaveBeenCalledWith(
-        'UPDATE videos SET file_path = ?, file_size = ?, removed = ? WHERE id = ?',
-        expect.objectContaining({
-          replacements: ['/videos/channel/video [abc123].mkv', 5000, 0, 1]
-        })
+      expect(mockVideo.update).toHaveBeenCalledWith(
+        { filePath: '/videos/channel/video [abc123].mkv', fileSize: 5000, removed: false },
+        { where: { id: 1 } },
       );
     });
 
@@ -715,15 +678,15 @@ describe('FileCheckModule', () => {
         { id: 2, fileSize: 3000 }
       ];
 
-      mockSequelize.query
+      mockVideo.update
         .mockRejectedValueOnce(new Error('Update failed'))
         .mockResolvedValueOnce();
 
       await expect(
-        fileCheckModule.applyVideoUpdates(mockSequelize, mockSequelizeLib, updates)
+        fileCheckModule.applyVideoUpdates(updates)
       ).rejects.toThrow('Update failed');
 
-      expect(mockSequelize.query).toHaveBeenCalledTimes(1);
+      expect(mockVideo.update).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -753,29 +716,15 @@ describe('FileCheckModule', () => {
         return Promise.reject({ code: 'ENOENT' });
       });
 
-      const mockSequelize = {
-        query: jest.fn()
-      };
-
-      const mockSequelizeLib = {
-        QueryTypes: {
-          UPDATE: 'UPDATE'
-        }
-      };
-
       const checkResult = await fileCheckModule.checkVideoFiles(videos);
 
       expect(checkResult.updates).toHaveLength(2);
       expect(checkResult.videos[0].fileSize).toBe('1500');
       expect(checkResult.videos[1].removed).toBe(true);
 
-      await fileCheckModule.applyVideoUpdates(
-        mockSequelize,
-        mockSequelizeLib,
-        checkResult.updates
-      );
+      await fileCheckModule.applyVideoUpdates(checkResult.updates);
 
-      expect(mockSequelize.query).toHaveBeenCalledTimes(2);
+      expect(mockVideo.update).toHaveBeenCalledTimes(2);
     });
   });
 });
