@@ -160,7 +160,9 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete, isEnriching = fa
 
   const getChipColor = (): 'default' | 'success' | 'warning' | 'error' => {
     if (video.isAlreadyDownloaded) return 'warning';
-    if (video.isMembersOnly) return 'error';
+    if (video.isMembersOnly) {
+      return video.canDownloadMembersOnly ? 'success' : 'error';
+    }
     return 'default';
   };
 
@@ -238,7 +240,10 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete, isEnriching = fa
       return `${video.videoTitle} - Already downloaded`;
     }
     if (video.isMembersOnly) {
-      return `${video.videoTitle} - Members-only content (cannot download)`;
+      if (video.canDownloadMembersOnly) {
+        return `${video.videoTitle} - Members-only content (Access confirmed)`;
+      }
+      return `${video.videoTitle} - Members-only content (Account lacks access)`;
     }
     return video.videoTitle;
   };

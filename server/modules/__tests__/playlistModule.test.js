@@ -11,6 +11,13 @@ jest.mock('../../db', () => ({
   sequelize: { query: jest.fn().mockResolvedValue([]), transaction: jest.fn(async (action) => action({})) },
   Sequelize: { QueryTypes: { SELECT: 'SELECT' } },
 }));
+jest.mock('../configModule', () => ({
+  getConfig: jest.fn(() => ({})),
+  directoryPath: '/mock/youtube/output',
+  ffmpegPath: '/usr/bin/ffmpeg',
+  getCookiesPath: jest.fn(() => null),
+  on: jest.fn(),
+}));
 jest.mock('../channelModule', () => ({
   upsertChannel: jest.fn(),
 }));
@@ -953,6 +960,8 @@ describe('playlistModule', () => {
       await promise;
 
       expect(flatPlaylistSpawn).toHaveBeenCalledWith('yt-dlp', [
+        '-4',
+        '--paths', 'temp:/mock/youtube/output/.youtarr_tmp',
         '--flat-playlist', '--dump-json',
         '--playlist-end', '5000',
         'https://u',

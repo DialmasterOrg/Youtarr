@@ -17,6 +17,8 @@ const { buildYtdlpEnv } = require('./ytdlpEnvBuilder');
 const DownloadTimeoutController = require('./DownloadTimeoutController');
 const { YtdlpErrorTracker } = require('./YtdlpErrorTracker');
 
+const videoValidationModule = require('../videoValidationModule');
+
 // Node fires 'exit' before stdout/stderr have necessarily drained; 'close'
 // fires once they have. We finalize on 'close', bounded by this timeout in
 // case an orphaned ffmpeg or post-process child keeps the pipes open.
@@ -66,6 +68,7 @@ class DownloadExecutor {
   async persistMembersOnlyAvailability(youtubeId) {
     if (!youtubeId) return;
     try {
+      videoValidationModule.recordAccessDenied(youtubeId);
       await ChannelVideo.update(
         { availability: 'subscriber_only' },
         { where: { youtube_id: youtubeId } },

@@ -121,8 +121,12 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
         return false;
       }
 
-      if (data.isMembersOnly) {
-        setErrorMessage('This video is members-only and cannot be downloaded.');
+      if (data.isMembersOnly && !data.canDownloadMembersOnly) {
+        if (data.accessState === 'access_denied') {
+          setErrorMessage('This video is members-only and your configured account does not have membership access.');
+        } else {
+          setErrorMessage('This video is members-only and requires valid cookies from an account with channel access.');
+        }
         return false;
       }
 
@@ -133,7 +137,9 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
           ...data.metadata,
           media_type: data.metadata.media_type || 'video',
           isAlreadyDownloaded: data.isAlreadyDownloaded || false,
-          isMembersOnly: false  // Always false since we return early if true
+          isMembersOnly: data.isMembersOnly || false,
+          canDownloadMembersOnly: data.canDownloadMembersOnly,
+          accessState: data.accessState,
         };
 
         const alreadyInList = validatedVideos.some(v => v.youtubeId === videoInfo.youtubeId);

@@ -4,6 +4,7 @@ jest.mock('../../models', () => ({
   Channel: { findOne: jest.fn() },
 }));
 jest.mock('../downloadModule', () => ({ doSpecificDownloads: jest.fn() }));
+jest.mock('../configModule', () => ({ hasUsableCookies: jest.fn() }));
 jest.mock('../../logger', () => ({
   info: jest.fn(),
   debug: jest.fn(),
@@ -14,6 +15,7 @@ jest.mock('../../logger', () => ({
 const ChannelVideo = require('../../models/channelvideo');
 const { Video, Channel } = require('../../models');
 const downloadModule = require('../downloadModule');
+const configModule = require('../configModule');
 const channelDownloadAllModule = require('../channelDownloadAllModule');
 
 const CHANNEL_ID = 'UC123';
@@ -35,6 +37,7 @@ beforeEach(() => {
   Video.findAll.mockResolvedValue([]);
   Channel.findOne.mockResolvedValue(channelRow);
   downloadModule.doSpecificDownloads.mockImplementation(async ({ body }) => ({ queued: body.urls.length }));
+  configModule.hasUsableCookies.mockReturnValue(false);
 });
 
 describe('getDownloadableVideos', () => {
@@ -75,6 +78,15 @@ describe('getDownloadableVideos', () => {
     const result = await channelDownloadAllModule.getDownloadableVideos(CHANNEL_ID, 'videos');
 
     expect(result.map((v) => v.youtube_id)).toEqual(['ok1', 'ok2']);
+  });
+
+  it('includes members-only videos when usable cookies are configured', async () => {
+    configModule.hasUsableCookies.mockReturnValue(true);
+    ChannelVideo.findAll.mockResolvedValue([cv('members', { availability: 'subscriber_only' })]);
+
+    const result = await channelDownloadAllModule.getDownloadableVideos(CHANNEL_ID, 'videos');
+
+    expect(result.map((v) => v.youtube_id)).toEqual(['members']);
   });
 
   it('excludes every previously downloaded video, including deleted ones', async () => {

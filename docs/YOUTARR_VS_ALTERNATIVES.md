@@ -91,7 +91,7 @@ Legend: ✅ supported, ❌ not supported, ⚠️ partial/caveat, "unclear" = not
 | Backup / restore | ✅ In-app backup & restore scripts | ⚠️ File-level (copy `/config`) | ⚠️ Documented manual multi-step procedure |
 | Responsive / mobile-friendly UI | ✅ Responsive; mobile screenshots | ⚠️ Likely responsive (Tailwind); not explicitly claimed | ✅ |
 | Live-stream / premiere handling | ⚠️ Streams in per-tab controls; in-progress stream handling not supported | ✅ Per-source shorts/livestream rules | ✅ Streams as a separate per-channel tab; disable via page size 0 |
-| Member-only channel content | ❌ | ⚠️ Via cookies; distinguished for retry logic | ⚠️ Works implicitly if cookie has membership |
+| Member-only channel content | ⚠️ Via cookies from an account with membership | ⚠️ Via cookies; distinguished for retry logic | ⚠️ Works implicitly if cookie has membership |
 
 [^1]: The persistent `cookies.txt` is intended for a throwaway account, since download cookies risk suspension and rotate quickly on active accounts. The one-time cookies file is used only for bulk channel import and deleted immediately after, so you can safely import from your real account.
 

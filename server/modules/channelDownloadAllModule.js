@@ -5,6 +5,8 @@ const { channelDownloadAllJobLabel } = require('./download/jobTypes');
 const { MEDIA_TAB_TYPE_MAP } = require('./tabsUtils');
 const logger = require('../logger');
 const videoActivity = require('./download/videoActivity');
+const configModule = require('./configModule');
+const videoValidationModule = require('./videoValidationModule');
 
 const WATCH_URL_PREFIX = 'https://www.youtube.com/watch?v=';
 
@@ -24,12 +26,12 @@ class ChannelDownloadAllModule {
       attributes: ['youtube_id', 'duration', 'availability', 'live_status'],
     });
 
-    // Mirror the yt-dlp manual-download match filter
-    // (availability!=subscriber_only & !is_live & live_status!=is_upcoming)
-    // so the preview count matches what yt-dlp will accept.
+    // Mirror the yt-dlp manual-download match filter so the preview count
+    // matches what yt-dlp will accept. Exclude explicit access denials.
+    const allowMembersOnly = configModule.hasUsableCookies();
     const candidates = rows.filter(
       (row) =>
-        row.availability !== 'subscriber_only' &&
+        (allowMembersOnly ? !videoValidationModule.isAccessDenied(row.youtube_id) : row.availability !== 'subscriber_only') &&
         row.live_status !== 'is_live' &&
         row.live_status !== 'is_upcoming'
     );

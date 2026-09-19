@@ -5,6 +5,8 @@ const { sequelize, Sequelize } = require('../db');
 const { Playlist, PlaylistVideo, Channel } = require('../models');
 const youtubeApi = require('./youtubeApi');
 const { MAX_PLAYLIST_VIDEOS } = require('./playlistConstants');
+const configModule = require('./configModule');
+const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 
 // yt-dlp's flat-playlist listing still returns private/deleted/members-only
 // videos but strips their metadata: the title comes back null (current yt-dlp)
@@ -54,7 +56,9 @@ class PlaylistModule {
 
   async _getPlaylistMetadata(url, { skipWebpage = false } = {}) {
     return new Promise((resolve, reject) => {
+      const config = configModule.getConfig();
       const args = [
+        ...YtdlpCommandBuilder.buildCommonArgs(config, { skipSleepRequests: true }),
         '--skip-download',
         '--dump-single-json',
         '--flat-playlist',
@@ -465,12 +469,17 @@ class PlaylistModule {
   // is also passed.
   _spawnFlatPlaylist(url, { playlistEnd, skipWebpage = false } = {}) {
     return new Promise((resolve, reject) => {
-      const args = ['--flat-playlist', '--dump-json'];
+      const config = configModule.getConfig();
+      const args = [
+        ...YtdlpCommandBuilder.buildCommonArgs(config, { skipSleepRequests: true }),
+        '--flat-playlist',
+        '--dump-json',
+      ];
       if (playlistEnd != null) {
         args.push('--playlist-end', String(playlistEnd));
       }
       if (skipWebpage) {
-        args.push('--extractor-args', 'youtubetab:skip=webpage');
+        args.push('--extractor-args', configModule.getCookiesPath() ? 'youtubetab:skip=webpage,authcheck' : 'youtubetab:skip=webpage');
       }
       args.push(url);
       const child = spawn('yt-dlp', args);

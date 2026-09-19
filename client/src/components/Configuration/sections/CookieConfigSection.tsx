@@ -67,7 +67,7 @@ export const CookieConfigSection: React.FC<CookieConfigSectionProps> = ({
         <AlertTitle>Security Warning</AlertTitle>
         <Typography variant="body2" style={{ marginBottom: 16 }}>
           Cookie files contain authentication information for your Google account.
-          We strongly recommend using a throwaway account instead of your main account.
+          We recommend using a throwaway account for standard downloads. If you wish to download members-only content, the cookies must belong to the account holding the active channel membership.
         </Typography>
         <Typography variant="body2">
           Learn more about cookie security:{' '}
@@ -82,8 +82,7 @@ export const CookieConfigSection: React.FC<CookieConfigSectionProps> = ({
 
       <Alert severity="info" style={{ marginBottom: 16 }}>
         <Typography variant="body2">
-          Cookies help bypass YouTube's bot detection. If you encounter "Sign in to confirm you're not a bot" errors,
-          enabling cookies can resolve the issue.
+          Cookies help bypass YouTube's bot detection and enable downloading members-only videos when the account holds an active channel membership.
         </Typography>
       </Alert>
 

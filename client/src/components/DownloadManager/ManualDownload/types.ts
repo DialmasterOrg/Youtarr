@@ -9,6 +9,8 @@ export interface VideoInfo {
   availability?: string;
   isAlreadyDownloaded: boolean;
   isMembersOnly: boolean;
+  canDownloadMembersOnly?: boolean;
+  accessState?: string;
   media_type?: string;
   isBulkImport?: boolean;
 }
@@ -27,6 +29,8 @@ export interface ValidationResponse {
   isValidUrl: boolean;
   isAlreadyDownloaded: boolean;
   isMembersOnly: boolean;
+  canDownloadMembersOnly?: boolean;
+  accessState?: string;
   metadata?: {
     youtubeId: string;
     url: string;

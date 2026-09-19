@@ -1,5 +1,6 @@
 const ytDlpRunner = require('./ytDlpRunner');
 const archiveModule = require('./archiveModule');
+const configModule = require('./configModule');
 const logger = require('../logger');
 const ChannelVideo = require('../models/channelvideo');
 const youtubeUrlParser = require('./youtubeUrlParser');
@@ -7,7 +8,22 @@ const youtubeUrlParser = require('./youtubeUrlParser');
 class VideoValidationModule {
   constructor() {
     this.cache = new Map();
+    this.deniedAccessSet = new Set();
     this.cacheTTL = 5 * 60 * 1000;
+    if (typeof configModule.on === 'function') {
+      configModule.on('change', () => {
+        this.cache.clear();
+        this.deniedAccessSet.clear();
+      });
+    }
+  }
+
+  recordAccessDenied(youtubeId) {
+    if (youtubeId) this.deniedAccessSet.add(youtubeId);
+  }
+
+  isAccessDenied(youtubeId) {
+    return youtubeId ? this.deniedAccessSet.has(youtubeId) : false;
   }
 
   /**
@@ -82,6 +98,11 @@ class VideoValidationModule {
    */
   toValidationResponse(videoId, metadata, isDuplicate) {
     const isMembersOnly = metadata.availability === 'subscriber_only';
+    const hasCookies = configModule.hasUsableCookies();
+    const canDownloadMembersOnly = isMembersOnly && hasCookies;
+    const accessState = isMembersOnly
+      ? (canDownloadMembersOnly ? 'access_confirmed' : 'no_cookies')
+      : 'public';
     const availabilityProvided = Boolean(metadata.availability);
 
     const contentRating = metadata.contentRating || metadata.content_rating || null;
@@ -91,6 +112,7 @@ class VideoValidationModule {
       isValidUrl: true,
       isAlreadyDownloaded: isDuplicate,
       isMembersOnly: isMembersOnly,
+      ...(isMembersOnly ? { canDownloadMembersOnly, accessState } : {}),
       metadata: {
         youtubeId: videoId,
         url: `https://www.youtube.com/watch?v=${videoId}`,
@@ -261,12 +283,16 @@ class VideoValidationModule {
         // Extract video ID from error message if possible, or use the one we parsed from URL
         const videoIdMatch = error.message.match(/\[youtube\]\s+([a-zA-Z0-9_-]{11}):/);
         const extractedVideoId = videoIdMatch ? videoIdMatch[1] : videoId;
+        this.recordAccessDenied(extractedVideoId);
 
-        // Return a valid response indicating it's members-only
+        // Return a response indicating members-only where access was denied by YouTube
         const membersOnlyResponse = {
           isValidUrl: true,
           isAlreadyDownloaded: false,
           isMembersOnly: true,
+          canDownloadMembersOnly: false,
+          accessState: 'access_denied',
+          error: 'YouTube denied membership access for this video with the current cookies.',
           metadata: {
             youtubeId: extractedVideoId,
             url: `https://www.youtube.com/watch?v=${extractedVideoId}`,
