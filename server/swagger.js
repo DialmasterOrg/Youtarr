@@ -3,6 +3,28 @@ const swaggerUi = require('swagger-ui-express');
 const fs = require('fs');
 const path = require('path');
 
+/**
+ * Return the JavaScript route sources used by swagger-jsdoc in a stable order.
+ * Scanning the directory keeps new annotated routes from being silently omitted
+ * and avoids platform-specific glob ordering.
+ */
+const discoverSwaggerFiles = (fileSystem = fs) => {
+  const routeDir = path.join(__dirname, 'routes');
+  // Some isolated server consumers provide a deliberately minimal filesystem
+  // adapter. Keep server initialization working there; normal Node runtimes and
+  // the documentation build always take the complete discovery path below.
+  if (typeof fileSystem.readdirSync !== 'function') {
+    return [path.join(__dirname, 'server.js')];
+  }
+
+  const routeFiles = fileSystem.readdirSync(routeDir)
+    .filter((fileName) => fileName.endsWith('.js'))
+    .sort()
+    .map((fileName) => path.join(routeDir, fileName));
+
+  return [path.join(__dirname, 'server.js'), ...routeFiles];
+};
+
 // Try to read version from package.json, fall back to 'unknown' if not available
 let appVersion = 'unknown';
 try {
@@ -108,21 +130,8 @@ const options = {
       },
     ],
   },
-  // Use absolute paths based on __dirname to work in both local dev and Docker
-  apis: [
-    path.join(__dirname, 'server.js'),
-    path.join(__dirname, 'routes', 'auth.js'),
-    path.join(__dirname, 'routes', 'channels.js'),
-    path.join(__dirname, 'routes', 'config.js'),
-    path.join(__dirname, 'routes', 'health.js'),
-    path.join(__dirname, 'routes', 'jobs.js'),
-    path.join(__dirname, 'routes', 'plex.js'),
-    path.join(__dirname, 'routes', 'setup.js'),
-    path.join(__dirname, 'routes', 'videos.js'),
-    path.join(__dirname, 'routes', 'videoSearch.js'),
-    path.join(__dirname, 'routes', 'apikeys.js'),
-    path.join(__dirname, 'routes', 'playlists.js'),
-  ],
+  // Use absolute paths based on __dirname to work in both local dev and Docker.
+  apis: discoverSwaggerFiles(),
 };
 
 const swaggerSpec = swaggerJsdoc(options);
@@ -141,5 +150,4 @@ const setupSwagger = (app) => {
   });
 };
 
-module.exports = { setupSwagger, swaggerSpec };
-
+module.exports = { setupSwagger, swaggerSpec, discoverSwaggerFiles };
