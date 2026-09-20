@@ -7,6 +7,7 @@ Before setting up Youtarr, ensure you have:
 1. **Docker & Docker Compose** installed on your system
 2. **Bash Shell** (Git Bash for Windows users)
 3. **Git** to clone the repository
+4. Some network and VPN knowledge if using Gluetun
 
 ## Quick Start Guide
 
@@ -60,7 +61,7 @@ If you prefer to use standard `docker compose up` commands:
    cp .env.example .env
    ```
 
-3. **Edit the .env file**:
+4. **Edit the .env file**:
    ```bash
    vim .env  # or use your preferred editor
    ```
@@ -69,6 +70,9 @@ If you prefer to use standard `docker compose up` commands:
    ```bash
    YOUTUBE_OUTPUT_DIR=/path/to/your/videos
    ```
+   
+> [!NOTE]
+> If using Gluetun, you must set all the required variables, or else it will fail.
 
    Optionally configure other settings:
    - `YOUTARR_HOST_PORT=3087` - Change this if you need the web interface on a different host port
@@ -81,7 +85,7 @@ If you prefer to use standard `docker compose up` commands:
 
    See: [ENVIRONMENT VARIABLES](ENVIRONMENT_VARIABLES.md) for more details
 
-4. **Start with Docker Compose**:
+6. **Start with Docker Compose**:
    ```bash
    docker compose up -d
    ```
@@ -92,23 +96,25 @@ If you prefer to use standard `docker compose up` commands:
    > ```
    > If you already have data in `./database/`, use `./scripts/migrate-to-named-volume.sh` instead. See [Database Management](DATABASE.md#migrating-from-bind-mount-to-named-volume) and [Troubleshooting](TROUBLESHOOTING.md#docker-desktop--arm-incorrect-information-in-file-errors) for details.
 
-5. **Access the web interface**:
+7. **Access the web interface**:
    - Navigate to `http://localhost:3087` (or your server's LAN IP)
    - If you set preset credentials in .env, use those to log in
    - If not, you'll be prompted to complete the setup wizard using the one-time token from `docker logs youtarr` or `config/setup-token`
    - Configure Plex (and optionally Jellyfin or Emby for playlist sync) and other settings from the Settings page
 
-> **Important**: Ensure the path you assign to `YOUTUBE_OUTPUT_DIR` already exists on the host and is writable before starting the stack. Otherwise Docker will create it as root-owned and the container may not be able to write downloads.
+> [!IMPORTANT]
+> Ensure the path you assign to `YOUTUBE_OUTPUT_DIR` already exists on the host and is writable before starting the stack. Otherwise Docker will create it as root-owned, and the container may not be able to write downloads.
 
 This method gives you direct control over environment variables and compose files, but it is not identical to `./start.sh`: plain `docker compose up -d` uses the legacy bind-mounted database unless you include or pin `docker-compose.arm.yml`.
 
 ### Method 3: Manual Setup Without Git (Advanced Users Only)
 
+> [!WARNING]
 > **Not Recommended**: This method requires manual directory creation, permission management, and lacks helper scripts. It is more error-prone and provides limited community support.
 >
 > **For advanced users only.** If you cannot clone the repository (e.g., Portainer, TrueNAS, limited Git access), see [Manual Docker Setup Without Git](DOCKER.md#manual-setup-without-git-clone) in the Docker documentation.
-
-Most users should use Method 1 or 2 above for the best experience and easiest updates.
+>
+> Most users should use Method 1 or 2 above for the best experience and easiest updates.
 
 ## Authentication
 
@@ -153,7 +159,7 @@ The `config/complete.list` file tracks all downloaded videos and prevents re-dow
 
 **Do Not Rename or Move Files**
 
-Videos must retain their `[youtubeid].mp4` filename and remain in the Youtarr configured mount. Moving or renaming files will cause Youtarr to mark them as "missing" from disk.
+Videos must retain their `[youtubeid].mp4` filename and remain in the Youtarr-configured mount. Moving or renaming files will cause Youtarr to mark them as "missing" from disk.
 If videos are moved WITHIN the mount, on restart, Youtarr will attempt to find them, but do so at your own risk.
 
 **Format**: All videos download as MP4 with comprehensive embedded metadata (title, genre, studio, keywords) and NFO files for maximum media server compatibility.
@@ -169,7 +175,7 @@ If videos are moved WITHIN the mount, on restart, Youtarr will attempt to find t
 
 **Docker on macOS without Docker Desktop** (e.g., Colima): Use the Mac's LAN IP (e.g., `192.168.x.x`) or `host.lima.internal`.
 
-**Docker on Linux**: Use the host's LAN IP (e.g., `192.168.x.x`). `host.docker.internal` normally resolves to the Docker bridge and Plex may not be listening there.
+**Docker on Linux**: Use the host's LAN IP (e.g., `192.168.x.x`). `host.docker.internal` normally resolves to the Docker bridge, and Plex may not be listening there.
 
 ### Content Filtering
 
