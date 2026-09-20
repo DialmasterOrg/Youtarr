@@ -49,6 +49,7 @@ https://github.com/user-attachments/assets/a80548fc-bcf9-4ad0-889c-dbd5aac250ee
 - **Unraid Ready**: Community Applications template (via DialmasterOrg repo) with headless-friendly credential presets
 - **Powered by yt-dlp**: Uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) under the hood for YouTube integration and downloads
 - **Content Ratings**: Add per-video and per-channel content ratings (normalized to common media-server values like `G`, `PG`, `PG-13`, `R`, `NC-17`, `TV-*`). Ratings can be set per-download, via channel defaults, or derived from yt-dlp metadata; they show up as badges and can be used for automated policies.
+- **Gluetun Integration**: Dedicated Docker Compose file with Gluetun integration
 
 ## How Youtarr compares
 
@@ -58,11 +59,14 @@ Youtarr predates [Pinchflat](https://github.com/kieraneglin/pinchflat) (first co
 
 You'll need Docker, Docker Compose, Git, and a Bash shell (Git Bash on Windows). See the [Installation Guide](docs/INSTALLATION.md) for prerequisites, install methods, initial setup, and updating.
 
+> [!NOTE]
 > **Heads up:** Youtarr runs exclusively via Docker; direct `npm start`/Node deployments are unsupported.
 
+> [!NOTE]
 > Want to try unreleased features? See [Using Development Builds](docs/DEVELOPMENT.md#using-development-builds) for the bleeding-edge `dev-latest` image.
 
-> **Database note for Docker Desktop/ARM/NAS users:** Fresh installs started with `./start.sh` use Docker named-volume storage for MariaDB. Existing bind-mounted installs and plain `docker compose up -d` installs may use `./database`; on virtualized filesystems this can be risky for MariaDB schema migrations. If you see `Table ... doesn't exist in engine` or `Incorrect information in file` errors, or if you want to proactively migrate, see [Database Management](docs/DATABASE.md#migrating-from-bind-mount-to-named-volume).
+> [!NOTE]
+> **Database note for Docker Desktop/ARM/NAS users:** Fresh installs started with `./start.sh` use Docker named-volume storage for MariaDB. Existing bind-mounted installs and plain `docker compose up -d` installs may use `./database`; on virtualized filesystems, this can be risky for MariaDB schema migrations. If you see `Table ... doesn't exist in engine` or `Incorrect information in file` errors, or if you want to proactively migrate, see [Database Management](docs/DATABASE.md#migrating-from-bind-mount-to-named-volume).
 
 ## Documentation
 
