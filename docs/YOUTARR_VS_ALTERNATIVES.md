@@ -87,7 +87,7 @@ Legend: ✅ supported, ❌ not supported, ⚠️ partial/caveat, "unclear" = not
 | REST/GraphQL API | ✅ 40+ endpoints, Swagger UI at `/swagger`, API keys with rate-limiting | ❌ Open feature request | ✅ REST + OpenAPI docs at `/api/docs/` |
 | Multi-user / RBAC | ❌ Single admin + API keys | ❌ Single HTTP basic-auth user | ⚠️ Superuser/staff/read-only roles; library is still shared across users |
 | Apprise notifications | ✅ | ✅ | ✅ |
-| Cookies (private/unlisted/members-only) | ✅ Persistent `cookies.txt` for downloads + separate one-time cookies file for bulk import (auto-deleted after use) [^1]; transient 403 failures retry automatically, persistent ones get a plain-language explanation | ✅ Three modes: Disabled / When Needed / All Ops | ✅ Plus PO-token provider support for bot-detection bypass |
+| Cookies (private/unlisted/members-only) | ✅ Persistent `cookies.txt` for downloads + separate one-time cookies file for bulk import (auto-deleted after use) [^1]; retryable download failures retry automatically, persistent ones get a plain-language explanation | ✅ Three modes: Disabled / When Needed / All Ops | ✅ Plus PO-token provider support for bot-detection bypass |
 | Backup / restore | ✅ In-app backup & restore scripts | ⚠️ File-level (copy `/config`) | ⚠️ Documented manual multi-step procedure |
 | Responsive / mobile-friendly UI | ✅ Responsive; mobile screenshots | ⚠️ Likely responsive (Tailwind); not explicitly claimed | ✅ |
 | Live-stream / premiere handling | ⚠️ Streams in per-tab controls; in-progress stream handling not supported | ✅ Per-source shorts/livestream rules | ✅ Streams as a separate per-channel tab; disable via page size 0 |

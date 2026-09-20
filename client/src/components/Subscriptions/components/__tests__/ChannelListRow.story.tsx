@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router-dom';
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import ChannelListRow from '../ChannelListRow';
@@ -20,12 +21,12 @@ const channel: Channel = {
 
 const meta: Meta<typeof ChannelListRow> = {
   title: 'Components/Subscriptions/ChannelListRow',
+  decorators: [(Story) => <MemoryRouter><Story /></MemoryRouter>],
   component: ChannelListRow,
   args: {
     channel,
     isMobile: false,
     globalPreferredResolution: '1080p',
-    onNavigate: fn(),
     onDelete: fn(),
     onRegexClick: fn(),
   },
@@ -45,6 +46,6 @@ export const Desktop: Story = {
     await expect(args.onRegexClick).toHaveBeenCalled();
 
     await userEvent.click(canvas.getByTestId(`channel-list-row-${channel.channel_id}`));
-    await expect(args.onNavigate).toHaveBeenCalledTimes(1);
+    await expect(canvas.getByRole('link')).toHaveAttribute('href', `/channel/${channel.channel_id}`);
   },
 };

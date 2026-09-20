@@ -40,9 +40,9 @@ class WatchStatusQueries {
   // Shared qualifying-row conditions for the SQL probes below: played rows,
   // restricted per watchStatusWatchedRule ('any' counts every synced user,
   // 'primary' only the Plex owner + configured Jellyfin/Emby users).
-  _watchedRuleConditions() {
+  _watchedRuleConditions(videosName = 'videos') {
     const config = configModule.getConfig();
-    const conditions = ['vws.video_id = videos.id', 'vws.played = 1'];
+    const conditions = [`vws.video_id = ${videosName}.id`, 'vws.played = 1'];
     const replacements = {};
     if (config.watchStatusWatchedRule === 'primary') {
       conditions.push(
@@ -61,8 +61,8 @@ class WatchStatusQueries {
   // filter on watched state inside SQL (videosModule's paginated listing);
   // callers negate it with NOT for the "unwatched" side. Keep the rule in
   // sync with getWatchedByMap below.
-  buildWatchedExistsSql() {
-    const { conditions, replacements } = this._watchedRuleConditions();
+  buildWatchedExistsSql(videosName = 'videos') {
+    const { conditions, replacements } = this._watchedRuleConditions(videosName);
     return {
       sql: `EXISTS (SELECT 1 FROM video_watch_status vws WHERE ${conditions.join(' AND ')})`,
       replacements,

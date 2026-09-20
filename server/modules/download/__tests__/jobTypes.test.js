@@ -99,8 +99,15 @@ describe('jobTypes', () => {
 
   describe('auto-retry jobs', () => {
     it('labels jobs with the video count and pluralizes', () => {
-      expect(autoRetryJobLabel(1)).toBe(`${AUTO_RETRY_LABEL_PREFIX}1 video (HTTP 403)`);
-      expect(autoRetryJobLabel(2)).toBe(`${AUTO_RETRY_LABEL_PREFIX}2 videos (HTTP 403)`);
+      expect(autoRetryJobLabel(1)).toBe(`${AUTO_RETRY_LABEL_PREFIX}1 video`);
+      expect(autoRetryJobLabel(2)).toBe(`${AUTO_RETRY_LABEL_PREFIX}2 videos`);
+    });
+
+    it('marks anonymous auto-retry jobs as no-cookies', () => {
+      expect(autoRetryJobLabel(1, { anonymous: true }))
+        .toBe(`${AUTO_RETRY_LABEL_PREFIX}1 video (no cookies)`);
+      expect(autoRetryJobLabel(2, { anonymous: true }))
+        .toBe(`${AUTO_RETRY_LABEL_PREFIX}2 videos (no cookies)`);
     });
 
     it('treats auto-retry jobs as specific URL-list download jobs', () => {

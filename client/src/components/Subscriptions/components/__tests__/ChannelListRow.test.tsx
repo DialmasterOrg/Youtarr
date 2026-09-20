@@ -1,3 +1,4 @@
+import { useLocation } from 'react-router-dom';
 import React from 'react';
 import { act } from 'react-dom/test-utils';
 import { screen } from '@testing-library/react';
@@ -5,7 +6,15 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import ChannelListRow from '../ChannelListRow';
 import { Channel } from '../../../../types/Channel';
-import { renderWithProviders } from '../../../../test-utils';
+import { renderWithProviders as renderWithBaseProviders } from '../../../../test-utils';
+
+function CurrentPath() {
+  return <output data-testid="current-path">{useLocation().pathname}</output>;
+}
+
+function renderWithProviders(ui: React.ReactElement) {
+  return renderWithBaseProviders(<>{ui}<CurrentPath /></>);
+}
 
 jest.mock('../chips', () => ({
   QualityChip: function MockQualityChip({ videoQuality, globalPreferredResolution }: any) {
@@ -123,7 +132,6 @@ describe('ChannelListRow', () => {
     channel: mockChannel,
     isMobile: false,
     globalPreferredResolution: '1080',
-    onNavigate: jest.fn(),
     onDelete: jest.fn(),
     onRegexClick: jest.fn(),
     isPendingAddition: false,
@@ -188,32 +196,29 @@ describe('ChannelListRow', () => {
   });
 
   describe('Interactions', () => {
-    test('calls onNavigate when header is clicked on desktop', async () => {
+    test('navigates to the channel when the header is clicked on desktop', async () => {
       const user = userEvent.setup();
-      const onNavigate = jest.fn();
 
-      renderWithProviders(<ChannelListRow {...defaultProps} onNavigate={onNavigate} />);
+      renderWithProviders(<ChannelListRow {...defaultProps} />);
 
       await user.click(screen.getByTestId('channel-list-row-UC1234567890'));
 
-      expect(onNavigate).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId('current-path')).toHaveTextContent('/channel/UC1234567890');
     });
 
     test('does not navigate and shows pending chip when addition is pending', async () => {
       const user = userEvent.setup();
-      const onNavigate = jest.fn();
 
       renderWithProviders(
         <ChannelListRow
           {...defaultProps}
-          onNavigate={onNavigate}
           isPendingAddition={true}
         />
       );
 
       await user.click(screen.getByTestId('channel-list-row-UC1234567890'));
 
-      expect(onNavigate).not.toHaveBeenCalled();
+      expect(screen.getByTestId('current-path')).toHaveTextContent(/^\/$/);
       expect(screen.getByText('Pending addition')).toBeInTheDocument();
     });
 

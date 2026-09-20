@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs-extra');
 const configModule = require('../configModule');
+const directoryManager = require('../filesystem/directoryManager');
 const logger = require('../../logger');
 
 // Hidden temp directory name (dot-prefix hides from media servers like Plex/Jellyfin)
@@ -144,26 +145,34 @@ class TempPathManager {
   async cleanTempDirectory() {
     const tempBase = this.getTempBasePath();
 
+    logger.info({ tempBasePath: tempBase }, 'Cleaning temp directory');
+    await this.ensureTempDirectory();
+
     try {
-      // Check if directory exists
-      const exists = await fs.pathExists(tempBase);
-
-      if (exists) {
-        logger.info({ tempBasePath: tempBase }, 'Cleaning temp directory');
-
-        // Remove entire directory
-        await fs.remove(tempBase);
-        logger.info('Removed temp directory');
-      } else {
-        logger.debug('Temp directory doesn\'t exist, nothing to clean');
+      // Preserve the root: it may be a Docker mount point with its own permissions.
+      // Read explicitly so permission and storage errors are not treated as a missing directory.
+      const entries = await fs.readdir(tempBase);
+      const failures = [];
+      for (const entry of entries) {
+        const entryPath = path.join(tempBase, entry);
+        try {
+          await directoryManager.removeDirectoryResilient(entryPath);
+        } catch (error) {
+          failures.push(error);
+          logger.error({ err: error, entryPath }, 'Failed to remove temp entry');
+        }
       }
-
-      // Recreate empty directory
-      await fs.ensureDir(tempBase);
-      logger.info({ tempBasePath: tempBase }, 'Recreated temp directory');
+      if (failures.length > 0) {
+        throw new AggregateError(failures,
+          `Failed to clean temp directory: could not remove ${failures.length} of ${entries.length} entries`);
+      }
+      logger.info({ tempBasePath: tempBase }, 'Cleaned temp directory contents');
 
     } catch (error) {
       logger.error({ tempBasePath: tempBase, err: error }, 'Error cleaning temp directory');
+      if (error instanceof AggregateError) {
+        throw error;
+      }
       throw new Error(`Failed to clean temp directory: ${error.message}`);
     }
   }

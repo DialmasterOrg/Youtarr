@@ -8,7 +8,7 @@ const fsPromises = require('fs').promises;
 const path = require('path');
 const logger = require('../../logger');
 const { YOUTUBE_ID_PATTERN, SUBFOLDER_PREFIX, MAIN_VIDEO_FILE_PATTERN, FRAGMENT_FILE_PATTERN, CHANNEL_CLEANUP_IGNORABLE_FILES, M3U_FILE_PATTERN, APPLEDOUBLE_FILE_PATTERN } = require('./constants');
-const { sleep } = require('./fileOperations');
+const { sleep } = require('./sleep');
 
 /**
  * Decide whether a directory entry can be ignored when judging emptiness or

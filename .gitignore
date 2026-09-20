@@ -84,3 +84,8 @@ __pycache__/
 
 # Private restore staging may contain configuration and cookies
 .youtarr-restore-*/
+
+# Docusaurus generated files
+website/.generated/
+website/build/
+website/.docusaurus/

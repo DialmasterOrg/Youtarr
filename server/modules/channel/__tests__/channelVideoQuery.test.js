@@ -216,7 +216,6 @@ describe('channelVideoQuery', () => {
 
     test('should check file existence when checkFiles=true', async () => {
       const Video = require('../../../models/video');
-      const { sequelize, Sequelize } = require('../../../db');
 
       const videos = [
         { youtube_id: 'video1', toJSON: () => ({ youtube_id: 'video1' }) },
@@ -247,8 +246,6 @@ describe('channelVideoQuery', () => {
         { id: 2, youtubeId: 'video2', removed: false, fileSize: 2000, filePath: '/path/to/video2.mp4' }
       ]);
       expect(fileCheckModule.applyVideoUpdates).toHaveBeenCalledWith(
-        sequelize,
-        Sequelize,
         [{ id: 2, removed: true, fileSize: null }]
       );
       expect(result[0].added).toBe(true);

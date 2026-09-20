@@ -47,6 +47,7 @@ jobs:
           tag_prefix: v
           default_bump: patch
           release_branches: main
+          fetch_all_tags: true
           dry_run: true  # Always dry run first to get the version
 
       - name: No changes since last release
@@ -58,6 +59,16 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
+
+      - name: Prepare release notes
+        if: ${{ steps.calculate_version.outputs.new_tag != '' && steps.calculate_version.outputs.release_type != 'none' }}
+        id: release_notes
+        env:
+          NEW_TAG: ${{ steps.calculate_version.outputs.new_tag }}
+          PREVIOUS_TAG: ${{ steps.calculate_version.outputs.previous_tag }}
+          CHANGELOG_BODY: ${{ steps.calculate_version.outputs.changelog }}
+          REPO: ${{ github.repository }}
+        run: node scripts/release-notes.js prepare
 
       - name: Pin npm
         run: npm install -g npm@11.15.0 --ignore-scripts
@@ -136,8 +147,10 @@ jobs:
           tag_prefix: v
           default_bump: patch
           release_branches: main
-          custom_tag: ${{ steps.calculate_version.outputs.new_tag }}
-          create_release: false
+          # custom_tag is a version: the action adds tag_prefix itself.
+          custom_tag: ${{ steps.calculate_version.outputs.new_version }}
+          commit_sha: ${{ env.BUMP_COMMIT }}
+          fetch_all_tags: true
 
 
       - name: Create GitHub Release
@@ -148,7 +161,7 @@ jobs:
           name: Release ${{ steps.calculate_version.outputs.new_tag }}
           body: |
             ## What's Changed
-            ${{ steps.calculate_version.outputs.changelog }}
+            ${{ steps.release_notes.outputs.body }}
 
             ## Docker Image
             ```bash
@@ -161,7 +174,7 @@ jobs:
             ```
 
             ## Full Changelog
-            **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.calculate_version.outputs.previous_tag }}...${{ steps.calculate_version.outputs.new_tag }}
+            **Full Changelog**: ${{ steps.release_notes.outputs.compare_url }}
           draft: false
           prerelease: false
           token: ${{ secrets.ACTION_RUNNER_TOKEN }}
@@ -171,31 +184,10 @@ jobs:
         if: ${{ !inputs.dry_run && steps.calculate_version.outputs.release_type != 'none' }}
         env:
           NEW_TAG: ${{ steps.calculate_version.outputs.new_tag }}
-          CHANGELOG_BODY: ${{ steps.calculate_version.outputs.changelog }}
-          REPO: ${{ github.repository }}
+          CHANGELOG_ENTRY: ${{ steps.release_notes.outputs.entry }}
         run: |
-          # Create or update CHANGELOG.md
-          # Values are passed via env vars (see `env:` above) so quotes/parens
-          # in commit messages do not break bash parsing.
-          CHANGELOG_ENTRY="## [${NEW_TAG}](https://github.com/${REPO}/releases/tag/${NEW_TAG}) - $(date +%Y-%m-%d)
-
-          ${CHANGELOG_BODY}
-
-          "
-
-          if [ -f CHANGELOG.md ]; then
-            # Prepend new entry after the header
-            echo "# Changelog
-
-          $CHANGELOG_ENTRY" > CHANGELOG.tmp
-            tail -n +2 CHANGELOG.md >> CHANGELOG.tmp
-            mv CHANGELOG.tmp CHANGELOG.md
-          else
-            # Create new CHANGELOG
-            echo "# Changelog
-
-          $CHANGELOG_ENTRY" > CHANGELOG.md
-          fi
+          # Keep commit-message text in environment variables, not shell source.
+          node scripts/release-notes.js update
 
           # Commit the CHANGELOG update
           git add CHANGELOG.md
@@ -225,7 +217,7 @@ jobs:
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_ANNOUNCEMENT_WEBHOOK_URL }}
           NEW_TAG: ${{ steps.calculate_version.outputs.new_tag }}
-          CHANGELOG: ${{ steps.calculate_version.outputs.changelog }}
+          CHANGELOG: ${{ steps.release_notes.outputs.body }}
           RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/${{ steps.calculate_version.outputs.new_tag }}
         run: |
           if [ -z "$DISCORD_WEBHOOK" ]; then
@@ -233,8 +225,7 @@ jobs:
             exit 0
           fi
 
-          # Strip the leading ### [version](url) (date) header line — it's redundant with the embed title
-          CLEAN_CHANGELOG=$(echo "$CHANGELOG" | sed '1{/^### \[/d}')
+          CLEAN_CHANGELOG="$CHANGELOG"
 
           # Truncate if too long for Discord embed description (max 4096, keep under 3800 for safety)
           MAX_LEN=3800
@@ -325,22 +316,24 @@ jobs:
         if: ${{ inputs.dry_run }}
         env:
           NEW_TAG: ${{ steps.calculate_version.outputs.new_tag }}
-          PREVIOUS_TAG: ${{ steps.calculate_version.outputs.previous_tag }}
+          PREVIOUS_TAG: ${{ steps.release_notes.outputs.previous_tag }}
+          COMMIT_BASELINE: ${{ steps.calculate_version.outputs.previous_tag }}
           RELEASE_TYPE: ${{ steps.calculate_version.outputs.release_type }}
-          CHANGELOG_BODY: ${{ steps.calculate_version.outputs.changelog }}
+          CHANGELOG_ENTRY: ${{ steps.release_notes.outputs.entry }}
           DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
         run: |
           echo "🔍 DRY RUN RESULTS:"
           echo "==================="
           echo "Would have created tag: ${NEW_TAG}"
           echo "Previous tag: ${PREVIOUS_TAG}"
+          echo "Commit-analysis baseline: ${COMMIT_BASELINE}"
           echo "Bump type: ${RELEASE_TYPE}"
           echo ""
           echo "Would have created GitHub Release: ${NEW_TAG}"
           echo ""
           echo "Release Notes Preview:"
           echo "----------------------"
-          echo "${CHANGELOG_BODY}"
+          echo "${CHANGELOG_ENTRY}"
           echo ""
           echo "Docker images that would be pushed:"
           echo "  - ${DOCKERHUB_USERNAME}/youtarr:${NEW_TAG}"

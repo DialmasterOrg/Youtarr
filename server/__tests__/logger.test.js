@@ -238,7 +238,7 @@ describe('logger.js', () => {
       const transportOptions = config.transport.options;
 
       expect(transportOptions.colorize).toBe(true);
-      expect(transportOptions.translateTime).toBe('UTC:yyyy-mm-dd HH:MM:ss.l o');
+      expect(transportOptions.translateTime).toBe('SYS:yyyy-mm-dd HH:MM:ss.l o');
       expect(transportOptions.ignore).toBe('pid,hostname');
       expect(transportOptions.messageFormat).toBe('{if req.id}[{req.id}] {end}{msg}');
     });
