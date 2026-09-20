@@ -408,7 +408,7 @@ describe('ChannelSettingsModule', () => {
       expect(channelSettingsModule.validateAdditionalTags(';').valid).toBe(false);
     });
 
-    test('rejects non-string input without throwing', () => {
+    test('rejects non-string input', () => {
       expect(channelSettingsModule.validateAdditionalTags(123).valid).toBe(false);
       expect(channelSettingsModule.validateAdditionalTags(['a', 'b']).valid).toBe(false);
       expect(channelSettingsModule.validateAdditionalTags({}).valid).toBe(false);
