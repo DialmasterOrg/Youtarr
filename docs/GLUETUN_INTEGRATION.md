@@ -10,14 +10,12 @@ This is a basic guide to configuring Youtarr to use Gluetun for downloading medi
 1. Backup Youtarr and Youtarr's database (if switching)
    - While adding Gluetun and using the new Docker Compose files does not mess with Youtarr or its database, it is always recommended to back up Youtarr and its database when modifying its setup.
 2. Switching Docker Compose files
-   - Switch to a Docker Compose file with Gluetun integrated, like [docker-compose-gluetun.yml](https://github.com/DialmasterOrg/Youtarr/blob/main/docker-compose-gluetun.yml)
-3. Switching `.env` files
-   - Switch to an `.env` file with Gluetun integrated, like [.env.gluetun-example](https://github.com/DialmasterOrg/Youtarr/blob/main/.env.gluetun-example)
-4. Recreate the Youtarr container and add Gluetun by running
+   - Switch to a Docker Compose file with Gluetun integrated, like [docker-compose-gluetun.yml](/docker-compose-gluetun.yml)
+3. Recreate the Youtarr container and add Gluetun by running
    ```
     docker compose -f docker-compose-gluetun.yml up -d --force-recreate
    ```
-6. Profit!
+4. Profit!
 
 ---
 
