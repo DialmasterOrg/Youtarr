@@ -193,12 +193,17 @@ class PlexModule {
         { strong: true },
         {
           headers: {
+            // Plex can return XML for Axios's default mixed Accept header.
+            Accept: 'application/json',
             'X-Plex-Product': 'Youtarr',
             'X-Plex-Client-Identifier': configModule.getConfig().uuid,
           },
         }
       );
-      const { id, code } = response.data;
+      const { id, code } = response.data || {};
+      if (!Number.isInteger(id) || id <= 0 || typeof code !== 'string' || !code.trim()) {
+        throw new Error('Plex returned an invalid PIN response');
+      }
       const authUrl = `https://app.plex.tv/auth#?clientID=${
         configModule.getConfig().uuid
       }&code=${code}&context%5Bdevice%5D%5Bproduct%5D=Youtarr`;
@@ -223,6 +228,7 @@ class PlexModule {
     try {
       const response = await axios.get(`https://plex.tv/api/v2/pins/${pinId}`, {
         headers: {
+          Accept: 'application/json',
           'X-Plex-Client-Identifier': configModule.getConfig().uuid,
         },
       });
