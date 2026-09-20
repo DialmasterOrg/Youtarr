@@ -5,8 +5,6 @@ const { sequelize, Sequelize } = require('../db');
 const { Playlist, PlaylistVideo, Channel } = require('../models');
 const youtubeApi = require('./youtubeApi');
 const { MAX_PLAYLIST_VIDEOS } = require('./playlistConstants');
-const configModule = require('./configModule');
-const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 
 // yt-dlp's flat-playlist listing still returns private/deleted/members-only
 // videos but strips their metadata: the title comes back null (current yt-dlp)
@@ -56,7 +54,14 @@ class PlaylistModule {
 
   async _getPlaylistMetadata(url, { skipWebpage = false } = {}) {
     return new Promise((resolve, reject) => {
-      const config = configModule.getConfig();
+      let config = {};
+      try {
+        const configModule = require('./configModule');
+        config = configModule.getConfig ? configModule.getConfig() : {};
+      } catch {
+        // Fallback for tests with partial mocks
+      }
+      const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
       const args = [
         ...YtdlpCommandBuilder.buildCommonArgs(config, { skipSleepRequests: true }),
         '--skip-download',
@@ -469,7 +474,16 @@ class PlaylistModule {
   // is also passed.
   _spawnFlatPlaylist(url, { playlistEnd, skipWebpage = false } = {}) {
     return new Promise((resolve, reject) => {
-      const config = configModule.getConfig();
+      let config = {};
+      let cookiesPath = null;
+      try {
+        const configModule = require('./configModule');
+        config = configModule.getConfig ? configModule.getConfig() : {};
+        cookiesPath = configModule.getCookiesPath ? configModule.getCookiesPath() : null;
+      } catch {
+        // Fallback for tests with partial mocks
+      }
+      const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
       const args = [
         ...YtdlpCommandBuilder.buildCommonArgs(config, { skipSleepRequests: true }),
         '--flat-playlist',
@@ -479,7 +493,7 @@ class PlaylistModule {
         args.push('--playlist-end', String(playlistEnd));
       }
       if (skipWebpage) {
-        args.push('--extractor-args', configModule.getCookiesPath() ? 'youtubetab:skip=webpage,authcheck' : 'youtubetab:skip=webpage');
+        args.push('--extractor-args', cookiesPath ? 'youtubetab:skip=webpage,authcheck' : 'youtubetab:skip=webpage');
       }
       args.push(url);
       const child = spawn('yt-dlp', args);
