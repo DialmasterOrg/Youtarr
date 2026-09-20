@@ -91,6 +91,7 @@ You'll need Docker, Docker Compose, Git, and a Bash shell (Git Bash on Windows).
 - [Docker Configuration](docs/DOCKER.md) - Advanced Docker settings
 - [Development Guide](docs/DEVELOPMENT.md) - Contributing, development setup, and using bleeding-edge dev builds
 - [API Documentation](http://localhost:3087/swagger) - Interactive Swagger/OpenAPI documentation (requires running instance)
+- [Gluetun Integration](docs/GLUETUN_INTEGRATION.md) - Gluetun VPN integration for Youtarr
 
 ### Help & Support
 - [Troubleshooting Guide](docs/TROUBLESHOOTING.md) - Common issues and solutions
