@@ -844,9 +844,8 @@ class ChannelSettingsModule {
         : null;
     }
     if (settings.additional_tags !== undefined) {
-      updateData.additional_tags = settings.additional_tags
-        ? settings.additional_tags.trim()
-        : null;
+      const trimmedTags = typeof settings.additional_tags === 'string' ? settings.additional_tags.trim() : '';
+      updateData.additional_tags = trimmedTags || null;
     }
     if (settings.default_rating !== undefined) {
       updateData.default_rating = normalizedDefaultRating;
