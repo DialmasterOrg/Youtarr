@@ -1,5 +1,19 @@
 # Changelog
 
+## [v1.84.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.84.1) - 2026-09-20
+
+### Bug Fixes
+
+* request json for plex pin authentication ([1264005](https://github.com/DialmasterOrg/Youtarr/commit/12640050ad2feedd09097243a787338d5df27b8f))
+
+
+### Documentation
+
+* link documentation site in README [skip ci] ([977c594](https://github.com/DialmasterOrg/Youtarr/commit/977c594994edfda148d3a80033c309a059ae8461))
+* update CHANGELOG for v1.84.0 [skip ci] ([a035fb2](https://github.com/DialmasterOrg/Youtarr/commit/a035fb20d432c5bb4f93eb6391b041469d2e5252))
+
+**Full Changelog**: https://github.com/DialmasterOrg/Youtarr/compare/v1.84.0...v1.84.1
+
 ## [v1.84.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.84.0) - 2026-09-19
 
 ### Features
