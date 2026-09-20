@@ -182,7 +182,15 @@ class ChannelSettingsModule {
    */
   validateAdditionalTags(additionalTags) {
     // NULL or empty string is valid
-    if (!additionalTags || additionalTags.trim() === '') {
+    if (!additionalTags) {
+      return { valid: true };
+    }
+
+    if (typeof additionalTags !== 'string') {
+      return { valid: false, error: 'Additional tags must be a string.' };
+    }
+
+    if (additionalTags.trim() === '') {
       return { valid: true };
     }
 
