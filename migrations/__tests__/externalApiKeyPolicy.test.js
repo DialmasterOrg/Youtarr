@@ -20,7 +20,10 @@ describe('external API key policy migration', () => {
     await migration.up(qi, { STRING: () => 'STRING', BOOLEAN: 'BOOLEAN', INTEGER: 'INTEGER', JSON: 'JSON', DATE: 'DATE' });
     expect(qi.operations.filter(([op]) => op === 'add')).toHaveLength(14);
     expect(qi.operations.some(([, sql]) => /legacy_download/.test(sql))).toBe(true);
-    expect(qi.operations.some(([, sql]) => /JSON_ARRAY\('video'\)/.test(sql))).toBe(true);
+    expect(qi.operations).toContainEqual([
+      'query',
+      "UPDATE apikeys SET allowed_media_types = '[\"video\"]' WHERE allowed_media_types IS NULL",
+    ]);
     expect(qi.operations).toContainEqual(['change', 'allowed_media_types']);
     expect(qi.operations.some(([, sql]) => /allow_video_requests/.test(sql))).toBe(true);
 

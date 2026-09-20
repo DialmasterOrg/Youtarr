@@ -20,7 +20,7 @@ module.exports = {
     ];
     for (const [name, definition] of cols) await addColumnIfMissing(q, 'apikeys', name, definition);
     await q.sequelize.query("UPDATE apikeys SET role = 'legacy_download' WHERE role IS NULL OR role = ''");
-    await q.sequelize.query("UPDATE apikeys SET allowed_media_types = JSON_ARRAY('video') WHERE allowed_media_types IS NULL");
+    await q.sequelize.query("UPDATE apikeys SET allowed_media_types = '[\"video\"]' WHERE allowed_media_types IS NULL");
     await q.changeColumn('apikeys', 'allowed_media_types', { type: S.JSON, allowNull: false });
     for (const [column, roles] of [['allow_video_requests', "'request', 'delete', 'admin'"], ['allow_channel_requests', "'request', 'delete', 'admin'"], ['allow_delete_video_requests', "'delete', 'admin'"]]) {
       await q.sequelize.query(`UPDATE apikeys SET ${column} = CASE WHEN role IN (${roles}) THEN true ELSE false END WHERE ${column} IS NULL`);
