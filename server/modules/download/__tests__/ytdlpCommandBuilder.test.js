@@ -294,6 +294,26 @@ describe('YtdlpCommandBuilder', () => {
     });
   });
 
+  describe('buildFormatSortArgs', () => {
+    it('sorts on resolution before codec for the default preference', () => {
+      expect(YtdlpCommandBuilder.buildFormatSortArgs('default')).toEqual(['-S', 'res,vcodec:avc']);
+    });
+
+    it('sorts the same way when no preference is given', () => {
+      expect(YtdlpCommandBuilder.buildFormatSortArgs()).toEqual(['-S', 'res,vcodec:avc']);
+    });
+
+    it('adds no sort for h264 and h265, whose selectors already pin a codec', () => {
+      expect(YtdlpCommandBuilder.buildFormatSortArgs('h264')).toEqual([]);
+      expect(YtdlpCommandBuilder.buildFormatSortArgs('h265')).toEqual([]);
+    });
+
+    it('puts res ahead of vcodec, so a higher resolution beats an AVC stream below it', () => {
+      const [, sort] = YtdlpCommandBuilder.buildFormatSortArgs('default');
+      expect(sort.indexOf('res')).toBeLessThan(sort.indexOf('vcodec'));
+    });
+  });
+
   describe('buildOutputPath', () => {
     it('should always build path using temp path (staging is always enabled)', () => {
       tempPathManager.getTempBasePath.mockReturnValue('/mock/youtube/output/.youtarr_tmp');

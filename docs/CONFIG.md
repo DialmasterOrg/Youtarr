@@ -96,11 +96,11 @@ Configuration can be modified through:
 - **Type**: `string`
 - **Default**: `"default"`
 - **Options**: `"default"`, `"h264"`, `"h265"`
-- **Description**: Preferred video codec for downloads. `"default"` picks the best stream YouTube offers at the requested resolution (typically VP9 or AV1 above 1080p). `"h264"` forces H.264/AVC, which maximizes client compatibility but effectively caps resolution at 1080p because YouTube does not serve H.264 above that height. `"h265"` prefers HEVC but YouTube rarely provides it, so it almost always falls back to H.264 MP4.
+- **Description**: Preferred video codec for downloads. `"default"` takes the highest resolution YouTube offers up to the configured limit, and prefers H.264/AVC between streams of the same height, so a 1080p request gets H.264 rather than the AV1 stream YouTube also publishes in MP4. Resolution still wins over codec, so asking for 2160p gives VP9 or AV1 rather than dropping to a 1080p H.264 stream. `"h264"` forces H.264/AVC, which maximizes client compatibility but effectively caps resolution at 1080p because YouTube does not serve H.264 above that height. `"h265"` prefers HEVC but YouTube rarely provides it, so it almost always falls back to H.264 MP4.
 - **Compatibility**:
   - `h264`: Best compatibility with all devices
   - `h265`: Better compression, requires modern devices
-  - `default`: YouTube picks the stream, typically VP9 or AV1 above 1080p. Best compression, but older devices may need to transcode. (VP9 and AV1 are not selectable values for this key; they are just what YouTube serves when no codec preference is forced.)
+  - `default`: H.264 at 1080p and below, and VP9 or AV1 above that, where YouTube offers nothing else. H.264 files are noticeably larger than the AV1 equivalent at the same resolution, which is the cost of direct play on clients without AV1 decode. (VP9 and AV1 are not selectable values for this key; they are just what YouTube serves above 1080p.)
 
 ### Default Subfolder
 - **Config Key**: `defaultSubfolder`

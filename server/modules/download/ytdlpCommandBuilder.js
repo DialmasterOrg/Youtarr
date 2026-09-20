@@ -121,6 +121,24 @@ class YtdlpCommandBuilder {
     return videoFormat;
   }
 
+  /**
+   * Format-sort args for the default codec preference.
+   *
+   * [ext=mp4] no longer implies H.264: YouTube serves AV1 in MP4 as well, and
+   * yt-dlp's default sort ranks av01 above avc1, so bestvideo picks AV1. Sort
+   * on resolution first and codec second so the requested height still wins
+   * and AVC is only preferred between formats of equal height. Sorting on
+   * codec alone would pick 1080p AVC over 2160p AV1.
+   *
+   * The h264 and h265 selectors already pin a codec, so they need no sort.
+   * @param {string} videoCodec - Video codec preference
+   * @returns {string[]} - Array of yt-dlp args, empty when no sort is needed
+   */
+  static buildFormatSortArgs(videoCodec = 'default') {
+    if (videoCodec === 'h264' || videoCodec === 'h265') return [];
+    return ['-S', 'res,vcodec:avc'];
+  }
+
   // Build Sponsorblock args based on configuration
   static buildSponsorblockArgs(config) {
     const args = [];
@@ -553,6 +571,7 @@ class YtdlpCommandBuilder {
       // Clean @ prefix from uploader_id when it's used as fallback
       '--replace-in-metadata', 'uploader_id', '^@', '',
       '-f', this.buildFormatString(res, videoCodec, audioFormat),
+      ...(audioFormat === 'mp3_only' ? [] : this.buildFormatSortArgs(videoCodec)),
       // Only force MP4 remux when sources might be webm (1440p+).
       // At <=1080p the format selector already picks MP4 sources.
       ...(this.resolutionRequiresNonMp4Source(res) ? ['--merge-output-format', 'mp4'] : []),
@@ -645,6 +664,7 @@ class YtdlpCommandBuilder {
       // Clean @ prefix from uploader_id when it's used as fallback
       '--replace-in-metadata', 'uploader_id', '^@', '',
       '-f', this.buildFormatString(res, videoCodec, audioFormat),
+      ...(audioFormat === 'mp3_only' ? [] : this.buildFormatSortArgs(videoCodec)),
       // Only force MP4 remux when sources might be webm (1440p+).
       // At <=1080p the format selector already picks MP4 sources.
       ...(this.resolutionRequiresNonMp4Source(res) ? ['--merge-output-format', 'mp4'] : []),
