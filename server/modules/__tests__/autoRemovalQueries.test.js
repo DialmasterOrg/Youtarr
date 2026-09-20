@@ -16,6 +16,7 @@ describe('autoRemovalQueries', () => {
 
     mockSequelize = {
       query: jest.fn().mockResolvedValue([]),
+      dialect: {},
       col: jest.fn((name) => name),
       literal: jest.fn((sql) => sql),
       fn: jest.fn((...args) => ['fn', args]),
@@ -141,6 +142,30 @@ describe('autoRemovalQueries', () => {
       }));
     });
 
+    test('should filter out provided ids', async () => {
+      const options = autoRemovalQueries._getBaseRemovalQueryOptions({ excludeIds: [1, 2, 3] });
+
+      expect(options).toMatchObject(expect.objectContaining({
+        where: expect.objectContaining({
+          id: {
+            [MockSequelize.Op.notIn]: [1, 2, 3],
+          },
+        }),
+      }));
+    });
+
+    test('should not filter on id if none are provided', async () => {
+      const options = autoRemovalQueries._getBaseRemovalQueryOptions({ excludeIds: [] });
+
+      expect(options).not.toMatchObject(expect.objectContaining({
+        where: expect.objectContaining({
+          id: expect.objectContaining({
+            [MockSequelize.Op.notIn]: expect.anything(),
+          }),
+        }),
+      }));
+    });
+
     test('should order & filter on timeCreated', async () => {
       const options = autoRemovalQueries._getBaseRemovalQueryOptions();
 
@@ -153,6 +178,12 @@ describe('autoRemovalQueries', () => {
         order: [['timeCreated', 'DESC']],
         subQuery: false,
       }));
+    });
+
+    test('should use provided ordering direction', async () => {
+      const options = autoRemovalQueries._getBaseRemovalQueryOptions({ orderDirection: 'ASC' });
+
+      expect(options.order).toEqual([['timeCreated', 'ASC']]);
     });
   });
 
@@ -234,66 +265,104 @@ describe('autoRemovalQueries', () => {
           timeCreated: new Date('2026-01-01')
         }
       ];
-      mockSequelize.query.mockResolvedValue(rows);
+      mockVideo.findAll.mockResolvedValue(rows);
 
       const videos = await autoRemovalQueries.getWatchedRemovalCandidates();
 
       expect(videos).toEqual(rows);
       expect(mockWatchStatusQueries.buildWatchedEligibilitySql).toHaveBeenCalledWith({
-        minDaysSinceWatched: 0
+        minDaysSinceWatched: 0,
+        videosName: 'Video',
       });
-      const [sql, options] = mockSequelize.query.mock.calls[0];
-      expect(sql).toContain('videos.removed = 0');
-      expect(sql).toContain('videos.protected = 0');
-      expect(sql).toContain('EXISTS (WATCHED_PROBE)');
-      expect(sql).not.toContain(':minVideoAgeDays');
-      expect(sql).not.toContain(':excludeIds');
-      expect(options.replacements).toEqual({});
+      expect(mockVideo.findAll).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          removed: false,
+          protected: false,
+          [MockSequelize.Op.and]: expect.arrayContaining([
+            'EXISTS (WATCHED_PROBE)'
+          ]),
+        }),
+      }));
+      expect(mockVideo.findAll).not.toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          id: expect.anything(),
+        }),
+      }));
+      expect(mockVideo.findAll).not.toHaveBeenCalledWith(expect.objectContaining({
+        having: expect.objectContaining({
+          timeCreated: expect.objectContaining({
+            [MockSequelize.Op.lt]: expect.anything(),
+          }),
+        }),
+      }));
     });
 
     test('collapses multi-job videos to one row per video id', async () => {
       await autoRemovalQueries.getWatchedRemovalCandidates();
 
-      const [sql] = mockSequelize.query.mock.calls[0];
-      expect(sql).toContain('GROUP BY videos.id');
-      expect(sql).toMatch(/MAX\(COALESCE\(/);
-      expect(sql).not.toContain('DISTINCT');
+      expect(mockVideo.findAll).toHaveBeenCalledWith(expect.objectContaining({
+        attributes: expect.arrayContaining([
+          [mockSequelize.fn('MAX', 'stuff()'), 'timeCreated'],
+        ]),
+        group: 'Video.id',
+      }));
+      expect(mockVideo.findAll).not.toHaveBeenCalledWith(expect.objectContaining({
+        distinct: true,
+      }));
     });
 
     test('passes minDaysSinceWatched to the eligibility probe and merges its replacements', async () => {
       mockWatchStatusQueries.buildWatchedEligibilitySql.mockReturnValue({
-        sql: 'EXISTS (WATCHED_PROBE_7D)',
+        sql: 'EXISTS (SELECT :watchedMinDaysSinceWatched)',
         replacements: { watchedMinDaysSinceWatched: 7 }
       });
 
       await autoRemovalQueries.getWatchedRemovalCandidates({ minDaysSinceWatched: 7 });
 
       expect(mockWatchStatusQueries.buildWatchedEligibilitySql).toHaveBeenCalledWith({
-        minDaysSinceWatched: 7
+        minDaysSinceWatched: 7,
+        videosName: 'Video',
       });
-      const [sql, options] = mockSequelize.query.mock.calls[0];
-      expect(sql).toContain('EXISTS (WATCHED_PROBE_7D)');
-      expect(options.replacements).toEqual({ watchedMinDaysSinceWatched: 7 });
+      expect(mockVideo.findAll).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          [MockSequelize.Op.and]: expect.arrayContaining([
+            'EXISTS (SELECT 7)'
+          ]),
+        }),
+      }));
     });
 
     test('adds a download-age constraint on the aggregated download time when minVideoAgeDays is set', async () => {
       await autoRemovalQueries.getWatchedRemovalCandidates({ minVideoAgeDays: 30 });
 
-      const [sql, options] = mockSequelize.query.mock.calls[0];
-      expect(sql).toMatch(/HAVING timeCreated IS NOT NULL\s+AND timeCreated < DATE_SUB\(NOW\(\), INTERVAL :minVideoAgeDays DAY\)/);
-      expect(options.replacements).toEqual({ minVideoAgeDays: 30 });
+      expect(mockVideo.findAll).toHaveBeenCalledWith(expect.objectContaining({
+        having: expect.objectContaining({
+          timeCreated: {
+            [MockSequelize.Op.not]: null,
+            [MockSequelize.Op.lt]: mockSequelize.fn(
+              'DATE_SUB',
+              mockSequelize.fn('NOW'),
+              mockSequelize.literal('INTERVAL 30 DAY'),
+            ),
+          },
+        }),
+      }));
     });
 
     test('excludes the provided video ids', async () => {
       await autoRemovalQueries.getWatchedRemovalCandidates({ excludeIds: [4, 8] });
 
-      const [sql, options] = mockSequelize.query.mock.calls[0];
-      expect(sql).toContain('videos.id NOT IN (:excludeIds)');
-      expect(options.replacements).toEqual({ excludeIds: [4, 8] });
+      expect(mockVideo.findAll).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          id: {
+            [MockSequelize.Op.notIn]: [4, 8],
+          },
+        }),
+      }));
     });
 
     test('returns empty array when the query fails', async () => {
-      mockSequelize.query.mockRejectedValue(new Error('db down'));
+      mockVideo.findAll.mockRejectedValue(new Error('db down'));
 
       await expect(autoRemovalQueries.getWatchedRemovalCandidates()).resolves.toEqual([]);
       expect(mockLogger.error).toHaveBeenCalled();
@@ -302,9 +371,25 @@ describe('autoRemovalQueries', () => {
     test('excludes videos of fully protected enabled channels', async () => {
       await autoRemovalQueries.getWatchedRemovalCandidates();
 
-      const [sql] = mockSequelize.query.mock.calls[0];
-      expect(sql).toContain('LEFT JOIN channels AS protchannel ON protchannel.channel_id = videos.channel_id AND protchannel.enabled = 1');
-      expect(sql).toContain('COALESCE(protchannel.auto_removal_protected, 0) = 0');
+      expect(mockVideo.findAll).toHaveBeenCalledWith(expect.objectContaining({
+        include: expect.arrayContaining([
+          expect.objectContaining({
+            as: 'channel',
+            on: {
+              id: mockSequelize.col('Video.channel_id'),
+              enabled: true,
+            },
+          }),
+        ]),
+        where: expect.objectContaining({
+          [MockSequelize.Op.and]: expect.arrayContaining([
+            mockSequelize.where(
+              mockSequelize.fn('COALESCE', mockSequelize.col('channel.auto_removal_protected'), false),
+              false,
+            ),
+          ]),
+        }),
+      }));
     });
   });
 
