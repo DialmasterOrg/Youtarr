@@ -665,6 +665,52 @@ describe('VideosModule', () => {
       expect(result.videos[0].youtube_removed_checked_at).toBeInstanceOf(Date);
     });
 
+    test('should write the same checked-at timestamp it returns', async () => {
+      const RealDate = Date;
+      const base = RealDate.now();
+      let ticks = 0;
+      // Every no-argument construction lands a millisecond later, so two
+      // separate new Date() calls can't agree by luck.
+      global.Date = class TickingDate extends RealDate {
+        constructor(...args) {
+          if (args.length === 0) {
+            super(base + ticks++);
+          } else {
+            super(...args);
+          }
+        }
+      };
+
+      try {
+        mockVideo.count.mockResolvedValue(1);
+        mockVideo.findAll.mockResolvedValue([
+          {
+            id: 1,
+            youtubeId: 'abc123',
+            youTubeChannelName: 'Test Channel',
+            youTubeVideoName: 'Test Video',
+            filePath: '/test/output/dir/Test Channel/video [abc123].mp4',
+            fileSize: '1000',
+            removed: false,
+            youtube_removed: false,
+            youtube_removed_checked_at: null
+          }
+        ]);
+        mockVideo.aggregate.mockResolvedValue([]);
+        mockFs.stat.mockResolvedValueOnce({ size: 1000 });
+        mockVideoValidationModule.checkVideoExistsOnYoutube.mockResolvedValueOnce(true);
+
+        const result = await VideosModule.getVideosPaginated();
+
+        expect(mockVideo.update).toHaveBeenCalledWith(
+          { youtube_removed_checked_at: result.videos[0].youtube_removed_checked_at },
+          { where: { id: [1] } },
+        );
+      } finally {
+        global.Date = RealDate;
+      }
+    });
+
     test('should skip YouTube validation when recently checked', async () => {
       const twentyThreeHoursAgo = new Date(Date.now() - 23 * 60 * 60 * 1000);
       const recentIso = twentyThreeHoursAgo.toISOString();

@@ -160,6 +160,8 @@ class VideosModule {
       const youtubeUpdates = [];
       const timestampUpdates = [];
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      // One stamp for the whole pass, so the response and the rows agree.
+      const checkedAt = new Date();
 
       // Check all videos concurrently for better performance
       // Only check videos that haven't been checked in the last 24 hours
@@ -173,17 +175,16 @@ class VideosModule {
 
         if (video.youtubeId) {
           const exists = await videoValidationModule.checkVideoExistsOnYoutube(video.youtubeId);
-          const now = new Date();
 
           if (!exists) {
             logger.info({ youtubeId: video.youtubeId }, 'Video no longer exists on YouTube, marking as removed');
             video.youtube_removed = true;
-            video.youtube_removed_checked_at = now;
-            return { id: video.id, removed: true, checked_at: now };
+            video.youtube_removed_checked_at = checkedAt;
+            return { id: video.id, removed: true, checked_at: checkedAt };
           } else {
             // Video exists, just update the timestamp
-            video.youtube_removed_checked_at = now;
-            return { id: video.id, removed: false, checked_at: now };
+            video.youtube_removed_checked_at = checkedAt;
+            return { id: video.id, removed: false, checked_at: checkedAt };
           }
         }
         return null;
@@ -204,7 +205,7 @@ class VideosModule {
       // Bulk update videos table for removed videos
       if (youtubeUpdates.length > 0) {
         await Video.update(
-          { youtube_removed: true, youtube_removed_checked_at: new Date() },
+          { youtube_removed: true, youtube_removed_checked_at: checkedAt },
           { where: { id: youtubeUpdates.map(u => u.id) } }
         );
       }
@@ -212,7 +213,7 @@ class VideosModule {
       // Bulk update videos table for timestamp-only updates
       if (timestampUpdates.length > 0) {
         await Video.update(
-          { youtube_removed_checked_at: new Date() },
+          { youtube_removed_checked_at: checkedAt },
           { where: { id: timestampUpdates.map(u => u.id) } }
         );
       }
