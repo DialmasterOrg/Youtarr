@@ -195,7 +195,7 @@ class ChannelSettingsModule {
     }
 
     // Check for characters that aren't a-z, A-Z, underscore, dash, space, pipe, or some acceptable variant
-    if (/[^a-zA-Z0-9_\s\p{L}\p{Nd}|-]/u.test(additionalTags)) {
+    if (/[^a-zA-Z0-9_ \p{L}\p{Nd}|-]/u.test(additionalTags)) {
       return {
         valid: false,
         error: 'Additional tags must only contain alphanumeric characters, underscores, dashes, or spaces.'

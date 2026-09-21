@@ -408,6 +408,14 @@ describe('ChannelSettingsModule', () => {
       expect(channelSettingsModule.validateAdditionalTags(';').valid).toBe(false);
     });
 
+    test('rejects non-space whitespace characters', () => {
+      // Vertical tab and form feed are illegal in XML 1.0 and would corrupt NFO tags
+      expect(channelSettingsModule.validateAdditionalTags('tag\ttag').valid).toBe(false);
+      expect(channelSettingsModule.validateAdditionalTags('tag\ntag').valid).toBe(false);
+      expect(channelSettingsModule.validateAdditionalTags('tag\vtag').valid).toBe(false);
+      expect(channelSettingsModule.validateAdditionalTags('tag\ftag').valid).toBe(false);
+    });
+
     test('rejects non-string input', () => {
       expect(channelSettingsModule.validateAdditionalTags(123).valid).toBe(false);
       expect(channelSettingsModule.validateAdditionalTags(['a', 'b']).valid).toBe(false);
