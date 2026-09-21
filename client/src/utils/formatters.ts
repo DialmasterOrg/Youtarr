@@ -66,6 +66,27 @@ export function formatDateTime(dateStr: string | null | undefined): string | nul
   return `${date.toLocaleDateString()} ${date.toLocaleTimeString(undefined, DATE_TIME_OPTIONS)}`;
 }
 
+// formatDateTime rendered in an explicit IANA zone (the server's), so times
+// labeled "server time" read correctly from any browser. Falls back to the
+// browser zone when the name is missing or unknown.
+export function formatDateTimeInZone(
+  dateStr: string | null | undefined,
+  timeZone: string | null | undefined
+): string | null {
+  const date = parseDate(dateStr);
+  if (!date) {
+    return null;
+  }
+  if (!timeZone) {
+    return formatDateTime(dateStr);
+  }
+  try {
+    return `${date.toLocaleDateString(undefined, { timeZone })} ${date.toLocaleTimeString(undefined, { ...DATE_TIME_OPTIONS, timeZone })}`;
+  } catch {
+    return formatDateTime(dateStr);
+  }
+}
+
 const ADDED_DATE_SHORT_OPTIONS: Intl.DateTimeFormatOptions = {
   month: 'short',
   day: 'numeric',

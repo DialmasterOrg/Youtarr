@@ -45,6 +45,7 @@ import { FILENAME_PRESETS } from '../../utils/filenameTemplate/presets';
 import { validatePrefix } from '../../utils/filenameTemplate/validate';
 import { SETTINGS_PAGES, SettingsIndex } from './SettingsIndex';
 import { MaintenanceSection } from './MaintenanceSection';
+import { SchedulingSection } from '../Configuration/sections/SchedulingSection';
 
 interface SettingsProps {
   token: string | null;
@@ -129,7 +130,7 @@ export function Settings({ token }: SettingsProps) {
     hasPlexServerConfigured,
   });
 
-  const { saveConfig, isSaving } = useConfigSave({
+  const { saveConfig, isSaving, fieldErrors, clearFieldErrors } = useConfigSave({
     token,
     config,
     setInitialConfig,
@@ -227,6 +228,7 @@ export function Settings({ token }: SettingsProps) {
   };
 
   const handleConfigChange = (updates: Partial<ConfigState>) => {
+    clearFieldErrors(updates);
     setConfig((prev) => ({ ...prev, ...updates }));
 
     const plexConnectionKeys: (keyof ConfigState)[] = ['plexIP', 'plexApiKey', 'plexPort', 'plexViaHttps'];
@@ -308,6 +310,17 @@ export function Settings({ token }: SettingsProps) {
                 onFilenameTemplatePreviewSuccess={handleFilenameTemplatePreviewSuccess}
               />
             }
+          />
+          <Route
+            path="scheduling"
+            element={<SchedulingSection
+              config={config}
+              deploymentEnvironment={deploymentEnvironment}
+              isPlatformManaged={isPlatformManaged}
+              onConfigChange={handleConfigChange}
+              fieldErrors={fieldErrors}
+              token={token}
+            />}
           />
           <Route path="appearance" element={<AppearanceSettingsSection onMobileTooltipClick={setMobileTooltip} />} />
           <Route
@@ -472,7 +485,7 @@ export function Settings({ token }: SettingsProps) {
           />
           <Route
             path="maintenance"
-            element={<MaintenanceSection token={token} />}
+            element={<MaintenanceSection token={token} config={config} />}
           />
 
           <Route path="*" element={<Navigate to="/settings" replace />} />

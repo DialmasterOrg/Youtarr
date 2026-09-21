@@ -13,6 +13,7 @@ describe('VideosModule', () => {
   let mockNfoGenerator;
   let mockMessageEmitter;
   let mockM3uGenerator;
+  let mockScheduledTaskRuns;
   let mockExecFile;
 
   beforeEach(() => {
@@ -133,6 +134,9 @@ describe('VideosModule', () => {
     jest.doMock('../messageEmitter', () => mockMessageEmitter);
 
     jest.doMock('../m3uGenerator', () => mockM3uGenerator);
+
+    mockScheduledTaskRuns = { record: jest.fn().mockResolvedValue(undefined) };
+    jest.doMock('../scheduledTaskRuns', () => mockScheduledTaskRuns);
 
     // Mock logger
     jest.doMock('../../logger', () => mockLogger);
@@ -659,6 +663,52 @@ describe('VideosModule', () => {
       expect(updateOptions).toEqual({ where: { id: [1] } });
       expect(result.videos[0].youtube_removed).toBe(true);
       expect(result.videos[0].youtube_removed_checked_at).toBeInstanceOf(Date);
+    });
+
+    test('should write the same checked-at timestamp it returns', async () => {
+      const RealDate = Date;
+      const base = RealDate.now();
+      let ticks = 0;
+      // Every no-argument construction lands a millisecond later, so two
+      // separate new Date() calls can't agree by luck.
+      global.Date = class TickingDate extends RealDate {
+        constructor(...args) {
+          if (args.length === 0) {
+            super(base + ticks++);
+          } else {
+            super(...args);
+          }
+        }
+      };
+
+      try {
+        mockVideo.count.mockResolvedValue(1);
+        mockVideo.findAll.mockResolvedValue([
+          {
+            id: 1,
+            youtubeId: 'abc123',
+            youTubeChannelName: 'Test Channel',
+            youTubeVideoName: 'Test Video',
+            filePath: '/test/output/dir/Test Channel/video [abc123].mp4',
+            fileSize: '1000',
+            removed: false,
+            youtube_removed: false,
+            youtube_removed_checked_at: null
+          }
+        ]);
+        mockVideo.aggregate.mockResolvedValue([]);
+        mockFs.stat.mockResolvedValueOnce({ size: 1000 });
+        mockVideoValidationModule.checkVideoExistsOnYoutube.mockResolvedValueOnce(true);
+
+        const result = await VideosModule.getVideosPaginated();
+
+        expect(mockVideo.update).toHaveBeenCalledWith(
+          { youtube_removed_checked_at: result.videos[0].youtube_removed_checked_at },
+          { where: { id: [1] } },
+        );
+      } finally {
+        global.Date = RealDate;
+      }
     });
 
     test('should skip YouTube validation when recently checked', async () => {
@@ -1321,12 +1371,18 @@ describe('VideosModule', () => {
       expect(result.processed).toBe(2500);
     });
 
-    test('should handle database errors during backfill', async () => {
+    test('resolves with the failure and its partial counters instead of throwing', async () => {
       mockFs.readdir.mockResolvedValueOnce([]);
       const mockError = new Error('Database error');
       mockVideo.count.mockRejectedValueOnce(mockError);
 
-      await expect(VideosModule.backfillVideoMetadata()).rejects.toThrow('Database error');
+      await expect(VideosModule.backfillVideoMetadata()).resolves.toEqual(expect.objectContaining({
+        status: 'error',
+        errorMessage: 'Database error',
+        processed: 0,
+        updated: 0,
+        removed: 0
+      }));
       expect(mockLogger.error).toHaveBeenCalledWith(
         { err: mockError },
         'Error during video metadata backfill'
@@ -1386,21 +1442,25 @@ describe('VideosModule', () => {
       mockFs.readdir.mockResolvedValueOnce([]);
       mockVideo.count.mockRejectedValueOnce(error);
 
-      await expect(VideosModule.backfillVideoMetadata({ trigger: 'manual' })).rejects.toThrow('boom');
+      await expect(VideosModule.backfillVideoMetadata({ trigger: 'manual' })).resolves.toMatchObject({ status: 'error' });
       expect(VideosModule._backfillRunning).toBe(false);
     });
 
-    test('should write rescanLastRun to config on completion', async () => {
+    test('records a manual run in the task history instead of config', async () => {
       mockFs.readdir.mockResolvedValueOnce([]);
       mockVideo.count.mockResolvedValueOnce(0);
 
       await VideosModule.backfillVideoMetadata({ trigger: 'manual' });
 
-      expect(mockConfigModule.updateConfig).toHaveBeenCalledWith(
+      expect(mockScheduledTaskRuns.record).toHaveBeenCalledWith(
         expect.objectContaining({
-          rescanLastRun: expect.objectContaining({
-            trigger: 'manual',
-            status: 'completed',
+          taskKey: 'videoRescanFrequency',
+          trigger: 'manual',
+          status: 'success',
+          outcome: 'completed',
+          startedAt: expect.any(Date),
+          finishedAt: expect.any(Date),
+          details: expect.objectContaining({
             videosScanned: 0,
             filesFoundOnDisk: 0,
             videosUpdated: 0,
@@ -1408,14 +1468,22 @@ describe('VideosModule', () => {
           })
         })
       );
+      expect(mockConfigModule.updateConfig).not.toHaveBeenCalled();
     });
 
-    test('should still emit completion when rescanLastRun persistence fails', async () => {
+    test('leaves scheduled runs for the scheduler to record', async () => {
       mockFs.readdir.mockResolvedValueOnce([]);
       mockVideo.count.mockResolvedValueOnce(0);
-      mockConfigModule.updateConfig.mockImplementation(() => {
-        throw new Error('config write failed');
-      });
+
+      await VideosModule.backfillVideoMetadata({ trigger: 'scheduled' });
+
+      expect(mockScheduledTaskRuns.record).not.toHaveBeenCalled();
+    });
+
+    test('should still emit completion when run recording fails', async () => {
+      mockFs.readdir.mockResolvedValueOnce([]);
+      mockVideo.count.mockResolvedValueOnce(0);
+      mockScheduledTaskRuns.record.mockRejectedValue(new Error('history write failed'));
 
       await VideosModule.backfillVideoMetadata({ trigger: 'manual' });
 

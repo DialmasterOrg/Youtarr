@@ -706,18 +706,20 @@ class PlaylistModule {
       where: { enabled: true, auto_download: true },
     });
     let totalEnqueued = 0;
-    let anyErrored = false;
+    // One failing playlist must not stop the others, but the sweep reports
+    // every failure so the scheduled run isn't recorded as a clean success.
+    const errors = [];
     for (const p of playlists) {
       try {
         const enqueued = await downloadModule.doPlaylistDownloads(p, { refreshFirst: true, limitToRecent: true, overrideSettings, runId });
         totalEnqueued += enqueued || 0;
       } catch (err) {
-        anyErrored = true;
+        errors.push({ playlistId: p.playlist_id, message: err.message || 'Unknown error' });
         logger.error({ err, playlist_id: p.playlist_id }, 'playlistAutoDownload failed for playlist');
       }
     }
 
-    if (playlists.length > 0 && totalEnqueued === 0 && !anyErrored) {
+    if (playlists.length > 0 && totalEnqueued === 0 && errors.length === 0) {
       try {
         const jobModule = require('./jobModule');
         const { PLAYLIST_SWEEP_LABEL } = require('./download/jobTypes');
@@ -730,6 +732,8 @@ class PlaylistModule {
         logger.error({ err }, 'Failed to record idle playlist auto-download sweep in history');
       }
     }
+
+    return { playlists: playlists.length, enqueued: totalEnqueued, failed: errors.length, errors };
   }
 }
 

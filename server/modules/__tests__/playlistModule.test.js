@@ -1912,6 +1912,32 @@ describe('playlistModule', () => {
       );
     });
 
+    test('reports how many playlists failed while still sweeping the rest', async () => {
+      const pl1 = { playlist_id: 'PL1', title: 'One' };
+      const pl2 = { playlist_id: 'PL2', title: 'Two' };
+      Playlist.findAll.mockResolvedValue([pl1, pl2]);
+      downloadModule.doPlaylistDownloads
+        .mockRejectedValueOnce(new Error('yt-dlp exited 1'))
+        .mockResolvedValueOnce(3);
+
+      await expect(playlistModule.playlistAutoDownload()).resolves.toEqual({
+        playlists: 2,
+        enqueued: 3,
+        failed: 1,
+        errors: [{ playlistId: 'PL1', message: 'yt-dlp exited 1' }],
+      });
+      expect(downloadModule.doPlaylistDownloads).toHaveBeenCalledTimes(2);
+    });
+
+    test('reports a clean sweep with its counts', async () => {
+      Playlist.findAll.mockResolvedValue([{ playlist_id: 'PL1', title: 'One' }]);
+      downloadModule.doPlaylistDownloads.mockResolvedValueOnce(2);
+
+      await expect(playlistModule.playlistAutoDownload()).resolves.toEqual({
+        playlists: 1, enqueued: 2, failed: 0, errors: [],
+      });
+    });
+
     test('creates one Complete "Playlist Downloads" job when auto-enabled playlists exist and nothing was enqueued', async () => {
       const pl1 = { playlist_id: 'PL1', title: 'One' };
       const pl2 = { playlist_id: 'PL2', title: 'Two' };

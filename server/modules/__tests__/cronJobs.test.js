@@ -17,7 +17,9 @@ describe('CronJobs', () => {
 
     // Mock node-cron
     mockSchedule = {
-      schedule: jest.fn()
+      schedule: jest.fn(() => ({ start: jest.fn(), stop: jest.fn() })),
+      validate: jest.requireActual('node-cron').validate,
+      getTasks: jest.fn(() => new Map())
     };
 
     jest.doMock('node-cron', () => mockSchedule);
@@ -73,9 +75,10 @@ describe('CronJobs', () => {
     jest.doMock('../ytdlpModule', () => mockYtdlpModule);
 
     // Mock configModule with a tiny in-memory store so the auto-update job can read/write
-    mockConfigStore = { autoUpdateYtdlp: false };
+    mockConfigStore = { autoUpdateYtdlp: true };
     mockConfigModule = {
       getConfig: jest.fn(() => mockConfigStore),
+      onConfigChange: jest.fn(),
       updateConfig: jest.fn((next) => { mockConfigStore = next; }),
       isElfhostedPlatform: jest.fn(() => false)
     };
@@ -98,10 +101,10 @@ describe('CronJobs', () => {
       cronJobs.initialize();
 
       expect(mockSchedule.schedule).toHaveBeenCalledTimes(4);
-      expect(mockSchedule.schedule).toHaveBeenCalledWith('0 2 * * *', expect.any(Function));
-      expect(mockSchedule.schedule).toHaveBeenCalledWith('0 3 * * *', expect.any(Function));
-      expect(mockSchedule.schedule).toHaveBeenCalledWith('30 3 * * *', expect.any(Function));
-      expect(mockSchedule.schedule).toHaveBeenCalledWith('0 4 * * *', expect.any(Function));
+      expect(mockSchedule.schedule).toHaveBeenCalledWith('0 2 * * *', expect.any(Function), expect.objectContaining({ scheduled: false }));
+      expect(mockSchedule.schedule).toHaveBeenCalledWith('0 3 * * *', expect.any(Function), expect.objectContaining({ scheduled: false }));
+      expect(mockSchedule.schedule).toHaveBeenCalledWith('30 3 * * *', expect.any(Function), expect.objectContaining({ scheduled: false }));
+      expect(mockSchedule.schedule).toHaveBeenCalledWith('0 4 * * *', expect.any(Function), expect.objectContaining({ scheduled: false }));
     });
 
     test('should log initialization messages', () => {
@@ -109,11 +112,35 @@ describe('CronJobs', () => {
 
       expect(mockLogger.info).toHaveBeenCalledWith('Initializing scheduled cron jobs');
       expect(mockLogger.info).toHaveBeenCalledWith('Scheduled cron jobs initialized successfully');
-      expect(mockLogger.info).toHaveBeenCalledWith('  - Automatic video cleanup: 2:00 AM daily');
-      expect(mockLogger.info).toHaveBeenCalledWith('  - Session cleanup: 3:00 AM daily');
-      expect(mockLogger.info).toHaveBeenCalledWith('  - Video metadata backfill: 3:30 AM daily');
-      expect(mockLogger.info).toHaveBeenCalledWith('  - yt-dlp auto-update: 4:00 AM daily (when enabled)');
     });
+  });
+
+  test('initializes and subscribes once, without replacing timers on unrelated changes', () => {
+    cronJobs.initialize();
+    cronJobs.initialize();
+    expect(mockConfigModule.onConfigChange).toHaveBeenCalledTimes(1);
+    const listener = mockConfigModule.onConfigChange.mock.calls[0][0];
+    mockConfigStore.otherSetting = true;
+    listener();
+    expect(mockSchedule.schedule).toHaveBeenCalledTimes(4);
+    const original = mockSchedule.schedule.mock.results[0].value;
+    mockConfigStore.autoRemovalFrequency = '0 18 * * *';
+    listener();
+    expect(mockSchedule.schedule).toHaveBeenCalledTimes(5);
+    expect(original.stop).toHaveBeenCalledTimes(1);
+    expect(mockSchedule.schedule).toHaveBeenLastCalledWith(
+      '0 18 * * *', expect.any(Function), expect.objectContaining({ name: 'youtarr:autoRemovalFrequency' })
+    );
+  });
+
+  test('disabled updates do not register a timer, while cleanup still registers', () => {
+    mockConfigStore.autoUpdateYtdlp = false;
+    mockConfigStore.autoRemovalEnabled = false;
+    cronJobs.initialize();
+    expect(mockSchedule.schedule).toHaveBeenCalledTimes(3);
+    expect(mockSchedule.schedule).toHaveBeenCalledWith(
+      '0 2 * * *', expect.any(Function), expect.any(Object)
+    );
   });
 
   describe('automatic video cleanup cron job (2:00 AM)', () => {
@@ -191,6 +218,76 @@ describe('CronJobs', () => {
       expect(mockLogger.error).toHaveBeenCalledWith({ err: testError }, 'Error during automatic video cleanup');
     });
 
+    test('returns a summary of what was deleted for the run history', async () => {
+      mockVideoDeletionModule.performAutomaticCleanup.mockResolvedValue({
+        totalDeleted: 5,
+        freedBytes: 1073741824,
+        errors: []
+      });
+      mockVideoDeletionModule.cleanupOrphanDirectories.mockResolvedValue({ removed: ['a', 'b'], errors: [] });
+
+      await expect(cleanupCallback()).resolves.toEqual({
+        status: 'success',
+        outcome: 'completed',
+        message: 'Deleted 5 videos and freed 1.00 GB, removed 2 empty folders.',
+        details: { deleted: 5, freedBytes: 1073741824, emptyFoldersRemoved: 2, errors: 0 }
+      });
+    });
+
+    test('reports deletions that failed as a partial failure', async () => {
+      mockVideoDeletionModule.performAutomaticCleanup.mockResolvedValue({
+        totalDeleted: 3,
+        freedBytes: 500000000,
+        errors: ['Error 1', 'Error 2']
+      });
+
+      await expect(cleanupCallback()).resolves.toEqual(expect.objectContaining({
+        status: 'error',
+        outcome: 'partial',
+        message: 'Deleted 3 videos and freed 0.47 GB; 2 errors.',
+        details: expect.objectContaining({ errors: 2 })
+      }));
+    });
+
+    test('reports a failed empty-folder cleanup instead of hiding it', async () => {
+      mockVideoDeletionModule.performAutomaticCleanup.mockResolvedValue({
+        totalDeleted: 0,
+        freedBytes: 0,
+        errors: []
+      });
+      mockVideoDeletionModule.cleanupOrphanDirectories.mockRejectedValue(new Error('EACCES'));
+
+      await expect(cleanupCallback()).resolves.toEqual(expect.objectContaining({
+        status: 'error',
+        outcome: 'partial',
+        message: 'No videos matched the removal rules; 1 error.'
+      }));
+    });
+
+    test('summarizes a run that deleted nothing', async () => {
+      mockVideoDeletionModule.performAutomaticCleanup.mockResolvedValue({
+        totalDeleted: 0,
+        freedBytes: 0,
+        errors: []
+      });
+
+      await expect(cleanupCallback()).resolves.toEqual(expect.objectContaining({
+        outcome: 'completed',
+        message: 'No videos matched the removal rules.'
+      }));
+    });
+
+    test('reports a failed cleanup so the run history shows it', async () => {
+      mockVideoDeletionModule.performAutomaticCleanup.mockRejectedValue(new Error('Cleanup failed'));
+
+      await expect(cleanupCallback()).resolves.toEqual(expect.objectContaining({
+        status: 'error',
+        outcome: 'error',
+        message: 'Cleanup failed'
+      }));
+      expect(mockVideoDeletionModule.cleanupOrphanDirectories).toHaveBeenCalled();
+    });
+
     test('should format GB correctly with multiple decimal places', async () => {
       mockVideoDeletionModule.performAutomaticCleanup.mockResolvedValue({
         totalDeleted: 10,
@@ -261,6 +358,26 @@ describe('CronJobs', () => {
       expect(mockLogger.error).toHaveBeenCalledWith({ err: testError }, 'Error cleaning sessions');
     });
 
+    test('returns a summary of removed sessions for the run history', async () => {
+      mockDb.Session.destroy.mockResolvedValue(5);
+
+      await expect(sessionCleanupCallback()).resolves.toEqual({
+        status: 'success',
+        outcome: 'completed',
+        message: 'Removed 5 expired sessions.',
+        details: { removed: 5 }
+      });
+    });
+
+    test('reports a failed session cleanup so the run history shows it', async () => {
+      mockDb.Session.destroy.mockRejectedValue(new Error('Database error'));
+
+      await expect(sessionCleanupCallback()).resolves.toEqual(expect.objectContaining({
+        status: 'error',
+        message: 'Database error'
+      }));
+    });
+
     test('should use correct date for inactive session threshold (30 days)', async () => {
       mockDb.Session.destroy.mockResolvedValue(0);
 
@@ -317,7 +434,7 @@ describe('CronJobs', () => {
 
       await resolvedPromise;
 
-      expect(mockLogger.info).toHaveBeenCalledWith('Video metadata backfill reached time limit, will continue tomorrow');
+      expect(mockLogger.info).toHaveBeenCalledWith('Video metadata backfill reached time limit, will continue at the next scheduled run');
     });
 
     test('should handle errors during backfill', async () => {
@@ -340,7 +457,42 @@ describe('CronJobs', () => {
 
       await backfillCallback();
 
-      expect(mockLogger.error).toHaveBeenCalledWith({ err: testError }, 'Error starting video metadata backfill');
+      expect(mockLogger.error).toHaveBeenCalledWith({ err: testError }, 'Video metadata backfill failed');
+    });
+
+    test('returns the rescan summary for the run history', async () => {
+      mockVideosModule.backfillVideoMetadata.mockResolvedValue({
+        status: 'completed', processed: 3, filesOnDisk: 3, updated: 1, removed: 0
+      });
+
+      await expect(backfillCallback()).resolves.toEqual(expect.objectContaining({
+        outcome: 'completed',
+        details: expect.objectContaining({ videosScanned: 3, videosUpdated: 1 })
+      }));
+    });
+
+    test('reports a failed rescan so the run history shows it', async () => {
+      mockVideosModule.backfillVideoMetadata.mockRejectedValue(new Error('Backfill failed'));
+
+      await expect(backfillCallback()).resolves.toEqual(expect.objectContaining({
+        status: 'error',
+        outcome: 'error',
+        message: 'Backfill failed'
+      }));
+    });
+
+    test('keeps the counters a failed rescan reached before it died', async () => {
+      mockVideosModule.backfillVideoMetadata.mockResolvedValue({
+        status: 'error', errorMessage: 'Database error', processed: 40, filesOnDisk: 100, updated: 12, removed: 3
+      });
+
+      await expect(backfillCallback()).resolves.toEqual(expect.objectContaining({
+        status: 'error',
+        outcome: 'error',
+        message: 'Database error',
+        details: expect.objectContaining({ videosScanned: 40, videosUpdated: 12, videosMarkedMissing: 3 })
+      }));
+      expect(mockLogger.info).not.toHaveBeenCalledWith('Video metadata backfill completed successfully');
     });
 
     test('should handle null result from backfill', async () => {
@@ -376,28 +528,36 @@ describe('CronJobs', () => {
       autoUpdateCallback = mockSchedule.schedule.mock.calls[3][1];
     });
 
-    test('does nothing when autoUpdateYtdlp is false', async () => {
+    test('records a skipped run instead of updating when autoUpdateYtdlp is false', async () => {
       mockConfigStore = { autoUpdateYtdlp: false };
 
-      await autoUpdateCallback();
+      const result = await autoUpdateCallback();
 
+      expect(result).toEqual(expect.objectContaining({
+        status: 'skipped',
+        outcome: 'skipped',
+        message: 'Automatic yt-dlp updates are turned off.',
+      }));
       expect(mockYtdlpModule.performUpdate).not.toHaveBeenCalled();
-      expect(mockConfigModule.updateConfig).not.toHaveBeenCalled();
       expect(mockRefreshCache).not.toHaveBeenCalled();
     });
 
-    test('does nothing on Elfhosted even when toggle is on', async () => {
+    test('records a skipped run on Elfhosted even when toggle is on', async () => {
       mockConfigStore = { autoUpdateYtdlp: true };
       mockConfigModule.isElfhostedPlatform.mockReturnValue(true);
 
-      await autoUpdateCallback();
+      const result = await autoUpdateCallback();
 
+      expect(result).toEqual(expect.objectContaining({
+        status: 'skipped',
+        outcome: 'skipped',
+        message: 'yt-dlp updates are managed by the hosting platform.',
+      }));
       expect(mockYtdlpModule.performUpdate).not.toHaveBeenCalled();
-      expect(mockConfigModule.updateConfig).not.toHaveBeenCalled();
       expect(mockRefreshCache).not.toHaveBeenCalled();
     });
 
-    test('records updated result and refreshes version cache on success with new version', async () => {
+    test('returns the installed version for the run history and refreshes the version cache', async () => {
       mockConfigStore = { autoUpdateYtdlp: true, ytdlpUpdateChannel: 'nightly', otherField: 'preserved' };
       mockYtdlpModule.performUpdate.mockResolvedValue({
         success: true,
@@ -406,21 +566,18 @@ describe('CronJobs', () => {
         newVersion: '2026.04.20'
       });
 
-      await autoUpdateCallback();
+      await expect(autoUpdateCallback()).resolves.toEqual(expect.objectContaining({
+        outcome: 'updated',
+        message: 'Updated to 2026.04.20',
+        details: { version: '2026.04.20' }
+      }));
 
       expect(mockYtdlpModule.performUpdate).toHaveBeenCalledWith({ channel: 'nightly' });
-      expect(mockConfigModule.updateConfig).toHaveBeenCalledTimes(1);
-
-      const writtenConfig = mockConfigModule.updateConfig.mock.calls[0][0];
-      expect(writtenConfig.otherField).toBe('preserved');
-      expect(writtenConfig.ytdlpLastChecked).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-      expect(writtenConfig.ytdlpLastUpdated).toBe(writtenConfig.ytdlpLastChecked);
-      expect(writtenConfig.ytdlpLastResult).toEqual({ status: 'updated', version: '2026.04.20' });
-
+      expect(mockConfigModule.updateConfig).not.toHaveBeenCalled();
       expect(mockRefreshCache).toHaveBeenCalledTimes(1);
     });
 
-    test('records up-to-date result without setting lastUpdated when no new version', async () => {
+    test('returns an up-to-date outcome when no new version was installed', async () => {
       mockConfigStore = { autoUpdateYtdlp: true };
       mockYtdlpModule.performUpdate.mockResolvedValue({
         success: true,
@@ -428,17 +585,14 @@ describe('CronJobs', () => {
         message: 'yt-dlp is already up to date'
       });
 
-      await autoUpdateCallback();
-
-      const writtenConfig = mockConfigModule.updateConfig.mock.calls[0][0];
-      expect(writtenConfig.ytdlpLastChecked).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-      expect(writtenConfig.ytdlpLastUpdated).toBeUndefined();
-      expect(writtenConfig.ytdlpLastResult).toEqual({ status: 'up-to-date' });
-
+      await expect(autoUpdateCallback()).resolves.toEqual(expect.objectContaining({
+        outcome: 'up-to-date'
+      }));
+      expect(mockConfigModule.updateConfig).not.toHaveBeenCalled();
       expect(mockRefreshCache).toHaveBeenCalledTimes(1);
     });
 
-    test('records skipped result when downloads are in progress', async () => {
+    test('returns a skipped outcome when the update was deferred', async () => {
       mockConfigStore = { autoUpdateYtdlp: true };
       mockYtdlpModule.performUpdate.mockResolvedValue({
         success: false,
@@ -446,15 +600,14 @@ describe('CronJobs', () => {
         message: 'Update deferred by yt-dlp module.'
       });
 
-      await autoUpdateCallback();
-
-      const writtenConfig = mockConfigModule.updateConfig.mock.calls[0][0];
-      expect(writtenConfig.ytdlpLastResult.status).toBe('skipped');
-      expect(writtenConfig.ytdlpLastResult.message).toBe('Update deferred by yt-dlp module.');
+      await expect(autoUpdateCallback()).resolves.toEqual(expect.objectContaining({
+        outcome: 'skipped',
+        message: 'Update deferred by yt-dlp module.'
+      }));
       expect(mockRefreshCache).not.toHaveBeenCalled();
     });
 
-    test('records error result on a real update failure', async () => {
+    test('reports a real update failure for the run history', async () => {
       mockConfigStore = { autoUpdateYtdlp: true };
       mockYtdlpModule.performUpdate.mockResolvedValue({
         success: false,
@@ -462,32 +615,36 @@ describe('CronJobs', () => {
         message: 'Update failed: Permission denied. On managed platforms, yt-dlp may be updated by the platform operator.'
       });
 
-      await autoUpdateCallback();
-
-      const writtenConfig = mockConfigModule.updateConfig.mock.calls[0][0];
-      expect(writtenConfig.ytdlpLastResult.status).toBe('error');
-      expect(writtenConfig.ytdlpLastResult.message).toMatch(/Permission denied/);
+      await expect(autoUpdateCallback()).resolves.toEqual(expect.objectContaining({
+        status: 'error',
+        outcome: 'error',
+        message: expect.stringMatching(/Permission denied/)
+      }));
       expect(mockRefreshCache).not.toHaveBeenCalled();
       expect(mockLogger.warn).toHaveBeenCalledWith(
         { message: expect.any(String) },
-        'Nightly yt-dlp auto-update failed'
+        'Scheduled yt-dlp auto-update failed'
       );
     });
 
-    test('swallows unexpected errors so the cron keeps running', async () => {
+    test('reports unexpected errors as failed runs so the cron keeps running', async () => {
       mockConfigStore = { autoUpdateYtdlp: true };
       mockYtdlpModule.performUpdate.mockRejectedValue(new Error('boom'));
 
-      await expect(autoUpdateCallback()).resolves.toBeUndefined();
+      await expect(autoUpdateCallback()).resolves.toEqual(expect.objectContaining({
+        status: 'error',
+        message: 'boom'
+      }));
 
       expect(mockLogger.error).toHaveBeenCalledWith(
         { err: expect.any(Error) },
-        'Unexpected error in nightly yt-dlp auto-update'
+        'Unexpected error in scheduled yt-dlp auto-update'
       );
     });
 
     test('tolerates a missing refreshYtDlpVersionCache dependency', async () => {
-      // Re-initialize without passing the dep to register a fresh callback
+      jest.resetModules();
+      cronJobs = require('../cronJobs');
       cronJobs.initialize();
       const initialCallCount = mockSchedule.schedule.mock.calls.length;
       const callbackNoDeps = mockSchedule.schedule.mock.calls[initialCallCount - 1][1];
@@ -500,8 +657,7 @@ describe('CronJobs', () => {
         newVersion: '2026.04.21'
       });
 
-      await expect(callbackNoDeps()).resolves.toBeUndefined();
-      expect(mockConfigModule.updateConfig).toHaveBeenCalled();
+      await expect(callbackNoDeps()).resolves.toEqual(expect.objectContaining({ outcome: 'updated' }));
     });
   });
 
