@@ -114,13 +114,13 @@ See [Authentication - Cannot Find the Setup Token](AUTHENTICATION.md#cannot-find
 
 ### Nightly Cleanup Didn't Delete Anything
 
-**Problem**: Automatic cleanup runs at 2:00 AM but no videos are removed.
+**Problem**: Automatic cleanup runs on schedule but no videos are removed.
 
 **Solution**:
 - Verify Automatic Video Removal is enabled on **Settings -> Auto Removal** and at least one rule is configured: an age threshold, a free-space threshold, or watched-based removal. Note that watched-based removal only runs while watch status sync is enabled.
 - Remember the exclusions. Videos you've marked as Protected, videos of channels with auto-removal protection enabled, and the newest downloads kept by "Keep this many newest downloads" (the global setting plus any per-channel keep counts) are never removed, so a run can legitimately delete nothing.
 - Run the dry-run preview to see how many videos currently match the rules - it also shows how many videos the protection settings are keeping. Adjust values if needed (for example, lower the free-space threshold or reduce the age requirement).
-- Check server logs around 2:00 AM for `[Auto-Removal]` messages to confirm the job is executing (`docker compose logs -f youtarr`).
+- Check server logs around the time configured in **Settings -> Scheduling** for cleanup messages to confirm the job is executing (`docker compose logs -f youtarr`).
 - If errors appear in the logs (e.g., permission issues deleting files), resolve those first - the cron job will skip files it cannot delete.
 
 ## Library / File Issues
@@ -610,7 +610,7 @@ COMPOSE_FILE=docker-compose.yml:docker-compose.arm.yml
 
 Update yt-dlp. Most download failures are extractor breakage that a newer yt-dlp fixes.
 
-- The fastest fix is in-app: go to **Settings -> YT-DLP** and update yt-dlp manually. With **Automatically update yt-dlp daily (4:00 AM)** enabled this happens each night on its own.
+- The fastest fix is in-app: go to **Settings -> YT-DLP** and update yt-dlp manually. With **Automatically update yt-dlp** enabled, this happens on the schedule configured in **Settings -> Scheduling** (daily at 04:00 by default).
 - If the latest stable yt-dlp still fails, switch the **Update Channel** to **Nightly** on the same page. Nightly gets extractor fixes days earlier than stable.
 - Youtarr's Docker image also bundles the latest yt-dlp at release time, so pulling a new image updates it too:
   - Via docker compose:

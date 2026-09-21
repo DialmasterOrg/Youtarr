@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { SCHEDULE_FIELDS, ScheduleFieldErrors } from '../schedules';
 import { ConfigState, SnackbarState } from '../types';
 import { CONFIG_UPDATED_EVENT } from '../../../hooks/useConfig';
 
@@ -11,16 +12,20 @@ interface UseConfigSaveParams {
   checkPlexConnection: () => void;
 }
 
-async function getSaveErrorMessage(response: Response): Promise<string> {
+async function getSaveError(response: Response): Promise<{ error: string; fieldErrors: ScheduleFieldErrors }> {
   try {
     const body = await response.json();
-    if (body && typeof body.error === 'string' && body.error.trim()) {
-      return body.error;
+    const fieldErrors: ScheduleFieldErrors = {};
+    for (const { key } of SCHEDULE_FIELDS) {
+      if (typeof body?.fieldErrors?.[key] === 'string') fieldErrors[key] = body.fieldErrors[key];
+    }
+    if (typeof body?.error === 'string' && body.error.trim()) {
+      return { error: body.error, fieldErrors };
     }
   } catch {
-    // Fall through to the generic message when the server did not return JSON.
+    // Fall through when the server didn't return JSON.
   }
-  return 'Failed to save configuration';
+  return { error: 'Failed to save configuration', fieldErrors: {} };
 }
 
 export const useConfigSave = ({
@@ -32,6 +37,16 @@ export const useConfigSave = ({
   checkPlexConnection,
 }: UseConfigSaveParams) => {
   const [isSaving, setIsSaving] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<ScheduleFieldErrors>({});
+  const clearFieldErrors = (updates: Partial<ConfigState>) => {
+    setFieldErrors((current) => {
+      const next = { ...current };
+      for (const { key } of SCHEDULE_FIELDS) {
+        if (key in updates) delete next[key];
+      }
+      return next;
+    });
+  };
 
   const saveConfig = useCallback(async (): Promise<boolean> => {
     setIsSaving(true);
@@ -46,14 +61,17 @@ export const useConfigSave = ({
       });
 
       if (!response.ok) {
+        const failure = await getSaveError(response);
+        setFieldErrors(failure.fieldErrors);
         setSnackbar({
           open: true,
-          message: await getSaveErrorMessage(response),
+          message: failure.error,
           severity: 'error'
         });
         return false;
       }
 
+      setFieldErrors({});
       setInitialConfig(config);
 
       if (typeof window !== 'undefined') {
@@ -89,5 +107,7 @@ export const useConfigSave = ({
   return {
     saveConfig,
     isSaving,
+    fieldErrors,
+    clearFieldErrors,
   };
 };

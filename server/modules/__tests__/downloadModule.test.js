@@ -480,8 +480,9 @@ describe('DownloadModule', () => {
       }));
       const playlistModule = require('../playlistModule');
 
-      await downloadModule.doChannelAndPlaylistDownloads({ some: 'data' });
+      const result = await downloadModule.doChannelAndPlaylistDownloads({ some: 'data' });
 
+      expect(result).toEqual({ playlistError: null, playlistsFailed: 0, playlistsChecked: 0 });
       expect(downloadModule.doChannelDownloads).toHaveBeenCalledWith({ some: 'data', runId: expect.any(String) });
       expect(playlistModule.playlistAutoDownload).toHaveBeenCalledTimes(1);
       expect(playlistModule.playlistAutoDownload).toHaveBeenCalledWith({}, expect.any(String));
@@ -505,7 +506,7 @@ describe('DownloadModule', () => {
       }, expect.any(String));
     });
 
-    it('still resolves (channels already ran) even if playlist auto-download throws', async () => {
+    it('still resolves (channels already ran) and reports the playlist failure instead of hiding it', async () => {
       jest.spyOn(downloadModule, 'doChannelDownloads').mockResolvedValue();
       jest.doMock('../playlistModule', () => ({
         playlistAutoDownload: jest.fn().mockRejectedValue(new Error('boom')),
@@ -513,8 +514,21 @@ describe('DownloadModule', () => {
 
       await expect(
         downloadModule.doChannelAndPlaylistDownloads({})
-      ).resolves.not.toThrow();
+      ).resolves.toEqual({ playlistError: 'boom', playlistsFailed: 0, playlistsChecked: 0 });
       expect(downloadModule.doChannelDownloads).toHaveBeenCalled();
+    });
+
+    it('propagates individual playlist failures the sweep swallowed', async () => {
+      jest.spyOn(downloadModule, 'doChannelDownloads').mockResolvedValue();
+      jest.doMock('../playlistModule', () => ({
+        playlistAutoDownload: jest.fn().mockResolvedValue({
+          playlists: 3, enqueued: 2, failed: 1, errors: [{ playlistId: 'PL1', message: 'yt-dlp exited 1' }],
+        }),
+      }));
+
+      await expect(
+        downloadModule.doChannelAndPlaylistDownloads({})
+      ).resolves.toEqual({ playlistError: null, playlistsFailed: 1, playlistsChecked: 3 });
     });
 
     it('skips channel job creation but still runs playlist auto-downloads when no channel URLs exist', async () => {

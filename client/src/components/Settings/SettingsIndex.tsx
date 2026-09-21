@@ -5,6 +5,7 @@ import { Link as RouterLink } from 'react-router-dom';
 const SETTINGS_CARD_CONTENT_HEIGHT = 72;
 
 export const SETTINGS_PAGES = [
+  { key: 'scheduling', title: 'Scheduling', description: 'Choose when automatic downloads and maintenance tasks run.' },
   { key: 'core', title: 'Core', description: 'Downloads folder, quality, defaults, and core behavior.' },
   { key: 'downloading', title: 'YT-DLP', description: 'yt-dlp backend settings for downloads and reliability.' },
   { key: 'api-keys', title: 'API Keys', description: 'API key settings and rate limits.' },

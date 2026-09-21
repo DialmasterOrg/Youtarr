@@ -9,6 +9,8 @@ const watchStatusQueries = require('./mediaServers/watchStatusQueries');
 const logger = require('../logger');
 const messageEmitter = require('./messageEmitter');
 const m3uGenerator = require('./m3uGenerator');
+const scheduledTaskRuns = require('./scheduledTaskRuns');
+const rescanRunSummary = require('./rescanRunSummary');
 const { AUDIO_EXTENSIONS, MEDIA_EXTENSIONS } = require('./filesystem/constants');
 const { probeVideoDimensions } = require('./resolutionTier');
 const createLimiter = require('./subscriptionImport/concurrencyLimiter');
@@ -737,7 +739,9 @@ class VideosModule {
         updated: totalUpdated,
         removed: totalRemoved
       };
-      throw err;
+      // Resolve with the failure and the counters it reached rather than
+      // rethrow, so every caller and the run history keep the partial progress.
+      return result;
     } finally {
       let lastRun = null;
 
@@ -754,11 +758,19 @@ class VideosModule {
           errorMessage: result.errorMessage || null
         };
 
-        try {
-          const currentConfig = configModule.getConfig();
-          configModule.updateConfig({ ...currentConfig, rescanLastRun: lastRun });
-        } catch (persistErr) {
-          logger.error({ err: persistErr }, 'Failed to persist rescanLastRun');
+        // Scheduled runs are recorded by the task scheduler itself.
+        if (result.trigger !== 'scheduled') {
+          try {
+            await scheduledTaskRuns.record({
+              taskKey: rescanRunSummary.TASK_KEY,
+              trigger: result.trigger,
+              startedAt: new Date(result.startedAt),
+              finishedAt: new Date(result.completedAt),
+              ...rescanRunSummary.toRunRecord(result),
+            });
+          } catch (persistErr) {
+            logger.error({ err: persistErr }, 'Failed to record rescan run');
+          }
         }
       }
 

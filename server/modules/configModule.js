@@ -5,6 +5,7 @@ const EventEmitter = require('events');
 const logger = require('../logger');
 const { getExternalCookiesPath, getExternalCookiesStatus } = require('./externalCookies');
 const { getDefaultNameForUrl } = require('./notificationHelpers');
+const { SCHEDULES, normalizeToMinimumInterval, violatesMinimumInterval } = require('./scheduleConfig');
 
 class ConfigModule extends EventEmitter {
   constructor() {
@@ -44,6 +45,21 @@ class ConfigModule extends EventEmitter {
       delete this.config.cronSchedule;
       legacyMigrationNeeded = true;
       logger.info('Migrated legacy cronSchedule field to channelDownloadFrequency');
+    }
+
+    // Schedules below the minimum interval were saved before the floor existed.
+    // Thin them within their existing hours and days instead of leaving the task
+    // unscheduled and every Settings save blocked.
+    for (const key of Object.keys(SCHEDULES)) {
+      if (violatesMinimumInterval(this.config[key])) {
+        const replacement = normalizeToMinimumInterval(this.config[key]);
+        logger.info(
+          { key, previous: this.config[key], replacement },
+          'Schedule ran more often than the minimum interval; changed on upgrade'
+        );
+        this.config[key] = replacement;
+        legacyMigrationNeeded = true;
+      }
     }
 
     // Migrate notification settings to new format

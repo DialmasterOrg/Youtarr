@@ -124,3 +124,10 @@ describe('validateConfig', () => {
     expect(validateConfig(config)).toMatch(/Cannot save:/);
   });
 });
+
+
+test('an incomplete daily schedule blocks saving', () => {
+  expect(validateConfig(createConfig({ autoRemovalFrequency: '' }))).toBe(
+    'Cannot save: Automatic video cleanup requires a schedule'
+  );
+});

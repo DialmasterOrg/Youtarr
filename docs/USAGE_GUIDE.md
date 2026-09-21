@@ -90,7 +90,7 @@ recommendation) the server ignores the file, though it still opens in any
 [Jellyfin](media-servers/jellyfin.md#channel-playlist-files-m3u) and
 [Emby](media-servers/emby.md#channel-playlist-files-m3u) guides for the
 library-type tradeoff. The file updates after downloads and deletions and
-refreshes nightly after the scheduled file rescan; files deleted outside
+refreshes after the scheduled file rescan; files deleted outside
 Youtarr drop out of the playlist at the next refresh.
 Turning the setting off (or unsubscribing from the channel) deletes the file.
 
@@ -251,13 +251,13 @@ Set up automatic downloads on a schedule so Youtarr checks for new videos period
    - Click "Settings" in the navigation menu
 
 2. **Set download schedule**
-   - Open **Settings -> Core** and find the **Download Frequency** drop-down
+   - Open **Settings -> Scheduling** and find **Automatic downloads**
    - Pick how often the cron job should run (defaults to hourly)
-   - Use the drop-down to choose one of the preset cron intervals
+   - Choose a preset interval, a daily time, or a custom cron expression
    - For in-depth field descriptions (and manual edits via config.json), see [Configuration Reference](CONFIG.md)
 
 3. **Choose video resolution**
-   - On the same Core page choose your preferred maximum resolution
+   - On **Settings -> Core**, enable automatic downloads and choose your preferred maximum resolution
    - Options range from 360p up through 2160p (4K); YouTube provides the best quality available up to that limit
 
 4. **Configure download limits** (optional)
@@ -280,6 +280,16 @@ Set up automatic downloads on a schedule so Youtarr checks for new videos period
 6. **Save configuration**
    - Click "Save" to apply your settings
    - Changes take effect immediately for the next scheduled run
+
+## Schedule Maintenance
+
+Open **Settings -> Scheduling** to change when automatic video cleanup, library repair, session cleanup, filesystem rescanning, or yt-dlp updates run. Watch-status sync and automatic downloads are configured on the same page. Existing feature pages include an **Edit schedule** link. Any task can be set to run as often as every 15 minutes, but for tasks other than automatic downloads the page warns you why that is rarely a good idea; the choice is still yours.
+
+For example, if your server is off overnight, change **Automatic video cleanup** from 02:00 to 18:00 and save. This updates future runs; saving does not immediately delete videos. Configure removal rules and preview deletions on **Settings -> Auto Removal** as before.
+
+The page shows the server timezone. Times and interval presets follow that clock, regardless of your browser's timezone. Configure the server timezone through `TZ` and restart the deployment if it needs changing. Youtarr must be running at the scheduled time; missed runs are not replayed. Startup library repair and filesystem rescanning still run independently of their schedules.
+
+The **Upcoming runs** list at the top shows when each active schedule fires next. Each card also shows its last run and how it ended, for example "completed: Deleted 12 videos and freed 8.10 GB" or "failed: Permission denied", so you can confirm a schedule is working without reading the logs. A schedule whose feature is switched off says so and links to where to turn it on. If a run is still going when its next time comes around, that occurrence is skipped and recorded as such. Times on this page are in the server timezone, and the page keeps itself up to date while it is open.
 
 ## Configure SponsorBlock
 
@@ -358,7 +368,7 @@ Videos can become "missing" if they're manually deleted from disk. This feature 
 
 ## Rescan Files on Disk
 
-Use this when you've moved, renamed, or converted downloaded files outside Youtarr and want Youtarr's database to catch up with what's actually on disk. The rescan walks your downloads folder and updates Youtarr's view of which files exist and where; it does not re-download anything. It also probes files for their actual resolution, so on libraries downloaded before that was tracked, the quality chips on video listings fill in gradually as the nightly rescan works through them.
+Use this when you've moved, renamed, or converted downloaded files outside Youtarr and want Youtarr's database to catch up with what's actually on disk. The rescan walks your downloads folder and updates Youtarr's view of which files exist and where; it does not re-download anything. It also probes files for their actual resolution, so on libraries downloaded before that was tracked, the quality chips on video listings fill in gradually as the scheduled rescan works through them.
 
 Common cases:
 - You converted `.mp4` files to `.mkv` (or another supported container) using ffmpeg.
