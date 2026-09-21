@@ -554,6 +554,9 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *                 type: string
    *               title_filter_regex:
    *                 type: string
+   *               additional_tags:
+   *                 type: string
+   *                 description: Add additional and custom tags to newly downloaded videos from the channel. It is text limited to 1000 characters. The tags are separated by a | character, and is restricted to alphanumeric characters, spaces, dashes, underscores, and (of course) | characters.
    *               m3u_enabled:
    *                 type: boolean
    *                 description: Generate a .m3u playlist file in the channel folder
