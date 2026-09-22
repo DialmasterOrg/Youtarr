@@ -5,6 +5,7 @@ const { spawnYtDlpSync } = require('./ytdlpProcess');
 const configModule = require('./configModule');
 const nfoGenerator = require('./nfoGenerator');
 const ratingMapper = require('./ratingMapper');
+const { parseAdditionalTags } = require('./additionalTags');
 const tempPathManager = require('./download/tempPathManager');
 const downloadSettingsResolver = require('./download/downloadSettingsResolver');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
@@ -368,12 +369,9 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
     const settingsChannelRecord = channelRecord && channelRecord.enabled ? channelRecord : null;
 
     // Merge per-channel custom tags into jsonData.tags (prepended, before YouTube tags)
-    // so the AtomicParsley --keyword args and the NFO writer below pick them up
+    // so the AtomicParsley --keyword args and the NFO writer below pick them up.
     if (settingsChannelRecord && settingsChannelRecord.additional_tags) {
-      const customTags = settingsChannelRecord.additional_tags
-        .split('|')
-        .map(t => t.trim())
-        .filter(t => t.length > 0);
+      const customTags = parseAdditionalTags(settingsChannelRecord.additional_tags);
       if (customTags.length > 0) {
         jsonData.tags = [...customTags, ...(jsonData.tags || [])];
       }

@@ -8,6 +8,7 @@ const logger = require('../logger');
 const ratingMapper = require('./ratingMapper');
 
 const { MEDIA_TAB_TYPE_MAP, VALID_TAB_TYPES, parseTabCsv } = require('./tabsUtils');
+const { parseAdditionalTags } = require('./additionalTags');
 const { validateSubFolderName } = require('./filesystem/subfolderValidation');
 const subfolderModule = require('./subfolderModule');
 const m3uGenerator = require('./m3uGenerator');
@@ -212,23 +213,25 @@ class ChannelSettingsModule {
       };
     }
 
-    // Reject whitespace-only tags and duplicate tags
+    // Reject stray | characters (empty or whitespace-only segments)
+    if (trimmed.split('|').some((tag) => tag.trim() === '')) {
+      return {
+        valid: false,
+        error: 'Tags cannot be empty or whitespace-only (check for stray | characters)',
+      };
+    }
+
+    // Reject duplicate tags, compared case-insensitively so 'Gaming|gaming' is rejected too
     const seen = new Set();
-    for (const tag of trimmed.split('|')) {
-      const normalized = tag.trim();
-      if (normalized === '') {
+    for (const tag of parseAdditionalTags(trimmed)) {
+      const lower = tag.toLowerCase();
+      if (seen.has(lower)) {
         return {
           valid: false,
-          error: 'Tags cannot be empty or whitespace-only (check for stray | characters)',
+          error: `Duplicate tags are not allowed: ${tag}`,
         };
       }
-      if (seen.has(normalized)) {
-        return {
-          valid: false,
-          error: `Duplicate tags are not allowed: ${normalized}`,
-        };
-      }
-      seen.add(normalized);
+      seen.add(lower);
     }
 
     return { valid: true };
