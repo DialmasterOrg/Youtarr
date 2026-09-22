@@ -495,6 +495,21 @@ class ConfigModule extends EventEmitter {
     return !getExternalCookiesPath() || getExternalCookiesStatus()?.ready === true;
   }
 
+  getCookiesAccessKey() {
+    const cookiesPath = this.getCookiesPath();
+    if (!cookiesPath || !this.hasUsableCookies()) return null;
+
+    const external = getExternalCookiesStatus();
+    if (external) return external.fingerprint || null;
+
+    try {
+      const stat = fs.statSync(cookiesPath);
+      return `${cookiesPath}:${stat.size}:${stat.mtimeMs}`;
+    } catch {
+      return null;
+    }
+  }
+
   getCookiesStatus() {
     const configDir = path.dirname(this.configPath);
     const customPath = path.join(configDir, 'cookies.user.txt');

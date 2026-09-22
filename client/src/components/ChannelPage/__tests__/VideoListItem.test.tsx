@@ -114,7 +114,7 @@ describe('VideoListItem Component', () => {
     test('renders "Members Only" status for subscriber-only video', () => {
       const membersOnlyVideo = { ...mockVideo, availability: 'subscriber_only' };
       renderWithProviders(<VideoListItem {...defaultProps} video={membersOnlyVideo} />);
-      expect(screen.getByText('Members Only')).toBeInTheDocument();
+      expect(screen.getByText('Members: Cookies Required')).toBeInTheDocument();
     });
 
     test('renders "Ignored" status for ignored video', () => {
@@ -799,7 +799,7 @@ describe('VideoListItem Component', () => {
         <VideoListItem {...defaultProps} video={membersOnlyVideo} />
       );
       // Verify the members only video renders with its status
-      expect(screen.getByText('Members Only')).toBeInTheDocument();
+      expect(screen.getByText('Members: Cookies Required')).toBeInTheDocument();
       expect(screen.getByText('Test Video Title')).toBeInTheDocument();
     });
 

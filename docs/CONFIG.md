@@ -387,7 +387,7 @@ Sync is one-way (server -> Youtarr). Non-owner Plex users come from the server's
 - **Type**: `boolean`
 - **Default**: `false`
 - **Description**: Use cookies for YouTube authentication
-- **Note**: May be required in some cases to get around YouTube bot detection or access members-only content for an account with an active channel membership. Enable only when needed: logged-in sessions use different YouTube player clients, and YouTube has been restricting stream formats on those for some accounts. When cookies are enabled Youtarr adds the `mweb` and `web_safari` player clients to every video download and metadata fetch; free (non-Premium) accounts affected by the restriction top out at 1080p. See "Downloads Are Only 360p With Cookies Enabled" in [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+- **Note**: May be required in some cases to get around YouTube bot detection or access members-only content for an account with an active channel membership. When enabled, Youtarr automatically includes members-only videos for which the account has access. Access is checked per video; explicit denials expire after 24 hours and reset when cookies change or a video is retried. Enable only when needed: logged-in sessions use different YouTube player clients, and YouTube has been restricting stream formats on those for some accounts. When cookies are enabled Youtarr adds the `mweb` and `web_safari` player clients to every video download and metadata fetch; free (non-Premium) accounts affected by the restriction top out at 1080p. See "Downloads Are Only 360p With Cookies Enabled" in [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 ### Custom Cookies Uploaded
 - **Config Key**: `customCookiesUploaded`

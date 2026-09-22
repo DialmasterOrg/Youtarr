@@ -59,7 +59,7 @@ describe('external cookie validation and status', () => {
   });
 
   test('validates a private copy with the installed executable and reports only safe metadata', () => {
-    expect(cookies.getExternalCookiesStatus()).toEqual({
+    expect(cookies.getExternalCookiesStatus()).toMatchObject({
       path: sourcePath, ready: true, lastModified: fs.statSync(sourcePath).mtime.toISOString(),
       warning: null, error: null,
     });

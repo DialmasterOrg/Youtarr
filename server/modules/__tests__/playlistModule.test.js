@@ -779,9 +779,8 @@ describe('playlistModule', () => {
       expect(rows.map((r) => r.youtube_id)).toEqual(['v1']);
     });
 
-    test('prunes tracked rows that are now private or removed from the playlist', async () => {
+    test('keeps tracked rows when the refresh contains unavailable placeholders', async () => {
       metadataCount = 2;
-      const { Op } = require('sequelize');
       Playlist.findOne.mockResolvedValue({
         id: 1, playlist_id: 'PLabc', url: 'https://u',
         min_duration: null, max_duration: null, title_filter_regex: null,
@@ -809,9 +808,7 @@ describe('playlistModule', () => {
       mockChild.emit('close', 0);
       await promise;
 
-      expect(PlaylistVideo.destroy).toHaveBeenCalledWith({
-        where: { playlist_id: 'PLabc', youtube_id: { [Op.notIn]: ['v1'] } },
-      });
+      expect(PlaylistVideo.destroy).not.toHaveBeenCalled();
     });
 
     test('does not prune when the fetch looks incomplete (fewer entries than reported)', async () => {

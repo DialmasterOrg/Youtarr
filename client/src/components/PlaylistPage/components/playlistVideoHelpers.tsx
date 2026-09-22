@@ -8,7 +8,8 @@ export type PlaylistVideoStatusColor = 'success' | 'default' | 'warning' | 'erro
 // Ignored videos stay downloadable: explicitly selecting one is an intentional
 // override of the ignore.
 export function isDownloadable(v: PlaylistVideo): boolean {
-  return !v.activity && !v.downloaded && !v.youtube_removed;
+  return !v.activity && !v.downloaded && !v.youtube_removed &&
+    !(v.availability === 'subscriber_only' && ['access_denied', 'no_cookies'].includes(v.members_only_access || 'no_cookies'));
 }
 
 // Maps PlaylistVideo's snake_case file fields to the indicator's camelCase props.
@@ -36,6 +37,12 @@ export function statusLabel(v: PlaylistVideo): { label: string; color: PlaylistV
   if (v.youtube_removed) return { label: 'Removed on YT', color: 'error' };
   if (v.downloaded) return { label: 'Downloaded', color: 'success' };
   if (v.previously_downloaded) return { label: 'Missing', color: 'error' };
+  if (v.availability === 'subscriber_only') {
+    if (v.members_only_access === 'access_confirmed') return { label: 'Members: access confirmed', color: 'success' };
+    if (v.members_only_access === 'access_unchecked') return { label: 'Members: will check access', color: 'warning' };
+    if (v.members_only_access === 'access_denied') return { label: 'Members: account lacks access', color: 'error' };
+    return { label: 'Members: cookies required', color: 'error' };
+  }
   return { label: 'Tracked', color: 'default' };
 }
 

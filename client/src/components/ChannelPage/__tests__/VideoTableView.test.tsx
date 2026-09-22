@@ -248,7 +248,7 @@ describe('VideoTableView Component', () => {
     test('renders "Members Only" status for subscriber-only video', () => {
       const membersOnlyVideo = { ...mockVideo, availability: 'subscriber_only' };
       renderWithProviders(<VideoTableView {...defaultProps} videos={[membersOnlyVideo]} />);
-      expect(screen.getByText('Members Only')).toBeInTheDocument();
+      expect(screen.getByText('Members: Cookies Required')).toBeInTheDocument();
     });
   });
 

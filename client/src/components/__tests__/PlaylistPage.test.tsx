@@ -420,7 +420,7 @@ describe('PlaylistPage video list notices', () => {
       screen.getByText(/private and deleted videos/i)
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/fewer videos here than YouTube reports/i)
+      screen.getByText(/Valid cookies automatically include eligible members-only videos/i)
     ).toBeInTheDocument();
   });
 });

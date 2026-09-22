@@ -39,6 +39,7 @@ describe('VideoValidationModule', () => {
     jest.clearAllMocks();
     // Clear the module's cache
     videoValidationModule.cache.clear();
+    videoValidationModule.accessRecords.clear();
     // Clear logger mocks
     logger.debug.mockClear();
     logger.info.mockClear();
@@ -129,6 +130,25 @@ describe('VideoValidationModule', () => {
     it('should throw error for null URL', () => {
       expect(() => videoValidationModule.normalizeUrlToVideoId(null))
         .toThrow('Invalid URL provided');
+    });
+  });
+
+  describe('members-only access records', () => {
+    it('expires an explicit denial after 24 hours', () => {
+      configModule.hasUsableCookies.mockReturnValue(true);
+      videoValidationModule.recordAccessDenied('member1234a');
+      const record = videoValidationModule.accessRecords.get('member1234a');
+      record.checkedAt -= videoValidationModule.accessTTL;
+
+      expect(videoValidationModule.getAccessState('member1234a')).toBe('access_unchecked');
+    });
+
+    it('replaces a denial after a successful access check', () => {
+      configModule.hasUsableCookies.mockReturnValue(true);
+      videoValidationModule.recordAccessDenied('member1234a');
+      videoValidationModule.recordAccessConfirmed('member1234a');
+
+      expect(videoValidationModule.getAccessState('member1234a')).toBe('access_confirmed');
     });
   });
 

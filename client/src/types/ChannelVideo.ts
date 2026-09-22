@@ -22,6 +22,7 @@ export interface ChannelVideo {
   youtube_removed?: boolean;
   duration: number;
   availability?: string | null;
+  members_only_access?: 'access_confirmed' | 'access_denied' | 'access_unchecked' | 'no_cookies' | 'public';
   fileSize?: number | null;
   filePath?: string | null;
   audioFilePath?: string | null;

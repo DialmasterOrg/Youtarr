@@ -82,7 +82,7 @@ export const CookieConfigSection: React.FC<CookieConfigSectionProps> = ({
 
       <Alert severity="info" style={{ marginBottom: 16 }}>
         <Typography variant="body2">
-          Cookies help bypass YouTube's bot detection and enable downloading members-only videos when the account holds an active channel membership.
+          Cookies help bypass YouTube's bot detection. When enabled, Youtarr automatically includes members-only videos for which this account has access. Access is checked per video; a denied check is retried after cookies change, after 24 hours, or when you retry manually.
         </Typography>
       </Alert>
 

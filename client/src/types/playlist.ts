@@ -55,6 +55,8 @@ export interface PlaylistVideo {
   // skips these during downloads unless allowRedownload is set.
   previously_downloaded: boolean;
   youtube_removed: boolean;
+  availability?: string;
+  members_only_access?: 'access_confirmed' | 'access_denied' | 'access_unchecked' | 'no_cookies' | 'public';
   // Populated only for videos that have been downloaded; used to hydrate VideoModal
   video_id: number | null;
   file_path: string | null;

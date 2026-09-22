@@ -8,22 +8,56 @@ const youtubeUrlParser = require('./youtubeUrlParser');
 class VideoValidationModule {
   constructor() {
     this.cache = new Map();
-    this.deniedAccessSet = new Set();
+    this.accessRecords = new Map();
     this.cacheTTL = 5 * 60 * 1000;
+    this.accessTTL = 24 * 60 * 60 * 1000;
     if (typeof configModule.on === 'function') {
       configModule.on('change', () => {
         this.cache.clear();
-        this.deniedAccessSet.clear();
+        this.accessRecords.clear();
       });
     }
   }
 
+  getCookieAccessKey() {
+    if (typeof configModule.getCookiesAccessKey === 'function') {
+      return configModule.getCookiesAccessKey();
+    }
+    return configModule.hasUsableCookies?.() ? 'configured-cookies' : null;
+  }
+
+  recordAccess(youtubeId, state) {
+    const cookieKey = this.getCookieAccessKey();
+    if (!youtubeId || !cookieKey) return;
+    this.accessRecords.set(youtubeId, { state, cookieKey, checkedAt: Date.now() });
+  }
+
   recordAccessDenied(youtubeId) {
-    if (youtubeId) this.deniedAccessSet.add(youtubeId);
+    this.recordAccess(youtubeId, 'access_denied');
+  }
+
+  recordAccessConfirmed(youtubeId) {
+    this.recordAccess(youtubeId, 'access_confirmed');
+  }
+
+  getAccessState(youtubeId, isMembersOnly = true) {
+    if (!isMembersOnly) return 'public';
+    const cookieKey = this.getCookieAccessKey();
+    if (!cookieKey) return 'no_cookies';
+    const record = youtubeId ? this.accessRecords.get(youtubeId) : null;
+    if (!record || record.cookieKey !== cookieKey || Date.now() - record.checkedAt >= this.accessTTL) {
+      if (record) this.accessRecords.delete(youtubeId);
+      return 'access_unchecked';
+    }
+    return record.state;
   }
 
   isAccessDenied(youtubeId) {
-    return youtubeId ? this.deniedAccessSet.has(youtubeId) : false;
+    return this.getAccessState(youtubeId) === 'access_denied';
+  }
+
+  resetAccess(youtubeId) {
+    if (youtubeId) this.accessRecords.delete(youtubeId);
   }
 
   /**
@@ -98,11 +132,12 @@ class VideoValidationModule {
    */
   toValidationResponse(videoId, metadata, isDuplicate) {
     const isMembersOnly = metadata.availability === 'subscriber_only';
-    const hasCookies = configModule.hasUsableCookies();
-    const canDownloadMembersOnly = isMembersOnly && hasCookies;
-    const accessState = isMembersOnly
-      ? (canDownloadMembersOnly ? 'access_confirmed' : 'no_cookies')
-      : 'public';
+    let accessState = this.getAccessState(videoId, isMembersOnly);
+    const canDownloadMembersOnly = isMembersOnly && !['no_cookies', 'access_denied'].includes(accessState);
+    if (isMembersOnly && canDownloadMembersOnly) {
+      this.recordAccessConfirmed(videoId);
+      accessState = 'access_confirmed';
+    }
     const availabilityProvided = Boolean(metadata.availability);
 
     const contentRating = metadata.contentRating || metadata.content_rating || null;

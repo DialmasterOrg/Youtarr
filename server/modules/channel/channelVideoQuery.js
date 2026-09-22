@@ -131,6 +131,10 @@ class ChannelVideoQuery {
       if (!plainVideoObject.youtube_removed) {
         plainVideoObject.thumbnail = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
       }
+      if (plainVideoObject.availability === 'subscriber_only') {
+        const videoValidationModule = require('../videoValidationModule');
+        plainVideoObject.members_only_access = videoValidationModule.getAccessState(videoId);
+      }
 
       return plainVideoObject;
     });

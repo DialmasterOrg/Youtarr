@@ -17,6 +17,7 @@ const downloadCleanup = require('./downloadCleanup');
 const transient403RetryPlanner = require('./transient403RetryPlanner');
 const failureAdvisor = require('./failureAdvisor');
 const failedVideoEnricher = require('./failedVideoEnricher');
+const videoValidationModule = require('../videoValidationModule');
 const { containsHttp403 } = require('./ytdlpStderrSignals');
 const { runCompletionSideEffects } = require('./downloadCompletionEffects');
 const {
@@ -182,6 +183,9 @@ async function finalizeDownloadJob({
     let videoData = await VideoMetadataProcessor.processVideoMetadata(urlsToProcess);
 
     const { successfulVideos, failedVideosList } = downloadResultProcessor.partitionDownloadResults(videoData, errorTracker, urlsToProcess);
+    for (const video of successfulVideos) {
+      videoValidationModule.recordAccessConfirmed(video.youtubeId);
+    }
     // Use successful videos for further processing (archive, database, etc.)
     videoData = successfulVideos;
 

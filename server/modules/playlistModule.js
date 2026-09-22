@@ -1,4 +1,4 @@
-const { spawn } = require('child_process');
+const { spawnYtDlp } = require('./ytdlpProcess');
 const { Op } = require('sequelize');
 const logger = require('../logger');
 const { sequelize, Sequelize } = require('../db');
@@ -71,7 +71,7 @@ class PlaylistModule {
       ];
       if (skipWebpage) args.push('--extractor-args', 'youtubetab:skip=webpage');
       args.push(url);
-      const child = spawn('yt-dlp', args);
+      const child = spawnYtDlp(args);
       let stdout = '';
       let stderr = '';
 
@@ -262,11 +262,12 @@ class PlaylistModule {
       ],
     });
 
-    // Prune rows that are no longer in the live playlist (went private, or were
-    // removed on YouTube) so they stop showing in Youtarr and stop being queued.
+    // Do not mistake an authentication-dependent placeholder for playlist removal.
+    // Keeping known rows also preserves local playback when membership later lapses.
+    const hasUnavailableEntries = entries.some((entry) => this.isUnavailableTitle(entry.title));
     // Unknown counts and partial fetches cannot prove that missing entries were
     // removed. A confirmed empty playlist can safely clear the tracked rows.
-    if (complete) {
+    if (complete && !hasUnavailableEntries) {
       const keepIds = available.map((e) => e.id).filter(Boolean);
       const where = { playlist_id: playlist.playlist_id };
       if (keepIds.length) where.youtube_id = { [Op.notIn]: keepIds };
@@ -496,7 +497,7 @@ class PlaylistModule {
         args.push('--extractor-args', cookiesPath ? 'youtubetab:skip=webpage,authcheck' : 'youtubetab:skip=webpage');
       }
       args.push(url);
-      const child = spawn('yt-dlp', args);
+      const child = spawnYtDlp(args);
       let stdout = '';
       let stderr = '';
       child.stdout.on('data', (d) => { stdout += d.toString(); });

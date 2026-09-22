@@ -9,16 +9,16 @@ export const getVideoStatus = (video: ChannelVideo): VideoStatus => {
   if (video.ignored) {
     return 'ignored';
   }
+  if (video.added && video.removed) {
+    return 'missing';
+  }
+  if (video.added) {
+    return 'downloaded';
+  }
   if (video.availability === 'subscriber_only') {
     return 'members_only';
   }
-  if (!video.added) {
-    return 'never_downloaded';
-  }
-  if (video.removed) {
-    return 'missing';
-  }
-  return 'downloaded';
+  return 'never_downloaded';
 };
 
 export const getStatusColor = (status: VideoStatus) => {
@@ -76,6 +76,16 @@ export const getStatusLabel = (status: VideoStatus) => {
       return 'Ignored';
     default:
       return 'Not Downloaded';
+  }
+};
+
+export const getVideoStatusLabel = (video: ChannelVideo, status = getVideoStatus(video)) => {
+  if (status !== 'members_only') return getStatusLabel(status);
+  switch (video.members_only_access) {
+    case 'access_confirmed': return 'Members: Access Confirmed';
+    case 'access_unchecked': return 'Members: Will Check Access';
+    case 'access_denied': return 'Members: Account Lacks Access';
+    default: return 'Members: Cookies Required';
   }
 };
 

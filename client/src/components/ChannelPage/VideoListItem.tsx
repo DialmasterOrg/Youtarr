@@ -14,7 +14,7 @@ import { ChannelVideo } from '../../types/ChannelVideo';
 import { decodeHtml, formatAddedDate } from '../../utils/formatters';
 import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_THEMED_CHIP_SMALL_STYLE } from '../shared/chipStyles';
 import { getPublishedDateDisplay } from './publishedDateDisplay';
-import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo, getStatusChipVariant, getStatusChipStyle } from '../../utils/videoStatus';
+import { getVideoStatus, getStatusColor, getStatusIcon, getVideoStatusLabel, getMediaTypeInfo, getStatusChipVariant, getStatusChipStyle } from '../../utils/videoStatus';
 import StillLiveDot from './StillLiveDot';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
 import ProtectionShieldButton from '../shared/ProtectionShieldButton';
@@ -49,7 +49,8 @@ function VideoListItem({
   const status = getVideoStatus(video);
   // Check if video is still live (not "was_live" and not null/undefined)
   const isStillLive = video.live_status && video.live_status !== 'was_live';
-  const isDownloadSelectable = (status === 'never_downloaded' || status === 'missing' || status === 'ignored') && !isStillLive;
+  const isDownloadSelectable = (status === 'never_downloaded' || status === 'missing' || status === 'ignored' ||
+    (status === 'members_only' && ['access_confirmed', 'access_unchecked'].includes(video.members_only_access || 'no_cookies'))) && !isStillLive;
   const isDeleteSelectable = video.added && !video.removed && !isStillLive;
   const isDownloadAllowed = selectionMode !== 'delete';
   const isDeleteAllowed = selectionMode !== 'download';
@@ -57,7 +58,7 @@ function VideoListItem({
   const isDeleteChecked = selectedForDeletion.includes(video.youtube_id);
   const mediaTypeInfo = getMediaTypeInfo(video.media_type);
   const isIgnored = status === 'ignored';
-  const statusLabel = status === 'downloaded' ? 'Available' : getStatusLabel(status);
+  const statusLabel = status === 'downloaded' ? 'Available' : getVideoStatusLabel(video, status);
   const isClickable = (isDownloadSelectable && isDownloadAllowed) || (isDeleteSelectable && isDeleteAllowed);
 
   return (

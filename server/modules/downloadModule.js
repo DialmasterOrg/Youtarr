@@ -11,6 +11,7 @@ const MessageEmitter = require('./messageEmitter');
 const ChannelVideo = require('../models/channelvideo');
 const logger = require('../logger');
 const playlistDownloadModule = require('./playlistDownloadModule');
+const videoValidationModule = require('./videoValidationModule');
 
 const DEFAULT_FILES_TO_DOWNLOAD = 5;
 
@@ -627,9 +628,31 @@ class DownloadModule {
       jobType = jobLabel;
     }
 
+    const originalUrls = this.getJobDataValue(jobData, 'urls') || [];
+    const urls = originalUrls.filter((url) => {
+      try {
+        const youtubeId = normalizeUrlToVideoId(url).id;
+        if (!jobLabel) {
+          // A direct user retry must recheck access rather than inherit a stale denial.
+          videoValidationModule.resetAccess(youtubeId);
+          return true;
+        }
+        return !videoValidationModule.isAccessDenied(youtubeId);
+      } catch {
+        return true;
+      }
+    });
+    if (urls.length !== originalUrls.length) {
+      if (reqOrJobData.body) reqOrJobData.body.urls = urls;
+      else jobData.urls = urls;
+    }
+    if (originalUrls.length > 0 && urls.length === 0) {
+      return { queued: 0, acceptedIds: [], alreadyActiveIds: [] };
+    }
+
     logger.info({ jobData }, 'Running specific downloads job');
 
-    const requestedUrls = this.getJobDataValue(jobData, 'urls') || [];
+    const requestedUrls = urls;
     const requestedIds = requestedUrls.flatMap(url => {
       try { return [normalizeUrlToVideoId(url).id]; } catch { return []; }
     });
@@ -647,7 +670,6 @@ class DownloadModule {
 
     if (!jobId) return { queued: 0, acceptedIds: [], alreadyActiveIds: [...new Set(requestedIds)] };
     const job = jobModule.getJob(jobId);
-    const urls = this.getJobDataValue(jobData, 'urls') || [];
     const acceptedIds = [...new Set(urls.flatMap(url => {
       try { return [normalizeUrlToVideoId(url).id]; } catch { return []; }
     }))];
