@@ -371,7 +371,7 @@ describe('DownloadPerformanceSection Component', () => {
 
       expect(screen.getAllByText('Auto-Retry Failed Videos').length).toBeGreaterThan(0);
       expect(
-        screen.getByText('Re-run videos that fail with a transient HTTP 403 in a fresh download job')
+        screen.getByText('Re-run videos after retryable download failures in a fresh download job')
       ).toBeInTheDocument();
     });
 

@@ -198,6 +198,18 @@ const createServerModule = ({
         const cronMock = { schedule: jest.fn() };
         const cronJobsMock = { initialize: jest.fn() };
         const watchStatusSchedulerMock = { scheduleTask: jest.fn(), subscribe: jest.fn() };
+        const scheduledTaskRunsMock = {
+          markInterruptedRuns: jest.fn().mockResolvedValue(undefined),
+          getLatestRuns: jest.fn().mockResolvedValue({}),
+          getLatestRun: jest.fn().mockResolvedValue(null),
+          record: jest.fn().mockResolvedValue(undefined)
+        };
+        const scheduledTaskManagerMock = {
+          setRunRecorder: jest.fn(),
+          getStatus: jest.fn(() => []),
+          stopAll: jest.fn(),
+          updateTask: jest.fn()
+        };
         const rateLimitMiddleware = jest.fn(() => (req, res, next) => next());
         // Mock ipKeyGenerator to normalize IPv6 addresses
         rateLimitMiddleware.ipKeyGenerator = jest.fn((ip) => ip);
@@ -255,6 +267,8 @@ const createServerModule = ({
         }));
         jest.doMock('../modules/cronJobs', () => cronJobsMock);
         jest.doMock('../modules/mediaServers/watchStatusScheduler', () => watchStatusSchedulerMock);
+        jest.doMock('../modules/scheduledTaskRuns', () => scheduledTaskRunsMock);
+        jest.doMock('../modules/scheduledTaskManager', () => scheduledTaskManagerMock);
         jest.doMock('../modules/channel/channelBackdropBackfill', () => ({ subscribe: jest.fn() }));
         jest.doMock('../modules/webSocketServer.js', () => jest.fn());
         jest.doMock('node-cron', () => cronMock);
@@ -275,6 +289,8 @@ const createServerModule = ({
         state.plexModuleMock = plexModuleMock;
         state.rateLimitMiddleware = rateLimitMiddleware;
         state.watchStatusSchedulerMock = watchStatusSchedulerMock;
+        state.scheduledTaskRunsMock = scheduledTaskRunsMock;
+        state.scheduledTaskManagerMock = scheduledTaskManagerMock;
         state.sessionUpdateMock = effectiveSession?.update || defaultSessionUpdate;
 
         const finalize = () => resolve(state);
@@ -326,12 +342,16 @@ describe('server initialization', () => {
   });
 
   test('initializes database and exposes health route', async () => {
-    const { app, dbMock, channelModuleMock, watchStatusSchedulerMock } = await createServerModule();
+    const {
+      app, dbMock, channelModuleMock, watchStatusSchedulerMock, scheduledTaskRunsMock, scheduledTaskManagerMock
+    } = await createServerModule();
 
     expect(dbMock.initializeDatabase).toHaveBeenCalledTimes(1);
-    expect(channelModuleMock.subscribe).toHaveBeenCalledTimes(1);
+    expect(channelModuleMock.subscribe).not.toHaveBeenCalled();
     expect(watchStatusSchedulerMock.scheduleTask).toHaveBeenCalledTimes(1);
     expect(watchStatusSchedulerMock.subscribe).toHaveBeenCalledTimes(1);
+    expect(scheduledTaskRunsMock.markInterruptedRuns).toHaveBeenCalledTimes(1);
+    expect(scheduledTaskManagerMock.setRunRecorder).toHaveBeenCalledWith(scheduledTaskRunsMock);
 
     const [healthHandler] = findRouteHandlers(app, 'get', '/api/health');
     const req = createMockRequest({ path: '/api/health' });

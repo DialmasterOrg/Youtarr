@@ -39,6 +39,7 @@ describe('JobModule', () => {
   let JobVideo;
   let ChannelVideo;
   let logger;
+  let scheduledTaskRuns;
   let originalDisableInitialBackfill;
 
   const mockJobsDir = '/test/jobs';
@@ -96,7 +97,9 @@ describe('JobModule', () => {
 
     // Mock node-cron
     cron = require('node-cron');
-    cron.schedule = jest.fn();
+    cron.validate.mockReturnValue(true);
+    cron.getTasks.mockReturnValue(new Map());
+    cron.schedule = jest.fn(() => ({ start: jest.fn(), stop: jest.fn() }));
 
     // Mock MessageEmitter
     MessageEmitter = require('../messageEmitter.js');
@@ -108,8 +111,15 @@ describe('JobModule', () => {
     // Mock configModule before it's required by jobModule
     jest.doMock('../configModule', () => ({
       getJobsPath: jest.fn().mockReturnValue(mockJobsDir),
+      getConfig: jest.fn().mockReturnValue({}),
+      onConfigChange: jest.fn(),
       directoryPath: '/test/output'
     }));
+
+    jest.doMock('../scheduledTaskRuns', () => ({
+      record: jest.fn().mockResolvedValue(undefined)
+    }));
+    scheduledTaskRuns = require('../scheduledTaskRuns');
 
     // Mock Sequelize models
     Job = require('../../models/job');
@@ -229,7 +239,7 @@ describe('JobModule', () => {
 
       JobModule = require('../jobModule');
 
-      expect(cron.schedule).toHaveBeenCalledWith('20 2 * * *', expect.any(Function));
+      expect(cron.schedule).toHaveBeenCalledWith('20 2 * * *', expect.any(Function), expect.objectContaining({ scheduled: false }));
     });
 
     test('should attempt initial backfill after timeout', async () => {
@@ -247,6 +257,37 @@ describe('JobModule', () => {
       await new Promise(resolve => setTimeout(resolve, 10));
 
       expect(logger.info).toHaveBeenCalledWith('No complete.list found for backfill. Skipping.');
+    });
+
+    test('records the startup archive repair in the run history', async () => {
+      fs.existsSync.mockReturnValue(false);
+      fs.readFileSync.mockReturnValue(JSON.stringify({ plexApiKey: 'test-key' }));
+      fsPromises.readFile.mockRejectedValue({ code: 'ENOENT' });
+      process.env.JOBMODULE_DISABLE_INITIAL_BACKFILL = 'false';
+
+      JobModule = require('../jobModule');
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(scheduledTaskRuns.record).toHaveBeenCalledWith({
+        taskKey: 'archiveBackfillFrequency',
+        trigger: 'startup',
+        startedAt: expect.any(Date),
+        finishedAt: expect.any(Date),
+        status: 'skipped',
+        outcome: 'skipped',
+        message: 'No download archive (complete.list) found.',
+      });
+    });
+
+    test('does not record a startup run when the initial backfill is disabled', async () => {
+      fs.existsSync.mockReturnValue(false);
+      fs.readFileSync.mockReturnValue(JSON.stringify({ plexApiKey: 'test-key' }));
+      process.env.JOBMODULE_DISABLE_INITIAL_BACKFILL = 'true';
+
+      JobModule = require('../jobModule');
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(scheduledTaskRuns.record).not.toHaveBeenCalled();
     });
   });
 
@@ -2134,10 +2175,52 @@ describe('JobModule', () => {
     test('should skip when complete.list does not exist', async () => {
       fsPromises.readFile.mockRejectedValue({ code: 'ENOENT' });
 
-      await JobModule.backfillFromCompleteList();
+      await expect(JobModule.backfillFromCompleteList()).resolves.toEqual(expect.objectContaining({
+        status: 'skipped', message: 'No download archive (complete.list) found.'
+      }));
 
       expect(logger.info).toHaveBeenCalledWith('No complete.list found for backfill. Skipping.');
+    });
 
+    test('reports records that could not be written as a partial failure', async () => {
+      fsPromises.readFile.mockImplementation(async (path) => {
+        if (path.includes('complete.list')) {
+          return 'youtube video-1\nyoutube video-2\n';
+        }
+        if (path.includes('.info.json')) {
+          const id = path.includes('video-1') ? 'video-1' : 'video-2';
+          return JSON.stringify({
+            id,
+            uploader: 'Channel',
+            title: `Video ${id}`,
+            duration: 100,
+            description: 'Description',
+            upload_date: '20240101',
+            channel_id: 'channel-1'
+          });
+        }
+        throw new Error('Unknown file');
+      });
+      fsPromises.stat.mockRejectedValue(new Error('ENOENT'));
+      Video.findAll.mockResolvedValue([]);
+      ChannelVideo.findAll.mockResolvedValue([]);
+      Video.findOne.mockResolvedValue(null);
+      Video.create.mockRejectedValueOnce(new Error('deadlock'));
+
+      await expect(JobModule.backfillFromCompleteList()).resolves.toEqual(expect.objectContaining({
+        status: 'error',
+        outcome: 'partial',
+        message: 'Recovered 1 video records and 2 channel video records; 1 write failed.',
+        details: { videosUpserts: 1, channelVideosUpserts: 2, failed: 1 }
+      }));
+    });
+
+    test('resolves to an error record when the archive cannot be read', async () => {
+      fsPromises.readFile.mockRejectedValue(new Error('EACCES: permission denied'));
+
+      await expect(JobModule.backfillFromCompleteList()).resolves.toEqual(expect.objectContaining({
+        status: 'error', outcome: 'error', message: 'EACCES: permission denied'
+      }));
     });
 
     test('should backfill missing videos from complete.list', async () => {
@@ -2177,8 +2260,14 @@ describe('JobModule', () => {
       ChannelVideo.findAll.mockResolvedValue([]);
       Video.findOne.mockResolvedValue(null);
 
-      await JobModule.backfillFromCompleteList();
+      const record = await JobModule.backfillFromCompleteList();
 
+      expect(record).toEqual(expect.objectContaining({
+        status: 'success',
+        outcome: 'completed',
+        message: 'Recovered 2 video records and 2 channel video records.',
+        details: { videosUpserts: 2, channelVideosUpserts: 2, failed: 0 }
+      }));
       expect(Video.create).toHaveBeenCalledTimes(2);
       expect(ChannelVideo.findOrCreate).toHaveBeenCalledTimes(2);
       expect(logger.info).toHaveBeenCalledWith(
@@ -2454,12 +2543,13 @@ describe('JobModule', () => {
 
       JobModule.scheduleDailyBackfill();
 
-      expect(cron.schedule).toHaveBeenCalledWith('20 2 * * *', expect.any(Function));
+      expect(cron.schedule).toHaveBeenCalledWith('20 2 * * *', expect.any(Function), expect.objectContaining({ scheduled: false }));
       expect(logger.info).toHaveBeenCalled();
 
     });
 
     test('should handle cron scheduling errors', () => {
+      require('../configModule').getConfig.mockReturnValue({ archiveBackfillFrequency: '0 18 * * *' });
       cron.schedule.mockImplementation(() => {
         throw new Error('Cron error');
       });

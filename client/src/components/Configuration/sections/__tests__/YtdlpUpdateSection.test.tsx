@@ -35,6 +35,9 @@ const versionInfo = {
   currentVersion: '2026.08.05',
   latestVersion: '2026.08.10',
   updateAvailable: true,
+  lastChecked: null,
+  lastUpdated: null,
+  lastResult: null,
 };
 
 const createProps = (
@@ -84,7 +87,7 @@ describe('YtdlpUpdateSection', () => {
     const props = createProps();
     renderWithProviders(<YtdlpUpdateSection {...props} />);
 
-    const toggle = screen.getByRole('checkbox', { name: /automatically update yt-dlp daily/i });
+    const toggle = screen.getByRole('checkbox', { name: /automatically update yt-dlp/i });
     await user.click(toggle);
 
     expect(props.onConfigChange).toHaveBeenCalledWith({ autoUpdateYtdlp: true });
@@ -119,32 +122,44 @@ describe('YtdlpUpdateSection', () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /stable \(recommended\)/i })).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('checkbox', { name: /automatically update yt-dlp daily/i })
+      screen.queryByRole('checkbox', { name: /automatically update yt-dlp/i })
     ).not.toBeInTheDocument();
   });
 
-  test('renders the last-checked status line', () => {
+  test('renders the last-checked status line from the version endpoint history', () => {
+    const props = createProps({
+      ytDlpVersionInfo: {
+        ...versionInfo,
+        lastChecked: '2026-08-17T04:00:00.000Z',
+        lastResult: { status: 'up-to-date' },
+      },
+    });
+    renderWithProviders(<YtdlpUpdateSection {...props} />);
+    expect(screen.getByText(/last checked:.*already up to date/i)).toBeInTheDocument();
+  });
+
+  test('ignores legacy config status fields once the endpoint provides history', () => {
     const props = createProps({
       config: createConfig({
-        ytdlpLastChecked: '2026-08-17T04:00:00.000Z',
-        ytdlpLastResult: { status: 'up-to-date' },
+        ytdlpLastChecked: '2026-04-25T04:00:00.000Z',
+        ytdlpLastResult: { status: 'error', message: 'stale' },
       }),
     });
     renderWithProviders(<YtdlpUpdateSection {...props} />);
-    expect(screen.getByText(/last checked:/i)).toBeInTheDocument();
+    expect(screen.queryByText(/last checked:/i)).not.toBeInTheDocument();
   });
 
   test('reflects a false autoUpdateYtdlp as unchecked', () => {
     const props = createProps({ config: createConfig({ autoUpdateYtdlp: false }) });
     renderWithProviders(<YtdlpUpdateSection {...props} />);
-    const toggle = screen.getByRole('checkbox', { name: /automatically update yt-dlp daily/i });
+    const toggle = screen.getByRole('checkbox', { name: /automatically update yt-dlp/i });
     expect(toggle).not.toBeChecked();
   });
 
   test('reflects a true autoUpdateYtdlp as checked', () => {
     const props = createProps({ config: createConfig({ autoUpdateYtdlp: true }) });
     renderWithProviders(<YtdlpUpdateSection {...props} />);
-    const toggle = screen.getByRole('checkbox', { name: /automatically update yt-dlp daily/i });
+    const toggle = screen.getByRole('checkbox', { name: /automatically update yt-dlp/i });
     expect(toggle).toBeChecked();
   });
 
@@ -153,7 +168,7 @@ describe('YtdlpUpdateSection', () => {
     const props = createProps({ config: createConfig({ autoUpdateYtdlp: true }) });
     renderWithProviders(<YtdlpUpdateSection {...props} />);
 
-    const toggle = screen.getByRole('checkbox', { name: /automatically update yt-dlp daily/i });
+    const toggle = screen.getByRole('checkbox', { name: /automatically update yt-dlp/i });
     await user.click(toggle);
 
     expect(props.onConfigChange).toHaveBeenCalledWith({ autoUpdateYtdlp: false });
@@ -167,11 +182,12 @@ describe('YtdlpUpdateSection', () => {
 
   test('renders "updated to <version>" caption and the last updated timestamp on a real update', () => {
     const props = createProps({
-      config: createConfig({
-        ytdlpLastChecked: '2026-04-25T04:00:00.000Z',
-        ytdlpLastUpdated: '2026-04-25T04:00:00.000Z',
-        ytdlpLastResult: { status: 'updated', version: '2026.04.20' },
-      }),
+      ytDlpVersionInfo: {
+        ...versionInfo,
+        lastChecked: '2026-04-25T04:00:00.000Z',
+        lastUpdated: '2026-04-25T04:00:00.000Z',
+        lastResult: { status: 'updated', version: '2026.04.20' },
+      },
     });
     renderWithProviders(<YtdlpUpdateSection {...props} />);
     expect(screen.getByText(/updated to 2026\.04\.20/i)).toBeInTheDocument();
@@ -180,10 +196,11 @@ describe('YtdlpUpdateSection', () => {
 
   test('renders "skipped" caption when an auto-update was skipped', () => {
     const props = createProps({
-      config: createConfig({
-        ytdlpLastChecked: '2026-04-25T04:00:00.000Z',
-        ytdlpLastResult: { status: 'skipped', message: 'Cannot update while downloads are in progress.' },
-      }),
+      ytDlpVersionInfo: {
+        ...versionInfo,
+        lastChecked: '2026-04-25T04:00:00.000Z',
+        lastResult: { status: 'skipped', message: 'Cannot update while downloads are in progress.' },
+      },
     });
     renderWithProviders(<YtdlpUpdateSection {...props} />);
     expect(screen.getByText(/skipped:.*downloads are in progress/i)).toBeInTheDocument();
@@ -191,10 +208,11 @@ describe('YtdlpUpdateSection', () => {
 
   test('renders "update failed" caption with message on error', () => {
     const props = createProps({
-      config: createConfig({
-        ytdlpLastChecked: '2026-04-25T04:00:00.000Z',
-        ytdlpLastResult: { status: 'error', message: 'Permission denied' },
-      }),
+      ytDlpVersionInfo: {
+        ...versionInfo,
+        lastChecked: '2026-04-25T04:00:00.000Z',
+        lastResult: { status: 'error', message: 'Permission denied' },
+      },
     });
     renderWithProviders(<YtdlpUpdateSection {...props} />);
     expect(screen.getByText(/update failed: Permission denied/i)).toBeInTheDocument();

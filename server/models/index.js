@@ -13,6 +13,7 @@ const Subfolder = require('./subfolder');
 const VideoWatchStatus = require('./videowatchstatus');
 const MediaServerUser = require('./mediaserveruser');
 const WatchStatusSyncCursor = require('./watchstatussynccursor');
+const ScheduledTaskRun = require('./scheduledtaskrun');
 const ApiKeyChannelGrant = require('./apikeychannelgrant');
 const ExternalRequest = require('./externalrequest');
 const ExternalApiUsageBucket = require('./externalapiusagebucket');
@@ -64,6 +65,7 @@ module.exports = {
   VideoWatchStatus,
   MediaServerUser,
   WatchStatusSyncCursor,
+  ScheduledTaskRun,
   ApiKeyChannelGrant,
   ExternalRequest,
   ExternalApiUsageBucket,

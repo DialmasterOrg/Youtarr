@@ -103,7 +103,6 @@ function VideoListContainer<IdType extends string | number>({
           rightActions={toolbarRightActions}
           isMobile={isMobile}
         />
-        {activeCount > 0 && <VideoListFilterChips filters={filters} />}
       </div>
 
       <VideoListFilterPanel
@@ -116,6 +115,14 @@ function VideoListContainer<IdType extends string | number>({
         }}
         customFilters={customFilters}
       />
+
+      {activeCount > 0 && (
+        <div
+          style={{ padding: isMobile ? '0 10px 6px 10px' : '0 16px 8px 16px' }}
+        >
+          <VideoListFilterChips filters={filters} />
+        </div>
+      )}
 
       {tabsSlot && <div>{tabsSlot}</div>}
 

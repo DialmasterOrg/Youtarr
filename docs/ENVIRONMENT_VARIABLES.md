@@ -216,9 +216,9 @@ Note: *The `/path/to/youtube/videos` is just an example. Use the path you have c
 ### TZ
 **Required**: No
 **Default**: `UTC`
-**Description**: Timezone for scheduled jobs and cleanup tasks
+**Description**: Timezone for console log timestamps, scheduled jobs, and cleanup tasks
 **Format**: IANA timezone (e.g., `America/Los_Angeles`, `Europe/Paris`)
-**Note**: Affects cron job execution times in Youtarr container.
+**Note**: Console timestamps include the numeric UTC offset and follow daylight-saving changes for the configured timezone. The provided Compose files default to UTC when `TZ` is unset.
 
 ### YOUTARR_IMAGE
 **Required**: No

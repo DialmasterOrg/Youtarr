@@ -711,6 +711,7 @@ describe('plexModule', () => {
         { strong: true },
         {
           headers: {
+            Accept: 'application/json',
             'X-Plex-Product': 'Youtarr',
             'X-Plex-Client-Identifier': 'test-uuid-1234'
           }
@@ -730,6 +731,19 @@ describe('plexModule', () => {
       expect(logger.error).toHaveBeenCalledWith({ err: error }, 'Failed to generate Plex auth URL');
     });
 
+    test.each([
+      ['XML', '<?xml version="1.0"?><pin id="12345" code="ABC123"/>'],
+      ['null', null],
+      ['missing ID', { code: 'ABC123' }],
+      ['missing code', { id: 12345 }],
+      ['invalid ID', { id: 0, code: 'ABC123' }],
+      ['blank code', { id: 12345, code: ' ' }],
+    ])('rejects %s PIN responses instead of generating a broken URL', async (_label, data) => {
+      axios.post.mockResolvedValue({ data });
+
+      await expect(plexModule.getAuthUrl()).rejects.toThrow('Plex returned an invalid PIN response');
+    });
+
     test('uses correct headers', async () => {
       axios.post.mockResolvedValue({
         data: { id: 1, code: 'TEST' }
@@ -742,6 +756,7 @@ describe('plexModule', () => {
         expect.any(Object),
         {
           headers: {
+            Accept: 'application/json',
             'X-Plex-Product': 'Youtarr',
             'X-Plex-Client-Identifier': 'test-uuid-1234'
           }
@@ -765,6 +780,7 @@ describe('plexModule', () => {
         'https://plex.tv/api/v2/pins/pin-123',
         {
           headers: {
+            Accept: 'application/json',
             'X-Plex-Client-Identifier': 'test-uuid-1234'
           }
         }

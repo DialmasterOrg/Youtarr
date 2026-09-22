@@ -17,6 +17,7 @@ import {
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { ConfigState, AutoRemovalDryRunResult } from '../types';
+import { ScheduleSummary } from './components/ScheduleSummary';
 import { useAutoRemovalDryRun } from '../hooks/useAutoRemovalDryRun';
 import { AutoRemovalWatchedControls } from './components/AutoRemovalWatchedControls';
 import { AutoRemovalPreview } from './components/AutoRemovalPreview';
@@ -142,11 +143,14 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
         <AlertTitle>Automatic Deletion</AlertTitle>
         <Typography variant="body2">
           This feature automatically deletes downloaded videos based on your configured rules.
-          Deletions run nightly at 2:00 AM and remove the files from disk. A deleted video can
+          Deletions remove the files from disk. A deleted video can
           only be restored by downloading it again (if it&apos;s still available on YouTube).
         </Typography>
       </Alert>
 
+      <div className="mb-4">
+        <ScheduleSummary scheduleKey="autoRemovalFrequency" value={config.autoRemovalFrequency} />
+      </div>
       <Grid container spacing={2}>
         {config.autoRemovalEnabled && (
           <>

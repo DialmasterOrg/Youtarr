@@ -1,5 +1,6 @@
 const { Sequelize, sequelize } = require('../db.js');
-const { Video } = require('../models');
+const { injectReplacements } = require('sequelize/lib/utils/sql');
+const { Video, JobVideo, Job } = require('../models');
 const fs = require('fs').promises;
 const path = require('path');
 const configModule = require('./configModule');
@@ -8,6 +9,8 @@ const watchStatusQueries = require('./mediaServers/watchStatusQueries');
 const logger = require('../logger');
 const messageEmitter = require('./messageEmitter');
 const m3uGenerator = require('./m3uGenerator');
+const scheduledTaskRuns = require('./scheduledTaskRuns');
+const rescanRunSummary = require('./rescanRunSummary');
 const { AUDIO_EXTENSIONS, MEDIA_EXTENSIONS } = require('./filesystem/constants');
 const { probeVideoDimensions } = require('./resolutionTier');
 const createLimiter = require('./subscriptionImport/concurrencyLimiter');
@@ -45,116 +48,99 @@ class VideosModule {
       const offset = (page - 1) * limit;
 
       // Build WHERE conditions
-      const whereConditions = [];
-      const replacements = {};
+      const where = {};
 
       if (search) {
-        whereConditions.push('(videos.youtube_video_name LIKE :search OR videos.youtube_channel_name LIKE :search)');
-        replacements.search = `%${search}%`;
+        where[Sequelize.Op.and] = [{
+          [Sequelize.Op.or]: [
+            { youTubeVideoName: { [Sequelize.Op.like]: `%${search}%` } },
+            { youTubeChannelName: { [Sequelize.Op.like]: `%${search}%` } },
+          ],
+        }];
       }
 
       if (channelFilter) {
-        whereConditions.push('videos.youtube_channel_name = :channelFilter');
-        replacements.channelFilter = channelFilter;
+        where.youTubeChannelName = channelFilter;
       }
 
       if (dateFrom) {
-        whereConditions.push('videos.original_date >= :dateFrom');
-        replacements.dateFrom = dateFrom.replace(/-/g, '');
+        where.originalDate = { [Sequelize.Op.gte]: dateFrom.replace(/-/g, '') };
       }
 
       if (dateTo) {
-        whereConditions.push('videos.original_date <= :dateTo');
-        replacements.dateTo = dateTo.replace(/-/g, '');
+        where.originalDate ??= {};
+        where.originalDate[Sequelize.Op.lte] = dateTo.replace(/-/g, '');
       }
 
       if (protectedFilter === 'only') {
-        whereConditions.push('videos.protected = 1');
+        where.protected = true;
       } else if (protectedFilter === 'exclude') {
-        whereConditions.push('videos.protected = 0');
+        where.protected = false;
       }
 
       if (missingFilter === 'only') {
-        whereConditions.push('videos.removed = 1');
+        where.removed = true;
       } else if (missingFilter === 'exclude') {
-        whereConditions.push('videos.removed = 0');
+        where.removed = false;
       }
 
       if (watchedFilter === 'only' || watchedFilter === 'exclude') {
-        const watched = watchStatusQueries.buildWatchedExistsSql();
-        whereConditions.push(watchedFilter === 'only' ? watched.sql : `NOT ${watched.sql}`);
-        Object.assign(replacements, watched.replacements);
+        const watched = watchStatusQueries.buildWatchedExistsSql('Video');
+        const sql = injectReplacements(watched.sql, sequelize.dialect, watched.replacements);
+        where[Sequelize.Op.and] ??= [];
+        where[Sequelize.Op.and].push(sequelize.literal(watchedFilter === 'only' ? sql : `NOT ${sql}`));
       }
 
-      const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
-
-      // Build ORDER BY
-      let orderByColumn;
-      if (sortBy === 'published') {
-        orderByColumn = 'videos.original_date';
-      } else {
-        orderByColumn = 'COALESCE(videos.last_downloaded_at, jobs.time_created, STR_TO_DATE(videos.original_date, \'%Y%m%d\'))';
-      }
-      const orderByClause = `ORDER BY ${orderByColumn} ${sortOrder.toUpperCase()}`;
+      const options = {
+        include: [{
+          model: JobVideo,
+          as: 'jobVideos',
+          attributes: [],
+          include: [{
+            model: Job,
+            as: 'job',
+            attributes: [],
+          }],
+        }],
+        where,
+      };
 
       // Get total count
-      const countQuery = `
-        SELECT COUNT(DISTINCT videos.id) as total
-        FROM videos
-        LEFT JOIN jobvideos ON videos.id = jobvideos.video_id
-        LEFT JOIN jobs ON jobs.id = jobvideos.job_id
-        ${whereClause}
-      `;
-
-      const countResult = await sequelize.query(countQuery, {
-        replacements,
-        type: Sequelize.QueryTypes.SELECT
+      const total = await Video.count({
+        ...options,
+        distinct: true,
       });
 
-      const total = countResult[0].total;
+      // Define attributes
+      options.attributes = {
+        include: [
+          [
+            sequelize.fn(
+              'COALESCE',
+              sequelize.col('Video.last_downloaded_at'),
+              sequelize.col('jobVideos->job.time_created'),
+              sequelize.fn('STR_TO_DATE', sequelize.col('Video.original_date'), '%Y%m%d'),
+            ),
+            'timeCreated',
+          ],
+        ],
+      };
+
+      // Add ordering
+      let orderByColumn;
+      if (sortBy === 'published') {
+        orderByColumn = sequelize.col('originalDate');
+      } else {
+        orderByColumn = sequelize.col('timeCreated');
+      }
+      options.order = [[orderByColumn, sortOrder.toUpperCase()]];
 
       // Get paginated videos
-      const query = `
-        SELECT
-          videos.id,
-          videos.youtube_id AS "youtubeId",
-          videos.youtube_channel_name AS "youTubeChannelName",
-          videos.youtube_video_name AS "youTubeVideoName",
-          videos.duration,
-          videos.original_date AS "originalDate",
-          videos.description,
-          videos.channel_id,
-          videos.file_path AS "filePath",
-          videos.file_size AS "fileSize",
-          videos.audio_file_path AS "audioFilePath",
-          videos.audio_file_size AS "audioFileSize",
-          videos.removed,
-          videos.youtube_removed,
-          videos.youtube_removed_checked_at,
-          videos.media_type,
-          videos.normalized_rating,
-          videos.rating_source,
-          videos.protected,
-          videos.video_resolution,
-          COALESCE(videos.last_downloaded_at, jobs.time_created, STR_TO_DATE(videos.original_date, '%Y%m%d')) AS timeCreated
-        FROM videos
-        LEFT JOIN jobvideos ON videos.id = jobvideos.video_id
-        LEFT JOIN jobs ON jobs.id = jobvideos.job_id
-        ${whereClause}
-        ${orderByClause}
-        LIMIT :limit OFFSET :offset
-      `;
-
-      replacements.limit = limit;
-      replacements.offset = offset;
-
-      const videos = await sequelize.query(query, {
-        replacements,
-        type: Sequelize.QueryTypes.SELECT,
-        model: Video,
-        mapToModel: true,
-        raw: true
-      });
+      options.limit = limit;
+      options.offset = offset;
+      options.subQuery = false;
+      options.raw = true;
+      const videos = await Video.findAll(options);
 
       // Real-time file check for videos that have a known file path
       // Only check videos with an existing filePath to avoid incorrectly marking videos as removed
@@ -167,13 +153,15 @@ class VideosModule {
       }
 
       // Batch update the database if there are changes
-      await fileCheckModule.applyVideoUpdates(sequelize, Sequelize, updates);
+      await fileCheckModule.applyVideoUpdates(updates);
 
       // Check if videos still exist on YouTube and mark as removed if they don't
       const videoValidationModule = require('./videoValidationModule');
       const youtubeUpdates = [];
       const timestampUpdates = [];
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      // One stamp for the whole pass, so the response and the rows agree.
+      const checkedAt = new Date();
 
       // Check all videos concurrently for better performance
       // Only check videos that haven't been checked in the last 24 hours
@@ -187,17 +175,16 @@ class VideosModule {
 
         if (video.youtubeId) {
           const exists = await videoValidationModule.checkVideoExistsOnYoutube(video.youtubeId);
-          const now = new Date();
 
           if (!exists) {
             logger.info({ youtubeId: video.youtubeId }, 'Video no longer exists on YouTube, marking as removed');
             video.youtube_removed = true;
-            video.youtube_removed_checked_at = now;
-            return { id: video.id, removed: true, checked_at: now };
+            video.youtube_removed_checked_at = checkedAt;
+            return { id: video.id, removed: true, checked_at: checkedAt };
           } else {
             // Video exists, just update the timestamp
-            video.youtube_removed_checked_at = now;
-            return { id: video.id, removed: false, checked_at: now };
+            video.youtube_removed_checked_at = checkedAt;
+            return { id: video.id, removed: false, checked_at: checkedAt };
           }
         }
         return null;
@@ -218,7 +205,7 @@ class VideosModule {
       // Bulk update videos table for removed videos
       if (youtubeUpdates.length > 0) {
         await Video.update(
-          { youtube_removed: true, youtube_removed_checked_at: new Date() },
+          { youtube_removed: true, youtube_removed_checked_at: checkedAt },
           { where: { id: youtubeUpdates.map(u => u.id) } }
         );
       }
@@ -226,7 +213,7 @@ class VideosModule {
       // Bulk update videos table for timestamp-only updates
       if (timestampUpdates.length > 0) {
         await Video.update(
-          { youtube_removed_checked_at: new Date() },
+          { youtube_removed_checked_at: checkedAt },
           { where: { id: timestampUpdates.map(u => u.id) } }
         );
       }
@@ -338,15 +325,14 @@ class VideosModule {
       });
 
       // Get all unique channel names from videos table
-      const videoChannelsQuery = `
-        SELECT DISTINCT youtube_channel_name AS "youTubeChannelName"
-        FROM videos
-        WHERE youtube_channel_name IS NOT NULL
-        ORDER BY youtube_channel_name
-      `;
-
-      const videoChannels = await sequelize.query(videoChannelsQuery, {
-        type: Sequelize.QueryTypes.SELECT
+      const videoChannels = await Video.aggregate('youTubeChannelName', 'distinct', {
+        where: {
+          youTubeChannelName: {
+            [Sequelize.Op.not]: null,
+          },
+        },
+        order: [['youTubeChannelName', 'ASC']],
+        plain: false,
       });
 
       // Combine both sets and deduplicate
@@ -361,8 +347,8 @@ class VideosModule {
 
       // Add channels from videos table
       videoChannels.forEach(row => {
-        if (row.youTubeChannelName) {
-          channelSet.add(row.youTubeChannelName);
+        if (row.distinct) {
+          channelSet.add(row.distinct);
         }
       });
 
@@ -463,43 +449,18 @@ class VideosModule {
       let batchFailed = 0;
 
       for (const update of batch) {
-        const setClauses = [];
-        const replacements = [];
+        const attributes = {
+          filePath: update.filePath,
+          fileSize: update.fileSize,
+          audioFilePath: update.audioFilePath,
+          audioFileSize: update.audioFileSize,
+          video_resolution: update.video_resolution,
+          removed: update.removed,
+        };
 
-        if (update.filePath !== undefined) {
-          setClauses.push('file_path = ?');
-          replacements.push(update.filePath);
-        }
-        if (update.fileSize !== undefined) {
-          setClauses.push('file_size = ?');
-          replacements.push(update.fileSize);
-        }
-        if (update.audioFilePath !== undefined) {
-          setClauses.push('audio_file_path = ?');
-          replacements.push(update.audioFilePath);
-        }
-        if (update.audioFileSize !== undefined) {
-          setClauses.push('audio_file_size = ?');
-          replacements.push(update.audioFileSize);
-        }
-        if (update.video_resolution !== undefined) {
-          setClauses.push('video_resolution = ?');
-          replacements.push(update.video_resolution);
-        }
-        if (update.removed !== undefined) {
-          setClauses.push('removed = ?');
-          replacements.push(update.removed ? 1 : 0);
-        }
-
-        if (setClauses.length > 0) {
-          replacements.push(update.id);
-          const query = `UPDATE videos SET ${setClauses.join(', ')} WHERE id = ?`;
-
+        if (Object.values(attributes).some((v) => v !== undefined)) {
           try {
-            await sequelize.query(query, {
-              replacements: replacements,
-              type: Sequelize.QueryTypes.UPDATE
-            });
+            await Video.update(attributes, { where: { id: update.id } });
             batchSuccess++;
           } catch (err) {
             batchFailed++;
@@ -779,7 +740,9 @@ class VideosModule {
         updated: totalUpdated,
         removed: totalRemoved
       };
-      throw err;
+      // Resolve with the failure and the counters it reached rather than
+      // rethrow, so every caller and the run history keep the partial progress.
+      return result;
     } finally {
       let lastRun = null;
 
@@ -796,11 +759,19 @@ class VideosModule {
           errorMessage: result.errorMessage || null
         };
 
-        try {
-          const currentConfig = configModule.getConfig();
-          configModule.updateConfig({ ...currentConfig, rescanLastRun: lastRun });
-        } catch (persistErr) {
-          logger.error({ err: persistErr }, 'Failed to persist rescanLastRun');
+        // Scheduled runs are recorded by the task scheduler itself.
+        if (result.trigger !== 'scheduled') {
+          try {
+            await scheduledTaskRuns.record({
+              taskKey: rescanRunSummary.TASK_KEY,
+              trigger: result.trigger,
+              startedAt: new Date(result.startedAt),
+              finishedAt: new Date(result.completedAt),
+              ...rescanRunSummary.toRunRecord(result),
+            });
+          } catch (persistErr) {
+            logger.error({ err: persistErr }, 'Failed to record rescan run');
+          }
         }
       }
 

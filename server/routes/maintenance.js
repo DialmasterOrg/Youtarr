@@ -10,7 +10,7 @@ const logger = require('../logger');
  *   name: Maintenance
  *   description: Filesystem reconciliation actions
  */
-function createMaintenanceRoutes({ verifyToken, videosModule, configModule }) {
+function createMaintenanceRoutes({ verifyToken, videosModule, configModule, scheduledTaskRuns, rescanRunSummary }) {
   const router = express.Router();
 
   /**
@@ -48,10 +48,14 @@ function createMaintenanceRoutes({ verifyToken, videosModule, configModule }) {
    *       200:
    *         description: Status object
    */
-  router.get('/api/maintenance/rescan-status', verifyToken, (req, res) => {
+  router.get('/api/maintenance/rescan-status', verifyToken, async (req, res) => {
     try {
       const running = videosModule.isBackfillRunning();
-      const lastRun = configModule.getConfig().rescanLastRun ?? null;
+      const run = await scheduledTaskRuns.getLatestRun(rescanRunSummary.TASK_KEY, { statuses: rescanRunSummary.LAST_RUN_STATUSES });
+      // Legacy fallback: releases before the run history stored the summary in config.json.
+      const lastRun = run
+        ? rescanRunSummary.fromRunRecord(run)
+        : (configModule.getConfig().rescanLastRun ?? null);
       return res.status(200).json({ running, lastRun });
     } catch (err) {
       logger.error({ err }, 'Failed to read rescan status');

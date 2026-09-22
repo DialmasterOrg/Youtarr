@@ -1,4 +1,4 @@
-jest.mock('node-cron', () => ({ schedule: jest.fn(), validate: jest.fn(() => true) }));
+jest.mock('node-cron', () => ({ schedule: jest.fn(), validate: jest.fn(() => true), getTasks: jest.fn(() => new Map()) }));
 jest.mock('../../../logger', () => ({
   info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn(),
 }));
@@ -17,6 +17,7 @@ describe('watchStatusScheduler', () => {
 
     cron = require('node-cron');
     cron.validate.mockReturnValue(true);
+    cron.schedule.mockImplementation(() => ({ start: jest.fn(), stop: jest.fn() }));
     configModule = require('../../configModule');
     watchStatusSync = require('../watchStatusSync');
 
@@ -26,7 +27,7 @@ describe('watchStatusScheduler', () => {
   test('schedules the sync when enabled', () => {
     configModule.getConfig.mockReturnValue({ watchStatusSyncEnabled: true, watchStatusSyncFrequency: '0 */4 * * *' });
     scheduler.scheduleTask();
-    expect(cron.schedule).toHaveBeenCalledWith('0 */4 * * *', expect.any(Function));
+    expect(cron.schedule).toHaveBeenCalledWith('0 */4 * * *', expect.any(Function), expect.objectContaining({ scheduled: false }));
   });
 
   test('the scheduled callback runs syncAll with the scheduled trigger', () => {
@@ -35,6 +36,22 @@ describe('watchStatusScheduler', () => {
     const callback = cron.schedule.mock.calls[0][1];
     callback();
     expect(watchStatusSync.syncAll).toHaveBeenCalledWith('scheduled');
+  });
+
+  test('the scheduled callback resolves to a run record describing the sync', async () => {
+    configModule.getConfig.mockReturnValue({ watchStatusSyncEnabled: true, watchStatusSyncFrequency: '0 */4 * * *' });
+    watchStatusSync.syncAll.mockResolvedValue({ servers: { plex: { updated: 2 } } });
+    scheduler.scheduleTask();
+    await expect(cron.schedule.mock.calls[0][1]()).resolves.toEqual(expect.objectContaining({
+      status: 'success', outcome: 'completed', message: 'Synced 1 server, 2 videos updated.',
+    }));
+  });
+
+  test('a sync that was already running is recorded as skipped, not success', async () => {
+    configModule.getConfig.mockReturnValue({ watchStatusSyncEnabled: true, watchStatusSyncFrequency: '0 */4 * * *' });
+    watchStatusSync.syncAll.mockResolvedValue({ skipped: 'already running', trigger: 'scheduled' });
+    scheduler.scheduleTask();
+    await expect(cron.schedule.mock.calls[0][1]()).resolves.toEqual(expect.objectContaining({ status: 'skipped' }));
   });
 
   test('does not schedule when disabled', () => {
@@ -48,7 +65,7 @@ describe('watchStatusScheduler', () => {
     // unmerged; the scheduler must match the UI's defaults, not go dark.
     configModule.getConfig.mockReturnValue({});
     scheduler.scheduleTask();
-    expect(cron.schedule).toHaveBeenCalledWith('0 */4 * * *', expect.any(Function));
+    expect(cron.schedule).toHaveBeenCalledWith('0 */4 * * *', expect.any(Function), expect.objectContaining({ scheduled: false }));
   });
 
   test('does not schedule an invalid cron expression', () => {
@@ -60,9 +77,10 @@ describe('watchStatusScheduler', () => {
 
   test('stops the previous task on reschedule', () => {
     const stop = jest.fn();
-    cron.schedule.mockReturnValue({ stop });
+    cron.schedule.mockReturnValue({ stop, start: jest.fn() });
     configModule.getConfig.mockReturnValue({ watchStatusSyncEnabled: true, watchStatusSyncFrequency: '0 */4 * * *' });
     scheduler.scheduleTask();
+    configModule.getConfig.mockReturnValue({ watchStatusSyncFrequency: '0 12 * * *' });
     scheduler.scheduleTask();
     expect(stop).toHaveBeenCalledTimes(1);
   });

@@ -1,8 +1,8 @@
 const { spawn } = require('child_process');
 const { Op } = require('sequelize');
 const logger = require('../logger');
-const { sequelize, Sequelize } = require('../db');
-const { Playlist, PlaylistVideo, Channel } = require('../models');
+const { sequelize } = require('../db');
+const { Playlist, PlaylistVideo, Channel, Video, Job, JobVideo } = require('../models');
 const youtubeApi = require('./youtubeApi');
 const { MAX_PLAYLIST_VIDEOS } = require('./playlistConstants');
 
@@ -657,19 +657,36 @@ class PlaylistModule {
 
     // Use recorded download/job times. A publication date cannot tell us when
     // the local file was downloaded; leave unknown download times unset.
-    const downloaded = await sequelize.query(
-      `SELECT
-         videos.youtube_id AS "youtubeId",
-         videos.channel_id,
-         videos.youtube_channel_name AS "youTubeChannelName",
-         COALESCE(videos.last_downloaded_at, MAX(jobs.time_created)) AS downloadedAt
-       FROM videos
-       LEFT JOIN jobvideos ON videos.id = jobvideos.video_id
-       LEFT JOIN jobs ON jobs.id = jobvideos.job_id
-       WHERE videos.youtube_id IN (:youtubeIds)
-       GROUP BY videos.id`,
-      { replacements: { youtubeIds }, type: Sequelize.QueryTypes.SELECT }
-    );
+    const downloaded = await Video.findAll({
+      attributes: [
+        'youtubeId',
+        'channel_id',
+        'youTubeChannelName',
+        [
+          sequelize.fn(
+            'COALESCE',
+            sequelize.col('Video.last_downloaded_at'),
+            sequelize.fn('MAX', sequelize.col('jobVideos->job.time_created')),
+          ),
+          'downloadedAt',
+        ],
+      ],
+      include: [{
+        model: JobVideo,
+        as: 'jobVideos',
+        attributes: [],
+        include: [{
+          model: Job,
+          as: 'job',
+          attributes: [],
+        }],
+      }],
+      where: {
+        youtubeId: youtubeIds,
+      },
+      group: 'Video.id',
+      raw: true,
+    });
     if (!downloaded || !downloaded.length) return;
 
     await this.backfillDownloadedVideoChannels(downloaded.map((v) => {
@@ -689,18 +706,20 @@ class PlaylistModule {
       where: { enabled: true, auto_download: true },
     });
     let totalEnqueued = 0;
-    let anyErrored = false;
+    // One failing playlist must not stop the others, but the sweep reports
+    // every failure so the scheduled run isn't recorded as a clean success.
+    const errors = [];
     for (const p of playlists) {
       try {
         const enqueued = await downloadModule.doPlaylistDownloads(p, { refreshFirst: true, limitToRecent: true, overrideSettings, runId });
         totalEnqueued += enqueued || 0;
       } catch (err) {
-        anyErrored = true;
+        errors.push({ playlistId: p.playlist_id, message: err.message || 'Unknown error' });
         logger.error({ err, playlist_id: p.playlist_id }, 'playlistAutoDownload failed for playlist');
       }
     }
 
-    if (playlists.length > 0 && totalEnqueued === 0 && !anyErrored) {
+    if (playlists.length > 0 && totalEnqueued === 0 && errors.length === 0) {
       try {
         const jobModule = require('./jobModule');
         const { PLAYLIST_SWEEP_LABEL } = require('./download/jobTypes');
@@ -713,6 +732,8 @@ class PlaylistModule {
         logger.error({ err }, 'Failed to record idle playlist auto-download sweep in history');
       }
     }
+
+    return { playlists: playlists.length, enqueued: totalEnqueued, failed: errors.length, errors };
   }
 }
 

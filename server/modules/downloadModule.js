@@ -104,8 +104,8 @@ class DownloadModule {
   }
 
   /**
-   * Enqueue a follow-up URL-list job for videos that failed with a transient
-   * HTTP 403. Owning channels are resolved so channel-tier settings (quality,
+   * Enqueue a follow-up URL-list job for videos with retryable download
+   * failures. Owning channels are resolved so channel-tier settings (quality,
    * audio format, subfolder routing) apply on the retry; the source job's
    * overrideSettings carry dialog-picked options through for manual and
    * playlist downloads.
@@ -117,6 +117,34 @@ class DownloadModule {
    */
   async enqueueAutoRetryJob({ retryVideos, autoRetryAttempt, runId, sourceJobData = {} }) {
     if (!Array.isArray(retryVideos) || retryVideos.length === 0) return;
+
+    // Keep normal transient-403 retries authenticated, while videos that
+    // specifically failed with cookie-induced "Video unavailable" are retried
+    // anonymously. Never mix the two modes in one yt-dlp invocation.
+    const anonymousVideos = retryVideos.filter(
+      (video) => video && video.anonymousRetry === true
+    );
+    const authenticatedVideos = retryVideos.filter(
+      (video) => !video || video.anonymousRetry !== true
+    );
+
+    if (anonymousVideos.length > 0 && authenticatedVideos.length > 0) {
+      await this.enqueueAutoRetryJob({
+        retryVideos: authenticatedVideos,
+        autoRetryAttempt,
+        runId,
+        sourceJobData,
+      });
+
+      await this.enqueueAutoRetryJob({
+        retryVideos: anonymousVideos,
+        autoRetryAttempt,
+        runId,
+        sourceJobData,
+      });
+
+      return;
+    }
 
     const ownerChannelMap = { ...(this.getJobDataValue(sourceJobData, 'ownerChannelMap') || {}) };
     const unmappedIds = retryVideos
@@ -147,11 +175,16 @@ class DownloadModule {
       || (mappedChannelIds.size === 1 ? [...mappedChannelIds][0] : null);
     const effectiveQuality = this.getJobDataValue(sourceJobData, 'effectiveQuality') || null;
 
+    const anonymousRetry = retryVideos.every(
+      (video) => video && video.anonymousRetry === true
+    );
+
     const body = {
       urls: retryVideos.map((video) => video.url),
       overrideSettings: { ...this.getOverrideSettings(sourceJobData) },
-      jobLabel: autoRetryJobLabel(retryVideos.length),
+      jobLabel: autoRetryJobLabel(retryVideos.length, { anonymous: anonymousRetry }),
       autoRetryAttempt,
+      anonymousRetry,
     };
     if (Object.keys(ownerChannelMap).length > 0) body.ownerChannelMap = ownerChannelMap;
     if (channelId) body.channelId = channelId;
@@ -161,7 +194,7 @@ class DownloadModule {
 
     logger.info(
       { videoCount: retryVideos.length, autoRetryAttempt, channelId, runId },
-      'Enqueueing auto-retry job for transient 403 failures'
+      'Enqueueing auto-retry job for retryable download failures'
     );
     await this.doSpecificDownloads({ body });
   }
@@ -248,20 +281,30 @@ class DownloadModule {
     const runId = downloadRunTracker.startRun();
     this.setJobDataValue(jobData, 'runId', runId);
 
+    // Playlist failures must not undo the channel jobs already queued, so they
+    // are reported to the caller rather than thrown: playlistError for a sweep
+    // that died outright, playlistsFailed for playlists the sweep skipped over.
+    let playlistError = null;
+    let playlistsFailed = 0;
+    let playlistsChecked = 0;
     try {
       await this.doChannelDownloads(jobData);
       try {
         const playlistModule = require('./playlistModule');
         const overrideSettings = this.getOverrideSettings(jobData);
-        await playlistModule.playlistAutoDownload(overrideSettings, runId);
+        const sweep = await playlistModule.playlistAutoDownload(overrideSettings, runId);
+        playlistsFailed = (sweep && sweep.failed) || 0;
+        playlistsChecked = (sweep && sweep.playlists) || 0;
       } catch (err) {
         logger.error({ err }, 'playlistAutoDownload failed after channel downloads');
+        playlistError = err.message || 'Unknown error';
       }
     } finally {
       // Seal once every job is enqueued so the run can emit one aggregated
       // summary as soon as its last job finishes.
       downloadRunTracker.seal(runId);
     }
+    return { playlistError, playlistsFailed, playlistsChecked };
   }
 
   async doSingleChannelDownloadJob(jobData = {}, isNextJob = false) {
@@ -712,7 +755,22 @@ class DownloadModule {
         // For manual downloads, we don't apply duration filters but still exclude members-only
         // Subfolder override is passed to post-processor via environment variable
         // Pass audioFormat for MP3 downloads
-        const args = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload(resolution, allowRedownload, audioFormat, skipVideoFolder);
+        const anonymousRetry = Boolean(this.getJobDataValue(jobData, 'anonymousRetry'));
+        const cookiesEnabled = Boolean(configModule.getCookiesPath()) && !anonymousRetry;
+        const args = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload(
+          resolution,
+          allowRedownload,
+          audioFormat,
+          skipVideoFolder,
+          { cookiesEnabled }
+        );
+
+        if (anonymousRetry) {
+          logger.info(
+            { urls },
+            'Retrying cookie-specific Video unavailable failure without cookies'
+          );
+        }
 
         // Check if any URLs are for videos marked as ignored, and remove them from archive
         // This allows users to manually download videos they've marked to ignore for channel downloads
@@ -785,6 +843,8 @@ class DownloadModule {
             // the resolution priority in videoDownloadPostProcessFiles.js.
             ownerChannelId: channelId || null,
             ownerChannelMap: this.getJobDataValue(jobData, 'ownerChannelMap') || null,
+            cookiesEnabled,
+            anonymousRetry,
           }
         )).catch(async err => {
           // Covers failures before the executor installs its own process
