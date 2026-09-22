@@ -52,8 +52,13 @@ test('custom mode echoes a recognized expression and links to a cron reference',
   expect(screen.getByRole('link', { name: 'crontab.guru' })).toHaveAttribute('href', 'https://crontab.guru');
 });
 
-test('custom mode does not echo an unrecognized expression', () => {
+test('custom mode describes a supported expression in words', () => {
   setup('15 9 * * 1-5');
+  expect(screen.getByText('Runs: At 09:15, Monday through Friday')).toBeInTheDocument();
+});
+
+test('custom mode does not describe an expression the server would reject', () => {
+  setup('5 4-5 10/11 * *');
   expect(screen.queryByText(/^Runs:/)).not.toBeInTheDocument();
 });
 

@@ -979,11 +979,11 @@ describe('CoreSettingsSection Component', () => {
       expect(input).toHaveValue('');
     });
 
-    test('displays an unrecognized expression without changing it', () => {
+    test('describes a custom expression in words', () => {
       renderWithProviders(<CoreSettingsSection {...createSectionProps({
-        config: createConfig({ channelDownloadFrequency: '* * * * *' })
+        config: createConfig({ channelDownloadFrequency: '15 9 * * 1-5' })
       })} />);
-      expect(screen.getByText(/Custom: \* \* \* \* \*/)).toBeInTheDocument();
+      expect(screen.getByText(/At 09:15, Monday through Friday/)).toBeInTheDocument();
     });
 
     test('handles all checkboxes unchecked', () => {
