@@ -574,6 +574,14 @@ Then set `LOG_LEVEL=debug` in your `.env` to see the queries.
 
 ## API Development
 
+### Documentation site checks
+
+Run `npm run docs:check` from the repository root to generate the documentation and run the documentation generator tests. This requires the root and `website/` dependencies to be installed. CI runs the same check before building the site.
+
+If documentation links point to missing files or unpublished Markdown pages, the generator reports all of those failures together. Each error includes the source file and line, the link target, the path it tried to find, and a suggested correction when it can identify the intended file. GitHub Actions also receives file-and-line error annotations. These errors stop generation; the documentation site build performs additional checks, including heading anchors.
+
+Relative links start from the document's own folder. For example, a guide in `docs/` links to a sibling page using `BACKUP_RESTORE.md`, without another `docs/` prefix. A leading `/` is treated as a filesystem-root path by the generator. For repository files that aren't published as site assets, such as Compose YAML files, use full GitHub URLs so the links work on the published site too.
+
 ### API Documentation (Swagger)
 
 Youtarr provides interactive API documentation via Swagger UI:
