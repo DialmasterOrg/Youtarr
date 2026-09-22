@@ -295,21 +295,12 @@ describe('YtdlpCommandBuilder', () => {
   });
 
   describe('buildFormatSortArgs', () => {
-    it('sorts on resolution before codec for the default preference', () => {
-      expect(YtdlpCommandBuilder.buildFormatSortArgs('default')).toEqual(['-S', 'res,vcodec:avc']);
-    });
-
-    it('sorts the same way when no preference is given', () => {
+    it('sorts on resolution before codec', () => {
       expect(YtdlpCommandBuilder.buildFormatSortArgs()).toEqual(['-S', 'res,vcodec:avc']);
     });
 
-    it('adds no sort for h264 and h265, whose selectors already pin a codec', () => {
-      expect(YtdlpCommandBuilder.buildFormatSortArgs('h264')).toEqual([]);
-      expect(YtdlpCommandBuilder.buildFormatSortArgs('h265')).toEqual([]);
-    });
-
     it('puts res ahead of vcodec, so a higher resolution beats an AVC stream below it', () => {
-      const [, sort] = YtdlpCommandBuilder.buildFormatSortArgs('default');
+      const [, sort] = YtdlpCommandBuilder.buildFormatSortArgs();
       expect(sort.indexOf('res')).toBeLessThan(sort.indexOf('vcodec'));
     });
   });
@@ -882,6 +873,9 @@ describe('YtdlpCommandBuilder', () => {
       const formatString = result[formatIndex + 1];
       expect(formatString).toContain('[vcodec^=hev]');
       expect(formatString).toBe('bestvideo[height<=1080][ext=mp4][vcodec^=hev]+bestaudio[ext=m4a]/bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+      // YouTube rarely has HEVC, so the fallback needs the sort to avoid AV1
+      const sortIndex = result.indexOf('-S');
+      expect(result.slice(sortIndex, sortIndex + 2)).toEqual(['-S', 'res,vcodec:avc']);
     });
 
     it('should combine custom resolution with h264 codec', () => {
@@ -1076,6 +1070,8 @@ describe('YtdlpCommandBuilder', () => {
       const formatString = result[formatIndex + 1];
       expect(formatString).toContain('[vcodec^=hev]');
       expect(formatString).toBe('bestvideo[height<=1080][ext=mp4][vcodec^=hev]+bestaudio[ext=m4a]/bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+      const sortIndex = result.indexOf('-S');
+      expect(result.slice(sortIndex, sortIndex + 2)).toEqual(['-S', 'res,vcodec:avc']);
     });
 
     it('should combine custom resolution with h264 codec', () => {
