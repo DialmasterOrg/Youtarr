@@ -185,6 +185,8 @@ describe('RequestsPage', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Details' }));
     expect(screen.getAllByText('@safechannel').length).toBeGreaterThan(0);
+    expect(screen.getByText('New channel request')).toBeInTheDocument();
+    expect(screen.queryByText('Channel null')).not.toBeInTheDocument();
     expect(screen.queryByText('https://www.youtube.com/@safechannel')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open channel' }))
       .toHaveAttribute('href', 'https://www.youtube.com/@safechannel');

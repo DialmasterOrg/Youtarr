@@ -144,6 +144,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
   const [channelsLoading, setChannelsLoading] = useState(false);
   const [grantsLoading, setGrantsLoading] = useState(false);
   const [editLoadError, setEditLoadError] = useState<string | null>(null);
+  const [editSubmitError, setEditSubmitError] = useState<string | null>(null);
   const [channelsLoadError, setChannelsLoadError] = useState<string | null>(null);
   const [grantsLoadError, setGrantsLoadError] = useState<string | null>(null);
   const [pendingExternalUpdate, setPendingExternalUpdate] = useState<{ keyId: number; policy: NormalizedApiKeyPolicy; channelIds: number[] } | null>(null);
@@ -246,6 +247,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
     setChannelsLoadError(null);
     setGrantsLoadError(null);
     setEditLoadError(null);
+    setEditSubmitError(null);
     const [grantsResult, channelsResult] = await Promise.allSettled([
       apiKeyApi.fetchChannelGrants(key.id),
       apiKeyApi.fetchAvailableChannels(),
@@ -274,6 +276,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
   const openEditDialog = (key: ApiKey) => {
     if (!token || key.role === 'legacy_download' || key.revoked_at) return;
     ++editLoadSequence.current;
+    setEditSubmitError(null);
     setEditKey(key);
     setEditPolicy(policyFromKey(key));
     setSelectedChannelIds([]);
@@ -287,6 +290,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
     setEditKey(null);
     setPendingExternalUpdate(null);
     setEditLoadError(null);
+    setEditSubmitError(null);
     setChannelsLoadError(null);
     setGrantsLoadError(null);
     setChannelsLoading(false);
@@ -295,6 +299,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
 
   const submitExternalAccess = async (update: { keyId: number; policy: NormalizedApiKeyPolicy; channelIds: number[] }) => {
     if (savingPolicy) return;
+    setEditSubmitError(null);
     setSavingPolicy(true);
     try {
       await apiKeyApi.updateExternalAccess(update.keyId, {
@@ -306,7 +311,8 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
       closeEditDialog();
       await fetchApiKeys();
     } catch (err) {
-      setEditLoadError(err instanceof Error ? err.message : 'Failed to save external access');
+      setPendingExternalUpdate(null);
+      setEditSubmitError(err instanceof Error ? err.message : 'Failed to save external access');
     } finally {
       setSavingPolicy(false);
     }
@@ -314,9 +320,10 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
 
   const saveExternalAccess = async () => {
     if (!token || !editKey || channelsLoading || grantsLoading || editLoadError) return;
+    setEditSubmitError(null);
     const normalized = normalizePolicy(editPolicy);
     if (!normalized.policy) {
-      setEditLoadError(normalized.error || 'Invalid policy values');
+      setEditSubmitError(normalized.error || 'Invalid policy values');
       return;
     }
     const normalizedPolicy = normalized.policy;
@@ -833,12 +840,21 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
               </div>
             </Alert>
           )}
+          {editSubmitError && (
+            <Alert severity="error" className="mb-4">{editSubmitError}</Alert>
+          )}
           {!editLoadError && (channelsLoading || grantsLoading) && (
             <Alert severity="info" className="mb-4">
               Loading channel grants and available channels...
             </Alert>
           )}
-          <PolicyEditor policy={editPolicy} onChange={setEditPolicy} />
+          <PolicyEditor
+            policy={editPolicy}
+            onChange={(policy) => {
+              setEditPolicy(policy);
+              setEditSubmitError(null);
+            }}
+          />
           <Divider className="my-5" />
           <Typography variant="subtitle2" className="mb-2">
             Approved channels ({selectedChannelIds.length})

@@ -130,6 +130,50 @@ describe('ApiKeysSection privilege confirmation', () => {
     expect(screen.queryByText('Confirm expanded external access?')).not.toBeInTheDocument();
   });
 
+  it('saves a corrected numeric policy without reloading channel grants', async () => {
+    const user = await openEditor();
+    const activeJobs = screen.getByRole('spinbutton', { name: 'Active jobs' });
+    const save = screen.getByRole('button', { name: 'Save External Access' });
+    await waitFor(() => expect(save).toBeEnabled());
+
+    await user.clear(activeJobs);
+    await user.click(save);
+    expect(screen.getByText('Active jobs must be an integer from 1 to 5.')).toBeInTheDocument();
+    expect(save).toBeEnabled();
+
+    await user.type(activeJobs, '3');
+    expect(screen.queryByText('Active jobs must be an integer from 1 to 5.')).not.toBeInTheDocument();
+    await user.click(save);
+
+    const api = mockedUseApiKeys.mock.results[0].value;
+    await waitFor(() => expect(api.updateExternalAccess).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({
+        policy: expect.objectContaining({ maxActiveJobs: 3 }),
+        channelIds: [],
+      })
+    ));
+    expect(api.fetchChannelGrants).toHaveBeenCalledTimes(1);
+    expect(api.fetchAvailableChannels).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows retrying a failed save without reloading channel grants', async () => {
+    const user = await openEditor();
+    const api = mockedUseApiKeys.mock.results[0].value;
+    const update = api.updateExternalAccess as jest.Mock;
+    update.mockRejectedValueOnce(new Error('Temporary save failure'));
+    const save = screen.getByRole('button', { name: 'Save External Access' });
+    await waitFor(() => expect(save).toBeEnabled());
+
+    await user.click(save);
+    expect(await screen.findByText('Temporary save failure')).toBeInTheDocument();
+    expect(save).toBeEnabled();
+    await user.click(save);
+
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(2));
+    expect(api.fetchChannelGrants).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps Save disabled until channel grants and channel options finish loading', async () => {
     const grants = deferred<number[]>();
     const channels = deferred<ChannelListEntry[]>();
