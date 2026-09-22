@@ -5,6 +5,7 @@ export interface FilenamePreset {
 }
 
 export const DEFAULT_PRESET_PREFIX = '%(uploader,channel,uploader_id).80B - %(title).64B';
+export const PLEX_TV_SERIES_PRESET_PREFIX = '%(timestamp>S%YE%m%d%H%M)s %(title).64B';
 
 export const FILENAME_PRESETS: readonly FilenamePreset[] = [
   {
@@ -24,7 +25,7 @@ export const FILENAME_PRESETS: readonly FilenamePreset[] = [
   },
   {
     label: 'Plex TV Series',
-    prefix: '%(timestamp>S%YE%m%d%H%M)s %(title).64B',
+    prefix: PLEX_TV_SERIES_PRESET_PREFIX,
     description: 'Compatible with Plex TV series naming convention.',
   },
   {

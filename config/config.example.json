@@ -52,6 +52,7 @@
   "writeVideoNfoFiles": true,
   "writeVideoFanart": false,
   "writeBackdropImages": false,
+  "prefixChannelNameInTitle": true,
   "notificationsEnabled": false,
   "appriseUrls": [],
   "autoRemovalEnabled": false,
