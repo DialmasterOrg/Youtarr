@@ -1663,6 +1663,27 @@ describe('videoDownloadPostProcessFiles', () => {
       );
     });
 
+    it('drops YouTube tags that duplicate a custom tag, case-insensitively', async () => {
+      Channel.findOne.mockResolvedValue({ ...customChannel, additional_tags: 'Minecraft' });
+      fs.readFileSync.mockReturnValue(JSON.stringify({
+        id: 'abc123',
+        upload_date: '20240131',
+        title: 'Video Title',
+        uploader: 'Channel',
+        channel_id: 'channel123',
+        tags: ['minecraft', 'tag2']
+      }));
+
+      await loadModule();
+      await settleAsync();
+
+      expect(childProcess.spawnSync).toHaveBeenCalledWith(
+        '/usr/bin/AtomicParsley',
+        expect.arrayContaining(['--keyword', 'Minecraft;tag2']),
+        expect.any(Object)
+      );
+    });
+
     it('trims whitespace and drops empty segments from additional_tags', async () => {
       Channel.findOne.mockResolvedValue({ ...customChannel, additional_tags: '  Foo | | Bar  ' });
 
