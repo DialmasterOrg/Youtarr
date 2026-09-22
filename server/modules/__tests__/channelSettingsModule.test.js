@@ -399,6 +399,11 @@ describe('ChannelSettingsModule', () => {
       expect(channelSettingsModule.validateAdditionalTags('a| a').valid).toBe(false);
     });
 
+    test('rejects case-insensitive duplicate tags', () => {
+      expect(channelSettingsModule.validateAdditionalTags('Gaming|gaming').valid).toBe(false);
+      expect(channelSettingsModule.validateAdditionalTags('Minecraft|minecraft|MINECRAFT').valid).toBe(false);
+    });
+
     test('rejects a tag containing disallowed characters', () => {
       expect(channelSettingsModule.validateAdditionalTags('tag1!tag2').valid).toBe(false);
       expect(channelSettingsModule.validateAdditionalTags('bad/tag').valid).toBe(false);
