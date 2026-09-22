@@ -48,7 +48,7 @@ describe('PlaylistHeader', () => {
     expect(screen.getByText('Challenge Videos')).toBeInTheDocument();
     expect(screen.getByText(/Library & Downloads/i)).toBeInTheDocument();
     expect(screen.getByText(/Media Server Sync/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Download 37 new/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Download all 37 videos/i })).toBeInTheDocument();
   });
 
   test('shows a Video playlist chip when the playlist is not MP3 Only', () => {
@@ -80,4 +80,33 @@ describe('PlaylistHeader', () => {
     );
     expect(screen.getByText(/2 downloaded items have no video file/i)).toBeInTheDocument();
   });
+  test.each([
+    [true, 'Following new additions.'],
+    [false, 'Following paused. Resume to catch up on new additions.'],
+  ] as const)('shows the following status when auto-download is %s', (autoDownload, status) => {
+    render(<MemoryRouter><PlaylistHeader {...baseProps}
+      playlist={{ ...playlist, auto_download: autoDownload, auto_download_baseline_at: '2026-09-01T00:00:00Z' }}
+      followingExistingCount={3} /></MemoryRouter>);
+    expect(screen.getByText(status, { exact: false })).toBeVisible();
+    expect(screen.getByText(/3 older/)).toBeVisible();
+  });
+
+  test('does not claim to follow a playlist before setup', () => {
+    render(<MemoryRouter><PlaylistHeader {...baseProps} /></MemoryRouter>);
+    expect(screen.queryByText(/Following new additions/)).not.toBeInTheDocument();
+  });
+
+  test.each([false, true])('shows outstanding selections on desktop and mobile (mobile=%s)', (isMobile) => {
+    render(<MemoryRouter><PlaylistHeader {...baseProps} isMobile={isMobile} followingRequestedCount={8}
+      playlist={{ ...playlist, auto_download_baseline_at: '2026-09-01T00:00:00Z' }} /></MemoryRouter>);
+    expect(screen.getByText(/8 selected videos are not downloaded yet/)).toBeVisible();
+  });
+
+  test.each([false, true])('shows a persisted setup failure in the header (mobile=%s)', (isMobile) => {
+    render(<MemoryRouter><PlaylistHeader {...baseProps} isMobile={isMobile}
+      playlist={{ ...playlist, auto_download: false, auto_download_setup_error: 'PLAYLIST_TOO_LARGE' }} /></MemoryRouter>);
+    expect(screen.getByRole('alert')).toHaveTextContent('Auto-download is off');
+    expect(screen.getByRole('button', { name: 'Retry following setup' })).toBeEnabled();
+  });
+
 });

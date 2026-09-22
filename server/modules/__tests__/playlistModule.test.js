@@ -4,11 +4,19 @@ jest.mock('../../logger', () => ({
 }));
 jest.mock('../../models', () => ({
   Playlist: { findOne: jest.fn(), create: jest.fn(), update: jest.fn(), findAll: jest.fn() },
-  PlaylistVideo: { findAll: jest.fn(), bulkCreate: jest.fn(), update: jest.fn(), destroy: jest.fn(), count: jest.fn() },
+  PlaylistVideo: { findAll: jest.fn(), bulkCreate: jest.fn(), update: jest.fn(), destroy: jest.fn(), count: jest.fn(), max: jest.fn() },
   Channel: { findAll: jest.fn() },
+  Video: { findAll: jest.fn() },
+  Job: { _name: 'Job' },
+  JobVideo: { _name: 'JobVideo' },
 }));
 jest.mock('../../db', () => ({
-  sequelize: { query: jest.fn().mockResolvedValue([]) },
+  sequelize: {
+    query: jest.fn().mockResolvedValue([]),
+    transaction: jest.fn(async (action) => action({})),
+    col: jest.fn((name) => name),
+    fn: jest.fn((...args) => ['fn', args]),
+  },
   Sequelize: { QueryTypes: { SELECT: 'SELECT' } },
 }));
 jest.mock('../channelModule', () => ({
@@ -28,17 +36,38 @@ jest.mock('../youtubeApi', () => ({
 
 const { EventEmitter } = require('events');
 
+function completedChild(output) {
+  const child = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  queueMicrotask(() => {
+    if (output instanceof Error) {
+      child.stderr.emit('data', output.message);
+      child.emit('close', 1);
+      return;
+    }
+    const lines = Array.isArray(output) ? output.map((row) => JSON.stringify(row)).join('\n') : JSON.stringify(output);
+    child.stdout.emit('data', lines);
+    child.emit('close', 0);
+  });
+  return child;
+}
+
 describe('playlistModule', () => {
   let playlistModule;
   let Playlist;
   let PlaylistVideo;
   let Channel;
+  let Video;
   let channelModule;
   let downloadModule;
   let jobModule;
   let childProcess;
   let youtubeApi;
   let db;
+  let flatPlaylistSpawn;
+  let metadataCount;
+  let fallbackMetadataCount;
 
   beforeEach(() => {
     jest.resetModules();
@@ -47,17 +76,25 @@ describe('playlistModule', () => {
     // destructured `const { spawn } = require('child_process')` in the module
     // captures our jest.fn().
     childProcess = require('child_process');
-    childProcess.spawn = jest.fn();
+    flatPlaylistSpawn = jest.fn();
+    metadataCount = null;
+    fallbackMetadataCount = null;
+    childProcess.spawn = jest.fn((binary, args) => {
+      if (args.includes('--playlist-items')) {
+        const count = args.includes('--extractor-args') ? fallbackMetadataCount : metadataCount;
+        return completedChild({ playlist_count: count });
+      }
+      return flatPlaylistSpawn(binary, args);
+    });
     // Now require the module — its top-level destructure picks up the mock.
     playlistModule = require('../playlistModule');
-    ({ Playlist, PlaylistVideo, Channel } = require('../../models'));
+    ({ Playlist, PlaylistVideo, Channel, Video } = require('../../models'));
     PlaylistVideo.count.mockResolvedValue(0);
     channelModule = require('../channelModule');
     downloadModule = require('../downloadModule');
     jobModule = require('../jobModule');
     youtubeApi = require('../youtubeApi');
     db = require('../../db');
-    db.sequelize.query.mockResolvedValue([]);
   });
 
   describe('getPlaylistInfo', () => {
@@ -168,6 +205,282 @@ describe('playlistModule', () => {
     });
   });
 
+  describe('following initialization', () => {
+    let p;
+    const entries = (count, total) => Array.from({ length: count }, (_, i) => ({
+      id: `video${i}`, title: `Video ${i}`, playlist_count: total, n_entries: count,
+    }));
+
+    beforeEach(() => {
+      metadataCount = 2;
+      p = { playlist_id: 'PL1', url: 'https://u', video_count: 2, enabled: true, auto_download: true, reload: jest.fn() };
+      p.update = jest.fn(async (values) => Object.assign(p, values));
+      Playlist.update.mockImplementation(async (values) => { Object.assign(p, values); return [1]; });
+      Playlist.findOne.mockResolvedValue(p);
+      PlaylistVideo.findAll.mockResolvedValue([]);
+      PlaylistVideo.max.mockResolvedValue(25);
+      flatPlaylistSpawn.mockImplementation(() => completedChild(entries(2, 2)));
+    });
+
+    test.each([
+      ['PLAYLIST_TOO_LARGE', 5001, false],
+      ['PLAYLIST_REFRESH_INCOMPLETE', 3, true],
+    ])('recovers %s without stamping a partial baseline or clearing requests', async (code, total, autoDownload) => {
+      metadataCount = total;
+      const warning = await playlistModule.recoverFollowingSetup(p, new Error(code));
+      expect(p).toMatchObject({ auto_download: autoDownload, auto_download_setup_error: code });
+      expect(p.auto_download_baseline_at).toBeUndefined();
+      expect(PlaylistVideo.bulkCreate).toHaveBeenCalledWith(expect.any(Array), expect.any(Object));
+      expect(PlaylistVideo.destroy).not.toHaveBeenCalled();
+      expect(PlaylistVideo.update).not.toHaveBeenCalled();
+      expect(warning).toContain('Playlist saved.');
+    });
+
+    test('subscription recovery pauses even a transient setup failure', async () => {
+      metadataCount = 3;
+      await playlistModule.recoverFollowingSetup(p, new Error('PLAYLIST_REFRESH_INCOMPLETE'), { disableAutoDownload: true });
+      expect(p.auto_download).toBe(false);
+      expect(p.auto_download_setup_error).toBe('PLAYLIST_REFRESH_INCOMPLETE');
+    });
+
+    test('keeps the setup explanation when the fallback listing also fails', async () => {
+      flatPlaylistSpawn.mockImplementation(() => completedChild(new Error('network down')));
+      const warning = await playlistModule.recoverFollowingSetup(p, new Error('PLAYLIST_TOO_LARGE'));
+      expect(warning).toContain('video listing could not be refreshed');
+      expect(p.auto_download_setup_error).toBe('PLAYLIST_TOO_LARGE');
+      expect(playlistModule.activeFetches.size).toBe(0);
+    });
+
+    test('successful setup clears a persisted failure', async () => {
+      p.auto_download_setup_error = 'PLAYLIST_REFRESH_INCOMPLETE';
+      await playlistModule.refreshForFollowing(p);
+      expect(p.auto_download_setup_error).toBeNull();
+      expect(p.auto_download_baseline_id).toBe(25);
+    });
+
+    test('a concurrent refresh is not treated as a reason to disable following', async () => {
+      playlistModule.activeFetches.add('PL1');
+      const warning = await playlistModule.recoverFollowingSetup(p, new Error('PLAYLIST_TOO_LARGE'));
+      expect(warning).toContain('Another refresh is in progress');
+      expect(Playlist.update).not.toHaveBeenCalled();
+      expect(p.auto_download).toBe(true);
+    });
+
+    test('does not overwrite a baseline established before recovery acquired the guard', async () => {
+      p.reload.mockImplementation(async () => { p.auto_download_baseline_at = new Date(); });
+      await playlistModule.recoverFollowingSetup(p, new Error('PLAYLIST_TOO_LARGE'));
+      expect(Playlist.update).not.toHaveBeenCalled();
+      expect(flatPlaylistSpawn).not.toHaveBeenCalled();
+    });
+
+    test('does not overwrite a concurrent pause during the conditional settings update', async () => {
+      Playlist.update.mockImplementation(async () => { p.auto_download = false; return [0]; });
+      const warning = await playlistModule.recoverFollowingSetup(p, new Error('PLAYLIST_REFRESH_INCOMPLETE'));
+      expect(Playlist.update).toHaveBeenCalledWith(expect.any(Object), { where: {
+        playlist_id: 'PL1', enabled: true, auto_download: true, auto_download_baseline_at: null,
+      } });
+      expect(p.auto_download).toBe(false);
+      expect(warning).toContain('current settings were kept');
+    });
+
+    test('does not recover unrelated failures', async () => {
+      const err = new Error('database unavailable');
+      await expect(playlistModule.recoverFollowingSetup(p, err)).rejects.toBe(err);
+      expect(Playlist.update).not.toHaveBeenCalled();
+    });
+
+    test('initialization saves the snapshot boundary without clearing saved requests', async () => {
+      await playlistModule.fetchAllPlaylistVideos('PL1', { followFromNow: true });
+      expect(p.update).toHaveBeenCalledWith(expect.objectContaining({
+        auto_download_baseline_id: 25, auto_download_baseline_at: expect.any(Date),
+      }), { transaction: expect.any(Object) });
+      expect(PlaylistVideo.update).not.toHaveBeenCalled();
+    });
+
+    test.each([null, '[Private video]', '[Deleted video]'])('initializes following when the complete snapshot includes an unavailable title: %s', async (title) => {
+      metadataCount = 4;
+      const snapshot = entries(4, 4);
+      snapshot[0].title = title;
+      flatPlaylistSpawn.mockImplementation(() => completedChild(snapshot));
+      PlaylistVideo.count.mockResolvedValue(3);
+
+      await playlistModule.fetchAllPlaylistVideos('PL1', { followFromNow: true });
+
+      const storedRows = PlaylistVideo.bulkCreate.mock.calls[0][0];
+      expect(storedRows.map((row) => row.youtube_id)).toEqual(['video1', 'video2', 'video3']);
+      expect(p).toMatchObject({
+        video_count: 3,
+        auto_download_baseline_id: 25,
+        auto_download_baseline_at: expect.any(Date),
+        auto_download_setup_error: null,
+      });
+    });
+
+    test('explicit reset replaces the baseline and clears saved requests in the same transaction', async () => {
+      const oldCutoff = new Date('2020-01-01T00:00:00Z');
+      Object.assign(p, { auto_download_baseline_at: oldCutoff, auto_download_baseline_id: 20 });
+      await playlistModule.fetchAllPlaylistVideos('PL1', { followFromNow: true, resetFollowing: true });
+      const transaction = p.update.mock.calls[0][1].transaction;
+      expect(PlaylistVideo.update).toHaveBeenCalledWith({ auto_download_requested: false }, {
+        where: { playlist_id: 'PL1' }, transaction,
+      });
+      expect(p.auto_download_baseline_id).toBe(25);
+      expect(p.auto_download_baseline_at.getTime()).toBeGreaterThan(oldCutoff.getTime());
+    });
+
+    test('reset preserves stored discovery and download dates', async () => {
+      await playlistModule.fetchAllPlaylistVideos('PL1', { followFromNow: true, resetFollowing: true });
+      const { updateOnDuplicate } = PlaylistVideo.bulkCreate.mock.calls[0][1];
+      expect(updateOnDuplicate).not.toEqual(expect.arrayContaining(['first_seen_at']));
+      expect(updateOnDuplicate).not.toEqual(expect.arrayContaining(['downloaded_at']));
+      expect(updateOnDuplicate).not.toEqual(expect.arrayContaining(['added_at']));
+    });
+
+    test('refreshForFollowing reloads the saved starting point and preserves a pause', async () => {
+      p.auto_download = false;
+      await playlistModule.refreshForFollowing(p, { resetFollowing: true });
+      expect(p.reload).toHaveBeenCalledTimes(1);
+      expect(p.auto_download).toBe(false);
+      expect(p.update.mock.calls[0][0]).not.toHaveProperty('auto_download');
+    });
+
+    test('an ordinary refresh preserves a saved cutoff and batch requests', async () => {
+      const baseline = new Date('2026-09-01T00:00:00Z');
+      Object.assign(p, { auto_download_baseline_at: baseline, auto_download_baseline_id: 20 });
+      await playlistModule.fetchAllPlaylistVideos('PL1');
+      expect(p.auto_download_baseline_at).toBe(baseline);
+      expect(p.auto_download_baseline_id).toBe(20);
+      expect(PlaylistVideo.update).not.toHaveBeenCalled();
+    });
+
+    test('a stale first-enable request preserves an already initialized cutoff', async () => {
+      const baseline = new Date('2026-09-01T00:00:00Z');
+      Object.assign(p, { auto_download_baseline_at: baseline, auto_download_baseline_id: 20 });
+      await playlistModule.refreshForFollowing(p);
+      expect(p.auto_download_baseline_at).toBe(baseline);
+      expect(p.auto_download_baseline_id).toBe(20);
+      expect(PlaylistVideo.update).not.toHaveBeenCalled();
+    });
+
+    test('does not use n_entries to certify a truncated InnerTube baseline', async () => {
+      metadataCount = 500;
+      flatPlaylistSpawn
+        .mockImplementationOnce(() => completedChild(entries(100)))
+        .mockImplementationOnce(() => completedChild(entries(200)));
+      await expect(playlistModule.refreshForFollowing(p)).rejects.toThrow('PLAYLIST_REFRESH_INCOMPLETE');
+      expect(p.update).not.toHaveBeenCalled();
+      expect(PlaylistVideo.bulkCreate).not.toHaveBeenCalled();
+      expect(playlistModule.activeFetches.size).toBe(0);
+    });
+
+    test('missing metadata cannot turn a per-entry extracted count into proof of completeness', async () => {
+      metadataCount = null;
+      flatPlaylistSpawn.mockImplementation(() => completedChild(entries(200, 200)));
+      await expect(playlistModule.refreshForFollowing(p)).rejects.toThrow('PLAYLIST_REFRESH_INCOMPLETE');
+      expect(PlaylistVideo.destroy).not.toHaveBeenCalled();
+    });
+
+    test('can verify a complete default listing through separate fallback metadata', async () => {
+      metadataCount = null;
+      fallbackMetadataCount = 2;
+      await playlistModule.refreshForFollowing(p);
+      expect(p.auto_download_baseline_id).toBe(25);
+      expect(flatPlaylistSpawn).toHaveBeenCalledTimes(1);
+    });
+
+    test.each(['', 'unknown', true, -1, 2.5])('rejects an invalid metadata total %s', async (total) => {
+      metadataCount = total;
+      await expect(playlistModule.refreshForFollowing(p)).rejects.toThrow('PLAYLIST_REFRESH_INCOMPLETE');
+    });
+
+    test('unknown totals do not prune tracked entries during ordinary refresh', async () => {
+      metadataCount = null;
+      await playlistModule.fetchAllPlaylistVideos('PL1');
+      expect(PlaylistVideo.destroy).not.toHaveBeenCalled();
+    });
+
+    test('a complete fallback can replace a smaller extracted count', async () => {
+      metadataCount = 500;
+      flatPlaylistSpawn
+        .mockImplementationOnce(() => completedChild(entries(100, 100)))
+        .mockImplementationOnce(() => completedChild(entries(500, 500)));
+      await playlistModule.refreshForFollowing(p);
+      expect(p.auto_download_baseline_id).toBe(25);
+    });
+
+    test('retains a larger reported total when choosing a larger fallback result', async () => {
+      metadataCount = null;
+      fallbackMetadataCount = 200;
+      flatPlaylistSpawn
+        .mockImplementationOnce(() => completedChild(entries(100, 500)))
+        .mockImplementationOnce(() => completedChild(entries(200, 200)));
+      await expect(playlistModule.refreshForFollowing(p)).rejects.toThrow('PLAYLIST_REFRESH_INCOMPLETE');
+    });
+
+    test('can verify an InnerTube result using its separate metadata request', async () => {
+      metadataCount = null;
+      fallbackMetadataCount = 2;
+      flatPlaylistSpawn.mockImplementationOnce(() => completedChild(new Error('network unavailable')));
+      await playlistModule.refreshForFollowing(p);
+      expect(p.auto_download_baseline_id).toBe(25);
+    });
+
+    test('does not allow the ordinary refresh count tolerance when setting a baseline', async () => {
+      metadataCount = 3;
+      flatPlaylistSpawn.mockImplementation(() => completedChild(entries(2, 3)));
+      await expect(playlistModule.refreshForFollowing(p)).rejects.toThrow('PLAYLIST_REFRESH_INCOMPLETE');
+    });
+
+    test('a failed reset preserves the old baseline and explicit requests', async () => {
+      const baseline = new Date('2026-09-01T00:00:00Z');
+      Object.assign(p, { auto_download_baseline_at: baseline, auto_download_baseline_id: 20 });
+      metadataCount = 50;
+      await expect(playlistModule.refreshForFollowing(p, { resetFollowing: true })).rejects.toThrow('PLAYLIST_REFRESH_INCOMPLETE');
+      expect(p.auto_download_baseline_at).toBe(baseline);
+      expect(PlaylistVideo.update).not.toHaveBeenCalled();
+      expect(PlaylistVideo.destroy).not.toHaveBeenCalled();
+    });
+
+    test('a confirmed empty playlist can establish a zero boundary and prune removed rows', async () => {
+      metadataCount = 0;
+      PlaylistVideo.max.mockResolvedValue(null);
+      flatPlaylistSpawn.mockImplementation(() => completedChild([]));
+      await playlistModule.refreshForFollowing(p);
+      expect(p.auto_download_baseline_id).toBe(0);
+      expect(PlaylistVideo.destroy).toHaveBeenCalledWith({ where: { playlist_id: 'PL1' } });
+    });
+
+    test('empty output without a reported zero is not a confirmed empty playlist', async () => {
+      metadataCount = null;
+      p.video_count = 0;
+      flatPlaylistSpawn.mockImplementation(() => completedChild([]));
+      await expect(playlistModule.refreshForFollowing(p)).rejects.toThrow('PLAYLIST_REFRESH_INCOMPLETE');
+      expect(PlaylistVideo.destroy).not.toHaveBeenCalled();
+    });
+
+    test('supports a verified playlist of exactly 5000 entries', async () => {
+      metadataCount = 5000;
+      PlaylistVideo.max.mockResolvedValue(5000);
+      flatPlaylistSpawn.mockImplementation(() => completedChild(entries(5000, 5000)));
+      await playlistModule.refreshForFollowing(p);
+      expect(p.auto_download_baseline_id).toBe(5000);
+    });
+
+    test('rejects a known oversized playlist with a permanent size-limit error', async () => {
+      metadataCount = 5001;
+      flatPlaylistSpawn.mockImplementation(() => completedChild(entries(5000, 5001)));
+      await expect(playlistModule.refreshForFollowing(p)).rejects.toThrow('PLAYLIST_TOO_LARGE');
+      expect(flatPlaylistSpawn).not.toHaveBeenCalled();
+      expect(p.update).not.toHaveBeenCalled();
+    });
+
+    test('hitting the cap with an unknown total does not establish a baseline', async () => {
+      metadataCount = null;
+      flatPlaylistSpawn.mockImplementation(() => completedChild(entries(5000)));
+      await expect(playlistModule.refreshForFollowing(p)).rejects.toThrow('PLAYLIST_REFRESH_INCOMPLETE');
+    });
+  });
+
   describe('fetchAllPlaylistVideos', () => {
     test('fetches via the default path with the full-playlist cap', async () => {
       Playlist.findOne.mockResolvedValue({
@@ -181,7 +494,7 @@ describe('playlistModule', () => {
       const mockChild = new EventEmitter();
       mockChild.stdout = new EventEmitter();
       mockChild.stderr = new EventEmitter();
-      childProcess.spawn.mockReturnValue(mockChild);
+      flatPlaylistSpawn.mockReturnValue(mockChild);
 
       const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
       await new Promise((resolve) => setImmediate(resolve));
@@ -190,7 +503,7 @@ describe('playlistModule', () => {
       mockChild.emit('close', 0);
       await promise;
 
-      const spawnArgs = childProcess.spawn.mock.calls[0][1];
+      const spawnArgs = flatPlaylistSpawn.mock.calls[0][1];
       expect(spawnArgs).toEqual(expect.arrayContaining([
         '--playlist-end', '5000',
       ]));
@@ -209,7 +522,7 @@ describe('playlistModule', () => {
       const mockChild = new EventEmitter();
       mockChild.stdout = new EventEmitter();
       mockChild.stderr = new EventEmitter();
-      childProcess.spawn.mockReturnValue(mockChild);
+      flatPlaylistSpawn.mockReturnValue(mockChild);
 
       const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
 
@@ -264,7 +577,7 @@ describe('playlistModule', () => {
       const mockChild = new EventEmitter();
       mockChild.stdout = new EventEmitter();
       mockChild.stderr = new EventEmitter();
-      childProcess.spawn.mockReturnValue(mockChild);
+      flatPlaylistSpawn.mockReturnValue(mockChild);
       const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
 
       // Playlist.findOne is async — wait for it to resolve before emitting events
@@ -297,7 +610,7 @@ describe('playlistModule', () => {
       const mockChild = new EventEmitter();
       mockChild.stdout = new EventEmitter();
       mockChild.stderr = new EventEmitter();
-      childProcess.spawn.mockReturnValue(mockChild);
+      flatPlaylistSpawn.mockReturnValue(mockChild);
       const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
       await new Promise((resolve) => setImmediate(resolve));
       await new Promise((resolve) => setImmediate(resolve));
@@ -327,7 +640,7 @@ describe('playlistModule', () => {
       const mockChild = new EventEmitter();
       mockChild.stdout = new EventEmitter();
       mockChild.stderr = new EventEmitter();
-      childProcess.spawn.mockReturnValue(mockChild);
+      flatPlaylistSpawn.mockReturnValue(mockChild);
       const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
       await new Promise((resolve) => setImmediate(resolve));
       await new Promise((resolve) => setImmediate(resolve));
@@ -352,7 +665,7 @@ describe('playlistModule', () => {
       const mockChild = new EventEmitter();
       mockChild.stdout = new EventEmitter();
       mockChild.stderr = new EventEmitter();
-      childProcess.spawn.mockReturnValue(mockChild);
+      flatPlaylistSpawn.mockReturnValue(mockChild);
       const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
       await new Promise((resolve) => setImmediate(resolve));
       await new Promise((resolve) => setImmediate(resolve));
@@ -386,7 +699,7 @@ describe('playlistModule', () => {
       const mockChild = new EventEmitter();
       mockChild.stdout = new EventEmitter();
       mockChild.stderr = new EventEmitter();
-      childProcess.spawn.mockReturnValue(mockChild);
+      flatPlaylistSpawn.mockReturnValue(mockChild);
       const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
       await new Promise((resolve) => setImmediate(resolve));
       await new Promise((resolve) => setImmediate(resolve));
@@ -417,7 +730,7 @@ describe('playlistModule', () => {
       const mockChild = new EventEmitter();
       mockChild.stdout = new EventEmitter();
       mockChild.stderr = new EventEmitter();
-      childProcess.spawn.mockReturnValue(mockChild);
+      flatPlaylistSpawn.mockReturnValue(mockChild);
       const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
       await new Promise((resolve) => setImmediate(resolve));
       await new Promise((resolve) => setImmediate(resolve));
@@ -448,7 +761,7 @@ describe('playlistModule', () => {
       const mockChild = new EventEmitter();
       mockChild.stdout = new EventEmitter();
       mockChild.stderr = new EventEmitter();
-      childProcess.spawn.mockReturnValue(mockChild);
+      flatPlaylistSpawn.mockReturnValue(mockChild);
       const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
       await new Promise((resolve) => setImmediate(resolve));
       await new Promise((resolve) => setImmediate(resolve));
@@ -468,6 +781,7 @@ describe('playlistModule', () => {
     });
 
     test('prunes tracked rows that are now private or removed from the playlist', async () => {
+      metadataCount = 2;
       const { Op } = require('sequelize');
       Playlist.findOne.mockResolvedValue({
         id: 1, playlist_id: 'PLabc', url: 'https://u',
@@ -481,7 +795,7 @@ describe('playlistModule', () => {
       const mockChild = new EventEmitter();
       mockChild.stdout = new EventEmitter();
       mockChild.stderr = new EventEmitter();
-      childProcess.spawn.mockReturnValue(mockChild);
+      flatPlaylistSpawn.mockReturnValue(mockChild);
       const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
       await new Promise((resolve) => setImmediate(resolve));
       await new Promise((resolve) => setImmediate(resolve));
@@ -519,7 +833,7 @@ describe('playlistModule', () => {
       const innertubeChild = new EventEmitter();
       innertubeChild.stdout = new EventEmitter();
       innertubeChild.stderr = new EventEmitter();
-      childProcess.spawn
+      flatPlaylistSpawn
         .mockReturnValueOnce(defaultChild)
         .mockReturnValueOnce(innertubeChild);
       const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
@@ -559,7 +873,7 @@ describe('playlistModule', () => {
       const innertubeChild = new EventEmitter();
       innertubeChild.stdout = new EventEmitter();
       innertubeChild.stderr = new EventEmitter();
-      childProcess.spawn
+      flatPlaylistSpawn
         .mockReturnValueOnce(defaultChild)
         .mockReturnValueOnce(innertubeChild);
       const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
@@ -573,7 +887,7 @@ describe('playlistModule', () => {
       innertubeChild.emit('close', 0);
       await promise;
 
-      expect(childProcess.spawn).toHaveBeenCalledTimes(2);
+      expect(flatPlaylistSpawn).toHaveBeenCalledTimes(2);
       expect(PlaylistVideo.destroy).not.toHaveBeenCalled();
     });
 
@@ -600,7 +914,7 @@ describe('playlistModule', () => {
       const innertubeChild = new EventEmitter();
       innertubeChild.stdout = new EventEmitter();
       innertubeChild.stderr = new EventEmitter();
-      childProcess.spawn
+      flatPlaylistSpawn
         .mockReturnValueOnce(defaultChild)
         .mockReturnValueOnce(innertubeChild);
       const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
@@ -634,7 +948,7 @@ describe('playlistModule', () => {
       const mockChild = new EventEmitter();
       mockChild.stdout = new EventEmitter();
       mockChild.stderr = new EventEmitter();
-      childProcess.spawn.mockReturnValue(mockChild);
+      flatPlaylistSpawn.mockReturnValue(mockChild);
       const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
       await new Promise((resolve) => setImmediate(resolve));
       await new Promise((resolve) => setImmediate(resolve));
@@ -646,7 +960,7 @@ describe('playlistModule', () => {
       mockChild.emit('close', 0);
       await promise;
 
-      expect(childProcess.spawn).toHaveBeenCalledWith('yt-dlp', [
+      expect(flatPlaylistSpawn).toHaveBeenCalledWith('yt-dlp', [
         '--flat-playlist', '--dump-json',
         '--playlist-end', '5000',
         'https://u',
@@ -668,7 +982,7 @@ describe('playlistModule', () => {
       const innertubeChild = new EventEmitter();
       innertubeChild.stdout = new EventEmitter();
       innertubeChild.stderr = new EventEmitter();
-      childProcess.spawn
+      flatPlaylistSpawn
         .mockReturnValueOnce(defaultChild)
         .mockReturnValueOnce(innertubeChild);
 
@@ -694,8 +1008,8 @@ describe('playlistModule', () => {
       innertubeChild.emit('close', 0);
       await promise;
 
-      expect(childProcess.spawn).toHaveBeenCalledTimes(2);
-      const secondCallArgs = childProcess.spawn.mock.calls[1][1];
+      expect(flatPlaylistSpawn).toHaveBeenCalledTimes(2);
+      const secondCallArgs = flatPlaylistSpawn.mock.calls[1][1];
       expect(secondCallArgs).toEqual(expect.arrayContaining([
         '--extractor-args', 'youtubetab:skip=webpage',
       ]));
@@ -718,7 +1032,7 @@ describe('playlistModule', () => {
       const innertubeChild = new EventEmitter();
       innertubeChild.stdout = new EventEmitter();
       innertubeChild.stderr = new EventEmitter();
-      childProcess.spawn
+      flatPlaylistSpawn
         .mockReturnValueOnce(defaultChild)
         .mockReturnValueOnce(innertubeChild);
 
@@ -739,8 +1053,8 @@ describe('playlistModule', () => {
       innertubeChild.emit('close', 0);
       await promise;
 
-      expect(childProcess.spawn).toHaveBeenCalledTimes(2);
-      const secondCallArgs = childProcess.spawn.mock.calls[1][1];
+      expect(flatPlaylistSpawn).toHaveBeenCalledTimes(2);
+      const secondCallArgs = flatPlaylistSpawn.mock.calls[1][1];
       expect(secondCallArgs).toEqual(expect.arrayContaining([
         '--extractor-args', 'youtubetab:skip=webpage',
       ]));
@@ -763,7 +1077,7 @@ describe('playlistModule', () => {
       const innertubeChild = new EventEmitter();
       innertubeChild.stdout = new EventEmitter();
       innertubeChild.stderr = new EventEmitter();
-      childProcess.spawn
+      flatPlaylistSpawn
         .mockReturnValueOnce(defaultChild)
         .mockReturnValueOnce(innertubeChild);
 
@@ -808,7 +1122,7 @@ describe('playlistModule', () => {
       const innertubeChild = new EventEmitter();
       innertubeChild.stdout = new EventEmitter();
       innertubeChild.stderr = new EventEmitter();
-      childProcess.spawn
+      flatPlaylistSpawn
         .mockReturnValueOnce(defaultChild)
         .mockReturnValueOnce(innertubeChild);
 
@@ -830,7 +1144,7 @@ describe('playlistModule', () => {
       innertubeChild.emit('close', 1);
 
       await expect(promise).resolves.toBeDefined();
-      expect(childProcess.spawn).toHaveBeenCalledTimes(2);
+      expect(flatPlaylistSpawn).toHaveBeenCalledTimes(2);
       const rows = PlaylistVideo.bulkCreate.mock.calls[0][0];
       expect(rows.map((r) => r.youtube_id)).toEqual(['v1', 'v2', 'v3']);
     });
@@ -847,7 +1161,7 @@ describe('playlistModule', () => {
       const mockChild = new EventEmitter();
       mockChild.stdout = new EventEmitter();
       mockChild.stderr = new EventEmitter();
-      childProcess.spawn.mockReturnValue(mockChild);
+      flatPlaylistSpawn.mockReturnValue(mockChild);
 
       const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
       await new Promise((resolve) => setImmediate(resolve));
@@ -860,7 +1174,7 @@ describe('playlistModule', () => {
       mockChild.emit('close', 0);
       await promise;
 
-      expect(childProcess.spawn).toHaveBeenCalledTimes(1);
+      expect(flatPlaylistSpawn).toHaveBeenCalledTimes(1);
     });
 
     test('falls back to InnerTube when the default fetch fails', async () => {
@@ -878,7 +1192,7 @@ describe('playlistModule', () => {
       const innertubeChild = new EventEmitter();
       innertubeChild.stdout = new EventEmitter();
       innertubeChild.stderr = new EventEmitter();
-      childProcess.spawn
+      flatPlaylistSpawn
         .mockReturnValueOnce(defaultChild)
         .mockReturnValueOnce(innertubeChild);
 
@@ -897,7 +1211,7 @@ describe('playlistModule', () => {
       innertubeChild.emit('close', 0);
       await promise;
 
-      expect(childProcess.spawn).toHaveBeenCalledTimes(2);
+      expect(flatPlaylistSpawn).toHaveBeenCalledTimes(2);
     });
 
     test('rejects when both fetch paths fail', async () => {
@@ -915,7 +1229,7 @@ describe('playlistModule', () => {
       const innertubeChild = new EventEmitter();
       innertubeChild.stdout = new EventEmitter();
       innertubeChild.stderr = new EventEmitter();
-      childProcess.spawn
+      flatPlaylistSpawn
         .mockReturnValueOnce(defaultChild)
         .mockReturnValueOnce(innertubeChild);
 
@@ -945,7 +1259,7 @@ describe('playlistModule', () => {
       const mockChild = new EventEmitter();
       mockChild.stdout = new EventEmitter();
       mockChild.stderr = new EventEmitter();
-      childProcess.spawn.mockReturnValue(mockChild);
+      flatPlaylistSpawn.mockReturnValue(mockChild);
       const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
       await new Promise((resolve) => setImmediate(resolve));
       await new Promise((resolve) => setImmediate(resolve));
@@ -975,7 +1289,7 @@ describe('playlistModule', () => {
       const mockChild = new EventEmitter();
       mockChild.stdout = new EventEmitter();
       mockChild.stderr = new EventEmitter();
-      childProcess.spawn.mockReturnValue(mockChild);
+      flatPlaylistSpawn.mockReturnValue(mockChild);
       const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
 
       await new Promise((resolve) => setImmediate(resolve));
@@ -986,6 +1300,10 @@ describe('playlistModule', () => {
 
       const updateOnDuplicate = PlaylistVideo.bulkCreate.mock.calls[0][1].updateOnDuplicate;
       expect(updateOnDuplicate).not.toContain('added_at');
+      expect(updateOnDuplicate).not.toContain('first_seen_at');
+      expect(updateOnDuplicate).not.toContain('downloaded_at');
+      expect(updateOnDuplicate).not.toContain('auto_download_requested');
+      expect(updateOnDuplicate).not.toContain('auto_download_last_attempt_at');
     });
 
     test('reconciles rows against downloaded videos after the fetch completes', async () => {
@@ -1001,7 +1319,7 @@ describe('playlistModule', () => {
       const mockChild = new EventEmitter();
       mockChild.stdout = new EventEmitter();
       mockChild.stderr = new EventEmitter();
-      childProcess.spawn.mockReturnValue(mockChild);
+      flatPlaylistSpawn.mockReturnValue(mockChild);
       const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
 
       await new Promise((resolve) => setImmediate(resolve));
@@ -1026,7 +1344,7 @@ describe('playlistModule', () => {
       const mockChild = new EventEmitter();
       mockChild.stdout = new EventEmitter();
       mockChild.stderr = new EventEmitter();
-      childProcess.spawn.mockReturnValue(mockChild);
+      flatPlaylistSpawn.mockReturnValue(mockChild);
       const promise = playlistModule.fetchAllPlaylistVideos('PLabc');
 
       await new Promise((resolve) => setImmediate(resolve));
@@ -1049,7 +1367,7 @@ describe('playlistModule', () => {
       const mockChild = new EventEmitter();
       mockChild.stdout = new EventEmitter();
       mockChild.stderr = new EventEmitter();
-      childProcess.spawn.mockReturnValue(mockChild);
+      flatPlaylistSpawn.mockReturnValue(mockChild);
       const first = playlistModule.fetchAllPlaylistVideos('PLabc');
       await new Promise((resolve) => setImmediate(resolve));
       await new Promise((resolve) => setImmediate(resolve));
@@ -1080,7 +1398,7 @@ describe('playlistModule', () => {
       const failingFallbackChild = new EventEmitter();
       failingFallbackChild.stdout = new EventEmitter();
       failingFallbackChild.stderr = new EventEmitter();
-      childProcess.spawn
+      flatPlaylistSpawn
         .mockReturnValueOnce(failingChild)
         .mockReturnValueOnce(failingFallbackChild);
       const failing = playlistModule.fetchAllPlaylistVideos('PLabc');
@@ -1095,7 +1413,7 @@ describe('playlistModule', () => {
       const retryChild = new EventEmitter();
       retryChild.stdout = new EventEmitter();
       retryChild.stderr = new EventEmitter();
-      childProcess.spawn.mockReturnValue(retryChild);
+      flatPlaylistSpawn.mockReturnValue(retryChild);
       const retry = playlistModule.fetchAllPlaylistVideos('PLabc');
       await new Promise((resolve) => setImmediate(resolve));
       await new Promise((resolve) => setImmediate(resolve));
@@ -1105,7 +1423,7 @@ describe('playlistModule', () => {
       retryChild.emit('close', 0);
       await retry;
 
-      expect(childProcess.spawn).toHaveBeenCalledTimes(3);
+      expect(flatPlaylistSpawn).toHaveBeenCalledTimes(3);
     });
   });
 
@@ -1325,9 +1643,9 @@ describe('playlistModule', () => {
       expect(channelModule.upsertChannel).not.toHaveBeenCalled();
     });
 
-    test('stamps added_at but skips channel work for downloaded videos that have no channel_id', async () => {
+    test('stamps downloaded_at but skips channel work for downloaded videos that have no channel_id', async () => {
       PlaylistVideo.findAll.mockResolvedValue([
-        { playlist_id: 'PL1', youtube_id: 'v1', channel_id: 'UCowner', added_at: null },
+        { playlist_id: 'PL1', youtube_id: 'v1', channel_id: 'UCowner', downloaded_at: null },
       ]);
 
       await playlistModule.backfillDownloadedVideoChannels([
@@ -1335,7 +1653,7 @@ describe('playlistModule', () => {
       ]);
 
       expect(PlaylistVideo.update).toHaveBeenCalledWith(
-        { added_at: expect.any(Date) },
+        { downloaded_at: expect.any(Date) },
         { where: { youtube_id: 'v1' } }
       );
       expect(channelModule.upsertChannel).not.toHaveBeenCalled();
@@ -1349,7 +1667,7 @@ describe('playlistModule', () => {
 
     test('does not rewrite channel_id that is already correct', async () => {
       PlaylistVideo.findAll.mockResolvedValue([
-        { playlist_id: 'PL1', youtube_id: 'v1', channel_id: 'UCreal', added_at: new Date() },
+        { playlist_id: 'PL1', youtube_id: 'v1', channel_id: 'UCreal', downloaded_at: new Date() },
       ]);
       Channel.findAll.mockResolvedValue([{ channel_id: 'UCreal' }]);
 
@@ -1365,7 +1683,7 @@ describe('playlistModule', () => {
       // auto-generated upload channel (VEVO/Topic). The stored owner id wins, so
       // no overwrite and no new channel.
       PlaylistVideo.findAll.mockResolvedValue([
-        { playlist_id: 'PL1', youtube_id: 'v1', channel_id: 'UCowner', added_at: new Date() },
+        { playlist_id: 'PL1', youtube_id: 'v1', channel_id: 'UCowner', downloaded_at: new Date() },
       ]);
       Channel.findAll.mockResolvedValue([]);
       Playlist.findAll.mockResolvedValue([
@@ -1380,10 +1698,10 @@ describe('playlistModule', () => {
       expect(channelModule.upsertChannel).not.toHaveBeenCalled();
     });
 
-    test('stamps added_at with the provided download time when a row is stale', async () => {
+    test('stamps downloaded_at with the provided download time when a row is stale', async () => {
       const downloadedAt = new Date('2026-01-05T10:00:00.000Z');
       PlaylistVideo.findAll.mockResolvedValue([
-        { playlist_id: 'PL1', youtube_id: 'v1', channel_id: 'UCreal', added_at: new Date('2026-06-01T00:00:00.000Z') },
+        { playlist_id: 'PL1', youtube_id: 'v1', channel_id: 'UCreal', downloaded_at: new Date('2026-06-01T00:00:00.000Z') },
       ]);
       Channel.findAll.mockResolvedValue([{ channel_id: 'UCreal' }]);
 
@@ -1395,15 +1713,15 @@ describe('playlistModule', () => {
         expect.objectContaining({ where: { youtube_id: ['v1'] } })
       );
       expect(PlaylistVideo.update).toHaveBeenCalledWith(
-        { added_at: downloadedAt },
+        { downloaded_at: downloadedAt },
         { where: { youtube_id: 'v1' } }
       );
     });
 
-    test('does not rewrite an added_at that already matches the download time', async () => {
+    test('does not rewrite a downloaded_at that already matches the download time', async () => {
       const downloadedAt = new Date('2026-01-05T10:00:00.000Z');
       PlaylistVideo.findAll.mockResolvedValue([
-        { playlist_id: 'PL1', youtube_id: 'v1', channel_id: 'UCreal', added_at: new Date(downloadedAt) },
+        { playlist_id: 'PL1', youtube_id: 'v1', channel_id: 'UCreal', downloaded_at: new Date(downloadedAt) },
       ]);
       Channel.findAll.mockResolvedValue([{ channel_id: 'UCreal' }]);
 
@@ -1414,9 +1732,9 @@ describe('playlistModule', () => {
       expect(PlaylistVideo.update).not.toHaveBeenCalled();
     });
 
-    test('leaves added_at alone when the caller reports no reliable download time', async () => {
+    test('leaves downloaded_at alone when the caller reports no reliable download time', async () => {
       PlaylistVideo.findAll.mockResolvedValue([
-        { playlist_id: 'PL1', youtube_id: 'v1', channel_id: 'UCreal', added_at: null },
+        { playlist_id: 'PL1', youtube_id: 'v1', channel_id: 'UCreal', downloaded_at: null },
       ]);
       Channel.findAll.mockResolvedValue([{ channel_id: 'UCreal' }]);
 
@@ -1429,7 +1747,7 @@ describe('playlistModule', () => {
 
     test('does not seed a hidden channel from a soft-deleted owning playlist', async () => {
       PlaylistVideo.findAll.mockResolvedValue([
-        { playlist_id: 'PLdeleted', youtube_id: 'v1', channel_id: null, added_at: new Date() },
+        { playlist_id: 'PLdeleted', youtube_id: 'v1', channel_id: null, downloaded_at: new Date() },
       ]);
       Channel.findAll.mockResolvedValue([]);
       // The enabled-only lookup finds no candidate playlists.
@@ -1453,8 +1771,8 @@ describe('playlistModule', () => {
 
     test('seeds from an enabled owning playlist when the first owning row is soft-deleted', async () => {
       PlaylistVideo.findAll.mockResolvedValue([
-        { playlist_id: 'PLdeleted', youtube_id: 'v1', channel_id: null, added_at: new Date() },
-        { playlist_id: 'PLlive', youtube_id: 'v1', channel_id: null, added_at: new Date() },
+        { playlist_id: 'PLdeleted', youtube_id: 'v1', channel_id: null, downloaded_at: new Date() },
+        { playlist_id: 'PLlive', youtube_id: 'v1', channel_id: null, downloaded_at: new Date() },
       ]);
       Channel.findAll.mockResolvedValue([]);
       Playlist.findAll.mockResolvedValue([
@@ -1482,9 +1800,9 @@ describe('playlistModule', () => {
         .mockResolvedValueOnce([{ youtube_id: 'v1' }, { youtube_id: 'v2' }])
         // rows matched inside backfillDownloadedVideoChannels
         .mockResolvedValueOnce([
-          { playlist_id: 'PL1', youtube_id: 'v1', channel_id: null, added_at: null },
+          { playlist_id: 'PL1', youtube_id: 'v1', channel_id: null, downloaded_at: null },
         ]);
-      db.sequelize.query.mockResolvedValue([
+      Video.findAll.mockResolvedValue([
         { youtubeId: 'v1', channel_id: 'UCa', youTubeChannelName: 'A', downloadedAt },
       ]);
       Channel.findAll.mockResolvedValue([{ channel_id: 'UCa' }]);
@@ -1494,12 +1812,27 @@ describe('playlistModule', () => {
       expect(PlaylistVideo.findAll).toHaveBeenNthCalledWith(1,
         expect.objectContaining({ where: { playlist_id: 'PL1' } })
       );
-      expect(db.sequelize.query).toHaveBeenCalledWith(
-        expect.stringContaining('COALESCE'),
-        expect.objectContaining({ replacements: { youtubeIds: ['v1', 'v2'] } })
-      );
+      expect(Video.findAll).toHaveBeenCalledWith(expect.objectContaining({
+        attributes: [
+          'youtubeId',
+          'channel_id',
+          'youTubeChannelName',
+          [
+            db.sequelize.fn(
+              'COALESCE',
+              db.sequelize.col('Video.last_downloaded_at'),
+              db.sequelize.fn('MAX', db.sequelize.col('jobVideos->job.time_created')),
+            ),
+            'downloadedAt',
+          ],
+        ],
+        where: {
+          youtubeId: ['v1', 'v2'],
+        },
+        raw: true,
+      }));
       expect(PlaylistVideo.update).toHaveBeenCalledWith(
-        { added_at: downloadedAt },
+        { downloaded_at: downloadedAt },
         { where: { youtube_id: 'v1' } }
       );
       expect(PlaylistVideo.update).toHaveBeenCalledWith(
@@ -1513,12 +1846,12 @@ describe('playlistModule', () => {
 
       await playlistModule.backfillFromDownloadedVideos('PL1');
 
-      expect(db.sequelize.query).not.toHaveBeenCalled();
+      expect(Video.findAll).not.toHaveBeenCalled();
     });
 
     test('no-ops when none of the tracked videos have been downloaded', async () => {
       PlaylistVideo.findAll.mockResolvedValueOnce([{ youtube_id: 'v1' }]);
-      db.sequelize.query.mockResolvedValue([]);
+      Video.findAll.mockResolvedValue([]);
 
       await playlistModule.backfillFromDownloadedVideos('PL1');
 
@@ -1579,6 +1912,32 @@ describe('playlistModule', () => {
       );
     });
 
+    test('reports how many playlists failed while still sweeping the rest', async () => {
+      const pl1 = { playlist_id: 'PL1', title: 'One' };
+      const pl2 = { playlist_id: 'PL2', title: 'Two' };
+      Playlist.findAll.mockResolvedValue([pl1, pl2]);
+      downloadModule.doPlaylistDownloads
+        .mockRejectedValueOnce(new Error('yt-dlp exited 1'))
+        .mockResolvedValueOnce(3);
+
+      await expect(playlistModule.playlistAutoDownload()).resolves.toEqual({
+        playlists: 2,
+        enqueued: 3,
+        failed: 1,
+        errors: [{ playlistId: 'PL1', message: 'yt-dlp exited 1' }],
+      });
+      expect(downloadModule.doPlaylistDownloads).toHaveBeenCalledTimes(2);
+    });
+
+    test('reports a clean sweep with its counts', async () => {
+      Playlist.findAll.mockResolvedValue([{ playlist_id: 'PL1', title: 'One' }]);
+      downloadModule.doPlaylistDownloads.mockResolvedValueOnce(2);
+
+      await expect(playlistModule.playlistAutoDownload()).resolves.toEqual({
+        playlists: 1, enqueued: 2, failed: 0, errors: [],
+      });
+    });
+
     test('creates one Complete "Playlist Downloads" job when auto-enabled playlists exist and nothing was enqueued', async () => {
       const pl1 = { playlist_id: 'PL1', title: 'One' };
       const pl2 = { playlist_id: 'PL2', title: 'Two' };
@@ -1636,7 +1995,7 @@ describe('playlistModule', () => {
       const child = new EventEmitter();
       child.stdout = new EventEmitter();
       child.stderr = new EventEmitter();
-      childProcess.spawn.mockReturnValue(child);
+      flatPlaylistSpawn.mockReturnValue(child);
       setImmediate(() => {
         entries.forEach((e) => child.stdout.emit('data', JSON.stringify(e) + '\n'));
         child.emit('close', 0);

@@ -3,6 +3,7 @@ const configModule = require('../configModule');
 const tempPathManager = require('./tempPathManager');
 const logger = require('../../logger');
 const customArgsParser = require('./customArgsParser');
+const { mergeCookiePlayerClients } = require('./cookiePlayerClients');
 const {
   CHANNEL_TEMPLATE,
   composeVideoFileTemplate,
@@ -205,7 +206,7 @@ class YtdlpCommandBuilder {
    * @returns {string[]}
    */
   static buildCommonArgs(config, options = {}) {
-    const { skipSleepRequests = false } = options;
+    const { skipSleepRequests = false, cookiesEnabled = true } = options;
     const args = [];
 
     // IP family (replaces previously-hardcoded -4)
@@ -238,7 +239,7 @@ class YtdlpCommandBuilder {
 
     // Cookies
     const cookiesPath = configModule.getCookiesPath();
-    if (cookiesPath) {
+    if (cookiesEnabled && cookiesPath) {
       args.push('--cookies', cookiesPath);
     }
 
@@ -286,6 +287,24 @@ class YtdlpCommandBuilder {
   }
 
   /**
+   * Custom args for commands that extract video formats. With cookies in play
+   * the cookie player clients get merged in; see cookiePlayerClients.js for
+   * why that's a merge and not a second token.
+   *
+   * @param {Object} config
+   * @returns {string[]}
+   */
+  static buildVideoExtractionCustomArgs(config, options = {}) {
+    const customArgs = this.buildCustomArgs(config);
+    const { cookiesEnabled = true } = options;
+
+    if (!cookiesEnabled || !configModule.getCookiesPath()) {
+      return customArgs;
+    }
+    return mergeCookiePlayerClients(customArgs);
+  }
+
+  /**
    * Build arguments for fetching metadata (channel info, video info, etc.)
    * @param {string} url - URL to fetch
    * @param {Object} options - Options object
@@ -319,7 +338,10 @@ class YtdlpCommandBuilder {
     }
 
     // Custom user args last (yt-dlp last-wins) but before URL operand
-    args.push(...this.buildCustomArgs(config));
+    // Flat listings don't make player requests, so they skip the cookie clients.
+    args.push(...(options.flatPlaylist
+      ? this.buildCustomArgs(config)
+      : this.buildVideoExtractionCustomArgs(config)));
 
     args.push(url);
     return args;
@@ -393,7 +415,7 @@ class YtdlpCommandBuilder {
       '--write-auto-sub',      // Fallback to auto-generated if manual not available
       '--sub-langs', language,
       '--convert-subs', 'srt',
-      '--sleep-subtitles', '2' // Add 2 second delay between subtitle requests to avoid rate limiting
+      '--sleep-subtitles', '5' // Add 5 second delay between subtitle requests to avoid rate limiting
     );
 
     return args;
@@ -575,7 +597,7 @@ class YtdlpCommandBuilder {
     // Custom user args MUST be appended last so yt-dlp's last-wins semantics
     // let users override managed defaults like --retries / --fragment-retries.
     // The URL list (-a tempChannelsFile) is appended later by downloadModule.
-    args.push(...this.buildCustomArgs(config));
+    args.push(...this.buildVideoExtractionCustomArgs(config));
 
     return args;
   }
@@ -589,8 +611,15 @@ class YtdlpCommandBuilder {
    * @param {boolean} skipVideoFolder - If true, skip the video subfolder level (flat structure)
    * @returns {string[]} - Array of yt-dlp command arguments
    */
-  static getBaseCommandArgsForManualDownload(resolution, allowRedownload = false, audioFormat = null, skipVideoFolder = false) {
+  static getBaseCommandArgsForManualDownload(
+    resolution,
+    allowRedownload = false,
+    audioFormat = null,
+    skipVideoFolder = false,
+    options = {}
+  ) {
     const config = configModule.getConfig();
+    const { cookiesEnabled = true } = options;
     const res = resolution || config.preferredResolution || '1080';
     const videoCodec = config.videoCodec || 'default';
 
@@ -599,7 +628,7 @@ class YtdlpCommandBuilder {
 
     // Start with common args (includes -4, proxy, sleep-requests, cookies)
     const args = [
-      ...this.buildCommonArgs(config),
+      ...this.buildCommonArgs(config, { cookiesEnabled }),
       '--windows-filenames',  // Sanitize filenames for Windows/Plex compatibility
       '--ffmpeg-location', configModule.ffmpegPath,
       '--socket-timeout', String(config.downloadSocketTimeoutSeconds || 30),
@@ -657,7 +686,7 @@ class YtdlpCommandBuilder {
     // Custom user args MUST be appended last so yt-dlp's last-wins semantics
     // let users override managed defaults like --retries / --fragment-retries.
     // URL operands are appended later by downloadModule.
-    args.push(...this.buildCustomArgs(config));
+    args.push(...this.buildVideoExtractionCustomArgs(config, { cookiesEnabled }));
 
     return args;
   }

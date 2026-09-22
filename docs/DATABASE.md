@@ -30,13 +30,14 @@ Youtarr uses MariaDB/MySQL for storing:
 | `jobvideodownloads`| `JobVideoDownload`| Download progress tracking        |
 | `sessions`         | `Session`         | User authentication sessions      |
 | `apikeys`          | `ApiKey`          | API key credentials for external integrations (bookmarklets, shortcuts, automation) |
-| `playlists`        | `Playlist`        | Subscribed YouTube playlists with per-playlist sync targets and seeded settings. `auto_download_baseline_at` (DATETIME, nullable): seed-then-track baseline for playlist auto-downloads; NULL until the first auto-download run. `sort_order` (STRING NOT NULL, default `'default'`): saved output order for the `.m3u` file and media server sync; `'reversed'` flips the YouTube playlist order. |
-| `playlistvideos`   | `PlaylistVideo`   | One row per (playlist, video) with the YouTube playlist position |
+| `playlists`        | `Playlist`        | Subscribed YouTube playlists with per-playlist sync targets and seeded settings. `auto_download_baseline_at` (DATETIME, nullable): saved starting time for automatic following. `auto_download_baseline_id` (INTEGER, nullable): last known playlist entry id for new setups, avoiding same-second timestamp ambiguity. Existing timestamp-only cutoffs are preserved on upgrade. `auto_download_setup_error` (STRING, nullable): persisted first-setup failure (`PLAYLIST_TOO_LARGE` or `PLAYLIST_REFRESH_INCOMPLETE`), cleared when a baseline is successfully established. `sort_order` (STRING NOT NULL, default `'default'`): saved output order for the `.m3u` file and media server sync; `'reversed'` flips the YouTube playlist order. |
+| `playlistvideos`   | `PlaylistVideo`   | One row per (playlist, video) with the YouTube playlist position. `first_seen_at`: immutable local discovery time, backfilled from row creation on upgrade. `downloaded_at`: recorded download/job time, independently updated. `auto_download_requested`: explicitly selected existing videos pending successful download, saved only with auto-download enabled and an established baseline. `auto_download_last_attempt_at` (DATETIME(3), nullable): scheduling time for an explicit saved batch or a selected scheduled retry, written before queue submission. Used to rotate older saved requests, independently of discovery and download dates; legacy requests with no known attempt remain null and join the bounded retry pool. First initialization preserves pending requests; successful downloads clear their own flags, and an explicit starting-point reset clears the remaining requests. Legacy `added_at` is retained for pre-upgrade timestamp cutoffs; it is no longer overwritten on download. |
 | `playlist_sync_state` | `PlaylistSyncState` | Per-(playlist, server) sync state: server playlist id, last_synced_at, last_error |
 | `subfolders`       | `Subfolder`       | Durable registry of known subfolder names (id, name unique, created_at, updated_at). Backfilled from channels, playlists, and video file paths by the `add-subfolders-table` migration; kept current by register-on-create and register-on-download-override. |
 | `video_watch_status` | `VideoWatchStatus` | Per-video, per-media-server, per-user watch state pulled by the watch status sync. Absence of a row means never synced/unknown, not unwatched. Columns: `video_id`, `server_type` (`plex`/`jellyfin`/`emby`), `server_user_id` (Plex owner is `'1'`), `played`, `play_count`, `position_ms`, `percent_watched`, `last_watched_at`, `last_synced_at`. Unique index on `(video_id, server_type, server_user_id)`. |
 | `media_server_users` | `MediaServerUser` | Media-server account directory populated during watch status sync: `server_type`, `server_user_id`, `server_user_name`. Unique index on `(server_type, server_user_id)`. Used to display which users watched a video. |
 | `watch_status_sync_cursors` | `WatchStatusSyncCursor` | Durable per-server watch-status sync cursor (unique `server_type`, `cursor` DATETIME). Today only Plex uses it: the newest play-history event scanned, so incremental pulls never permanently skip events. Deleting a row forces a full history re-scan on the next sync. |
+| `scheduled_task_runs` | `ScheduledTaskRun` | Bounded run history (the last 20 runs per task, plus any row still running and the newest row of each outcome) for the configurable schedules: `task_key` (the schedule's config key), `trigger_type` (`scheduled`/`manual`/`startup`), `status` (`running`/`success`/`error`/`skipped`/`interrupted`), task-specific `outcome`, `message`, JSON `details`, `started_at`, `finished_at`. Index on `(task_key, started_at)`. Rows still `running` when the server starts are marked `interrupted`. Feeds `GET /api/schedules` and the last-run displays on the Scheduling, Maintenance, and YT-DLP settings pages. |
 | `SequelizeMeta`    | NA                | Sequelize ORM migration tracking  |
 
 ## Internal Database (Default)
@@ -45,7 +46,7 @@ Youtarr uses MariaDB/MySQL for storing:
 - **Image**: `mariadb:10.3`
 - **Container Name**: `youtarr-db`
 - **Port**: 3321 inside the Docker network only; the bundled database is not published to the host
-- **Character Set**: `utf8mb4` (full Unicode/emoji support)
+- **Character Set**: `utf8mb4` (full Unicode/emoji support), collation `utf8mb4_unicode_ci` on the database default and every table. The `20260907000000-normalize-utf8mb4-unicode-collation` migration converts older installs that still had `utf8mb4_general_ci` or three-byte `utf8` tables.
 - **Default Credentials**:
   - User: `root`
   - Password: `123qweasd` (change in production!)
@@ -359,6 +360,11 @@ ALTER DATABASE youtarr
   CHARACTER SET utf8mb4
   COLLATE utf8mb4_unicode_ci;
 ```
+
+Tables on mixed collations (`utf8mb4_general_ci` beside `utf8mb4_unicode_ci`) make any query that
+compares string columns across them fail with `Illegal mix of collations`. The
+`normalize-utf8mb4-unicode-collation` migration fixes this automatically on startup; see
+[Troubleshooting](TROUBLESHOOTING.md#startup-fails-with-illegal-mix-of-collations) for the manual steps.
 
 ## Storage Considerations
 

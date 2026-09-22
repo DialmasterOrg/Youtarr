@@ -76,7 +76,11 @@ const mockPlaylist = {
   thumbnail: null,
   public_on_servers: false,
   auto_download: false,
+  auto_download_baseline_at: null as string | null,
 };
+
+jest.mock('axios', () => ({ get: jest.fn(), post: jest.fn(), isAxiosError: () => false }));
+const http = require('axios');
 
 jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
@@ -177,7 +181,10 @@ jest.mock('../PlaylistPage/components/NoMediaServerWarning', () => ({
 
 jest.mock('../PlaylistPage/components/PlaylistSettingsDialog', () => ({
   __esModule: true,
-  default: () => null,
+  default: ({ open, onFollowFromNow }: { open: boolean; onFollowFromNow: () => void }) => {
+    const React = require('react');
+    return open ? React.createElement('button', { onClick: onFollowFromNow }, 'Follow from now...') : null;
+  },
 }));
 
 jest.mock('../shared/SubscriptionsBackButton', () => ({
@@ -246,13 +253,13 @@ describe('PlaylistPage selected-download selection lifecycle', () => {
     await waitFor(() => expect(screen.queryByText('1 selected')).not.toBeInTheDocument());
   });
 
-  test('Download new opens the dialog and downloads all videos on confirm', async () => {
+  test('Download all opens the dialog and downloads all videos on confirm', async () => {
     const user = userEvent.setup();
     mockTriggerDownload.mockResolvedValue(undefined);
 
     renderWithProviders(<PlaylistPage token="t" />);
 
-    await user.click(screen.getByRole('button', { name: /Download 1 new/i }));
+    await user.click(screen.getByRole('button', { name: /Download 1 video/i }));
     await user.click(await screen.findByTestId('mock-confirm-download'));
 
     await waitFor(() => expect(mockTriggerDownload).toHaveBeenCalledWith(undefined, undefined));
@@ -281,27 +288,24 @@ describe('PlaylistPage selected-download selection lifecycle', () => {
     expect(await screen.findByTestId('mock-dialog-missing-count')).toHaveTextContent('0');
   });
 
-  test('passes missingVideoCount 0 for Download new even when missing videos exist', async () => {
+  test('passes missingVideoCount 0 for Download all even when missing videos exist', async () => {
     const user = userEvent.setup();
 
     renderWithProviders(<PlaylistPage token="t" />);
 
-    await user.click(screen.getByRole('button', { name: /Download 1 new/i }));
+    await user.click(screen.getByRole('button', { name: /Download 1 video/i }));
 
     expect(await screen.findByTestId('mock-dialog-missing-count')).toHaveTextContent('0');
   });
 
-  test('toggling the auto-download switch turns the playlist setting on', async () => {
+  test('first enable opens following setup instead of silently downloading a batch', async () => {
     const user = userEvent.setup();
-    mockToggleAutoDownload.mockResolvedValue({ ...mockPlaylist, auto_download: true });
-
     renderWithProviders(<PlaylistPage token="t" />);
-
     await user.click(screen.getByRole('checkbox', { name: /Auto-download new videos/i }));
-
-    await waitFor(() =>
-      expect(mockToggleAutoDownload).toHaveBeenCalledWith('PL1', true)
-    );
+    expect(await screen.findByRole('dialog', { name: 'Start following this playlist' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Only download future additions' })).toBeChecked();
+    expect(mockToggleAutoDownload).not.toHaveBeenCalled();
+    expect(mockTriggerDownload).not.toHaveBeenCalled();
   });
 
   test('marks the row deleted in place and refreshes meta when the modal reports a deletion', async () => {
@@ -448,5 +452,68 @@ describe('PlaylistPage restored-subscription notice', () => {
     expect(
       screen.queryByText('Playlist restored with its previous settings')
     ).not.toBeInTheDocument();
+  });
+});
+
+
+describe('PlaylistPage following controls', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPlaylist.auto_download = false;
+    mockPlaylist.auto_download_baseline_at = '2026-09-01T00:00:00Z';
+    mockToggleAutoDownload.mockResolvedValue(true);
+    http.get.mockResolvedValue({ data: { candidates: [], selectedIds: [], missingDates: 0 } });
+  });
+
+  afterEach(() => {
+    mockPlaylist.auto_download = false;
+    mockPlaylist.auto_download_baseline_at = null;
+    mockLocationState = null;
+  });
+
+  test.each([
+    [false, true, 'Auto-download resumed; new additions will catch up on scheduled runs.'],
+    [true, false, 'Auto-download paused'],
+  ])('toggles with an existing baseline from %s to %s', async (current, next, message) => {
+    const user = userEvent.setup();
+    mockPlaylist.auto_download = current;
+    renderWithProviders(<PlaylistPage token="t" />);
+    await user.click(screen.getByRole('checkbox', { name: 'Auto-download new videos' }));
+    await waitFor(() => expect(mockToggleAutoDownload).toHaveBeenCalledWith('PL1', next));
+    expect(await screen.findByText(message)).toBeVisible();
+    expect(screen.queryByRole('dialog', { name: 'Start following this playlist' })).not.toBeInTheDocument();
+  });
+
+  test('shows a failure snackbar when a pause or resume cannot be saved', async () => {
+    const user = userEvent.setup();
+    mockToggleAutoDownload.mockResolvedValue(false);
+    renderWithProviders(<PlaylistPage token="t" />);
+    await user.click(screen.getByRole('checkbox', { name: 'Auto-download new videos' }));
+    expect(await screen.findByText('Could not update auto-download. Please retry.')).toBeVisible();
+  });
+
+  test('opens the existing-video chooser from the header', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<PlaylistPage token="t" />);
+    await user.click(screen.getByRole('button', { name: 'Choose existing videos' }));
+    expect(await screen.findByRole('dialog', { name: 'Choose existing videos' })).toBeVisible();
+    expect(await screen.findByText('No eligible existing videos.')).toBeVisible();
+  });
+
+  test('opens reset confirmation from playlist settings', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<PlaylistPage token="t" />);
+    await user.click(screen.getByRole('button', { name: 'Playlist settings' }));
+    await user.click(screen.getByRole('button', { name: 'Follow from now...' }));
+    expect(await screen.findByRole('dialog', { name: 'Reset starting point?' })).toBeVisible();
+    expect(screen.getByText(/Automatic downloads will remain paused/)).toBeVisible();
+  });
+
+  test('shows the subscription warning instead of claiming all restored settings were kept', async () => {
+    mockLocationState = { restored: true, warning: 'Playlist saved. Auto-download was turned off; retry setup later.' };
+    renderWithProviders(<PlaylistPage token="t" />);
+    expect(await screen.findByText('Playlist saved. Auto-download was turned off; retry setup later.')).toBeVisible();
+    expect(screen.queryByText('Playlist restored with its previous settings')).not.toBeInTheDocument();
+    expect(mockNavigate).toHaveBeenCalledWith('/playlist/PL1', { replace: true, state: null });
   });
 });

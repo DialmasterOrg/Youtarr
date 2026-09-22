@@ -91,7 +91,7 @@ recommendation) the server ignores the file, though it still opens in any
 [Jellyfin](media-servers/jellyfin.md#channel-playlist-files-m3u) and
 [Emby](media-servers/emby.md#channel-playlist-files-m3u) guides for the
 library-type tradeoff. The file updates after downloads and deletions and
-refreshes nightly after the scheduled file rescan; files deleted outside
+refreshes after the scheduled file rescan; files deleted outside
 Youtarr drop out of the playlist at the next refresh.
 Turning the setting off (or unsubscribing from the channel) deletes the file.
 
@@ -205,14 +205,32 @@ Private, deleted, and members-only videos can't be accessed, so Youtarr leaves t
 Open a playlist to manage it:
 
 - **Refresh from YouTube**: re-fetches the live playlist, updates the video list, then re-syncs and rewrites the `.m3u`. It doesn't download anything.
-- **Download new**: downloads every tracked video you don't already have. A settings dialog lets you confirm resolution and other options first.
-- **Auto-download new videos**: turn this on and Youtarr keeps the playlist current on your regular download schedule (see [Configure Automation](#configure-automation)).
+- **Download all N videos**: shows the eligible count and downloads every tracked video you have not previously downloaded. A settings dialog lets you confirm resolution and other options first.
+- **Auto-download new videos**: first enable refreshes the playlist and defaults to following future additions only. You can also preview and select an existing batch during setup. Later runs download newly discovered entries wherever they appear, even when the video itself is old. Your global per-run download count applies to new discoveries. Each scheduled run can also retry up to the same number of older saved selections, starting with those attempted least recently. Extra entries wait for later runs; neither allowance borrows unused slots from the other. Already queued or downloading videos do not take another slot. Pause/resume preserves tracking (see [Configure Automation](#configure-automation)).
+- **Choose existing videos**: select up to a chosen count by newest publication date, beginning of playlist, or end of playlist. Review the titles and adjust checkboxes before queuing. Missing publication dates require a positional or manual choice. This works for existing playlists too and preserves automatic tracking. Selected older videos remain eligible for retry while auto-download is enabled and a starting point exists.
+- **Follow from now** (in Playlist settings): refreshes the playlist and skips its current undownloaded backlog, including saved batch requests, after confirmation. This preserves whether automatic downloads are running or paused. Files and already queued downloads are kept.
 - **Playlist settings**: set a subfolder, resolution, download type, and default rating for this playlist. A video's own channel settings take precedence; these apply when the channel has no override. The download type also decides whether the playlist syncs to media servers as a video or music playlist (see [Switching a playlist's download type](MEDIA_SERVER_PLAYLISTS.md#switching-a-playlists-download-type)).
 - **Sync chips**: one per media server. Click to enable or disable sync for that server, or click an unconfigured server to jump to its settings.
 - **Public on media servers**: makes the playlist visible to other users on Jellyfin and Emby. Plex playlists are always created under one account and shared manually, so this setting doesn't affect Plex.
 - **Sync now** and **Rebuild .m3u file**: push the current state to your servers or regenerate the `.m3u` on demand. Sync runs in the background and can take a minute or two while your media server's library scan finishes.
 
-In the video list you can sort newest- or oldest-first, filter by download state with the **Show** control (All videos / Downloaded / Not downloaded), filter by watch status with the **Watched** control (see [Track Watch Status from Media Servers](#track-watch-status-from-media-servers)), exclude videos you don't want, and select specific videos to download with **Download Selected**. Excluded videos are skipped when downloading the playlist and removed from synced server playlists; if the file is already on disk, it stays there. Videos whose file was deleted after downloading count as not downloaded.
+In the video list you can sort by playlist order, reverse order, discovery time, download time, or newest publication date, filter by download state with the **Show** control (All videos / Downloaded / Not downloaded), filter by watch status with the **Watched** control (see [Track Watch Status from Media Servers](#track-watch-status-from-media-servers)), exclude videos you don't want, and select specific videos to download with **Download Selected**. Excluded videos are skipped when downloading the playlist and removed from synced server playlists; if the file is already on disk, it stays there. Videos whose file was deleted after downloading count as not downloaded.
+
+Discovery means when Youtarr first saw a video in this playlist; it is not the date the owner added it on YouTube. Downloading never changes discovery order. Videos discovered in the same refresh share a timestamp and use playlist order as a tie-break. Publication dates stay visible in every sort, including in the existing-video review list. Sorting by discovery or download time shows that date below Published in both the desktop table and cards on narrower screens. The Downloaded line is omitted for videos without a local file. Tap or click a discovery or download date to expand its full timestamp. Missing dates display as Unknown and sort last. Sorting the page or changing media-server playback order never changes automatic download eligibility.
+
+**Upgrade note:** Playlists with an existing tracking cutoff keep it. Older playlists with auto-download enabled but no saved cutoff start following future discoveries on their first successful scheduled refresh; they no longer seed an automatic batch from the old playlist contents. Use **Choose existing videos** to request that backlog or correct an unwanted initial batch. Only an explicit starting-point reset discards outstanding saved batch requests; first-time initialization preserves them. Successful downloads clear their own requests.
+
+Automatic following supports playlists with **up to 5,000 entries**, including unavailable entries YouTube reports. Larger playlists cannot establish a starting point with the current fetch limit; retrying will not remove that limit. New setups never infer recency from playlist position. Youtarr checks a separate playlist metadata total against the fetched entries before saving a starting point. If the total is missing, conflicting, or the listing is incomplete, the starting point stays unchanged and setup can be retried later. Unverified listings also cannot remove previously tracked entries. A refresh already in progress must finish before another setup attempt.
+
+If an older auto-enabled playlist cannot establish its first starting point, Youtarr still tries to refresh its visible list. An incomplete snapshot leaves automatic downloads waiting with a header notice and retries on scheduled runs. A playlist over the limit has auto-download turned off with a persistent explanation. Neither fallback stamps a starting point or clears saved requests. A successful setup clears the notice.
+
+Subscribing or restoring can succeed even when following setup cannot finish. The subscription is kept and the page shows a warning; size/completeness failures turn auto-download off so you can retry setup deliberately. If another refresh is already running, the saved auto-download setting is kept.
+
+The full explicit selection queues immediately, outside the scheduled allowances. Selections are saved for scheduled retry only when auto-download is enabled and a starting point exists. Otherwise, a queue failure is reported so you can retry the selection yourself.
+
+For example, with a limit of **3**, a scheduled playlist run can queue up to **3 new discoveries plus 3 older saved retries**. A requested video discovered after the starting point uses only the discovery allowance. Discovery jobs queue first, followed by separately labelled **Saved playlist retries** jobs (download settings can split either group into several jobs). Unsuccessful older requests rotate so they cannot occupy every retry slot forever. Requests with no recorded attempt time join the same bounded pool; accumulated selections do not all requeue at once.
+
+The header shows how many eligible selected videos are still undownloaded, including ones queued or downloading. This count is not a failure count. Attempt times record scheduling, not successful downloads or failure diagnoses. A skipped, terminated, or unsuccessful attempt keeps its request. Successful downloads and starting-point resets clear request flags; ignored or unavailable videos are excluded from retry selection. Repeated failure outcomes and automatic retry suspension are not tracked per playlist entry yet.
 
 ### Playlist files (.m3u)
 
@@ -234,13 +252,13 @@ Set up automatic downloads on a schedule so Youtarr checks for new videos period
    - Click "Settings" in the navigation menu
 
 2. **Set download schedule**
-   - Open **Settings -> Core** and find the **Download Frequency** drop-down
+   - Open **Settings -> Scheduling** and find **Automatic downloads**
    - Pick how often the cron job should run (defaults to hourly)
-   - Use the drop-down to choose one of the preset cron intervals
+   - Choose a preset interval, a daily time, or a custom cron expression
    - For in-depth field descriptions (and manual edits via config.json), see [Configuration Reference](CONFIG.md)
 
 3. **Choose video resolution**
-   - On the same Core page choose your preferred maximum resolution
+   - On **Settings -> Core**, enable automatic downloads and choose your preferred maximum resolution
    - Options range from 360p up through 2160p (4K); YouTube provides the best quality available up to that limit
 
 4. **Configure download limits** (optional)
@@ -263,6 +281,16 @@ Set up automatic downloads on a schedule so Youtarr checks for new videos period
 6. **Save configuration**
    - Click "Save" to apply your settings
    - Changes take effect immediately for the next scheduled run
+
+## Schedule Maintenance
+
+Open **Settings -> Scheduling** to change when automatic video cleanup, library repair, session cleanup, filesystem rescanning, or yt-dlp updates run. Watch-status sync and automatic downloads are configured on the same page. Existing feature pages include an **Edit schedule** link. Any task can be set to run as often as every 15 minutes, but for tasks other than automatic downloads the page warns you why that is rarely a good idea; the choice is still yours.
+
+For example, if your server is off overnight, change **Automatic video cleanup** from 02:00 to 18:00 and save. This updates future runs; saving does not immediately delete videos. Configure removal rules and preview deletions on **Settings -> Auto Removal** as before.
+
+The page shows the server timezone. Times and interval presets follow that clock, regardless of your browser's timezone. Configure the server timezone through `TZ` and restart the deployment if it needs changing. Youtarr must be running at the scheduled time; missed runs are not replayed. Startup library repair and filesystem rescanning still run independently of their schedules.
+
+The **Upcoming runs** list at the top shows when each active schedule fires next. Each card also shows its last run and how it ended, for example "completed: Deleted 12 videos and freed 8.10 GB" or "failed: Permission denied", so you can confirm a schedule is working without reading the logs. A schedule whose feature is switched off says so and links to where to turn it on. If a run is still going when its next time comes around, that occurrence is skipped and recorded as such. Times on this page are in the server timezone, and the page keeps itself up to date while it is open.
 
 ## Configure SponsorBlock
 
@@ -341,7 +369,7 @@ Videos can become "missing" if they're manually deleted from disk. This feature 
 
 ## Rescan Files on Disk
 
-Use this when you've moved, renamed, or converted downloaded files outside Youtarr and want Youtarr's database to catch up with what's actually on disk. The rescan walks your downloads folder and updates Youtarr's view of which files exist and where; it does not re-download anything. It also probes files for their actual resolution, so on libraries downloaded before that was tracked, the quality chips on video listings fill in gradually as the nightly rescan works through them.
+Use this when you've moved, renamed, or converted downloaded files outside Youtarr and want Youtarr's database to catch up with what's actually on disk. The rescan walks your downloads folder and updates Youtarr's view of which files exist and where; it does not re-download anything. It also probes files for their actual resolution, so on libraries downloaded before that was tracked, the quality chips on video listings fill in gradually as the scheduled rescan works through them.
 
 Common cases:
 - You converted `.mp4` files to `.mkv` (or another supported container) using ffmpeg.

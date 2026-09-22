@@ -47,9 +47,12 @@ describe('autoDownloadScheduler', () => {
     fsPromises = fs.promises;
 
     cron = require('node-cron');
-    cron.schedule = jest.fn().mockReturnValue({
+    cron.validate.mockReturnValue(true);
+    cron.getTasks.mockReturnValue(new Map());
+    cron.schedule = jest.fn().mockImplementation(() => ({
+      start: jest.fn(),
       stop: jest.fn()
-    });
+    }));
 
     configModule = require('../../configModule');
     downloadModule = require('../../downloadModule');
@@ -77,7 +80,8 @@ describe('autoDownloadScheduler', () => {
 
       expect(cron.schedule).toHaveBeenCalledWith(
         '0 */12 * * *',
-        expect.any(Function)
+        expect.any(Function),
+        expect.objectContaining({ scheduled: false })
       );
     });
 
@@ -93,13 +97,12 @@ describe('autoDownloadScheduler', () => {
       expect(cron.schedule).not.toHaveBeenCalled();
     });
 
-    test('should stop old task before scheduling new one', () => {
-      const mockTask = { stop: jest.fn() };
-      autoDownloadScheduler.task = mockTask;
-
+    test('stops the old task when the frequency changes', () => {
       autoDownloadScheduler.scheduleTask();
-
-      expect(mockTask.stop).toHaveBeenCalled();
+      const oldTask = cron.schedule.mock.results[0].value;
+      configModule.getConfig.mockReturnValue({ channelAutoDownload: true, channelDownloadFrequency: '0 18 * * *' });
+      autoDownloadScheduler.scheduleTask();
+      expect(oldTask.stop).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -243,6 +246,52 @@ describe('autoDownloadScheduler', () => {
         }),
         'Running scheduled channel downloads'
       );
+    });
+
+    test('resolves to a success record after starting the sweep', async () => {
+      await expect(autoDownloadScheduler.channelAutoDownload()).resolves.toEqual(expect.objectContaining({
+        status: 'success', outcome: 'completed', message: 'Checked enabled channels and playlists for new videos.'
+      }));
+    });
+
+    test('resolves to a skipped record when a channel download is still running', async () => {
+      jobModule.getAllJobs.mockReturnValue({
+        'job-123': { jobType: 'Channel Downloads', status: 'In Progress' }
+      });
+
+      await expect(autoDownloadScheduler.channelAutoDownload()).resolves.toEqual(expect.objectContaining({
+        status: 'skipped', message: 'The previous channel download job is still running.'
+      }));
+    });
+
+    test('reports individual playlist failures as a partial failure', async () => {
+      downloadModule.doChannelAndPlaylistDownloads.mockResolvedValue({
+        playlistError: null, playlistsFailed: 1, playlistsChecked: 3,
+      });
+
+      await expect(autoDownloadScheduler.channelAutoDownload()).resolves.toEqual(expect.objectContaining({
+        status: 'error',
+        outcome: 'partial',
+        message: 'Channel downloads were queued, but 1 of 3 playlists failed to sweep.'
+      }));
+    });
+
+    test('reports a failed playlist sweep as a partial failure', async () => {
+      downloadModule.doChannelAndPlaylistDownloads.mockResolvedValue({ playlistError: 'Playlist API down' });
+
+      await expect(autoDownloadScheduler.channelAutoDownload()).resolves.toEqual(expect.objectContaining({
+        status: 'error',
+        outcome: 'partial',
+        message: 'Channel downloads were queued, but the playlist sweep failed: Playlist API down'
+      }));
+    });
+
+    test('resolves to an error record when the sweep fails', async () => {
+      downloadModule.doChannelAndPlaylistDownloads.mockRejectedValue(new Error('yt-dlp missing'));
+
+      await expect(autoDownloadScheduler.channelAutoDownload()).resolves.toEqual(expect.objectContaining({
+        status: 'error', outcome: 'error', message: 'yt-dlp missing'
+      }));
     });
 
     test('skips when a channel download is already running (In Progress)', async () => {

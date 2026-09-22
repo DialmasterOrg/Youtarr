@@ -186,7 +186,7 @@ prompt_timezone_configuration() {
   load_available_timezones
 
   yt_section "Timezone"
-  yt_info "Timezone controls when scheduled jobs and nightly cleanup tasks run."
+  yt_info "Timezone controls console log timestamps and when scheduled jobs and nightly cleanup tasks run."
   yt_info "Choose the timezone that matches your deployment. Press Enter to accept '$current_default'."
   yt_detail "Enter a number from the list, type the timezone name (e.g., Europe/London), or type '? tokyo' to search."
   display_common_timezones

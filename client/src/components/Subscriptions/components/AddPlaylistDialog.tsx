@@ -104,9 +104,12 @@ const AddPlaylistDialog: React.FC<AddPlaylistDialogProps> = ({
       if (result) {
         onSubscribed?.(result.playlist);
         resetAndClose();
-        if (result.restored) {
-          // The playlist page shows a "restored with previous settings" notice.
-          navigate(`/playlist/${result.playlist.playlist_id}`, { state: { restored: true } });
+        if (result.restored || result.warning) {
+          // The destination shows setup warnings before the generic restore notice.
+          navigate(`/playlist/${result.playlist.playlist_id}`, { state: {
+            ...(result.restored && { restored: true }),
+            ...(result.warning && { warning: result.warning }),
+          } });
         } else {
           navigate(`/playlist/${result.playlist.playlist_id}`);
         }

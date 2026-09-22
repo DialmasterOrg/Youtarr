@@ -12,6 +12,9 @@ interface PlaylistHeaderProps {
   serverStatus: MediaServerStatus;
   anyConfigured: boolean;
   newCount: number | null;
+  followingExistingCount?: number | null;
+  followingRequestedCount?: number | null;
+  onChooseExisting?: () => void;
   togglePending: boolean;
   actionRunning: boolean;
   refreshing: boolean;
@@ -42,6 +45,9 @@ const PlaylistHeader: React.FC<PlaylistHeaderProps> = ({
   serverStatus,
   anyConfigured,
   newCount,
+  followingExistingCount,
+  followingRequestedCount,
+  onChooseExisting,
   togglePending,
   actionRunning,
   refreshing,
@@ -123,6 +129,11 @@ const PlaylistHeader: React.FC<PlaylistHeaderProps> = ({
                 onToggleAutoDownload={onToggleAutoDownload}
                 togglePending={togglePending}
                 newCount={newCount}
+                hasFollowingBaseline={Boolean(playlist.auto_download_baseline_at)}
+                setupError={playlist.auto_download_setup_error}
+                followingExistingCount={followingExistingCount}
+                followingRequestedCount={followingRequestedCount}
+                onChooseExisting={onChooseExisting}
                 onRefresh={onRefresh}
                 onDownloadAll={onDownloadAll}
                 onOpenSettings={onOpenSettings}

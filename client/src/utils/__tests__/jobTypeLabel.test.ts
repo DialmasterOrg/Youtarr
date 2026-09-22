@@ -27,6 +27,10 @@ describe('jobTypeLabel', () => {
     expect(jobTypeLabel('Playlist: My Mix')).toBe('Playlist download: My Mix');
   });
 
+  test('distinguishes saved playlist retries from new downloads and HTTP retries', () => {
+    expect(jobTypeLabel('Playlist Retry: My Mix')).toBe('Saved playlist retries: My Mix');
+  });
+
   test('maps the playlist run label and the synthetic sweep marker', () => {
     expect(jobTypeLabel('Playlist downloads')).toBe('Playlist downloads');
     expect(jobTypeLabel('Playlist Downloads')).toBe('Playlist downloads');

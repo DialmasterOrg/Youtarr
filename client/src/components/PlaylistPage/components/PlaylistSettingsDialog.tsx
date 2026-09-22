@@ -28,6 +28,7 @@ interface PlaylistSettingsDialogProps {
   token: string | null;
   onClose: () => void;
   onSaved: (next: PlaylistSubscribeSettings) => void;
+  onFollowFromNow?: () => void;
 }
 
 // Settings surfaced by this dialog. The playlist also has min_duration,
@@ -62,6 +63,7 @@ const PlaylistSettingsDialog: React.FC<PlaylistSettingsDialogProps> = ({
   token,
   onClose,
   onSaved,
+  onFollowFromNow,
 }) => {
   const [form, setForm] = useState<FormState>(() => fromPlaylist(playlist));
   const sortOrderLabelId = useId();
@@ -90,6 +92,7 @@ const PlaylistSettingsDialog: React.FC<PlaylistSettingsDialogProps> = ({
   const willBeAudio = form.audio_format === 'mp3_only';
   const syncTypeChanges = wasAudio !== willBeAudio;
 
+  const isDirty = JSON.stringify(form) !== JSON.stringify(fromPlaylist(playlist));
   // Saving a new order doesn't sync anything by itself.
   const sortOrderChanges = form.sort_order !== (playlist.sort_order ?? 'default');
 
@@ -114,6 +117,18 @@ const PlaylistSettingsDialog: React.FC<PlaylistSettingsDialogProps> = ({
       <DialogContent>
         <div className="flex flex-col gap-4 mt-2">
           {error && <Alert severity="error">{error}</Alert>}
+          {playlist.auto_download_baseline_at && onFollowFromNow && (
+            <div className="rounded-md border border-border p-3 flex flex-col gap-2">
+              <Typography variant="subtitle2">Automatic downloads</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Tracking started {new Date(playlist.auto_download_baseline_at).toLocaleString()}.
+                Follow from now to skip the current undownloaded backlog. This keeps automatic downloads running or paused as they are now. You will review this before applying it.
+              </Typography>
+              <Button variant="outlined" onClick={onFollowFromNow}
+                disabled={pending || isDirty}>Follow from now...</Button>
+              {isDirty && <Typography variant="caption">Save or discard your settings changes before changing the starting point.</Typography>}
+            </div>
+          )}
 
           <Alert severity="info">
             <Typography variant="body2">
@@ -204,9 +219,8 @@ const PlaylistSettingsDialog: React.FC<PlaylistSettingsDialogProps> = ({
               </Select>
             </FormControl>
             <Typography variant="caption" color="text.secondary" className="block mt-1">
-              Order of the .m3u file and synced media server playlists. Some playlists add new
-              videos at the top; Reverse playlist order keeps those playing oldest-first as new
-              videos are added.
+              Playback order in the .m3u file and synced media server playlists.
+              This does not affect automatic downloads or sorting on this page.
             </Typography>
             {sortOrderChanges && (
               <div className="mt-2">

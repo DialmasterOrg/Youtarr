@@ -497,10 +497,13 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
             <Alert
               severity="error"
               action={
-                errorDetails.code === 'COOKIES_REQUIRED' ||
-                errorDetails.code === 'COOKIES_RECOMMENDED' ||
-                errorDetails.message.includes('Bot detection') ||
-                errorDetails.message.toLowerCase().includes('cookie') ? (
+                errorDetails.code !== 'NO_COOKIES_FALLBACK_FAILED' &&
+                errorDetails.code !== 'NO_COOKIES_FALLBACK_403' && (
+                  errorDetails.code === 'COOKIES_REQUIRED' ||
+                  errorDetails.code === 'COOKIES_RECOMMENDED' ||
+                  errorDetails.message.includes('Bot detection') ||
+                  errorDetails.message.toLowerCase().includes('cookie')
+                ) ? (
                   <Button
                     color="inherit"
                     size="small"

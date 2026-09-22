@@ -1,9 +1,10 @@
 const { spawn } = require('child_process');
 const { Op } = require('sequelize');
 const logger = require('../logger');
-const { sequelize, Sequelize } = require('../db');
-const { Playlist, PlaylistVideo, Channel } = require('../models');
+const { sequelize } = require('../db');
+const { Playlist, PlaylistVideo, Channel, Video, Job, JobVideo } = require('../models');
 const youtubeApi = require('./youtubeApi');
+const { MAX_PLAYLIST_VIDEOS } = require('./playlistConstants');
 
 // yt-dlp's flat-playlist listing still returns private/deleted/members-only
 // videos but strips their metadata: the title comes back null (current yt-dlp)
@@ -12,21 +13,19 @@ const youtubeApi = require('./youtubeApi');
 // back null for every entry.
 const UNAVAILABLE_TITLE_RE = /^\[(private|deleted|unavailable)\b[^\]]*\]$/i;
 
-// Every playlist fetch pages the full playlist up to this cap: the
-// default webpage path first, with a one-shot InnerTube fallback when it
-// fails or falls short (see _fetchPlaylistVideos). This cap is
-// playlist-scoped; channelModule.js has a separate, differently-named cap
-// (MAX_LOAD_MORE_VIDEOS) for the unrelated channel-videos Load More feature.
-const MAX_PLAYLIST_VIDEOS = 5000;
-
-// playlist_count routinely overcounts by a few (it includes videos deleted
-// from YouTube that no longer appear in listings), so only treat a fetch as
-// truncated when it falls short of the reported count by more than this.
+// Ordinary refreshes tolerate small reported-count drift before retrying.
+// Establishing a baseline and pruning require an exact, independently verified count.
 const REPORTED_COUNT_SLACK = 5;
 
-// added_at round-trips through a DATETIME column (second precision), so an
+// downloaded_at round-trips through a DATETIME column (second precision), so an
 // exact millisecond comparison would flag every already-correct row as stale.
-const ADDED_AT_TOLERANCE_MS = 1000;
+const DOWNLOAD_TIME_TOLERANCE_MS = 1000;
+
+function reportedCount(value) {
+  if (!['number', 'string'].includes(typeof value) || String(value).trim() === '') return null;
+  const count = Number(value);
+  return Number.isSafeInteger(count) && count >= 0 ? count : null;
+}
 
 class PlaylistModule {
   constructor() {
@@ -41,14 +40,28 @@ class PlaylistModule {
     return UNAVAILABLE_TITLE_RE.test(trimmed);
   }
   async getPlaylistInfo(url) {
+    const data = await this._getPlaylistMetadata(url);
+    return {
+      playlist_id: data.id,
+      title: data.title,
+      uploader: data.uploader || data.channel || null,
+      description: data.description || null,
+      thumbnail: data.thumbnail || null,
+      video_count: reportedCount(data.playlist_count) ?? 0,
+      url: data.webpage_url || url,
+    };
+  }
+
+  async _getPlaylistMetadata(url, { skipWebpage = false } = {}) {
     return new Promise((resolve, reject) => {
       const args = [
         '--skip-download',
         '--dump-single-json',
         '--flat-playlist',
         '--playlist-items', '0',
-        url,
       ];
+      if (skipWebpage) args.push('--extractor-args', 'youtubetab:skip=webpage');
+      args.push(url);
       const child = spawn('yt-dlp', args);
       let stdout = '';
       let stderr = '';
@@ -68,16 +81,7 @@ class PlaylistModule {
           return reject(new Error('NETWORK_ERROR'));
         }
         try {
-          const data = JSON.parse(stdout);
-          resolve({
-            playlist_id: data.id,
-            title: data.title,
-            uploader: data.uploader || data.channel || null,
-            description: data.description || null,
-            thumbnail: data.thumbnail || null,
-            video_count: data.playlist_count || 0,
-            url: data.webpage_url || url,
-          });
+          resolve(JSON.parse(stdout));
         } catch (err) {
           logger.error({ err, stdout }, 'getPlaylistInfo parse error');
           reject(new Error('PARSE_ERROR'));
@@ -111,68 +115,83 @@ class PlaylistModule {
     return { playlist, restored: false };
   }
 
-  async fetchAllPlaylistVideos(playlistId) {
+  async refreshForFollowing(playlist, { followFromNow = true, resetFollowing = false } = {}) {
+    const count = await this.fetchAllPlaylistVideos(playlist.playlist_id, { followFromNow, resetFollowing });
+    await playlist.reload();
+    return count;
+  }
+
+  isFollowingSetupError(err) {
+    return ['PLAYLIST_TOO_LARGE', 'PLAYLIST_REFRESH_INCOMPLETE'].includes(err.message);
+  }
+
+  // Recover only first-time setup failures. Hold the same fetch guard through
+  // the fallback so another setup cannot stamp a baseline halfway through it.
+  async recoverFollowingSetup(playlist, err, { disableAutoDownload = false } = {}) {
+    if (!this.isFollowingSetupError(err)) throw err;
+    const playlistId = playlist.playlist_id;
     if (this.activeFetches.has(playlistId)) {
-      throw new Error('FETCH_IN_PROGRESS');
+      return 'Playlist saved. Another refresh is in progress; check its following status when it finishes.';
     }
     this.activeFetches.add(playlistId);
     try {
-      return await this._fetchPlaylistVideos(playlistId);
+      await playlist.reload();
+      if (!playlist.enabled || playlist.auto_download_baseline_at) {
+        return 'Playlist saved. Following settings changed during setup; the current settings were kept.';
+      }
+      const pause = disableAutoDownload || err.message === 'PLAYLIST_TOO_LARGE';
+      // Compare the settings we just read: a concurrent pause or unsubscribe
+      // must not be undone by this recovery, nor may a new baseline be changed.
+      const [updated] = await Playlist.update({
+        auto_download_setup_error: err.message,
+        ...(pause && { auto_download: false }),
+      }, { where: {
+        playlist_id: playlistId, enabled: true,
+        auto_download: playlist.auto_download, auto_download_baseline_at: null,
+      } });
+      if (!updated) {
+        await playlist.reload();
+        return 'Playlist saved. Following settings changed during setup; the current settings were kept.';
+      }
+      let warning = err.message === 'PLAYLIST_TOO_LARGE'
+        ? `Playlist saved. Auto-download was turned off because automatic following supports up to ${MAX_PLAYLIST_VIDEOS.toLocaleString('en-US')} entries. You can still choose tracked videos manually.`
+        : `Playlist saved. YouTube did not provide a complete starting snapshot. ${pause ? 'Auto-download was turned off; retry setup later.' : 'Auto-download is waiting for a complete starting snapshot and will retry on scheduled runs.'}`;
+      try {
+        // A partial snapshot can update the listing, but cannot start following
+        // or prune missing entries. Saved batch requests are left untouched.
+        await this._fetchPlaylistVideos(playlistId);
+      } catch (refreshError) {
+        logger.error({ err: refreshError, playlist_id: playlistId }, 'Playlist setup fallback refresh failed');
+        warning += ' The video listing could not be refreshed either; try refreshing it later.';
+      }
+      await playlist.reload();
+      return warning;
     } finally {
       this.activeFetches.delete(playlistId);
     }
   }
 
-  async _fetchPlaylistVideos(playlistId) {
+  async fetchAllPlaylistVideos(playlistId, options = {}) {
+    if (this.activeFetches.has(playlistId)) {
+      throw new Error('FETCH_IN_PROGRESS');
+    }
+    this.activeFetches.add(playlistId);
+    try {
+      return await this._fetchPlaylistVideos(playlistId, options);
+    } finally {
+      this.activeFetches.delete(playlistId);
+    }
+  }
+
+  async _fetchPlaylistVideos(playlistId, { followFromNow = false, resetFollowing = false } = {}) {
     const playlist = await Playlist.findOne({ where: { playlist_id: playlistId } });
     if (!playlist) throw new Error('PLAYLIST_NOT_FOUND');
+    // A stale first-enable request must not reset tracking established meanwhile.
+    const startFollowing = followFromNow && (resetFollowing || !playlist.auto_download_baseline_at);
 
-    // YouTube has broken each flat-playlist extraction path at different
-    // times in 2026: the default webpage path truncated at ~100 entries
-    // (June 2026, fixed in yt-dlp 2026.07.04), and the InnerTube-only path
-    // (youtubetab:skip=webpage) still stops at ~200 for playlist views
-    // (server-side; channel tabs are unaffected). Fetch via the default
-    // path; when the result falls short of the playlist's reported size,
-    // or the spawn fails outright, retry once via InnerTube and keep
-    // whichever fetch returned more entries.
-    let entries;
-    let usedInnertube = false;
-    const innertubeOpts = { playlistEnd: MAX_PLAYLIST_VIDEOS, skipWebpage: true };
-    try {
-      entries = await this._spawnFlatPlaylist(playlist.url, { playlistEnd: MAX_PLAYLIST_VIDEOS });
-    } catch (err) {
-      logger.warn({ playlist_id: playlistId, err }, 'Default playlist fetch failed; retrying via InnerTube');
-      entries = await this._spawnFlatPlaylist(playlist.url, innertubeOpts);
-      usedInnertube = true;
-    }
+    const { entries, complete } = await this._fetchSnapshot(playlist, startFollowing);
 
-    const reported = Number(entries[0]?.playlist_count ?? entries[0]?.n_entries) || null;
-    const expected = reported == null ? null : Math.min(reported, MAX_PLAYLIST_VIDEOS);
-    if (
-      !usedInnertube &&
-      (entries.length === 0 || (expected != null && entries.length + REPORTED_COUNT_SLACK < expected))
-    ) {
-      logger.warn(
-        { playlist_id: playlistId, fetched: entries.length, expected },
-        'Playlist fetch came back empty or short of reported count; retrying via InnerTube'
-      );
-      try {
-        const fallback = await this._spawnFlatPlaylist(playlist.url, innertubeOpts);
-        if (fallback.length > entries.length) entries = fallback;
-      } catch (err) {
-        // Unlike the failure-path fallback above, here we already have a usable
-        // (if short) default result; keep it rather than failing the fetch.
-        logger.warn({ playlist_id: playlistId, err }, 'InnerTube fallback fetch failed; keeping the default fetch result');
-      }
-    }
-
-    if (entries.length >= MAX_PLAYLIST_VIDEOS) {
-      logger.warn(
-        { playlist_id: playlistId, fetched: entries.length, cap: MAX_PLAYLIST_VIDEOS },
-        'Playlist fetch hit the entry cap; videos beyond the cap are not tracked'
-      );
-    }
-
+    const discoveredAt = new Date();
     const available = entries.filter((e) => !this.isUnavailableTitle(e.title));
 
     const regex = playlist.title_filter_regex ? new RegExp(playlist.title_filter_regex, 'i') : null;
@@ -209,7 +228,8 @@ class PlaylistModule {
         thumbnail: pickThumbnail(e),
         duration: typeof e.duration === 'number' ? e.duration : null,
         published_at: e.upload_date || e.release_date || null,
-        added_at: new Date(),
+        added_at: discoveredAt,
+        first_seen_at: discoveredAt,
       }}))
       .filter(({ entry }) => passes(entry))
       .map(({ row }) => row);
@@ -218,8 +238,8 @@ class PlaylistModule {
     await this._preserveExistingChannelInfo(playlist.playlist_id, rows);
     await this._backfillPublishedDates(rows);
 
-    // added_at is deliberately absent: existing rows keep their first-seen
-    // timestamp, and backfillFromDownloadedVideos re-stamps downloaded rows.
+    // Discovery dates and explicit download requests are never overwritten by
+    // refresh. Download times are reconciled separately below.
     await PlaylistVideo.bulkCreate(rows, {
       updateOnDuplicate: [
         'position',
@@ -235,12 +255,9 @@ class PlaylistModule {
 
     // Prune rows that are no longer in the live playlist (went private, or were
     // removed on YouTube) so they stop showing in Youtarr and stop being queued.
-    // Skip pruning on a partial or empty fetch: yt-dlp reports the full count per
-    // entry, so fewer entries than reported means a glitch, not real deletions.
-    const reportedCount = Number(entries[0]?.playlist_count ?? entries[0]?.n_entries) || null;
-    const fetchLooksComplete =
-      entries.length > 0 && (reportedCount == null || entries.length >= reportedCount);
-    if (fetchLooksComplete) {
+    // Unknown counts and partial fetches cannot prove that missing entries were
+    // removed. A confirmed empty playlist can safely clear the tracked rows.
+    if (complete) {
       const keepIds = available.map((e) => e.id).filter(Boolean);
       const where = { playlist_id: playlist.playlist_id };
       if (keepIds.length) where.youtube_id = { [Op.notIn]: keepIds };
@@ -263,7 +280,27 @@ class PlaylistModule {
     if (!playlist.thumbnail && available[0]?.id) {
       update.thumbnail = `https://i.ytimg.com/vi/${available[0].id}/hqdefault.jpg`;
     }
-    await playlist.update(update);
+    if (startFollowing) {
+      // The fetch guard remains held while capturing the last known entry.
+      // An id boundary also works for empty playlists and same-second refreshes.
+      const baselineId = await PlaylistVideo.max('id', { where: { playlist_id: playlistId } }) || 0;
+      await sequelize.transaction(async (transaction) => {
+        if (resetFollowing) {
+          await PlaylistVideo.update(
+            { auto_download_requested: false },
+            { where: { playlist_id: playlistId }, transaction }
+          );
+        }
+        await playlist.update({
+          ...update,
+          auto_download_baseline_at: new Date(),
+          auto_download_baseline_id: baselineId,
+          auto_download_setup_error: null,
+        }, { transaction });
+      });
+    } else {
+      await playlist.update(update);
+    }
 
     // Best-effort: a failed reconciliation shouldn't fail the fetch.
     try {
@@ -273,6 +310,79 @@ class PlaylistModule {
     }
 
     return rows.length;
+  }
+
+  async _fetchSnapshot(playlist, startFollowing) {
+    // A metadata-only request does not walk the entries, so yt-dlp cannot
+    // substitute the length of a truncated extraction for YouTube's total.
+    // n_entries (and sometimes per-entry playlist_count) describe extraction,
+    // not independent evidence that pagination finished.
+    let metadataCount = null;
+    try {
+      metadataCount = reportedCount((await this._getPlaylistMetadata(playlist.url)).playlist_count);
+    } catch (err) {
+      logger.warn({ err, playlist_id: playlist.playlist_id }, 'Could not verify playlist size from metadata');
+    }
+    if (metadataCount == null) {
+      try {
+        metadataCount = reportedCount((await this._getPlaylistMetadata(playlist.url, { skipWebpage: true })).playlist_count);
+      } catch (err) {
+        logger.warn({ err, playlist_id: playlist.playlist_id }, 'Could not verify playlist size through InnerTube');
+      }
+    }
+    if (startFollowing && metadataCount > MAX_PLAYLIST_VIDEOS) {
+      throw new Error('PLAYLIST_TOO_LARGE');
+    }
+    const counts = new Set(metadataCount == null ? [] : [metadataCount]);
+    const rememberCounts = (result) => {
+      for (const entry of result) {
+        const count = reportedCount(entry.playlist_count);
+        if (count != null) counts.add(count);
+      }
+    };
+    const expectedCount = () => counts.size ? Math.max(...counts) : null;
+    const innertubeOpts = { playlistEnd: MAX_PLAYLIST_VIDEOS, skipWebpage: true };
+    let entries;
+    let usedInnertube = false;
+    try {
+      entries = await this._spawnFlatPlaylist(playlist.url, { playlistEnd: MAX_PLAYLIST_VIDEOS });
+    } catch (err) {
+      logger.warn({ err, playlist_id: playlist.playlist_id }, 'Default playlist fetch failed; retrying via InnerTube');
+      entries = await this._spawnFlatPlaylist(playlist.url, innertubeOpts);
+      usedInnertube = true;
+    }
+    rememberCounts(entries);
+    const expected = expectedCount();
+    const slack = startFollowing ? 0 : REPORTED_COUNT_SLACK;
+    if (!usedInnertube && (entries.length === 0 ||
+      (expected != null && entries.length + slack < Math.min(expected, MAX_PLAYLIST_VIDEOS)))) {
+      logger.warn({ playlist_id: playlist.playlist_id, fetched: entries.length, expected },
+        'Playlist fetch came back empty or short of reported count; retrying via InnerTube');
+      try {
+        const fallback = await this._spawnFlatPlaylist(playlist.url, innertubeOpts);
+        usedInnertube = true;
+        rememberCounts(fallback);
+        if (fallback.length > entries.length) entries = fallback;
+      } catch (err) {
+        logger.warn({ err, playlist_id: playlist.playlist_id }, 'InnerTube fallback fetch failed; keeping the default fetch result');
+      }
+    }
+    if (entries.length >= MAX_PLAYLIST_VIDEOS) {
+      logger.warn({ playlist_id: playlist.playlist_id, fetched: entries.length, cap: MAX_PLAYLIST_VIDEOS },
+        'Playlist fetch hit the entry cap; videos beyond the cap are not tracked');
+    }
+    // Smaller per-entry totals may themselves be synthesized from a truncated
+    // extraction. A larger total remains evidence that entries are missing.
+    const complete = metadataCount != null && entries.length === metadataCount && expectedCount() === metadataCount;
+    if (startFollowing && expectedCount() > MAX_PLAYLIST_VIDEOS) {
+      throw new Error('PLAYLIST_TOO_LARGE');
+    }
+    if (startFollowing && !complete) {
+      logger.warn({ playlist_id: playlist.playlist_id, fetched: entries.length, metadataCount, reportedCounts: [...counts] },
+        'Following requires a verifiably complete playlist snapshot');
+      throw new Error('PLAYLIST_REFRESH_INCOMPLETE');
+    }
+    return { entries, complete };
   }
 
   // The flat-playlist refresh rebuilds every row with a null published_at, and
@@ -437,7 +547,7 @@ class PlaylistModule {
       youtubeIds.add(v.youtubeId);
       // downloadedAt: undefined means "downloaded just now" (the post-download
       // hook), an explicit null means the caller has no reliable download time
-      // and added_at must be left alone.
+      // and downloaded_at must be left alone.
       if (v.downloadedAt !== null) {
         const valid = v.downloadedAt instanceof Date && !Number.isNaN(v.downloadedAt.getTime());
         downloadedAtByVideo.set(v.youtubeId, valid ? v.downloadedAt : fallbackDownloadedAt);
@@ -452,11 +562,11 @@ class PlaylistModule {
 
     const rows = await PlaylistVideo.findAll({
       where: { youtube_id: [...youtubeIds] },
-      attributes: ['playlist_id', 'youtube_id', 'channel_id', 'added_at'],
+      attributes: ['playlist_id', 'youtube_id', 'channel_id', 'downloaded_at'],
     });
     if (!rows || !rows.length) return;
 
-    await this._stampDownloadedAddedAt(rows, downloadedAtByVideo);
+    await this._stampDownloadedAt(rows, downloadedAtByVideo);
 
     const filledRows = rows.filter((row) => !row.channel_id && channelByVideo.get(row.youtube_id));
     if (filledRows.length === 0) return;
@@ -512,29 +622,28 @@ class PlaylistModule {
     }
   }
 
-  // The playlist UI shows added_at as the video's download time, but fetch
-  // writes stamp rows with fetch time. Re-stamp rows for downloaded videos,
-  // soft-deleted playlists included, so a later re-subscribe stays accurate.
-  async _stampDownloadedAddedAt(rows, downloadedAtByVideo) {
+  // Downloading must never change discovery order. Reconcile only download
+  // timestamps, including soft-deleted playlists that may later be restored.
+  async _stampDownloadedAt(rows, downloadedAtByVideo) {
     const stale = new Map();
     for (const row of rows) {
       const target = downloadedAtByVideo.get(row.youtube_id);
       if (!target || stale.has(row.youtube_id)) continue;
-      const current = row.added_at ? new Date(row.added_at).getTime() : null;
-      if (current == null || Math.abs(current - target.getTime()) > ADDED_AT_TOLERANCE_MS) {
+      const current = row.downloaded_at ? new Date(row.downloaded_at).getTime() : null;
+      if (current == null || Math.abs(current - target.getTime()) > DOWNLOAD_TIME_TOLERANCE_MS) {
         stale.set(row.youtube_id, target);
       }
     }
-    for (const [youtubeId, addedAt] of stale) {
+    for (const [youtubeId, downloadedAt] of stale) {
       await PlaylistVideo.update(
-        { added_at: addedAt },
+        { downloaded_at: downloadedAt },
         { where: { youtube_id: youtubeId } }
       );
     }
   }
 
   // Reconciles one playlist's tracked rows against videos that already exist in
-  // the Videos table: fills channel attribution and re-stamps added_at with the
+  // the Videos table: fills channel attribution and downloaded_at with the
   // video's actual download time. Runs after every fetch so rows created for
   // videos downloaded by other means (or while the playlist was soft-deleted)
   // pick up the right metadata.
@@ -546,22 +655,38 @@ class PlaylistModule {
     const youtubeIds = (tracked || []).map((r) => r.youtube_id).filter(Boolean);
     if (!youtubeIds.length) return;
 
-    // Same download-time derivation as videosModule/videoDeletionModule's
-    // timeCreated: last download wins, then the download job's creation time,
-    // then the upload date.
-    const downloaded = await sequelize.query(
-      `SELECT
-         videos.youtube_id AS "youtubeId",
-         videos.channel_id,
-         videos.youtube_channel_name AS "youTubeChannelName",
-         COALESCE(videos.last_downloaded_at, MAX(jobs.time_created), STR_TO_DATE(videos.original_date, '%Y%m%d')) AS downloadedAt
-       FROM videos
-       LEFT JOIN jobvideos ON videos.id = jobvideos.video_id
-       LEFT JOIN jobs ON jobs.id = jobvideos.job_id
-       WHERE videos.youtube_id IN (:youtubeIds)
-       GROUP BY videos.id`,
-      { replacements: { youtubeIds }, type: Sequelize.QueryTypes.SELECT }
-    );
+    // Use recorded download/job times. A publication date cannot tell us when
+    // the local file was downloaded; leave unknown download times unset.
+    const downloaded = await Video.findAll({
+      attributes: [
+        'youtubeId',
+        'channel_id',
+        'youTubeChannelName',
+        [
+          sequelize.fn(
+            'COALESCE',
+            sequelize.col('Video.last_downloaded_at'),
+            sequelize.fn('MAX', sequelize.col('jobVideos->job.time_created')),
+          ),
+          'downloadedAt',
+        ],
+      ],
+      include: [{
+        model: JobVideo,
+        as: 'jobVideos',
+        attributes: [],
+        include: [{
+          model: Job,
+          as: 'job',
+          attributes: [],
+        }],
+      }],
+      where: {
+        youtubeId: youtubeIds,
+      },
+      group: 'Video.id',
+      raw: true,
+    });
     if (!downloaded || !downloaded.length) return;
 
     await this.backfillDownloadedVideoChannels(downloaded.map((v) => {
@@ -581,18 +706,20 @@ class PlaylistModule {
       where: { enabled: true, auto_download: true },
     });
     let totalEnqueued = 0;
-    let anyErrored = false;
+    // One failing playlist must not stop the others, but the sweep reports
+    // every failure so the scheduled run isn't recorded as a clean success.
+    const errors = [];
     for (const p of playlists) {
       try {
         const enqueued = await downloadModule.doPlaylistDownloads(p, { refreshFirst: true, limitToRecent: true, overrideSettings, runId });
         totalEnqueued += enqueued || 0;
       } catch (err) {
-        anyErrored = true;
+        errors.push({ playlistId: p.playlist_id, message: err.message || 'Unknown error' });
         logger.error({ err, playlist_id: p.playlist_id }, 'playlistAutoDownload failed for playlist');
       }
     }
 
-    if (playlists.length > 0 && totalEnqueued === 0 && !anyErrored) {
+    if (playlists.length > 0 && totalEnqueued === 0 && errors.length === 0) {
       try {
         const jobModule = require('./jobModule');
         const { PLAYLIST_SWEEP_LABEL } = require('./download/jobTypes');
@@ -605,6 +732,8 @@ class PlaylistModule {
         logger.error({ err }, 'Failed to record idle playlist auto-download sweep in history');
       }
     }
+
+    return { playlists: playlists.length, enqueued: totalEnqueued, failed: errors.length, errors };
   }
 }
 

@@ -172,6 +172,7 @@ function formatDiagnosisLine(diagnosis = {}) {
  */
 function getSubtitle(jobType = '') {
   const type = jobType || '';
+  if (type.startsWith('Playlist Retry: ')) return 'Saved Playlist Retries';
   const isChannel = type.includes('Channel Downloads') || type.includes('Channel & playlist');
   const isPlaylist =
     type.startsWith('Playlist: ') || type === 'Playlist downloads' || type.includes('Channel & playlist');

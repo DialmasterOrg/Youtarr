@@ -1,14 +1,16 @@
 import React from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import { Avatar, Card, CardActionArea, CardContent, Chip, Tooltip, Typography } from '../../ui';
 import { Delete as DeleteIcon, Image as ImageIcon, Folder as FolderIcon } from '../../../lib/icons';
 import { Channel } from '../../../types/Channel';
 import { QualityChip, AutoDownloadChips, DurationFilterChip, TitleFilterChip, DownloadFormatConfigIndicator, TerminatedChip, ProtectedChip } from './chips';
 
+const THUMBNAIL_ASPECT_PADDING = '56.25%';
+
 interface ChannelCardProps {
     channel: Channel;
     isMobile: boolean;
     globalPreferredResolution: string;
-    onNavigate: () => void;
     onDelete: () => void;
     onRegexClick: (event: React.MouseEvent<HTMLElement>, regex: string) => void;
     isPendingAddition?: boolean;
@@ -18,11 +20,13 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
     channel,
     isMobile,
     globalPreferredResolution,
-    onNavigate,
     onDelete,
     onRegexClick,
     isPendingAddition,
 }) => {
+    const canNavigate = Boolean(channel.channel_id) && !isPendingAddition;
+    const channelPath = `/channel/${channel.channel_id}`;
+
     const thumbnailSrc = channel.channel_id
         ? `/images/channelthumb-${channel.channel_id}.jpg`
         : '/images/channelthumb-default.jpg';
@@ -30,6 +34,7 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
     return (
         <Card
             style={{
+                position: 'relative',
                 height: '100%',
                 display: 'flex',
                 flexDirection: 'column',
@@ -43,22 +48,28 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
             elevation={0}
         >
             <CardActionArea
-                onClick={isPendingAddition ? undefined : onNavigate}
+                component={canNavigate ? RouterLink : 'div'}
+                to={canNavigate ? channelPath : undefined}
+                role={undefined}
+                tabIndex={undefined}
+                aria-label={canNavigate ? channel.uploader || 'Unknown Channel' : undefined}
                 data-testid={`channel-card-${channel.channel_id || channel.url}`}
                 disabled={isPendingAddition}
                 style={{
-                    height: '100%',
+                    flexGrow: 1,
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'stretch',
-                    cursor: isPendingAddition ? 'not-allowed' : 'pointer',
+                    cursor: canNavigate ? 'pointer' : 'default',
+                    color: 'inherit',
+                    textDecoration: 'none',
                 }}
             >
                 <div
                     style={{
                         position: 'relative',
                         width: '100%',
-                        paddingTop: '56.25%',
+                        paddingTop: THUMBNAIL_ASPECT_PADDING,
                         overflow: 'hidden',
                         backgroundColor: 'rgba(64,64,64,0.5)',
                         display: 'flex',
@@ -90,7 +101,9 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
                     <div
                         style={{
                             position: 'absolute',
-                            bottom: 8,
+                            bottom: channel.title_filter_regex
+                                ? 'calc(8px + var(--ui-chip-small-height, 24px) + 6px)'
+                                : 8,
                             left: 8,
                             display: 'flex',
                             flexDirection: 'column',
@@ -102,40 +115,7 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
                             maxDuration={channel.max_duration}
                             isMobile={isMobile}
                         />
-                        <TitleFilterChip
-                            titleFilterRegex={channel.title_filter_regex}
-                            onRegexClick={onRegexClick}
-                            isMobile={isMobile}
-                        />
                     </div>
-
-                    <Tooltip title="Remove channel">
-                        <button
-                            type="button"
-                            aria-label="Remove channel"
-                            style={{
-                                position: 'absolute',
-                                top: 8,
-                                right: 8,
-                                background: 'rgba(0,0,0,0.4)',
-                                border: 'none',
-                                borderRadius: '50%',
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                width: 36,
-                                height: 36,
-                                color: 'var(--destructive)',
-                            }}
-                            onClick={(event) => {
-                                event.stopPropagation();
-                                onDelete();
-                            }}
-                        >
-                            <DeleteIcon size={16} data-testid="DeleteIcon" />
-                        </button>
-                    </Tooltip>
                 </div>
 
                 <CardContent style={{ display: 'flex', flexDirection: 'column', gap: 16, width: '100%', flexGrow: 1 }}>
@@ -160,14 +140,53 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
                         </div>
                         {isPendingAddition && <Chip label="Pending" size="small" color="warning" />}
                     </div>
-
-                    <CardDetails
-                        channel={channel}
-                        isMobile={isMobile}
-                        onRegexClick={onRegexClick}
-                    />
                 </CardContent>
             </CardActionArea>
+            {/* AutoDownloadChips can include a defaults-info button and popover. */}
+            <CardContent style={{ paddingTop: 0, opacity: isPendingAddition ? 0.5 : undefined }}>
+                <CardDetails channel={channel} isMobile={isMobile} />
+            </CardContent>
+            {/* Match the thumbnail area; controls are siblings of the navigation link. */}
+            <div style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                paddingTop: THUMBNAIL_ASPECT_PADDING,
+                pointerEvents: 'none',
+            }}>
+                <div style={{ position: 'absolute', top: 8, right: 8, pointerEvents: 'auto' }}>
+                    <Tooltip title="Remove channel">
+                        <button
+                            type="button"
+                            aria-label="Remove channel"
+                            style={{
+                                background: 'rgba(0,0,0,0.4)',
+                                border: 'none',
+                                borderRadius: '50%',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: 36,
+                                height: 36,
+                                color: 'var(--destructive)',
+                            }}
+                            onClick={onDelete}
+                        >
+                            <DeleteIcon size={16} data-testid="DeleteIcon" />
+                        </button>
+                    </Tooltip>
+                </div>
+                <div style={{ position: 'absolute', bottom: 8, left: 8, display: 'flex', pointerEvents: isPendingAddition ? 'none' : 'auto' }}>
+                    <TitleFilterChip
+                        disabled={isPendingAddition}
+                        titleFilterRegex={channel.title_filter_regex}
+                        onRegexClick={onRegexClick}
+                        isMobile={isMobile}
+                    />
+                </div>
+            </div>
         </Card>
     );
 };
@@ -175,10 +194,9 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
 interface CardDetailsProps {
     channel: Channel;
     isMobile: boolean;
-    onRegexClick: (event: React.MouseEvent<HTMLElement>, regex: string) => void;
 }
 
-const CardDetails: React.FC<CardDetailsProps> = ({ channel, isMobile, onRegexClick }) => {
+const CardDetails: React.FC<CardDetailsProps> = ({ channel, isMobile }) => {
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>

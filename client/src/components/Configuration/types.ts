@@ -83,6 +83,7 @@ export interface PlatformManagedState {
 }
 
 export interface DeploymentEnvironment {
+  timezone?: string | null;
   platform?: string | null;
   isWsl: boolean;
 }

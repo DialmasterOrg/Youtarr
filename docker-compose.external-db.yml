@@ -1,7 +1,7 @@
 # IMPORTANT NOTES:
-# By default the youtarr service runs as ROOT (UID 0, GID 0) for compatibility with existing setups.
+# By default, the youtarr service runs as ROOT (UID 0, GID 0) for compatibility with existing setups.
 # For improved security, you can set YOUTARR_UID and YOUTARR_GID environment variables to run the container as a non-root user.
-# If you do so, ensure that the following directories to exist on the host with the correct ownership/permissions before
+# If you do so, ensure that the following directories exist on the host with the correct ownership/permissions before
 # starting the container:
 # - ./config
 # - ./jobs
@@ -51,7 +51,7 @@ services:
       # This is just informational and lets the app know where the videos will be stored on the host
       YOUTUBE_OUTPUT_DIR: ${YOUTUBE_OUTPUT_DIR}
       # Optional: Custom data path for platforms like Elfhosted (defaults to /usr/src/app/data)
-      # This is the internal path where videos download inside the container and is not needed for most users
+      # This is the internal path where videos are downloaded inside the container and is not needed for most users
       # DATA_PATH: /storage/rclone/storagebox/youtube
 
     ports:

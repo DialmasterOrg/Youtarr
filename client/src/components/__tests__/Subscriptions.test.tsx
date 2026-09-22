@@ -43,17 +43,13 @@ jest.mock('../../hooks/useConfig', () => ({
 // Mock child components
 jest.mock('../Subscriptions/components/ChannelCard', () => ({
   __esModule: true,
-  default: function MockChannelCard({ channel, onNavigate, onDelete, isPendingAddition }: any) {
+  default: function MockChannelCard({ channel, onDelete, isPendingAddition }: any) {
     const React = require('react');
     return React.createElement('div', {
       'data-testid': `channel-card-${channel.url}`,
       'data-pending': isPendingAddition,
     },
       React.createElement('div', null, channel.uploader),
-      React.createElement('button', {
-        'data-testid': `navigate-${channel.url}`,
-        onClick: onNavigate,
-      }, 'Navigate'),
       React.createElement('button', {
         'data-testid': `delete-${channel.url}`,
         onClick: onDelete,
@@ -64,17 +60,13 @@ jest.mock('../Subscriptions/components/ChannelCard', () => ({
 
 jest.mock('../Subscriptions/components/ChannelListRow', () => ({
   __esModule: true,
-  default: function MockChannelListRow({ channel, onNavigate, onDelete, isPendingAddition }: any) {
+  default: function MockChannelListRow({ channel, onDelete, isPendingAddition }: any) {
     const React = require('react');
     return React.createElement('div', {
       'data-testid': `channel-row-${channel.url}`,
       'data-pending': isPendingAddition,
     },
       React.createElement('div', null, channel.uploader),
-      React.createElement('button', {
-        'data-testid': `navigate-${channel.url}`,
-        onClick: onNavigate,
-      }, 'Navigate'),
       React.createElement('button', {
         'data-testid': `delete-${channel.url}`,
         onClick: onDelete,
@@ -1292,52 +1284,6 @@ describe('Subscriptions Component', () => {
       expect(useChannelList).toHaveBeenCalledWith(
         expect.objectContaining({ page: 1 })
       );
-    });
-  });
-
-  describe('Navigation', () => {
-    test('navigates to channel page when channel clicked', async () => {
-      const user = userEvent.setup();
-      useChannelList.mockReturnValue({
-        channels: mockChannels,
-        total: 2,
-        totalPages: 1,
-        loading: false,
-        error: null,
-        refetch: mockRefetchChannels,
-        subFolders: [],
-      });
-
-      renderSubscriptions();
-
-      await user.click(screen.getByTestId(`navigate-${mockChannels[0].url}`));
-
-      expect(mockNavigate).toHaveBeenCalledWith(`/channel/${mockChannels[0].channel_id}`);
-    });
-
-    test('does not navigate when channel_id is missing', async () => {
-      const user = userEvent.setup();
-      const channelWithoutId: Channel = {
-        url: 'https://www.youtube.com/@nochannel',
-        uploader: 'No ID Channel',
-        channel_id: undefined as any,
-      };
-
-      useChannelList.mockReturnValue({
-        channels: [channelWithoutId],
-        total: 1,
-        totalPages: 1,
-        loading: false,
-        error: null,
-        refetch: mockRefetchChannels,
-        subFolders: [],
-      });
-
-      renderSubscriptions();
-
-      await user.click(screen.getByTestId(`navigate-${channelWithoutId.url}`));
-
-      expect(mockNavigate).not.toHaveBeenCalled();
     });
   });
 

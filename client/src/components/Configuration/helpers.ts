@@ -1,5 +1,3 @@
-import { FREQUENCY_MAPPING } from './constants';
-
 /**
  * Formats bytes into human-readable file sizes
  */
@@ -13,18 +11,6 @@ export const formatBytes = (bytes: number): string => {
   const value = bytes / Math.pow(1024, exponent);
   const decimals = exponent === 0 ? 0 : exponent === 1 ? 1 : 2;
   return `${value.toFixed(decimals)} ${units[exponent]}`;
-};
-
-/**
- * Converts cron expression to human-readable frequency label
- */
-export const reverseFrequencyMapping = (cronExpression: string): string => {
-  for (const [key, value] of Object.entries(FREQUENCY_MAPPING)) {
-    if (value === cronExpression) {
-      return key;
-    }
-  }
-  return cronExpression; // Return the cron expression if no match found
 };
 
 /**

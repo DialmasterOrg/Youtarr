@@ -175,6 +175,18 @@ describe('YtdlpOutputRouter', () => {
       );
       expect(cookieCalls).toHaveLength(1);
     });
+
+    it('ignores the mweb PO-token advisory even though it mentions HTTP Error 403', () => {
+      router.handleStdoutChunk(
+        'WARNING: [youtube] abc: mweb client https formats require a GVS PO Token which was not provided. ' +
+        'They will be skipped as they may yield HTTP Error 403.\n'
+      );
+
+      expect(router.httpForbiddenDetected).toBe(false);
+      expect(MessageEmitter.emitMessage.mock.calls.some(
+        (call) => call[4] && call[4].errorCode === 'COOKIES_RECOMMENDED'
+      )).toBe(false);
+    });
   });
 
   describe('handleStderrChunk', () => {
@@ -186,7 +198,7 @@ describe('YtdlpOutputRouter', () => {
     });
 
     it('sets botDetected and broadcasts an error message on bot detection', () => {
-      router.handleStderrChunk('Sign in to confirm you\'re not a bot');
+      router.handleStderrChunk('Sign in to confirm you\'re not a bot\n');
 
       expect(router.botDetected).toBe(true);
       expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
@@ -227,13 +239,122 @@ describe('YtdlpOutputRouter', () => {
     });
 
     it('detects 403s on stderr and emits the cookies suggestion', () => {
-      router.handleStderrChunk('HTTP Error 403: Forbidden');
+      router.handleStderrChunk('HTTP Error 403: Forbidden\n');
 
       expect(router.httpForbiddenDetected).toBe(true);
       const cookieCalls = MessageEmitter.emitMessage.mock.calls.filter(
         (call) => call[4] && call[4].errorCode === 'COOKIES_RECOMMENDED'
       );
       expect(cookieCalls).toHaveLength(1);
+    });
+
+    it('does not treat the mweb PO-token advisory as a 403', () => {
+      router.handleStderrChunk(
+        'WARNING: [youtube] abc: mweb client https formats require a GVS PO Token which was not provided. ' +
+        'They will be skipped as they may yield HTTP Error 403. You can manually pass a GVS PO Token\n'
+      );
+
+      expect(router.httpForbiddenDetected).toBe(false);
+      expect(MessageEmitter.emitMessage.mock.calls.some(
+        (call) => call[4] && call[4].errorCode === 'COOKIES_RECOMMENDED'
+      )).toBe(false);
+    });
+
+    it('still detects a real 403 in a chunk that also carries the PO-token advisory', () => {
+      router.handleStderrChunk(
+        'WARNING: [youtube] abc: mweb client https formats require a GVS PO Token which was not provided. ' +
+        'They will be skipped as they may yield HTTP Error 403.\n' +
+        'ERROR: unable to download video data: HTTP Error 403: Forbidden\n'
+      );
+
+      expect(router.httpForbiddenDetected).toBe(true);
+    });
+
+    it('broadcasts a one-time SABR restriction warning when YouTube strips formats for the account', () => {
+      const sabrLine =
+        'WARNING: [youtube] abc: Some web_embedded client https formats have been skipped as they are missing a URL. ' +
+        'YouTube may have enabled the SABR-only streaming experiment for your account. See  https://github.com/yt-dlp/yt-dlp/issues/12482  for more details\n';
+      router.handleStderrChunk(sabrLine);
+      router.handleStderrChunk(sabrLine);
+
+      expect(router.sabrRestrictionDetected).toBe(true);
+      const sabrCalls = MessageEmitter.emitMessage.mock.calls.filter(
+        (call) => call[4] && call[4].errorCode === 'SABR_RESTRICTED_FORMATS'
+      );
+      expect(sabrCalls).toHaveLength(1);
+      expect(sabrCalls[0][4].warning).toBe(true);
+      expect(sabrCalls[0][4].text).toMatch(/1080p/);
+      expect(router.httpForbiddenDetected).toBe(false);
+    });
+
+    it('holds a partial stderr line until its newline arrives before classifying it', () => {
+      router.handleStderrChunk('WARNING: [youtube] abc: mweb client https formats require a GVS PO Token which was not provided. ');
+      router.handleStderrChunk('They will be skipped as they may yield HTTP Error 403.\n');
+
+      expect(router.httpForbiddenDetected).toBe(false);
+      expect(errorTracker.handleWarningLine).toHaveBeenCalledTimes(1);
+      expect(errorTracker.handleWarningLine).toHaveBeenCalledWith(
+        'WARNING: [youtube] abc: mweb client https formats require a GVS PO Token which was not provided. ' +
+        'They will be skipped as they may yield HTTP Error 403.',
+        'stderr'
+      );
+    });
+
+    it('emits the SABR warning when its phrase is split across chunks', () => {
+      router.handleStderrChunk('WARNING: [youtube] abc: YouTube may have enabled the SABR-only streaming ');
+      router.handleStderrChunk('experiment for your account.\n');
+
+      expect(router.sabrRestrictionDetected).toBe(true);
+      expect(MessageEmitter.emitMessage.mock.calls.filter(
+        (call) => call[4] && call[4].errorCode === 'SABR_RESTRICTED_FORMATS'
+      )).toHaveLength(1);
+    });
+
+    it('flushes a trailing line that never received a newline when the run is disposed', () => {
+      router.handleStderrChunk('ERROR: unable to download video data: HTTP Error 403: Forbidden');
+
+      expect(errorTracker.handleErrorLine).not.toHaveBeenCalled();
+      expect(router.httpForbiddenDetected).toBe(false);
+
+      router.dispose();
+
+      expect(errorTracker.handleErrorLine).toHaveBeenCalledWith(
+        'ERROR: unable to download video data: HTTP Error 403: Forbidden',
+        'stderr'
+      );
+      expect(router.httpForbiddenDetected).toBe(true);
+    });
+
+    it('keeps the raw stderr buffer complete regardless of line buffering', () => {
+      router.handleStderrChunk('WARNING: partial ');
+      router.handleStderrChunk('line\nERROR: whole line\n');
+
+      expect(router.stderrBuffer).toBe('WARNING: partial line\nERROR: whole line\n');
+    });
+
+    it('ignores stderr that arrives after dispose without mutating state or broadcasting', () => {
+      router.handleStderrChunk('WARNING: first\n');
+      router.dispose();
+      MessageEmitter.emitMessage.mockClear();
+      errorTracker.handleErrorLine.mockClear();
+
+      router.handleStderrChunk('ERROR: unable to download video data: HTTP Error 403: Forbidden\n');
+
+      expect(router.stderrBuffer).toBe('WARNING: first\n');
+      expect(router.httpForbiddenDetected).toBe(false);
+      expect(errorTracker.handleErrorLine).not.toHaveBeenCalled();
+      expect(MessageEmitter.emitMessage).not.toHaveBeenCalled();
+    });
+
+    it('ignores stdout that arrives after dispose', () => {
+      router.dispose();
+      MessageEmitter.emitMessage.mockClear();
+
+      router.handleStdoutChunk('[youtube] Extracting URL: https://www.youtube.com/watch?v=aaaaaaaaaaa\nHTTP Error 403: Forbidden\n');
+
+      expect(router.httpForbiddenDetected).toBe(false);
+      expect(errorTracker.trackVideoStart).not.toHaveBeenCalled();
+      expect(MessageEmitter.emitMessage).not.toHaveBeenCalled();
     });
   });
 
@@ -259,7 +380,7 @@ describe('YtdlpOutputRouter', () => {
     });
 
     it('suggests refreshing or disabling cookies on 403 instead of enabling them', () => {
-      cookiesRouter.handleStderrChunk('HTTP Error 403: Forbidden');
+      cookiesRouter.handleStderrChunk('HTTP Error 403: Forbidden\n');
 
       const call = MessageEmitter.emitMessage.mock.calls.find(
         (c) => c[4] && c[4].errorCode === 'COOKIES_MAY_BE_STALE'
@@ -275,7 +396,7 @@ describe('YtdlpOutputRouter', () => {
     });
 
     it('suggests refreshing cookies on bot detection instead of setting them', () => {
-      cookiesRouter.handleStderrChunk('Sign in to confirm you\'re not a bot');
+      cookiesRouter.handleStderrChunk('Sign in to confirm you\'re not a bot\n');
 
       const call = MessageEmitter.emitMessage.mock.calls.find(
         (c) => c[4] && c[4].progress && c[4].progress.state === 'bot_detected'
@@ -283,6 +404,65 @@ describe('YtdlpOutputRouter', () => {
       expect(call).toBeDefined();
       expect(call[4].text).toMatch(/likely expired or rotated/i);
       expect(call[4].text).not.toMatch(/set cookies/i);
+    });
+  });
+
+  describe('context-aware hints during anonymous retry', () => {
+    let anonymousRouter;
+
+    beforeEach(() => {
+      anonymousRouter = new YtdlpOutputRouter({
+        jobId: 'job-123',
+        config: { enableStallDetection: false },
+        monitor: makeMonitor(),
+        errorTracker: makeErrorTracker(),
+        timeoutController: makeTimeoutController(),
+        cookiesEnabled: false,
+        anonymousRetry: true
+      });
+    });
+
+    afterEach(() => {
+      if (anonymousRouter.progressFlushTimer) {
+        clearTimeout(anonymousRouter.progressFlushTimer);
+        anonymousRouter.progressFlushTimer = null;
+      }
+    });
+
+    it('reports a recoverable 403 during the no-cookies fallback without recommending cookies', () => {
+      anonymousRouter.handleStderrChunk('HTTP Error 403: Forbidden\n');
+
+      const call = MessageEmitter.emitMessage.mock.calls.find(
+        (c) => c[4] && c[4].errorCode === 'NO_COOKIES_FALLBACK_403'
+      );
+
+      expect(call).toBeDefined();
+      expect(call[4].text).toMatch(/no-cookies fallback/i);
+      expect(call[4].text).toMatch(/if this retry fails/i);
+      expect(call[4].text).toMatch(/genuinely unavailable/i);
+      expect(call[4].text).not.toMatch(/fallback also failed/i);
+      expect(call[4].text).not.toMatch(/set.*cookies|enable.*cookies|re-export/i);
+      expect(
+        MessageEmitter.emitMessage.mock.calls.some(
+          (c) => c[4] && (
+            c[4].errorCode === 'COOKIES_RECOMMENDED' ||
+            c[4].errorCode === 'COOKIES_MAY_BE_STALE'
+          )
+        )
+      ).toBe(false);
+    });
+
+    it('reports bot detection as a failed no-cookies fallback instead of recommending cookies', () => {
+      anonymousRouter.handleStderrChunk('Sign in to confirm you\'re not a bot\n');
+
+      const call = MessageEmitter.emitMessage.mock.calls.find(
+        (c) => c[4] && c[4].progress && c[4].progress.state === 'bot_detected'
+      );
+
+      expect(call).toBeDefined();
+      expect(call[4].text).toMatch(/no-cookies fallback/i);
+      expect(call[4].text).toMatch(/genuinely unavailable/i);
+      expect(call[4].text).not.toMatch(/set.*cookies|enable.*cookies|re-export/i);
     });
   });
 

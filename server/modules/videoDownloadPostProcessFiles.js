@@ -50,6 +50,27 @@ const actualChannelFolderName = isFlatMode
   ? path.basename(videoDirectory)
   : path.basename(path.dirname(videoDirectory));
 
+// yt-dlp reports `timestamp` as Unix seconds. Values outside a plausible upload
+// window are treated as missing so an obviously wrong instant is not embedded;
+// the date-only upload_date is used instead. Premieres can carry a slightly
+// future timestamp, so the upper edge allows a day of slack. A badly skewed
+// system clock therefore also falls back to the date-only value.
+const MAX_UPLOAD_TIMESTAMP_SKEW_MS = 24 * 60 * 60 * 1000;
+
+// Plex reads the ©day atom. Seconds-precision UTC is the form verified against
+// AtomicParsley in issue #832; fractional seconds are dropped rather than
+// guessing at what each server's date parser accepts.
+function formatUploadInstant(timestamp) {
+  if (!Number.isFinite(timestamp) || timestamp < 0) {
+    return null;
+  }
+  const millis = timestamp * 1000;
+  if (millis > Date.now() + MAX_UPLOAD_TIMESTAMP_SKEW_MS) {
+    return null;
+  }
+  return new Date(millis).toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
 function shouldWriteChannelPosters() {
   const config = configModule.getConfig() || {};
   return config.writeChannelPosters !== false;
@@ -527,9 +548,12 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
         apArgs.push('--keyword', jsonData.tags.slice(0, 10).join(';'));
       }
 
-      // Add release date for Plex/mp4 embedded metadata
-      // Good lord Plex is finicky
-      if (jsonData.upload_date) {
+      // Preserve the upload instant in MP4 metadata when available. NFO release
+      // dates remain date-only for Jellyfin/Emby compatibility.
+      const uploadInstant = formatUploadInstant(jsonData.timestamp);
+      if (uploadInstant) {
+        apArgs.push('--year', uploadInstant);
+      } else if (jsonData.upload_date) {
         const year = jsonData.upload_date.substring(0, 4);
         const month = jsonData.upload_date.substring(4, 6);
         const day = jsonData.upload_date.substring(6, 8);

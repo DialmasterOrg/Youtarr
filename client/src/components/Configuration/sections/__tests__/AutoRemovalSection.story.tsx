@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router-dom';
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, userEvent, within } from 'storybook/test';
 import React, { useState } from 'react';
@@ -7,6 +8,7 @@ import { AutoRemovalSection } from '../AutoRemovalSection';
 const meta: Meta<typeof AutoRemovalSection> = {
   title: 'Components/Configuration/Sections/AutoRemovalSection',
   component: AutoRemovalSection,
+  decorators: [(Story) => <MemoryRouter><Story /></MemoryRouter>],
   render: (args) => {
     const [config, setConfig] = useState({
       ...DEFAULT_CONFIG,

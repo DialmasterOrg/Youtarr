@@ -17,6 +17,7 @@ const createYoutubeApiKeyRoutes = require('./youtubeApiKey');
 const createYtdlpOptionsRoutes = require('./ytdlpOptions');
 const createMaintenanceRoutes = require('./maintenance');
 const createSubfolderRoutes = require('./subfolders');
+const createSchedulesRoutes = require('./schedules');
 const videoMetadataModule = require('../modules/videoMetadataModule');
 const videoOembedEnricher = require('../modules/videoOembedEnricher');
 const playlistModule = require('../modules/playlistModule');
@@ -27,9 +28,15 @@ const channelDownloadAllModule = require('../modules/channelDownloadAllModule');
 const ratingMapper = require('../modules/ratingMapper');
 const subfolderModule = require('../modules/subfolderModule');
 const playlistVideoFilters = require('../modules/playlistVideoFilters');
+const playlistDownloadModule = require('../modules/playlistDownloadModule');
 const models = require('../models');
 const videoLocalStatus = require('../modules/videoLocalStatus');
 const videoActivity = require('../modules/download/videoActivity');
+const scheduledTaskManager = require('../modules/scheduledTaskManager');
+const scheduledTaskRuns = require('../modules/scheduledTaskRuns');
+const scheduleConfig = require('../modules/scheduleConfig');
+const rescanRunSummary = require('../modules/rescanRunSummary');
+const ytdlpUpdateRunSummary = require('../modules/ytdlpUpdateRunSummary');
 
 /**
  * Registers all route modules with the Express app
@@ -64,7 +71,9 @@ function registerRoutes(app, deps) {
   } = deps;
 
   // Health routes (no auth required for health checks, but yt-dlp endpoints are authenticated)
-  app.use(createHealthRoutes({ getCachedYtDlpVersion, refreshYtDlpVersionCache, verifyToken, configModule }));
+  app.use(createHealthRoutes({
+    getCachedYtDlpVersion, refreshYtDlpVersionCache, verifyToken, configModule, scheduledTaskRuns, ytdlpUpdateRunSummary,
+  }));
 
   // Auth routes
   app.use(createAuthRoutes({ verifyToken, loginLimiter, configModule, getClientAddress }));
@@ -109,16 +118,19 @@ function registerRoutes(app, deps) {
   app.use(createVideoDetailRoutes({ verifyToken, videoMetadataModule, mediaServers }));
 
   // Playlist routes
-  app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters }));
+  app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule }));
 
   // Media server routes
   app.use(createMediaServerRoutes({ verifyToken, configModule, mediaServers }));
 
   // Maintenance routes
-  app.use(createMaintenanceRoutes({ verifyToken, videosModule, configModule }));
+  app.use(createMaintenanceRoutes({ verifyToken, videosModule, configModule, scheduledTaskRuns, rescanRunSummary }));
 
   // Subfolder registry routes
   app.use(createSubfolderRoutes({ verifyToken, subfolderModule }));
+
+  // Scheduled task status routes
+  app.use(createSchedulesRoutes({ verifyToken, scheduledTaskManager, scheduledTaskRuns, scheduleConfig }));
 
   // Defensive redirect: /channels -> /subscriptions (frontend handles client-side routing,
   // this fallback covers direct server-side hits during the transition period)

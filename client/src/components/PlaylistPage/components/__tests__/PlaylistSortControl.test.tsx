@@ -16,7 +16,7 @@ describe('PlaylistSortControl', () => {
 
     expect(await screen.findByRole('option', { name: 'Playlist order' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Reverse playlist order' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Recently added first' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Recently discovered by Youtarr' })).toBeInTheDocument();
   });
 
   test('calls onChange with the chosen order', async () => {
@@ -34,7 +34,7 @@ describe('PlaylistSortControl', () => {
     render(<PlaylistSortControl value="desc" onChange={onChange} />);
 
     fireEvent.mouseDown(screen.getByRole('button', { name: 'Sort' }));
-    fireEvent.click(await screen.findByRole('option', { name: 'Recently added first' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Recently discovered by Youtarr' }));
 
     expect(onChange).toHaveBeenCalledWith('recent');
   });

@@ -468,7 +468,7 @@ describe('YtdlpCommandBuilder', () => {
         '--write-auto-sub',
         '--sub-langs', 'en',
         '--convert-subs', 'srt',
-        '--sleep-subtitles', '2'
+        '--sleep-subtitles', '5'
       ]);
     });
 
@@ -483,7 +483,7 @@ describe('YtdlpCommandBuilder', () => {
         '--write-auto-sub',
         '--sub-langs', 'es',
         '--convert-subs', 'srt',
-        '--sleep-subtitles', '2'
+        '--sleep-subtitles', '5'
       ]);
     });
 
@@ -498,7 +498,7 @@ describe('YtdlpCommandBuilder', () => {
         '--write-auto-sub',
         '--sub-langs', 'en,es,fr',
         '--convert-subs', 'srt',
-        '--sleep-subtitles', '2'
+        '--sleep-subtitles', '5'
       ]);
     });
 
@@ -734,6 +734,21 @@ describe('YtdlpCommandBuilder', () => {
       const cookiesIndex = result.indexOf('--cookies');
       expect(cookiesIndex).toBeGreaterThan(-1);
       expect(result[cookiesIndex + 1]).toBe('/path/to/cookies.txt');
+    });
+
+    it('should omit cookies when cookiesEnabled is false', () => {
+      configModule.getCookiesPath.mockReturnValue('/cookies/file.txt');
+
+      const result = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload(
+        undefined,
+        false,
+        null,
+        false,
+        { cookiesEnabled: false }
+      );
+
+      expect(result).not.toContain('--cookies');
+      expect(result).not.toContain('/cookies/file.txt');
     });
 
     it('should include sponsorblock args when configured', () => {
@@ -1296,6 +1311,85 @@ describe('YtdlpCommandBuilder', () => {
       const args = YtdlpCommandBuilder.buildMetadataFetchArgs('https://x/y');
       expect(args[args.length - 1]).toBe('https://x/y');
       expect(args.slice(-3, -1)).toEqual(['--concurrent-fragments', '4']);
+    });
+  });
+
+  describe('cookie player clients', () => {
+    const MANAGED_TOKEN = 'youtube:player_client=default,mweb,web_safari';
+    const youtubeTokens = (args) => args.filter((a) => /^youtube:/i.test(a));
+
+    test('getBaseCommandArgs selects the cookie player clients when cookies are enabled', () => {
+      configModule.getCookiesPath.mockReturnValue('/path/to/cookies.txt');
+      const args = YtdlpCommandBuilder.getBaseCommandArgs();
+
+      const idx = args.indexOf(MANAGED_TOKEN);
+      expect(idx).toBeGreaterThan(0);
+      expect(args[idx - 1]).toBe('--extractor-args');
+    });
+
+    test('getBaseCommandArgs leaves player clients to yt-dlp when cookies are disabled', () => {
+      configModule.getCookiesPath.mockReturnValue(null);
+      const args = YtdlpCommandBuilder.getBaseCommandArgs();
+
+      expect(youtubeTokens(args)).toEqual([]);
+    });
+
+    test('getBaseCommandArgsForManualDownload selects the cookie player clients when cookies are enabled', () => {
+      configModule.getCookiesPath.mockReturnValue('/path/to/cookies.txt');
+      const args = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload();
+
+      expect(args).toContain(MANAGED_TOKEN);
+    });
+
+    test('keeps the managed youtubetab extractor args alongside the youtube player clients', () => {
+      configModule.getCookiesPath.mockReturnValue('/path/to/cookies.txt');
+      const args = YtdlpCommandBuilder.getBaseCommandArgs();
+
+      expect(args).toContain('youtubetab:tab=videos;sort=dd');
+      expect(youtubeTokens(args)).toHaveLength(1);
+    });
+
+    test('folds the player clients into a user-supplied youtube: extractor arg so neither is lost', () => {
+      configModule.getCookiesPath.mockReturnValue('/path/to/cookies.txt');
+      mockConfig.ytdlpCustomArgs = '--extractor-args youtube:lang=en';
+      const args = YtdlpCommandBuilder.getBaseCommandArgs();
+
+      expect(youtubeTokens(args)).toEqual(['youtube:lang=en;player_client=default,mweb,web_safari']);
+    });
+
+    test('lets a user-supplied player_client override the managed list', () => {
+      configModule.getCookiesPath.mockReturnValue('/path/to/cookies.txt');
+      mockConfig.ytdlpCustomArgs = '--extractor-args youtube:player_client=web_safari';
+      const args = YtdlpCommandBuilder.getBaseCommandArgs();
+
+      expect(youtubeTokens(args)).toEqual(['youtube:player_client=web_safari']);
+    });
+
+    test('still ends with unrelated custom args so yt-dlp last-wins holds', () => {
+      configModule.getCookiesPath.mockReturnValue('/path/to/cookies.txt');
+      mockConfig.ytdlpCustomArgs = '--concurrent-fragments 4';
+      const args = YtdlpCommandBuilder.getBaseCommandArgs();
+
+      expect(args).toContain(MANAGED_TOKEN);
+      expect(args.slice(-2)).toEqual(['--concurrent-fragments', '4']);
+    });
+
+    test('buildMetadataFetchArgs selects the cookie player clients for a single-video fetch', () => {
+      configModule.getCookiesPath.mockReturnValue('/path/to/cookies.txt');
+      const args = YtdlpCommandBuilder.buildMetadataFetchArgs('https://www.youtube.com/watch?v=abc');
+
+      expect(args).toContain(MANAGED_TOKEN);
+    });
+
+    test('buildMetadataFetchArgs skips the player clients for flat playlist listings', () => {
+      configModule.getCookiesPath.mockReturnValue('/path/to/cookies.txt');
+      const args = YtdlpCommandBuilder.buildMetadataFetchArgs('https://www.youtube.com/@chan/videos', {
+        flatPlaylist: true,
+        extractorArgs: 'youtubetab:approximate_date',
+      });
+
+      expect(youtubeTokens(args)).toEqual([]);
+      expect(args).toContain('youtubetab:approximate_date');
     });
   });
 });

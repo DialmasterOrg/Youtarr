@@ -29,7 +29,9 @@ const PlaylistSortControl: React.FC<PlaylistSortControlProps> = ({
       >
         <MenuItem value="asc">Playlist order</MenuItem>
         <MenuItem value="desc">Reverse playlist order</MenuItem>
-        <MenuItem value="recent">Recently added first</MenuItem>
+        <MenuItem value="recent">Recently discovered by Youtarr</MenuItem>
+        <MenuItem value="downloaded">Recently downloaded</MenuItem>
+        <MenuItem value="published">Newest published</MenuItem>
       </Select>
     </FormControl>
   );
