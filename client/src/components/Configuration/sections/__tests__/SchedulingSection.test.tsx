@@ -13,7 +13,7 @@ const axios = require('axios');
 const props = {
   config: DEFAULT_CONFIG,
   deploymentEnvironment: { timezone: 'Europe/Paris', platform: null, isWsl: false },
-  isPlatformManaged: { plexUrl: false, authEnabled: true, useTmpForDownloads: false, ytdlpUpdates: false },
+  isPlatformManaged: { plexUrl: false, authEnabled: true, useTmpForDownloads: false, ytdlpUpdates: false, externalApiEnabled: false },
   onConfigChange: jest.fn(),
   fieldErrors: {},
   token: 'tok',
