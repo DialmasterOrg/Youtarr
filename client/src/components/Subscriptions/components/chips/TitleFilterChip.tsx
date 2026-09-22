@@ -6,12 +6,14 @@ interface TitleFilterChipProps {
   titleFilterRegex: string | null | undefined;
   onRegexClick: (event: React.MouseEvent<HTMLElement>, regex: string) => void;
   isMobile: boolean;
+  disabled?: boolean;
 }
 
 const TitleFilterChip: React.FC<TitleFilterChipProps> = ({
   titleFilterRegex,
   onRegexClick,
   isMobile,
+  disabled,
 }) => {
   if (!titleFilterRegex) {
     return null;
@@ -20,6 +22,7 @@ const TitleFilterChip: React.FC<TitleFilterChipProps> = ({
   return (
     <Tooltip title="Title filter for channel downloads">
       <Chip
+        disabled={disabled}
         icon={<HelpOutlineIcon size={16} data-testid="HelpOutlineIcon" />}
         label="Filters"
         size="small"

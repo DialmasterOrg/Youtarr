@@ -475,3 +475,72 @@ describe('POST /api/config/filename-preview', () => {
     expect(res.body.error).toMatch(/timed out/);
   });
 });
+
+
+describe('schedule configuration', () => {
+  test.each([
+    'invalid', '', null, 123, '0 25 * * *', '0 0 18 * * * extra',
+    '1e1 * * * *', '1.5 * * * *', '0foo * * * *', '0 2 * Januaryfoo *',
+  ])(
+    'rejects an invalid frequency %p without saving other edits', async (value) => {
+      const { app, configModule } = makeApp();
+      const res = await supertest(app).post('/updateconfig').send({
+        autoRemovalFrequency: value,
+        channelDownloadFrequency: '0 18 * * *',
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.fieldErrors.autoRemovalFrequency).toEqual(expect.any(String));
+      expect(configModule.updateConfig).not.toHaveBeenCalled();
+    }
+  );
+
+  test('rejects a schedule that runs more often than the minimum interval', async () => {
+    const { app, configModule } = makeApp();
+    const res = await supertest(app).post('/updateconfig').send({
+      channelDownloadFrequency: '*/5 * * * *',
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Automatic downloads: must not run more often than every 15 minutes.');
+    expect(configModule.updateConfig).not.toHaveBeenCalled();
+  });
+
+  test('field errors stand alone because the Scheduling card already shows the label', async () => {
+    const { app } = makeApp();
+    const res = await supertest(app).post('/updateconfig').send({
+      channelDownloadFrequency: '*/5 * * * *',
+      autoRemovalFrequency: 'invalid',
+    });
+    expect(res.body.fieldErrors).toEqual({
+      channelDownloadFrequency: 'Must not run more often than every 15 minutes.',
+      autoRemovalFrequency: 'Enter a valid cron expression.',
+    });
+  });
+
+  test('preserves omitted schedules and backfills missing defaults', async () => {
+    const { app, configModule } = makeApp();
+    configModule._config.watchStatusSyncFrequency = '15 9 * * 1-5';
+    const res = await supertest(app).post('/updateconfig').send({
+      autoRemovalFrequency: '  0 18 * * *  ',
+      channelDownloadFrequency: '0 15 9 * * 1-5',
+      deploymentEnvironment: { timezone: 'untrusted' },
+    });
+    expect(res.status).toBe(200);
+    expect(configModule._config).toEqual(expect.objectContaining({
+      autoRemovalFrequency: '0 18 * * *',
+      channelDownloadFrequency: '0 15 9 * * 1-5',
+      watchStatusSyncFrequency: '15 9 * * 1-5',
+      archiveBackfillFrequency: '20 2 * * *',
+      videoRescanFrequency: '30 3 * * *',
+      sessionCleanupFrequency: '0 3 * * *',
+      ytdlpUpdateFrequency: '0 4 * * *',
+    }));
+    expect(configModule._config.deploymentEnvironment).toBeUndefined();
+  });
+
+  test('reports the server timezone as read-only deployment metadata', async () => {
+    const { app } = makeApp();
+    const res = await supertest(app).get('/getconfig');
+    expect(res.status).toBe(200);
+    expect(res.body.deploymentEnvironment.timezone).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  });
+});

@@ -249,6 +249,13 @@ const initialize = async () => {
     const channelBackdropBackfill = require('./modules/channel/channelBackdropBackfill');
     const { Channel } = require('./models');
     const { registerRoutes } = require('./routes');
+    const scheduledTaskRuns = require('./modules/scheduledTaskRuns');
+    const scheduledTaskManager = require('./modules/scheduledTaskManager');
+
+    // Runs left "running" by the previous process never finished; close them
+    // out before any timer fires, then start recording this process's runs.
+    await scheduledTaskRuns.markInterruptedRuns();
+    scheduledTaskManager.setRunRecorder(scheduledTaskRuns);
 
     // Cache yt-dlp version once during startup to keep the version endpoint fast
     refreshYtDlpVersionCache();
@@ -312,8 +319,6 @@ const initialize = async () => {
         setupTokenModule.logBanner();
       }
     }
-
-    channelModule.subscribe();
 
     watchStatusScheduler.scheduleTask();
     watchStatusScheduler.subscribe();
@@ -729,8 +734,11 @@ const initialize = async () => {
           setTimeout(() => {
             logger.info('Starting async video metadata backfill');
             videosModule.backfillVideoMetadata({ trigger: 'startup' })
-              .then(() => {
-                logger.info('Video metadata backfill completed successfully');
+              .then((result) => {
+                // A failed run resolves with status 'error' and has already logged why.
+                if (!result || result.status !== 'error') {
+                  logger.info('Video metadata backfill completed successfully');
+                }
               })
               .catch(err => {
                 logger.error({ err }, 'Video metadata backfill failed');
@@ -765,6 +773,8 @@ if (process.env.NODE_ENV !== 'test') {
   // Graceful shutdown handlers
   const gracefulShutdown = (signal) => {
     logger.info({ signal }, 'Received shutdown signal, cleaning up...');
+
+    require('./modules/scheduledTaskManager').stopAll();
 
     // Stop health monitor
     databaseHealth.stopHealthMonitor();

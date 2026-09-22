@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Avatar,
   Chip,
@@ -16,7 +17,6 @@ interface ChannelListRowProps {
   channel: Channel;
   isMobile: boolean;
   globalPreferredResolution: string;
-  onNavigate: () => void;
   onDelete: () => void;
   onRegexClick: (event: React.MouseEvent<HTMLElement>, regex: string) => void;
   isPendingAddition?: boolean;
@@ -29,7 +29,6 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
   channel,
   isMobile,
   globalPreferredResolution,
-  onNavigate,
   onDelete,
   onRegexClick,
   isPendingAddition,
@@ -42,51 +41,64 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
     ? `/images/channelthumb-${channel.channel_id}.jpg`
     : '/images/channelthumb-default.jpg';
 
-  const renderChannelHeader = () => (
-    <div
-      style={{
+  const canNavigate = Boolean(channel.channel_id) && !isPendingAddition;
+
+  const renderChannelHeader = () => {
+    const headerProps = {
+      className: 'rounded-[var(--radius-ui)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+      style: {
         display: 'flex',
         alignItems: 'center',
         gap: 16,
-        cursor: isPendingAddition ? 'not-allowed' : 'pointer',
+        cursor: isPendingAddition ? 'not-allowed' : canNavigate ? 'pointer' : 'default',
+        color: 'inherit',
+        textDecoration: 'none',
         minWidth: 0,
         flex: 1,
-      }}
-      onClick={isPendingAddition ? undefined : onNavigate}
-      data-testid={`channel-list-row-${channel.channel_id || channel.url}`}
-    >
-      {thumbnailVisible && (
-        <Avatar
-          src={thumbnailSrc}
-          alt={`${channel.uploader} thumbnail`}
-          style={{ width: 56, height: 56, flexShrink: 0 }}
-          imgProps={{ onError: () => setThumbnailVisible(false) }}
-        />
-      )}
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, gap: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flexWrap: 'wrap' }}>
-            <Typography variant={isMobile ? 'h6' : 'h5'} noWrap style={{ minWidth: 0 }}>
-              {channel.uploader || 'Unknown Channel'}
-            </Typography>
-            <TerminatedChip terminatedAt={channel.terminated_at} />
+      },
+      'data-testid': `channel-list-row-${channel.channel_id || channel.url}`,
+    };
+    const content = (
+      <>
+        {thumbnailVisible && (
+          <Avatar
+            src={thumbnailSrc}
+            alt={`${channel.uploader} thumbnail`}
+            style={{ width: 56, height: 56, flexShrink: 0 }}
+            imgProps={{ onError: () => setThumbnailVisible(false) }}
+          />
+        )}
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, gap: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flexWrap: 'wrap' }}>
+              <Typography variant={isMobile ? 'h6' : 'h5'} noWrap style={{ minWidth: 0 }}>
+                {channel.uploader || 'Unknown Channel'}
+              </Typography>
+              <TerminatedChip terminatedAt={channel.terminated_at} />
+            </div>
+            {/* On mobile we show folder and quality chips right under the channel name */}
+            {isMobile && (
+              <div style={{ marginTop: 2, display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                <QualityChip videoQuality={channel.video_quality} globalPreferredResolution={globalPreferredResolution} />
+                <SubFolderChip subFolder={channel.sub_folder} />
+                <RatingBadge rating={channel.default_rating} />
+                <ProtectedChip
+                  autoRemovalProtected={channel.auto_removal_protected}
+                  keepRecentCount={channel.auto_removal_keep_recent_count}
+                />
+              </div>)}
           </div>
-          {/* On mobile we show folder and quality chips right under the channel name */}
-          {isMobile && (
-            <div style={{ marginTop: 2, display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-              <QualityChip videoQuality={channel.video_quality} globalPreferredResolution={globalPreferredResolution} />
-              <SubFolderChip subFolder={channel.sub_folder} />
-              <RatingBadge rating={channel.default_rating} />
-              <ProtectedChip
-                autoRemovalProtected={channel.auto_removal_protected}
-                keepRecentCount={channel.auto_removal_keep_recent_count}
-              />
-            </div>)}
+          {isPendingAddition && <Chip label="Pending addition" size="small" color="warning" style={{ marginTop: 4 }} />}
         </div>
-        {isPendingAddition && <Chip label="Pending addition" size="small" color="warning" style={{ marginTop: 4 }} />}
-      </div>
-    </div>
-  );
+      </>
+    );
+
+    return canNavigate ? (
+      <RouterLink to={`/channel/${channel.channel_id}`} {...headerProps}>{content}</RouterLink>
+    ) : (
+      <div {...headerProps} aria-disabled={isPendingAddition || undefined}>{content}</div>
+    );
+  };
 
   const zebraBackground = typeof rowIndex === 'number' && rowIndex % 2 === 1 ? 'var(--muted)' : undefined;
 

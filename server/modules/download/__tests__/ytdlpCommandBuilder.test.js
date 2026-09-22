@@ -744,6 +744,21 @@ describe('YtdlpCommandBuilder', () => {
       expect(result[cookiesIndex + 1]).toBe('/path/to/cookies.txt');
     });
 
+    it('should omit cookies when cookiesEnabled is false', () => {
+      configModule.getCookiesPath.mockReturnValue('/cookies/file.txt');
+
+      const result = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload(
+        undefined,
+        false,
+        null,
+        false,
+        { cookiesEnabled: false }
+      );
+
+      expect(result).not.toContain('--cookies');
+      expect(result).not.toContain('/cookies/file.txt');
+    });
+
     it('should include sponsorblock args when configured', () => {
       mockConfig.sponsorblockEnabled = true;
       mockConfig.sponsorblockCategories = { sponsor: true };

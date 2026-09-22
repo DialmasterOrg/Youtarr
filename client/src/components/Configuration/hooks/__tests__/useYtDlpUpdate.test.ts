@@ -34,6 +34,9 @@ describe('useYtDlpUpdate', () => {
         currentVersion: null,
         latestVersion: null,
         updateAvailable: false,
+        lastChecked: null,
+        lastUpdated: null,
+        lastResult: null,
       });
       expect(result.current.updateStatus).toBe('checking');
       expect(result.current.checkingVersion).toBe(true);
@@ -47,6 +50,9 @@ describe('useYtDlpUpdate', () => {
         currentVersion: null,
         latestVersion: null,
         updateAvailable: false,
+        lastChecked: null,
+        lastUpdated: null,
+        lastResult: null,
       });
     });
   });
@@ -75,8 +81,37 @@ describe('useYtDlpUpdate', () => {
         currentVersion: '2024.01.01',
         latestVersion: '2024.01.15',
         updateAvailable: true,
+        lastChecked: null,
+        lastUpdated: null,
+        lastResult: null,
       });
       expect(result.current.updateStatus).toBe('idle');
+    });
+
+    it('exposes the update history the endpoint reports', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({
+          currentVersion: '2024.01.15',
+          latestVersion: '2024.01.15',
+          updateAvailable: false,
+          lastChecked: '2024-01-16T04:00:00.000Z',
+          lastUpdated: '2024-01-15T04:00:00.000Z',
+          lastResult: { status: 'up-to-date', message: 'Already up to date.' },
+        }),
+      });
+
+      const { result } = renderHook(() => useYtDlpUpdate('test-token'));
+
+      await waitFor(() => {
+        expect(result.current.checkingVersion).toBe(false);
+      });
+
+      expect(result.current.versionInfo).toEqual(expect.objectContaining({
+        lastChecked: '2024-01-16T04:00:00.000Z',
+        lastUpdated: '2024-01-15T04:00:00.000Z',
+        lastResult: { status: 'up-to-date', message: 'Already up to date.' },
+      }));
     });
 
     it('handles fetch error', async () => {

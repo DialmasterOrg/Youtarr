@@ -1,5 +1,6 @@
 const fs = require('fs').promises;
 const path = require('path');
+const { Video } = require('../models');
 const { VIDEO_EXTENSIONS, AUDIO_EXTENSIONS } = require('./filesystem/constants');
 const createLimiter = require('./subscriptionImport/concurrencyLimiter');
 
@@ -143,45 +144,18 @@ class FileCheckModule {
     return { videos: updatedVideos, updates: updateSlots.filter(Boolean) };
   }
 
-  async applyVideoUpdates(sequelize, Sequelize, updates) {
-    if (updates.length === 0) {
-      return;
-    }
-
+  async applyVideoUpdates(updates) {
     for (const update of updates) {
-      const setClauses = [];
-      const values = [];
+      const attributes = {
+        filePath: update.filePath,
+        fileSize: update.fileSize,
+        audioFilePath: update.audioFilePath,
+        audioFileSize: update.audioFileSize,
+        removed: update.removed,
+      };
 
-      if (update.filePath !== undefined) {
-        setClauses.push('file_path = ?');
-        values.push(update.filePath);
-      }
-      if (update.fileSize !== undefined) {
-        setClauses.push('file_size = ?');
-        values.push(update.fileSize);
-      }
-      if (update.audioFilePath !== undefined) {
-        setClauses.push('audio_file_path = ?');
-        values.push(update.audioFilePath);
-      }
-      if (update.audioFileSize !== undefined) {
-        setClauses.push('audio_file_size = ?');
-        values.push(update.audioFileSize);
-      }
-      if (update.removed !== undefined) {
-        setClauses.push('removed = ?');
-        values.push(update.removed ? 1 : 0);
-      }
-
-      if (setClauses.length > 0) {
-        values.push(update.id);
-        await sequelize.query(
-          `UPDATE videos SET ${setClauses.join(', ')} WHERE id = ?`,
-          {
-            replacements: values,
-            type: Sequelize.QueryTypes.UPDATE
-          }
-        );
+      if (Object.values(attributes).some((v) => v !== undefined)) {
+        await Video.update(attributes, { where: { id: update.id } });
       }
     }
   }

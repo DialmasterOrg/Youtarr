@@ -218,7 +218,7 @@ vim .env  # or nano, or your preferred editor
 - `YOUTUBE_OUTPUT_DIR` - Must be set to your video storage path
 
 **Optional settings:**
-- `TZ` - Your timezone (e.g., `America/New_York`, `Europe/London`). Defaults to `UTC`. Set this if scheduled downloads and nightly cleanup should run in your local time.
+- `TZ` - Your timezone (e.g., `America/New_York`, `Europe/London`). Defaults to `UTC`. Set this if console log timestamps, scheduled downloads, and nightly cleanup should use your local time.
 - `YOUTARR_HOST_PORT` - Host port for the web interface. Defaults to `3087`; change this if another service already uses that port.
 - `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` - Seed login credentials and skip the setup-token wizard for headless or automated deployments.
 - `YOUTARR_UID` / `YOUTARR_GID` - Run the container as a non-root user (recommended for security, see step 5 below).

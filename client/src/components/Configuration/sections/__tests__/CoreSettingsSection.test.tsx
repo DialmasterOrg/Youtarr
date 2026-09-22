@@ -383,78 +383,13 @@ describe('CoreSettingsSection Component', () => {
     });
   });
 
-  describe('Download Frequency Select', () => {
-    test('renders Download Frequency select', () => {
-      const props = createSectionProps();
-      renderWithProviders(<CoreSettingsSection {...props} />);
-      const labels = screen.getAllByText('Download Frequency');
-      expect(labels.length).toBeGreaterThan(0);
-    });
-
-    test('displays correct frequency value', () => {
-      const props = createSectionProps({
-        config: createConfig({ channelDownloadFrequency: '0 */6 * * *' }) // Every 6 hours
-      });
-      renderWithProviders(<CoreSettingsSection {...props} />);
-      expect(screen.getByText('Every 6 hours')).toBeInTheDocument();
-    });
-
-    test('select is disabled when channelAutoDownload is false', () => {
-      const props = createSectionProps({
-        config: createConfig({ channelAutoDownload: false })
-      });
-      renderWithProviders(<CoreSettingsSection {...props} />);
-      // Select should be disabled
-      const selectButton = screen.getByRole('button', { name: /Every 6 hours/i });
-      expect(selectButton).toHaveAttribute('aria-disabled', 'true');
-    });
-
-    test('select is enabled when channelAutoDownload is true', () => {
-      const props = createSectionProps({
-        config: createConfig({ channelAutoDownload: true })
-      });
-      renderWithProviders(<CoreSettingsSection {...props} />);
-      // Select should be enabled
-      const selectButton = screen.getByRole('button', { name: /Every 6 hours/i });
-      expect(selectButton).not.toHaveAttribute('aria-disabled', 'true');
-    });
-
-    test('calls onConfigChange when frequency is changed', async () => {
-      const user = userEvent.setup();
-      const onConfigChange = jest.fn();
-      const props = createSectionProps({
-        config: createConfig({ channelAutoDownload: true, channelDownloadFrequency: '0 */6 * * *' }),
-        onConfigChange
-      });
-      renderWithProviders(<CoreSettingsSection {...props} />);
-
-      const selectButton = screen.getByRole('button', { name: /Every 6 hours/i });
-      await user.click(selectButton);
-
-      const hourlyOption = await screen.findByRole('option', { name: 'Hourly' });
-      await user.click(hourlyOption);
-
-      expect(onConfigChange).toHaveBeenCalledWith({ channelDownloadFrequency: '0 * * * *' });
-    });
-
-    test('displays all frequency options', async () => {
-      const user = userEvent.setup();
-      const props = createSectionProps({
-        config: createConfig({ channelAutoDownload: true })
-      });
-      renderWithProviders(<CoreSettingsSection {...props} />);
-
-      const selectButton = screen.getByRole('button', { name: /Every 6 hours/i });
-      await user.click(selectButton);
-
-      expect(await screen.findByRole('option', { name: 'Every 15 minutes' })).toBeInTheDocument();
-      expect(screen.getByRole('option', { name: 'Every 30 minutes' })).toBeInTheDocument();
-      expect(screen.getByRole('option', { name: 'Hourly' })).toBeInTheDocument();
-      expect(screen.getByRole('option', { name: 'Every 4 hours' })).toBeInTheDocument();
-      expect(screen.getByRole('option', { name: 'Every 6 hours' })).toBeInTheDocument();
-      expect(screen.getByRole('option', { name: 'Every 12 hours' })).toBeInTheDocument();
-      expect(screen.getByRole('option', { name: 'Daily' })).toBeInTheDocument();
-      expect(screen.getByRole('option', { name: 'Weekly' })).toBeInTheDocument();
+  describe('Download schedule summary', () => {
+    test('shows the frequency and links to Scheduling even when downloads are disabled', () => {
+      renderWithProviders(<CoreSettingsSection {...createSectionProps()} />);
+      expect(screen.getByText(/Schedule: Every 6 hours/)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Edit schedule' })).toHaveAttribute(
+        'href', '/settings/scheduling#channelDownloadFrequency'
+      );
     });
   });
 
@@ -1009,27 +944,6 @@ describe('CoreSettingsSection Component', () => {
       expect(screen.getByTestId('subtitle-language-selector')).toBeInTheDocument();
     });
 
-    test('disabling auto downloads disables frequency selector', async () => {
-      const props = createSectionProps({
-        config: createConfig({ channelAutoDownload: true })
-      });
-      const { rerender } = renderWithProviders(<CoreSettingsSection {...props} />);
-
-      let selectButton = screen.getByRole('button', { name: /Every 6 hours/i });
-      expect(selectButton).not.toHaveAttribute('aria-disabled', 'true');
-
-      // Simulate disabling auto downloads
-      rerender(
-        <CoreSettingsSection
-          {...props}
-          config={createConfig({ channelAutoDownload: false })}
-        />
-      );
-
-      selectButton = screen.getByRole('button', { name: /Every 6 hours/i });
-      expect(selectButton).toHaveAttribute('aria-disabled', 'true');
-    });
-
     test('handles multiple configuration changes', async () => {
       const user = userEvent.setup();
       const onConfigChange = jest.fn();
@@ -1065,23 +979,11 @@ describe('CoreSettingsSection Component', () => {
       expect(input).toHaveValue('');
     });
 
-    test('handles unknown cron expression in frequency', () => {
-      // Suppress console warnings for this test to avoid noise
-      const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-
-      const props = createSectionProps({
+    test('displays an unrecognized expression without changing it', () => {
+      renderWithProviders(<CoreSettingsSection {...createSectionProps({
         config: createConfig({ channelDownloadFrequency: '* * * * *' })
-      });
-      renderWithProviders(<CoreSettingsSection {...props} />);
-
-      // Component should render without crashing when given an unknown cron expression
-      // The reverseFrequencyMapping function will return the raw cron expression
-      expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      // Verify the Download Frequency label is present
-      const labels = screen.getAllByText('Download Frequency');
-      expect(labels.length).toBeGreaterThan(0);
-
-      consoleSpy.mockRestore();
+      })} />);
+      expect(screen.getByText(/Custom: \* \* \* \* \*/)).toBeInTheDocument();
     });
 
     test('handles all checkboxes unchecked', () => {
@@ -1130,7 +1032,7 @@ describe('CoreSettingsSection Component', () => {
       });
       renderWithProviders(<CoreSettingsSection {...props} />);
 
-      expect(screen.getAllByText('Download Frequency').length).toBeGreaterThan(0);
+      expect(screen.getByRole('link', { name: 'Edit schedule' })).toBeInTheDocument();
       expect(screen.getAllByText(/Files to Download per Channel/i).length).toBeGreaterThan(0);
       expect(screen.getAllByText('Preferred Resolution').length).toBeGreaterThan(0);
       expect(screen.getAllByText('Preferred Video Codec').length).toBeGreaterThan(0);

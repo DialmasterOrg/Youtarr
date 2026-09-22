@@ -24,7 +24,7 @@ const PLAYLIST_RETRY_LABEL_PREFIX = 'Playlist Retry: ';
 // already-running guard match that substring, and a download-all job is a
 // URL-list job, not a channel/tab sweep.
 const CHANNEL_DOWNLOAD_ALL_LABEL_PREFIX = 'Channel Download All: ';
-// Auto-retry jobs enqueued after transient-403 failures. Always a URL-list
+// Auto-retry jobs enqueued after retryable download failures. Always a URL-list
 // job. Like the download-all label, must NOT contain CHANNEL_DOWNLOAD_LABEL
 // even when retrying channel-sweep failures.
 const AUTO_RETRY_LABEL_PREFIX = 'Auto-retry: ';
@@ -68,9 +68,10 @@ function channelDownloadAllJobLabel(channel) {
   return `${CHANNEL_DOWNLOAD_ALL_LABEL_PREFIX}${channel.title || channel.channel_id}`;
 }
 
-// Build the activity-view job label for a transient-403 auto-retry job.
-function autoRetryJobLabel(videoCount) {
-  return `${AUTO_RETRY_LABEL_PREFIX}${videoCount} video${videoCount !== 1 ? 's' : ''} (HTTP 403)`;
+// Build the activity-view job label for an auto-retry job.
+function autoRetryJobLabel(videoCount, { anonymous = false } = {}) {
+  const suffix = anonymous ? ' (no cookies)' : '';
+  return `${AUTO_RETRY_LABEL_PREFIX}${videoCount} video${videoCount !== 1 ? 's' : ''}${suffix}`;
 }
 
 // True for a channel download-all job. These jobs are exempt from the

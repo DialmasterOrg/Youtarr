@@ -169,6 +169,50 @@ describe('ConfigModule', () => {
       expect(logger.info).toHaveBeenCalledWith('Migrated legacy cronSchedule field to channelDownloadFrequency');
     });
 
+    test('normalizes schedules below the minimum interval on load', () => {
+      const existingConfig = {
+        ...defaultTemplate,
+        channelDownloadFrequency: '*/5 * * * *',
+        watchStatusSyncFrequency: '* * * * *',
+        archiveBackfillFrequency: '0,5 2 * * 0',
+        autoRemovalFrequency: '0 2 * * *'
+      };
+      fs.existsSync.mockReturnValue(true);
+      fs.readFileSync.mockImplementation((path) => {
+        if (path.includes('config.json') && !path.includes('example')) {
+          return JSON.stringify(existingConfig);
+        }
+        return JSON.stringify(defaultTemplate);
+      });
+
+      ConfigModule = require('../configModule');
+
+      const config = ConfigModule.getConfig();
+      expect(config.channelDownloadFrequency).toBe('*/15 * * * *');
+      expect(config.watchStatusSyncFrequency).toBe('*/15 * * * *');
+      // The Sunday 02:00 window is kept; only the run five minutes later is dropped.
+      expect(config.archiveBackfillFrequency).toBe('0 2 * * 0');
+      expect(config.autoRemovalFrequency).toBe('0 2 * * *');
+      expect(logger.info).toHaveBeenCalledWith(
+        { key: 'channelDownloadFrequency', previous: '*/5 * * * *', replacement: '*/15 * * * *' },
+        'Schedule ran more often than the minimum interval; changed on upgrade'
+      );
+      expect(fs.writeFileSync).toHaveBeenCalled();
+    });
+
+    test('leaves malformed schedules for correction instead of normalizing them on load', () => {
+      const expression = '0,1e1 2 * * 0';
+      const existingConfig = { ...defaultTemplate, channelDownloadFrequency: expression };
+      fs.existsSync.mockReturnValue(true);
+      fs.readFileSync.mockImplementation((path) => JSON.stringify(
+        path.includes('config.json') ? existingConfig : defaultTemplate
+      ));
+
+      ConfigModule = require('../configModule');
+
+      expect(ConfigModule.getConfig().channelDownloadFrequency).toBe(expression);
+    });
+
     test('should convert plexPort to string if it is a number', () => {
       // Arrange
       const configWithNumberPort = {

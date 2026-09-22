@@ -1,5 +1,6 @@
 const express = require('express');
 const multer = require('multer');
+const { SCHEDULES, getScheduleError, getSchedule } = require('../modules/scheduleConfig');
 const customArgsParser = require('../modules/download/customArgsParser');
 const filenamePreview = require('../modules/filenamePreview');
 const { getExternalCookiesPath } = require('../modules/externalCookies');
@@ -8,6 +9,8 @@ const { getExternalCookiesPath } = require('../modules/externalCookies');
 // format: digits with optional decimal, optional K/M/G suffix.
 const RATE_LIMIT_REGEX = /^\d+(\.\d+)?[KkMmGg]?$/;
 const MAX_VIDEO_FILENAME_PREFIX_LENGTH = 160;
+
+const capitalize = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 
 /**
  * Validate the safety/UX rules for a videoFilenamePrefix. Mirrors the client's
@@ -107,7 +110,19 @@ module.exports = function createConfigRoutes({ verifyToken, configModule, valida
    *                   type: string
    *                 videosToDownload:
    *                   type: integer
-   *                 cronSchedule:
+   *                 channelDownloadFrequency:
+   *                   type: string
+   *                 watchStatusSyncFrequency:
+   *                   type: string
+   *                 autoRemovalFrequency:
+   *                   type: string
+   *                 archiveBackfillFrequency:
+   *                   type: string
+   *                 sessionCleanupFrequency:
+   *                   type: string
+   *                 videoRescanFrequency:
+   *                   type: string
+   *                 ytdlpUpdateFrequency:
    *                   type: string
    */
   router.get('/getconfig', verifyToken, (req, res) => {
@@ -127,6 +142,7 @@ module.exports = function createConfigRoutes({ verifyToken, configModule, valida
 
     safeConfig.deploymentEnvironment = {
       platform: process.env.PLATFORM || null,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
       isWsl: isWslEnvironment
     };
 
@@ -162,9 +178,23 @@ module.exports = function createConfigRoutes({ verifyToken, configModule, valida
    *                 type: string
    *               videosToDownload:
    *                 type: integer
-   *               cronSchedule:
+   *               channelDownloadFrequency:
+   *                 type: string
+   *               watchStatusSyncFrequency:
+   *                 type: string
+   *               autoRemovalFrequency:
+   *                 type: string
+   *               archiveBackfillFrequency:
+   *                 type: string
+   *               sessionCleanupFrequency:
+   *                 type: string
+   *               videoRescanFrequency:
+   *                 type: string
+   *               ytdlpUpdateFrequency:
    *                 type: string
    *     responses:
+   *       400:
+   *         description: Invalid configuration; schedule errors include a fieldErrors object keyed by config field
    *       200:
    *         description: Configuration updated successfully
    *         content:
@@ -180,6 +210,28 @@ module.exports = function createConfigRoutes({ verifyToken, configModule, valida
     req.log.info('Updating application configuration');
     const currentConfig = configModule.getConfig();
     const updateData = { ...req.body };
+    delete updateData.deploymentEnvironment;
+
+    // The snackbar needs the label to say which schedule failed; the field
+    // error renders under a card that already carries it, so it stands alone.
+    const fieldErrors = {};
+    let firstScheduleError = null;
+    for (const [key, definition] of Object.entries(SCHEDULES)) {
+      if (Object.prototype.hasOwnProperty.call(updateData, key)) {
+        const scheduleError = getScheduleError(updateData[key]);
+        if (scheduleError) {
+          fieldErrors[key] = capitalize(scheduleError);
+          firstScheduleError = firstScheduleError || `${definition.label}: ${scheduleError}`;
+        } else {
+          updateData[key] = updateData[key].trim();
+        }
+      } else {
+        updateData[key] = getSchedule(currentConfig, key);
+      }
+    }
+    if (firstScheduleError) {
+      return res.status(400).json({ error: firstScheduleError, fieldErrors });
+    }
 
     // Custom args denylist gate (defense-in-depth; buildCustomArgs also re-validates)
     if (typeof updateData.ytdlpCustomArgs === 'string' && updateData.ytdlpCustomArgs.trim()) {

@@ -65,6 +65,7 @@ export function useConfig(token: string | null): UseConfigResult {
         const env = data.deploymentEnvironment;
         setDeploymentEnvironment({
           platform: env.platform ?? null,
+          timezone: env.timezone ?? null,
           isWsl: !!env.isWsl
         });
         delete data.deploymentEnvironment;

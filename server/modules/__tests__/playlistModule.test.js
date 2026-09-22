@@ -6,9 +6,17 @@ jest.mock('../../models', () => ({
   Playlist: { findOne: jest.fn(), create: jest.fn(), update: jest.fn(), findAll: jest.fn() },
   PlaylistVideo: { findAll: jest.fn(), bulkCreate: jest.fn(), update: jest.fn(), destroy: jest.fn(), count: jest.fn(), max: jest.fn() },
   Channel: { findAll: jest.fn() },
+  Video: { findAll: jest.fn() },
+  Job: { _name: 'Job' },
+  JobVideo: { _name: 'JobVideo' },
 }));
 jest.mock('../../db', () => ({
-  sequelize: { query: jest.fn().mockResolvedValue([]), transaction: jest.fn(async (action) => action({})) },
+  sequelize: {
+    query: jest.fn().mockResolvedValue([]),
+    transaction: jest.fn(async (action) => action({})),
+    col: jest.fn((name) => name),
+    fn: jest.fn((...args) => ['fn', args]),
+  },
   Sequelize: { QueryTypes: { SELECT: 'SELECT' } },
 }));
 jest.mock('../configModule', () => ({
@@ -57,6 +65,7 @@ describe('playlistModule', () => {
   let Playlist;
   let PlaylistVideo;
   let Channel;
+  let Video;
   let channelModule;
   let downloadModule;
   let jobModule;
@@ -86,14 +95,13 @@ describe('playlistModule', () => {
     });
     // Now require the module — its top-level destructure picks up the mock.
     playlistModule = require('../playlistModule');
-    ({ Playlist, PlaylistVideo, Channel } = require('../../models'));
+    ({ Playlist, PlaylistVideo, Channel, Video } = require('../../models'));
     PlaylistVideo.count.mockResolvedValue(0);
     channelModule = require('../channelModule');
     downloadModule = require('../downloadModule');
     jobModule = require('../jobModule');
     youtubeApi = require('../youtubeApi');
     db = require('../../db');
-    db.sequelize.query.mockResolvedValue([]);
   });
 
   describe('getPlaylistInfo', () => {
@@ -1800,7 +1808,7 @@ describe('playlistModule', () => {
         .mockResolvedValueOnce([
           { playlist_id: 'PL1', youtube_id: 'v1', channel_id: null, downloaded_at: null },
         ]);
-      db.sequelize.query.mockResolvedValue([
+      Video.findAll.mockResolvedValue([
         { youtubeId: 'v1', channel_id: 'UCa', youTubeChannelName: 'A', downloadedAt },
       ]);
       Channel.findAll.mockResolvedValue([{ channel_id: 'UCa' }]);
@@ -1810,10 +1818,25 @@ describe('playlistModule', () => {
       expect(PlaylistVideo.findAll).toHaveBeenNthCalledWith(1,
         expect.objectContaining({ where: { playlist_id: 'PL1' } })
       );
-      expect(db.sequelize.query).toHaveBeenCalledWith(
-        expect.stringContaining('COALESCE'),
-        expect.objectContaining({ replacements: { youtubeIds: ['v1', 'v2'] } })
-      );
+      expect(Video.findAll).toHaveBeenCalledWith(expect.objectContaining({
+        attributes: [
+          'youtubeId',
+          'channel_id',
+          'youTubeChannelName',
+          [
+            db.sequelize.fn(
+              'COALESCE',
+              db.sequelize.col('Video.last_downloaded_at'),
+              db.sequelize.fn('MAX', db.sequelize.col('jobVideos->job.time_created')),
+            ),
+            'downloadedAt',
+          ],
+        ],
+        where: {
+          youtubeId: ['v1', 'v2'],
+        },
+        raw: true,
+      }));
       expect(PlaylistVideo.update).toHaveBeenCalledWith(
         { downloaded_at: downloadedAt },
         { where: { youtube_id: 'v1' } }
@@ -1829,12 +1852,12 @@ describe('playlistModule', () => {
 
       await playlistModule.backfillFromDownloadedVideos('PL1');
 
-      expect(db.sequelize.query).not.toHaveBeenCalled();
+      expect(Video.findAll).not.toHaveBeenCalled();
     });
 
     test('no-ops when none of the tracked videos have been downloaded', async () => {
       PlaylistVideo.findAll.mockResolvedValueOnce([{ youtube_id: 'v1' }]);
-      db.sequelize.query.mockResolvedValue([]);
+      Video.findAll.mockResolvedValue([]);
 
       await playlistModule.backfillFromDownloadedVideos('PL1');
 
@@ -1893,6 +1916,32 @@ describe('playlistModule', () => {
         pl2,
         { refreshFirst: true, limitToRecent: true, overrideSettings: { resolution: '720', videoCount: 3 } }
       );
+    });
+
+    test('reports how many playlists failed while still sweeping the rest', async () => {
+      const pl1 = { playlist_id: 'PL1', title: 'One' };
+      const pl2 = { playlist_id: 'PL2', title: 'Two' };
+      Playlist.findAll.mockResolvedValue([pl1, pl2]);
+      downloadModule.doPlaylistDownloads
+        .mockRejectedValueOnce(new Error('yt-dlp exited 1'))
+        .mockResolvedValueOnce(3);
+
+      await expect(playlistModule.playlistAutoDownload()).resolves.toEqual({
+        playlists: 2,
+        enqueued: 3,
+        failed: 1,
+        errors: [{ playlistId: 'PL1', message: 'yt-dlp exited 1' }],
+      });
+      expect(downloadModule.doPlaylistDownloads).toHaveBeenCalledTimes(2);
+    });
+
+    test('reports a clean sweep with its counts', async () => {
+      Playlist.findAll.mockResolvedValue([{ playlist_id: 'PL1', title: 'One' }]);
+      downloadModule.doPlaylistDownloads.mockResolvedValueOnce(2);
+
+      await expect(playlistModule.playlistAutoDownload()).resolves.toEqual({
+        playlists: 1, enqueued: 2, failed: 0, errors: [],
+      });
     });
 
     test('creates one Complete "Playlist Downloads" job when auto-enabled playlists exist and nothing was enqueued', async () => {

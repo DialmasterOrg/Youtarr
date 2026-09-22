@@ -35,8 +35,8 @@ import { AddSubfolderDialog } from '../../shared/AddSubfolderDialog';
 import { Plus as AddIcon, Settings as SettingsIcon } from '../../../lib/icons';
 import { useSubfolders } from '../../../hooks/useSubfolders';
 import { ConfigState, DeploymentEnvironment, PlatformManagedState } from '../types';
-import { reverseFrequencyMapping, getChannelFilesOptions } from '../helpers';
-import { FREQUENCY_MAPPING } from '../constants';
+import { getChannelFilesOptions } from '../helpers';
+import { ScheduleSummary } from './components/ScheduleSummary';
 
 interface CoreSettingsSectionProps {
   config: ConfigState;
@@ -201,14 +201,6 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
     onConfigChange({ channelFilesToDownload: Number(event.target.value) });
   };
 
-  const handleSelectChange = (
-    event: ChangeEvent<{ value: unknown }>,
-    name: string
-  ) => {
-    onConfigChange({ [name]: FREQUENCY_MAPPING[event.target.value as string] });
-  };
-
-  const currentFrequency = reverseFrequencyMapping(config.channelDownloadFrequency);
 
   return (
     <ConfigurationCard
@@ -312,30 +304,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
             <AccordionDetails>
               <Grid container spacing={2}>
                 <Grid item xs={12} md={6}>
-                  <FormControl fullWidth>
-                    <InputLabel>Download Frequency</InputLabel>
-                    <Box className="flex items-center gap-1">
-                      <Select
-                        value={currentFrequency}
-                        onChange={(e: SelectChangeEvent<string>) =>
-                          handleSelectChange(e as any, 'channelDownloadFrequency')
-                        }
-                        label="Download Frequency"
-                        disabled={!config.channelAutoDownload}
-                        className="flex-1 min-w-0"
-                      >
-                        {Object.keys(FREQUENCY_MAPPING).map((key) => (
-                          <MenuItem key={key} value={key}>
-                            {key}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                      <InfoTooltip
-                        text="How often to run automatic channel video downloads."
-                        onMobileClick={onMobileTooltipClick}
-                      />
-                    </Box>
-                  </FormControl>
+                  <ScheduleSummary scheduleKey="channelDownloadFrequency" value={config.channelDownloadFrequency} />
                 </Grid>
 
                 <Grid item xs={12} md={6}>

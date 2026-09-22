@@ -56,6 +56,8 @@ describe('channelModule facade', () => {
       jest.resetModules();
       jest.clearAllMocks();
       const cron = require('node-cron');
+      cron.validate.mockReturnValue(true);
+      cron.schedule.mockReturnValue({ start: jest.fn(), stop: jest.fn() });
       const configModule = require('../configModule');
 
       require('../channelModule');
@@ -63,7 +65,8 @@ describe('channelModule facade', () => {
 
       expect(cron.schedule).toHaveBeenCalledWith(
         '0 */6 * * *',
-        expect.any(Function)
+        expect.any(Function),
+        expect.objectContaining({ scheduled: false })
       );
       expect(configModule.onConfigChange).toHaveBeenCalled();
     });

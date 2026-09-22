@@ -26,7 +26,7 @@ const STDIO_DRAIN_TIMEOUT_MS = 5 * 1000;
 
 class DownloadExecutor {
   // enqueueAutoRetry is injected by downloadModule so the finalizer can queue
-  // transient-403 retry jobs without a require cycle back into downloadModule.
+  // auto-retry jobs without a require cycle back into downloadModule.
   constructor({ enqueueAutoRetry = null } = {}) {
     this.enqueueAutoRetry = enqueueAutoRetry;
     this.tempChannelsFile = null;
@@ -255,13 +255,19 @@ class DownloadExecutor {
         },
       });
 
+      const cookiesEnabled =
+        postProcessDirectives.cookiesEnabled ??
+        Boolean(configModule.getCookiesPath());
+      const anonymousRetry = postProcessDirectives.anonymousRetry === true;
+
       const router = new YtdlpOutputRouter({
         jobId,
         config,
         monitor,
         errorTracker,
         timeoutController,
-        cookiesEnabled: Boolean(configModule.getCookiesPath()),
+        cookiesEnabled,
+        anonymousRetry,
         heartbeatIntervalMs: this.progressHeartbeatMs,
       });
 
@@ -340,6 +346,8 @@ class DownloadExecutor {
             tempChannelsFile: this.tempChannelsFile,
             onTempChannelsFileCleaned: () => { this.tempChannelsFile = null; },
             enqueueAutoRetry: this.enqueueAutoRetry,
+            cookiesEnabled,
+            anonymousRetry,
           });
           resolve();
         } catch (err) {

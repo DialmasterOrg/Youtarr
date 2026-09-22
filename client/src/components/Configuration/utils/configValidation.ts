@@ -1,4 +1,5 @@
 import { ConfigState } from '../types';
+import { SCHEDULE_FIELDS } from '../schedules';
 import { validateRateLimit } from '../sections/ytdlpOptionsHelpers';
 import { validatePrefix } from '../../../utils/filenameTemplate/validate';
 
@@ -39,6 +40,10 @@ export const validateProxyUrl = (proxy: string): string | null => {
  * @returns Error message if validation fails, null if valid
  */
 export const validateConfig = (config: ConfigState): string | null => {
+  for (const { key, label } of SCHEDULE_FIELDS) {
+    if (typeof config[key] !== 'string' || !config[key].trim()) return `Cannot save: ${label} requires a schedule`;
+  }
+
   // Auto removal validation
   if (
     config.autoRemovalEnabled &&

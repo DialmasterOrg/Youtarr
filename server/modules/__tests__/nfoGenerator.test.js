@@ -454,6 +454,19 @@ describe('NfoGenerator', () => {
       expect(nfoContent).toContain('<year>2023</year>');
     });
 
+    it('should keep premiered date-only when an upload timestamp is present', () => {
+      const jsonData = {
+        title: 'Test Video',
+        upload_date: '20231225',
+        timestamp: Date.parse('2023-12-25T17:11:00Z') / 1000
+      };
+
+      nfoGenerator.writeVideoNfoFile(mockVideoPath, jsonData);
+
+      const nfoContent = fs.writeFileSync.mock.calls[0][1];
+      expect(nfoContent).toContain('<premiered>2023-12-25</premiered>');
+    });
+
     it('should omit year when upload_date is missing', () => {
       const jsonData = {
         title: 'No Upload Date Video'
