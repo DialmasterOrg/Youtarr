@@ -402,6 +402,13 @@ Sync is one-way (server -> Youtarr). Non-owner Plex users come from the server's
 - **Description**: Generate backdrop image files for Emby and Jellyfin background art
 - **Note**: Creates `backdrop.jpg` in each channel directory (from the channel's YouTube banner) and a `-backdrop.jpg` file alongside each video (copy of the video thumbnail). When enabled, channel-level backdrops are backfilled for existing channel folders; video-level backdrops are created for new downloads only.
 
+### Prefix Channel Name In Embedded Title
+- **Config Key**: `prefixChannelNameInTitle`
+- **Type**: `boolean`
+- **Default**: `true`
+- **Description**: Write the MP4's embedded title tag as `Channel - Title` instead of just `Title`
+- **Note**: Plex reads the embedded title tag (it does not read `.nfo` files). In an "Other Videos" library the prefix gives each video its channel context. In a TV Shows library the channel is already the show name, so turn this off to keep episode titles clean. The channel name is still written to the artist, album (Plex Collection), copyright (Plex Studio), and TV network tags, and the `.nfo` title is never prefixed. Only applies to new downloads; existing files are not re-tagged.
+
 ## Cookie Config
 
 ### Enable Cookies

@@ -246,6 +246,59 @@ describe('videoDownloadPostProcessFiles', () => {
     expect(process.exit).not.toHaveBeenCalled();
   });
 
+  function getAtomicParsleyArgs(targetPath) {
+    const call = childProcess.spawnSync.mock.calls.find(
+      ([cmd, args]) => cmd === '/usr/bin/AtomicParsley' && args[0] === targetPath
+    );
+    return call ? call[1] : null;
+  }
+
+  function getEmbeddedTitle(targetPath) {
+    const args = getAtomicParsleyArgs(targetPath);
+    return args ? args[args.indexOf('--title') + 1] : null;
+  }
+
+  it('omits the channel prefix from the embedded title when prefixChannelNameInTitle is false', async () => {
+    configModule.__setConfig({
+      writeChannelPosters: false,
+      writeVideoNfoFiles: true,
+      prefixChannelNameInTitle: false,
+      ffmpegPath: '/usr/bin/ffmpeg'
+    });
+
+    await loadModule();
+    await settleAsync();
+
+    expect(getEmbeddedTitle(videoPath)).toBe('Video Title');
+  });
+
+  describe('video_mp3 dual-format downloads', () => {
+    const audioPath = '/library/Channel/Video Title [abc123].mp3';
+    const companionVideoPath = '/library/Channel/Video Title [abc123].mp4';
+
+    beforeEach(() => {
+      process.argv = ['node', 'script', audioPath];
+      fs.existsSync.mockImplementation((path) => path === jsonPath || path === companionVideoPath);
+    });
+
+    it('embeds metadata into the companion MP4', async () => {
+      await loadModule();
+      await settleAsync();
+
+      expect(getEmbeddedTitle(companionVideoPath)).toBe('Channel - Video Title');
+      expect(getAtomicParsleyArgs(companionVideoPath)).toEqual(
+        expect.arrayContaining(['--album', 'Channel', '--stik', 'Movie', '--overWrite'])
+      );
+    });
+
+    it('does not run AtomicParsley against the MP3 file', async () => {
+      await loadModule();
+      await settleAsync();
+
+      expect(getAtomicParsleyArgs(audioPath)).toBeNull();
+    });
+  });
+
   it('backfills title and uploader for a nameless seeded channel from the info json', async () => {
     Channel.findOne.mockResolvedValue({
       id: 7,

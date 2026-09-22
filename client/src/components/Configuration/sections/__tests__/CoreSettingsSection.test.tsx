@@ -279,6 +279,56 @@ describe('CoreSettingsSection Component', () => {
     });
   });
 
+  describe('Prefix channel name in embedded video title Checkbox', () => {
+    const label = /Prefix channel name in embedded video title/i;
+
+    test('is checked by default', () => {
+      const props = createSectionProps();
+      renderWithProviders(<CoreSettingsSection {...props} />);
+
+      expect(screen.getByRole('checkbox', { name: label })).toBeChecked();
+    });
+
+    test('reflects prefixChannelNameInTitle state when false', () => {
+      const props = createSectionProps({
+        config: createConfig({ prefixChannelNameInTitle: false })
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+
+      expect(screen.getByRole('checkbox', { name: label })).not.toBeChecked();
+    });
+
+    test('calls onConfigChange with false when toggled off', async () => {
+      const user = userEvent.setup();
+      const onConfigChange = jest.fn();
+      const props = createSectionProps({
+        config: createConfig({ prefixChannelNameInTitle: true }),
+        onConfigChange
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+
+      await user.click(screen.getByRole('checkbox', { name: label }));
+
+      expect(onConfigChange).toHaveBeenCalledTimes(1);
+      expect(onConfigChange).toHaveBeenCalledWith({ prefixChannelNameInTitle: false });
+    });
+
+    test('calls onConfigChange with true when toggled on', async () => {
+      const user = userEvent.setup();
+      const onConfigChange = jest.fn();
+      const props = createSectionProps({
+        config: createConfig({ prefixChannelNameInTitle: false }),
+        onConfigChange
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+
+      await user.click(screen.getByRole('checkbox', { name: label }));
+
+      expect(onConfigChange).toHaveBeenCalledTimes(1);
+      expect(onConfigChange).toHaveBeenCalledWith({ prefixChannelNameInTitle: true });
+    });
+  });
+
   describe('YouTube Output Directory Field', () => {
     test('renders YouTube Output Directory field', () => {
       const props = createSectionProps();
