@@ -370,10 +370,17 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
 
     // Merge per-channel custom tags into jsonData.tags (prepended, before YouTube tags)
     // so the AtomicParsley --keyword args and the NFO writer below pick them up.
+    // YouTube tags duplicating a custom tag are dropped (case-insensitive), otherwise a
+    // custom tag like "Minecraft" on a video YouTube already tagged "minecraft" would be
+    // embedded twice.
     if (settingsChannelRecord && settingsChannelRecord.additional_tags) {
       const customTags = parseAdditionalTags(settingsChannelRecord.additional_tags);
       if (customTags.length > 0) {
-        jsonData.tags = [...customTags, ...(jsonData.tags || [])];
+        const customTagSet = new Set(customTags.map(t => t.toLowerCase()));
+        jsonData.tags = [
+          ...customTags,
+          ...(jsonData.tags || []).filter(t => !customTagSet.has(t.toLowerCase())),
+        ];
       }
     }
 
