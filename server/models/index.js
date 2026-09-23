@@ -4,6 +4,7 @@ const JobVideo = require('./jobvideo');
 const JobVideoDownload = require('./jobvideodownload');
 const Video = require('./video');
 const Channel = require('./channel');
+const ChannelVideo = require('./channelvideo');
 const Session = require('./session');
 const ApiKey = require('./apikey');
 const Playlist = require('./playlist');
@@ -14,6 +15,9 @@ const VideoWatchStatus = require('./videowatchstatus');
 const MediaServerUser = require('./mediaserveruser');
 const WatchStatusSyncCursor = require('./watchstatussynccursor');
 const ScheduledTaskRun = require('./scheduledtaskrun');
+const ApiKeyChannelGrant = require('./apikeychannelgrant');
+const ExternalRequest = require('./externalrequest');
+const ExternalApiUsageBucket = require('./externalapiusagebucket');
 
 Job.hasMany(JobVideo, { foreignKey: 'job_id', as: 'jobVideos' });
 Job.hasMany(JobVideoDownload, { foreignKey: 'job_id', as: 'jobVideoDownloads' });
@@ -34,12 +38,26 @@ PlaylistSyncState.belongsTo(Playlist, { foreignKey: 'playlist_id', targetKey: 'i
 Video.hasMany(VideoWatchStatus, { foreignKey: 'video_id', as: 'watchStatuses' });
 VideoWatchStatus.belongsTo(Video, { foreignKey: 'video_id', as: 'video' });
 
+ApiKey.hasMany(ApiKeyChannelGrant, { foreignKey: 'api_key_id', as: 'channelGrants' });
+ApiKeyChannelGrant.belongsTo(ApiKey, { foreignKey: 'api_key_id', as: 'apiKey' });
+Channel.hasMany(ApiKeyChannelGrant, { foreignKey: 'channel_id', as: 'apiKeyGrants' });
+ApiKeyChannelGrant.belongsTo(Channel, { foreignKey: 'channel_id', as: 'channel' });
+ApiKey.hasMany(ExternalRequest, { foreignKey: 'api_key_id', as: 'externalRequests' });
+ExternalRequest.belongsTo(ApiKey, { foreignKey: 'api_key_id', as: 'apiKey' });
+Channel.hasMany(ExternalRequest, { foreignKey: 'channel_id', as: 'externalRequests' });
+ExternalRequest.belongsTo(Channel, { foreignKey: 'channel_id', as: 'channel' });
+Job.hasMany(ExternalRequest, { foreignKey: 'job_id', as: 'externalRequests' });
+ExternalRequest.belongsTo(Job, { foreignKey: 'job_id', as: 'job' });
+ApiKey.hasMany(ExternalApiUsageBucket, { foreignKey: 'api_key_id', as: 'usageBuckets' });
+ExternalApiUsageBucket.belongsTo(ApiKey, { foreignKey: 'api_key_id', as: 'apiKey' });
+
 module.exports = {
   Job,
   JobVideo,
   JobVideoDownload,
   Video,
   Channel,
+  ChannelVideo,
   Session,
   ApiKey,
   Playlist,
@@ -50,4 +68,7 @@ module.exports = {
   MediaServerUser,
   WatchStatusSyncCursor,
   ScheduledTaskRun,
+  ApiKeyChannelGrant,
+  ExternalRequest,
+  ExternalApiUsageBucket,
 };

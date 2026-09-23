@@ -51,10 +51,12 @@ describe('Channel Poster Functionality', () => {
     jest.doMock('node-cron', () => ({
       schedule: jest.fn()
     }));
-    jest.doMock('../../models/channel', () => ({
-      findAll: jest.fn(),
-      findOne: jest.fn()
-    }));
+    jest.doMock('../../models/channel', () => {
+      const Channel = jest.requireActual('../../models/channel');
+      Channel.findAll = jest.fn();
+      Channel.findOne = jest.fn();
+      return Channel;
+    });
     jest.doMock('../../models/channelvideo', () => ({}));
     jest.doMock('../messageEmitter', () => ({
       emitMessage: jest.fn()
