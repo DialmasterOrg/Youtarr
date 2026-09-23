@@ -118,11 +118,11 @@ Youtarr must be running at the scheduled time; missed occurrences are not replay
 - **Type**: `string`
 - **Default**: `"default"`
 - **Options**: `"default"`, `"h264"`, `"h265"`
-- **Description**: Preferred video codec for downloads. `"default"` picks the best stream YouTube offers at the requested resolution (typically VP9 or AV1 above 1080p). `"h264"` forces H.264/AVC, which maximizes client compatibility but effectively caps resolution at 1080p because YouTube does not serve H.264 above that height. `"h265"` prefers HEVC but YouTube rarely provides it, so it almost always falls back to H.264 MP4.
+- **Description**: Preferred video codec for downloads. `"default"` takes the highest resolution YouTube offers up to the configured limit, and prefers H.264/AVC between streams of the same resolution, so a 1080p request gets H.264 rather than the AV1 stream YouTube also publishes in MP4. Resolution still wins over codec, so asking for 2160p gives a 2160p stream rather than dropping to 1080p H.264. Above 1080p that is usually VP9 without HDR, even when YouTube also has an HDR stream at that resolution, because the codec preference ranks AV1 below VP9 and is applied before yt-dlp's usual HDR preference. To prefer AV1 again, add `-S res,vcodec:av01` to the custom yt-dlp arguments; keeping `res` first means resolution still wins over codec. `"h264"` forces H.264/AVC, which maximizes client compatibility but effectively caps resolution at 1080p because YouTube does not serve H.264 above that height. `"h265"` prefers HEVC but YouTube rarely provides it, so it almost always falls back to H.264 MP4 at 1080p and below, and to AV1 MP4 above that.
 - **Compatibility**:
   - `h264`: Best compatibility with all devices
   - `h265`: Better compression, requires modern devices
-  - `default`: YouTube picks the stream, typically VP9 or AV1 above 1080p. Best compression, but older devices may need to transcode. (VP9 and AV1 are not selectable values for this key; they are just what YouTube serves when no codec preference is forced.)
+  - `default`: H.264 at 1080p and below, and usually VP9 without HDR above that, where YouTube has no H.264. H.264 files are noticeably larger than the AV1 equivalent at the same resolution, which is the cost of direct play on clients without AV1 decode. (VP9 and AV1 are not selectable values for this key; `-S res,vcodec:av01` in the custom yt-dlp arguments is the way to get AV1.)
 
 ### Default Subfolder
 - **Config Key**: `defaultSubfolder`
