@@ -133,6 +133,29 @@ describe('ChannelPage Component', () => {
       expect(await screen.findByText('Tech Channel')).toBeInTheDocument();
     });
 
+    test('does not show the YouTube link before the channel loads', () => {
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      expect(screen.queryByRole('link', { name: 'Open in YouTube' })).not.toBeInTheDocument();
+    });
+
+    test('links to the channel on YouTube once loaded', async () => {
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      expect(await screen.findByRole('link', { name: 'Open in YouTube' })).toHaveAttribute(
+        'href',
+        'https://www.youtube.com/channel/UC123456'
+      );
+    });
+
     test('renders ChannelVideos component with token and channelAutoDownloadTabs props', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
