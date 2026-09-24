@@ -21,6 +21,9 @@ const {
   moveWithRetries
 } = require('./filesystem');
 
+// Settings the Add Channel dialog can set before a channel is subscribed.
+const NEW_CHANNEL_SETTING_KEYS = ['auto_download_enabled_tabs', 'video_quality', 'audio_format', 'sub_folder'];
+
 /**
  * Module for managing channel-level configuration settings
  * Handles subfolder organization and per-channel video quality overrides
@@ -314,6 +317,44 @@ class ChannelSettingsModule {
     const allowed = parts.filter((part) => effectiveMediaTypes.has(part));
     const deduped = Array.from(new Set(allowed));
     return { valid: true, normalized: deduped.join(',') };
+  }
+
+  /**
+   * Validate the settings a user picks while adding a channel, before the
+   * channel is subscribed. Only the add dialog's settings are accepted; the
+   * rest stay editable from the channel page after saving.
+   * @param {*} settings - Settings object from an /updatechannels add item
+   * @returns {{ valid: boolean, error?: string }}
+   */
+  validateNewChannelSettings(settings) {
+    if (settings === undefined) {
+      return { valid: true };
+    }
+    if (typeof settings !== 'object' || settings === null || Array.isArray(settings)) {
+      return { valid: false, error: 'Channel settings must be an object' };
+    }
+
+    const unsupported = Object.keys(settings).find((key) => !NEW_CHANNEL_SETTING_KEYS.includes(key));
+    if (unsupported) {
+      return { valid: false, error: `Unsupported channel setting: ${unsupported}` };
+    }
+
+    const nonString = NEW_CHANNEL_SETTING_KEYS.find(
+      (key) => settings[key] != null && typeof settings[key] !== 'string'
+    );
+    if (nonString) {
+      return { valid: false, error: `${nonString} must be a string or null` };
+    }
+
+    const allTabsCsv = Object.keys(MEDIA_TAB_TYPE_MAP).join(',');
+    const validations = [
+      settings.sub_folder !== undefined && this.validateSubFolder(settings.sub_folder),
+      settings.video_quality !== undefined && this.validateVideoQuality(settings.video_quality),
+      settings.audio_format !== undefined && this.validateAudioFormat(settings.audio_format),
+      this.validateAutoDownloadEnabledTabs(settings.auto_download_enabled_tabs, allTabsCsv, []),
+    ];
+    const failed = validations.find((result) => result && !result.valid);
+    return failed ? { valid: false, error: failed.error } : { valid: true };
   }
 
   /**

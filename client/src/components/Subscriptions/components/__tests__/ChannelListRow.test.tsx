@@ -222,6 +222,23 @@ describe('ChannelListRow', () => {
       expect(screen.getByText('Pending addition')).toBeInTheDocument();
     });
 
+    test('opens the settings of a pending addition from its edit button', async () => {
+      const user = userEvent.setup();
+      const onEditPending = jest.fn();
+
+      renderWithProviders(<ChannelListRow {...defaultProps} isPendingAddition onEditPending={onEditPending} />);
+
+      await user.click(screen.getByRole('button', { name: 'Edit pending channel settings' }));
+
+      expect(onEditPending).toHaveBeenCalledTimes(1);
+    });
+
+    test('shows no edit button for a saved channel', () => {
+      renderWithProviders(<ChannelListRow {...defaultProps} onEditPending={jest.fn()} />);
+
+      expect(screen.queryByRole('button', { name: 'Edit pending channel settings' })).not.toBeInTheDocument();
+    });
+
     test('calls onDelete when delete button is clicked', async () => {
       const user = userEvent.setup();
       const onDelete = jest.fn();

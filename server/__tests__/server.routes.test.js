@@ -1330,7 +1330,8 @@ describe('server routes - channels', () => {
 
       expect(channelModuleMock.updateChannelsByDelta).toHaveBeenCalledWith({
         enableUrls: ['https://youtube.com/@new'],
-        disableUrls: ['https://youtube.com/@old']
+        disableUrls: ['https://youtube.com/@old'],
+        channelSettingsModule: expect.any(Object)
       });
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({ status: 'success' });
@@ -1360,10 +1361,53 @@ describe('server routes - channels', () => {
           { url: 'https://youtube.com/@channel1', channel_id: 'UC123' },
           { url: 'https://youtube.com/@channel2', channel_id: 'UC456' }
         ],
-        disableUrls: []
+        disableUrls: [],
+        channelSettingsModule: expect.any(Object)
       });
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({ status: 'success' });
+    });
+
+    test('returns 400 with the validation message when add settings are invalid', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+      const invalid = new Error('Invalid video quality');
+      invalid.code = 'INVALID_CHANNEL_SETTINGS';
+      channelModuleMock.updateChannelsByDelta.mockRejectedValueOnce(invalid);
+
+      const handlers = findRouteHandlers(app, 'post', '/updatechannels');
+      const updateHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { add: [{ url: 'https://youtube.com/@new', settings: { video_quality: '999' } }] }
+      });
+      const res = createMockResponse();
+
+      await updateHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({ error: 'Invalid video quality' });
+    });
+
+    test('returns 409 when a changed subfolder is blocked by active downloads', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+      channelModuleMock.updateChannelsByDelta.mockRejectedValueOnce(
+        new Error('Cannot change subfolder while downloads are in progress for this channel')
+      );
+
+      const handlers = findRouteHandlers(app, 'post', '/updatechannels');
+      const updateHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { add: [{ url: 'https://youtube.com/@busy', settings: { sub_folder: 'Kids' } }] }
+      });
+      const res = createMockResponse();
+
+      await updateHandler(req, res);
+
+      expect(res.statusCode).toBe(409);
+      expect(res.body).toEqual({
+        error: 'Cannot change subfolder while downloads are in progress for this channel'
+      });
     });
 
     test('returns 400 when delta payload has no changes', async () => {

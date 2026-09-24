@@ -19,6 +19,27 @@ import {
   PlaylistPreview,
   PlaylistSubscribeSettings,
 } from '../../../types/playlist';
+import { GLOBAL_DEFAULT_SENTINEL } from '../../../utils/channelHelpers';
+import NewPlaylistSettings, { NewPlaylistSettingsValues } from './NewPlaylistSettings';
+
+const DEFAULT_NEW_PLAYLIST_SETTINGS: NewPlaylistSettingsValues = {
+  auto_download: false,
+  video_quality: null,
+  audio_format: null,
+  sub_folder: GLOBAL_DEFAULT_SENTINEL,
+};
+
+// A restore keeps the saved settings, so the dialog shows those instead of the defaults.
+const initialSettingsFor = (preview: PlaylistPreview): NewPlaylistSettingsValues => {
+  const saved = preview.existing_subscription?.settings;
+  if (!saved) return DEFAULT_NEW_PLAYLIST_SETTINGS;
+  return {
+    auto_download: Boolean(saved.auto_download),
+    video_quality: saved.video_quality,
+    audio_format: saved.audio_format,
+    sub_folder: saved.default_sub_folder,
+  };
+};
 
 interface AddPlaylistDialogProps {
   open: boolean;
@@ -42,6 +63,7 @@ const AddPlaylistDialog: React.FC<AddPlaylistDialogProps> = ({
 
   const [url, setUrl] = useState('');
   const [preview, setPreview] = useState<PlaylistPreview | null>(null);
+  const [newSettings, setNewSettings] = useState<NewPlaylistSettingsValues>(DEFAULT_NEW_PLAYLIST_SETTINGS);
   const [localError, setLocalError] = useState<string | null>(null);
   const [subscribing, setSubscribing] = useState(false);
 
@@ -64,7 +86,10 @@ const AddPlaylistDialog: React.FC<AddPlaylistDialogProps> = ({
         return;
       }
       const info = await fetchPlaylistInfo(trimmed);
-      if (info) setPreview(info);
+      if (info) {
+        setPreview(info);
+        setNewSettings(initialSettingsFor(info));
+      }
     },
     [fetchPlaylistInfo]
   );
@@ -97,6 +122,13 @@ const AddPlaylistDialog: React.FC<AddPlaylistDialogProps> = ({
       sync_to_plex: status.plex,
       sync_to_jellyfin: status.jellyfin,
       sync_to_emby: status.emby,
+      // The server ignores settings on a restore, so only a new playlist sends them.
+      ...(!preview?.existing_subscription && {
+        auto_download: newSettings.auto_download,
+        video_quality: newSettings.video_quality,
+        audio_format: newSettings.audio_format,
+        default_sub_folder: newSettings.sub_folder,
+      }),
     };
     setSubscribing(true);
     try {
@@ -119,6 +151,15 @@ const AddPlaylistDialog: React.FC<AddPlaylistDialogProps> = ({
     }
   };
 
+  const alreadySubscribed = preview?.existing_subscription?.enabled === true;
+  const restoring = preview?.existing_subscription?.enabled === false;
+
+  const openExistingPlaylist = () => {
+    if (!preview) return;
+    resetAndClose();
+    navigate(`/playlist/${preview.playlist_id}`);
+  };
+
   const enabledServers = [
     status.plex && 'Plex',
     status.jellyfin && 'Jellyfin',
@@ -134,7 +175,11 @@ const AddPlaylistDialog: React.FC<AddPlaylistDialogProps> = ({
             label="YouTube playlist URL"
             placeholder="https://www.youtube.com/playlist?list=..."
             value={url}
-            onChange={(e) => setUrl(e.target.value)}
+            onChange={(e) => {
+              setUrl(e.target.value);
+              // A preview belongs to the URL it was fetched for; editing the URL means fetching again.
+              setPreview(null);
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !pending) {
                 e.preventDefault();
@@ -189,7 +234,31 @@ const AddPlaylistDialog: React.FC<AddPlaylistDialogProps> = ({
             </Box>
           )}
 
-          {preview && anyConfigured && (
+          {alreadySubscribed && (
+            <Alert severity="info">
+              <Typography variant="body2">You are already subscribed to this playlist.</Typography>
+            </Alert>
+          )}
+
+          {restoring && (
+            <Alert severity="info">
+              <Typography variant="body2">
+                Previously subscribed. It will be restored with its saved settings, shown below. You can change them
+                from the playlist page after subscribing.
+              </Typography>
+            </Alert>
+          )}
+
+          {preview && !alreadySubscribed && (
+            <NewPlaylistSettings
+              token={token}
+              values={newSettings}
+              onChange={(patch) => setNewSettings((prev) => ({ ...prev, ...patch }))}
+              readOnly={restoring || subscribing}
+            />
+          )}
+
+          {preview && !alreadySubscribed && anyConfigured && (
             <Typography variant="caption" color="text.secondary">
               On subscribe, Youtarr will sync this playlist to: {enabledServers.join(', ')}.
             </Typography>
@@ -210,7 +279,11 @@ const AddPlaylistDialog: React.FC<AddPlaylistDialogProps> = ({
         <Button variant="text" onClick={resetAndClose} disabled={pending}>
           Cancel
         </Button>
-        {preview ? (
+        {alreadySubscribed ? (
+          <Button variant="contained" onClick={openExistingPlaylist}>
+            Go to playlist
+          </Button>
+        ) : preview ? (
           <Button
             variant="contained"
             onClick={handleSubscribe}

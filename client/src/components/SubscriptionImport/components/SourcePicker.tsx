@@ -21,6 +21,14 @@ interface SourcePickerProps {
 // Cookies tab is default (index 0), CSV tab is index 1
 const TAB_INDEX_TO_SOURCE: ImportSource[] = ['cookies', 'takeout'];
 
+// Same three columns as a Google Takeout subscriptions.csv, for users building one by hand.
+const EXAMPLE_CSV = [
+  'Channel Id,Channel Url,Channel Title',
+  'UCXuqSBlHAE6Xw-yeJA0Tunw,http://www.youtube.com/channel/UCXuqSBlHAE6Xw-yeJA0Tunw,Linus Tech Tips',
+  'UCBJycsmduvYEL83R_U4JriQ,http://www.youtube.com/channel/UCBJycsmduvYEL83R_U4JriQ,Marques Brownlee',
+].join('\n') + '\n';
+const EXAMPLE_CSV_HREF = `data:text/csv;charset=utf-8,${encodeURIComponent(EXAMPLE_CSV)}`;
+
 const COOKIES_EXTENSION_URL = 'https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc';
 
 const SourcePicker: React.FC<SourcePickerProps> = ({ loading, error, errorDetails, onSubmit }) => {
@@ -127,6 +135,18 @@ const SourcePicker: React.FC<SourcePickerProps> = ({ loading, error, errorDetail
             </ol>
             <Typography variant="body2" color="secondary">
             Upload that <strong>subscriptions.csv</strong> file below.
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Making the file by hand instead?{' '}
+              <a
+                href={EXAMPLE_CSV_HREF}
+                download="youtarr-channels-example.csv"
+                className="underline underline-offset-2"
+              >
+                Download an example CSV
+              </a>
+              . Every row needs the channel ID (it starts with <code>UC</code>); rows without one are skipped. On
+              YouTube, open the channel&apos;s About panel, then Share channel, then Copy channel ID.
             </Typography>
           </div>
         )}

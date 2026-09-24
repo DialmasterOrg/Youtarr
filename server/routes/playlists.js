@@ -1,6 +1,10 @@
 const express = require('express');
 const { MAX_PLAYLIST_VIDEOS, MAX_SELECTED_DOWNLOAD_IDS, DEFAULT_PREVIEW_COUNT, FETCH_IN_PROGRESS_MESSAGE } = require('../modules/playlistConstants');
 const { createOverrideSettingsValidator } = require('./overrideSettingsValidator');
+const { createSubscribeSettingsValidator } = require('./playlistSubscribeSettings');
+
+// Saved settings the Add Playlist dialog shows when a removed playlist is restored.
+const RESTORE_PREVIEW_SETTING_KEYS = ['auto_download', 'default_sub_folder', 'video_quality', 'audio_format'];
 
 function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule }) {
   const router = express.Router();
@@ -32,6 +36,10 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
   const VALID_SORT_ORDERS = new Set(['default', 'reversed']);
 
   const validateOverrideSettings = createOverrideSettingsValidator({
+    channelSettingsModule,
+    ratingMapper,
+  });
+  const validateSubscribeSettings = createSubscribeSettingsValidator({
     channelSettingsModule,
     ratingMapper,
   });
@@ -149,7 +157,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    *                 description: YouTube playlist URL
    *     responses:
    *       200:
-   *         description: Playlist info
+   *         description: Playlist info. existing_subscription is null for a playlist Youtarr has never saved; otherwise it reports whether the playlist is subscribed (enabled) and its saved auto_download, default_sub_folder, video_quality, and audio_format, which a restore keeps.
    *       400:
    *         description: url is required
    *       403:
@@ -166,7 +174,14 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url is required' });
     try {
       const info = await playlistModule.getPlaylistInfo(url);
-      res.json(info);
+      const saved = await Playlist.findOne({ where: { playlist_id: info.playlist_id } });
+      const existingSubscription = saved
+        ? {
+          enabled: Boolean(saved.enabled),
+          settings: Object.fromEntries(RESTORE_PREVIEW_SETTING_KEYS.map((key) => [key, saved[key] ?? null])),
+        }
+        : null;
+      res.json({ ...info, existing_subscription: existingSubscription });
     } catch (err) {
       if (err.message === 'PLAYLIST_NOT_FOUND') return res.status(404).json({ error: 'Playlist not found' });
       if (err.message === 'COOKIES_REQUIRED') return res.status(403).json({ error: 'This playlist requires authentication (cookies)' });
@@ -196,22 +211,22 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    *                 description: YouTube playlist URL
    *               settings:
    *                 type: object
-   *                 description: Optional per-playlist download settings
+   *                 description: Optional per-playlist settings, applied only when the playlist is new. Accepts auto_download, sync_to_plex, sync_to_jellyfin, sync_to_emby, public_on_servers, default_sub_folder, video_quality, min_duration, max_duration, title_filter_regex, audio_format, default_rating, and sort_order; other keys are ignored.
    *     responses:
    *       201:
    *         description: Saved playlist, restored flag, and optional following setup warning
    *       400:
-   *         description: Missing url or invalid default_sub_folder
+   *         description: Missing url or an invalid settings value
    *       500:
    *         description: Internal server error
    */
   router.post('/api/playlists', verifyToken, async (req, res) => {
-    const { url, settings = {} } = req.body;
+    const { url } = req.body;
     if (!url) return res.status(400).json({ error: 'url is required' });
-    if (defaultSubFolderInvalid(settings.default_sub_folder)) {
-      return res.status(400).json({ error: 'Invalid default_sub_folder' });
-    }
     try {
+      const validated = validateSubscribeSettings(req.body.settings);
+      if (!validated.ok) return res.status(400).json({ error: validated.error });
+      const settings = validated.value;
       const info = await playlistModule.getPlaylistInfo(url);
       const { playlist: created, restored } = await playlistModule.upsertPlaylist(info, { enabled: true, settings });
       // On restore the submitted settings are discarded in favor of the saved

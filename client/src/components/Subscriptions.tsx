@@ -41,7 +41,7 @@ import WebSocketContext, { Message } from '../contexts/WebSocketContext';
 import { useConfig } from '../hooks/useConfig';
 import { Channel } from '../types/Channel';
 import { useChannelList } from './Subscriptions/hooks/useChannelList';
-import { useChannelMutations } from './Subscriptions/hooks/useChannelMutations';
+import { ChannelLookupResult, useChannelMutations } from './Subscriptions/hooks/useChannelMutations';
 import ChannelCard from './Subscriptions/components/ChannelCard';
 import ChannelListRow, { CHANNEL_LIST_DESKTOP_TEMPLATE } from './Subscriptions/components/ChannelListRow';
 import {
@@ -63,6 +63,8 @@ import ActiveImportBanner from './Subscriptions/components/ActiveImportBanner';
 import SubscriptionsFilter, { SubscriptionsFilterValue } from './Subscriptions/components/SubscriptionsFilter';
 import SubscriptionAddBar from './Subscriptions/components/SubscriptionAddBar';
 import AddPlaylistDialog from './Subscriptions/components/AddPlaylistDialog';
+import AddChannelSettingsDialog from './Subscriptions/components/AddChannelSettingsDialog';
+import { NewChannelSettings, PendingChannel } from './Subscriptions/newChannelSettings';
 import PlaylistListBlock from './Subscriptions/components/PlaylistListBlock';
 import { useActiveImport } from '../hooks/useActiveImport';
 import { usePlaylistList } from '../hooks/usePlaylistList';
@@ -115,6 +117,10 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
   const [folderMenuAnchor, setFolderMenuAnchor] = useState<null | HTMLElement>(null);
   const [mobileActionsAnchorEl, setMobileActionsAnchorEl] = useState<null | HTMLElement>(null);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const [channelSettingsDialog, setChannelSettingsDialog] = useState<{
+    channel: PendingChannel;
+    mode: 'add' | 'edit';
+  } | null>(null);
 
   const [pageSize, setPageSize] = useListPageSize('youtarr.channelManager.pageSize');
   const effectivePageSize = useInfiniteScroll ? INFINITE_SCROLL_FETCH_SIZE : pageSize;
@@ -159,7 +165,9 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
     deletedChannels,
     isAddingChannel,
     isSaving,
-    addChannel,
+    lookupChannel,
+    addPendingChannel,
+    updatePendingChannel,
     queueChannelForDeletion,
     undoChanges,
     saveChanges,
@@ -283,20 +291,40 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
     };
   }, [websocketContext, messageFilter, handleMessage]);
 
-  const handleAddChannel = async () => {
-    if (!newSubscriptionUrl.trim()) return;
-    const result = await addChannel(newSubscriptionUrl);
+  // Shows the lookup outcome: the settings dialog for a found channel (or the
+  // pending entry it matches), otherwise a message. Returns false on failure.
+  const showChannelLookupResult = useCallback((result: ChannelLookupResult) => {
     if (!result.success) {
       setDialogMessage(result.message || 'Failed to add channel');
       setDialogOpen(true);
-      return;
+      return false;
     }
-
-    setNewSubscriptionUrl('');
-    if (result.message) {
+    if (result.channel) {
+      setChannelSettingsDialog({ channel: result.channel, mode: result.alreadyPending ? 'edit' : 'add' });
+    } else if (result.message) {
       setDialogMessage(result.message);
       setDialogOpen(true);
     }
+    return true;
+  }, []);
+
+  const handleAddChannel = async () => {
+    if (!newSubscriptionUrl.trim()) return;
+    const result = await lookupChannel(newSubscriptionUrl);
+    if (showChannelLookupResult(result)) {
+      setNewSubscriptionUrl('');
+    }
+  };
+
+  const handleChannelSettingsConfirm = (settings: NewChannelSettings) => {
+    if (!channelSettingsDialog) return;
+    const { channel, mode } = channelSettingsDialog;
+    if (mode === 'add') {
+      addPendingChannel({ ...channel, ...settings });
+    } else {
+      updatePendingChannel(channel.url, settings);
+    }
+    setChannelSettingsDialog(null);
   };
 
   // Auto-add handoff from Find on YouTube / AddChannelDialog: consume the
@@ -311,19 +339,12 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
     navigate(location.pathname, { replace: true });
     setTypeFilter('channels');
     setNewSubscriptionUrl(addChannelUrl);
-    addChannel(addChannelUrl).then((result) => {
-      if (!result.success) {
-        setDialogMessage(result.message || 'Failed to add channel');
-        setDialogOpen(true);
-        return;
-      }
-      setNewSubscriptionUrl('');
-      if (result.message) {
-        setDialogMessage(result.message);
-        setDialogOpen(true);
+    lookupChannel(addChannelUrl).then((result) => {
+      if (showChannelLookupResult(result)) {
+        setNewSubscriptionUrl('');
       }
     });
-  }, [location.state, location.pathname, navigate, addChannel]);
+  }, [location.state, location.pathname, navigate, lookupChannel, showChannelLookupResult]);
 
   const handleTypeFilterChange = (next: SubscriptionsFilterValue) => {
     setTypeFilter(next);
@@ -713,6 +734,7 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
                           onDelete={() => handleDeleteClick(channel)}
                           onRegexClick={handleRegexClick}
                           isPendingAddition={pendingAdditionSet.has(channel.url)}
+                          onEditPending={() => setChannelSettingsDialog({ channel, mode: 'edit' })}
                           rowIndex={rowIndex}
                         />
                       );
@@ -729,6 +751,7 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
                             onDelete={() => handleDeleteClick(channel)}
                             onRegexClick={handleRegexClick}
                             isPendingAddition={pendingAdditionSet.has(channel.url)}
+                            onEditPending={() => setChannelSettingsDialog({ channel, mode: 'edit' })}
                           />
                         </Grid>
                       ))}
@@ -969,6 +992,16 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
         open={playlistHelpDialogOpen}
         onClose={() => setPlaylistHelpDialogOpen(false)}
         isMobile={isMobile}
+      />
+
+      <AddChannelSettingsDialog
+        key={channelSettingsDialog ? `${channelSettingsDialog.mode}:${channelSettingsDialog.channel.url}` : 'closed'}
+        open={Boolean(channelSettingsDialog)}
+        channel={channelSettingsDialog?.channel ?? null}
+        mode={channelSettingsDialog?.mode ?? 'add'}
+        token={token}
+        onConfirm={handleChannelSettingsConfirm}
+        onClose={() => setChannelSettingsDialog(null)}
       />
 
       <AddPlaylistDialog
