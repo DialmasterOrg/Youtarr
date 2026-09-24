@@ -59,6 +59,10 @@ const buildDeps = (overrides = {}) => ({
   },
   channelSettingsModule: {
     validateSubFolder: jest.fn().mockReturnValue({ valid: true }),
+    validateVideoQuality: jest.fn().mockReturnValue({ valid: true }),
+    validateAudioFormat: jest.fn().mockReturnValue({ valid: true }),
+    validateDurationSettings: jest.fn().mockReturnValue({ valid: true }),
+    validateTitleRegex: jest.fn().mockReturnValue({ valid: true }),
     ...overrides.channelSettingsModule,
   },
   subfolderModule: {
@@ -327,7 +331,7 @@ describe('GET /api/playlists/:playlistId unsyncable_count', () => {
 
 describe('POST /api/playlists/addplaylistinfo', () => {
   test('returns playlist info on success', async () => {
-    const deps = buildDeps();
+    const deps = buildDeps({ Playlist: { findOne: jest.fn().mockResolvedValue(null) } });
     const info = { playlist_id: 'PLtest', title: 'Test', video_count: 5 };
     deps.playlistModule.getPlaylistInfo.mockResolvedValue(info);
 
@@ -338,7 +342,34 @@ describe('POST /api/playlists/addplaylistinfo', () => {
     await handler(req, res);
 
     expect(deps.playlistModule.getPlaylistInfo).toHaveBeenCalledWith('https://youtube.com/playlist?list=PLtest');
-    expect(res.json).toHaveBeenCalledWith(info);
+    expect(res.json).toHaveBeenCalledWith({ ...info, existing_subscription: null });
+  });
+
+  test('reports the saved settings of a previously subscribed playlist', async () => {
+    const saved = makePlaylist({
+      playlist_id: 'PLtest',
+      enabled: false,
+      auto_download: true,
+      default_sub_folder: 'Music',
+      video_quality: '720',
+      audio_format: 'mp3_only',
+    });
+    const deps = buildDeps({ Playlist: { findOne: jest.fn().mockResolvedValue(saved) } });
+    deps.playlistModule.getPlaylistInfo.mockResolvedValue({ playlist_id: 'PLtest', title: 'Test' });
+
+    const handler = getHandler('post', '/api/playlists/addplaylistinfo', deps);
+    const req = { body: { url: 'https://youtube.com/playlist?list=PLtest' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.models.Playlist.findOne).toHaveBeenCalledWith({ where: { playlist_id: 'PLtest' } });
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      existing_subscription: {
+        enabled: false,
+        settings: { auto_download: true, default_sub_folder: 'Music', video_quality: '720', audio_format: 'mp3_only' },
+      },
+    }));
   });
 
   test('returns 400 when url is missing', async () => {
@@ -506,6 +537,80 @@ describe('POST /api/playlists', () => {
     expect(res.json).toHaveBeenCalledWith({ error: 'Invalid default_sub_folder' });
     expect(deps.playlistModule.getPlaylistInfo).not.toHaveBeenCalled();
     expect(deps.playlistModule.upsertPlaylist).not.toHaveBeenCalled();
+  });
+
+  test('passes only playlist settings through to the new subscription', async () => {
+    const deps = buildDeps();
+    const info = { playlist_id: 'PLtest' };
+    deps.playlistModule.getPlaylistInfo.mockResolvedValue(info);
+    deps.playlistModule.upsertPlaylist.mockResolvedValue({ playlist: makePlaylist(), restored: false });
+
+    const handler = getHandler('post', '/api/playlists', deps);
+    const req = {
+      body: {
+        url: 'https://youtube.com/playlist?list=PLtest',
+        settings: { video_quality: '720', enabled: false, auto_download_baseline_id: 99 },
+      },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.playlistModule.upsertPlaylist).toHaveBeenCalledWith(info, {
+      enabled: true,
+      settings: { video_quality: '720' },
+    });
+  });
+
+  test('rejects an invalid setting value before subscribing', async () => {
+    const deps = buildDeps({
+      channelSettingsModule: {
+        validateVideoQuality: jest.fn().mockReturnValue({ valid: false, error: 'Invalid video quality' }),
+      },
+    });
+    const handler = getHandler('post', '/api/playlists', deps);
+    const req = {
+      body: { url: 'https://youtube.com/playlist?list=PLtest', settings: { video_quality: '999' } },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Invalid video quality' });
+    expect(deps.playlistModule.getPlaylistInfo).not.toHaveBeenCalled();
+  });
+
+  test('returns 400 for a non-string title filter instead of throwing', async () => {
+    const deps = buildDeps();
+    const handler = getHandler('post', '/api/playlists', deps);
+    const req = {
+      body: { url: 'https://youtube.com/playlist?list=PLtest', settings: { title_filter_regex: 123 } },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(deps.channelSettingsModule.validateTitleRegex).not.toHaveBeenCalled();
+  });
+
+  test('returns 500 instead of rejecting when settings validation throws', async () => {
+    const deps = buildDeps({
+      channelSettingsModule: { validateVideoQuality: jest.fn(() => { throw new Error('boom'); }) },
+    });
+    const handler = getHandler('post', '/api/playlists', deps);
+    const req = {
+      body: { url: 'https://youtube.com/playlist?list=PLtest', settings: { video_quality: '720' } },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await expect(handler(req, res)).resolves.not.toThrow();
+    expect(res.status).toHaveBeenCalledWith(500);
   });
 
   test('returns 500 on subscribe failure', async () => {

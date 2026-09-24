@@ -8,7 +8,7 @@ import {
   Typography,
   Divider,
 } from '../../ui';
-import { Delete as DeleteIcon } from '../../../lib/icons';
+import { Delete as DeleteIcon, Edit as EditIcon } from '../../../lib/icons';
 import { Channel } from '../../../types/Channel';
 import { SubFolderChip, QualityChip, AutoDownloadChips, DurationFilterChip, TitleFilterChip, DownloadFormatConfigIndicator, TerminatedChip, ProtectedChip } from './chips';
 import RatingBadge from '../../shared/RatingBadge';
@@ -20,6 +20,8 @@ interface ChannelListRowProps {
   onDelete: () => void;
   onRegexClick: (event: React.MouseEvent<HTMLElement>, regex: string) => void;
   isPendingAddition?: boolean;
+  /** Opens the Add Channel dialog for a pending addition. */
+  onEditPending?: () => void;
   rowIndex?: number;
 }
 
@@ -32,6 +34,7 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
   onDelete,
   onRegexClick,
   isPendingAddition,
+  onEditPending,
   rowIndex,
 }) => {
   const [thumbnailVisible, setThumbnailVisible] = useState(true);
@@ -100,6 +103,18 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
     );
   };
 
+  const renderEditPendingButton = () => (isPendingAddition && onEditPending ? (
+    <Tooltip title="Edit settings">
+      <button
+        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', padding: 4, flexShrink: 0 }}
+        onClick={onEditPending}
+        aria-label="Edit pending channel settings"
+      >
+        <EditIcon size={20} />
+      </button>
+    </Tooltip>
+  ) : null);
+
   const zebraBackground = typeof rowIndex === 'number' && rowIndex % 2 === 1 ? 'var(--muted)' : undefined;
 
   if (isMobile) {
@@ -118,6 +133,7 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
       >
         <div style={{ display: 'flex', width: '100%', gap: 8, alignItems: 'flex-start', minWidth: 0 }}>
           {renderChannelHeader()}
+          {renderEditPendingButton()}
           <Tooltip title="Remove channel">
             <button
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--destructive)', display: 'inline-flex', alignItems: 'center', padding: 4, flexShrink: 0 }}
@@ -237,6 +253,7 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          {renderEditPendingButton()}
           <Tooltip title="Remove channel">
             <button
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--destructive)', display: 'inline-flex', alignItems: 'center', padding: 4 }}

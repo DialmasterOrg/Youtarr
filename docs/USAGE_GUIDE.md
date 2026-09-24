@@ -59,6 +59,12 @@ Subscribe to YouTube channels to automatically download new videos as they're pu
        - `@MrBeast`
        - `https://youtube.com/@MrBeast`
        - `https://www.youtube.com/channel/UCX6OQ3DkcsbYNE6H8uQQuVA`
+   - Youtarr looks the channel up on YouTube (this can take a few seconds), then opens the **Add channel** dialog with the usual defaults filled in:
+     - **Auto Downloads**: a toggle for each tab the channel has (**New Videos**, **New Shorts**, **New Live/Streams**)
+     - **Video Quality**, **Download Type** (Video Only, Video + MP3, or MP3 Only), and **Subfolder**
+   - Click **Continue** to keep the defaults or your changes. The channel joins the list as a pending addition; use its edit (pencil) button to change these settings before saving.
+   - A channel you subscribed to before comes back with its saved settings filled in.
+   - Click **Save Changes** to subscribe. Filters, ratings, and auto-removal are set later from the channel page.
 
 3. **Queue downloads when you're ready**
    - Newly added channels wait until you run a channel download or a scheduled cron cycle
@@ -120,6 +126,7 @@ Export your subscription list from Google and upload the CSV file. This method d
    - On the import page, select the **Import Using CSV** tab
    - Click **Choose File** and select the file at: `Takeout/YouTube and YouTube Music/subscriptions/subscriptions.csv`
    - Click **Upload & Preview**
+   - To build the file by hand instead, use **Download an example CSV** on the same tab. It has the three Takeout columns (`Channel Id,Channel Url,Channel Title`). Every row needs the channel ID (it starts with `UC`); rows without one are skipped. On YouTube, open the channel's About panel, then **Share channel** -> **Copy channel ID**.
 
 ### Method 2: Cookies File
 
@@ -182,9 +189,11 @@ Subscribe to a YouTube playlist and Youtarr tracks its videos, downloads them, a
    - The **Add playlist** dialog opens and fetches a preview: the title, channel, thumbnail, and video count
    - If you opened the dialog without a URL first, paste the link inside it and click **Fetch info**
 
-3. **Subscribe**
+3. **Choose settings and subscribe**
+   - Below the preview, set **Automatically download new videos**, **Video Quality**, **Download Type**, and **Default Subfolder**. Automatic downloads only pick up videos added to the playlist from now on; choose existing videos to download from the playlist's detail page.
    - The dialog shows which media servers the playlist will sync to. If you haven't connected any, the videos still download and a `.m3u` file is still written; you just won't get a native server playlist.
    - Click **Subscribe**. Youtarr pulls in the video list and opens the playlist's detail page.
+   - A playlist you subscribed to before is restored with its saved settings, shown read-only in the dialog; change them from the playlist page afterwards. If you're already subscribed, the dialog offers **Go to playlist** instead.
 
 > Click the **?** icon on the Playlists tab for an in-app summary of how playlists work.
 

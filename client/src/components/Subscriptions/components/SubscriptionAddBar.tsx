@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, CircularProgress, Grid, TextField } from '../../ui';
+import { Button, CircularProgress, Grid, TextField, Typography } from '../../ui';
 import { Add as AddIcon, Upload as UploadIcon } from '../../../lib/icons';
 import { SubscriptionsFilterValue } from './SubscriptionsFilter';
 
@@ -71,7 +71,7 @@ const SubscriptionAddBar: React.FC<SubscriptionAddBarProps> = ({
                   onClick={onAddChannel}
                   disabled={isAddingChannel || isEmpty}
                 >
-                  {isAddingChannel ? 'Adding…' : 'Channel'}
+                  {isAddingChannel ? 'Looking up...' : 'Channel'}
                 </Button>
               </Grid>
               <Grid item xs={6}>
@@ -100,6 +100,16 @@ const SubscriptionAddBar: React.FC<SubscriptionAddBarProps> = ({
           )}
         </Grid>
       </Grid>
+      {isChannels && isAddingChannel && (
+        <Grid item xs={12}>
+          <div role="status" className="flex items-center gap-2">
+            <CircularProgress size={14} />
+            <Typography variant="body2" color="text.secondary">
+              Looking up channel on YouTube... this can take a few seconds.
+            </Typography>
+          </div>
+        </Grid>
+      )}
     </Grid>
   );
 };

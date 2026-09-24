@@ -369,6 +369,73 @@ describe('ChannelSettingsModule', () => {
     });
   });
 
+  describe('validateNewChannelSettings', () => {
+    test('accepts an absent settings object', () => {
+      expect(channelSettingsModule.validateNewChannelSettings(undefined)).toEqual({ valid: true });
+    });
+
+    test('accepts every supported setting with valid values', () => {
+      const result = channelSettingsModule.validateNewChannelSettings({
+        auto_download_enabled_tabs: 'video,short',
+        video_quality: '720',
+        audio_format: 'mp3_only',
+        sub_folder: '##USE_GLOBAL_DEFAULT##',
+      });
+
+      expect(result).toEqual({ valid: true });
+    });
+
+    test('accepts null overrides meaning use the global setting', () => {
+      const result = channelSettingsModule.validateNewChannelSettings({
+        video_quality: null,
+        audio_format: null,
+        sub_folder: null,
+      });
+
+      expect(result).toEqual({ valid: true });
+    });
+
+    test('rejects a settings value that is not an object', () => {
+      expect(channelSettingsModule.validateNewChannelSettings(['720']).valid).toBe(false);
+    });
+
+    test('rejects settings that are not allowed at add time', () => {
+      const result = channelSettingsModule.validateNewChannelSettings({ enabled: true });
+
+      expect(result).toEqual({ valid: false, error: 'Unsupported channel setting: enabled' });
+    });
+
+    test('rejects an invalid video quality', () => {
+      expect(channelSettingsModule.validateNewChannelSettings({ video_quality: '999' }).valid).toBe(false);
+    });
+
+    test('rejects an invalid audio format', () => {
+      expect(channelSettingsModule.validateNewChannelSettings({ audio_format: 'flac' }).valid).toBe(false);
+    });
+
+    test('rejects an unsafe subfolder name', () => {
+      expect(channelSettingsModule.validateNewChannelSettings({ sub_folder: '../escape' }).valid).toBe(false);
+    });
+
+    test.each(['sub_folder', 'video_quality', 'audio_format', 'auto_download_enabled_tabs'])(
+      'rejects a non-string %s',
+      (key) => {
+        expect(channelSettingsModule.validateNewChannelSettings({ [key]: 123 })).toEqual({
+          valid: false,
+          error: `${key} must be a string or null`,
+        });
+      }
+    );
+
+    test('rejects an unknown auto-download media type', () => {
+      const result = channelSettingsModule.validateNewChannelSettings({
+        auto_download_enabled_tabs: 'video,podcast',
+      });
+
+      expect(result.valid).toBe(false);
+    });
+  });
+
   describe('hasActiveDownloads', () => {
     test('should return false when no jobs are running', async () => {
       jobModule.getAllJobs.mockReturnValue({});

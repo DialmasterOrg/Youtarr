@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Avatar, Card, CardActionArea, CardContent, Chip, Tooltip, Typography } from '../../ui';
-import { Delete as DeleteIcon, Image as ImageIcon, Folder as FolderIcon } from '../../../lib/icons';
+import { Delete as DeleteIcon, Edit as EditIcon, Image as ImageIcon, Folder as FolderIcon } from '../../../lib/icons';
 import { Channel } from '../../../types/Channel';
 import { QualityChip, AutoDownloadChips, DurationFilterChip, TitleFilterChip, DownloadFormatConfigIndicator, TerminatedChip, ProtectedChip } from './chips';
 
@@ -14,6 +14,8 @@ interface ChannelCardProps {
     onDelete: () => void;
     onRegexClick: (event: React.MouseEvent<HTMLElement>, regex: string) => void;
     isPendingAddition?: boolean;
+    /** Opens the Add Channel dialog for a pending addition. */
+    onEditPending?: () => void;
 }
 
 const ChannelCard: React.FC<ChannelCardProps> = ({
@@ -23,6 +25,7 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
     onDelete,
     onRegexClick,
     isPendingAddition,
+    onEditPending,
 }) => {
     const canNavigate = Boolean(channel.channel_id) && !isPendingAddition;
     const channelPath = `/channel/${channel.channel_id}`;
@@ -155,7 +158,30 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
                 paddingTop: THUMBNAIL_ASPECT_PADDING,
                 pointerEvents: 'none',
             }}>
-                <div style={{ position: 'absolute', top: 8, right: 8, pointerEvents: 'auto' }}>
+                <div style={{ position: 'absolute', top: 8, right: 8, pointerEvents: 'auto', display: 'flex', gap: 8 }}>
+                    {isPendingAddition && onEditPending && (
+                        <Tooltip title="Edit settings">
+                            <button
+                                type="button"
+                                aria-label="Edit pending channel settings"
+                                style={{
+                                    background: 'rgba(0,0,0,0.4)',
+                                    border: 'none',
+                                    borderRadius: '50%',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    width: 36,
+                                    height: 36,
+                                    color: 'var(--primary-foreground)',
+                                }}
+                                onClick={onEditPending}
+                            >
+                                <EditIcon size={16} />
+                            </button>
+                        </Tooltip>
+                    )}
                     <Tooltip title="Remove channel">
                         <button
                             type="button"
