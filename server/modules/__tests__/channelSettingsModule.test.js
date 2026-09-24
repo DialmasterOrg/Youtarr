@@ -31,6 +31,8 @@ jest.mock('../../models/video', () => {
   return MockVideo;
 });
 
+jest.mock('../../models', () => ({ }));
+
 jest.mock('../configModule', () => ({
   directoryPath: '/test/output',
   getDefaultSubfolder: jest.fn().mockReturnValue(null)
