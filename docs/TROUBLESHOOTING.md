@@ -218,6 +218,37 @@ This is a known Docker Desktop issue on Windows where mount points become corrup
    netstat -an | grep 3087
    ```
 
+### "EMFILE: too many open files, watch" or "Cannot watch config.json" {#config-file-watcher-limit}
+
+**Problem**: Youtarr logs this warning on startup:
+
+```
+Cannot watch config.json for changes; Youtarr will keep running, but hand edits to config.json will not be picked up until restart ...
+```
+
+Older versions crashed on startup instead, with:
+
+```
+Error: EMFILE: too many open files, watch '/app/config/config.json'
+```
+
+**Cause**: Youtarr watches `config.json` so it can pick up changes you make to the file by hand. Linux limits how many file watchers (inotify instances) each user can create, and the default is 128. On hosts running many containers as the same user (on Unraid most containers run as `nobody`), the other containers can use up that shared limit, leaving none for Youtarr. A related limit, `fs.inotify.max_user_watches`, produces an `ENOSPC` "System limit for number of file watchers reached" error instead.
+
+Youtarr keeps running without the watcher. Settings saved from the web UI still work; the only thing lost is auto-reload of hand edits to `config.json`, which take effect after a restart instead.
+
+**Solution**: Raise the limit on the host (not inside the container):
+
+```bash
+sysctl -w fs.inotify.max_user_instances=512
+# If the warning mentions max_user_watches / ENOSPC:
+sysctl -w fs.inotify.max_user_watches=524288
+```
+
+Then restart Youtarr. `sysctl -w` doesn't survive a reboot. To make it permanent:
+
+- **Unraid**: install the **Tips and Tweaks** plugin and raise the inotify limits there, or add the `sysctl -w ...` line(s) to `/boot/config/go` so they run at every boot.
+- **Other Linux hosts**: create `/etc/sysctl.d/99-inotify.conf` containing `fs.inotify.max_user_instances=512` (and `fs.inotify.max_user_watches=524288` if needed), then run `sysctl --system`.
+
 ### Asustor App Central: Stuck on an Old Version
 
 **Problem**: You installed Youtarr from App Central on an Asustor NAS, a newer Youtarr release exists, but pulling images via Docker or Portainer doesn't update anything.
