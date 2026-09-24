@@ -51,7 +51,7 @@ describe('ConfigModule', () => {
     fs.readFileSync = jest.fn();
     fs.writeFileSync = jest.fn();
     fs.mkdirSync = jest.fn();
-    fs.watch = jest.fn().mockReturnValue({ close: jest.fn() });
+    fs.watch = jest.fn().mockReturnValue({ close: jest.fn(), on: jest.fn() });
     fs.chmodSync = jest.fn();
     fs.unlinkSync = jest.fn();
 
@@ -734,7 +734,7 @@ describe('ConfigModule', () => {
       let watchCallback;
       fs.watch.mockImplementation((path, callback) => {
         watchCallback = callback;
-        return { close: jest.fn() };
+        return { close: jest.fn(), on: jest.fn() };
       });
 
       ConfigModule = require('../configModule');
@@ -756,7 +756,7 @@ describe('ConfigModule', () => {
 
     test('should stop watching config when stopWatchingConfig is called', () => {
       // Arrange
-      const mockWatcher = { close: jest.fn() };
+      const mockWatcher = { close: jest.fn(), on: jest.fn() };
       fs.watch.mockReturnValue(mockWatcher);
       fs.existsSync.mockReturnValue(true);
       fs.readFileSync.mockReturnValue(JSON.stringify(defaultTemplate));
@@ -778,7 +778,7 @@ describe('ConfigModule', () => {
       let watchCallback;
       fs.watch.mockImplementation((path, callback) => {
         watchCallback = callback;
-        return { close: jest.fn() };
+        return { close: jest.fn(), on: jest.fn() };
       });
 
       ConfigModule = require('../configModule');
@@ -807,7 +807,7 @@ describe('ConfigModule', () => {
       let watchCallback;
       fs.watch.mockImplementation((path, callback) => {
         watchCallback = callback;
-        return { close: jest.fn() };
+        return { close: jest.fn(), on: jest.fn() };
       });
 
       ConfigModule = require('../configModule');
@@ -820,6 +820,94 @@ describe('ConfigModule', () => {
 
       // Assert - should not emit change event for identical content
       expect(changeListener).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Config Watcher Unavailable', () => {
+    const makeWatchError = (code) => Object.assign(new Error(`${code}: watch failed`), { code });
+
+    beforeEach(() => {
+      fs.existsSync.mockReturnValue(true);
+      fs.readFileSync.mockReturnValue(JSON.stringify(defaultTemplate));
+    });
+
+    test('loads config when the watcher cannot be created', () => {
+      fs.watch.mockImplementation(() => {
+        throw makeWatchError('EMFILE');
+      });
+
+      ConfigModule = require('../configModule');
+
+      expect(ConfigModule.getConfig().plexPort).toBe('32400');
+    });
+
+    test('warns with the instance limit fix and docs link on EMFILE', () => {
+      const error = makeWatchError('EMFILE');
+      fs.watch.mockImplementation(() => {
+        throw error;
+      });
+
+      ConfigModule = require('../configModule');
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ err: error }),
+        expect.stringMatching(/sysctl -w fs\.inotify\.max_user_instances=512.*troubleshooting\/#config-file-watcher-limit/)
+      );
+    });
+
+    test('warns with the watch limit fix on ENOSPC', () => {
+      fs.watch.mockImplementation(() => {
+        throw makeWatchError('ENOSPC');
+      });
+
+      ConfigModule = require('../configModule');
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.stringContaining('fs.inotify.max_user_watches')
+      );
+    });
+
+    test('stopWatchingConfig does not throw when the watcher never started', () => {
+      fs.watch.mockImplementation(() => {
+        throw makeWatchError('EMFILE');
+      });
+      ConfigModule = require('../configModule');
+
+      expect(() => ConfigModule.stopWatchingConfig()).not.toThrow();
+    });
+
+    test('saveConfig still writes the file when the watcher never started', () => {
+      fs.watch.mockImplementation(() => {
+        throw makeWatchError('EMFILE');
+      });
+      ConfigModule = require('../configModule');
+      fs.writeFileSync.mockClear();
+
+      ConfigModule.saveConfig();
+
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        expect.stringContaining('config.json'),
+        expect.any(String),
+        expect.anything()
+      );
+    });
+
+    test('closes the watcher and warns when it emits an error after starting', () => {
+      const EventEmitter = require('events');
+      const watcher = new EventEmitter();
+      watcher.close = jest.fn();
+      fs.watch.mockReturnValue(watcher);
+      ConfigModule = require('../configModule');
+      const error = makeWatchError('EMFILE');
+
+      watcher.emit('error', error);
+
+      expect(watcher.close).toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ err: error }),
+        expect.stringContaining('Cannot watch config.json')
+      );
     });
   });
 
@@ -1409,7 +1497,7 @@ describe('ConfigModule', () => {
       let watchCallback;
       fs.watch.mockImplementation((path, callback) => {
         watchCallback = callback;
-        return { close: jest.fn() };
+        return { close: jest.fn(), on: jest.fn() };
       });
 
       ConfigModule = require('../configModule');
