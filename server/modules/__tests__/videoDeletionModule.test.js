@@ -1068,13 +1068,6 @@ describe('VideoDeletionModule', () => {
 
   describe('getOldestVideos', () => {
     beforeEach(() => {
-      jest.doMock('../../db.js', () => ({
-        Sequelize: {
-          QueryTypes: { SELECT: 'SELECT' }
-        },
-        sequelize: mockSequelize
-      }));
-
       jest.resetModules();
       mockLogger = require('../../logger');
       VideoDeletionModule = require('../videoDeletionModule');
@@ -1092,17 +1085,14 @@ describe('VideoDeletionModule', () => {
         }
       ];
 
-      mockSequelize.query.mockResolvedValue(mockVideos);
+      mockVideo.findAll.mockResolvedValue(mockVideos);
 
       const result = await VideoDeletionModule.getOldestVideos(10);
 
-      expect(mockSequelize.query).toHaveBeenCalledWith(
-        expect.stringContaining('LIMIT :limit'),
-        expect.objectContaining({
-          replacements: { limit: 10 },
-          type: 'SELECT'
-        })
-      );
+      expect(mockVideo.findAll).toHaveBeenCalledWith(expect.objectContaining({
+        subQuery: false,
+        limit: 10,
+      }));
       expect(result).toEqual(mockVideos);
       expect(mockLogger.info).toHaveBeenCalledWith(
         expect.objectContaining({ count: 1, limit: 10 }),
@@ -1122,45 +1112,41 @@ describe('VideoDeletionModule', () => {
         }
       ];
 
-      mockSequelize.query.mockResolvedValue(mockVideos);
+      mockVideo.findAll.mockResolvedValue(mockVideos);
 
       const result = await VideoDeletionModule.getOldestVideos(10, [1, 2, 3]);
 
-      expect(mockSequelize.query).toHaveBeenCalledWith(
-        expect.stringContaining('NOT IN (:excludeIds)'),
-        expect.objectContaining({
-          replacements: { limit: 10, excludeIds: [1, 2, 3] },
-          type: 'SELECT'
-        })
-      );
+      expect(mockVideo.findAll).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          id: {
+            [MockSequelize.Op.notIn]: [1, 2, 3],
+          },
+        }),
+      }));
       expect(result).toEqual(mockVideos);
     });
 
     test('should handle empty exclude list', async () => {
-      mockSequelize.query.mockResolvedValue([]);
-
       const result = await VideoDeletionModule.getOldestVideos(5, []);
 
-      expect(mockSequelize.query).toHaveBeenCalledWith(
-        expect.not.stringContaining('NOT IN'),
-        expect.objectContaining({
-          replacements: { limit: 5 },
-          type: 'SELECT'
-        })
-      );
+      expect(mockVideo.findAll).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.not.objectContaining({
+          id: expect.objectContaining({
+            [MockSequelize.Op.notIn]: expect.anything(),
+          }),
+        }),
+      }));
       expect(result).toEqual([]);
     });
 
     test('should return empty array when no videos found', async () => {
-      mockSequelize.query.mockResolvedValue([]);
-
       const result = await VideoDeletionModule.getOldestVideos(50);
 
       expect(result).toEqual([]);
     });
 
     test('should handle database errors gracefully', async () => {
-      mockSequelize.query.mockRejectedValue(new Error('Query failed'));
+      mockVideo.findAll.mockRejectedValue(new Error('Query failed'));
 
       const result = await VideoDeletionModule.getOldestVideos(10);
 
@@ -1172,21 +1158,13 @@ describe('VideoDeletionModule', () => {
     });
 
     test('should exclude protected videos from results', async () => {
-      mockSequelize.query.mockResolvedValue([]);
-
       await VideoDeletionModule.getOldestVideos(10);
 
-      const queryString = mockSequelize.query.mock.calls[0][0];
-      expect(queryString).toContain('videos.protected = 0');
-    });
-
-    test('counts MP3 bytes in each candidate size', async () => {
-      mockSequelize.query.mockResolvedValue([]);
-
-      await VideoDeletionModule.getOldestVideos(10);
-
-      const queryString = mockSequelize.query.mock.calls[0][0];
-      expect(queryString).toContain('COALESCE(videos.audio_file_size, 0)');
+      expect(mockVideo.findAll).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          protected: false,
+        }),
+      }));
     });
   });
 
@@ -1359,7 +1337,7 @@ describe('VideoDeletionModule', () => {
         }
       ];
 
-      mockSequelize.query.mockResolvedValue(mockOldestVideos);
+      mockVideo.findAll.mockResolvedValue(mockOldestVideos);
 
       const result = await VideoDeletionModule.performAutomaticCleanup({ dryRun: true });
 
@@ -1393,7 +1371,7 @@ describe('VideoDeletionModule', () => {
         { id: 3, youtubeId: 'yt3', fileSize: String(2 * 1024 ** 3), timeCreated: new Date('2023-01-03') }
       ];
 
-      mockSequelize.query.mockResolvedValueOnce(mockOldestVideos);
+      mockVideo.findAll.mockResolvedValueOnce(mockOldestVideos);
 
       const channelByVideoId = { 1: 'UC1', 2: 'UC1', 3: 'UC2' };
       mockVideo.findByPk.mockImplementation((id) => Promise.resolve({
@@ -1829,14 +1807,12 @@ describe('VideoDeletionModule', () => {
       });
       mockConfigModule.isStorageBelowThreshold.mockReturnValue(true);
       mockConfigModule.convertStorageThresholdToBytes.mockReturnValue(10 * 1024 ** 3);
-      mockSequelize.query.mockResolvedValue([]);
 
       await VideoDeletionModule.performAutomaticCleanup({ dryRun: true });
 
-      const [, spaceOptions] = mockSequelize.query.mock.calls[0];
-      expect(spaceOptions.replacements.excludeIds).toEqual(
-        expect.arrayContaining([50, 1])
-      );
+      expect(mockAutoRemovalQueries.getBaseRemovalQueryOptions).toHaveBeenCalledWith(expect.objectContaining({
+        excludeIds: [50, 1],
+      }));
     });
 
     test('should exclude keep-recent ids from real space cleanup', async () => {
@@ -1854,12 +1830,12 @@ describe('VideoDeletionModule', () => {
       });
       mockConfigModule.isStorageBelowThreshold.mockReturnValue(true);
       mockConfigModule.convertStorageThresholdToBytes.mockReturnValue(10 * 1024 ** 3);
-      mockSequelize.query.mockResolvedValue([]);
 
       await VideoDeletionModule.performAutomaticCleanup({ dryRun: false });
 
-      const [, spaceOptions] = mockSequelize.query.mock.calls[0];
-      expect(spaceOptions.replacements.excludeIds).toEqual([50]);
+      expect(mockAutoRemovalQueries.getBaseRemovalQueryOptions).toHaveBeenCalledWith(expect.objectContaining({
+        excludeIds: [50],
+      }));
     });
 
     test('merges per-channel keep-recent ids into the exclusion set', async () => {
@@ -1942,7 +1918,7 @@ describe('VideoDeletionModule', () => {
       test('deletes oldest videos until usage is back under the limit', async () => {
         mockConfigModule.getConfig.mockReturnValue({ autoRemovalEnabled: true, autoRemovalUsageLimit: '10GB' });
         mockStorageUsage.getDownloadedBytes.mockResolvedValue(13 * GB);
-        mockSequelize.query.mockResolvedValueOnce([
+        mockVideo.findAll.mockResolvedValueOnce([
           { id: 1, youtubeId: 'yt1', fileSize: String(2 * GB) },
           { id: 2, youtubeId: 'yt2', fileSize: String(2 * GB) },
           { id: 3, youtubeId: 'yt3', fileSize: String(2 * GB) }
@@ -1982,7 +1958,7 @@ describe('VideoDeletionModule', () => {
       test('dry run previews only the videos a real run would delete', async () => {
         mockConfigModule.getConfig.mockReturnValue({ autoRemovalEnabled: true, autoRemovalUsageLimit: '10GB' });
         mockStorageUsage.getDownloadedBytes.mockResolvedValue(11 * GB);
-        mockSequelize.query.mockResolvedValueOnce(
+        mockVideo.findAll.mockResolvedValueOnce(
           Array.from({ length: 50 }, (_, i) => ({ id: i + 1, youtubeId: `yt${i + 1}`, fileSize: String(GB) }))
         );
 
@@ -1998,14 +1974,15 @@ describe('VideoDeletionModule', () => {
           autoRemovalUsageLimit: '10GB'
         });
         mockStorageUsage.getDownloadedBytes.mockResolvedValue(20 * GB);
-        mockSequelize.query
+        mockVideo.findAll
           .mockResolvedValueOnce([{ id: 7, youtubeId: 'yt7', fileSize: String(GB), timeCreated: new Date('2023-01-01') }])
           .mockResolvedValue([]);
 
         await VideoDeletionModule.performAutomaticCleanup({ dryRun: true });
 
-        const [, usageOptions] = mockSequelize.query.mock.calls[1];
-        expect(usageOptions.replacements.excludeIds).toContain(7);
+        expect(mockAutoRemovalQueries.getBaseRemovalQueryOptions).toHaveBeenCalledWith(expect.objectContaining({
+          excludeIds: expect.arrayContaining([7]),
+        }));
       });
 
       test('records an error when the limit format is invalid', async () => {
@@ -2030,14 +2007,15 @@ describe('VideoDeletionModule', () => {
         mockConfigModule.getConfig.mockReturnValue({ autoRemovalEnabled: true, autoRemovalUsageLimit: '10GB' });
         mockStorageUsage.getDownloadedBytes.mockResolvedValue(11 * GB);
         mockVideo.findByPk.mockResolvedValue(null);
-        mockSequelize.query
+        mockVideo.findAll
           .mockResolvedValueOnce([{ id: 1, youtubeId: 'yt1', fileSize: String(2 * GB) }])
           .mockResolvedValue([]);
 
         await VideoDeletionModule.performAutomaticCleanup();
 
-        const [, secondBatchOptions] = mockSequelize.query.mock.calls[1];
-        expect(secondBatchOptions.replacements.excludeIds).toEqual([1]);
+        expect(mockAutoRemovalQueries.getBaseRemovalQueryOptions).toHaveBeenCalledWith(expect.objectContaining({
+          excludeIds: [1],
+        }));
       });
     });
   });
