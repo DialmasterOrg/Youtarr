@@ -13,7 +13,7 @@ class AutoRemovalQueries {
   /**
    * Get the base options for Video.findAll to pick videos to be removed.
    */
-  _getBaseRemovalQueryOptions({ excludeIds = [], orderDirection = 'DESC', joinChannel = true } = {}) {
+  getBaseRemovalQueryOptions({ excludeIds = [], orderDirection = 'DESC', idOnly = false, joinChannel = true } = {}) {
     const { Sequelize, sequelize } = require('../db.js');
 
     const options = {
@@ -52,6 +52,15 @@ class AutoRemovalQueries {
       };
     }
 
+    if (!idOnly) {
+      options.attributes.push(
+        'youtubeId',
+        'youTubeVideoName',
+        'youTubeChannelName',
+        [sequelize.literal(STORED_BYTES_SQL_SEQUELIZE), 'fileSize'],
+      );
+    }
+
     if (joinChannel) {
       options.include.push({
         model: Channel,
@@ -88,7 +97,9 @@ class AutoRemovalQueries {
     }
 
     try {
-      const options = this._getBaseRemovalQueryOptions();
+      const options = this.getBaseRemovalQueryOptions({
+        idOnly: true,
+      });
       options.limit = count;
       const rows = await Video.findAll(options);
 
@@ -122,7 +133,8 @@ class AutoRemovalQueries {
 
       const ids = [];
       for (const channel of channels) {
-        const options = this._getBaseRemovalQueryOptions({
+        const options = this.getBaseRemovalQueryOptions({
+          idOnly: true,
           joinChannel: false,
         });
         options.where.channel_id = channel.channel_id;
@@ -153,7 +165,7 @@ class AutoRemovalQueries {
     const { Sequelize, sequelize } = require('../db.js');
 
     try {
-      const options = this._getBaseRemovalQueryOptions({
+      const options = this.getBaseRemovalQueryOptions({
         excludeIds,
         orderDirection: 'ASC',
       });
@@ -175,13 +187,6 @@ class AutoRemovalQueries {
       options.where[Sequelize.Op.and] ??= [];
       options.where[Sequelize.Op.and].push(sequelize.literal(injectReplacements(watched.sql, sequelize.dialect, watched.replacements)));
       
-      options.attributes.push(
-        'youtubeId',
-        'youTubeVideoName',
-        'youTubeChannelName',
-        [sequelize.literal(STORED_BYTES_SQL_SEQUELIZE), 'fileSize'],
-      );
-
       const videos = await Video.findAll(options);
 
       logger.info(

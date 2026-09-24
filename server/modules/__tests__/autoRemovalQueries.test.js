@@ -63,22 +63,46 @@ describe('autoRemovalQueries', () => {
     autoRemovalQueries = require('../autoRemovalQueries');
   });
 
-  describe('_getBaseRemovalQueryOptions', () => {
-    test('should group on video and include only id & max(timeCreated) attributes', async () => {
-      const options = autoRemovalQueries._getBaseRemovalQueryOptions();
+  describe('getBaseRemovalQueryOptions', () => {
+    test('should group on video', async () => {
+      const options = autoRemovalQueries.getBaseRemovalQueryOptions();
+
+      expect(options).toMatchObject(expect.objectContaining({
+        group: mockSequelize.col('Video.id'),
+      }));
+    });
+
+    test('should include only id & max(timeCreated) attributes if idOnly = true', async () => {
+      const options = autoRemovalQueries.getBaseRemovalQueryOptions({ idOnly: true });
 
       expect(options).toMatchObject(expect.objectContaining({
         attributes: [
           'id',
           [mockSequelize.fn('MAX', 'stuff()'), 'timeCreated'],
         ],
-        group: mockSequelize.col('Video.id'),
+        raw: true,
+      }));
+    });
+
+    test('should include youtube & file size attributes if idOnly = false', async () => {
+      const options = autoRemovalQueries.getBaseRemovalQueryOptions({ idOnly: false });
+
+      expect(options).toMatchObject(expect.objectContaining({
+        attributes: expect.arrayContaining([
+          'youtubeId',
+          'youTubeVideoName',
+          'youTubeChannelName',
+          [
+            mockSequelize.literal('(COALESCE(Video.file_size, 0) + COALESCE(Video.audio_file_size, 0))'),
+            'fileSize',
+          ],
+        ]),
         raw: true,
       }));
     });
 
     test('should join on jobs', async () => {
-      const options = autoRemovalQueries._getBaseRemovalQueryOptions();
+      const options = autoRemovalQueries.getBaseRemovalQueryOptions();
 
       expect(options).toMatchObject(expect.objectContaining({
         include: expect.arrayContaining([
@@ -97,7 +121,7 @@ describe('autoRemovalQueries', () => {
     });
 
     test('should join & filter on channels if enabled', async () => {
-      const options = autoRemovalQueries._getBaseRemovalQueryOptions({ joinChannel: true });
+      const options = autoRemovalQueries.getBaseRemovalQueryOptions({ joinChannel: true });
 
       expect(options).toMatchObject(expect.objectContaining({
         include: expect.arrayContaining([
@@ -123,7 +147,7 @@ describe('autoRemovalQueries', () => {
     });
 
     test('should not join or filter on channels if disabled', async () => {
-      const options = autoRemovalQueries._getBaseRemovalQueryOptions({ joinChannel: false });
+      const options = autoRemovalQueries.getBaseRemovalQueryOptions({ joinChannel: false });
 
       expect(options).toMatchObject(expect.objectContaining({
         include: expect.not.arrayContaining([
@@ -143,7 +167,7 @@ describe('autoRemovalQueries', () => {
     });
 
     test('should filter out provided ids', async () => {
-      const options = autoRemovalQueries._getBaseRemovalQueryOptions({ excludeIds: [1, 2, 3] });
+      const options = autoRemovalQueries.getBaseRemovalQueryOptions({ excludeIds: [1, 2, 3] });
 
       expect(options).toMatchObject(expect.objectContaining({
         where: expect.objectContaining({
@@ -155,7 +179,7 @@ describe('autoRemovalQueries', () => {
     });
 
     test('should not filter on id if none are provided', async () => {
-      const options = autoRemovalQueries._getBaseRemovalQueryOptions({ excludeIds: [] });
+      const options = autoRemovalQueries.getBaseRemovalQueryOptions({ excludeIds: [] });
 
       expect(options).not.toMatchObject(expect.objectContaining({
         where: expect.objectContaining({
@@ -167,7 +191,7 @@ describe('autoRemovalQueries', () => {
     });
 
     test('should order & filter on timeCreated', async () => {
-      const options = autoRemovalQueries._getBaseRemovalQueryOptions();
+      const options = autoRemovalQueries.getBaseRemovalQueryOptions();
 
       expect(options).toMatchObject(expect.objectContaining({
         having: {
@@ -181,7 +205,7 @@ describe('autoRemovalQueries', () => {
     });
 
     test('should use provided ordering direction', async () => {
-      const options = autoRemovalQueries._getBaseRemovalQueryOptions({ orderDirection: 'ASC' });
+      const options = autoRemovalQueries.getBaseRemovalQueryOptions({ orderDirection: 'ASC' });
 
       expect(options.order).toEqual([['timeCreated', 'ASC']]);
     });
