@@ -10,6 +10,7 @@ import ChannelSettingsDialog from './ChannelPage/ChannelSettingsDialog';
 import TerminatedNotice from './ChannelPage/components/TerminatedNotice';
 import { useConfig } from '../hooks/useConfig';
 import SubscriptionsBackButton from './shared/SubscriptionsBackButton';
+import OpenInYouTubeLink, { youtubeChannelUrl } from './shared/OpenInYouTubeLink';
 import SubFolderChip from './Subscriptions/components/chips/SubFolderChip';
 import QualityChip from './Subscriptions/components/chips/QualityChip';
 import AutoDownloadChips from './Subscriptions/components/chips/AutoDownloadChips';
@@ -407,14 +408,17 @@ function ChannelPage({ token }: ChannelPageProps) {
               className="flex flex-col gap-5"
             >
               <Box className="flex flex-col gap-3">
-                <Typography
-                  variant={isMobile ? 'h5' : 'h4'}
-                  component="h2"
-                  gutterBottom
-                  className="mb-0"
-                >
-                  {channel ? channel.uploader : 'Loading...'}
-                </Typography>
+                <Box className="flex flex-wrap items-start justify-between gap-2">
+                  <Typography
+                    variant={isMobile ? 'h5' : 'h4'}
+                    component="h2"
+                    gutterBottom
+                    className="mb-0 min-w-0"
+                  >
+                    {channel ? channel.uploader : 'Loading...'}
+                  </Typography>
+                  {channel && channel_id && <OpenInYouTubeLink href={youtubeChannelUrl(channel_id)} />}
+                </Box>
                 {channel?.terminated_at && (
                   <TerminatedNotice terminatedAt={channel.terminated_at} isMobile={isMobile} />
                 )}

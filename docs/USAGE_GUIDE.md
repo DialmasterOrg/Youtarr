@@ -73,6 +73,7 @@ Subscribe to YouTube channels to automatically download new videos as they're pu
 
 4. **Configure channel-specific settings** (optional)
    - Click on a channel to open its detail page
+   - Click **Open in YouTube** next to the channel name to open the channel on YouTube in a new tab
    - Click **Edit** (the gear button) in the **Channel Settings** bar to open channel settings. The dialog has four tabs:
      - **General**:
        - **Subfolder**: pick or create a subfolder to organize channels into separate media libraries (e.g., `__kids`, `__music`); the picker has an inline **Add Subfolder** action for new names
@@ -212,6 +213,7 @@ Private, deleted, and members-only videos can't be accessed, so Youtarr leaves t
 
 Open a playlist to manage it:
 
+- **Open in YouTube**: opens the playlist on YouTube in a new tab.
 - **Refresh from YouTube**: re-fetches the live playlist, updates the video list, then re-syncs and rewrites the `.m3u`. It doesn't download anything.
 - **Download all N videos**: shows the eligible count and downloads every tracked video you have not previously downloaded. A settings dialog lets you confirm resolution and other options first.
 - **Auto-download new videos**: first enable refreshes the playlist and defaults to following future additions only. You can also preview and select an existing batch during setup. Later runs download newly discovered entries wherever they appear, even when the video itself is old. Your global per-run download count applies to new discoveries. Each scheduled run can also retry up to the same number of older saved selections, starting with those attempted least recently. Extra entries wait for later runs; neither allowance borrows unused slots from the other. Already queued or downloading videos do not take another slot. Pause/resume preserves tracking (see [Configure Automation](#configure-automation)).
