@@ -8,7 +8,9 @@ const JobVideo = require('../models/jobvideo');
 const JobVideoDownload = require('../models/jobvideodownload');
 const ChannelVideo = require('../models/channelvideo');
 const videoPersistence = require('./videoPersistence');
-const cron = require('node-cron');
+const scheduledTasks = require('./scheduledTaskManager');
+const scheduledTaskRuns = require('./scheduledTaskRuns');
+const { getSchedule } = require('./scheduleConfig');
 const MessageEmitter = require('./messageEmitter.js'); // import the helper function
 const configModule = require('./configModule');
 const videoActivity = require('./download/videoActivity');
@@ -23,6 +25,7 @@ const MAX_SAVE_RETRIES = 3;
 // never deleted, so raising these resurfaces older persisted jobs.
 const JOB_RETENTION_DAYS = 42;
 const MAX_HISTORY_JOBS = 720;
+const ARCHIVE_BACKFILL_TASK_KEY = 'archiveBackfillFrequency';
 
 class JobModule {
   constructor() {
@@ -61,15 +64,31 @@ class JobModule {
 
     // Schedule a daily backfill from complete.list and run an initial backfill
     this.scheduleDailyBackfill();
+    configModule.onConfigChange(this.scheduleDailyBackfill.bind(this));
 
     const disableInitialBackfill = process.env.JOBMODULE_DISABLE_INITIAL_BACKFILL === 'true';
     if (!disableInitialBackfill) {
       setTimeout(() => {
-        this.backfillFromCompleteList().catch((err) => {
+        this.runStartupBackfill().catch((err) => {
           logger.error({ err }, 'Initial backfill failed');
         });
       }, 0);
     }
+  }
+
+  // The startup pass is written as one finished row rather than started and
+  // finished separately: it begins before server.js marks stale running rows
+  // interrupted, so a running row created here would be flagged by that pass.
+  async runStartupBackfill() {
+    const startedAt = new Date();
+    const record = await this.backfillFromCompleteList();
+    await scheduledTaskRuns.record({
+      taskKey: ARCHIVE_BACKFILL_TASK_KEY,
+      trigger: 'startup',
+      startedAt,
+      finishedAt: new Date(),
+      ...record,
+    });
   }
 
   /**
@@ -641,7 +660,11 @@ class JobModule {
       } catch (e) {
         if (e && e.code === 'ENOENT') {
           logger.info('No complete.list found for backfill. Skipping.');
-          return;
+          return {
+            status: 'skipped',
+            outcome: 'skipped',
+            message: 'No download archive (complete.list) found.',
+          };
         }
         throw e;
       }
@@ -657,6 +680,7 @@ class JobModule {
 
       let videosUpserts = 0;
       let channelVideosUpserts = 0;
+      let failedWrites = 0;
       const missingInfoIds = [];
 
       // Build fast lookup sets of existing youtube IDs to avoid overwriting fresher DB data
@@ -796,6 +820,7 @@ class JobModule {
             }
           }
         } catch (vidErr) {
+          failedWrites += 1;
           logger.error({ err: vidErr, id }, 'Error upserting Videos');
         }
 
@@ -814,6 +839,7 @@ class JobModule {
             }
           }
         } catch (cvErr) {
+          failedWrites += 1;
           logger.error({ err: cvErr, id }, 'Error upserting channelvideos');
         }
 
@@ -828,23 +854,25 @@ class JobModule {
       if (missingInfoIds.length > 0) {
         logger.warn({ missingCount: missingInfoIds.length, missingIds: missingInfoIds.join(', ') }, 'Backfill skipped due to missing info.json');
       }
+      const failures = failedWrites > 0 ? `; ${failedWrites} write${failedWrites === 1 ? '' : 's'} failed` : '';
+      return {
+        status: failedWrites > 0 ? 'error' : 'success',
+        outcome: failedWrites > 0 ? 'partial' : 'completed',
+        message: `Recovered ${videosUpserts} video records and ${channelVideosUpserts} channel video records${failures}.`,
+        details: { videosUpserts, channelVideosUpserts, failed: failedWrites },
+      };
     } catch (err) {
       logger.error({ err }, 'Backfill error');
+      return { status: 'error', outcome: 'error', message: err.message || 'Unknown error' };
     }
   }
 
-  // Schedule daily backfill at 2:20am local time
   scheduleDailyBackfill() {
-    try {
-      cron.schedule('20 2 * * *', () => {
-        this.backfillFromCompleteList().catch((err) => {
-          logger.error({ err }, 'Scheduled backfill failed');
-        });
-      });
-      logger.info('Scheduled daily backfill from complete.list at 2:20am');
-    } catch (err) {
-      logger.error({ err }, 'Failed to schedule daily backfill');
-    }
+    scheduledTasks.updateTask({
+      id: ARCHIVE_BACKFILL_TASK_KEY,
+      expression: getSchedule(configModule.getConfig(), ARCHIVE_BACKFILL_TASK_KEY),
+      run: () => this.backfillFromCompleteList(),
+    });
   }
 
   getJob(jobId) {

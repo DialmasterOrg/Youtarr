@@ -263,6 +263,16 @@ describe('ChannelCard Component', () => {
       expect(screen.getByText('Pending')).toBeInTheDocument();
     });
 
+    test('opens the settings of a pending addition from its edit button', async () => {
+      const user = userEvent.setup();
+      const onEditPending = jest.fn();
+      renderWithProviders(<ChannelCard {...defaultProps} isPendingAddition onEditPending={onEditPending} />);
+
+      await user.click(screen.getByRole('button', { name: 'Edit pending channel settings' }));
+
+      expect(onEditPending).toHaveBeenCalledTimes(1);
+    });
+
     test('does not display "Pending" chip when isPendingAddition is false', () => {
       renderWithProviders(<ChannelCard {...defaultProps} isPendingAddition={false} />);
       expect(screen.queryByText('Pending')).not.toBeInTheDocument();

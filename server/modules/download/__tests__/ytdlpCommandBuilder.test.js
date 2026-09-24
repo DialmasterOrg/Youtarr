@@ -294,6 +294,17 @@ describe('YtdlpCommandBuilder', () => {
     });
   });
 
+  describe('buildFormatSortArgs', () => {
+    it('sorts on resolution before codec', () => {
+      expect(YtdlpCommandBuilder.buildFormatSortArgs()).toEqual(['-S', 'res,vcodec:avc']);
+    });
+
+    it('puts res ahead of vcodec, so a higher resolution beats an AVC stream below it', () => {
+      const [, sort] = YtdlpCommandBuilder.buildFormatSortArgs();
+      expect(sort.indexOf('res')).toBeLessThan(sort.indexOf('vcodec'));
+    });
+  });
+
   describe('buildOutputPath', () => {
     it('should always build path using temp path (staging is always enabled)', () => {
       tempPathManager.getTempBasePath.mockReturnValue('/mock/youtube/output/.youtarr_tmp');
@@ -862,6 +873,9 @@ describe('YtdlpCommandBuilder', () => {
       const formatString = result[formatIndex + 1];
       expect(formatString).toContain('[vcodec^=hev]');
       expect(formatString).toBe('bestvideo[height<=1080][ext=mp4][vcodec^=hev]+bestaudio[ext=m4a]/bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+      // YouTube rarely has HEVC, so the fallback needs the sort to avoid AV1
+      const sortIndex = result.indexOf('-S');
+      expect(result.slice(sortIndex, sortIndex + 2)).toEqual(['-S', 'res,vcodec:avc']);
     });
 
     it('should combine custom resolution with h264 codec', () => {
@@ -1056,6 +1070,8 @@ describe('YtdlpCommandBuilder', () => {
       const formatString = result[formatIndex + 1];
       expect(formatString).toContain('[vcodec^=hev]');
       expect(formatString).toBe('bestvideo[height<=1080][ext=mp4][vcodec^=hev]+bestaudio[ext=m4a]/bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+      const sortIndex = result.indexOf('-S');
+      expect(result.slice(sortIndex, sortIndex + 2)).toEqual(['-S', 'res,vcodec:avc']);
     });
 
     it('should combine custom resolution with h264 codec', () => {

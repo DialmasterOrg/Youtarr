@@ -8,6 +8,20 @@ const m3uGenerator = require('../m3uGenerator');
 
 const SUB_FOLDER_DEFAULT_KEY = '__default__';
 
+/**
+ * Drop a sub_folder that matches the channel's current one. Its presence alone
+ * makes updateChannelSettings refuse the save while the channel has active
+ * downloads, and the Add Channel dialog always sends it.
+ */
+function withoutUnchangedSubFolder(settings, channel) {
+  if (!channel || settings.sub_folder === undefined) return settings;
+  const requested = settings.sub_folder ? settings.sub_folder.trim() : null;
+  if (requested !== (channel.sub_folder ?? null)) return settings;
+  const rest = { ...settings };
+  delete rest.sub_folder;
+  return rest;
+}
+
 class ChannelCatalog {
   /**
    * Populate missing channel information for all enabled channels.
@@ -274,28 +288,46 @@ class ChannelCatalog {
    * Apply incremental channel updates using explicit add/remove lists.
    * Enables new channels and disables removed ones without needing the full list.
    * @param {Object} options
-   * @param {Array<string|{url: string, channel_id?: string}>} [options.enableUrls=[]] - URLs or objects with URL and channel_id to enable
+   * @param {Array<string|{url: string, channel_id?: string, settings?: Object}>} [options.enableUrls=[]] - URLs or objects with URL, channel_id, and the settings chosen in the Add Channel dialog
    * @param {Array<string>} [options.disableUrls=[]] - Channel URLs to disable
+   * @param {Object} [options.channelSettingsModule] - Validates and applies add-item settings; passed at call time
+   *   to keep channelSettingsModule (and its model graph) out of the channel module's require chain
    * @returns {Promise<void>}
+   * @throws {Error} code INVALID_CHANNEL_SETTINGS when any add item's settings are invalid; nothing is changed
    */
-  async updateChannelsByDelta({ enableUrls = [], disableUrls = [] } = {}) {
-    // Handle both string URLs and objects with url/channel_id
+  async updateChannelsByDelta({ enableUrls = [], disableUrls = [], channelSettingsModule } = {}) {
+    // Handle both string URLs and objects with url/channel_id/settings
     const toEnable = (enableUrls || []).map((item) => {
       if (typeof item === 'string') {
-        return { url: item.trim(), channel_id: null };
+        return { url: item.trim(), channel_id: null, settings: undefined };
       }
       return {
         url: (item.url || '').trim(),
-        channel_id: item.channel_id || null
+        channel_id: item.channel_id || null,
+        settings: item.settings
       };
     }).filter(item => item.url);
+
+    // Validate every add item up front so a bad one cannot leave the batch half-saved.
+    for (const { settings } of toEnable) {
+      if (settings === undefined) continue;
+      if (!channelSettingsModule) {
+        throw new Error('channelSettingsModule is required to apply channel settings');
+      }
+      const validation = channelSettingsModule.validateNewChannelSettings(settings);
+      if (!validation.valid) {
+        const error = new Error(validation.error);
+        error.code = 'INVALID_CHANNEL_SETTINGS';
+        throw error;
+      }
+    }
 
     const toDisable = Array.from(
       new Set((disableUrls || []).map((u) => (u || '').trim()).filter(Boolean))
     );
 
     try {
-      for (const { url, channel_id } of toEnable) {
+      for (const { url, channel_id, settings } of toEnable) {
         let foundChannel = null;
 
         // First try to find by URL
@@ -312,13 +344,29 @@ class ChannelCatalog {
         // This should rarely happen - only if channel was somehow deleted or never added
         if (!foundChannel) {
           logger.warn({ url, channel_id }, 'Channel not found in database, fetching from YouTube');
-          const channelInfo = await channelProvisioning.getChannelInfo(url, false, true);
+          // Provision disabled so a scheduled download cannot pick the channel
+          // up with its defaults before the settings below are applied.
+          const channelInfo = await channelProvisioning.getChannelInfo(url, false, false);
           if (channelInfo && channelInfo.id) {
+            if (settings) {
+              const provisioned = await Channel.findOne({ where: { channel_id: channelInfo.id } });
+              await channelSettingsModule.updateChannelSettings(
+                channelInfo.id,
+                withoutUnchangedSubFolder(settings, provisioned)
+              );
+            }
             await Channel.update({ enabled: true }, { where: { channel_id: channelInfo.id } });
             m3uGenerator.generateChannelM3UInBackground(channelInfo.id, 'channel-enable');
           }
         } else {
-          // Channel exists, just enable it
+          // Apply the dialog's settings before enabling, so the channel never
+          // runs a scheduled download with the defaults it was created with.
+          if (settings) {
+            await channelSettingsModule.updateChannelSettings(
+              foundChannel.channel_id,
+              withoutUnchangedSubFolder(settings, foundChannel)
+            );
+          }
           await foundChannel.update({ enabled: true });
           logger.info({ url, channel_id: foundChannel.channel_id }, 'Enabled existing channel');
           m3uGenerator.generateChannelM3UInBackground(foundChannel.channel_id, 'channel-enable');

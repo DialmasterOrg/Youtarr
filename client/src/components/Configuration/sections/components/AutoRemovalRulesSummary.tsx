@@ -53,7 +53,7 @@ export const AutoRemovalRulesSummary: React.FC<AutoRemovalRulesSummaryProps> = (
   return (
     <Alert severity="success" className="mt-2">
       <Typography variant="body2" className="font-medium mb-2">
-        Every night at 2:00 AM, a video is deleted if it matches {rules.length > 1 ? 'any of these rules' : 'this rule'}:
+        On each scheduled cleanup, a video is deleted if it matches {rules.length > 1 ? 'any of these rules' : 'this rule'}:
       </Typography>
       {rules.map((rule, index) => (
         <Typography key={`rule-${index}`} variant="body2">

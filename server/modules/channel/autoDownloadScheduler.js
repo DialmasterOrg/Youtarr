@@ -1,4 +1,5 @@
-const cron = require('node-cron');
+const scheduledTasks = require('../scheduledTaskManager');
+const { getSchedule } = require('../scheduleConfig');
 const fs = require('fs-extra');
 const fsPromises = fs.promises;
 const path = require('path');
@@ -21,23 +22,13 @@ class AutoDownloadScheduler {
    * @returns {void}
    */
   scheduleTask() {
-    const frequency = configModule.getConfig().channelDownloadFrequency;
-    logger.info({ frequency }, 'Scheduling channel download task');
-
-    if (this.task) {
-      logger.info('Stopping old scheduled task');
-      this.task.stop();
-    }
-
-    if (configModule.getConfig().channelAutoDownload) {
-      this.task = cron.schedule(
-        frequency,
-        this.channelAutoDownload
-      );
-      logger.info({ frequency }, 'Auto-downloads enabled, task scheduled');
-    } else {
-      logger.info('Auto-downloads disabled');
-    }
+    const config = configModule.getConfig();
+    scheduledTasks.updateTask({
+      id: 'channelDownloadFrequency',
+      expression: getSchedule(config, 'channelDownloadFrequency'),
+      enabled: Boolean(config.channelAutoDownload),
+      run: this.channelAutoDownload,
+    });
   }
 
   /**
@@ -64,13 +55,37 @@ class AutoDownloadScheduler {
 
     if (hasRunningChannelDownload) {
       logger.warn('Skipping scheduled channel download - previous download still in progress');
-      return;
+      return {
+        status: 'skipped',
+        outcome: 'skipped',
+        message: 'The previous channel download job is still running.',
+      };
     }
 
     try {
-      await downloadModule.doChannelAndPlaylistDownloads();
+      const result = await downloadModule.doChannelAndPlaylistDownloads();
+      if (result && result.playlistError) {
+        return {
+          status: 'error',
+          outcome: 'partial',
+          message: `Channel downloads were queued, but the playlist sweep failed: ${result.playlistError}`,
+        };
+      }
+      if (result && result.playlistsFailed > 0) {
+        return {
+          status: 'error',
+          outcome: 'partial',
+          message: `Channel downloads were queued, but ${result.playlistsFailed} of ${result.playlistsChecked} playlists failed to sweep.`,
+        };
+      }
+      return {
+        status: 'success',
+        outcome: 'completed',
+        message: 'Checked enabled channels and playlists for new videos.',
+      };
     } catch (err) {
       logger.error({ err }, 'Scheduled channel + playlist downloads failed');
+      return { status: 'error', outcome: 'error', message: err.message || 'Unknown error' };
     }
   }
 
@@ -80,7 +95,9 @@ class AutoDownloadScheduler {
    * @returns {void}
    */
   subscribe() {
+    if (this.subscribed) return;
     configModule.onConfigChange(this.scheduleTask.bind(this));
+    this.subscribed = true;
   }
 
   /**

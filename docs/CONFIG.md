@@ -67,6 +67,28 @@ Configuration can be modified through:
   - `"0 0 * * 0"` - Weekly on Sunday at midnight
   - `"*/30 * * * *"` - Every 30 minutes
 
+### Scheduling
+
+All seven recurring tasks can be configured in **Settings -> Scheduling**. Schedules are stored in `config.json` as cron expressions. Every schedule offers a daily time picker, preset intervals, or a custom cron expression. The 15 and 30 minute presets are available for every task, but the page shows a warning when any task other than automatic downloads is set to run more than once an hour, because those tasks do full-library or network work on every run; the choice is still yours. **Custom cron** accepts five fields (minute, hour, day of month, month, day of week), or six fields with seconds first. Runs must be at least 15 minutes apart: an expression such as `*/5 * * * *` is rejected, and a six-field expression needs a single fixed seconds value.
+
+| Config key | Default | Task |
+| --- | --- | --- |
+| `channelDownloadFrequency` | `0 * * * *` | Automatic channel and playlist downloads |
+| `watchStatusSyncFrequency` | `0 */4 * * *` | Watch status sync |
+| `autoRemovalFrequency` | `0 2 * * *` | Video removal and empty-folder cleanup |
+| `archiveBackfillFrequency` | `20 2 * * *` | Repair library records from the download archive |
+| `sessionCleanupFrequency` | `0 3 * * *` | Expired and old inactive session cleanup |
+| `videoRescanFrequency` | `30 3 * * *` | Filesystem rescan and metadata backfill |
+| `ytdlpUpdateFrequency` | `0 4 * * *` | Automatic yt-dlp update checks |
+
+Times use the server timezone, shown on the Scheduling page and configured through `TZ`. Interval presets follow the clock: "Every 4 hours" runs at 00:00, 04:00, 08:00, and so on. Changing a schedule takes effect after saving, without a restart or immediate execution. Running tasks are allowed to finish. Invalid schedule submissions are rejected without saving other changes.
+
+Existing feature switches still control downloads, watch sync, video removal, and yt-dlp updates. Empty-folder cleanup continues even when video removal is disabled. Elfhosted manages yt-dlp updates itself. The archive repair and filesystem rescan retain their startup passes, which appear in the run history with the `startup` trigger.
+
+The Scheduling page also shows what the scheduler is actually doing: an **Upcoming runs** list, and on each card the next run, whether the task is running now, and its last recorded run with the outcome (for example "completed: Deleted 12 videos and freed 8.10 GB"). If a saved expression could not be scheduled, the card says so in red. Every time on the page is shown in the server timezone, whatever zone your browser is in, and the page refreshes itself: every minute, every five seconds while a task is running, and whenever you return to the tab. Run history is stored in the database (`scheduled_task_runs`: the last 20 runs per task, plus the newest run of each outcome so the last yt-dlp install is always kept), never in `config.json`. If a run is still in progress at its next scheduled time, that occurrence is recorded as skipped; a task that found its own work already in progress (a manual rescan, a sync, a channel download job) is also recorded as skipped rather than completed; a run cut short by a restart is recorded as interrupted.
+
+Youtarr must be running at the scheduled time; missed occurrences are not replayed. If your server is switched off overnight, choose a time when it is running. Restore default changes the schedule in the form; save to apply it. Valid custom expressions are preserved on upgrade, with one exception: a schedule that ran more often than every 15 minutes, which only a hand-edited `config.json` could produce, is thinned when Youtarr starts. Runs closer than 15 minutes apart are dropped and the hours and days are kept, so `*/5 * * * *` becomes `*/15 * * * *` and `0,5 2 * * 0` becomes `0 2 * * 0`. The change is logged with the old and new expression. If a hand-edited expression is invalid, the old timer remains active until a valid edit; after a restart, that task stays unscheduled. Check server logs for the affected configuration key.
+
 ### Files to Download per Channel
 - **Config Key**: `channelFilesToDownload`
 - **Type**: `number`
@@ -96,11 +118,11 @@ Configuration can be modified through:
 - **Type**: `string`
 - **Default**: `"default"`
 - **Options**: `"default"`, `"h264"`, `"h265"`
-- **Description**: Preferred video codec for downloads. `"default"` picks the best stream YouTube offers at the requested resolution (typically VP9 or AV1 above 1080p). `"h264"` forces H.264/AVC, which maximizes client compatibility but effectively caps resolution at 1080p because YouTube does not serve H.264 above that height. `"h265"` prefers HEVC but YouTube rarely provides it, so it almost always falls back to H.264 MP4.
+- **Description**: Preferred video codec for downloads. `"default"` takes the highest resolution YouTube offers up to the configured limit, and prefers H.264/AVC between streams of the same resolution, so a 1080p request gets H.264 rather than the AV1 stream YouTube also publishes in MP4. Resolution still wins over codec, so asking for 2160p gives a 2160p stream rather than dropping to 1080p H.264. Above 1080p that is usually VP9 without HDR, even when YouTube also has an HDR stream at that resolution, because the codec preference ranks AV1 below VP9 and is applied before yt-dlp's usual HDR preference. To prefer AV1 again, add `-S res,vcodec:av01` to the custom yt-dlp arguments; keeping `res` first means resolution still wins over codec. `"h264"` forces H.264/AVC, which maximizes client compatibility but effectively caps resolution at 1080p because YouTube does not serve H.264 above that height. `"h265"` prefers HEVC but YouTube rarely provides it, so it almost always falls back to H.264 MP4 at 1080p and below, and to AV1 MP4 above that.
 - **Compatibility**:
   - `h264`: Best compatibility with all devices
   - `h265`: Better compression, requires modern devices
-  - `default`: YouTube picks the stream, typically VP9 or AV1 above 1080p. Best compression, but older devices may need to transcode. (VP9 and AV1 are not selectable values for this key; they are just what YouTube serves when no codec preference is forced.)
+  - `default`: H.264 at 1080p and below, and usually VP9 without HDR above that, where YouTube has no H.264. H.264 files are noticeably larger than the AV1 equivalent at the same resolution, which is the cost of direct play on clients without AV1 decode. (VP9 and AV1 are not selectable values for this key; `-S res,vcodec:av01` in the custom yt-dlp arguments is the way to get AV1.)
 
 ### Default Subfolder
 - **Config Key**: `defaultSubfolder`
@@ -379,6 +401,13 @@ Sync is one-way (server -> Youtarr). Non-owner Plex users come from the server's
 - **Default**: `false`
 - **Description**: Generate backdrop image files for Emby and Jellyfin background art
 - **Note**: Creates `backdrop.jpg` in each channel directory (from the channel's YouTube banner) and a `-backdrop.jpg` file alongside each video (copy of the video thumbnail). When enabled, channel-level backdrops are backfilled for existing channel folders; video-level backdrops are created for new downloads only.
+
+### Prefix Channel Name In Embedded Title
+- **Config Key**: `prefixChannelNameInTitle`
+- **Type**: `boolean`
+- **Default**: `true`
+- **Description**: Write the MP4's embedded title tag as `Channel - Title` instead of just `Title`
+- **Note**: Plex reads the embedded title tag (it does not read `.nfo` files). In an "Other Videos" library the prefix gives each video its channel context. In a TV Shows library the channel is already the show name, so turn this off to keep episode titles clean. The channel name is still written to the artist, album (Plex Collection), copyright (Plex Studio), and TV network tags, and the `.nfo` title is never prefixed. Only applies to new downloads; existing files are not re-tagged.
 
 ## Cookie Config
 
@@ -803,7 +832,7 @@ For detailed information on creating and using API keys, see [API Integration Gu
 
 ## yt-dlp Auto-Update
 
-Youtarr can optionally check for and install yt-dlp updates on a daily schedule (4:00 AM). The channel picker, toggle, and status display live with the manual yt-dlp update button on the Settings -> YT-DLP page.
+Youtarr can optionally check for and install yt-dlp updates on a configurable schedule (daily at 04:00 by default). The channel picker, toggle, and status display live with the manual yt-dlp update button on the Settings -> YT-DLP page.
 
 ### Update Channel
 - **Config Key**: `ytdlpUpdateChannel`
@@ -817,37 +846,18 @@ Youtarr can optionally check for and install yt-dlp updates on a daily schedule 
 - **Config Key**: `autoUpdateYtdlp`
 - **Type**: `boolean`
 - **Default**: `false`
-- **Description**: When `true`, Youtarr runs `yt-dlp --update-to <channel>@latest` at 4:00 AM (server local time, controlled by the `TZ` env var) every night.
+- **Description**: When `true`, Youtarr runs `yt-dlp --update-to <channel>@latest` on `ytdlpUpdateFrequency` (daily at 04:00 server time by default).
 - **Behavior**:
   - Updates run even while downloads are in progress; the in-flight download finishes on the previous version and the next spawned download uses the new one.
   - If the update process itself fails (e.g., permission denied on managed platforms, network error, timeout), the failure is logged and Youtarr continues to run on the previous yt-dlp version.
   - On success, the in-process yt-dlp version cache is refreshed without requiring a server restart.
 
-### Last Checked Timestamp
-- **Config Key**: `ytdlpLastChecked`
-- **Type**: `string | null` (ISO 8601 timestamp)
-- **Default**: `null`
-- **Description**: Set automatically every time the nightly job runs (regardless of outcome). Surfaced in the UI as "Last checked: ...".
-- **Note**: Managed by the application; do not edit by hand.
+### Update History
+The "Last checked", "Last updated", and result line on the YT-DLP page come from the scheduled task run history in the database (see [Scheduling](#scheduling)); both scheduled and manual updates are recorded there. `GET /api/ytdlp/latest-version` returns them as `lastChecked`, `lastUpdated`, and `lastResult` (`{ status: 'updated' | 'up-to-date' | 'skipped' | 'error', message?, version? }`).
 
-### Last Updated Timestamp
-- **Config Key**: `ytdlpLastUpdated`
-- **Type**: `string | null` (ISO 8601 timestamp)
-- **Default**: `null`
-- **Description**: Set automatically when the nightly job successfully installs a new yt-dlp version. Not updated when the check finds yt-dlp is already current.
-- **Note**: Managed by the application; do not edit by hand.
-
-### Last Run Result
-- **Config Key**: `ytdlpLastResult`
-- **Type**: `object | null`
-- **Default**: `null`
-- **Shape**: `{ status: 'updated' | 'up-to-date' | 'skipped' | 'error', message?: string, version?: string }`
-- **Description**: Records the outcome of the most recent nightly run. The UI uses this to render an inline status next to "Last checked".
-- **Statuses**:
-  - `updated` — a new version was installed; `version` holds the new version string.
-  - `up-to-date` — yt-dlp was already current.
-  - `skipped` — the run was deferred (another update was already running); `message` describes why.
-  - `error` — `yt-dlp --update-to` failed; `message` holds a short error description.
+### Legacy Status Keys
+- **Config Keys**: `ytdlpLastChecked`, `ytdlpLastUpdated`, `ytdlpLastResult`
+- **Description**: Earlier releases stored the update history in these keys. They are no longer written. If they exist in an upgraded `config.json` they are shown until the first update run is recorded, after which the run history takes over.
 - **Note**: Managed by the application; do not edit by hand.
 
 ## Filesystem Rescan
@@ -855,7 +865,9 @@ Youtarr can optionally check for and install yt-dlp updates on a daily schedule 
 For user-facing documentation on when and how to use the filesystem rescan (moving files, converting formats, supported extensions), see [Rescan Files on Disk](USAGE_GUIDE.md#rescan-files-on-disk).
 
 ### Last Rescan Result
-- **Config Key**: `rescanLastRun`
+The Maintenance page's last-run summary comes from the scheduled task run history in the database (see [Scheduling](#scheduling)); scheduled, manual, and startup rescans are all recorded there. `GET /api/maintenance/rescan-status` returns it as `lastRun` in the shape below.
+
+- **Legacy Config Key**: `rescanLastRun` (no longer written; shown until the first rescan is recorded after upgrading)
 - **Type**: `object | null`
 - **Default**: `null`
 - **Shape**:
@@ -872,7 +884,7 @@ For user-facing documentation on when and how to use the filesystem rescan (movi
     "errorMessage": null
   }
   ```
-- **Description**: Records the outcome of the most recent filesystem reconciliation pass (the `backfillVideoMetadata` run). Written by the daily cron, the server-startup pass, and the manual "Rescan files on disk" action on the Maintenance & Rescan settings page. Surfaced read-only on that page so users can see when the last scan ran and what it found or fixed.
+- **Description**: The outcome of the most recent filesystem reconciliation pass (the `backfillVideoMetadata` run), whether it was started by the schedule, the server-startup pass, or the manual "Rescan files on disk" action on the Maintenance & Rescan settings page. Surfaced read-only on that page so users can see when the last scan ran and what it found or fixed.
 - **Note**: Managed by the application; do not edit by hand.
 
 ## Account & Security

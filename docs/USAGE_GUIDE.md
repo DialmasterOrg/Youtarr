@@ -59,6 +59,12 @@ Subscribe to YouTube channels to automatically download new videos as they're pu
        - `@MrBeast`
        - `https://youtube.com/@MrBeast`
        - `https://www.youtube.com/channel/UCX6OQ3DkcsbYNE6H8uQQuVA`
+   - Youtarr looks the channel up on YouTube (this can take a few seconds), then opens the **Add channel** dialog with the usual defaults filled in:
+     - **Auto Downloads**: a toggle for each tab the channel has (**New Videos**, **New Shorts**, **New Live/Streams**)
+     - **Video Quality**, **Download Type** (Video Only, Video + MP3, or MP3 Only), and **Subfolder**
+   - Click **Continue** to keep the defaults or your changes. The channel joins the list as a pending addition; use its edit (pencil) button to change these settings before saving.
+   - A channel you subscribed to before comes back with its saved settings filled in.
+   - Click **Save Changes** to subscribe. Filters, ratings, and auto-removal are set later from the channel page.
 
 3. **Queue downloads when you're ready**
    - Newly added channels wait until you run a channel download or a scheduled cron cycle
@@ -67,6 +73,7 @@ Subscribe to YouTube channels to automatically download new videos as they're pu
 
 4. **Configure channel-specific settings** (optional)
    - Click on a channel to open its detail page
+   - Click **Open in YouTube** next to the channel name to open the channel on YouTube in a new tab
    - Click **Edit** (the gear button) in the **Channel Settings** bar to open channel settings. The dialog has four tabs:
      - **General**:
        - **Subfolder**: pick or create a subfolder to organize channels into separate media libraries (e.g., `__kids`, `__music`); the picker has an inline **Add Subfolder** action for new names
@@ -90,7 +97,7 @@ recommendation) the server ignores the file, though it still opens in any
 [Jellyfin](media-servers/jellyfin.md#channel-playlist-files-m3u) and
 [Emby](media-servers/emby.md#channel-playlist-files-m3u) guides for the
 library-type tradeoff. The file updates after downloads and deletions and
-refreshes nightly after the scheduled file rescan; files deleted outside
+refreshes after the scheduled file rescan; files deleted outside
 Youtarr drop out of the playlist at the next refresh.
 Turning the setting off (or unsubscribing from the channel) deletes the file.
 
@@ -120,6 +127,7 @@ Export your subscription list from Google and upload the CSV file. This method d
    - On the import page, select the **Import Using CSV** tab
    - Click **Choose File** and select the file at: `Takeout/YouTube and YouTube Music/subscriptions/subscriptions.csv`
    - Click **Upload & Preview**
+   - To build the file by hand instead, use **Download an example CSV** on the same tab. It has the three Takeout columns (`Channel Id,Channel Url,Channel Title`). Every row needs the channel ID (it starts with `UC`); rows without one are skipped. On YouTube, open the channel's About panel, then **Share channel** -> **Copy channel ID**.
 
 ### Method 2: Cookies File
 
@@ -182,9 +190,11 @@ Subscribe to a YouTube playlist and Youtarr tracks its videos, downloads them, a
    - The **Add playlist** dialog opens and fetches a preview: the title, channel, thumbnail, and video count
    - If you opened the dialog without a URL first, paste the link inside it and click **Fetch info**
 
-3. **Subscribe**
+3. **Choose settings and subscribe**
+   - Below the preview, set **Automatically download new videos**, **Video Quality**, **Download Type**, and **Default Subfolder**. Automatic downloads only pick up videos added to the playlist from now on; choose existing videos to download from the playlist's detail page.
    - The dialog shows which media servers the playlist will sync to. If you haven't connected any, the videos still download and a `.m3u` file is still written; you just won't get a native server playlist.
    - Click **Subscribe**. Youtarr pulls in the video list and opens the playlist's detail page.
+   - A playlist you subscribed to before is restored with its saved settings, shown read-only in the dialog; change them from the playlist page afterwards. If you're already subscribed, the dialog offers **Go to playlist** instead.
 
 > Click the **?** icon on the Playlists tab for an in-app summary of how playlists work.
 
@@ -203,6 +213,7 @@ Private, deleted, and members-only videos can't be accessed, so Youtarr leaves t
 
 Open a playlist to manage it:
 
+- **Open in YouTube**: opens the playlist on YouTube in a new tab.
 - **Refresh from YouTube**: re-fetches the live playlist, updates the video list, then re-syncs and rewrites the `.m3u`. It doesn't download anything.
 - **Download all N videos**: shows the eligible count and downloads every tracked video you have not previously downloaded. A settings dialog lets you confirm resolution and other options first.
 - **Auto-download new videos**: first enable refreshes the playlist and defaults to following future additions only. You can also preview and select an existing batch during setup. Later runs download newly discovered entries wherever they appear, even when the video itself is old. Your global per-run download count applies to new discoveries. Each scheduled run can also retry up to the same number of older saved selections, starting with those attempted least recently. Extra entries wait for later runs; neither allowance borrows unused slots from the other. Already queued or downloading videos do not take another slot. Pause/resume preserves tracking (see [Configure Automation](#configure-automation)).
@@ -251,13 +262,13 @@ Set up automatic downloads on a schedule so Youtarr checks for new videos period
    - Click "Settings" in the navigation menu
 
 2. **Set download schedule**
-   - Open **Settings -> Core** and find the **Download Frequency** drop-down
+   - Open **Settings -> Scheduling** and find **Automatic downloads**
    - Pick how often the cron job should run (defaults to hourly)
-   - Use the drop-down to choose one of the preset cron intervals
+   - Choose a preset interval, a daily time, or a custom cron expression
    - For in-depth field descriptions (and manual edits via config.json), see [Configuration Reference](CONFIG.md)
 
 3. **Choose video resolution**
-   - On the same Core page choose your preferred maximum resolution
+   - On **Settings -> Core**, enable automatic downloads and choose your preferred maximum resolution
    - Options range from 360p up through 2160p (4K); YouTube provides the best quality available up to that limit
 
 4. **Configure download limits** (optional)
@@ -280,6 +291,16 @@ Set up automatic downloads on a schedule so Youtarr checks for new videos period
 6. **Save configuration**
    - Click "Save" to apply your settings
    - Changes take effect immediately for the next scheduled run
+
+## Schedule Maintenance
+
+Open **Settings -> Scheduling** to change when automatic video cleanup, library repair, session cleanup, filesystem rescanning, or yt-dlp updates run. Watch-status sync and automatic downloads are configured on the same page. Existing feature pages include an **Edit schedule** link. Any task can be set to run as often as every 15 minutes, but for tasks other than automatic downloads the page warns you why that is rarely a good idea; the choice is still yours.
+
+For example, if your server is off overnight, change **Automatic video cleanup** from 02:00 to 18:00 and save. This updates future runs; saving does not immediately delete videos. Configure removal rules and preview deletions on **Settings -> Auto Removal** as before.
+
+The page shows the server timezone. Times and interval presets follow that clock, regardless of your browser's timezone. Configure the server timezone through `TZ` and restart the deployment if it needs changing. Youtarr must be running at the scheduled time; missed runs are not replayed. Startup library repair and filesystem rescanning still run independently of their schedules.
+
+The **Upcoming runs** list at the top shows when each active schedule fires next. Each card also shows its last run and how it ended, for example "completed: Deleted 12 videos and freed 8.10 GB" or "failed: Permission denied", so you can confirm a schedule is working without reading the logs. A schedule whose feature is switched off says so and links to where to turn it on. If a run is still going when its next time comes around, that occurrence is skipped and recorded as such. Times on this page are in the server timezone, and the page keeps itself up to date while it is open.
 
 ## Configure SponsorBlock
 
@@ -358,7 +379,7 @@ Videos can become "missing" if they're manually deleted from disk. This feature 
 
 ## Rescan Files on Disk
 
-Use this when you've moved, renamed, or converted downloaded files outside Youtarr and want Youtarr's database to catch up with what's actually on disk. The rescan walks your downloads folder and updates Youtarr's view of which files exist and where; it does not re-download anything. It also probes files for their actual resolution, so on libraries downloaded before that was tracked, the quality chips on video listings fill in gradually as the nightly rescan works through them.
+Use this when you've moved, renamed, or converted downloaded files outside Youtarr and want Youtarr's database to catch up with what's actually on disk. The rescan walks your downloads folder and updates Youtarr's view of which files exist and where; it does not re-download anything. It also probes files for their actual resolution, so on libraries downloaded before that was tracked, the quality chips on video listings fill in gradually as the scheduled rescan works through them.
 
 Common cases:
 - You converted `.mp4` files to `.mkv` (or another supported container) using ffmpeg.

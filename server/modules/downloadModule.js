@@ -281,20 +281,30 @@ class DownloadModule {
     const runId = downloadRunTracker.startRun();
     this.setJobDataValue(jobData, 'runId', runId);
 
+    // Playlist failures must not undo the channel jobs already queued, so they
+    // are reported to the caller rather than thrown: playlistError for a sweep
+    // that died outright, playlistsFailed for playlists the sweep skipped over.
+    let playlistError = null;
+    let playlistsFailed = 0;
+    let playlistsChecked = 0;
     try {
       await this.doChannelDownloads(jobData);
       try {
         const playlistModule = require('./playlistModule');
         const overrideSettings = this.getOverrideSettings(jobData);
-        await playlistModule.playlistAutoDownload(overrideSettings, runId);
+        const sweep = await playlistModule.playlistAutoDownload(overrideSettings, runId);
+        playlistsFailed = (sweep && sweep.failed) || 0;
+        playlistsChecked = (sweep && sweep.playlists) || 0;
       } catch (err) {
         logger.error({ err }, 'playlistAutoDownload failed after channel downloads');
+        playlistError = err.message || 'Unknown error';
       }
     } finally {
       // Seal once every job is enqueued so the run can emit one aggregated
       // summary as soon as its last job finishes.
       downloadRunTracker.seal(runId);
     }
+    return { playlistError, playlistsFailed, playlistsChecked };
   }
 
   async doSingleChannelDownloadJob(jobData = {}, isNextJob = false) {

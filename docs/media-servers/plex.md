@@ -73,6 +73,8 @@ In Youtarr, go to `Settings -> Core -> Video Filename Template` and select the `
 
 This will **not** rename previously downloaded videos. It is best to set this before you start downloading; otherwise, re-download videos so they pick up the new naming.
 
+While you are there, turn off `Prefix channel name in embedded video title` under `Settings -> Core -> Download Settings`. Plex reads the embedded MP4 title as the episode title, and in a TV Shows library the channel is already the show name, so the prefix would only repeat it. This also only applies to new downloads.
+
 #### Step 2: Create a New Library
 1. In Plex, go to Settings → Manage → Libraries
 2. Click "Add Library"

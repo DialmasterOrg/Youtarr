@@ -26,7 +26,7 @@ describe('Cookie Module Integration Tests', () => {
     jest.doMock('fs', () => ({
       readFileSync: jest.fn().mockReturnValue(JSON.stringify(mockConfig)),
       writeFileSync: jest.fn(),
-      watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+      watch: jest.fn().mockReturnValue({ close: jest.fn(), on: jest.fn() }),
       existsSync: jest.fn().mockReturnValue(true),
       mkdirSync: jest.fn(),
       chmodSync: jest.fn(),

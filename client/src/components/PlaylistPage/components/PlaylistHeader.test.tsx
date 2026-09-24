@@ -51,6 +51,18 @@ describe('PlaylistHeader', () => {
     expect(screen.getByRole('button', { name: /Download all 37 videos/i })).toBeInTheDocument();
   });
 
+  test('links to the playlist on YouTube', () => {
+    render(
+      <MemoryRouter>
+        <PlaylistHeader {...baseProps} />
+      </MemoryRouter>
+    );
+    expect(screen.getByRole('link', { name: 'Open in YouTube' })).toHaveAttribute(
+      'href',
+      'https://www.youtube.com/playlist?list=PL1'
+    );
+  });
+
   test('shows a Video playlist chip when the playlist is not MP3 Only', () => {
     render(
       <MemoryRouter>

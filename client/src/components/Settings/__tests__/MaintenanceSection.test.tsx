@@ -1,5 +1,7 @@
+import { renderWithProviders } from '../../../test-utils';
+import { DEFAULT_CONFIG } from '../../../config/configSchema';
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MaintenanceSection } from '../MaintenanceSection';
 import { UseRescanStatusReturn, RescanLastRun } from '../../../hooks/useRescanStatus';
@@ -22,7 +24,7 @@ function setup(overrides: Partial<UseRescanStatusReturn> = {}) {
     triggerRescan,
     ...overrides
   });
-  render(<MaintenanceSection token="tok" />);
+  renderWithProviders(<MaintenanceSection token="tok" config={DEFAULT_CONFIG} />);
   return { triggerRescan };
 }
 

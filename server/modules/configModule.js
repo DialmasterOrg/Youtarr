@@ -5,6 +5,17 @@ const EventEmitter = require('events');
 const logger = require('../logger');
 const { getExternalCookiesPath, getExternalCookiesStatus } = require('./externalCookies');
 const { getDefaultNameForUrl } = require('./notificationHelpers');
+const { SCHEDULES, normalizeToMinimumInterval, violatesMinimumInterval } = require('./scheduleConfig');
+
+const CONFIG_WATCH_DOCS_URL = 'https://dialmasterorg.github.io/Youtarr/docs/troubleshooting/#config-file-watcher-limit';
+const CONFIG_WATCH_LIMIT_SETTINGS = {
+  EMFILE: 'fs.inotify.max_user_instances',
+  ENOSPC: 'fs.inotify.max_user_watches',
+};
+const CONFIG_WATCH_SUGGESTED_LIMITS = {
+  'fs.inotify.max_user_instances': 512,
+  'fs.inotify.max_user_watches': 524288,
+};
 
 class ConfigModule extends EventEmitter {
   constructor() {
@@ -44,6 +55,21 @@ class ConfigModule extends EventEmitter {
       delete this.config.cronSchedule;
       legacyMigrationNeeded = true;
       logger.info('Migrated legacy cronSchedule field to channelDownloadFrequency');
+    }
+
+    // Schedules below the minimum interval were saved before the floor existed.
+    // Thin them within their existing hours and days instead of leaving the task
+    // unscheduled and every Settings save blocked.
+    for (const key of Object.keys(SCHEDULES)) {
+      if (violatesMinimumInterval(this.config[key])) {
+        const replacement = normalizeToMinimumInterval(this.config[key]);
+        logger.info(
+          { key, previous: this.config[key], replacement },
+          'Schedule ran more often than the minimum interval; changed on upgrade'
+        );
+        this.config[key] = replacement;
+        legacyMigrationNeeded = true;
+      }
     }
 
     // Migrate notification settings to new format
@@ -373,8 +399,7 @@ class ConfigModule extends EventEmitter {
   }
 
   watchConfig() {
-    // Watch the config file for changes
-    this.configWatcher = fs.watch(this.configPath, (event) => {
+    const onConfigFileEvent = (event) => {
       if (event === 'change') {
         // Clear any existing debounce timer
         if (this.debounceTimer) {
@@ -441,7 +466,31 @@ class ConfigModule extends EventEmitter {
           }
         }, 100); // 100ms debounce delay
       }
-    });
+    };
+
+    // Watching config.json only exists to pick up hand edits, so a host that
+    // can't provide a watcher (inotify limits exhausted) must not stop startup.
+    try {
+      this.configWatcher = fs.watch(this.configPath, onConfigFileEvent);
+      this.configWatcher.on('error', (error) => {
+        this.logConfigWatchUnavailable(error);
+        this.stopWatchingConfig();
+      });
+    } catch (error) {
+      this.configWatcher = null;
+      this.logConfigWatchUnavailable(error);
+    }
+  }
+
+  logConfigWatchUnavailable(error) {
+    const limitSetting = CONFIG_WATCH_LIMIT_SETTINGS[error && error.code];
+    const hint = limitSetting
+      ? `The host's inotify limit (${limitSetting}) is exhausted, usually by many containers running as the same user. Raise it on the host, e.g. \`sysctl -w ${limitSetting}=${CONFIG_WATCH_SUGGESTED_LIMITS[limitSetting]}\`.`
+      : 'The file watcher could not be created.';
+    logger.warn(
+      { err: error, configPath: this.configPath, docs: CONFIG_WATCH_DOCS_URL },
+      `Cannot watch config.json for changes; Youtarr will keep running, but hand edits to config.json will not be picked up until restart (changes saved from the web UI are unaffected). ${hint} See ${CONFIG_WATCH_DOCS_URL}`
+    );
   }
 
   stopWatchingConfig() {
@@ -451,6 +500,7 @@ class ConfigModule extends EventEmitter {
     }
     if (this.configWatcher) {
       this.configWatcher.close();
+      this.configWatcher = null;
     }
   }
 

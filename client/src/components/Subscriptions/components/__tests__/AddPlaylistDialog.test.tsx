@@ -18,6 +18,21 @@ jest.mock('../../../../hooks/usePlaylistMutations', () => ({
 jest.mock('../../../../hooks/useMediaServerStatus', () => ({
   useMediaServerStatus: jest.fn(),
 }));
+jest.mock('../NewPlaylistSettings', () => ({
+  __esModule: true,
+  default: function MockNewPlaylistSettings({ values, onChange, readOnly }: any) {
+    const React = require('react');
+    return React.createElement('div', {
+      'data-testid': 'new-playlist-settings',
+      'data-read-only': readOnly ? 'true' : 'false',
+      'data-values': JSON.stringify(values),
+    },
+      React.createElement('button', {
+        onClick: () => onChange({ auto_download: true, video_quality: '720' }),
+      }, 'Change settings')
+    );
+  },
+}));
 
 const { usePlaylistMutations } = require('../../../../hooks/usePlaylistMutations');
 const { useMediaServerStatus } = require('../../../../hooks/useMediaServerStatus');
@@ -217,5 +232,110 @@ describe('AddPlaylistDialog', () => {
     expect(
       screen.queryByText(/Fetching the complete playlist from YouTube/i)
     ).not.toBeInTheDocument();
+  });
+
+  describe('settings chosen before subscribing', () => {
+    const preview = { title: 'My List', uploader: 'Me', video_count: 5, thumbnail: '', playlist_id: 'PL123' };
+
+    test('starts a new playlist with the default settings', async () => {
+      mockFetchPlaylistInfo.mockResolvedValue({ ...preview, existing_subscription: null });
+
+      renderWithProviders(<AddPlaylistDialog open token="t" onClose={jest.fn()} initialUrl={PLAYLIST_URL} />);
+
+      const settings = await screen.findByTestId('new-playlist-settings');
+      expect(JSON.parse(settings.getAttribute('data-values') || '{}')).toEqual({
+        auto_download: false,
+        video_quality: null,
+        audio_format: null,
+        sub_folder: '##USE_GLOBAL_DEFAULT##',
+      });
+    });
+
+    test('subscribes with the settings the user chose', async () => {
+      const user = userEvent.setup();
+      mockFetchPlaylistInfo.mockResolvedValue({ ...preview, existing_subscription: null });
+      mockSubscribe.mockResolvedValue({ playlist: { playlist_id: 'PL123' }, restored: false });
+
+      renderWithProviders(<AddPlaylistDialog open token="t" onClose={jest.fn()} initialUrl={PLAYLIST_URL} />);
+      await user.click(await screen.findByRole('button', { name: 'Change settings' }));
+      await user.click(screen.getByRole('button', { name: 'Subscribe' }));
+
+      await waitFor(() => {
+        expect(mockSubscribe).toHaveBeenCalledWith(PLAYLIST_URL, {
+          sync_to_plex: true,
+          sync_to_jellyfin: false,
+          sync_to_emby: false,
+          auto_download: true,
+          video_quality: '720',
+          audio_format: null,
+          default_sub_folder: '##USE_GLOBAL_DEFAULT##',
+        });
+      });
+    });
+
+    test('shows the saved settings read-only for a previously subscribed playlist', async () => {
+      const saved = { auto_download: true, default_sub_folder: 'Music', video_quality: '480', audio_format: 'mp3_only' };
+      mockFetchPlaylistInfo.mockResolvedValue({ ...preview, existing_subscription: { enabled: false, settings: saved } });
+
+      renderWithProviders(<AddPlaylistDialog open token="t" onClose={jest.fn()} initialUrl={PLAYLIST_URL} />);
+
+      const settings = await screen.findByTestId('new-playlist-settings');
+      expect(settings).toHaveAttribute('data-read-only', 'true');
+      expect(JSON.parse(settings.getAttribute('data-values') || '{}')).toEqual({
+        auto_download: true,
+        video_quality: '480',
+        audio_format: 'mp3_only',
+        sub_folder: 'Music',
+      });
+      expect(screen.getByText(/restored with its saved settings/)).toBeInTheDocument();
+    });
+
+    test('restores a previously subscribed playlist without sending settings', async () => {
+      const user = userEvent.setup();
+      const saved = { auto_download: false, default_sub_folder: null, video_quality: null, audio_format: null };
+      mockFetchPlaylistInfo.mockResolvedValue({ ...preview, existing_subscription: { enabled: false, settings: saved } });
+      mockSubscribe.mockResolvedValue({ playlist: { playlist_id: 'PL123' }, restored: true });
+
+      renderWithProviders(<AddPlaylistDialog open token="t" onClose={jest.fn()} initialUrl={PLAYLIST_URL} />);
+      await user.click(await screen.findByRole('button', { name: 'Subscribe' }));
+
+      await waitFor(() => {
+        expect(mockSubscribe).toHaveBeenCalledWith(PLAYLIST_URL, {
+          sync_to_plex: true,
+          sync_to_jellyfin: false,
+          sync_to_emby: false,
+        });
+      });
+    });
+
+    test('offers to open a playlist that is already subscribed', async () => {
+      const user = userEvent.setup();
+      const saved = { auto_download: false, default_sub_folder: null, video_quality: null, audio_format: null };
+      mockFetchPlaylistInfo.mockResolvedValue({ ...preview, existing_subscription: { enabled: true, settings: saved } });
+
+      renderWithProviders(<AddPlaylistDialog open token="t" onClose={jest.fn()} initialUrl={PLAYLIST_URL} />);
+
+      expect(await screen.findByText(/already subscribed/)).toBeInTheDocument();
+      expect(screen.queryByTestId('new-playlist-settings')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Go to playlist' }));
+
+      expect(mockNavigate).toHaveBeenCalledWith('/playlist/PL123');
+      expect(mockSubscribe).not.toHaveBeenCalled();
+    });
+
+    test('editing the URL drops the previous preview so the next action fetches the new playlist', async () => {
+      const user = userEvent.setup();
+      const saved = { auto_download: false, default_sub_folder: null, video_quality: null, audio_format: null };
+      mockFetchPlaylistInfo.mockResolvedValue({ ...preview, existing_subscription: { enabled: true, settings: saved } });
+
+      renderWithProviders(<AddPlaylistDialog open token="t" onClose={jest.fn()} initialUrl={PLAYLIST_URL} />);
+      await screen.findByRole('button', { name: 'Go to playlist' });
+
+      await user.type(screen.getByLabelText('YouTube playlist URL'), 'X');
+
+      expect(screen.queryByRole('button', { name: 'Go to playlist' })).not.toBeInTheDocument();
+      expect(screen.queryByText('My List')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Fetch info' })).toBeInTheDocument();
+    });
   });
 });

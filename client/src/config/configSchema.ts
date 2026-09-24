@@ -25,6 +25,11 @@ export const CONFIG_FIELDS = {
   // Enforced by configSchemaAlignment.test.ts.
   channelAutoDownload: { default: false, trackChanges: true },
   channelDownloadFrequency: { default: '0 * * * *', trackChanges: true },
+  autoRemovalFrequency: { default: '0 2 * * *', trackChanges: true },
+  archiveBackfillFrequency: { default: '20 2 * * *', trackChanges: true },
+  sessionCleanupFrequency: { default: '0 3 * * *', trackChanges: true },
+  videoRescanFrequency: { default: '30 3 * * *', trackChanges: true },
+  ytdlpUpdateFrequency: { default: '0 4 * * *', trackChanges: true },
   channelFilesToDownload: { default: 5, trackChanges: true },
 
   // Video settings
@@ -114,6 +119,7 @@ export const CONFIG_FIELDS = {
   writeVideoNfoFiles: { default: true, trackChanges: true },
   writeVideoFanart: { default: false, trackChanges: true },
   writeBackdropImages: { default: false, trackChanges: true },
+  prefixChannelNameInTitle: { default: true, trackChanges: true },
 
   // Notifications
   notificationsEnabled: { default: false, trackChanges: true },
@@ -193,6 +199,11 @@ export type ConfigState = {
 export const DEFAULT_CONFIG: ConfigState = {
   channelAutoDownload: CONFIG_FIELDS.channelAutoDownload.default,
   channelDownloadFrequency: CONFIG_FIELDS.channelDownloadFrequency.default,
+  autoRemovalFrequency: CONFIG_FIELDS.autoRemovalFrequency.default,
+  archiveBackfillFrequency: CONFIG_FIELDS.archiveBackfillFrequency.default,
+  sessionCleanupFrequency: CONFIG_FIELDS.sessionCleanupFrequency.default,
+  videoRescanFrequency: CONFIG_FIELDS.videoRescanFrequency.default,
+  ytdlpUpdateFrequency: CONFIG_FIELDS.ytdlpUpdateFrequency.default,
   channelFilesToDownload: CONFIG_FIELDS.channelFilesToDownload.default,
   preferredResolution: CONFIG_FIELDS.preferredResolution.default,
   videoCodec: CONFIG_FIELDS.videoCodec.default,
@@ -242,6 +253,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   writeVideoNfoFiles: CONFIG_FIELDS.writeVideoNfoFiles.default,
   writeVideoFanart: CONFIG_FIELDS.writeVideoFanart.default,
   writeBackdropImages: CONFIG_FIELDS.writeBackdropImages.default,
+  prefixChannelNameInTitle: CONFIG_FIELDS.prefixChannelNameInTitle.default,
   notificationsEnabled: CONFIG_FIELDS.notificationsEnabled.default,
   appriseUrls: CONFIG_FIELDS.appriseUrls.default,
   autoRemovalEnabled: CONFIG_FIELDS.autoRemovalEnabled.default,

@@ -4,6 +4,7 @@ import { Info as InfoIcon } from '../../../lib/icons';
 import { MediaServerStatus, MediaServerType, Playlist } from '../../../types/playlist';
 import LibraryDownloadsGroup from './LibraryDownloadsGroup';
 import MediaServerSyncGroup from './MediaServerSyncGroup';
+import OpenInYouTubeLink, { youtubePlaylistUrl } from '../../shared/OpenInYouTubeLink';
 
 interface PlaylistHeaderProps {
   playlist: Playlist;
@@ -82,9 +83,12 @@ const PlaylistHeader: React.FC<PlaylistHeaderProps> = ({
           />
           <div className="flex flex-col gap-4 flex-1 min-w-0">
             <div>
-              <Typography variant="h5" style={{ fontWeight: 700 }}>
-                {playlist.title}
-              </Typography>
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <Typography variant="h5" className="min-w-0" style={{ fontWeight: 700 }}>
+                  {playlist.title}
+                </Typography>
+                <OpenInYouTubeLink href={youtubePlaylistUrl(playlist.playlist_id)} />
+              </div>
               {playlist.uploader && (
                 <Typography variant="body2" color="text.secondary">
                   By {playlist.uploader}
