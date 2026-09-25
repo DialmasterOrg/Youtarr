@@ -21,7 +21,9 @@ const {
   buildTerminationFailureCountLabel,
   formatTerminationFailureLine,
   getDiagnoses,
-  formatDiagnosisLine
+  formatDiagnosisLine,
+  getStoppedGroups,
+  formatStoppedGroupLine
 } = require('../utils');
 
 const DEFAULT_HEADER_GRADIENT = 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)';
@@ -153,6 +155,18 @@ function formatDownloadMessage(finalSummary, videoData) {
         ${failedItems ? `<ul>${failedItems}</ul>` : '<p>See Youtarr download history for details.</p>'}
         ${moreFailures}
         ${diagnosisItems}
+      </div>`;
+  }
+
+  const stoppedGroups = getStoppedGroups(finalSummary);
+  if (stoppedGroups.length > 0) {
+    const stoppedItems = stoppedGroups.map(stopped =>
+      `<p>${escapeHtml(formatStoppedGroupLine(stopped))}</p>`
+    ).join('');
+    content += `
+      <div class="warning-card">
+        <strong>⚠️ Download stopped early.</strong>
+        ${stoppedItems}
       </div>`;
   }
 

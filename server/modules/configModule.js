@@ -11,6 +11,11 @@ const { SCHEDULES, normalizeToMinimumInterval, violatesMinimumInterval } = requi
 const STORAGE_SIZE_KEYS = ['downloadPauseUsageLimit', 'downloadPauseMinFreeSpace', 'autoRemovalUsageLimit'];
 const STORAGE_SIZE_PATTERN = /^[1-9]\d*(MB|GB|TB)$/;
 
+// yt-dlp's cache (YouTube signature-function specs) lives under the config
+// volume so it survives container recreation and stays writable when the
+// container user has no writable home directory.
+const YTDLP_CACHE_DIR_NAME = '.yt-dlp-cache';
+
 const CONFIG_WATCH_DOCS_URL = 'https://dialmasterorg.github.io/Youtarr/docs/troubleshooting/#config-file-watcher-limit';
 const CONFIG_WATCH_LIMIT_SETTINGS = {
   EMFILE: 'fs.inotify.max_user_instances',
@@ -348,6 +353,10 @@ class ConfigModule extends EventEmitter {
       return path.join(__dirname, '../../config/jobs');
     }
     return path.join(__dirname, '../../jobs');
+  }
+
+  getYtdlpCacheDir() {
+    return path.join(__dirname, '../../config', YTDLP_CACHE_DIR_NAME);
   }
 
   updateConfig(newConfig) {

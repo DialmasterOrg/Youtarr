@@ -66,8 +66,14 @@ function buildSummaryText(summary) {
   if (summary.totalTerminatedChannels > 0) {
     parts.push(`${summary.totalTerminatedChannels} channel${summary.totalTerminatedChannels !== 1 ? 's' : ''} marked terminated`);
   }
-  if (parts.length === 0) return 'Download completed: No new videos to download';
-  return `Download completed: ${parts.join(', ')}`;
+  const stoppedGroups = summary.stoppedGroups || [];
+  for (const { group, reason, terminated } of stoppedGroups) {
+    const where = terminated ? `terminated in ${group}` : `stopped at ${group}`;
+    parts.push(`${where}${reason ? ` (${reason})` : ''}, later groups skipped`);
+  }
+  const prefix = stoppedGroups.length > 0 ? 'Download stopped early' : 'Download completed';
+  if (parts.length === 0) return `${prefix}: No new videos to download`;
+  return `${prefix}: ${parts.join(', ')}`;
 }
 
 class DownloadRunTracker {
@@ -97,6 +103,8 @@ class DownloadRunTracker {
         terminatedChannels: [],
         terminationFailures: [],
         videoData: [],
+        // Grouped channel jobs stopped partway: { group, reason, terminated }.
+        stoppedGroups: [],
       },
     });
     return runId;
@@ -146,6 +154,7 @@ class DownloadRunTracker {
     if (Array.isArray(summary.videoData)) acc.videoData.push(...summary.videoData);
     if (Array.isArray(summary.terminatedChannels)) acc.terminatedChannels.push(...summary.terminatedChannels);
     if (Array.isArray(summary.terminationFailures)) acc.terminationFailures.push(...summary.terminationFailures);
+    if (summary.stoppedGroup) acc.stoppedGroups.push(summary.stoppedGroup);
 
     this.maybeFinalize(runId);
     return true;
@@ -191,7 +200,8 @@ class DownloadRunTracker {
       acc.totalFailed > 0 ||
       acc.totalMembersOnly > 0 ||
       terminatedChannels.length > 0 ||
-      terminationFailures.length > 0;
+      terminationFailures.length > 0 ||
+      acc.stoppedGroups.length > 0;
 
     const finalSummary = {
       totalDownloaded: acc.totalDownloaded,
@@ -206,6 +216,7 @@ class DownloadRunTracker {
       terminationFailures,
       jobType: deriveLabel(run.jobTypes),
       completedAt: new Date().toISOString(),
+      ...(acc.stoppedGroups.length > 0 ? { stoppedGroups: acc.stoppedGroups } : {}),
     };
 
     const payload = {
@@ -235,9 +246,11 @@ class DownloadRunTracker {
       'Emitted aggregated final summary for download run'
     );
 
-    // Diagnosed failures notify even when nothing downloaded: automated users
-    // otherwise never learn about a persistent, fixable failure.
-    if (acc.totalDownloaded > 0 || terminatedChannels.length > 0 || terminationFailures.length > 0 || acc.diagnoses.length > 0) {
+    // Diagnosed failures and a group that failed partway notify even when
+    // nothing downloaded: automated users otherwise never learn about a
+    // persistent, fixable failure. A user termination alone does not notify.
+    const stoppedByFailure = acc.stoppedGroups.some((g) => !g.terminated);
+    if (acc.totalDownloaded > 0 || terminatedChannels.length > 0 || terminationFailures.length > 0 || acc.diagnoses.length > 0 || stoppedByFailure) {
       const notificationModule = require('../notificationModule');
       notificationModule
         .sendDownloadNotification({ finalSummary, videoData: acc.videoData })

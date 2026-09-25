@@ -56,6 +56,7 @@ function mockConfigModule() {
   mockConfig.getImagePath = jest.fn().mockReturnValue('/path/to/images');
   mockConfig.directoryPath = '/path/to/videos';
   mockConfig.getCookiesPath = jest.fn().mockReturnValue(null);
+  mockConfig.getYtdlpCacheDir = jest.fn().mockReturnValue('/app/config/.yt-dlp-cache');
   mockConfig.getDefaultSubfolder = jest.fn().mockReturnValue(null);
   return mockConfig;
 }

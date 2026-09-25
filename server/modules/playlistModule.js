@@ -172,6 +172,17 @@ class PlaylistModule {
     }
   }
 
+  /**
+   * The RegExp a playlist title filter is evaluated with on refresh. The
+   * settings route uses it to reject a pattern that would break every refresh.
+   * @param {string} pattern
+   * @returns {RegExp}
+   * @throws {SyntaxError} when the pattern is not a valid JavaScript regex
+   */
+  buildTitleFilterRegExp(pattern) {
+    return new RegExp(pattern, 'i');
+  }
+
   async fetchAllPlaylistVideos(playlistId, options = {}) {
     if (this.activeFetches.has(playlistId)) {
       throw new Error('FETCH_IN_PROGRESS');
@@ -195,7 +206,7 @@ class PlaylistModule {
     const discoveredAt = new Date();
     const available = entries.filter((e) => !this.isUnavailableTitle(e.title));
 
-    const regex = playlist.title_filter_regex ? new RegExp(playlist.title_filter_regex, 'i') : null;
+    const regex = playlist.title_filter_regex ? this.buildTitleFilterRegExp(playlist.title_filter_regex) : null;
     const passes = (e) => {
       if (playlist.min_duration != null && (e.duration || 0) < playlist.min_duration) return false;
       if (playlist.max_duration != null && (e.duration || 0) > playlist.max_duration) return false;

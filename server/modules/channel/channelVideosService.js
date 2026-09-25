@@ -10,6 +10,7 @@ const channelVideoQuery = require('./channelVideoQuery');
 const channelVideoFetcher = require('./channelVideoFetcher');
 const fetchRegistry = require('./fetchRegistry');
 const tabState = require('./tabState');
+const ratingMapper = require('../ratingMapper');
 
 // Maximum number of videos to load when user clicks "Load More"
 // Limit set here because some channels have tens or hundreds of thousands of videos...
@@ -38,7 +39,7 @@ class ChannelVideosService {
     const lastFetched = channel ? tabState.getLastFetchedForTab(channel, mediaType) : null;
 
     return {
-      videos: videos,
+      videos: this.applyChannelDefaultRating(videos, channel),
       dataSource: dataSource,
       lastFetched: lastFetched,
       totalCount: stats ? stats.totalCount : videos.length,
@@ -46,6 +47,26 @@ class ChannelVideosService {
       autoDownloadsEnabled: autoDownloadsEnabled,
       availableTabs: availableTabs,
     };
+  }
+
+  /**
+   * Show the rating a download would receive on videos that are not downloaded.
+   * yt-dlp's flat channel listings carry no rating metadata, so for these
+   * videos that is the channel's default rating, resolved at read time so a
+   * changed or cleared default shows up immediately. Downloaded videos keep
+   * the rating recorded on their Videos row.
+   * @param {Array} videos - Enriched channel videos
+   * @param {Object|null} channel - Channel database record
+   * @returns {Array} - Videos with normalized_rating/rating_source filled where applicable
+   */
+  applyChannelDefaultRating(videos, channel) {
+    const { normalized_rating: rating, rating_source: source } =
+      ratingMapper.determineEffectiveRating({}, channel ? channel.default_rating : null);
+    if (!rating) return videos;
+
+    return videos.map((video) => (video.added
+      ? video
+      : { ...video, normalized_rating: rating, rating_source: source }));
   }
 
   /**

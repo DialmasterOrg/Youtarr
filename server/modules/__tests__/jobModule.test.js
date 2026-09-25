@@ -1352,6 +1352,38 @@ describe('JobModule', () => {
       expect(JobModule.jobs['job-1'].output).toBe('3 videos.');
     });
 
+    test('keeps Error status for a failed download job', async () => {
+      JobModule.jobs = {
+        'job-1': { status: 'In Progress', jobType: 'Channel Downloads', data: { videos: [] } }
+      };
+      JobModule.saveJobOnly = jest.fn().mockResolvedValue();
+      JobVideo.findAll.mockResolvedValue([]);
+
+      await JobModule.updateJob('job-1', {
+        status: 'Error',
+        output: 'Bot detection encountered. Please set cookies in your Configuration.',
+        data: { videos: [] }
+      });
+
+      expect(JobModule.jobs['job-1'].status).toBe('Error');
+    });
+
+    test('keeps the failure output for a failed download job', async () => {
+      JobModule.jobs = {
+        'job-1': { status: 'In Progress', jobType: 'Channel Downloads', data: { videos: [] } }
+      };
+      JobModule.saveJobOnly = jest.fn().mockResolvedValue();
+      JobVideo.findAll.mockResolvedValue([]);
+
+      await JobModule.updateJob('job-1', {
+        status: 'Error',
+        output: 'Output directory is not accessible: EACCES',
+        data: { videos: [] }
+      });
+
+      expect(JobModule.jobs['job-1'].output).toBe('Output directory is not accessible: EACCES');
+    });
+
     test('should preserve Complete with Warnings status for download jobs', async () => {
       JobModule.jobs = {
         'job-1': { status: 'In Progress', jobType: 'Channel Downloads', data: { videos: [] } }

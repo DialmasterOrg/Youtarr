@@ -14,6 +14,23 @@ const playlistDownloadModule = require('./playlistDownloadModule');
 const storageGuard = require('./storageGuard');
 
 const DEFAULT_FILES_TO_DOWNLOAD = 5;
+// Statuses that end a grouped channel download before its remaining groups run.
+const GROUP_STOP_STATUSES = new Set(['Error', 'Terminated', 'Killed']);
+
+/**
+ * Why a grouped channel download stopped at a group. Error carries its reason
+ * in output (bot detection, unwritable output directory); a termination in
+ * notes (e.g. "User requested termination").
+ */
+function describeGroupStop(group, job) {
+  const reason = job.status === 'Error' ? job.output : (job.notes || job.output);
+  return { group, status: job.status, reason: reason || null };
+}
+
+// The shape run summaries and notifications receive.
+function toStoppedGroup(stopped) {
+  return { group: stopped.group, reason: stopped.reason, terminated: stopped.status === 'Terminated' };
+}
 
 class DownloadModule {
   constructor() {
@@ -412,18 +429,25 @@ class DownloadModule {
       return;
     }
 
-    // Process each group sequentially
+    // Process each group sequentially. A group that ends in Error, or a
+    // termination, stops the run; the wrap-up below keeps that status, still
+    // reports the earlier groups, and starts the next queued job.
+    let stopped = null; // { group, status, reason }
     for (let i = 0; i < groups.length; i++) {
-      // Check if job was terminated before starting next group
-      const currentJob = jobModule.getJob(jobId);
-      if (!currentJob || currentJob.status === 'Terminated' || currentJob.status === 'Killed') {
-        logger.info({ jobId, status: currentJob?.status }, 'Job was terminated, stopping group processing');
-        return; // Exit without calling startNextJob or refreshing Plex
-      }
-
       const group = groups[i];
       const groupDesc = `Group ${i + 1}/${groups.length} (${group.quality}p${group.subFolder ? `, ${group.subFolder}` : ''})`;
       const groupJobType = `Channel Downloads - ${groupDesc}`;
+
+      // A termination that landed between groups
+      const currentJob = jobModule.getJob(jobId);
+      if (!currentJob) {
+        logger.warn({ jobId }, 'Grouped download job disappeared, stopping group processing');
+        return;
+      }
+      if (GROUP_STOP_STATUSES.has(currentJob.status)) {
+        stopped = describeGroupStop(groupDesc, currentJob);
+        break;
+      }
 
       logger.info({ groupJobType, channelCount: group.channels.length }, 'Processing download group');
 
@@ -442,12 +466,29 @@ class DownloadModule {
           status: 'Error',
           output: `Error in ${groupDesc}: ${err.message}`,
         });
-        return; // Stop processing remaining groups on error
+        stopped = { group: groupDesc, status: 'Error', reason: err.message };
+        break;
+      }
+
+      // An intermediate group never gets Error from ordinary video failures:
+      // the finalizer saves a non-zero yt-dlp exit without a status while more
+      // groups remain. Error here comes only from systemic paths (bot
+      // detection, unwritable output directory, yt-dlp failing to start, a
+      // crashed finalizer), which later groups would hit the same way.
+      // Terminated means the user or a timeout stopped this group.
+      const afterGroup = jobModule.getJob(jobId);
+      if (afterGroup && GROUP_STOP_STATUSES.has(afterGroup.status)) {
+        stopped = describeGroupStop(groupDesc, afterGroup);
+        break;
       }
     }
 
-    // All groups completed successfully
-    logger.info('All download groups completed, marking job as complete');
+    if (stopped) {
+      logger.warn({ jobId, ...stopped }, 'Download group stopped, skipping remaining groups');
+    } else {
+      logger.info('All download groups completed, marking job as complete');
+    }
+    const stoppedTerminated = Boolean(stopped && stopped.status === 'Terminated');
 
     // Check terminations and termination-persistence failures before stamping
     // the status; both feed into the DB record and the WebSocket payload.
@@ -456,12 +497,16 @@ class DownloadModule {
     const terminationFailuresForJob = (inFlightJob && inFlightJob.data && inFlightJob.data.terminationFailures) || [];
     const hasTerminationActivity = terminatedChannelsForJob.length > 0 || terminationFailuresForJob.length > 0;
     const completedStatus = hasTerminationActivity ? 'Complete with Warnings' : 'Complete';
-    const progressState = hasTerminationActivity ? 'warning' : 'complete';
+    let progressState = hasTerminationActivity ? 'warning' : 'complete';
+    if (stopped) progressState = stoppedTerminated ? 'terminated' : 'error';
 
-    // Mark the job as complete - this will trigger video reload from DB
-    await jobModule.updateJob(jobId, {
-      status: completedStatus,
-    });
+    // Mark the job as complete - this will trigger video reload from DB.
+    // A stopped group already persisted its status and reloaded videos.
+    if (!stopped) {
+      await jobModule.updateJob(jobId, {
+        status: completedStatus,
+      });
+    }
 
     // Get the updated job with all videos reloaded from database
     const completedJob = jobModule.getJob(jobId);
@@ -492,7 +537,8 @@ class DownloadModule {
         terminatedChannels: terminatedChannels,
         terminationFailures: terminationFailures,
         jobType: 'Channel Downloads - All Groups',
-        completedAt: new Date().toISOString()
+        completedAt: new Date().toISOString(),
+        ...(stopped ? { stoppedGroups: [toStoppedGroup(stopped)] } : {}),
       };
 
       // Build completion message with counts
@@ -506,7 +552,12 @@ class DownloadModule {
       if (terminationFailures.length > 0) {
         messageParts.push(`${terminationFailures.length} termination${terminationFailures.length !== 1 ? 's' : ''} could not be auto-disabled`);
       }
-      const completionText = `Download completed: ${messageParts.join(', ')} across ${groups.length} groups`;
+      let completionText = `Download completed: ${messageParts.join(', ')} across ${groups.length} groups`;
+      if (stopped) {
+        const verb = stoppedTerminated ? 'terminated' : 'failed';
+        const reason = stopped.reason ? `: ${stopped.reason}` : '';
+        completionText = `Download ${verb} in ${stopped.group}${reason}. ${messageParts.join(', ')}`;
+      }
 
       const finalPayload = {
         text: completionText,
@@ -522,7 +573,12 @@ class DownloadModule {
         finalSummary: finalSummary
       };
 
-      if (hasTerminationActivity) {
+      if (stoppedTerminated) {
+        finalPayload.warning = true;
+        finalPayload.terminationReason = stopped.reason;
+      } else if (stopped) {
+        finalPayload.error = true;
+      } else if (hasTerminationActivity) {
         finalPayload.warning = true;
       }
 
@@ -542,6 +598,7 @@ class DownloadModule {
           terminationFailures: terminationFailures,
           videoData: completedJob.data.videos || [],
           jobType: 'Channel Downloads',
+          ...(stopped ? { stoppedGroup: toStoppedGroup(stopped) } : {}),
         });
       } else {
         MessageEmitter.emitMessage(
@@ -556,9 +613,11 @@ class DownloadModule {
           'Emitted final summary for multi-group download');
 
         // Include termination-only runs (zero downloads, one or more terminated
-        // or one or more termination-persistence failures) and diagnosed
-        // failure-only runs (the advice is the whole point of notifying).
-        if (totalVideos > 0 || terminatedChannels.length > 0 || terminationFailures.length > 0 || diagnoses.length > 0) {
+        // or one or more termination-persistence failures), diagnosed
+        // failure-only runs (the advice is the whole point of notifying), and
+        // runs a failed group stopped early. A user termination alone does not notify.
+        const stoppedByFailure = Boolean(stopped && !stoppedTerminated);
+        if (totalVideos > 0 || terminatedChannels.length > 0 || terminationFailures.length > 0 || diagnoses.length > 0 || stoppedByFailure) {
           const notificationModule = require('./notificationModule');
           notificationModule.sendDownloadNotification({
             finalSummary: finalSummary,

@@ -3,6 +3,7 @@ const configModule = require('../configModule');
 const tempPathManager = require('./tempPathManager');
 const logger = require('../../logger');
 const customArgsParser = require('./customArgsParser');
+const archiveModule = require('../archiveModule');
 const { mergeCookiePlayerClients } = require('./cookiePlayerClients');
 const {
   CHANNEL_TEMPLATE,
@@ -262,6 +263,8 @@ class YtdlpCommandBuilder {
     // Temp paths for yt-dlp's internal temp files
     args.push(...this.buildTempPathArgs());
 
+    args.push('--cache-dir', configModule.getYtdlpCacheDir());
+
     return args;
   }
 
@@ -478,11 +481,12 @@ class YtdlpCommandBuilder {
 
     // Add title regex filter if specified
     if (filterConfig.titleFilterRegex) {
-      // Escape backslashes and single quotes for Python string literal
+      // yt-dlp's match_str splits filters on unescaped '&' and, inside a quoted
+      // value, only unescapes the quote character. Backslashes pass through
+      // untouched, so doubling them would turn `\d` into a literal backslash.
       const escapedRegex = filterConfig.titleFilterRegex
-        .replace(/\\/g, '\\\\') // Escape backslashes first
-        // eslint-disable-next-line quotes
-        .replace(/'/g, "\\'"); // Escape single quotes
+        .replace(/'/g, '\\\'')
+        .replace(/&/g, '\\&');
       additionalFilters.push(`title ~= '${escapedRegex}'`);
     }
 
@@ -587,7 +591,7 @@ class YtdlpCommandBuilder {
 
     // Only use download archive if NOT allowing re-downloads
     if (!allowRedownload) {
-      args.push('--download-archive', './config/complete.list');
+      args.push('--download-archive', archiveModule.getArchivePath());
     }
 
     // Build match filter with any channel-specific filtering
@@ -680,7 +684,7 @@ class YtdlpCommandBuilder {
 
     // Only use download archive if NOT allowing re-downloads
     if (!allowRedownload) {
-      args.push('--download-archive', './config/complete.list');
+      args.push('--download-archive', archiveModule.getArchivePath());
     }
 
     args.push(

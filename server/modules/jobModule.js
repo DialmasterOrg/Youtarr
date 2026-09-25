@@ -27,6 +27,8 @@ const MAX_SAVE_RETRIES = 3;
 const JOB_RETENTION_DAYS = 42;
 const MAX_HISTORY_JOBS = 720;
 const ARCHIVE_BACKFILL_TASK_KEY = 'archiveBackfillFrequency';
+// Terminal download statuses whose output is rewritten to "N videos.".
+const SUCCESS_STATUSES = new Set(['Complete', 'Complete with Warnings']);
 
 class JobModule {
   constructor() {
@@ -1067,13 +1069,11 @@ class JobModule {
         { text: 'Download job completed.', videos: updatedFields.data?.videos || [] }
       );
 
-      // Only modify output and status for actual completions, not terminations
-      if (updatedFields.status !== 'Terminated') {
+      // Successful completions report a video count; failures keep their own
+      // status and output so the reason survives into Download History.
+      if (SUCCESS_STATUSES.has(updatedFields.status)) {
         let numVideos = updatedFields.data?.videos?.length || 0;
         updatedFields.output = numVideos + ' videos.';
-        if (updatedFields.status !== 'Complete with Warnings') {
-          updatedFields.status = 'Complete';
-        }
       }
     }
 
@@ -1115,7 +1115,7 @@ class JobModule {
         job.data.videos = videos;
 
         // Update output message to reflect correct video count
-        if (updatedFields.status !== 'Terminated') {
+        if (SUCCESS_STATUSES.has(updatedFields.status)) {
           job.output = `${videos.length} videos.`;
         }
 

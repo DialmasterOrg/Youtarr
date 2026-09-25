@@ -90,6 +90,38 @@ describe('channelVideosService', () => {
       });
     });
 
+    describe('channel default rating', () => {
+      const ratedChannel = { ...mockChannelData, default_rating: 'TV-Y' };
+
+      test('applies the channel default to a video that is not downloaded', () => {
+        const result = channelVideosService.buildChannelVideosResponse([{ ...mockVideoData, added: false }], ratedChannel);
+
+        expect(result.videos[0]).toMatchObject({ normalized_rating: 'TV-Y', rating_source: 'Channel Default' });
+      });
+
+      test('keeps the recorded rating of a downloaded video', () => {
+        const downloaded = { ...mockVideoData, added: true, normalized_rating: 'PG' };
+
+        const result = channelVideosService.buildChannelVideosResponse([downloaded], ratedChannel);
+
+        expect(result.videos[0].normalized_rating).toBe('PG');
+      });
+
+      test('leaves videos unrated when the channel has no default', () => {
+        const result = channelVideosService.buildChannelVideosResponse([{ ...mockVideoData, added: false }], mockChannelData);
+
+        expect(result.videos[0].normalized_rating).toBeUndefined();
+      });
+
+      test('leaves videos unrated when the channel default is NR', () => {
+        const nrChannel = { ...mockChannelData, default_rating: 'NR' };
+
+        const result = channelVideosService.buildChannelVideosResponse([{ ...mockVideoData, added: false }], nrChannel);
+
+        expect(result.videos[0].normalized_rating).toBeUndefined();
+      });
+    });
+
     test('should return null lastFetched for unfetched tab', () => {
       const result = channelVideosService.buildChannelVideosResponse([mockVideoData], mockChannelData, 'cache', null, false, 'short');
       expect(result.lastFetched).toBeNull();

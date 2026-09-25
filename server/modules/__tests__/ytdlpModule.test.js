@@ -15,6 +15,10 @@ jest.mock('../jobModule', () => ({
   getInProgressJobId: jest.fn(),
 }));
 
+jest.mock('../configModule', () => ({
+  getYtdlpCacheDir: jest.fn(() => '/app/config/.yt-dlp-cache'),
+}));
+
 jest.mock('../download/tempPathManager', () => ({
   getTempBasePath: jest.fn(() => '/tmp/youtarr-downloads'),
 }));
@@ -27,17 +31,27 @@ jest.mock('../../logger', () => ({
   debug: jest.fn(),
 }));
 
+const fs = require('fs');
 const { spawn } = require('child_process');
 const https = require('https');
 const jobModule = require('../jobModule');
 const ytdlpModule = require('../ytdlpModule');
 
 describe('ytdlpModule', () => {
+  // Successful updates clear the yt-dlp cache directory. Keep every test off
+  // the real filesystem: inside the dev container that path is the live cache.
+  let rmSpy;
+
   beforeEach(() => {
     jest.clearAllMocks();
+    rmSpy = jest.spyOn(fs.promises, 'rm').mockResolvedValue();
     ytdlpModule.clearVersionCache();
     ytdlpModule.resetUpdateState();
     jobModule.getInProgressJobId.mockReturnValue(null);
+  });
+
+  afterEach(() => {
+    rmSpy.mockRestore();
   });
 
   describe('isUpdateAvailable', () => {
@@ -413,6 +427,44 @@ describe('ytdlpModule', () => {
       expect(result.reason).toBe('updated');
       expect(result.message).toBe('Successfully updated to 2024.01.20');
       expect(result.newVersion).toBe('2024.01.20');
+    });
+
+    describe('yt-dlp disk cache', () => {
+      it('clears the cache after updating to a new version', async () => {
+        const mockProcess = createMockProcess();
+        spawn.mockReturnValue(mockProcess);
+
+        const updatePromise = ytdlpModule.performUpdate();
+        mockProcess.stdout.emit('data', 'Updated yt-dlp to 2024.01.20');
+        mockProcess.emit('close', 0);
+        await updatePromise;
+
+        expect(rmSpy).toHaveBeenCalledWith('/app/config/.yt-dlp-cache', { recursive: true, force: true });
+      });
+
+      it('keeps the cache when yt-dlp is already up to date', async () => {
+        const mockProcess = createMockProcess();
+        spawn.mockReturnValue(mockProcess);
+
+        const updatePromise = ytdlpModule.performUpdate();
+        mockProcess.stdout.emit('data', 'yt-dlp is up to date (2024.01.15)');
+        mockProcess.emit('close', 0);
+        await updatePromise;
+
+        expect(rmSpy).not.toHaveBeenCalled();
+      });
+
+      it('still reports the update as successful when clearing the cache fails', async () => {
+        rmSpy.mockRejectedValue(new Error('EACCES'));
+        const mockProcess = createMockProcess();
+        spawn.mockReturnValue(mockProcess);
+
+        const updatePromise = ytdlpModule.performUpdate();
+        mockProcess.stdout.emit('data', 'Updated yt-dlp to 2024.01.20');
+        mockProcess.emit('close', 0);
+
+        await expect(updatePromise).resolves.toMatchObject({ success: true, reason: 'updated' });
+      });
     });
 
     it('reports when already up to date', async () => {

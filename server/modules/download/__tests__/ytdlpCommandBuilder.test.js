@@ -5,7 +5,12 @@ jest.mock('../../configModule', () => ({
   getConfig: jest.fn(),
   directoryPath: '/mock/youtube/output',
   ffmpegPath: '/usr/bin/ffmpeg',
-  getCookiesPath: jest.fn()
+  getCookiesPath: jest.fn(),
+  getYtdlpCacheDir: jest.fn(() => '/app/config/.yt-dlp-cache')
+}));
+
+jest.mock('../../archiveModule', () => ({
+  getArchivePath: jest.fn(() => '/app/config/complete.list')
 }));
 
 // Mock tempPathManager
@@ -586,13 +591,22 @@ describe('YtdlpCommandBuilder', () => {
       expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming & title ~= \'tutorial\'');
     });
 
-    it('should escape backslashes in title regex', () => {
+    it('passes backslashes through unchanged, since yt-dlp does not unescape them', () => {
       const filterConfig = {
         hasGroupingCriteria: true,
         titleFilterRegex: '\\d+' // Match one or more digits
       };
       const result = YtdlpCommandBuilder.buildMatchFilters(filterConfig);
-      expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming & title ~= \'\\\\d+\'');
+      expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming & title ~= \'\\d+\'');
+    });
+
+    it('escapes ampersands so yt-dlp does not split the filter on them', () => {
+      const filterConfig = {
+        hasGroupingCriteria: true,
+        titleFilterRegex: 'Q&A'
+      };
+      const result = YtdlpCommandBuilder.buildMatchFilters(filterConfig);
+      expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming & title ~= \'Q\\&A\'');
     });
 
     it('should escape single quotes in title regex', () => {
@@ -604,13 +618,13 @@ describe('YtdlpCommandBuilder', () => {
       expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming & title ~= \'Let\\\'s Go\'');
     });
 
-    it('should escape both backslashes and quotes in complex regex', () => {
+    it('escapes quotes while keeping backslashes in a complex regex', () => {
       const filterConfig = {
         hasGroupingCriteria: true,
         titleFilterRegex: 'Part \\d+: It\'s Here'
       };
       const result = YtdlpCommandBuilder.buildMatchFilters(filterConfig);
-      expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming & title ~= \'Part \\\\d+: It\\\'s Here\'');
+      expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming & title ~= \'Part \\d+: It\\\'s Here\'');
     });
 
     it('should combine all filters when specified', () => {
@@ -1209,6 +1223,28 @@ describe('YtdlpCommandBuilder', () => {
       delete cfg.ytdlpDownloadRateLimit;
       const args = YtdlpCommandBuilder.buildCommonArgs(cfg);
       expect(args).not.toContain('--limit-rate');
+    });
+  });
+
+  describe('buildCommonArgs — yt-dlp cache', () => {
+    test('points --cache-dir at the config volume', () => {
+      const args = YtdlpCommandBuilder.buildCommonArgs(mockConfig);
+      const i = args.indexOf('--cache-dir');
+      expect(args[i + 1]).toBe('/app/config/.yt-dlp-cache');
+    });
+  });
+
+  describe('download archive path', () => {
+    test('channel downloads use the absolute archive path', () => {
+      const args = YtdlpCommandBuilder.getBaseCommandArgs();
+      const i = args.indexOf('--download-archive');
+      expect(args[i + 1]).toBe('/app/config/complete.list');
+    });
+
+    test('manual downloads use the absolute archive path', () => {
+      const args = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload();
+      const i = args.indexOf('--download-archive');
+      expect(args[i + 1]).toBe('/app/config/complete.list');
     });
   });
 
