@@ -15,6 +15,10 @@ jest.mock('../../downloadModule', () => ({
 jest.mock('../../jobModule', () => ({
   getAllJobs: jest.fn().mockReturnValue({})
 }));
+jest.mock('../../storageGuard', () => ({
+  refresh: jest.fn().mockResolvedValue({ paused: false, reasons: [] }),
+  describe: jest.fn(() => 'Downloads are paused: downloaded videos use 12.0 GB, over the 10 GB limit')
+}));
 
 describe('autoDownloadScheduler', () => {
   let autoDownloadScheduler;
@@ -246,6 +250,39 @@ describe('autoDownloadScheduler', () => {
         }),
         'Running scheduled channel downloads'
       );
+    });
+
+    test('skips with the pause reason when storage limits pause downloads', async () => {
+      const storageGuard = require('../../storageGuard');
+      storageGuard.refresh.mockResolvedValueOnce({ paused: true, reasons: [{ text: 'over the limit' }] });
+
+      await expect(autoDownloadScheduler.channelAutoDownload()).resolves.toEqual({
+        status: 'skipped',
+        outcome: 'skipped',
+        message: 'Downloads are paused: downloaded videos use 12.0 GB, over the 10 GB limit'
+      });
+    });
+
+    test('does not start a sweep while downloads are paused', async () => {
+      const storageGuard = require('../../storageGuard');
+      storageGuard.refresh.mockResolvedValueOnce({ paused: true, reasons: [] });
+
+      await autoDownloadScheduler.channelAutoDownload();
+
+      expect(downloadModule.doChannelAndPlaylistDownloads).not.toHaveBeenCalled();
+    });
+
+    test('records playlists skipped by a storage pause as a success with the reason', async () => {
+      downloadModule.doChannelAndPlaylistDownloads.mockResolvedValue({
+        playlistError: null, playlistsFailed: 0, playlistsChecked: 2,
+        playlistsPausedReason: 'Downloads are paused: over the limit',
+      });
+
+      await expect(autoDownloadScheduler.channelAutoDownload()).resolves.toEqual({
+        status: 'success',
+        outcome: 'completed',
+        message: 'Channel downloads were queued; playlist downloads were skipped. Downloads are paused: over the limit',
+      });
     });
 
     test('resolves to a success record after starting the sweep', async () => {

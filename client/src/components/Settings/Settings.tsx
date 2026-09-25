@@ -23,6 +23,7 @@ import { DownloadPerformanceSection } from '../Configuration/sections/DownloadPe
 import { YtdlpOptionsSection } from '../Configuration/sections/YtdlpOptionsSection';
 import { YtdlpUpdateSection } from '../Configuration/sections/YtdlpUpdateSection';
 import { AutoRemovalSection } from '../Configuration/sections/AutoRemovalSection';
+import { StorageLimitsSection } from '../Configuration/sections/StorageLimitsSection';
 import { AccountSecuritySection } from '../Configuration/sections/AccountSecuritySection';
 import ApiKeysSection from '../Configuration/sections/ApiKeysSection';
 import { YouTubeApiSection } from '../Configuration/sections/YouTubeApiSection';
@@ -441,6 +442,18 @@ export function Settings({ token }: SettingsProps) {
             path="autoremove"
             element={
               <AutoRemovalSection
+                token={token}
+                config={config}
+                storageAvailable={storageAvailable}
+                onConfigChange={handleConfigChange}
+                onMobileTooltipClick={setMobileTooltip}
+              />
+            }
+          />
+          <Route
+            path="storage-limits"
+            element={
+              <StorageLimitsSection
                 token={token}
                 config={config}
                 storageAvailable={storageAvailable}

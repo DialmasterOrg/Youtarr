@@ -4,6 +4,15 @@ const path = require('path');
 const logger = require('../logger');
 const { isVideoDirectory, cleanupEmptyChannelDirectory, cleanupEmptyParents, isSubfolderDir, listSubdirectories, removeDirectoryResilient } = require('./filesystem');
 const m3uGenerator = require('./m3uGenerator');
+const storageUsage = require('./storageUsage');
+const { STORED_BYTES_SQL } = storageUsage;
+const storageGuard = require('./storageGuard');
+
+// Oldest-first removal (free-space and total-usage strategies) works in
+// batches and stops after a bounded number of them per run.
+const OLDEST_FIRST_BATCH_SIZE = 50;
+const OLDEST_FIRST_MAX_BATCHES = 10;
+const PLAN_SAMPLE_LIMIT = 10;
 
 class VideoDeletionModule {
   constructor() {}
@@ -109,8 +118,11 @@ class VideoDeletionModule {
         };
       }
 
-      // Check if we have a file path
-      if (!video.filePath) {
+      // Audio-only (MP3) downloads have no video filePath; their files live
+      // at audioFilePath and must be deleted the same way.
+      const primaryPath = video.filePath || video.audioFilePath;
+
+      if (!primaryPath) {
         // No file path, just mark as removed in database
         await video.update({ removed: true });
         return {
@@ -124,13 +136,13 @@ class VideoDeletionModule {
       // Get the video directory path
       // Nested: filePath = /path/to/channel/channel - title - id/video.mp4
       // Flat:   filePath = /path/to/channel/video.mp4
-      const videoDirectory = path.dirname(video.filePath);
-      const flat = this.isFlat(video.filePath);
+      const videoDirectory = path.dirname(primaryPath);
+      const flat = this.isFlat(primaryPath);
 
       // Safety check: ensure the path contains the youtube ID
       // This prevents accidentally deleting the wrong files
-      if (!video.filePath.includes(video.youtubeId)) {
-        logger.error({ videoId, filePath: video.filePath, youtubeId: video.youtubeId }, 'Safety check failed: file path doesn\'t contain youtube ID');
+      if (!primaryPath.includes(video.youtubeId)) {
+        logger.error({ videoId, filePath: primaryPath, youtubeId: video.youtubeId }, 'Safety check failed: file path doesn\'t contain youtube ID');
         return {
           success: false,
           videoId,
@@ -185,7 +197,7 @@ class VideoDeletionModule {
       await video.update({ removed: true });
 
       // Best-effort cleanup of empty channel directory
-      await this._tryCleanupChannelDirectory(video.filePath, flat);
+      await this._tryCleanupChannelDirectory(primaryPath, flat);
 
       return {
         success: true,
@@ -229,6 +241,7 @@ class VideoDeletionModule {
     }
 
     this._regenerateM3usForChannels(affectedChannelIds);
+    if (deleted.length > 0) this._refreshDownloadPauseIfPaused();
 
     return {
       success: failed.length === 0,
@@ -283,12 +296,25 @@ class VideoDeletionModule {
     }
 
     this._regenerateM3usForChannels(affectedChannelIds);
+    if (deleted.length > 0) this._refreshDownloadPauseIfPaused();
 
     return {
       success: failed.length === 0,
       deleted,
       failed
     };
+  }
+
+  /**
+   * Deletions shrink the downloaded total, so re-check a storage pause right
+   * away instead of waiting for the next download request or periodic check.
+   * @private
+   */
+  _refreshDownloadPauseIfPaused() {
+    if (!storageGuard.getStatus().paused) return;
+    storageGuard.refresh().catch((err) => {
+      logger.error({ err }, 'Failed to re-check the download pause state after deleting videos');
+    });
   }
 
   /**
@@ -323,7 +349,7 @@ class VideoDeletionModule {
           videos.youtube_id AS "youtubeId",
           videos.youtube_video_name AS "youTubeVideoName",
           videos.youtube_channel_name AS "youTubeChannelName",
-          videos.file_size AS "fileSize",
+          ${STORED_BYTES_SQL} AS "fileSize",
           COALESCE(videos.last_downloaded_at, jobs.time_created, STR_TO_DATE(videos.original_date, '%Y%m%d')) AS timeCreated
         FROM videos
         LEFT JOIN jobvideos ON videos.id = jobvideos.video_id
@@ -375,7 +401,7 @@ ${excludeClause}        ORDER BY timeCreated ASC
           videos.youtube_id AS "youtubeId",
           videos.youtube_video_name AS "youTubeVideoName",
           videos.youtube_channel_name AS "youTubeChannelName",
-          videos.file_size AS "fileSize",
+          ${STORED_BYTES_SQL} AS "fileSize",
           COALESCE(videos.last_downloaded_at, jobs.time_created, STR_TO_DATE(videos.original_date, '%Y%m%d')) AS timeCreated
         FROM videos
         LEFT JOIN jobvideos ON videos.id = jobvideos.video_id
@@ -474,6 +500,116 @@ ${excludeClause}        ORDER BY timeCreated ASC
   }
 
   /**
+   * Remove the oldest removable videos until at least bytesToFree bytes are
+   * accounted for. Shared by the free-space and total-usage strategies. In a
+   * dry run nothing is deleted and every selected video counts as freed.
+   * Each video tried is excluded from later batches, so a video that fails to
+   * delete is not retried over and over within one run.
+   * @param {object} options
+   * @param {number} options.bytesToFree
+   * @param {number[]} options.excludeIds - Guarded (and, in dry runs, already-claimed) ids
+   * @param {object} options.bucket - The strategy's entry in result.plan
+   * @param {string} options.deletedKey - Result counter to increment, e.g. 'deletedBySpace'
+   * @param {string} options.label - Strategy name for log messages
+   * @param {boolean} options.dryRun
+   * @param {boolean} options.includeSamples
+   * @param {object} options.result - The cleanup result being built
+   * @returns {Promise<{selectedIds: number[]}>}
+   * @private
+   */
+  async _removeOldestUntilFreed({ bytesToFree, excludeIds, bucket, deletedKey, label, dryRun, includeSamples, result }) {
+    const triedIds = new Set();
+    const affectedChannelIds = [];
+    let freedSoFar = 0;
+    let iterations = 0;
+
+    const addSample = (video) => {
+      if (includeSamples && bucket.sampleVideos.length < PLAN_SAMPLE_LIMIT) {
+        bucket.sampleVideos.push(this.formatVideoForPlan(video));
+      }
+    };
+
+    while (freedSoFar < bytesToFree && iterations < OLDEST_FIRST_MAX_BATCHES) {
+      const oldestVideos = await this.getOldestVideos(
+        OLDEST_FIRST_BATCH_SIZE,
+        [...excludeIds, ...triedIds]
+      );
+
+      if (oldestVideos.length === 0) {
+        logger.info({ dryRun, label }, '[Auto-Removal] No more videos available for oldest-first cleanup');
+        break;
+      }
+
+      let batchDeletedCount = 0;
+      let batchFreed = 0;
+
+      for (const video of oldestVideos) {
+        // Stop at the target so a dry run previews what a real run deletes.
+        if (freedSoFar >= bytesToFree) {
+          logger.info({ label }, '[Auto-Removal] Target met, stopping oldest-first cleanup');
+          break;
+        }
+
+        triedIds.add(video.id);
+        bucket.candidateCount += 1;
+        const videoSize = parseInt(video.fileSize) || 0;
+
+        if (dryRun) {
+          freedSoFar += videoSize;
+          batchFreed += videoSize;
+          bucket.estimatedFreedBytes += videoSize;
+          addSample(video);
+          continue;
+        }
+
+        const deleteResult = await this.deleteVideoById(video.id);
+
+        if (deleteResult.success) {
+          freedSoFar += videoSize;
+          batchFreed += videoSize;
+          batchDeletedCount += 1;
+          affectedChannelIds.push(deleteResult.channelId);
+
+          result[deletedKey] += 1;
+          bucket.deletedCount += 1;
+          result.totalDeleted += 1;
+          result.freedBytes += videoSize;
+          bucket.estimatedFreedBytes += videoSize;
+          addSample(video);
+        } else {
+          bucket.failedCount += 1;
+          result.errors.push(`Failed to delete video ${video.id}: ${deleteResult.error}`);
+          logger.error({ videoId: video.id, error: deleteResult.error }, '[Auto-Removal] Failed to delete video');
+        }
+      }
+
+      if (!dryRun) {
+        logger.info({
+          label,
+          batch: iterations + 1,
+          deletedCount: batchDeletedCount,
+          batchFreedGB: (batchFreed / (1024 ** 3)).toFixed(2),
+          totalFreedGB: (freedSoFar / (1024 ** 3)).toFixed(2)
+        }, '[Auto-Removal] Batch completed');
+      }
+
+      iterations += 1;
+    }
+
+    bucket.iterations = iterations;
+
+    if (!dryRun) {
+      if (iterations >= OLDEST_FIRST_MAX_BATCHES) {
+        logger.warn({ label }, '[Auto-Removal] Reached maximum iterations for oldest-first cleanup');
+        result.errors.push('Reached maximum iterations, may need additional cleanup');
+      }
+      this._regenerateM3usForChannels(affectedChannelIds);
+    }
+
+    return { selectedIds: Array.from(triedIds) };
+  }
+
+  /**
    * Perform automatic cleanup based on configured thresholds
    * This is the main method called by the cron job
    * @param {object} options
@@ -491,6 +627,9 @@ ${excludeClause}        ORDER BY timeCreated ASC
 
     const watchedEnabled = config.autoRemovalWatchedEnabled === true;
     const keepRecentCount = this._parsePositiveInt(config.autoRemovalKeepRecentCount);
+    const hasAgeThreshold = config.autoRemovalVideoAgeThreshold !== null && config.autoRemovalVideoAgeThreshold !== '';
+    const hasSpaceThreshold = config.autoRemovalFreeSpaceThreshold !== null && config.autoRemovalFreeSpaceThreshold !== '';
+    const hasUsageLimit = config.autoRemovalUsageLimit !== undefined && config.autoRemovalUsageLimit !== null && config.autoRemovalUsageLimit !== '';
 
     const result = {
       success: true,
@@ -498,6 +637,7 @@ ${excludeClause}        ORDER BY timeCreated ASC
       deletedByAge: 0,
       deletedByWatched: 0,
       deletedBySpace: 0,
+      deletedByUsage: 0,
       totalDeleted: 0,
       freedBytes: 0,
       errors: [],
@@ -544,12 +684,26 @@ ${excludeClause}        ORDER BY timeCreated ASC
           needsCleanup: false,
           iterations: 0,
           sampleVideos: []
+        },
+        usageStrategy: {
+          enabled: false,
+          limit: hasUsageLimit ? config.autoRemovalUsageLimit : null,
+          limitBytes: null,
+          usedBytes: null,
+          candidateCount: 0,
+          estimatedFreedBytes: 0,
+          deletedCount: 0,
+          failedCount: 0,
+          needsCleanup: false,
+          iterations: 0,
+          sampleVideos: []
         }
       },
       simulationTotals: dryRun ? {
         byAge: 0,
         byWatched: 0,
         bySpace: 0,
+        byUsage: 0,
         total: 0,
         estimatedFreedBytes: 0
       } : null
@@ -561,15 +715,13 @@ ${excludeClause}        ORDER BY timeCreated ASC
 
     logger.info({ dryRun }, '[Auto-Removal] Starting automatic video cleanup');
 
-    const hasAgeThreshold = config.autoRemovalVideoAgeThreshold !== null && config.autoRemovalVideoAgeThreshold !== '';
-    const hasSpaceThreshold = config.autoRemovalFreeSpaceThreshold !== null && config.autoRemovalFreeSpaceThreshold !== '';
 
     if (!config.autoRemovalEnabled && !dryRun) {
       logger.info('[Auto-Removal] Auto-removal is disabled, skipping cleanup');
       return result;
     }
 
-    if (!hasAgeThreshold && !hasSpaceThreshold && !watchedEnabled) {
+    if (!hasAgeThreshold && !hasSpaceThreshold && !hasUsageLimit && !watchedEnabled) {
       logger.info('[Auto-Removal] No thresholds configured, skipping cleanup');
       return result;
     }
@@ -794,120 +946,24 @@ ${excludeClause}        ORDER BY timeCreated ASC
               const spaceToFree = thresholdBytes - storageStatus.available;
               logger.info({ spaceToFreeGB: (spaceToFree / (1024 ** 3)).toFixed(2) }, '[Auto-Removal] Need to free storage space');
 
-              const batchSize = 50;
-              const maxIterations = 10;
+              const { selectedIds } = await this._removeOldestUntilFreed({
+                bytesToFree: spaceToFree,
+                excludeIds: dryRun ? [...keepRecentIds, ...dryRunProcessedIds] : keepRecentIds,
+                bucket: result.plan.spaceStrategy,
+                deletedKey: 'deletedBySpace',
+                label: 'space-based',
+                dryRun,
+                includeSamples,
+                result
+              });
 
               if (dryRun) {
-                const processedIds = new Set(dryRunProcessedIds || []);
-                keepRecentIds.forEach(id => processedIds.add(id));
-                let freedSoFar = 0;
-                let iterations = 0;
-
-                while (freedSoFar < spaceToFree && iterations < maxIterations) {
-                  const oldestVideos = await this.getOldestVideos(batchSize, Array.from(processedIds));
-
-                  if (oldestVideos.length === 0) {
-                    logger.info('[Auto-Removal] Dry-run: no more videos available for space-based cleanup');
-                    break;
-                  }
-
-                  oldestVideos.forEach(v => processedIds.add(v.id));
-
-                  const batchFreed = oldestVideos.reduce((sum, v) => sum + (parseInt(v.fileSize) || 0), 0);
-                  freedSoFar += batchFreed;
-
-                  result.plan.spaceStrategy.candidateCount += oldestVideos.length;
-                  result.plan.spaceStrategy.estimatedFreedBytes += batchFreed;
-
-                  if (includeSamples && result.plan.spaceStrategy.sampleVideos.length < 10) {
-                    const remainingSlots = 10 - result.plan.spaceStrategy.sampleVideos.length;
-                    result.plan.spaceStrategy.sampleVideos.push(
-                      ...oldestVideos.slice(0, remainingSlots).map(video => this.formatVideoForPlan(video))
-                    );
-                  }
-
-                  iterations += 1;
-                }
-
-                result.plan.spaceStrategy.iterations = iterations;
-
+                selectedIds.forEach(id => dryRunProcessedIds.add(id));
                 if (result.simulationTotals) {
                   result.simulationTotals.bySpace = result.plan.spaceStrategy.candidateCount;
                   result.simulationTotals.total += result.plan.spaceStrategy.candidateCount;
                   result.simulationTotals.estimatedFreedBytes += result.plan.spaceStrategy.estimatedFreedBytes;
                 }
-              } else {
-                let freedSoFar = 0;
-                let iterations = 0;
-                const affectedChannelIds = [];
-
-                while (freedSoFar < spaceToFree && iterations < maxIterations) {
-                  const oldestVideos = await this.getOldestVideos(batchSize, keepRecentIds);
-
-                  if (oldestVideos.length === 0) {
-                    logger.info('[Auto-Removal] No more videos available to delete');
-                    break;
-                  }
-
-                  let batchDeletedCount = 0;
-                  let batchFreed = 0;
-
-                  // Delete videos one-by-one until threshold is met to avoid over-deletion
-                  for (const video of oldestVideos) {
-                    if (freedSoFar >= spaceToFree) {
-                      logger.info('[Auto-Removal] Space threshold met, stopping space-based cleanup');
-                      break;
-                    }
-
-                    result.plan.spaceStrategy.candidateCount += 1;
-
-                    const deleteResult = await this.deleteVideoById(video.id);
-
-                    if (deleteResult.success) {
-                      const videoSize = parseInt(video.fileSize) || 0;
-                      freedSoFar += videoSize;
-                      batchFreed += videoSize;
-                      batchDeletedCount += 1;
-                      affectedChannelIds.push(deleteResult.channelId);
-
-                      result.deletedBySpace += 1;
-                      result.plan.spaceStrategy.deletedCount += 1;
-                      result.totalDeleted += 1;
-                      result.freedBytes += videoSize;
-                      result.plan.spaceStrategy.estimatedFreedBytes += videoSize;
-
-                      if (includeSamples && result.plan.spaceStrategy.sampleVideos.length < 10) {
-                        result.plan.spaceStrategy.sampleVideos.push(this.formatVideoForPlan(video));
-                      }
-                    } else {
-                      result.plan.spaceStrategy.failedCount += 1;
-                      result.errors.push(`Failed to delete video ${video.id}: ${deleteResult.error}`);
-                      logger.error({ videoId: video.id, error: deleteResult.error }, '[Auto-Removal] Failed to delete video');
-                    }
-                  }
-
-                  logger.info({
-                    batch: iterations + 1,
-                    deletedCount: batchDeletedCount,
-                    batchFreedGB: (batchFreed / (1024 ** 3)).toFixed(2),
-                    totalFreedGB: (freedSoFar / (1024 ** 3)).toFixed(2)
-                  }, '[Auto-Removal] Batch completed');
-
-                  iterations += 1;
-
-                  if (freedSoFar >= spaceToFree) {
-                    break;
-                  }
-                }
-
-                result.plan.spaceStrategy.iterations = iterations;
-
-                if (iterations >= maxIterations) {
-                  logger.warn('[Auto-Removal] Reached maximum iterations for space-based cleanup');
-                  result.errors.push('Reached maximum iterations, may need additional cleanup');
-                }
-
-                this._regenerateM3usForChannels(affectedChannelIds);
               }
             } else {
               logger.info({ availableGB: storageStatus.availableGB }, '[Auto-Removal] Storage is above threshold, no space-based cleanup needed');
@@ -921,12 +977,71 @@ ${excludeClause}        ORDER BY timeCreated ASC
       }
     }
 
+    // Total-usage cleanup: runs last so it only removes what the other
+    // strategies left over the limit.
+    if (hasUsageLimit) {
+      const bucket = result.plan.usageStrategy;
+      const limitBytes = configModule.convertStorageThresholdToBytes(config.autoRemovalUsageLimit);
+
+      if (limitBytes === null) {
+        logger.warn({ limit: config.autoRemovalUsageLimit }, '[Auto-Removal] Invalid total usage limit format, skipping usage-based cleanup');
+        result.errors.push('Invalid total usage limit format, skipped usage-based cleanup');
+      } else {
+        bucket.enabled = true;
+        bucket.limitBytes = limitBytes;
+
+        try {
+          const measuredBytes = await storageUsage.getDownloadedBytes();
+          // A real run measures after earlier deletions; a dry run deleted
+          // nothing, so subtract what the earlier strategies would have freed.
+          const alreadyFreed = dryRun && result.simulationTotals ? result.simulationTotals.estimatedFreedBytes : 0;
+          const usedBytes = Math.max(0, measuredBytes - alreadyFreed);
+          bucket.usedBytes = usedBytes;
+          bucket.needsCleanup = usedBytes > limitBytes;
+
+          if (bucket.needsCleanup) {
+            const bytesToFree = usedBytes - limitBytes;
+            logger.info({ bytesToFreeGB: (bytesToFree / (1024 ** 3)).toFixed(2) }, '[Auto-Removal] Downloaded videos exceed the total usage limit');
+
+            const { selectedIds } = await this._removeOldestUntilFreed({
+              bytesToFree,
+              excludeIds: dryRun ? [...keepRecentIds, ...dryRunProcessedIds] : keepRecentIds,
+              bucket,
+              deletedKey: 'deletedByUsage',
+              label: 'usage-based',
+              dryRun,
+              includeSamples,
+              result
+            });
+
+            if (dryRun) {
+              selectedIds.forEach(id => dryRunProcessedIds.add(id));
+              if (result.simulationTotals) {
+                result.simulationTotals.byUsage = bucket.candidateCount;
+                result.simulationTotals.total += bucket.candidateCount;
+                result.simulationTotals.estimatedFreedBytes += bucket.estimatedFreedBytes;
+              }
+            }
+          } else {
+            logger.info({ usedGB: (usedBytes / (1024 ** 3)).toFixed(2) }, '[Auto-Removal] Downloaded videos are within the total usage limit');
+          }
+        } catch (error) {
+          logger.error({ err: error }, '[Auto-Removal] Error during usage-based cleanup');
+          result.errors.push(`Usage-based cleanup error: ${error.message}`);
+          result.success = false;
+        }
+      }
+    }
+
+    if (!dryRun && result.totalDeleted > 0) this._refreshDownloadPauseIfPaused();
+
     logger.info({
       dryRun,
       totalDeleted: result.totalDeleted,
       deletedByAge: result.deletedByAge,
       deletedByWatched: result.deletedByWatched,
       deletedBySpace: result.deletedBySpace,
+      deletedByUsage: result.deletedByUsage,
       totalFreedGB: (result.freedBytes / (1024 ** 3)).toFixed(2),
       errorCount: result.errors.length
     }, '[Auto-Removal] Cleanup completed');
@@ -936,6 +1051,7 @@ ${excludeClause}        ORDER BY timeCreated ASC
         simulatedByAge: result.simulationTotals.byAge,
         simulatedByWatched: result.simulationTotals.byWatched,
         simulatedBySpace: result.simulationTotals.bySpace,
+        simulatedByUsage: result.simulationTotals.byUsage,
         estimatedFreedGB: (result.simulationTotals.estimatedFreedBytes / (1024 ** 3)).toFixed(2)
       }, '[Auto-Removal] Dry-run simulation summary');
     }

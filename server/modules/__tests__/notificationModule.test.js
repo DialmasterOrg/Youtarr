@@ -998,6 +998,54 @@ describe('NotificationModule Integration', () => {
       );
     });
   });
+
+  describe('sendDownloadPauseNotification', () => {
+    const pausedStatus = {
+      paused: true,
+      reasons: [{ type: 'usage', text: 'downloaded videos use 512.0 GB, over the 500 GB limit' }]
+    };
+
+    it('sends a notification when downloads are paused', async () => {
+      const sendPromise = notificationModule.sendDownloadPauseNotification(pausedStatus);
+
+      setImmediate(() => {
+        mockProcess.emit('close', 0);
+      });
+
+      await sendPromise;
+
+      expect(mockLoggerInfo).toHaveBeenCalledWith(
+        { paused: true, successCount: 1, totalCount: 1 },
+        'Download pause notification sent successfully'
+      );
+    });
+
+    it('skips the notification when notifications are not configured', async () => {
+      mockGetConfig.mockReturnValue({ notificationsEnabled: false, appriseUrls: [] });
+
+      await notificationModule.sendDownloadPauseNotification(pausedStatus);
+
+      expect(mockSpawn).not.toHaveBeenCalled();
+    });
+
+    it('sends a Discord embed for Discord URLs with rich formatting', async () => {
+      mockGetConfig.mockReturnValue({
+        notificationsEnabled: true,
+        appriseUrls: [{ url: 'https://discord.com/api/webhooks/123/abc', name: 'Discord', richFormatting: true }]
+      });
+
+      const sendPromise = notificationModule.sendDownloadPauseNotification(pausedStatus);
+
+      setImmediate(() => {
+        mockResponse.emit('data', '');
+        mockResponse.emit('end');
+      });
+
+      await sendPromise;
+
+      expect(mockRequest.write).toHaveBeenCalledWith(expect.stringContaining('Downloads Paused'));
+    });
+  });
 });
 
 describe('Auto-Removal Utils', () => {

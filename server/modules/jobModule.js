@@ -17,6 +17,7 @@ const videoActivity = require('./download/videoActivity');
 const { isDownloadJob, isSpecificUrlDownloadJob } = require('./download/jobTypes');
 const downloadCleanup = require('./download/downloadCleanup');
 const { serializeAuxData, parseAuxData } = require('./jobAuxData');
+const storageGuard = require('./storageGuard');
 const logger = require('../logger');
 
 const MAX_SAVE_RETRIES = 3;
@@ -61,6 +62,14 @@ class JobModule {
         this.saveJobsAndStartNext();
       });
     }
+
+    // Jobs held while downloads were paused for storage start once it clears.
+    storageGuard.on('resumed', () => {
+      if (this.getInProgressJobId()) return;
+      this.startNextJob().catch((err) => {
+        logger.error({ err }, 'Failed to start queued job after downloads resumed');
+      });
+    });
 
     // Schedule a daily backfill from complete.list and run an initial backfill
     this.scheduleDailyBackfill();
@@ -430,29 +439,62 @@ class JobModule {
     return null;
   }
 
-  async startNextJob() {
+  /**
+   * Start the first Pending job. Overlapping calls share one in-flight scan:
+   * a job stays Pending while its action prepares (channel downloads build
+   * their groups first), so two concurrent scans would both start it.
+   * @returns {Promise<void>}
+   */
+  startNextJob() {
+    if (!this.nextJobStart) {
+      // Deferred a tick so the promise is stored before the scan runs; a
+      // caller re-entering from inside the scan then joins this one.
+      this.nextJobStart = Promise.resolve()
+        .then(() => this._startNextJob())
+        .finally(() => {
+          this.nextJobStart = null;
+        });
+    }
+    return this.nextJobStart;
+  }
+
+  async _startNextJob() {
     logger.info('Looking for next job to start');
+    // Re-checking here also runs after every finished job, so crossing a
+    // storage limit pauses downloads (and alerts the user) right away.
+    // A failed check fails open, like the guard's own measurements.
+    let guardStatus = null;
+    try {
+      guardStatus = await storageGuard.refresh();
+    } catch (err) {
+      logger.error({ err }, 'Could not check the download pause state; starting the next job anyway');
+    }
+    if (guardStatus && guardStatus.paused) {
+      logger.info('Downloads are paused for storage; holding queued jobs');
+      return;
+    }
     const jobs = this.getAllJobs();
     for (let id in jobs) {
-      if (jobs[id].status === 'Pending') {
-        jobs[id].id = id;
-        if (jobs[id].action) {
-          jobs[id].action(jobs[id], true); // Invoke the function
-        } else {
-          // Job is missing its action function (likely loaded from DB after restart)
-          logger.warn({ jobId: id, jobType: jobs[id].jobType },
-            'Cannot start pending job - missing action function, marking as Terminated');
+      if (jobs[id].status !== 'Pending') continue;
+      jobs[id].id = id;
+      if (!jobs[id].action) {
+        // Job is missing its action function (likely loaded from DB after restart)
+        logger.warn({ jobId: id, jobType: jobs[id].jobType },
+          'Cannot start pending job - missing action function, marking as Terminated');
 
-          await this.updateJob(id, {
-            status: 'Terminated',
-            output: 'Job could not be started after server restart',
-          });
-
-          // Try to start the next pending job
-          this.startNextJob();
-        }
-        break;
+        await this.updateJob(id, {
+          status: 'Terminated',
+          output: 'Job could not be started after server restart',
+        });
+        // Try the next pending job
+        continue;
       }
+      // Not awaited (the job runs in the background), so catch here:
+      // an unhandled rejection would exit the process.
+      Promise.resolve(jobs[id].action(jobs[id], true)).catch((err) => {
+        logger.error({ err, jobId: id, jobType: jobs[id].jobType }, 'Failed to start queued job');
+      });
+      break;
     }
   }
 

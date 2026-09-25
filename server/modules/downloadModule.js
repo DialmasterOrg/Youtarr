@@ -11,6 +11,7 @@ const MessageEmitter = require('./messageEmitter');
 const ChannelVideo = require('../models/channelvideo');
 const logger = require('../logger');
 const playlistDownloadModule = require('./playlistDownloadModule');
+const storageGuard = require('./storageGuard');
 
 const DEFAULT_FILES_TO_DOWNLOAD = 5;
 
@@ -200,6 +201,12 @@ class DownloadModule {
   }
 
   async doChannelDownloads(jobData = {}, isNextJob = false) {
+    // New requests are refused while storage limits pause downloads; a held
+    // job being started from the queue (isNextJob) was admitted earlier.
+    if (!isNextJob && !jobData?.id) {
+      await storageGuard.assertDownloadsAllowed();
+    }
+
     const overrideSettings = this.getOverrideSettings(jobData);
     const overrideResolution = overrideSettings.resolution || null;
     const channelDownloadGrouper = require('./channelDownloadGrouper');
@@ -277,14 +284,17 @@ class DownloadModule {
    * @returns {Promise<void>}
    */
   async doChannelAndPlaylistDownloads(jobData = {}) {
+    await storageGuard.assertDownloadsAllowed();
     const downloadRunTracker = require('./download/downloadRunTracker');
     const runId = downloadRunTracker.startRun();
     this.setJobDataValue(jobData, 'runId', runId);
 
     // Playlist failures must not undo the channel jobs already queued, so they
     // are reported to the caller rather than thrown: playlistError for a sweep
-    // that died outright, playlistsFailed for playlists the sweep skipped over.
+    // that died outright, playlistsFailed for playlists the sweep skipped over,
+    // playlistsPausedReason when a storage pause stopped the sweep.
     let playlistError = null;
+    let playlistsPausedReason = null;
     let playlistsFailed = 0;
     let playlistsChecked = 0;
     try {
@@ -295,6 +305,7 @@ class DownloadModule {
         const sweep = await playlistModule.playlistAutoDownload(overrideSettings, runId);
         playlistsFailed = (sweep && sweep.failed) || 0;
         playlistsChecked = (sweep && sweep.playlists) || 0;
+        playlistsPausedReason = (sweep && sweep.pausedReason) || null;
       } catch (err) {
         logger.error({ err }, 'playlistAutoDownload failed after channel downloads');
         playlistError = err.message || 'Unknown error';
@@ -304,7 +315,7 @@ class DownloadModule {
       // summary as soon as its last job finishes.
       downloadRunTracker.seal(runId);
     }
-    return { playlistError, playlistsFailed, playlistsChecked };
+    return { playlistError, playlistsFailed, playlistsChecked, playlistsPausedReason };
   }
 
   async doSingleChannelDownloadJob(jobData = {}, isNextJob = false) {
@@ -323,6 +334,8 @@ class DownloadModule {
       isNextJob
     );
 
+    // No id means another caller already started this queued job.
+    if (!jobId) return;
     this.registerJobWithRun(jobData, jobId);
 
     if (jobModule.getJob(jobId).status === 'In Progress') {
@@ -658,6 +671,9 @@ class DownloadModule {
 
   async doSpecificDownloads(reqOrJobData, isNextJob = false) {
     const jobData = reqOrJobData.body ? reqOrJobData.body : reqOrJobData;
+    if (!isNextJob && !jobData.id) {
+      await storageGuard.assertDownloadsAllowed();
+    }
 
     // Build job type with optional source indicator
     let jobType = MANUAL_DOWNLOAD_LABEL;
@@ -989,6 +1005,8 @@ class DownloadModule {
   }
 
   async doPlaylistDownloads(playlist, options = {}) {
+    // Checked before the YouTube refresh so a paused request does no work.
+    await storageGuard.assertDownloadsAllowed();
     const PlaylistVideo = require('../models/playlistvideo');
     const Video = require('../models/video');
     const playlistModule = require('./playlistModule');

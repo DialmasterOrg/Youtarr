@@ -109,15 +109,24 @@ See [Authentication - Cannot Find the Setup Token](AUTHENTICATION.md#cannot-find
 **Solution**:
 - Confirm the storage indicator (shown in the app header and at the bottom of the navigation sidebar) is visible and shows valid values. Space-based removal requires the server to resolve the download directory path and gather disk usage via `df`.
 - Ensure the `DATA_PATH` (or selected YouTube directory) exists within the container/host and is mounted with read access to filesystem metadata.
-- If you're running on network storage or uncommon mounts, try remounting with `df` support or rely on age-based cleanup instead.
+- If you're running on network storage or uncommon mounts, try remounting with `df` support or rely on age-based or total-size cleanup instead (the total size rule does not use `df`).
 - Retry the preview after saving the configuration again. The preview endpoint requires a valid auth token; log back in if necessary.
+
+### Downloads Stopped with "Downloads are paused"
+
+**Problem**: New downloads are refused (HTTP 409 from the API), scheduled downloads show as skipped, and a "Downloads are paused" banner appears.
+
+**Solution**:
+- A storage limit on **Settings -> Storage Limits** was reached. The banner and the notification say which one and by how much.
+- Free space or remove videos (manually, or with Auto Removal), or raise or clear the limit. Downloads resume on their own: Youtarr re-checks after deletions, on settings changes, and every 5 minutes while paused. Queued downloads then start automatically.
+- If downloads stay paused after an Auto Removal run, check that the pause limits are not stricter than the Auto Removal limits (the Storage Limits page shows a warning when they are).
 
 ### Nightly Cleanup Didn't Delete Anything
 
 **Problem**: Automatic cleanup runs on schedule but no videos are removed.
 
 **Solution**:
-- Verify Automatic Video Removal is enabled on **Settings -> Auto Removal** and at least one rule is configured: an age threshold, a free-space threshold, or watched-based removal. Note that watched-based removal only runs while watch status sync is enabled.
+- Verify Automatic Video Removal is enabled on **Settings -> Auto Removal** and at least one rule is configured: an age threshold, a free-space threshold, a total size limit, or watched-based removal. Note that watched-based removal only runs while watch status sync is enabled.
 - Remember the exclusions. Videos you've marked as Protected, videos of channels with auto-removal protection enabled, and the newest downloads kept by "Keep this many newest downloads" (the global setting plus any per-channel keep counts) are never removed, so a run can legitimately delete nothing.
 - Run the dry-run preview to see how many videos currently match the rules - it also shows how many videos the protection settings are keeping. Adjust values if needed (for example, lower the free-space threshold or reduce the age requirement).
 - Check server logs around the time configured in **Settings -> Scheduling** for cleanup messages to confirm the job is executing (`docker compose logs -f youtarr`).

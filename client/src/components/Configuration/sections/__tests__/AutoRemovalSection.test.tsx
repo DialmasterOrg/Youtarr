@@ -127,7 +127,26 @@ describe('AutoRemovalSection', () => {
     expect(
       screen.getByText(/Videos are removed when they match any enabled rule below/i)
     ).toBeInTheDocument();
-    expect(screen.getAllByText('OR')).toHaveLength(2);
+    expect(screen.getAllByText('OR')).toHaveLength(3);
+  });
+
+  test('offers the total size rule even when disk space reporting is unavailable', () => {
+    const props = createSectionProps({
+      config: createConfig({ autoRemovalEnabled: true }),
+      storageAvailable: false,
+    });
+    renderWithProviders(<AutoRemovalSection {...props} />);
+
+    expect(screen.getByText('Total size of downloads')).toBeInTheDocument();
+  });
+
+  test('treats a total size limit as a configured rule', () => {
+    const props = createSectionProps({
+      config: createConfig({ autoRemovalEnabled: true, autoRemovalUsageLimit: '500GB' }),
+    });
+    renderWithProviders(<AutoRemovalSection {...props} />);
+
+    expect(screen.getByRole('button', { name: /Preview Automatic Removal/i })).toBeEnabled();
   });
 
   test('renders storage unavailable warning when free-space data is missing', async () => {
@@ -192,6 +211,7 @@ describe('AutoRemovalSection', () => {
       autoRemovalWatchedMinDaysSinceWatched: '',
       autoRemovalWatchedMinVideoAgeDays: '',
       autoRemovalKeepRecentCount: 0,
+      autoRemovalUsageLimit: '',
     });
 
     expect(await screen.findByText('Preview Summary')).toBeInTheDocument();

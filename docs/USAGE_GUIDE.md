@@ -280,6 +280,7 @@ Set up automatic downloads on a schedule so Youtarr checks for new videos period
      - **Old videos**: **Delete videos older than** a set number of days
      - **Watched videos**: **Remove watched videos** once your media servers report them watched (see [Track Watch Status from Media Servers](#track-watch-status-from-media-servers)); you can add a **Wait after last watch** delay and a **Minimum time since download** so fresh downloads aren't removed right away
      - **Low disk space**: delete the oldest videos **When free space falls below** a threshold
+     - **Total size of downloads**: delete the oldest videos **When downloads total more than** a size, for example to stay under a cloud storage quota
    - Some videos are always kept, no matter which rules match:
      - Videos you've marked as Protected
      - The newest N downloads, if you set **Keep this many newest downloads**
@@ -288,7 +289,13 @@ Set up automatic downloads on a schedule so Youtarr checks for new videos period
      - This shows you exactly which videos would be deleted without actually removing them
      - Highly recommended before enabling auto-cleanup
 
-6. **Save configuration**
+6. **Pause downloads when storage is full** (optional)
+   - Open **Settings -> Storage Limits**
+   - **Pause when downloads total more than** a size, and/or **Pause when free space falls below** a size
+   - While paused, new downloads are refused, queued downloads wait, and a banner explains why; you also get a notification when downloads pause and when they resume
+   - Downloads resume automatically once storage is back within your limits (for example after Auto Removal frees space)
+
+7. **Save configuration**
    - Click "Save" to apply your settings
    - Changes take effect immediately for the next scheduled run
 

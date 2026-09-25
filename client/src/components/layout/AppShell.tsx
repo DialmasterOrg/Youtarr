@@ -6,6 +6,7 @@ import { NavHeader } from './NavHeader';
 import { NavSidebar } from './NavSidebar';
 import { BackgroundDecorations } from './BackgroundDecorations';
 import UpdateAvailableBanner from './UpdateAvailableBanner';
+import DownloadPauseBanner from './DownloadPauseBanner';
 import { NavItem } from './navigation';
 import { getThemeById, getThemeLayoutCssVars, resolveThemeLayoutPolicy } from '../../themes';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
@@ -286,6 +287,7 @@ export function AppShell({
             boxShadow: 'var(--layout-content-frame-shadow)',
           }}
         >
+          <DownloadPauseBanner token={token} />
           {children}
         </div>
       </main>

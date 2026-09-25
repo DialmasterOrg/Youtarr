@@ -251,6 +251,7 @@ const initialize = async () => {
     const { registerRoutes } = require('./routes');
     const scheduledTaskRuns = require('./modules/scheduledTaskRuns');
     const scheduledTaskManager = require('./modules/scheduledTaskManager');
+    const storageGuard = require('./modules/storageGuard');
 
     // Runs left "running" by the previous process never finished; close them
     // out before any timer fires, then start recording this process's runs.
@@ -323,6 +324,9 @@ const initialize = async () => {
     watchStatusScheduler.scheduleTask();
     watchStatusScheduler.subscribe();
     channelBackdropBackfill.subscribe();
+    storageGuard.initialize().catch((err) => {
+      logger.error({ err }, 'Initial download pause check failed');
+    });
     subscriptionImportModule.init({
       channelModule,
       jobModule,

@@ -28,6 +28,9 @@ jest.mock('../downloadModule', () => ({
 jest.mock('../jobModule', () => ({
   addJob: jest.fn().mockResolvedValue('mock-job-id'),
 }));
+jest.mock('../storageGuard', () => ({
+  isPausedError: (err) => Boolean(err && err.code === 'DOWNLOADS_PAUSED'),
+}));
 jest.mock('../youtubeApi', () => ({
   isAvailable: jest.fn(() => false),
   getApiKey: jest.fn(() => null),
@@ -1925,8 +1928,40 @@ describe('playlistModule', () => {
         enqueued: 3,
         failed: 1,
         errors: [{ playlistId: 'PL1', message: 'yt-dlp exited 1' }],
+        pausedReason: null,
       });
       expect(downloadModule.doPlaylistDownloads).toHaveBeenCalledTimes(2);
+    });
+
+    describe('when downloads are paused for storage', () => {
+      const pausedError = () => Object.assign(new Error('Downloads are paused: over the limit'), { code: 'DOWNLOADS_PAUSED' });
+
+      beforeEach(() => {
+        Playlist.findAll.mockResolvedValue([
+          { playlist_id: 'PL1', title: 'One' },
+          { playlist_id: 'PL2', title: 'Two' },
+        ]);
+        downloadModule.doPlaylistDownloads.mockRejectedValueOnce(pausedError());
+      });
+
+      test('stops the sweep at the first refused playlist', async () => {
+        await playlistModule.playlistAutoDownload();
+
+        expect(downloadModule.doPlaylistDownloads).toHaveBeenCalledTimes(1);
+      });
+
+      test('reports the pause instead of a failure', async () => {
+        await expect(playlistModule.playlistAutoDownload()).resolves.toMatchObject({
+          failed: 0,
+          pausedReason: 'Downloads are paused: over the limit',
+        });
+      });
+
+      test('does not record an idle sweep job', async () => {
+        await playlistModule.playlistAutoDownload();
+
+        expect(jobModule.addJob).not.toHaveBeenCalled();
+      });
     });
 
     test('reports a clean sweep with its counts', async () => {
@@ -1934,7 +1969,7 @@ describe('playlistModule', () => {
       downloadModule.doPlaylistDownloads.mockResolvedValueOnce(2);
 
       await expect(playlistModule.playlistAutoDownload()).resolves.toEqual({
-        playlists: 1, enqueued: 2, failed: 0, errors: [],
+        playlists: 1, enqueued: 2, failed: 0, errors: [], pausedReason: null,
       });
     });
 

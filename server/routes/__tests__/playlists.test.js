@@ -76,6 +76,10 @@ const buildDeps = (overrides = {}) => ({
   // time, so the filter tests exercise the actual set logic through the route.
   playlistVideoFilters: require('../../modules/playlistVideoFilters'),
   playlistDownloadModule: require('../../modules/playlistDownloadModule'),
+  storageGuard: {
+    isPausedError: jest.fn((err) => Boolean(err && err.code === 'DOWNLOADS_PAUSED')),
+    ...overrides.storageGuard,
+  },
   models: {
     Playlist: {
       findAndCountAll: jest.fn(),
@@ -1720,6 +1724,23 @@ describe('POST /api/playlists/:playlistId/download', () => {
 
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: 'Failed to start playlist download' });
+  });
+
+  test('returns 409 with the reason when downloads are paused for storage', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(makePlaylist());
+    deps.downloadModule.doPlaylistDownloads.mockRejectedValue(
+      Object.assign(new Error('Downloads are paused: over the limit'), { code: 'DOWNLOADS_PAUSED' })
+    );
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/download', deps);
+    const req = { params: { playlistId: 'PLtest123' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Downloads are paused: over the limit' });
   });
 
   test('passes videoIds through to doPlaylistDownloads when provided', async () => {
