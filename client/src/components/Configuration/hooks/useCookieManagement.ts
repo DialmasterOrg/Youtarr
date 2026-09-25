@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { CONFIG_UPDATED_EVENT } from '../../../hooks/useConfig';
 import { ConfigState, CookieStatus, SnackbarState } from '../types';
 
 interface UseCookieManagementParams {
@@ -33,6 +34,13 @@ export const useCookieManagement = ({
   // Fetch cookie status on mount; externally managed files can also be refreshed.
   useEffect(() => {
     void refreshCookieStatus();
+  }, [refreshCookieStatus]);
+
+  // Saving Enable Cookies changes which file is active, and so its details.
+  useEffect(() => {
+    const refresh = () => { void refreshCookieStatus(); };
+    window.addEventListener(CONFIG_UPDATED_EVENT, refresh);
+    return () => window.removeEventListener(CONFIG_UPDATED_EVENT, refresh);
   }, [refreshCookieStatus]);
 
   // Keep external-source warnings and recovery visible while Settings is open.

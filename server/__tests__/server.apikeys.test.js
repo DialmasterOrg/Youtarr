@@ -321,6 +321,11 @@ const createServerModule = ({
           previewTemplate: jest.fn(),
           validateTemplate: jest.fn().mockResolvedValue({ ok: true })
         }));
+        // Same reason: cookieTest also loads ytDlpRunner.
+        jest.doMock('../modules/cookieTest', () => ({
+          run: jest.fn(),
+          isBusyError: jest.fn(() => false)
+        }));
         jest.doMock('../models/channelvideo', () => ({
           update: jest.fn().mockResolvedValue([1])
         }));

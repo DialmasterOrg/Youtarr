@@ -149,6 +149,7 @@ const createServerModule = ({
           getConfig: jest.fn(() => configState),
           updateConfig: jest.fn((patch) => Object.assign(configState, patch)),
           getImagePath: jest.fn(() => '/images'),
+          getCookiesPath: jest.fn(() => null),
           getCookiesStatus: jest.fn(() => ({
             cookiesEnabled: false,
             customCookiesUploaded: false,
@@ -271,6 +272,11 @@ const createServerModule = ({
         jest.doMock('../modules/filenamePreview', () => ({
           previewTemplate: jest.fn(),
           validateTemplate: jest.fn().mockResolvedValue({ ok: true })
+        }));
+        // Same reason: cookieTest also loads ytDlpRunner.
+        jest.doMock('../modules/cookieTest', () => ({
+          run: jest.fn(),
+          isBusyError: jest.fn(() => false)
         }));
         jest.doMock('../models/channelvideo', () => ({
           update: jest.fn().mockResolvedValue([1])
@@ -409,7 +415,8 @@ describe('server routes - cookies', () => {
       expect(res.body).toEqual({
         cookiesEnabled: true,
         customCookiesUploaded: true,
-        customFileExists: true
+        customFileExists: true,
+        details: null
       });
     });
   });
@@ -488,7 +495,8 @@ describe('server routes - cookies', () => {
         cookieStatus: {
           cookiesEnabled: false,
           customCookiesUploaded: false,
-          customFileExists: false
+          customFileExists: false,
+          details: null
         }
       });
     });

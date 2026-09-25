@@ -629,6 +629,26 @@ const initialize = async () => {
       },
     });
 
+    // Rate limiter for /api/cookies/test. Each test spawns yt-dlp and makes a
+    // signed-in request to YouTube; repeated tests could draw a bot check.
+    const cookieTestRateLimiter = rateLimit({
+      windowMs: 1 * 60 * 1000,
+      max: 5,
+      message: { error: 'Too many cookie tests. Please wait a minute before trying again.' },
+      standardHeaders: true,
+      legacyHeaders: false,
+      validate: {
+        trustProxy: false,
+        ip: false,
+      },
+      keyGenerator: (req) => getRateLimitAddress(req),
+      handler: (_req, res) => {
+        res.status(429).json({
+          error: 'Too many cookie tests. Please wait a minute before trying again.',
+        });
+      },
+    });
+
     /**** ONLY ROUTES BELOW THIS LINE *********/
 
     // Setup Swagger documentation at /swagger
@@ -685,6 +705,7 @@ const initialize = async () => {
       youtubeApiKeyTestLimiter,
       ytdlpValidationRateLimiter,
       filenamePreviewRateLimiter,
+      cookieTestRateLimiter,
       configModule,
       channelModule,
       plexModule,

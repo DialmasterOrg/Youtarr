@@ -426,6 +426,29 @@ Sync is one-way (server -> Youtarr). Non-owner Plex users come from the server's
 - **Description**: Indicates if custom cookies.txt file has been uploaded
 - **Note**: Managed automatically by the application
 
+### Cookie Details and Test
+
+Once cookies are enabled and saved, Settings -> Cookies summarizes the active
+cookie file (uploaded or external) and offers a **Test cookies** button. Neither
+is a config field.
+
+- **Details** come from reading the file locally. They show how many of
+  YouTube's login cookies it contains (`SID`, `HSID`, `SSID`, `APISID`,
+  `SAPISID`, the `__Secure-1P/3P` variants, and `LOGIN_INFO` on `youtube.com`),
+  when the earliest one expires, and a warning when any have already expired or
+  none are present (an export from a signed-out browser). Session cookies have
+  no expiry date and are labeled as such. Cookie values are never read out or
+  returned. YouTube can end a session before these dates, so a future expiry
+  does not prove the cookies still work.
+- **Test cookies** makes one request to YouTube's subscriptions feed with the
+  active cookies, through the same proxy, IP family, and yt-dlp cache as
+  downloads. That feed only loads for a signed-in session, so the result answers
+  "are these cookies still signed in?" right away. An account with no
+  subscriptions still passes. Failures name the likely cause: not signed in
+  (expired, rotated, or signed-out cookies), a bot check, a network problem, a
+  timeout (60 seconds), or an unusable external file. One test runs at a time,
+  and tests are limited to 5 per minute.
+
 ### External Cookie File
 
 To refresh cookies from an external script or service, set the optional

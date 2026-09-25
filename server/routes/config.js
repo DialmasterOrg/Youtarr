@@ -88,7 +88,10 @@ const cookieUpload = multer({
  * @param {boolean} deps.isWslEnvironment - Whether running in WSL
  * @returns {express.Router}
  */
-module.exports = function createConfigRoutes({ verifyToken, configModule, validateEnvAuthCredentials, isWslEnvironment, filenamePreviewRateLimiter }) {
+module.exports = function createConfigRoutes({
+  verifyToken, configModule, validateEnvAuthCredentials, isWslEnvironment, filenamePreviewRateLimiter,
+  cookieDetails, cookieTest, cookieTestRateLimiter,
+}) {
   const router = express.Router();
 
   /**
@@ -399,6 +402,13 @@ module.exports = function createConfigRoutes({ verifyToken, configModule, valida
     }
   );
 
+  // Every cookie route returns details, so the client never replaces its
+  // status with a copy that lacks them (the Test button depends on details).
+  const getCookieStatusWithDetails = () => ({
+    ...configModule.getCookiesStatus(),
+    details: cookieDetails.getDetails(configModule.getCookiesPath()),
+  });
+
   /**
    * @swagger
    * /api/cookies/status:
@@ -440,16 +450,90 @@ module.exports = function createConfigRoutes({ verifyToken, configModule, valida
    *                     error:
    *                       type: string
    *                       nullable: true
+   *                 details:
+   *                   type: object
+   *                   nullable: true
+   *                   description: Summary of YouTube login cookies in the active cookie file. Null when cookies are disabled, no file is active, or the file cannot be read. Never includes cookie values.
+   *                   properties:
+   *                     loginCookiesFound:
+   *                       type: integer
+   *                       description: Distinct YouTube login cookie names (SID, SAPISID, __Secure-3PSID, LOGIN_INFO, ...) on youtube.com.
+   *                     sessionLoginCookies:
+   *                       type: integer
+   *                       description: Login cookies with no expiry (session cookies).
+   *                     expiredLoginCookies:
+   *                       type: integer
+   *                     earliestExpiry:
+   *                       type: string
+   *                       format: date-time
+   *                       nullable: true
+   *                       description: Earliest expiry among login cookies that have one, including already-expired ones.
+   *                     earliestExpiryName:
+   *                       type: string
+   *                       nullable: true
+   *                     lastModified:
+   *                       type: string
+   *                       format: date-time
    *       500:
    *         description: Failed to get cookie status
    */
   router.get('/api/cookies/status', verifyToken, (req, res) => {
     try {
-      const status = configModule.getCookiesStatus();
-      res.json(status);
+      res.json(getCookieStatusWithDetails());
     } catch (error) {
       req.log.error({ err: error }, 'Failed to get cookie status');
       res.status(500).json({ error: 'Failed to get cookie status' });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/cookies/test:
+   *   post:
+   *     summary: Test the active cookie file
+   *     description: Requests YouTube's subscriptions feed with the active cookies, using the same proxy, IP family, and cache settings as downloads, to check whether they still belong to a signed-in session. An account with no subscriptions still passes. Rate limited.
+   *     tags: [Configuration]
+   *     responses:
+   *       200:
+   *         description: Test completed. Check `ok` for the result.
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 ok:
+   *                   type: boolean
+   *                 message:
+   *                   type: string
+   *                   description: Present when ok is true.
+   *                 code:
+   *                   type: string
+   *                   enum: [EXPIRED_COOKIES, BOT_CHECK, NETWORK, TIMEOUT, INVALID_COOKIE_FILE, UNKNOWN]
+   *                   description: Present when ok is false.
+   *                 error:
+   *                   type: string
+   *                   description: Present when ok is false.
+   *       400:
+   *         description: Cookies are disabled or no cookie file is active.
+   *       409:
+   *         description: A cookie test is already running.
+   *       429:
+   *         description: Too many cookie tests.
+   *       500:
+   *         description: Failed to run the cookie test
+   */
+  router.post('/api/cookies/test', verifyToken, cookieTestRateLimiter, async (req, res) => {
+    if (!configModule.getCookiesPath()) {
+      return res.status(400).json({ error: 'No cookie file is active. Enable cookies and upload or configure a cookie file first.' });
+    }
+    try {
+      res.json(await cookieTest.run());
+    } catch (error) {
+      if (cookieTest.isBusyError(error)) {
+        return res.status(409).json({ error: 'A cookie test is already running.' });
+      }
+      req.log.error({ err: error }, 'Failed to run cookie test');
+      res.status(500).json({ error: 'Failed to run cookie test' });
     }
   });
 
@@ -473,7 +557,7 @@ module.exports = function createConfigRoutes({ verifyToken, configModule, valida
    *                 description: Netscape format cookie file
    *     responses:
    *       200:
-   *         description: Cookie file uploaded successfully
+   *         description: Cookie file uploaded successfully. `cookieStatus` has the same shape as GET /api/cookies/status, including details.
    *       400:
    *         description: Invalid file or format
    *       409:
@@ -501,7 +585,7 @@ module.exports = function createConfigRoutes({ verifyToken, configModule, valida
 
       configModule.writeCustomCookiesFile(Buffer.from(fileContent));
 
-      const status = configModule.getCookiesStatus();
+      const status = getCookieStatusWithDetails();
       res.json({
         status: 'success',
         message: 'Cookie file uploaded successfully',
@@ -522,7 +606,7 @@ module.exports = function createConfigRoutes({ verifyToken, configModule, valida
    *     tags: [Configuration]
    *     responses:
    *       200:
-   *         description: Cookie file deleted successfully
+   *         description: Cookie file deleted successfully. `cookieStatus` has the same shape as GET /api/cookies/status, including details.
    *       409:
    *         description: Cookies are managed externally via YOUTARR_COOKIES_FILE.
    *       500:
@@ -534,7 +618,7 @@ module.exports = function createConfigRoutes({ verifyToken, configModule, valida
         return res.status(409).json({ error: 'Cookies are managed externally. Unset YOUTARR_COOKIES_FILE to manage uploaded cookies.' });
       }
       configModule.deleteCustomCookiesFile();
-      const status = configModule.getCookiesStatus();
+      const status = getCookieStatusWithDetails();
       res.json({
         status: 'success',
         message: 'Custom cookie file deleted',
