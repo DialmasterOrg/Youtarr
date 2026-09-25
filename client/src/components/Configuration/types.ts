@@ -93,6 +93,15 @@ export interface DeploymentEnvironment {
   isWsl: boolean;
 }
 
+export interface CookieDetails {
+  loginCookiesFound: number;
+  sessionLoginCookies: number;
+  expiredLoginCookies: number;
+  earliestExpiry: string | null;
+  earliestExpiryName: string | null;
+  lastModified: string;
+}
+
 export interface CookieStatus {
   cookiesEnabled: boolean;
   customCookiesUploaded: boolean;
@@ -104,7 +113,12 @@ export interface CookieStatus {
     warning: string | null;
     error: string | null;
   };
+  details?: CookieDetails | null;
 }
+
+export type CookieTestResult =
+  | { ok: true; message: string }
+  | { ok: false; code?: string; error: string };
 
 export interface SnackbarState {
   open: boolean;

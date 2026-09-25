@@ -38,6 +38,8 @@ const scheduleConfig = require('../modules/scheduleConfig');
 const rescanRunSummary = require('../modules/rescanRunSummary');
 const ytdlpUpdateRunSummary = require('../modules/ytdlpUpdateRunSummary');
 const storageGuard = require('../modules/storageGuard');
+const cookieDetails = require('../modules/cookieDetails');
+const cookieTest = require('../modules/cookieTest');
 
 /**
  * Registers all route modules with the Express app
@@ -52,6 +54,7 @@ function registerRoutes(app, deps) {
     youtubeApiKeyTestLimiter,
     ytdlpValidationRateLimiter,
     filenamePreviewRateLimiter,
+    cookieTestRateLimiter,
     configModule,
     channelModule,
     plexModule,
@@ -83,7 +86,10 @@ function registerRoutes(app, deps) {
   app.use(createSetupRoutes({ configModule, setupTokenModule, setupCreateAuthLimiter, getClientAddress }));
 
   // Config routes
-  app.use(createConfigRoutes({ verifyToken, configModule, validateEnvAuthCredentials, isWslEnvironment, filenamePreviewRateLimiter }));
+  app.use(createConfigRoutes({
+    verifyToken, configModule, validateEnvAuthCredentials, isWslEnvironment, filenamePreviewRateLimiter,
+    cookieDetails, cookieTest, cookieTestRateLimiter,
+  }));
 
   // Channel routes
   app.use(createChannelRoutes({ verifyToken, channelModule, archiveModule, channelDownloadAllModule, ratingMapper, storageGuard }));
