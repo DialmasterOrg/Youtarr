@@ -2,10 +2,8 @@ const { injectReplacements } = require('sequelize/lib/utils/sql');
 const { Video, JobVideo, Job, Channel } = require('../models');
 const logger = require('../logger');
 const watchStatusQueries = require('./mediaServers/watchStatusQueries');
+const { STORED_BYTES_SQL } = require('./storageUsage');
 const { TIME_CREATED_ATTRIBUTE } = require('./videosModule');
-
-// This matches STORED_BYTES_SQL in storageUsage but with the correct table name for the sequlize-generated queries.
-const STORED_BYTES_SQL_SEQUELIZE = '(COALESCE(Video.file_size, 0) + COALESCE(Video.audio_file_size, 0))';
 
 // Read-only candidate queries for auto-removal (the watched strategy and
 // the keep-most-recent guard, including per-channel keep-recent); deletion itself stays in videoDeletionModule.
@@ -57,7 +55,7 @@ class AutoRemovalQueries {
         'youtubeId',
         'youTubeVideoName',
         'youTubeChannelName',
-        [sequelize.literal(STORED_BYTES_SQL_SEQUELIZE), 'fileSize'],
+        [sequelize.literal(STORED_BYTES_SQL), 'fileSize'],
       );
     }
 

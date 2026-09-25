@@ -17,6 +17,9 @@ jest.mock('../../models/channel', () => mockFactories.mockChannelModel());
 jest.mock('../../models/channelvideo', () => mockFactories.mockChannelVideoModel());
 jest.mock('../../models/video', () => mockFactories.mockVideoModel());
 jest.mock('../../models/videowatchstatus', () => mockFactories.mockVideoWatchStatusModel());
+jest.mock('../../models', () => ({
+  Video: require('../../models/video'),
+}));
 jest.mock('../mediaServers/watchStatusQueries', () => ({ getWatchedByMap: jest.fn() }));
 jest.mock('../configModule', () => mockFactories.mockConfigModule());
 jest.mock('../youtubeApi', () => mockFactories.mockYoutubeApi());
