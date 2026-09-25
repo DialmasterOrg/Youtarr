@@ -118,18 +118,25 @@ class AutoRemovalQueries {
    * @returns {Promise<{channelCount: number, ids: number[]}>}
    */
   async getChannelKeepRecentIds() {
-    const { Sequelize, sequelize } = require('../db.js');
+    const { Sequelize } = require('../db.js');
 
     try {
-      const channels = await sequelize.query(
-        `SELECT channel_id, auto_removal_keep_recent_count AS "keepCount"
-         FROM channels
-         WHERE auto_removal_keep_recent_count > 0
-           AND auto_removal_protected = 0
-           AND enabled = 1
-           AND channel_id IS NOT NULL`,
-        { type: Sequelize.QueryTypes.SELECT }
-      );
+      const channels = await Channel.findAll({
+        attributes: [
+          'channel_id',
+          'auto_removal_keep_recent_count',
+        ],
+        where: {
+          auto_removal_keep_recent_count: {
+            [Sequelize.Op.gt]: 0
+          },
+          auto_removal_protected: false,
+          enabled: true,
+          channel_id: {
+            [Sequelize.Op.not]: null,
+          },
+        },
+      });
 
       const ids = [];
       for (const channel of channels) {
