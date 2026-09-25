@@ -37,6 +37,7 @@ const scheduledTaskRuns = require('../modules/scheduledTaskRuns');
 const scheduleConfig = require('../modules/scheduleConfig');
 const rescanRunSummary = require('../modules/rescanRunSummary');
 const ytdlpUpdateRunSummary = require('../modules/ytdlpUpdateRunSummary');
+const storageGuard = require('../modules/storageGuard');
 
 /**
  * Registers all route modules with the Express app
@@ -85,10 +86,10 @@ function registerRoutes(app, deps) {
   app.use(createConfigRoutes({ verifyToken, configModule, validateEnvAuthCredentials, isWslEnvironment, filenamePreviewRateLimiter }));
 
   // Channel routes
-  app.use(createChannelRoutes({ verifyToken, channelModule, archiveModule, channelDownloadAllModule, ratingMapper }));
+  app.use(createChannelRoutes({ verifyToken, channelModule, archiveModule, channelDownloadAllModule, ratingMapper, storageGuard }));
 
   // Video routes
-  app.use(createVideoRoutes({ verifyToken, videosModule, downloadModule, videoOembedEnricher, videoLocalStatus }));
+  app.use(createVideoRoutes({ verifyToken, videosModule, downloadModule, videoOembedEnricher, videoLocalStatus, storageGuard }));
 
   // Video search routes
   app.use(createVideoSearchRoutes({ verifyToken, videoSearchModule }));
@@ -103,7 +104,7 @@ function registerRoutes(app, deps) {
   app.use(createYtdlpOptionsRoutes({ verifyToken, ytdlpValidationRateLimiter }));
 
   // Job routes
-  app.use(createJobRoutes({ verifyToken, jobModule, downloadModule, videoActivity }));
+  app.use(createJobRoutes({ verifyToken, jobModule, downloadModule, videoActivity, storageGuard }));
 
   // Plex routes
   app.use(createPlexRoutes({ verifyToken, plexModule, configModule }));
@@ -118,7 +119,7 @@ function registerRoutes(app, deps) {
   app.use(createVideoDetailRoutes({ verifyToken, videoMetadataModule, mediaServers }));
 
   // Playlist routes
-  app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule }));
+  app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule, storageGuard }));
 
   // Media server routes
   app.use(createMediaServerRoutes({ verifyToken, configModule, mediaServers }));

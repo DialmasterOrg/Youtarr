@@ -133,6 +133,11 @@ export const CONFIG_FIELDS = {
   autoRemovalWatchedMinDaysSinceWatched: { default: '', trackChanges: true },
   autoRemovalWatchedMinVideoAgeDays: { default: '', trackChanges: true },
   autoRemovalKeepRecentCount: { default: 0, trackChanges: true },
+  autoRemovalUsageLimit: { default: '', trackChanges: true },
+
+  // Download pause (storage limits)
+  downloadPauseUsageLimit: { default: '', trackChanges: true },
+  downloadPauseMinFreeSpace: { default: '', trackChanges: true },
 
   // Storage
   useTmpForDownloads: { default: false, trackChanges: true },
@@ -263,6 +268,9 @@ export const DEFAULT_CONFIG: ConfigState = {
   autoRemovalWatchedMinDaysSinceWatched: CONFIG_FIELDS.autoRemovalWatchedMinDaysSinceWatched.default,
   autoRemovalWatchedMinVideoAgeDays: CONFIG_FIELDS.autoRemovalWatchedMinVideoAgeDays.default,
   autoRemovalKeepRecentCount: CONFIG_FIELDS.autoRemovalKeepRecentCount.default,
+  autoRemovalUsageLimit: CONFIG_FIELDS.autoRemovalUsageLimit.default,
+  downloadPauseUsageLimit: CONFIG_FIELDS.downloadPauseUsageLimit.default,
+  downloadPauseMinFreeSpace: CONFIG_FIELDS.downloadPauseMinFreeSpace.default,
   useTmpForDownloads: CONFIG_FIELDS.useTmpForDownloads.default,
   tmpFilePath: CONFIG_FIELDS.tmpFilePath.default,
   subtitlesEnabled: CONFIG_FIELDS.subtitlesEnabled.default,

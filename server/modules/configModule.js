@@ -7,6 +7,10 @@ const { getExternalCookiesPath, getExternalCookiesStatus } = require('./external
 const { getDefaultNameForUrl } = require('./notificationHelpers');
 const { SCHEDULES, normalizeToMinimumInterval, violatesMinimumInterval } = require('./scheduleConfig');
 
+// Storage limit settings: a positive whole number with a unit, or '' for off.
+const STORAGE_SIZE_KEYS = ['downloadPauseUsageLimit', 'downloadPauseMinFreeSpace', 'autoRemovalUsageLimit'];
+const STORAGE_SIZE_PATTERN = /^[1-9]\d*(MB|GB|TB)$/;
+
 const CONFIG_WATCH_DOCS_URL = 'https://dialmasterorg.github.io/Youtarr/docs/troubleshooting/#config-file-watcher-limit';
 const CONFIG_WATCH_LIMIT_SETTINGS = {
   EMFILE: 'fs.inotify.max_user_instances',
@@ -74,6 +78,10 @@ class ConfigModule extends EventEmitter {
 
     // Migrate notification settings to new format
     if (this.migrateNotificationSettings()) {
+      legacyMigrationNeeded = true;
+    }
+
+    if (this.normalizeStorageSizeFields()) {
       legacyMigrationNeeded = true;
     }
 
@@ -446,6 +454,10 @@ class ConfigModule extends EventEmitter {
               legacyMigrationNeeded = true;
             }
 
+            if (this.normalizeStorageSizeFields()) {
+              legacyMigrationNeeded = true;
+            }
+
             // Save config if modified by merge or legacy migrations
             if (mergeResult.modified || legacyMigrationNeeded) {
               this.saveConfig();
@@ -701,8 +713,34 @@ class ConfigModule extends EventEmitter {
   }
 
   /**
+   * Correct or clear hand-edited storage limit settings. The UI always sends
+   * the full config and /updateconfig rejects malformed sizes, so a bad value
+   * left in config.json would block every Settings save; the guard already
+   * ignores it, so clearing it only makes the UI match what is enforced.
+   * "500 gb" becomes "500GB"; anything still invalid (including 0) becomes ''.
+   * @returns {boolean} True if any value changed
+   */
+  normalizeStorageSizeFields() {
+    let changed = false;
+    for (const key of STORAGE_SIZE_KEYS) {
+      const value = this.config[key];
+      if (value === undefined || value === null || value === '') continue;
+      const cleaned = String(value).replace(/\s+/g, '').toUpperCase();
+      const replacement = STORAGE_SIZE_PATTERN.test(cleaned) ? cleaned : '';
+      if (replacement === value) continue;
+      logger.warn(
+        { key, previous: value, replacement },
+        replacement ? 'Corrected the format of a storage limit setting' : 'Cleared an invalid storage limit setting'
+      );
+      this.config[key] = replacement;
+      changed = true;
+    }
+    return changed;
+  }
+
+  /**
    * Convert storage threshold string (e.g., "1GB") to bytes
-   * @param {string} threshold - Threshold string like "500MB", "1GB", etc.
+   * @param {string} threshold - Threshold string like "500MB", "1GB", "2TB"
    * @returns {number|null} - Threshold in bytes, or null if invalid/not set
    */
   convertStorageThresholdToBytes(threshold) {
@@ -712,11 +750,12 @@ class ConfigModule extends EventEmitter {
 
     const units = {
       'MB': 1024 * 1024,
-      'GB': 1024 * 1024 * 1024
+      'GB': 1024 * 1024 * 1024,
+      'TB': 1024 * 1024 * 1024 * 1024
     };
 
-    // Match pattern like "500MB" or "1GB"
-    const match = threshold.toString().match(/^(\d+)(MB|GB)$/);
+    // Match pattern like "500MB", "1GB" or "2TB"
+    const match = threshold.toString().match(/^(\d+)(MB|GB|TB)$/);
     if (!match) {
       logger.warn({ threshold }, 'Invalid storage threshold format');
       return null;

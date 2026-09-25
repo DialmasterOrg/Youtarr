@@ -15,7 +15,7 @@ const parseFilterMode = (value) =>
  * @param {Object} deps.ratingMapper - Rating validation/normalization module
  * @returns {express.Router}
  */
-module.exports = function createChannelRoutes({ verifyToken, channelModule, archiveModule, channelDownloadAllModule, ratingMapper }) {
+module.exports = function createChannelRoutes({ verifyToken, channelModule, archiveModule, channelDownloadAllModule, ratingMapper, storageGuard }) {
   const router = express.Router();
   const logger = require('../logger');
   const channelSettingsModule = require('../modules/channelSettingsModule');
@@ -1091,6 +1091,16 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *         description: Invalid tabType or overrideSettings
    *       404:
    *         description: Channel not found
+   *       409:
+   *         description: Downloads are paused because a storage limit was reached (Settings > Storage Limits); the error message gives the reason
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 error:
+   *                   type: string
+   *                   example: 'Downloads are paused: downloaded videos use 512.0 GB, over the 500 GB limit'
    *       500:
    *         description: Failed to start download
    */
@@ -1116,6 +1126,9 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
     } catch (error) {
       if (error.message === 'CHANNEL_NOT_FOUND') {
         return res.status(404).json({ error: 'Channel not found' });
+      }
+      if (storageGuard.isPausedError(error)) {
+        return res.status(409).json({ error: error.message });
       }
       req.log.error({ err: error, channelId, tabType }, 'Failed to start channel download-all');
       res.status(500).json({ error: 'Failed to start channel download-all' });

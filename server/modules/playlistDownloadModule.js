@@ -71,6 +71,10 @@ class PlaylistDownloadModule {
       return { queued: await deps.downloadModule.doPlaylistDownloads(playlist, { youtubeIds: ids }) };
     } catch (err) {
       if (!canRetry) throw err;
+      if (deps.storageGuard && deps.storageGuard.isPausedError(err)) {
+        (deps.logger || logger).info({ playlist_id: playlist.playlist_id, count: ids.length }, 'Saved playlist batch for retry while downloads are paused');
+        return { queued: 0, warning: `${err.message}. Selection saved; auto-download will queue it once downloads resume.` };
+      }
       (deps.logger || logger).error({ err, playlist_id: playlist.playlist_id, count: ids.length }, 'Queueing saved playlist batch failed');
       return { queued: 0, warning: 'Selection saved. Queuing failed; auto-download will retry on a scheduled run.' };
     }

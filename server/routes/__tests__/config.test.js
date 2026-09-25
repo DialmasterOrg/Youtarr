@@ -206,6 +206,38 @@ describe('POST /updateconfig', () => {
       }
     );
   });
+
+  describe('storage size validation', () => {
+    const fields = ['downloadPauseUsageLimit', 'downloadPauseMinFreeSpace', 'autoRemovalUsageLimit'];
+
+    test.each(fields.flatMap((field) => ['', '500MB', '50GB', '2TB'].map((value) => [field, value])))(
+      'accepts %s = %p',
+      async (field, value) => {
+        const { app, configModule } = makeApp();
+        const res = await supertest(app).post('/updateconfig').send({ [field]: value });
+        expect(res.status).toBe(200);
+        expect(configModule.updateConfig).toHaveBeenCalled();
+      }
+    );
+
+    test.each(fields.flatMap((field) => ['0GB', '5 GB', '5gb', '1.5TB', 'lots', 500].map((value) => [field, value])))(
+      'rejects %s = %p without saving',
+      async (field, value) => {
+        const { app, configModule } = makeApp();
+        const res = await supertest(app).post('/updateconfig').send({ [field]: value });
+        expect(res.status).toBe(400);
+        expect(configModule.updateConfig).not.toHaveBeenCalled();
+      }
+    );
+
+    test('names the rejected setting in the error', async () => {
+      const { app } = makeApp();
+      const res = await supertest(app).post('/updateconfig').send({ downloadPauseMinFreeSpace: 'lots' });
+      expect(res.body).toEqual({
+        error: 'Storage limits: minimum free space: use a whole number followed by MB, GB or TB (for example 500GB), or leave it blank',
+      });
+    });
+  });
 });
 
 describe('POST /updateconfig - videoFilenamePrefix validation', () => {

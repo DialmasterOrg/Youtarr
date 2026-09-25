@@ -11,6 +11,7 @@ const {
   formatFailedVideoLine,
   getSubtitle,
   buildAutoRemovalTitle,
+  buildDownloadPauseContent,
   formatBytes,
   groupVideosByChannel,
   getTerminatedCount,
@@ -240,10 +241,11 @@ function buildAutoRemovalEmailHtml(title, subtitle, content) {
  * @returns {Object} Object with title and HTML body strings
  */
 function formatAutoRemovalMessage(cleanupResult) {
-  const { totalDeleted, deletedByAge, deletedByWatched = 0, deletedBySpace, freedBytes, plan = {} } = cleanupResult;
+  const { totalDeleted, deletedByAge, deletedByWatched = 0, deletedBySpace, deletedByUsage = 0, freedBytes, plan = {} } = cleanupResult;
   const ageStrategy = plan.ageStrategy || {};
   const watchedStrategy = plan.watchedStrategy || {};
   const spaceStrategy = plan.spaceStrategy || {};
+  const usageStrategy = plan.usageStrategy || {};
 
   const title = buildAutoRemovalTitle(totalDeleted);
   const subtitle = `Freed ${formatBytes(freedBytes)} of storage`;
@@ -303,14 +305,53 @@ function formatAutoRemovalMessage(cleanupResult) {
     }
   }
 
+  if (deletedByUsage > 0) {
+    const threshold = escapeHtml(String(usageStrategy.limit));
+    content += `<h3 style="color: #e65100; margin-top: 20px;">💾 Removed to stay under the ${threshold} total size limit: ${deletedByUsage} ${deletedByUsage === 1 ? 'video' : 'videos'}</h3>`;
+
+    const { groups, truncatedCount } = groupVideosByChannel(usageStrategy.sampleVideos, 5, deletedByUsage);
+    for (const group of groups) {
+      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
+      content += `
+      <div class="video-card" style="border-left-color: #f57c00;">
+        <div class="channel-name">📺 ${escapeHtml(group.channel)} (${videoLabel})</div>
+        <div class="video-title">${group.titles.map(t => escapeHtml(t)).join(', ')}</div>
+      </div>`;
+    }
+    if (truncatedCount > 0) {
+      content += `<p class="more-videos">...and ${truncatedCount} more videos</p>`;
+    }
+  }
+
   return {
     title,
     body: buildAutoRemovalEmailHtml(title, subtitle, content)
   };
 }
 
+/**
+ * Format downloads paused/resumed notification as HTML email
+ * @param {Object} status - storageGuard status
+ * @returns {Object} Object with title and HTML body strings
+ */
+function formatDownloadPauseMessage(status) {
+  const { title, summary, reasons, footer } = buildDownloadPauseContent(status);
+  let content = '';
+  if (reasons.length > 0) {
+    content += `<ul>${reasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join('')}</ul>`;
+  }
+  if (footer) {
+    content += `<p>${escapeHtml(footer)}</p>`;
+  }
+  return {
+    title,
+    body: buildEmailHtml(title, summary, content)
+  };
+}
+
 module.exports = {
   formatDownloadMessage,
   formatTestMessage,
-  formatAutoRemovalMessage
+  formatAutoRemovalMessage,
+  formatDownloadPauseMessage
 };

@@ -189,9 +189,25 @@ class SubscriptionImportModule {
       })
       .finally(() => {
         this.activeJob = null;
+        this.startQueuedJobs();
       });
 
     return { jobId, total };
+  }
+
+  /**
+   * Start jobs that queued behind the import. The import occupies the job
+   * queue while it runs but finishes outside the download completion path,
+   * so without this, downloads queued meanwhile (or held by a storage pause
+   * that cleared meanwhile) would stay Pending. A running download advances
+   * the queue itself when it completes.
+   */
+  startQueuedJobs() {
+    const { jobModule } = this.deps;
+    if (jobModule.getInProgressJobId()) return;
+    jobModule.startNextJob().catch((err) => {
+      logger.error({ err }, 'Failed to start queued jobs after subscription import');
+    });
   }
 
   /**

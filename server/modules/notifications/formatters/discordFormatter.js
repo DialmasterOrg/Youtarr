@@ -10,6 +10,7 @@ const {
   formatFailedVideoLine,
   getSubtitle,
   buildAutoRemovalTitle,
+  buildDownloadPauseContent,
   formatBytes,
   groupVideosByChannel,
   getTerminatedCount,
@@ -184,10 +185,11 @@ function formatPlainMessage(title, body) {
  * @returns {Object} Discord webhook message payload with embeds
  */
 function formatAutoRemovalMessage(cleanupResult) {
-  const { totalDeleted, deletedByAge, deletedByWatched = 0, deletedBySpace, freedBytes, plan = {} } = cleanupResult;
+  const { totalDeleted, deletedByAge, deletedByWatched = 0, deletedBySpace, deletedByUsage = 0, freedBytes, plan = {} } = cleanupResult;
   const ageStrategy = plan.ageStrategy || {};
   const watchedStrategy = plan.watchedStrategy || {};
   const spaceStrategy = plan.spaceStrategy || {};
+  const usageStrategy = plan.usageStrategy || {};
 
   const title = buildAutoRemovalTitle(totalDeleted);
   const description = `Freed **${formatBytes(freedBytes)}** of storage`;
@@ -256,6 +258,27 @@ function formatAutoRemovalMessage(cleanupResult) {
     });
   }
 
+  if (deletedByUsage > 0) {
+    const threshold = usageStrategy.limit;
+    const { groups, truncatedCount } = groupVideosByChannel(usageStrategy.sampleVideos, 5, deletedByUsage);
+    let value = groups.map(group => {
+      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
+      return `📺 **${group.channel}** (${videoLabel})\n${group.titles.join(', ')}`;
+    }).join('\n\n');
+
+    if (truncatedCount > 0) {
+      value += `\n\n...and ${truncatedCount} more videos`;
+    }
+
+    if (!value) value = `${deletedByUsage} ${deletedByUsage === 1 ? 'video' : 'videos'}`;
+
+    fields.push({
+      name: `💾 Removed to stay under the ${threshold} total size limit: ${deletedByUsage}`,
+      value,
+      inline: false
+    });
+  }
+
   return {
     embeds: [{
       title,
@@ -270,9 +293,42 @@ function formatAutoRemovalMessage(cleanupResult) {
   };
 }
 
+/**
+ * Format downloads paused/resumed notification as a Discord embed
+ * @param {Object} status - storageGuard status
+ * @returns {Object} Discord webhook payload
+ */
+function formatDownloadPauseMessage(status) {
+  const { title, summary, reasons, footer } = buildDownloadPauseContent(status);
+  const fields = [];
+  if (reasons.length > 0) {
+    fields.push({
+      name: 'Why',
+      value: truncateFieldValueAtLineBoundary(reasons.map((reason) => `• ${reason}`).join('\n')),
+      inline: false
+    });
+  }
+  if (footer) {
+    fields.push({ name: 'What happens next', value: footer, inline: false });
+  }
+  return {
+    embeds: [{
+      title,
+      description: summary,
+      color: status && status.paused ? 0xE53935 : 0x43A047, // Red when paused, green when resumed
+      fields,
+      timestamp: new Date().toISOString(),
+      footer: {
+        text: 'Youtarr'
+      }
+    }]
+  };
+}
+
 module.exports = {
   formatDownloadMessage,
   formatTestMessage,
   formatPlainMessage,
-  formatAutoRemovalMessage
+  formatAutoRemovalMessage,
+  formatDownloadPauseMessage
 };

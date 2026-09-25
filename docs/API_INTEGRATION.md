@@ -114,6 +114,7 @@ Add a single YouTube video to the download queue.
 | 400 | `{"success": false, "error": "URL is required"}` | Missing or invalid URL |
 | 401 | `{"error": "Invalid API key"}` | Invalid or missing authentication |
 | 403 | `{"error": "API keys can only access the download endpoint"}` | API key used on wrong endpoint |
+| 409 | `{"success": false, "error": "Downloads are paused: ..."}` | A storage limit (Settings -> Storage Limits) was reached; the message says which. Retry after storage is back within the limits |
 | 429 | `{"success": false, "error": "Rate limit exceeded"}` | Too many requests |
 
 ### API Key Management Endpoints

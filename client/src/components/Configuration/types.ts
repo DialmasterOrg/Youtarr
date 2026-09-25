@@ -20,6 +20,9 @@ export interface AutoRemovalDryRunPlanStrategy {
   thresholdDays?: number | null;
   threshold?: string | null;
   thresholdBytes?: number | null;
+  limit?: string | null;
+  limitBytes?: number | null;
+  usedBytes?: number | null;
   minDaysSinceWatched?: number | null;
   minVideoAgeDays?: number | null;
   skippedReason?: string | null;
@@ -54,11 +57,13 @@ export interface AutoRemovalDryRunResult {
       protectedCount: number;
     };
     spaceStrategy: AutoRemovalDryRunPlanStrategy;
+    usageStrategy?: AutoRemovalDryRunPlanStrategy;
   };
   simulationTotals: {
     byAge: number;
     byWatched?: number;
     bySpace: number;
+    byUsage?: number;
     total: number;
     estimatedFreedBytes: number;
   } | null;

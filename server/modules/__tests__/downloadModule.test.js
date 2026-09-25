@@ -53,6 +53,10 @@ jest.mock('../../logger', () => ({
 jest.mock('uuid', () => ({
   v4: jest.fn(() => 'test-uuid-123')
 }));
+jest.mock('../storageGuard', () => ({
+  assertDownloadsAllowed: jest.fn().mockResolvedValue(),
+  isPausedError: jest.fn(() => false)
+}));
 jest.mock('../messageEmitter', () => ({
   emitMessage: jest.fn(),
   getLastMessages: jest.fn(() => []),
@@ -467,6 +471,62 @@ describe('DownloadModule', () => {
     });
   });
 
+  describe('when downloads are paused for storage', () => {
+    let storageGuard;
+    let jobModuleMock;
+    const pausedError = Object.assign(new Error('Downloads are paused: over the limit'), { code: 'DOWNLOADS_PAUSED' });
+
+    beforeEach(() => {
+      storageGuard = require('../storageGuard');
+      jobModuleMock = require('../jobModule');
+      storageGuard.assertDownloadsAllowed.mockRejectedValue(pausedError);
+    });
+
+    afterEach(() => {
+      storageGuard.assertDownloadsAllowed.mockResolvedValue();
+    });
+
+    it('refuses new manual downloads without creating a job', async () => {
+      await expect(
+        downloadModule.doSpecificDownloads({ body: { urls: ['https://youtube.com/watch?v=abc123'] } })
+      ).rejects.toBe(pausedError);
+      expect(jobModuleMock.addOrUpdateJob).not.toHaveBeenCalled();
+    });
+
+    it('still starts a held manual job from the queue', async () => {
+      jobModuleMock.getJob.mockReturnValue({ status: 'Pending' });
+
+      await downloadModule.doSpecificDownloads({ id: 'held-job', urls: ['https://youtube.com/watch?v=abc123'] }, true);
+
+      expect(jobModuleMock.addOrUpdateJob).toHaveBeenCalled();
+    });
+
+    it('refuses new channel downloads without creating a job', async () => {
+      await expect(downloadModule.doChannelDownloads({})).rejects.toBe(pausedError);
+      expect(jobModuleMock.addOrUpdateJob).not.toHaveBeenCalled();
+    });
+
+    it('still starts a held channel job from the queue', async () => {
+      await downloadModule.doChannelDownloads({ id: 'held-job' }, true);
+
+      expect(jobModuleMock.addOrUpdateJob).toHaveBeenCalled();
+    });
+
+    it('refuses a channel and playlist sweep before any work starts', async () => {
+      const channelSpy = jest.spyOn(downloadModule, 'doChannelDownloads');
+
+      await expect(downloadModule.doChannelAndPlaylistDownloads({})).rejects.toBe(pausedError);
+      expect(channelSpy).not.toHaveBeenCalled();
+    });
+
+    it('refuses playlist downloads before refreshing from YouTube', async () => {
+      const playlist = { playlist_id: 'PL1', reload: jest.fn() };
+
+      await expect(downloadModule.doPlaylistDownloads(playlist, { refreshFirst: true })).rejects.toBe(pausedError);
+      expect(playlist.reload).not.toHaveBeenCalled();
+    });
+  });
+
   describe('doChannelAndPlaylistDownloads', () => {
     it('runs channel downloads first, then triggers playlist auto-downloads', async () => {
       const order = [];
@@ -482,7 +542,7 @@ describe('DownloadModule', () => {
 
       const result = await downloadModule.doChannelAndPlaylistDownloads({ some: 'data' });
 
-      expect(result).toEqual({ playlistError: null, playlistsFailed: 0, playlistsChecked: 0 });
+      expect(result).toEqual({ playlistError: null, playlistsFailed: 0, playlistsChecked: 0, playlistsPausedReason: null });
       expect(downloadModule.doChannelDownloads).toHaveBeenCalledWith({ some: 'data', runId: expect.any(String) });
       expect(playlistModule.playlistAutoDownload).toHaveBeenCalledTimes(1);
       expect(playlistModule.playlistAutoDownload).toHaveBeenCalledWith({}, expect.any(String));
@@ -514,7 +574,7 @@ describe('DownloadModule', () => {
 
       await expect(
         downloadModule.doChannelAndPlaylistDownloads({})
-      ).resolves.toEqual({ playlistError: 'boom', playlistsFailed: 0, playlistsChecked: 0 });
+      ).resolves.toEqual({ playlistError: 'boom', playlistsFailed: 0, playlistsChecked: 0, playlistsPausedReason: null });
       expect(downloadModule.doChannelDownloads).toHaveBeenCalled();
     });
 
@@ -528,7 +588,20 @@ describe('DownloadModule', () => {
 
       await expect(
         downloadModule.doChannelAndPlaylistDownloads({})
-      ).resolves.toEqual({ playlistError: null, playlistsFailed: 1, playlistsChecked: 3 });
+      ).resolves.toEqual({ playlistError: null, playlistsFailed: 1, playlistsChecked: 3, playlistsPausedReason: null });
+    });
+
+    it('reports a sweep stopped by a storage pause', async () => {
+      jest.spyOn(downloadModule, 'doChannelDownloads').mockResolvedValue();
+      jest.doMock('../playlistModule', () => ({
+        playlistAutoDownload: jest.fn().mockResolvedValue({
+          playlists: 3, enqueued: 0, failed: 0, errors: [], pausedReason: 'Downloads are paused: over the limit',
+        }),
+      }));
+
+      await expect(downloadModule.doChannelAndPlaylistDownloads({})).resolves.toMatchObject({
+        playlistsPausedReason: 'Downloads are paused: over the limit',
+      });
     });
 
     it('skips channel job creation but still runs playlist auto-downloads when no channel URLs exist', async () => {
@@ -574,6 +647,15 @@ describe('DownloadModule', () => {
       YtdlpCommandBuilderMock = require('../download/ytdlpCommandBuilder');
       jobModuleMock.addOrUpdateJob.mockResolvedValue(mockJobId);
       channelModuleMock.generateChannelsFile.mockResolvedValue(mockTempFile);
+    });
+
+    it('does nothing when another caller already started the queued job', async () => {
+      jobModuleMock.addOrUpdateJob.mockResolvedValue(undefined);
+      jobModuleMock.getJob.mockReturnValue(undefined);
+
+      await downloadModule.doSingleChannelDownloadJob({ id: 'held-job' }, true);
+
+      expect(mockDownloadExecutor.doDownload).not.toHaveBeenCalled();
     });
 
     it('should successfully execute channel downloads with default settings', async () => {

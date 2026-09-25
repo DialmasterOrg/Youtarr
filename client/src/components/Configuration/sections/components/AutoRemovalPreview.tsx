@@ -21,7 +21,9 @@ export const AutoRemovalPreview: React.FC<AutoRemovalPreviewProps> = ({ result }
     ...(plan.ageStrategy.sampleVideos || []),
     ...(plan.watchedStrategy?.sampleVideos || []),
     ...(plan.spaceStrategy.sampleVideos || []),
+    ...(plan.usageStrategy?.sampleVideos || []),
   ].slice(0, MAX_SAMPLE_VIDEOS);
+  const usageStrategy = plan.usageStrategy;
   const hasSpaceThreshold = plan.spaceStrategy.thresholdBytes != null;
   const keepRecent = plan.keepRecent;
   const channelKeepRecent = plan.channelKeepRecent;
@@ -59,6 +61,16 @@ export const AutoRemovalPreview: React.FC<AutoRemovalPreviewProps> = ({ result }
       {hasSpaceThreshold && plan.spaceStrategy.needsCleanup === false && (
         <Typography variant="body2">
           Storage is currently above the free space threshold; no space-based deletions are needed.
+        </Typography>
+      )}
+      {usageStrategy?.enabled && usageStrategy.needsCleanup && (
+        <Typography variant="body2">
+          • Total size limit: {usageStrategy.candidateCount} videos (~{formatBytes(usageStrategy.estimatedFreedBytes)})
+        </Typography>
+      )}
+      {usageStrategy?.enabled && usageStrategy.needsCleanup === false && (
+        <Typography variant="body2">
+          Downloaded videos ({formatBytes(usageStrategy.usedBytes ?? 0)}) are within the total size limit; no size-based deletions are needed.
         </Typography>
       )}
       {keepRecent && keepRecent.count > 0 && (

@@ -24,6 +24,8 @@ const mockDeps = {
     addOrUpdateJob: jest.fn().mockResolvedValue('job-uuid-123'),
     updateJob: jest.fn().mockResolvedValue(),
     getJob: jest.fn(),
+    getInProgressJobId: jest.fn().mockReturnValue(null),
+    startNextJob: jest.fn().mockResolvedValue(),
     jobs: {},
   },
   messageEmitter: { emitMessage: jest.fn() },
@@ -224,6 +226,54 @@ describe('SubscriptionImportModule', () => {
       await new Promise((r) => setImmediate(r));
 
       expect(subscriptionImportModule.activeJob).toBeNull();
+    });
+  });
+
+  describe('starting queued jobs after an import', () => {
+    const channels = [{ channelId: 'UC_a', title: 'A', url: 'https://youtube.com/channel/UC_a' }];
+    const flush = () => new Promise((r) => setImmediate(r));
+
+    test('starts queued jobs when the import completes', async () => {
+      importJobRunner.runImport.mockResolvedValue();
+
+      await subscriptionImportModule.startImport(channels, 'user');
+      await flush();
+
+      expect(mockDeps.jobModule.startNextJob).toHaveBeenCalledTimes(1);
+    });
+
+    test('starts queued jobs when the import fails', async () => {
+      importJobRunner.runImport.mockRejectedValue(new Error('runner crash'));
+
+      await subscriptionImportModule.startImport(channels, 'user');
+      await flush();
+
+      expect(mockDeps.jobModule.startNextJob).toHaveBeenCalledTimes(1);
+    });
+
+    test('leaves the queue to a download that is still running', async () => {
+      importJobRunner.runImport.mockResolvedValue();
+      mockDeps.jobModule.getInProgressJobId.mockReturnValueOnce('download-job');
+
+      await subscriptionImportModule.startImport(channels, 'user');
+      await flush();
+
+      expect(mockDeps.jobModule.startNextJob).not.toHaveBeenCalled();
+    });
+
+    test('logs instead of rejecting when starting queued jobs fails', async () => {
+      const logger = require('../../../logger');
+      importJobRunner.runImport.mockResolvedValue();
+      mockDeps.jobModule.startNextJob.mockRejectedValueOnce(new Error('boom'));
+
+      await subscriptionImportModule.startImport(channels, 'user');
+      await flush();
+      await flush();
+
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ err: expect.any(Error) }),
+        'Failed to start queued jobs after subscription import'
+      );
     });
   });
 

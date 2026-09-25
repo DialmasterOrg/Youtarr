@@ -18,6 +18,16 @@ describe('AutoRemovalRulesSummary', () => {
     expect(screen.queryByText(/a video is deleted/i)).not.toBeInTheDocument();
   });
 
+  test('describes the total size rule', () => {
+    renderWithProviders(
+      <AutoRemovalRulesSummary config={createConfig({ autoRemovalUsageLimit: '2TB' })} />
+    );
+
+    expect(screen.getByText(/Downloaded videos total more than/i)).toHaveTextContent(
+      'Downloaded videos total more than 2 TB'
+    );
+  });
+
   test('uses singular phrasing for a single rule', () => {
     renderWithProviders(
       <AutoRemovalRulesSummary

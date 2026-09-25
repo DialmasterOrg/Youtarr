@@ -6,10 +6,10 @@ const { createSubscribeSettingsValidator } = require('./playlistSubscribeSetting
 // Saved settings the Add Playlist dialog shows when a removed playlist is restored.
 const RESTORE_PREVIEW_SETTING_KEYS = ['auto_download', 'default_sub_folder', 'video_quality', 'audio_format'];
 
-function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule }) {
+function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule, storageGuard }) {
   const router = express.Router();
   const { Playlist, PlaylistVideo, Video } = models;
-  const downloadDeps = { PlaylistVideo, Video, playlistModule, downloadModule };
+  const downloadDeps = { PlaylistVideo, Video, playlistModule, downloadModule, storageGuard };
 
   const respondToFollowingError = (res, err) => {
     const errors = {
@@ -748,7 +748,14 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    *       404:
    *         description: Playlist not found
    *       409:
-   *         description: A playlist refresh is already in progress
+   *         description: A playlist refresh is already in progress, or downloads are paused because a storage limit was reached (Settings > Storage Limits) and the selected videos could not be saved for retry; the error message says which
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 error:
+   *                   type: string
    *       422:
    *         description: Playlist exceeds the 5000-entry automatic following limit
    *       503:
@@ -774,6 +781,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       res.json({ playlist: p, ...result });
     } catch (err) {
       if (respondToFollowingError(res, err)) return;
+      if (storageGuard.isPausedError(err)) return res.status(409).json({ error: err.message });
       req.log.error({ err, playlist_id: req.params.playlistId }, 'configure playlist following failed');
       res.status(500).json({ error: 'Could not finish following setup. Please retry.' });
     }
@@ -806,11 +814,21 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    *                 items: { type: string }
    *     responses:
    *       202:
-   *         description: Queued count and optional queue failure warning
+   *         description: Queued count and optional queue failure warning. When downloads are paused by a storage limit but the selection can be saved for scheduled retry (auto-download enabled with a starting point), this returns queued 0 with a warning giving the pause reason instead of 409.
    *       400:
    *         description: Invalid video IDs
    *       404:
    *         description: Playlist not found
+   *       409:
+   *         description: Downloads are paused because a storage limit was reached (Settings > Storage Limits); and the selection could not be saved for retry; the error message gives the reason
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 error:
+   *                   type: string
+   *                   example: 'Downloads are paused: downloaded videos use 512.0 GB, over the 500 GB limit'
    *       500:
    *         description: Queueing failed
    */
@@ -824,6 +842,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       if (!p) return res.status(404).json({ error: 'Playlist not found' });
       res.status(202).json(await playlistDownloadModule.queueBatch(p, videoIds, { ...downloadDeps, logger: req.log }));
     } catch (err) {
+      if (storageGuard.isPausedError(err)) return res.status(409).json({ error: err.message });
       req.log.error({ err }, 'queue playlist batch failed');
       res.status(500).json({ error: 'Failed to queue selected videos; please retry' });
     }
@@ -869,6 +888,16 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    *         description: Invalid videoIds or overrideSettings
    *       404:
    *         description: Playlist not found
+   *       409:
+   *         description: Downloads are paused because a storage limit was reached (Settings > Storage Limits); the error message gives the reason
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 error:
+   *                   type: string
+   *                   example: 'Downloads are paused: downloaded videos use 512.0 GB, over the 500 GB limit'
    *       500:
    *         description: Internal server error
    */
@@ -900,6 +929,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       });
       res.status(202).json({ status: 'accepted', message: queued ? 'Playlist download started' : 'No eligible videos to queue', queued });
     } catch (err) {
+      if (storageGuard.isPausedError(err)) return res.status(409).json({ error: err.message });
       req.log.error({ err }, 'trigger playlist download failed');
       res.status(500).json({ error: 'Failed to start playlist download' });
     }

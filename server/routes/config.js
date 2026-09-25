@@ -8,6 +8,14 @@ const { getExternalCookiesPath } = require('../modules/externalCookies');
 // Mirror of the frontend RATE_LIMIT_REGEX. Matches yt-dlp's --limit-rate
 // format: digits with optional decimal, optional K/M/G suffix.
 const RATE_LIMIT_REGEX = /^\d+(\.\d+)?[KkMmGg]?$/;
+// Storage limits: a positive whole number with a unit, or blank for off.
+// Zero would pause downloads (or remove videos) as soon as anything exists.
+const STORAGE_SIZE_REGEX = /^[1-9]\d*(MB|GB|TB)$/;
+const STORAGE_SIZE_FIELDS = {
+  downloadPauseUsageLimit: 'Storage limits: total size of downloads',
+  downloadPauseMinFreeSpace: 'Storage limits: minimum free space',
+  autoRemovalUsageLimit: 'Auto removal: total size of downloads',
+};
 const MAX_VIDEO_FILENAME_PREFIX_LENGTH = 160;
 
 const capitalize = (text) => text.charAt(0).toUpperCase() + text.slice(1);
@@ -249,6 +257,18 @@ module.exports = function createConfigRoutes({ verifyToken, configModule, valida
       const validation = customArgsParser.validate(tokens);
       if (!validation.ok) {
         return res.status(400).json({ error: validation.error });
+      }
+    }
+
+    // A malformed limit would be silently ignored (the guard fails open), so
+    // the UI would claim a safety limit that is not enforced.
+    for (const [key, label] of Object.entries(STORAGE_SIZE_FIELDS)) {
+      const value = updateData[key];
+      if (value === undefined || value === null || value === '') continue;
+      if (typeof value !== 'string' || !STORAGE_SIZE_REGEX.test(value)) {
+        return res.status(400).json({
+          error: `${label}: use a whole number followed by MB, GB or TB (for example 500GB), or leave it blank`,
+        });
       }
     }
 
