@@ -74,12 +74,12 @@ class WatchStatusQueries {
   // newer than the cutoff. A played row with a NULL last_watched_at blocks
   // deletion (we can't prove when it was watched), so unknown watch dates
   // always err on the side of keeping files.
-  buildWatchedEligibilitySql({ minDaysSinceWatched = 0 } = {}) {
-    const watched = this.buildWatchedExistsSql();
+  buildWatchedEligibilitySql({ minDaysSinceWatched = 0, videosName = 'videos' } = {}) {
+    const watched = this.buildWatchedExistsSql(videosName);
     if (!minDaysSinceWatched || minDaysSinceWatched <= 0) {
       return watched;
     }
-    const { conditions, replacements } = this._watchedRuleConditions();
+    const { conditions, replacements } = this._watchedRuleConditions(videosName);
     const recentConditions = conditions.concat(
       '(vws.last_watched_at IS NULL OR vws.last_watched_at > DATE_SUB(NOW(), INTERVAL :watchedMinDaysSinceWatched DAY))'
     );

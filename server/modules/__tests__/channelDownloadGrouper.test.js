@@ -9,6 +9,8 @@ jest.mock('../../models/channel', () => {
   return MockChannel;
 });
 
+jest.mock('../../models', () => ({ }));
+
 jest.mock('../configModule', () => ({
   directoryPath: '/mock/youtube/output',
   config: {

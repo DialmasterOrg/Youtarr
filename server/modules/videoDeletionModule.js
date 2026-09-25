@@ -1,11 +1,11 @@
 const { Video } = require('../models');
+const { injectReplacements } = require('sequelize/lib/utils/sql');
 const fs = require('fs').promises;
 const path = require('path');
 const logger = require('../logger');
 const { isVideoDirectory, cleanupEmptyChannelDirectory, cleanupEmptyParents, isSubfolderDir, listSubdirectories, removeDirectoryResilient } = require('./filesystem');
 const m3uGenerator = require('./m3uGenerator');
 const storageUsage = require('./storageUsage');
-const { STORED_BYTES_SQL } = storageUsage;
 const storageGuard = require('./storageGuard');
 
 // Oldest-first removal (free-space and total-usage strategies) works in
@@ -336,42 +336,19 @@ class VideoDeletionModule {
    */
   async getVideosOlderThanThreshold(ageInDays, excludeIds = []) {
     const { Sequelize, sequelize } = require('../db.js');
+    const autoRemovalQueries = require('./autoRemovalQueries');
 
     try {
-      const excludeClause = excludeIds && excludeIds.length > 0
-        ? '          AND videos.id NOT IN (:excludeIds)\n'
-        : '';
-
-      // Use raw SQL query to match the timeCreated calculation in videosModule.js
-      const query = `
-        SELECT DISTINCT
-          videos.id,
-          videos.youtube_id AS "youtubeId",
-          videos.youtube_video_name AS "youTubeVideoName",
-          videos.youtube_channel_name AS "youTubeChannelName",
-          ${STORED_BYTES_SQL} AS "fileSize",
-          COALESCE(videos.last_downloaded_at, jobs.time_created, STR_TO_DATE(videos.original_date, '%Y%m%d')) AS timeCreated
-        FROM videos
-        LEFT JOIN jobvideos ON videos.id = jobvideos.video_id
-        LEFT JOIN jobs ON jobs.id = jobvideos.job_id
-        LEFT JOIN channels AS protchannel ON protchannel.channel_id = videos.channel_id AND protchannel.enabled = 1
-        WHERE videos.removed = 0
-          AND videos.protected = 0
-          AND COALESCE(protchannel.auto_removal_protected, 0) = 0
-          AND COALESCE(videos.last_downloaded_at, jobs.time_created, STR_TO_DATE(videos.original_date, '%Y%m%d')) IS NOT NULL
-          AND COALESCE(videos.last_downloaded_at, jobs.time_created, STR_TO_DATE(videos.original_date, '%Y%m%d')) < DATE_SUB(NOW(), INTERVAL :ageInDays DAY)
-${excludeClause}        ORDER BY timeCreated ASC
-      `;
-
-      const replacements = { ageInDays };
-      if (excludeIds && excludeIds.length > 0) {
-        replacements.excludeIds = excludeIds;
-      }
-
-      const videos = await sequelize.query(query, {
-        replacements,
-        type: Sequelize.QueryTypes.SELECT
+      const options = autoRemovalQueries.getBaseRemovalQueryOptions({
+        excludeIds,
+        orderDirection: 'ASC',
       });
+      options.having.timeCreated[Sequelize.Op.lt] = sequelize.fn(
+        'DATE_SUB',
+        sequelize.fn('NOW'),
+        sequelize.literal(injectReplacements('INTERVAL ? DAY', sequelize.dialect, [ageInDays])),
+      );
+      const videos = await Video.findAll(options);
 
       logger.info({ count: videos.length, ageInDays }, '[Auto-Removal] Found videos older than threshold');
       return videos;
@@ -388,42 +365,16 @@ ${excludeClause}        ORDER BY timeCreated ASC
    * @returns {Promise<Array<{id: number, youtubeId: string, youTubeVideoName: string, timeCreated: Date, fileSize: number}>>}
    */
   async getOldestVideos(limit, excludeIds = []) {
-    const { Sequelize, sequelize } = require('../db.js');
+    const autoRemovalQueries = require('./autoRemovalQueries');
 
     try {
-      const excludeClause = excludeIds && excludeIds.length > 0
-        ? '          AND videos.id NOT IN (:excludeIds)\n'
-        : '';
-
-      const query = `
-        SELECT DISTINCT
-          videos.id,
-          videos.youtube_id AS "youtubeId",
-          videos.youtube_video_name AS "youTubeVideoName",
-          videos.youtube_channel_name AS "youTubeChannelName",
-          ${STORED_BYTES_SQL} AS "fileSize",
-          COALESCE(videos.last_downloaded_at, jobs.time_created, STR_TO_DATE(videos.original_date, '%Y%m%d')) AS timeCreated
-        FROM videos
-        LEFT JOIN jobvideos ON videos.id = jobvideos.video_id
-        LEFT JOIN jobs ON jobs.id = jobvideos.job_id
-        LEFT JOIN channels AS protchannel ON protchannel.channel_id = videos.channel_id AND protchannel.enabled = 1
-        WHERE videos.removed = 0
-          AND videos.protected = 0
-          AND COALESCE(protchannel.auto_removal_protected, 0) = 0
-          AND COALESCE(videos.last_downloaded_at, jobs.time_created, STR_TO_DATE(videos.original_date, '%Y%m%d')) IS NOT NULL
-${excludeClause}        ORDER BY timeCreated ASC
-        LIMIT :limit
-      `;
-
-      const replacements = { limit };
-      if (excludeIds && excludeIds.length > 0) {
-        replacements.excludeIds = excludeIds;
-      }
-
-      const videos = await sequelize.query(query, {
-        replacements,
-        type: Sequelize.QueryTypes.SELECT
+      const options = autoRemovalQueries.getBaseRemovalQueryOptions({
+        excludeIds,
+        orderDirection: 'ASC',
       });
+      options.limit = limit;
+      options.subQuery = false;
+      const videos = await Video.findAll(options);
 
       logger.info({ count: videos.length, limit }, '[Auto-Removal] Found oldest videos');
       return videos;

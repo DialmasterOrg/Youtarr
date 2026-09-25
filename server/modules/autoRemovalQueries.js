@@ -1,15 +1,85 @@
+const { injectReplacements } = require('sequelize/lib/utils/sql');
+const { Video, JobVideo, Job, Channel } = require('../models');
 const logger = require('../logger');
 const watchStatusQueries = require('./mediaServers/watchStatusQueries');
 const { STORED_BYTES_SQL } = require('./storageUsage');
-
-// Matches the timeCreated calculation used by videosModule.js and the other
-// auto-removal candidate queries in videoDeletionModule.js.
-const DOWNLOAD_TIME_SQL =
-  'COALESCE(videos.last_downloaded_at, jobs.time_created, STR_TO_DATE(videos.original_date, \'%Y%m%d\'))';
+const { TIME_CREATED_ATTRIBUTE } = require('./videosModule');
 
 // Read-only candidate queries for auto-removal (the watched strategy and
 // the keep-most-recent guard, including per-channel keep-recent); deletion itself stays in videoDeletionModule.
 class AutoRemovalQueries {
+  /**
+   * Get the base options for Video.findAll to pick videos to be removed.
+   */
+  getBaseRemovalQueryOptions({ excludeIds = [], orderDirection = 'DESC', idOnly = false, joinChannel = true } = {}) {
+    const { Sequelize, sequelize } = require('../db.js');
+
+    const options = {
+      attributes: [
+        'id',
+        [sequelize.fn('MAX', TIME_CREATED_ATTRIBUTE), 'timeCreated'],
+      ],
+      include: [{
+        model: JobVideo,
+        as: 'jobVideos',
+        attributes: [],
+        include: [{
+          model: Job,
+          as: 'job',
+          attributes: [],
+        }],
+      }],
+      where: {
+        removed: false,
+        protected: false,
+      },
+      group: sequelize.col('Video.id'),
+      having: {
+        timeCreated: {
+          [Sequelize.Op.not]: null,
+        },
+      },
+      order: [['timeCreated', orderDirection]],
+      subQuery: false,
+      raw: true,
+    };
+
+    if (excludeIds && excludeIds.length > 0) {
+      options.where.id = {
+        [Sequelize.Op.notIn]: excludeIds,
+      };
+    }
+
+    if (!idOnly) {
+      options.attributes.push(
+        'youtubeId',
+        'youTubeVideoName',
+        'youTubeChannelName',
+        [sequelize.literal(STORED_BYTES_SQL), 'fileSize'],
+      );
+    }
+
+    if (joinChannel) {
+      options.include.push({
+        model: Channel,
+        as: 'channel',
+        attributes: [],
+        on: {
+          id: sequelize.col('Video.channel_id'),
+          enabled: true,
+        },
+      });
+      options.where[Sequelize.Op.and] = [
+        sequelize.where(
+          sequelize.fn('COALESCE', sequelize.col('channel.auto_removal_protected'), false),
+          false,
+        ),
+      ];
+    }
+
+    return options;
+  }
+
   /**
    * Ids of the N most recently downloaded videos (not marked removed).
    * Used as an exclusion set so auto-removal never touches the newest downloads.
@@ -23,28 +93,13 @@ class AutoRemovalQueries {
     if (!Number.isFinite(count) || count <= 0) {
       return [];
     }
-    const { Sequelize, sequelize } = require('../db.js');
 
     try {
-      const query = `
-        SELECT videos.id, MAX(${DOWNLOAD_TIME_SQL}) AS timeCreated
-        FROM videos
-        LEFT JOIN jobvideos ON videos.id = jobvideos.video_id
-        LEFT JOIN jobs ON jobs.id = jobvideos.job_id
-        LEFT JOIN channels AS protchannel ON protchannel.channel_id = videos.channel_id AND protchannel.enabled = 1
-        WHERE videos.removed = 0
-          AND videos.protected = 0
-          AND COALESCE(protchannel.auto_removal_protected, 0) = 0
-        GROUP BY videos.id
-        HAVING timeCreated IS NOT NULL
-        ORDER BY timeCreated DESC
-        LIMIT :count
-      `;
-
-      const rows = await sequelize.query(query, {
-        replacements: { count },
-        type: Sequelize.QueryTypes.SELECT
+      const options = this.getBaseRemovalQueryOptions({
+        idOnly: true,
       });
+      options.limit = count;
+      const rows = await Video.findAll(options);
 
       return rows.map((row) => row.id);
     } catch (error) {
@@ -61,38 +116,35 @@ class AutoRemovalQueries {
    * @returns {Promise<{channelCount: number, ids: number[]}>}
    */
   async getChannelKeepRecentIds() {
-    const { Sequelize, sequelize } = require('../db.js');
+    const { Sequelize } = require('../db.js');
 
     try {
-      const channels = await sequelize.query(
-        `SELECT channel_id, auto_removal_keep_recent_count AS "keepCount"
-         FROM channels
-         WHERE auto_removal_keep_recent_count > 0
-           AND auto_removal_protected = 0
-           AND enabled = 1
-           AND channel_id IS NOT NULL`,
-        { type: Sequelize.QueryTypes.SELECT }
-      );
+      const channels = await Channel.findAll({
+        attributes: [
+          'channel_id',
+          'auto_removal_keep_recent_count',
+        ],
+        where: {
+          auto_removal_keep_recent_count: {
+            [Sequelize.Op.gt]: 0
+          },
+          auto_removal_protected: false,
+          enabled: true,
+          channel_id: {
+            [Sequelize.Op.not]: null,
+          },
+        },
+      });
 
       const ids = [];
       for (const channel of channels) {
-        const query = `
-          SELECT videos.id, MAX(${DOWNLOAD_TIME_SQL}) AS timeCreated
-          FROM videos
-          LEFT JOIN jobvideos ON videos.id = jobvideos.video_id
-          LEFT JOIN jobs ON jobs.id = jobvideos.job_id
-          WHERE videos.removed = 0
-            AND videos.protected = 0
-            AND videos.channel_id = :channelId
-          GROUP BY videos.id
-          HAVING timeCreated IS NOT NULL
-          ORDER BY timeCreated DESC
-          LIMIT :count
-        `;
-        const rows = await sequelize.query(query, {
-          replacements: { channelId: channel.channel_id, count: channel.keepCount },
-          type: Sequelize.QueryTypes.SELECT
+        const options = this.getBaseRemovalQueryOptions({
+          idOnly: true,
+          joinChannel: false,
         });
+        options.where.channel_id = channel.channel_id;
+        options.limit = channel.keepCount;
+        const rows = await Video.findAll(options);
         rows.forEach((row) => ids.push(row.id));
       }
 
@@ -118,49 +170,29 @@ class AutoRemovalQueries {
     const { Sequelize, sequelize } = require('../db.js');
 
     try {
-      const watched = watchStatusQueries.buildWatchedEligibilitySql({ minDaysSinceWatched });
-      const replacements = { ...watched.replacements };
+      const options = this.getBaseRemovalQueryOptions({
+        excludeIds,
+        orderDirection: 'ASC',
+      });
 
       // The age filter uses the newest download time for multi-job videos,
       // so it's a HAVING on the MAX aggregate, not a per-row WHERE.
-      let havingClause = '';
       if (minVideoAgeDays > 0) {
-        havingClause = `        HAVING timeCreated IS NOT NULL
-          AND timeCreated < DATE_SUB(NOW(), INTERVAL :minVideoAgeDays DAY)
-`;
-        replacements.minVideoAgeDays = minVideoAgeDays;
+        options.having.timeCreated[Sequelize.Op.lt] = sequelize.fn(
+          'DATE_SUB',
+          sequelize.fn('NOW'),
+          sequelize.literal(injectReplacements('INTERVAL ? DAY', sequelize.dialect, [minVideoAgeDays])),
+        );
       }
 
-      let excludeClause = '';
-      if (excludeIds.length > 0) {
-        excludeClause = '          AND videos.id NOT IN (:excludeIds)\n';
-        replacements.excludeIds = excludeIds;
-      }
-
-      const query = `
-        SELECT
-          videos.id,
-          videos.youtube_id AS "youtubeId",
-          videos.youtube_video_name AS "youTubeVideoName",
-          videos.youtube_channel_name AS "youTubeChannelName",
-          ${STORED_BYTES_SQL} AS "fileSize",
-          MAX(${DOWNLOAD_TIME_SQL}) AS timeCreated
-        FROM videos
-        LEFT JOIN jobvideos ON videos.id = jobvideos.video_id
-        LEFT JOIN jobs ON jobs.id = jobvideos.job_id
-        LEFT JOIN channels AS protchannel ON protchannel.channel_id = videos.channel_id AND protchannel.enabled = 1
-        WHERE videos.removed = 0
-          AND videos.protected = 0
-          AND COALESCE(protchannel.auto_removal_protected, 0) = 0
-          AND ${watched.sql}
-${excludeClause}        GROUP BY videos.id
-${havingClause}        ORDER BY timeCreated ASC
-      `;
-
-      const videos = await sequelize.query(query, {
-        replacements,
-        type: Sequelize.QueryTypes.SELECT
+      const watched = watchStatusQueries.buildWatchedEligibilitySql({
+        minDaysSinceWatched,
+        videosName: 'Video',
       });
+      options.where[Sequelize.Op.and] ??= [];
+      options.where[Sequelize.Op.and].push(sequelize.literal(injectReplacements(watched.sql, sequelize.dialect, watched.replacements)));
+      
+      const videos = await Video.findAll(options);
 
       logger.info(
         { count: videos.length, minDaysSinceWatched, minVideoAgeDays },

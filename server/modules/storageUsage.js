@@ -1,8 +1,9 @@
+const { Video } = require('../models');
 const logger = require('../logger');
 
 // Bytes a video row occupies on disk: its video file plus any MP3 copy.
 // Audio-only downloads have a NULL file_size, so both columns count.
-const STORED_BYTES_SQL = '(COALESCE(videos.file_size, 0) + COALESCE(videos.audio_file_size, 0))';
+const STORED_BYTES_SQL = '(COALESCE(Video.file_size, 0) + COALESCE(Video.audio_file_size, 0))';
 
 // Read side of "how much space do Youtarr's downloads use", measured from the
 // sizes recorded at download time and corrected by the nightly rescan rather
@@ -15,16 +16,26 @@ class StorageUsage {
    * @returns {Promise<number>}
    */
   async getDownloadedBytes() {
-    const { Sequelize, sequelize } = require('../db.js');
+    const { sequelize } = require('../db.js');
 
     try {
-      const rows = await sequelize.query(
-        `SELECT COALESCE(SUM(${STORED_BYTES_SQL}), 0) AS "totalBytes"
-         FROM videos
-         WHERE videos.removed = 0`,
-        { type: Sequelize.QueryTypes.SELECT }
-      );
-      const total = Number(rows && rows[0] ? rows[0].totalBytes : 0);
+      const result = await Video.findOne({
+        attributes: [
+          [
+            sequelize.fn(
+              'COALESCE',
+              sequelize.fn('SUM', sequelize.literal(STORED_BYTES_SQL)),
+              0,
+            ),
+            'totalBytes',
+          ],
+        ],
+        where: {
+          removed: false,
+        },
+        raw: true,
+      });
+      const total = Number(result?.totalBytes ?? 0);
       return Number.isFinite(total) ? total : 0;
     } catch (error) {
       logger.error({ err: error }, 'Error summing downloaded video sizes');
