@@ -10,7 +10,7 @@ import ThumbnailClickOverlay from '../shared/ThumbnailClickOverlay';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { decodeHtml, formatAddedDateParts } from '../../utils/formatters';
-import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo, getStatusChipVariant, getStatusChipStyle } from '../../utils/videoStatus';
+import { getVideoStatus, getStatusColor, getStatusIcon, getVideoStatusLabel, getMediaTypeInfo, getStatusChipVariant, getStatusChipStyle } from '../../utils/videoStatus';
 import StillLiveDot from './StillLiveDot';
 import RatingBadge from '../shared/RatingBadge';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
@@ -64,7 +64,8 @@ function VideoTableView({
     if (isDeleteMode) {
       return video.added && !video.removed && !isStillLive;
     }
-    return (status === 'never_downloaded' || status === 'missing' || status === 'ignored') && !video.youtube_removed && !isStillLive;
+    return (status === 'never_downloaded' || status === 'missing' || status === 'ignored' ||
+      (status === 'members_only' && ['access_confirmed', 'access_unchecked'].includes(video.members_only_access || 'no_cookies'))) && !video.youtube_removed && !isStillLive;
   });
 
   return (
@@ -126,9 +127,10 @@ function VideoTableView({
         <tbody>
           {videos.map((video) => {
             const status = getVideoStatus(video);
-            const statusLabel = status === 'downloaded' ? 'Available' : getStatusLabel(status);
+            const statusLabel = status === 'downloaded' ? 'Available' : getVideoStatusLabel(video, status);
             const isStillLive = video.live_status && video.live_status !== 'was_live';
-            const isDownloadSelectable = (status === 'never_downloaded' || status === 'missing' || status === 'ignored') && !video.youtube_removed && !isStillLive;
+            const isDownloadSelectable = (status === 'never_downloaded' || status === 'missing' || status === 'ignored' ||
+              (status === 'members_only' && ['access_confirmed', 'access_unchecked'].includes(video.members_only_access || 'no_cookies'))) && !video.youtube_removed && !isStillLive;
             const isDeleteSelectable = video.added && !video.removed && !isStillLive;
             const isDownloadAllowed = selectionMode !== 'delete';
             const isDeleteAllowed = selectionMode !== 'download';

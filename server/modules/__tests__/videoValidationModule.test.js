@@ -9,11 +9,13 @@ jest.mock('../download/tempPathManager', () => ({
 jest.mock('../../models/channelvideo', () => ({
   update: jest.fn().mockResolvedValue([1]),
 }));
+jest.mock('../configModule', () => ({ hasUsableCookies: jest.fn() }));
 
 const videoValidationModule = require('../videoValidationModule');
 const ytDlpRunner = require('../ytDlpRunner');
 const archiveModule = require('../archiveModule');
 const ChannelVideo = require('../../models/channelvideo');
+const configModule = require('../configModule');
 const logger = require('../../logger');
 
 // Mock dependencies
@@ -37,6 +39,7 @@ describe('VideoValidationModule', () => {
     jest.clearAllMocks();
     // Clear the module's cache
     videoValidationModule.cache.clear();
+    videoValidationModule.accessRecords.clear();
     // Clear logger mocks
     logger.debug.mockClear();
     logger.info.mockClear();
@@ -46,6 +49,7 @@ describe('VideoValidationModule', () => {
     ChannelVideo.update.mockClear();
     ChannelVideo.update.mockResolvedValue([1]);
     ytDlpRunner.isMembersOnlyError.mockImplementation(isMembersOnlyMessage);
+    configModule.hasUsableCookies.mockReturnValue(false);
   });
 
   describe('normalizeUrlToVideoId', () => {
@@ -129,6 +133,25 @@ describe('VideoValidationModule', () => {
     });
   });
 
+  describe('members-only access records', () => {
+    it('expires an explicit denial after 24 hours', () => {
+      configModule.hasUsableCookies.mockReturnValue(true);
+      videoValidationModule.recordAccessDenied('member1234a');
+      const record = videoValidationModule.accessRecords.get('member1234a');
+      record.checkedAt -= videoValidationModule.accessTTL;
+
+      expect(videoValidationModule.getAccessState('member1234a')).toBe('access_unchecked');
+    });
+
+    it('replaces a denial after a successful access check', () => {
+      configModule.hasUsableCookies.mockReturnValue(true);
+      videoValidationModule.recordAccessDenied('member1234a');
+      videoValidationModule.recordAccessConfirmed('member1234a');
+
+      expect(videoValidationModule.getAccessState('member1234a')).toBe('access_confirmed');
+    });
+  });
+
   describe('toValidationResponse', () => {
     it('should format response correctly for public video', () => {
       const videoId = 'dQw4w9WgXcQ';
@@ -174,6 +197,17 @@ describe('VideoValidationModule', () => {
       const result = videoValidationModule.toValidationResponse(videoId, metadata, isDuplicate);
 
       expect(result.isMembersOnly).toBe(true);
+      expect(result.canDownloadMembersOnly).toBe(false);
+    });
+
+    it('allows a members-only validation result when usable cookies are configured', () => {
+      configModule.hasUsableCookies.mockReturnValue(true);
+
+      const result = videoValidationModule.toValidationResponse('member12345', {
+        availability: 'subscriber_only',
+      }, false);
+
+      expect(result.canDownloadMembersOnly).toBe(true);
     });
 
     it('should mark duplicates correctly', () => {

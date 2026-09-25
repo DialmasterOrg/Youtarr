@@ -463,9 +463,8 @@ function PlaylistPage({ token }: PlaylistPageProps) {
             </Box>
           </Box>
           <Typography variant="caption" color="text.secondary" className="block mb-2">
-            Private, members-only, and deleted videos can&apos;t be accessed, so
-            they are never loaded or downloaded; you may see fewer videos here
-            than YouTube reports for the playlist.
+            Private and deleted videos can&apos;t be accessed. Valid cookies automatically
+            include eligible members-only videos; access is checked per video.
           </Typography>
           <PlaylistVideoList
             videos={videos}

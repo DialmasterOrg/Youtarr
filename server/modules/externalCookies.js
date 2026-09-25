@@ -148,7 +148,7 @@ function prepareCookieFile(sourcePath) {
             : null,
         };
       }
-      result = { snapshotPath, cleanup, lastModified, error: null, warning: validationCache.warning };
+      result = { snapshotPath, cleanup, lastModified, fingerprint: digest, error: null, warning: validationCache.warning };
     } catch (error) {
       if (error.code === 'EXTERNAL_COOKIES_INVALID') throw error;
       throw cookieError(VALIDATION_ERRORS.snapshot);
@@ -157,7 +157,7 @@ function prepareCookieFile(sourcePath) {
     cleanup();
     // Do not expose parser output, exception text, or cookie contents to logs or the API.
     result = {
-      snapshotPath: null, cleanup: null, lastModified, warning: null,
+      snapshotPath: null, cleanup: null, lastModified, fingerprint: null, warning: null,
       error: error.code === 'EXTERNAL_COOKIES_INVALID'
         ? error.message : `External cookies: ${VALIDATION_ERRORS.unavailable}`,
     };

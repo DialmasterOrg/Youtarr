@@ -32,6 +32,8 @@ const playlistDownloadModule = require('../modules/playlistDownloadModule');
 const models = require('../models');
 const videoLocalStatus = require('../modules/videoLocalStatus');
 const videoActivity = require('../modules/download/videoActivity');
+const channelVideoModel = require('../models/channelvideo');
+const videoValidationModule = require('../modules/videoValidationModule');
 const scheduledTaskManager = require('../modules/scheduledTaskManager');
 const scheduledTaskRuns = require('../modules/scheduledTaskRuns');
 const scheduleConfig = require('../modules/scheduleConfig');
@@ -118,7 +120,7 @@ function registerRoutes(app, deps) {
   app.use(createVideoDetailRoutes({ verifyToken, videoMetadataModule, mediaServers }));
 
   // Playlist routes
-  app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule }));
+  app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule, channelVideoModel, getMembersOnlyAccessState: videoValidationModule.getAccessState.bind(videoValidationModule) }));
 
   // Media server routes
   app.use(createMediaServerRoutes({ verifyToken, configModule, mediaServers }));

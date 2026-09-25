@@ -133,7 +133,7 @@ describe('VideoCard Component', () => {
     test('renders "Members Only" status for subscriber-only video', () => {
       const membersOnlyVideo = { ...mockVideo, availability: 'subscriber_only' };
       renderWithProviders(<VideoCard {...defaultProps} video={membersOnlyVideo} />);
-      expect(screen.getByText('Members Only')).toBeInTheDocument();
+      expect(screen.getByText('Members: Cookies Required')).toBeInTheDocument();
     });
 
     test('renders "Ignored" status for ignored video', () => {

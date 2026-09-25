@@ -55,14 +55,14 @@ describe('videoStatus Utility', () => {
       expect(getVideoStatus(membersOnlyVideo)).toBe('members_only');
     });
 
-    test('returns "members_only" even if video was previously downloaded', () => {
+    test('keeps downloaded status when a members-only video is already local', () => {
       const membersOnlyDownloadedVideo = {
         ...baseMockVideo,
         availability: 'subscriber_only',
         added: true,
         removed: false,
       };
-      expect(getVideoStatus(membersOnlyDownloadedVideo)).toBe('members_only');
+      expect(getVideoStatus(membersOnlyDownloadedVideo)).toBe('downloaded');
     });
 
     test('returns "never_downloaded" when video has not been added', () => {
@@ -133,14 +133,14 @@ describe('videoStatus Utility', () => {
       expect(getVideoStatus(membersOnlyNotDownloaded)).toBe('members_only');
     });
 
-    test('priority: members_only takes precedence over missing', () => {
+    test('priority: missing takes precedence over members_only', () => {
       const membersOnlyMissing = {
         ...baseMockVideo,
         availability: 'subscriber_only',
         added: true,
         removed: true,
       };
-      expect(getVideoStatus(membersOnlyMissing)).toBe('members_only');
+      expect(getVideoStatus(membersOnlyMissing)).toBe('missing');
     });
   });
 

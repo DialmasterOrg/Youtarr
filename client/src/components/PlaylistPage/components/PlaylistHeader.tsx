@@ -112,7 +112,7 @@ const PlaylistHeader: React.FC<PlaylistHeaderProps> = ({
                 </Tooltip>
                 <Typography variant="body2" color="text.secondary" className="inline-flex items-center gap-1">
                   {playlist.video_count} videos
-                  <Tooltip title="Private and members-only videos can't be accessed, so they're excluded from this list and never downloaded.">
+                  <Tooltip title="Private videos cannot be accessed. Valid cookies automatically include members-only videos when the account has access.">
                     <span
                       className="inline-flex items-center cursor-help"
                       aria-label="Why some videos may be missing"

@@ -208,11 +208,20 @@ describe('VideoChip', () => {
     });
 
     test('annotates accessible name for members-only videos', () => {
-      const video = { ...baseVideo, isMembersOnly: true };
+      const video = { ...baseVideo, isMembersOnly: true, canDownloadMembersOnly: false };
       render(<VideoChip video={video} onDelete={mockOnDelete} />);
 
       expect(
-        screen.getByRole('button', { name: 'Test Video Title - Members-only content (cannot download)' })
+        screen.getByRole('button', { name: 'Test Video Title - Members-only content (Account lacks access)' })
+      ).toBeInTheDocument();
+    });
+
+    test('annotates accessible name for members-only videos with confirmed access', () => {
+      const video = { ...baseVideo, isMembersOnly: true, canDownloadMembersOnly: true };
+      render(<VideoChip video={video} onDelete={mockOnDelete} />);
+
+      expect(
+        screen.getByRole('button', { name: 'Test Video Title - Members-only content (Access confirmed)' })
       ).toBeInTheDocument();
     });
   });

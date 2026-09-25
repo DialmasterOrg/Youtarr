@@ -6,7 +6,7 @@ const { createSubscribeSettingsValidator } = require('./playlistSubscribeSetting
 // Saved settings the Add Playlist dialog shows when a removed playlist is restored.
 const RESTORE_PREVIEW_SETTING_KEYS = ['auto_download', 'default_sub_folder', 'video_quality', 'audio_format'];
 
-function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule }) {
+function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule, channelVideoModel = null, getMembersOnlyAccessState = () => 'public' }) {
   const router = express.Router();
   const { Playlist, PlaylistVideo, Video } = models;
   const downloadDeps = { PlaylistVideo, Video, playlistModule, downloadModule };
@@ -522,12 +522,20 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
 
       const youtubeIds = rows.map((r) => r.youtube_id).filter(Boolean);
       const downloadedById = new Map();
+      const availabilityById = new Map();
       if (youtubeIds.length > 0 && Video) {
         const downloaded = await Video.findAll({
           where: { youtubeId: youtubeIds },
           attributes: ['id', 'youtubeId', 'youTubeVideoName', 'youTubeChannelName', 'duration', 'originalDate', 'removed', 'youtube_removed', 'filePath', 'fileSize', 'audioFilePath', 'audioFileSize', 'video_resolution'],
         });
         downloaded.forEach((v) => downloadedById.set(v.youtubeId, v));
+      }
+      if (youtubeIds.length > 0 && channelVideoModel) {
+        const channelVideos = await channelVideoModel.findAll({
+          where: { youtube_id: youtubeIds },
+          attributes: ['youtube_id', 'availability'],
+        });
+        channelVideos.forEach((video) => availabilityById.set(video.youtube_id, video.availability));
       }
 
       const watchedByVideoId = await mediaServers.watchStatusQueries.getWatchedByMap(
@@ -575,6 +583,10 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
           audio_file_size: dl?.audioFileSize != null ? Number(dl.audioFileSize) : null,
           video_resolution: dl?.video_resolution ?? null,
           watched_by: dl ? watchedByVideoId.get(dl.id) || [] : [],
+          availability: availabilityById.get(youtubeId) || 'public',
+          members_only_access: availabilityById.get(youtubeId) === 'subscriber_only'
+            ? getMembersOnlyAccessState(youtubeId)
+            : 'public',
         };
       });
 

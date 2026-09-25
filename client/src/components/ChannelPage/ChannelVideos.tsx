@@ -515,7 +515,8 @@ function ChannelVideos({
     const downloadable = paginatedVideos
       .filter((video) => {
         const status = getVideoStatus(video);
-        return status === 'never_downloaded' || status === 'missing' || status === 'ignored';
+        return status === 'never_downloaded' || status === 'missing' || status === 'ignored' ||
+          (status === 'members_only' && ['access_confirmed', 'access_unchecked'].includes(video.members_only_access || 'no_cookies'));
       })
       .map((video) => video.youtube_id);
     setCheckedBoxes((prev) => {
@@ -538,7 +539,8 @@ function ChannelVideos({
     const ids = paginatedVideos
       .filter((video) => {
         const status = getVideoStatus(video);
-        return status === 'never_downloaded' || status === 'missing' || status === 'ignored';
+        return status === 'never_downloaded' || status === 'missing' || status === 'ignored' ||
+          (status === 'members_only' && ['access_confirmed', 'access_unchecked'].includes(video.members_only_access || 'no_cookies'));
       })
       .map((video) => video.youtube_id);
     setCheckedBoxes((prev) => {
@@ -1244,7 +1246,8 @@ function ChannelVideos({
         disabled={
           paginatedVideos.filter((video) => {
             const status = getVideoStatus(video);
-            return status === 'never_downloaded' || status === 'missing' || status === 'ignored';
+            return status === 'never_downloaded' || status === 'missing' || status === 'ignored' ||
+              (status === 'members_only' && ['access_confirmed', 'access_unchecked'].includes(video.members_only_access || 'no_cookies'));
           }).length === 0
         }
         className="intent-warning"

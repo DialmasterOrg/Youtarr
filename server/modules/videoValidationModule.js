@@ -1,5 +1,6 @@
 const ytDlpRunner = require('./ytDlpRunner');
 const archiveModule = require('./archiveModule');
+const configModule = require('./configModule');
 const logger = require('../logger');
 const ChannelVideo = require('../models/channelvideo');
 const youtubeUrlParser = require('./youtubeUrlParser');
@@ -7,7 +8,56 @@ const youtubeUrlParser = require('./youtubeUrlParser');
 class VideoValidationModule {
   constructor() {
     this.cache = new Map();
+    this.accessRecords = new Map();
     this.cacheTTL = 5 * 60 * 1000;
+    this.accessTTL = 24 * 60 * 60 * 1000;
+    if (typeof configModule.on === 'function') {
+      configModule.on('change', () => {
+        this.cache.clear();
+        this.accessRecords.clear();
+      });
+    }
+  }
+
+  getCookieAccessKey() {
+    if (typeof configModule.getCookiesAccessKey === 'function') {
+      return configModule.getCookiesAccessKey();
+    }
+    return configModule.hasUsableCookies?.() ? 'configured-cookies' : null;
+  }
+
+  recordAccess(youtubeId, state) {
+    const cookieKey = this.getCookieAccessKey();
+    if (!youtubeId || !cookieKey) return;
+    this.accessRecords.set(youtubeId, { state, cookieKey, checkedAt: Date.now() });
+  }
+
+  recordAccessDenied(youtubeId) {
+    this.recordAccess(youtubeId, 'access_denied');
+  }
+
+  recordAccessConfirmed(youtubeId) {
+    this.recordAccess(youtubeId, 'access_confirmed');
+  }
+
+  getAccessState(youtubeId, isMembersOnly = true) {
+    if (!isMembersOnly) return 'public';
+    const cookieKey = this.getCookieAccessKey();
+    if (!cookieKey) return 'no_cookies';
+    const record = youtubeId ? this.accessRecords.get(youtubeId) : null;
+    if (!record || record.cookieKey !== cookieKey || Date.now() - record.checkedAt >= this.accessTTL) {
+      if (record) this.accessRecords.delete(youtubeId);
+      return 'access_unchecked';
+    }
+    return record.state;
+  }
+
+  isAccessDenied(youtubeId) {
+    return this.getAccessState(youtubeId) === 'access_denied';
+  }
+
+  resetAccess(youtubeId) {
+    if (youtubeId) this.accessRecords.delete(youtubeId);
   }
 
   /**
@@ -82,6 +132,12 @@ class VideoValidationModule {
    */
   toValidationResponse(videoId, metadata, isDuplicate) {
     const isMembersOnly = metadata.availability === 'subscriber_only';
+    let accessState = this.getAccessState(videoId, isMembersOnly);
+    const canDownloadMembersOnly = isMembersOnly && !['no_cookies', 'access_denied'].includes(accessState);
+    if (isMembersOnly && canDownloadMembersOnly) {
+      this.recordAccessConfirmed(videoId);
+      accessState = 'access_confirmed';
+    }
     const availabilityProvided = Boolean(metadata.availability);
 
     const contentRating = metadata.contentRating || metadata.content_rating || null;
@@ -91,6 +147,7 @@ class VideoValidationModule {
       isValidUrl: true,
       isAlreadyDownloaded: isDuplicate,
       isMembersOnly: isMembersOnly,
+      ...(isMembersOnly ? { canDownloadMembersOnly, accessState } : {}),
       metadata: {
         youtubeId: videoId,
         url: `https://www.youtube.com/watch?v=${videoId}`,
@@ -261,12 +318,16 @@ class VideoValidationModule {
         // Extract video ID from error message if possible, or use the one we parsed from URL
         const videoIdMatch = error.message.match(/\[youtube\]\s+([a-zA-Z0-9_-]{11}):/);
         const extractedVideoId = videoIdMatch ? videoIdMatch[1] : videoId;
+        this.recordAccessDenied(extractedVideoId);
 
-        // Return a valid response indicating it's members-only
+        // Return a response indicating members-only where access was denied by YouTube
         const membersOnlyResponse = {
           isValidUrl: true,
           isAlreadyDownloaded: false,
           isMembersOnly: true,
+          canDownloadMembersOnly: false,
+          accessState: 'access_denied',
+          error: 'YouTube denied membership access for this video with the current cookies.',
           metadata: {
             youtubeId: extractedVideoId,
             url: `https://www.youtube.com/watch?v=${extractedVideoId}`,

@@ -1,4 +1,4 @@
-const { spawn } = require('child_process');
+const { spawnYtDlp } = require('./ytdlpProcess');
 const { Op } = require('sequelize');
 const logger = require('../logger');
 const { sequelize } = require('../db');
@@ -54,7 +54,16 @@ class PlaylistModule {
 
   async _getPlaylistMetadata(url, { skipWebpage = false } = {}) {
     return new Promise((resolve, reject) => {
+      let config = {};
+      try {
+        const configModule = require('./configModule');
+        config = configModule.getConfig ? configModule.getConfig() : {};
+      } catch {
+        // Fallback for tests with partial mocks
+      }
+      const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
       const args = [
+        ...YtdlpCommandBuilder.buildCommonArgs(config, { skipSleepRequests: true }),
         '--skip-download',
         '--dump-single-json',
         '--flat-playlist',
@@ -62,7 +71,7 @@ class PlaylistModule {
       ];
       if (skipWebpage) args.push('--extractor-args', 'youtubetab:skip=webpage');
       args.push(url);
-      const child = spawn('yt-dlp', args);
+      const child = spawnYtDlp(args);
       let stdout = '';
       let stderr = '';
 
@@ -253,11 +262,12 @@ class PlaylistModule {
       ],
     });
 
-    // Prune rows that are no longer in the live playlist (went private, or were
-    // removed on YouTube) so they stop showing in Youtarr and stop being queued.
+    // Do not mistake an authentication-dependent placeholder for playlist removal.
+    // Keeping known rows also preserves local playback when membership later lapses.
+    const hasUnavailableEntries = entries.some((entry) => this.isUnavailableTitle(entry.title));
     // Unknown counts and partial fetches cannot prove that missing entries were
     // removed. A confirmed empty playlist can safely clear the tracked rows.
-    if (complete) {
+    if (complete && !hasUnavailableEntries) {
       const keepIds = available.map((e) => e.id).filter(Boolean);
       const where = { playlist_id: playlist.playlist_id };
       if (keepIds.length) where.youtube_id = { [Op.notIn]: keepIds };
@@ -465,15 +475,29 @@ class PlaylistModule {
   // is also passed.
   _spawnFlatPlaylist(url, { playlistEnd, skipWebpage = false } = {}) {
     return new Promise((resolve, reject) => {
-      const args = ['--flat-playlist', '--dump-json'];
+      let config = {};
+      let cookiesPath = null;
+      try {
+        const configModule = require('./configModule');
+        config = configModule.getConfig ? configModule.getConfig() : {};
+        cookiesPath = configModule.getCookiesPath ? configModule.getCookiesPath() : null;
+      } catch {
+        // Fallback for tests with partial mocks
+      }
+      const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
+      const args = [
+        ...YtdlpCommandBuilder.buildCommonArgs(config, { skipSleepRequests: true }),
+        '--flat-playlist',
+        '--dump-json',
+      ];
       if (playlistEnd != null) {
         args.push('--playlist-end', String(playlistEnd));
       }
       if (skipWebpage) {
-        args.push('--extractor-args', 'youtubetab:skip=webpage');
+        args.push('--extractor-args', cookiesPath ? 'youtubetab:skip=webpage,authcheck' : 'youtubetab:skip=webpage');
       }
       args.push(url);
-      const child = spawn('yt-dlp', args);
+      const child = spawnYtDlp(args);
       let stdout = '';
       let stderr = '';
       child.stdout.on('data', (d) => { stdout += d.toString(); });
