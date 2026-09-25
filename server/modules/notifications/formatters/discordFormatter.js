@@ -20,7 +20,9 @@ const {
   buildTerminationFailureCountLabel,
   formatTerminationFailureLine,
   getDiagnoses,
-  formatDiagnosisLine
+  formatDiagnosisLine,
+  getStoppedGroups,
+  formatStoppedGroupLine
 } = require('../utils');
 
 const DISCORD_FIELD_VALUE_LIMIT = 1024;
@@ -126,7 +128,16 @@ function formatDownloadMessage(finalSummary, videoData) {
     });
   }
 
-  const hasWarning = failedCount > 0 || terminatedCount > 0 || terminationFailureCount > 0;
+  const stoppedGroups = getStoppedGroups(finalSummary);
+  if (stoppedGroups.length > 0) {
+    fields.push({
+      name: '⚠️ Stopped early',
+      value: truncateFieldValueAtLineBoundary(stoppedGroups.map(formatStoppedGroupLine).join('\n')),
+      inline: false
+    });
+  }
+
+  const hasWarning = failedCount > 0 || terminatedCount > 0 || terminationFailureCount > 0 || stoppedGroups.length > 0;
   return {
     embeds: [{
       title,

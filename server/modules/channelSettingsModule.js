@@ -11,6 +11,7 @@ const { MEDIA_TAB_TYPE_MAP, VALID_TAB_TYPES, parseTabCsv } = require('./tabsUtil
 const { validateSubFolderName } = require('./filesystem/subfolderValidation');
 const subfolderModule = require('./subfolderModule');
 const m3uGenerator = require('./m3uGenerator');
+const titleRegex = require('./titleFilterRegex');
 const {
   GLOBAL_DEFAULT_SENTINEL,
   buildChannelPath,
@@ -152,30 +153,7 @@ class ChannelSettingsModule {
       };
     }
 
-    // Test if it's a valid Python regex by testing against a sample string
-    try {
-      const { execFileSync } = require('child_process');
-      const path = require('path');
-      const scriptPath = path.join(__dirname, '../utils/test-python-regex.py');
-
-      // Use execFileSync with argument array to prevent shell injection
-      const result = execFileSync('python3', [scriptPath, trimmed, 'test'], {
-        encoding: 'utf8',
-        timeout: 1000,
-      });
-
-      const parsed = JSON.parse(result);
-      if (parsed.error) {
-        return { valid: false, error: parsed.error };
-      }
-    } catch (err) {
-      return {
-        valid: false,
-        error: `Invalid Python regex pattern: ${err.message}`,
-      };
-    }
-
-    return { valid: true };
+    return titleRegex.checkSyntax(trimmed);
   }
 
   /**
@@ -469,7 +447,6 @@ class ChannelSettingsModule {
    */
   async previewTitleFilter(channelId, regexPattern) {
     const ChannelVideo = require('../models/channelvideo');
-    const path = require('path');
 
     // Validate the regex pattern first
     const validation = this.validateTitleRegex(regexPattern);
@@ -501,43 +478,18 @@ class ChannelSettingsModule {
       };
     }
 
-    // Use Python to test each video title - same regex engine as yt-dlp
-    const { execFileSync } = require('child_process');
-    const scriptPath = path.join(__dirname, '../utils/test-python-regex.py');
-    const trimmedPattern = regexPattern.trim();
+    // Python regex, same engine as yt-dlp's match filter, in one process.
+    // A timeout or crash propagates: reporting "0 matches" would misdescribe
+    // a pattern that could not be evaluated.
+    const titles = channelVideos.map((cv) => cv.title || '');
+    const results = await titleRegex.matchTitles(regexPattern.trim(), titles);
 
-    const videos = channelVideos.map((cv) => {
-      const title = cv.title || '';
-      let matches = false;
-
-      try {
-        // Use execFileSync with argument array to prevent shell injection
-        const result = execFileSync(
-          'python3',
-          [scriptPath, trimmedPattern, title],
-          { encoding: 'utf8', timeout: 1000 }
-        );
-
-        const parsed = JSON.parse(result);
-        if (parsed.error) {
-          logger.error({ err: parsed.error, title }, 'Regex test error in previewTitleFilter');
-          matches = false;
-        } else {
-          matches = parsed.matches;
-        }
-      } catch (testError) {
-        // If Python execution fails for a specific title, consider it non-matching
-        logger.error({ err: testError.message, title }, 'Failed to test title in previewTitleFilter');
-        matches = false;
-      }
-
-      return {
-        video_id: cv.youtube_id,
-        title,
-        upload_date: cv.publishedAt,
-        matches,
-      };
-    });
+    const videos = channelVideos.map((cv, i) => ({
+      video_id: cv.youtube_id,
+      title: titles[i],
+      upload_date: cv.publishedAt,
+      matches: results[i],
+    }));
 
     const matchCount = videos.filter((v) => v.matches).length;
 

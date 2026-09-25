@@ -35,6 +35,7 @@ client/node_modules
 jobs/*
 config/jobs/*
 config/images/*
+config/.yt-dlp-cache/
 
 # misc
 .DS_Store

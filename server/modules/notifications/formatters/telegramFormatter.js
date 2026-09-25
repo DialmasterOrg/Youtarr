@@ -21,7 +21,9 @@ const {
   buildTerminationFailureCountLabel,
   formatTerminationFailureLine,
   getDiagnoses,
-  formatDiagnosisLine
+  formatDiagnosisLine,
+  getStoppedGroups,
+  formatStoppedGroupLine
 } = require('../utils');
 
 /**
@@ -74,6 +76,14 @@ function formatDownloadMessage(finalSummary, videoData) {
     }
     getDiagnoses(finalSummary).forEach(diagnosis => {
       body += `💡 <i>${escapeHtml(formatDiagnosisLine(diagnosis))}</i>\n`;
+    });
+    body += '\n';
+  }
+
+  const stoppedGroups = getStoppedGroups(finalSummary);
+  if (stoppedGroups.length > 0) {
+    stoppedGroups.forEach(stopped => {
+      body += `⚠️ <b>${escapeHtml(formatStoppedGroupLine(stopped))}</b>\n`;
     });
     body += '\n';
   }

@@ -398,7 +398,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    *       200:
    *         description: Applied settings
    *       400:
-   *         description: Invalid default_sub_folder or sort_order
+   *         description: Invalid default_sub_folder, sort_order, or title_filter_regex (must be a string or null and compile as a JavaScript regex; playlist title filters match case-insensitively)
    *       404:
    *         description: Playlist not found
    *       500:
@@ -413,6 +413,18 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     }
     if ('sort_order' in updates && !VALID_SORT_ORDERS.has(updates.sort_order)) {
       return res.status(400).json({ error: 'Invalid sort_order; expected default or reversed' });
+    }
+    const titleFilter = updates.title_filter_regex;
+    if (titleFilter != null && typeof titleFilter !== 'string') {
+      return res.status(400).json({ error: 'title_filter_regex must be a string or null' });
+    }
+    if (titleFilter) {
+      // A pattern the refresh cannot compile would break every refresh of this playlist.
+      try {
+        playlistModule.buildTitleFilterRegExp(titleFilter);
+      } catch (err) {
+        return res.status(400).json({ error: `Invalid title_filter_regex: ${err.message}` });
+      }
     }
     try {
       const p = await findEnabledPlaylist(req.params.playlistId);

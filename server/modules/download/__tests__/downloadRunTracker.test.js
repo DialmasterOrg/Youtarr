@@ -268,6 +268,86 @@ describe('downloadRunTracker', () => {
       expect(payload.progress.state).toBe('warning');
     });
 
+    describe('a grouped channel job that stopped partway', () => {
+      function runWithStoppedGroup() {
+        const runId = tracker.startRun();
+        tracker.registerJob(runId, 'j1');
+        tracker.recordJobResult(runId, 'j1', {
+          totalDownloaded: 3,
+          jobType: 'Channel Downloads',
+          stoppedGroup: { group: 'Group 2/3 (720p)', reason: 'Bot detection encountered', terminated: false },
+        });
+        tracker.seal(runId);
+        return emittedSummary();
+      }
+
+      test('says the run stopped early, where, and why', () => {
+        expect(runWithStoppedGroup().text).toBe(
+          'Download stopped early: 3 videos downloaded, stopped at Group 2/3 (720p) (Bot detection encountered), later groups skipped'
+        );
+      });
+
+      test('notifies even when nothing downloaded', () => {
+        const runId = tracker.startRun();
+        tracker.registerJob(runId, 'j1');
+        tracker.recordJobResult(runId, 'j1', {
+          totalDownloaded: 0,
+          jobType: 'Channel Downloads',
+          stoppedGroup: { group: 'Group 1/2 (1080p)', reason: 'Bot detection encountered', terminated: false },
+        });
+        tracker.seal(runId);
+
+        expect(notificationModule.sendDownloadNotification).toHaveBeenCalled();
+      });
+
+      test('does not notify for a user termination alone', () => {
+        const runId = tracker.startRun();
+        tracker.registerJob(runId, 'j1');
+        tracker.recordJobResult(runId, 'j1', {
+          totalDownloaded: 0,
+          jobType: 'Channel Downloads',
+          stoppedGroup: { group: 'Group 1/2 (1080p)', reason: 'User requested termination', terminated: true },
+        });
+        tracker.seal(runId);
+
+        expect(notificationModule.sendDownloadNotification).not.toHaveBeenCalled();
+      });
+
+      test('describes a termination as terminated', () => {
+        const runId = tracker.startRun();
+        tracker.registerJob(runId, 'j1');
+        tracker.recordJobResult(runId, 'j1', {
+          totalDownloaded: 1,
+          jobType: 'Channel Downloads',
+          stoppedGroup: { group: 'Group 1/2 (1080p)', reason: null, terminated: true },
+        });
+        tracker.seal(runId);
+
+        expect(emittedSummary().text).toBe(
+          'Download stopped early: 1 video downloaded, terminated in Group 1/2 (1080p), later groups skipped'
+        );
+      });
+
+      test('marks the run as a warning even with no failed videos', () => {
+        expect(runWithStoppedGroup().progress.state).toBe('warning');
+      });
+
+      test('lists the stopped group in the final summary', () => {
+        expect(runWithStoppedGroup().finalSummary.stoppedGroups).toEqual([
+          { group: 'Group 2/3 (720p)', reason: 'Bot detection encountered', terminated: false },
+        ]);
+      });
+    });
+
+    test('leaves stoppedGroups out of the final summary when every group finished', () => {
+      const runId = tracker.startRun();
+      tracker.registerJob(runId, 'j1');
+      tracker.recordJobResult(runId, 'j1', { totalDownloaded: 1, jobType: 'Channel Downloads' });
+      tracker.seal(runId);
+
+      expect(emittedSummary().finalSummary).not.toHaveProperty('stoppedGroups');
+    });
+
     test('deduplicates terminated channels across jobs', () => {
       const runId = tracker.startRun();
       tracker.registerJob(runId, 'j1');

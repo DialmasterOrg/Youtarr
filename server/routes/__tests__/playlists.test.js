@@ -38,6 +38,7 @@ const buildDeps = (overrides = {}) => ({
     refreshForFollowing: jest.fn().mockResolvedValue(0),
     isFollowingSetupError: (err) => ['PLAYLIST_TOO_LARGE', 'PLAYLIST_REFRESH_INCOMPLETE'].includes(err.message),
     recoverFollowingSetup: jest.fn().mockResolvedValue('Playlist saved. Auto-download setup needs attention.'),
+    buildTitleFilterRegExp: jest.fn(),
     ...overrides.playlistModule,
   },
   m3uGenerator: {
@@ -873,6 +874,79 @@ describe('PUT /api/playlists/:playlistId/settings', () => {
     await handler(req, res);
 
     expect(deps.subfolderModule.register).toHaveBeenCalledWith('Music');
+  });
+
+  test('rejects a title_filter_regex the refresh cannot compile, without persisting', async () => {
+    const deps = buildDeps();
+    deps.playlistModule.buildTitleFilterRegExp.mockImplementation(() => {
+      throw new SyntaxError('Unterminated character class');
+    });
+
+    const handler = getHandler('put', '/api/playlists/:playlistId/settings', deps);
+    const req = {
+      params: { playlistId: 'PLtest123' },
+      body: { title_filter_regex: '[unclosed' },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Invalid title_filter_regex: Unterminated character class' });
+    expect(deps.models.Playlist.findOne).not.toHaveBeenCalled();
+  });
+
+  test('rejects a non-string title_filter_regex', async () => {
+    const deps = buildDeps();
+
+    const handler = getHandler('put', '/api/playlists/:playlistId/settings', deps);
+    const req = {
+      params: { playlistId: 'PLtest123' },
+      body: { title_filter_regex: 42 },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  test('saves a valid title_filter_regex exactly as given', async () => {
+    const deps = buildDeps();
+    const p = makePlaylist();
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+
+    const handler = getHandler('put', '/api/playlists/:playlistId/settings', deps);
+    const req = {
+      params: { playlistId: 'PLtest123' },
+      body: { title_filter_regex: 'Episode \\d+ ' },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(p.update).toHaveBeenCalledWith({ title_filter_regex: 'Episode \\d+ ' });
+  });
+
+  test('clears title_filter_regex without compiling it', async () => {
+    const deps = buildDeps();
+    const p = makePlaylist();
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+
+    const handler = getHandler('put', '/api/playlists/:playlistId/settings', deps);
+    const req = {
+      params: { playlistId: 'PLtest123' },
+      body: { title_filter_regex: null },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.playlistModule.buildTitleFilterRegExp).not.toHaveBeenCalled();
   });
 
   test('returns 404 when playlist not found', async () => {

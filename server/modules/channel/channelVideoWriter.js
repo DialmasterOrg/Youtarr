@@ -61,9 +61,6 @@ class ChannelVideoWriter {
         // code paths (modal open, download error, URL validation) populated.
         if (video.availability) updates.availability = video.availability;
         if (video.live_status) updates.live_status = video.live_status;
-        if (video.content_rating != null) updates.content_rating = video.content_rating;
-        if (video.age_limit != null) updates.age_limit = video.age_limit;
-        if (video.normalized_rating != null) updates.normalized_rating = video.normalized_rating;
         // publishedAt / published_at_source intentionally deferred to phase 2.
         await videoRecord.update(updates);
       }

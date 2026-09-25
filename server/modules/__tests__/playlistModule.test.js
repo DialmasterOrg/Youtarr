@@ -149,6 +149,16 @@ describe('playlistModule', () => {
     });
   });
 
+  describe('buildTitleFilterRegExp', () => {
+    test('matches case-insensitively', () => {
+      expect(playlistModule.buildTitleFilterRegExp('review').test('GAME REVIEW')).toBe(true);
+    });
+
+    test('throws for a pattern JavaScript cannot compile', () => {
+      expect(() => playlistModule.buildTitleFilterRegExp('[unclosed')).toThrow(SyntaxError);
+    });
+  });
+
   describe('upsertPlaylist', () => {
     test('creates a new playlist with the provided settings when none exists', async () => {
       Playlist.findOne.mockResolvedValue(null);
@@ -566,6 +576,25 @@ describe('playlistModule', () => {
         ]),
         expect.objectContaining({ updateOnDuplicate: expect.any(Array) })
       );
+    });
+
+    test('keeps entries whose titles match the title filter, ignoring case', async () => {
+      Playlist.findOne.mockResolvedValue({
+        id: 1, playlist_id: 'PLabc', url: 'https://u',
+        min_duration: null, max_duration: null, title_filter_regex: 'review',
+        update: jest.fn().mockResolvedValue(true),
+      });
+      PlaylistVideo.findAll.mockResolvedValue([]);
+      PlaylistVideo.bulkCreate.mockResolvedValue([]);
+      flatPlaylistSpawn.mockImplementation(() => completedChild([
+        { id: 'v1', title: 'Game REVIEW', duration: 100 },
+        { id: 'v2', title: 'Trailer', duration: 100 },
+      ]));
+
+      await playlistModule.fetchAllPlaylistVideos('PLabc');
+
+      const call = PlaylistVideo.bulkCreate.mock.calls[0][0];
+      expect(call.map((v) => v.youtube_id)).toEqual(['v1']);
     });
 
     test('applies min_duration filter', async () => {

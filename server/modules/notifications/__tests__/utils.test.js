@@ -9,6 +9,9 @@ const {
   getTerminationFailureCount,
   buildTerminationFailureCountLabel,
   formatTerminationFailureLine,
+  getStoppedGroups,
+  hasFailureStop,
+  formatStoppedGroupLine,
 } = require('../utils');
 
 describe('notification utils - terminated channel helpers', () => {
@@ -144,6 +147,31 @@ describe('notification utils - terminated channel helpers', () => {
       expect(formatTerminationFailureLine('UC123')).toBe(
         'UC123: detected as terminated but could not be auto-disabled (check the channel manually)'
       );
+    });
+  });
+});
+
+describe('notification utils - stopped group helpers', () => {
+  describe('getStoppedGroups', () => {
+    test('returns an empty list when the summary has none', () => {
+      expect(getStoppedGroups({})).toEqual([]);
+    });
+  });
+
+  describe('hasFailureStop', () => {
+    test('is true when a failed group stopped the run', () => {
+      expect(hasFailureStop({ stoppedGroups: [{ group: 'Group 1/2 (1080p)', terminated: false }] })).toBe(true);
+    });
+
+    test('is false when only a termination stopped the run', () => {
+      expect(hasFailureStop({ stoppedGroups: [{ group: 'Group 1/2 (1080p)', terminated: true }] })).toBe(false);
+    });
+  });
+
+  describe('formatStoppedGroupLine', () => {
+    test('leaves out the reason when there is none', () => {
+      expect(formatStoppedGroupLine({ group: 'Group 2/3 (720p)', reason: null, terminated: false }))
+        .toBe('Stopped at Group 2/3 (720p). Later groups were skipped.');
     });
   });
 });

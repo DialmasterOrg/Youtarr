@@ -164,6 +164,35 @@ function formatDiagnosisLine(diagnosis = {}) {
 }
 
 /**
+ * Get the grouped channel downloads that stopped partway.
+ * @param {Object} finalSummary - Summary object from the download wrap-up or run tracker
+ * @returns {Array} Stopped groups ({ group, reason, terminated })
+ */
+function getStoppedGroups(finalSummary = {}) {
+  return Array.isArray(finalSummary.stoppedGroups) ? finalSummary.stoppedGroups : [];
+}
+
+/**
+ * Whether a failed group (not a user termination) stopped the download early.
+ * @param {Object} finalSummary
+ * @returns {boolean}
+ */
+function hasFailureStop(finalSummary = {}) {
+  return getStoppedGroups(finalSummary).some((stopped) => !stopped.terminated);
+}
+
+/**
+ * Format a stopped group for notification bodies.
+ * @param {Object} stopped - { group, reason, terminated }
+ * @returns {string} Human-readable stopped-early line
+ */
+function formatStoppedGroupLine(stopped = {}) {
+  const where = stopped.terminated ? `Terminated in ${stopped.group}` : `Stopped at ${stopped.group}`;
+  const reason = stopped.reason ? `: ${stopped.reason}` : '';
+  return `${where}${reason}. Later groups were skipped.`;
+}
+
+/**
  * Get subtitle based on job type. Handles per-job labels (channel, manual,
  * `Playlist: <title>`) as well as the aggregated download-run labels
  * (`Channel Downloads`, `Playlist downloads`, `Channel & playlist update`).
@@ -293,6 +322,9 @@ module.exports = {
   formatFailedVideoLine,
   getDiagnoses,
   formatDiagnosisLine,
+  getStoppedGroups,
+  hasFailureStop,
+  formatStoppedGroupLine,
   getSubtitle,
   buildAutoRemovalTitle,
   formatBytes,

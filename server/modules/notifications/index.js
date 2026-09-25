@@ -18,6 +18,7 @@ const { appriseSender, discordSender } = require('./senders');
 
 // Plain formatter for non-rich formatting
 const plainFormatter = require('./formatters/plainFormatter');
+const { hasFailureStop } = require('./utils');
 
 /**
  * Normalize an appriseUrls entry to the current object format
@@ -116,8 +117,9 @@ class NotificationModule {
         : 0;
 
       // Diagnosed failure-only runs still notify: the "Likely cause" advice is
-      // the whole point of telling an automated user about the failure.
-      if (finalSummary.totalDownloaded === 0 && terminatedChannelCount === 0 && terminationFailureCount === 0 && diagnosisCount === 0) {
+      // the whole point of telling an automated user about the failure. So do
+      // runs a failed group stopped early.
+      if (finalSummary.totalDownloaded === 0 && terminatedChannelCount === 0 && terminationFailureCount === 0 && diagnosisCount === 0 && !hasFailureStop(finalSummary)) {
         logger.debug('No new videos downloaded and no terminations recorded, skipping notification');
         return;
       }
