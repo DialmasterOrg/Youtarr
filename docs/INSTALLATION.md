@@ -7,11 +7,13 @@ Before setting up Youtarr, ensure you have:
 1. **Docker & Docker Compose** installed on your system
 2. **Bash Shell** (Git Bash for Windows users)
 3. **Git** to clone the repository
+4. Some network and VPN knowledge if using Gluetun
 
 ## Quick Start Guide
 
 Choose your preferred installation method
 
+> [!TIP]
 > Running on a NAS or Unraid? There are dedicated platform guides for [Synology](platforms/synology.md), [Unraid](platforms/unraid.md), and [Asustor](platforms/asustor.md) - start there instead.
 
 ### Method 1: First-Time Installation via `./start.sh` helper
@@ -25,14 +27,14 @@ Choose your preferred installation method
    ```bash
    ./start.sh
    ```
-   If this is a first time run you will:
-   - Be prompted to setup your output directory for videos (defaults to `./downloads`)
+   If this is a first-time run, you will:
+   - Be prompted to set up your output directory for videos (defaults to `./downloads`)
    - Choose your timezone (default `UTC`), which drives scheduled downloads and nightly cleanup jobs.
 
    #### Optional flags:
-     - `--no-auth`: Completely disable auth. Never expose Youtarr directly to the internet in this manner, only use if you have your own authentication layer (Cloudflare Tunnel, OAuth Proxy, etc)
-     - `--headless-auth`: Set auth credentials in `.env`, bypassing the need to setup credentials in the UI (as that may be difficult to do over localhost for headless setups)
-     - `--pull-latest`: Pull latest code from Github and latest image from DockerHub
+     - `--no-auth`: Completely disable auth. Never expose Youtarr directly to the internet in this manner; only use if you have your own authentication layer (Cloudflare Tunnel, OAuth Proxy, etc.)
+     - `--headless-auth`: Set auth credentials in `.env`, bypassing the need to set up credentials in the UI (as that may be difficult to do over localhost for headless setups)
+     - `--pull-latest`: Pull latest code from GitHub and latest image from DockerHub
      - `--debug`: Set log level to debug
 
    This automatically creates a `.env` file from the included `.env.example` and starts both the Youtarr application and MariaDB database containers. On a fresh install, `./start.sh` uses Docker named-volume storage for MariaDB. If an existing `./database/` MariaDB directory is present, it preserves that bind-mounted database and prints a migration warning.
@@ -60,7 +62,7 @@ If you prefer to use standard `docker compose up` commands:
    cp .env.example .env
    ```
 
-3. **Edit the .env file**:
+4. **Edit the .env file**:
    ```bash
    vim .env  # or use your preferred editor
    ```
@@ -69,6 +71,9 @@ If you prefer to use standard `docker compose up` commands:
    ```bash
    YOUTUBE_OUTPUT_DIR=/path/to/your/videos
    ```
+   
+> [!NOTE]
+> If using Gluetun, you must set all the required variables, or else it will fail.
 
    Optionally configure other settings:
    - `YOUTARR_HOST_PORT=3087` - Change this if you need the web interface on a different host port
@@ -81,7 +86,7 @@ If you prefer to use standard `docker compose up` commands:
 
    See: [ENVIRONMENT VARIABLES](ENVIRONMENT_VARIABLES.md) for more details
 
-4. **Start with Docker Compose**:
+6. **Start with Docker Compose**:
    ```bash
    docker compose up -d
    ```
@@ -92,23 +97,25 @@ If you prefer to use standard `docker compose up` commands:
    > ```
    > If you already have data in `./database/`, use `./scripts/migrate-to-named-volume.sh` instead. See [Database Management](DATABASE.md#migrating-from-bind-mount-to-named-volume) and [Troubleshooting](TROUBLESHOOTING.md#docker-desktop--arm-incorrect-information-in-file-errors) for details.
 
-5. **Access the web interface**:
+7. **Access the web interface**:
    - Navigate to `http://localhost:3087` (or your server's LAN IP)
    - If you set preset credentials in .env, use those to log in
    - If not, you'll be prompted to complete the setup wizard using the one-time token from `docker logs youtarr` or `config/setup-token`
    - Configure Plex (and optionally Jellyfin or Emby for playlist sync) and other settings from the Settings page
 
-> **Important**: Ensure the path you assign to `YOUTUBE_OUTPUT_DIR` already exists on the host and is writable before starting the stack. Otherwise Docker will create it as root-owned and the container may not be able to write downloads.
+> [!IMPORTANT]
+> Ensure the path you assign to `YOUTUBE_OUTPUT_DIR` already exists on the host and is writable before starting the stack. Otherwise Docker will create it as root-owned, and the container may not be able to write downloads.
 
 This method gives you direct control over environment variables and compose files, but it is not identical to `./start.sh`: plain `docker compose up -d` uses the legacy bind-mounted database unless you include or pin `docker-compose.arm.yml`.
 
 ### Method 3: Manual Setup Without Git (Advanced Users Only)
 
+> [!WARNING]
 > **Not Recommended**: This method requires manual directory creation, permission management, and lacks helper scripts. It is more error-prone and provides limited community support.
 >
 > **For advanced users only.** If you cannot clone the repository (e.g., Portainer, TrueNAS, limited Git access), see [Manual Docker Setup Without Git](DOCKER.md#manual-setup-without-git-clone) in the Docker documentation.
-
-Most users should use Method 1 or 2 above for the best experience and easiest updates.
+>
+> Most users should use Method 1 or 2 above for the best experience and easiest updates.
 
 ## Authentication
 
@@ -153,7 +160,7 @@ The `config/complete.list` file tracks all downloaded videos and prevents re-dow
 
 **Do Not Rename or Move Files**
 
-Videos must retain their `[youtubeid].mp4` filename and remain in the Youtarr configured mount. Moving or renaming files will cause Youtarr to mark them as "missing" from disk.
+Videos must retain their `[youtubeid].mp4` filename and remain in the Youtarr-configured mount. Moving or renaming files will cause Youtarr to mark them as "missing" from disk.
 If videos are moved WITHIN the mount, on restart, Youtarr will attempt to find them, but do so at your own risk.
 
 **Format**: All videos download as MP4 with comprehensive embedded metadata (title, genre, studio, keywords) and NFO files for maximum media server compatibility.
@@ -165,11 +172,11 @@ If videos are moved WITHIN the mount, on restart, Youtarr will attempt to find t
 - Your media server (Plex/Jellyfin/etc.) can read from the same media location
 - Youtarr can reach your media server API over the network (if using Plex integration)
 
-**Docker Desktop (Windows/macOS)**: When configuring Plex, use `host.docker.internal` or your LAN IP (e.g. `192.168.x.x`) as your Plex server address to allow the container to reach the host machine.
+**Docker Desktop (Windows/macOS)**: When configuring Plex, use `host.docker.internal` or your LAN IP (e.g., `192.168.x.x`) as your Plex server address to allow the container to reach the host machine.
 
 **Docker on macOS without Docker Desktop** (e.g., Colima): Use the Mac's LAN IP (e.g., `192.168.x.x`) or `host.lima.internal`.
 
-**Docker on Linux**: Use the host's LAN IP (e.g., `192.168.x.x`). `host.docker.internal` normally resolves to the Docker bridge and Plex may not be listening there.
+**Docker on Linux**: Use the host's LAN IP (e.g., `192.168.x.x`). `host.docker.internal` normally resolves to the Docker bridge, and Plex may not be listening there.
 
 ### Content Filtering
 
@@ -182,9 +189,9 @@ If videos are moved WITHIN the mount, on restart, Youtarr will attempt to find t
 Youtarr fully supports platform-managed deployments with automatic configuration:
 
 - **Auto-Configuration**: When `DATA_PATH` is set, config.json is auto-created on first run
-- **Platform Authentication**: Set `AUTH_ENABLED=false` to bypass internal auth (only when platform handles it). Never expose a no-auth instance directly; protect it behind your platform's authentication layer.
+- **Platform Authentication**: Set `AUTH_ENABLED=false` to bypass internal auth (only when the platform handles it). Never expose a no-auth instance directly; protect it behind your platform's authentication layer.
 - **Pre-configured Plex**: Set `PLEX_URL` for automatic Plex server configuration
-- **Consolidated Storage**: All persistent data stored under single `/app/config` mount
+- **Consolidated Storage**: All persistent data stored under a single `/app/config` mount
 - **Example**: `DATA_PATH=/storage/rclone/storagebox/youtube`
 - **Details**: See [Docker Guide](DOCKER.md#platform-deployment-configuration) for full configuration
 
@@ -198,7 +205,7 @@ To access Youtarr from other devices on your private network:
 For external access:
 - Do not expose Youtarr directly to the internet over plain HTTP
 - Use a reverse proxy with HTTPS, or use a VPN/SSH tunnel instead of port forwarding the app directly
-- If you use a reverse proxy, make sure WebSocket support is enabled for the Youtarr host - otherwise real-time download progress won't display. See [Troubleshooting](TROUBLESHOOTING.md#no-download-progress-shown-downloads-work-videos-just-appear)
+- If you use a reverse proxy, make sure WebSocket support is enabled for the Youtarr host; otherwise, real-time download progress won't display. See [Troubleshooting](TROUBLESHOOTING.md#no-download-progress-shown-downloads-work-videos-just-appear)
 - Keep `AUTH_ENABLED=true` unless an upstream authentication layer protects every request
 
 ## Upgrading
