@@ -231,6 +231,7 @@ const CardDetails: React.FC<CardDetailsProps> = ({ channel, isMobile }) => {
                     availableTabs={channel.available_tabs}
                     autoDownloadTabs={channel.auto_download_enabled_tabs}
                     isMobile={isMobile}
+                    tabStats={channel.tab_download_stats}
                 />
                 <ProtectedChip
                     autoRemovalProtected={channel.auto_removal_protected}

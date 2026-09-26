@@ -1,18 +1,22 @@
 import React, { useState } from 'react';
-import { Chip, IconButton, Popover, Typography } from '../../../../components/ui';
+import { Chip, IconButton, Popover, Tooltip, Typography } from '../../../../components/ui';
 import { FileDownload as FileDownloadIcon, Info as InfoOutlinedIcon } from '../../../../lib/icons';
 import { SHARED_CHANNEL_META_DEFAULT_SURFACE_STYLE, SHARED_CHIP_RADIUS } from '../../../shared/chipStyles';
+import { ChannelTabType, TabDownloadStatsByTab } from '../../../../types/Channel';
+import { describeTabStats, formatTabPercent } from '../../../../utils/tabDownloadStats';
 
 interface AutoDownloadChipsProps {
   availableTabs: string | null | undefined;
   autoDownloadTabs: string | undefined;
   isMobile: boolean;
+  tabStats?: TabDownloadStatsByTab;
 }
 
 const AutoDownloadChips: React.FC<AutoDownloadChipsProps> = ({
   availableTabs,
   autoDownloadTabs,
   isMobile,
+  tabStats,
 }) => {
   const [infoAnchor, setInfoAnchor] = useState<HTMLElement | null>(null);
 
@@ -90,13 +94,16 @@ const AutoDownloadChips: React.FC<AutoDownloadChipsProps> = ({
       if (!tabInfo) return null;
       const mediaType = availableToMediaTypeMap[tab];
       const isAutoDownloadEnabled = mediaType && autoDownloadEnabled.includes(mediaType);
+      const stats = tabStats?.[tab as ChannelTabType];
+      const percentText = formatTabPercent(stats);
+      const baseLabel = isMobile ? tabInfo.short : tabInfo.full;
 
-      return (
+      const chip = (
         <Chip
           key={tab}
           data-testid={`auto-download-chip-${tab}`}
           data-autodownload={isAutoDownloadEnabled ? 'true' : 'false'}
-          label={isMobile ? tabInfo.short : tabInfo.full}
+          label={percentText ? `${baseLabel} ${percentText}` : baseLabel}
           size="small"
           variant="filled"
           color={isAutoDownloadEnabled ? 'primary' : 'default'}
@@ -112,6 +119,11 @@ const AutoDownloadChips: React.FC<AutoDownloadChipsProps> = ({
           }}
         />
       );
+      return stats ? (
+        <Tooltip key={tab} title={describeTabStats(stats)}>
+          {chip}
+        </Tooltip>
+      ) : chip;
     })
     .filter(Boolean) as React.ReactNode[];
 

@@ -4,6 +4,7 @@ const Channel = require('../../models/channel');
 const channelMappers = require('./channelMappers');
 const channelThumbnails = require('./channelThumbnails');
 const channelProvisioning = require('./channelProvisioning');
+const tabDownloadStats = require('./tabDownloadStats');
 const m3uGenerator = require('../m3uGenerator');
 
 const SUB_FOLDER_DEFAULT_KEY = '__default__';
@@ -193,6 +194,12 @@ class ChannelCatalog {
 
       channelThumbnails.backfillChannelImages(rows);
 
+      // Stats are decoration: a failed query must not empty the channel list.
+      const statsByChannel = await tabDownloadStats.getForChannels(rows).catch((err) => {
+        logger.warn({ err }, 'Failed to compute channel download stats');
+        return new Map();
+      });
+
       const totalPages = count > 0 ? Math.ceil(count / safePageSize) : 0;
       const normalizedSubFolders = distinctSubFolders
         .map((entry) => entry.sub_folder)
@@ -205,7 +212,7 @@ class ChannelCatalog {
         });
 
       return {
-        channels: rows.map((channel) => channelMappers.mapChannelListEntry(channel)),
+        channels: rows.map((channel) => channelMappers.mapChannelListEntry(channel, statsByChannel.get(channel.channel_id))),
         total: count,
         page: safePage,
         pageSize: safePageSize,

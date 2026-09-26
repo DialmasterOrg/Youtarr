@@ -39,7 +39,7 @@ jest.mock('../chips', () => ({
       subFolder || 'Default Folder'
     );
   },
-  AutoDownloadChips: function MockAutoDownloadChips({ availableTabs, autoDownloadTabs }: any) {
+  AutoDownloadChips: function MockAutoDownloadChips({ availableTabs, autoDownloadTabs, tabStats }: any) {
     const React = require('react');
     return React.createElement(
       'div',
@@ -47,6 +47,7 @@ jest.mock('../chips', () => ({
         'data-testid': 'auto-download-chips',
         'data-available': availableTabs,
         'data-enabled': autoDownloadTabs,
+        'data-videos-percent': tabStats?.videos?.percent,
       },
       'Auto'
     );
@@ -150,6 +151,16 @@ describe('ChannelListRow', () => {
       expect(screen.getByTestId('quality-chip')).toHaveAttribute('data-quality', '1080');
       expect(screen.getByTestId('auto-download-chips')).toHaveAttribute('data-enabled', 'video');
       expect(screen.getByTestId('sub-folder-chip')).toHaveTextContent('Default Folder');
+    });
+
+    test('passes the tab download stats to the auto-download chips', () => {
+      const channelWithStats = {
+        ...mockChannel,
+        tab_download_stats: { videos: { total: 449, fetchedAt: null, downloaded: 120, ignored: 0, percent: 26 } },
+      };
+      renderWithProviders(<ChannelListRow {...defaultProps} channel={channelWithStats} />);
+
+      expect(screen.getByTestId('auto-download-chips')).toHaveAttribute('data-videos-percent', '26');
     });
 
     test('uses channel url in test id and default thumbnail when channel_id is missing', () => {

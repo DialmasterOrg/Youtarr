@@ -10,6 +10,7 @@ jest.mock('../../messageEmitter.js');
 jest.mock('../../youtubeApi', () => mockFactories.mockYoutubeApi());
 jest.mock('../../configModule', () => mockFactories.mockConfigModule());
 jest.mock('../../filesystem', () => mockFactories.mockFilesystem());
+jest.mock('../tabVideoCounts', () => ({ refreshChannel: jest.fn().mockResolvedValue({ status: 'refreshed' }) }));
 
 describe('channelProvisioning', () => {
   let channelProvisioning;
@@ -579,6 +580,54 @@ describe('channelProvisioning', () => {
   });
 
   describe('getChannelInfo with new channel', () => {
+    const NEW_CHANNEL_URL = 'https://www.youtube.com/@newchan';
+
+    const arrangeNewChannel = () => {
+      const channelIdentity = require('../channelIdentity');
+      const channelMetadataFetcher = require('../channelMetadataFetcher');
+      const channelThumbnails = require('../channelThumbnails');
+      const tabManager = require('../tabManager');
+      jest.spyOn(channelIdentity, 'findChannelByUrlOrId').mockResolvedValue({ foundChannel: null, channelUrl: NEW_CHANNEL_URL });
+      jest.spyOn(channelMetadataFetcher, 'fetchChannelMetadata').mockResolvedValue({
+        channel_id: 'UC999',
+        title: 'New Channel',
+        description: 'desc',
+        uploader: 'New Channel',
+        folder_name: 'New Channel',
+        entries: [{ id: 'vid1' }],
+      });
+      jest.spyOn(channelThumbnails, 'processChannelThumbnail').mockResolvedValue();
+      jest.spyOn(channelThumbnails, 'processChannelBanner').mockResolvedValue();
+      jest.spyOn(tabManager, 'detectAndSaveChannelTabs').mockResolvedValue({ autoDownloadEnabledTabs: 'video', availableTabs: ['videos'] });
+      Channel.findOne.mockResolvedValue(null);
+      Channel.create.mockResolvedValue({ enabled: true, update: jest.fn() });
+      return require('../tabVideoCounts');
+    };
+
+    test('counts tab videos for a newly subscribed channel', async () => {
+      const tabVideoCounts = arrangeNewChannel();
+
+      await channelProvisioning.getChannelInfo(NEW_CHANNEL_URL, false, true);
+
+      expect(tabVideoCounts.refreshChannel).toHaveBeenCalledWith('UC999');
+    });
+
+    test('does not count tab videos for a channel created disabled', async () => {
+      const tabVideoCounts = arrangeNewChannel();
+
+      await channelProvisioning.getChannelInfo(NEW_CHANNEL_URL, false, false);
+
+      expect(tabVideoCounts.refreshChannel).not.toHaveBeenCalled();
+    });
+
+    test('does not count tab videos when tab detection is skipped', async () => {
+      const tabVideoCounts = arrangeNewChannel();
+
+      await channelProvisioning.getChannelInfo(NEW_CHANNEL_URL, false, true, {}, { skipTabDetection: true });
+
+      expect(tabVideoCounts.refreshChannel).not.toHaveBeenCalled();
+    });
+
     test('caches the channel banner after processing the thumbnail', async () => {
       const channelIdentity = require('../channelIdentity');
       const channelMetadataFetcher = require('../channelMetadataFetcher');

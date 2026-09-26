@@ -8,6 +8,7 @@ const channelProvisioning = require('./channel/channelProvisioning');
 const channelCatalog = require('./channel/channelCatalog');
 const autoDownloadScheduler = require('./channel/autoDownloadScheduler');
 const channelVideosService = require('./channel/channelVideosService');
+const tabDownloadStats = require('./channel/tabDownloadStats');
 
 class ChannelModule {
   constructor() {
@@ -150,6 +151,16 @@ class ChannelModule {
    */
   async getChannelAvailableTabs(channelId) {
     return tabManager.getChannelAvailableTabs(channelId);
+  }
+
+  /**
+   * Per-tab download stats for the channel page, refreshing YouTube totals
+   * older than 24 hours first.
+   * @param {string} channelId
+   * @returns {Promise<{ channelId: string, tabs: Object } | null>}
+   */
+  async getChannelTabStats(channelId) {
+    return tabDownloadStats.getChannelTabStats(channelId);
   }
 
   /**

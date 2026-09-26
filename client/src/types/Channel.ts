@@ -1,3 +1,19 @@
+export type ChannelTabType = 'videos' | 'shorts' | 'streams';
+
+// Public-video download stats for one channel tab. total is YouTube's count
+// (null until looked up); percent is null without a usable total.
+export interface TabDownloadStats {
+  total: number | null;
+  fetchedAt: string | null;
+  downloaded: number;
+  ignored: number;
+  percent: number | null;
+  // Channel page only: public videos loaded into Youtarr's listing.
+  loaded?: number;
+}
+
+export type TabDownloadStatsByTab = Partial<Record<ChannelTabType, TabDownloadStats>>;
+
 export interface Channel {
   url: string;
   uploader: string;
@@ -19,4 +35,6 @@ export interface Channel {
   terminated_at?: string | null;
   auto_removal_protected?: boolean;
   auto_removal_keep_recent_count?: number | null;
+  // Only on /getchannels entries.
+  tab_download_stats?: TabDownloadStatsByTab;
 }

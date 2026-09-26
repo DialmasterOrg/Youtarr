@@ -69,6 +69,17 @@ export const SCHEDULE_FIELDS = [
     frequentRunWarning: 'Every run contacts GitHub to check for a release. Running it more than once an hour can hit GitHub rate limits, and yt-dlp releases at most a few times a week.',
   },
   {
+    key: 'channelVideoCountsFrequency',
+    group: 'maintenance',
+    label: 'Refresh channel video counts',
+    description: 'Look up how many public videos each subscribed channel tab has on YouTube, for the download percentages.',
+    settingsPath: 'maintenance',
+    settingsLabel: 'Maintenance',
+    enabledKey: null,
+    disabledText: null,
+    frequentRunWarning: 'Every run looks up each tab of every subscribed channel on YouTube. Without a YouTube API key that is up to three yt-dlp requests per channel, and running it often can trigger YouTube\'s bot check. Once a day is enough.',
+  },
+  {
     key: 'archiveBackfillFrequency',
     group: 'maintenance',
     label: 'Repair library records',

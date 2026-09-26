@@ -13,12 +13,14 @@ jest.mock('../../m3uGenerator', () => ({
   generateChannelM3UInBackground: jest.fn(),
   deleteChannelM3UInBackground: jest.fn(),
 }));
+jest.mock('../tabDownloadStats', () => ({ getForChannels: jest.fn().mockResolvedValue(new Map()) }));
 
 describe('channelCatalog', () => {
   let channelCatalog;
   let Channel;
   let logger;
   let m3uGenerator;
+  let tabDownloadStats;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -29,6 +31,7 @@ describe('channelCatalog', () => {
 
     logger = require('../../../logger');
     m3uGenerator = require('../../m3uGenerator');
+    tabDownloadStats = require('../tabDownloadStats');
 
     channelCatalog = require('../channelCatalog');
   });
@@ -230,6 +233,25 @@ describe('channelCatalog', () => {
           sub_folder: '_Kids'
         })
       }));
+    });
+
+    test('adds tab download stats to each channel', async () => {
+      const stats = { videos: { total: 10, fetchedAt: null, downloaded: 5, ignored: 0, percent: 50 } };
+      Channel.findAndCountAll.mockResolvedValueOnce({ rows: [{ channel_id: 'UC1', url: 'u', available_tabs: 'videos' }], count: 1 });
+      tabDownloadStats.getForChannels.mockResolvedValueOnce(new Map([['UC1', stats]]));
+
+      const result = await channelCatalog.getChannelsPaginated();
+
+      expect(result.channels[0].tab_download_stats).toEqual(stats);
+    });
+
+    test('still lists channels when the stats query fails', async () => {
+      Channel.findAndCountAll.mockResolvedValueOnce({ rows: [{ channel_id: 'UC1', url: 'u', available_tabs: 'videos' }], count: 1 });
+      tabDownloadStats.getForChannels.mockRejectedValueOnce(new Error('db down'));
+
+      const result = await channelCatalog.getChannelsPaginated();
+
+      expect(result.channels).toHaveLength(1);
     });
   });
 

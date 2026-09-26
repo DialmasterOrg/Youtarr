@@ -150,6 +150,7 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
             availableTabs={channel.available_tabs}
             autoDownloadTabs={channel.auto_download_enabled_tabs}
             isMobile={isMobile}
+            tabStats={channel.tab_download_stats}
           />
           {hasFilters && (
             <Divider
@@ -235,6 +236,7 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
             availableTabs={channel.available_tabs}
             autoDownloadTabs={channel.auto_download_enabled_tabs}
             isMobile={isMobile}
+            tabStats={channel.tab_download_stats}
           />
         </div>
 

@@ -71,7 +71,7 @@ Configuration can be modified through:
 
 ### Scheduling
 
-All seven recurring tasks can be configured in **Settings -> Scheduling**. Schedules are stored in `config.json` as cron expressions. Every schedule offers a daily time picker, preset intervals, or a custom cron expression. The 15 and 30 minute presets are available for every task, but the page shows a warning when any task other than automatic downloads is set to run more than once an hour, because those tasks do full-library or network work on every run; the choice is still yours. **Custom cron** accepts five fields (minute, hour, day of month, month, day of week), or six fields with seconds first. Runs must be at least 15 minutes apart: an expression such as `*/5 * * * *` is rejected, and a six-field expression needs a single fixed seconds value.
+All eight recurring tasks can be configured in **Settings -> Scheduling**. Schedules are stored in `config.json` as cron expressions. Every schedule offers a daily time picker, preset intervals, or a custom cron expression. The 15 and 30 minute presets are available for every task, but the page shows a warning when any task other than automatic downloads is set to run more than once an hour, because those tasks do full-library or network work on every run; the choice is still yours. **Custom cron** accepts five fields (minute, hour, day of month, month, day of week), or six fields with seconds first. Runs must be at least 15 minutes apart: an expression such as `*/5 * * * *` is rejected, and a six-field expression needs a single fixed seconds value.
 
 | Config key | Default | Task |
 | --- | --- | --- |
@@ -82,6 +82,7 @@ All seven recurring tasks can be configured in **Settings -> Scheduling**. Sched
 | `sessionCleanupFrequency` | `0 3 * * *` | Expired and old inactive session cleanup |
 | `videoRescanFrequency` | `30 3 * * *` | Filesystem rescan and metadata backfill |
 | `ytdlpUpdateFrequency` | `0 4 * * *` | Automatic yt-dlp update checks |
+| `channelVideoCountsFrequency` | `45 4 * * *` | Look up each subscribed channel tab's public video count on YouTube for the download percentages (YouTube API when a key is set, otherwise yt-dlp). Startup also counts channels whose counts are missing or a day old. |
 
 Times use the server timezone, shown on the Scheduling page and configured through `TZ`. Interval presets follow the clock: "Every 4 hours" runs at 00:00, 04:00, 08:00, and so on. Changing a schedule takes effect after saving, without a restart or immediate execution. Running tasks are allowed to finish. Invalid schedule submissions are rejected without saving other changes.
 

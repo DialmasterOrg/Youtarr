@@ -398,6 +398,74 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
 
   /**
    * @swagger
+   * /api/channels/{channelId}/tab-stats:
+   *   get:
+   *     summary: Get per-tab download stats
+   *     description: >
+   *       For each visible tab, the number of public videos on YouTube (from the
+   *       tab's auto-generated playlist, refreshed first when older than 24 hours),
+   *       how many of them are downloaded (including videos deleted locally), how many
+   *       are ignored, how many are loaded in Youtarr, and the downloaded percentage.
+   *       Members-only videos are not counted.
+   *     tags: [Channels]
+   *     parameters:
+   *       - in: path
+   *         name: channelId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: YouTube channel ID
+   *     responses:
+   *       200:
+   *         description: Tab stats
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 channelId:
+   *                   type: string
+   *                 tabs:
+   *                   type: object
+   *                   additionalProperties:
+   *                     type: object
+   *                     properties:
+   *                       total:
+   *                         type: integer
+   *                         nullable: true
+   *                       fetchedAt:
+   *                         type: string
+   *                         nullable: true
+   *                       downloaded:
+   *                         type: integer
+   *                       ignored:
+   *                         type: integer
+   *                       loaded:
+   *                         type: integer
+   *                       percent:
+   *                         type: integer
+   *                         nullable: true
+   *       404:
+   *         description: Channel not found
+   *       500:
+   *         description: Failed to get channel tab stats
+   */
+  router.get('/api/channels/:channelId/tab-stats', verifyToken, async (req, res) => {
+    const { channelId } = req.params;
+    try {
+      const result = await channelModule.getChannelTabStats(channelId);
+      if (!result) {
+        return res.status(404).json({ error: 'Channel not found' });
+      }
+      return res.status(200).json(result);
+    } catch (error) {
+      req.log.error({ err: error, channelId }, 'Failed to get channel tab stats');
+      return res.status(500).json({ error: 'Failed to get channel tab stats' });
+    }
+  });
+
+  /**
+   * @swagger
    * /api/channels/{channelId}/tabs/{tabType}/auto-download:
    *   patch:
    *     summary: Update tab auto-download setting

@@ -12,6 +12,10 @@ const logger = require('./logger');
 const pinoHttp = require('pino-http');
 const { setupSwagger } = require('./swagger');
 const { isAuthConfigured } = require('./modules/authState');
+
+// Start the channel tab count catch-up after the startup rescan has begun.
+const STARTUP_TAB_COUNT_REFRESH_DELAY_MS = 2 * 60 * 1000;
+
 const app = express();
 app.set('trust proxy', parseTrustProxySetting(process.env.TRUST_PROXY));
 if (process.env.TRUST_PROXY === undefined || process.env.TRUST_PROXY === '') {
@@ -773,6 +777,16 @@ const initialize = async () => {
                 logger.error({ err }, 'Video metadata backfill failed');
               });
           }, 5000); // Delay 5 seconds to avoid blocking startup
+
+          // Count channel tabs whose counts are missing or a day old (first
+          // run after upgrading, long downtime), after the startup rescan.
+          setTimeout(() => {
+            const tabVideoCounts = require('./modules/channel/tabVideoCounts');
+            tabVideoCounts.refreshAtStartup({ runRecorder: scheduledTaskRuns })
+              .catch(err => {
+                logger.error({ err }, 'Startup channel video count refresh failed');
+              });
+          }, STARTUP_TAB_COUNT_REFRESH_DELAY_MS);
         } else {
           logger.warn('Skipping cron jobs and background tasks - database is not healthy');
         }

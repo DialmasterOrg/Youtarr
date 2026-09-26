@@ -135,6 +135,11 @@ Channel.init(
       allowNull: true,
       defaultValue: null,
     },
+    tab_video_counts: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      defaultValue: null,
+    },
   },
   {
     sequelize,

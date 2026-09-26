@@ -10,6 +10,7 @@ describe('CronJobs', () => {
   let mockYtdlpModule;
   let mockConfigModule;
   let mockConfigStore;
+  let mockTabVideoCounts;
 
   beforeEach(() => {
     jest.resetModules();
@@ -74,6 +75,9 @@ describe('CronJobs', () => {
     };
     jest.doMock('../ytdlpModule', () => mockYtdlpModule);
 
+    mockTabVideoCounts = { refreshAll: jest.fn() };
+    jest.doMock('../channel/tabVideoCounts', () => mockTabVideoCounts);
+
     // Mock configModule with a tiny in-memory store so the auto-update job can read/write
     mockConfigStore = { autoUpdateYtdlp: true };
     mockConfigModule = {
@@ -97,10 +101,11 @@ describe('CronJobs', () => {
   });
 
   describe('initialize', () => {
-    test('should register all four cron jobs', () => {
+    test('should register all five cron jobs', () => {
       cronJobs.initialize();
 
-      expect(mockSchedule.schedule).toHaveBeenCalledTimes(4);
+      expect(mockSchedule.schedule).toHaveBeenCalledTimes(5);
+      expect(mockSchedule.schedule).toHaveBeenCalledWith('45 4 * * *', expect.any(Function), expect.objectContaining({ scheduled: false }));
       expect(mockSchedule.schedule).toHaveBeenCalledWith('0 2 * * *', expect.any(Function), expect.objectContaining({ scheduled: false }));
       expect(mockSchedule.schedule).toHaveBeenCalledWith('0 3 * * *', expect.any(Function), expect.objectContaining({ scheduled: false }));
       expect(mockSchedule.schedule).toHaveBeenCalledWith('30 3 * * *', expect.any(Function), expect.objectContaining({ scheduled: false }));
@@ -122,11 +127,11 @@ describe('CronJobs', () => {
     const listener = mockConfigModule.onConfigChange.mock.calls[0][0];
     mockConfigStore.otherSetting = true;
     listener();
-    expect(mockSchedule.schedule).toHaveBeenCalledTimes(4);
+    expect(mockSchedule.schedule).toHaveBeenCalledTimes(5);
     const original = mockSchedule.schedule.mock.results[0].value;
     mockConfigStore.autoRemovalFrequency = '0 18 * * *';
     listener();
-    expect(mockSchedule.schedule).toHaveBeenCalledTimes(5);
+    expect(mockSchedule.schedule).toHaveBeenCalledTimes(6);
     expect(original.stop).toHaveBeenCalledTimes(1);
     expect(mockSchedule.schedule).toHaveBeenLastCalledWith(
       '0 18 * * *', expect.any(Function), expect.objectContaining({ name: 'youtarr:autoRemovalFrequency' })
@@ -137,7 +142,7 @@ describe('CronJobs', () => {
     mockConfigStore.autoUpdateYtdlp = false;
     mockConfigStore.autoRemovalEnabled = false;
     cronJobs.initialize();
-    expect(mockSchedule.schedule).toHaveBeenCalledTimes(3);
+    expect(mockSchedule.schedule).toHaveBeenCalledTimes(4);
     expect(mockSchedule.schedule).toHaveBeenCalledWith(
       '0 2 * * *', expect.any(Function), expect.any(Object)
     );
@@ -646,8 +651,8 @@ describe('CronJobs', () => {
       jest.resetModules();
       cronJobs = require('../cronJobs');
       cronJobs.initialize();
-      const initialCallCount = mockSchedule.schedule.mock.calls.length;
-      const callbackNoDeps = mockSchedule.schedule.mock.calls[initialCallCount - 1][1];
+      const callbackNoDeps = mockSchedule.schedule.mock.calls
+        .find((call) => call[2].name === 'youtarr:ytdlpUpdateFrequency')[1];
 
       mockConfigStore = { autoUpdateYtdlp: true };
       mockYtdlpModule.performUpdate.mockResolvedValue({
@@ -815,6 +820,34 @@ describe('CronJobs', () => {
       await sessionCleanupCallback();
 
       expect(mockLogger.info).toHaveBeenCalledWith({ removed: 'invalid' }, 'Removed expired sessions');
+    });
+  });
+
+  describe('channel video counts refresh', () => {
+    const countsCallback = () => mockSchedule.schedule.mock.calls
+      .find((call) => call[2].name === 'youtarr:channelVideoCountsFrequency')[1];
+
+    beforeEach(() => {
+      cronJobs.initialize();
+    });
+
+    test('registers the refresh at its default time', () => {
+      expect(mockSchedule.schedule).toHaveBeenCalledWith(
+        '45 4 * * *', expect.any(Function), expect.objectContaining({ name: 'youtarr:channelVideoCountsFrequency' })
+      );
+    });
+
+    test('records the refresh summary', async () => {
+      const summary = { status: 'success', outcome: 'completed', message: 'Refreshed video counts for 3 channels.' };
+      mockTabVideoCounts.refreshAll.mockResolvedValue(summary);
+
+      await expect(countsCallback()()).resolves.toEqual(expect.objectContaining(summary));
+    });
+
+    test('records an error when the refresh throws', async () => {
+      mockTabVideoCounts.refreshAll.mockRejectedValue(new Error('db down'));
+
+      await expect(countsCallback()()).resolves.toEqual(expect.objectContaining({ status: 'error', outcome: 'error', message: 'db down' }));
     });
   });
 });
