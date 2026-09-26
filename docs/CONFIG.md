@@ -18,9 +18,11 @@ These settings can be changed from the Settings pages in the web UI.
 - [Download Performance](#download-performance)
 - [Advanced Settings](#advanced-settings)
 - [Auto-Removal Settings](#auto-removal-settings)
+- [Storage Limits (Download Pause)](#storage-limits-download-pause)
 - [API Keys & External Access](#api-keys--external-access)
 - [yt-dlp Auto-Update](#yt-dlp-auto-update)
 - [Filesystem Rescan](#filesystem-rescan)
+- [Logging](#logging)
 - [Account & Security](#account--security)
 - [System Fields](#system-fields)
 - [Configuration Examples](#configuration-examples)
@@ -118,11 +120,11 @@ Youtarr must be running at the scheduled time; missed occurrences are not replay
 - **Type**: `string`
 - **Default**: `"default"`
 - **Options**: `"default"`, `"h264"`, `"h265"`
-- **Description**: Preferred video codec for downloads. `"default"` picks the best stream YouTube offers at the requested resolution (typically VP9 or AV1 above 1080p). `"h264"` forces H.264/AVC, which maximizes client compatibility but effectively caps resolution at 1080p because YouTube does not serve H.264 above that height. `"h265"` prefers HEVC but YouTube rarely provides it, so it almost always falls back to H.264 MP4.
+- **Description**: Preferred video codec for downloads. `"default"` takes the highest resolution YouTube offers up to the configured limit, and prefers H.264/AVC between streams of the same resolution, so a 1080p request gets H.264 rather than the AV1 stream YouTube also publishes in MP4. Resolution still wins over codec, so asking for 2160p gives a 2160p stream rather than dropping to 1080p H.264. Above 1080p that is usually VP9 without HDR, even when YouTube also has an HDR stream at that resolution, because the codec preference ranks AV1 below VP9 and is applied before yt-dlp's usual HDR preference. To prefer AV1 again, add `-S res,vcodec:av01` to the custom yt-dlp arguments; keeping `res` first means resolution still wins over codec. `"h264"` forces H.264/AVC, which maximizes client compatibility but effectively caps resolution at 1080p because YouTube does not serve H.264 above that height. `"h265"` prefers HEVC but YouTube rarely provides it, so it almost always falls back to H.264 MP4 at 1080p and below, and to AV1 MP4 above that.
 - **Compatibility**:
   - `h264`: Best compatibility with all devices
   - `h265`: Better compression, requires modern devices
-  - `default`: YouTube picks the stream, typically VP9 or AV1 above 1080p. Best compression, but older devices may need to transcode. (VP9 and AV1 are not selectable values for this key; they are just what YouTube serves when no codec preference is forced.)
+  - `default`: H.264 at 1080p and below, and usually VP9 without HDR above that, where YouTube has no H.264. H.264 files are noticeably larger than the AV1 equivalent at the same resolution, which is the cost of direct play on clients without AV1 decode. (VP9 and AV1 are not selectable values for this key; `-S res,vcodec:av01` in the custom yt-dlp arguments is the way to get AV1.)
 
 ### Default Subfolder
 - **Config Key**: `defaultSubfolder`
@@ -402,6 +404,13 @@ Sync is one-way (server -> Youtarr). Non-owner Plex users come from the server's
 - **Description**: Generate backdrop image files for Emby and Jellyfin background art
 - **Note**: Creates `backdrop.jpg` in each channel directory (from the channel's YouTube banner) and a `-backdrop.jpg` file alongside each video (copy of the video thumbnail). When enabled, channel-level backdrops are backfilled for existing channel folders; video-level backdrops are created for new downloads only.
 
+### Prefix Channel Name In Embedded Title
+- **Config Key**: `prefixChannelNameInTitle`
+- **Type**: `boolean`
+- **Default**: `true`
+- **Description**: Write the MP4's embedded title tag as `Channel - Title` instead of just `Title`
+- **Note**: Plex reads the embedded title tag (it does not read `.nfo` files). In an "Other Videos" library the prefix gives each video its channel context. In a TV Shows library the channel is already the show name, so turn this off to keep episode titles clean. The channel name is still written to the artist, album (Plex Collection), copyright (Plex Studio), and TV network tags, and the `.nfo` title is never prefixed. Only applies to new downloads; existing files are not re-tagged.
+
 ## Cookie Config
 
 ### Enable Cookies
@@ -417,6 +426,29 @@ Sync is one-way (server -> Youtarr). Non-owner Plex users come from the server's
 - **Default**: `false`
 - **Description**: Indicates if custom cookies.txt file has been uploaded
 - **Note**: Managed automatically by the application
+
+### Cookie Details and Test
+
+Once cookies are enabled and saved, Settings -> Cookies summarizes the active
+cookie file (uploaded or external) and offers a **Test cookies** button. Neither
+is a config field.
+
+- **Details** come from reading the file locally. They show how many of
+  YouTube's login cookies it contains (`SID`, `HSID`, `SSID`, `APISID`,
+  `SAPISID`, the `__Secure-1P/3P` variants, and `LOGIN_INFO` on `youtube.com`),
+  when the earliest one expires, and a warning when any have already expired or
+  none are present (an export from a signed-out browser). Session cookies have
+  no expiry date and are labeled as such. Cookie values are never read out or
+  returned. YouTube can end a session before these dates, so a future expiry
+  does not prove the cookies still work.
+- **Test cookies** makes one request to YouTube's subscriptions feed with the
+  active cookies, through the same proxy, IP family, and yt-dlp cache as
+  downloads. That feed only loads for a signed-in session, so the result answers
+  "are these cookies still signed in?" right away. An account with no
+  subscriptions still passes. Failures name the likely cause: not signed in
+  (expired, rotated, or signed-out cookies), a bot check, a network problem, a
+  timeout (60 seconds), or an unusable external file. One test runs at a time,
+  and tests are limited to 5 per minute.
 
 ### External Cookie File
 
@@ -765,7 +797,7 @@ volumes:
 - **Type**: `string`
 - **Default**: `null` (not set)
 - **Description**: Minimum free space to maintain
-- **Examples**: `"100GB"`, `"500GB"`, `"1TB"`
+- **Examples**: `"100GB"`, `"500GB"`, `"1TB"` (units: `MB`, `GB`, `TB`)
 - **Note**: Deletes oldest videos when space falls below threshold
 
 ### Video Age Threshold
@@ -799,8 +831,16 @@ volumes:
 - **Config Key**: `autoRemovalKeepRecentCount`
 - **Type**: `number`
 - **Default**: `0` (disabled)
-- **Description**: The N most recently downloaded videos are excluded from every auto-removal strategy (age, watched, and free-space)
+- **Description**: The N most recently downloaded videos are excluded from every auto-removal strategy (age, watched, free-space, and total size)
 - **Note**: Videos marked as Protected are always excluded from auto-removal, independent of this setting, and do not count toward the N (each keep-recent slot goes to a video that would otherwise be removable). Videos of channels protected at the channel level are treated the same way.
+
+### Total Size Limit
+- **Config Key**: `autoRemovalUsageLimit`
+- **Type**: `string`
+- **Default**: `""` (off)
+- **Description**: When the videos Youtarr has downloaded total more than this size, the oldest videos are deleted until the total is back under it. Runs after the other strategies, so it only removes what they left over the limit.
+- **Examples**: `"500GB"`, `"2TB"` (units: `MB`, `GB`, `TB`)
+- **Note**: The total is the sum of the recorded video and MP3 file sizes of every video not marked removed (updated at download time and by the nightly rescan), not a scan of the disk, so it works on network shares and cloud storage where free space is reported incorrectly. Thumbnails, subtitles and metadata files are not counted. A single cleanup run deletes at most 500 videos per strategy, so a large reduction of the limit can take several runs.
 
 ### Per-Channel Auto-Removal Settings
 Two more guards live in each channel's settings dialog (the Auto-Removal tab), not in `config.json`:
@@ -808,6 +848,37 @@ Two more guards live in each channel's settings dialog (the Auto-Removal tab), n
 - **Always keep newest downloads**: a per-channel version of `autoRemovalKeepRecentCount` (1-10000).
 
 The two are mutually exclusive: enabling protection clears the channel's keep-recent count. Both only apply while the channel is subscribed; they go dormant if you unsubscribe.
+
+## Storage Limits (Download Pause)
+
+Pause all downloads when storage reaches a limit. Both limits are optional and off by default; downloads pause when either is reached. Configure them on **Settings -> Storage Limits**.
+
+While paused:
+- New download requests (manual, API key, channel download-all, playlist downloads, and the scheduled channel/playlist sweep) are refused. API calls return HTTP 409 with the reason; scheduled runs are recorded as skipped with the reason.
+- Downloads already queued stay queued and start automatically once storage is back within the limits. A download already in progress is allowed to finish, so usage can briefly go over a limit.
+- A banner explains the pause on every page (on the Downloads pages it cannot be dismissed), and a notification is sent through your configured notification services when downloads pause and again when they resume.
+- Youtarr re-checks after every download, after videos are deleted, when the settings change, and every 5 minutes while paused.
+
+If a measurement fails (for example, disk space cannot be read), that limit does not pause downloads.
+
+Size values must be a positive whole number followed by `MB`, `GB` or `TB` (for example `500GB`), or blank for off. Saving any other value from the UI or API is rejected. A malformed value hand-edited into `config.json` is fixed when the file is loaded (at startup, or when Youtarr notices the edit while running): spacing and unit case are corrected where possible (`"500 gb"` becomes `"500GB"`), and anything else, including `0`, is cleared to off, with a warning in the logs. This also applies to `autoRemovalUsageLimit`.
+
+When combining these with Auto Removal, set the pause usage limit at or above `autoRemovalUsageLimit`, and the pause free-space minimum at or below `autoRemovalFreeSpaceThreshold`. Otherwise cleanup stops before storage is back within the pause limit and downloads stay paused. The settings page warns about this.
+
+### Total Size Limit
+- **Config Key**: `downloadPauseUsageLimit`
+- **Type**: `string`
+- **Default**: `""` (off)
+- **Description**: Pause downloads while the videos Youtarr has downloaded total more than this size. Measured the same way as `autoRemovalUsageLimit`, so it works on network shares and cloud storage.
+- **Examples**: `"500GB"`, `"2TB"` (units: `MB`, `GB`, `TB`)
+
+### Minimum Free Space
+- **Config Key**: `downloadPauseMinFreeSpace`
+- **Type**: `string`
+- **Default**: `""` (off)
+- **Description**: Pause downloads while free space on the disk that holds your downloads is below this size.
+- **Examples**: `"1GB"`, `"50GB"`, `"1TB"` (the UI offers 1 GB, 5 GB, 10 GB, 50 GB, 100 GB, 250 GB, 500 GB, and 1 TB)
+- **Note**: Uses the same `df`-based measurement as the storage indicator. Some mounts (network shares, overlays, bind mounts) report free space incorrectly; use `downloadPauseUsageLimit` instead on those.
 
 ## API Keys & External Access
 
@@ -879,6 +950,18 @@ The Maintenance page's last-run summary comes from the scheduled task run histor
   ```
 - **Description**: The outcome of the most recent filesystem reconciliation pass (the `backfillVideoMetadata` run), whether it was started by the schedule, the server-startup pass, or the manual "Rescan files on disk" action on the Maintenance & Rescan settings page. Surfaced read-only on that page so users can see when the last scan ran and what it found or fixed.
 - **Note**: Managed by the application; do not edit by hand.
+
+## Logging
+
+### Log Level
+- **Config Key**: `logLevel`
+- **Type**: `string`
+- **Default**: `''`
+- **Values**: `''` (Default), `'warn'`, `'info'`, `'debug'`
+- **Description**: Overrides the `LOG_LEVEL` environment variable while Youtarr runs. `''` uses `LOG_LEVEL`. A saved change (Settings -> Logging, or a hand edit to `config.json`) takes effect immediately, without a restart, including for the per-video post-processor. Settings -> Logging shows whether the current level comes from this setting or from `LOG_LEVEL`.
+- **Note**: An unsupported value in `config.json` is lowercased or cleared on load, with a warning in the log. `/updateconfig` rejects unsupported values.
+
+Log files are controlled with the [`LOG_FILE_MAX_SIZE` and `LOG_FILE_MAX_COUNT`](ENVIRONMENT_VARIABLES.md#log_file_max_size) environment variables. The **Download logs** button on Settings -> Logging (`GET /api/logs/download`) returns every log file, oldest first, as one text file, with the configured API keys and tokens, token parameters in URLs, and proxy passwords replaced by `[REDACTED]`.
 
 ## Account & Security
 

@@ -13,7 +13,13 @@ const { JobVideoDownload } = require('../models');
 const videoPersistence = require('./videoPersistence');
 const { VIDEO_PERSISTED_MARKER } = require('./constants/outputMarkers');
 const logger = require('../logger');
+const logLevelSync = require('./logLevelSync');
 const { buildChannelPath, cleanupEmptyParents, moveWithRetries, ensureDirWithRetries, copySyncWithFallback } = require('./filesystem');
+
+// Match the server's log level, including a level chosen in Settings. Quietly:
+// this process starts at LOG_LEVEL for every video, and its output is relayed
+// into the server log, so an announced change would repeat per download.
+logLevelSync.apply({ announce: false });
 
 const activeJobId = process.env.YOUTARR_JOB_ID;
 
@@ -89,6 +95,97 @@ function shouldWriteVideoFanart() {
 function shouldWriteBackdropImages() {
   const config = configModule.getConfig() || {};
   return config.writeBackdropImages === true;
+}
+
+function shouldPrefixChannelNameInTitle() {
+  const config = configModule.getConfig() || {};
+  return config.prefixChannelNameInTitle !== false;
+}
+
+// Embed iTunes-compatible metadata into an MP4 using AtomicParsley.
+// AtomicParsley writes directly to the iTunes atom container (moov.udta.meta.ilst)
+// which Plex reads for "Other Videos" / Personal Media libraries.
+// It modifies the file in-place (--overWrite), so no temp file dance is needed.
+function embedVideoMetadata(targetPath, jsonData) {
+  try {
+    const apArgs = [targetPath];
+
+    // Title: "Channel - Title" unless the channel prefix is turned off
+    const channelName = jsonData.uploader || jsonData.channel || jsonData.uploader_id || '';
+    if (channelName && jsonData.title) {
+      const title = shouldPrefixChannelNameInTitle()
+        ? `${channelName} - ${jsonData.title}`
+        : jsonData.title;
+      apArgs.push('--title', title);
+    }
+
+    // Genre from YouTube categories
+    if (jsonData.categories && jsonData.categories.length > 0) {
+      apArgs.push('--genre', jsonData.categories.join(';'));
+    }
+
+    // Channel name metadata
+    if (channelName) {
+      apArgs.push('--TVNetwork', channelName);
+      apArgs.push('--copyright', channelName);  // Plex maps cprt atom → Studio
+      apArgs.push('--artist', channelName);
+      apArgs.push('--album', channelName);       // Plex maps album → Collection
+    }
+
+    // Tags as keywords
+    if (jsonData.tags && jsonData.tags.length > 0) {
+      apArgs.push('--keyword', jsonData.tags.slice(0, 10).join(';'));
+    }
+
+    // Preserve the upload instant in MP4 metadata when available. NFO release
+    // dates remain date-only for Jellyfin/Emby compatibility.
+    const uploadInstant = formatUploadInstant(jsonData.timestamp);
+    if (uploadInstant) {
+      apArgs.push('--year', uploadInstant);
+    } else if (jsonData.upload_date) {
+      const year = jsonData.upload_date.substring(0, 4);
+      const month = jsonData.upload_date.substring(4, 6);
+      const day = jsonData.upload_date.substring(6, 8);
+      const releaseDate = `${year}-${month}-${day}`;
+      apArgs.push('--year', `${releaseDate}`);
+    }
+
+    // Description for Plex Summary
+    if (jsonData.description) {
+      apArgs.push('--description', jsonData.description.substring(0, 255));
+      apArgs.push('--longdesc', jsonData.description);
+    }
+
+    // Media type (stik=9 → Movie, used by Plex for personal media)
+    apArgs.push('--stik', 'Movie');
+
+    // Content rating via iTunEXTC atom — this is what Plex actually reads
+    const iTunEXTC = ratingMapper.mapToITunEXTC(jsonData.normalized_rating);
+    if (iTunEXTC) {
+      apArgs.push('--rDNSatom', iTunEXTC, 'name=iTunEXTC', 'domain=com.apple.iTunes');
+    }
+
+    apArgs.push('--overWrite');
+
+    logger.info({ targetPath }, 'Embedding metadata via AtomicParsley for Plex');
+    const result = spawnSync(configModule.atomicParsleyPath, apArgs, {
+      stdio: 'pipe',
+      maxBuffer: 10 * 1024 * 1024
+    });
+
+    if (result.error) {
+      throw result.error;
+    }
+
+    if (result.status !== 0) {
+      const stderr = result.stderr ? result.stderr.toString() : 'Unknown error';
+      throw new Error(`AtomicParsley exited with status ${result.status}: ${stderr}`);
+    }
+
+    logger.info({ targetPath }, 'Successfully embedded metadata via AtomicParsley');
+  } catch (err) {
+    logger.warn({ err, targetPath }, 'Could not embed metadata via AtomicParsley');
+  }
 }
 
 // Helper function to download channel thumbnail if needed
@@ -514,88 +611,14 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
       }
     }
 
-    // Embed iTunes-compatible metadata into the MP4 using AtomicParsley.
-    // AtomicParsley writes directly to the iTunes atom container (moov.udta.meta.ilst)
-    // which Plex reads for "Other Videos" / Personal Media libraries.
-    // It modifies the file in-place (--overWrite), so no temp file dance is needed.
-    // Skip for audio-only downloads (MP3 files)
-    if (isAudioFile) {
+    // MP3 files carry yt-dlp's own embedded tags, so AtomicParsley only runs
+    // against an MP4: the download itself, or the companion in video_mp3 mode.
+    if (companionVideoPath) {
+      embedVideoMetadata(companionVideoPath, jsonData);
+    } else if (isAudioFile) {
       logger.info('[Post-Process] Audio file detected, skipping video metadata embedding');
-    } else try {
-      const apArgs = [videoPath];
-
-      // Title (channel name + video title)
-      const channelName = jsonData.uploader || jsonData.channel || jsonData.uploader_id || '';
-      if (channelName && jsonData.title) {
-        apArgs.push('--title', `${channelName} - ${jsonData.title}`);
-      }
-
-      // Genre from YouTube categories
-      if (jsonData.categories && jsonData.categories.length > 0) {
-        apArgs.push('--genre', jsonData.categories.join(';'));
-      }
-
-      // Channel name metadata
-      if (channelName) {
-        apArgs.push('--TVNetwork', channelName);
-        apArgs.push('--copyright', channelName);  // Plex maps cprt atom → Studio
-        apArgs.push('--artist', channelName);
-        apArgs.push('--album', channelName);       // Plex maps album → Collection
-      }
-
-      // Tags as keywords
-      if (jsonData.tags && jsonData.tags.length > 0) {
-        apArgs.push('--keyword', jsonData.tags.slice(0, 10).join(';'));
-      }
-
-      // Preserve the upload instant in MP4 metadata when available. NFO release
-      // dates remain date-only for Jellyfin/Emby compatibility.
-      const uploadInstant = formatUploadInstant(jsonData.timestamp);
-      if (uploadInstant) {
-        apArgs.push('--year', uploadInstant);
-      } else if (jsonData.upload_date) {
-        const year = jsonData.upload_date.substring(0, 4);
-        const month = jsonData.upload_date.substring(4, 6);
-        const day = jsonData.upload_date.substring(6, 8);
-        const releaseDate = `${year}-${month}-${day}`;
-        apArgs.push('--year', `${releaseDate}`);
-      }
-
-      // Description for Plex Summary
-      if (jsonData.description) {
-        apArgs.push('--description', jsonData.description.substring(0, 255));
-        apArgs.push('--longdesc', jsonData.description);
-      }
-
-      // Media type (stik=9 → Movie, used by Plex for personal media)
-      apArgs.push('--stik', 'Movie');
-
-      // Content rating via iTunEXTC atom — this is what Plex actually reads
-      const iTunEXTC = ratingMapper.mapToITunEXTC(jsonData.normalized_rating);
-      if (iTunEXTC) {
-        apArgs.push('--rDNSatom', iTunEXTC, 'name=iTunEXTC', 'domain=com.apple.iTunes');
-      }
-
-      apArgs.push('--overWrite');
-
-      logger.info('Embedding metadata via AtomicParsley for Plex');
-      const result = spawnSync(configModule.atomicParsleyPath, apArgs, {
-        stdio: 'pipe',
-        maxBuffer: 10 * 1024 * 1024
-      });
-
-      if (result.error) {
-        throw result.error;
-      }
-
-      if (result.status !== 0) {
-        const stderr = result.stderr ? result.stderr.toString() : 'Unknown error';
-        throw new Error(`AtomicParsley exited with status ${result.status}: ${stderr}`);
-      }
-
-      logger.info('Successfully embedded metadata via AtomicParsley');
-    } catch (err) {
-      logger.warn({ err }, 'Could not embed metadata via AtomicParsley');
+    } else {
+      embedVideoMetadata(videoPath, jsonData);
     }
 
     if (fs.existsSync(imagePath)) {

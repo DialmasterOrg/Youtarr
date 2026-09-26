@@ -1,11 +1,15 @@
 const express = require('express');
 const { MAX_PLAYLIST_VIDEOS, MAX_SELECTED_DOWNLOAD_IDS, DEFAULT_PREVIEW_COUNT, FETCH_IN_PROGRESS_MESSAGE } = require('../modules/playlistConstants');
 const { createOverrideSettingsValidator } = require('./overrideSettingsValidator');
+const { createSubscribeSettingsValidator } = require('./playlistSubscribeSettings');
 
-function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule }) {
+// Saved settings the Add Playlist dialog shows when a removed playlist is restored.
+const RESTORE_PREVIEW_SETTING_KEYS = ['auto_download', 'default_sub_folder', 'video_quality', 'audio_format'];
+
+function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule, storageGuard }) {
   const router = express.Router();
   const { Playlist, PlaylistVideo, Video } = models;
-  const downloadDeps = { PlaylistVideo, Video, playlistModule, downloadModule };
+  const downloadDeps = { PlaylistVideo, Video, playlistModule, downloadModule, storageGuard };
 
   const respondToFollowingError = (res, err) => {
     const errors = {
@@ -32,6 +36,10 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
   const VALID_SORT_ORDERS = new Set(['default', 'reversed']);
 
   const validateOverrideSettings = createOverrideSettingsValidator({
+    channelSettingsModule,
+    ratingMapper,
+  });
+  const validateSubscribeSettings = createSubscribeSettingsValidator({
     channelSettingsModule,
     ratingMapper,
   });
@@ -149,7 +157,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    *                 description: YouTube playlist URL
    *     responses:
    *       200:
-   *         description: Playlist info
+   *         description: Playlist info. existing_subscription is null for a playlist Youtarr has never saved; otherwise it reports whether the playlist is subscribed (enabled) and its saved auto_download, default_sub_folder, video_quality, and audio_format, which a restore keeps.
    *       400:
    *         description: url is required
    *       403:
@@ -166,7 +174,14 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url is required' });
     try {
       const info = await playlistModule.getPlaylistInfo(url);
-      res.json(info);
+      const saved = await Playlist.findOne({ where: { playlist_id: info.playlist_id } });
+      const existingSubscription = saved
+        ? {
+          enabled: Boolean(saved.enabled),
+          settings: Object.fromEntries(RESTORE_PREVIEW_SETTING_KEYS.map((key) => [key, saved[key] ?? null])),
+        }
+        : null;
+      res.json({ ...info, existing_subscription: existingSubscription });
     } catch (err) {
       if (err.message === 'PLAYLIST_NOT_FOUND') return res.status(404).json({ error: 'Playlist not found' });
       if (err.message === 'COOKIES_REQUIRED') return res.status(403).json({ error: 'This playlist requires authentication (cookies)' });
@@ -196,22 +211,22 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    *                 description: YouTube playlist URL
    *               settings:
    *                 type: object
-   *                 description: Optional per-playlist download settings
+   *                 description: Optional per-playlist settings, applied only when the playlist is new. Accepts auto_download, sync_to_plex, sync_to_jellyfin, sync_to_emby, public_on_servers, default_sub_folder, video_quality, min_duration, max_duration, title_filter_regex, audio_format, default_rating, and sort_order; other keys are ignored.
    *     responses:
    *       201:
    *         description: Saved playlist, restored flag, and optional following setup warning
    *       400:
-   *         description: Missing url or invalid default_sub_folder
+   *         description: Missing url or an invalid settings value
    *       500:
    *         description: Internal server error
    */
   router.post('/api/playlists', verifyToken, async (req, res) => {
-    const { url, settings = {} } = req.body;
+    const { url } = req.body;
     if (!url) return res.status(400).json({ error: 'url is required' });
-    if (defaultSubFolderInvalid(settings.default_sub_folder)) {
-      return res.status(400).json({ error: 'Invalid default_sub_folder' });
-    }
     try {
+      const validated = validateSubscribeSettings(req.body.settings);
+      if (!validated.ok) return res.status(400).json({ error: validated.error });
+      const settings = validated.value;
       const info = await playlistModule.getPlaylistInfo(url);
       const { playlist: created, restored } = await playlistModule.upsertPlaylist(info, { enabled: true, settings });
       // On restore the submitted settings are discarded in favor of the saved
@@ -383,7 +398,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    *       200:
    *         description: Applied settings
    *       400:
-   *         description: Invalid default_sub_folder or sort_order
+   *         description: Invalid default_sub_folder, sort_order, or title_filter_regex (must be a string or null and compile as a JavaScript regex; playlist title filters match case-insensitively)
    *       404:
    *         description: Playlist not found
    *       500:
@@ -398,6 +413,18 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     }
     if ('sort_order' in updates && !VALID_SORT_ORDERS.has(updates.sort_order)) {
       return res.status(400).json({ error: 'Invalid sort_order; expected default or reversed' });
+    }
+    const titleFilter = updates.title_filter_regex;
+    if (titleFilter != null && typeof titleFilter !== 'string') {
+      return res.status(400).json({ error: 'title_filter_regex must be a string or null' });
+    }
+    if (titleFilter) {
+      // A pattern the refresh cannot compile would break every refresh of this playlist.
+      try {
+        playlistModule.buildTitleFilterRegExp(titleFilter);
+      } catch (err) {
+        return res.status(400).json({ error: `Invalid title_filter_regex: ${err.message}` });
+      }
     }
     try {
       const p = await findEnabledPlaylist(req.params.playlistId);
@@ -733,7 +760,14 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    *       404:
    *         description: Playlist not found
    *       409:
-   *         description: A playlist refresh is already in progress
+   *         description: A playlist refresh is already in progress, or downloads are paused because a storage limit was reached (Settings > Storage Limits) and the selected videos could not be saved for retry; the error message says which
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 error:
+   *                   type: string
    *       422:
    *         description: Playlist exceeds the 5000-entry automatic following limit
    *       503:
@@ -759,6 +793,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       res.json({ playlist: p, ...result });
     } catch (err) {
       if (respondToFollowingError(res, err)) return;
+      if (storageGuard.isPausedError(err)) return res.status(409).json({ error: err.message });
       req.log.error({ err, playlist_id: req.params.playlistId }, 'configure playlist following failed');
       res.status(500).json({ error: 'Could not finish following setup. Please retry.' });
     }
@@ -791,11 +826,21 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    *                 items: { type: string }
    *     responses:
    *       202:
-   *         description: Queued count and optional queue failure warning
+   *         description: Queued count and optional queue failure warning. When downloads are paused by a storage limit but the selection can be saved for scheduled retry (auto-download enabled with a starting point), this returns queued 0 with a warning giving the pause reason instead of 409.
    *       400:
    *         description: Invalid video IDs
    *       404:
    *         description: Playlist not found
+   *       409:
+   *         description: Downloads are paused because a storage limit was reached (Settings > Storage Limits); and the selection could not be saved for retry; the error message gives the reason
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 error:
+   *                   type: string
+   *                   example: 'Downloads are paused: downloaded videos use 512.0 GB, over the 500 GB limit'
    *       500:
    *         description: Queueing failed
    */
@@ -809,6 +854,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       if (!p) return res.status(404).json({ error: 'Playlist not found' });
       res.status(202).json(await playlistDownloadModule.queueBatch(p, videoIds, { ...downloadDeps, logger: req.log }));
     } catch (err) {
+      if (storageGuard.isPausedError(err)) return res.status(409).json({ error: err.message });
       req.log.error({ err }, 'queue playlist batch failed');
       res.status(500).json({ error: 'Failed to queue selected videos; please retry' });
     }
@@ -854,6 +900,16 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    *         description: Invalid videoIds or overrideSettings
    *       404:
    *         description: Playlist not found
+   *       409:
+   *         description: Downloads are paused because a storage limit was reached (Settings > Storage Limits); the error message gives the reason
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 error:
+   *                   type: string
+   *                   example: 'Downloads are paused: downloaded videos use 512.0 GB, over the 500 GB limit'
    *       500:
    *         description: Internal server error
    */
@@ -885,6 +941,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       });
       res.status(202).json({ status: 'accepted', message: queued ? 'Playlist download started' : 'No eligible videos to queue', queued });
     } catch (err) {
+      if (storageGuard.isPausedError(err)) return res.status(409).json({ error: err.message });
       req.log.error({ err }, 'trigger playlist download failed');
       res.status(500).json({ error: 'Failed to start playlist download' });
     }

@@ -149,6 +149,19 @@ describe('POST /api/auto-removal/dry-run', () => {
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ dryRun: true }));
   });
 
+  test('forwards the total usage limit override to the cleanup module', async () => {
+    const handler = getHandler();
+    const req = { body: { autoRemovalUsageLimit: '2TB' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(videoDeletionModuleShared.performAutomaticCleanup).toHaveBeenCalledWith({
+      dryRun: true,
+      overrides: { autoRemovalUsageLimit: '2TB' }
+    });
+  });
+
   test('coerces a string autoRemovalWatchedEnabled to boolean', async () => {
     const handler = getHandler();
     const req = {
@@ -420,6 +433,7 @@ describe('POST /triggerchanneldownloads', () => {
   };
 
   let downloadModuleMock;
+  let storageGuardMock;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -428,6 +442,10 @@ describe('POST /triggerchanneldownloads', () => {
     downloadModuleMock = {
       doChannelAndPlaylistDownloads: jest.fn().mockResolvedValue(undefined),
     };
+    storageGuardMock = {
+      refresh: jest.fn().mockResolvedValue({ paused: false, reasons: [] }),
+      describe: jest.fn(() => 'Downloads are paused: over the limit'),
+    };
   });
 
   const getHandler = () => {
@@ -435,6 +453,7 @@ describe('POST /triggerchanneldownloads', () => {
       verifyToken: (req, res, next) => next(),
       videosModule: {},
       downloadModule: downloadModuleMock,
+      storageGuard: storageGuardMock,
     });
     const app = express();
     app.use(express.json());
@@ -442,7 +461,7 @@ describe('POST /triggerchanneldownloads', () => {
     return findRouteHandler(app, 'post', '/triggerchanneldownloads');
   };
 
-  it('triggers combined channel + playlist downloads', () => {
+  it('triggers combined channel + playlist downloads', async () => {
     const handler = getHandler();
     const req = {
       body: {},
@@ -450,13 +469,13 @@ describe('POST /triggerchanneldownloads', () => {
     };
     const res = createResponse();
 
-    handler(req, res);
+    await handler(req, res);
 
     expect(res.json).toHaveBeenCalledWith({ status: 'success' });
     expect(downloadModuleMock.doChannelAndPlaylistDownloads).toHaveBeenCalled();
   });
 
-  it('returns 400 when a channel download job is already running', () => {
+  it('returns 400 when a channel download job is already running', async () => {
     jobModuleShared.getRunningJobs.mockReturnValue([
       { jobType: 'Channel Downloads', status: 'In Progress' },
     ]);
@@ -468,10 +487,42 @@ describe('POST /triggerchanneldownloads', () => {
     };
     const res = createResponse();
 
-    handler(req, res);
+    await handler(req, res);
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({ error: 'Job Already Running' });
     expect(downloadModuleMock.doChannelAndPlaylistDownloads).not.toHaveBeenCalled();
+  });
+
+  it('returns 409 with the reason when downloads are paused for storage', async () => {
+    storageGuardMock.refresh.mockResolvedValue({ paused: true, reasons: [{ text: 'over the limit' }] });
+
+    const handler = getHandler();
+    const res = createResponse();
+
+    await handler({ body: {}, log: loggerMock }, res);
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Downloads are paused: over the limit' });
+  });
+
+  it('does not start downloads while paused', async () => {
+    storageGuardMock.refresh.mockResolvedValue({ paused: true, reasons: [] });
+
+    const handler = getHandler();
+
+    await handler({ body: {}, log: loggerMock }, createResponse());
+
+    expect(downloadModuleMock.doChannelAndPlaylistDownloads).not.toHaveBeenCalled();
+  });
+
+  it('still starts downloads when the pause check fails', async () => {
+    storageGuardMock.refresh.mockRejectedValue(new Error('check failed'));
+
+    const handler = getHandler();
+
+    await handler({ body: {}, log: { ...loggerMock, warn: jest.fn() } }, createResponse());
+
+    expect(downloadModuleMock.doChannelAndPlaylistDownloads).toHaveBeenCalled();
   });
 });

@@ -1,5 +1,45 @@
 # Changelog
 
+## [v1.85.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.85.0) - 2026-09-24
+
+### Features
+
+* add channel prefix toggle for embedded title ([600fd40](https://github.com/DialmasterOrg/Youtarr/commit/600fd405be7e22056dfa40e1903960fe31ac114f)), closes [#829](https://github.com/DialmasterOrg/Youtarr/issues/829)
+* add configurable schedules and run history ([4d98965](https://github.com/DialmasterOrg/Youtarr/commit/4d9896533392f989c78edd02c5e00d517e1739ff)), closes [#837](https://github.com/DialmasterOrg/Youtarr/issues/837)
+* choose settings when adding channels ([c6fea7b](https://github.com/DialmasterOrg/Youtarr/commit/c6fea7becb7772cd51c35b339d9e9b51922ec6db)), closes [#595](https://github.com/DialmasterOrg/Youtarr/issues/595) [#864](https://github.com/DialmasterOrg/Youtarr/issues/864)
+* describe custom cron schedules in plain words ([316b605](https://github.com/DialmasterOrg/Youtarr/commit/316b605836e87e6d019de753c0c54fa312549552)), closes [#837](https://github.com/DialmasterOrg/Youtarr/issues/837)
+* link channels and playlists to youtube ([93da944](https://github.com/DialmasterOrg/Youtarr/commit/93da94439a5c55cedf395d12c4d5b61413152349)), closes [#866](https://github.com/DialmasterOrg/Youtarr/issues/866)
+
+
+### Bug Fixes
+
+* apply the codec sort to every video download ([33b04bf](https://github.com/DialmasterOrg/Youtarr/commit/33b04bff43520350ac4aa9ea72ae0d36b1d9a39a))
+* clarify documentation link errors ([32842e3](https://github.com/DialmasterOrg/Youtarr/commit/32842e358d1b6a25bb5fbb7076d2cf4aeb323338))
+* don't crash when config.json can't be watched ([a2ba093](https://github.com/DialmasterOrg/Youtarr/commit/a2ba093a76639493e2eb79d26f9a79e6f7af51f0)), closes [#870](https://github.com/DialmasterOrg/Youtarr/issues/870)
+* prefer AVC over AV1 at equal resolution for the default codec ([d76834e](https://github.com/DialmasterOrg/Youtarr/commit/d76834eedf0eb727707c0a8000af502913b9091d))
+* use one timestamp for youtube removal checks ([725688c](https://github.com/DialmasterOrg/Youtarr/commit/725688ce470709970c94bb22de7a8f7bc21f5c6c))
+
+
+### Documentation
+
+* update CHANGELOG for v1.84.1 [skip ci] ([495276e](https://github.com/DialmasterOrg/Youtarr/commit/495276ee78a83f55636cc256dd1da1e55e9d9e88))
+
+**Full Changelog**: https://github.com/DialmasterOrg/Youtarr/compare/v1.84.1...v1.85.0
+
+## [v1.84.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.84.1) - 2026-09-20
+
+### Bug Fixes
+
+* request json for plex pin authentication ([1264005](https://github.com/DialmasterOrg/Youtarr/commit/12640050ad2feedd09097243a787338d5df27b8f))
+
+
+### Documentation
+
+* link documentation site in README [skip ci] ([977c594](https://github.com/DialmasterOrg/Youtarr/commit/977c594994edfda148d3a80033c309a059ae8461))
+* update CHANGELOG for v1.84.0 [skip ci] ([a035fb2](https://github.com/DialmasterOrg/Youtarr/commit/a035fb20d432c5bb4f93eb6391b041469d2e5252))
+
+**Full Changelog**: https://github.com/DialmasterOrg/Youtarr/compare/v1.84.0...v1.84.1
+
 ## [v1.84.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.84.0) - 2026-09-19
 
 ### Features

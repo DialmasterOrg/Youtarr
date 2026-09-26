@@ -113,6 +113,23 @@ describe('SourcePicker', () => {
     expect(screen.getByText(/Google Takeout exports can take 24-72 hours/i)).toBeInTheDocument();
   });
 
+  test('offers an example CSV with the columns the importer reads', () => {
+    render(<SourcePicker {...defaultProps} />);
+    fireEvent.click(screen.getByRole('tab', { name: /import using csv/i }));
+
+    const link = screen.getByRole('link', { name: /download an example csv/i });
+
+    expect(link).toHaveAttribute('download', 'youtarr-channels-example.csv');
+    expect(decodeURIComponent(link.getAttribute('href') || '')).toContain('Channel Id,Channel Url,Channel Title');
+  });
+
+  test('explains that hand-made CSV rows need a channel ID', () => {
+    render(<SourcePicker {...defaultProps} />);
+    fireEvent.click(screen.getByRole('tab', { name: /import using csv/i }));
+
+    expect(screen.getByText(/rows without one are skipped/i)).toBeInTheDocument();
+  });
+
   test('does not show error alert when error is null', () => {
     render(<SourcePicker {...defaultProps} />);
 

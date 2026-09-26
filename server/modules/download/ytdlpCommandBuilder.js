@@ -3,6 +3,7 @@ const configModule = require('../configModule');
 const tempPathManager = require('./tempPathManager');
 const logger = require('../../logger');
 const customArgsParser = require('./customArgsParser');
+const archiveModule = require('../archiveModule');
 const { mergeCookiePlayerClients } = require('./cookiePlayerClients');
 const {
   CHANNEL_TEMPLATE,
@@ -119,6 +120,22 @@ class YtdlpCommandBuilder {
     }
 
     return videoFormat;
+  }
+
+  /**
+   * Format-sort args for video downloads.
+   *
+   * [ext=mp4] no longer implies H.264: YouTube serves AV1 in MP4 as well, and
+   * yt-dlp's default sort ranks av01 above avc1, so bestvideo picks AV1. That
+   * hits the h265 selector too, since YouTube rarely has HEVC and it falls
+   * through to plain [ext=mp4]. Sort on resolution first and codec second so
+   * the requested resolution still wins and AVC is only preferred between
+   * formats of equal resolution. Sorting on codec alone would pick 1080p AVC
+   * over 2160p AV1.
+   * @returns {string[]} - Array of yt-dlp args
+   */
+  static buildFormatSortArgs() {
+    return ['-S', 'res,vcodec:avc'];
   }
 
   // Build Sponsorblock args based on configuration
@@ -245,6 +262,8 @@ class YtdlpCommandBuilder {
 
     // Temp paths for yt-dlp's internal temp files
     args.push(...this.buildTempPathArgs());
+
+    args.push('--cache-dir', configModule.getYtdlpCacheDir());
 
     return args;
   }
@@ -462,11 +481,12 @@ class YtdlpCommandBuilder {
 
     // Add title regex filter if specified
     if (filterConfig.titleFilterRegex) {
-      // Escape backslashes and single quotes for Python string literal
+      // yt-dlp's match_str splits filters on unescaped '&' and, inside a quoted
+      // value, only unescapes the quote character. Backslashes pass through
+      // untouched, so doubling them would turn `\d` into a literal backslash.
       const escapedRegex = filterConfig.titleFilterRegex
-        .replace(/\\/g, '\\\\') // Escape backslashes first
-        // eslint-disable-next-line quotes
-        .replace(/'/g, "\\'"); // Escape single quotes
+        .replace(/'/g, '\\\'')
+        .replace(/&/g, '\\&');
       additionalFilters.push(`title ~= '${escapedRegex}'`);
     }
 
@@ -553,6 +573,7 @@ class YtdlpCommandBuilder {
       // Clean @ prefix from uploader_id when it's used as fallback
       '--replace-in-metadata', 'uploader_id', '^@', '',
       '-f', this.buildFormatString(res, videoCodec, audioFormat),
+      ...(audioFormat === 'mp3_only' ? [] : this.buildFormatSortArgs()),
       // Only force MP4 remux when sources might be webm (1440p+).
       // At <=1080p the format selector already picks MP4 sources.
       ...(this.resolutionRequiresNonMp4Source(res) ? ['--merge-output-format', 'mp4'] : []),
@@ -570,7 +591,7 @@ class YtdlpCommandBuilder {
 
     // Only use download archive if NOT allowing re-downloads
     if (!allowRedownload) {
-      args.push('--download-archive', './config/complete.list');
+      args.push('--download-archive', archiveModule.getArchivePath());
     }
 
     // Build match filter with any channel-specific filtering
@@ -645,6 +666,7 @@ class YtdlpCommandBuilder {
       // Clean @ prefix from uploader_id when it's used as fallback
       '--replace-in-metadata', 'uploader_id', '^@', '',
       '-f', this.buildFormatString(res, videoCodec, audioFormat),
+      ...(audioFormat === 'mp3_only' ? [] : this.buildFormatSortArgs()),
       // Only force MP4 remux when sources might be webm (1440p+).
       // At <=1080p the format selector already picks MP4 sources.
       ...(this.resolutionRequiresNonMp4Source(res) ? ['--merge-output-format', 'mp4'] : []),
@@ -662,7 +684,7 @@ class YtdlpCommandBuilder {
 
     // Only use download archive if NOT allowing re-downloads
     if (!allowRedownload) {
-      args.push('--download-archive', './config/complete.list');
+      args.push('--download-archive', archiveModule.getArchivePath());
     }
 
     args.push(

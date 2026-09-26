@@ -18,6 +18,7 @@ const { appriseSender, discordSender } = require('./senders');
 
 // Plain formatter for non-rich formatting
 const plainFormatter = require('./formatters/plainFormatter');
+const { hasFailureStop } = require('./utils');
 
 /**
  * Normalize an appriseUrls entry to the current object format
@@ -116,8 +117,9 @@ class NotificationModule {
         : 0;
 
       // Diagnosed failure-only runs still notify: the "Likely cause" advice is
-      // the whole point of telling an automated user about the failure.
-      if (finalSummary.totalDownloaded === 0 && terminatedChannelCount === 0 && terminationFailureCount === 0 && diagnosisCount === 0) {
+      // the whole point of telling an automated user about the failure. So do
+      // runs a failed group stopped early.
+      if (finalSummary.totalDownloaded === 0 && terminatedChannelCount === 0 && terminationFailureCount === 0 && diagnosisCount === 0 && !hasFailureStop(finalSummary)) {
         logger.debug('No new videos downloaded and no terminations recorded, skipping notification');
         return;
       }
@@ -194,6 +196,47 @@ class NotificationModule {
       }
     } catch (error) {
       logger.error({ err: error }, 'Failed to send auto-removal notification');
+    }
+  }
+
+  /**
+   * Send a notification that downloads were paused or resumed because of the
+   * storage limits (sent only when the paused state changes)
+   * @param {Object} status - storageGuard status ({ paused, reasons })
+   */
+  async sendDownloadPauseNotification(status) {
+    if (!this.isConfigured()) {
+      logger.debug('Notifications not configured, skipping download pause notification');
+      return;
+    }
+
+    try {
+      const config = this.configModule.getConfig();
+      const urls = this.getUrlsFromConfig(config);
+
+      const results = await Promise.all(urls.map(async (entry) => {
+        try {
+          const service = getServiceForUrl(entry.url);
+          const useRichFormatting = entry.richFormatting && service.supportsRichFormatting;
+
+          const formatter = useRichFormatting ? getFormatter(service) : plainFormatter;
+          const sendMethod = useRichFormatting ? service.sendMethod : 'apprise-plain';
+
+          const message = formatter.formatDownloadPauseMessage(status);
+          await sendNotification(entry.url, message, sendMethod);
+          return true;
+        } catch (err) {
+          logger.error({ err, name: entry.name }, 'Failed to send download pause notification');
+          return false;
+        }
+      }));
+
+      const successCount = results.filter(Boolean).length;
+      if (successCount > 0) {
+        logger.info({ paused: Boolean(status && status.paused), successCount, totalCount: urls.length }, 'Download pause notification sent successfully');
+      }
+    } catch (error) {
+      logger.error({ err: error }, 'Failed to send download pause notification');
     }
   }
 

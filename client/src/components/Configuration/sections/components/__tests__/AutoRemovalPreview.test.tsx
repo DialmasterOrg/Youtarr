@@ -107,6 +107,48 @@ describe('AutoRemovalPreview', () => {
     expect(screen.getByText(/Watched Video/)).toBeInTheDocument();
   });
 
+  test('renders the total size limit line when cleanup is needed', () => {
+    const result = createResult();
+    result.plan.usageStrategy = {
+      enabled: true,
+      limit: '500GB',
+      limitBytes: 500 * 1024 ** 3,
+      usedBytes: 520 * 1024 ** 3,
+      candidateCount: 4,
+      estimatedFreedBytes: 4194304,
+      deletedCount: 0,
+      failedCount: 0,
+      needsCleanup: true,
+      sampleVideos: [],
+    };
+
+    renderWithProviders(<AutoRemovalPreview result={result} />);
+
+    expect(screen.getByText(/Total size limit:/)).toHaveTextContent('• Total size limit: 4 videos (~4.00 MB)');
+  });
+
+  test('notes when downloads are within the total size limit', () => {
+    const result = createResult();
+    result.plan.usageStrategy = {
+      enabled: true,
+      limit: '500GB',
+      limitBytes: 500 * 1024 ** 3,
+      usedBytes: 1024 ** 3,
+      candidateCount: 0,
+      estimatedFreedBytes: 0,
+      deletedCount: 0,
+      failedCount: 0,
+      needsCleanup: false,
+      sampleVideos: [],
+    };
+
+    renderWithProviders(<AutoRemovalPreview result={result} />);
+
+    expect(screen.getByText(/are within the total size limit/i)).toHaveTextContent(
+      'Downloaded videos (1.00 GB) are within the total size limit'
+    );
+  });
+
   test('notes when storage is above the free space threshold', () => {
     renderWithProviders(<AutoRemovalPreview result={createResult()} />);
 

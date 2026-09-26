@@ -18,6 +18,7 @@ const createYtdlpOptionsRoutes = require('./ytdlpOptions');
 const createMaintenanceRoutes = require('./maintenance');
 const createSubfolderRoutes = require('./subfolders');
 const createSchedulesRoutes = require('./schedules');
+const createLogRoutes = require('./logs');
 const videoMetadataModule = require('../modules/videoMetadataModule');
 const videoOembedEnricher = require('../modules/videoOembedEnricher');
 const playlistModule = require('../modules/playlistModule');
@@ -37,6 +38,11 @@ const scheduledTaskRuns = require('../modules/scheduledTaskRuns');
 const scheduleConfig = require('../modules/scheduleConfig');
 const rescanRunSummary = require('../modules/rescanRunSummary');
 const ytdlpUpdateRunSummary = require('../modules/ytdlpUpdateRunSummary');
+const storageGuard = require('../modules/storageGuard');
+const cookieDetails = require('../modules/cookieDetails');
+const cookieTest = require('../modules/cookieTest');
+const logger = require('../logger');
+const logFilesModule = require('../modules/logFilesModule');
 
 /**
  * Registers all route modules with the Express app
@@ -51,6 +57,7 @@ function registerRoutes(app, deps) {
     youtubeApiKeyTestLimiter,
     ytdlpValidationRateLimiter,
     filenamePreviewRateLimiter,
+    cookieTestRateLimiter,
     configModule,
     channelModule,
     plexModule,
@@ -82,13 +89,16 @@ function registerRoutes(app, deps) {
   app.use(createSetupRoutes({ configModule, setupTokenModule, setupCreateAuthLimiter, getClientAddress }));
 
   // Config routes
-  app.use(createConfigRoutes({ verifyToken, configModule, validateEnvAuthCredentials, isWslEnvironment, filenamePreviewRateLimiter }));
+  app.use(createConfigRoutes({
+    verifyToken, configModule, validateEnvAuthCredentials, isWslEnvironment, filenamePreviewRateLimiter,
+    cookieDetails, cookieTest, cookieTestRateLimiter, getLoggingStatus: logger.getLoggingStatus,
+  }));
 
   // Channel routes
-  app.use(createChannelRoutes({ verifyToken, channelModule, archiveModule, channelDownloadAllModule, ratingMapper }));
+  app.use(createChannelRoutes({ verifyToken, channelModule, archiveModule, channelDownloadAllModule, ratingMapper, storageGuard }));
 
   // Video routes
-  app.use(createVideoRoutes({ verifyToken, videosModule, downloadModule, videoOembedEnricher, videoLocalStatus }));
+  app.use(createVideoRoutes({ verifyToken, videosModule, downloadModule, videoOembedEnricher, videoLocalStatus, storageGuard }));
 
   // Video search routes
   app.use(createVideoSearchRoutes({ verifyToken, videoSearchModule }));
@@ -103,7 +113,7 @@ function registerRoutes(app, deps) {
   app.use(createYtdlpOptionsRoutes({ verifyToken, ytdlpValidationRateLimiter }));
 
   // Job routes
-  app.use(createJobRoutes({ verifyToken, jobModule, downloadModule, videoActivity }));
+  app.use(createJobRoutes({ verifyToken, jobModule, downloadModule, videoActivity, storageGuard }));
 
   // Plex routes
   app.use(createPlexRoutes({ verifyToken, plexModule, configModule }));
@@ -118,7 +128,7 @@ function registerRoutes(app, deps) {
   app.use(createVideoDetailRoutes({ verifyToken, videoMetadataModule, mediaServers }));
 
   // Playlist routes
-  app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule }));
+  app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule, storageGuard }));
 
   // Media server routes
   app.use(createMediaServerRoutes({ verifyToken, configModule, mediaServers }));
@@ -131,6 +141,9 @@ function registerRoutes(app, deps) {
 
   // Scheduled task status routes
   app.use(createSchedulesRoutes({ verifyToken, scheduledTaskManager, scheduledTaskRuns, scheduleConfig }));
+
+  // Log file download
+  app.use(createLogRoutes({ verifyToken, logFilesModule, configModule }));
 
   // Defensive redirect: /channels -> /subscriptions (frontend handles client-side routing,
   // this fallback covers direct server-side hits during the transition period)

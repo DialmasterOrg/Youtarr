@@ -54,11 +54,15 @@ jest.mock('../m3uGenerator', () => ({
   generateChannelM3UInBackground: jest.fn(),
   deleteChannelM3UInBackground: jest.fn(),
 }));
+jest.mock('../titleFilterRegex', () => ({
+  checkSyntax: jest.fn(),
+  matchTitles: jest.fn(),
+}));
 
 describe('ChannelSettingsModule', () => {
   let channelSettingsModule;
   let fs;
-  let childProcess;
+  let titleFilterRegex;
   let logger;
   let Channel;
   let ChannelVideo;
@@ -86,7 +90,9 @@ describe('ChannelSettingsModule', () => {
     jest.resetModules();
 
     fs = require('fs-extra');
-    childProcess = require('child_process');
+    titleFilterRegex = require('../titleFilterRegex');
+    titleFilterRegex.checkSyntax.mockReturnValue({ valid: true });
+    titleFilterRegex.matchTitles.mockResolvedValue([]);
     logger = require('../../logger');
     Channel = require('../../models/channel');
     ChannelVideo = require('../../models/channelvideo');
@@ -313,11 +319,6 @@ describe('ChannelSettingsModule', () => {
   });
 
   describe('validateTitleRegex', () => {
-    beforeEach(() => {
-      // Mock execFileSync to return valid regex result by default
-      childProcess.execFileSync = jest.fn().mockReturnValue(JSON.stringify({ matches: false }));
-    });
-
     test('should validate empty string as valid', () => {
       const result = channelSettingsModule.validateTitleRegex('');
       expect(result.valid).toBe(true);
@@ -329,14 +330,13 @@ describe('ChannelSettingsModule', () => {
     });
 
     test('should validate simple regex patterns', () => {
-      childProcess.execFileSync.mockReturnValue(JSON.stringify({ matches: true }));
       const result = channelSettingsModule.validateTitleRegex('test.*pattern');
       expect(result.valid).toBe(true);
-      expect(childProcess.execFileSync).toHaveBeenCalledWith(
-        'python3',
-        expect.arrayContaining(['test.*pattern', 'test']),
-        expect.any(Object)
-      );
+    });
+
+    test('checks the pattern with the Python regex engine', () => {
+      channelSettingsModule.validateTitleRegex('test.*pattern');
+      expect(titleFilterRegex.checkSyntax).toHaveBeenCalledWith('test.*pattern');
     });
 
     test('should reject regex patterns longer than 500 characters', () => {
@@ -347,25 +347,81 @@ describe('ChannelSettingsModule', () => {
     });
 
     test('should reject invalid Python regex patterns', () => {
-      childProcess.execFileSync.mockReturnValue(JSON.stringify({ error: 'Invalid regex syntax' }));
+      titleFilterRegex.checkSyntax.mockReturnValue({ valid: false, error: 'Invalid regex syntax' });
       const result = channelSettingsModule.validateTitleRegex('[invalid');
-      expect(result.valid).toBe(false);
-      expect(result.error).toBe('Invalid regex syntax');
-    });
-
-    test('should handle Python execution errors', () => {
-      childProcess.execFileSync.mockImplementation(() => {
-        throw new Error('Python not found');
-      });
-      const result = channelSettingsModule.validateTitleRegex('test');
-      expect(result.valid).toBe(false);
-      expect(result.error).toContain('Invalid Python regex pattern');
+      expect(result).toEqual({ valid: false, error: 'Invalid regex syntax' });
     });
 
     test('should trim whitespace before validation', () => {
-      childProcess.execFileSync.mockReturnValue(JSON.stringify({ matches: false }));
-      const result = channelSettingsModule.validateTitleRegex('  test  ');
-      expect(result.valid).toBe(true);
+      channelSettingsModule.validateTitleRegex('  test  ');
+      expect(titleFilterRegex.checkSyntax).toHaveBeenCalledWith('test');
+    });
+  });
+
+  describe('validateNewChannelSettings', () => {
+    test('accepts an absent settings object', () => {
+      expect(channelSettingsModule.validateNewChannelSettings(undefined)).toEqual({ valid: true });
+    });
+
+    test('accepts every supported setting with valid values', () => {
+      const result = channelSettingsModule.validateNewChannelSettings({
+        auto_download_enabled_tabs: 'video,short',
+        video_quality: '720',
+        audio_format: 'mp3_only',
+        sub_folder: '##USE_GLOBAL_DEFAULT##',
+      });
+
+      expect(result).toEqual({ valid: true });
+    });
+
+    test('accepts null overrides meaning use the global setting', () => {
+      const result = channelSettingsModule.validateNewChannelSettings({
+        video_quality: null,
+        audio_format: null,
+        sub_folder: null,
+      });
+
+      expect(result).toEqual({ valid: true });
+    });
+
+    test('rejects a settings value that is not an object', () => {
+      expect(channelSettingsModule.validateNewChannelSettings(['720']).valid).toBe(false);
+    });
+
+    test('rejects settings that are not allowed at add time', () => {
+      const result = channelSettingsModule.validateNewChannelSettings({ enabled: true });
+
+      expect(result).toEqual({ valid: false, error: 'Unsupported channel setting: enabled' });
+    });
+
+    test('rejects an invalid video quality', () => {
+      expect(channelSettingsModule.validateNewChannelSettings({ video_quality: '999' }).valid).toBe(false);
+    });
+
+    test('rejects an invalid audio format', () => {
+      expect(channelSettingsModule.validateNewChannelSettings({ audio_format: 'flac' }).valid).toBe(false);
+    });
+
+    test('rejects an unsafe subfolder name', () => {
+      expect(channelSettingsModule.validateNewChannelSettings({ sub_folder: '../escape' }).valid).toBe(false);
+    });
+
+    test.each(['sub_folder', 'video_quality', 'audio_format', 'auto_download_enabled_tabs'])(
+      'rejects a non-string %s',
+      (key) => {
+        expect(channelSettingsModule.validateNewChannelSettings({ [key]: 123 })).toEqual({
+          valid: false,
+          error: `${key} must be a string or null`,
+        });
+      }
+    );
+
+    test('rejects an unknown auto-download media type', () => {
+      const result = channelSettingsModule.validateNewChannelSettings({
+        auto_download_enabled_tabs: 'video,podcast',
+      });
+
+      expect(result.valid).toBe(false);
     });
   });
 
@@ -507,7 +563,6 @@ describe('ChannelSettingsModule', () => {
 
     beforeEach(() => {
       ChannelVideo.findAll.mockResolvedValue(mockChannelVideos);
-      childProcess.execFileSync = jest.fn().mockReturnValue(JSON.stringify({ matches: false }));
     });
 
     test('should return all videos as matching when no regex provided', async () => {
@@ -517,15 +572,13 @@ describe('ChannelSettingsModule', () => {
       expect(result.videos.every(v => v.matches)).toBe(true);
     });
 
-    test('should test regex against each video title', async () => {
-      // Mock validateTitleRegex to return valid first
-      childProcess.execFileSync.mockReturnValue(JSON.stringify({ matches: false }));
+    test('tests every title in one batch', async () => {
+      await channelSettingsModule.previewTitleFilter('UC123456', ' Test ');
+      expect(titleFilterRegex.matchTitles).toHaveBeenCalledWith('Test', ['Test Video 1', 'Another Video']);
+    });
 
-      // Then set up the specific responses for each video title
-      childProcess.execFileSync
-        .mockReturnValueOnce(JSON.stringify({ matches: false })) // validation call
-        .mockReturnValueOnce(JSON.stringify({ matches: true }))  // first video
-        .mockReturnValueOnce(JSON.stringify({ matches: false })); // second video
+    test('should test regex against each video title', async () => {
+      titleFilterRegex.matchTitles.mockResolvedValue([true, false]);
 
       const result = await channelSettingsModule.previewTitleFilter('UC123456', 'Test');
       expect(result.totalCount).toBe(2);
@@ -540,18 +593,11 @@ describe('ChannelSettingsModule', () => {
       ).rejects.toThrow('Title filter regex must be 500 characters or less');
     });
 
-    test('should handle Python execution errors gracefully', async () => {
-      // First call for validation should succeed, then subsequent calls fail
-      childProcess.execFileSync
-        .mockReturnValueOnce(JSON.stringify({ matches: false })) // validation call succeeds
-        .mockImplementation(() => {
-          throw new Error('Python error');
-        });
+    test('rejects when the pattern cannot be evaluated, instead of reporting no matches', async () => {
+      titleFilterRegex.matchTitles.mockRejectedValue(new Error('Title filter regex timed out after 15000 ms'));
 
-      const result = await channelSettingsModule.previewTitleFilter('UC123456', 'test');
-      expect(result.matchCount).toBe(0);
-      expect(result.videos.every(v => !v.matches)).toBe(true);
-      expect(logger.error).toHaveBeenCalled();
+      await expect(channelSettingsModule.previewTitleFilter('UC123456', '(a+)+$'))
+        .rejects.toThrow('Title filter regex timed out after 15000 ms');
     });
 
     test('should limit results to 20 videos', async () => {
@@ -743,7 +789,6 @@ describe('ChannelSettingsModule', () => {
 
     test('should update title filter regex', async () => {
       const channel = await Channel.findOne();
-      childProcess.execFileSync = jest.fn().mockReturnValue(JSON.stringify({ matches: false }));
 
       const result = await channelSettingsModule.updateChannelSettings('UC123456', {
         title_filter_regex: 'test.*pattern'

@@ -1,5 +1,6 @@
 const logger = require('../logger');
 const watchStatusQueries = require('./mediaServers/watchStatusQueries');
+const { STORED_BYTES_SQL } = require('./storageUsage');
 
 // Matches the timeCreated calculation used by videosModule.js and the other
 // auto-removal candidate queries in videoDeletionModule.js.
@@ -142,7 +143,7 @@ class AutoRemovalQueries {
           videos.youtube_id AS "youtubeId",
           videos.youtube_video_name AS "youTubeVideoName",
           videos.youtube_channel_name AS "youTubeChannelName",
-          videos.file_size AS "fileSize",
+          ${STORED_BYTES_SQL} AS "fileSize",
           MAX(${DOWNLOAD_TIME_SQL}) AS timeCreated
         FROM videos
         LEFT JOIN jobvideos ON videos.id = jobvideos.video_id

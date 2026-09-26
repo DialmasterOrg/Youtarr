@@ -52,6 +52,7 @@
   "writeVideoNfoFiles": true,
   "writeVideoFanart": false,
   "writeBackdropImages": false,
+  "prefixChannelNameInTitle": true,
   "notificationsEnabled": false,
   "appriseUrls": [],
   "autoRemovalEnabled": false,
@@ -61,6 +62,9 @@
   "autoRemovalWatchedMinDaysSinceWatched": "",
   "autoRemovalWatchedMinVideoAgeDays": "",
   "autoRemovalKeepRecentCount": 0,
+  "autoRemovalUsageLimit": "",
+  "downloadPauseUsageLimit": "",
+  "downloadPauseMinFreeSpace": "",
   "subtitlesEnabled": false,
   "subtitleLanguage": "en",
   "darkModeEnabled": false,
@@ -91,5 +95,6 @@
   "plexWatchStatusAllUsers": true,
   "jellyfinWatchStatusAllUsers": true,
   "embyWatchStatusAllUsers": true,
-  "watchStatusWatchedRule": "any"
+  "watchStatusWatchedRule": "any",
+  "logLevel": ""
 }

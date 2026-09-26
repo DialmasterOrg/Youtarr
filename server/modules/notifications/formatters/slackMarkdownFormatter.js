@@ -12,6 +12,7 @@ const {
   formatFailedVideoLine,
   getSubtitle,
   buildAutoRemovalTitle,
+  buildDownloadPauseContent,
   formatBytes,
   groupVideosByChannel,
   getTerminatedCount,
@@ -21,7 +22,9 @@ const {
   buildTerminationFailureCountLabel,
   formatTerminationFailureLine,
   getDiagnoses,
-  formatDiagnosisLine
+  formatDiagnosisLine,
+  getStoppedGroups,
+  formatStoppedGroupLine
 } = require('../utils');
 
 /**
@@ -74,6 +77,14 @@ function formatDownloadMessage(finalSummary, videoData) {
     }
     getDiagnoses(finalSummary).forEach(diagnosis => {
       body += `💡 _${formatDiagnosisLine(diagnosis)}_\n`;
+    });
+    body += '\n';
+  }
+
+  const stoppedGroups = getStoppedGroups(finalSummary);
+  if (stoppedGroups.length > 0) {
+    stoppedGroups.forEach(stopped => {
+      body += `⚠️ *${formatStoppedGroupLine(stopped)}*\n`;
     });
     body += '\n';
   }
@@ -131,10 +142,11 @@ Example Video Title
  * @returns {Object} { title, body } for Apprise
  */
 function formatAutoRemovalMessage(cleanupResult) {
-  const { totalDeleted, deletedByAge, deletedByWatched = 0, deletedBySpace, freedBytes, plan = {} } = cleanupResult;
+  const { totalDeleted, deletedByAge, deletedByWatched = 0, deletedBySpace, deletedByUsage = 0, freedBytes, plan = {} } = cleanupResult;
   const ageStrategy = plan.ageStrategy || {};
   const watchedStrategy = plan.watchedStrategy || {};
   const spaceStrategy = plan.spaceStrategy || {};
+  const usageStrategy = plan.usageStrategy || {};
 
   const title = buildAutoRemovalTitle(totalDeleted);
   let body = `Freed *${formatBytes(freedBytes)}* of storage\n`;
@@ -180,11 +192,43 @@ function formatAutoRemovalMessage(cleanupResult) {
     }
   }
 
+  if (deletedByUsage > 0) {
+    const threshold = usageStrategy.limit;
+    body += `\n*Removed to stay under the ${threshold} total size limit: ${deletedByUsage} ${deletedByUsage === 1 ? 'video' : 'videos'}*\n`;
+
+    const { groups, truncatedCount } = groupVideosByChannel(usageStrategy.sampleVideos, 5, deletedByUsage);
+    for (const group of groups) {
+      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
+      body += `📺 *${group.channel}* (${videoLabel}): ${group.titles.join(', ')}\n`;
+    }
+    if (truncatedCount > 0) {
+      body += `_...and ${truncatedCount} more videos_\n`;
+    }
+  }
+
+  return { title, body };
+}
+
+/**
+ * Format downloads paused/resumed notification as Slack markdown
+ * @param {Object} status - storageGuard status
+ * @returns {Object} { title, body } for Apprise
+ */
+function formatDownloadPauseMessage(status) {
+  const { title, summary, reasons, footer } = buildDownloadPauseContent(status);
+  let body = summary;
+  if (reasons.length > 0) {
+    body += `\n\n${reasons.map((reason) => `• *${reason}*`).join('\n')}`;
+  }
+  if (footer) {
+    body += `\n\n_${footer}_`;
+  }
   return { title, body };
 }
 
 module.exports = {
   formatDownloadMessage,
   formatTestMessage,
-  formatAutoRemovalMessage
+  formatAutoRemovalMessage,
+  formatDownloadPauseMessage
 };

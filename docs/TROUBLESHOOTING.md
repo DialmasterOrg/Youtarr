@@ -1,5 +1,17 @@
 # Youtarr Troubleshooting Guide
 
+## Collecting Logs {#collecting-logs}
+
+Youtarr writes its log to the container console (`docker logs youtarr`) and to rolling files in `config/logs/` (`youtarr.1.log`, `youtarr.2.log`, ...; the highest number is the newest).
+
+To capture a problem:
+1. Open **Settings -> Logging**, set **Log level** to **Debug**, and save. No restart is needed.
+2. Reproduce the problem.
+3. Click **Download logs** to save all log files as one file, or copy the files from `config/logs/` on the host.
+4. Set **Log level** back to **Default** and save.
+
+**Download logs** replaces the API keys and tokens saved in Settings, token parameters in URLs, and proxy passwords with `[REDACTED]`. The files in `config/logs/` are not changed. Logs can still include video titles, channel names, file paths and server addresses, so check them before posting them publicly.
+
 ## Login Issues
 
 ### Cannot Find the Setup Token
@@ -109,15 +121,24 @@ See [Authentication - Cannot Find the Setup Token](AUTHENTICATION.md#cannot-find
 **Solution**:
 - Confirm the storage indicator (shown in the app header and at the bottom of the navigation sidebar) is visible and shows valid values. Space-based removal requires the server to resolve the download directory path and gather disk usage via `df`.
 - Ensure the `DATA_PATH` (or selected YouTube directory) exists within the container/host and is mounted with read access to filesystem metadata.
-- If you're running on network storage or uncommon mounts, try remounting with `df` support or rely on age-based cleanup instead.
+- If you're running on network storage or uncommon mounts, try remounting with `df` support or rely on age-based or total-size cleanup instead (the total size rule does not use `df`).
 - Retry the preview after saving the configuration again. The preview endpoint requires a valid auth token; log back in if necessary.
+
+### Downloads Stopped with "Downloads are paused"
+
+**Problem**: New downloads are refused (HTTP 409 from the API), scheduled downloads show as skipped, and a "Downloads are paused" banner appears.
+
+**Solution**:
+- A storage limit on **Settings -> Storage Limits** was reached. The banner and the notification say which one and by how much.
+- Free space or remove videos (manually, or with Auto Removal), or raise or clear the limit. Downloads resume on their own: Youtarr re-checks after deletions, on settings changes, and every 5 minutes while paused. Queued downloads then start automatically.
+- If downloads stay paused after an Auto Removal run, check that the pause limits are not stricter than the Auto Removal limits (the Storage Limits page shows a warning when they are).
 
 ### Nightly Cleanup Didn't Delete Anything
 
 **Problem**: Automatic cleanup runs on schedule but no videos are removed.
 
 **Solution**:
-- Verify Automatic Video Removal is enabled on **Settings -> Auto Removal** and at least one rule is configured: an age threshold, a free-space threshold, or watched-based removal. Note that watched-based removal only runs while watch status sync is enabled.
+- Verify Automatic Video Removal is enabled on **Settings -> Auto Removal** and at least one rule is configured: an age threshold, a free-space threshold, a total size limit, or watched-based removal. Note that watched-based removal only runs while watch status sync is enabled.
 - Remember the exclusions. Videos you've marked as Protected, videos of channels with auto-removal protection enabled, and the newest downloads kept by "Keep this many newest downloads" (the global setting plus any per-channel keep counts) are never removed, so a run can legitimately delete nothing.
 - Run the dry-run preview to see how many videos currently match the rules - it also shows how many videos the protection settings are keeping. Adjust values if needed (for example, lower the free-space threshold or reduce the age requirement).
 - Check server logs around the time configured in **Settings -> Scheduling** for cleanup messages to confirm the job is executing (`docker compose logs -f youtarr`).
@@ -217,6 +238,37 @@ This is a known Docker Desktop issue on Windows where mount points become corrup
    ```bash
    netstat -an | grep 3087
    ```
+
+### "EMFILE: too many open files, watch" or "Cannot watch config.json" {#config-file-watcher-limit}
+
+**Problem**: Youtarr logs this warning on startup:
+
+```
+Cannot watch config.json for changes; Youtarr will keep running, but hand edits to config.json will not be picked up until restart ...
+```
+
+Older versions crashed on startup instead, with:
+
+```
+Error: EMFILE: too many open files, watch '/app/config/config.json'
+```
+
+**Cause**: Youtarr watches `config.json` so it can pick up changes you make to the file by hand. Linux limits how many file watchers (inotify instances) each user can create, and the default is 128. On hosts running many containers as the same user (on Unraid most containers run as `nobody`), the other containers can use up that shared limit, leaving none for Youtarr. A related limit, `fs.inotify.max_user_watches`, produces an `ENOSPC` "System limit for number of file watchers reached" error instead.
+
+Youtarr keeps running without the watcher. Settings saved from the web UI still work; the only thing lost is auto-reload of hand edits to `config.json`, which take effect after a restart instead.
+
+**Solution**: Raise the limit on the host (not inside the container):
+
+```bash
+sysctl -w fs.inotify.max_user_instances=512
+# If the warning mentions max_user_watches / ENOSPC:
+sysctl -w fs.inotify.max_user_watches=524288
+```
+
+Then restart Youtarr. `sysctl -w` doesn't survive a reboot. To make it permanent:
+
+- **Unraid**: install the **Tips and Tweaks** plugin and raise the inotify limits there, or add the `sysctl -w ...` line(s) to `/boot/config/go` so they run at every boot.
+- **Other Linux hosts**: create `/etc/sysctl.d/99-inotify.conf` containing `fs.inotify.max_user_instances=512` (and `fs.inotify.max_user_watches=524288` if needed), then run `sysctl --system`.
 
 ### Asustor App Central: Stuck on an Old Version
 
@@ -644,7 +696,7 @@ Youtarr detects this pattern and shows a "Likely cause" diagnosis on the Downloa
 
 Uploaded cookies change which YouTube player client yt-dlp can use, and YouTube enforces stricter requirements on that path. Stale or rotated cookies are the most common trigger - YouTube rotates cookie values regularly, so an exported cookies file goes invalid over time.
 
-1. **Refresh your cookies first**: sign into YouTube in your browser, re-export cookies with a browser extension (e.g., "Get cookies.txt LOCALLY"), and upload the fresh file. Refreshing preserves whatever you enabled cookies for.
+1. **Refresh your cookies first**: sign into YouTube in your browser, re-export cookies with a browser extension (e.g., "Get cookies.txt LOCALLY"), and upload the fresh file. Refreshing preserves whatever you enabled cookies for. **Test cookies** in Settings -> Cookies confirms whether the current file is still signed in.
 2. **If fresh cookies still fail**, temporarily disable cookies and retry the video. Many videos download fine without cookies because yt-dlp can then use a less restricted client.
 
 **If cookies are not enabled**:
@@ -652,6 +704,18 @@ Uploaded cookies change which YouTube player client yt-dlp can use, and YouTube 
 The 403 is sometimes a temporary block on YouTube's side - retrying later can work. If it keeps failing, uploading YouTube cookies from your browser (Settings -> Cookies) often resolves it.
 
 **Note**: The same failure on one machine but not another usually comes down to this cookies difference, not the network - both machines can share an IP and behave differently.
+
+### Test Cookies Says Not Signed In
+
+**Problem**: Settings -> Cookies -> **Test cookies** reports that YouTube did not recognize a signed-in session.
+
+The cookie file no longer belongs to a signed-in YouTube session. The cookies expired, YouTube rotated them (it does this regularly, and signing out or exporting from a browser that then keeps using the session can invalidate the exported copy), or they were exported from a signed-out browser. The details above the button may also show expired login cookies or none at all.
+
+1. Sign into YouTube in your browser (ideally a private window you close right after exporting, so the browser does not rotate the exported session).
+2. Re-export cookies with a browser extension (e.g., "Get cookies.txt LOCALLY").
+3. Upload the fresh file (or replace your `YOUTARR_COOKIES_FILE` source) and run **Test cookies** again.
+
+If the test reports a bot check instead, sign into YouTube in your browser, solve any challenge it shows, then re-export. A network or timeout failure means YouTube could not be reached; check the server's internet connection and the proxy setting in Settings.
 
 ### Downloads Are Only 360p With Cookies Enabled
 

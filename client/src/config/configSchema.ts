@@ -119,6 +119,7 @@ export const CONFIG_FIELDS = {
   writeVideoNfoFiles: { default: true, trackChanges: true },
   writeVideoFanart: { default: false, trackChanges: true },
   writeBackdropImages: { default: false, trackChanges: true },
+  prefixChannelNameInTitle: { default: true, trackChanges: true },
 
   // Notifications
   notificationsEnabled: { default: false, trackChanges: true },
@@ -132,6 +133,11 @@ export const CONFIG_FIELDS = {
   autoRemovalWatchedMinDaysSinceWatched: { default: '', trackChanges: true },
   autoRemovalWatchedMinVideoAgeDays: { default: '', trackChanges: true },
   autoRemovalKeepRecentCount: { default: 0, trackChanges: true },
+  autoRemovalUsageLimit: { default: '', trackChanges: true },
+
+  // Download pause (storage limits)
+  downloadPauseUsageLimit: { default: '', trackChanges: true },
+  downloadPauseMinFreeSpace: { default: '', trackChanges: true },
 
   // Storage
   useTmpForDownloads: { default: false, trackChanges: true },
@@ -171,6 +177,9 @@ export const CONFIG_FIELDS = {
     } | null,
     trackChanges: false,
   },
+
+  // Logging - '' uses the LOG_LEVEL environment variable
+  logLevel: { default: '' as '' | 'warn' | 'info' | 'debug', trackChanges: true },
 
   // yt-dlp options (custom args, IP family, rate limit)
   ytdlpIpFamily: { default: 'ipv4' as 'ipv4' | 'ipv6' | 'auto', trackChanges: true },
@@ -252,6 +261,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   writeVideoNfoFiles: CONFIG_FIELDS.writeVideoNfoFiles.default,
   writeVideoFanart: CONFIG_FIELDS.writeVideoFanart.default,
   writeBackdropImages: CONFIG_FIELDS.writeBackdropImages.default,
+  prefixChannelNameInTitle: CONFIG_FIELDS.prefixChannelNameInTitle.default,
   notificationsEnabled: CONFIG_FIELDS.notificationsEnabled.default,
   appriseUrls: CONFIG_FIELDS.appriseUrls.default,
   autoRemovalEnabled: CONFIG_FIELDS.autoRemovalEnabled.default,
@@ -261,6 +271,9 @@ export const DEFAULT_CONFIG: ConfigState = {
   autoRemovalWatchedMinDaysSinceWatched: CONFIG_FIELDS.autoRemovalWatchedMinDaysSinceWatched.default,
   autoRemovalWatchedMinVideoAgeDays: CONFIG_FIELDS.autoRemovalWatchedMinVideoAgeDays.default,
   autoRemovalKeepRecentCount: CONFIG_FIELDS.autoRemovalKeepRecentCount.default,
+  autoRemovalUsageLimit: CONFIG_FIELDS.autoRemovalUsageLimit.default,
+  downloadPauseUsageLimit: CONFIG_FIELDS.downloadPauseUsageLimit.default,
+  downloadPauseMinFreeSpace: CONFIG_FIELDS.downloadPauseMinFreeSpace.default,
   useTmpForDownloads: CONFIG_FIELDS.useTmpForDownloads.default,
   tmpFilePath: CONFIG_FIELDS.tmpFilePath.default,
   subtitlesEnabled: CONFIG_FIELDS.subtitlesEnabled.default,
@@ -274,6 +287,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   ytdlpLastUpdated: CONFIG_FIELDS.ytdlpLastUpdated.default,
   ytdlpLastResult: CONFIG_FIELDS.ytdlpLastResult.default,
   rescanLastRun: CONFIG_FIELDS.rescanLastRun.default,
+  logLevel: CONFIG_FIELDS.logLevel.default,
   ytdlpIpFamily: CONFIG_FIELDS.ytdlpIpFamily.default,
   ytdlpDownloadRateLimit: CONFIG_FIELDS.ytdlpDownloadRateLimit.default,
   ytdlpCustomArgs: CONFIG_FIELDS.ytdlpCustomArgs.default,

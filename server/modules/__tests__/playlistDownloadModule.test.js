@@ -14,7 +14,7 @@ const dependencies = () => ({
   Video: { findAll: jest.fn().mockResolvedValue([]) },
   playlistModule: { isUnavailableTitle: (title) => !title || title === '[Private video]' },
   downloadModule: { doPlaylistDownloads: jest.fn().mockResolvedValue(1) },
-  logger: { error: jest.fn() },
+  logger: { error: jest.fn(), info: jest.fn() },
 });
 
 describe('playlistDownloadModule', () => {
@@ -185,6 +185,17 @@ describe('playlistDownloadModule', () => {
     deps.downloadModule.doPlaylistDownloads.mockRejectedValue(err);
     expect(await playlistDownloads.queueBatch(playlist, ['old'], deps)).toMatchObject({ queued: 0, warning: expect.stringContaining('will retry') });
     expect(deps.logger.error).toHaveBeenCalledWith({ err, playlist_id: 'PL1', count: 1 }, expect.any(String));
+  });
+
+  test('explains a saved batch that could not queue because downloads are paused', async () => {
+    const deps = dependencies();
+    const err = new Error('Downloads are paused: over the limit');
+    deps.downloadModule.doPlaylistDownloads.mockRejectedValue(err);
+    deps.storageGuard = { isPausedError: (e) => e === err };
+    expect(await playlistDownloads.queueBatch(playlist, ['old'], deps)).toEqual({
+      queued: 0,
+      warning: 'Downloads are paused: over the limit. Selection saved; auto-download will queue it once downloads resume.'
+    });
   });
 
   test.each([

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -27,6 +27,17 @@ const PlexAuthDialog: React.FC<PlexAuthDialogProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Stop polling Plex and cancel the delayed close if the dialog unmounts
+  // mid-authentication (e.g. the user navigates away from Settings).
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
+    };
+  }, []);
 
   const handlePlexAuth = async () => {
     setLoading(true);
@@ -70,7 +81,7 @@ const PlexAuthDialog: React.FC<PlexAuthDialogProps> = ({
               onSuccess(authToken);
               
               // Close dialog after a brief delay to show success
-              setTimeout(() => {
+              closeTimeoutRef.current = setTimeout(() => {
                 onClose();
               }, 1500);
             }
@@ -90,6 +101,7 @@ const PlexAuthDialog: React.FC<PlexAuthDialogProps> = ({
           setLoading(false);
         }
       }, 5000);
+      pollIntervalRef.current = intervalId;
     } catch (error: any) {
       setError(`Error: ${error.message}`);
       setLoading(false);

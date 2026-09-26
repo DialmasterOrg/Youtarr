@@ -12,6 +12,7 @@ const { parseAdditionalTags } = require('./additionalTags');
 const { validateSubFolderName } = require('./filesystem/subfolderValidation');
 const subfolderModule = require('./subfolderModule');
 const m3uGenerator = require('./m3uGenerator');
+const titleRegex = require('./titleFilterRegex');
 const {
   GLOBAL_DEFAULT_SENTINEL,
   buildChannelPath,
@@ -21,6 +22,9 @@ const {
   ensureDir,
   moveWithRetries
 } = require('./filesystem');
+
+// Settings the Add Channel dialog can set before a channel is subscribed.
+const NEW_CHANNEL_SETTING_KEYS = ['auto_download_enabled_tabs', 'video_quality', 'audio_format', 'sub_folder'];
 
 /**
  * Module for managing channel-level configuration settings
@@ -150,30 +154,7 @@ class ChannelSettingsModule {
       };
     }
 
-    // Test if it's a valid Python regex by testing against a sample string
-    try {
-      const { execFileSync } = require('child_process');
-      const path = require('path');
-      const scriptPath = path.join(__dirname, '../utils/test-python-regex.py');
-
-      // Use execFileSync with argument array to prevent shell injection
-      const result = execFileSync('python3', [scriptPath, trimmed, 'test'], {
-        encoding: 'utf8',
-        timeout: 1000,
-      });
-
-      const parsed = JSON.parse(result);
-      if (parsed.error) {
-        return { valid: false, error: parsed.error };
-      }
-    } catch (err) {
-      return {
-        valid: false,
-        error: `Invalid Python regex pattern: ${err.message}`,
-      };
-    }
-
-    return { valid: true };
+    return titleRegex.checkSyntax(trimmed);
   }
 
   /**
@@ -379,6 +360,44 @@ class ChannelSettingsModule {
   }
 
   /**
+   * Validate the settings a user picks while adding a channel, before the
+   * channel is subscribed. Only the add dialog's settings are accepted; the
+   * rest stay editable from the channel page after saving.
+   * @param {*} settings - Settings object from an /updatechannels add item
+   * @returns {{ valid: boolean, error?: string }}
+   */
+  validateNewChannelSettings(settings) {
+    if (settings === undefined) {
+      return { valid: true };
+    }
+    if (typeof settings !== 'object' || settings === null || Array.isArray(settings)) {
+      return { valid: false, error: 'Channel settings must be an object' };
+    }
+
+    const unsupported = Object.keys(settings).find((key) => !NEW_CHANNEL_SETTING_KEYS.includes(key));
+    if (unsupported) {
+      return { valid: false, error: `Unsupported channel setting: ${unsupported}` };
+    }
+
+    const nonString = NEW_CHANNEL_SETTING_KEYS.find(
+      (key) => settings[key] != null && typeof settings[key] !== 'string'
+    );
+    if (nonString) {
+      return { valid: false, error: `${nonString} must be a string or null` };
+    }
+
+    const allTabsCsv = Object.keys(MEDIA_TAB_TYPE_MAP).join(',');
+    const validations = [
+      settings.sub_folder !== undefined && this.validateSubFolder(settings.sub_folder),
+      settings.video_quality !== undefined && this.validateVideoQuality(settings.video_quality),
+      settings.audio_format !== undefined && this.validateAudioFormat(settings.audio_format),
+      this.validateAutoDownloadEnabledTabs(settings.auto_download_enabled_tabs, allTabsCsv, []),
+    ];
+    const failed = validations.find((result) => result && !result.valid);
+    return failed ? { valid: false, error: failed.error } : { valid: true };
+  }
+
+  /**
    * Check if a channel has any active downloads
    * @param {string} channelId - Channel ID to check
    * @returns {Promise<boolean>} - True if downloads are active
@@ -490,7 +509,6 @@ class ChannelSettingsModule {
    */
   async previewTitleFilter(channelId, regexPattern) {
     const ChannelVideo = require('../models/channelvideo');
-    const path = require('path');
 
     // Validate the regex pattern first
     const validation = this.validateTitleRegex(regexPattern);
@@ -522,43 +540,18 @@ class ChannelSettingsModule {
       };
     }
 
-    // Use Python to test each video title - same regex engine as yt-dlp
-    const { execFileSync } = require('child_process');
-    const scriptPath = path.join(__dirname, '../utils/test-python-regex.py');
-    const trimmedPattern = regexPattern.trim();
+    // Python regex, same engine as yt-dlp's match filter, in one process.
+    // A timeout or crash propagates: reporting "0 matches" would misdescribe
+    // a pattern that could not be evaluated.
+    const titles = channelVideos.map((cv) => cv.title || '');
+    const results = await titleRegex.matchTitles(regexPattern.trim(), titles);
 
-    const videos = channelVideos.map((cv) => {
-      const title = cv.title || '';
-      let matches = false;
-
-      try {
-        // Use execFileSync with argument array to prevent shell injection
-        const result = execFileSync(
-          'python3',
-          [scriptPath, trimmedPattern, title],
-          { encoding: 'utf8', timeout: 1000 }
-        );
-
-        const parsed = JSON.parse(result);
-        if (parsed.error) {
-          logger.error({ err: parsed.error, title }, 'Regex test error in previewTitleFilter');
-          matches = false;
-        } else {
-          matches = parsed.matches;
-        }
-      } catch (testError) {
-        // If Python execution fails for a specific title, consider it non-matching
-        logger.error({ err: testError.message, title }, 'Failed to test title in previewTitleFilter');
-        matches = false;
-      }
-
-      return {
-        video_id: cv.youtube_id,
-        title,
-        upload_date: cv.publishedAt,
-        matches,
-      };
-    });
+    const videos = channelVideos.map((cv, i) => ({
+      video_id: cv.youtube_id,
+      title: titles[i],
+      upload_date: cv.publishedAt,
+      matches: results[i],
+    }));
 
     const matchCount = videos.filter((v) => v.matches).length;
 

@@ -25,6 +25,10 @@ jest.mock('../download/downloadExecutor', () => {
   }));
 });
 jest.mock('../../logger');
+jest.mock('../storageGuard', () => ({
+  refresh: jest.fn().mockResolvedValue({ paused: false }),
+  on: jest.fn()
+}));
 
 const { v4: uuidv4 } = require('uuid');
 
@@ -825,7 +829,7 @@ describe('JobModule', () => {
       JobModule = require('../jobModule');
     });
 
-    test('should invoke action for first pending job', () => {
+    test('should invoke action for first pending job', async () => {
       const mockAction = jest.fn();
       JobModule.jobs = {
         'job-1': { status: 'Complete' },
@@ -833,7 +837,7 @@ describe('JobModule', () => {
         'job-3': { status: 'Pending' }
       };
 
-      JobModule.startNextJob();
+      await JobModule.startNextJob();
 
       expect(logger.info).toHaveBeenCalledWith('Looking for next job to start');
       expect(mockAction).toHaveBeenCalledWith(
@@ -843,13 +847,13 @@ describe('JobModule', () => {
 
     });
 
-    test('should do nothing if no pending jobs', () => {
+    test('should do nothing if no pending jobs', async () => {
       JobModule.jobs = {
         'job-1': { status: 'Complete' },
         'job-2': { status: 'In Progress' }
       };
 
-      JobModule.startNextJob();
+      await JobModule.startNextJob();
 
       expect(logger.info).toHaveBeenCalledWith('Looking for next job to start');
 
@@ -857,23 +861,7 @@ describe('JobModule', () => {
 
     test('should terminate job with missing action function and try next job', async () => {
       const mockAction = jest.fn();
-      const mockUpdateJob = jest.fn().mockResolvedValue();
-
-      // Save original method
-      const originalUpdateJob = JobModule.updateJob;
-      const originalStartNextJob = JobModule.startNextJob;
-
-      // Mock updateJob to track calls
-      JobModule.updateJob = mockUpdateJob;
-
-      // Create a call counter to prevent infinite recursion
-      let startNextCallCount = 0;
-      JobModule.startNextJob = async function() {
-        startNextCallCount++;
-        if (startNextCallCount > 2) return; // Prevent infinite recursion
-        await originalStartNextJob.call(this);
-      };
-
+      JobModule.updateJob = jest.fn().mockResolvedValue();
       JobModule.jobs = {
         'job-1': { status: 'Complete' },
         'job-2': { status: 'Pending', jobType: 'Manually Added Urls' }, // No action function
@@ -882,23 +870,37 @@ describe('JobModule', () => {
 
       await JobModule.startNextJob();
 
-      expect(logger.warn).toHaveBeenCalledWith(
-        expect.objectContaining({ jobId: 'job-2', jobType: 'Manually Added Urls' }),
-        'Cannot start pending job - missing action function, marking as Terminated'
-      );
-      expect(mockUpdateJob).toHaveBeenCalledWith('job-2', {
+      expect(JobModule.updateJob).toHaveBeenCalledWith('job-2', {
         status: 'Terminated',
         output: 'Job could not be started after server restart',
       });
-      // Should recursively call startNextJob to try the next pending job
-      expect(startNextCallCount).toBeGreaterThan(1);
-
-      // Restore original methods
-      JobModule.updateJob = originalUpdateJob;
-      JobModule.startNextJob = originalStartNextJob;
+      expect(mockAction).toHaveBeenCalledWith(expect.objectContaining({ id: 'job-3' }), true);
     });
 
-    test('should not invoke action if job has no action function', () => {
+    test('overlapping calls start a pending job only once', async () => {
+      const mockAction = jest.fn();
+      JobModule.jobs = { 'job-1': { status: 'Pending', action: mockAction } };
+
+      await Promise.all([JobModule.startNextJob(), JobModule.startNextJob()]);
+
+      expect(mockAction).toHaveBeenCalledTimes(1);
+    });
+
+    test('logs instead of rejecting when a started job action fails', async () => {
+      JobModule.jobs = {
+        'job-1': { status: 'Pending', jobType: 'Channel Downloads', action: jest.fn().mockRejectedValue(new Error('boom')) }
+      };
+
+      await JobModule.startNextJob();
+      await new Promise(setImmediate);
+
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ jobId: 'job-1' }),
+        'Failed to start queued job'
+      );
+    });
+
+    test('should not invoke action if job has no action function', async () => {
       JobModule.updateJob = jest.fn();
 
       JobModule.jobs = {
@@ -915,16 +917,107 @@ describe('JobModule', () => {
       RealJobModule.startNextJob = function() {
         callCount++;
         if (callCount === 1) {
-          originalStartNext();
+          return originalStartNext();
         }
+        return Promise.resolve();
       };
 
-      RealJobModule.startNextJob();
+      await RealJobModule.startNextJob();
 
       expect(JobModule.updateJob).toHaveBeenCalledWith('job-1', {
         status: 'Terminated',
         output: 'Job could not be started after server restart',
       });
+    });
+  });
+
+  describe('startNextJob while downloads are paused', () => {
+    let storageGuard;
+
+    beforeEach(() => {
+      fs.existsSync.mockReturnValue(false);
+      fs.readFileSync.mockReturnValue(JSON.stringify({ plexApiKey: 'test-key' }));
+      JobModule = require('../jobModule');
+      storageGuard = require('../storageGuard');
+    });
+
+    test('holds pending jobs while storage limits pause downloads', async () => {
+      const mockAction = jest.fn();
+      storageGuard.refresh.mockResolvedValueOnce({ paused: true });
+      JobModule.jobs = { 'job-1': { status: 'Pending', action: mockAction } };
+
+      await JobModule.startNextJob();
+
+      expect(mockAction).not.toHaveBeenCalled();
+    });
+
+    test('starts pending jobs when the pause check fails', async () => {
+      const mockAction = jest.fn();
+      storageGuard.refresh.mockRejectedValueOnce(new Error('check failed'));
+      JobModule.jobs = { 'job-1': { status: 'Pending', action: mockAction } };
+
+      await JobModule.startNextJob();
+
+      expect(mockAction).toHaveBeenCalled();
+    });
+
+    test('a resume during a running scan starts the pending job only once', async () => {
+      const mockAction = jest.fn();
+      JobModule.jobs = { 'job-1': { status: 'Pending', action: mockAction } };
+      const onResumed = storageGuard.on.mock.calls.find(([event]) => event === 'resumed')[1];
+      // The guard emits 'resumed' from inside the refresh startNextJob awaits.
+      storageGuard.refresh.mockImplementationOnce(async () => {
+        onResumed();
+        return { paused: false };
+      });
+
+      await JobModule.startNextJob();
+      await new Promise(setImmediate);
+
+      expect(mockAction).toHaveBeenCalledTimes(1);
+    });
+
+    test('a held job skipped by a resume during an import starts when the queue next advances', async () => {
+      const mockAction = jest.fn();
+      JobModule.jobs = {
+        'import-1': { status: 'In Progress', jobType: 'Import Subscriptions' },
+        'job-1': { status: 'Pending', action: mockAction },
+      };
+      const onResumed = storageGuard.on.mock.calls.find(([event]) => event === 'resumed')[1];
+      onResumed();
+      await new Promise(setImmediate);
+      expect(mockAction).not.toHaveBeenCalled();
+
+      // The import finishes; subscriptionImport then advances the queue.
+      JobModule.jobs['import-1'].status = 'Complete';
+      await JobModule.startNextJob();
+
+      expect(mockAction).toHaveBeenCalledTimes(1);
+    });
+
+    test('starts held jobs when downloads resume', async () => {
+      const mockAction = jest.fn();
+      JobModule.jobs = { 'job-1': { status: 'Pending', action: mockAction } };
+      const onResumed = storageGuard.on.mock.calls.find(([event]) => event === 'resumed')[1];
+
+      onResumed();
+      await new Promise(setImmediate);
+
+      expect(mockAction).toHaveBeenCalled();
+    });
+
+    test('does not start another job on resume while one is running', async () => {
+      const mockAction = jest.fn();
+      JobModule.jobs = {
+        'job-1': { status: 'In Progress' },
+        'job-2': { status: 'Pending', action: mockAction }
+      };
+      const onResumed = storageGuard.on.mock.calls.find(([event]) => event === 'resumed')[1];
+
+      onResumed();
+      await new Promise(setImmediate);
+
+      expect(mockAction).not.toHaveBeenCalled();
     });
   });
 
@@ -1257,6 +1350,38 @@ describe('JobModule', () => {
         expect.objectContaining({ videos: ['video1', 'video2', 'video3'] })
       );
       expect(JobModule.jobs['job-1'].output).toBe('3 videos.');
+    });
+
+    test('keeps Error status for a failed download job', async () => {
+      JobModule.jobs = {
+        'job-1': { status: 'In Progress', jobType: 'Channel Downloads', data: { videos: [] } }
+      };
+      JobModule.saveJobOnly = jest.fn().mockResolvedValue();
+      JobVideo.findAll.mockResolvedValue([]);
+
+      await JobModule.updateJob('job-1', {
+        status: 'Error',
+        output: 'Bot detection encountered. Please set cookies in your Configuration.',
+        data: { videos: [] }
+      });
+
+      expect(JobModule.jobs['job-1'].status).toBe('Error');
+    });
+
+    test('keeps the failure output for a failed download job', async () => {
+      JobModule.jobs = {
+        'job-1': { status: 'In Progress', jobType: 'Channel Downloads', data: { videos: [] } }
+      };
+      JobModule.saveJobOnly = jest.fn().mockResolvedValue();
+      JobVideo.findAll.mockResolvedValue([]);
+
+      await JobModule.updateJob('job-1', {
+        status: 'Error',
+        output: 'Output directory is not accessible: EACCES',
+        data: { videos: [] }
+      });
+
+      expect(JobModule.jobs['job-1'].output).toBe('Output directory is not accessible: EACCES');
     });
 
     test('should preserve Complete with Warnings status for download jobs', async () => {

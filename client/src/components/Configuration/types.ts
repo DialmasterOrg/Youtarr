@@ -20,6 +20,9 @@ export interface AutoRemovalDryRunPlanStrategy {
   thresholdDays?: number | null;
   threshold?: string | null;
   thresholdBytes?: number | null;
+  limit?: string | null;
+  limitBytes?: number | null;
+  usedBytes?: number | null;
   minDaysSinceWatched?: number | null;
   minVideoAgeDays?: number | null;
   skippedReason?: string | null;
@@ -54,11 +57,13 @@ export interface AutoRemovalDryRunResult {
       protectedCount: number;
     };
     spaceStrategy: AutoRemovalDryRunPlanStrategy;
+    usageStrategy?: AutoRemovalDryRunPlanStrategy;
   };
   simulationTotals: {
     byAge: number;
     byWatched?: number;
     bySpace: number;
+    byUsage?: number;
     total: number;
     estimatedFreedBytes: number;
   } | null;
@@ -88,6 +93,26 @@ export interface DeploymentEnvironment {
   isWsl: boolean;
 }
 
+export interface LoggingStatus {
+  envLevel: string;
+  file: {
+    enabled: boolean;
+    directory: string;
+    maxSizeBytes: number;
+    maxFiles: number;
+    error: string | null;
+  };
+}
+
+export interface CookieDetails {
+  loginCookiesFound: number;
+  sessionLoginCookies: number;
+  expiredLoginCookies: number;
+  earliestExpiry: string | null;
+  earliestExpiryName: string | null;
+  lastModified: string;
+}
+
 export interface CookieStatus {
   cookiesEnabled: boolean;
   customCookiesUploaded: boolean;
@@ -99,7 +124,12 @@ export interface CookieStatus {
     warning: string | null;
     error: string | null;
   };
+  details?: CookieDetails | null;
 }
+
+export type CookieTestResult =
+  | { ok: true; message: string }
+  | { ok: false; code?: string; error: string };
 
 export interface SnackbarState {
   open: boolean;

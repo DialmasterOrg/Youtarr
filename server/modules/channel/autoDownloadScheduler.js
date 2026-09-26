@@ -8,6 +8,7 @@ const { v4: uuidv4 } = require('uuid');
 const logger = require('../../logger');
 const configModule = require('../configModule');
 const downloadModule = require('../downloadModule');
+const storageGuard = require('../storageGuard');
 const Channel = require('../../models/channel');
 const channelIdentity = require('./channelIdentity');
 
@@ -43,6 +44,15 @@ class AutoDownloadScheduler {
       interval: configModule.getConfig().channelDownloadFrequency
     }, 'Running scheduled channel downloads');
 
+    // Checked first: jobs held by a storage pause stay Pending, and the
+    // "still running" skip below would otherwise hide the real reason.
+    const pauseStatus = await storageGuard.refresh();
+    if (pauseStatus.paused) {
+      const message = storageGuard.describe(pauseStatus);
+      logger.warn({ reasons: pauseStatus.reasons.map((r) => r.text) }, 'Skipping scheduled channel download - downloads are paused');
+      return { status: 'skipped', outcome: 'skipped', message };
+    }
+
     // Check if a Channel Downloads job is already running
     const jobModule = require('../jobModule');
     const jobs = jobModule.getAllJobs();
@@ -76,6 +86,13 @@ class AutoDownloadScheduler {
           status: 'error',
           outcome: 'partial',
           message: `Channel downloads were queued, but ${result.playlistsFailed} of ${result.playlistsChecked} playlists failed to sweep.`,
+        };
+      }
+      if (result && result.playlistsPausedReason) {
+        return {
+          status: 'success',
+          outcome: 'completed',
+          message: `Channel downloads were queued; playlist downloads were skipped. ${result.playlistsPausedReason}`,
         };
       }
       return {

@@ -59,6 +59,12 @@ Subscribe to YouTube channels to automatically download new videos as they're pu
        - `@MrBeast`
        - `https://youtube.com/@MrBeast`
        - `https://www.youtube.com/channel/UCX6OQ3DkcsbYNE6H8uQQuVA`
+   - Youtarr looks the channel up on YouTube (this can take a few seconds), then opens the **Add channel** dialog with the usual defaults filled in:
+     - **Auto Downloads**: a toggle for each tab the channel has (**New Videos**, **New Shorts**, **New Live/Streams**)
+     - **Video Quality**, **Download Type** (Video Only, Video + MP3, or MP3 Only), and **Subfolder**
+   - Click **Continue** to keep the defaults or your changes. The channel joins the list as a pending addition; use its edit (pencil) button to change these settings before saving.
+   - A channel you subscribed to before comes back with its saved settings filled in.
+   - Click **Save Changes** to subscribe. Filters, ratings, and auto-removal are set later from the channel page.
 
 3. **Queue downloads when you're ready**
    - Newly added channels wait until you run a channel download or a scheduled cron cycle
@@ -67,6 +73,7 @@ Subscribe to YouTube channels to automatically download new videos as they're pu
 
 4. **Configure channel-specific settings** (optional)
    - Click on a channel to open its detail page
+   - Click **Open in YouTube** next to the channel name to open the channel on YouTube in a new tab
    - Click **Edit** (the gear button) in the **Channel Settings** bar to open channel settings. The dialog has five tabs:
      - **General**:
        - **Subfolder**: pick or create a subfolder to organize channels into separate media libraries (e.g., `__kids`, `__music`); the picker has an inline **Add Subfolder** action for new names
@@ -121,6 +128,7 @@ Export your subscription list from Google and upload the CSV file. This method d
    - On the import page, select the **Import Using CSV** tab
    - Click **Choose File** and select the file at: `Takeout/YouTube and YouTube Music/subscriptions/subscriptions.csv`
    - Click **Upload & Preview**
+   - To build the file by hand instead, use **Download an example CSV** on the same tab. It has the three Takeout columns (`Channel Id,Channel Url,Channel Title`). Every row needs the channel ID (it starts with `UC`); rows without one are skipped. On YouTube, open the channel's About panel, then **Share channel** -> **Copy channel ID**.
 
 ### Method 2: Cookies File
 
@@ -183,9 +191,11 @@ Subscribe to a YouTube playlist and Youtarr tracks its videos, downloads them, a
    - The **Add playlist** dialog opens and fetches a preview: the title, channel, thumbnail, and video count
    - If you opened the dialog without a URL first, paste the link inside it and click **Fetch info**
 
-3. **Subscribe**
+3. **Choose settings and subscribe**
+   - Below the preview, set **Automatically download new videos**, **Video Quality**, **Download Type**, and **Default Subfolder**. Automatic downloads only pick up videos added to the playlist from now on; choose existing videos to download from the playlist's detail page.
    - The dialog shows which media servers the playlist will sync to. If you haven't connected any, the videos still download and a `.m3u` file is still written; you just won't get a native server playlist.
    - Click **Subscribe**. Youtarr pulls in the video list and opens the playlist's detail page.
+   - A playlist you subscribed to before is restored with its saved settings, shown read-only in the dialog; change them from the playlist page afterwards. If you're already subscribed, the dialog offers **Go to playlist** instead.
 
 > Click the **?** icon on the Playlists tab for an in-app summary of how playlists work.
 
@@ -204,6 +214,7 @@ Private, deleted, and members-only videos can't be accessed, so Youtarr leaves t
 
 Open a playlist to manage it:
 
+- **Open in YouTube**: opens the playlist on YouTube in a new tab.
 - **Refresh from YouTube**: re-fetches the live playlist, updates the video list, then re-syncs and rewrites the `.m3u`. It doesn't download anything.
 - **Download all N videos**: shows the eligible count and downloads every tracked video you have not previously downloaded. A settings dialog lets you confirm resolution and other options first.
 - **Auto-download new videos**: first enable refreshes the playlist and defaults to following future additions only. You can also preview and select an existing batch during setup. Later runs download newly discovered entries wherever they appear, even when the video itself is old. Your global per-run download count applies to new discoveries. Each scheduled run can also retry up to the same number of older saved selections, starting with those attempted least recently. Extra entries wait for later runs; neither allowance borrows unused slots from the other. Already queued or downloading videos do not take another slot. Pause/resume preserves tracking (see [Configure Automation](#configure-automation)).
@@ -270,6 +281,7 @@ Set up automatic downloads on a schedule so Youtarr checks for new videos period
      - **Old videos**: **Delete videos older than** a set number of days
      - **Watched videos**: **Remove watched videos** once your media servers report them watched (see [Track Watch Status from Media Servers](#track-watch-status-from-media-servers)); you can add a **Wait after last watch** delay and a **Minimum time since download** so fresh downloads aren't removed right away
      - **Low disk space**: delete the oldest videos **When free space falls below** a threshold
+     - **Total size of downloads**: delete the oldest videos **When downloads total more than** a size, for example to stay under a cloud storage quota
    - Some videos are always kept, no matter which rules match:
      - Videos you've marked as Protected
      - The newest N downloads, if you set **Keep this many newest downloads**
@@ -278,7 +290,13 @@ Set up automatic downloads on a schedule so Youtarr checks for new videos period
      - This shows you exactly which videos would be deleted without actually removing them
      - Highly recommended before enabling auto-cleanup
 
-6. **Save configuration**
+6. **Pause downloads when storage is full** (optional)
+   - Open **Settings -> Storage Limits**
+   - **Pause when downloads total more than** a size, and/or **Pause when free space falls below** a size
+   - While paused, new downloads are refused, queued downloads wait, and a banner explains why; you also get a notification when downloads pause and when they resume
+   - Downloads resume automatically once storage is back within your limits (for example after Auto Removal frees space)
+
+7. **Save configuration**
    - Click "Save" to apply your settings
    - Changes take effect immediately for the next scheduled run
 
