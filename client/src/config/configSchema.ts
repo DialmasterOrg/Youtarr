@@ -178,6 +178,9 @@ export const CONFIG_FIELDS = {
     trackChanges: false,
   },
 
+  // Logging - '' uses the LOG_LEVEL environment variable
+  logLevel: { default: '' as '' | 'warn' | 'info' | 'debug', trackChanges: true },
+
   // yt-dlp options (custom args, IP family, rate limit)
   ytdlpIpFamily: { default: 'ipv4' as 'ipv4' | 'ipv6' | 'auto', trackChanges: true },
   ytdlpDownloadRateLimit: { default: '', trackChanges: true },
@@ -284,6 +287,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   ytdlpLastUpdated: CONFIG_FIELDS.ytdlpLastUpdated.default,
   ytdlpLastResult: CONFIG_FIELDS.ytdlpLastResult.default,
   rescanLastRun: CONFIG_FIELDS.rescanLastRun.default,
+  logLevel: CONFIG_FIELDS.logLevel.default,
   ytdlpIpFamily: CONFIG_FIELDS.ytdlpIpFamily.default,
   ytdlpDownloadRateLimit: CONFIG_FIELDS.ytdlpDownloadRateLimit.default,
   ytdlpCustomArgs: CONFIG_FIELDS.ytdlpCustomArgs.default,

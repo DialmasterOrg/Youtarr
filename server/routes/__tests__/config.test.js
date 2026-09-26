@@ -10,6 +10,11 @@ const supertest = require('supertest');
 const createConfigRoutes = require('../config');
 const filenamePreview = require('../../modules/filenamePreview');
 
+const LOGGING_STATUS = {
+  envLevel: 'info',
+  file: { enabled: true, directory: '/app/config/logs', maxSizeBytes: 10485760, maxFiles: 5, error: null },
+};
+
 function makeApp() {
   const app = express();
   app.use(express.json());
@@ -48,6 +53,7 @@ function makeApp() {
     run: jest.fn(),
     isBusyError: jest.fn((error) => error?.code === 'COOKIE_TEST_IN_PROGRESS'),
   };
+  const getLoggingStatus = jest.fn(() => LOGGING_STATUS);
   app.use(createConfigRoutes({
     verifyToken,
     configModule,
@@ -57,6 +63,7 @@ function makeApp() {
     cookieDetails,
     cookieTest,
     cookieTestRateLimiter,
+    getLoggingStatus,
   }));
   // eslint-disable-next-line no-unused-vars -- Express identifies error handlers by 4-arg arity.
   app.use((err, _req, res, _next) => {
@@ -331,6 +338,29 @@ describe('POST /updateconfig', () => {
         expect(configModule.updateConfig).not.toHaveBeenCalled();
       }
     );
+  });
+
+  describe('logLevel validation', () => {
+    test.each(['', 'warn', 'info', 'debug'])('accepts %p', async (value) => {
+      const { app, configModule } = makeApp();
+      const res = await supertest(app).post('/updateconfig').send({ logLevel: value });
+      expect(res.status).toBe(200);
+      expect(configModule.updateConfig).toHaveBeenCalled();
+    });
+
+    test.each(['DEBUG', 'trace', 'verbose', 5])('rejects %p without saving', async (value) => {
+      const { app, configModule } = makeApp();
+      const res = await supertest(app).post('/updateconfig').send({ logLevel: value });
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: 'Log level must be Default, Warn, Info or Debug' });
+      expect(configModule.updateConfig).not.toHaveBeenCalled();
+    });
+  });
+
+  test('does not save the read-only logging status', async () => {
+    const { app, configModule } = makeApp();
+    await supertest(app).post('/updateconfig').send({ logLevel: 'debug', logging: LOGGING_STATUS });
+    expect(configModule.updateConfig.mock.calls[0][0]).not.toHaveProperty('logging');
   });
 
   describe('storage size validation', () => {
@@ -700,5 +730,11 @@ describe('schedule configuration', () => {
     const res = await supertest(app).get('/getconfig');
     expect(res.status).toBe(200);
     expect(res.body.deploymentEnvironment.timezone).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  });
+
+  test('includes the logging status', async () => {
+    const { app } = makeApp();
+    const res = await supertest(app).get('/getconfig');
+    expect(res.body.logging).toEqual(LOGGING_STATUS);
   });
 });

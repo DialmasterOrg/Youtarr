@@ -6,6 +6,7 @@ const logger = require('../logger');
 const { getExternalCookiesPath, getExternalCookiesStatus } = require('./externalCookies');
 const { getDefaultNameForUrl } = require('./notificationHelpers');
 const { SCHEDULES, normalizeToMinimumInterval, violatesMinimumInterval } = require('./scheduleConfig');
+const { normalizeLevelSetting } = require('../logging/logLevel');
 
 // Storage limit settings: a positive whole number with a unit, or '' for off.
 const STORAGE_SIZE_KEYS = ['downloadPauseUsageLimit', 'downloadPauseMinFreeSpace', 'autoRemovalUsageLimit'];
@@ -87,6 +88,10 @@ class ConfigModule extends EventEmitter {
     }
 
     if (this.normalizeStorageSizeFields()) {
+      legacyMigrationNeeded = true;
+    }
+
+    if (this.normalizeLogLevelSetting()) {
       legacyMigrationNeeded = true;
     }
 
@@ -467,6 +472,10 @@ class ConfigModule extends EventEmitter {
               legacyMigrationNeeded = true;
             }
 
+            if (this.normalizeLogLevelSetting()) {
+              legacyMigrationNeeded = true;
+            }
+
             // Save config if modified by merge or legacy migrations
             if (mergeResult.modified || legacyMigrationNeeded) {
               this.saveConfig();
@@ -745,6 +754,25 @@ class ConfigModule extends EventEmitter {
       changed = true;
     }
     return changed;
+  }
+
+  /**
+   * Correct a hand-edited log level ("DEBUG" becomes "debug") or clear an
+   * unsupported one. The UI always sends the full config and /updateconfig
+   * rejects unknown levels, so a bad value would block every Settings save.
+   * @returns {boolean} True if the value changed
+   */
+  normalizeLogLevelSetting() {
+    const value = this.config.logLevel;
+    if (value === undefined || value === '') return false;
+    const replacement = normalizeLevelSetting(value);
+    if (replacement === value) return false;
+    logger.warn(
+      { key: 'logLevel', previous: value, replacement },
+      replacement ? 'Corrected the format of the log level setting' : 'Cleared an invalid log level setting'
+    );
+    this.config.logLevel = replacement;
+    return true;
   }
 
   /**

@@ -93,6 +93,17 @@ export interface DeploymentEnvironment {
   isWsl: boolean;
 }
 
+export interface LoggingStatus {
+  envLevel: string;
+  file: {
+    enabled: boolean;
+    directory: string;
+    maxSizeBytes: number;
+    maxFiles: number;
+    error: string | null;
+  };
+}
+
 export interface CookieDetails {
   loginCookiesFound: number;
   sessionLoginCookies: number;

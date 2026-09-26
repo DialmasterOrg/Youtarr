@@ -232,6 +232,10 @@ const initialize = async () => {
     }
 
     const configModule = require('./modules/configModule');
+    // Apply a log level chosen in Settings before the rest of startup logs.
+    const logLevelSync = require('./modules/logLevelSync');
+    logLevelSync.apply();
+    logLevelSync.subscribe();
     const channelModule = require('./modules/channelModule');
     const subfolderModule = require('./modules/subfolderModule');
     const plexModule = require('./modules/plexModule');

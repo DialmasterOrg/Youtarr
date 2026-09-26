@@ -22,6 +22,7 @@ These settings can be changed from the Settings pages in the web UI.
 - [API Keys & External Access](#api-keys--external-access)
 - [yt-dlp Auto-Update](#yt-dlp-auto-update)
 - [Filesystem Rescan](#filesystem-rescan)
+- [Logging](#logging)
 - [Account & Security](#account--security)
 - [System Fields](#system-fields)
 - [Configuration Examples](#configuration-examples)
@@ -949,6 +950,18 @@ The Maintenance page's last-run summary comes from the scheduled task run histor
   ```
 - **Description**: The outcome of the most recent filesystem reconciliation pass (the `backfillVideoMetadata` run), whether it was started by the schedule, the server-startup pass, or the manual "Rescan files on disk" action on the Maintenance & Rescan settings page. Surfaced read-only on that page so users can see when the last scan ran and what it found or fixed.
 - **Note**: Managed by the application; do not edit by hand.
+
+## Logging
+
+### Log Level
+- **Config Key**: `logLevel`
+- **Type**: `string`
+- **Default**: `''`
+- **Values**: `''` (Default), `'warn'`, `'info'`, `'debug'`
+- **Description**: Overrides the `LOG_LEVEL` environment variable while Youtarr runs. `''` uses `LOG_LEVEL`. A saved change (Settings -> Logging, or a hand edit to `config.json`) takes effect immediately, without a restart, including for the per-video post-processor. Settings -> Logging shows whether the current level comes from this setting or from `LOG_LEVEL`.
+- **Note**: An unsupported value in `config.json` is lowercased or cleared on load, with a warning in the log. `/updateconfig` rejects unsupported values.
+
+Log files are controlled with the [`LOG_FILE_MAX_SIZE` and `LOG_FILE_MAX_COUNT`](ENVIRONMENT_VARIABLES.md#log_file_max_size) environment variables. The **Download logs** button on Settings -> Logging (`GET /api/logs/download`) returns every log file, oldest first, as one text file, with the configured API keys and tokens, token parameters in URLs, and proxy passwords replaced by `[REDACTED]`.
 
 ## Account & Security
 

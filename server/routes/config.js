@@ -4,6 +4,7 @@ const { SCHEDULES, getScheduleError, getSchedule } = require('../modules/schedul
 const customArgsParser = require('../modules/download/customArgsParser');
 const filenamePreview = require('../modules/filenamePreview');
 const { getExternalCookiesPath } = require('../modules/externalCookies');
+const { isValidLevelSetting } = require('../logging/logLevel');
 
 // Mirror of the frontend RATE_LIMIT_REGEX. Matches yt-dlp's --limit-rate
 // format: digits with optional decimal, optional K/M/G suffix.
@@ -86,11 +87,12 @@ const cookieUpload = multer({
  * @param {Object} deps.configModule - Config module
  * @param {Function} deps.validateEnvAuthCredentials - Function to validate ENV auth credentials
  * @param {boolean} deps.isWslEnvironment - Whether running in WSL
+ * @param {Function} deps.getLoggingStatus - Returns LOG_LEVEL and log file status
  * @returns {express.Router}
  */
 module.exports = function createConfigRoutes({
   verifyToken, configModule, validateEnvAuthCredentials, isWslEnvironment, filenamePreviewRateLimiter,
-  cookieDetails, cookieTest, cookieTestRateLimiter,
+  cookieDetails, cookieTest, cookieTestRateLimiter, getLoggingStatus,
 }) {
   const router = express.Router();
 
@@ -135,6 +137,12 @@ module.exports = function createConfigRoutes({
    *                   type: string
    *                 ytdlpUpdateFrequency:
    *                   type: string
+   *                 logLevel:
+   *                   type: string
+   *                   enum: ['', warn, info, debug]
+   *                 logging:
+   *                   type: object
+   *                   description: LOG_LEVEL value and log file status (read-only)
    */
   router.get('/getconfig', verifyToken, (req, res) => {
     const config = configModule.getConfig();
@@ -159,6 +167,7 @@ module.exports = function createConfigRoutes({
 
     safeConfig.envAuthApplied = validateEnvAuthCredentials();
     safeConfig.youtubeOutputDirectory = process.env.YOUTUBE_OUTPUT_DIR || process.env.DATA_PATH || null;
+    safeConfig.logging = getLoggingStatus();
 
     res.json(safeConfig);
   });
@@ -203,6 +212,9 @@ module.exports = function createConfigRoutes({
    *                 type: string
    *               ytdlpUpdateFrequency:
    *                 type: string
+   *               logLevel:
+   *                 type: string
+   *                 enum: ['', warn, info, debug]
    *     responses:
    *       400:
    *         description: Invalid configuration; schedule errors include a fieldErrors object keyed by config field
@@ -222,6 +234,7 @@ module.exports = function createConfigRoutes({
     const currentConfig = configModule.getConfig();
     const updateData = { ...req.body };
     delete updateData.deploymentEnvironment;
+    delete updateData.logging;
 
     // The snackbar needs the label to say which schedule failed; the field
     // error renders under a card that already carries it, so it stands alone.
@@ -294,6 +307,14 @@ module.exports = function createConfigRoutes({
       return res.status(400).json({
         error: 'ytdlpUpdateChannel must be "stable" or "nightly"',
       });
+    }
+
+    // An unknown level would be ignored at runtime while Settings claimed it.
+    if (
+      Object.prototype.hasOwnProperty.call(updateData, 'logLevel') &&
+      !isValidLevelSetting(updateData.logLevel)
+    ) {
+      return res.status(400).json({ error: 'Log level must be Default, Warn, Info or Debug' });
     }
 
     // Video filename template prefix validation

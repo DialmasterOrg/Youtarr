@@ -213,6 +213,16 @@ describe('videoDownloadPostProcessFiles', () => {
     await flushPromises();
   }
 
+  // Quietly: the post-processor starts at LOG_LEVEL on every video, so an
+  // announced change would add a "Log level changed" line per download.
+  it('quietly matches the log level saved in Settings', async () => {
+    configModule.__setConfig({ writeChannelPosters: false, writeVideoNfoFiles: true, logLevel: 'debug' });
+
+    await loadModule();
+
+    expect(logger.applyLevelSetting).toHaveBeenCalledWith('debug', { announce: false });
+  });
+
   it('embeds metadata via AtomicParsley with correct arguments', async () => {
     await loadModule();
     await settleAsync();
