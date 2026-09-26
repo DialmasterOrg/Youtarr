@@ -8,6 +8,7 @@ const logger = require('../logger');
 const ratingMapper = require('./ratingMapper');
 
 const { MEDIA_TAB_TYPE_MAP, VALID_TAB_TYPES, parseTabCsv } = require('./tabsUtils');
+const { parseAdditionalTags } = require('./additionalTags');
 const { validateSubFolderName } = require('./filesystem/subfolderValidation');
 const subfolderModule = require('./subfolderModule');
 const m3uGenerator = require('./m3uGenerator');
@@ -154,6 +155,67 @@ class ChannelSettingsModule {
     }
 
     return titleRegex.checkSyntax(trimmed);
+  }
+
+  /**
+   * Validate additionalTags
+   * @param {string|null} additionalTags - tags string to validate
+   * @returns {Object} - { valid: boolean, error?: string }
+   */
+  validateAdditionalTags(additionalTags) {
+    // NULL or empty string is valid
+    if (!additionalTags) {
+      return { valid: true };
+    }
+
+    if (typeof additionalTags !== 'string') {
+      return { valid: false, error: 'Additional tags must be a string.' };
+    }
+
+    if (additionalTags.trim() === '') {
+      return { valid: true };
+    }
+
+    // Check for characters that aren't a-z, A-Z, underscore, dash, space, pipe, or some acceptable variant
+    if (/[^a-zA-Z0-9_ \p{L}\p{Nd}|-]/u.test(additionalTags)) {
+      return {
+        valid: false,
+        error: 'Additional tags must only contain alphanumeric characters, underscores, dashes, or spaces.'
+      };
+    }
+
+    const trimmed = additionalTags.trim();
+
+    // Check length
+    if (trimmed.length > 1000) {
+      return {
+        valid: false,
+        error: 'Additional tags must be 1000 characters or less',
+      };
+    }
+
+    // Reject stray | characters (empty or whitespace-only segments)
+    if (trimmed.split('|').some((tag) => tag.trim() === '')) {
+      return {
+        valid: false,
+        error: 'Tags cannot be empty or whitespace-only (check for stray | characters)',
+      };
+    }
+
+    // Reject duplicate tags, compared case-insensitively so 'Gaming|gaming' is rejected too
+    const seen = new Set();
+    for (const tag of parseAdditionalTags(trimmed)) {
+      const lower = tag.toLowerCase();
+      if (seen.has(lower)) {
+        return {
+          valid: false,
+          error: `Duplicate tags are not allowed: ${tag}`,
+        };
+      }
+      seen.add(lower);
+    }
+
+    return { valid: true };
   }
 
   /**
@@ -527,6 +589,7 @@ class ChannelSettingsModule {
       min_duration: channel.min_duration,
       max_duration: channel.max_duration,
       title_filter_regex: channel.title_filter_regex,
+      additional_tags: channel.additional_tags,
       audio_format: channel.audio_format,
       default_rating: channel.default_rating,
       skip_video_folder: channel.skip_video_folder,
@@ -646,6 +709,14 @@ class ChannelSettingsModule {
     // Validate title filter regex if provided
     if (settings.title_filter_regex !== undefined) {
       const validation = this.validateTitleRegex(settings.title_filter_regex);
+      if (!validation.valid) {
+        throw new Error(validation.error);
+      }
+    }
+
+    // Validate additional tags if provided
+    if (settings.additional_tags !== undefined) {
+      const validation = this.validateAdditionalTags(settings.additional_tags);
       if (!validation.valid) {
         throw new Error(validation.error);
       }
@@ -776,6 +847,10 @@ class ChannelSettingsModule {
         ? settings.title_filter_regex.trim()
         : null;
     }
+    if (settings.additional_tags !== undefined) {
+      const trimmedTags = typeof settings.additional_tags === 'string' ? settings.additional_tags.trim() : '';
+      updateData.additional_tags = trimmedTags || null;
+    }
     if (settings.default_rating !== undefined) {
       updateData.default_rating = normalizedDefaultRating;
     }
@@ -895,6 +970,7 @@ class ChannelSettingsModule {
         min_duration: updatedChannel.min_duration,
         max_duration: updatedChannel.max_duration,
         title_filter_regex: updatedChannel.title_filter_regex,
+        additional_tags: updatedChannel.additional_tags,
         audio_format: updatedChannel.audio_format,
         default_rating: updatedChannel.default_rating,
         skip_video_folder: updatedChannel.skip_video_folder,
