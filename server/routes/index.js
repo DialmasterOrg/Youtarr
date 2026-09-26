@@ -18,6 +18,7 @@ const createYtdlpOptionsRoutes = require('./ytdlpOptions');
 const createMaintenanceRoutes = require('./maintenance');
 const createSubfolderRoutes = require('./subfolders');
 const createSchedulesRoutes = require('./schedules');
+const createLogRoutes = require('./logs');
 const videoMetadataModule = require('../modules/videoMetadataModule');
 const videoOembedEnricher = require('../modules/videoOembedEnricher');
 const playlistModule = require('../modules/playlistModule');
@@ -40,6 +41,8 @@ const ytdlpUpdateRunSummary = require('../modules/ytdlpUpdateRunSummary');
 const storageGuard = require('../modules/storageGuard');
 const cookieDetails = require('../modules/cookieDetails');
 const cookieTest = require('../modules/cookieTest');
+const logger = require('../logger');
+const logFilesModule = require('../modules/logFilesModule');
 
 /**
  * Registers all route modules with the Express app
@@ -88,7 +91,7 @@ function registerRoutes(app, deps) {
   // Config routes
   app.use(createConfigRoutes({
     verifyToken, configModule, validateEnvAuthCredentials, isWslEnvironment, filenamePreviewRateLimiter,
-    cookieDetails, cookieTest, cookieTestRateLimiter,
+    cookieDetails, cookieTest, cookieTestRateLimiter, getLoggingStatus: logger.getLoggingStatus,
   }));
 
   // Channel routes
@@ -138,6 +141,9 @@ function registerRoutes(app, deps) {
 
   // Scheduled task status routes
   app.use(createSchedulesRoutes({ verifyToken, scheduledTaskManager, scheduledTaskRuns, scheduleConfig }));
+
+  // Log file download
+  app.use(createLogRoutes({ verifyToken, logFilesModule, configModule }));
 
   // Defensive redirect: /channels -> /subscriptions (frontend handles client-side routing,
   // this fallback covers direct server-side hits during the transition period)

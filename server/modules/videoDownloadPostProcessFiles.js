@@ -12,7 +12,13 @@ const { JobVideoDownload } = require('../models');
 const videoPersistence = require('./videoPersistence');
 const { VIDEO_PERSISTED_MARKER } = require('./constants/outputMarkers');
 const logger = require('../logger');
+const logLevelSync = require('./logLevelSync');
 const { buildChannelPath, cleanupEmptyParents, moveWithRetries, ensureDirWithRetries, copySyncWithFallback } = require('./filesystem');
+
+// Match the server's log level, including a level chosen in Settings. Quietly:
+// this process starts at LOG_LEVEL for every video, and its output is relayed
+// into the server log, so an announced change would repeat per download.
+logLevelSync.apply({ announce: false });
 
 const activeJobId = process.env.YOUTARR_JOB_ID;
 

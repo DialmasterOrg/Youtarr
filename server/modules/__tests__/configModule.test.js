@@ -234,6 +234,40 @@ describe('ConfigModule', () => {
       });
     });
 
+    describe('log level setting on load', () => {
+      const loadWith = (overrides) => {
+        const existingConfig = { ...defaultTemplate, ...overrides };
+        fs.existsSync.mockReturnValue(true);
+        fs.readFileSync.mockImplementation((path) => JSON.stringify(
+          path.includes('config.json') && !path.includes('example') ? existingConfig : defaultTemplate
+        ));
+        ConfigModule = require('../configModule');
+        return ConfigModule.getConfig();
+      };
+
+      test('lowercases a hand-edited level', () => {
+        expect(loadWith({ logLevel: 'DEBUG' }).logLevel).toBe('debug');
+      });
+
+      test.each(['verbose', 'trace', 42])('clears the unsupported value %p', (value) => {
+        expect(loadWith({ logLevel: value }).logLevel).toBe('');
+      });
+
+      test('keeps a supported value unchanged', () => {
+        expect(loadWith({ logLevel: 'warn' }).logLevel).toBe('warn');
+      });
+
+      test('warns and saves when the value is cleared', () => {
+        loadWith({ logLevel: 'verbose' });
+
+        expect(logger.warn).toHaveBeenCalledWith(
+          { key: 'logLevel', previous: 'verbose', replacement: '' },
+          'Cleared an invalid log level setting'
+        );
+        expect(fs.writeFileSync).toHaveBeenCalled();
+      });
+    });
+
     test('leaves malformed schedules for correction instead of normalizing them on load', () => {
       const expression = '0,1e1 2 * * 0';
       const existingConfig = { ...defaultTemplate, channelDownloadFrequency: expression };
@@ -801,6 +835,26 @@ describe('ConfigModule', () => {
 
       ConfigModule.on('change', () => {
         expect(ConfigModule.getConfig().downloadPauseUsageLimit).toBe('');
+        done();
+      });
+
+      watchCallback('change');
+      jest.runAllTimers();
+    });
+
+    test('clears an invalid log level from a hand edit picked up while running', (done) => {
+      fs.existsSync.mockReturnValue(true);
+      fs.readFileSync.mockReturnValue(JSON.stringify(defaultTemplate));
+      let watchCallback;
+      fs.watch.mockImplementation((path, callback) => {
+        watchCallback = callback;
+        return { close: jest.fn(), on: jest.fn() };
+      });
+      ConfigModule = require('../configModule');
+      fs.readFileSync.mockReturnValue(JSON.stringify({ ...defaultTemplate, logLevel: 'Verbose' }));
+
+      ConfigModule.on('change', () => {
+        expect(ConfigModule.getConfig().logLevel).toBe('');
         done();
       });
 

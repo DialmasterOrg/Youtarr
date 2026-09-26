@@ -1,5 +1,17 @@
 # Youtarr Troubleshooting Guide
 
+## Collecting Logs {#collecting-logs}
+
+Youtarr writes its log to the container console (`docker logs youtarr`) and to rolling files in `config/logs/` (`youtarr.1.log`, `youtarr.2.log`, ...; the highest number is the newest).
+
+To capture a problem:
+1. Open **Settings -> Logging**, set **Log level** to **Debug**, and save. No restart is needed.
+2. Reproduce the problem.
+3. Click **Download logs** to save all log files as one file, or copy the files from `config/logs/` on the host.
+4. Set **Log level** back to **Default** and save.
+
+**Download logs** replaces the API keys and tokens saved in Settings, token parameters in URLs, and proxy passwords with `[REDACTED]`. The files in `config/logs/` are not changed. Logs can still include video titles, channel names, file paths and server addresses, so check them before posting them publicly.
+
 ## Login Issues
 
 ### Cannot Find the Setup Token

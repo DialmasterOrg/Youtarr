@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ConfigState, PlatformManagedState, DeploymentEnvironment } from '../components/Configuration/types';
+import { ConfigState, PlatformManagedState, DeploymentEnvironment, LoggingStatus } from '../components/Configuration/types';
 import { DEFAULT_CONFIG } from '../config/configSchema';
 
 export const CONFIG_UPDATED_EVENT = 'config-updated';
@@ -9,6 +9,7 @@ interface UseConfigResult {
   initialConfig: ConfigState | null;
   isPlatformManaged: PlatformManagedState;
   deploymentEnvironment: DeploymentEnvironment;
+  loggingStatus: LoggingStatus | null;
   loading: boolean;
   error: Error | null;
   refetch: () => Promise<void>;
@@ -29,6 +30,7 @@ export function useConfig(token: string | null): UseConfigResult {
     platform: null,
     isWsl: false,
   });
+  const [loggingStatus, setLoggingStatus] = useState<LoggingStatus | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
 
@@ -75,6 +77,10 @@ export function useConfig(token: string | null): UseConfigResult {
           isWsl: false
         });
       }
+
+      // Read-only server status; never part of the config that gets saved
+      setLoggingStatus(data.logging ?? null);
+      delete data.logging;
 
       // Spread DEFAULT_CONFIG first so fields missing from the server response
       // (stale config pre-dating a new field) fall back to defaults instead of undefined.
@@ -132,6 +138,7 @@ export function useConfig(token: string | null): UseConfigResult {
     initialConfig,
     isPlatformManaged,
     deploymentEnvironment,
+    loggingStatus,
     loading,
     error,
     refetch: fetchConfig,

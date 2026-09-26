@@ -76,6 +76,9 @@ services:
       YOUTARR_COOKIES_FILE: ${YOUTARR_COOKIES_FILE:-}
       # Logging configuration
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Optional: rolling log files in config/logs (defaults: 10MB per file, 5 older files kept)
+      LOG_FILE_MAX_SIZE: ${LOG_FILE_MAX_SIZE:-}
+      LOG_FILE_MAX_COUNT: ${LOG_FILE_MAX_COUNT:-}
       # This is just informational and lets the app know where the videos will be stored on the host
       YOUTUBE_OUTPUT_DIR: ${YOUTUBE_OUTPUT_DIR}
       # Optional: Custom data path for platforms like Elfhosted (defaults to /usr/src/app/data)
