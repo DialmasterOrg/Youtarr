@@ -46,6 +46,13 @@ jest.mock('react-router-dom', () => ({
   useParams: () => mockParams,
 }));
 
+jest.mock('axios', () => ({
+  put: jest.fn(),
+  isAxiosError: jest.fn(),
+}));
+
+const axios = require('axios');
+
 // Mock fetch
 const mockFetch = jest.fn();
 global.fetch = mockFetch as any;
@@ -87,6 +94,163 @@ describe('ChannelPage Component', () => {
     });
     dialogPropsStore.current = null;
     channelVideosPropsStore.current = null;
+  });
+
+  describe('Auto-download toggles', () => {
+    const channelA = { uploader: 'Channel A', channel_id: 'UC123456', available_tabs: 'videos,shorts,streams', auto_download_enabled_tabs: 'video' };
+    const savedAs = (value: string) => ({ data: { settings: { auto_download_enabled_tabs: value } } });
+
+    const openChannelA = async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true, json: jest.fn().mockResolvedValueOnce(channelA) });
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+      return screen.findByRole('button', { name: 'Auto-download Shorts' });
+    };
+
+    test('turns a tab on and confirms it', async () => {
+      axios.put.mockResolvedValueOnce(savedAs('video,short'));
+      const shorts = await openChannelA();
+
+      await act(async () => { shorts.click(); });
+
+      expect(await screen.findByText('Auto-download on for Shorts')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Auto-download Shorts' })).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    test('undo turns the tab back off', async () => {
+      axios.put.mockResolvedValueOnce(savedAs('video,short')).mockResolvedValueOnce(savedAs('video'));
+      const shorts = await openChannelA();
+      await act(async () => { shorts.click(); });
+
+      await act(async () => { (await screen.findByRole('button', { name: 'Undo' })).click(); });
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Auto-download Shorts' })).toHaveAttribute('aria-pressed', 'false');
+      });
+    });
+
+    test('reverts the tab and explains when the save fails', async () => {
+      axios.put.mockRejectedValueOnce(new Error('network down'));
+      const shorts = await openChannelA();
+
+      await act(async () => { shorts.click(); });
+
+      expect(await screen.findByText("Couldn't update auto-download for Shorts")).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Auto-download Shorts' })).toHaveAttribute('aria-pressed', 'false');
+    });
+  });
+
+  describe('Navigating between channels', () => {
+    const channelA = { uploader: 'Channel A', channel_id: 'UC123456', available_tabs: 'videos,shorts,streams', auto_download_enabled_tabs: 'video' };
+    const channelB = { uploader: 'Channel B', channel_id: 'UC999999', available_tabs: 'videos,shorts,streams', auto_download_enabled_tabs: 'livestream' };
+    const page = () => (
+      <BrowserRouter>
+        <ChannelPage token={mockToken} />
+      </BrowserRouter>
+    );
+
+    afterEach(() => {
+      mockParams.channel_id = 'UC123456';
+    });
+
+    test('shows the toggles as loading until the new channel arrives', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true, json: jest.fn().mockResolvedValueOnce(channelA) });
+      const { rerender } = render(page());
+      await screen.findByRole('button', { name: 'Auto-download Videos' });
+
+      mockParams.channel_id = 'UC999999';
+      mockFetch.mockReturnValueOnce(new Promise(() => undefined));
+      rerender(page());
+
+      expect(screen.queryByRole('button', { name: 'Auto-download Videos' })).not.toBeInTheDocument();
+    });
+
+    test('keeps the save lock when returning to a channel before its save finishes', async () => {
+      axios.put.mockReturnValueOnce(new Promise(() => undefined));
+      mockFetch.mockResolvedValueOnce({ ok: true, json: jest.fn().mockResolvedValueOnce(channelA) });
+      const { rerender } = render(page());
+      const shorts = await screen.findByRole('button', { name: 'Auto-download Shorts' });
+      await act(async () => { shorts.click(); });
+
+      mockParams.channel_id = 'UC999999';
+      mockFetch.mockResolvedValueOnce({ ok: true, json: jest.fn().mockResolvedValueOnce(channelB) });
+      rerender(page());
+      await screen.findByText('Channel B');
+      mockParams.channel_id = 'UC123456';
+      mockFetch.mockResolvedValueOnce({ ok: true, json: jest.fn().mockResolvedValueOnce(channelA) });
+      rerender(page());
+      await screen.findByText('Channel A');
+
+      expect(screen.getByRole('button', { name: 'Auto-download Live' })).toBeDisabled();
+    });
+
+    test('keeps the save lock when the layout switches to mobile mid-save', async () => {
+      axios.put.mockReturnValueOnce(new Promise(() => undefined));
+      mockFetch.mockResolvedValueOnce({ ok: true, json: jest.fn().mockResolvedValueOnce(channelA) });
+      const { rerender } = render(page());
+      const shorts = await screen.findByRole('button', { name: 'Auto-download Shorts' });
+      await act(async () => { shorts.click(); });
+
+      (useMediaQuery as jest.Mock).mockReturnValue(true);
+      rerender(page());
+
+      expect(screen.getByRole('button', { name: 'Auto-download Live' })).toBeDisabled();
+    });
+
+    test('ignores a save for the previous channel that finishes after navigating', async () => {
+      let resolveSave: (value: unknown) => void = () => undefined;
+      axios.put.mockReturnValueOnce(new Promise((resolve) => { resolveSave = resolve; }));
+      mockFetch.mockResolvedValueOnce({ ok: true, json: jest.fn().mockResolvedValueOnce(channelA) });
+      const { rerender } = render(page());
+      const shorts = await screen.findByRole('button', { name: 'Auto-download Shorts' });
+      await act(async () => { shorts.click(); });
+
+      mockParams.channel_id = 'UC999999';
+      mockFetch.mockResolvedValueOnce({ ok: true, json: jest.fn().mockResolvedValueOnce(channelB) });
+      rerender(page());
+      await screen.findByText('Channel B');
+      await act(async () => { resolveSave({ data: { settings: { auto_download_enabled_tabs: 'video,short' } } }); });
+
+      expect(screen.getByRole('button', { name: 'Auto-download Shorts' })).toHaveAttribute('aria-pressed', 'false');
+    });
+  });
+
+  describe('Global automatic downloads hint', () => {
+    const renderWithConfig = (config: Record<string, unknown>, loading: boolean) => {
+      (useConfig as jest.Mock).mockReturnValue({
+        ...(useConfig as jest.Mock)(),
+        config,
+        loading,
+      });
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+    };
+
+    test('shows the hint when automatic downloads are off', async () => {
+      renderWithConfig({ preferredResolution: '1080', channelAutoDownload: false }, false);
+
+      expect(await screen.findByRole('link', { name: /Automatic downloads are off/ })).toBeInTheDocument();
+    });
+
+    test('hides the hint when automatic downloads are on', async () => {
+      renderWithConfig({ preferredResolution: '1080', channelAutoDownload: true }, false);
+
+      await screen.findByRole('button', { name: 'Auto-download Videos' });
+      expect(screen.queryByRole('link', { name: /Automatic downloads are off/ })).not.toBeInTheDocument();
+    });
+
+    test('hides the hint while the config is loading', async () => {
+      renderWithConfig({ preferredResolution: '1080' }, true);
+
+      await screen.findByRole('button', { name: 'Auto-download Videos' });
+      expect(screen.queryByRole('link', { name: /Automatic downloads are off/ })).not.toBeInTheDocument();
+    });
   });
 
   describe('Component Rendering', () => {
@@ -1066,6 +1230,41 @@ describe('ChannelPage Component', () => {
       // Check that the title is rendered
       const title = screen.getByRole('heading', { name: 'Tech Channel' });
       expect(title).toHaveClass('typo-h5');
+    });
+
+    test('shows None when the channel has no rating override', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({ ...mockChannel, default_rating: null })
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      expect(await screen.findByText('None')).toBeInTheDocument();
+    });
+
+    test('opens the settings dialog from the header Edit button', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(mockChannel)
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await screen.findByText('Tech Channel');
+      await act(async () => {
+        screen.getByRole('button', { name: 'Edit settings' }).click();
+      });
+
+      expect(screen.getByTestId('channel-settings-dialog')).toHaveAttribute('data-open', 'true');
     });
 
     test('description box has mobile-specific height', async () => {
