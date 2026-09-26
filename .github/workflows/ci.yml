@@ -160,6 +160,54 @@ jobs:
             coverage/coverage-summary.json
             coverage/lcov.info
 
+  test-external-api-database:
+    name: External API DB migrations (${{ matrix.engine }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - engine: mariadb
+            image: mariadb:10.3
+          - engine: mysql
+            image: mysql:8.0
+    services:
+      database:
+        image: ${{ matrix.image }}
+        env:
+          MYSQL_ROOT_PASSWORD: rootpass
+          MYSQL_DATABASE: youtarr
+        ports:
+          - 3321:3306
+        options: >-
+          --health-cmd="mysqladmin ping --protocol=tcp -h 127.0.0.1 -uroot -prootpass"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+      - name: Pin npm
+        run: npm install -g npm@11.15.0 --ignore-scripts
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Run external API migration lifecycle
+        run: npm run test:backend -- migrations/__tests__/externalApiDatabase.integration.test.js --runInBand
+        env:
+          EXTERNAL_API_DATABASE_TEST: 'true'
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3321
+          DB_USER: root
+          DB_PASSWORD: rootpass
+          DB_ADMIN_USER: root
+          DB_ADMIN_PASSWORD: rootpass
+
   test-frontend:
     name: Frontend Tests
     runs-on: ubuntu-latest
@@ -331,7 +379,7 @@ jobs:
   check-all:
     name: All Checks
     runs-on: ubuntu-latest
-    needs: [lint, test-backup-restore, test-cookie-validation, test-backend, test-frontend, test-storybook, security-audit, docs]
+    needs: [lint, test-backup-restore, test-cookie-validation, test-backend, test-external-api-database, test-frontend, test-storybook, security-audit, docs]
     if: always()
     steps:
       - name: Check all results
@@ -341,6 +389,7 @@ jobs:
           echo "Backup/Restore Tests: ${{ needs.test-backup-restore.result }}"
           echo "Cookie Loader Tests: ${{ needs.test-cookie-validation.result }}"
           echo "Backend Tests: ${{ needs.test-backend.result }}"
+          echo "External API Database Tests: ${{ needs.test-external-api-database.result }}"
           echo "Frontend Tests: ${{ needs.test-frontend.result }}"
           echo "Storybook Tests: ${{ needs.test-storybook.result }}"
           echo "Security Audit: ${{ needs.security-audit.result }}"
@@ -350,6 +399,7 @@ jobs:
              [ "${{ needs.test-backup-restore.result }}" != "success" ] || \
              [ "${{ needs.test-cookie-validation.result }}" != "success" ] || \
              [ "${{ needs.test-backend.result }}" != "success" ] || \
+             [ "${{ needs.test-external-api-database.result }}" != "success" ] || \
              [ "${{ needs.test-frontend.result }}" != "success" ] || \
              [ "${{ needs.test-storybook.result }}" != "success" ] || \
              [ "${{ needs.security-audit.result }}" != "success" ] || \
@@ -362,6 +412,7 @@ jobs:
             [ "${{ needs.test-backup-restore.result }}" != "success" ] && echo "  - Backup/Restore Tests"
             [ "${{ needs.test-cookie-validation.result }}" != "success" ] && echo "  - Cookie Loader Tests"
             [ "${{ needs.test-backend.result }}" != "success" ] && echo "  - Backend Tests"
+            [ "${{ needs.test-external-api-database.result }}" != "success" ] && echo "  - External API Database Tests"
             [ "${{ needs.test-frontend.result }}" != "success" ] && echo "  - Frontend Tests"
             [ "${{ needs.test-storybook.result }}" != "success" ] && echo "  - Storybook Tests"
             [ "${{ needs.security-audit.result }}" != "success" ] && echo "  - Security Audit"

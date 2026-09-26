@@ -34,9 +34,11 @@ jest.mock('../channelModule', () => ({
   generateChannelsFile: jest.fn(),
   getEnabledChannelDownloadUrls: jest.fn(),
 }));
-jest.mock('../../models/channel', () => ({
-  findOne: jest.fn()
-}));
+jest.mock('../../models/channel', () => {
+  const Channel = jest.requireActual('../../models/channel');
+  Channel.findOne = jest.fn();
+  return Channel;
+});
 jest.mock('../../models/channelvideo', () => ({
   findAll: jest.fn()
 }));
