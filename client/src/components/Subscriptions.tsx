@@ -66,6 +66,7 @@ import AddPlaylistDialog from './Subscriptions/components/AddPlaylistDialog';
 import AddChannelSettingsDialog from './Subscriptions/components/AddChannelSettingsDialog';
 import { NewChannelSettings, PendingChannel } from './Subscriptions/newChannelSettings';
 import PlaylistListBlock from './Subscriptions/components/PlaylistListBlock';
+import DownloadPercentInfo from './Subscriptions/components/DownloadPercentInfo';
 import { useActiveImport } from '../hooks/useActiveImport';
 import { usePlaylistList } from '../hooks/usePlaylistList';
 import { usePlaylistMutations } from '../hooks/usePlaylistMutations';
@@ -73,6 +74,8 @@ import { Playlist } from '../types/playlist';
 
 type ViewMode = 'list' | 'grid';
 type SortOrder = 'asc' | 'desc';
+
+const AUTO_DOWNLOADS_COLUMN_LABEL = 'Auto downloads';
 
 interface SubscriptionsProps {
   token: string | null;
@@ -210,7 +213,7 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
   const hasNextPage = page < pageCount;
 
   const showDesktopListColumns = !isMobile && viewMode === 'list';
-  const listColumnLabels = ['Channel', 'Quality / Folder', 'Auto downloads', 'Filters'];
+  const listColumnLabels = ['Channel', 'Quality / Folder', AUTO_DOWNLOADS_COLUMN_LABEL, 'Filters'];
   const folderControlActive = Boolean(selectedSubFolder);
   const availableFolderOptions = useMemo(() => {
     const folderSet = new Set<string>([DEFAULT_SUBFOLDER_KEY]);
@@ -554,6 +557,8 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
                 Filters{filterValue ? ' •' : ''}
               </Button>
 
+              <DownloadPercentInfo />
+
               {/* Actions button */}
               <Button
                 variant="outlined"
@@ -660,9 +665,12 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
               </Tooltip>
             </div>
 
-            <Typography variant="body2" color="text.secondary">
-              {(folderControlActive && filterValue) ? `Total matching channels: ${total}` : `Total channels: ${total}`}
-            </Typography>
+            <div className="flex items-center gap-1">
+              <Typography variant="body2" color="text.secondary">
+                {(folderControlActive && filterValue) ? `Total matching channels: ${total}` : `Total channels: ${total}`}
+              </Typography>
+              {viewMode === 'grid' && <DownloadPercentInfo />}
+            </div>
           </div>
           )}
 
@@ -715,9 +723,18 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
                         }}
                       >
                         {listColumnLabels.map((label) => (
-                          <Typography key={label} variant="caption" style={{ fontWeight: 600 }}>
-                            {label}
-                          </Typography>
+                          label === AUTO_DOWNLOADS_COLUMN_LABEL ? (
+                            <div key={label} className="flex items-center gap-1">
+                              <Typography variant="caption" style={{ fontWeight: 600 }}>
+                                {label}
+                              </Typography>
+                              <DownloadPercentInfo />
+                            </div>
+                          ) : (
+                            <Typography key={label} variant="caption" style={{ fontWeight: 600 }}>
+                              {label}
+                            </Typography>
+                          )
                         ))}
                         <div />
                       </div>

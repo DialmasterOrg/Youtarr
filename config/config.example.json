@@ -8,6 +8,7 @@
   "sessionCleanupFrequency": "0 3 * * *",
   "videoRescanFrequency": "30 3 * * *",
   "ytdlpUpdateFrequency": "0 4 * * *",
+  "channelVideoCountsFrequency": "45 4 * * *",
   "preferredResolution": "1080",
   "videoCodec": "default",
   "defaultSubfolder": "",

@@ -37,9 +37,9 @@ beforeEach(() => {
   axios.get.mockResolvedValue({ data: { tasks: [] } });
 });
 
-test('groups the seven schedules and shows the server timezone', () => {
+test('groups the eight schedules and shows the server timezone', () => {
   renderWithProviders(<SchedulingSection {...props} />);
-  expect(screen.getAllByRole('region')).toHaveLength(7);
+  expect(screen.getAllByRole('region')).toHaveLength(8);
   expect(screen.getByRole('heading', { name: 'Downloads and sync' })).toBeInTheDocument();
   expect(screen.getByRole('heading', { name: 'Maintenance' })).toBeInTheDocument();
   expect(screen.getByText('Europe/Paris')).toBeInTheDocument();

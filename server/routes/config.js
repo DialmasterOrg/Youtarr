@@ -137,6 +137,8 @@ module.exports = function createConfigRoutes({
    *                   type: string
    *                 ytdlpUpdateFrequency:
    *                   type: string
+   *                 channelVideoCountsFrequency:
+   *                   type: string
    *                 logLevel:
    *                   type: string
    *                   enum: ['', warn, info, debug]
@@ -211,6 +213,8 @@ module.exports = function createConfigRoutes({
    *               videoRescanFrequency:
    *                 type: string
    *               ytdlpUpdateFrequency:
+   *                 type: string
+   *               channelVideoCountsFrequency:
    *                 type: string
    *               logLevel:
    *                 type: string

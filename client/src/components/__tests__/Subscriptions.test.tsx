@@ -423,6 +423,47 @@ describe('Subscriptions Component', () => {
       expect(screen.getByText('Auto downloads')).toBeInTheDocument();
       expect(screen.getByText('Filters')).toBeInTheDocument();
     });
+
+    describe('download percentage info', () => {
+      const withChannels = () => useChannelList.mockReturnValue({
+        channels: mockChannels,
+        total: 2,
+        totalPages: 1,
+        loading: false,
+        error: null,
+        refetch: mockRefetchChannels,
+        subFolders: [],
+      });
+
+      test('appears once, in the list header, on desktop', () => {
+        withChannels();
+
+        renderSubscriptions();
+
+        expect(screen.getAllByRole('button', { name: 'Download percentage info' })).toHaveLength(1);
+      });
+
+      test('stays available once in grid view', async () => {
+        const user = userEvent.setup();
+        withChannels();
+        renderSubscriptions();
+
+        await user.click(screen.getByLabelText('Grid view'));
+
+        await waitFor(() => {
+          expect(screen.getAllByRole('button', { name: 'Download percentage info' })).toHaveLength(1);
+        });
+      });
+
+      test('appears once in the mobile toolbar', () => {
+        (useMediaQuery as jest.Mock).mockReturnValue(true);
+        withChannels();
+
+        renderSubscriptions();
+
+        expect(screen.getAllByRole('button', { name: 'Download percentage info' })).toHaveLength(1);
+      });
+    });
   });
 
   describe('Adding Channels', () => {

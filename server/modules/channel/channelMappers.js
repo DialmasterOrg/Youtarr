@@ -37,9 +37,10 @@ class ChannelMappers {
   /**
    * Map channel database record to list response format expected by the UI
    * @param {Object} channel - Channel database record
+   * @param {Object|null} [tabStats] - Per-tab download stats from tabDownloadStats
    * @returns {Object} - Simplified channel representation
    */
-  mapChannelListEntry(channel) {
+  mapChannelListEntry(channel, tabStats = null) {
     const effectiveTabs = tabState.computeEffectiveTabs(channel.available_tabs, channel.hidden_tabs);
     const out = {
       url: channel.url,
@@ -60,6 +61,10 @@ class ChannelMappers {
 
     if (channel.default_rating != null) {
       out.default_rating = channel.default_rating;
+    }
+
+    if (tabStats) {
+      out.tab_download_stats = tabStats;
     }
 
     return out;

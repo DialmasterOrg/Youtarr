@@ -27,7 +27,7 @@ jest.mock('react-swipeable', () => ({
 // Mock child components
 jest.mock('../VideoCard', () => ({
   __esModule: true,
-  default: function MockVideoCard({ video, onCheckChange, onVideoClick, onDeletionChange, selectionMode }: any) {
+  default: function MockVideoCard({ video, onCheckChange, onVideoClick, onDeletionChange, onToggleIgnore, selectionMode }: any) {
     const React = require('react');
     // Mirror the real VideoCard's gating: when the other mode is active,
     // the corresponding selection affordance is disabled so the parent's
@@ -41,6 +41,11 @@ jest.mock('../VideoCard', () => ({
         'data-selection-mode': selectionMode ?? 'null',
       },
       React.createElement('span', null, video.title),
+      React.createElement(
+        'button',
+        { type: 'button', 'data-testid': `toggle-ignore-${video.youtube_id}`, onClick: () => onToggleIgnore?.(video.youtube_id) },
+        'Toggle ignore'
+      ),
       React.createElement(
         'button',
         {
@@ -212,7 +217,9 @@ jest.mock('../ChannelVideosDialogs', () => ({
       'data-selected-tab': props.selectedTab,
       'data-tab-label': props.tabLabel,
       'data-missing-video-count': props.missingVideoCount,
-      'data-mobile-tooltip': props.mobileTooltip
+      'data-mobile-tooltip': props.mobileTooltip,
+      'data-tab-total': props.tabStats?.total,
+      'data-tab-loaded': props.tabStats?.loaded,
     });
   }
 }));
@@ -247,6 +254,10 @@ jest.mock('../hooks/useChannelVideos', () => ({
 
 jest.mock('../hooks/useRefreshChannelVideos', () => ({
   useRefreshChannelVideos: jest.fn(),
+}));
+
+jest.mock('../hooks/useChannelTabStats', () => ({
+  useChannelTabStats: jest.fn(() => ({ data: null, loading: false, error: null, refetch: jest.fn() })),
 }));
 
 jest.mock('../../../hooks/useConfig', () => ({
@@ -319,6 +330,9 @@ describe('ChannelVideos Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockFetch.mockReset();
+    require('../hooks/useChannelTabStats').useChannelTabStats.mockReturnValue({
+      data: null, loading: false, error: null, refetch: jest.fn(),
+    });
     (useMediaQuery as jest.Mock).mockReturnValue(false);
     mockNavigate.mockClear();
     localStorage.removeItem('youtarr.channelVideos.pageSize');
@@ -476,7 +490,145 @@ describe('ChannelVideos Component', () => {
     });
   });
 
+  describe('Tab download stats refresh', () => {
+    const mockRefetchTabStats = jest.fn();
+
+    beforeEach(() => {
+      require('../hooks/useChannelTabStats').useChannelTabStats.mockReturnValue({
+        data: null, loading: false, error: null, refetch: mockRefetchTabStats,
+      });
+    });
+
+    test('refreshes download stats when the listing size changes', async () => {
+      const { rerender } = renderChannelVideos();
+      expect(await screen.findByTestId('channel-videos-header')).toBeInTheDocument();
+      mockRefetchTabStats.mockClear();
+
+      useChannelVideos.mockReturnValue({
+        videos: mockVideos,
+        totalCount: 50,
+        oldestVideoDate: '2023-01-01',
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+      rerender(<ChannelVideos token={mockToken} />);
+
+      await waitFor(() => expect(mockRefetchTabStats).toHaveBeenCalledTimes(1));
+    });
+
+    test('does not refresh download stats again on the first render', async () => {
+      renderChannelVideos();
+
+      expect(await screen.findByTestId('channel-videos-header')).toBeInTheDocument();
+      expect(mockRefetchTabStats).not.toHaveBeenCalled();
+    });
+
+    test('passes the selected tab counts to the Load More dialog', async () => {
+      require('../hooks/useChannelTabStats').useChannelTabStats.mockReturnValue({
+        data: { videos: { total: 449, fetchedAt: null, downloaded: 5, ignored: 0, percent: 1, loaded: 50 } },
+        loading: false,
+        error: null,
+        refetch: mockRefetchTabStats,
+      });
+      renderChannelVideos();
+
+      const dialogs = await screen.findByTestId('channel-videos-dialogs');
+      expect([dialogs.getAttribute('data-tab-total'), dialogs.getAttribute('data-tab-loaded')]).toEqual(['449', '50']);
+    });
+
+    test('refreshes download stats after ignoring a video', async () => {
+      useChannelVideos.mockReturnValue({
+        videos: [mockVideos[0]],
+        totalCount: 1,
+        oldestVideoDate: '2023-01-01',
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+      renderChannelVideos();
+      expect(await screen.findByTestId('video-card-video1')).toBeInTheDocument();
+      mockFetch.mockResolvedValueOnce({ ok: true, json: jest.fn().mockResolvedValueOnce({ success: true }) });
+
+      await userEvent.click(screen.getByTestId('toggle-ignore-video1'));
+
+      await waitFor(() => expect(mockRefetchTabStats).toHaveBeenCalled());
+    });
+  });
+
   describe('Tab Management', () => {
+    test('shows the tab download percentage on the tab label', async () => {
+      const { useChannelTabStats } = require('../hooks/useChannelTabStats');
+      useChannelTabStats.mockReturnValue({
+        data: { videos: { total: 10, fetchedAt: null, downloaded: 5, ignored: 0, percent: 50, loaded: 8 } },
+        loading: false,
+        error: null,
+        refetch: jest.fn(),
+      });
+
+      renderChannelVideos();
+
+      expect(await screen.findByRole('progressbar', { name: 'Videos: 5 of 10 downloaded' })).toBeInTheDocument();
+    });
+
+    test('shows how many videos are on YouTube and loaded', async () => {
+      const { useChannelTabStats } = require('../hooks/useChannelTabStats');
+      useChannelTabStats.mockReturnValue({
+        data: { videos: { total: 10, fetchedAt: null, downloaded: 5, ignored: 0, percent: 50, loaded: 8 } },
+        loading: false,
+        error: null,
+        refetch: jest.fn(),
+      });
+
+      renderChannelVideos();
+
+      expect(await screen.findByTestId('tab-download-summary')).toHaveTextContent('Videos tab · 5 of 10 downloaded · 8 loaded');
+    });
+
+    describe('item count chip', () => {
+      const threeVideos = () => useChannelVideos.mockReturnValue({
+        videos: mockVideos,
+        totalCount: 3,
+        oldestVideoDate: '2023-01-01',
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      test('is left out when the tab summary shows the counts', async () => {
+        threeVideos();
+        require('../hooks/useChannelTabStats').useChannelTabStats.mockReturnValue({
+          data: { videos: { total: 10, fetchedAt: null, downloaded: 5, ignored: 0, percent: 50, loaded: 3 } },
+          loading: false,
+          error: null,
+          refetch: jest.fn(),
+        });
+
+        renderChannelVideos();
+
+        await screen.findByTestId('tab-download-summary');
+        expect(screen.queryByText('3 items')).not.toBeInTheDocument();
+      });
+
+      test('shows the item count before the tab has been counted', async () => {
+        threeVideos();
+
+        renderChannelVideos();
+
+        expect(await screen.findByText('3 items')).toBeInTheDocument();
+      });
+
+      test('shows how many videos match while a filter is on', async () => {
+        const user = userEvent.setup();
+        threeVideos();
+        renderChannelVideos();
+
+        await user.click(await screen.findByTestId('watched-filter-only'));
+
+        expect(await screen.findByText('3 matches')).toBeInTheDocument();
+      });
+    });
+
     test('does not show tabs while fetching, then shows tabs after loading', async () => {
       // Setup a delayed response to catch the loading state
       let resolveTabsFetch: (value: any) => void;
@@ -1100,46 +1252,63 @@ describe('ChannelVideos Component', () => {
       });
     };
 
-    test('mobile date info explains pending dates when estimated rows are present', () => {
+    test('mobile video list info explains pending dates when estimated rows are present', async () => {
       (useMediaQuery as jest.Mock).mockReturnValue(true);
       mockVideosReturn([estimatedVideo]);
 
       renderChannelVideos();
-      fireEvent.click(screen.getByLabelText('Date info'));
+      fireEvent.click(screen.getByLabelText('Video list info'));
 
-      expect(screen.getByTestId('channel-videos-dialogs')).toHaveAttribute(
-        'data-mobile-tooltip',
-        expect.stringContaining('Some videos show "Pending"')
-      );
+      expect(await screen.findByText(/^Pending means YouTube listed the video without a date\./)).toBeInTheDocument();
     });
 
-    test('mobile date info omits the pending explanation when all rows have dates', () => {
-      (useMediaQuery as jest.Mock).mockReturnValue(true);
+    test('video list info omits the pending explanation when all rows have dates', async () => {
       mockVideosReturn(mockVideos);
 
       renderChannelVideos();
-      fireEvent.click(screen.getByLabelText('Date info'));
+      fireEvent.click(screen.getByLabelText('Video list info'));
 
-      expect(screen.getByTestId('channel-videos-dialogs')).not.toHaveAttribute(
-        'data-mobile-tooltip',
-        expect.stringContaining('Some videos show "Pending"')
-      );
+      await screen.findByText(/^Dates come from YouTube\./);
+      expect(screen.queryByText(/Pending means/)).not.toBeInTheDocument();
     });
 
-    test('highlights the date info icon when estimated rows are present', () => {
+    test('highlights the video list info icon when estimated rows are present', () => {
       mockVideosReturn([estimatedVideo]);
 
       renderChannelVideos();
 
-      expect(screen.getByLabelText('Date info')).toHaveStyle({ color: 'var(--warning)' });
+      expect(screen.getByLabelText('Video list info')).toHaveStyle({ color: 'var(--warning)' });
     });
 
-    test('does not highlight the date info icon when all rows have dates', () => {
+    test('does not highlight the video list info icon when all rows have dates', () => {
       mockVideosReturn(mockVideos);
 
       renderChannelVideos();
 
-      expect(screen.getByLabelText('Date info')).toHaveStyle({ color: 'var(--foreground)' });
+      expect(screen.getByLabelText('Video list info')).not.toHaveStyle({ color: 'var(--warning)' });
+    });
+
+    test('shows one info button in the header', () => {
+      mockVideosReturn(mockVideos);
+
+      renderChannelVideos();
+
+      expect(within(screen.getByTestId('channel-videos-header')).getAllByRole('button', { name: /info/i })).toHaveLength(1);
+    });
+
+    test('explains only the missing publish dates on the Shorts tab', async () => {
+      const user = userEvent.setup();
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({ availableTabs: ['videos', 'shorts'] }),
+      });
+      mockVideosReturn(mockVideos);
+      renderChannelVideos();
+
+      await user.click(await screen.findByRole('tab', { name: /Shorts/i }));
+      await user.click(screen.getByLabelText('Video list info'));
+
+      expect(await screen.findByText("YouTube doesn't provide publish dates for Shorts.")).toBeInTheDocument();
     });
   });
 

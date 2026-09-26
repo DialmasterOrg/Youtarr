@@ -10,7 +10,6 @@ import {
   Tab,
   Button,
   LinearProgress,
-  Tooltip,
   Chip,
 } from '../ui';
 import {
@@ -18,7 +17,6 @@ import {
   Trash2 as DeleteIcon,
   Ban as BlockIcon,
   RefreshCw as RefreshIcon,
-  Info as InfoIcon,
 } from '../../lib/icons';
 
 import useMediaQuery from '../../hooks/useMediaQuery';
@@ -34,6 +32,11 @@ import DownloadAllVideosDialog from './DownloadAllVideosDialog';
 import { useChannelVideos } from './hooks/useChannelVideos';
 import { useRefreshChannelVideos } from './hooks/useRefreshChannelVideos';
 import { useChannelFetchStatus } from './hooks/useChannelFetchStatus';
+import { useChannelTabStats } from './hooks/useChannelTabStats';
+import TabDownloadProgress from './components/TabDownloadProgress';
+import TabDownloadSummary from './components/TabDownloadSummary';
+import ChannelVideosInfo from './components/ChannelVideosInfo';
+import { ChannelTabType } from '../../types/Channel';
 import { useChannelVideoFilters } from './hooks/useChannelVideoFilters';
 import { useConfig } from '../../hooks/useConfig';
 import { useTriggerDownloads } from '../../hooks/useTriggerDownloads';
@@ -168,6 +171,7 @@ function ChannelVideos({
     setDateFrom,
     setDateTo,
     clearAllFilters: clearBaseFilters,
+    hasActiveFilters: hasDurationOrDateFilter,
   } = useChannelVideoFilters();
 
   const { deleteVideosByYoutubeIds, loading: deleteLoading } = useVideoDeletion();
@@ -343,6 +347,19 @@ function ChannelVideos({
   });
 
   useDownloadListingsRefresh(refetchVideos);
+
+  const { data: tabStats, refetch: refetchTabStats } = useChannelTabStats(channelId, token);
+  useDownloadListingsRefresh(refetchTabStats);
+
+  // A change in the listing size (an automatic or background fetch, Load More,
+  // tabs detected for an imported channel) changes the loaded and ignored
+  // counts, and can make a first count possible.
+  const previousTotalCount = useRef(totalCount);
+  useEffect(() => {
+    if (previousTotalCount.current === totalCount) return;
+    previousTotalCount.current = totalCount;
+    void refetchTabStats();
+  }, [totalCount, refetchTabStats]);
 
   useEffect(() => {
     if (availableTabsFromVideos && availableTabsFromVideos.length > 0) {
@@ -592,6 +609,7 @@ function ChannelVideos({
     startPolling();
     await refreshVideos();
     await refetchVideos();
+    await refetchTabStats();
   };
 
   const handleRefreshCancel = () => setRefreshConfirmOpen(false);
@@ -669,6 +687,7 @@ function ChannelVideos({
         { method: 'POST', headers: { 'x-access-token': token } }
       );
       if (!response.ok) throw new Error(`Failed to ${endpoint} video`);
+      void refetchTabStats();
       setSuccessMessage(
         isCurrentlyIgnored
           ? 'Video unignored. Channel downloads will include this video'
@@ -706,6 +725,7 @@ function ChannelVideos({
       const result = await response.json();
       setSuccessMessage(result.message || `Successfully ignored ${checkedBoxes.length} videos`);
       setCheckedBoxes([]);
+      void refetchTabStats();
     } catch (error) {
       setLocalIgnoreStatus((prev) => ({ ...prev, ...originalIgnoreStates }));
       console.error('Error bulk ignoring:', error);
@@ -1005,40 +1025,55 @@ function ChannelVideos({
     const label = getTabLabel(tabType);
     const isEnabled = isTabAutoDownloadEnabled(tabType);
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <Typography variant="caption" style={{ fontWeight: 700, color: 'inherit' }}>
-          {label}
-        </Typography>
-        <div
-          style={{
-            width: 12,
-            height: 12,
-            borderRadius: '50%',
-            backgroundColor: isEnabled ? 'var(--success)' : 'rgba(0,0,0,0.08)',
-            border: isEnabled ? '2px solid var(--success)' : '1px solid rgba(0,0,0,0.25)',
-            transition: 'all 200ms ease',
-            display: 'inline-block',
-            boxShadow: isEnabled ? '0 0 8px rgba(34,197,94,0.4)' : 'none',
-          }}
-          title={isEnabled ? 'Auto-download enabled' : 'Auto-download disabled'}
-        />
+      <div className="flex flex-col items-center gap-1">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Typography variant="caption" style={{ fontWeight: 700, color: 'inherit' }}>
+            {label}
+          </Typography>
+          <div
+            style={{
+              width: 12,
+              height: 12,
+              borderRadius: '50%',
+              backgroundColor: isEnabled ? 'var(--success)' : 'rgba(0,0,0,0.08)',
+              border: isEnabled ? '2px solid var(--success)' : '1px solid rgba(0,0,0,0.25)',
+              transition: 'all 200ms ease',
+              display: 'inline-block',
+              boxShadow: isEnabled ? '0 0 8px rgba(34,197,94,0.4)' : 'none',
+            }}
+            title={isEnabled ? 'Auto-download enabled' : 'Auto-download disabled'}
+          />
+        </div>
+        <TabDownloadProgress label={label} stats={tabStats?.[tabType as ChannelTabType]} />
       </div>
     );
   };
+
+  const selectedTabStats = selectedTab ? tabStats?.[selectedTab as ChannelTabType] : undefined;
+  const showsTabSummary = Boolean(
+    selectedTabStats && selectedTabStats.total !== null && selectedTabStats.loaded !== undefined
+  );
+  // The summary already gives the tab's size; the list count only adds
+  // something while a search or filter narrows the list.
+  const listIsFiltered = Boolean(listState.search) || hasDurationOrDateFilter || maxRating !== ''
+    || [downloadedFilter, protectedFilter, missingFilter, ignoredFilter, watchedFilter].some((mode) => mode !== 'off');
+  let countChipLabel: string | null = null;
+  if (totalCount > 0 && listIsFiltered) {
+    countChipLabel = `${totalCount} ${totalCount === 1 ? 'match' : 'matches'}`;
+  } else if (totalCount > 0 && !showsTabSummary) {
+    countChipLabel = `${totalCount} ${totalCount === 1 ? 'item' : 'items'}`;
+  }
 
   const hasPendingDates = videos.some(
     (v) => v.published_at_source === 'estimated' && v.media_type !== 'short'
   );
   const dateTooltipBase =
-    'Publish dates come from YouTube, which doesn\'t always provide them, so Youtarr does the best it can with what it has. ' +
-    'A ~ means the date is approximate: YouTube only reported something like "1 month ago", so it can be off by days. ' +
-    'A date becomes exact once the video is downloaded or its details are opened. ' +
-    'Youtarr keeps videos in the same order they appear on YouTube as best it can; if the order looks off, click "Load More" to rebuild it.';
-  const pendingDatesSentence =
-    'Some videos show "Pending" because YouTube returned this list without dates. ';
+    'Dates come from YouTube. A ~ marks an estimate (YouTube said something like "1 month ago"); ' +
+    'it becomes exact once the video is downloaded or opened. If the order looks off, Load More rebuilds it.';
+  const pendingDatesSentence = 'Pending means YouTube listed the video without a date. ';
   const dateTooltipText =
     selectedTab === 'shorts'
-      ? 'Shorts do not expose publish dates via yt-dlp, so dates are hidden. ' + dateTooltipBase
+      ? "YouTube doesn't provide publish dates for Shorts."
       : (hasPendingDates ? pendingDatesSentence : '') + dateTooltipBase;
 
   const headerSlot = (
@@ -1063,57 +1098,16 @@ function ChannelVideos({
         data-testid="channel-videos-header"
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          {totalCount > 0 && (
-            <Chip
-              label={totalCount + ' ' + (totalCount === 1 ? 'item' : 'items')}
-              size="small"
-              color="primary"
-            />
+          {countChipLabel && (
+            <Chip label={countChipLabel} size="small" color="primary" />
           )}
+          <TabDownloadSummary tabLabel={getTabLabel(selectedTab || 'videos')} stats={selectedTabStats} />
           {oldestVideoDate && selectedTab !== 'shorts' && !isMobile && (
             <Typography variant="caption" color="text.secondary">
               Oldest: {new Date(oldestVideoDate).toLocaleDateString()}
             </Typography>
           )}
-          {isMobile ? (
-            <button
-              type="button"
-              onClick={() => setMobileTooltip(dateTooltipText)}
-              style={{
-                marginLeft: 4,
-                padding: 4,
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                // Warn-tint the icon when any date is pending, to invite a click
-                color: hasPendingDates ? 'var(--warning)' : 'var(--foreground)',
-              }}
-              aria-label="Date info"
-            >
-              <InfoIcon size={16} data-testid="InfoIcon" />
-            </button>
-          ) : (
-            <Tooltip title={dateTooltipText} arrow placement="top">
-              <button
-                type="button"
-                style={{
-                  marginLeft: 4,
-                  padding: 4,
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  color: hasPendingDates ? 'var(--warning)' : 'var(--foreground)',
-                }}
-                aria-label="Date info"
-              >
-                <InfoIcon size={16} data-testid="InfoIcon" />
-              </button>
-            </Tooltip>
-          )}
+          <ChannelVideosInfo tabStats={tabStats} dateText={dateTooltipText} highlight={hasPendingDates} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <Button
@@ -1328,6 +1322,7 @@ function ChannelVideos({
         defaultAudioFormatSource={defaultAudioFormatSource}
         selectedTab={selectedTab || 'videos'}
         tabLabel={getTabLabel(selectedTab || 'videos')}
+        tabStats={selectedTabStats}
         onDownloadDialogClose={() => setDownloadDialogOpen(false)}
         onDownloadConfirm={handleDownloadConfirm}
         onRefreshCancel={handleRefreshCancel}
