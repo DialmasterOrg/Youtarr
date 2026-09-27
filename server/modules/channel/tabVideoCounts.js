@@ -3,7 +3,7 @@ const Channel = require('../../models/channel');
 const MessageEmitter = require('../messageEmitter.js');
 const tabState = require('./tabState');
 const tabCountSources = require('./tabCountSources');
-const tabCountBackoff = require('./tabCountBackoff');
+const tabCountThrottle = require('./tabCountThrottle');
 const { MEDIA_TAB_TYPE_MAP } = require('../tabsUtils');
 
 const COUNTS_STALE_AFTER_MS = 24 * 60 * 60 * 1000;
@@ -42,31 +42,44 @@ function pausedSummary(remainingMs) {
   };
 }
 
-function describeStop({ backoff, stoppedAfterFailures, stoppedByPause }) {
-  if (backoff) {
-    const cause = backoff.backoffReason === 'bot-check' ? 'asked for a bot check' : 'is limiting requests';
-    const paused = backoff.backoffScope === 'bulk' ? 'automatic refreshes' : 'all refreshes';
-    return `. Stopped because YouTube ${cause}; ${paused} are paused for ${hoursFrom(backoff.backoffMs)}`;
+// Why a yt-dlp bulk run ended before its last channel, besides a throttle.
+const STOP_REASON = {
+  FAILURES: tabCountSources.STOPPED_AFTER_FAILURES,
+  PAUSED: 'paused',
+  DOWNLOAD: 'download',
+};
+
+function describeBackoff(backoff) {
+  if (backoff.backoffScope === 'bulk') {
+    return `. Stopped because YouTube asked for a bot check on a lookup without cookies (automatic refreshes don't send cookies); automatic refreshes are paused for ${hoursFrom(backoff.backoffMs)}, and channel pages you open are still counted with your cookies`;
   }
-  if (stoppedAfterFailures) return '. Stopped after repeated failed lookups';
-  if (stoppedByPause) return '. Stopped because refreshes were paused';
+  const cause = backoff.backoffReason === 'bot-check' ? 'asked for a bot check' : 'is limiting requests';
+  return `. Stopped because YouTube ${cause}; all refreshes are paused for ${hoursFrom(backoff.backoffMs)}`;
+}
+
+function describeStop({ backoff, stopReason }) {
+  if (backoff) return describeBackoff(backoff);
+  if (stopReason === STOP_REASON.FAILURES) return '. Stopped after repeated failed lookups';
+  if (stopReason === STOP_REASON.PAUSED) return '. Stopped because refreshes were paused';
+  if (stopReason === STOP_REASON.DOWNLOAD) return '. Stopped because a download was running';
   return '';
 }
 
 function summarizeRefresh({
-  refreshed, failed, source, remaining = 0, backoff = null, stoppedAfterFailures = false, stoppedByPause = false,
+  refreshed, failed, source, remaining = 0, backoff = null, stopReason = null, switchedToCookies = false,
 }) {
   const details = { refreshed, failed, source, remaining, ...(backoff || {}) };
   if (refreshed === 0 && failed === 0 && remaining === 0) {
     return { status: 'success', outcome: 'completed', message: 'No channels needed a video count.', details };
   }
   const failures = failed > 0 ? `; ${plural(failed, 'channel')} failed` : '';
+  const switched = switchedToCookies ? '. Automatic refreshes will send your cookies from now on' : '';
   const later = remaining > 0 ? `. ${plural(remaining, 'channel')} left for later runs` : '';
-  const message = `Refreshed video counts for ${plural(refreshed, 'channel')}${failures}${describeStop({ backoff, stoppedAfterFailures, stoppedByPause })}${later}.`;
+  const message = `Refreshed video counts for ${plural(refreshed, 'channel')}${failures}${describeStop({ backoff, stopReason })}${switched}${later}.`;
   if (backoff) {
-    return { status: 'error', outcome: tabCountBackoff.THROTTLED_OUTCOME, message, details };
+    return { status: 'error', outcome: tabCountThrottle.THROTTLED_OUTCOME, message, details };
   }
-  if (failed === 0 && !stoppedAfterFailures) {
+  if (failed === 0 && stopReason !== STOP_REASON.FAILURES) {
     return { status: 'success', outcome: 'completed', message, details };
   }
   return { status: 'error', outcome: refreshed > 0 ? 'partial' : 'error', message, details };
@@ -77,6 +90,7 @@ class TabVideoCounts {
     this.inFlight = new Map();
     this.bulkRunning = false;
     this.runHistory = null;
+    this.isDownloadActive = () => false;
   }
 
   /**
@@ -87,7 +101,17 @@ class TabVideoCounts {
    */
   setRunHistory(runHistory) {
     this.runHistory = runHistory;
-    tabCountBackoff.useRunHistory(runHistory, TASK_KEY);
+    tabCountThrottle.useRunHistory(runHistory, TASK_KEY);
+  }
+
+  /**
+   * Bulk yt-dlp runs stop at the next channel while a download is running,
+   * so their lookups do not interleave with the download's requests.
+   * @param {Function} isDownloadActive - () => boolean, passed in so the
+   *   channel modules do not load the job queue
+   */
+  setDownloadActivityCheck(isDownloadActive) {
+    this.isDownloadActive = isDownloadActive;
   }
 
   /**
@@ -166,16 +190,26 @@ class TabVideoCounts {
         if (apiResult) return await this._finishRun(apiResult);
       }
 
-      const pausedMs = await tabCountBackoff.remainingMs('bulk');
+      const pausedMs = await tabCountThrottle.remainingMs('bulk');
       if (pausedMs > 0) return pausedSummary(pausedMs);
 
-      const revision = tabCountBackoff.getRevision();
-      const result = await this._refreshViaYtdlp(enabled);
+      const revision = tabCountThrottle.getRevision();
+      const withCookies = await tabCountThrottle.bulkUsesCookies();
+      const result = await this._refreshViaYtdlp(enabled, withCookies);
+      if (result.refreshed + result.failed > 0) {
+        const { switchedToCookies } = tabCountThrottle.recordBulkRun({
+          sentCookies: withCookies,
+          counted: result.tabsCounted > 0,
+          botCheck: result.throttle === 'bot-check',
+        });
+        result.switchedToCookies = switchedToCookies;
+        if (switchedToCookies) logger.warn('YouTube bot-checked repeated tab count refreshes without cookies; automatic refreshes will send cookies');
+      }
       if (result.throttle) {
-        result.backoff = await tabCountBackoff.start({ reason: result.throttle, bulk: true });
+        result.backoff = await tabCountThrottle.start({ reason: result.throttle, sentCookies: withCookies });
         logger.warn({ ...result.backoff, refreshed: result.refreshed }, 'YouTube throttled the channel video count refresh; pausing refreshes');
       } else if (result.refreshed + result.failed > 0) {
-        tabCountBackoff.clearIfUnchanged(revision);
+        tabCountThrottle.clearIfUnchanged(revision);
       }
       return await this._finishRun(result);
     } catch (err) {
@@ -185,7 +219,7 @@ class TabVideoCounts {
         status: 'error',
         outcome: 'error',
         message: err.message || 'Unknown error',
-        details: await tabCountBackoff.currentDetails(),
+        details: await tabCountThrottle.currentDetails(),
       };
     } finally {
       this.bulkRunning = false;
@@ -195,17 +229,11 @@ class TabVideoCounts {
   /**
    * Startup catch-up: counts channels whose counts are missing or old (a
    * first run after upgrading, or a long downtime) and records the run in
-   * the scheduled task's history. It does not start while a download is
-   * running (the scheduled run picks those channels up), and a run that was
-   * skipped or had nothing to count is not recorded, so frequent restarts do
-   * not push real runs out of the history.
-   * @param {{ isDownloadActive?: Function }} [deps]
+   * the scheduled task's history. Like any bulk run it stops while a
+   * download is running. A run that was skipped or counted nothing is not
+   * recorded, so frequent restarts do not push real runs out of the history.
    */
-  async refreshAtStartup({ isDownloadActive } = {}) {
-    if (isDownloadActive && isDownloadActive()) {
-      logger.info('Skipping the startup channel video count refresh while a download is running');
-      return { status: 'skipped', outcome: 'skipped', message: 'A download was running.' };
-    }
+  async refreshAtStartup() {
     const startedAt = new Date();
     const summary = await this.refreshAll({ onlyStale: true });
     const { refreshed = 0, failed = 0 } = summary.details || {};
@@ -240,13 +268,13 @@ class TabVideoCounts {
       counts = await tabCountSources.fetchCountsViaApi(playlistIds);
     }
     if (!counts) {
-      if (await tabCountBackoff.remainingMs('on-demand') > 0) return { status: 'paused' };
+      if (await tabCountThrottle.remainingMs('on-demand') > 0) return { status: 'paused' };
       await this._markAttempted(channelId);
       const lookup = await tabCountSources.fetchCountsViaYtdlp(playlistIds);
       counts = lookup.counts;
       source = 'yt-dlp';
       if (lookup.throttle) {
-        const backoff = await tabCountBackoff.start({ reason: lookup.throttle, bulk: false });
+        const backoff = await tabCountThrottle.start({ reason: lookup.throttle, sentCookies: true });
         logger.warn({ ...backoff, channelId }, 'YouTube throttled a channel video count lookup; pausing refreshes');
       }
     }
@@ -261,7 +289,7 @@ class TabVideoCounts {
       MessageEmitter.emitMessage('broadcast', null, 'channel', 'channelsUpdated', { text: 'Channel video counts updated' });
     }
     const summary = summarizeRefresh(result);
-    return { ...summary, details: { ...(await tabCountBackoff.currentDetails()), ...summary.details } };
+    return { ...summary, details: { ...(await tabCountThrottle.currentDetails()), ...summary.details } };
   }
 
   // Resolves null when the API call failed, so the caller falls back to yt-dlp.
@@ -280,7 +308,7 @@ class TabVideoCounts {
     return { refreshed, failed, source: 'api', remaining: 0, throttle: null };
   }
 
-  async _refreshViaYtdlp(enabled) {
+  async _refreshViaYtdlp(enabled, withCookies) {
     const now = Date.now();
     const candidates = enabled
       .filter((channel) => this.isStale(channel, now, BULK_STALE_AFTER_MS))
@@ -303,25 +331,28 @@ class TabVideoCounts {
 
     let refreshed = 0;
     let failed = 0;
+    let tabsCounted = 0;
     const { stopReason } = await tabCountSources.lookupChannelsPaced(selected, {
-      shouldStop: async () => (await tabCountBackoff.remainingMs('bulk')) > 0,
+      withCookies,
+      stopBeforeChannel: async () => (this.isDownloadActive() ? STOP_REASON.DOWNLOAD : null),
+      stopBeforeLookup: async () => ((await tabCountThrottle.remainingMs('bulk')) > 0 ? STOP_REASON.PAUSED : null),
       onChannelStart: (plan) => this._markAttempted(plan.channel.channel_id),
       onChannelDone: async (plan, counts) => {
+        tabsCounted += counts.size;
         if (await this._saveChannel(plan, counts, new Date().toISOString(), 'yt-dlp')) refreshed += 1;
         else failed += 1;
       },
     });
 
-    const stoppedAfterFailures = stopReason === tabCountSources.STOPPED_AFTER_FAILURES;
-    const stoppedByPause = stopReason === tabCountSources.STOPPED_BY_PAUSE;
+    const throttled = stopReason === 'bot-check' || stopReason === 'rate-limit';
     return {
       refreshed,
       failed,
       source: 'yt-dlp',
       remaining: candidates.length - refreshed - failed,
-      throttle: stopReason && !stoppedAfterFailures && !stoppedByPause ? stopReason : null,
-      stoppedAfterFailures,
-      stoppedByPause,
+      tabsCounted,
+      throttle: throttled ? stopReason : null,
+      stopReason: throttled ? null : stopReason,
     };
   }
 

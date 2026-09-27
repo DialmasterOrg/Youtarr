@@ -264,18 +264,29 @@ describe('tabCountSources', () => {
       expect(result.stopReason).toBe('rate-limit');
     });
 
-    test('stops before the next lookup once shouldStop says so', async () => {
+    test('sends cookies when asked to', async () => {
       ytDlpRunner.run.mockResolvedValue(JSON.stringify({ playlist_count: 1 }));
-      const callbacks = { ...hooks(), shouldStop: jest.fn().mockResolvedValueOnce(false).mockResolvedValue(true) };
+
+      await runPaced([plan('UULF1')], { ...hooks(), withCookies: true });
+
+      expect(YtdlpCommandBuilder.buildMetadataFetchArgs).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ cookiesEnabled: true, skipSleepRequests: false })
+      );
+    });
+
+    test('stops before the next lookup with the reason stopBeforeLookup gives', async () => {
+      ytDlpRunner.run.mockResolvedValue(JSON.stringify({ playlist_count: 1 }));
+      const callbacks = { ...hooks(), stopBeforeLookup: jest.fn().mockResolvedValueOnce(null).mockResolvedValue('paused') };
 
       const result = await runPaced([plan('UULF1', 'UUSH1'), plan('UULF2')], callbacks);
 
       expect([result.stopReason, ytDlpRunner.run.mock.calls.length]).toEqual(['paused', 1]);
     });
 
-    test('hands back the tabs counted before the stop', async () => {
+    test('hands back the tabs counted before a lookup stop', async () => {
       ytDlpRunner.run.mockResolvedValue(JSON.stringify({ playlist_count: 3 }));
-      const callbacks = { ...hooks(), shouldStop: jest.fn().mockResolvedValueOnce(false).mockResolvedValue(true) };
+      const callbacks = { ...hooks(), stopBeforeLookup: jest.fn().mockResolvedValueOnce(null).mockResolvedValue('paused') };
       const first = plan('UULF1', 'UUSH1');
 
       await runPaced([first, plan('UULF2')], callbacks);
@@ -285,11 +296,24 @@ describe('tabCountSources', () => {
 
     test('does not start a channel it stopped before looking up', async () => {
       ytDlpRunner.run.mockResolvedValue(JSON.stringify({ playlist_count: 1 }));
-      const callbacks = { ...hooks(), shouldStop: jest.fn().mockResolvedValueOnce(false).mockResolvedValue(true) };
+      const callbacks = { ...hooks(), stopBeforeLookup: jest.fn().mockResolvedValueOnce(null).mockResolvedValue('paused') };
 
       await runPaced([plan('UULF1'), plan('UULF2')], callbacks);
 
       expect([callbacks.onChannelStart.mock.calls.length, callbacks.onChannelDone.mock.calls.length]).toEqual([1, 1]);
+    });
+
+    test('finishes the current channel before a channel stop', async () => {
+      ytDlpRunner.run.mockResolvedValue(JSON.stringify({ playlist_count: 2 }));
+      const callbacks = { ...hooks(), stopBeforeChannel: jest.fn().mockResolvedValueOnce(null).mockResolvedValue('download') };
+      const first = plan('UULF1', 'UUSH1');
+
+      const result = await runPaced([first, plan('UULF2')], callbacks);
+
+      expect([result.stopReason, callbacks.onChannelDone.mock.calls]).toEqual([
+        'download',
+        [[first, new Map([['UULF1', 2], ['UUSH1', 2]])]],
+      ]);
     });
 
     test('stops after three unexplained failures in a row', async () => {

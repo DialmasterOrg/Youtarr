@@ -16,10 +16,11 @@ jest.mock('../tabCountSources', () => ({
   fetchCountsViaYtdlp: jest.fn(),
   lookupChannelsPaced: jest.fn(),
   STOPPED_AFTER_FAILURES: 'failures',
-  STOPPED_BY_PAUSE: 'paused',
 }));
-jest.mock('../tabCountBackoff', () => ({
+jest.mock('../tabCountThrottle', () => ({
   useRunHistory: jest.fn(),
+  bulkUsesCookies: jest.fn(),
+  recordBulkRun: jest.fn(),
   remainingMs: jest.fn(),
   start: jest.fn(),
   getRevision: jest.fn(),
@@ -51,10 +52,13 @@ const RATE_LIMIT_BACKOFF = {
 };
 
 // Stands in for the paced yt-dlp loop: counts each channel's tabs from
-// `counts`, handing channels back one by one until `stopAfter` of them.
+// `counts`, handing channels back one by one until `stopAfter` of them or
+// until stopBeforeChannel gives a reason.
 const pacedLookup = (counts, { stopReason = null, stopAfter = Infinity } = {}) =>
-  async (plans, { onChannelStart, onChannelDone }) => {
+  async (plans, { onChannelStart, onChannelDone, stopBeforeChannel }) => {
     for (const plan of plans.slice(0, stopAfter)) {
+      const channelStop = await stopBeforeChannel();
+      if (channelStop) return { stopReason: channelStop };
       await onChannelStart(plan);
       const found = plan.tabs.filter(({ playlistId }) => counts.has(playlistId));
       await onChannelDone(plan, new Map(found.map(({ playlistId }) => [playlistId, counts.get(playlistId)])));
@@ -76,7 +80,7 @@ describe('tabVideoCounts', () => {
   let Channel;
   let tabCountSources;
   let MessageEmitter;
-  let tabCountBackoff;
+  let tabCountThrottle;
 
   beforeEach(() => {
     jest.resetModules();
@@ -84,12 +88,14 @@ describe('tabVideoCounts', () => {
     Channel = require('../../../models/channel');
     tabCountSources = require('../tabCountSources');
     MessageEmitter = require('../../messageEmitter.js');
-    tabCountBackoff = require('../tabCountBackoff');
+    tabCountThrottle = require('../tabCountThrottle');
     Channel.update.mockResolvedValue([1]);
-    tabCountBackoff.remainingMs.mockResolvedValue(0);
-    tabCountBackoff.start.mockResolvedValue(RATE_LIMIT_BACKOFF);
-    tabCountBackoff.getRevision.mockReturnValue(1);
-    tabCountBackoff.currentDetails.mockResolvedValue({});
+    tabCountThrottle.remainingMs.mockResolvedValue(0);
+    tabCountThrottle.start.mockResolvedValue(RATE_LIMIT_BACKOFF);
+    tabCountThrottle.getRevision.mockReturnValue(1);
+    tabCountThrottle.currentDetails.mockResolvedValue({});
+    tabCountThrottle.bulkUsesCookies.mockResolvedValue(false);
+    tabCountThrottle.recordBulkRun.mockReturnValue({ switchedToCookies: false });
     tabVideoCounts = require('../tabVideoCounts');
   });
 
@@ -271,7 +277,7 @@ describe('tabVideoCounts', () => {
 
     test('serves stored counts while throttling has paused every refresh', async () => {
       Channel.findOne.mockResolvedValue(makeChannel());
-      tabCountBackoff.remainingMs.mockResolvedValue(HOUR_MS);
+      tabCountThrottle.remainingMs.mockResolvedValue(HOUR_MS);
 
       const result = await tabVideoCounts.refreshChannel(CHANNEL_ID);
 
@@ -284,12 +290,12 @@ describe('tabVideoCounts', () => {
 
       await tabVideoCounts.refreshChannel(CHANNEL_ID);
 
-      expect(tabCountBackoff.remainingMs).toHaveBeenCalledWith('on-demand');
+      expect(tabCountThrottle.remainingMs).toHaveBeenCalledWith('on-demand');
     });
 
     test('still counts through the API while yt-dlp lookups are paused', async () => {
       Channel.findOne.mockResolvedValue(makeChannel());
-      tabCountBackoff.remainingMs.mockResolvedValue(HOUR_MS);
+      tabCountThrottle.remainingMs.mockResolvedValue(HOUR_MS);
       useApi(new Map([[`UULF${SUFFIX}`, 1], [`UUSH${SUFFIX}`, 1]]));
 
       const result = await tabVideoCounts.refreshChannel(CHANNEL_ID);
@@ -303,7 +309,7 @@ describe('tabVideoCounts', () => {
 
       await tabVideoCounts.refreshChannel(CHANNEL_ID);
 
-      expect(tabCountBackoff.start).toHaveBeenCalledWith({ reason: 'bot-check', bulk: false });
+      expect(tabCountThrottle.start).toHaveBeenCalledWith({ reason: 'bot-check', sentCookies: true });
     });
 
     test('shares one lookup between overlapping requests for the same channel', async () => {
@@ -376,7 +382,7 @@ describe('tabVideoCounts', () => {
 
     test('runs while yt-dlp refreshes are paused', async () => {
       Channel.findAll.mockResolvedValue([makeChannel({ available_tabs: 'videos' })]);
-      tabCountBackoff.remainingMs.mockResolvedValue(HOUR_MS);
+      tabCountThrottle.remainingMs.mockResolvedValue(HOUR_MS);
       tabCountSources.fetchCountsViaApi.mockResolvedValue(new Map([[`UULF${SUFFIX}`, 4]]));
 
       const summary = await tabVideoCounts.refreshAll();
@@ -387,7 +393,7 @@ describe('tabVideoCounts', () => {
     test('records the current backoff on an API run', async () => {
       Channel.findAll.mockResolvedValue([makeChannel({ available_tabs: 'videos' })]);
       tabCountSources.fetchCountsViaApi.mockResolvedValue(new Map([[`UULF${SUFFIX}`, 4]]));
-      tabCountBackoff.currentDetails.mockResolvedValue(CARRIED_BACKOFF);
+      tabCountThrottle.currentDetails.mockResolvedValue(CARRIED_BACKOFF);
 
       const summary = await tabVideoCounts.refreshAll();
 
@@ -518,7 +524,7 @@ describe('tabVideoCounts', () => {
 
     test('skips the run while bulk refreshes are paused', async () => {
       Channel.findAll.mockResolvedValue([makeChannel({ available_tabs: 'videos' })]);
-      tabCountBackoff.remainingMs.mockResolvedValue(5.5 * HOUR_MS);
+      tabCountThrottle.remainingMs.mockResolvedValue(5.5 * HOUR_MS);
 
       const summary = await tabVideoCounts.refreshAll();
 
@@ -532,7 +538,7 @@ describe('tabVideoCounts', () => {
 
       await tabVideoCounts.refreshAll();
 
-      expect(tabCountBackoff.start).toHaveBeenCalledWith({ reason: 'rate-limit', bulk: true });
+      expect(tabCountThrottle.start).toHaveBeenCalledWith({ reason: 'rate-limit', sentCookies: false });
     });
 
     test('records a throttled run with its backoff', async () => {
@@ -558,17 +564,17 @@ describe('tabVideoCounts', () => {
 
       const summary = await tabVideoCounts.refreshAll();
 
-      expect([summary.outcome, summary.message, tabCountBackoff.start.mock.calls.length])
+      expect([summary.outcome, summary.message, tabCountThrottle.start.mock.calls.length])
         .toEqual(['error', 'Refreshed video counts for 0 channels; 1 channel failed. Stopped after repeated failed lookups.', 0]);
     });
 
     test('ends the backoff doubling after a run YouTube did not throttle', async () => {
       Channel.findAll.mockResolvedValue([makeChannel({ available_tabs: 'videos' })]);
-      tabCountBackoff.getRevision.mockReturnValue(7);
+      tabCountThrottle.getRevision.mockReturnValue(7);
 
       await tabVideoCounts.refreshAll();
 
-      expect(tabCountBackoff.clearIfUnchanged).toHaveBeenCalledWith(7);
+      expect(tabCountThrottle.clearIfUnchanged).toHaveBeenCalledWith(7);
     });
 
     test('keeps the backoff doubling after a run that looked nothing up', async () => {
@@ -576,20 +582,96 @@ describe('tabVideoCounts', () => {
 
       await tabVideoCounts.refreshAll();
 
-      expect(tabCountBackoff.clearIfUnchanged).not.toHaveBeenCalled();
+      expect(tabCountThrottle.clearIfUnchanged).not.toHaveBeenCalled();
     });
 
     test('checks for a bulk pause before each lookup', async () => {
       Channel.findAll.mockResolvedValue([makeChannel({ available_tabs: 'videos' })]);
-      let shouldStop;
+      let stopBeforeLookup;
       tabCountSources.lookupChannelsPaced.mockImplementation(async (plans, hooks) => {
-        shouldStop = hooks.shouldStop;
+        stopBeforeLookup = hooks.stopBeforeLookup;
         return { stopReason: null };
       });
       await tabVideoCounts.refreshAll();
-      tabCountBackoff.remainingMs.mockResolvedValue(HOUR_MS);
+      tabCountThrottle.remainingMs.mockResolvedValue(HOUR_MS);
 
-      expect(await shouldStop()).toBe(true);
+      expect(await stopBeforeLookup()).toBe('paused');
+    });
+
+    test('stops at the next channel while a download is running', async () => {
+      Channel.findAll.mockResolvedValue([makeChannel({ available_tabs: 'videos' })]);
+      tabVideoCounts.setDownloadActivityCheck(() => true);
+
+      const summary = await tabVideoCounts.refreshAll();
+
+      expect([summary.status, summary.message]).toEqual([
+        'success',
+        'Refreshed video counts for 0 channels. Stopped because a download was running. 1 channel left for later runs.',
+      ]);
+    });
+
+    test('sends cookies once bulk runs have switched to them', async () => {
+      Channel.findAll.mockResolvedValue([makeChannel({ available_tabs: 'videos' })]);
+      tabCountThrottle.bulkUsesCookies.mockResolvedValue(true);
+
+      await tabVideoCounts.refreshAll();
+
+      expect(tabCountSources.lookupChannelsPaced).toHaveBeenCalledWith(expect.any(Array), expect.objectContaining({ withCookies: true }));
+    });
+
+    test('pauses as a lookup that sent cookies once bulk runs have switched', async () => {
+      Channel.findAll.mockResolvedValue([makeChannel({ available_tabs: 'videos' })]);
+      tabCountThrottle.bulkUsesCookies.mockResolvedValue(true);
+      tabCountSources.lookupChannelsPaced.mockImplementation(pacedLookup(new Map(), { stopReason: 'bot-check' }));
+
+      await tabVideoCounts.refreshAll();
+
+      expect(tabCountThrottle.start).toHaveBeenCalledWith({ reason: 'bot-check', sentCookies: true });
+    });
+
+    test('tells the cookie mode about a bot check that counted nothing', async () => {
+      Channel.findAll.mockResolvedValue([makeChannel({ available_tabs: 'videos' })]);
+      tabCountSources.lookupChannelsPaced.mockImplementation(pacedLookup(new Map(), { stopReason: 'bot-check' }));
+
+      await tabVideoCounts.refreshAll();
+
+      expect(tabCountThrottle.recordBulkRun).toHaveBeenCalledWith({ sentCookies: false, counted: false, botCheck: true });
+    });
+
+    test('tells the cookie mode a tab was counted when a bot check cut its channel short', async () => {
+      Channel.findAll.mockResolvedValue([makeChannel()]);
+      tabCountSources.lookupChannelsPaced.mockImplementation(pacedLookup(
+        new Map([[`UULF${SUFFIX}`, 449]]),
+        { stopReason: 'bot-check' }
+      ));
+
+      await tabVideoCounts.refreshAll();
+
+      expect(tabCountThrottle.recordBulkRun).toHaveBeenCalledWith({ sentCookies: false, counted: true, botCheck: true });
+    });
+
+    test('explains a bot check on a lookup without cookies', async () => {
+      Channel.findAll.mockResolvedValue([makeChannel({ available_tabs: 'videos' })]);
+      tabCountSources.lookupChannelsPaced.mockImplementation(pacedLookup(new Map(), { stopReason: 'bot-check' }));
+      tabCountThrottle.start.mockResolvedValue({ ...RATE_LIMIT_BACKOFF, backoffReason: 'bot-check', backoffScope: 'bulk' });
+
+      const summary = await tabVideoCounts.refreshAll();
+
+      expect(summary.message).toBe(
+        'Refreshed video counts for 0 channels; 1 channel failed. Stopped because YouTube asked for a bot check on a lookup'
+        + ' without cookies (automatic refreshes don\'t send cookies); automatic refreshes are paused for 6 hours, and'
+        + ' channel pages you open are still counted with your cookies.'
+      );
+    });
+
+    test('says when bulk runs switch to cookies', async () => {
+      Channel.findAll.mockResolvedValue([makeChannel({ available_tabs: 'videos' })]);
+      tabCountSources.lookupChannelsPaced.mockImplementation(pacedLookup(new Map(), { stopReason: 'bot-check' }));
+      tabCountThrottle.recordBulkRun.mockReturnValue({ switchedToCookies: true });
+
+      const summary = await tabVideoCounts.refreshAll();
+
+      expect(summary.message).toContain('. Automatic refreshes will send your cookies from now on.');
     });
 
     test('stops without starting a backoff when a pause begins during the run', async () => {
@@ -604,7 +686,7 @@ describe('tabVideoCounts', () => {
 
       const summary = await tabVideoCounts.refreshAll();
 
-      expect([summary.status, summary.message, tabCountBackoff.start.mock.calls.length]).toEqual([
+      expect([summary.status, summary.message, tabCountThrottle.start.mock.calls.length]).toEqual([
         'success',
         'Refreshed video counts for 1 channel. Stopped because refreshes were paused. 1 channel left for later runs.',
         0,
@@ -613,7 +695,7 @@ describe('tabVideoCounts', () => {
 
     test('records the current backoff on a run that looked nothing up', async () => {
       Channel.findAll.mockResolvedValue([]);
-      tabCountBackoff.currentDetails.mockResolvedValue(CARRIED_BACKOFF);
+      tabCountThrottle.currentDetails.mockResolvedValue(CARRIED_BACKOFF);
 
       const summary = await tabVideoCounts.refreshAll();
 
@@ -622,7 +704,7 @@ describe('tabVideoCounts', () => {
 
     test('resolves with the current backoff when the refresh fails', async () => {
       Channel.findAll.mockRejectedValue(new Error('db down'));
-      tabCountBackoff.currentDetails.mockResolvedValue(CARRIED_BACKOFF);
+      tabCountThrottle.currentDetails.mockResolvedValue(CARRIED_BACKOFF);
 
       const summary = await tabVideoCounts.refreshAll();
 
@@ -662,18 +744,23 @@ describe('tabVideoCounts', () => {
       expect(runHistory.record).not.toHaveBeenCalled();
     });
 
-    test('does not start while a download is running', async () => {
-      const summary = await tabVideoCounts.refreshAtStartup({ isDownloadActive: () => true });
+    test('records nothing when a download stopped it before any lookup', async () => {
+      tabCountSources.isApiAvailable.mockReturnValue(false);
+      Channel.findAll.mockResolvedValue([makeChannel({ available_tabs: 'videos' })]);
+      tabCountSources.lookupChannelsPaced.mockImplementation(pacedLookup(new Map()));
+      tabVideoCounts.setDownloadActivityCheck(() => true);
 
-      expect([summary.status, Channel.findAll.mock.calls.length]).toEqual(['skipped', 0]);
+      await tabVideoCounts.refreshAtStartup();
+
+      expect([tabCountSources.lookupChannelsPaced.mock.calls.length, runHistory.record.mock.calls.length]).toEqual([1, 0]);
     });
 
     test('records nothing while refreshes are paused', async () => {
       tabCountSources.isApiAvailable.mockReturnValue(false);
       Channel.findAll.mockResolvedValue([makeChannel({ available_tabs: 'videos' })]);
-      tabCountBackoff.remainingMs.mockResolvedValue(HOUR_MS);
+      tabCountThrottle.remainingMs.mockResolvedValue(HOUR_MS);
 
-      await tabVideoCounts.refreshAtStartup({ isDownloadActive: () => false });
+      await tabVideoCounts.refreshAtStartup();
 
       expect(runHistory.record).not.toHaveBeenCalled();
     });
@@ -685,7 +772,7 @@ describe('tabVideoCounts', () => {
 
       tabVideoCounts.setRunHistory(runHistory);
 
-      expect(tabCountBackoff.useRunHistory).toHaveBeenCalledWith(runHistory, 'channelVideoCountsFrequency');
+      expect(tabCountThrottle.useRunHistory).toHaveBeenCalledWith(runHistory, 'channelVideoCountsFrequency');
     });
   });
 });

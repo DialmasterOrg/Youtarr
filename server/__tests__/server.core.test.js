@@ -177,7 +177,8 @@ const createServerModule = ({
         const jobModuleMock = {
           getJob: jest.fn(),
           getRunningJobs: jest.fn(() => []),
-          getRunningJobsWithFreshVideos: jest.fn().mockResolvedValue([])
+          getRunningJobsWithFreshVideos: jest.fn().mockResolvedValue([]),
+          getInProgressJobId: jest.fn(() => null)
         };
 
         const videosModuleMock = {
@@ -213,6 +214,7 @@ const createServerModule = ({
         };
         const tabVideoCountsMock = {
           setRunHistory: jest.fn(),
+          setDownloadActivityCheck: jest.fn(),
           refreshAtStartup: jest.fn().mockResolvedValue({})
         };
         const rateLimitMiddleware = jest.fn(() => (req, res, next) => next());
@@ -306,6 +308,7 @@ const createServerModule = ({
         state.scheduledTaskRunsMock = scheduledTaskRunsMock;
         state.scheduledTaskManagerMock = scheduledTaskManagerMock;
         state.tabVideoCountsMock = tabVideoCountsMock;
+        state.jobModuleMock = jobModuleMock;
         state.sessionUpdateMock = effectiveSession?.update || defaultSessionUpdate;
 
         const finalize = () => resolve(state);
@@ -367,6 +370,14 @@ describe('server initialization', () => {
     const { scheduledTaskRunsMock, tabVideoCountsMock } = await createServerModule();
 
     expect(tabVideoCountsMock.setRunHistory).toHaveBeenCalledWith(scheduledTaskRunsMock);
+  });
+
+  test('tells the channel video count refresh when a download is running', async () => {
+    const { tabVideoCountsMock, jobModuleMock } = await createServerModule();
+    const isDownloadActive = tabVideoCountsMock.setDownloadActivityCheck.mock.calls[0][0];
+    jobModuleMock.getInProgressJobId.mockReturnValue('job-1');
+
+    expect(isDownloadActive()).toBe(true);
   });
 
   test('initializes database and exposes health route', async () => {

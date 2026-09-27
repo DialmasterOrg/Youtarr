@@ -31,7 +31,6 @@ const FAILURE = {
 };
 const THROTTLE_FAILURES = new Set([FAILURE.BOT_CHECK, FAILURE.RATE_LIMIT]);
 const STOPPED_AFTER_FAILURES = 'failures';
-const STOPPED_BY_PAUSE = 'paused';
 
 function parsePlaylistCount(stdout) {
   return parseReportedCount(JSON.parse(stdout)?.playlist_count);
@@ -101,7 +100,7 @@ class TabCountSources {
     let throttle = null;
     await Promise.all(playlistIds.map((playlistId) => limit(async () => {
       if (throttle) return;
-      const result = await this._lookup(playlistId, { bulk: false });
+      const result = await this._lookup(playlistId, { paced: false, withCookies: true });
       if (result.failure) {
         if (THROTTLE_FAILURES.has(result.failure)) throttle = result.failure;
         return;
@@ -112,30 +111,45 @@ class TabCountSources {
   }
 
   /**
-   * Bulk yt-dlp lookups: one at a time, paced, without cookies, so a bot
-   * check lands on the IP rather than the user's account. Each channel is
-   * handed back as soon as its tabs are done so its counts are saved before
-   * the next one starts.
+   * Bulk yt-dlp lookups: one at a time and paced, without cookies unless the
+   * caller has switched bulk runs to cookies (an IP that is always
+   * bot-checked without them). Each channel is handed back as soon as its
+   * tabs are done so its counts are saved before the next one starts.
    * @param {Array<{ tabs: Array<{ playlistId: string }> }>} plans
-   * @param {{ onChannelStart: Function, onChannelDone: Function, shouldStop?: Function }} hooks -
-   *   onChannelDone(plan, counts) receives the tabs that were counted;
-   *   shouldStop() is checked before every lookup, so a pause that starts
-   *   during the run (an on-demand lookup got throttled) ends it
-   * @returns {Promise<{ stopReason: 'bot-check'|'rate-limit'|'failures'|'paused'|null }>}
+   * @param {Object} options
+   * @param {boolean} [options.withCookies=false]
+   * @param {Function} options.onChannelStart - onChannelStart(plan), before its first lookup
+   * @param {Function} options.onChannelDone - onChannelDone(plan, counts) with the tabs counted
+   * @param {Function} [options.stopBeforeChannel] - resolves a stop reason or
+   *   null; checked between channels, so a stop never leaves one half counted
+   * @param {Function} [options.stopBeforeLookup] - resolves a stop reason or
+   *   null; checked before every lookup
+   * @returns {Promise<{ stopReason: string|null }>} 'bot-check', 'rate-limit',
+   *   'failures', a reason from a stop hook, or null
    */
-  async lookupChannelsPaced(plans, { onChannelStart, onChannelDone, shouldStop = async () => false }) {
+  async lookupChannelsPaced(plans, {
+    withCookies = false,
+    onChannelStart,
+    onChannelDone,
+    stopBeforeChannel = async () => null,
+    stopBeforeLookup = async () => null,
+  }) {
     let consecutiveFailures = 0;
     let lookups = 0;
 
     for (const plan of plans) {
+      const channelStop = await stopBeforeChannel();
+      if (channelStop) return { stopReason: channelStop };
+
       const counts = new Map();
       let started = false;
       let stopReason = null;
 
       for (const { playlistId } of plan.tabs) {
         if (lookups > 0) await delay(BULK_LOOKUP_DELAY_MS);
-        if (await shouldStop()) {
-          stopReason = STOPPED_BY_PAUSE;
+        const lookupStop = await stopBeforeLookup();
+        if (lookupStop) {
+          stopReason = lookupStop;
           break;
         }
         if (!started) {
@@ -143,7 +157,7 @@ class TabCountSources {
           started = true;
         }
         lookups += 1;
-        const result = await this._lookup(playlistId, { bulk: true });
+        const result = await this._lookup(playlistId, { paced: true, withCookies });
         if (!result.failure) {
           counts.set(playlistId, result.count);
           consecutiveFailures = 0;
@@ -171,13 +185,13 @@ class TabCountSources {
   /**
    * @returns {Promise<{ count: number } | { failure: string }>}
    */
-  async _lookup(playlistId, { bulk }) {
+  async _lookup(playlistId, { paced, withCookies }) {
     const url = `https://www.youtube.com/playlist?list=${playlistId}`;
     const args = YtdlpCommandBuilder.buildMetadataFetchArgs(url, {
       flatPlaylist: true,
       playlistItems: '0',
-      skipSleepRequests: !bulk,
-      cookiesEnabled: !bulk,
+      skipSleepRequests: !paced,
+      cookiesEnabled: withCookies,
     });
     try {
       const count = parsePlaylistCount(await ytDlpRunner.run(args, { timeoutMs: YTDLP_COUNT_TIMEOUT_MS }));
@@ -199,6 +213,5 @@ class TabCountSources {
 
 const tabCountSources = new TabCountSources();
 tabCountSources.STOPPED_AFTER_FAILURES = STOPPED_AFTER_FAILURES;
-tabCountSources.STOPPED_BY_PAUSE = STOPPED_BY_PAUSE;
 
 module.exports = tabCountSources;

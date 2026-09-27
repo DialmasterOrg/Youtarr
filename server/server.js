@@ -267,6 +267,7 @@ const initialize = async () => {
     await scheduledTaskRuns.markInterruptedRuns();
     scheduledTaskManager.setRunRecorder(scheduledTaskRuns);
     tabVideoCounts.setRunHistory(scheduledTaskRuns);
+    tabVideoCounts.setDownloadActivityCheck(() => jobModule.getInProgressJobId() !== null);
 
     // Cache yt-dlp version once during startup to keep the version endpoint fast
     refreshYtDlpVersionCache();
@@ -781,10 +782,9 @@ const initialize = async () => {
           }, 5000); // Delay 5 seconds to avoid blocking startup
 
           // Count channel tabs whose counts are missing or old (first run
-          // after upgrading, long downtime), after the startup rescan. It
-          // skips while a download is running; the scheduled run catches up.
+          // after upgrading, long downtime), after the startup rescan.
           setTimeout(() => {
-            tabVideoCounts.refreshAtStartup({ isDownloadActive: () => jobModule.getInProgressJobId() !== null })
+            tabVideoCounts.refreshAtStartup()
               .catch(err => {
                 logger.error({ err }, 'Startup channel video count refresh failed');
               });
