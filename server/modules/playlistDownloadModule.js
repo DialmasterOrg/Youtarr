@@ -1,6 +1,21 @@
+const { QueryTypes } = require('sequelize');
 const playlistSelection = require('./download/playlistAutoSelection');
 const logger = require('../logger');
 const videoActivity = require('./download/videoActivity');
+
+// Raw SQL: one grouped count for a whole page of playlists. "Downloaded" means
+// a usable file on disk, the same predicate as the playlist videos listing's
+// per-row `downloaded` flag and its Downloaded filter (routes/playlists.js,
+// playlistVideoFilters.js). Deleted downloads do not count.
+const DOWNLOADED_COUNT_SQL = `
+  SELECT pv.playlist_id, COUNT(*) AS downloaded
+  FROM playlistvideos pv
+  JOIN videos v ON v.youtube_id = pv.youtube_id
+  WHERE pv.playlist_id IN (:playlistIds)
+    AND v.removed = 0
+    AND (v.file_path IS NOT NULL OR v.audio_file_path IS NOT NULL)
+  GROUP BY pv.playlist_id
+`;
 
 // Dependencies are passed at call time, as in playlistVideoFilters, to keep
 // download orchestration out of the route without introducing a module cycle.
@@ -23,8 +38,25 @@ class PlaylistDownloadModule {
       (!excludeActive || !videoActivity.isActive(row.youtube_id))), existing };
   }
 
+  /**
+   * Videos with a file on disk per playlist, keyed by playlist_id. Playlists
+   * with none are absent from the map.
+   * @param {string[]} playlistIds
+   * @param {{ PlaylistVideo: Object }} deps
+   * @returns {Promise<Map<string, number>>}
+   */
+  async getDownloadedCounts(playlistIds, { PlaylistVideo }) {
+    if (!playlistIds.length) return new Map();
+    const rows = await PlaylistVideo.sequelize.query(DOWNLOADED_COUNT_SQL, {
+      replacements: { playlistIds },
+      type: QueryTypes.SELECT,
+    });
+    return new Map(rows.map((row) => [row.playlist_id, Number(row.downloaded)]));
+  }
+
   async getCounts(playlist, deps) {
     const { candidates, existing } = await this.getTrackedVideos(playlist.playlist_id, deps);
+    const downloadedCounts = await this.getDownloadedCounts([playlist.playlist_id], deps);
     const pending = playlist.auto_download_baseline_at ? playlistSelection.selectNewSinceBaseline({
       candidates,
       baselineAt: playlist.auto_download_baseline_at,
@@ -33,6 +65,7 @@ class PlaylistDownloadModule {
     }) : { discoveries: [], retries: [] };
     const targetsAudio = playlist.audio_format === 'mp3_only';
     return {
+      downloaded_count: downloadedCounts.get(playlist.playlist_id) || 0,
       not_downloaded_count: candidates.length,
       following_existing_count: candidates.length - pending.discoveries.length - pending.retries.length,
       following_requested_count: candidates.filter((row) => row.auto_download_requested).length,
