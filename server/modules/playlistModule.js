@@ -5,6 +5,7 @@ const { sequelize } = require('../db');
 const { Playlist, PlaylistVideo, Channel, Video, Job, JobVideo } = require('../models');
 const youtubeApi = require('./youtubeApi');
 const { MAX_PLAYLIST_VIDEOS } = require('./playlistConstants');
+const storageGuard = require('./storageGuard');
 
 // yt-dlp's flat-playlist listing still returns private/deleted/members-only
 // videos but strips their metadata: the title comes back null (current yt-dlp)
@@ -171,6 +172,17 @@ class PlaylistModule {
     }
   }
 
+  /**
+   * The RegExp a playlist title filter is evaluated with on refresh. The
+   * settings route uses it to reject a pattern that would break every refresh.
+   * @param {string} pattern
+   * @returns {RegExp}
+   * @throws {SyntaxError} when the pattern is not a valid JavaScript regex
+   */
+  buildTitleFilterRegExp(pattern) {
+    return new RegExp(pattern, 'i');
+  }
+
   async fetchAllPlaylistVideos(playlistId, options = {}) {
     if (this.activeFetches.has(playlistId)) {
       throw new Error('FETCH_IN_PROGRESS');
@@ -194,7 +206,7 @@ class PlaylistModule {
     const discoveredAt = new Date();
     const available = entries.filter((e) => !this.isUnavailableTitle(e.title));
 
-    const regex = playlist.title_filter_regex ? new RegExp(playlist.title_filter_regex, 'i') : null;
+    const regex = playlist.title_filter_regex ? this.buildTitleFilterRegExp(playlist.title_filter_regex) : null;
     const passes = (e) => {
       if (playlist.min_duration != null && (e.duration || 0) < playlist.min_duration) return false;
       if (playlist.max_duration != null && (e.duration || 0) > playlist.max_duration) return false;
@@ -709,17 +721,25 @@ class PlaylistModule {
     // One failing playlist must not stop the others, but the sweep reports
     // every failure so the scheduled run isn't recorded as a clean success.
     const errors = [];
+    // A storage pause is not a playlist failure: every remaining playlist
+    // would be refused the same way, so stop and report the pause instead.
+    let pausedReason = null;
     for (const p of playlists) {
       try {
         const enqueued = await downloadModule.doPlaylistDownloads(p, { refreshFirst: true, limitToRecent: true, overrideSettings, runId });
         totalEnqueued += enqueued || 0;
       } catch (err) {
+        if (storageGuard.isPausedError(err)) {
+          pausedReason = err.message;
+          logger.info({ playlist_id: p.playlist_id }, 'Downloads paused for storage; skipping the rest of the playlist sweep');
+          break;
+        }
         errors.push({ playlistId: p.playlist_id, message: err.message || 'Unknown error' });
         logger.error({ err, playlist_id: p.playlist_id }, 'playlistAutoDownload failed for playlist');
       }
     }
 
-    if (playlists.length > 0 && totalEnqueued === 0 && errors.length === 0) {
+    if (playlists.length > 0 && totalEnqueued === 0 && errors.length === 0 && !pausedReason) {
       try {
         const jobModule = require('./jobModule');
         const { PLAYLIST_SWEEP_LABEL } = require('./download/jobTypes');
@@ -733,7 +753,7 @@ class PlaylistModule {
       }
     }
 
-    return { playlists: playlists.length, enqueued: totalEnqueued, failed: errors.length, errors };
+    return { playlists: playlists.length, enqueued: totalEnqueued, failed: errors.length, errors, pausedReason };
   }
 }
 

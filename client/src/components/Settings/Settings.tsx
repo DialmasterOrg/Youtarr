@@ -23,6 +23,7 @@ import { DownloadPerformanceSection } from '../Configuration/sections/DownloadPe
 import { YtdlpOptionsSection } from '../Configuration/sections/YtdlpOptionsSection';
 import { YtdlpUpdateSection } from '../Configuration/sections/YtdlpUpdateSection';
 import { AutoRemovalSection } from '../Configuration/sections/AutoRemovalSection';
+import { StorageLimitsSection } from '../Configuration/sections/StorageLimitsSection';
 import { AccountSecuritySection } from '../Configuration/sections/AccountSecuritySection';
 import ApiKeysSection from '../Configuration/sections/ApiKeysSection';
 import { YouTubeApiSection } from '../Configuration/sections/YouTubeApiSection';
@@ -46,6 +47,7 @@ import { validatePrefix } from '../../utils/filenameTemplate/validate';
 import { SETTINGS_PAGES, SettingsIndex } from './SettingsIndex';
 import { MaintenanceSection } from './MaintenanceSection';
 import { SchedulingSection } from '../Configuration/sections/SchedulingSection';
+import { LoggingSection } from '../Configuration/sections/LoggingSection';
 
 interface SettingsProps {
   token: string | null;
@@ -63,6 +65,7 @@ export function Settings({ token }: SettingsProps) {
     initialConfig,
     isPlatformManaged,
     deploymentEnvironment,
+    loggingStatus,
     loading: isLoading,
     setConfig,
     setInitialConfig,
@@ -450,6 +453,18 @@ export function Settings({ token }: SettingsProps) {
             }
           />
           <Route
+            path="storage-limits"
+            element={
+              <StorageLimitsSection
+                token={token}
+                config={config}
+                storageAvailable={storageAvailable}
+                onConfigChange={handleConfigChange}
+                onMobileTooltipClick={setMobileTooltip}
+              />
+            }
+          />
+          <Route
             path="security"
             element={
               <AccountSecuritySection
@@ -486,6 +501,18 @@ export function Settings({ token }: SettingsProps) {
           <Route
             path="maintenance"
             element={<MaintenanceSection token={token} config={config} />}
+          />
+          <Route
+            path="logging"
+            element={
+              <LoggingSection
+                config={config}
+                savedLogLevel={initialConfig?.logLevel ?? ''}
+                loggingStatus={loggingStatus}
+                token={token}
+                onConfigChange={handleConfigChange}
+              />
+            }
           />
 
           <Route path="*" element={<Navigate to="/settings" replace />} />

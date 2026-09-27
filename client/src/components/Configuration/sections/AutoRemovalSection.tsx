@@ -16,10 +16,12 @@ import {
 } from '../../ui';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
 import { InfoTooltip } from '../common/InfoTooltip';
+import { OrDivider } from '../common/OrDivider';
 import { ConfigState, AutoRemovalDryRunResult } from '../types';
 import { ScheduleSummary } from './components/ScheduleSummary';
 import { useAutoRemovalDryRun } from '../hooks/useAutoRemovalDryRun';
 import { AutoRemovalWatchedControls } from './components/AutoRemovalWatchedControls';
+import { AutoRemovalUsageControls } from './components/AutoRemovalUsageControls';
 import { AutoRemovalPreview } from './components/AutoRemovalPreview';
 import { AutoRemovalRulesSummary } from './components/AutoRemovalRulesSummary';
 
@@ -30,18 +32,6 @@ interface AutoRemovalSectionProps {
   onConfigChange: (updates: Partial<ConfigState>) => void;
   onMobileTooltipClick?: (text: string) => void;
 }
-
-const OrDivider: React.FC = () => (
-  <Grid item xs={12}>
-    <Box className="flex items-center gap-3">
-      <Box className="flex-1 border-t border-border" />
-      <Typography variant="body2" className="text-muted-foreground font-medium">
-        OR
-      </Typography>
-      <Box className="flex-1 border-t border-border" />
-    </Box>
-  </Grid>
-);
 
 export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
   token,
@@ -82,7 +72,8 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
     config.autoRemovalWatchedEnabled,
     config.autoRemovalWatchedMinDaysSinceWatched,
     config.autoRemovalWatchedMinVideoAgeDays,
-    config.autoRemovalKeepRecentCount
+    config.autoRemovalKeepRecentCount,
+    config.autoRemovalUsageLimit
   ]);
 
   const handleRunDryRun = async () => {
@@ -96,7 +87,8 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
         autoRemovalWatchedEnabled: config.autoRemovalWatchedEnabled,
         autoRemovalWatchedMinDaysSinceWatched: config.autoRemovalWatchedMinDaysSinceWatched,
         autoRemovalWatchedMinVideoAgeDays: config.autoRemovalWatchedMinVideoAgeDays,
-        autoRemovalKeepRecentCount: config.autoRemovalKeepRecentCount
+        autoRemovalKeepRecentCount: config.autoRemovalKeepRecentCount,
+        autoRemovalUsageLimit: config.autoRemovalUsageLimit
       });
 
       setAutoRemovalDryRun({
@@ -123,6 +115,7 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
   const autoRemovalHasStrategy =
     Boolean(config.autoRemovalFreeSpaceThreshold) ||
     Boolean(config.autoRemovalVideoAgeThreshold) ||
+    Boolean(config.autoRemovalUsageLimit) ||
     config.autoRemovalWatchedEnabled;
 
   return (
@@ -158,8 +151,8 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
               <Grid item xs={12}>
                 <Alert severity="error" className="mb-2">
                   <Typography variant="body2">
-                    Enable at least one removal rule below (old videos, watched videos, or
-                    low disk space) when automatic removal is enabled.
+                    Enable at least one removal rule below (old videos, watched videos, low disk
+                    space, or total size of downloads) when automatic removal is enabled.
                   </Typography>
                 </Alert>
               </Grid>
@@ -178,7 +171,7 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
                     storage-based auto-removal will not work.
                   </Typography>
                   <Typography variant="body2">
-                    <strong>You can still use the Old videos and Watched videos rules</strong>, which don&apos;t require storage reporting.
+                    <strong>You can still use the Old videos, Watched videos and Total size of downloads rules</strong>, which don&apos;t require storage reporting.
                   </Typography>
                 </Alert>
               </Grid>
@@ -290,6 +283,14 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
                 </Grid>
               </>
             )}
+
+            <OrDivider />
+
+            <AutoRemovalUsageControls
+              config={config}
+              onConfigChange={onConfigChange}
+              onMobileTooltipClick={onMobileTooltipClick}
+            />
 
             <Grid item xs={12}>
               <Box className="rounded-lg border border-border p-4 bg-muted/30">

@@ -5,6 +5,7 @@ const { spawnYtDlpSync } = require('./ytdlpProcess');
 const configModule = require('./configModule');
 const nfoGenerator = require('./nfoGenerator');
 const ratingMapper = require('./ratingMapper');
+const { parseAdditionalTags } = require('./additionalTags');
 const tempPathManager = require('./download/tempPathManager');
 const downloadSettingsResolver = require('./download/downloadSettingsResolver');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
@@ -12,7 +13,13 @@ const { JobVideoDownload } = require('../models');
 const videoPersistence = require('./videoPersistence');
 const { VIDEO_PERSISTED_MARKER } = require('./constants/outputMarkers');
 const logger = require('../logger');
+const logLevelSync = require('./logLevelSync');
 const { buildChannelPath, cleanupEmptyParents, moveWithRetries, ensureDirWithRetries, copySyncWithFallback } = require('./filesystem');
+
+// Match the server's log level, including a level chosen in Settings. Quietly:
+// this process starts at LOG_LEVEL for every video, and its output is relayed
+// into the server log, so an announced change would repeat per download.
+logLevelSync.apply({ announce: false });
 
 const activeJobId = process.env.YOUTARR_JOB_ID;
 
@@ -432,7 +439,7 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
         const channelId = lookupChannelId;
         channelRecord = await Channel.findOne({
           where: { channel_id: channelId },
-          attributes: ['id', 'sub_folder', 'title', 'uploader', 'folder_name', 'default_rating', 'enabled', 'skip_video_folder']
+          attributes: ['id', 'sub_folder', 'title', 'uploader', 'folder_name', 'default_rating', 'enabled', 'skip_video_folder', 'additional_tags']
         });
 
         logger.info({ channelId, ownerProvided: !!ownerChannelId, found: !!channelRecord }, 'Post-process channel lookup');
@@ -478,6 +485,22 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
     // playlist fallback -> global. channelRecord above is still used for metadata backfill
     // regardless of enabled state.
     const settingsChannelRecord = channelRecord && channelRecord.enabled ? channelRecord : null;
+
+    // Merge per-channel custom tags into jsonData.tags (prepended, before YouTube tags)
+    // so the AtomicParsley --keyword args and the NFO writer below pick them up.
+    // YouTube tags duplicating a custom tag are dropped (case-insensitive), otherwise a
+    // custom tag like "Minecraft" on a video YouTube already tagged "minecraft" would be
+    // embedded twice.
+    if (settingsChannelRecord && settingsChannelRecord.additional_tags) {
+      const customTags = parseAdditionalTags(settingsChannelRecord.additional_tags);
+      if (customTags.length > 0) {
+        const customTagSet = new Set(customTags.map(t => t.toLowerCase()));
+        jsonData.tags = [
+          ...customTags,
+          ...(jsonData.tags || []).filter(t => !customTagSet.has(t.toLowerCase())),
+        ];
+      }
+    }
 
     // Outgoing layout: in per-video mode, resolve flat-vs-subfolder from the
     // video's real channel (hard override -> channel tri-state -> global);

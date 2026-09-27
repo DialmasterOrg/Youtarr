@@ -3,11 +3,15 @@ const logger = require('../../logger');
 const quotaTracker = require('./quotaTracker');
 const { classifyYoutubeApiError, YoutubeApiErrorCode } = require('./errorClassifier');
 const { parseIso8601Duration } = require('./durationParser');
+const parseReportedCount = require('../parseReportedCount');
 const {
   YOUTUBE_API_BASE_URL,
   YOUTUBE_API_TIMEOUT_MS,
   ENDPOINTS,
   VIDEOS_LIST_BATCH_SIZE,
+  PLAYLISTS_LIST_BATCH_SIZE,
+  TAB_PLAYLIST_PREFIX,
+  CHANNEL_ID_PATTERN,
 } = require('./constants');
 
 // Reference video for key validation: a permanently public, well-known video.
@@ -24,21 +28,6 @@ const TEST_VIDEO_ID = 'dQw4w9WgXcQ';
 // playable file and would surface a useless result card.
 const SEARCH_LIST_MAX_RESULTS = 50;
 const SEARCH_LIST_EXTRA_PAGE_BUFFER = 1;
-
-// Per-tab auto-generated playlist prefixes. UU is all uploads combined;
-// UULF/UUSH/UULV are the same content partitioned by media type and correspond
-// exactly to the Videos/Shorts/Live tabs on the channel page. Undocumented by
-// Google but stable for years.
-const TAB_PLAYLIST_PREFIX = {
-  videos: 'UULF',
-  shorts: 'UUSH',
-  streams: 'UULV',
-};
-
-// YouTube channel IDs are always exactly 24 chars: "UC" + 22 base64url-ish chars.
-// Validating the full shape up-front catches typos/corrupt data before we construct
-// a bogus playlist ID and hit the API for nothing.
-const CHANNEL_ID_PATTERN = /^UC[A-Za-z0-9_-]{22}$/;
 
 function derivePlaylistIdForTab(channelId, tabType) {
   const prefix = TAB_PLAYLIST_PREFIX[tabType];
@@ -482,6 +471,41 @@ async function detectAvailableTabs(apiKey, channelUrl) {
   return { availableTabs, channelInfo };
 }
 
+/**
+ * Item counts for playlists via playlists.list (part=contentDetails), batched
+ * PLAYLISTS_LIST_BATCH_SIZE ids per call at 1 quota unit each. YouTube leaves
+ * out playlists that do not exist, which for the auto-generated tab playlists
+ * means the tab is empty, so an omitted id maps to 0. An id whose itemCount is
+ * unusable is left out of the result. Any failed call propagates so the caller
+ * can fall back to yt-dlp.
+ *
+ * @param {string} apiKey
+ * @param {string[]} playlistIds
+ * @returns {Promise<Map<string, number>>}
+ */
+async function getPlaylistItemCounts(apiKey, playlistIds) {
+  const counts = new Map();
+  for (const batch of chunk(playlistIds, PLAYLISTS_LIST_BATCH_SIZE)) {
+    const data = await apiGet(apiKey, ENDPOINTS.playlists, {
+      id: batch.join(','),
+      part: 'contentDetails',
+      maxResults: PLAYLISTS_LIST_BATCH_SIZE,
+    });
+    const returned = new Map(
+      (data.items || []).map((item) => [item.id, parseReportedCount(item.contentDetails?.itemCount)])
+    );
+    for (const id of batch) {
+      if (!returned.has(id)) {
+        counts.set(id, 0);
+        continue;
+      }
+      const count = returned.get(id);
+      if (count !== null) counts.set(id, count);
+    }
+  }
+  return counts;
+}
+
 module.exports = {
   testKey,
   getVideoMetadata,
@@ -489,5 +513,6 @@ module.exports = {
   searchVideos,
   searchChannels,
   detectAvailableTabs,
+  getPlaylistItemCounts,
   YoutubeApiError,
 };

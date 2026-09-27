@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import '@testing-library/jest-dom';
 import PlaylistHeader from './PlaylistHeader';
@@ -82,6 +83,25 @@ describe('PlaylistHeader', () => {
       </MemoryRouter>
     );
     expect(screen.getByText('Audio playlist')).toBeInTheDocument();
+  });
+
+  test('shows the video and downloaded counts', () => {
+    render(
+      <MemoryRouter>
+        <PlaylistHeader {...baseProps} downloadedCount={12} />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('12 downloaded (30%) • 39 videos')).toBeInTheDocument();
+  });
+
+  test('explains the counts, including the 5,000 video limit', async () => {
+    render(
+      <MemoryRouter>
+        <PlaylistHeader {...baseProps} downloadedCount={12} />
+      </MemoryRouter>
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Playlist video count info' }));
+    expect(await screen.findByText(/first 5,000 videos of a playlist/)).toBeInTheDocument();
   });
 
   test('forwards unsyncableCount to the media server sync group', () => {

@@ -26,7 +26,7 @@ Youtarr ships four Compose files so each supported runtime can layer the right o
 - **Volumes**:
   - `${YOUTUBE_OUTPUT_DIR}:/usr/src/app/data` - Videos directory
   - `./server/images:/app/server/images` - Thumbnails/cache
-  - `./config:/app/config` - Configuration files
+  - `./config:/app/config` - Configuration files, the yt-dlp download archive (`complete.list`), yt-dlp's cache (`.yt-dlp-cache/`, cleared automatically when yt-dlp updates; safe to delete), and rolling log files (`logs/`)
   - `./jobs:/app/jobs` - Job state and artifacts
 
 ### Database Container (youtarr-db)
@@ -547,6 +547,8 @@ When `DATA_PATH` is set:
    - `/app/config/config.json` - Configuration file
    - `/app/config/images/` - Channel and video thumbnails
    - `/app/config/jobs/` - Job state and metadata
+   - `/app/config/.yt-dlp-cache/` - yt-dlp's cache (same location in every deployment)
+   - `/app/config/logs/` - Rolling log files (same location in every deployment)
 
 2. **Protected Settings**: In the web UI:
    - Plex URL field is disabled if `PLEX_URL` is set

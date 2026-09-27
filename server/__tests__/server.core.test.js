@@ -198,6 +198,7 @@ const createServerModule = ({
         const cronMock = { schedule: jest.fn() };
         const cronJobsMock = { initialize: jest.fn() };
         const watchStatusSchedulerMock = { scheduleTask: jest.fn(), subscribe: jest.fn() };
+        const logLevelSyncMock = { apply: jest.fn(), subscribe: jest.fn() };
         const scheduledTaskRunsMock = {
           markInterruptedRuns: jest.fn().mockResolvedValue(undefined),
           getLatestRuns: jest.fn().mockResolvedValue({}),
@@ -270,6 +271,13 @@ const createServerModule = ({
         jest.doMock('../modules/scheduledTaskRuns', () => scheduledTaskRunsMock);
         jest.doMock('../modules/scheduledTaskManager', () => scheduledTaskManagerMock);
         jest.doMock('../modules/channel/channelBackdropBackfill', () => ({ subscribe: jest.fn() }));
+        jest.doMock('../modules/logLevelSync', () => logLevelSyncMock);
+        jest.doMock('../modules/storageGuard', () => ({
+          initialize: jest.fn().mockResolvedValue({ paused: false, reasons: [] }),
+          refresh: jest.fn().mockResolvedValue({ paused: false, reasons: [] }),
+          isPausedError: jest.fn(() => false),
+          describe: jest.fn(() => ''),
+        }));
         jest.doMock('../modules/webSocketServer.js', () => jest.fn());
         jest.doMock('node-cron', () => cronMock);
         jest.doMock('express-rate-limit', () => Object.assign(rateLimitMiddleware, { ipKeyGenerator: rateLimitMiddleware.ipKeyGenerator }));
@@ -289,6 +297,7 @@ const createServerModule = ({
         state.plexModuleMock = plexModuleMock;
         state.rateLimitMiddleware = rateLimitMiddleware;
         state.watchStatusSchedulerMock = watchStatusSchedulerMock;
+        state.logLevelSyncMock = logLevelSyncMock;
         state.scheduledTaskRunsMock = scheduledTaskRunsMock;
         state.scheduledTaskManagerMock = scheduledTaskManagerMock;
         state.sessionUpdateMock = effectiveSession?.update || defaultSessionUpdate;
@@ -339,6 +348,13 @@ describe('server initialization', () => {
     expect(loggerMock.info).not.toHaveBeenCalledWith(
       expect.stringContaining('TRUST_PROXY is unset')
     );
+  });
+
+  test('applies the saved log level and follows config changes at startup', async () => {
+    const { logLevelSyncMock } = await createServerModule();
+
+    expect(logLevelSyncMock.apply).toHaveBeenCalledTimes(1);
+    expect(logLevelSyncMock.subscribe).toHaveBeenCalledTimes(1);
   });
 
   test('initializes database and exposes health route', async () => {

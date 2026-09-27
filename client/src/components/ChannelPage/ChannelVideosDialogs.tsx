@@ -12,6 +12,28 @@ import {
 import DownloadSettingsDialog from '../DownloadManager/ManualDownload/DownloadSettingsDialog';
 import DeleteVideosDialog from '../shared/DeleteVideosDialog';
 import { DownloadSettings } from '../DownloadManager/ManualDownload/types';
+import { TabDownloadStats } from '../../types/Channel';
+import { LOAD_MORE_MAX_VIDEOS } from './components/TabDownloadSummary';
+
+// Load More re-reads the newest LOAD_MORE_MAX_VIDEOS entries of the tab.
+// Members-only entries share those slots but are not in YouTube's public
+// total, so the out-of-reach count is approximate.
+function describeLoadMore(stats: TabDownloadStats | undefined, tabLabel: string): string {
+  const limit = LOAD_MORE_MAX_VIDEOS.toLocaleString();
+  if (!stats || stats.total === null || stats.loaded === undefined) {
+    return `This will load up to the newest ${limit} videos from this channel's '${tabLabel}' tab on YouTube.`;
+  }
+  const total = stats.total.toLocaleString();
+  if (stats.loaded >= stats.total) {
+    return `All ${total} public videos on this tab are already loaded. Loading again refreshes the list.`;
+  }
+  const listed = `YouTube lists ${total} public videos on this tab and ${stats.loaded.toLocaleString()} are loaded.`;
+  if (stats.total <= LOAD_MORE_MAX_VIDEOS) {
+    return `${listed} Load More will load the full list.`;
+  }
+  const outOfReach = (stats.total - LOAD_MORE_MAX_VIDEOS).toLocaleString();
+  return `${listed} Load More reads only the newest ${limit}, so about ${outOfReach} of the oldest can't be loaded here.`;
+}
 
 export interface ChannelVideosDialogsProps {
   token: string | null;
@@ -31,6 +53,9 @@ export interface ChannelVideosDialogsProps {
   defaultAudioFormatSource?: 'channel' | 'global';
   selectedTab: string;
   tabLabel: string;
+  // Channel page stats for the selected tab; without a YouTube total the
+  // Load More dialog falls back to the generic limit.
+  tabStats?: TabDownloadStats;
   onDownloadDialogClose: () => void;
   onDownloadConfirm: (settings: DownloadSettings | null) => void;
   onRefreshCancel: () => void;
@@ -61,6 +86,7 @@ function ChannelVideosDialogs({
   defaultAudioFormatSource,
   selectedTab,
   tabLabel,
+  tabStats,
   onDownloadDialogClose,
   onDownloadConfirm,
   onRefreshCancel,
@@ -101,7 +127,7 @@ function ChannelVideosDialogs({
         </DialogTitle>
         <DialogContent>
           <DialogContentText id="refresh-dialog-description">
-            This will load up to 5000 additional videos from this channel&apos;s &apos;{tabLabel}&apos; tab on YouTube. <i>This can take quite some time to complete, depending on the size of the channel and your internet connection!</i>
+            {describeLoadMore(tabStats, tabLabel)} <i>This can take quite some time to complete, depending on the size of the channel and your internet connection!</i>
           </DialogContentText>
         </DialogContent>
         <DialogActions>

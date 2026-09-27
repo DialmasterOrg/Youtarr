@@ -63,6 +63,7 @@ function initialize(deps = {}) {
   const notificationModule = require('./notificationModule');
   const ytdlpModule = require('./ytdlpModule');
   const configModule = require('./configModule');
+  const tabVideoCounts = require('./channel/tabVideoCounts');
   const { refreshYtDlpVersionCache } = deps;
 
   logger.info('Initializing scheduled cron jobs');
@@ -209,6 +210,19 @@ function initialize(deps = {}) {
       return summary;
     } catch (error) {
       logger.error({ err: error }, 'Unexpected error in scheduled yt-dlp auto-update');
+      return failedRun(error);
+    }
+  };
+
+  // ============================================================================
+  // CHANNEL VIDEO COUNTS (per-tab YouTube totals for the download percentage)
+  // ============================================================================
+  jobs.channelVideoCountsFrequency = async () => {
+    logger.info('Refreshing channel tab video counts');
+    try {
+      return await tabVideoCounts.refreshAll();
+    } catch (error) {
+      logger.error({ err: error }, 'Channel tab video count refresh failed');
       return failedRun(error);
     }
   };

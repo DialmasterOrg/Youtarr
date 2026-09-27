@@ -74,7 +74,7 @@ Subscribe to YouTube channels to automatically download new videos as they're pu
 4. **Configure channel-specific settings** (optional)
    - Click on a channel to open its detail page
    - Click **Open in YouTube** next to the channel name to open the channel on YouTube in a new tab
-   - Click **Edit** (the gear button) in the **Channel Settings** bar to open channel settings. The dialog has four tabs:
+   - Click **Edit** (the gear button) in the **Channel Settings** bar to open channel settings. The dialog has five tabs:
      - **General**:
        - **Subfolder**: pick or create a subfolder to organize channels into separate media libraries (e.g., `__kids`, `__music`); the picker has an inline **Add Subfolder** action for new names
        - **Resolution Override**: a **Channel Video Quality Override** that takes precedence over the global setting
@@ -82,6 +82,7 @@ Subscribe to YouTube channels to automatically download new videos as they're pu
        - **Auto Downloads**: separate toggles for **New Videos**, **New Shorts**, and **New Live/Streams**. These only take effect while the global **Enable Automatic Downloads** toggle in Settings -> Core is on.
      - **Filters**: duration limits and a title regex to control which videos auto-download
      - **Ratings**: a default content rating for this channel's downloads
+     - **Tags**: custom tags that can be automatically added to downloaded videos separated by '|'. This applies only to videos downloaded in the future.
      - **Auto-Removal**: **Protect this channel from auto-removal**, or use **Always keep newest downloads** to keep the channel's newest N downloads out of automatic cleanup (see [Configure Automation](#configure-automation))
 
 ### Channel playlist file (.m3u)
@@ -280,6 +281,7 @@ Set up automatic downloads on a schedule so Youtarr checks for new videos period
      - **Old videos**: **Delete videos older than** a set number of days
      - **Watched videos**: **Remove watched videos** once your media servers report them watched (see [Track Watch Status from Media Servers](#track-watch-status-from-media-servers)); you can add a **Wait after last watch** delay and a **Minimum time since download** so fresh downloads aren't removed right away
      - **Low disk space**: delete the oldest videos **When free space falls below** a threshold
+     - **Total size of downloads**: delete the oldest videos **When downloads total more than** a size, for example to stay under a cloud storage quota
    - Some videos are always kept, no matter which rules match:
      - Videos you've marked as Protected
      - The newest N downloads, if you set **Keep this many newest downloads**
@@ -288,7 +290,14 @@ Set up automatic downloads on a schedule so Youtarr checks for new videos period
      - This shows you exactly which videos would be deleted without actually removing them
      - Highly recommended before enabling auto-cleanup
 
-6. **Save configuration**
+6. **Pause downloads when storage is full** (optional)
+   - Open **Settings -> Storage Limits**
+   - **Pause when downloads total more than** a size, and/or **Pause when free space falls below** a size
+   - While paused, new downloads are refused, queued downloads wait, and a banner explains why; you also get a notification when downloads pause and when they resume
+   - Limits are checked between download jobs: a job already running finishes all of its videos, so storage can go past a limit until it ends
+   - Downloads resume automatically once storage is back within your limits (for example after Auto Removal frees space)
+
+7. **Save configuration**
    - Click "Save" to apply your settings
    - Changes take effect immediately for the next scheduled run
 

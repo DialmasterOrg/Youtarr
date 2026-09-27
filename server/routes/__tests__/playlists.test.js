@@ -25,6 +25,9 @@ const makePlaylist = (overrides = {}) => ({
   enabled: true,
   update: jest.fn().mockResolvedValue(undefined),
   reload: jest.fn().mockResolvedValue(undefined),
+  toJSON() {
+    return Object.fromEntries(Object.entries(this).filter(([, value]) => typeof value !== 'function'));
+  },
   ...overrides,
 });
 
@@ -38,6 +41,7 @@ const buildDeps = (overrides = {}) => ({
     refreshForFollowing: jest.fn().mockResolvedValue(0),
     isFollowingSetupError: (err) => ['PLAYLIST_TOO_LARGE', 'PLAYLIST_REFRESH_INCOMPLETE'].includes(err.message),
     recoverFollowingSetup: jest.fn().mockResolvedValue('Playlist saved. Auto-download setup needs attention.'),
+    buildTitleFilterRegExp: jest.fn(),
     ...overrides.playlistModule,
   },
   m3uGenerator: {
@@ -76,6 +80,10 @@ const buildDeps = (overrides = {}) => ({
   // time, so the filter tests exercise the actual set logic through the route.
   playlistVideoFilters: require('../../modules/playlistVideoFilters'),
   playlistDownloadModule: require('../../modules/playlistDownloadModule'),
+  storageGuard: {
+    isPausedError: jest.fn((err) => Boolean(err && err.code === 'DOWNLOADS_PAUSED')),
+    ...overrides.storageGuard,
+  },
   models: {
     Playlist: {
       findAndCountAll: jest.fn(),
@@ -88,6 +96,7 @@ const buildDeps = (overrides = {}) => ({
       findAndCountAll: jest.fn(),
       findAll: jest.fn().mockResolvedValue([]),
       update: jest.fn(),
+      sequelize: { query: jest.fn().mockResolvedValue([]) },
       ...overrides.PlaylistVideo,
     },
     Video: {
@@ -128,6 +137,26 @@ describe('GET /api/playlists', () => {
       expect.objectContaining({ where: { enabled: true }, limit: 25, offset: 0 })
     );
     expect(res.json).toHaveBeenCalledWith({ total: 2, playlists: expect.any(Array) });
+  });
+
+  test('adds each playlist\'s downloaded count, zero when it has none', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findAndCountAll.mockResolvedValue({
+      count: 2,
+      rows: [makePlaylist({ id: 1 }), makePlaylist({ id: 2, playlist_id: 'PLother' })],
+    });
+    deps.models.PlaylistVideo.sequelize.query.mockResolvedValue([{ playlist_id: 'PLtest123', downloaded: 5 }]);
+
+    const handler = getHandler('get', '/api/playlists', deps);
+    const res = createResponse();
+
+    await handler({ query: {}, log: loggerMock }, res);
+
+    const { playlists } = res.json.mock.calls[0][0];
+    expect(playlists.map((p) => [p.playlist_id, p.downloaded_count])).toEqual([
+      ['PLtest123', 5],
+      ['PLother', 0],
+    ]);
   });
 
   test('respects page and pageSize query params', async () => {
@@ -263,6 +292,18 @@ describe('GET /api/playlists/:playlistId not_downloaded_count', () => {
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ not_downloaded_count: 2 })
     );
+  });
+
+  test('includes the downloaded count', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.sequelize.query.mockResolvedValue([{ playlist_id: 'PLtest123', downloaded: 2 }]);
+
+    const handler = getHandler('get', '/api/playlists/:playlistId', deps);
+    const res = createResponse();
+
+    await handler({ params: { playlistId: 'PLtest123' }, log: loggerMock }, res);
+
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ downloaded_count: 2 }));
   });
 
   test('returns 404 when playlist missing', async () => {
@@ -869,6 +910,79 @@ describe('PUT /api/playlists/:playlistId/settings', () => {
     await handler(req, res);
 
     expect(deps.subfolderModule.register).toHaveBeenCalledWith('Music');
+  });
+
+  test('rejects a title_filter_regex the refresh cannot compile, without persisting', async () => {
+    const deps = buildDeps();
+    deps.playlistModule.buildTitleFilterRegExp.mockImplementation(() => {
+      throw new SyntaxError('Unterminated character class');
+    });
+
+    const handler = getHandler('put', '/api/playlists/:playlistId/settings', deps);
+    const req = {
+      params: { playlistId: 'PLtest123' },
+      body: { title_filter_regex: '[unclosed' },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Invalid title_filter_regex: Unterminated character class' });
+    expect(deps.models.Playlist.findOne).not.toHaveBeenCalled();
+  });
+
+  test('rejects a non-string title_filter_regex', async () => {
+    const deps = buildDeps();
+
+    const handler = getHandler('put', '/api/playlists/:playlistId/settings', deps);
+    const req = {
+      params: { playlistId: 'PLtest123' },
+      body: { title_filter_regex: 42 },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  test('saves a valid title_filter_regex exactly as given', async () => {
+    const deps = buildDeps();
+    const p = makePlaylist();
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+
+    const handler = getHandler('put', '/api/playlists/:playlistId/settings', deps);
+    const req = {
+      params: { playlistId: 'PLtest123' },
+      body: { title_filter_regex: 'Episode \\d+ ' },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(p.update).toHaveBeenCalledWith({ title_filter_regex: 'Episode \\d+ ' });
+  });
+
+  test('clears title_filter_regex without compiling it', async () => {
+    const deps = buildDeps();
+    const p = makePlaylist();
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+
+    const handler = getHandler('put', '/api/playlists/:playlistId/settings', deps);
+    const req = {
+      params: { playlistId: 'PLtest123' },
+      body: { title_filter_regex: null },
+      log: loggerMock,
+    };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.playlistModule.buildTitleFilterRegExp).not.toHaveBeenCalled();
   });
 
   test('returns 404 when playlist not found', async () => {
@@ -1720,6 +1834,23 @@ describe('POST /api/playlists/:playlistId/download', () => {
 
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: 'Failed to start playlist download' });
+  });
+
+  test('returns 409 with the reason when downloads are paused for storage', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(makePlaylist());
+    deps.downloadModule.doPlaylistDownloads.mockRejectedValue(
+      Object.assign(new Error('Downloads are paused: over the limit'), { code: 'DOWNLOADS_PAUSED' })
+    );
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/download', deps);
+    const req = { params: { playlistId: 'PLtest123' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Downloads are paused: over the limit' });
   });
 
   test('passes videoIds through to doPlaylistDownloads when provided', async () => {

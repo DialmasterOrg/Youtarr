@@ -28,9 +28,12 @@ jest.mock('../chips', () => ({
     }
     return React.createElement('div', attrs, `Quality: ${videoQuality || 'default'}`);
   },
-  AutoDownloadChips: function MockAutoDownloadChips({ availableTabs, autoDownloadTabs }: any) {
+  AutoDownloadChips: function MockAutoDownloadChips({ availableTabs, autoDownloadTabs, tabStats }: any) {
     const React = require('react');
     const attrs: any = { 'data-testid': 'auto-download-chips' };
+    if (tabStats?.videos) {
+      attrs['data-videos-percent'] = tabStats.videos.percent;
+    }
     if (availableTabs !== null && availableTabs !== undefined) {
       attrs['data-available'] = availableTabs;
     }
@@ -185,6 +188,16 @@ describe('ChannelCard Component', () => {
       expect(autoDownloadChips).toBeInTheDocument();
       expect(autoDownloadChips).toHaveAttribute('data-available', 'video,short,livestream');
       expect(autoDownloadChips).toHaveAttribute('data-enabled', 'video');
+    });
+
+    test('passes the tab download stats to the auto-download chips', () => {
+      const channelWithStats = {
+        ...mockChannel,
+        tab_download_stats: { videos: { total: 449, fetchedAt: null, downloaded: 120, ignored: 0, percent: 26 } },
+      };
+      renderWithProviders(<ChannelCard {...defaultProps} channel={channelWithStats} />);
+
+      expect(screen.getByTestId('auto-download-chips')).toHaveAttribute('data-videos-percent', '26');
     });
 
     test('renders DurationFilterChip when min/max duration is set', () => {

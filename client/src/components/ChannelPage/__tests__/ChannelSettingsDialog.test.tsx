@@ -85,6 +85,7 @@ describe('ChannelSettingsDialog', () => {
       platform: null,
       isWsl: false,
     },
+    loggingStatus: null,
     setConfig: jest.fn(),
     setInitialConfig: jest.fn(),
   });
@@ -365,6 +366,7 @@ describe('ChannelSettingsDialog', () => {
           platform: null,
           isWsl: false,
         },
+        loggingStatus: null,
         setConfig: jest.fn(),
         setInitialConfig: jest.fn(),
       });

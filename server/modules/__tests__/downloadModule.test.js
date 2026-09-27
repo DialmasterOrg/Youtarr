@@ -53,6 +53,10 @@ jest.mock('../../logger', () => ({
 jest.mock('uuid', () => ({
   v4: jest.fn(() => 'test-uuid-123')
 }));
+jest.mock('../storageGuard', () => ({
+  assertDownloadsAllowed: jest.fn().mockResolvedValue(),
+  isPausedError: jest.fn(() => false)
+}));
 jest.mock('../messageEmitter', () => ({
   emitMessage: jest.fn(),
   getLastMessages: jest.fn(() => []),
@@ -467,6 +471,62 @@ describe('DownloadModule', () => {
     });
   });
 
+  describe('when downloads are paused for storage', () => {
+    let storageGuard;
+    let jobModuleMock;
+    const pausedError = Object.assign(new Error('Downloads are paused: over the limit'), { code: 'DOWNLOADS_PAUSED' });
+
+    beforeEach(() => {
+      storageGuard = require('../storageGuard');
+      jobModuleMock = require('../jobModule');
+      storageGuard.assertDownloadsAllowed.mockRejectedValue(pausedError);
+    });
+
+    afterEach(() => {
+      storageGuard.assertDownloadsAllowed.mockResolvedValue();
+    });
+
+    it('refuses new manual downloads without creating a job', async () => {
+      await expect(
+        downloadModule.doSpecificDownloads({ body: { urls: ['https://youtube.com/watch?v=abc123'] } })
+      ).rejects.toBe(pausedError);
+      expect(jobModuleMock.addOrUpdateJob).not.toHaveBeenCalled();
+    });
+
+    it('still starts a held manual job from the queue', async () => {
+      jobModuleMock.getJob.mockReturnValue({ status: 'Pending' });
+
+      await downloadModule.doSpecificDownloads({ id: 'held-job', urls: ['https://youtube.com/watch?v=abc123'] }, true);
+
+      expect(jobModuleMock.addOrUpdateJob).toHaveBeenCalled();
+    });
+
+    it('refuses new channel downloads without creating a job', async () => {
+      await expect(downloadModule.doChannelDownloads({})).rejects.toBe(pausedError);
+      expect(jobModuleMock.addOrUpdateJob).not.toHaveBeenCalled();
+    });
+
+    it('still starts a held channel job from the queue', async () => {
+      await downloadModule.doChannelDownloads({ id: 'held-job' }, true);
+
+      expect(jobModuleMock.addOrUpdateJob).toHaveBeenCalled();
+    });
+
+    it('refuses a channel and playlist sweep before any work starts', async () => {
+      const channelSpy = jest.spyOn(downloadModule, 'doChannelDownloads');
+
+      await expect(downloadModule.doChannelAndPlaylistDownloads({})).rejects.toBe(pausedError);
+      expect(channelSpy).not.toHaveBeenCalled();
+    });
+
+    it('refuses playlist downloads before refreshing from YouTube', async () => {
+      const playlist = { playlist_id: 'PL1', reload: jest.fn() };
+
+      await expect(downloadModule.doPlaylistDownloads(playlist, { refreshFirst: true })).rejects.toBe(pausedError);
+      expect(playlist.reload).not.toHaveBeenCalled();
+    });
+  });
+
   describe('doChannelAndPlaylistDownloads', () => {
     it('runs channel downloads first, then triggers playlist auto-downloads', async () => {
       const order = [];
@@ -482,7 +542,7 @@ describe('DownloadModule', () => {
 
       const result = await downloadModule.doChannelAndPlaylistDownloads({ some: 'data' });
 
-      expect(result).toEqual({ playlistError: null, playlistsFailed: 0, playlistsChecked: 0 });
+      expect(result).toEqual({ playlistError: null, playlistsFailed: 0, playlistsChecked: 0, playlistsPausedReason: null });
       expect(downloadModule.doChannelDownloads).toHaveBeenCalledWith({ some: 'data', runId: expect.any(String) });
       expect(playlistModule.playlistAutoDownload).toHaveBeenCalledTimes(1);
       expect(playlistModule.playlistAutoDownload).toHaveBeenCalledWith({}, expect.any(String));
@@ -514,7 +574,7 @@ describe('DownloadModule', () => {
 
       await expect(
         downloadModule.doChannelAndPlaylistDownloads({})
-      ).resolves.toEqual({ playlistError: 'boom', playlistsFailed: 0, playlistsChecked: 0 });
+      ).resolves.toEqual({ playlistError: 'boom', playlistsFailed: 0, playlistsChecked: 0, playlistsPausedReason: null });
       expect(downloadModule.doChannelDownloads).toHaveBeenCalled();
     });
 
@@ -528,7 +588,20 @@ describe('DownloadModule', () => {
 
       await expect(
         downloadModule.doChannelAndPlaylistDownloads({})
-      ).resolves.toEqual({ playlistError: null, playlistsFailed: 1, playlistsChecked: 3 });
+      ).resolves.toEqual({ playlistError: null, playlistsFailed: 1, playlistsChecked: 3, playlistsPausedReason: null });
+    });
+
+    it('reports a sweep stopped by a storage pause', async () => {
+      jest.spyOn(downloadModule, 'doChannelDownloads').mockResolvedValue();
+      jest.doMock('../playlistModule', () => ({
+        playlistAutoDownload: jest.fn().mockResolvedValue({
+          playlists: 3, enqueued: 0, failed: 0, errors: [], pausedReason: 'Downloads are paused: over the limit',
+        }),
+      }));
+
+      await expect(downloadModule.doChannelAndPlaylistDownloads({})).resolves.toMatchObject({
+        playlistsPausedReason: 'Downloads are paused: over the limit',
+      });
     });
 
     it('skips channel job creation but still runs playlist auto-downloads when no channel URLs exist', async () => {
@@ -574,6 +647,15 @@ describe('DownloadModule', () => {
       YtdlpCommandBuilderMock = require('../download/ytdlpCommandBuilder');
       jobModuleMock.addOrUpdateJob.mockResolvedValue(mockJobId);
       channelModuleMock.generateChannelsFile.mockResolvedValue(mockTempFile);
+    });
+
+    it('does nothing when another caller already started the queued job', async () => {
+      jobModuleMock.addOrUpdateJob.mockResolvedValue(undefined);
+      jobModuleMock.getJob.mockReturnValue(undefined);
+
+      await downloadModule.doSingleChannelDownloadJob({ id: 'held-job' }, true);
+
+      expect(mockDownloadExecutor.doDownload).not.toHaveBeenCalled();
     });
 
     it('should successfully execute channel downloads with default settings', async () => {
@@ -788,6 +870,141 @@ describe('DownloadModule', () => {
       });
     });
 
+    describe('when a group finishes with Error status', () => {
+      const groups = [
+        { quality: '1080', subFolder: null, channels: [{ channel_id: 'UC1' }] },
+        { quality: '720', subFolder: null, channels: [{ channel_id: 'UC2' }] }
+      ];
+      let executeSpy;
+
+      beforeEach(() => {
+        const job = { status: 'In Progress', data: { videos: [] } };
+        jobModuleMock.getJob.mockReturnValue(job);
+        executeSpy = jest.spyOn(downloadModule, 'executeGroupDownload').mockImplementation(async () => {
+          job.status = 'Error';
+          job.output = 'Output directory is not accessible: EACCES';
+        });
+      });
+
+      it('skips the remaining groups', async () => {
+        await downloadModule.doGroupedChannelDownloads({}, groups);
+
+        expect(executeSpy).toHaveBeenCalledTimes(1);
+      });
+
+      it('does not overwrite the Error status with Complete', async () => {
+        await downloadModule.doGroupedChannelDownloads({}, groups);
+
+        expect(jobModuleMock.updateJob).not.toHaveBeenCalledWith('job-123', { status: 'Complete' });
+      });
+
+      it('starts the next queued job', async () => {
+        await downloadModule.doGroupedChannelDownloads({}, groups);
+
+        expect(jobModuleMock.startNextJob).toHaveBeenCalled();
+      });
+
+      it('tells the run tracker which group stopped the job', async () => {
+        const downloadRunTracker = require('../download/downloadRunTracker');
+        jest.spyOn(downloadRunTracker, 'isActive').mockReturnValue(true);
+        const recordSpy = jest.spyOn(downloadRunTracker, 'recordJobResult').mockReturnValue(true);
+
+        await downloadModule.doGroupedChannelDownloads({ runId: 'run-x' }, groups);
+
+        expect(recordSpy).toHaveBeenCalledWith('run-x', 'job-123', expect.objectContaining({
+          stoppedGroup: {
+            group: 'Group 1/2 (1080p)',
+            reason: 'Output directory is not accessible: EACCES',
+            terminated: false,
+          },
+        }));
+      });
+
+      it('puts the failure reason in the final message', async () => {
+        const MessageEmitter = require('../messageEmitter');
+
+        await downloadModule.doGroupedChannelDownloads({}, groups);
+
+        const finalCall = MessageEmitter.emitMessage.mock.calls.find((call) => call[4] && call[4].finalSummary);
+        expect(finalCall[4].text).toBe(
+          'Download failed in Group 1/2 (1080p): Output directory is not accessible: EACCES. 0 downloaded'
+        );
+      });
+
+      it('notifies even though nothing downloaded', async () => {
+        const notificationModule = require('../notificationModule');
+        const notifySpy = jest.spyOn(notificationModule, 'sendDownloadNotification').mockResolvedValue();
+
+        await downloadModule.doGroupedChannelDownloads({}, groups);
+
+        expect(notifySpy).toHaveBeenCalledWith(expect.objectContaining({
+          finalSummary: expect.objectContaining({
+            stoppedGroups: [expect.objectContaining({ group: 'Group 1/2 (1080p)', terminated: false })],
+          }),
+        }));
+      });
+    });
+
+    describe('when the user terminates the last group', () => {
+      const groups = [
+        { quality: '1080', subFolder: null, channels: [{ channel_id: 'UC1' }] }
+      ];
+
+      beforeEach(() => {
+        const job = { status: 'In Progress', data: { videos: [] } };
+        jobModuleMock.getJob.mockReturnValue(job);
+        jest.spyOn(downloadModule, 'executeGroupDownload').mockImplementation(async () => {
+          job.status = 'Terminated';
+          job.output = '0 videos completed before termination';
+          job.notes = 'User requested termination';
+        });
+      });
+
+      it('keeps the Terminated status instead of stamping Complete', async () => {
+        await downloadModule.doGroupedChannelDownloads({}, groups);
+
+        expect(jobModuleMock.updateJob).not.toHaveBeenCalledWith('job-123', { status: 'Complete' });
+      });
+
+      it('reports the termination and its reason', async () => {
+        const MessageEmitter = require('../messageEmitter');
+
+        await downloadModule.doGroupedChannelDownloads({}, groups);
+
+        const finalCall = MessageEmitter.emitMessage.mock.calls.find((call) => call[4] && call[4].finalSummary);
+        expect(finalCall[4]).toMatchObject({
+          text: 'Download terminated in Group 1/1 (1080p): User requested termination. 0 downloaded',
+          progress: { state: 'terminated' },
+        });
+      });
+
+      it('does not notify for the termination alone', async () => {
+        const notificationModule = require('../notificationModule');
+        const notifySpy = jest.spyOn(notificationModule, 'sendDownloadNotification').mockResolvedValue();
+
+        await downloadModule.doGroupedChannelDownloads({}, groups);
+
+        expect(notifySpy).not.toHaveBeenCalled();
+      });
+
+      it('starts the next queued job', async () => {
+        await downloadModule.doGroupedChannelDownloads({}, groups);
+
+        expect(jobModuleMock.startNextJob).toHaveBeenCalled();
+      });
+    });
+
+    it('starts the next queued job after a group throws', async () => {
+      const groups = [
+        { quality: '1080', subFolder: null, channels: [{ channel_id: 'UC1' }] }
+      ];
+      jest.spyOn(downloadModule, 'executeGroupDownload').mockRejectedValueOnce(new Error('boom'));
+
+      await downloadModule.doGroupedChannelDownloads({}, groups);
+
+      expect(jobModuleMock.startNextJob).toHaveBeenCalled();
+    });
+
     it('should refresh Plex libraries for each group subfolder after all groups complete', async () => {
       const groups = [
         { quality: '1080', subFolder: null, channels: [{ channel_id: 'UC1' }] }
@@ -859,14 +1076,32 @@ describe('DownloadModule', () => {
       jobModuleMock.getJob
         .mockReturnValueOnce({ status: 'In Progress' }) // Initial check
         .mockReturnValueOnce({ status: 'In Progress' }) // First iteration check
+        .mockReturnValueOnce({ status: 'In Progress' }) // Post-group failure check
         .mockReturnValueOnce({ status: 'Terminated' }); // Second iteration check (after group 1 completes)
 
       await downloadModule.doGroupedChannelDownloads({}, groups);
 
       // Should only execute first group, then stop when it detects termination
       expect(executeSpy).toHaveBeenCalledTimes(1);
-      expect(plexModuleMock.refreshLibrariesForSubfolders).not.toHaveBeenCalled();
-      expect(jobModuleMock.startNextJob).not.toHaveBeenCalled();
+    });
+
+    it('still wraps up a job terminated between groups', async () => {
+      const groups = [
+        { quality: '1080', subFolder: null, channels: [{ channel_id: 'UC1' }] },
+        { quality: '720', subFolder: null, channels: [{ channel_id: 'UC2' }] }
+      ];
+      jest.spyOn(downloadModule, 'executeGroupDownload').mockResolvedValue();
+      const job = { status: 'In Progress', data: { videos: [] } };
+      jobModuleMock.getJob.mockReturnValue(job);
+      jobModuleMock.getJob
+        .mockReturnValueOnce(job) // Initial check
+        .mockReturnValueOnce(job) // First iteration check
+        .mockReturnValueOnce(job) // Post-group check
+        .mockReturnValue({ ...job, status: 'Terminated', notes: 'User requested termination' });
+
+      await downloadModule.doGroupedChannelDownloads({}, groups);
+
+      expect(jobModuleMock.startNextJob).toHaveBeenCalled();
     });
   });
 

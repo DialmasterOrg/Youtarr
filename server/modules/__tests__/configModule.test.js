@@ -200,6 +200,74 @@ describe('ConfigModule', () => {
       expect(fs.writeFileSync).toHaveBeenCalled();
     });
 
+    describe('storage limit settings on load', () => {
+      const loadWith = (overrides) => {
+        const existingConfig = { ...defaultTemplate, ...overrides };
+        fs.existsSync.mockReturnValue(true);
+        fs.readFileSync.mockImplementation((path) => JSON.stringify(
+          path.includes('config.json') && !path.includes('example') ? existingConfig : defaultTemplate
+        ));
+        ConfigModule = require('../configModule');
+        return ConfigModule.getConfig();
+      };
+
+      test('corrects spacing and unit case', () => {
+        expect(loadWith({ downloadPauseUsageLimit: '500 gb' }).downloadPauseUsageLimit).toBe('500GB');
+      });
+
+      test.each(['lots', '0GB', '1.5TB', 500])('clears the unusable value %p', (value) => {
+        expect(loadWith({ downloadPauseMinFreeSpace: value }).downloadPauseMinFreeSpace).toBe('');
+      });
+
+      test('keeps valid values unchanged', () => {
+        expect(loadWith({ autoRemovalUsageLimit: '2TB' }).autoRemovalUsageLimit).toBe('2TB');
+      });
+
+      test('warns and saves when a value is cleared', () => {
+        loadWith({ autoRemovalUsageLimit: 'lots' });
+
+        expect(logger.warn).toHaveBeenCalledWith(
+          { key: 'autoRemovalUsageLimit', previous: 'lots', replacement: '' },
+          'Cleared an invalid storage limit setting'
+        );
+        expect(fs.writeFileSync).toHaveBeenCalled();
+      });
+    });
+
+    describe('log level setting on load', () => {
+      const loadWith = (overrides) => {
+        const existingConfig = { ...defaultTemplate, ...overrides };
+        fs.existsSync.mockReturnValue(true);
+        fs.readFileSync.mockImplementation((path) => JSON.stringify(
+          path.includes('config.json') && !path.includes('example') ? existingConfig : defaultTemplate
+        ));
+        ConfigModule = require('../configModule');
+        return ConfigModule.getConfig();
+      };
+
+      test('lowercases a hand-edited level', () => {
+        expect(loadWith({ logLevel: 'DEBUG' }).logLevel).toBe('debug');
+      });
+
+      test.each(['verbose', 'trace', 42])('clears the unsupported value %p', (value) => {
+        expect(loadWith({ logLevel: value }).logLevel).toBe('');
+      });
+
+      test('keeps a supported value unchanged', () => {
+        expect(loadWith({ logLevel: 'warn' }).logLevel).toBe('warn');
+      });
+
+      test('warns and saves when the value is cleared', () => {
+        loadWith({ logLevel: 'verbose' });
+
+        expect(logger.warn).toHaveBeenCalledWith(
+          { key: 'logLevel', previous: 'verbose', replacement: '' },
+          'Cleared an invalid log level setting'
+        );
+        expect(fs.writeFileSync).toHaveBeenCalled();
+      });
+    });
+
     test('leaves malformed schedules for correction instead of normalizing them on load', () => {
       const expression = '0,1e1 2 * * 0';
       const existingConfig = { ...defaultTemplate, channelDownloadFrequency: expression };
@@ -754,6 +822,46 @@ describe('ConfigModule', () => {
       jest.runAllTimers();
     });
 
+    test('clears an invalid storage limit from a hand edit picked up while running', (done) => {
+      fs.existsSync.mockReturnValue(true);
+      fs.readFileSync.mockReturnValue(JSON.stringify(defaultTemplate));
+      let watchCallback;
+      fs.watch.mockImplementation((path, callback) => {
+        watchCallback = callback;
+        return { close: jest.fn(), on: jest.fn() };
+      });
+      ConfigModule = require('../configModule');
+      fs.readFileSync.mockReturnValue(JSON.stringify({ ...defaultTemplate, downloadPauseUsageLimit: 'lots' }));
+
+      ConfigModule.on('change', () => {
+        expect(ConfigModule.getConfig().downloadPauseUsageLimit).toBe('');
+        done();
+      });
+
+      watchCallback('change');
+      jest.runAllTimers();
+    });
+
+    test('clears an invalid log level from a hand edit picked up while running', (done) => {
+      fs.existsSync.mockReturnValue(true);
+      fs.readFileSync.mockReturnValue(JSON.stringify(defaultTemplate));
+      let watchCallback;
+      fs.watch.mockImplementation((path, callback) => {
+        watchCallback = callback;
+        return { close: jest.fn(), on: jest.fn() };
+      });
+      ConfigModule = require('../configModule');
+      fs.readFileSync.mockReturnValue(JSON.stringify({ ...defaultTemplate, logLevel: 'Verbose' }));
+
+      ConfigModule.on('change', () => {
+        expect(ConfigModule.getConfig().logLevel).toBe('');
+        done();
+      });
+
+      watchCallback('change');
+      jest.runAllTimers();
+    });
+
     test('should stop watching config when stopWatchingConfig is called', () => {
       // Arrange
       const mockWatcher = { close: jest.fn(), on: jest.fn() };
@@ -1273,6 +1381,14 @@ describe('ConfigModule', () => {
       expect(bytes).toBe(2 * 1024 * 1024 * 1024);
     });
 
+    test('should convert storage threshold from TB to bytes', () => {
+      ConfigModule = require('../configModule');
+
+      const bytes = ConfigModule.convertStorageThresholdToBytes('3TB');
+
+      expect(bytes).toBe(3 * 1024 ** 4);
+    });
+
     test('should return null for invalid threshold format', () => {
       // Arrange
       ConfigModule = require('../configModule');
@@ -1297,69 +1413,6 @@ describe('ConfigModule', () => {
 
       // Assert
       expect(bytes).toBeNull();
-    });
-
-    test('should check if storage is below threshold with string threshold', () => {
-      // Arrange
-      ConfigModule = require('../configModule');
-      const currentAvailable = 100 * 1024 * 1024; // 100 MB
-
-      // Act
-      const isBelowThreshold = ConfigModule.isStorageBelowThreshold(currentAvailable, '200MB');
-
-      // Assert
-      expect(isBelowThreshold).toBe(true);
-    });
-
-    test('should check if storage is above threshold', () => {
-      // Arrange
-      ConfigModule = require('../configModule');
-      const currentAvailable = 500 * 1024 * 1024; // 500 MB
-
-      // Act
-      const isBelowThreshold = ConfigModule.isStorageBelowThreshold(currentAvailable, '200MB');
-
-      // Assert
-      expect(isBelowThreshold).toBe(false);
-    });
-
-    test('should check threshold with numeric bytes value', () => {
-      // Arrange
-      ConfigModule = require('../configModule');
-      const currentAvailable = 100 * 1024 * 1024; // 100 MB
-      const thresholdBytes = 200 * 1024 * 1024; // 200 MB
-
-      // Act
-      const isBelowThreshold = ConfigModule.isStorageBelowThreshold(currentAvailable, thresholdBytes);
-
-      // Assert
-      expect(isBelowThreshold).toBe(true);
-    });
-
-    test('should return false when currentAvailable is null', () => {
-      // Arrange
-      ConfigModule = require('../configModule');
-
-      // Act
-      const isBelowThreshold = ConfigModule.isStorageBelowThreshold(null, '200MB');
-
-      // Assert
-      expect(isBelowThreshold).toBe(false);
-      expect(logger.warn).toHaveBeenCalledWith(
-        'Cannot check storage threshold: currentAvailable is null/undefined'
-      );
-    });
-
-    test('should return false when threshold is null', () => {
-      // Arrange
-      ConfigModule = require('../configModule');
-      const currentAvailable = 100 * 1024 * 1024;
-
-      // Act
-      const isBelowThreshold = ConfigModule.isStorageBelowThreshold(currentAvailable, null);
-
-      // Assert
-      expect(isBelowThreshold).toBe(false);
     });
   });
 

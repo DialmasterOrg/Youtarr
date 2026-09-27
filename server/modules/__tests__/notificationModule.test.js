@@ -485,6 +485,52 @@ describe('Failure diagnoses in notifications', () => {
 });
 
 
+describe('Stopped-early groups in notifications', () => {
+  const stoppedSummary = {
+    totalDownloaded: 2,
+    totalFailed: 0,
+    jobType: 'Channel Downloads',
+    stoppedGroups: [
+      { group: 'Group 2/3 (720p)', reason: 'Output directory is not accessible: EACCES', terminated: false }
+    ]
+  };
+
+  it.each([
+    ['plain', () => plainFormatter],
+    ['discord', () => discordFormatter],
+    ['email', () => emailFormatter],
+    ['telegram', () => telegramFormatter],
+    ['slack', () => slackMarkdownFormatter],
+  ])('says which group stopped the download and why in %s notifications', (_name, getFormatter) => {
+    const serialized = JSON.stringify(getFormatter().formatDownloadMessage(stoppedSummary, []));
+
+    expect(serialized).toContain('Stopped at Group 2/3 (720p): Output directory is not accessible: EACCES. Later groups were skipped.');
+  });
+
+  it('describes a user termination as terminated', () => {
+    const summary = {
+      ...stoppedSummary,
+      stoppedGroups: [{ group: 'Group 1/2 (1080p)', reason: 'User requested termination', terminated: true }]
+    };
+
+    const message = plainFormatter.formatDownloadMessage(summary, []);
+
+    expect(message.body).toContain('Terminated in Group 1/2 (1080p): User requested termination. Later groups were skipped.');
+  });
+
+  it('colors a Discord embed for a stopped run as a warning', () => {
+    const message = discordFormatter.formatDownloadMessage(stoppedSummary, []);
+
+    expect(message.embeds[0].color).toBe(0xffa500);
+  });
+
+  it('omits the stopped-early line when every group finished', () => {
+    const message = plainFormatter.formatDownloadMessage({ ...stoppedSummary, stoppedGroups: [] }, []);
+
+    expect(message.body).not.toContain('Later groups were skipped');
+  });
+});
+
 describe('Apprise Sender', () => {
   let mockProcess;
 
@@ -857,6 +903,48 @@ describe('NotificationModule Integration', () => {
       expect(mockSpawn).toHaveBeenCalled();
     });
 
+    it('still sends notification when a failed group stopped the run with nothing downloaded', async () => {
+      const notificationData = {
+        finalSummary: {
+          totalDownloaded: 0,
+          totalSkipped: 0,
+          totalFailed: 0,
+          jobType: 'Channel Downloads',
+          failedVideos: [],
+          diagnoses: [],
+          stoppedGroups: [{ group: 'Group 1/2 (1080p)', reason: 'Bot detection encountered', terminated: false }]
+        },
+        videoData: []
+      };
+
+      const sendPromise = notificationModule.sendDownloadNotification(notificationData);
+      setImmediate(() => {
+        mockProcess.emit('close', 0);
+      });
+      await sendPromise;
+
+      expect(mockSpawn).toHaveBeenCalled();
+    });
+
+    it('skips a run stopped only by a user termination with nothing downloaded', async () => {
+      const notificationData = {
+        finalSummary: {
+          totalDownloaded: 0,
+          totalSkipped: 0,
+          totalFailed: 0,
+          jobType: 'Channel Downloads',
+          failedVideos: [],
+          diagnoses: [],
+          stoppedGroups: [{ group: 'Group 1/2 (1080p)', reason: 'User requested termination', terminated: true }]
+        },
+        videoData: []
+      };
+
+      await notificationModule.sendDownloadNotification(notificationData);
+
+      expect(mockSpawn).not.toHaveBeenCalled();
+    });
+
     it('skips a failure-only run when there are no diagnoses', async () => {
       const notificationData = {
         finalSummary: {
@@ -996,6 +1084,54 @@ describe('NotificationModule Integration', () => {
       expect(mockRequest.write).toHaveBeenCalledWith(
         expect.stringContaining('embeds')
       );
+    });
+  });
+
+  describe('sendDownloadPauseNotification', () => {
+    const pausedStatus = {
+      paused: true,
+      reasons: [{ type: 'usage', text: 'downloaded videos use 512.0 GB, over the 500 GB limit' }]
+    };
+
+    it('sends a notification when downloads are paused', async () => {
+      const sendPromise = notificationModule.sendDownloadPauseNotification(pausedStatus);
+
+      setImmediate(() => {
+        mockProcess.emit('close', 0);
+      });
+
+      await sendPromise;
+
+      expect(mockLoggerInfo).toHaveBeenCalledWith(
+        { paused: true, successCount: 1, totalCount: 1 },
+        'Download pause notification sent successfully'
+      );
+    });
+
+    it('skips the notification when notifications are not configured', async () => {
+      mockGetConfig.mockReturnValue({ notificationsEnabled: false, appriseUrls: [] });
+
+      await notificationModule.sendDownloadPauseNotification(pausedStatus);
+
+      expect(mockSpawn).not.toHaveBeenCalled();
+    });
+
+    it('sends a Discord embed for Discord URLs with rich formatting', async () => {
+      mockGetConfig.mockReturnValue({
+        notificationsEnabled: true,
+        appriseUrls: [{ url: 'https://discord.com/api/webhooks/123/abc', name: 'Discord', richFormatting: true }]
+      });
+
+      const sendPromise = notificationModule.sendDownloadPauseNotification(pausedStatus);
+
+      setImmediate(() => {
+        mockResponse.emit('data', '');
+        mockResponse.emit('end');
+      });
+
+      await sendPromise;
+
+      expect(mockRequest.write).toHaveBeenCalledWith(expect.stringContaining('Downloads Paused'));
     });
   });
 });

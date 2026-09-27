@@ -1,6 +1,7 @@
 import { renderHook, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { useCookieManagement } from '../useCookieManagement';
+import { CONFIG_UPDATED_EVENT } from '../../../../hooks/useConfig';
 import { CookieStatus } from '../../types';
 
 // Mock fetch globally
@@ -153,6 +154,27 @@ describe('useCookieManagement', () => {
         },
       });
       expect(result.current.cookieStatus).toEqual(mockCookieStatus);
+    });
+
+    test('refetches cookie status after the configuration is saved', async () => {
+      const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
+      const disabledStatus: CookieStatus = { ...mockCookieStatus, cookiesEnabled: false };
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, status: 200, json: jest.fn().mockResolvedValueOnce(disabledStatus) } as unknown as Response)
+        .mockResolvedValueOnce({ ok: true, status: 200, json: jest.fn().mockResolvedValueOnce(mockCookieStatus) } as unknown as Response);
+
+      const { result } = renderHook(() =>
+        useCookieManagement({
+          token: mockToken,
+          setConfig: mockSetConfig,
+          setSnackbar: mockSetSnackbar,
+        })
+      );
+      await waitFor(() => expect(result.current.cookieStatus).toEqual(disabledStatus));
+
+      act(() => { window.dispatchEvent(new CustomEvent(CONFIG_UPDATED_EVENT)); });
+
+      await waitFor(() => expect(result.current.cookieStatus).toEqual(mockCookieStatus));
     });
 
     test('does not fetch cookie status when token is null', () => {

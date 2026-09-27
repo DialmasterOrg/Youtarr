@@ -164,6 +164,35 @@ function formatDiagnosisLine(diagnosis = {}) {
 }
 
 /**
+ * Get the grouped channel downloads that stopped partway.
+ * @param {Object} finalSummary - Summary object from the download wrap-up or run tracker
+ * @returns {Array} Stopped groups ({ group, reason, terminated })
+ */
+function getStoppedGroups(finalSummary = {}) {
+  return Array.isArray(finalSummary.stoppedGroups) ? finalSummary.stoppedGroups : [];
+}
+
+/**
+ * Whether a failed group (not a user termination) stopped the download early.
+ * @param {Object} finalSummary
+ * @returns {boolean}
+ */
+function hasFailureStop(finalSummary = {}) {
+  return getStoppedGroups(finalSummary).some((stopped) => !stopped.terminated);
+}
+
+/**
+ * Format a stopped group for notification bodies.
+ * @param {Object} stopped - { group, reason, terminated }
+ * @returns {string} Human-readable stopped-early line
+ */
+function formatStoppedGroupLine(stopped = {}) {
+  const where = stopped.terminated ? `Terminated in ${stopped.group}` : `Stopped at ${stopped.group}`;
+  const reason = stopped.reason ? `: ${stopped.reason}` : '';
+  return `${where}${reason}. Later groups were skipped.`;
+}
+
+/**
  * Get subtitle based on job type. Handles per-job labels (channel, manual,
  * `Playlist: <title>`) as well as the aggregated download-run labels
  * (`Channel Downloads`, `Playlist downloads`, `Channel & playlist update`).
@@ -252,8 +281,40 @@ function groupVideosByChannel(sampleVideos, maxVideos = 5, totalCount = null) {
   return { groups, truncatedCount };
 }
 
+/**
+ * Build the shared content of a downloads paused/resumed notification.
+ * Reason texts come from storageGuard so the notification, the UI banner and
+ * API errors describe the pause the same way.
+ * @param {Object} status - storageGuard status ({ paused, reasons: [{ text }] })
+ * @returns {{title: string, summary: string, reasons: string[], footer: string|null}}
+ */
+function buildDownloadPauseContent(status = {}) {
+  if (!status.paused) {
+    return {
+      title: '▶️ Downloads Resumed',
+      summary: 'Storage is back within your configured limits, so downloads have resumed.',
+      reasons: [],
+      footer: null
+    };
+  }
+
+  const reasons = (Array.isArray(status.reasons) ? status.reasons : [])
+    .map((reason) => reason.text || '')
+    .filter(Boolean)
+    .map((text) => text.charAt(0).toUpperCase() + text.slice(1));
+
+  return {
+    title: '⏸️ Downloads Paused',
+    summary: 'Youtarr has stopped downloading because storage is over your configured limits.',
+    reasons,
+    footer: 'Queued downloads are held and start automatically once storage is back within your limits. ' +
+      'Free up space, remove videos, or change the limits in Settings > Storage Limits.'
+  };
+}
+
 module.exports = {
   escapeHtml,
+  buildDownloadPauseContent,
   formatDuration,
   buildTitle,
   getFailedCount,
@@ -261,6 +322,9 @@ module.exports = {
   formatFailedVideoLine,
   getDiagnoses,
   formatDiagnosisLine,
+  getStoppedGroups,
+  hasFailureStop,
+  formatStoppedGroupLine,
   getSubtitle,
   buildAutoRemovalTitle,
   formatBytes,

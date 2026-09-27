@@ -11,6 +11,7 @@ const {
   formatFailedVideoLine,
   getSubtitle,
   buildAutoRemovalTitle,
+  buildDownloadPauseContent,
   formatBytes,
   groupVideosByChannel,
   getTerminatedCount,
@@ -20,7 +21,9 @@ const {
   buildTerminationFailureCountLabel,
   formatTerminationFailureLine,
   getDiagnoses,
-  formatDiagnosisLine
+  formatDiagnosisLine,
+  getStoppedGroups,
+  formatStoppedGroupLine
 } = require('../utils');
 
 /**
@@ -77,6 +80,14 @@ function formatDownloadMessage(finalSummary, videoData) {
     body += '\n';
   }
 
+  const stoppedGroups = getStoppedGroups(finalSummary);
+  if (stoppedGroups.length > 0) {
+    stoppedGroups.forEach(stopped => {
+      body += `⚠️ <b>${escapeHtml(formatStoppedGroupLine(stopped))}</b>\n`;
+    });
+    body += '\n';
+  }
+
   if (videoData && videoData.length > 0) {
     const videosToShow = videoData.slice(0, 10);
 
@@ -118,10 +129,11 @@ function formatTestMessage(name) {
  * @returns {Object} Object with title and HTML body strings
  */
 function formatAutoRemovalMessage(cleanupResult) {
-  const { totalDeleted, deletedByAge, deletedByWatched = 0, deletedBySpace, freedBytes, plan = {} } = cleanupResult;
+  const { totalDeleted, deletedByAge, deletedByWatched = 0, deletedBySpace, deletedByUsage = 0, freedBytes, plan = {} } = cleanupResult;
   const ageStrategy = plan.ageStrategy || {};
   const watchedStrategy = plan.watchedStrategy || {};
   const spaceStrategy = plan.spaceStrategy || {};
+  const usageStrategy = plan.usageStrategy || {};
 
   const title = buildAutoRemovalTitle(totalDeleted);
   let body = `Freed <b>${formatBytes(freedBytes)}</b> of storage\n`;
@@ -167,13 +179,46 @@ function formatAutoRemovalMessage(cleanupResult) {
     }
   }
 
+  if (deletedByUsage > 0) {
+    const threshold = escapeHtml(String(usageStrategy.limit));
+    body += `\n<b>Removed to stay under the ${threshold} total size limit: ${deletedByUsage} ${deletedByUsage === 1 ? 'video' : 'videos'}</b>\n`;
+
+    const { groups, truncatedCount } = groupVideosByChannel(usageStrategy.sampleVideos, 5, deletedByUsage);
+    for (const group of groups) {
+      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
+      body += `📺 <b>${escapeHtml(group.channel)}</b> (${videoLabel}): ${group.titles.map(t => escapeHtml(t)).join(', ')}\n`;
+    }
+    if (truncatedCount > 0) {
+      body += `<i>...and ${truncatedCount} more videos</i>\n`;
+    }
+  }
+
   body += '\n<i>— Youtarr</i>';
 
+  return { title, body };
+}
+
+/**
+ * Format downloads paused/resumed notification as Telegram HTML
+ * @param {Object} status - storageGuard status
+ * @returns {Object} Object with title and HTML body strings
+ */
+function formatDownloadPauseMessage(status) {
+  const { title, summary, reasons, footer } = buildDownloadPauseContent(status);
+  let body = escapeHtml(summary);
+  if (reasons.length > 0) {
+    body += `\n\n${reasons.map((reason) => `• <b>${escapeHtml(reason)}</b>`).join('\n')}`;
+  }
+  if (footer) {
+    body += `\n\n<i>${escapeHtml(footer)}</i>`;
+  }
+  body += '\n\n<i>— Youtarr</i>';
   return { title, body };
 }
 
 module.exports = {
   formatDownloadMessage,
   formatTestMessage,
-  formatAutoRemovalMessage
+  formatAutoRemovalMessage,
+  formatDownloadPauseMessage
 };

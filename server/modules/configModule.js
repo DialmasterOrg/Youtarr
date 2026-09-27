@@ -6,6 +6,16 @@ const logger = require('../logger');
 const { getExternalCookiesPath, getExternalCookiesStatus } = require('./externalCookies');
 const { getDefaultNameForUrl } = require('./notificationHelpers');
 const { SCHEDULES, normalizeToMinimumInterval, violatesMinimumInterval } = require('./scheduleConfig');
+const { normalizeLevelSetting } = require('../logging/logLevel');
+
+// Storage limit settings: a positive whole number with a unit, or '' for off.
+const STORAGE_SIZE_KEYS = ['downloadPauseUsageLimit', 'downloadPauseMinFreeSpace', 'autoRemovalUsageLimit'];
+const STORAGE_SIZE_PATTERN = /^[1-9]\d*(MB|GB|TB)$/;
+
+// yt-dlp's cache (YouTube signature-function specs) lives under the config
+// volume so it survives container recreation and stays writable when the
+// container user has no writable home directory.
+const YTDLP_CACHE_DIR_NAME = '.yt-dlp-cache';
 
 const CONFIG_WATCH_DOCS_URL = 'https://dialmasterorg.github.io/Youtarr/docs/troubleshooting/#config-file-watcher-limit';
 const CONFIG_WATCH_LIMIT_SETTINGS = {
@@ -74,6 +84,14 @@ class ConfigModule extends EventEmitter {
 
     // Migrate notification settings to new format
     if (this.migrateNotificationSettings()) {
+      legacyMigrationNeeded = true;
+    }
+
+    if (this.normalizeStorageSizeFields()) {
+      legacyMigrationNeeded = true;
+    }
+
+    if (this.normalizeLogLevelSetting()) {
       legacyMigrationNeeded = true;
     }
 
@@ -342,6 +360,10 @@ class ConfigModule extends EventEmitter {
     return path.join(__dirname, '../../jobs');
   }
 
+  getYtdlpCacheDir() {
+    return path.join(__dirname, '../../config', YTDLP_CACHE_DIR_NAME);
+  }
+
   updateConfig(newConfig) {
     this.config = newConfig;
 
@@ -443,6 +465,14 @@ class ConfigModule extends EventEmitter {
 
             // Migrate notification settings to new format
             if (this.migrateNotificationSettings()) {
+              legacyMigrationNeeded = true;
+            }
+
+            if (this.normalizeStorageSizeFields()) {
+              legacyMigrationNeeded = true;
+            }
+
+            if (this.normalizeLogLevelSetting()) {
               legacyMigrationNeeded = true;
             }
 
@@ -701,8 +731,53 @@ class ConfigModule extends EventEmitter {
   }
 
   /**
+   * Correct or clear hand-edited storage limit settings. The UI always sends
+   * the full config and /updateconfig rejects malformed sizes, so a bad value
+   * left in config.json would block every Settings save; the guard already
+   * ignores it, so clearing it only makes the UI match what is enforced.
+   * "500 gb" becomes "500GB"; anything still invalid (including 0) becomes ''.
+   * @returns {boolean} True if any value changed
+   */
+  normalizeStorageSizeFields() {
+    let changed = false;
+    for (const key of STORAGE_SIZE_KEYS) {
+      const value = this.config[key];
+      if (value === undefined || value === null || value === '') continue;
+      const cleaned = String(value).replace(/\s+/g, '').toUpperCase();
+      const replacement = STORAGE_SIZE_PATTERN.test(cleaned) ? cleaned : '';
+      if (replacement === value) continue;
+      logger.warn(
+        { key, previous: value, replacement },
+        replacement ? 'Corrected the format of a storage limit setting' : 'Cleared an invalid storage limit setting'
+      );
+      this.config[key] = replacement;
+      changed = true;
+    }
+    return changed;
+  }
+
+  /**
+   * Correct a hand-edited log level ("DEBUG" becomes "debug") or clear an
+   * unsupported one. The UI always sends the full config and /updateconfig
+   * rejects unknown levels, so a bad value would block every Settings save.
+   * @returns {boolean} True if the value changed
+   */
+  normalizeLogLevelSetting() {
+    const value = this.config.logLevel;
+    if (value === undefined || value === '') return false;
+    const replacement = normalizeLevelSetting(value);
+    if (replacement === value) return false;
+    logger.warn(
+      { key: 'logLevel', previous: value, replacement },
+      replacement ? 'Corrected the format of the log level setting' : 'Cleared an invalid log level setting'
+    );
+    this.config.logLevel = replacement;
+    return true;
+  }
+
+  /**
    * Convert storage threshold string (e.g., "1GB") to bytes
-   * @param {string} threshold - Threshold string like "500MB", "1GB", etc.
+   * @param {string} threshold - Threshold string like "500MB", "1GB", "2TB"
    * @returns {number|null} - Threshold in bytes, or null if invalid/not set
    */
   convertStorageThresholdToBytes(threshold) {
@@ -712,11 +787,12 @@ class ConfigModule extends EventEmitter {
 
     const units = {
       'MB': 1024 * 1024,
-      'GB': 1024 * 1024 * 1024
+      'GB': 1024 * 1024 * 1024,
+      'TB': 1024 * 1024 * 1024 * 1024
     };
 
-    // Match pattern like "500MB" or "1GB"
-    const match = threshold.toString().match(/^(\d+)(MB|GB)$/);
+    // Match pattern like "500MB", "1GB" or "2TB"
+    const match = threshold.toString().match(/^(\d+)(MB|GB|TB)$/);
     if (!match) {
       logger.warn({ threshold }, 'Invalid storage threshold format');
       return null;
@@ -726,32 +802,6 @@ class ConfigModule extends EventEmitter {
     const unit = match[2];
 
     return value * units[unit];
-  }
-
-  /**
-   * Check if current storage is below the threshold
-   * @param {number} currentAvailable - Current available bytes
-   * @param {string|number} threshold - Threshold (string like "1GB" or number in bytes)
-   * @returns {boolean} - true if below threshold, false otherwise
-   */
-  isStorageBelowThreshold(currentAvailable, threshold) {
-    if (currentAvailable === null || currentAvailable === undefined) {
-      logger.warn('Cannot check storage threshold: currentAvailable is null/undefined');
-      return false;
-    }
-
-    let thresholdBytes;
-    if (typeof threshold === 'string') {
-      thresholdBytes = this.convertStorageThresholdToBytes(threshold);
-    } else {
-      thresholdBytes = threshold;
-    }
-
-    if (thresholdBytes === null || thresholdBytes === undefined) {
-      return false;
-    }
-
-    return currentAvailable < thresholdBytes;
   }
 }
 
