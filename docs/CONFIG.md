@@ -856,9 +856,10 @@ Pause all downloads when storage reaches a limit. Both limits are optional and o
 
 While paused:
 - New download requests (manual, API key, channel download-all, playlist downloads, and the scheduled channel/playlist sweep) are refused. API calls return HTTP 409 with the reason; scheduled runs are recorded as skipped with the reason.
-- Downloads already queued stay queued and start automatically once storage is back within the limits. A download already in progress is allowed to finish, so usage can briefly go over a limit.
+- Downloads already queued stay queued and start automatically once storage is back within the limits.
+- A download job already running is allowed to finish, including its remaining videos and channel groups. Usage can therefore go over the limit, or free space can fall below the minimum, by as much as that job downloads. The limits are checked again when it finishes.
 - A banner explains the pause on every page (on the Downloads pages it cannot be dismissed), and a notification is sent through your configured notification services when downloads pause and again when they resume.
-- Youtarr re-checks after every download, after videos are deleted, when the settings change, and every 5 minutes while paused.
+- Youtarr re-checks after each download job completes, after videos are deleted, when the settings change, and every 5 minutes while paused.
 
 If a measurement fails (for example, disk space cannot be read), that limit does not pause downloads.
 

@@ -1190,7 +1190,6 @@ describe('VideoDeletionModule', () => {
       mockConfigModule = {
         getConfig: jest.fn(),
         getStorageStatus: jest.fn(),
-        isStorageBelowThreshold: jest.fn(),
         convertStorageThresholdToBytes: jest.fn()
       };
 
@@ -1345,7 +1344,6 @@ describe('VideoDeletionModule', () => {
         availableGB: 5
       });
 
-      mockConfigModule.isStorageBelowThreshold.mockReturnValue(true);
       mockConfigModule.convertStorageThresholdToBytes.mockReturnValue(10 * 1024 ** 3); // 10GB
 
       const mockOldestVideos = [
@@ -1381,7 +1379,6 @@ describe('VideoDeletionModule', () => {
         availableGB: 5
       });
 
-      mockConfigModule.isStorageBelowThreshold.mockReturnValue(true);
       mockConfigModule.convertStorageThresholdToBytes.mockReturnValue(10 * 1024 ** 3); // need to free 5GB
 
       // Three videos across two channels (UC1 duplicated) whose combined size
@@ -1425,7 +1422,6 @@ describe('VideoDeletionModule', () => {
         availableGB: 50
       });
 
-      mockConfigModule.isStorageBelowThreshold.mockReturnValue(false);
       mockConfigModule.convertStorageThresholdToBytes.mockReturnValue(10 * 1024 ** 3);
 
       const result = await VideoDeletionModule.performAutomaticCleanup();
@@ -1435,7 +1431,7 @@ describe('VideoDeletionModule', () => {
       expect(result.deletedBySpace).toBe(0);
       expect(mockLogger.info).toHaveBeenCalledWith(
         expect.objectContaining({ availableGB: 50 }),
-        '[Auto-Removal] Storage is above threshold, no space-based cleanup needed'
+        '[Auto-Removal] Free space meets the threshold, no space-based cleanup needed'
       );
     });
 
@@ -1826,7 +1822,6 @@ describe('VideoDeletionModule', () => {
         available: 5 * 1024 ** 3,
         availableGB: 5
       });
-      mockConfigModule.isStorageBelowThreshold.mockReturnValue(true);
       mockConfigModule.convertStorageThresholdToBytes.mockReturnValue(10 * 1024 ** 3);
       mockSequelize.query.mockResolvedValue([]);
 
@@ -1851,7 +1846,6 @@ describe('VideoDeletionModule', () => {
         available: 5 * 1024 ** 3,
         availableGB: 5
       });
-      mockConfigModule.isStorageBelowThreshold.mockReturnValue(true);
       mockConfigModule.convertStorageThresholdToBytes.mockReturnValue(10 * 1024 ** 3);
       mockSequelize.query.mockResolvedValue([]);
 
@@ -2036,6 +2030,114 @@ describe('VideoDeletionModule', () => {
 
         const [, secondBatchOptions] = mockSequelize.query.mock.calls[1];
         expect(secondBatchOptions.replacements.excludeIds).toEqual([1]);
+      });
+    });
+
+    describe('free-space cleanup after earlier strategies', () => {
+      const GB = 1024 ** 3;
+      const ageCandidate = (id, sizeGB) => ({
+        id,
+        youtubeId: `age${id}`,
+        fileSize: String(sizeGB * GB),
+        timeCreated: new Date('2023-01-01')
+      });
+      const oneGbVideos = (count, firstId = 100) => Array.from({ length: count }, (_, i) => ({
+        id: firstId + i,
+        youtubeId: `yt${firstId + i}`,
+        fileSize: String(GB),
+        timeCreated: new Date('2024-01-01')
+      }));
+
+      beforeEach(() => {
+        mockConfigModule.convertStorageThresholdToBytes.mockImplementation((value) => (
+          value === '100GB' ? 100 * GB : null
+        ));
+        mockConfigModule.getStorageStatus.mockResolvedValue({ available: 60 * GB, availableGB: '60.00' });
+      });
+
+      const ageAndSpaceConfig = {
+        autoRemovalEnabled: true,
+        autoRemovalVideoAgeThreshold: '30',
+        autoRemovalFreeSpaceThreshold: '100GB'
+      };
+
+      test('dry run selects nothing when age savings already meet the free-space target', async () => {
+        mockConfigModule.getConfig.mockReturnValue(ageAndSpaceConfig);
+        mockSequelize.query
+          .mockResolvedValueOnce([ageCandidate(1, 60)])
+          .mockResolvedValue(oneGbVideos(50));
+
+        const result = await VideoDeletionModule.performAutomaticCleanup({ dryRun: true });
+
+        expect(result.plan.spaceStrategy.candidateCount).toBe(0);
+      });
+
+      test('dry run selects nothing when watched savings already meet the free-space target', async () => {
+        mockConfigModule.getConfig.mockReturnValue({
+          autoRemovalEnabled: true,
+          autoRemovalWatchedEnabled: true,
+          autoRemovalFreeSpaceThreshold: '100GB'
+        });
+        mockAutoRemovalQueries.getWatchedRemovalCandidates.mockResolvedValue([ageCandidate(1, 60)]);
+        mockSequelize.query.mockResolvedValue(oneGbVideos(50));
+
+        const result = await VideoDeletionModule.performAutomaticCleanup({ dryRun: true });
+
+        expect(result.plan.spaceStrategy.candidateCount).toBe(0);
+      });
+
+      test('dry run frees only the deficit left after earlier strategies', async () => {
+        mockConfigModule.getConfig.mockReturnValue(ageAndSpaceConfig);
+        mockSequelize.query
+          .mockResolvedValueOnce([ageCandidate(1, 10)])
+          .mockResolvedValue(oneGbVideos(50));
+
+        const result = await VideoDeletionModule.performAutomaticCleanup({ dryRun: true });
+
+        expect(result.plan.spaceStrategy.estimatedFreedBytes).toBe(30 * GB);
+      });
+
+      test('dry run needs no cleanup when earlier savings land exactly on the threshold', async () => {
+        mockConfigModule.getConfig.mockReturnValue(ageAndSpaceConfig);
+        mockSequelize.query
+          .mockResolvedValueOnce([ageCandidate(1, 40)])
+          .mockResolvedValue(oneGbVideos(50));
+
+        const result = await VideoDeletionModule.performAutomaticCleanup({ dryRun: true });
+
+        expect(result.plan.spaceStrategy.needsCleanup).toBe(false);
+      });
+
+      test('dry run reports the measured storage status, not the projected one', async () => {
+        mockConfigModule.getConfig.mockReturnValue(ageAndSpaceConfig);
+        mockSequelize.query
+          .mockResolvedValueOnce([ageCandidate(1, 60)])
+          .mockResolvedValue(oneGbVideos(50));
+
+        const result = await VideoDeletionModule.performAutomaticCleanup({ dryRun: true });
+
+        expect(result.plan.spaceStrategy.storageStatus.available).toBe(60 * GB);
+      });
+
+      test('real run uses the remeasured free space without re-adding earlier deletions', async () => {
+        mockConfigModule.getConfig.mockReturnValue(ageAndSpaceConfig);
+        // Measured after the 10GB age deletion: 60GB + 10GB.
+        mockConfigModule.getStorageStatus.mockResolvedValue({ available: 70 * GB, availableGB: '70.00' });
+        mockVideo.findByPk.mockImplementation((id) => Promise.resolve({
+          id,
+          youtubeId: `yt${id}`,
+          channel_id: 'UC1',
+          removed: false,
+          filePath: null,
+          update: jest.fn().mockResolvedValue(undefined)
+        }));
+        mockSequelize.query
+          .mockResolvedValueOnce([ageCandidate(1, 10)])
+          .mockResolvedValue(oneGbVideos(50));
+
+        const result = await VideoDeletionModule.performAutomaticCleanup();
+
+        expect(result.deletedBySpace).toBe(30);
       });
     });
   });

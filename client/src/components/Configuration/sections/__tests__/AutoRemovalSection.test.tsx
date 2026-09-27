@@ -219,7 +219,7 @@ describe('AutoRemovalSection', () => {
     expect(screen.getByText(/Sample videos/i)).toBeInTheDocument();
     expect(screen.getByText(/Sample Video/)).toHaveTextContent('Sample Video (abc123) • 1.00 MB');
     expect(
-      screen.getByText(/Storage is currently above the free space threshold/i)
+      screen.getByText(/Free space is at or above the threshold/i)
     ).toBeInTheDocument();
   });
 

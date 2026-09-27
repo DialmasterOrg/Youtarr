@@ -926,13 +926,6 @@ ${excludeClause}        ORDER BY timeCreated ASC
           logger.warn('[Auto-Removal] Could not retrieve storage status - skipping space-based cleanup for safety');
           result.errors.push('Storage status unavailable, skipped space-based cleanup');
         } else {
-          const isBelowThreshold = configModule.isStorageBelowThreshold(
-            storageStatus.available,
-            config.autoRemovalFreeSpaceThreshold
-          );
-
-          result.plan.spaceStrategy.needsCleanup = isBelowThreshold;
-
           const thresholdBytes = configModule.convertStorageThresholdToBytes(config.autoRemovalFreeSpaceThreshold);
 
           if (thresholdBytes === null) {
@@ -942,8 +935,13 @@ ${excludeClause}        ORDER BY timeCreated ASC
             result.plan.spaceStrategy.enabled = true;
             result.plan.spaceStrategy.thresholdBytes = thresholdBytes;
 
-            if (isBelowThreshold) {
-              const spaceToFree = thresholdBytes - storageStatus.available;
+            // A real run measures after earlier deletions; a dry run deleted
+            // nothing, so credit what the earlier strategies would have freed.
+            const alreadyFreed = dryRun && result.simulationTotals ? result.simulationTotals.estimatedFreedBytes : 0;
+            const spaceToFree = Math.max(0, thresholdBytes - (storageStatus.available + alreadyFreed));
+            result.plan.spaceStrategy.needsCleanup = spaceToFree > 0;
+
+            if (spaceToFree > 0) {
               logger.info({ spaceToFreeGB: (spaceToFree / (1024 ** 3)).toFixed(2) }, '[Auto-Removal] Need to free storage space');
 
               const { selectedIds } = await this._removeOldestUntilFreed({
@@ -966,7 +964,7 @@ ${excludeClause}        ORDER BY timeCreated ASC
                 }
               }
             } else {
-              logger.info({ availableGB: storageStatus.availableGB }, '[Auto-Removal] Storage is above threshold, no space-based cleanup needed');
+              logger.info({ availableGB: storageStatus.availableGB, alreadyFreed }, '[Auto-Removal] Free space meets the threshold, no space-based cleanup needed');
             }
           }
         }

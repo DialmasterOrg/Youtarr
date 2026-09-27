@@ -1414,69 +1414,6 @@ describe('ConfigModule', () => {
       // Assert
       expect(bytes).toBeNull();
     });
-
-    test('should check if storage is below threshold with string threshold', () => {
-      // Arrange
-      ConfigModule = require('../configModule');
-      const currentAvailable = 100 * 1024 * 1024; // 100 MB
-
-      // Act
-      const isBelowThreshold = ConfigModule.isStorageBelowThreshold(currentAvailable, '200MB');
-
-      // Assert
-      expect(isBelowThreshold).toBe(true);
-    });
-
-    test('should check if storage is above threshold', () => {
-      // Arrange
-      ConfigModule = require('../configModule');
-      const currentAvailable = 500 * 1024 * 1024; // 500 MB
-
-      // Act
-      const isBelowThreshold = ConfigModule.isStorageBelowThreshold(currentAvailable, '200MB');
-
-      // Assert
-      expect(isBelowThreshold).toBe(false);
-    });
-
-    test('should check threshold with numeric bytes value', () => {
-      // Arrange
-      ConfigModule = require('../configModule');
-      const currentAvailable = 100 * 1024 * 1024; // 100 MB
-      const thresholdBytes = 200 * 1024 * 1024; // 200 MB
-
-      // Act
-      const isBelowThreshold = ConfigModule.isStorageBelowThreshold(currentAvailable, thresholdBytes);
-
-      // Assert
-      expect(isBelowThreshold).toBe(true);
-    });
-
-    test('should return false when currentAvailable is null', () => {
-      // Arrange
-      ConfigModule = require('../configModule');
-
-      // Act
-      const isBelowThreshold = ConfigModule.isStorageBelowThreshold(null, '200MB');
-
-      // Assert
-      expect(isBelowThreshold).toBe(false);
-      expect(logger.warn).toHaveBeenCalledWith(
-        'Cannot check storage threshold: currentAvailable is null/undefined'
-      );
-    });
-
-    test('should return false when threshold is null', () => {
-      // Arrange
-      ConfigModule = require('../configModule');
-      const currentAvailable = 100 * 1024 * 1024;
-
-      // Act
-      const isBelowThreshold = ConfigModule.isStorageBelowThreshold(currentAvailable, null);
-
-      // Assert
-      expect(isBelowThreshold).toBe(false);
-    });
   });
 
   describe('Path Resolution', () => {
