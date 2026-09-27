@@ -1,5 +1,49 @@
 # Changelog
 
+## [v1.86.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.86.0) - 2026-09-27
+
+### Features
+
+* add rolling log files and live log level ([026f1d9](https://github.com/DialmasterOrg/Youtarr/commit/026f1d92e7811b0ae278b9c6f911209fa4a998d2)), closes [#883](https://github.com/DialmasterOrg/Youtarr/issues/883)
+* pause downloads and prune by storage limits ([4ed6994](https://github.com/DialmasterOrg/Youtarr/commit/4ed699470cc83b191be6507eaa3ada0454cd39be)), closes [#196](https://github.com/DialmasterOrg/Youtarr/issues/196) [#217](https://github.com/DialmasterOrg/Youtarr/issues/217)
+* show cookie details and add cookie test ([ea1da1b](https://github.com/DialmasterOrg/Youtarr/commit/ea1da1bd4bca5c992d6b4d9461aab734ae8cd962))
+* show downloaded counts for playlists ([db53697](https://github.com/DialmasterOrg/Youtarr/commit/db536979059397a750e61b9bdd73543ae2b07ec0))
+* show load more progress on channel tabs ([86648fd](https://github.com/DialmasterOrg/Youtarr/commit/86648fdc425dc72e12bfc3203e7b3caf543be8b3))
+* show per-tab download progress for channels ([2d34ebb](https://github.com/DialmasterOrg/Youtarr/commit/2d34ebb529176d249540522c4d0c50bb17253bd6)), closes [#865](https://github.com/DialmasterOrg/Youtarr/issues/865)
+* toggle channel auto-download tabs in place ([29ce64c](https://github.com/DialmasterOrg/Youtarr/commit/29ce64cb26aa6d666dcfc57f4b28e65f5639b687))
+
+
+### Bug Fixes
+
+* address bugs found in turbo fork comparison ([70b53ce](https://github.com/DialmasterOrg/Youtarr/commit/70b53ce7590ebed49f5803a7dc8b52d93ce1bb64)), closes [#880](https://github.com/DialmasterOrg/Youtarr/issues/880)
+* channelSettingsModule.js validateAdditionalTags doesn't accept whitespace characters except for normal spaces now and channelSettingsModule.test.js tests for this ([be77c33](https://github.com/DialmasterOrg/Youtarr/commit/be77c33fee88dae0e0fcc2a53a7ffeafa547d716))
+* create new additionalTags.js for one source of truth to parse additionalTags in videoDownloadPostProcessFiles.js and channelSettingsModule.js ([091f6e3](https://github.com/DialmasterOrg/Youtarr/commit/091f6e3248ada929ab12647c2ade6a0ff1a7d6ef))
+* dedupes video tags from YouTube if they exist in additionalTags already case-insensitively ([005653e](https://github.com/DialmasterOrg/Youtarr/commit/005653e93ac98e6c46155d5e0af987050bb19a7b))
+* explain tabs with more loaded than listed ([1b7e525](https://github.com/DialmasterOrg/Youtarr/commit/1b7e5250623f82829b2a5cd9ed014e1ecceac194)), closes [#865](https://github.com/DialmasterOrg/Youtarr/issues/865)
+* match free-space preview to real cleanup ([ad9e200](https://github.com/DialmasterOrg/Youtarr/commit/ad9e200313fcfb7b18bc5e9f35392f8f175a0805)), closes [#886](https://github.com/DialmasterOrg/Youtarr/issues/886)
+* read yt-dlp output only after it is written ([df78a74](https://github.com/DialmasterOrg/Youtarr/commit/df78a74b98e86b5055f02cf133f099ca53d9d157))
+* server/modules/channelSettingsModule.js validateAdditionalTags now validates that additionalTags is a string ([37cc57e](https://github.com/DialmasterOrg/Youtarr/commit/37cc57e40dee3c7ad77c4453ef6065e060de0425))
+* updated server/modules/channelSettingsModule.js to trim settings.additional_tags first so that whitespace-only input normalizes to null ([68dffcf](https://github.com/DialmasterOrg/Youtarr/commit/68dffcf9975ba7507c27e3aeb2e1d2f3c2b1417c))
+
+
+### Tests
+
+* add test for case-insensitive deduping tags in channelSettingsModule.validateAdditionalTags ([adc9f37](https://github.com/DialmasterOrg/Youtarr/commit/adc9f37a79a2bbc26af49370a08dbb4dcf13067e))
+* add test for deduping combined additionalTags and tags pulled from YT ([c7575bb](https://github.com/DialmasterOrg/Youtarr/commit/c7575bbeb492e9a2dd6eafc4702412466d543860))
+* added additionalTags.test.js for testing the new parseAdditionalTags helper ([15a8d24](https://github.com/DialmasterOrg/Youtarr/commit/15a8d241eda7a61bc4e796f65f3fd465ac9bae15))
+
+
+### Documentation
+
+* docs/DATABASE.md update for additional_tags ([18d6f24](https://github.com/DialmasterOrg/Youtarr/commit/18d6f24ef8e2d0d4ff7ceb8952396004e81edd48))
+* docs/USAGE_GUIDE.md updates for the Tags tab in the Channel Settings Dialog ([8d3f700](https://github.com/DialmasterOrg/Youtarr/commit/8d3f700783a9c97a78b8d81f74fd20cc85e2d3f0))
+* update CHANGELOG for v1.85.0 [skip ci] ([46c1701](https://github.com/DialmasterOrg/Youtarr/commit/46c17018fb50ce77369d1f023467587a5db81460))
+* updated channels.js swagger schema to include additional_tags ([a84bd31](https://github.com/DialmasterOrg/Youtarr/commit/a84bd3197d1d81da6efbba8f35bb79fcaa684423))
+* updated channelSettingsModules.test.js wording ([2df6c3d](https://github.com/DialmasterOrg/Youtarr/commit/2df6c3d038dc5f2478f49cb8822f297778d3cf34))
+* updated server/modules/videoDownloadPostProcessFiles.js comment to more accurately reflect the custom tags merge ([0d997dc](https://github.com/DialmasterOrg/Youtarr/commit/0d997dc21dbdfa4038fa60e5a668569e2fbc97bc))
+
+**Full Changelog**: https://github.com/DialmasterOrg/Youtarr/compare/v1.85.0...v1.86.0
+
 ## [v1.85.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.85.0) - 2026-09-24
 
 ### Features
