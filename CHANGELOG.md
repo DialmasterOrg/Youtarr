@@ -1,5 +1,19 @@
 # Changelog
 
+## [v1.86.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.86.1) - 2026-09-27
+
+### Bug Fixes
+
+* pace and back off channel tab count lookups ([84f3943](https://github.com/DialmasterOrg/Youtarr/commit/84f3943b9c4f2f7e457aba2a15bb1b0164b7e8b7)), closes [#865](https://github.com/DialmasterOrg/Youtarr/issues/865)
+* refine tab count refresh throttling ([348e3e6](https://github.com/DialmasterOrg/Youtarr/commit/348e3e6bdc6a63e38bd6425bf88dac1ca8b0d198)), closes [#865](https://github.com/DialmasterOrg/Youtarr/issues/865)
+
+
+### Documentation
+
+* update CHANGELOG for v1.86.0 [skip ci] ([c4fc620](https://github.com/DialmasterOrg/Youtarr/commit/c4fc620a31f32e667b17ed21eb23f52eb6e8eaaf))
+
+**Full Changelog**: https://github.com/DialmasterOrg/Youtarr/compare/v1.86.0...v1.86.1
+
 ## [v1.86.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.86.0) - 2026-09-27
 
 ### Features
