@@ -11,6 +11,13 @@ const TAB_LABELS: Record<ChannelTabType, string> = {
   streams: 'Live',
 };
 
+export const LOADED_EXCEEDS_TOTAL_NOTE =
+  'More videos are loaded than YouTube lists because some were made private or deleted ' +
+  'after Youtarr loaded them.';
+
+const loadedExceedsTotal = (stats: TabDownloadStats) =>
+  stats.loaded !== undefined && stats.total !== null && stats.loaded > stats.total;
+
 interface ChannelVideosInfoProps {
   tabStats: TabDownloadStatsByTab | null;
   dateText: string;
@@ -31,9 +38,10 @@ const ChannelVideosInfo: React.FC<ChannelVideosInfoProps> = ({ tabStats, dateTex
     .filter((value): value is string => Boolean(value))
     .sort()[0];
   const updatedText = formatDateTime(oldestFetchedAt);
+  const tinted = highlight || countedTabs.some(({ stats }) => loadedExceedsTotal(stats));
 
   return (
-    <InfoPopoverButton ariaLabel="Video list info" color={highlight ? 'var(--warning)' : undefined}>
+    <InfoPopoverButton ariaLabel="Video list info" color={tinted ? 'var(--warning)' : undefined}>
       <div className="flex flex-col gap-3">
         {countedTabs.length > 0 && (
           <div className="flex flex-col gap-1">
@@ -44,9 +52,14 @@ const ChannelVideosInfo: React.FC<ChannelVideosInfoProps> = ({ tabStats, dateTex
               )}
             </div>
             {countedTabs.map(({ tab, stats }) => (
-              <Typography key={tab} variant="body2">
-                {`${TAB_LABELS[tab]}: ${describeTabCounts(stats)}`}
-              </Typography>
+              <React.Fragment key={tab}>
+                <Typography variant="body2">
+                  {`${TAB_LABELS[tab]}: ${describeTabCounts(stats)}`}
+                </Typography>
+                {loadedExceedsTotal(stats) && (
+                  <Typography variant="caption" color="warning">{LOADED_EXCEEDS_TOTAL_NOTE}</Typography>
+                )}
+              </React.Fragment>
             ))}
             <Typography variant="body2" color="text.secondary">{PUBLIC_ONLY_NOTE}</Typography>
           </div>
