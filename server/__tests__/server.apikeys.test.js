@@ -333,6 +333,7 @@ const createServerModule = ({
         jest.doMock('node-cron', () => ({ schedule: jest.fn() }));
         jest.doMock('../modules/mediaServers/watchStatusScheduler', () => ({ scheduleTask: jest.fn(), subscribe: jest.fn() }));
         jest.doMock('../modules/channel/channelBackdropBackfill', () => ({ subscribe: jest.fn() }));
+        jest.doMock('../modules/channel/tabVideoCounts', () => ({ setRunHistory: jest.fn(), refreshAtStartup: jest.fn().mockResolvedValue({}) }));
         jest.doMock('../modules/logLevelSync', () => ({ apply: jest.fn(), subscribe: jest.fn() }));
         jest.doMock('../modules/storageGuard', () => ({
           initialize: jest.fn().mockResolvedValue({ paused: false, reasons: [] }),

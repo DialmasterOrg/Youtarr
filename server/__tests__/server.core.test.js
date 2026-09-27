@@ -211,6 +211,10 @@ const createServerModule = ({
           stopAll: jest.fn(),
           updateTask: jest.fn()
         };
+        const tabVideoCountsMock = {
+          setRunHistory: jest.fn(),
+          refreshAtStartup: jest.fn().mockResolvedValue({})
+        };
         const rateLimitMiddleware = jest.fn(() => (req, res, next) => next());
         // Mock ipKeyGenerator to normalize IPv6 addresses
         rateLimitMiddleware.ipKeyGenerator = jest.fn((ip) => ip);
@@ -271,6 +275,7 @@ const createServerModule = ({
         jest.doMock('../modules/scheduledTaskRuns', () => scheduledTaskRunsMock);
         jest.doMock('../modules/scheduledTaskManager', () => scheduledTaskManagerMock);
         jest.doMock('../modules/channel/channelBackdropBackfill', () => ({ subscribe: jest.fn() }));
+        jest.doMock('../modules/channel/tabVideoCounts', () => tabVideoCountsMock);
         jest.doMock('../modules/logLevelSync', () => logLevelSyncMock);
         jest.doMock('../modules/storageGuard', () => ({
           initialize: jest.fn().mockResolvedValue({ paused: false, reasons: [] }),
@@ -300,6 +305,7 @@ const createServerModule = ({
         state.logLevelSyncMock = logLevelSyncMock;
         state.scheduledTaskRunsMock = scheduledTaskRunsMock;
         state.scheduledTaskManagerMock = scheduledTaskManagerMock;
+        state.tabVideoCountsMock = tabVideoCountsMock;
         state.sessionUpdateMock = effectiveSession?.update || defaultSessionUpdate;
 
         const finalize = () => resolve(state);
@@ -355,6 +361,12 @@ describe('server initialization', () => {
 
     expect(logLevelSyncMock.apply).toHaveBeenCalledTimes(1);
     expect(logLevelSyncMock.subscribe).toHaveBeenCalledTimes(1);
+  });
+
+  test('hands the run history to the channel video count refresh', async () => {
+    const { scheduledTaskRunsMock, tabVideoCountsMock } = await createServerModule();
+
+    expect(tabVideoCountsMock.setRunHistory).toHaveBeenCalledWith(scheduledTaskRunsMock);
   });
 
   test('initializes database and exposes health route', async () => {
