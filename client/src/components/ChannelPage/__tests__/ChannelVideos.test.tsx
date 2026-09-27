@@ -220,7 +220,7 @@ jest.mock('../ChannelVideosDialogs', () => ({
       'data-mobile-tooltip': props.mobileTooltip,
       'data-tab-total': props.tabStats?.total,
       'data-tab-loaded': props.tabStats?.loaded,
-    });
+    }, React.createElement('button', { onClick: props.onRefreshConfirm }, 'Mock confirm Load More'));
   }
 }));
 
@@ -553,6 +553,72 @@ describe('ChannelVideos Component', () => {
       await userEvent.click(screen.getByTestId('toggle-ignore-video1'));
 
       await waitFor(() => expect(mockRefetchTabStats).toHaveBeenCalled());
+    });
+  });
+
+  describe('Load More completion', () => {
+    const mockRefetchTabStats = jest.fn();
+    let finishLoadMore: () => void;
+
+    beforeEach(() => {
+      require('../hooks/useChannelTabStats').useChannelTabStats.mockReturnValue({
+        data: null, loading: false, error: null, refetch: mockRefetchTabStats,
+      });
+      mockRefreshVideos.mockImplementation(() => new Promise((resolve) => {
+        finishLoadMore = () => resolve(null);
+      }));
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({ availableTabs: ['videos', 'shorts'], isFetching: false }),
+      });
+    });
+
+    const startLoadMore = async () => {
+      await userEvent.click(await screen.findByRole('button', { name: 'Mock confirm Load More' }));
+      await waitFor(() => expect(mockRefreshVideos).toHaveBeenCalled());
+    };
+
+    test('reloads the list when Load More finishes on the same tab', async () => {
+      renderChannelVideos();
+      await startLoadMore();
+      mockRefetchVideos.mockClear();
+
+      await act(async () => finishLoadMore());
+
+      expect(mockRefetchVideos).toHaveBeenCalledTimes(1);
+    });
+
+    test('reloads the download stats when Load More finishes on the same channel', async () => {
+      renderChannelVideos();
+      await startLoadMore();
+      mockRefetchTabStats.mockClear();
+
+      await act(async () => finishLoadMore());
+
+      expect(mockRefetchTabStats).toHaveBeenCalledTimes(1);
+    });
+
+    test('does not reload the list over another tab the user switched to', async () => {
+      renderChannelVideos();
+      await startLoadMore();
+      await userEvent.click(await screen.findByRole('tab', { name: /Shorts/i }));
+      mockRefetchVideos.mockClear();
+
+      await act(async () => finishLoadMore());
+
+      expect(mockRefetchVideos).not.toHaveBeenCalled();
+    });
+
+    test('does not reload the list or stats over another channel the user switched to', async () => {
+      const { rerender } = renderChannelVideos({ channelId: 'UC123456' });
+      await startLoadMore();
+      rerender(<ChannelVideos token={mockToken} channelId="UC999999" />);
+      mockRefetchVideos.mockClear();
+      mockRefetchTabStats.mockClear();
+
+      await act(async () => finishLoadMore());
+
+      expect([mockRefetchVideos.mock.calls.length, mockRefetchTabStats.mock.calls.length]).toEqual([0, 0]);
     });
   });
 

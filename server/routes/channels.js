@@ -1026,6 +1026,16 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *                   type: string
    *                 tabType:
    *                   type: string
+   *                 progress:
+   *                   type: object
+   *                   description: Load More progress, present only on a tab-specific check of a Load More fetch
+   *                   properties:
+   *                     itemsFetched:
+   *                       type: integer
+   *                       description: Entries read from the tab so far (saving stage - entries read in total)
+   *                     stage:
+   *                       type: string
+   *                       enum: [listing, saving]
    */
   router.get('/api/channels/:channelId/fetch-status', verifyToken, async (req, res) => {
     const { channelId } = req.params;

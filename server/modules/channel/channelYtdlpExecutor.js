@@ -13,9 +13,11 @@ class ChannelYtdlpExecutor {
    * common arguments (cookies, proxy, sleep-requests, etc.)
    * @param {Array} args - Pre-built arguments for yt-dlp command
    * @param {string|null} outputFile - Optional output file path
+   * @param {Object} options - Options object
+   * @param {Function} options.onStdoutData - Called with each raw stdout chunk as it arrives
    * @returns {Promise<string>} - Output content if outputFile provided
    */
-  async executeYtDlpCommand(args, outputFile = null) {
+  async executeYtDlpCommand(args, outputFile = null, { onStdoutData } = {}) {
     const ytDlp = spawnYtDlp(args, {
       env: {
         ...process.env,
@@ -31,6 +33,10 @@ class ChannelYtdlpExecutor {
     if (outputFile) {
       const writeStream = fs.createWriteStream(outputFile);
       ytDlp.stdout.pipe(writeStream);
+    }
+
+    if (onStdoutData) {
+      ytDlp.stdout.on('data', onStdoutData);
     }
 
     // Capture stderr to detect bot challenges

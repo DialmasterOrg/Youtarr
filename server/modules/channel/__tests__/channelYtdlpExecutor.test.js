@@ -29,7 +29,7 @@ const FIXED_UUID = 'fixed-uuid';
 
 function createFakeProcess() {
   const proc = new EventEmitter();
-  proc.stdout = { pipe: jest.fn() };
+  proc.stdout = Object.assign(new EventEmitter(), { pipe: jest.fn() });
   proc.stderr = new EventEmitter();
   return proc;
 }
@@ -123,6 +123,20 @@ describe('channelYtdlpExecutor', () => {
         ['--flat-playlist'],
         { env: expect.objectContaining({ TMPDIR: TEMP_BASE_PATH }) }
       );
+    });
+
+    test('passes each stdout chunk to onStdoutData as it arrives', async () => {
+      const onStdoutData = jest.fn();
+      const promise = executor.executeYtDlpCommand(['--dump-json'], null, { onStdoutData });
+      proc.stdout.emit('data', Buffer.from('{"id":"a"}\n'));
+      proc.stdout.emit('data', Buffer.from('{"id":"b"}\n'));
+      proc.emit('exit', 0);
+      await promise;
+
+      expect(onStdoutData.mock.calls.map(([chunk]) => chunk.toString())).toEqual([
+        '{"id":"a"}\n',
+        '{"id":"b"}\n',
+      ]);
     });
 
     describe('with an output file', () => {
