@@ -135,6 +135,72 @@ describe('yt-dlp process snapshots', () => {
     expect(fs.existsSync(snapshot)).toBe(false);
   });
 
+  describe('uploaded cookies', () => {
+    let uploadedPath;
+
+    beforeEach(() => {
+      delete process.env.YOUTARR_COOKIES_FILE;
+      const uploadedCookies = require('../uploadedCookies');
+      uploadedCookies.configDir = sourceDir;
+      uploadedPath = uploadedCookies.getPath();
+      fs.writeFileSync(uploadedPath, cookies('uploaded'), { mode: 0o600 });
+    });
+
+    test('never passes the uploaded file itself to yt-dlp', () => {
+      spawnYtDlp(['--cookies', uploadedPath, '--dump-json']);
+      const [, spawnedArgs] = childProcess.spawn.mock.calls[0];
+      expect(spawnedArgs[1]).not.toBe(uploadedPath);
+      expect(fs.readFileSync(spawnedArgs[1], 'utf8')).toBe(cookies('uploaded'));
+    });
+
+    test('keeps the uploaded file unchanged when yt-dlp writes back its jar', () => {
+      const child = spawnYtDlp(['--cookies', uploadedPath]);
+      const copy = childProcess.spawn.mock.calls[0][1][1];
+      fs.writeFileSync(copy, cookies('writeback'));
+      child.emit('close', 0);
+      expect(fs.readFileSync(uploadedPath, 'utf8')).toBe(cookies('uploaded'));
+    });
+
+    test.each([
+      ['a normal exit', [0]],
+      ['a nonzero exit', [1]],
+      ['a signal', [null, 'SIGKILL']],
+      ['a failed spawn', [-2]],
+    ])('removes the copy after %s', (_label, closeArgs) => {
+      const child = spawnYtDlp(['--cookies', uploadedPath]);
+      const copy = childProcess.spawn.mock.calls[0][1][1];
+      child.emit('close', ...closeArgs);
+      expect(fs.existsSync(copy)).toBe(false);
+    });
+
+    test('removes the copy if spawning throws synchronously', () => {
+      let copy;
+      childProcess.spawn.mockImplementation((_command, args) => {
+        copy = args[1];
+        throw new Error('spawn failed');
+      });
+      expect(() => spawnYtDlp(['--cookies', uploadedPath])).toThrow('spawn failed');
+      expect(fs.existsSync(copy)).toBe(false);
+    });
+
+    test('removes the copy after a synchronous run', () => {
+      let copy;
+      childProcess.spawnSync.mockImplementation((_command, args) => {
+        copy = args[1];
+        return { status: 0, stdout: 'ok' };
+      });
+      spawnYtDlpSync(['--cookies', uploadedPath]);
+      expect(copy).not.toBe(uploadedPath);
+      expect(fs.existsSync(copy)).toBe(false);
+    });
+
+    test('runs without cookies when the uploaded file cannot be copied', () => {
+      fs.unlinkSync(uploadedPath);
+      spawnYtDlp(['--cookies', uploadedPath, '--dump-json']);
+      expect(childProcess.spawn).toHaveBeenCalledWith('yt-dlp', ['--dump-json'], undefined);
+    });
+  });
+
   test('cleans synchronous snapshots after yt-dlp throws', () => {
     let snapshot;
     childProcess.spawnSync.mockImplementation((command, args) => {

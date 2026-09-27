@@ -989,26 +989,37 @@ describe('VideosModule', () => {
   });
 
   describe('backfillVideoMetadata', () => {
+    // A raw row as the rescan reads it: every guarded column present.
+    const dbRow = (overrides = {}) => ({
+      id: 1,
+      youtubeId: 'abc12345678',
+      removed: 0,
+      filePath: null,
+      fileSize: null,
+      audioFilePath: null,
+      audioFileSize: null,
+      video_resolution: null,
+      last_downloaded_at: null,
+      ...overrides,
+    });
+    const fsError = (code) => Object.assign(new Error(code), { code });
+
+    beforeEach(() => {
+      mockVideo.update.mockResolvedValue([1]);
+    });
+
     test('should backfill video metadata successfully', async () => {
       // Mock file system scan
       mockFs.readdir.mockResolvedValueOnce([
         { name: 'video [abc123].mp4', isDirectory: () => false, isFile: () => true }
       ]);
-      mockFs.stat.mockResolvedValueOnce({ size: 5000 });
+      mockFs.stat.mockResolvedValue({ size: 5000 });
 
       // Mock video count
       mockVideo.count.mockResolvedValueOnce(1);
 
       // Mock video fetch
-      mockVideo.findAll.mockResolvedValueOnce([
-        {
-          id: 1,
-          youtubeId: 'abc123',
-          filePath: null,
-          fileSize: null,
-          removed: false
-        }
-      ]);
+      mockVideo.findAll.mockResolvedValueOnce([dbRow({ youtubeId: 'abc123' })]);
 
       // Mock update query
       mockSequelize.query.mockResolvedValueOnce();
@@ -1026,21 +1037,12 @@ describe('VideosModule', () => {
       mockFs.readdir.mockResolvedValueOnce([
         { name: 'Video [abc12345678].mp4', isDirectory: () => false, isFile: () => true }
       ]);
-      mockFs.stat.mockResolvedValueOnce({ size: 1000 });
+      mockFs.stat.mockResolvedValue({ size: 1000 });
       mockExecFile.mockImplementation((file, args, opts, cb) => cb(null, '1280,720\n'));
 
       mockVideo.count.mockResolvedValueOnce(1);
       mockVideo.findAll.mockResolvedValueOnce([
-        {
-          id: 1,
-          youtubeId: 'abc12345678',
-          filePath: '/test/output/dir/Video [abc12345678].mp4',
-          fileSize: '1000',
-          audioFilePath: null,
-          audioFileSize: null,
-          removed: false,
-          video_resolution: null
-        }
+        dbRow({ filePath: '/test/output/dir/Video [abc12345678].mp4', fileSize: '1000' })
       ]);
       mockSequelize.query.mockResolvedValue([]);
 
@@ -1054,13 +1056,8 @@ describe('VideosModule', () => {
       );
       expect(mockVideo.update).toHaveBeenCalledTimes(1);
       expect(mockVideo.update).toHaveBeenCalledWith(
-        {
-          filePath: '/test/output/dir/Video [abc12345678].mp4',
-          fileSize: 1000,
-          removed: false,
-          video_resolution: '1280x720',
-        },
-        { where: { id: 1 } },
+        { removed: false, video_resolution: '1280x720' },
+        { where: expect.objectContaining({ id: 1, video_resolution: null }) },
       );
     });
 
@@ -1094,7 +1091,8 @@ describe('VideosModule', () => {
           audioFilePath: null,
           audioFileSize: null,
           removed: false,
-          video_resolution: null
+          video_resolution: null,
+          last_downloaded_at: null
         }))
       );
       mockSequelize.query.mockResolvedValue([]);
@@ -1138,7 +1136,8 @@ describe('VideosModule', () => {
           audioFilePath: null,
           audioFileSize: null,
           removed: false,
-          video_resolution: null
+          video_resolution: null,
+          last_downloaded_at: null
         }))
       );
       mockSequelize.query.mockResolvedValue([]);
@@ -1155,33 +1154,19 @@ describe('VideosModule', () => {
       mockFs.readdir.mockResolvedValueOnce([
         { name: 'Video [abc12345678].mp4', isDirectory: () => false, isFile: () => true }
       ]);
-      mockFs.stat.mockResolvedValueOnce({ size: 1000 });
+      mockFs.stat.mockResolvedValue({ size: 1000 });
 
       mockVideo.count.mockResolvedValueOnce(1);
       mockVideo.findAll.mockResolvedValueOnce([
-        {
-          id: 1,
-          youtubeId: 'abc12345678',
-          filePath: '/test/output/dir/Video [abc12345678].mp4',
-          fileSize: '1000',
-          audioFilePath: null,
-          audioFileSize: null,
-          removed: false,
-          video_resolution: null
-        }
+        dbRow({ filePath: '/test/output/dir/Video [abc12345678].mp4', fileSize: '1000' })
       ]);
 
       await VideosModule.backfillVideoMetadata();
 
       expect(mockVideo.update).toHaveBeenCalledTimes(1);
       expect(mockVideo.update).toHaveBeenCalledWith(
-        {
-          filePath: '/test/output/dir/Video [abc12345678].mp4',
-          fileSize: 1000,
-          removed: false,
-          video_resolution: '0x0',
-        },
-        { where: { id: 1 } },
+        { removed: false, video_resolution: '0x0' },
+        { where: expect.objectContaining({ id: 1 }) },
       );
     });
 
@@ -1189,20 +1174,20 @@ describe('VideosModule', () => {
       mockFs.readdir.mockResolvedValueOnce([
         { name: 'Video [abc12345678].mp3', isDirectory: () => false, isFile: () => true }
       ]);
-      mockFs.stat.mockResolvedValueOnce({ size: 500 });
+      mockFs.stat.mockImplementation(async (filePath) => {
+        if (filePath.endsWith('.mp4')) throw fsError('ENOENT');
+        return { size: 500 };
+      });
 
       mockVideo.count.mockResolvedValueOnce(1);
       mockVideo.findAll.mockResolvedValueOnce([
-        {
-          id: 1,
-          youtubeId: 'abc12345678',
+        dbRow({
           filePath: '/test/output/dir/Video [abc12345678].mp4',
           fileSize: '1000',
           audioFilePath: '/test/output/dir/Video [abc12345678].mp3',
           audioFileSize: '500',
-          removed: false,
           video_resolution: '1920x1080'
-        }
+        })
       ]);
 
       await VideosModule.backfillVideoMetadata();
@@ -1210,15 +1195,8 @@ describe('VideosModule', () => {
       expect(mockExecFile).not.toHaveBeenCalled();
       expect(mockVideo.update).toHaveBeenCalledTimes(1);
       expect(mockVideo.update).toHaveBeenCalledWith(
-        {
-          filePath: null,
-          fileSize: null,
-          audioFilePath: '/test/output/dir/Video [abc12345678].mp3',
-          audioFileSize: 500,
-          removed: false,
-          video_resolution: null,
-        },
-        { where: { id: 1 } },
+        { filePath: null, fileSize: null, video_resolution: null, removed: false },
+        { where: expect.objectContaining({ id: 1 }) },
       );
     });
 
@@ -1291,22 +1269,19 @@ describe('VideosModule', () => {
 
       // Mock video with file path that doesn't exist
       mockVideo.findAll.mockResolvedValueOnce([
-        {
-          id: 1,
-          youtubeId: 'missing123',
-          filePath: '/test/missing.mp4',
-          fileSize: '1000',
-          removed: false
-        }
+        dbRow({ youtubeId: 'missing123', filePath: '/test/missing.mp4', fileSize: '1000' })
       ]);
-
-      // Mock update query
-      mockSequelize.query.mockResolvedValueOnce();
+      mockFs.stat.mockRejectedValue(fsError('ENOENT'));
 
       const result = await VideosModule.backfillVideoMetadata();
 
       expect(result.removed).toBe(1);
       expect(result.updated).toBe(0);
+      // Stored paths are kept so a file returning to its location is found again.
+      expect(mockVideo.update).toHaveBeenCalledWith(
+        { removed: true },
+        { where: expect.objectContaining({ id: 1, filePath: '/test/missing.mp4' }) },
+      );
     });
 
     test('should clear removed flag when a previously-missing file reappears (raw row removed=1)', async () => {
@@ -1315,18 +1290,17 @@ describe('VideosModule', () => {
       mockFs.readdir.mockResolvedValueOnce([
         { name: 'video [restored1].mp4', isDirectory: () => false, isFile: () => true }
       ]);
-      mockFs.stat.mockResolvedValueOnce({ size: 1000 });
+      mockFs.stat.mockResolvedValue({ size: 1000 });
 
       mockVideo.count.mockResolvedValueOnce(1);
 
       mockVideo.findAll.mockResolvedValueOnce([
-        {
-          id: 1,
+        dbRow({
           youtubeId: 'restored1',
           filePath: '/test/output/dir/video [restored1].mp4',
           fileSize: '1000',
           removed: 1
-        }
+        })
       ]);
 
       mockSequelize.query.mockResolvedValueOnce();
@@ -1335,6 +1309,147 @@ describe('VideosModule', () => {
 
       expect(result.updated).toBe(1);
       expect(result.removed).toBe(0);
+    });
+
+    describe('changes that land after the walk', () => {
+      const mp4 = '/test/output/dir/Video [abc12345678].mp4';
+      const mp3 = '/test/output/dir/Video [abc12345678].mp3';
+      const walkFinds = (...names) => mockFs.readdir.mockResolvedValueOnce(
+        names.map((name) => ({ name, isDirectory: () => false, isFile: () => true }))
+      );
+      const readRow = (row) => {
+        mockVideo.count.mockResolvedValueOnce(1);
+        mockVideo.findAll.mockResolvedValueOnce([row]);
+      };
+
+      test('does not mark a download that finished after the walk as missing', async () => {
+        walkFinds();
+        readRow(dbRow({ filePath: mp4, fileSize: '1000', video_resolution: '1920x1080' }));
+        mockFs.stat.mockResolvedValue({ size: 1000 });
+
+        const result = await VideosModule.backfillVideoMetadata();
+
+        expect(mockVideo.update).not.toHaveBeenCalled();
+        expect(result.removed).toBe(0);
+      });
+
+      test('does not restore a video deleted after the walk', async () => {
+        walkFinds('Video [abc12345678].mp4');
+        readRow(dbRow({ removed: 1, filePath: mp4, fileSize: '1000', video_resolution: '1920x1080' }));
+        mockFs.stat
+          .mockResolvedValueOnce({ size: 1000 }) // the walk
+          .mockRejectedValue(fsError('ENOENT')); // the fresh check
+
+        const result = await VideosModule.backfillVideoMetadata();
+
+        expect(mockVideo.update).not.toHaveBeenCalled();
+        expect(result.updated).toBe(0);
+      });
+
+      test('keeps an audio file added after the walk', async () => {
+        walkFinds('Video [abc12345678].mp4');
+        readRow(dbRow({
+          filePath: mp4, fileSize: '1000', video_resolution: '1920x1080',
+          audioFilePath: mp3, audioFileSize: '500'
+        }));
+        mockFs.stat.mockImplementation(async (filePath) => ({ size: filePath.endsWith('.mp3') ? 500 : 1000 }));
+
+        await VideosModule.backfillVideoMetadata();
+
+        expect(mockVideo.update).not.toHaveBeenCalled();
+      });
+
+      test('keeps a video file added after the walk, with its resolution', async () => {
+        walkFinds('Video [abc12345678].mp3');
+        readRow(dbRow({
+          filePath: mp4, fileSize: '1000', video_resolution: '1920x1080',
+          audioFilePath: mp3, audioFileSize: '500'
+        }));
+        mockFs.stat.mockImplementation(async (filePath) => ({ size: filePath.endsWith('.mp3') ? 500 : 1000 }));
+
+        await VideosModule.backfillVideoMetadata();
+
+        expect(mockVideo.update).not.toHaveBeenCalled();
+      });
+
+      test('does not write back the size of a file replaced after the walk', async () => {
+        walkFinds('Video [abc12345678].mp4');
+        readRow(dbRow({ filePath: mp4, fileSize: '2000', video_resolution: '1920x1080' }));
+        mockFs.stat
+          .mockResolvedValueOnce({ size: 1000 }) // the walk saw the old file
+          .mockResolvedValue({ size: 2000 }); // the replacement is on disk now
+
+        await VideosModule.backfillVideoMetadata();
+
+        expect(mockVideo.update).not.toHaveBeenCalled();
+      });
+
+      test('leaves the row alone when a file check fails for a reason other than a missing file', async () => {
+        walkFinds();
+        readRow(dbRow({ filePath: mp4, fileSize: '1000' }));
+        mockFs.stat.mockRejectedValue(fsError('EACCES'));
+
+        const result = await VideosModule.backfillVideoMetadata();
+
+        expect(mockVideo.update).not.toHaveBeenCalled();
+        expect(result.removed).toBe(0);
+      });
+
+      test('does not clear a missing format while the other format cannot be checked', async () => {
+        walkFinds();
+        readRow(dbRow({ filePath: mp4, fileSize: '1000', audioFilePath: mp3, audioFileSize: '500' }));
+        mockFs.stat.mockImplementation(async (filePath) => {
+          throw fsError(filePath.endsWith('.mp4') ? 'ENOENT' : 'EIO');
+        });
+
+        await VideosModule.backfillVideoMetadata();
+
+        expect(mockVideo.update).not.toHaveBeenCalled();
+      });
+
+      test('writes only if the row is unchanged since it was read', async () => {
+        const downloadedAt = new Date('2026-09-27T03:31:07Z');
+        walkFinds('Video [abc12345678].mp4');
+        readRow(dbRow({ removed: 1, filePath: mp4, fileSize: '1000', video_resolution: '1920x1080', last_downloaded_at: downloadedAt }));
+        mockFs.stat.mockResolvedValue({ size: 1000 });
+
+        await VideosModule.backfillVideoMetadata();
+
+        expect(mockVideo.update).toHaveBeenCalledWith({ removed: false }, {
+          where: {
+            id: 1,
+            removed: true,
+            filePath: mp4,
+            fileSize: '1000',
+            audioFilePath: null,
+            audioFileSize: null,
+            video_resolution: '1920x1080',
+            last_downloaded_at: downloadedAt,
+          },
+        });
+      });
+
+      test('counts a row changed by another writer before the write as skipped', async () => {
+        walkFinds();
+        readRow(dbRow({ filePath: mp4, fileSize: '1000' }));
+        mockFs.stat.mockRejectedValue(fsError('ENOENT'));
+        mockVideo.update.mockResolvedValue([0]);
+
+        const result = await VideosModule.backfillVideoMetadata();
+
+        expect(result).toEqual(expect.objectContaining({ removed: 0, updated: 0, skippedChanged: 1, failed: 0 }));
+      });
+
+      test('counts a write that throws as failed, not updated', async () => {
+        walkFinds('Video [abc12345678].mp4');
+        readRow(dbRow({ removed: 1, filePath: mp4, fileSize: '1000', video_resolution: '1920x1080' }));
+        mockFs.stat.mockResolvedValue({ size: 1000 });
+        mockVideo.update.mockRejectedValue(new Error('lock wait timeout'));
+
+        const result = await VideosModule.backfillVideoMetadata();
+
+        expect(result).toEqual(expect.objectContaining({ updated: 0, failed: 1 }));
+      });
     });
 
     test('should process videos in chunks', async () => {

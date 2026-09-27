@@ -14,6 +14,8 @@ const rescanRunSummary = require('./rescanRunSummary');
 const { AUDIO_EXTENSIONS, MEDIA_EXTENSIONS } = require('./filesystem/constants');
 const { probeVideoDimensions } = require('./resolutionTier');
 const createLimiter = require('./subscriptionImport/concurrencyLimiter');
+const { isRescanCandidate, resolveRescanUpdate } = require('./rescanRowUpdate');
+const { unchangedSinceRead, GUARDED_COLUMNS } = require('./videoRowGuard');
 
 // Backfill row updates are applied in parameterized batches of this size,
 // and flushed mid-chunk at the same cadence so completed work survives a
@@ -23,6 +25,11 @@ const BACKFILL_UPDATE_BATCH_SIZE = 100;
 // ffprobes are I/O-bound, so running 4 at once cuts backfill wall time
 // ~4x without piling up subprocesses next to downloads and Plex.
 const BACKFILL_PROBE_CONCURRENCY = 4;
+
+// Each nominated row gets a fresh stat and then its write, as one unit so the
+// gap between them stays short. Bounded so network shares and the database
+// pool aren't flooded.
+const RESCAN_WRITE_CONCURRENCY = 4;
 
 class VideosModule {
   constructor() {
@@ -432,47 +439,35 @@ class VideosModule {
   }
 
   /**
-   * Apply backfill row updates in small parameterized batches. Deliberately
-   * does not check the run's time limit: once a flush starts it completes,
-   * so the expensive work already done (ffprobes, file stats) is never
-   * discarded. A flush of <= 1000 plain UPDATEs overruns the limit by
-   * seconds at most.
+   * Write the rescan's nominated rows. Each row's update is recomputed from a
+   * fresh stat and written only if the row is unchanged since it was read, so
+   * a download or deletion that landed after the walk is never undone.
+   * Deliberately does not check the run's time limit: once started, a slice's
+   * writes complete, so the expensive work already done is never discarded.
+   * @param {Array<{row: Object, fileInfo: Object|undefined, probedResolution: string|null}>} candidates
+   * @returns {Promise<{updated: number, removed: number, skipped: number, failed: number}>}
    */
-  async _flushBackfillUpdates(updates) {
-    for (let i = 0; i < updates.length; i += BACKFILL_UPDATE_BATCH_SIZE) {
-      await new Promise(resolve => setImmediate(resolve)); // Yield control
-
-      const batch = updates.slice(i, i + BACKFILL_UPDATE_BATCH_SIZE);
-
-      // Use individual parameterized updates to handle special characters properly
-      let batchSuccess = 0;
-      let batchFailed = 0;
-
-      for (const update of batch) {
-        const attributes = {
-          filePath: update.filePath,
-          fileSize: update.fileSize,
-          audioFilePath: update.audioFilePath,
-          audioFileSize: update.audioFileSize,
-          video_resolution: update.video_resolution,
-          removed: update.removed,
-        };
-
-        if (Object.values(attributes).some((v) => v !== undefined)) {
-          try {
-            await Video.update(attributes, { where: { id: update.id } });
-            batchSuccess++;
-          } catch (err) {
-            batchFailed++;
-            logger.error({ err, videoId: update.id }, 'Failed to update video');
-          }
+  async _applyRescanUpdates(candidates) {
+    const counts = { updated: 0, removed: 0, skipped: 0, failed: 0 };
+    const limit = createLimiter(RESCAN_WRITE_CONCURRENCY);
+    await Promise.all(candidates.map(({ row, fileInfo, probedResolution }) => limit(async () => {
+      try {
+        const changes = await resolveRescanUpdate(row, fileInfo, probedResolution, (filePath) => fs.stat(filePath));
+        if (!changes) return;
+        const [affected] = await Video.update(changes, { where: unchangedSinceRead(row) });
+        if (affected === 0) {
+          counts.skipped++;
+        } else if (changes.removed === true) {
+          counts.removed++;
+        } else {
+          counts.updated++;
         }
+      } catch (err) {
+        counts.failed++;
+        logger.error({ err, videoId: row.id }, 'Failed to update video');
       }
-
-      if (batchFailed > 0) {
-        logger.info({ batchSuccess, batchFailed }, 'Batch update results');
-      }
-    }
+    })));
+    return counts;
   }
 
   async backfillVideoMetadata(arg = {}) {
@@ -496,6 +491,8 @@ class VideosModule {
     let totalProcessed = 0;
     let totalUpdated = 0;
     let totalRemoved = 0;
+    let totalSkipped = 0;
+    let totalFailed = 0;
     let fileMapSize = 0;
     let result;
 
@@ -550,9 +547,10 @@ class VideosModule {
       while (offset < totalCount) {
         checkTimeLimit();
 
-        // Fetch a chunk of videos
+        // Fetch a chunk of videos. Every guarded column is read so the write
+        // can require the row to be unchanged since this read.
         const videos = await Video.findAll({
-          attributes: ['id', 'youtubeId', 'filePath', 'fileSize', 'audioFilePath', 'audioFileSize', 'removed', 'video_resolution'],
+          attributes: ['id', 'youtubeId', 'removed', ...GUARDED_COLUMNS],
           limit: VIDEO_CHUNK_SIZE,
           offset: offset,
           raw: true
@@ -560,11 +558,7 @@ class VideosModule {
 
         if (videos.length === 0) break;
 
-        const bulkUpdates = [];
-        let chunkUpdated = 0;
-        let chunkRemoved = 0;
-
-        // Process the chunk in 100-row slices: probe, apply the row logic, flush.
+        // Process the chunk in 100-row slices: probe, nominate, write.
         for (let sliceStart = 0; sliceStart < videos.length; sliceStart += BACKFILL_UPDATE_BATCH_SIZE) {
           checkTimeLimit();
           await new Promise(resolve => setImmediate(resolve)); // Yield control
@@ -589,98 +583,31 @@ class VideosModule {
             });
           }).filter(Boolean));
 
+          // The walk only nominates rows; what gets written is decided from a
+          // fresh stat at write time (see rescanRowUpdate).
+          const candidates = [];
           for (const video of slice) {
             const fileInfo = fileMap.get(video.youtubeId);
-
-            if (fileInfo) {
-              // Check if any file exists (video or audio)
-              const hasVideoFile = !!fileInfo.videoFilePath;
-              const hasAudioFile = !!fileInfo.audioFilePath;
-              const hasAnyFile = hasVideoFile || hasAudioFile;
-
-              if (hasAnyFile) {
-                // Check if update needed for video file
-                const videoPathChanged = hasVideoFile && video.filePath !== fileInfo.videoFilePath;
-                const videoSizeChanged = hasVideoFile && (!video.fileSize || video.fileSize !== fileInfo.videoFileSize.toString());
-
-                // Check if update needed for audio file
-                const audioPathChanged = hasAudioFile && video.audioFilePath !== fileInfo.audioFilePath;
-                const audioSizeChanged = hasAudioFile && (!video.audioFileSize || video.audioFileSize !== fileInfo.audioFileSize.toString());
-
-                // Check if we need to clear audio fields (audio file was deleted)
-                const audioFileRemoved = !hasAudioFile && (video.audioFilePath || video.audioFileSize);
-
-                // Check if we need to clear video fields (video file was deleted but audio exists)
-                const videoFileRemoved = !hasVideoFile && hasAudioFile && (video.filePath || video.fileSize);
-
-                const probedResolution = probeResults.get(video.youtubeId) ?? null;
-
-                // Sequelize BOOLEAN columns come back as 0/1 in raw mode, so use a
-                // truthy check; `=== true` would never match the raw integer.
-                if (videoPathChanged || videoSizeChanged || audioPathChanged || audioSizeChanged ||
-                    audioFileRemoved || videoFileRemoved || video.removed || probedResolution !== null) {
-                  const update = {
-                    id: video.id,
-                    removed: false
-                  };
-
-                  // Update video file info
-                  if (hasVideoFile) {
-                    update.filePath = fileInfo.videoFilePath;
-                    update.fileSize = fileInfo.videoFileSize;
-                  } else if (videoFileRemoved) {
-                    update.filePath = null;
-                    update.fileSize = null;
-                    // The stored dimensions belong to the deleted file; clearing
-                    // them lets a reappearing file be re-probed instead of
-                    // keeping a stale label.
-                    update.video_resolution = null;
-                  }
-
-                  // Update audio file info
-                  if (hasAudioFile) {
-                    update.audioFilePath = fileInfo.audioFilePath;
-                    update.audioFileSize = fileInfo.audioFileSize;
-                  } else if (audioFileRemoved) {
-                    update.audioFilePath = null;
-                    update.audioFileSize = null;
-                  }
-
-                  if (probedResolution !== null) {
-                    update.video_resolution = probedResolution;
-                  }
-
-                  bulkUpdates.push(update);
-                  chunkUpdated++;
-                }
-              }
-            } else {
-              // No files exist in fileMap for this video
-              if (!video.removed) {
-                // Only mark as removed, don't touch filePath or fileSize
-                // They might still be valid even if we can't find the file right now
-                bulkUpdates.push({
-                  id: video.id,
-                  removed: true
-                  // DO NOT include filePath or fileSize here - leave them unchanged
-                });
-                chunkRemoved++;
-              }
+            const probedResolution = probeResults.get(video.youtubeId) ?? null;
+            if (isRescanCandidate(video, fileInfo, probedResolution)) {
+              candidates.push({ row: video, fileInfo, probedResolution });
             }
           }
 
-          // Flush each slice's updates right away: on a slow network share the
-          // probes can outlast the whole time budget, and work lost to an abort
-          // would get re-probed next run and never converge.
-          if (bulkUpdates.length > 0) {
-            logProgress(`Updating ${bulkUpdates.length} records (chunk ${Math.floor(offset / VIDEO_CHUNK_SIZE) + 1})...`);
-            await this._flushBackfillUpdates(bulkUpdates.splice(0));
+          // Write each slice right away: on a slow network share the probes can
+          // outlast the whole time budget, and work lost to an abort would get
+          // re-probed next run and never converge.
+          if (candidates.length > 0) {
+            logProgress(`Checking ${candidates.length} records (chunk ${Math.floor(offset / VIDEO_CHUNK_SIZE) + 1})...`);
+            const counts = await this._applyRescanUpdates(candidates);
+            totalUpdated += counts.updated;
+            totalRemoved += counts.removed;
+            totalSkipped += counts.skipped;
+            totalFailed += counts.failed;
           }
         }
 
         totalProcessed += videos.length;
-        totalUpdated += chunkUpdated;
-        totalRemoved += chunkRemoved;
         offset += VIDEO_CHUNK_SIZE;
 
         // Log progress every few chunks
@@ -695,7 +622,9 @@ class VideosModule {
         totalProcessed,
         filesOnDisk: fileMapSize,
         updated: totalUpdated,
-        removed: totalRemoved
+        removed: totalRemoved,
+        skippedChanged: totalSkipped,
+        failed: totalFailed
       }, 'Video metadata backfill completed');
 
       result = {
@@ -703,6 +632,8 @@ class VideosModule {
         filesOnDisk: fileMapSize,
         updated: totalUpdated,
         removed: totalRemoved,
+        skippedChanged: totalSkipped,
+        failed: totalFailed,
         timeElapsed: elapsed,
         trigger,
         startedAt: startedAtIso,
@@ -724,7 +655,9 @@ class VideosModule {
           processed: totalProcessed,
           filesOnDisk: fileMapSize,
           updated: totalUpdated,
-          removed: totalRemoved
+          removed: totalRemoved,
+          skippedChanged: totalSkipped,
+          failed: totalFailed
         };
         return result;
       }
@@ -738,7 +671,9 @@ class VideosModule {
         processed: totalProcessed,
         filesOnDisk: fileMapSize,
         updated: totalUpdated,
-        removed: totalRemoved
+        removed: totalRemoved,
+        skippedChanged: totalSkipped,
+        failed: totalFailed
       };
       // Resolve with the failure and the counters it reached rather than
       // rethrow, so every caller and the run history keep the partial progress.

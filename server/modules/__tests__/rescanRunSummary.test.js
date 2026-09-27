@@ -12,8 +12,55 @@ describe('rescanRunSummary', () => {
         status: 'success',
         outcome: 'completed',
         message: 'Scanned 8,421 videos: 12 updated, 3 marked missing.',
-        details: { videosScanned: 8421, filesFoundOnDisk: 8423, videosUpdated: 12, videosMarkedMissing: 3 },
+        details: {
+          videosScanned: 8421,
+          filesFoundOnDisk: 8423,
+          videosUpdated: 12,
+          videosMarkedMissing: 3,
+          videosSkipped: 0,
+          videosFailed: 0,
+        },
       });
+    });
+
+    test('reports rows skipped because they changed during the scan without treating the run as skipped', () => {
+      const record = toRunRecord({ status: 'completed', processed: 10, updated: 1, removed: 0, skippedChanged: 2 });
+      expect(record).toEqual(expect.objectContaining({
+        status: 'success',
+        outcome: 'completed',
+        message: 'Scanned 10 videos: 1 updated, 0 marked missing, 2 skipped (changed during the scan).',
+      }));
+      expect(record.details).toEqual(expect.objectContaining({ videosSkipped: 2, videosFailed: 0 }));
+    });
+
+    test('records a finished scan with failed row writes as a partial failure', () => {
+      const record = toRunRecord({ status: 'completed', processed: 10, updated: 3, removed: 1, failed: 2 });
+      expect(record).toEqual(expect.objectContaining({
+        status: 'error',
+        outcome: 'partial',
+        message: 'Scanned 10 videos: 3 updated, 1 marked missing, 2 failed.',
+      }));
+      expect(record.details.videosFailed).toBe(2);
+    });
+
+    test('keeps a timed-out scan continuable and names its failed writes', () => {
+      const record = toRunRecord({ status: 'timed-out', timedOut: true, processed: 500, failed: 1 });
+      expect(record).toEqual(expect.objectContaining({
+        status: 'success',
+        outcome: 'timed-out',
+        message: 'Reached the time limit after 500 videos (1 failed); continues at the next run.',
+      }));
+    });
+
+    test('shows a partial scan as an error on the Maintenance page, with its message', () => {
+      const run = {
+        startedAt: '2026-09-27T03:30:00Z', finishedAt: '2026-09-27T03:31:00Z', trigger: 'scheduled',
+        ...toRunRecord({ status: 'completed', processed: 10, updated: 3, removed: 1, failed: 2 }),
+      };
+      expect(fromRunRecord(run)).toEqual(expect.objectContaining({
+        status: 'error',
+        errorMessage: 'Scanned 10 videos: 3 updated, 1 marked missing, 2 failed.',
+      }));
     });
 
     test('summarizes a scan that hit the time limit', () => {

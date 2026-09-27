@@ -18,9 +18,12 @@ const { isDownloadJob, isSpecificUrlDownloadJob } = require('./download/jobTypes
 const downloadCleanup = require('./download/downloadCleanup');
 const { serializeAuxData, parseAuxData } = require('./jobAuxData');
 const storageGuard = require('./storageGuard');
+const { unchangedSinceRead } = require('./videoRowGuard');
 const logger = require('../logger');
 
 const MAX_SAVE_RETRIES = 3;
+// Library repair looks for a missing row's file at its guessed .mp4 path, then these.
+const BACKFILL_ALT_VIDEO_EXTENSIONS = ['.webm', '.mkv', '.m4v', '.avi'];
 // Download History window: jobs older than this are purged from memory,
 // and at most MAX_HISTORY_JOBS are returned to the client. DB rows are
 // never deleted, so raising these resurfaces older persisted jobs.
@@ -694,6 +697,27 @@ class JobModule {
     return videoPersistence.upsertChannelVideoFromInfo(info, options);
   }
 
+  /**
+   * Look for a backfilled video's file at its guessed .mp4 path, then with the
+   * other common video extensions.
+   * @param {string} mp4Path - Guessed path ending in .mp4
+   * @returns {Promise<{path: string, size: string}|null>} The file found, or null
+   */
+  async _findArchivedVideoFile(mp4Path) {
+    // Swap only the trailing extension; the channel name or title may contain ".mp4" too.
+    const basePath = mp4Path.slice(0, -'.mp4'.length);
+    const candidates = [mp4Path, ...BACKFILL_ALT_VIDEO_EXTENSIONS.map((ext) => `${basePath}${ext}`)];
+    for (const candidate of candidates) {
+      try {
+        const stats = await fsPromises.stat(candidate);
+        return { path: candidate, size: stats.size.toString() };
+      } catch (err) {
+        // Try the next extension
+      }
+    }
+    return null;
+  }
+
   // Backfill Videos and channelvideos tables from complete.list and jobs info JSON
   async backfillFromCompleteList() {
     try {
@@ -799,53 +823,48 @@ class JobModule {
             rating_source: info.rating_source || null,
           };
 
-          // Check if file exists and get file size
-          try {
-            const stats = await fsPromises.stat(fullPath);
-            payload.filePath = fullPath;
-            payload.fileSize = stats.size.toString();
-            payload.removed = false;
-          } catch (err) {
-            // Try other common extensions
-            const extensions = ['.webm', '.mkv', '.m4v', '.avi'];
-            let fileFound = false;
+          // Read the row before searching the disk, so a deletion that lands
+          // in between can't be undone by an earlier "file found".
+          const videoInstance = await Video.findOne({ where: { youtubeId: info.id } });
+          const needsFileSearch = videoInstance
+            ? !videoInstance.filePath || !videoInstance.fileSize
+            : needsVideo;
+          const foundFile = needsFileSearch ? await this._findArchivedVideoFile(fullPath) : null;
 
-            for (const ext of extensions) {
-              const altPath = fullPath.replace('.mp4', ext);
-              try {
-                const stats = await fsPromises.stat(altPath);
-                payload.filePath = altPath;
-                payload.fileSize = stats.size.toString();
-                payload.removed = false;
-                fileFound = true;
-                break;
-              } catch (altErr) {
-                // Continue trying other extensions
-              }
-            }
-
-            if (!fileFound) {
-              payload.filePath = fullPath;
-              payload.fileSize = null;
-              payload.removed = false;
-            }
-          }
-
-          let videoInstance = await Video.findOne({ where: { youtubeId: info.id } });
           if (!videoInstance && needsVideo) {
-            await Video.create(payload);
-            videosUpserts += 1;
+            try {
+              // Without a file on disk the row is recreated as missing; the
+              // guessed path is kept, as the rescan keeps stored paths.
+              await Video.create({
+                ...payload,
+                filePath: foundFile ? foundFile.path : fullPath,
+                fileSize: foundFile ? foundFile.size : null,
+                removed: !foundFile,
+              });
+              videosUpserts += 1;
+            } catch (createErr) {
+              if (createErr.name !== 'SequelizeUniqueConstraintError' && createErr.original?.code !== 'ER_DUP_ENTRY') {
+                throw createErr;
+              }
+              // A download created the row in the meantime; its data is newer.
+              logger.info({ youtubeId: info.id }, 'Video already exists (created by another process), skipping backfill');
+            }
           } else if (videoInstance) {
-            const updates = {};
-
-            // Update file metadata only if not already set
-            if (!videoInstance.filePath || !videoInstance.fileSize) {
-              if (payload.filePath || payload.fileSize) {
-                updates.filePath = payload.filePath;
-                updates.fileSize = payload.fileSize;
-                updates.removed = payload.removed;
+            // Only claim a file that was actually found, and only if no other
+            // writer changed the row since it was read. This only runs when
+            // filePath or fileSize was empty, so the write always changes a
+            // column, which the zero-rows conflict check relies on.
+            if (foundFile) {
+              const [affected] = await Video.update(
+                { filePath: foundFile.path, fileSize: foundFile.size, removed: false },
+                { where: unchangedSinceRead(videoInstance) }
+              );
+              if (affected === 0) {
+                logger.info({ youtubeId: info.id }, 'Video changed during backfill, skipping file update');
               }
             }
+
+            const updates = {};
 
             // Update media_type only if currently set to default 'video' (meaning it hasn't been set yet)
             if (videoInstance.media_type === 'video' && payload.media_type && payload.media_type !== 'video') {
