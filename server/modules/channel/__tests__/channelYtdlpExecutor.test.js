@@ -21,17 +21,40 @@ jest.mock('../../download/tempPathManager', () => ({
 }));
 
 const { EventEmitter } = require('events');
+const { PassThrough, Writable } = require('stream');
 const path = require('path');
 const os = require('os');
 
 const TEMP_BASE_PATH = '/tmp/yt-temp';
 const FIXED_UUID = 'fixed-uuid';
+const SLOW_WRITE_DELAY_MS = 20;
 
 function createFakeProcess() {
   const proc = new EventEmitter();
-  proc.stdout = Object.assign(new EventEmitter(), { pipe: jest.fn() });
+  proc.stdout = new PassThrough();
   proc.stderr = new EventEmitter();
   return proc;
+}
+
+/**
+ * Stand-in for the output file's write stream. Chunks count as "on disk" only
+ * once each write completes, after writeDelayMs when set.
+ */
+function createFileWriteStream({ writeDelayMs = 0, writeError = null } = {}) {
+  const onDisk = [];
+  const stream = new Writable({
+    write(chunk, encoding, callback) {
+      if (writeError) {
+        callback(writeError);
+        return;
+      }
+      setTimeout(() => {
+        onDisk.push(chunk);
+        callback();
+      }, writeDelayMs);
+    }
+  });
+  return { stream, readOnDisk: () => Buffer.concat(onDisk).toString('utf8') };
 }
 
 describe('channelYtdlpExecutor', () => {
@@ -141,38 +164,86 @@ describe('channelYtdlpExecutor', () => {
 
     describe('with an output file', () => {
       const OUTPUT_FILE = '/tmp/out.json';
-      const OUTPUT_CONTENT = '{"entries":[]}';
+      const RECORDS = ['{"id":"a"}\n', '{"id":"b"}\n'];
 
-      let writeStream;
+      function useFileWriteStream(options) {
+        const file = createFileWriteStream(options);
+        fs.createWriteStream.mockReturnValue(file.stream);
+        fs.promises.readFile.mockImplementation(async () => file.readOnDisk());
+        return file;
+      }
 
-      beforeEach(() => {
-        writeStream = { on: jest.fn() };
-        fs.createWriteStream.mockReturnValue(writeStream);
-        fs.promises.readFile.mockResolvedValue(OUTPUT_CONTENT);
-      });
+      function emitRecordsAndExit(code) {
+        RECORDS.forEach((record) => proc.stdout.write(record));
+        proc.stdout.end();
+        proc.emit('exit', code);
+      }
 
-      test('pipes yt-dlp stdout into a write stream on the output file', async () => {
+      test('writes yt-dlp stdout to the output file', async () => {
+        useFileWriteStream();
+
         const promise = executor.executeYtDlpCommand(['--dump-json'], OUTPUT_FILE);
-        proc.emit('exit', 0);
+        emitRecordsAndExit(0);
         await promise;
 
         expect(fs.createWriteStream).toHaveBeenCalledWith(OUTPUT_FILE);
-        expect(proc.stdout.pipe).toHaveBeenCalledWith(writeStream);
       });
 
       test('resolves with the output file content', async () => {
-        const promise = executor.executeYtDlpCommand(['--dump-json'], OUTPUT_FILE);
-        proc.emit('exit', 0);
+        useFileWriteStream();
 
-        await expect(promise).resolves.toBe(OUTPUT_CONTENT);
+        const promise = executor.executeYtDlpCommand(['--dump-json'], OUTPUT_FILE);
+        emitRecordsAndExit(0);
+
+        await expect(promise).resolves.toBe(RECORDS.join(''));
+      });
+
+      test('returns every record when the file write finishes after yt-dlp exits', async () => {
+        useFileWriteStream({ writeDelayMs: SLOW_WRITE_DELAY_MS });
+
+        const promise = executor.executeYtDlpCommand(['--dump-json'], OUTPUT_FILE);
+        emitRecordsAndExit(0);
+
+        await expect(promise).resolves.toBe(RECORDS.join(''));
       });
 
       test('removes the output file after reading it', async () => {
+        useFileWriteStream();
+
         const promise = executor.executeYtDlpCommand(['--dump-json'], OUTPUT_FILE);
-        proc.emit('exit', 0);
+        emitRecordsAndExit(0);
         await promise;
 
         expect(fs.promises.unlink).toHaveBeenCalledWith(OUTPUT_FILE);
+      });
+
+      test('rejects with the write error when the output file cannot be written', async () => {
+        useFileWriteStream({ writeError: new Error('ENOSPC: no space left on device') });
+
+        const promise = executor.executeYtDlpCommand(['--dump-json'], OUTPUT_FILE);
+        emitRecordsAndExit(0);
+
+        await expect(promise).rejects.toThrow('ENOSPC');
+      });
+
+      test('does not read the output file when it cannot be written', async () => {
+        useFileWriteStream({ writeError: new Error('ENOSPC: no space left on device') });
+
+        const promise = executor.executeYtDlpCommand(['--dump-json'], OUTPUT_FILE);
+        emitRecordsAndExit(0);
+        await promise.catch(() => {});
+
+        expect(fs.promises.readFile).not.toHaveBeenCalled();
+      });
+
+      test('rejects with the yt-dlp error when yt-dlp fails', async () => {
+        useFileWriteStream();
+
+        const promise = executor.executeYtDlpCommand(['--dump-json'], OUTPUT_FILE);
+        proc.stderr.emit('data', 'ERROR: Unable to download webpage');
+        emitRecordsAndExit(1);
+
+        await expect(promise).rejects.toMatchObject({ code: 'NETWORK_ERROR' });
       });
     });
   });

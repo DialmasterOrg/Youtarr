@@ -2,6 +2,7 @@ const fs = require('fs-extra');
 const fsPromises = fs.promises;
 const path = require('path');
 const os = require('os');
+const { pipeline } = require('stream/promises');
 const { v4: uuidv4 } = require('uuid');
 const { spawnYtDlp } = require('../ytdlpProcess');
 const tempPathManager = require('../download/tempPathManager');
@@ -30,10 +31,13 @@ class ChannelYtdlpExecutor {
     // 'error' event and take down the whole process.
     ytDlp.on('error', () => {});
 
-    if (outputFile) {
-      const writeStream = fs.createWriteStream(outputFile);
-      ytDlp.stdout.pipe(writeStream);
-    }
+    // The child's exit does not mean its output is on disk: stdout can still be
+    // draining and the write stream flushing, so the file is read only after
+    // the pipeline finishes. A write stream failure rejects instead of being
+    // an unhandled 'error' event.
+    const outputWritten = outputFile
+      ? pipeline(ytDlp.stdout, fs.createWriteStream(outputFile))
+      : null;
 
     if (onStdoutData) {
       ytDlp.stdout.on('data', onStdoutData);
@@ -45,7 +49,7 @@ class ChannelYtdlpExecutor {
       stderrBuffer += data.toString();
     });
 
-    await new Promise((resolve, reject) => {
+    const exited = new Promise((resolve, reject) => {
       ytDlp.on('exit', (code) => {
         // Check for bot detection
         if (stderrBuffer.includes('Sign in to confirm you\'re not a bot') ||
@@ -79,6 +83,8 @@ class ChannelYtdlpExecutor {
       });
       ytDlp.on('error', reject);
     });
+
+    await Promise.all([exited, outputWritten]);
 
     if (outputFile) {
       const content = await fsPromises.readFile(outputFile, 'utf8');
