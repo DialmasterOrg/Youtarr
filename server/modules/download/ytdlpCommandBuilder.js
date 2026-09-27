@@ -332,13 +332,20 @@ class YtdlpCommandBuilder {
    * @param {string} options.playlistItems - Specific playlist items
    * @param {string} options.extractorArgs - Extractor arguments
    * @param {boolean} options.skipSleepRequests - Skip sleep between requests (for single fetches)
+   * @param {boolean} options.streamEntries - Print one JSON line per playlist entry as each page
+   *   arrives instead of a single JSON document at exit (no playlist-level fields)
    * @returns {string[]} - Complete args array
    */
   static buildMetadataFetchArgs(url, options = {}) {
     const config = configModule.getConfig();
     const args = [...this.buildCommonArgs(config, { skipSleepRequests: options.skipSleepRequests })];
 
-    args.push('--skip-download', '--dump-single-json');
+    args.push('--skip-download');
+    if (options.streamEntries) {
+      args.push('--dump-json', '--lazy-playlist');
+    } else {
+      args.push('--dump-single-json');
+    }
 
     if (options.flatPlaylist) {
       args.push('--flat-playlist');

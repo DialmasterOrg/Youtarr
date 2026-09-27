@@ -9,7 +9,6 @@ import {
   Tabs,
   Tab,
   Button,
-  LinearProgress,
   Chip,
 } from '../ui';
 import {
@@ -34,6 +33,7 @@ import { useRefreshChannelVideos } from './hooks/useRefreshChannelVideos';
 import { useChannelFetchStatus } from './hooks/useChannelFetchStatus';
 import { useChannelTabStats } from './hooks/useChannelTabStats';
 import TabDownloadProgress from './components/TabDownloadProgress';
+import LoadMoreProgress from './components/LoadMoreProgress';
 import TabDownloadSummary from './components/TabDownloadSummary';
 import ChannelVideosInfo from './components/ChannelVideosInfo';
 import { ChannelTabType } from '../../types/Channel';
@@ -423,6 +423,7 @@ function ChannelVideos({
 
   const {
     isFetching: backgroundFetching,
+    progress: fetchProgress,
     onFetchComplete,
     startPolling,
   } = useChannelFetchStatus(channelId, selectedTab, token);
@@ -604,11 +605,19 @@ function ChannelVideos({
     navigate('/downloads/activity');
   }, [navigate]);
 
+  // Load More can outlive the channel or tab it started on. Its refetches come
+  // from that render, so running them after a switch would load the old view's
+  // list or stats over the current one.
+  const currentViewRef = useRef({ channelId, selectedTab });
+  currentViewRef.current = { channelId, selectedTab };
+
   const handleRefreshConfirm = async () => {
     setRefreshConfirmOpen(false);
     startPolling();
     await refreshVideos();
-    await refetchVideos();
+    const view = currentViewRef.current;
+    if (view.channelId !== channelId) return;
+    if (view.selectedTab === selectedTab) await refetchVideos();
     await refetchTabStats();
   };
 
@@ -1136,7 +1145,7 @@ function ChannelVideos({
           </Button>
         </div>
       </div>
-      {fetchingAllVideos && <LinearProgress style={{ marginTop: 8 }} />}
+      {fetchingAllVideos && <LoadMoreProgress progress={fetchProgress} total={selectedTabStats?.total} />}
     </div>
   );
 

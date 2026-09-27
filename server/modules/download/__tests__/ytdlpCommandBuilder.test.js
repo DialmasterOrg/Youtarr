@@ -1364,6 +1364,18 @@ describe('YtdlpCommandBuilder', () => {
       expect(args[args.length - 1]).toBe('https://x/y');
       expect(args.slice(-3, -1)).toEqual(['--concurrent-fragments', '4']);
     });
+
+    test('buildMetadataFetchArgs dumps a single JSON document by default', () => {
+      const args = YtdlpCommandBuilder.buildMetadataFetchArgs('https://x/y');
+      expect(args).toContain('--dump-single-json');
+      expect(args).not.toContain('--lazy-playlist');
+    });
+
+    test('buildMetadataFetchArgs streams one JSON line per entry when streamEntries is set', () => {
+      const args = YtdlpCommandBuilder.buildMetadataFetchArgs('https://x/y', { flatPlaylist: true, streamEntries: true });
+      expect(args).toEqual(expect.arrayContaining(['--dump-json', '--lazy-playlist']));
+      expect(args).not.toContain('--dump-single-json');
+    });
   });
 
   describe('cookie player clients', () => {
