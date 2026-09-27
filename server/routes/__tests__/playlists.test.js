@@ -25,6 +25,9 @@ const makePlaylist = (overrides = {}) => ({
   enabled: true,
   update: jest.fn().mockResolvedValue(undefined),
   reload: jest.fn().mockResolvedValue(undefined),
+  toJSON() {
+    return Object.fromEntries(Object.entries(this).filter(([, value]) => typeof value !== 'function'));
+  },
   ...overrides,
 });
 
@@ -93,6 +96,7 @@ const buildDeps = (overrides = {}) => ({
       findAndCountAll: jest.fn(),
       findAll: jest.fn().mockResolvedValue([]),
       update: jest.fn(),
+      sequelize: { query: jest.fn().mockResolvedValue([]) },
       ...overrides.PlaylistVideo,
     },
     Video: {
@@ -133,6 +137,26 @@ describe('GET /api/playlists', () => {
       expect.objectContaining({ where: { enabled: true }, limit: 25, offset: 0 })
     );
     expect(res.json).toHaveBeenCalledWith({ total: 2, playlists: expect.any(Array) });
+  });
+
+  test('adds each playlist\'s downloaded count, zero when it has none', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findAndCountAll.mockResolvedValue({
+      count: 2,
+      rows: [makePlaylist({ id: 1 }), makePlaylist({ id: 2, playlist_id: 'PLother' })],
+    });
+    deps.models.PlaylistVideo.sequelize.query.mockResolvedValue([{ playlist_id: 'PLtest123', downloaded: 5 }]);
+
+    const handler = getHandler('get', '/api/playlists', deps);
+    const res = createResponse();
+
+    await handler({ query: {}, log: loggerMock }, res);
+
+    const { playlists } = res.json.mock.calls[0][0];
+    expect(playlists.map((p) => [p.playlist_id, p.downloaded_count])).toEqual([
+      ['PLtest123', 5],
+      ['PLother', 0],
+    ]);
   });
 
   test('respects page and pageSize query params', async () => {
@@ -268,6 +292,18 @@ describe('GET /api/playlists/:playlistId not_downloaded_count', () => {
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ not_downloaded_count: 2 })
     );
+  });
+
+  test('includes the downloaded count', async () => {
+    const deps = buildDeps();
+    deps.models.PlaylistVideo.sequelize.query.mockResolvedValue([{ playlist_id: 'PLtest123', downloaded: 2 }]);
+
+    const handler = getHandler('get', '/api/playlists/:playlistId', deps);
+    const res = createResponse();
+
+    await handler({ params: { playlistId: 'PLtest123' }, log: loggerMock }, res);
+
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ downloaded_count: 2 }));
   });
 
   test('returns 404 when playlist missing', async () => {

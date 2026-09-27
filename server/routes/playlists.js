@@ -82,7 +82,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    *           maximum: 100
    *     responses:
    *       200:
-   *         description: Paginated playlists
+   *         description: Paginated playlists. Each playlist includes downloaded_count, the number of its videos with a file on disk now (downloaded and later deleted videos are not counted).
    *       500:
    *         description: Internal server error
    */
@@ -96,7 +96,14 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
         offset: (page - 1) * pageSize,
         order: [['updatedAt', 'DESC']],
       });
-      res.json({ total: count, playlists: rows });
+      const downloadedCounts = await playlistDownloadModule.getDownloadedCounts(
+        rows.map((p) => p.playlist_id), downloadDeps
+      );
+      const playlists = rows.map((p) => ({
+        ...p.toJSON(),
+        downloaded_count: downloadedCounts.get(p.playlist_id) || 0,
+      }));
+      res.json({ total: count, playlists });
     } catch (err) {
       req.log.error({ err }, 'GET /api/playlists failed');
       res.status(500).json({ error: 'Failed to list playlists' });
@@ -108,7 +115,7 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
    * /api/playlists/{playlistId}:
    *   get:
    *     summary: Get a playlist with download and sync counts
-   *     description: Includes not_downloaded_count, unsyncable_count, following_existing_count (older eligible entries needing explicit selection), and following_requested_count (eligible saved selections not yet downloaded) alongside the playlist row.
+   *     description: Includes downloaded_count (videos with a file on disk now; downloaded and later deleted videos are not counted), not_downloaded_count, unsyncable_count, following_existing_count (older eligible entries needing explicit selection), and following_requested_count (eligible saved selections not yet downloaded) alongside the playlist row.
    *     tags: [Playlists]
    *     parameters:
    *       - in: path

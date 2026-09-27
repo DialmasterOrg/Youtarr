@@ -678,6 +678,7 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ token }) => {
             {typeFilter === 'playlists' ? (
               <PlaylistListBlock
                 playlists={playlists}
+                total={playlistTotal}
                 loading={playlistsLoading}
                 onDelete={handlePlaylistDeleteClick}
               />
