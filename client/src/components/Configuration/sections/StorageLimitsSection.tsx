@@ -90,9 +90,11 @@ export const StorageLimitsSection: React.FC<StorageLimitsSectionProps> = ({
       chipColor={hasLimit ? 'success' : 'default'}
     >
       <Typography variant="body2" className="mb-4">
-        Stop all downloads (scheduled, manual, and API) when storage reaches a limit. New download
-        requests are refused, and queued downloads wait and then start automatically once storage is
-        back within your limits. Both limits are optional; downloads pause when either one is reached.
+        Stop starting new downloads (scheduled, manual, and API) when storage reaches a limit. New
+        download requests are refused, and queued downloads wait and then start automatically once
+        storage is back within your limits. A download job already running finishes first, so storage
+        can go past a limit until it ends. Both limits are optional; downloads pause when either one is
+        reached.
       </Typography>
 
       {pauseStatus?.paused ? (
@@ -124,7 +126,7 @@ export const StorageLimitsSection: React.FC<StorageLimitsSectionProps> = ({
                     testId="download-pause-usage-limit"
                   />
                   <InfoTooltip
-                    text="Adds up the size of every video Youtarr has downloaded (video and MP3 files), using the sizes recorded at download time and refreshed by the nightly rescan. Works on network shares and cloud storage, where free space may be reported incorrectly. Thumbnails, subtitles and metadata files are not counted. A download already in progress is allowed to finish, so the total can briefly go over the limit."
+                    text="Adds up the size of every video Youtarr has downloaded (video and MP3 files), using the sizes recorded at download time and refreshed by the nightly rescan. Works on network shares and cloud storage, where free space may be reported incorrectly. Thumbnails, subtitles and metadata files are not counted. A download job already running is allowed to finish all of its videos, so the total can go over the limit until that job ends."
                     onMobileClick={onMobileTooltipClick}
                   />
                 </Box>

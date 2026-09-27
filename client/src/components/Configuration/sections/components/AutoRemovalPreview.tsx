@@ -60,7 +60,7 @@ export const AutoRemovalPreview: React.FC<AutoRemovalPreviewProps> = ({ result }
       )}
       {hasSpaceThreshold && plan.spaceStrategy.needsCleanup === false && (
         <Typography variant="body2">
-          Storage is currently above the free space threshold; no space-based deletions are needed.
+          Free space is at or above the threshold, counting any deletions above; no space-based deletions are needed.
         </Typography>
       )}
       {usageStrategy?.enabled && usageStrategy.needsCleanup && (

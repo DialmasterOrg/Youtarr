@@ -149,11 +149,11 @@ describe('AutoRemovalPreview', () => {
     );
   });
 
-  test('notes when storage is above the free space threshold', () => {
+  test('notes when free space meets the threshold', () => {
     renderWithProviders(<AutoRemovalPreview result={createResult()} />);
 
     expect(
-      screen.getByText(/Storage is currently above the free space threshold/i)
+      screen.getByText(/Free space is at or above the threshold/i)
     ).toBeInTheDocument();
   });
 

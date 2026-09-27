@@ -803,32 +803,6 @@ class ConfigModule extends EventEmitter {
 
     return value * units[unit];
   }
-
-  /**
-   * Check if current storage is below the threshold
-   * @param {number} currentAvailable - Current available bytes
-   * @param {string|number} threshold - Threshold (string like "1GB" or number in bytes)
-   * @returns {boolean} - true if below threshold, false otherwise
-   */
-  isStorageBelowThreshold(currentAvailable, threshold) {
-    if (currentAvailable === null || currentAvailable === undefined) {
-      logger.warn('Cannot check storage threshold: currentAvailable is null/undefined');
-      return false;
-    }
-
-    let thresholdBytes;
-    if (typeof threshold === 'string') {
-      thresholdBytes = this.convertStorageThresholdToBytes(threshold);
-    } else {
-      thresholdBytes = threshold;
-    }
-
-    if (thresholdBytes === null || thresholdBytes === undefined) {
-      return false;
-    }
-
-    return currentAvailable < thresholdBytes;
-  }
 }
 
 module.exports = new ConfigModule();

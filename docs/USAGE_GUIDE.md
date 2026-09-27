@@ -294,6 +294,7 @@ Set up automatic downloads on a schedule so Youtarr checks for new videos period
    - Open **Settings -> Storage Limits**
    - **Pause when downloads total more than** a size, and/or **Pause when free space falls below** a size
    - While paused, new downloads are refused, queued downloads wait, and a banner explains why; you also get a notification when downloads pause and when they resume
+   - Limits are checked between download jobs: a job already running finishes all of its videos, so storage can go past a limit until it ends
    - Downloads resume automatically once storage is back within your limits (for example after Auto Removal frees space)
 
 7. **Save configuration**

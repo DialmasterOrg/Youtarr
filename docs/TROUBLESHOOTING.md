@@ -130,6 +130,7 @@ See [Authentication - Cannot Find the Setup Token](AUTHENTICATION.md#cannot-find
 
 **Solution**:
 - A storage limit on **Settings -> Storage Limits** was reached. The banner and the notification say which one and by how much.
+- Usage further past the limit than one video is expected: limits are checked between download jobs, so a job that was already running when the limit was crossed finishes all of its videos first.
 - Free space or remove videos (manually, or with Auto Removal), or raise or clear the limit. Downloads resume on their own: Youtarr re-checks after deletions, on settings changes, and every 5 minutes while paused. Queued downloads then start automatically.
 - If downloads stay paused after an Auto Removal run, check that the pause limits are not stricter than the Auto Removal limits (the Storage Limits page shows a warning when they are).
 

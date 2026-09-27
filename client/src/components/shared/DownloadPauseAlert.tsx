@@ -34,7 +34,7 @@ export const DownloadPauseAlert: React.FC<DownloadPauseAlertProps> = ({ status, 
       ))}
       <Typography variant="body2" className="mt-1">
         New downloads are refused and queued downloads wait until storage is back within your limits,
-        then start automatically.
+        then start automatically. A download job that was already running is allowed to finish.
         {!hideSettingsLink && (
           <>
             {' '}
