@@ -177,7 +177,8 @@ const createServerModule = ({
         const jobModuleMock = {
           getJob: jest.fn(),
           getRunningJobs: jest.fn(() => []),
-          getRunningJobsWithFreshVideos: jest.fn().mockResolvedValue([])
+          getRunningJobsWithFreshVideos: jest.fn().mockResolvedValue([]),
+          getInProgressJobId: jest.fn(() => null)
         };
 
         const videosModuleMock = {
@@ -210,6 +211,11 @@ const createServerModule = ({
           getStatus: jest.fn(() => []),
           stopAll: jest.fn(),
           updateTask: jest.fn()
+        };
+        const tabVideoCountsMock = {
+          setRunHistory: jest.fn(),
+          setDownloadActivityCheck: jest.fn(),
+          refreshAtStartup: jest.fn().mockResolvedValue({})
         };
         const rateLimitMiddleware = jest.fn(() => (req, res, next) => next());
         // Mock ipKeyGenerator to normalize IPv6 addresses
@@ -271,6 +277,7 @@ const createServerModule = ({
         jest.doMock('../modules/scheduledTaskRuns', () => scheduledTaskRunsMock);
         jest.doMock('../modules/scheduledTaskManager', () => scheduledTaskManagerMock);
         jest.doMock('../modules/channel/channelBackdropBackfill', () => ({ subscribe: jest.fn() }));
+        jest.doMock('../modules/channel/tabVideoCounts', () => tabVideoCountsMock);
         jest.doMock('../modules/logLevelSync', () => logLevelSyncMock);
         jest.doMock('../modules/storageGuard', () => ({
           initialize: jest.fn().mockResolvedValue({ paused: false, reasons: [] }),
@@ -300,6 +307,8 @@ const createServerModule = ({
         state.logLevelSyncMock = logLevelSyncMock;
         state.scheduledTaskRunsMock = scheduledTaskRunsMock;
         state.scheduledTaskManagerMock = scheduledTaskManagerMock;
+        state.tabVideoCountsMock = tabVideoCountsMock;
+        state.jobModuleMock = jobModuleMock;
         state.sessionUpdateMock = effectiveSession?.update || defaultSessionUpdate;
 
         const finalize = () => resolve(state);
@@ -355,6 +364,20 @@ describe('server initialization', () => {
 
     expect(logLevelSyncMock.apply).toHaveBeenCalledTimes(1);
     expect(logLevelSyncMock.subscribe).toHaveBeenCalledTimes(1);
+  });
+
+  test('hands the run history to the channel video count refresh', async () => {
+    const { scheduledTaskRunsMock, tabVideoCountsMock } = await createServerModule();
+
+    expect(tabVideoCountsMock.setRunHistory).toHaveBeenCalledWith(scheduledTaskRunsMock);
+  });
+
+  test('tells the channel video count refresh when a download is running', async () => {
+    const { tabVideoCountsMock, jobModuleMock } = await createServerModule();
+    const isDownloadActive = tabVideoCountsMock.setDownloadActivityCheck.mock.calls[0][0];
+    jobModuleMock.getInProgressJobId.mockReturnValue('job-1');
+
+    expect(isDownloadActive()).toBe(true);
   });
 
   test('initializes database and exposes health route', async () => {

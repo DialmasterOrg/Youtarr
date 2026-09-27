@@ -140,6 +140,11 @@ Channel.init(
       allowNull: true,
       defaultValue: null,
     },
+    tab_counts_attempted_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      defaultValue: null,
+    },
   },
   {
     sequelize,

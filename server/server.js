@@ -255,6 +255,7 @@ const initialize = async () => {
     const messageEmitter = require('./modules/messageEmitter');
     const watchStatusScheduler = require('./modules/mediaServers/watchStatusScheduler');
     const channelBackdropBackfill = require('./modules/channel/channelBackdropBackfill');
+    const tabVideoCounts = require('./modules/channel/tabVideoCounts');
     const { Channel } = require('./models');
     const { registerRoutes } = require('./routes');
     const scheduledTaskRuns = require('./modules/scheduledTaskRuns');
@@ -265,6 +266,8 @@ const initialize = async () => {
     // out before any timer fires, then start recording this process's runs.
     await scheduledTaskRuns.markInterruptedRuns();
     scheduledTaskManager.setRunRecorder(scheduledTaskRuns);
+    tabVideoCounts.setRunHistory(scheduledTaskRuns);
+    tabVideoCounts.setDownloadActivityCheck(() => jobModule.getInProgressJobId() !== null);
 
     // Cache yt-dlp version once during startup to keep the version endpoint fast
     refreshYtDlpVersionCache();
@@ -778,11 +781,10 @@ const initialize = async () => {
               });
           }, 5000); // Delay 5 seconds to avoid blocking startup
 
-          // Count channel tabs whose counts are missing or a day old (first
-          // run after upgrading, long downtime), after the startup rescan.
+          // Count channel tabs whose counts are missing or old (first run
+          // after upgrading, long downtime), after the startup rescan.
           setTimeout(() => {
-            const tabVideoCounts = require('./modules/channel/tabVideoCounts');
-            tabVideoCounts.refreshAtStartup({ runRecorder: scheduledTaskRuns })
+            tabVideoCounts.refreshAtStartup()
               .catch(err => {
                 logger.error({ err }, 'Startup channel video count refresh failed');
               });
