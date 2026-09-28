@@ -907,6 +907,82 @@ describe('JobModule', () => {
       );
     });
 
+    test('marks a queued job whose action fails before it starts as an error and starts the next job', async () => {
+      const nextAction = jest.fn();
+      JobModule.updateJob = jest.fn(async (id, updates) => Object.assign(JobModule.jobs[id], updates));
+      JobModule.jobs = {
+        'job-1': { status: 'Pending', jobType: 'Channel Downloads', action: jest.fn().mockRejectedValue(new Error('boom')) },
+        'job-2': { status: 'Pending', jobType: 'Playlist Downloads', action: nextAction },
+      };
+
+      await JobModule.startNextJob();
+      // The release and the second scan each await the storage check first.
+      for (let tick = 0; tick < 10 && nextAction.mock.calls.length === 0; tick += 1) {
+        await new Promise(setImmediate);
+      }
+
+      expect(JobModule.updateJob).toHaveBeenCalledWith('job-1', {
+        status: 'Error', output: 'Job could not be started: boom',
+      });
+      expect(nextAction).toHaveBeenCalledTimes(1);
+    });
+
+    test('tells listeners about a queued job abandoned before it started, with its run', async () => {
+      const listener = jest.fn();
+      JobModule.onJobAbandoned(listener);
+      JobModule.updateJob = jest.fn(async (id, updates) => Object.assign(JobModule.jobs[id], updates));
+      JobModule.jobs = {
+        'job-1': {
+          status: 'Pending', jobType: 'Channel Downloads', data: { runId: 'run-1' },
+          action: jest.fn().mockRejectedValue(new Error('boom')),
+        },
+      };
+
+      await JobModule.startNextJob();
+      for (let tick = 0; tick < 10 && listener.mock.calls.length === 0; tick += 1) {
+        await new Promise(setImmediate);
+      }
+
+      expect(listener).toHaveBeenCalledWith({ jobId: 'job-1', runId: 'run-1', reason: 'Job could not be started: boom' });
+    });
+
+    test('tells listeners when a job gets a final status, before its videos are reloaded', async () => {
+      const RealJobModule = require('../jobModule');
+      const listener = jest.fn();
+      RealJobModule.onJobEnded(listener);
+      RealJobModule.jobs = { 'job-1': { status: 'In Progress', jobType: 'Manually Added Urls', data: {} } };
+
+      const update = RealJobModule.updateJob('job-1', { status: 'Error', output: 'boom' });
+
+      expect(listener).toHaveBeenCalledWith({ jobId: 'job-1' });
+      await update;
+    });
+
+    test('does not tell listeners about a status that is not final', async () => {
+      const RealJobModule = require('../jobModule');
+      const listener = jest.fn();
+      RealJobModule.onJobEnded(listener);
+      RealJobModule.jobs = { 'job-1': { status: 'Pending', jobType: 'Manually Added Urls', data: {} } };
+
+      await RealJobModule.updateJob('job-1', { status: 'In Progress' });
+
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    test('leaves a job the failing action already started to the download path', async () => {
+      JobModule.updateJob = jest.fn();
+      const action = jest.fn(async () => {
+        JobModule.jobs['job-1'].status = 'In Progress';
+        throw new Error('boom');
+      });
+      JobModule.jobs = { 'job-1': { status: 'Pending', jobType: 'Channel Downloads', action } };
+
+      await JobModule.startNextJob();
+      await new Promise(setImmediate);
+
+      expect(JobModule.updateJob).not.toHaveBeenCalled();
+    });
+
     test('should not invoke action if job has no action function', async () => {
       JobModule.updateJob = jest.fn();
 
@@ -2832,6 +2908,131 @@ describe('JobModule', () => {
 
         expect(record.details).toEqual(expect.objectContaining({ videosUpserts: 0, failed: 0 }));
       });
+    });
+  });
+
+  describe('archive repair locking', () => {
+    let scheduledTaskManager;
+
+    beforeEach(() => {
+      fs.existsSync.mockReturnValue(false);
+      fs.readFileSync.mockReturnValue(JSON.stringify({ plexApiKey: 'test-key' }));
+      JobModule = require('../jobModule');
+      scheduledTaskManager = require('../scheduledTaskManager');
+    });
+
+    // Holds the complete.list read open until release() is called, so a
+    // second call can be made while the first is still in progress.
+    function deferArchiveRead() {
+      let releaseRead;
+      let readCalls = 0;
+      fsPromises.readFile.mockImplementation((filePath) => {
+        if (String(filePath).includes('complete.list')) {
+          readCalls += 1;
+          return new Promise((resolve, reject) => {
+            releaseRead = () => reject(Object.assign(new Error('missing'), { code: 'ENOENT' }));
+          });
+        }
+        return Promise.reject(Object.assign(new Error('missing'), { code: 'ENOENT' }));
+      });
+      return { release: () => releaseRead(), readCalls: () => readCalls };
+    }
+
+    test('resolves an overlapping call as skipped and reads the archive only once', async () => {
+      const archiveRead = deferArchiveRead();
+
+      const first = JobModule.backfillFromCompleteList();
+      const second = await JobModule.backfillFromCompleteList();
+
+      expect(second).toEqual({
+        status: 'skipped',
+        outcome: 'skipped',
+        message: 'A library repair was already running.',
+      });
+
+      archiveRead.release();
+      await first;
+
+      expect(archiveRead.readCalls()).toBe(1);
+    });
+
+    test('isArchiveRepairRunning is true while the repair is pending and false once it finishes', async () => {
+      const archiveRead = deferArchiveRead();
+
+      expect(JobModule.isArchiveRepairRunning()).toBe(false);
+
+      const pending = JobModule.backfillFromCompleteList();
+
+      expect(JobModule.isArchiveRepairRunning()).toBe(true);
+
+      archiveRead.release();
+      await pending;
+
+      expect(JobModule.isArchiveRepairRunning()).toBe(false);
+    });
+
+    test('releases the lock when the repair throws', async () => {
+      JobModule._repairFromArchive = jest.fn().mockRejectedValue(new Error('boom'));
+
+      await expect(JobModule.backfillFromCompleteList()).rejects.toThrow('boom');
+
+      expect(JobModule.isArchiveRepairRunning()).toBe(false);
+    });
+
+    test('the repair reports as running through the scheduler', async () => {
+      const archiveRead = deferArchiveRead();
+
+      const pending = JobModule.backfillFromCompleteList();
+      JobModule.scheduleDailyBackfill();
+
+      expect(
+        scheduledTaskManager.getStatus().find((t) => t.id === 'archiveBackfillFrequency').running
+      ).toBe(true);
+
+      archiveRead.release();
+      await pending;
+
+      expect(
+        scheduledTaskManager.getStatus().find((t) => t.id === 'archiveBackfillFrequency').running
+      ).toBe(false);
+    });
+  });
+
+  describe('runStartupBackfill announces', () => {
+    let scheduledTaskManager;
+
+    beforeEach(() => {
+      fs.existsSync.mockReturnValue(false);
+      fs.readFileSync.mockReturnValue(JSON.stringify({ plexApiKey: 'test-key' }));
+      fsPromises.readFile.mockRejectedValue({ code: 'ENOENT' });
+      JobModule = require('../jobModule');
+      scheduledTaskManager = require('../scheduledTaskManager');
+    });
+
+    test('calls announceRun with the archive lock already held, and still records the startup run', async () => {
+      let runningAtCall;
+      const announceRunSpy = jest.spyOn(scheduledTaskManager, 'announceRun').mockImplementation((id, promise) => {
+        runningAtCall = JobModule.isArchiveRepairRunning();
+        return promise;
+      });
+
+      await JobModule.runStartupBackfill();
+
+      expect(announceRunSpy).toHaveBeenCalledWith('archiveBackfillFrequency', expect.any(Promise));
+      expect(runningAtCall).toBe(true);
+      expect(scheduledTaskRuns.record).toHaveBeenCalledWith(
+        expect.objectContaining({ taskKey: 'archiveBackfillFrequency', trigger: 'startup' })
+      );
+    });
+
+    test('broadcasts the archive task status through messageEmitter when the startup pass runs', async () => {
+      jest.spyOn(scheduledTaskManager, 'announceRun');
+
+      await JobModule.runStartupBackfill();
+
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
+        'broadcast', null, 'schedules', 'scheduledTaskStatus', { key: 'archiveBackfillFrequency' }
+      );
     });
   });
 

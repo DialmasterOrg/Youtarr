@@ -141,7 +141,10 @@ describe('useWatchStatusSync', () => {
   test('surfaces the 409 message and polls the already-running sync', async () => {
     axios.get.mockResolvedValue({ data: { running: false, lastRun: null } });
     axios.post.mockRejectedValueOnce({
-      response: { status: 409, data: { error: 'Watch status sync is already running' } },
+      response: {
+        status: 409,
+        data: { error: 'Watch status sync is already running', reason: 'running', availableAt: null },
+      },
     });
     axios.isAxiosError.mockReturnValue(true);
 
@@ -154,6 +157,31 @@ describe('useWatchStatusSync', () => {
 
     expect(result.current.startError).toBe('Watch status sync is already running');
     expect(result.current.syncState?.running).toBe(true);
+  });
+
+  test('surfaces a no-media-server refusal without flipping running to true', async () => {
+    axios.get.mockResolvedValue({ data: { running: false, lastRun: null } });
+    axios.post.mockRejectedValueOnce({
+      response: {
+        status: 409,
+        data: {
+          error: 'No media server is connected for watch status.',
+          reason: 'no-media-server',
+          availableAt: null,
+        },
+      },
+    });
+    axios.isAxiosError.mockReturnValue(true);
+
+    const { result } = renderHook(() => useWatchStatusSync('tok'));
+    await waitFor(() => expect(result.current.syncState).not.toBeNull());
+
+    await act(async () => {
+      await result.current.startSync();
+    });
+
+    expect(result.current.startError).toBe('No media server is connected for watch status.');
+    expect(result.current.syncState?.running).toBe(false);
   });
 
   test('reports a generic message when starting fails outright', async () => {

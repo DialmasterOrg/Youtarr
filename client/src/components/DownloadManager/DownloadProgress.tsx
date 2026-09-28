@@ -543,12 +543,14 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
           const terminationFailureCount = finalSummary.totalTerminationFailures
             ?? finalSummary.terminationFailures?.length
             ?? 0;
+          const jobIssues = finalSummary.jobIssues ?? [];
           const hasIssue =
             (finalSummary.totalFailed != null && finalSummary.totalFailed > 0)
             || (finalSummary.totalAutoRetried != null && finalSummary.totalAutoRetried > 0)
             || (finalSummary.totalMembersOnly != null && finalSummary.totalMembersOnly > 0)
             || terminatedCount > 0
-            || terminationFailureCount > 0;
+            || terminationFailureCount > 0
+            || jobIssues.length > 0;
           // text-{success,warning}-foreground is meant for solid bg pairing;
           // on /10 tinted bg we want the saturated colour token itself.
           const bgClass = hasIssue ? 'bg-warning/10' : 'bg-success/10';
@@ -583,6 +585,13 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                   if (finalSummary.totalSkipped > 0) {
                     parts.push(`${finalSummary.totalSkipped} skipped (already downloaded or filtered)`);
                   }
+                  jobIssues.forEach((issue) => {
+                    const what = issue.status === 'Terminated' || issue.status === 'Killed'
+                      ? '✗ Download job terminated'
+                      : '✗ Download job failed';
+                    const why = issue.reason ? issue.reason.replace(/\.$/, '') : '';
+                    parts.push(why ? `${what} (${why})` : what);
+                  });
                   if (parts.length === 0) {
                     return 'No new videos downloaded';
                   }

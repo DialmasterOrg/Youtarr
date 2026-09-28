@@ -23,6 +23,7 @@ export const SCHEDULE_FIELDS = [
     enabledKey: 'channelAutoDownload',
     disabledText: 'Automatic downloads are off, so this schedule is idle until you turn them on.',
     frequentRunWarning: null,
+    runNowConfirm: null,
   },
   {
     key: 'watchStatusSyncFrequency',
@@ -34,6 +35,7 @@ export const SCHEDULE_FIELDS = [
     enabledKey: 'watchStatusSyncEnabled',
     disabledText: 'Watch status sync is off, so this schedule is idle until you turn it on.',
     frequentRunWarning: 'Every sync lists the full library of each connected media server. Running it more than once an hour adds load to those servers for little benefit; use Sync Now when you need an immediate update.',
+    runNowConfirm: null,
   },
   {
     key: 'autoRemovalFrequency',
@@ -45,6 +47,11 @@ export const SCHEDULE_FIELDS = [
     enabledKey: 'autoRemovalEnabled',
     disabledText: 'Video removal is off, so each run removes empty channel folders only.',
     frequentRunWarning: 'Every run evaluates your removal rules against the whole library and walks the download folders for empty directories. Once a day is usually enough.',
+    runNowConfirm: {
+      title: 'Run automatic video cleanup now?',
+      body: 'This applies your saved removal rules and permanently deletes the videos they match from disk. Empty channel folders are removed too. Protected videos and the videos your keep settings cover are never removed.',
+      confirmLabel: 'Run cleanup',
+    },
   },
   {
     key: 'videoRescanFrequency',
@@ -56,6 +63,7 @@ export const SCHEDULE_FIELDS = [
     enabledKey: null,
     disabledText: null,
     frequentRunWarning: 'Every rescan walks every file in your download folders and probes videos with ffprobe. Running it more than once an hour keeps the disk busy for little benefit; use the manual rescan after you change files.',
+    runNowConfirm: null,
   },
   {
     key: 'ytdlpUpdateFrequency',
@@ -67,6 +75,7 @@ export const SCHEDULE_FIELDS = [
     enabledKey: 'autoUpdateYtdlp',
     disabledText: 'Automatic yt-dlp updates are off, so this schedule is idle until you turn them on.',
     frequentRunWarning: 'Every run contacts GitHub to check for a release. Running it more than once an hour can hit GitHub rate limits, and yt-dlp releases at most a few times a week.',
+    runNowConfirm: null,
   },
   {
     key: 'channelVideoCountsFrequency',
@@ -78,6 +87,7 @@ export const SCHEDULE_FIELDS = [
     enabledKey: null,
     disabledText: null,
     frequentRunWarning: 'Every run looks up each tab of every subscribed channel on YouTube. Without a YouTube API key that is up to three yt-dlp requests per channel, and running it often can trigger YouTube\'s bot check. Once a day is enough.',
+    runNowConfirm: null,
   },
   {
     key: 'archiveBackfillFrequency',
@@ -89,6 +99,7 @@ export const SCHEDULE_FIELDS = [
     enabledKey: null,
     disabledText: null,
     frequentRunWarning: 'Every run reads the whole download archive and checks each entry against the database. Once a day is usually enough.',
+    runNowConfirm: null,
   },
   {
     key: 'sessionCleanupFrequency',
@@ -100,10 +111,12 @@ export const SCHEDULE_FIELDS = [
     enabledKey: null,
     disabledText: null,
     frequentRunWarning: 'Sessions expire after seven days, so running cleanup more than once an hour does nothing extra.',
+    runNowConfirm: null,
   },
 ] as const;
 
 export type ScheduleKey = typeof SCHEDULE_FIELDS[number]['key'];
+export type ScheduleField = typeof SCHEDULE_FIELDS[number];
 export type ScheduleFieldErrors = Partial<Record<ScheduleKey, string>>;
 
 export const getDefaultSchedule = (key: ScheduleKey): string => CONFIG_FIELDS[key].default;

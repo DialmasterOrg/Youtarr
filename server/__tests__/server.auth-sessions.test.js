@@ -214,7 +214,9 @@ const createServerModule = ({
         jest.doMock('../modules/downloadModule', () => ({}));
         jest.doMock('../modules/jobModule', () => ({
           getRunningJobs: jest.fn(() => []),
-          getRunningJobsWithFreshVideos: jest.fn().mockResolvedValue([])
+          getRunningJobsWithFreshVideos: jest.fn().mockResolvedValue([]),
+          onJobAbandoned: jest.fn(),
+          onJobEnded: jest.fn()
         }));
         jest.doMock('../modules/videosModule', () => ({}));
         jest.doMock('../modules/videoMetadataModule', () => ({
@@ -286,6 +288,8 @@ const createServerModule = ({
         jest.doMock('../modules/mediaServers/watchStatusScheduler', () => ({ scheduleTask: jest.fn(), subscribe: jest.fn() }));
         jest.doMock('../modules/channel/channelBackdropBackfill', () => ({ subscribe: jest.fn() }));
         jest.doMock('../modules/channel/tabVideoCounts', () => ({ setRunHistory: jest.fn(), setDownloadActivityCheck: jest.fn(), refreshAtStartup: jest.fn().mockResolvedValue({}) }));
+        jest.doMock('../modules/channel/autoDownloadScheduler', () => ({ setRunTracker: jest.fn() }));
+        jest.doMock('../modules/download/downloadRunTracker', () => ({ isActive: jest.fn(), getUnfinishedJobs: jest.fn() }));
         jest.doMock('../modules/logLevelSync', () => ({ apply: jest.fn(), subscribe: jest.fn() }));
         jest.doMock('../modules/storageGuard', () => ({
           initialize: jest.fn().mockResolvedValue({ paused: false, reasons: [] }),

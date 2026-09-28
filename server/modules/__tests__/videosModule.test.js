@@ -1658,16 +1658,16 @@ describe('VideosModule', () => {
       expect(VideosModule._backfillRunning).toBe(false);
     });
 
-    test('records a manual run in the task history instead of config', async () => {
+    test('records a startup run in the task history instead of config', async () => {
       mockFs.readdir.mockResolvedValueOnce([]);
       mockVideo.count.mockResolvedValueOnce(0);
 
-      await VideosModule.backfillVideoMetadata({ trigger: 'manual' });
+      await VideosModule.backfillVideoMetadata({ trigger: 'startup' });
 
       expect(mockScheduledTaskRuns.record).toHaveBeenCalledWith(
         expect.objectContaining({
           taskKey: 'videoRescanFrequency',
-          trigger: 'manual',
+          trigger: 'startup',
           status: 'success',
           outcome: 'completed',
           startedAt: expect.any(Date),
@@ -1692,13 +1692,24 @@ describe('VideosModule', () => {
       expect(mockScheduledTaskRuns.record).not.toHaveBeenCalled();
     });
 
-    test('should still emit completion when run recording fails', async () => {
+    test('leaves manual runs for the scheduler to record', async () => {
       mockFs.readdir.mockResolvedValueOnce([]);
       mockVideo.count.mockResolvedValueOnce(0);
-      mockScheduledTaskRuns.record.mockRejectedValue(new Error('history write failed'));
 
       await VideosModule.backfillVideoMetadata({ trigger: 'manual' });
 
+      expect(mockScheduledTaskRuns.record).not.toHaveBeenCalled();
+    });
+
+    test('should still emit completion when run recording fails', async () => {
+      mockFs.readdir.mockResolvedValueOnce([]);
+      mockVideo.count.mockResolvedValueOnce(0);
+      const persistErr = new Error('history write failed');
+      mockScheduledTaskRuns.record.mockRejectedValue(persistErr);
+
+      await VideosModule.backfillVideoMetadata({ trigger: 'startup' });
+
+      expect(mockLogger.error).toHaveBeenCalledWith({ err: persistErr }, 'Failed to record rescan run');
       expect(mockMessageEmitter.emitMessage).toHaveBeenCalledWith(
         'broadcast',
         null,
@@ -1890,21 +1901,4 @@ describe('VideosModule', () => {
     });
   });
 
-  describe('tryStartBackfill', () => {
-    test('returns started: true when not running', () => {
-      VideosModule._backfillRunning = false;
-      const spy = jest.spyOn(VideosModule, 'backfillVideoMetadata').mockResolvedValue();
-      const result = VideosModule.tryStartBackfill({ trigger: 'manual' });
-      expect(result).toEqual({ started: true });
-      expect(spy).toHaveBeenCalledWith({ trigger: 'manual' });
-      spy.mockRestore();
-    });
-
-    test('returns started: false when already running', () => {
-      VideosModule._backfillRunning = true;
-      const result = VideosModule.tryStartBackfill();
-      expect(result).toEqual({ started: false, reason: 'already-running' });
-      VideosModule._backfillRunning = false;
-    });
-  });
 });

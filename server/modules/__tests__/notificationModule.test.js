@@ -524,6 +524,23 @@ describe('Stopped-early groups in notifications', () => {
     expect(message.embeds[0].color).toBe(0xffa500);
   });
 
+  it.each([
+    ['plain', () => plainFormatter],
+    ['discord', () => discordFormatter],
+    ['email', () => emailFormatter],
+    ['telegram', () => telegramFormatter],
+    ['slack', () => slackMarkdownFormatter],
+  ])('says a download job failed and why in %s notifications', (_name, getFormatter) => {
+    const summary = {
+      totalDownloaded: 0,
+      jobType: 'Channel Downloads',
+      jobIssues: [{ status: 'Failed', reason: 'No valid channel URLs to download', byUser: false }],
+    };
+    const serialized = JSON.stringify(getFormatter().formatDownloadMessage(summary, []));
+
+    expect(serialized).toContain('A download job failed: No valid channel URLs to download.');
+  });
+
   it('omits the stopped-early line when every group finished', () => {
     const message = plainFormatter.formatDownloadMessage({ ...stoppedSummary, stoppedGroups: [] }, []);
 

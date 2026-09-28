@@ -21,8 +21,7 @@ const {
   formatTerminationFailureLine,
   getDiagnoses,
   formatDiagnosisLine,
-  getStoppedGroups,
-  formatStoppedGroupLine
+  getStoppedLines
 } = require('../utils');
 
 const DISCORD_FIELD_VALUE_LIMIT = 1024;
@@ -128,16 +127,16 @@ function formatDownloadMessage(finalSummary, videoData) {
     });
   }
 
-  const stoppedGroups = getStoppedGroups(finalSummary);
-  if (stoppedGroups.length > 0) {
+  const stoppedLines = getStoppedLines(finalSummary);
+  if (stoppedLines.length > 0) {
     fields.push({
       name: '⚠️ Stopped early',
-      value: truncateFieldValueAtLineBoundary(stoppedGroups.map(formatStoppedGroupLine).join('\n')),
+      value: truncateFieldValueAtLineBoundary(stoppedLines.join('\n')),
       inline: false
     });
   }
 
-  const hasWarning = failedCount > 0 || terminatedCount > 0 || terminationFailureCount > 0 || stoppedGroups.length > 0;
+  const hasWarning = failedCount > 0 || terminatedCount > 0 || terminationFailureCount > 0 || stoppedLines.length > 0;
   return {
     embeds: [{
       title,

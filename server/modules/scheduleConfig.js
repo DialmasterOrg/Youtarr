@@ -6,6 +6,8 @@ const MIN_SCHEDULE_INTERVAL_MINUTES = 15;
 const MAX_LOOKAHEAD_DAYS = 366;
 const MINUTES_PER_HOUR = 60;
 const MS_PER_MINUTE = 60 * 1000;
+// Manual runs of tasks that call YouTube are held to the same spacing as schedules.
+const MANUAL_RUN_COOLDOWN_MS = MIN_SCHEDULE_INTERVAL_MINUTES * MS_PER_MINUTE;
 const HALF_DAY_MS = 12 * 60 * MS_PER_MINUTE;
 const MAX_SECOND = 59;
 const MAX_MINUTE = 59;
@@ -255,6 +257,7 @@ function getSchedule(config, key) {
 module.exports = {
   SCHEDULES,
   MIN_SCHEDULE_INTERVAL_MINUTES,
+  MANUAL_RUN_COOLDOWN_MS,
   getScheduleError,
   getNextRun,
   isValidSchedule,

@@ -70,7 +70,6 @@ function registerRoutes(app, deps) {
     channelSearchModule,
     youtubeApi,
     getCachedYtDlpVersion,
-    refreshYtDlpVersionCache,
     validateEnvAuthCredentials,
     setupTokenModule,
     getClientAddress,
@@ -79,7 +78,7 @@ function registerRoutes(app, deps) {
 
   // Health routes (no auth required for health checks, but yt-dlp endpoints are authenticated)
   app.use(createHealthRoutes({
-    getCachedYtDlpVersion, refreshYtDlpVersionCache, verifyToken, configModule, scheduledTaskRuns, ytdlpUpdateRunSummary,
+    getCachedYtDlpVersion, verifyToken, configModule, scheduledTaskRuns, ytdlpUpdateRunSummary, scheduledTaskManager,
   }));
 
   // Auth routes
@@ -98,7 +97,9 @@ function registerRoutes(app, deps) {
   app.use(createChannelRoutes({ verifyToken, channelModule, archiveModule, channelDownloadAllModule, ratingMapper, storageGuard }));
 
   // Video routes
-  app.use(createVideoRoutes({ verifyToken, videosModule, downloadModule, videoOembedEnricher, videoLocalStatus, storageGuard }));
+  app.use(createVideoRoutes({
+    verifyToken, videosModule, downloadModule, videoOembedEnricher, videoLocalStatus, storageGuard, scheduledTaskManager,
+  }));
 
   // Video search routes
   app.use(createVideoSearchRoutes({ verifyToken, videoSearchModule }));
@@ -131,10 +132,12 @@ function registerRoutes(app, deps) {
   app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule, storageGuard }));
 
   // Media server routes
-  app.use(createMediaServerRoutes({ verifyToken, configModule, mediaServers }));
+  app.use(createMediaServerRoutes({ verifyToken, configModule, mediaServers, scheduledTaskManager }));
 
   // Maintenance routes
-  app.use(createMaintenanceRoutes({ verifyToken, videosModule, configModule, scheduledTaskRuns, rescanRunSummary }));
+  app.use(createMaintenanceRoutes({
+    verifyToken, videosModule, configModule, scheduledTaskRuns, rescanRunSummary, scheduledTaskManager,
+  }));
 
   // Subfolder registry routes
   app.use(createSubfolderRoutes({ verifyToken, subfolderModule }));

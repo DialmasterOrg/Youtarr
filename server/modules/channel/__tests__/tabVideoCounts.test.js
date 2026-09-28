@@ -28,6 +28,7 @@ jest.mock('../tabCountThrottle', () => ({
   currentDetails: jest.fn(),
   THROTTLED_OUTCOME: 'throttled',
 }));
+jest.mock('../../scheduledTaskManager', () => ({ announceRun: jest.fn((id, promise) => promise) }));
 
 const CHANNEL_ID = 'UCHnyfMqiRRG1u-2MsSQLbXA';
 const OTHER_CHANNEL_ID = 'UCaaaaaaaaaaaaaaaaaaaaaa';
@@ -432,6 +433,21 @@ describe('tabVideoCounts', () => {
 
       expect([second.status, second.outcome]).toEqual(['skipped', 'skipped']);
     });
+
+    test('isBulkRunning is true while refreshAll is pending', async () => {
+      Channel.findAll.mockResolvedValue([makeChannel({ available_tabs: 'videos' })]);
+      let finish;
+      tabCountSources.fetchCountsViaApi.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+
+      expect(tabVideoCounts.isBulkRunning()).toBe(false);
+      const run = tabVideoCounts.refreshAll();
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(tabVideoCounts.isBulkRunning()).toBe(true);
+
+      finish(new Map([[`UULF${SUFFIX}`, 4]]));
+      await run;
+      expect(tabVideoCounts.isBulkRunning()).toBe(false);
+    });
   });
 
   describe('refreshAll without an API key', () => {
@@ -712,6 +728,29 @@ describe('tabVideoCounts', () => {
     });
   });
 
+  describe('getBulkRunBlocker', () => {
+    test('never blocks when the YouTube API is available', async () => {
+      tabCountSources.isApiAvailable.mockReturnValue(true);
+      tabVideoCounts.setDownloadActivityCheck(() => true);
+      expect(await tabVideoCounts.getBulkRunBlocker()).toBeNull();
+    });
+
+    test('reports a throttle pause with when it ends', async () => {
+      tabCountSources.isApiAvailable.mockReturnValue(false);
+      tabCountThrottle.remainingMs.mockResolvedValue(60_000);
+      const blocker = await tabVideoCounts.getBulkRunBlocker(1_000_000);
+      expect(blocker).toMatchObject({ reason: 'youtube-throttled' });
+      expect(blocker.availableAt.getTime()).toBe(1_060_000);
+    });
+
+    test('waits for a running download', async () => {
+      tabCountSources.isApiAvailable.mockReturnValue(false);
+      tabCountThrottle.remainingMs.mockResolvedValue(0);
+      tabVideoCounts.setDownloadActivityCheck(() => true);
+      expect(await tabVideoCounts.getBulkRunBlocker()).toMatchObject({ reason: 'downloads-active', availableAt: null });
+    });
+  });
+
   describe('refreshAtStartup', () => {
     const runHistory = { record: jest.fn(), getLatestRun: jest.fn() };
 
@@ -763,6 +802,27 @@ describe('tabVideoCounts', () => {
       await tabVideoCounts.refreshAtStartup();
 
       expect(runHistory.record).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('refreshAtStartup announces', () => {
+    test('announces the startup refresh after its lock is set, and returns its summary', async () => {
+      const scheduledTaskManager = require('../../scheduledTaskManager');
+      Channel.findOne.mockResolvedValue(null);
+      Channel.findAll.mockResolvedValue([makeChannel({ available_tabs: 'videos' })]);
+      tabCountSources.isApiAvailable.mockReturnValue(true);
+      tabCountSources.fetchCountsViaApi.mockResolvedValue(new Map([[`UULF${SUFFIX}`, 4]]));
+      let runningWhenAnnounced = null;
+      scheduledTaskManager.announceRun.mockImplementation((id, promise) => {
+        runningWhenAnnounced = tabVideoCounts.isBulkRunning();
+        return promise;
+      });
+
+      const summary = await tabVideoCounts.refreshAtStartup();
+
+      expect(scheduledTaskManager.announceRun).toHaveBeenCalledWith('channelVideoCountsFrequency', expect.any(Promise));
+      expect(runningWhenAnnounced).toBe(true);
+      expect(summary).toEqual(expect.objectContaining({ status: expect.any(String) }));
     });
   });
 

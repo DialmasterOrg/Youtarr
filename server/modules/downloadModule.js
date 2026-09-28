@@ -395,6 +395,18 @@ class DownloadModule {
           status: 'Failed',
           output: `Error: ${err.message}`,
         });
+        // yt-dlp never started, so no finalizer will report this job or start
+        // the next one: report the failure to its run so the sweep can finish,
+        // then let the queue move on instead of stalling behind this job.
+        const downloadRunTracker = require('./download/downloadRunTracker');
+        const runId = this.getJobDataValue(jobData, 'runId');
+        if (downloadRunTracker.isActive(runId)) {
+          downloadRunTracker.recordJobResult(runId, jobId, {
+            jobType,
+            jobIssue: { status: 'Failed', reason: err.message, byUser: false },
+          });
+        }
+        await jobModule.startNextJob();
       }
     }
   }

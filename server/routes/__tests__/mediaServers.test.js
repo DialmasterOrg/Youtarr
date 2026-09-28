@@ -55,6 +55,10 @@ const buildDeps = (overrides = {}) => ({
     },
     ...overrides.mediaServers,
   },
+  scheduledTaskManager: {
+    runNow: jest.fn(),
+    ...overrides.scheduledTaskManager,
+  },
 });
 
 const getHandler = (method, path, deps) => {
@@ -358,7 +362,7 @@ describe('GET /api/mediaservers/watch-status', () => {
 describe('POST /api/mediaservers/watch-status/sync', () => {
   test('starts a sync', async () => {
     const deps = buildDeps();
-    deps.mediaServers.watchStatusSync.getStatus.mockReturnValue({ running: false, lastRun: null });
+    deps.scheduledTaskManager.runNow.mockResolvedValue({ started: true, completion: Promise.resolve({}) });
 
     const handler = getHandler('post', '/api/mediaservers/watch-status/sync', deps);
     const req = { log: loggerMock };
@@ -368,12 +372,18 @@ describe('POST /api/mediaservers/watch-status/sync', () => {
 
     expect(res.status).toHaveBeenCalledWith(202);
     expect(res.json).toHaveBeenCalledWith({ started: true });
-    expect(deps.mediaServers.watchStatusSync.syncAll).toHaveBeenCalledWith('manual');
+    expect(deps.scheduledTaskManager.runNow).toHaveBeenCalledWith('watchStatusSyncFrequency', {
+      trigger: 'manual',
+      enforceEnabled: false,
+      enforceCooldown: false,
+    });
   });
 
   test('returns 409 when already running', async () => {
     const deps = buildDeps();
-    deps.mediaServers.watchStatusSync.getStatus.mockReturnValue({ running: true, lastRun: null });
+    deps.scheduledTaskManager.runNow.mockResolvedValue({
+      started: false, reason: 'running', message: 'This task is already running.', availableAt: null,
+    });
 
     const handler = getHandler('post', '/api/mediaservers/watch-status/sync', deps);
     const req = { log: loggerMock };
@@ -382,29 +392,41 @@ describe('POST /api/mediaservers/watch-status/sync', () => {
     await handler(req, res);
 
     expect(res.status).toHaveBeenCalledWith(409);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Watch status sync is already running' });
-    expect(deps.mediaServers.watchStatusSync.syncAll).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ error: 'Watch status sync is already running', reason: 'running', availableAt: null });
   });
 
-  test('does not crash the request when syncAll rejects', async () => {
+  test('returns 409 with the manager message when no media server is connected', async () => {
     const deps = buildDeps();
-    deps.mediaServers.watchStatusSync.getStatus.mockReturnValue({ running: false, lastRun: null });
-    deps.mediaServers.watchStatusSync.syncAll.mockRejectedValue(new Error('adapter exploded'));
+    deps.scheduledTaskManager.runNow.mockResolvedValue({
+      started: false,
+      reason: 'no-media-server',
+      message: 'No media server is connected for watch status.',
+      availableAt: null,
+    });
 
     const handler = getHandler('post', '/api/mediaservers/watch-status/sync', deps);
     const req = { log: loggerMock };
     const res = createResponse();
 
     await handler(req, res);
-    // Flush the fire-and-forget promise's microtask queue so its .catch runs
-    // before the test asserts on it.
-    await new Promise((resolve) => setImmediate(resolve));
 
-    expect(res.status).toHaveBeenCalledWith(202);
-    expect(res.json).toHaveBeenCalledWith({ started: true });
-    expect(loggerMock.error).toHaveBeenCalledWith(
-      expect.objectContaining({ err: expect.any(Error) }),
-      'Manual watch status sync failed'
-    );
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'No media server is connected for watch status.', reason: 'no-media-server', availableAt: null,
+    });
+  });
+
+  test('returns 500 when runNow throws', async () => {
+    const deps = buildDeps();
+    deps.scheduledTaskManager.runNow.mockRejectedValue(new Error('boom'));
+
+    const handler = getHandler('post', '/api/mediaservers/watch-status/sync', deps);
+    const req = { log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Failed to start watch status sync' });
   });
 });

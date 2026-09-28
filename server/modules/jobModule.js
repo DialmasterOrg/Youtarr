@@ -33,6 +33,8 @@ const MAX_HISTORY_JOBS = 720;
 const ARCHIVE_BACKFILL_TASK_KEY = 'archiveBackfillFrequency';
 // Terminal download statuses whose output is rewritten to "N videos.".
 const SUCCESS_STATUSES = new Set(['Complete', 'Complete with Warnings']);
+// Statuses a job never leaves once set.
+const FINAL_JOB_STATUSES = new Set(['Complete', 'Complete with Warnings', 'Error', 'Failed', 'Terminated', 'Killed']);
 
 class JobModule {
   constructor() {
@@ -41,6 +43,10 @@ class JobModule {
     this.jobsFilePathOld = path.join(this.jobsDir, 'jobs.json.old');
     this.isSaving = false; // Locking mechanism to prevent multiple saves at the same time
     this.jobs = {}; // Initialize this.jobs as an empty object
+    // Told when failUnstartedJob gives up on a queued job; see onJobAbandoned.
+    this.jobAbandonedListeners = new Set();
+    // Told whenever updateJob gives a job a final status; see onJobEnded.
+    this.jobEndedListeners = new Set();
 
     if (!fs.existsSync(this.jobsDir)) {
       fs.mkdirSync(this.jobsDir, { recursive: true });
@@ -94,7 +100,7 @@ class JobModule {
   // The startup pass is written as one finished row rather than started and
   // finished separately: it begins before server.js marks stale running rows
   // interrupted, so a running row created here would be flagged by that pass.
-  async runStartupBackfill() {
+  async _runStartupBackfill() {
     const startedAt = new Date();
     const record = await this.backfillFromCompleteList();
     await scheduledTaskRuns.record({
@@ -104,6 +110,12 @@ class JobModule {
       finishedAt: new Date(),
       ...record,
     });
+  }
+
+  // Runs outside the scheduler, so open Scheduling pages are told when it
+  // starts and ends. The repair's lock is set before this broadcasts.
+  runStartupBackfill() {
+    return scheduledTasks.announceRun(ARCHIVE_BACKFILL_TASK_KEY, this._runStartupBackfill());
   }
 
   /**
@@ -499,8 +511,76 @@ class JobModule {
       // an unhandled rejection would exit the process.
       Promise.resolve(jobs[id].action(jobs[id], true)).catch((err) => {
         logger.error({ err, jobId: id, jobType: jobs[id].jobType }, 'Failed to start queued job');
+        return this.failUnstartedJob(id, err);
+      }).catch((err) => {
+        logger.error({ err, jobId: id }, 'Could not release a queued job that failed to start');
       });
       break;
+    }
+  }
+
+  /**
+   * A queued job whose action failed before the job left Pending would stay
+   * Pending forever and hold every later job behind it. Mark it as an error
+   * and start the next one. A job the action already moved on (In Progress
+   * or finished) is left to the download path that owns it.
+   * @param {string} jobId
+   * @param {Error} err
+   * @returns {Promise<void>}
+   */
+  async failUnstartedJob(jobId, err) {
+    const job = this.jobs[jobId];
+    if (!job || job.status !== 'Pending') return;
+    const reason = `Job could not be started: ${err && err.message ? err.message : 'Unknown error'}`;
+    const runId = job.data && job.data.runId ? job.data.runId : null;
+    await this.updateJob(jobId, { status: 'Error', output: reason });
+    this.notifyJobAbandoned({ jobId, runId, reason });
+    // The scan that launched this job may still be settling; joining it would
+    // start nothing, since it is past its job loop. Let it end, then scan again.
+    if (this.nextJobStart) await this.nextJobStart.catch(() => {});
+    await this.startNextJob();
+  }
+
+  /**
+   * Listen for queued jobs abandoned before they started, so a download run
+   * can count them without jobModule depending on the run tracker.
+   * @param {Function} listener - called with { jobId, runId, reason }
+   * @returns {Function} unsubscribe
+   */
+  onJobAbandoned(listener) {
+    this.jobAbandonedListeners.add(listener);
+    return () => this.jobAbandonedListeners.delete(listener);
+  }
+
+  /**
+   * Listen for jobs given a final status (by any path: the download
+   * finalizer, error handlers, or failUnstartedJob), so a download run can
+   * tell a job that ended without reporting from one still running.
+   * @param {Function} listener - called with { jobId }
+   * @returns {Function} unsubscribe
+   */
+  onJobEnded(listener) {
+    this.jobEndedListeners.add(listener);
+    return () => this.jobEndedListeners.delete(listener);
+  }
+
+  notifyJobEnded(event) {
+    for (const listener of this.jobEndedListeners) {
+      try {
+        listener(event);
+      } catch (err) {
+        logger.warn({ err, jobId: event.jobId }, 'Job ended listener failed');
+      }
+    }
+  }
+
+  notifyJobAbandoned(event) {
+    for (const listener of this.jobAbandonedListeners) {
+      try {
+        listener(event);
+      } catch (err) {
+        logger.warn({ err, jobId: event.jobId }, 'Abandoned job listener failed');
+      }
     }
   }
 
@@ -719,8 +799,26 @@ class JobModule {
     return null;
   }
 
-  // Backfill Videos and channelvideos tables from complete.list and jobs info JSON
+  // The startup pass runs outside the scheduler, so the repair keeps its own
+  // lock; two walks at once would race on the same rows.
   async backfillFromCompleteList() {
+    if (this._archiveRepairRunning) {
+      return { status: 'skipped', outcome: 'skipped', message: 'A library repair was already running.' };
+    }
+    this._archiveRepairRunning = true;
+    try {
+      return await this._repairFromArchive();
+    } finally {
+      this._archiveRepairRunning = false;
+    }
+  }
+
+  isArchiveRepairRunning() {
+    return Boolean(this._archiveRepairRunning);
+  }
+
+  // Backfill Videos and channelvideos tables from complete.list and jobs info JSON
+  async _repairFromArchive() {
     try {
       const archivePath = path.join(__dirname, '../../config', 'complete.list');
       let archiveContent;
@@ -982,6 +1080,7 @@ class JobModule {
       id: ARCHIVE_BACKFILL_TASK_KEY,
       expression: getSchedule(configModule.getConfig(), ARCHIVE_BACKFILL_TASK_KEY),
       run: () => this.backfillFromCompleteList(),
+      isRunning: () => this.isArchiveRepairRunning(),
     });
   }
 
@@ -1147,6 +1246,9 @@ class JobModule {
     for (let field in updatedFields) {
       job[field] = updatedFields[field];
     }
+    // Before the database work below: listeners (the download run tracker)
+    // must know the job has ended even while its results are still on the way.
+    if (FINAL_JOB_STATUSES.has(updatedFields.status)) this.notifyJobEnded({ jobId });
 
     // Save only THIS job to DB, don't iterate through all jobs
     const isCompletedJob = updatedFields.status === 'Complete' ||

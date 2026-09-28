@@ -318,6 +318,7 @@ export function Settings({ token }: SettingsProps) {
             path="scheduling"
             element={<SchedulingSection
               config={config}
+              savedConfig={initialConfig}
               deploymentEnvironment={deploymentEnvironment}
               isPlatformManaged={isPlatformManaged}
               onConfigChange={handleConfigChange}
