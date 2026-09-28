@@ -256,7 +256,9 @@ const createServerModule = ({
         jest.doMock('../modules/downloadModule', () => downloadModuleMock);
         jest.doMock('../modules/jobModule', () => ({
           getRunningJobs: jest.fn(() => []),
-          getRunningJobsWithFreshVideos: jest.fn().mockResolvedValue([])
+          getRunningJobsWithFreshVideos: jest.fn().mockResolvedValue([]),
+          onJobAbandoned: jest.fn(),
+          onJobEnded: jest.fn()
         }));
         jest.doMock('../modules/videosModule', () => ({}));
         jest.doMock('../modules/videoMetadataModule', () => ({

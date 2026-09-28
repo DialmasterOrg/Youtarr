@@ -24,9 +24,7 @@ const status = (overrides: Partial<ScheduleTaskStatus> = {}): ScheduleTaskStatus
 
 const baseProps = {
   field: watchStatusField,
-  featureOnInForm: false,
   pending: false,
-  timeZone: 'UTC',
   onRun: jest.fn(),
 };
 
@@ -44,12 +42,11 @@ test('renders an enabled Run now button and calls onRun on click when available 
   expect(onRun).toHaveBeenCalledTimes(1);
 });
 
-test('is disabled with the hint text when status.runNow is blocked', () => {
+test('is disabled when status.runNow is blocked', () => {
   renderWithProviders(<RunNowControl {...baseProps} status={status({
     runNow: { available: false, reason: 'cooldown', message: 'x', availableAt: '2026-09-27T12:15:00.000Z' },
   })} />);
   expect(screen.getByRole('button', { name: 'Run Watch status sync now' })).toBeDisabled();
-  expect(screen.getByText(/^Ran less than 15 minutes ago\./)).toBeInTheDocument();
 });
 
 test('shows Running... and is disabled when status.running', () => {
@@ -76,13 +73,6 @@ test('shows Starting... and is disabled while pending', () => {
   expect(button).toHaveTextContent('Starting...');
 });
 
-test('renders the hint link for downloads-paused', () => {
-  renderWithProviders(<RunNowControl {...baseProps} status={status({
-    runNow: { available: false, reason: 'downloads-paused', message: 'Downloads are paused.', availableAt: null },
-  })} />);
-  expect(screen.getByRole('link', { name: 'Storage limits' })).toHaveAttribute('href', '/settings/storage-limits');
-});
-
 test('cleanup field: clicking opens a confirm dialog; Cancel closes without calling onRun; confirm calls onRun once', () => {
   const onRun = jest.fn();
   renderWithProviders(<RunNowControl {...baseProps} field={cleanupField} status={status({ key: 'autoRemovalFrequency', label: 'Automatic video cleanup' })} onRun={onRun} />);
@@ -98,11 +88,6 @@ test('cleanup field: clicking opens a confirm dialog; Cancel closes without call
   fireEvent.click(screen.getByRole('button', { name: 'Run Automatic video cleanup now' }));
   fireEvent.click(screen.getByRole('button', { name: 'Run cleanup' }));
   expect(onRun).toHaveBeenCalledTimes(1);
-});
-
-test('shows error in an alert', () => {
-  renderWithProviders(<RunNowControl {...baseProps} status={status()} error="Could not start the task." />);
-  expect(screen.getByRole('alert')).toHaveTextContent('Could not start the task.');
 });
 
 test('renders nothing until status has loaded', () => {

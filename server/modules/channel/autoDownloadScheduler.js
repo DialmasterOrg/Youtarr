@@ -12,7 +12,41 @@ const storageGuard = require('../storageGuard');
 const Channel = require('../../models/channel');
 const channelIdentity = require('./channelIdentity');
 
+const { waitForSweepEnd } = require('./sweepCompletion');
+const sweepRunSummary = require('./sweepRunSummary');
+
 const ACTIVE_JOB_STATUSES = new Set(['In Progress', 'Pending']);
+
+// The record for a sweep whose jobs are queued. With the run tracker it is
+// only interim: the sweep's final record replaces it when the downloads end.
+function describeQueuedSweep(result) {
+  if (result && result.playlistError) {
+    return {
+      status: 'error',
+      outcome: 'partial',
+      message: `Channel downloads were queued, but the playlist sweep failed: ${result.playlistError}`,
+    };
+  }
+  if (result && result.playlistsFailed > 0) {
+    return {
+      status: 'error',
+      outcome: 'partial',
+      message: `Channel downloads were queued, but ${result.playlistsFailed} of ${result.playlistsChecked} playlists failed to sweep.`,
+    };
+  }
+  if (result && result.playlistsPausedReason) {
+    return {
+      status: 'success',
+      outcome: 'completed',
+      message: `Channel downloads were queued; playlist downloads were skipped. ${result.playlistsPausedReason}`,
+    };
+  }
+  return {
+    status: 'success',
+    outcome: 'completed',
+    message: 'Checked enabled channels and playlists for new videos.',
+  };
+}
 
 class AutoDownloadScheduler {
   constructor() {
@@ -51,8 +85,8 @@ class AutoDownloadScheduler {
           this.sweepRunIds.delete(runId);
           continue;
         }
-        // A job left 'Failed' never reports to its run, so only queued or
-        // running jobs count; otherwise it would hold the sweep open for weeks.
+        // Only queued or running jobs count: a job that stopped without
+        // reporting to its run must not hold the sweep open.
         for (const job of this.runTracker.getUnfinishedJobs(runId)) {
           if (ACTIVE_JOB_STATUSES.has(job.status)) active.set(job.id, job.status);
         }
@@ -147,32 +181,12 @@ class AutoDownloadScheduler {
 
     try {
       const result = await downloadModule.doChannelAndPlaylistDownloads(jobData);
-      if (result && result.playlistError) {
-        return {
-          status: 'error',
-          outcome: 'partial',
-          message: `Channel downloads were queued, but the playlist sweep failed: ${result.playlistError}`,
-        };
-      }
-      if (result && result.playlistsFailed > 0) {
-        return {
-          status: 'error',
-          outcome: 'partial',
-          message: `Channel downloads were queued, but ${result.playlistsFailed} of ${result.playlistsChecked} playlists failed to sweep.`,
-        };
-      }
-      if (result && result.playlistsPausedReason) {
-        return {
-          status: 'success',
-          outcome: 'completed',
-          message: `Channel downloads were queued; playlist downloads were skipped. ${result.playlistsPausedReason}`,
-        };
-      }
-      return {
-        status: 'success',
-        outcome: 'completed',
-        message: 'Checked enabled channels and playlists for new videos.',
-      };
+      const queued = describeQueuedSweep(result);
+      const runId = downloadModule.getJobDataValue(jobData, 'runId');
+      if (!this.runTracker || !runId) return queued;
+      // The task returns now, so its lock is released exactly as before; the
+      // run record stays open until the sweep's downloads end.
+      return { ...queued, finalRecord: this.recordSweepEnd(runId, result || {}) };
     } catch (err) {
       logger.error({ err }, 'Channel + playlist downloads failed');
       return { status: 'error', outcome: 'error', message: err.message || 'Unknown error' };
@@ -182,6 +196,23 @@ class AutoDownloadScheduler {
       const runId = downloadModule.getJobDataValue(jobData, 'runId');
       if (runId) this.sweepRunIds.add(runId);
     }
+  }
+
+  /**
+   * Wait for a queued sweep's downloads to end and describe the whole sweep
+   * for its run record. Never rejects on its own; see waitForSweepEnd.
+   * @param {string} runId
+   * @param {Object} queueResult - doChannelAndPlaylistDownloads's result
+   * @returns {Promise<object>} the run record
+   */
+  async recordSweepEnd(runId, queueResult) {
+    const sweep = await waitForSweepEnd({
+      runId,
+      tracker: this.runTracker,
+      isPaused: () => storageGuard.getStatus().paused,
+    });
+    const pauseMessage = sweep.endedBy === 'paused' ? storageGuard.describe(storageGuard.getStatus()) : null;
+    return sweepRunSummary.toRunRecord({ sweep, queueResult, pauseMessage });
   }
 
   /**

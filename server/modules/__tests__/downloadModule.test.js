@@ -763,6 +763,30 @@ describe('DownloadModule', () => {
       });
     });
 
+    it('starts the next queued job after failing, so the queue does not stall', async () => {
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+      channelModuleMock.generateChannelsFile.mockRejectedValue(new Error('No valid channel URLs'));
+
+      await downloadModule.doSingleChannelDownloadJob();
+
+      expect(jobModuleMock.startNextJob).toHaveBeenCalled();
+    });
+
+    it('reports the failure to its download run so the sweep can finish', async () => {
+      const downloadRunTracker = require('../download/downloadRunTracker');
+      jest.spyOn(downloadRunTracker, 'isActive').mockReturnValue(true);
+      const recordSpy = jest.spyOn(downloadRunTracker, 'recordJobResult').mockReturnValue(true);
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+      channelModuleMock.generateChannelsFile.mockRejectedValue(new Error('No valid channel URLs'));
+
+      await downloadModule.doSingleChannelDownloadJob({ runId: 'run-1' });
+
+      expect(recordSpy).toHaveBeenCalledWith('run-1', mockJobId, {
+        jobType: 'Channel Downloads',
+        jobIssue: { status: 'Failed', reason: 'No valid channel URLs', byUser: false },
+      });
+    });
+
     it('should not execute download if job is not in progress', async () => {
       jobModuleMock.getJob.mockReturnValue({ status: 'Queued' });
 

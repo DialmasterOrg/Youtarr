@@ -175,6 +175,8 @@ const createServerModule = ({
         };
 
         const jobModuleMock = {
+          onJobAbandoned: jest.fn(),
+          onJobEnded: jest.fn(),
           getJob: jest.fn(),
           getRunningJobs: jest.fn(() => []),
           getRunningJobsWithFreshVideos: jest.fn().mockResolvedValue([]),
@@ -203,6 +205,7 @@ const createServerModule = ({
         const scheduledTaskRunsMock = {
           markInterruptedRuns: jest.fn().mockResolvedValue(undefined),
           getLatestRuns: jest.fn().mockResolvedValue({}),
+          getLatestFinishedRuns: jest.fn().mockResolvedValue({}),
           getLatestRun: jest.fn().mockResolvedValue(null),
           record: jest.fn().mockResolvedValue(undefined)
         };
@@ -218,7 +221,9 @@ const createServerModule = ({
           refreshAtStartup: jest.fn().mockResolvedValue({})
         };
         const autoDownloadSchedulerMock = { setRunTracker: jest.fn() };
-        const downloadRunTrackerMock = { isActive: jest.fn(), getUnfinishedJobs: jest.fn() };
+        const downloadRunTrackerMock = {
+          isActive: jest.fn(), getUnfinishedJobs: jest.fn(), handleAbandonedJob: jest.fn(), handleJobEnded: jest.fn(),
+        };
         const rateLimitMiddleware = jest.fn(() => (req, res, next) => next());
         // Mock ipKeyGenerator to normalize IPv6 addresses
         rateLimitMiddleware.ipKeyGenerator = jest.fn((ip) => ip);
@@ -390,6 +395,25 @@ describe('server initialization', () => {
     const { autoDownloadSchedulerMock, downloadRunTrackerMock } = await createServerModule();
 
     expect(autoDownloadSchedulerMock.setRunTracker).toHaveBeenCalledWith(downloadRunTrackerMock);
+  });
+
+  test('reports queued jobs abandoned before they start to their download run', async () => {
+    const { jobModuleMock, downloadRunTrackerMock } = await createServerModule();
+    const listener = jobModuleMock.onJobAbandoned.mock.calls[0][0];
+    const event = { jobId: 'job-1', runId: 'run-1', reason: 'Job could not be started: boom' };
+
+    listener(event);
+
+    expect(downloadRunTrackerMock.handleAbandonedJob).toHaveBeenCalledWith(event);
+  });
+
+  test('tells the download run tracker whenever a job ends', async () => {
+    const { jobModuleMock, downloadRunTrackerMock } = await createServerModule();
+    const listener = jobModuleMock.onJobEnded.mock.calls[0][0];
+
+    listener({ jobId: 'job-1' });
+
+    expect(downloadRunTrackerMock.handleJobEnded).toHaveBeenCalledWith({ jobId: 'job-1' });
   });
 
   test('initializes database and exposes health route', async () => {

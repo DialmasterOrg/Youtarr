@@ -173,12 +173,23 @@ function getStoppedGroups(finalSummary = {}) {
 }
 
 /**
- * Whether a failed group (not a user termination) stopped the download early.
+ * Get the download jobs that ended in an error or were terminated.
+ * @param {Object} finalSummary - Summary object from the run tracker
+ * @returns {Array} Job issues ({ status, reason, byUser })
+ */
+function getJobIssues(finalSummary = {}) {
+  return Array.isArray(finalSummary.jobIssues) ? finalSummary.jobIssues : [];
+}
+
+/**
+ * Whether a failure (not a user termination) stopped the download early: a
+ * failed group, or a download job that failed or was stopped by a timeout.
  * @param {Object} finalSummary
  * @returns {boolean}
  */
 function hasFailureStop(finalSummary = {}) {
-  return getStoppedGroups(finalSummary).some((stopped) => !stopped.terminated);
+  return getStoppedGroups(finalSummary).some((stopped) => !stopped.terminated)
+    || getJobIssues(finalSummary).some((issue) => !issue.byUser);
 }
 
 /**
@@ -190,6 +201,31 @@ function formatStoppedGroupLine(stopped = {}) {
   const where = stopped.terminated ? `Terminated in ${stopped.group}` : `Stopped at ${stopped.group}`;
   const reason = stopped.reason ? `: ${stopped.reason}` : '';
   return `${where}${reason}. Later groups were skipped.`;
+}
+
+/**
+ * Format a job issue for notification bodies.
+ * @param {Object} issue - { status, reason }
+ * @returns {string} Human-readable line
+ */
+function formatJobIssueLine(issue = {}) {
+  const what = issue.status === 'Terminated' || issue.status === 'Killed'
+    ? 'A download job was terminated'
+    : 'A download job failed';
+  const reason = typeof issue.reason === 'string' ? issue.reason.replace(/\.$/, '') : '';
+  return reason ? `${what}: ${reason}.` : `${what}.`;
+}
+
+/**
+ * Every "stopped early" line for a summary: stopped groups, then job issues.
+ * @param {Object} finalSummary
+ * @returns {string[]}
+ */
+function getStoppedLines(finalSummary = {}) {
+  return [
+    ...getStoppedGroups(finalSummary).map(formatStoppedGroupLine),
+    ...getJobIssues(finalSummary).map(formatJobIssueLine),
+  ];
 }
 
 /**
@@ -323,8 +359,11 @@ module.exports = {
   getDiagnoses,
   formatDiagnosisLine,
   getStoppedGroups,
+  getJobIssues,
   hasFailureStop,
   formatStoppedGroupLine,
+  formatJobIssueLine,
+  getStoppedLines,
   getSubtitle,
   buildAutoRemovalTitle,
   formatBytes,

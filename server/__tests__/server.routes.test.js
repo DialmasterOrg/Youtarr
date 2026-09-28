@@ -220,6 +220,8 @@ const createServerModule = ({
         };
 
         const jobModuleMock = {
+          onJobAbandoned: jest.fn(),
+          onJobEnded: jest.fn(),
           getJob: jest.fn((jobId) => {
             if (jobId === 'existing-job') {
               return { id: jobId, status: 'In Progress' };

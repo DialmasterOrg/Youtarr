@@ -18,6 +18,10 @@ jest.mock('../DownloadActivityIndicator', () => ({
   ),
 }));
 
+jest.mock('../ScheduledTaskIndicator', () => ({
+  ScheduledTaskIndicator: () => <div data-testid="scheduled-task-indicator" />,
+}));
+
 const NAV_ITEMS = [
   {
     key: 'channels',
@@ -177,6 +181,12 @@ describe('NavHeader shared update indicator', () => {
     renderHeader();
 
     expect(screen.getByTestId('download-activity-indicator')).toBeInTheDocument();
+  });
+
+  it('renders the scheduled task indicator in the header actions', () => {
+    renderHeader();
+
+    expect(screen.getByTestId('scheduled-task-indicator')).toBeInTheDocument();
   });
 
   it('renders the download activity indicator in the playful mobile header', () => {

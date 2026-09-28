@@ -134,7 +134,9 @@ const setupServer = async ({ authEnabled = 'false', passwordHash = null } = {}) 
   jest.doMock('../modules/jobModule', () => ({
     getJob: jest.fn(),
     getRunningJobs: jest.fn(() => []),
-    getRunningJobsWithFreshVideos: jest.fn().mockResolvedValue([])
+    getRunningJobsWithFreshVideos: jest.fn().mockResolvedValue([]),
+    onJobAbandoned: jest.fn(),
+    onJobEnded: jest.fn()
   }));
   jest.doMock('../modules/videosModule', () => ({
     getVideos: jest.fn().mockResolvedValue([])

@@ -6,7 +6,7 @@ const supertest = require('supertest');
 const createSchedulesRoutes = require('../schedules');
 const scheduleConfig = require('../../modules/scheduleConfig');
 
-function makeApp({ statuses = [], latestRuns = {}, blockers = {} } = {}) {
+function makeApp({ statuses = [], latestRuns = {}, finishedRuns = {}, blockers = {} } = {}) {
   const statusByKey = new Map(statuses.map((status) => [status.id, status]));
   const scheduledTaskManager = {
     getTaskSnapshot: jest.fn(async (key) => ({
@@ -15,7 +15,10 @@ function makeApp({ statuses = [], latestRuns = {}, blockers = {} } = {}) {
     })),
     runNow: jest.fn(),
   };
-  const scheduledTaskRuns = { getLatestRuns: jest.fn().mockResolvedValue(latestRuns) };
+  const scheduledTaskRuns = {
+    getLatestRuns: jest.fn().mockResolvedValue(latestRuns),
+    getLatestFinishedRuns: jest.fn().mockResolvedValue(finishedRuns),
+  };
   const app = express();
   app.use(createSchedulesRoutes({
     verifyToken: (req, res, next) => next(),
@@ -39,6 +42,7 @@ describe('GET /api/schedules', () => {
         error: null, running: false, nextRunAt: new Date('2026-09-21T02:00:00.000Z'),
       }],
       latestRuns: { autoRemovalFrequency: lastRun },
+      finishedRuns: { autoRemovalFrequency: lastRun },
     });
 
     const res = await supertest(app).get('/api/schedules');
@@ -55,8 +59,37 @@ describe('GET /api/schedules', () => {
       running: false,
       nextRunAt: '2026-09-21T02:00:00.000Z',
       lastRun,
+      lastFinishedRun: lastRun,
       runNow: { available: true, reason: null, message: null, availableAt: null },
     });
+  });
+
+  test('reports the newest finished run separately when the latest run was skipped', async () => {
+    const skipped = {
+      id: 2, taskKey: 'videoRescanFrequency', trigger: 'scheduled', status: 'skipped', outcome: null,
+      message: 'The previous run was still in progress.', details: null,
+      startedAt: '2026-09-20T03:00:00.000Z', finishedAt: '2026-09-20T03:00:00.000Z',
+    };
+    const finished = {
+      ...skipped, id: 1, status: 'success', outcome: 'completed', message: 'Scanned 10 videos.',
+      startedAt: '2026-09-20T02:00:00.000Z', finishedAt: '2026-09-20T02:05:00.000Z',
+    };
+    const { app } = makeApp({
+      latestRuns: { videoRescanFrequency: skipped },
+      finishedRuns: { videoRescanFrequency: finished },
+    });
+
+    const res = await supertest(app).get('/api/schedules');
+
+    const rescan = res.body.tasks.find((task) => task.key === 'videoRescanFrequency');
+    expect(rescan.lastRun).toEqual(skipped);
+    expect(rescan.lastFinishedRun).toEqual(finished);
+  });
+
+  test('reports no finished run for a task that has never finished one', async () => {
+    const { app } = makeApp();
+    const res = await supertest(app).get('/api/schedules');
+    expect(res.body.tasks.every((task) => task.lastFinishedRun === null)).toBe(true);
   });
 
   test('reports tasks the scheduler has not registered as inactive', async () => {

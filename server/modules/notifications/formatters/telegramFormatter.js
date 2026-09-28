@@ -22,8 +22,7 @@ const {
   formatTerminationFailureLine,
   getDiagnoses,
   formatDiagnosisLine,
-  getStoppedGroups,
-  formatStoppedGroupLine
+  getStoppedLines
 } = require('../utils');
 
 /**
@@ -80,10 +79,10 @@ function formatDownloadMessage(finalSummary, videoData) {
     body += '\n';
   }
 
-  const stoppedGroups = getStoppedGroups(finalSummary);
-  if (stoppedGroups.length > 0) {
-    stoppedGroups.forEach(stopped => {
-      body += `⚠️ <b>${escapeHtml(formatStoppedGroupLine(stopped))}</b>\n`;
+  const stoppedLines = getStoppedLines(finalSummary);
+  if (stoppedLines.length > 0) {
+    stoppedLines.forEach(line => {
+      body += `⚠️ <b>${escapeHtml(line)}</b>\n`;
     });
     body += '\n';
   }

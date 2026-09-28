@@ -412,7 +412,15 @@ describe('autoDownloadScheduler', () => {
     beforeEach(() => {
       jobModule = require('../../jobModule');
       storageGuard = require('../../storageGuard');
-      runTracker = { isActive: jest.fn().mockReturnValue(true), getUnfinishedJobs: jest.fn().mockReturnValue([]) };
+      runTracker = {
+        isActive: jest.fn().mockReturnValue(true),
+        getUnfinishedJobs: jest.fn().mockReturnValue([]),
+        onRunFinished: jest.fn(() => () => {}),
+        // Finished unless a test says otherwise, so each sweep's wait ends at once.
+        getFinishedRun: jest.fn().mockReturnValue({ finishedAt: new Date(), totals: null }),
+        getTotals: jest.fn().mockReturnValue(null),
+        getUnreportedJobs: jest.fn().mockReturnValue([]),
+      };
       autoDownloadScheduler.setRunTracker(runTracker);
     });
 
@@ -464,6 +472,8 @@ describe('autoDownloadScheduler', () => {
 
     test('stops checking a run once it has finished', async () => {
       await startSweep();
+      // The sweep's end-of-run wait checks the run too; only count the status checks.
+      runTracker.getUnfinishedJobs.mockClear();
       runTracker.isActive.mockReturnValueOnce(false);
       autoDownloadScheduler.isChannelDownloadRunning();
       autoDownloadScheduler.isChannelDownloadRunning();
@@ -599,6 +609,84 @@ describe('autoDownloadScheduler', () => {
     });
   });
 
+  describe('sweep run record', () => {
+    let storageGuard;
+    let runTracker;
+
+    const startSweep = (queueResult = undefined) => {
+      downloadModule.doChannelAndPlaylistDownloads.mockImplementationOnce(async (jobData) => {
+        jobData.runId = 'run-1';
+        return queueResult;
+      });
+      return autoDownloadScheduler.channelAutoDownload();
+    };
+
+    beforeEach(() => {
+      storageGuard = require('../../storageGuard');
+      storageGuard.getStatus.mockReturnValue({ paused: false, reasons: [] });
+      runTracker = {
+        isActive: jest.fn().mockReturnValue(true),
+        getUnfinishedJobs: jest.fn().mockReturnValue([]),
+        onRunFinished: jest.fn(() => () => {}),
+        // Finished unless a test says otherwise, so each sweep's wait ends at once.
+        getFinishedRun: jest.fn().mockReturnValue({ finishedAt: new Date(), totals: null }),
+        getTotals: jest.fn().mockReturnValue(null),
+        getUnreportedJobs: jest.fn().mockReturnValue([]),
+      };
+    });
+
+    test('records the queueing result directly when no tracker is set', async () => {
+      const record = await startSweep();
+      expect(record).not.toHaveProperty('finalRecord');
+    });
+
+    test('describes the whole sweep once its downloads end', async () => {
+      autoDownloadScheduler.setRunTracker(runTracker);
+      runTracker.getFinishedRun.mockReturnValue({
+        finishedAt: new Date('2026-09-28T16:21:17.000Z'),
+        totals: { totalDownloaded: 3, totalSkipped: 6, totalFailed: 0, jobCount: 2 },
+      });
+
+      const record = await startSweep();
+
+      await expect(record.finalRecord).resolves.toEqual(expect.objectContaining({
+        status: 'success',
+        outcome: 'completed',
+        message: '3 videos downloaded, 6 skipped (already downloaded or filtered).',
+      }));
+    });
+
+    test('keeps playlist problems from queueing in the final record', async () => {
+      autoDownloadScheduler.setRunTracker(runTracker);
+      const record = await startSweep({ playlistError: null, playlistsFailed: 1, playlistsChecked: 3 });
+      await expect(record.finalRecord).resolves.toEqual(expect.objectContaining({
+        status: 'error', outcome: 'partial', message: expect.stringContaining('1 of 3 playlists could not be checked.'),
+      }));
+    });
+
+    test('ends the record at a storage pause with the pause reason', async () => {
+      autoDownloadScheduler.setRunTracker(runTracker);
+      runTracker.getFinishedRun.mockReturnValue(null);
+      runTracker.getUnreportedJobs.mockReturnValue([{ id: 'p1', status: 'Pending', reporting: false }]);
+      storageGuard.getStatus.mockReturnValue({ paused: true, reasons: [] });
+
+      const record = await startSweep();
+
+      await expect(record.finalRecord).resolves.toEqual(expect.objectContaining({
+        status: 'success',
+        outcome: 'paused',
+        message: expect.stringContaining('Stopped when downloads were paused: Downloads are paused: downloaded videos use 12.0 GB'),
+      }));
+    });
+
+    test('does not report the task running once the queueing has returned and no job is active', async () => {
+      autoDownloadScheduler.setRunTracker(runTracker);
+      autoDownloadScheduler.scheduleTask();
+      await startSweep();
+      expect(autoDownloadScheduler.isChannelDownloadRunning()).toBe(false);
+    });
+  });
+
   describe('registration with the scheduled task manager', () => {
     let storageGuard;
     let runTracker;
@@ -607,7 +695,15 @@ describe('autoDownloadScheduler', () => {
 
     beforeEach(() => {
       storageGuard = require('../../storageGuard');
-      runTracker = { isActive: jest.fn().mockReturnValue(true), getUnfinishedJobs: jest.fn().mockReturnValue([]) };
+      runTracker = {
+        isActive: jest.fn().mockReturnValue(true),
+        getUnfinishedJobs: jest.fn().mockReturnValue([]),
+        onRunFinished: jest.fn(() => () => {}),
+        // Finished unless a test says otherwise, so each sweep's wait ends at once.
+        getFinishedRun: jest.fn().mockReturnValue({ finishedAt: new Date(), totals: null }),
+        getTotals: jest.fn().mockReturnValue(null),
+        getUnreportedJobs: jest.fn().mockReturnValue([]),
+      };
       autoDownloadScheduler.setRunTracker(runTracker);
     });
 

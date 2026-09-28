@@ -72,14 +72,44 @@ const RUN_RESULT_STATUSES = new Set(['success', 'error', 'skipped']);
 
 // Tasks may resolve to { status, outcome, message, details } to describe their
 // run; status is success, error, or skipped. Anything else counts as success.
+// A task whose work carries on after it returns (automatic downloads queue a
+// sweep that runs for hours) adds finalRecord, a promise of the record to
+// write when that work ends; see finishWhenSettled.
 function describeResult(result) {
   const summary = result && typeof result === 'object' ? result : {};
-  return {
+  const record = {
     status: RUN_RESULT_STATUSES.has(summary.status) ? summary.status : 'success',
     outcome: summary.outcome ?? null,
     message: summary.message ?? null,
     details: summary.details ?? null,
   };
+  // A task that knows when its work really ended (a finalRecord that noticed
+  // the end late) says so; otherwise the recorder stamps the current time.
+  if (summary.finishedAt instanceof Date && !Number.isNaN(summary.finishedAt.getTime())) {
+    record.finishedAt = summary.finishedAt;
+  }
+  return record;
+}
+
+function deferredRecordOf(result) {
+  const finalRecord = result && typeof result === 'object' ? result.finalRecord : null;
+  return finalRecord && typeof finalRecord.then === 'function' ? finalRecord : null;
+}
+
+// Closes a history row whose task handed back a finalRecord. The task's lock
+// is already released by then: this only decides what the row says and when
+// it closes, so however long the work runs, or if finalRecord never settles,
+// nothing here can keep the task "running" or refuse a run. A row still open
+// at shutdown is marked interrupted at the next startup.
+function finishWhenSettled(id, handle, finalRecord) {
+  Promise.resolve(finalRecord)
+    .then(describeResult, (err) => {
+      logger.error({ err, task: id }, 'Scheduled task failed after it started its work');
+      return { status: 'error', outcome: null, message: err && err.message ? err.message : 'Unknown error', details: null };
+    })
+    .then((record) => (handle ? withRecorder((recorder) => recorder.finish(handle, record)) : null))
+    .catch((err) => logger.warn({ err, task: id }, 'Could not record the end of a scheduled task'))
+    .finally(() => notifyStatusChanged(id));
 }
 
 // run() always starts in this same tick, alongside the history insert, so the
@@ -101,6 +131,7 @@ async function execute(id, state, { trigger = 'scheduled', args = {}, force = fa
   let handle = null;
   let recording = null;
   let record;
+  let finalRecord = null;
   try {
     notifyStatusChanged(id);
     recording = runRecorder
@@ -111,6 +142,7 @@ async function execute(id, state, { trigger = 'scheduled', args = {}, force = fa
     handle = started.status === 'fulfilled' ? started.value : null;
     if (outcome.status === 'rejected') throw outcome.reason;
     record = describeResult(outcome.value);
+    finalRecord = deferredRecordOf(outcome.value);
   } catch (err) {
     logger.error({ err, task: id, trigger }, 'Scheduled task failed');
     record = { status: 'error', outcome: null, message: err.message, details: null };
@@ -123,7 +155,11 @@ async function execute(id, state, { trigger = 'scheduled', args = {}, force = fa
     state.running = false;
     if (record.status === 'skipped') state.lastStartedAt = previousStartedAt;
   }
-  if (handle) await withRecorder((recorder) => recorder.finish(handle, record));
+  if (finalRecord) {
+    finishWhenSettled(id, handle, finalRecord);
+  } else if (handle) {
+    await withRecorder((recorder) => recorder.finish(handle, record));
+  }
   notifyStatusChanged(id);
   return record;
 }

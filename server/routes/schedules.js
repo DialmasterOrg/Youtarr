@@ -84,6 +84,10 @@ function createSchedulesRoutes({ verifyToken, scheduledTaskManager, scheduledTas
    *                             type: string
    *                             format: date-time
    *                             nullable: true
+   *                       lastFinishedRun:
+   *                         type: object
+   *                         nullable: true
+   *                         description: The newest run that ran to an end (success or error), with the same fields as lastRun; skipped and interrupted runs are left out, so this is the run to time
    *                       runNow:
    *                         type: object
    *                         properties:
@@ -108,7 +112,10 @@ function createSchedulesRoutes({ verifyToken, scheduledTaskManager, scheduledTas
    */
   router.get('/api/schedules', verifyToken, async (req, res) => {
     try {
-      const latestRuns = await scheduledTaskRuns.getLatestRuns();
+      const [latestRuns, finishedRuns] = await Promise.all([
+        scheduledTaskRuns.getLatestRuns(),
+        scheduledTaskRuns.getLatestFinishedRuns(),
+      ]);
       const tasks = await Promise.all(Object.entries(scheduleConfig.SCHEDULES).map(async ([key, definition]) => {
         const snapshot = await scheduledTaskManager.getTaskSnapshot(key);
         const status = snapshot.status || {};
@@ -123,6 +130,7 @@ function createSchedulesRoutes({ verifyToken, scheduledTaskManager, scheduledTas
           running: Boolean(status.running),
           nextRunAt: status.nextRunAt ? status.nextRunAt.toISOString() : null,
           lastRun: latestRuns[key] ?? null,
+          lastFinishedRun: finishedRuns[key] ?? null,
           runNow: toRunNowState(blocker),
         };
       }));

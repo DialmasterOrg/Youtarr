@@ -60,6 +60,7 @@ const meta: Meta<typeof SchedulingSection> = {
   },
   args: {
     config: DEFAULT_CONFIG,
+    savedConfig: DEFAULT_CONFIG,
     deploymentEnvironment: { timezone: 'Europe/Paris', isWsl: false },
     isPlatformManaged: { plexUrl: false, authEnabled: true, useTmpForDownloads: false, ytdlpUpdates: false },
     fieldErrors: {},

@@ -15,6 +15,13 @@ jest.mock('../../hooks/useRunScheduledTask', () => ({
   useRunScheduledTask: () => mockRunScheduledTaskReturn,
 }));
 
+// Deep links arrive as a location hash; MemoryRouter in renderWithProviders starts at '/'.
+let mockHash = '';
+jest.mock('react-router-dom', () => {
+  const actual = jest.requireActual('react-router-dom');
+  return { ...actual, useLocation: () => ({ ...actual.useLocation(), hash: mockHash }) };
+});
+
 import React from 'react';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { DEFAULT_CONFIG } from '../../../../config/configSchema';
@@ -22,6 +29,7 @@ import { renderWithProviders } from '../../../../test-utils';
 import { formatDateTimeInZone } from '../../../../utils/formatters';
 import { SchedulingSection } from '../SchedulingSection';
 import { ScheduleTaskStatus } from '../../hooks/useScheduleStatus';
+import { SCHEDULE_FIELDS } from '../../schedules';
 
 const axios = require('axios');
 
@@ -54,11 +62,17 @@ beforeEach(() => {
   mockRunScheduledTaskReturn.pending = {};
   mockRunScheduledTaskReturn.errors = {};
   mockRunScheduledTaskReturn.runTask = jest.fn();
+  mockHash = '';
 });
+
+const rowHeader = (label: string) => within(screen.getByRole('region', { name: label }))
+  .getByRole('button', { name: new RegExp(`^${label}`) });
 
 test('groups the eight schedules and shows the server timezone', () => {
   renderWithProviders(<SchedulingSection {...props} />);
-  expect(screen.getAllByRole('region')).toHaveLength(8);
+  SCHEDULE_FIELDS.forEach((field) => {
+    expect(screen.getByRole('region', { name: field.label })).toBeInTheDocument();
+  });
   expect(screen.getByRole('heading', { name: 'Downloads and sync' })).toBeInTheDocument();
   expect(screen.getByRole('heading', { name: 'Maintenance' })).toBeInTheDocument();
   expect(screen.getByText('Europe/Paris')).toBeInTheDocument();
@@ -96,7 +110,7 @@ test('shows the next and last run reported by the server', async () => {
   await waitFor(() => {
     expect(cleanup.getByText(`Next run: ${formatDateTimeInZone('2026-09-21T00:00:00.000Z', 'Europe/Paris')}`)).toBeInTheDocument();
   });
-  expect(cleanup.getByText(/Last run: .*completed: Deleted 2 videos and freed 1\.20 GB\./)).toBeInTheDocument();
+  expect(cleanup.getByText(/Last run: .*completed in 1m: Deleted 2 videos and freed 1\.20 GB\./)).toBeInTheDocument();
 });
 
 test('warns when the saved expression could not be scheduled', async () => {
@@ -109,24 +123,68 @@ test('warns when the saved expression could not be scheduled', async () => {
   });
 });
 
-test('lists upcoming runs in time order', async () => {
+test('summarizes the tasks and names the next run', async () => {
   axios.get.mockResolvedValue({ data: { tasks: [
-    status({ key: 'videoRescanFrequency', label: 'Rescan files on disk', nextRunAt: '2026-09-21T03:30:00.000Z' }),
-    status({ nextRunAt: '2026-09-21T02:00:00.000Z' }),
+    status({ key: 'videoRescanFrequency', label: 'Rescan files on disk', nextRunAt: '2099-09-21T03:30:00.000Z' }),
+    status({ nextRunAt: '2099-09-21T02:00:00.000Z', running: true }),
     status({ key: 'channelDownloadFrequency', label: 'Automatic downloads', enabled: false, active: false, nextRunAt: null }),
   ] } });
   renderWithProviders(<SchedulingSection {...props} />);
-  const upcoming = within(await screen.findByRole('list', { name: 'Upcoming runs' }));
-  await waitFor(() => expect(upcoming.getAllByRole('listitem')).toHaveLength(2));
-  const items = upcoming.getAllByRole('listitem').map((item) => item.textContent);
-  expect(items[0]).toMatch(/Automatic video cleanup/);
-  expect(items[0]).toContain(formatDateTimeInZone('2026-09-21T02:00:00.000Z', 'Europe/Paris'));
-  expect(items[1]).toMatch(/Rescan files on disk/);
+  const summary = await screen.findByLabelText('Schedule summary');
+  expect(summary).toHaveTextContent(/^3 tasks · 1 running · next: Automatic video cleanup in /);
 });
 
-test('says so when nothing is scheduled', () => {
+test('shows no summary until the status loads', () => {
+  axios.get.mockReturnValue(new Promise(() => {}));
   renderWithProviders(<SchedulingSection {...props} />);
-  expect(screen.getByText('No tasks are currently scheduled.')).toBeInTheDocument();
+  expect(screen.queryByLabelText('Schedule summary')).not.toBeInTheDocument();
+});
+
+test('every task starts collapsed', () => {
+  renderWithProviders(<SchedulingSection {...props} />);
+  SCHEDULE_FIELDS.forEach((field) => {
+    expect(rowHeader(field.label)).toHaveAttribute('aria-expanded', 'false');
+  });
+});
+
+test('a deep link opens that task', () => {
+  mockHash = '#autoRemovalFrequency';
+  renderWithProviders(<SchedulingSection {...props} />);
+  expect(rowHeader('Automatic video cleanup')).toHaveAttribute('aria-expanded', 'true');
+  expect(rowHeader('Session cleanup')).toHaveAttribute('aria-expanded', 'false');
+});
+
+test('a save error opens the affected task and flags it in the header', () => {
+  renderWithProviders(<SchedulingSection {...props}
+    config={{ ...DEFAULT_CONFIG, autoRemovalFrequency: 'invalid' }}
+    fieldErrors={{ autoRemovalFrequency: 'Enter a valid cron expression.' }}
+  />);
+  expect(rowHeader('Automatic video cleanup')).toHaveAttribute('aria-expanded', 'true');
+  expect(rowHeader('Automatic video cleanup')).toHaveTextContent('Invalid schedule');
+});
+
+test('a failed Run now request opens that task', () => {
+  mockRunScheduledTaskReturn.errors = { sessionCleanupFrequency: 'Could not start the task.' };
+  renderWithProviders(<SchedulingSection {...props} />);
+  expect(rowHeader('Session cleanup')).toHaveAttribute('aria-expanded', 'true');
+});
+
+test('marks a schedule changed since the last save', () => {
+  renderWithProviders(<SchedulingSection {...props}
+    savedConfig={DEFAULT_CONFIG}
+    config={{ ...DEFAULT_CONFIG, sessionCleanupFrequency: '30 4 * * *' }}
+  />);
+  expect(rowHeader('Session cleanup')).toHaveTextContent('Unsaved');
+  expect(rowHeader('Repair library records')).not.toHaveTextContent('Unsaved');
+});
+
+test('treats a schedule missing from the saved config like an empty one', () => {
+  const { sessionCleanupFrequency: _omitted, ...savedWithoutKey } = DEFAULT_CONFIG;
+  renderWithProviders(<SchedulingSection {...props}
+    savedConfig={savedWithoutKey as typeof DEFAULT_CONFIG}
+    config={{ ...DEFAULT_CONFIG, sessionCleanupFrequency: '' }}
+  />);
+  expect(rowHeader('Session cleanup')).not.toHaveTextContent('Unsaved');
 });
 
 test('disables yt-dlp scheduling on managed platforms', () => {

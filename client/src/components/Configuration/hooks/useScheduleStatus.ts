@@ -40,6 +40,9 @@ export interface ScheduleTaskStatus {
   running: boolean;
   nextRunAt: string | null;
   lastRun: ScheduleRun | null;
+  // The newest run that ran to an end (not skipped or interrupted), for
+  // timing. Absent from servers that predate it.
+  lastFinishedRun?: ScheduleRun | null;
   runNow: ScheduleRunAvailability;
 }
 
@@ -167,5 +170,5 @@ export function useScheduleStatus(token: string | null) {
     return () => clearTimeout(timer);
   }, [nextAvailableAt, clockOffsetMs, refresh]);
 
-  return { tasks, loading, error, refresh };
+  return { tasks, loading, error, refresh, clockOffsetMs };
 }

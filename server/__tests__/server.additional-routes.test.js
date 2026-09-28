@@ -203,6 +203,8 @@ const createServerModule = ({
         };
 
         const jobModuleMock = {
+          onJobAbandoned: jest.fn(),
+          onJobEnded: jest.fn(),
           getJob: jest.fn(),
           getRunningJobs: jest.fn(() => []),
           getRunningJobsWithFreshVideos: jest.fn().mockResolvedValue([]),

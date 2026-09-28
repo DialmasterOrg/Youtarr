@@ -271,6 +271,11 @@ const initialize = async () => {
     tabVideoCounts.setRunHistory(scheduledTaskRuns);
     tabVideoCounts.setDownloadActivityCheck(() => jobModule.getInProgressJobId() !== null);
     autoDownloadScheduler.setRunTracker(downloadRunTracker);
+    // A queued job abandoned before it started still counts toward its run.
+    jobModule.onJobAbandoned((event) => downloadRunTracker.handleAbandonedJob(event));
+    // Every final status, whichever path set it, so a run never waits on a
+    // job that ended without reporting its results.
+    jobModule.onJobEnded((event) => downloadRunTracker.handleJobEnded(event));
 
     // Cache yt-dlp version once during startup to keep the version endpoint fast
     refreshYtDlpVersionCache();

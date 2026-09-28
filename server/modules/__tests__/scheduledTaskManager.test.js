@@ -224,6 +224,93 @@ describe('scheduledTaskManager', () => {
       }));
     });
 
+    describe('work that carries on after the task returns (finalRecord)', () => {
+      const flush = () => new Promise((resolve) => setImmediate(resolve));
+      let settle;
+      let fail;
+
+      beforeEach(() => {
+        const finalRecord = new Promise((resolve, reject) => { settle = resolve; fail = reject; });
+        run.mockResolvedValue({ status: 'success', message: 'Queued the sweep.', finalRecord });
+      });
+
+      test('leaves the history row open until the work ends, then records its result', async () => {
+        manager.updateTask({ id, expression, run });
+        await cron.schedule.mock.results[0].value.callback();
+        expect(recorder.finish).not.toHaveBeenCalled();
+
+        settle({ status: 'error', outcome: 'partial', message: 'Downloaded 3 videos; 2 failed.', details: { failed: 2 } });
+        await flush();
+
+        expect(recorder.finish).toHaveBeenCalledTimes(1);
+        expect(recorder.finish).toHaveBeenCalledWith(handle, {
+          status: 'error', outcome: 'partial', message: 'Downloaded 3 videos; 2 failed.', details: { failed: 2 },
+        });
+      });
+
+      test('does not count as running while the history row is open', async () => {
+        manager.updateTask({ id, expression, run });
+        await cron.schedule.mock.results[0].value.callback();
+        expect(manager.getStatus()[0].running).toBe(false);
+        await expect(manager.getTaskSnapshot(id)).resolves.toMatchObject({ status: { running: false }, blocker: null });
+      });
+
+      test('never refuses a manual run while the history row is open', async () => {
+        manager.updateTask({ id, expression, run });
+        await cron.schedule.mock.results[0].value.callback();
+        const outcome = await manager.runNow(id);
+        expect(outcome.started).toBe(true);
+        await outcome.completion;
+        expect(run).toHaveBeenCalledTimes(2);
+      });
+
+      test('runs the next scheduled occurrence instead of skipping it', async () => {
+        manager.updateTask({ id, expression, run });
+        const task = cron.schedule.mock.results[0].value;
+        await task.callback();
+        await task.callback();
+        expect(run).toHaveBeenCalledTimes(2);
+        expect(recorder.recordSkipped).not.toHaveBeenCalled();
+      });
+
+      test('closes the history row as failed when the work rejects', async () => {
+        manager.updateTask({ id, expression, run });
+        await cron.schedule.mock.results[0].value.callback();
+        fail(new Error('tracker exploded'));
+        await flush();
+        expect(recorder.finish).toHaveBeenCalledWith(handle, {
+          status: 'error', outcome: null, message: 'tracker exploded', details: null,
+        });
+      });
+
+      test('records when the work really ended, if the final record says', async () => {
+        const finishedAt = new Date('2026-09-28T16:21:17.000Z');
+        manager.updateTask({ id, expression, run });
+        await cron.schedule.mock.results[0].value.callback();
+        settle({ status: 'success', message: 'No new videos.', finishedAt });
+        await flush();
+        expect(recorder.finish).toHaveBeenCalledWith(handle, expect.objectContaining({ finishedAt }));
+      });
+
+      test('ignores an end time that is not a valid date', async () => {
+        manager.updateTask({ id, expression, run });
+        await cron.schedule.mock.results[0].value.callback();
+        settle({ status: 'success', message: 'No new videos.', finishedAt: new Date('nonsense') });
+        await flush();
+        expect(recorder.finish.mock.calls[0][1]).not.toHaveProperty('finishedAt');
+      });
+
+      test('tells open pages when the history row closes', async () => {
+        const messageEmitter = require('../messageEmitter');
+        manager.updateTask({ id, expression, run });
+        await cron.schedule.mock.results[0].value.callback();
+        messageEmitter.emitMessage.mockClear();
+        settle({ status: 'success', message: 'No new videos.' });
+        await flush();
+        expect(messageEmitter.emitMessage).toHaveBeenCalledWith('broadcast', null, 'schedules', 'scheduledTaskStatus', { key: id });
+      });
+    });
+
     test('finishes the history row when run throws synchronously', async () => {
       const syncRun = () => { throw new Error('bad input'); };
       manager.updateTask({ id, expression, run: syncRun });
