@@ -10,6 +10,8 @@ export interface Playlist {
   uploader: string | null;
   thumbnail: string | null;
   video_count: number;
+  // Videos with a file on disk now; downloaded-then-deleted videos are not counted.
+  downloaded_count?: number;
   enabled: boolean;
   auto_download: boolean;
   auto_download_baseline_at?: string | null;

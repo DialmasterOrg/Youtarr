@@ -1371,6 +1371,18 @@ describe('YtdlpCommandBuilder', () => {
       expect(args).not.toContain('--lazy-playlist');
     });
 
+    test('buildMetadataFetchArgs passes the configured cookies by default', () => {
+      configModule.getCookiesPath.mockReturnValue('/cookies/file.txt');
+      const args = YtdlpCommandBuilder.buildMetadataFetchArgs('https://x/y', { flatPlaylist: true });
+      expect(args).toEqual(expect.arrayContaining(['--cookies', '/cookies/file.txt']));
+    });
+
+    test('buildMetadataFetchArgs omits cookies when cookiesEnabled is false', () => {
+      configModule.getCookiesPath.mockReturnValue('/cookies/file.txt');
+      const args = YtdlpCommandBuilder.buildMetadataFetchArgs('https://x/y', { flatPlaylist: true, cookiesEnabled: false });
+      expect(args).not.toContain('--cookies');
+    });
+
     test('buildMetadataFetchArgs streams one JSON line per entry when streamEntries is set', () => {
       const args = YtdlpCommandBuilder.buildMetadataFetchArgs('https://x/y', { flatPlaylist: true, streamEntries: true });
       expect(args).toEqual(expect.arrayContaining(['--dump-json', '--lazy-playlist']));

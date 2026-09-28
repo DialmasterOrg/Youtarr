@@ -10,7 +10,11 @@ const rows = [
   { id: 11, youtube_id: 'new', title: 'Newer upload', position: 2, published_at: '20260901' },
 ];
 const dependencies = () => ({
-  PlaylistVideo: { findAll: jest.fn().mockResolvedValue(rows), update: jest.fn().mockResolvedValue([1]) },
+  PlaylistVideo: {
+    findAll: jest.fn().mockResolvedValue(rows),
+    update: jest.fn().mockResolvedValue([1]),
+    sequelize: { query: jest.fn().mockResolvedValue([]) },
+  },
   Video: { findAll: jest.fn().mockResolvedValue([]) },
   playlistModule: { isUnavailableTitle: (title) => !title || title === '[Private video]' },
   downloadModule: { doPlaylistDownloads: jest.fn().mockResolvedValue(1) },
@@ -88,7 +92,7 @@ describe('playlistDownloadModule', () => {
     const deps = dependencies();
     deps.PlaylistVideo.findAll.mockResolvedValue([...rows, { ...rows[0], id: 2, youtube_id: 'requested', auto_download_requested: true }]);
     expect(await playlistDownloads.getCounts(playlist, deps)).toEqual({
-      not_downloaded_count: 3, following_existing_count: 1, following_requested_count: 1, unsyncable_count: 0,
+      downloaded_count: 0, not_downloaded_count: 3, following_existing_count: 1, following_requested_count: 1, unsyncable_count: 0,
     });
   });
 
@@ -105,6 +109,47 @@ describe('playlistDownloadModule', () => {
     ]);
     expect(await playlistDownloads.getCounts({ ...playlist, auto_download_baseline_id: null }, deps))
       .toMatchObject({ following_existing_count: 1 });
+  });
+
+  test('reports the downloaded count for the playlist', async () => {
+    const deps = dependencies();
+    deps.PlaylistVideo.sequelize.query.mockResolvedValue([{ playlist_id: 'PL1', downloaded: '4' }]);
+    expect(await playlistDownloads.getCounts(playlist, deps)).toMatchObject({ downloaded_count: 4 });
+  });
+
+  describe('getDownloadedCounts', () => {
+    test('maps each playlist to its numeric downloaded count', async () => {
+      const deps = dependencies();
+      deps.PlaylistVideo.sequelize.query.mockResolvedValue([
+        { playlist_id: 'PL1', downloaded: '3' },
+        { playlist_id: 'PL2', downloaded: 7 },
+      ]);
+      const counts = await playlistDownloads.getDownloadedCounts(['PL1', 'PL2', 'PL3'], deps);
+      expect([...counts]).toEqual([['PL1', 3], ['PL2', 7]]);
+    });
+
+    test('passes the playlist ids as bound replacements', async () => {
+      const deps = dependencies();
+      await playlistDownloads.getDownloadedCounts(['PL1'], deps);
+      expect(deps.PlaylistVideo.sequelize.query).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ replacements: { playlistIds: ['PL1'] } })
+      );
+    });
+
+    test('counts only files on disk', async () => {
+      const deps = dependencies();
+      await playlistDownloads.getDownloadedCounts(['PL1'], deps);
+      const [sql] = deps.PlaylistVideo.sequelize.query.mock.calls[0];
+      expect(sql).toMatch(/v\.removed = 0\s+AND \(v\.file_path IS NOT NULL OR v\.audio_file_path IS NOT NULL\)/);
+    });
+
+    test('skips the query when there are no playlists', async () => {
+      const deps = dependencies();
+      const counts = await playlistDownloads.getDownloadedCounts([], deps);
+      expect(counts.size).toBe(0);
+      expect(deps.PlaylistVideo.sequelize.query).not.toHaveBeenCalled();
+    });
   });
 
   test('queues only eligible selected ids and saves them before queueing', async () => {
