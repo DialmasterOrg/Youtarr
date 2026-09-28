@@ -44,6 +44,7 @@ describe('JobModule', () => {
   let ChannelVideo;
   let logger;
   let scheduledTaskRuns;
+  let videosModule;
   let originalDisableInitialBackfill;
 
   const mockJobsDir = '/test/jobs';
@@ -124,6 +125,12 @@ describe('JobModule', () => {
       record: jest.fn().mockResolvedValue(undefined)
     }));
     scheduledTaskRuns = require('../scheduledTaskRuns');
+
+    // Library repair walks the downloads folder through videosModule.
+    jest.doMock('../videosModule', () => ({
+      scanForVideoFiles: jest.fn().mockResolvedValue({ fileMap: new Map(), duplicates: new Map(), unreadable: 0 })
+    }));
+    videosModule = require('../videosModule');
 
     // Mock Sequelize models
     Job = require('../../models/job');
@@ -2336,7 +2343,7 @@ describe('JobModule', () => {
         status: 'error',
         outcome: 'partial',
         message: 'Recovered 1 video records and 2 channel video records; 1 write failed.',
-        details: { videosUpserts: 1, channelVideosUpserts: 2, failed: 1 }
+        details: { videosUpserts: 1, channelVideosUpserts: 2, failed: 1, unreadableOnDisk: 0, recreatedUnverified: 0 }
       }));
     });
 
@@ -2391,7 +2398,7 @@ describe('JobModule', () => {
         status: 'success',
         outcome: 'completed',
         message: 'Recovered 2 video records and 2 channel video records.',
-        details: { videosUpserts: 2, channelVideosUpserts: 2, failed: 0 }
+        details: { videosUpserts: 2, channelVideosUpserts: 2, failed: 0, unreadableOnDisk: 0, recreatedUnverified: 0 }
       }));
       expect(Video.create).toHaveBeenCalledTimes(2);
       expect(ChannelVideo.findOrCreate).toHaveBeenCalledTimes(2);
@@ -2537,8 +2544,11 @@ describe('JobModule', () => {
         throw new Error('Unknown file');
       });
 
-      // Mock stat to simulate file exists with size
-      fsPromises.stat.mockResolvedValue({ size: 123456789 });
+      const filePath = '/test/output/Channel 1/Channel 1 - Video 1 - video-1/Channel 1 - Video 1  [video-1].mp4';
+      videosModule.scanForVideoFiles.mockResolvedValue({
+        fileMap: new Map([['video-1', { videoFilePath: filePath, videoFileSize: 123456789, audioFilePath: null, audioFileSize: null }]]),
+        duplicates: new Map(),
+      });
 
       Video.findAll.mockResolvedValue([]);
       ChannelVideo.findAll.mockResolvedValue([]);
@@ -2546,11 +2556,12 @@ describe('JobModule', () => {
 
       await JobModule.backfillFromCompleteList();
 
+      expect(videosModule.scanForVideoFiles).toHaveBeenCalledWith('/test/output');
       expect(Video.create).toHaveBeenCalledTimes(1);
       expect(Video.create).toHaveBeenCalledWith(
         expect.objectContaining({
           youtubeId: 'video-1',
-          filePath: '/test/output/Channel 1/Channel 1 - Video 1 - video-1/Channel 1 - Video 1  [video-1].mp4',
+          filePath,
           fileSize: '123456789',
           removed: false
         })
@@ -2575,6 +2586,7 @@ describe('JobModule', () => {
         update: jest.fn(),
         ...overrides,
       });
+      const fileStat = (size) => ({ size, isFile: () => true });
 
       beforeEach(() => {
         fsPromises.readFile.mockImplementation(async (path) => {
@@ -2597,7 +2609,7 @@ describe('JobModule', () => {
 
       test('fills in the found file on a row missing its size, if the row is unchanged', async () => {
         const row = existingRow({ filePath: mp4Path });
-        fsPromises.stat.mockResolvedValue({ size: 987654321 });
+        fsPromises.stat.mockResolvedValue(fileStat(987654321));
         Video.findAll.mockResolvedValue([{ youtubeId: 'video-1' }]);
         Video.findOne.mockResolvedValue(row);
 
@@ -2640,7 +2652,7 @@ describe('JobModule', () => {
         let deleted = false;
         fsPromises.stat.mockImplementation(async () => {
           if (deleted) throw new Error('ENOENT');
-          return { size: 123 };
+          return fileStat(123);
         });
         const row = existingRow({ removed: true, filePath: mp4Path });
         Video.findAll.mockResolvedValue([{ youtubeId: 'video-1' }]);
@@ -2656,7 +2668,7 @@ describe('JobModule', () => {
       });
 
       test('skips the file update without a failure when the row changed after it was read', async () => {
-        fsPromises.stat.mockResolvedValue({ size: 123 });
+        fsPromises.stat.mockResolvedValue(fileStat(123));
         Video.findAll.mockResolvedValue([{ youtubeId: 'video-1' }]);
         Video.findOne.mockResolvedValue(existingRow({ filePath: mp4Path }));
         Video.update.mockResolvedValue([0]);
@@ -2670,8 +2682,17 @@ describe('JobModule', () => {
         );
       });
 
+      test('does not record a directory at the guessed path as the file', async () => {
+        fsPromises.stat.mockResolvedValue({ size: 4096, isFile: () => false });
+        Video.findAll.mockResolvedValue([{ youtubeId: 'video-1' }]);
+        Video.findOne.mockResolvedValue(existingRow({ filePath: mp4Path }));
+
+        await JobModule.backfillFromCompleteList();
+
+        expect(Video.update).not.toHaveBeenCalled();
+      });
+
       test('recreates a missing row as removed when its file is not found', async () => {
-        fsPromises.stat.mockRejectedValue(new Error('ENOENT'));
         Video.findAll.mockResolvedValue([]);
         Video.findOne.mockResolvedValue(null);
 
@@ -2682,6 +2703,105 @@ describe('JobModule', () => {
         );
       });
 
+      test('recreates a lost audio-only row from the audio file found on disk', async () => {
+        const mp3Path = '/test/output/Channel 1/Video 1 [video-1].mp3';
+        videosModule.scanForVideoFiles.mockResolvedValue({
+          fileMap: new Map([['video-1', { videoFilePath: null, videoFileSize: null, audioFilePath: mp3Path, audioFileSize: 4096 }]]),
+          duplicates: new Map(),
+        });
+        Video.findAll.mockResolvedValue([]);
+        Video.findOne.mockResolvedValue(null);
+
+        await JobModule.backfillFromCompleteList();
+
+        expect(Video.create).toHaveBeenCalledWith(expect.objectContaining({
+          filePath: null, fileSize: null, audioFilePath: mp3Path, audioFileSize: '4096', removed: false,
+        }));
+      });
+
+      test('walks the downloads folder once per run however many rows were lost', async () => {
+        fsPromises.readFile.mockImplementation(async (path) => {
+          if (path.includes('complete.list')) return 'youtube video-1\nyoutube video-2\n';
+          const id = path.includes('video-1') ? 'video-1' : 'video-2';
+          return JSON.stringify({ id, uploader: 'Channel 1', title: id, channel_id: 'channel-1' });
+        });
+        Video.findAll.mockResolvedValue([]);
+        Video.findOne.mockResolvedValue(null);
+
+        await JobModule.backfillFromCompleteList();
+
+        expect(Video.create).toHaveBeenCalledTimes(2);
+        expect(videosModule.scanForVideoFiles).toHaveBeenCalledTimes(1);
+      });
+
+      test('logs how many files the walk found', async () => {
+        Video.findAll.mockResolvedValue([]);
+        Video.findOne.mockResolvedValue(null);
+
+        await JobModule.backfillFromCompleteList();
+
+        expect(logger.info).toHaveBeenCalledWith(
+          { filesOnDisk: 0 },
+          'Searched the downloads folder for lost video records'
+        );
+      });
+
+      test('still recreates a lost row as missing when parts of the folder could not be read', async () => {
+        videosModule.scanForVideoFiles.mockResolvedValue({ fileMap: new Map(), duplicates: new Map(), unreadable: 2 });
+        Video.findAll.mockResolvedValue([]);
+        Video.findOne.mockResolvedValue(null);
+
+        await JobModule.backfillFromCompleteList();
+
+        expect(logger.warn).toHaveBeenCalledWith(
+          { unreadable: 2 },
+          'Parts of the downloads folder could not be read; lost videos stored there are recreated as missing'
+        );
+        expect(Video.create).toHaveBeenCalledWith(expect.objectContaining({ youtubeId: 'video-1', removed: true }));
+      });
+
+      test('reports a run as partial when a lost row was recreated as missing during a partial walk', async () => {
+        videosModule.scanForVideoFiles.mockResolvedValue({ fileMap: new Map(), duplicates: new Map(), unreadable: 2 });
+        Video.findAll.mockResolvedValue([]);
+        Video.findOne.mockResolvedValue(null);
+
+        const record = await JobModule.backfillFromCompleteList();
+
+        expect(record).toEqual(expect.objectContaining({
+          status: 'error',
+          outcome: 'partial',
+          message: 'Recovered 1 video records and 1 channel video records; 1 recreated as missing because parts of the downloads folder could not be read.',
+          details: expect.objectContaining({ unreadableOnDisk: 2, recreatedUnverified: 1 }),
+        }));
+      });
+
+      test('keeps a partial walk completed when every lost row was found', async () => {
+        videosModule.scanForVideoFiles.mockResolvedValue({
+          fileMap: new Map([['video-1', { videoFilePath: mp4Path, videoFileSize: 123, audioFilePath: null, audioFileSize: null }]]),
+          duplicates: new Map(),
+          unreadable: 2,
+        });
+        Video.findAll.mockResolvedValue([]);
+        Video.findOne.mockResolvedValue(null);
+
+        const record = await JobModule.backfillFromCompleteList();
+
+        expect(record).toEqual(expect.objectContaining({
+          outcome: 'completed',
+          details: expect.objectContaining({ unreadableOnDisk: 2, recreatedUnverified: 0 }),
+        }));
+      });
+
+      test('does not walk the downloads folder when no row was lost', async () => {
+        fsPromises.stat.mockRejectedValue(new Error('ENOENT'));
+        Video.findAll.mockResolvedValue([{ youtubeId: 'video-1' }]);
+        Video.findOne.mockResolvedValue(existingRow({ filePath: mp4Path }));
+
+        await JobModule.backfillFromCompleteList();
+
+        expect(videosModule.scanForVideoFiles).not.toHaveBeenCalled();
+      });
+
       test('finds another extension even when the title contains ".mp4"', async () => {
         const base = '/test/output/Channel 1/Channel 1 - Convert .mp4 Files - video-1/Channel 1 - Convert .mp4 Files  [video-1]';
         fsPromises.readFile.mockImplementation(async (path) => {
@@ -2689,21 +2809,21 @@ describe('JobModule', () => {
           return JSON.stringify({ id: 'video-1', uploader: 'Channel 1', title: 'Convert .mp4 Files', channel_id: 'channel-1' });
         });
         fsPromises.stat.mockImplementation(async (path) => {
-          if (path === `${base}.webm`) return { size: 777 };
+          if (path === `${base}.webm`) return fileStat(777);
           throw new Error('ENOENT');
         });
-        Video.findAll.mockResolvedValue([]);
-        Video.findOne.mockResolvedValue(null);
+        Video.findAll.mockResolvedValue([{ youtubeId: 'video-1' }]);
+        Video.findOne.mockResolvedValue(existingRow());
 
         await JobModule.backfillFromCompleteList();
 
-        expect(Video.create).toHaveBeenCalledWith(
-          expect.objectContaining({ filePath: `${base}.webm`, fileSize: '777', removed: false })
+        expect(Video.update).toHaveBeenCalledWith(
+          { filePath: `${base}.webm`, fileSize: '777', removed: false },
+          expect.anything()
         );
       });
 
       test('treats a row created concurrently by a download as already existing', async () => {
-        fsPromises.stat.mockResolvedValue({ size: 123 });
         Video.findAll.mockResolvedValue([]);
         Video.findOne.mockResolvedValue(null);
         Video.create.mockRejectedValueOnce(Object.assign(new Error('Duplicate'), { name: 'SequelizeUniqueConstraintError' }));
@@ -2712,55 +2832,6 @@ describe('JobModule', () => {
 
         expect(record.details).toEqual(expect.objectContaining({ videosUpserts: 0, failed: 0 }));
       });
-    });
-
-    test('should try alternative video extensions when mp4 not found', async () => {
-
-      fsPromises.readFile.mockImplementation(async (path) => {
-        if (path.includes('complete.list')) {
-          return 'youtube video-1\n';
-        }
-        if (path.includes('video-1.info.json')) {
-          return JSON.stringify({
-            id: 'video-1',
-            uploader: 'Channel 1',
-            title: 'Video 1',
-            duration: 100,
-            description: 'Description 1',
-            upload_date: '20240101',
-            channel_id: 'channel-1'
-          });
-        }
-        throw new Error('Unknown file');
-      });
-
-      // Mock stat to fail for mp4 but succeed for webm
-      fsPromises.stat.mockImplementation(async (path) => {
-        if (path.includes('.mp4')) {
-          throw new Error('ENOENT');
-        }
-        if (path.includes('.webm')) {
-          return { size: 555555555 };
-        }
-        throw new Error('ENOENT');
-      });
-
-      Video.findAll.mockResolvedValue([]);
-      ChannelVideo.findAll.mockResolvedValue([]);
-      Video.findOne.mockResolvedValue(null);
-
-      await JobModule.backfillFromCompleteList();
-
-      expect(Video.create).toHaveBeenCalledTimes(1);
-      expect(Video.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          youtubeId: 'video-1',
-          filePath: '/test/output/Channel 1/Channel 1 - Video 1 - video-1/Channel 1 - Video 1  [video-1].webm',
-          fileSize: '555555555',
-          removed: false
-        })
-      );
-
     });
   });
 

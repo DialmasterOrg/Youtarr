@@ -19,10 +19,11 @@ const downloadCleanup = require('./download/downloadCleanup');
 const { serializeAuxData, parseAuxData } = require('./jobAuxData');
 const storageGuard = require('./storageGuard');
 const { unchangedSinceRead } = require('./videoRowGuard');
+const videosModule = require('./videosModule');
 const logger = require('../logger');
 
 const MAX_SAVE_RETRIES = 3;
-// Library repair looks for a missing row's file at its guessed .mp4 path, then these.
+// Library repair looks for an existing row's missing file at its guessed .mp4 path, then these.
 const BACKFILL_ALT_VIDEO_EXTENSIONS = ['.webm', '.mkv', '.m4v', '.avi'];
 // Download History window: jobs older than this are purged from memory,
 // and at most MAX_HISTORY_JOBS are returned to the client. DB rows are
@@ -710,7 +711,7 @@ class JobModule {
     for (const candidate of candidates) {
       try {
         const stats = await fsPromises.stat(candidate);
-        return { path: candidate, size: stats.size.toString() };
+        if (stats.isFile()) return { path: candidate, size: stats.size.toString() };
       } catch (err) {
         // Try the next extension
       }
@@ -772,6 +773,33 @@ class JobModule {
       const maxPerRun = 300;
       const capped = candidates.slice(0, maxPerRun);
 
+      // A lost row's files are looked up by YouTube id anywhere under the
+      // downloads folder: the guessed path only fits the oldest folder layout
+      // and never an audio file. The folder is walked at most once per run,
+      // and only if a lost row needs recreating.
+      let downloadedFiles = null;
+      let unreadableOnDisk = 0;
+      // Lost rows recreated as missing while the walk was partial: their file
+      // may sit in a part that couldn't be read.
+      let recreatedUnverified = 0;
+      const findDownloadedFiles = async (youtubeId) => {
+        if (!downloadedFiles) {
+          const outputDir = configModule.directoryPath;
+          if (outputDir) {
+            const { fileMap, unreadable } = await videosModule.scanForVideoFiles(outputDir);
+            downloadedFiles = fileMap;
+            unreadableOnDisk = unreadable;
+            logger.info({ filesOnDisk: fileMap.size }, 'Searched the downloads folder for lost video records');
+            if (unreadable > 0) {
+              logger.warn({ unreadable }, 'Parts of the downloads folder could not be read; lost videos stored there are recreated as missing');
+            }
+          } else {
+            downloadedFiles = new Map();
+          }
+        }
+        return downloadedFiles.get(youtubeId) || null;
+      };
+
       let processed = 0;
       for (const { id, needsVideo, needsChannelVideo } of capped) {
         const infoPath = path.join(__dirname, `../../jobs/info/${id}.info.json`);
@@ -826,22 +854,31 @@ class JobModule {
           // Read the row before searching the disk, so a deletion that lands
           // in between can't be undone by an earlier "file found".
           const videoInstance = await Video.findOne({ where: { youtubeId: info.id } });
-          const needsFileSearch = videoInstance
-            ? !videoInstance.filePath || !videoInstance.fileSize
-            : needsVideo;
-          const foundFile = needsFileSearch ? await this._findArchivedVideoFile(fullPath) : null;
+          const foundFile = videoInstance && (!videoInstance.filePath || !videoInstance.fileSize)
+            ? await this._findArchivedVideoFile(fullPath)
+            : null;
 
           if (!videoInstance && needsVideo) {
+            const files = await findDownloadedFiles(info.id);
+            const sizeOf = (size) => (size === null || size === undefined ? null : String(size));
             try {
               // Without a file on disk the row is recreated as missing; the
-              // guessed path is kept, as the rescan keeps stored paths.
+              // guessed path is kept, as the rescan keeps stored paths. This
+              // also applies when the walk was partial (unreadable folders):
+              // deferring instead would block recovery for good wherever a
+              // folder is never readable (lost+found, NAS recycle bins), while
+              // a row wrongly recreated as missing is restored by the next
+              // rescan that finds its file.
               await Video.create({
                 ...payload,
-                filePath: foundFile ? foundFile.path : fullPath,
-                fileSize: foundFile ? foundFile.size : null,
-                removed: !foundFile,
+                filePath: files ? files.videoFilePath : fullPath,
+                fileSize: files ? sizeOf(files.videoFileSize) : null,
+                audioFilePath: files ? files.audioFilePath : null,
+                audioFileSize: files ? sizeOf(files.audioFileSize) : null,
+                removed: !files,
               });
               videosUpserts += 1;
+              if (!files && unreadableOnDisk > 0) recreatedUnverified += 1;
             } catch (createErr) {
               if (createErr.name !== 'SequelizeUniqueConstraintError' && createErr.original?.code !== 'ER_DUP_ENTRY') {
                 throw createErr;
@@ -918,11 +955,21 @@ class JobModule {
         logger.warn({ missingCount: missingInfoIds.length, missingIds: missingInfoIds.join(', ') }, 'Backfill skipped due to missing info.json');
       }
       const failures = failedWrites > 0 ? `; ${failedWrites} write${failedWrites === 1 ? '' : 's'} failed` : '';
+      const unverified = recreatedUnverified > 0
+        ? `; ${recreatedUnverified} recreated as missing because parts of the downloads folder could not be read`
+        : '';
+      const partial = failedWrites > 0 || recreatedUnverified > 0;
       return {
-        status: failedWrites > 0 ? 'error' : 'success',
-        outcome: failedWrites > 0 ? 'partial' : 'completed',
-        message: `Recovered ${videosUpserts} video records and ${channelVideosUpserts} channel video records${failures}.`,
-        details: { videosUpserts, channelVideosUpserts, failed: failedWrites },
+        status: partial ? 'error' : 'success',
+        outcome: partial ? 'partial' : 'completed',
+        message: `Recovered ${videosUpserts} video records and ${channelVideosUpserts} channel video records${failures}${unverified}.`,
+        details: {
+          videosUpserts,
+          channelVideosUpserts,
+          failed: failedWrites,
+          unreadableOnDisk,
+          recreatedUnverified,
+        },
       };
     } catch (err) {
       logger.error({ err }, 'Backfill error');

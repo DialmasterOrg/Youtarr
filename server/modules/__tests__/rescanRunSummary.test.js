@@ -15,8 +15,10 @@ describe('rescanRunSummary', () => {
         details: {
           videosScanned: 8421,
           filesFoundOnDisk: 8423,
+          unreadableOnDisk: 0,
           videosUpdated: 12,
           videosMarkedMissing: 3,
+          videosKept: 0,
           videosSkipped: 0,
           videosFailed: 0,
         },
@@ -31,6 +33,21 @@ describe('rescanRunSummary', () => {
         message: 'Scanned 10 videos: 1 updated, 0 marked missing, 2 skipped (changed during the scan).',
       }));
       expect(record.details).toEqual(expect.objectContaining({ videosSkipped: 2, videosFailed: 0 }));
+    });
+
+    test('records folders or files the walk could not read in the details', () => {
+      const record = toRunRecord({ status: 'completed', processed: 10, updated: 0, removed: 0, unreadableOnDisk: 3 });
+      expect(record.outcome).toBe('completed');
+      expect(record.details.unreadableOnDisk).toBe(3);
+    });
+
+    test('records rows left as recorded in the details only', () => {
+      const record = toRunRecord({ status: 'completed', processed: 10, updated: 0, removed: 0, kept: 4 });
+      expect(record).toEqual(expect.objectContaining({
+        outcome: 'completed',
+        message: 'Scanned 10 videos: 0 updated, 0 marked missing.',
+      }));
+      expect(record.details.videosKept).toBe(4);
     });
 
     test('records a finished scan with failed row writes as a partial failure', () => {

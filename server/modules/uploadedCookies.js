@@ -37,18 +37,37 @@ class UploadedCookies {
       }
     };
 
-    const preparedArgs = [...args];
+    // Never fall back to the uploaded file itself: yt-dlp saves its jar there
+    // on exit, which could overwrite a newer upload or recreate deleted cookies.
+    const withoutCookies = () => {
+      const remaining = [...args];
+      remaining.splice(cookieIndex, 2);
+      return { args: remaining, cleanup: null };
+    };
+
+    let contents;
+    try {
+      contents = fs.readFileSync(this.getPath());
+    } catch (err) {
+      if (err.code === 'ENOENT') {
+        logger.info('Uploaded cookies were deleted before yt-dlp started; running without cookies');
+      } else {
+        logger.error({ err }, 'Could not read uploaded cookies; running yt-dlp without cookies');
+      }
+      return withoutCookies();
+    }
+
     try {
       copyDir = fs.mkdtempSync(path.join(os.tmpdir(), COPY_DIR_PREFIX));
       const copyPath = path.join(copyDir, 'cookies.txt');
-      fs.writeFileSync(copyPath, fs.readFileSync(this.getPath()), { mode: 0o600, flag: 'wx' });
+      fs.writeFileSync(copyPath, contents, { mode: 0o600, flag: 'wx' });
+      const preparedArgs = [...args];
       preparedArgs[cookieIndex + 1] = copyPath;
       return { args: preparedArgs, cleanup };
     } catch (err) {
       cleanup();
-      logger.warn({ err }, 'Could not copy uploaded cookies for yt-dlp; running without cookies');
-      preparedArgs.splice(cookieIndex, 2);
-      return { args: preparedArgs, cleanup: null };
+      logger.error({ err }, 'Could not make a private copy of uploaded cookies; running yt-dlp without cookies');
+      return withoutCookies();
     }
   }
 }

@@ -46,17 +46,21 @@ function isRescanCandidate(row, fileInfo, probedResolution) {
   );
 }
 
-// Present if any candidate path exists now; missing only if every one is
-// confirmed absent; unknown if a check failed for any other reason.
+// ENOTDIR: a directory in the path is now a regular file, so the file is gone.
+const ABSENT_CODES = ['ENOENT', 'ENOTDIR'];
+
+// Present if any candidate path is a regular file now; missing only if every
+// one is confirmed absent (or is no longer a file, e.g. a directory); unknown
+// if a check failed for any other reason.
 async function checkFormat(paths, stat) {
   const candidates = [...new Set(paths.filter(Boolean))];
   let unknown = false;
   for (const candidate of candidates) {
     try {
       const stats = await stat(candidate);
-      return { state: PRESENT, path: candidate, size: stats.size };
+      if (stats.isFile()) return { state: PRESENT, path: candidate, size: stats.size };
     } catch (err) {
-      if (err.code !== 'ENOENT') unknown = true;
+      if (!ABSENT_CODES.includes(err.code)) unknown = true;
     }
   }
   return { state: unknown ? UNKNOWN : MISSING };

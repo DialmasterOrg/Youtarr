@@ -942,6 +942,63 @@ describe('VideosModule', () => {
       );
     });
 
+    test('counts a folder it cannot read as unreadable', async () => {
+      mockFs.readdir.mockRejectedValueOnce(Object.assign(new Error('EACCES'), { code: 'EACCES' }));
+
+      const { unreadable } = await VideosModule.scanForVideoFiles('/restricted');
+
+      expect(unreadable).toBe(1);
+    });
+
+    test('keeps walking the folder past a file deleted mid-walk, without counting it unreadable', async () => {
+      mockFs.readdir.mockResolvedValueOnce([
+        { name: 'Gone [aaaaaaaaaaa].mp4', isDirectory: () => false, isFile: () => true },
+        { name: 'Kept [bbbbbbbbbbb].mp4', isDirectory: () => false, isFile: () => true }
+      ]);
+      mockFs.stat
+        .mockRejectedValueOnce(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
+        .mockResolvedValueOnce({ size: 200 });
+
+      const { fileMap, unreadable } = await VideosModule.scanForVideoFiles('/videos');
+
+      expect([...fileMap.keys()]).toEqual(['bbbbbbbbbbb']);
+      expect(unreadable).toBe(0);
+    });
+
+    test('keeps walking the folder past a file it cannot check, counting it unreadable', async () => {
+      mockFs.readdir.mockResolvedValueOnce([
+        { name: 'Locked [aaaaaaaaaaa].mp4', isDirectory: () => false, isFile: () => true },
+        { name: 'Kept [bbbbbbbbbbb].mp4', isDirectory: () => false, isFile: () => true }
+      ]);
+      mockFs.stat
+        .mockRejectedValueOnce(Object.assign(new Error('EIO'), { code: 'EIO' }))
+        .mockResolvedValueOnce({ size: 200 });
+
+      const { fileMap, unreadable } = await VideosModule.scanForVideoFiles('/videos');
+
+      expect([...fileMap.keys()]).toEqual(['bbbbbbbbbbb']);
+      expect(unreadable).toBe(1);
+    });
+
+    test('logs files it cannot check once per folder, with a count', async () => {
+      const denied = Object.assign(new Error('EACCES'), { code: 'EACCES' });
+      mockFs.readdir.mockResolvedValueOnce([
+        { name: 'A [aaaaaaaaaaa].mp4', isDirectory: () => false, isFile: () => true },
+        { name: 'B [bbbbbbbbbbb].mp4', isDirectory: () => false, isFile: () => true },
+        { name: 'C [ccccccccccc].mp4', isDirectory: () => false, isFile: () => true }
+      ]);
+      mockFs.stat.mockRejectedValue(denied);
+
+      const { unreadable } = await VideosModule.scanForVideoFiles('/videos');
+
+      expect(unreadable).toBe(3);
+      expect(mockLogger.warn).toHaveBeenCalledTimes(1);
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        { err: denied, dir: '/videos', uncheckedFiles: 3 },
+        'Could not check files while scanning'
+      );
+    });
+
     test('should detect .mkv files', async () => {
       mockFs.readdir.mockResolvedValueOnce([
         { name: 'Channel - Title [vid12345abc].mkv', isDirectory: () => false, isFile: () => true }
@@ -1003,6 +1060,7 @@ describe('VideosModule', () => {
       ...overrides,
     });
     const fsError = (code) => Object.assign(new Error(code), { code });
+    const fileStat = (size) => ({ size, isFile: () => true });
 
     beforeEach(() => {
       mockVideo.update.mockResolvedValue([1]);
@@ -1013,7 +1071,7 @@ describe('VideosModule', () => {
       mockFs.readdir.mockResolvedValueOnce([
         { name: 'video [abc123].mp4', isDirectory: () => false, isFile: () => true }
       ]);
-      mockFs.stat.mockResolvedValue({ size: 5000 });
+      mockFs.stat.mockResolvedValue(fileStat(5000));
 
       // Mock video count
       mockVideo.count.mockResolvedValueOnce(1);
@@ -1037,7 +1095,7 @@ describe('VideosModule', () => {
       mockFs.readdir.mockResolvedValueOnce([
         { name: 'Video [abc12345678].mp4', isDirectory: () => false, isFile: () => true }
       ]);
-      mockFs.stat.mockResolvedValue({ size: 1000 });
+      mockFs.stat.mockResolvedValue(fileStat(1000));
       mockExecFile.mockImplementation((file, args, opts, cb) => cb(null, '1280,720\n'));
 
       mockVideo.count.mockResolvedValueOnce(1);
@@ -1079,7 +1137,7 @@ describe('VideosModule', () => {
           isFile: () => true
         }))
       );
-      mockFs.stat.mockResolvedValue({ size: 1000 });
+      mockFs.stat.mockResolvedValue(fileStat(1000));
 
       mockVideo.count.mockResolvedValueOnce(VIDEO_COUNT);
       mockVideo.findAll.mockResolvedValueOnce(
@@ -1113,7 +1171,7 @@ describe('VideosModule', () => {
           isFile: () => true
         }))
       );
-      mockFs.stat.mockResolvedValue({ size: 1000 });
+      mockFs.stat.mockResolvedValue(fileStat(1000));
 
       let inFlight = 0;
       let maxInFlight = 0;
@@ -1154,7 +1212,7 @@ describe('VideosModule', () => {
       mockFs.readdir.mockResolvedValueOnce([
         { name: 'Video [abc12345678].mp4', isDirectory: () => false, isFile: () => true }
       ]);
-      mockFs.stat.mockResolvedValue({ size: 1000 });
+      mockFs.stat.mockResolvedValue(fileStat(1000));
 
       mockVideo.count.mockResolvedValueOnce(1);
       mockVideo.findAll.mockResolvedValueOnce([
@@ -1176,7 +1234,7 @@ describe('VideosModule', () => {
       ]);
       mockFs.stat.mockImplementation(async (filePath) => {
         if (filePath.endsWith('.mp4')) throw fsError('ENOENT');
-        return { size: 500 };
+        return fileStat(500);
       });
 
       mockVideo.count.mockResolvedValueOnce(1);
@@ -1204,7 +1262,7 @@ describe('VideosModule', () => {
       mockFs.readdir.mockResolvedValueOnce([
         { name: 'Video [abc12345678].mp4', isDirectory: () => false, isFile: () => true }
       ]);
-      mockFs.stat.mockResolvedValueOnce({ size: 1000 });
+      mockFs.stat.mockResolvedValueOnce(fileStat(1000));
 
       mockVideo.count.mockResolvedValueOnce(1);
       mockVideo.findAll.mockResolvedValueOnce([
@@ -1290,7 +1348,7 @@ describe('VideosModule', () => {
       mockFs.readdir.mockResolvedValueOnce([
         { name: 'video [restored1].mp4', isDirectory: () => false, isFile: () => true }
       ]);
-      mockFs.stat.mockResolvedValue({ size: 1000 });
+      mockFs.stat.mockResolvedValue(fileStat(1000));
 
       mockVideo.count.mockResolvedValueOnce(1);
 
@@ -1325,7 +1383,7 @@ describe('VideosModule', () => {
       test('does not mark a download that finished after the walk as missing', async () => {
         walkFinds();
         readRow(dbRow({ filePath: mp4, fileSize: '1000', video_resolution: '1920x1080' }));
-        mockFs.stat.mockResolvedValue({ size: 1000 });
+        mockFs.stat.mockResolvedValue(fileStat(1000));
 
         const result = await VideosModule.backfillVideoMetadata();
 
@@ -1337,7 +1395,7 @@ describe('VideosModule', () => {
         walkFinds('Video [abc12345678].mp4');
         readRow(dbRow({ removed: 1, filePath: mp4, fileSize: '1000', video_resolution: '1920x1080' }));
         mockFs.stat
-          .mockResolvedValueOnce({ size: 1000 }) // the walk
+          .mockResolvedValueOnce(fileStat(1000)) // the walk
           .mockRejectedValue(fsError('ENOENT')); // the fresh check
 
         const result = await VideosModule.backfillVideoMetadata();
@@ -1352,7 +1410,7 @@ describe('VideosModule', () => {
           filePath: mp4, fileSize: '1000', video_resolution: '1920x1080',
           audioFilePath: mp3, audioFileSize: '500'
         }));
-        mockFs.stat.mockImplementation(async (filePath) => ({ size: filePath.endsWith('.mp3') ? 500 : 1000 }));
+        mockFs.stat.mockImplementation(async (filePath) => (fileStat(filePath.endsWith('.mp3') ? 500 : 1000)));
 
         await VideosModule.backfillVideoMetadata();
 
@@ -1365,7 +1423,7 @@ describe('VideosModule', () => {
           filePath: mp4, fileSize: '1000', video_resolution: '1920x1080',
           audioFilePath: mp3, audioFileSize: '500'
         }));
-        mockFs.stat.mockImplementation(async (filePath) => ({ size: filePath.endsWith('.mp3') ? 500 : 1000 }));
+        mockFs.stat.mockImplementation(async (filePath) => (fileStat(filePath.endsWith('.mp3') ? 500 : 1000)));
 
         await VideosModule.backfillVideoMetadata();
 
@@ -1376,8 +1434,8 @@ describe('VideosModule', () => {
         walkFinds('Video [abc12345678].mp4');
         readRow(dbRow({ filePath: mp4, fileSize: '2000', video_resolution: '1920x1080' }));
         mockFs.stat
-          .mockResolvedValueOnce({ size: 1000 }) // the walk saw the old file
-          .mockResolvedValue({ size: 2000 }); // the replacement is on disk now
+          .mockResolvedValueOnce(fileStat(1000)) // the walk saw the old file
+          .mockResolvedValue(fileStat(2000)); // the replacement is on disk now
 
         await VideosModule.backfillVideoMetadata();
 
@@ -1411,7 +1469,7 @@ describe('VideosModule', () => {
         const downloadedAt = new Date('2026-09-27T03:31:07Z');
         walkFinds('Video [abc12345678].mp4');
         readRow(dbRow({ removed: 1, filePath: mp4, fileSize: '1000', video_resolution: '1920x1080', last_downloaded_at: downloadedAt }));
-        mockFs.stat.mockResolvedValue({ size: 1000 });
+        mockFs.stat.mockResolvedValue(fileStat(1000));
 
         await VideosModule.backfillVideoMetadata();
 
@@ -1443,12 +1501,51 @@ describe('VideosModule', () => {
       test('counts a write that throws as failed, not updated', async () => {
         walkFinds('Video [abc12345678].mp4');
         readRow(dbRow({ removed: 1, filePath: mp4, fileSize: '1000', video_resolution: '1920x1080' }));
-        mockFs.stat.mockResolvedValue({ size: 1000 });
+        mockFs.stat.mockResolvedValue(fileStat(1000));
         mockVideo.update.mockRejectedValue(new Error('lock wait timeout'));
 
         const result = await VideosModule.backfillVideoMetadata();
 
         expect(result).toEqual(expect.objectContaining({ updated: 0, failed: 1 }));
+      });
+
+      test('broadcasts a scan with failed writes as an error, matching the run history', async () => {
+        walkFinds('Video [abc12345678].mp4');
+        readRow(dbRow({ removed: 1, filePath: mp4, fileSize: '1000', video_resolution: '1920x1080' }));
+        mockFs.stat.mockResolvedValue(fileStat(1000));
+        mockVideo.update.mockRejectedValue(new Error('lock wait timeout'));
+
+        await VideosModule.backfillVideoMetadata({ trigger: 'manual' });
+
+        expect(mockMessageEmitter.emitMessage).toHaveBeenCalledWith(
+          'broadcast', null, 'server', 'rescanStatus',
+          expect.objectContaining({
+            running: false,
+            lastRun: expect.objectContaining({
+              status: 'error',
+              errorMessage: 'Scanned 1 videos: 0 updated, 0 marked missing, 1 failed.',
+            }),
+          })
+        );
+      });
+
+      test('reports how much of the downloads folder could not be read', async () => {
+        mockFs.readdir.mockRejectedValueOnce(Object.assign(new Error('EACCES'), { code: 'EACCES' }));
+        mockVideo.count.mockResolvedValueOnce(0);
+
+        const result = await VideosModule.backfillVideoMetadata();
+
+        expect(result.unreadableOnDisk).toBe(1);
+      });
+
+      test('counts a nominated row whose files are already as recorded as kept', async () => {
+        walkFinds();
+        readRow(dbRow({ filePath: mp4, fileSize: '1000' }));
+        mockFs.stat.mockResolvedValue(fileStat(1000));
+
+        const result = await VideosModule.backfillVideoMetadata();
+
+        expect(result).toEqual(expect.objectContaining({ kept: 1, updated: 0, removed: 0 }));
       });
     });
 

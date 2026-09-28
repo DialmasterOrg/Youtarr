@@ -367,75 +367,106 @@ class VideosModule {
     }
   }
 
-  async scanForVideoFiles(dir, fileMap = new Map(), duplicates = new Map()) {
+  /**
+   * Walk a folder tree for downloaded media files, keyed by YouTube id.
+   * A folder or file that can't be read is skipped and counted in `unreadable`,
+   * so callers can tell a partial walk from a complete one; a file deleted
+   * mid-walk is simply absent.
+   * @returns {Promise<{fileMap: Map, duplicates: Map, unreadable: number}>}
+   */
+  async scanForVideoFiles(dir, fileMap = new Map(), duplicates = new Map(), problems = { unreadable: 0 }) {
+    const result = () => ({ fileMap, duplicates, unreadable: problems.unreadable });
+    let entries;
     try {
-      const entries = await fs.readdir(dir, { withFileTypes: true });
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch (err) {
+      problems.unreadable++;
+      logger.error({ err, dir }, 'Error scanning directory');
+      return result();
+    }
 
-      for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name);
+    // Files in this folder that couldn't be checked, logged once per folder:
+    // a folder listable but not searchable (e.g. after chmod -R 644) fails
+    // every file in it.
+    let uncheckedFiles = 0;
+    let firstCheckError = null;
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
 
-        if (entry.isDirectory()) {
-          await this.scanForVideoFiles(fullPath, fileMap, duplicates);
-          continue;
+      if (entry.isDirectory()) {
+        await this.scanForVideoFiles(fullPath, fileMap, duplicates, problems);
+        continue;
+      }
+
+      if (!entry.isFile()) {
+        continue;
+      }
+
+      const ext = path.extname(entry.name).toLowerCase();
+      if (!MEDIA_EXTENSIONS.includes(ext)) {
+        continue;
+      }
+
+      // Match files ending with [<id>].<ext>; <id> is whatever yt-dlp wrote
+      // between the brackets at the end of the filename.
+      const match = entry.name.match(/\[([^[\]]+)\]\.[a-z0-9]+$/i);
+      if (!match) {
+        continue;
+      }
+
+      const youtubeId = match[1];
+      const isAudio = AUDIO_EXTENSIONS.includes(ext);
+      // One bad file must not end the walk of its folder.
+      let stats;
+      try {
+        stats = await fs.stat(fullPath);
+      } catch (err) {
+        // ENOENT: deleted since the folder was listed, so it's simply gone.
+        if (err.code !== 'ENOENT') {
+          problems.unreadable++;
+          uncheckedFiles++;
+          firstCheckError = firstCheckError || err;
         }
+        continue;
+      }
 
-        if (!entry.isFile()) {
-          continue;
+      if (!fileMap.has(youtubeId)) {
+        fileMap.set(youtubeId, {
+          videoFilePath: null,
+          videoFileSize: null,
+          audioFilePath: null,
+          audioFileSize: null
+        });
+      }
+
+      const existing = fileMap.get(youtubeId);
+      const pathKey = isAudio ? 'audioFilePath' : 'videoFilePath';
+      const sizeKey = isAudio ? 'audioFileSize' : 'videoFileSize';
+
+      if (existing[pathKey]) {
+        if (!duplicates.has(youtubeId)) {
+          duplicates.set(youtubeId, []);
         }
+        duplicates.get(youtubeId).push(fullPath);
 
-        const ext = path.extname(entry.name).toLowerCase();
-        if (!MEDIA_EXTENSIONS.includes(ext)) {
-          continue;
-        }
-
-        // Match files ending with [<id>].<ext>; <id> is whatever yt-dlp wrote
-        // between the brackets at the end of the filename.
-        const match = entry.name.match(/\[([^[\]]+)\]\.[a-z0-9]+$/i);
-        if (!match) {
-          continue;
-        }
-
-        const youtubeId = match[1];
-        const isAudio = AUDIO_EXTENSIONS.includes(ext);
-        const stats = await fs.stat(fullPath);
-
-        if (!fileMap.has(youtubeId)) {
-          fileMap.set(youtubeId, {
-            videoFilePath: null,
-            videoFileSize: null,
-            audioFilePath: null,
-            audioFileSize: null
-          });
-        }
-
-        const existing = fileMap.get(youtubeId);
-        const pathKey = isAudio ? 'audioFilePath' : 'videoFilePath';
-        const sizeKey = isAudio ? 'audioFileSize' : 'videoFileSize';
-
-        if (existing[pathKey]) {
-          if (!duplicates.has(youtubeId)) {
-            duplicates.set(youtubeId, []);
-          }
-          duplicates.get(youtubeId).push(fullPath);
-
-          if (stats.size > existing[sizeKey]) {
-            logger.warn(
-              { youtubeId, filePath: fullPath, size: stats.size, type: ext },
-              'Duplicate found: keeping larger file'
-            );
-            existing[pathKey] = fullPath;
-            existing[sizeKey] = stats.size;
-          }
-        } else {
+        if (stats.size > existing[sizeKey]) {
+          logger.warn(
+            { youtubeId, filePath: fullPath, size: stats.size, type: ext },
+            'Duplicate found: keeping larger file'
+          );
           existing[pathKey] = fullPath;
           existing[sizeKey] = stats.size;
         }
+      } else {
+        existing[pathKey] = fullPath;
+        existing[sizeKey] = stats.size;
       }
-    } catch (err) {
-      logger.error({ err, dir }, 'Error scanning directory');
     }
 
-    return { fileMap, duplicates };
+    if (uncheckedFiles > 0) {
+      logger.warn({ err: firstCheckError, dir, uncheckedFiles }, 'Could not check files while scanning');
+    }
+    return result();
   }
 
   /**
@@ -445,15 +476,20 @@ class VideosModule {
    * Deliberately does not check the run's time limit: once started, a slice's
    * writes complete, so the expensive work already done is never discarded.
    * @param {Array<{row: Object, fileInfo: Object|undefined, probedResolution: string|null}>} candidates
-   * @returns {Promise<{updated: number, removed: number, skipped: number, failed: number}>}
+   * @returns {Promise<{updated: number, removed: number, kept: number, skipped: number, failed: number}>}
    */
   async _applyRescanUpdates(candidates) {
-    const counts = { updated: 0, removed: 0, skipped: 0, failed: 0 };
+    const counts = { updated: 0, removed: 0, kept: 0, skipped: 0, failed: 0 };
     const limit = createLimiter(RESCAN_WRITE_CONCURRENCY);
     await Promise.all(candidates.map(({ row, fileInfo, probedResolution }) => limit(async () => {
       try {
         const changes = await resolveRescanUpdate(row, fileInfo, probedResolution, (filePath) => fs.stat(filePath));
-        if (!changes) return;
+        // Kept as recorded: the files are where the row says, or couldn't be
+        // checked. Counted so rows re-checked every run are visible.
+        if (!changes) {
+          counts.kept++;
+          return;
+        }
         const [affected] = await Video.update(changes, { where: unchangedSinceRead(row) });
         if (affected === 0) {
           counts.skipped++;
@@ -491,9 +527,11 @@ class VideosModule {
     let totalProcessed = 0;
     let totalUpdated = 0;
     let totalRemoved = 0;
+    let totalKept = 0;
     let totalSkipped = 0;
     let totalFailed = 0;
     let fileMapSize = 0;
+    let unreadableOnDisk = 0;
     let result;
 
     try {
@@ -521,9 +559,13 @@ class VideosModule {
 
       // First, scan filesystem for all video files
       logProgress('Scanning filesystem for video files...');
-      const { fileMap, duplicates } = await this.scanForVideoFiles(outputDir);
+      const { fileMap, duplicates, unreadable } = await this.scanForVideoFiles(outputDir);
       fileMapSize = fileMap.size;
-      logProgress(`Found ${fileMap.size} video files on disk`);
+      unreadableOnDisk = unreadable;
+      // Rows whose files sit in unreadable parts are re-checked by path below.
+      logProgress(unreadable > 0
+        ? `Found ${fileMap.size} video files on disk (${unreadable} folders or files could not be read)`
+        : `Found ${fileMap.size} video files on disk`);
 
 
       if (duplicates.size > 0) {
@@ -602,6 +644,7 @@ class VideosModule {
             const counts = await this._applyRescanUpdates(candidates);
             totalUpdated += counts.updated;
             totalRemoved += counts.removed;
+            totalKept += counts.kept;
             totalSkipped += counts.skipped;
             totalFailed += counts.failed;
           }
@@ -621,8 +664,10 @@ class VideosModule {
         elapsed,
         totalProcessed,
         filesOnDisk: fileMapSize,
+        unreadableOnDisk,
         updated: totalUpdated,
         removed: totalRemoved,
+        kept: totalKept,
         skippedChanged: totalSkipped,
         failed: totalFailed
       }, 'Video metadata backfill completed');
@@ -630,8 +675,10 @@ class VideosModule {
       result = {
         processed: totalProcessed,
         filesOnDisk: fileMapSize,
+        unreadableOnDisk,
         updated: totalUpdated,
         removed: totalRemoved,
+        kept: totalKept,
         skippedChanged: totalSkipped,
         failed: totalFailed,
         timeElapsed: elapsed,
@@ -654,8 +701,10 @@ class VideosModule {
           status: 'timed-out',
           processed: totalProcessed,
           filesOnDisk: fileMapSize,
+          unreadableOnDisk,
           updated: totalUpdated,
           removed: totalRemoved,
+          kept: totalKept,
           skippedChanged: totalSkipped,
           failed: totalFailed
         };
@@ -670,8 +719,10 @@ class VideosModule {
         errorMessage: err.message || 'Unknown error',
         processed: totalProcessed,
         filesOnDisk: fileMapSize,
+        unreadableOnDisk,
         updated: totalUpdated,
         removed: totalRemoved,
+        kept: totalKept,
         skippedChanged: totalSkipped,
         failed: totalFailed
       };
@@ -682,17 +733,15 @@ class VideosModule {
       let lastRun = null;
 
       if (result) {
-        lastRun = {
-          startedAt: result.startedAt,
-          completedAt: result.completedAt,
+        // Build the broadcast from the same record the run history stores, so
+        // the live Maintenance view and a reload agree (e.g. a partial scan).
+        const record = rescanRunSummary.toRunRecord(result);
+        lastRun = rescanRunSummary.fromRunRecord({
+          ...record,
           trigger: result.trigger,
-          status: result.status,
-          videosUpdated: result.updated || 0,
-          videosMarkedMissing: result.removed || 0,
-          videosScanned: result.processed || 0,
-          filesFoundOnDisk: result.filesOnDisk || 0,
-          errorMessage: result.errorMessage || null
-        };
+          startedAt: result.startedAt,
+          finishedAt: result.completedAt,
+        });
 
         // Scheduled runs are recorded by the task scheduler itself.
         if (result.trigger !== 'scheduled') {
@@ -702,7 +751,7 @@ class VideosModule {
               trigger: result.trigger,
               startedAt: new Date(result.startedAt),
               finishedAt: new Date(result.completedAt),
-              ...rescanRunSummary.toRunRecord(result),
+              ...record,
             });
           } catch (persistErr) {
             logger.error({ err: persistErr }, 'Failed to record rescan run');

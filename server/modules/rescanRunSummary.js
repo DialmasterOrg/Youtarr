@@ -48,8 +48,13 @@ function toRunRecord(result = {}) {
     details: {
       videosScanned: count(result.processed),
       filesFoundOnDisk: count(result.filesOnDisk),
+      // Folders or files the walk could not read; their rows were re-checked by path.
+      unreadableOnDisk: count(result.unreadableOnDisk),
       videosUpdated: count(result.updated),
       videosMarkedMissing: count(result.removed),
+      // Rows the walk nominated but left as recorded: their files were where
+      // the row says (e.g. outside the downloads folder) or couldn't be checked.
+      videosKept: count(result.kept),
       // Rows another writer changed after the rescan read them; left for a later run.
       videosSkipped: count(result.skippedChanged),
       videosFailed: count(result.failed),

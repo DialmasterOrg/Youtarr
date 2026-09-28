@@ -5,7 +5,7 @@ const path = require('path');
 const { EventEmitter } = require('events');
 
 jest.mock('child_process', () => ({ spawn: jest.fn(), spawnSync: jest.fn() }));
-jest.mock('../../logger', () => ({ warn: jest.fn(), info: jest.fn() }));
+jest.mock('../../logger', () => ({ warn: jest.fn(), info: jest.fn(), error: jest.fn() }));
 
 describe('yt-dlp process snapshots', () => {
   let originalSource;
@@ -194,8 +194,8 @@ describe('yt-dlp process snapshots', () => {
       expect(fs.existsSync(copy)).toBe(false);
     });
 
-    test('runs without cookies when the uploaded file cannot be copied', () => {
-      fs.unlinkSync(uploadedPath);
+    test('runs without cookies rather than passing the uploaded file when no copy can be made', () => {
+      jest.spyOn(fs, 'mkdtempSync').mockImplementationOnce(() => { throw new Error('no space'); });
       spawnYtDlp(['--cookies', uploadedPath, '--dump-json']);
       expect(childProcess.spawn).toHaveBeenCalledWith('yt-dlp', ['--dump-json'], undefined);
     });

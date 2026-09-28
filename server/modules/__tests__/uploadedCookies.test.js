@@ -3,7 +3,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-jest.mock('../../logger', () => ({ warn: jest.fn(), info: jest.fn() }));
+jest.mock('../../logger', () => ({ warn: jest.fn(), info: jest.fn(), error: jest.fn() }));
 
 describe('uploadedCookies', () => {
   const cookies = value => `# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t0\tSID\t${value}\n`;
@@ -94,23 +94,43 @@ describe('uploadedCookies', () => {
     );
   });
 
-  test('runs without cookies and warns when the uploaded file cannot be read', () => {
+  test('runs without cookies when the upload was deleted before the run', () => {
     fs.unlinkSync(uploadedPath);
     const prepared = uploadedCookies.prepare(['--cookies', uploadedPath, '--dump-json']);
 
     expect(prepared.args).toEqual(['--dump-json']);
     expect(prepared.cleanup).toBeNull();
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ err: expect.objectContaining({ code: 'ENOENT' }) }),
-      'Could not copy uploaded cookies for yt-dlp; running without cookies'
+    expect(logger.info).toHaveBeenCalledWith('Uploaded cookies were deleted before yt-dlp started; running without cookies');
+  });
+
+  test('runs without cookies and logs an error when the upload cannot be read', () => {
+    jest.spyOn(fs, 'readFileSync').mockImplementationOnce(() => {
+      throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+    });
+    const prepared = uploadedCookies.prepare(['--cookies', uploadedPath, '--dump-json']);
+
+    expect(prepared.args).toEqual(['--dump-json']);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ err: expect.objectContaining({ code: 'EACCES' }) }),
+      'Could not read uploaded cookies; running yt-dlp without cookies'
+    );
+  });
+
+  test('never passes the uploaded file itself when the private copy cannot be written', () => {
+    jest.spyOn(fs, 'writeFileSync').mockImplementationOnce(() => { throw new Error('disk full'); });
+    const prepared = uploadedCookies.prepare(['--cookies', uploadedPath, '--dump-json']);
+
+    expect(prepared.args).toEqual(['--dump-json']);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ err: expect.any(Error) }),
+      'Could not make a private copy of uploaded cookies; running yt-dlp without cookies'
     );
   });
 
   test('removes a partial copy directory when copying fails', () => {
     jest.spyOn(fs, 'writeFileSync').mockImplementationOnce(() => { throw new Error('disk full'); });
-    const prepared = uploadedCookies.prepare(['--cookies', uploadedPath]);
+    uploadedCookies.prepare(['--cookies', uploadedPath]);
 
-    expect(prepared.args).toEqual([]);
     expect(createdDirs).toHaveLength(1);
     expect(fs.existsSync(createdDirs[0])).toBe(false);
   });

@@ -21,9 +21,11 @@ const row = (overrides = {}) => ({
 const fsError = (code) => Object.assign(new Error(code), { code });
 
 // Files on disk right now, keyed by path; any other path is missing.
-const diskWith = (files, errors = {}) => async (filePath) => {
+// `dirs` lists paths that exist as directories.
+const diskWith = (files, errors = {}, dirs = []) => async (filePath) => {
   if (errors[filePath]) throw fsError(errors[filePath]);
-  if (filePath in files) return { size: files[filePath] };
+  if (dirs.includes(filePath)) return { size: 4096, isFile: () => false };
+  if (filePath in files) return { size: files[filePath], isFile: () => true };
   throw fsError('ENOENT');
 };
 
@@ -146,6 +148,20 @@ describe('resolveRescanUpdate', () => {
       row({ filePath: MP4, fileSize: '1000' }), undefined, null, diskWith({}, { [MP4]: 'EACCES' })
     );
     expect(update).toBeNull();
+  });
+
+  test('marks a row missing when a directory in its stored path is now a file', async () => {
+    const update = await resolveRescanUpdate(
+      row({ filePath: MP4, fileSize: '1000' }), undefined, null, diskWith({}, { [MP4]: 'ENOTDIR' })
+    );
+    expect(update).toEqual({ removed: true });
+  });
+
+  test('does not record a directory at the stored path as the file', async () => {
+    const update = await resolveRescanUpdate(
+      row({ filePath: MP4, fileSize: '1000' }), undefined, null, diskWith({}, {}, [MP4])
+    );
+    expect(update).toEqual({ removed: true });
   });
 
   test('neither clears nor marks missing while one format cannot be checked', async () => {
