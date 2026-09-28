@@ -311,6 +311,8 @@ The page shows the server timezone. Times and interval presets follow that clock
 
 The **Upcoming runs** list at the top shows when each active schedule fires next. Each card also shows its last run and how it ended, for example "completed: Deleted 12 videos and freed 8.10 GB" or "failed: Permission denied", so you can confirm a schedule is working without reading the logs. A schedule whose feature is switched off says so and links to where to turn it on. If a run is still going when its next time comes around, that occurrence is skipped and recorded as such. Times on this page are in the server timezone, and the page keeps itself up to date while it is open.
 
+Each task has a **Run now** button that starts it immediately with your saved settings. If Run now is greyed out, the text next to it says why: the task is already running, its feature is turned off (use the link on the card to turn it on, then save), downloads are paused by a storage limit, or, for channel video counts, it ran less than 15 minutes ago, in which case the card shows when you can run it again. Automatic downloads can be run now even while they are turned off; the switch only stops the schedule. Running automatic video cleanup asks you to confirm, because it permanently deletes the videos your removal rules match.
+
 ## Configure SponsorBlock
 
 Automatically remove or mark sponsored segments, intros, outros, and other unwanted content using the crowdsourced [SponsorBlock](https://sponsor.ajay.app/) database.
@@ -398,6 +400,8 @@ Common cases:
 1. **Open Settings -> Maintenance & Rescan**
 2. Click **Rescan files on disk**
 3. The page shows progress in real time and a summary of the last run (videos updated, files marked missing)
+
+You can also start a rescan with **Run now** on the Rescan files on disk card in **Settings -> Scheduling**.
 
 A scan also runs daily on a schedule and once at server startup, so changes you make outside Youtarr will eventually be picked up even if you don't trigger a manual rescan.
 

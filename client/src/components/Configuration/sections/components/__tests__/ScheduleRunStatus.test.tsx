@@ -14,6 +14,7 @@ const base: ScheduleTaskStatus = {
   running: false,
   nextRunAt: '2026-09-21T02:00:00.000Z',
   lastRun: null,
+  runNow: { available: true, reason: null, message: null, availableAt: null },
 };
 
 const lastRun = {

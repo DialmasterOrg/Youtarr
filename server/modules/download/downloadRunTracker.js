@@ -120,6 +120,24 @@ class DownloadRunTracker {
   }
 
   /**
+   * Jobs of an active run that have not reported and are not in a terminal
+   * state, with their live status. Empty for an unknown or finalized run.
+   * @param {string} runId
+   * @returns {Array<{ id: string, status: string }>}
+   */
+  getUnfinishedJobs(runId) {
+    const run = this.runs.get(runId);
+    if (!run) return [];
+    const unfinished = [];
+    for (const id of run.jobIds) {
+      if (run.reported.has(id)) continue;
+      const job = jobModule.getJob(id);
+      if (job && !TERMINAL_STATUSES.has(job.status)) unfinished.push({ id, status: job.status });
+    }
+    return unfinished;
+  }
+
+  /**
    * Record that a job belongs to a run so the run knows when every job is done.
    * @param {string} runId
    * @param {string} jobId
@@ -176,12 +194,7 @@ class DownloadRunTracker {
     const run = this.runs.get(runId);
     if (!run || run.finalized || !run.sealed) return;
 
-    const allDone = [...run.jobIds].every((id) => {
-      if (run.reported.has(id)) return true;
-      const job = jobModule.getJob(id);
-      return !job || TERMINAL_STATUSES.has(job.status);
-    });
-    if (!allDone) return;
+    if (this.getUnfinishedJobs(runId).length > 0) return;
 
     run.finalized = true;
     this.runs.delete(runId);

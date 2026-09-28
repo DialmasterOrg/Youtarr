@@ -1,5 +1,6 @@
 const express = require('express');
 const logger = require('../logger');
+const { sendRunBlocked, toRunNowState } = require('./runNowResponse');
 
 /**
  * Schedule status routes.
@@ -9,7 +10,7 @@ const logger = require('../logger');
  * @swagger
  * tags:
  *   name: Schedules
- *   description: Scheduled task status
+ *   description: Scheduled task status and manual runs
  */
 function createSchedulesRoutes({ verifyToken, scheduledTaskManager, scheduledTaskRuns, scheduleConfig }) {
   const router = express.Router();
@@ -83,15 +84,35 @@ function createSchedulesRoutes({ verifyToken, scheduledTaskManager, scheduledTas
    *                             type: string
    *                             format: date-time
    *                             nullable: true
+   *                       runNow:
+   *                         type: object
+   *                         properties:
+   *                           available:
+   *                             type: boolean
+   *                           reason:
+   *                             type: string
+   *                             nullable: true
+   *                           message:
+   *                             type: string
+   *                             nullable: true
+   *                           availableAt:
+   *                             type: string
+   *                             format: date-time
+   *                             nullable: true
+   *                 serverTime:
+   *                   type: string
+   *                   format: date-time
+   *                   description: Server clock when the response was built; clients time availableAt against it
    *       500:
    *         description: Status could not be read
    */
   router.get('/api/schedules', verifyToken, async (req, res) => {
     try {
-      const statuses = new Map(scheduledTaskManager.getStatus().map((status) => [status.id, status]));
       const latestRuns = await scheduledTaskRuns.getLatestRuns();
-      const tasks = Object.entries(scheduleConfig.SCHEDULES).map(([key, definition]) => {
-        const status = statuses.get(key) || {};
+      const tasks = await Promise.all(Object.entries(scheduleConfig.SCHEDULES).map(async ([key, definition]) => {
+        const snapshot = await scheduledTaskManager.getTaskSnapshot(key);
+        const status = snapshot.status || {};
+        const blocker = snapshot.blocker;
         return {
           key,
           label: definition.label,
@@ -102,12 +123,54 @@ function createSchedulesRoutes({ verifyToken, scheduledTaskManager, scheduledTas
           running: Boolean(status.running),
           nextRunAt: status.nextRunAt ? status.nextRunAt.toISOString() : null,
           lastRun: latestRuns[key] ?? null,
+          runNow: toRunNowState(blocker),
         };
-      });
-      return res.json({ tasks });
+      }));
+      return res.json({ tasks, serverTime: new Date().toISOString() });
     } catch (err) {
       logger.error({ err }, 'Failed to read schedule status');
       return res.status(500).json({ error: 'Failed to read schedule status' });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/schedules/{key}/run:
+   *   post:
+   *     summary: Run a scheduled task now
+   *     description: Starts the task in the background with the manual trigger, using the saved settings. The run appears in the task's history.
+   *     tags: [Schedules]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: key
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Config key of the schedule, for example videoRescanFrequency
+   *     responses:
+   *       202:
+   *         description: The run started
+   *       404:
+   *         description: Unknown task
+   *       409:
+   *         description: The task cannot run now; reason is running, disabled, cooldown, managed, downloads-paused, no-media-server, youtube-throttled or downloads-active, and availableAt says when it can run again when known
+   *       503:
+   *         description: The task is not registered yet (server still starting or database unavailable)
+   */
+  router.post('/api/schedules/:key/run', verifyToken, async (req, res) => {
+    const { key } = req.params;
+    if (!Object.prototype.hasOwnProperty.call(scheduleConfig.SCHEDULES, key)) {
+      return res.status(404).json({ error: 'Unknown scheduled task' });
+    }
+    try {
+      const outcome = await scheduledTaskManager.runNow(key, { trigger: 'manual' });
+      if (!outcome.started) return sendRunBlocked(res, outcome);
+      return res.status(202).json({ started: true });
+    } catch (err) {
+      logger.error({ err, task: key }, 'Failed to start scheduled task');
+      return res.status(500).json({ error: 'Failed to start the task' });
     }
   });
 

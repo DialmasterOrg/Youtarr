@@ -94,7 +94,7 @@ class JobModule {
   // The startup pass is written as one finished row rather than started and
   // finished separately: it begins before server.js marks stale running rows
   // interrupted, so a running row created here would be flagged by that pass.
-  async runStartupBackfill() {
+  async _runStartupBackfill() {
     const startedAt = new Date();
     const record = await this.backfillFromCompleteList();
     await scheduledTaskRuns.record({
@@ -104,6 +104,12 @@ class JobModule {
       finishedAt: new Date(),
       ...record,
     });
+  }
+
+  // Runs outside the scheduler, so open Scheduling pages are told when it
+  // starts and ends. The repair's lock is set before this broadcasts.
+  runStartupBackfill() {
+    return scheduledTasks.announceRun(ARCHIVE_BACKFILL_TASK_KEY, this._runStartupBackfill());
   }
 
   /**
@@ -719,8 +725,26 @@ class JobModule {
     return null;
   }
 
-  // Backfill Videos and channelvideos tables from complete.list and jobs info JSON
+  // The startup pass runs outside the scheduler, so the repair keeps its own
+  // lock; two walks at once would race on the same rows.
   async backfillFromCompleteList() {
+    if (this._archiveRepairRunning) {
+      return { status: 'skipped', outcome: 'skipped', message: 'A library repair was already running.' };
+    }
+    this._archiveRepairRunning = true;
+    try {
+      return await this._repairFromArchive();
+    } finally {
+      this._archiveRepairRunning = false;
+    }
+  }
+
+  isArchiveRepairRunning() {
+    return Boolean(this._archiveRepairRunning);
+  }
+
+  // Backfill Videos and channelvideos tables from complete.list and jobs info JSON
+  async _repairFromArchive() {
     try {
       const archivePath = path.join(__dirname, '../../config', 'complete.list');
       let archiveContent;
@@ -982,6 +1006,7 @@ class JobModule {
       id: ARCHIVE_BACKFILL_TASK_KEY,
       expression: getSchedule(configModule.getConfig(), ARCHIVE_BACKFILL_TASK_KEY),
       run: () => this.backfillFromCompleteList(),
+      isRunning: () => this.isArchiveRepairRunning(),
     });
   }
 

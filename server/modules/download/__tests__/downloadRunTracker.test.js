@@ -56,6 +56,77 @@ describe('downloadRunTracker', () => {
     });
   });
 
+  describe('getUnfinishedJobs', () => {
+    const liveStatuses = (statuses) => {
+      jobModule.getJob.mockImplementation((id) => (statuses[id] ? { status: statuses[id] } : undefined));
+    };
+
+    test('returns an empty list for an unknown run', () => {
+      expect(tracker.getUnfinishedJobs('run-does-not-exist')).toEqual([]);
+    });
+
+    test('lists registered jobs that have not reported, with their live status', () => {
+      liveStatuses({ channel: 'Complete', pl1: 'Pending' });
+      const runId = tracker.startRun();
+      tracker.registerJob(runId, 'channel');
+      tracker.registerJob(runId, 'pl1');
+      tracker.recordJobResult(runId, 'channel', { totalDownloaded: 1 });
+
+      expect(tracker.getUnfinishedJobs(runId)).toEqual([{ id: 'pl1', status: 'Pending' }]);
+    });
+
+    test.each(['Complete', 'Error', 'Terminated', 'Killed'])('leaves out a job whose live status is %s', (status) => {
+      liveStatuses({ j1: status });
+      const runId = tracker.startRun();
+      tracker.registerJob(runId, 'j1');
+
+      expect(tracker.getUnfinishedJobs(runId)).toEqual([]);
+    });
+
+    test('leaves out a job that no longer exists', () => {
+      liveStatuses({});
+      const runId = tracker.startRun();
+      tracker.registerJob(runId, 'gone');
+
+      expect(tracker.getUnfinishedJobs(runId)).toEqual([]);
+    });
+
+    test('lists only the retry once its source job reaches a terminal status unreported', () => {
+      const statuses = { source: 'In Progress', 'retry-1': 'Pending' };
+      liveStatuses(statuses);
+      const runId = tracker.startRun();
+      tracker.registerJob(runId, 'source');
+      tracker.seal(runId);
+      tracker.registerJob(runId, 'retry-1');
+      statuses.source = 'Complete';
+
+      expect(tracker.getUnfinishedJobs(runId)).toEqual([{ id: 'retry-1', status: 'Pending' }]);
+    });
+
+    test('keeps the run active while a retry is unfinished after the source reports', () => {
+      const statuses = { source: 'In Progress', 'retry-1': 'Pending' };
+      liveStatuses(statuses);
+      const runId = tracker.startRun();
+      tracker.registerJob(runId, 'source');
+      tracker.seal(runId);
+      tracker.registerJob(runId, 'retry-1');
+      statuses.source = 'Complete';
+      tracker.recordJobResult(runId, 'source', { totalDownloaded: 1 });
+
+      expect(tracker.isActive(runId)).toBe(true);
+    });
+
+    test('returns an empty list once the last job reports and the run finalizes', () => {
+      liveStatuses({ j1: 'In Progress' });
+      const runId = tracker.startRun();
+      tracker.registerJob(runId, 'j1');
+      tracker.seal(runId);
+      tracker.recordJobResult(runId, 'j1', { totalDownloaded: 1 });
+
+      expect(tracker.getUnfinishedJobs(runId)).toEqual([]);
+    });
+  });
+
   describe('aggregation and finalization', () => {
     test('does not finalize until the run is sealed', () => {
       const runId = tracker.startRun();

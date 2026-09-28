@@ -4,6 +4,7 @@ const MessageEmitter = require('../messageEmitter.js');
 const tabState = require('./tabState');
 const tabCountSources = require('./tabCountSources');
 const tabCountThrottle = require('./tabCountThrottle');
+const scheduledTaskManager = require('../scheduledTaskManager');
 const { MEDIA_TAB_TYPE_MAP } = require('../tabsUtils');
 
 const COUNTS_STALE_AFTER_MS = 24 * 60 * 60 * 1000;
@@ -226,6 +227,44 @@ class TabVideoCounts {
     }
   }
 
+  isBulkRunning() {
+    return this.bulkRunning;
+  }
+
+  /**
+   * Why a manual bulk refresh would do nothing right now. Only the yt-dlp
+   * path can be held up: the API path ignores throttle pauses and downloads.
+   * @returns {Promise<null|{ reason: string, message: string, availableAt: Date|null }>}
+   */
+  async getBulkRunBlocker(now = Date.now()) {
+    if (tabCountSources.isApiAvailable()) return null;
+    const pausedMs = await tabCountThrottle.remainingMs('bulk', now);
+    if (pausedMs > 0) {
+      return {
+        reason: 'youtube-throttled',
+        message: 'YouTube limited channel lookups, so video count refreshes are paused.',
+        availableAt: new Date(now + pausedMs),
+      };
+    }
+    if (this.isDownloadActive()) {
+      return {
+        reason: 'downloads-active',
+        message: 'Video counts are looked up after the current download finishes.',
+        availableAt: null,
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Startup catch-up (see _refreshAtStartup). It runs outside the scheduler
+   * two minutes after boot, often after the browser has reconnected, so it
+   * tells open Scheduling pages when it starts and ends.
+   */
+  refreshAtStartup() {
+    return scheduledTaskManager.announceRun(TASK_KEY, this._refreshAtStartup());
+  }
+
   /**
    * Startup catch-up: counts channels whose counts are missing or old (a
    * first run after upgrading, or a long downtime) and records the run in
@@ -233,7 +272,7 @@ class TabVideoCounts {
    * download is running. A run that was skipped or counted nothing is not
    * recorded, so frequent restarts do not push real runs out of the history.
    */
-  async refreshAtStartup() {
+  async _refreshAtStartup() {
     const startedAt = new Date();
     const summary = await this.refreshAll({ onlyStale: true });
     const { refreshed = 0, failed = 0 } = summary.details || {};

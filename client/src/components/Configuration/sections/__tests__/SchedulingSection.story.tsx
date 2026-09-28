@@ -32,14 +32,20 @@ const run = (taskKey: string, overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+const runNow = { available: true, reason: null, message: null, availableAt: null };
+const runNowCooldown = {
+  available: false, reason: 'cooldown', message: 'Ran less than 15 minutes ago.',
+  availableAt: tomorrowAt(2, 10),
+};
+
 const tasks = [
-  { key: 'channelDownloadFrequency', label: 'Automatic downloads', enabled: false, active: false, expression: null, error: null, running: false, nextRunAt: null, lastRun: null },
-  { key: 'watchStatusSyncFrequency', label: 'Watch status sync', enabled: true, active: true, expression: '0 */4 * * *', error: null, running: false, nextRunAt: tomorrowAt(0), lastRun: run('watchStatusSyncFrequency', { message: 'Synced 2 servers.' }) },
-  { key: 'autoRemovalFrequency', label: 'Automatic video cleanup', enabled: true, active: true, expression: '0 2 * * *', error: null, running: false, nextRunAt: tomorrowAt(2), lastRun: run('autoRemovalFrequency', { message: 'Deleted 12 videos and freed 8.10 GB.' }) },
-  { key: 'videoRescanFrequency', label: 'Rescan files on disk', enabled: true, active: true, expression: '30 3 * * *', error: null, running: true, nextRunAt: tomorrowAt(3, 30), lastRun: run('videoRescanFrequency', { message: 'Scanned 8,421 videos: 12 updated, 3 marked missing.' }) },
-  { key: 'ytdlpUpdateFrequency', label: 'Automatic yt-dlp updates', enabled: true, active: false, expression: null, error: 'must not run more often than every 15 minutes.', running: false, nextRunAt: null, lastRun: run('ytdlpUpdateFrequency', { status: 'error', outcome: 'error', message: 'Permission denied.' }) },
-  { key: 'archiveBackfillFrequency', label: 'Repair library records', enabled: true, active: true, expression: '20 2 * * *', error: null, running: false, nextRunAt: tomorrowAt(2, 20), lastRun: run('archiveBackfillFrequency', { trigger: 'startup' }) },
-  { key: 'sessionCleanupFrequency', label: 'Session cleanup', enabled: true, active: true, expression: '0 3 * * *', error: null, running: false, nextRunAt: tomorrowAt(3), lastRun: null },
+  { key: 'channelDownloadFrequency', label: 'Automatic downloads', enabled: false, active: false, expression: null, error: null, running: false, nextRunAt: null, lastRun: null, runNow },
+  { key: 'watchStatusSyncFrequency', label: 'Watch status sync', enabled: true, active: true, expression: '0 */4 * * *', error: null, running: false, nextRunAt: tomorrowAt(0), lastRun: run('watchStatusSyncFrequency', { message: 'Synced 2 servers.' }), runNow },
+  { key: 'autoRemovalFrequency', label: 'Automatic video cleanup', enabled: true, active: true, expression: '0 2 * * *', error: null, running: false, nextRunAt: tomorrowAt(2), lastRun: run('autoRemovalFrequency', { message: 'Deleted 12 videos and freed 8.10 GB.' }), runNow: runNowCooldown },
+  { key: 'videoRescanFrequency', label: 'Rescan files on disk', enabled: true, active: true, expression: '30 3 * * *', error: null, running: true, nextRunAt: tomorrowAt(3, 30), lastRun: run('videoRescanFrequency', { message: 'Scanned 8,421 videos: 12 updated, 3 marked missing.' }), runNow },
+  { key: 'ytdlpUpdateFrequency', label: 'Automatic yt-dlp updates', enabled: true, active: false, expression: null, error: 'must not run more often than every 15 minutes.', running: false, nextRunAt: null, lastRun: run('ytdlpUpdateFrequency', { status: 'error', outcome: 'error', message: 'Permission denied.' }), runNow },
+  { key: 'archiveBackfillFrequency', label: 'Repair library records', enabled: true, active: true, expression: '20 2 * * *', error: null, running: false, nextRunAt: tomorrowAt(2, 20), lastRun: run('archiveBackfillFrequency', { trigger: 'startup' }), runNow },
+  { key: 'sessionCleanupFrequency', label: 'Session cleanup', enabled: true, active: true, expression: '0 3 * * *', error: null, running: false, nextRunAt: tomorrowAt(3), lastRun: null, runNow },
 ];
 
 const meta: Meta<typeof SchedulingSection> = {

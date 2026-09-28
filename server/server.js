@@ -256,6 +256,8 @@ const initialize = async () => {
     const watchStatusScheduler = require('./modules/mediaServers/watchStatusScheduler');
     const channelBackdropBackfill = require('./modules/channel/channelBackdropBackfill');
     const tabVideoCounts = require('./modules/channel/tabVideoCounts');
+    const autoDownloadScheduler = require('./modules/channel/autoDownloadScheduler');
+    const downloadRunTracker = require('./modules/download/downloadRunTracker');
     const { Channel } = require('./models');
     const { registerRoutes } = require('./routes');
     const scheduledTaskRuns = require('./modules/scheduledTaskRuns');
@@ -268,6 +270,7 @@ const initialize = async () => {
     scheduledTaskManager.setRunRecorder(scheduledTaskRuns);
     tabVideoCounts.setRunHistory(scheduledTaskRuns);
     tabVideoCounts.setDownloadActivityCheck(() => jobModule.getInProgressJobId() !== null);
+    autoDownloadScheduler.setRunTracker(downloadRunTracker);
 
     // Cache yt-dlp version once during startup to keep the version endpoint fast
     refreshYtDlpVersionCache();
@@ -284,8 +287,8 @@ const initialize = async () => {
           { configuredChannel, installedYtDlpVersion },
           'Installed yt-dlp does not match configured update channel; re-applying'
         );
-        ytdlpModule
-          .performUpdate({ channel: configuredChannel })
+        scheduledTaskManager
+          .announceRun('ytdlpUpdateFrequency', ytdlpModule.performUpdate({ channel: configuredChannel }))
           .then((result) => {
             if (result.success) {
               refreshYtDlpVersionCache();
@@ -729,7 +732,6 @@ const initialize = async () => {
       channelSearchModule,
       youtubeApi,
       getCachedYtDlpVersion,
-      refreshYtDlpVersionCache,
       validateEnvAuthCredentials,
       setupTokenModule,
       getClientAddress,

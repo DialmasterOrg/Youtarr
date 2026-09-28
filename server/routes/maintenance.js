@@ -1,5 +1,6 @@
 const express = require('express');
 const logger = require('../logger');
+const { sendRunBlocked } = require('./runNowResponse');
 
 /**
  * Maintenance routes.
@@ -10,7 +11,9 @@ const logger = require('../logger');
  *   name: Maintenance
  *   description: Filesystem reconciliation actions
  */
-function createMaintenanceRoutes({ verifyToken, videosModule, configModule, scheduledTaskRuns, rescanRunSummary }) {
+function createMaintenanceRoutes({
+  verifyToken, videosModule, configModule, scheduledTaskRuns, rescanRunSummary, scheduledTaskManager,
+}) {
   const router = express.Router();
 
   /**
@@ -23,13 +26,18 @@ function createMaintenanceRoutes({ verifyToken, videosModule, configModule, sche
    *       202:
    *         description: Rescan started
    *       409:
-   *         description: A rescan is already in progress
+   *         description: A rescan is already in progress, or the task cannot start (reason in the body)
+   *       503:
+   *         description: The task is not registered yet (server still starting or database unavailable)
    */
-  router.post('/api/maintenance/rescan-files', verifyToken, (req, res) => {
+  router.post('/api/maintenance/rescan-files', verifyToken, async (req, res) => {
     try {
-      const result = videosModule.tryStartBackfill({ trigger: 'manual' });
-      if (!result.started) {
-        return res.status(409).json({ error: 'Rescan already in progress' });
+      const outcome = await scheduledTaskManager.runNow('videoRescanFrequency', {
+        trigger: 'manual',
+        enforceCooldown: false,
+      });
+      if (!outcome.started) {
+        return sendRunBlocked(res, outcome, { running: 'Rescan already in progress' });
       }
       return res.status(202).json({ status: 'started', trigger: 'manual' });
     } catch (err) {

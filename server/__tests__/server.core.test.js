@@ -217,6 +217,8 @@ const createServerModule = ({
           setDownloadActivityCheck: jest.fn(),
           refreshAtStartup: jest.fn().mockResolvedValue({})
         };
+        const autoDownloadSchedulerMock = { setRunTracker: jest.fn() };
+        const downloadRunTrackerMock = { isActive: jest.fn(), getUnfinishedJobs: jest.fn() };
         const rateLimitMiddleware = jest.fn(() => (req, res, next) => next());
         // Mock ipKeyGenerator to normalize IPv6 addresses
         rateLimitMiddleware.ipKeyGenerator = jest.fn((ip) => ip);
@@ -278,6 +280,8 @@ const createServerModule = ({
         jest.doMock('../modules/scheduledTaskManager', () => scheduledTaskManagerMock);
         jest.doMock('../modules/channel/channelBackdropBackfill', () => ({ subscribe: jest.fn() }));
         jest.doMock('../modules/channel/tabVideoCounts', () => tabVideoCountsMock);
+        jest.doMock('../modules/channel/autoDownloadScheduler', () => autoDownloadSchedulerMock);
+        jest.doMock('../modules/download/downloadRunTracker', () => downloadRunTrackerMock);
         jest.doMock('../modules/logLevelSync', () => logLevelSyncMock);
         jest.doMock('../modules/storageGuard', () => ({
           initialize: jest.fn().mockResolvedValue({ paused: false, reasons: [] }),
@@ -308,6 +312,8 @@ const createServerModule = ({
         state.scheduledTaskRunsMock = scheduledTaskRunsMock;
         state.scheduledTaskManagerMock = scheduledTaskManagerMock;
         state.tabVideoCountsMock = tabVideoCountsMock;
+        state.autoDownloadSchedulerMock = autoDownloadSchedulerMock;
+        state.downloadRunTrackerMock = downloadRunTrackerMock;
         state.jobModuleMock = jobModuleMock;
         state.sessionUpdateMock = effectiveSession?.update || defaultSessionUpdate;
 
@@ -378,6 +384,12 @@ describe('server initialization', () => {
     jobModuleMock.getInProgressJobId.mockReturnValue('job-1');
 
     expect(isDownloadActive()).toBe(true);
+  });
+
+  test('hands the download run tracker to the automatic downloads scheduler', async () => {
+    const { autoDownloadSchedulerMock, downloadRunTrackerMock } = await createServerModule();
+
+    expect(autoDownloadSchedulerMock.setRunTracker).toHaveBeenCalledWith(downloadRunTrackerMock);
   });
 
   test('initializes database and exposes health route', async () => {

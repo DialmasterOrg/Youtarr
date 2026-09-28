@@ -1,5 +1,5 @@
 const scheduledTasks = require('./scheduledTaskManager');
-const { getSchedule } = require('./scheduleConfig');
+const { getSchedule, MANUAL_RUN_COOLDOWN_MS } = require('./scheduleConfig');
 const rescanRunSummary = require('./rescanRunSummary');
 const ytdlpUpdateRunSummary = require('./ytdlpUpdateRunSummary');
 const logger = require('../logger');
@@ -151,11 +151,11 @@ function initialize(deps = {}) {
   // ============================================================================
   // VIDEO METADATA BACKFILL
   // ============================================================================
-  jobs.videoRescanFrequency = async () => {
-    logger.info('Starting scheduled video metadata backfill');
+  jobs.videoRescanFrequency = async ({ trigger = 'scheduled' } = {}) => {
+    logger.info({ trigger }, 'Starting video metadata backfill');
     try {
-      // Await completion so another scheduled occurrence can't overlap this one.
-      const result = await videosModule.backfillVideoMetadata({ trigger: 'scheduled' });
+      // Await completion so another occurrence can't overlap this one.
+      const result = await videosModule.backfillVideoMetadata({ trigger });
       if (result && result.timedOut) {
         logger.info('Video metadata backfill reached time limit, will continue at the next scheduled run');
       } else if (!result || result.status !== 'error') {
@@ -172,20 +172,20 @@ function initialize(deps = {}) {
   // ============================================================================
   // YT-DLP AUTO-UPDATE (only when enabled in config)
   // ============================================================================
-  jobs.ytdlpUpdateFrequency = async () => {
+  jobs.ytdlpUpdateFrequency = async ({ trigger = 'scheduled' } = {}) => {
     try {
-      // The timer is disabled in both of these states, so only a run already in
-      // flight when the setting changed can reach them.
+      // Elfhosted manages yt-dlp itself; skip every trigger, not just the timer.
       if (configModule.isElfhostedPlatform()) {
         return skippedRun('yt-dlp updates are managed by the hosting platform.');
       }
 
       const config = configModule.getConfig();
-      if (!config.autoUpdateYtdlp) {
+      // Only the timer honors the auto-update switch; a manual update is always allowed.
+      if (trigger === 'scheduled' && !config.autoUpdateYtdlp) {
         return skippedRun('Automatic yt-dlp updates are turned off.');
       }
 
-      logger.info('Running scheduled yt-dlp auto-update');
+      logger.info({ trigger }, 'Running yt-dlp update');
       const result = await ytdlpModule.performUpdate({ channel: config.ytdlpUpdateChannel });
       const summary = ytdlpUpdateRunSummary.toRunRecord(result);
 
@@ -227,6 +227,23 @@ function initialize(deps = {}) {
     }
   };
 
+  // Hooks the scheduler uses to report runs started elsewhere and to decide
+  // whether a manual run may start now.
+  const TASK_OPTIONS = {
+    videoRescanFrequency: { isRunning: () => videosModule.isBackfillRunning() },
+    ytdlpUpdateFrequency: {
+      isRunning: () => ytdlpModule.isUpdateInProgress(),
+      getRunBlocker: async () => (configModule.isElfhostedPlatform()
+        ? { reason: 'managed', message: 'yt-dlp updates are managed by the hosting platform.' }
+        : null),
+    },
+    channelVideoCountsFrequency: {
+      isRunning: () => tabVideoCounts.isBulkRunning(),
+      getRunBlocker: () => tabVideoCounts.getBulkRunBlocker(),
+      manualCooldownMs: MANUAL_RUN_COOLDOWN_MS,
+    },
+  };
+
   const reschedule = () => {
     const config = configModule.getConfig();
     for (const [id, run] of Object.entries(jobs)) {
@@ -236,6 +253,7 @@ function initialize(deps = {}) {
         enabled: id !== 'ytdlpUpdateFrequency' ||
           (Boolean(config.autoUpdateYtdlp) && !configModule.isElfhostedPlatform()),
         run,
+        ...TASK_OPTIONS[id],
       });
     }
   };

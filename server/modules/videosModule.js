@@ -743,8 +743,9 @@ class VideosModule {
           finishedAt: result.completedAt,
         });
 
-        // Scheduled runs are recorded by the task scheduler itself.
-        if (result.trigger !== 'scheduled') {
+        // Startup rescans begin outside the scheduler; every other trigger is
+        // recorded by scheduledTaskManager.
+        if (result.trigger === 'startup') {
           try {
             await scheduledTaskRuns.record({
               taskKey: rescanRunSummary.TASK_KEY,
@@ -777,24 +778,6 @@ class VideosModule {
         });
       }
     }
-  }
-
-  /**
-   * Atomically check the lock and kick off a backfill. Returns synchronously
-   * with `started: true` (caller should respond 202) or `started: false`
-   * (caller should respond 409). The actual backfill runs as a fire-and-forget
-   * task; errors are logged inside `backfillVideoMetadata` itself.
-   */
-  tryStartBackfill({ trigger = 'manual' } = {}) {
-    if (this._backfillRunning) {
-      return { started: false, reason: 'already-running' };
-    }
-    // backfillVideoMetadata sets the flag synchronously before its first await,
-    // so launching it here is race-free for in-process callers.
-    this.backfillVideoMetadata({ trigger }).catch((err) => {
-      logger.error({ err }, 'Manual backfill run failed');
-    });
-    return { started: true };
   }
 
   isBackfillRunning() {

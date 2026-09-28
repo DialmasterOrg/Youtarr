@@ -5,9 +5,11 @@ import { ConfigurationCard } from '../common/ConfigurationCard';
 import { ConfigState, DeploymentEnvironment, PlatformManagedState } from '../types';
 import { getDefaultSchedule, runsMoreThanHourly, SCHEDULE_FIELDS, SCHEDULE_GROUPS, ScheduleFieldErrors } from '../schedules';
 import { ScheduleTaskStatus, useScheduleStatus } from '../hooks/useScheduleStatus';
+import { useRunScheduledTask } from '../hooks/useRunScheduledTask';
 import { formatDateTimeInZone } from '../../../utils/formatters';
 import { ScheduleEditor } from './components/ScheduleEditor';
 import { ScheduleRunStatus } from './components/ScheduleRunStatus';
+import { RunNowControl } from './components/RunNowControl';
 
 interface SchedulingSectionProps {
   config: ConfigState;
@@ -31,7 +33,8 @@ export function SchedulingSection({
   config, deploymentEnvironment, isPlatformManaged, onConfigChange, fieldErrors, token,
 }: SchedulingSectionProps) {
   const { hash } = useLocation();
-  const { tasks, error: statusError } = useScheduleStatus(token);
+  const { tasks, error: statusError, refresh } = useScheduleStatus(token);
+  const { pending: runPending, errors: runErrors, runTask } = useRunScheduledTask(token, refresh);
   const statusByKey = useMemo(() => new Map(tasks.map((task) => [task.key, task])), [tasks]);
   const upcoming = useMemo(() => upcomingRuns(tasks), [tasks]);
 
@@ -45,6 +48,7 @@ export function SchedulingSection({
         Schedules use server time: <strong>{deploymentEnvironment.timezone || 'server local time'}</strong>.
         {' '}Changes apply after saving. If a run is still in progress at its next scheduled time, that occurrence is skipped.
         {' '}Youtarr must be running at the scheduled time; missed runs are not replayed.
+        {' '}Run now starts a task immediately with your saved settings.
       </Alert>
       {statusError && <Alert severity="warning" className="mb-4">{statusError}</Alert>}
 
@@ -83,6 +87,17 @@ export function SchedulingSection({
                     <Link to={`/settings/${field.settingsPath}`} className="underline font-medium">{linkText}</Link>
                   </div>
                   <ScheduleRunStatus status={statusByKey.get(field.key)} timeZone={deploymentEnvironment.timezone} />
+                  {!managed && (
+                    <RunNowControl
+                      field={field}
+                      status={statusByKey.get(field.key)}
+                      featureOnInForm={enabled}
+                      pending={Boolean(runPending[field.key])}
+                      error={runErrors[field.key]}
+                      timeZone={deploymentEnvironment.timezone}
+                      onRun={() => runTask(field.key)}
+                    />
+                  )}
                   <ScheduleEditor
                     id={field.key}
                     label={field.label}
