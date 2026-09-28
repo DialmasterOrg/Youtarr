@@ -583,12 +583,21 @@ class ConfigModule extends EventEmitter {
   writeCustomCookiesFile(buffer) {
     const configDir = path.dirname(this.configPath);
     const customPath = path.join(configDir, 'cookies.user.txt');
+    const tempPath = `${customPath}.${process.pid}.${uuidv4()}.tmp`;
 
-    // Write the file
-    fs.writeFileSync(customPath, buffer);
-
-    // Set restrictive permissions (owner read/write only)
-    fs.chmodSync(customPath, 0o600);
+    // Write beside the target, then rename, so a yt-dlp run copying the file
+    // never reads a half-written upload. Owner-only from creation.
+    try {
+      fs.writeFileSync(tempPath, buffer, { mode: 0o600, flag: 'wx' });
+      fs.renameSync(tempPath, customPath);
+    } catch (err) {
+      try {
+        fs.unlinkSync(tempPath);
+      } catch {
+        // Nothing to remove if the temp file was never created.
+      }
+      throw err;
+    }
 
     // Update config
     this.config.customCookiesUploaded = true;

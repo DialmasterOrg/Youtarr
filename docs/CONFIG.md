@@ -427,6 +427,7 @@ Sync is one-way (server -> Youtarr). Non-owner Plex users come from the server's
 - **Default**: `false`
 - **Description**: Indicates if custom cookies.txt file has been uploaded
 - **Note**: Managed automatically by the application
+- **Uploaded file**: Stored as `config/cookies.user.txt`. Each yt-dlp run works on its own private copy, so the file changes only when you upload or delete cookies in Settings. Cookie updates YouTube sends during a run are not saved back to it, the same as for an external cookie file.
 
 ### Cookie Details and Test
 

@@ -1248,17 +1248,56 @@ describe('ConfigModule', () => {
 
       // Assert
       expect(fs.writeFileSync).toHaveBeenCalledWith(
-        expect.stringContaining('cookies.user.txt'),
-        buffer
-      );
-      expect(fs.chmodSync).toHaveBeenCalledWith(
-        expect.stringContaining('cookies.user.txt'),
-        0o600
+        expect.stringMatching(/cookies\.user\.txt\.\d+\.test-uuid-1234\.tmp$/),
+        buffer,
+        { mode: 0o600, flag: 'wx' }
       );
       expect(ConfigModule.config.customCookiesUploaded).toBe(true);
       expect(ConfigModule.config.cookiesEnabled).toBe(true);
       expect(filePath).toContain('cookies.user.txt');
       expect(changeListener).toHaveBeenCalled();
+    });
+
+    test('should move the written upload over the cookies file in one rename', () => {
+      const filePath = ConfigModule.writeCustomCookiesFile(Buffer.from('cookie data'));
+
+      expect(fs.renameSync).toHaveBeenCalledWith(
+        expect.stringMatching(/cookies\.user\.txt\.\d+\.test-uuid-1234\.tmp$/),
+        filePath
+      );
+    });
+
+    test('should remove the temp file and keep the previous upload when the rename fails', () => {
+      ConfigModule.config.customCookiesUploaded = false;
+      const renameError = new Error('EXDEV');
+      fs.renameSync.mockImplementationOnce(() => { throw renameError; });
+
+      expect(() => ConfigModule.writeCustomCookiesFile(Buffer.from('cookie data'))).toThrow(renameError);
+      expect(fs.unlinkSync).toHaveBeenCalledWith(
+        expect.stringMatching(/cookies\.user\.txt\.\d+\.test-uuid-1234\.tmp$/)
+      );
+      expect(fs.unlinkSync).not.toHaveBeenCalledWith(expect.stringMatching(/cookies\.user\.txt$/));
+      expect(ConfigModule.config.customCookiesUploaded).toBe(false);
+    });
+
+    test('should rethrow a failed write without marking cookies uploaded', () => {
+      ConfigModule.config.customCookiesUploaded = false;
+      const writeError = new Error('ENOSPC');
+      fs.writeFileSync.mockImplementationOnce(() => { throw writeError; });
+      fs.unlinkSync.mockImplementationOnce(() => { throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' }); });
+
+      expect(() => ConfigModule.writeCustomCookiesFile(Buffer.from('cookie data'))).toThrow(writeError);
+      expect(fs.renameSync).not.toHaveBeenCalled();
+      expect(ConfigModule.config.customCookiesUploaded).toBe(false);
+    });
+
+    test('should hand yt-dlp the path that runs copy from', () => {
+      const uploadedCookies = require('../uploadedCookies');
+      ConfigModule.config.cookiesEnabled = true;
+      ConfigModule.config.customCookiesUploaded = true;
+      fs.existsSync.mockReturnValue(true);
+
+      expect(ConfigModule.getCookiesPath()).toBe(uploadedCookies.getPath());
     });
 
     test('should delete custom cookies file', () => {
