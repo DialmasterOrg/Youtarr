@@ -20,7 +20,7 @@ describe('watchStatusSync', () => {
       Video: { findAll: jest.fn(), findOne: jest.fn() },
       VideoWatchStatus: {
         bulkCreate: jest.fn().mockResolvedValue([]),
-        findAll: jest.fn(),
+        findAll: jest.fn().mockResolvedValue([]),
       },
       MediaServerUser: { bulkCreate: jest.fn().mockResolvedValue([]), findAll: jest.fn().mockResolvedValue([]) },
       WatchStatusSyncCursor: {
@@ -67,7 +67,7 @@ describe('watchStatusSync', () => {
 
     const summary = await watchStatusSync.syncAll();
 
-    expect(summary.servers.plex).toEqual({ updated: 1 });
+    expect(summary.servers.plex).toEqual({ checked: 1, changed: 1 });
     expect(VideoWatchStatus.bulkCreate).toHaveBeenCalledTimes(1);
     const [rows, options] = VideoWatchStatus.bulkCreate.mock.calls[0];
     expect(rows).toHaveLength(1);
@@ -113,7 +113,7 @@ describe('watchStatusSync', () => {
 
     const summary = await watchStatusSync.syncAll();
 
-    expect(summary.servers.plex).toEqual({ updated: 1 });
+    expect(summary.servers.plex).toEqual({ checked: 1, changed: 1 });
     const [rows] = VideoWatchStatus.bulkCreate.mock.calls[0];
     expect(rows[0]).toMatchObject({ video_id: 7, played: true });
   });
@@ -129,7 +129,7 @@ describe('watchStatusSync', () => {
 
     const summary = await watchStatusSync.syncAll();
 
-    expect(summary.servers.jellyfin).toEqual({ updated: 1 });
+    expect(summary.servers.jellyfin).toEqual({ checked: 1, changed: 1 });
     const [rows] = VideoWatchStatus.bulkCreate.mock.calls[0];
     expect(rows[0]).toMatchObject({ video_id: 9, server_user_id: 'u1' });
   });
@@ -162,8 +162,8 @@ describe('watchStatusSync', () => {
 
     const summary = await watchStatusSync.syncAll();
 
-    // `updated` counts distinct videos, not (video, user) rows.
-    expect(summary.servers.jellyfin).toEqual({ updated: 1 });
+    // Counts are distinct videos, not (video, user) rows.
+    expect(summary.servers.jellyfin).toEqual({ checked: 1, changed: 1 });
     const [rows] = VideoWatchStatus.bulkCreate.mock.calls[0];
     expect(rows).toHaveLength(2);
     expect(rows.map((r) => r.server_user_id).sort()).toEqual(['u1', 'u2']);
@@ -310,7 +310,7 @@ describe('watchStatusSync', () => {
 
     // Unexpected internal errors are genericized, never rendered verbatim.
     expect(summary.servers.plex).toEqual({ error: 'internal error during sync; check Youtarr logs' });
-    expect(summary.servers.jellyfin).toEqual({ updated: 0 });
+    expect(summary.servers.jellyfin).toEqual({ checked: 0, changed: 0 });
     expect(VideoWatchStatus.bulkCreate).not.toHaveBeenCalled();
   });
 
@@ -364,4 +364,129 @@ describe('watchStatusSync', () => {
     expect(status.lastRun.trigger).toBe('manual');
   });
 
+  describe('change counting', () => {
+    const PATH = '/media/Chan/Video A [id1].mp4';
+    const entry = (overrides = {}) => ({
+      path: PATH, serverUserId: 'u1', played: false, playCount: 0,
+      positionMs: 5000, percentWatched: 37.1,
+      lastWatchedAt: new Date('2026-09-20T10:15:30.789Z'),
+      ...overrides,
+    });
+    // Shaped like a raw read back from MariaDB: BOOLEAN as 0/1, BIGINT as a
+    // string (bigNumberStrings), FLOAT with single-precision noise, and
+    // DATETIME truncated to whole seconds.
+    const storedRow = (overrides = {}) => ({
+      video_id: 7, server_user_id: 'u1', played: 0, play_count: 0,
+      position_ms: '5000', percent_watched: 37.099998474121094,
+      last_watched_at: new Date('2026-09-20T10:15:30.000Z'),
+      ...overrides,
+    });
+    const syncOneVideo = async (entries, stored) => {
+      serverRegistry.getEnabledAdapters.mockReturnValue([fakeAdapter('jellyfin', resolvedFetch(entries))]);
+      Video.findAll.mockResolvedValue([{ id: 7, youtubeId: 'id1', filePath: '/data/Chan/Video A [id1].mp4' }]);
+      VideoWatchStatus.findAll.mockResolvedValue(stored);
+      return watchStatusSync.syncAll();
+    };
+
+    test('does not count a video whose stored state matches what the server reports', async () => {
+      const summary = await syncOneVideo([entry()], [storedRow()]);
+
+      expect(summary.servers.jellyfin).toEqual({ checked: 1, changed: 0 });
+    });
+
+    test('still writes rows for videos whose state did not change', async () => {
+      await syncOneVideo([entry()], [storedRow()]);
+
+      const [rows] = VideoWatchStatus.bulkCreate.mock.calls[0];
+      expect(rows).toHaveLength(1);
+    });
+
+    test('counts a video that became played', async () => {
+      const summary = await syncOneVideo(
+        [entry({ played: true, playCount: 1, percentWatched: 100 })],
+        [storedRow()]
+      );
+
+      expect(summary.servers.jellyfin).toEqual({ checked: 1, changed: 1 });
+    });
+
+    test('counts a video whose resume position moved', async () => {
+      const summary = await syncOneVideo([entry({ positionMs: 9000 })], [storedRow()]);
+
+      expect(summary.servers.jellyfin.changed).toBe(1);
+    });
+
+    test('counts a video whose last watched time moved by a second or more', async () => {
+      const summary = await syncOneVideo(
+        [entry({ lastWatchedAt: new Date('2026-09-20T10:15:31.789Z') })],
+        [storedRow()]
+      );
+
+      expect(summary.servers.jellyfin.changed).toBe(1);
+    });
+
+    test('counts a video that gains watch state for a new user', async () => {
+      const summary = await syncOneVideo(
+        [entry(), entry({ serverUserId: 'u2' })],
+        [storedRow()]
+      );
+
+      expect(summary.servers.jellyfin).toEqual({ checked: 1, changed: 1 });
+    });
+
+    test('does not count a video first seen with no watch state', async () => {
+      // No stored row already reads as unwatched, so an empty first row
+      // changes nothing a user can see.
+      const summary = await syncOneVideo(
+        [entry({ positionMs: 0, percentWatched: null, lastWatchedAt: null })],
+        []
+      );
+
+      expect(summary.servers.jellyfin).toEqual({ checked: 1, changed: 0 });
+    });
+
+    test('counts a video first seen with a resume position', async () => {
+      const summary = await syncOneVideo(
+        [entry({ positionMs: 5000, percentWatched: null, lastWatchedAt: null })],
+        []
+      );
+
+      expect(summary.servers.jellyfin.changed).toBe(1);
+    });
+
+    test('compares against stored rows for this server only', async () => {
+      await syncOneVideo([entry()], [storedRow()]);
+
+      expect(VideoWatchStatus.findAll).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({ server_type: 'jellyfin' }),
+      }));
+    });
+
+    test('totals count each video once across servers', async () => {
+      const plexEntries = [entry({ serverUserId: '1' })];
+      serverRegistry.getEnabledAdapters.mockReturnValue([
+        fakeAdapter('plex', resolvedFetch(plexEntries)),
+        fakeAdapter('jellyfin', resolvedFetch([entry()])),
+      ]);
+      Video.findAll.mockResolvedValue([
+        { id: 7, youtubeId: 'id1', filePath: '/data/Chan/Video A [id1].mp4' },
+      ]);
+
+      const summary = await watchStatusSync.syncAll();
+
+      expect(summary.totals).toEqual({ checked: 1, changed: 1 });
+    });
+
+    test('totals leave out a server that failed', async () => {
+      serverRegistry.getEnabledAdapters.mockReturnValue([
+        fakeAdapter('plex', jest.fn().mockRejectedValue(new Error('boom'))),
+        fakeAdapter('jellyfin', resolvedFetch([])),
+      ]);
+      Video.findAll.mockResolvedValue([]);
+
+      const summary = await watchStatusSync.syncAll();
+
+      expect(summary.totals).toEqual({ checked: 0, changed: 0 });
+    });
+  });
 });

@@ -72,7 +72,7 @@ function SyncRunSummary({ run }: { run: WatchStatusSyncRun }) {
           {MEDIA_SERVER_LABELS[server] || server}:{' '}
           {result.error
             ? `failed (${result.error})`
-            : `${result.updated} ${result.updated === 1 ? 'video' : 'videos'} updated`}
+            : `${(result.checked ?? 0).toLocaleString('en-US')} ${result.checked === 1 ? 'video' : 'videos'} checked, ${(result.changed ?? 0).toLocaleString('en-US')} changed`}
         </Typography>
       ))}
     </Box>
