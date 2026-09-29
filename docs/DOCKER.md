@@ -87,6 +87,25 @@ docker compose -f docker-compose.yml -f docker-compose.arm.yml up -d
 
 This uses a named Docker volume instead of a bind mount for MariaDB data.
 
+### Keeping docker-compose.override.yml
+
+Docker Compose only loads `docker-compose.override.yml` automatically when it runs without `-f` flags and without `COMPOSE_FILE` set. The named-volume setup uses both: `./start.sh` and `./scripts/migrate-to-named-volume.sh` pin `COMPOSE_FILE=docker-compose.yml:docker-compose.arm.yml` in `.env`, and the fresh-install command above passes `-f`. If you keep your own changes in `docker-compose.override.yml` (for example, a [network share volume](#letting-docker-mount-the-share)), Compose stops loading it and those changes silently disappear from the containers.
+
+Neither script adds the override for you. List it in `.env` yourself, before `docker-compose.arm.yml`:
+
+```env
+COMPOSE_PATH_SEPARATOR=:
+COMPOSE_FILE=docker-compose.yml:docker-compose.override.yml:docker-compose.arm.yml
+```
+
+Compose applies the files left to right, and a later file wins when two files mount the same container path. Keeping `docker-compose.arm.yml` last guarantees the database stays on the named volume even if the override also touches `youtarr-db`. When passing `-f` flags directly, use the same order:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.arm.yml up -d
+```
+
+Run `docker compose up -d` after changing `.env` so the containers are recreated with the full file list.
+
 ### Manual Configuration
 
 Alternatively, edit `docker-compose.yml` directly:
@@ -618,6 +637,8 @@ net use Z: \\nas-server\youtube /persistent:yes
 # Enter: Z:/Youtube_videos
 ```
 
+Docker Desktop runs containers inside a VM, which generally cannot see drive letters mapped in your Windows session. If the container shows an empty folder or Compose fails to create the mount, let Docker mount the share itself instead: see [Letting Docker Mount the Share](#letting-docker-mount-the-share).
+
 **macOS Example (SMB)**:
 ```bash
 # Mount via Finder or command line
@@ -631,6 +652,47 @@ mount_smbfs //username@nas-server/youtube ~/nas-youtube
 #### Docker Compose Configuration
 
 Once your network storage is mounted on the host, configure it using `YOUTUBE_OUTPUT_DIR`:
+
+#### Letting Docker Mount the Share
+
+Instead of mounting the share on the host, Docker can mount an SMB/CIFS share (the default on Synology, QNAP, and Windows file shares) directly as a named volume. This works the same on Linux, Docker Desktop for Windows, and Docker Desktop for macOS, and it is the most reliable option on Docker Desktop.
+
+Create `docker-compose.override.yml` next to `docker-compose.yml`. It is ignored by git, so `git pull` never touches it:
+
+```yaml
+services:
+  youtarr:
+    volumes:
+      - youtube_videos:/usr/src/app/data
+
+volumes:
+  youtube_videos:
+    driver: local
+    driver_opts:
+      type: cifs
+      o: "username=YOUR_NAS_USER,password=YOUR_NAS_PASSWORD,uid=1000,gid=1000,file_mode=0775,dir_mode=0775,vers=3.0"
+      device: "//192.168.1.50/YouTube"
+```
+
+- `device` is the share in `//server/share` form. Use the NAS IP address rather than its hostname unless the hostname resolves from inside Docker.
+- `uid`/`gid` set the owner Youtarr sees for files on the share. Match them to `YOUTARR_UID`/`YOUTARR_GID` if you set those.
+- `vers=3.0` selects the SMB protocol version. Synology and recent Windows shares support it; try `vers=2.1` for older devices.
+- The password is stored in plain text in this file, so consider a NAS account that only has access to this share.
+- Docker Compose treats `$` as the start of a variable, even inside quotes. Write each literal `$` in the username or password as `$$`: a password of `abc$secret` goes in as `abc$$secret`.
+
+The override's `/usr/src/app/data` mount replaces the `${YOUTUBE_OUTPUT_DIR}` mount from `docker-compose.yml`, so `YOUTUBE_OUTPUT_DIR` no longer controls where videos go. Keep it set anyway (for example `./downloads`), since `docker-compose.yml` still references it.
+
+If your `.env` sets `COMPOSE_FILE` (named-volume installs do), add the override to it as described in [Keeping docker-compose.override.yml](#keeping-docker-composeoverrideyml), or Compose will ignore this file.
+
+After `docker compose up -d`, check that Youtarr sees the share:
+
+```bash
+docker exec youtarr ls /usr/src/app/data
+```
+
+From Git Bash on Windows, prefix the command with `MSYS_NO_PATHCONV=1`, otherwise Git Bash rewrites `/usr/src/app/data` into a Windows path.
+
+If the share is unreachable when Youtarr starts, Youtarr's startup file rescan marks the videos on it as missing. Nothing is deleted: once the share is back, restart Youtarr or use **Run now** on "Rescan files on disk" under Settings > Scheduling.
 
 #### Troubleshooting NAS Issues
 
