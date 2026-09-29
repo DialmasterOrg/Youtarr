@@ -50,6 +50,25 @@ const BENIGN_STDERR_WARNING_PATTERNS = [
 // whitespace). Used to avoid flagging a clean, exit-0 download as "Complete
 // with Warnings" over informational noise like the subtitle impersonation
 // notice. Returns false for empty stderr so callers keep their own guard.
+
+// Terminal statuses a download run should report as a problem with the job
+// itself, beyond its per-video counts.
+const JOB_ISSUE_STATUSES = new Set(['Error', 'Failed', 'Terminated', 'Killed']);
+
+// The job-level problem to hand the run, read back from the status the
+// branches above persisted (they differ in how they choose it), or null. An
+// error whose failed videos were all handed to an automatic retry is the
+// retry's to report: its own result says whether they finally downloaded.
+function describeJobIssue(jobId, { wasManuallyTerminated, failuresHandedOff }) {
+  const job = jobModule.getJob(jobId);
+  const status = job && job.status;
+  if (!JOB_ISSUE_STATUSES.has(status)) return null;
+  const terminated = status === 'Terminated' || status === 'Killed';
+  if (!terminated && failuresHandedOff) return null;
+  const reason = (terminated && job.notes) || job.output || status;
+  return { status, reason, byUser: terminated && Boolean(wasManuallyTerminated) };
+}
+
 function stderrHasOnlyBenignWarnings(stderrBuffer = '') {
   const lines = String(stderrBuffer)
     .split('\n')
@@ -575,7 +594,12 @@ async function finalizeDownloadJob({
 
     // Fold this job's totals into the run; it emits one aggregated summary + notification when its last job finishes.
     if (runActive) {
+      const jobIssue = describeJobIssue(jobId, {
+        wasManuallyTerminated,
+        failuresHandedOff: autoRetryQueuedCount > 0 && reportableFailedVideos.length === 0 && !botDetected,
+      });
       downloadRunTracker.recordJobResult(runId, jobId, {
+        ...(jobIssue ? { jobIssue } : {}),
         totalDownloaded: videoData.length,
         totalSkipped: monitor.videoCount.skipped || 0,
         totalFailed: reportableFailedVideos.length,

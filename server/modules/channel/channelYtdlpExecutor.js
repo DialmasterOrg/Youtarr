@@ -2,6 +2,7 @@ const fs = require('fs-extra');
 const fsPromises = fs.promises;
 const path = require('path');
 const os = require('os');
+const { pipeline } = require('stream/promises');
 const { v4: uuidv4 } = require('uuid');
 const { spawnYtDlp } = require('../ytdlpProcess');
 const tempPathManager = require('../download/tempPathManager');
@@ -14,9 +15,11 @@ class ChannelYtdlpExecutor {
    * common arguments (cookies, proxy, sleep-requests, etc.)
    * @param {Array} args - Pre-built arguments for yt-dlp command
    * @param {string|null} outputFile - Optional output file path
+   * @param {Object} options - Options object
+   * @param {Function} options.onStdoutData - Called with each raw stdout chunk as it arrives
    * @returns {Promise<string>} - Output content if outputFile provided
    */
-  async executeYtDlpCommand(args, outputFile = null, { timeoutMs = 120000 } = {}) {
+  async executeYtDlpCommand(args, outputFile = null, { timeoutMs = 120000, onStdoutData } = {}) {
     const ytDlp = spawnYtDlp(args, {
       env: {
         ...process.env,
@@ -29,9 +32,16 @@ class ChannelYtdlpExecutor {
     // 'error' event and take down the whole process.
     ytDlp.on('error', () => {});
 
-    if (outputFile) {
-      const writeStream = fs.createWriteStream(outputFile);
-      ytDlp.stdout.pipe(writeStream);
+    // The child's exit does not mean its output is on disk: stdout can still be
+    // draining and the write stream flushing, so the file is read only after
+    // the pipeline finishes. A write stream failure rejects instead of being
+    // an unhandled 'error' event.
+    const outputWritten = outputFile
+      ? pipeline(ytDlp.stdout, fs.createWriteStream(outputFile))
+      : null;
+
+    if (onStdoutData) {
+      ytDlp.stdout.on('data', onStdoutData);
     }
 
     // Capture stderr to detect bot challenges
@@ -40,7 +50,7 @@ class ChannelYtdlpExecutor {
       stderrBuffer += data.toString();
     });
 
-    await new Promise((resolve, reject) => {
+    const exited = new Promise((resolve, reject) => {
       let settled = false;
       const finish = (callback, value) => {
         if (settled) return;
@@ -90,6 +100,7 @@ class ChannelYtdlpExecutor {
       ytDlp.on('error', (error) => finish(reject, error));
 
     });
+    await Promise.all([exited, outputWritten]);
     if (outputFile) {
       const content = await fsPromises.readFile(outputFile, 'utf8');
       await fsPromises.unlink(outputFile);

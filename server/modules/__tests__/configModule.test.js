@@ -51,7 +51,7 @@ describe('ConfigModule', () => {
     fs.readFileSync = jest.fn();
     fs.writeFileSync = jest.fn();
     fs.mkdirSync = jest.fn();
-    fs.watch = jest.fn().mockReturnValue({ close: jest.fn() });
+    fs.watch = jest.fn().mockReturnValue({ close: jest.fn(), on: jest.fn() });
     fs.chmodSync = jest.fn();
     fs.unlinkSync = jest.fn();
 
@@ -198,6 +198,74 @@ describe('ConfigModule', () => {
         'Schedule ran more often than the minimum interval; changed on upgrade'
       );
       expect(fs.writeFileSync).toHaveBeenCalled();
+    });
+
+    describe('storage limit settings on load', () => {
+      const loadWith = (overrides) => {
+        const existingConfig = { ...defaultTemplate, ...overrides };
+        fs.existsSync.mockReturnValue(true);
+        fs.readFileSync.mockImplementation((path) => JSON.stringify(
+          path.includes('config.json') && !path.includes('example') ? existingConfig : defaultTemplate
+        ));
+        ConfigModule = require('../configModule');
+        return ConfigModule.getConfig();
+      };
+
+      test('corrects spacing and unit case', () => {
+        expect(loadWith({ downloadPauseUsageLimit: '500 gb' }).downloadPauseUsageLimit).toBe('500GB');
+      });
+
+      test.each(['lots', '0GB', '1.5TB', 500])('clears the unusable value %p', (value) => {
+        expect(loadWith({ downloadPauseMinFreeSpace: value }).downloadPauseMinFreeSpace).toBe('');
+      });
+
+      test('keeps valid values unchanged', () => {
+        expect(loadWith({ autoRemovalUsageLimit: '2TB' }).autoRemovalUsageLimit).toBe('2TB');
+      });
+
+      test('warns and saves when a value is cleared', () => {
+        loadWith({ autoRemovalUsageLimit: 'lots' });
+
+        expect(logger.warn).toHaveBeenCalledWith(
+          { key: 'autoRemovalUsageLimit', previous: 'lots', replacement: '' },
+          'Cleared an invalid storage limit setting'
+        );
+        expect(fs.writeFileSync).toHaveBeenCalled();
+      });
+    });
+
+    describe('log level setting on load', () => {
+      const loadWith = (overrides) => {
+        const existingConfig = { ...defaultTemplate, ...overrides };
+        fs.existsSync.mockReturnValue(true);
+        fs.readFileSync.mockImplementation((path) => JSON.stringify(
+          path.includes('config.json') && !path.includes('example') ? existingConfig : defaultTemplate
+        ));
+        ConfigModule = require('../configModule');
+        return ConfigModule.getConfig();
+      };
+
+      test('lowercases a hand-edited level', () => {
+        expect(loadWith({ logLevel: 'DEBUG' }).logLevel).toBe('debug');
+      });
+
+      test.each(['verbose', 'trace', 42])('clears the unsupported value %p', (value) => {
+        expect(loadWith({ logLevel: value }).logLevel).toBe('');
+      });
+
+      test('keeps a supported value unchanged', () => {
+        expect(loadWith({ logLevel: 'warn' }).logLevel).toBe('warn');
+      });
+
+      test('warns and saves when the value is cleared', () => {
+        loadWith({ logLevel: 'verbose' });
+
+        expect(logger.warn).toHaveBeenCalledWith(
+          { key: 'logLevel', previous: 'verbose', replacement: '' },
+          'Cleared an invalid log level setting'
+        );
+        expect(fs.writeFileSync).toHaveBeenCalled();
+      });
     });
 
     test('leaves malformed schedules for correction instead of normalizing them on load', () => {
@@ -734,7 +802,7 @@ describe('ConfigModule', () => {
       let watchCallback;
       fs.watch.mockImplementation((path, callback) => {
         watchCallback = callback;
-        return { close: jest.fn() };
+        return { close: jest.fn(), on: jest.fn() };
       });
 
       ConfigModule = require('../configModule');
@@ -754,9 +822,49 @@ describe('ConfigModule', () => {
       jest.runAllTimers();
     });
 
+    test('clears an invalid storage limit from a hand edit picked up while running', (done) => {
+      fs.existsSync.mockReturnValue(true);
+      fs.readFileSync.mockReturnValue(JSON.stringify(defaultTemplate));
+      let watchCallback;
+      fs.watch.mockImplementation((path, callback) => {
+        watchCallback = callback;
+        return { close: jest.fn(), on: jest.fn() };
+      });
+      ConfigModule = require('../configModule');
+      fs.readFileSync.mockReturnValue(JSON.stringify({ ...defaultTemplate, downloadPauseUsageLimit: 'lots' }));
+
+      ConfigModule.on('change', () => {
+        expect(ConfigModule.getConfig().downloadPauseUsageLimit).toBe('');
+        done();
+      });
+
+      watchCallback('change');
+      jest.runAllTimers();
+    });
+
+    test('clears an invalid log level from a hand edit picked up while running', (done) => {
+      fs.existsSync.mockReturnValue(true);
+      fs.readFileSync.mockReturnValue(JSON.stringify(defaultTemplate));
+      let watchCallback;
+      fs.watch.mockImplementation((path, callback) => {
+        watchCallback = callback;
+        return { close: jest.fn(), on: jest.fn() };
+      });
+      ConfigModule = require('../configModule');
+      fs.readFileSync.mockReturnValue(JSON.stringify({ ...defaultTemplate, logLevel: 'Verbose' }));
+
+      ConfigModule.on('change', () => {
+        expect(ConfigModule.getConfig().logLevel).toBe('');
+        done();
+      });
+
+      watchCallback('change');
+      jest.runAllTimers();
+    });
+
     test('should stop watching config when stopWatchingConfig is called', () => {
       // Arrange
-      const mockWatcher = { close: jest.fn() };
+      const mockWatcher = { close: jest.fn(), on: jest.fn() };
       fs.watch.mockReturnValue(mockWatcher);
       fs.existsSync.mockReturnValue(true);
       fs.readFileSync.mockReturnValue(JSON.stringify(defaultTemplate));
@@ -778,7 +886,7 @@ describe('ConfigModule', () => {
       let watchCallback;
       fs.watch.mockImplementation((path, callback) => {
         watchCallback = callback;
-        return { close: jest.fn() };
+        return { close: jest.fn(), on: jest.fn() };
       });
 
       ConfigModule = require('../configModule');
@@ -807,7 +915,7 @@ describe('ConfigModule', () => {
       let watchCallback;
       fs.watch.mockImplementation((path, callback) => {
         watchCallback = callback;
-        return { close: jest.fn() };
+        return { close: jest.fn(), on: jest.fn() };
       });
 
       ConfigModule = require('../configModule');
@@ -820,6 +928,94 @@ describe('ConfigModule', () => {
 
       // Assert - should not emit change event for identical content
       expect(changeListener).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Config Watcher Unavailable', () => {
+    const makeWatchError = (code) => Object.assign(new Error(`${code}: watch failed`), { code });
+
+    beforeEach(() => {
+      fs.existsSync.mockReturnValue(true);
+      fs.readFileSync.mockReturnValue(JSON.stringify(defaultTemplate));
+    });
+
+    test('loads config when the watcher cannot be created', () => {
+      fs.watch.mockImplementation(() => {
+        throw makeWatchError('EMFILE');
+      });
+
+      ConfigModule = require('../configModule');
+
+      expect(ConfigModule.getConfig().plexPort).toBe('32400');
+    });
+
+    test('warns with the instance limit fix and docs link on EMFILE', () => {
+      const error = makeWatchError('EMFILE');
+      fs.watch.mockImplementation(() => {
+        throw error;
+      });
+
+      ConfigModule = require('../configModule');
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ err: error }),
+        expect.stringMatching(/sysctl -w fs\.inotify\.max_user_instances=512.*troubleshooting\/#config-file-watcher-limit/)
+      );
+    });
+
+    test('warns with the watch limit fix on ENOSPC', () => {
+      fs.watch.mockImplementation(() => {
+        throw makeWatchError('ENOSPC');
+      });
+
+      ConfigModule = require('../configModule');
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.stringContaining('fs.inotify.max_user_watches')
+      );
+    });
+
+    test('stopWatchingConfig does not throw when the watcher never started', () => {
+      fs.watch.mockImplementation(() => {
+        throw makeWatchError('EMFILE');
+      });
+      ConfigModule = require('../configModule');
+
+      expect(() => ConfigModule.stopWatchingConfig()).not.toThrow();
+    });
+
+    test('saveConfig still writes the file when the watcher never started', () => {
+      fs.watch.mockImplementation(() => {
+        throw makeWatchError('EMFILE');
+      });
+      ConfigModule = require('../configModule');
+      fs.writeFileSync.mockClear();
+
+      ConfigModule.saveConfig();
+
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        expect.stringContaining('config.json'),
+        expect.any(String),
+        expect.anything()
+      );
+    });
+
+    test('closes the watcher and warns when it emits an error after starting', () => {
+      const EventEmitter = require('events');
+      const watcher = new EventEmitter();
+      watcher.close = jest.fn();
+      fs.watch.mockReturnValue(watcher);
+      ConfigModule = require('../configModule');
+      const error = makeWatchError('EMFILE');
+
+      watcher.emit('error', error);
+
+      expect(watcher.close).toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ err: error }),
+        expect.stringContaining('Cannot watch config.json')
+      );
     });
   });
 
@@ -1052,17 +1248,56 @@ describe('ConfigModule', () => {
 
       // Assert
       expect(fs.writeFileSync).toHaveBeenCalledWith(
-        expect.stringContaining('cookies.user.txt'),
-        buffer
-      );
-      expect(fs.chmodSync).toHaveBeenCalledWith(
-        expect.stringContaining('cookies.user.txt'),
-        0o600
+        expect.stringMatching(/cookies\.user\.txt\.\d+\.test-uuid-1234\.tmp$/),
+        buffer,
+        { mode: 0o600, flag: 'wx' }
       );
       expect(ConfigModule.config.customCookiesUploaded).toBe(true);
       expect(ConfigModule.config.cookiesEnabled).toBe(true);
       expect(filePath).toContain('cookies.user.txt');
       expect(changeListener).toHaveBeenCalled();
+    });
+
+    test('should move the written upload over the cookies file in one rename', () => {
+      const filePath = ConfigModule.writeCustomCookiesFile(Buffer.from('cookie data'));
+
+      expect(fs.renameSync).toHaveBeenCalledWith(
+        expect.stringMatching(/cookies\.user\.txt\.\d+\.test-uuid-1234\.tmp$/),
+        filePath
+      );
+    });
+
+    test('should remove the temp file and keep the previous upload when the rename fails', () => {
+      ConfigModule.config.customCookiesUploaded = false;
+      const renameError = new Error('EXDEV');
+      fs.renameSync.mockImplementationOnce(() => { throw renameError; });
+
+      expect(() => ConfigModule.writeCustomCookiesFile(Buffer.from('cookie data'))).toThrow(renameError);
+      expect(fs.unlinkSync).toHaveBeenCalledWith(
+        expect.stringMatching(/cookies\.user\.txt\.\d+\.test-uuid-1234\.tmp$/)
+      );
+      expect(fs.unlinkSync).not.toHaveBeenCalledWith(expect.stringMatching(/cookies\.user\.txt$/));
+      expect(ConfigModule.config.customCookiesUploaded).toBe(false);
+    });
+
+    test('should rethrow a failed write without marking cookies uploaded', () => {
+      ConfigModule.config.customCookiesUploaded = false;
+      const writeError = new Error('ENOSPC');
+      fs.writeFileSync.mockImplementationOnce(() => { throw writeError; });
+      fs.unlinkSync.mockImplementationOnce(() => { throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' }); });
+
+      expect(() => ConfigModule.writeCustomCookiesFile(Buffer.from('cookie data'))).toThrow(writeError);
+      expect(fs.renameSync).not.toHaveBeenCalled();
+      expect(ConfigModule.config.customCookiesUploaded).toBe(false);
+    });
+
+    test('should hand yt-dlp the path that runs copy from', () => {
+      const uploadedCookies = require('../uploadedCookies');
+      ConfigModule.config.cookiesEnabled = true;
+      ConfigModule.config.customCookiesUploaded = true;
+      fs.existsSync.mockReturnValue(true);
+
+      expect(ConfigModule.getCookiesPath()).toBe(uploadedCookies.getPath());
     });
 
     test('should delete custom cookies file', () => {
@@ -1185,6 +1420,14 @@ describe('ConfigModule', () => {
       expect(bytes).toBe(2 * 1024 * 1024 * 1024);
     });
 
+    test('should convert storage threshold from TB to bytes', () => {
+      ConfigModule = require('../configModule');
+
+      const bytes = ConfigModule.convertStorageThresholdToBytes('3TB');
+
+      expect(bytes).toBe(3 * 1024 ** 4);
+    });
+
     test('should return null for invalid threshold format', () => {
       // Arrange
       ConfigModule = require('../configModule');
@@ -1209,69 +1452,6 @@ describe('ConfigModule', () => {
 
       // Assert
       expect(bytes).toBeNull();
-    });
-
-    test('should check if storage is below threshold with string threshold', () => {
-      // Arrange
-      ConfigModule = require('../configModule');
-      const currentAvailable = 100 * 1024 * 1024; // 100 MB
-
-      // Act
-      const isBelowThreshold = ConfigModule.isStorageBelowThreshold(currentAvailable, '200MB');
-
-      // Assert
-      expect(isBelowThreshold).toBe(true);
-    });
-
-    test('should check if storage is above threshold', () => {
-      // Arrange
-      ConfigModule = require('../configModule');
-      const currentAvailable = 500 * 1024 * 1024; // 500 MB
-
-      // Act
-      const isBelowThreshold = ConfigModule.isStorageBelowThreshold(currentAvailable, '200MB');
-
-      // Assert
-      expect(isBelowThreshold).toBe(false);
-    });
-
-    test('should check threshold with numeric bytes value', () => {
-      // Arrange
-      ConfigModule = require('../configModule');
-      const currentAvailable = 100 * 1024 * 1024; // 100 MB
-      const thresholdBytes = 200 * 1024 * 1024; // 200 MB
-
-      // Act
-      const isBelowThreshold = ConfigModule.isStorageBelowThreshold(currentAvailable, thresholdBytes);
-
-      // Assert
-      expect(isBelowThreshold).toBe(true);
-    });
-
-    test('should return false when currentAvailable is null', () => {
-      // Arrange
-      ConfigModule = require('../configModule');
-
-      // Act
-      const isBelowThreshold = ConfigModule.isStorageBelowThreshold(null, '200MB');
-
-      // Assert
-      expect(isBelowThreshold).toBe(false);
-      expect(logger.warn).toHaveBeenCalledWith(
-        'Cannot check storage threshold: currentAvailable is null/undefined'
-      );
-    });
-
-    test('should return false when threshold is null', () => {
-      // Arrange
-      ConfigModule = require('../configModule');
-      const currentAvailable = 100 * 1024 * 1024;
-
-      // Act
-      const isBelowThreshold = ConfigModule.isStorageBelowThreshold(currentAvailable, null);
-
-      // Assert
-      expect(isBelowThreshold).toBe(false);
     });
   });
 
@@ -1409,7 +1589,7 @@ describe('ConfigModule', () => {
       let watchCallback;
       fs.watch.mockImplementation((path, callback) => {
         watchCallback = callback;
-        return { close: jest.fn() };
+        return { close: jest.fn(), on: jest.fn() };
       });
 
       ConfigModule = require('../configModule');

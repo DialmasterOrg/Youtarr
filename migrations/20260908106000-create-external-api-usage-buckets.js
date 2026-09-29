@@ -16,7 +16,7 @@ module.exports = {
       accepted_writes: { type: S.INTEGER, allowNull: false, defaultValue: 0 },
       created_at: { type: S.DATE, allowNull: false, defaultValue: S.NOW },
       updated_at: { type: S.DATE, allowNull: false, defaultValue: S.NOW },
-    });
+    }, { charset: 'utf8mb4', collate: 'utf8mb4_unicode_ci' });
     await addIndexIfMissing(q, 'external_api_usage_buckets', ['api_key_id', 'window_type', 'window_start'], { unique: true, name: 'external_api_usage_key_window_uq' });
     await addIndexIfMissing(q, 'external_api_usage_buckets', ['window_start'], { name: 'external_api_usage_window_idx' });
   },

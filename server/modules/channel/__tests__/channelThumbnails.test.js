@@ -44,6 +44,59 @@ describe('channelThumbnails', () => {
     jest.clearAllMocks();
   });
 
+  describe('resizeChannelThumbnail', () => {
+    let childProcess;
+
+    beforeEach(() => {
+      childProcess = require('child_process');
+      childProcess.execFile.mockImplementation((file, args, callback) => callback(null, '', ''));
+      fs.promises.rename.mockResolvedValue();
+    });
+
+    test('passes image paths to ffmpeg as separate arguments without a shell', async () => {
+      await channelThumbnails.resizeChannelThumbnail('UC$(id)"x');
+
+      expect(childProcess.execFile).toHaveBeenCalledWith(
+        '/usr/bin/ffmpeg',
+        [
+          '-loglevel', 'error', '-y',
+          '-i', '/path/to/images/channelthumb-UC$(id)"x.jpg',
+          '-vf', 'scale=iw*0.4:ih*0.4',
+          '-q:v', '2',
+          '/path/to/images/channelthumb-UC$(id)"x-small.jpg',
+        ],
+        expect.any(Function)
+      );
+    });
+
+    test('replaces the original thumbnail with the resized one', async () => {
+      await channelThumbnails.resizeChannelThumbnail('UC123');
+
+      expect(fs.promises.rename).toHaveBeenCalledWith(
+        '/path/to/images/channelthumb-UC123-small.jpg',
+        '/path/to/images/channelthumb-UC123.jpg'
+      );
+    });
+
+    test('logs and does not throw when ffmpeg fails', async () => {
+      childProcess.execFile.mockImplementation((file, args, callback) => callback(new Error('ffmpeg failed')));
+
+      await expect(channelThumbnails.resizeChannelThumbnail('UC123')).resolves.toBeUndefined();
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ channelId: 'UC123' }),
+        'Error resizing channel thumbnail'
+      );
+    });
+
+    test('keeps the original thumbnail when ffmpeg fails', async () => {
+      childProcess.execFile.mockImplementation((file, args, callback) => callback(new Error('ffmpeg failed')));
+
+      await channelThumbnails.resizeChannelThumbnail('UC123');
+
+      expect(fs.promises.rename).not.toHaveBeenCalled();
+    });
+  });
+
   describe('extractAvatarThumbnailUrl', () => {
     test('should return null when thumbnails is not an array', () => {
       const channelData = { channel_id: 'UC123', thumbnails: null };

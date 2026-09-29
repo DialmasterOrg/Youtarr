@@ -627,4 +627,66 @@ describe('useRefreshChannelVideos', () => {
       expect(refreshResult3).toEqual(refreshResult1);
     });
   });
+
+  describe('Switching Channel or Tab', () => {
+    type View = { channelId: string; tabType: string };
+    const renderForView = () =>
+      renderHook(
+        ({ channelId, tabType }: View) =>
+          useRefreshChannelVideos(channelId, 1, 16, 'off', tabType, mockToken),
+        { initialProps: { channelId: mockChannelId, tabType: 'videos' } as View }
+      );
+
+    // Starts a Load More whose response the test settles later.
+    const startPendingRefresh = (result: { current: { refreshVideos: () => Promise<unknown> } }) => {
+      let settle: (response: unknown) => void = () => {};
+      mockFetch.mockImplementationOnce(() => new Promise((resolve) => { settle = resolve; }));
+      let pending: Promise<unknown> = Promise.resolve();
+      act(() => {
+        pending = result.current.refreshVideos();
+      });
+      return {
+        fail: async () => {
+          await act(async () => {
+            settle({ ok: false, status: 500, json: jest.fn().mockResolvedValueOnce({ success: false, message: 'yt-dlp failed' }) });
+            await pending;
+          });
+        },
+      };
+    };
+
+    test('stops showing loading when the channel changes', () => {
+      const { result, rerender } = renderForView();
+      startPendingRefresh(result);
+
+      rerender({ channelId: 'UC999999999', tabType: 'videos' });
+
+      expect(result.current.loading).toBe(false);
+    });
+
+    test('keeps a previous tab error off the tab the user switched to', async () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const { result, rerender } = renderForView();
+      const refresh = startPendingRefresh(result);
+      rerender({ channelId: mockChannelId, tabType: 'shorts' });
+
+      await refresh.fail();
+
+      expect(result.current.error).toBeNull();
+      consoleErrorSpy.mockRestore();
+    });
+
+    test('keeps a previous tab load from ending the current tab load', async () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const { result, rerender } = renderForView();
+      const videosRefresh = startPendingRefresh(result);
+      rerender({ channelId: mockChannelId, tabType: 'shorts' });
+      startPendingRefresh(result);
+
+      await videosRefresh.fail();
+
+      expect(result.current.loading).toBe(true);
+      consoleErrorSpy.mockRestore();
+    });
+  });
 });

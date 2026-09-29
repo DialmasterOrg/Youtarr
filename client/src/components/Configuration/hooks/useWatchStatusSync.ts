@@ -86,8 +86,12 @@ export const useWatchStatusSync = (token: string | null) => {
       const message =
         (axios.isAxiosError(err) && err.response?.data?.error) || 'Failed to start sync';
       setStartError(typeof message === 'string' ? message : 'Failed to start sync');
-      if (axios.isAxiosError(err) && err.response?.status === 409) {
-        // Another sync is already running; start polling it as well.
+      const reason = axios.isAxiosError(err)
+        ? (err.response?.data as { reason?: unknown } | undefined)?.reason
+        : undefined;
+      if (axios.isAxiosError(err) && err.response?.status === 409 && reason === 'running') {
+        // Another sync is already running; start polling it as well. Other
+        // refusals (no media server) mean nothing started.
         setSyncState((prev) => ({ running: true, lastRun: prev?.lastRun ?? null }));
       }
     } finally {

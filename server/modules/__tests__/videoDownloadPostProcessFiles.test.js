@@ -213,6 +213,16 @@ describe('videoDownloadPostProcessFiles', () => {
     await flushPromises();
   }
 
+  // Quietly: the post-processor starts at LOG_LEVEL on every video, so an
+  // announced change would add a "Log level changed" line per download.
+  it('quietly matches the log level saved in Settings', async () => {
+    configModule.__setConfig({ writeChannelPosters: false, writeVideoNfoFiles: true, logLevel: 'debug' });
+
+    await loadModule();
+
+    expect(logger.applyLevelSetting).toHaveBeenCalledWith('debug', { announce: false });
+  });
+
   it('embeds metadata via AtomicParsley with correct arguments', async () => {
     await loadModule();
     await settleAsync();
@@ -244,6 +254,59 @@ describe('videoDownloadPostProcessFiles', () => {
     expect(nfoGenerator.writeVideoNfoFile).toHaveBeenCalledWith(videoPath, expect.any(Object));
     expect(configModule.stopWatchingConfig).toHaveBeenCalled();
     expect(process.exit).not.toHaveBeenCalled();
+  });
+
+  function getAtomicParsleyArgs(targetPath) {
+    const call = childProcess.spawnSync.mock.calls.find(
+      ([cmd, args]) => cmd === '/usr/bin/AtomicParsley' && args[0] === targetPath
+    );
+    return call ? call[1] : null;
+  }
+
+  function getEmbeddedTitle(targetPath) {
+    const args = getAtomicParsleyArgs(targetPath);
+    return args ? args[args.indexOf('--title') + 1] : null;
+  }
+
+  it('omits the channel prefix from the embedded title when prefixChannelNameInTitle is false', async () => {
+    configModule.__setConfig({
+      writeChannelPosters: false,
+      writeVideoNfoFiles: true,
+      prefixChannelNameInTitle: false,
+      ffmpegPath: '/usr/bin/ffmpeg'
+    });
+
+    await loadModule();
+    await settleAsync();
+
+    expect(getEmbeddedTitle(videoPath)).toBe('Video Title');
+  });
+
+  describe('video_mp3 dual-format downloads', () => {
+    const audioPath = '/library/Channel/Video Title [abc123].mp3';
+    const companionVideoPath = '/library/Channel/Video Title [abc123].mp4';
+
+    beforeEach(() => {
+      process.argv = ['node', 'script', audioPath];
+      fs.existsSync.mockImplementation((path) => path === jsonPath || path === companionVideoPath);
+    });
+
+    it('embeds metadata into the companion MP4', async () => {
+      await loadModule();
+      await settleAsync();
+
+      expect(getEmbeddedTitle(companionVideoPath)).toBe('Channel - Video Title');
+      expect(getAtomicParsleyArgs(companionVideoPath)).toEqual(
+        expect.arrayContaining(['--album', 'Channel', '--stik', 'Movie', '--overWrite'])
+      );
+    });
+
+    it('does not run AtomicParsley against the MP3 file', async () => {
+      await loadModule();
+      await settleAsync();
+
+      expect(getAtomicParsleyArgs(audioPath)).toBeNull();
+    });
   });
 
   it('backfills title and uploader for a nameless seeded channel from the info json', async () => {
@@ -1807,6 +1870,141 @@ describe('videoDownloadPostProcessFiles', () => {
         '/tmp/youtarr-downloads/Channel/Video Title - abc123',
         '/library/Channel/Video Title - abc123',
         expect.any(Object)
+      );
+    });
+  });
+
+  describe('per-channel additional_tags merge', () => {
+    const customChannel = {
+      id: 1,
+      sub_folder: null,
+      uploader: 'Channel',
+      folder_name: 'Channel',
+      default_rating: null,
+      enabled: true,
+    };
+
+    beforeEach(() => {
+      // Channel lookup must resolve via the info.json channel_id, not an owner env
+      delete process.env.YOUTARR_OWNER_CHANNEL_ID;
+      delete process.env.YOUTARR_OWNER_CHANNEL_MAP;
+    });
+
+    it('prepends enabled channel custom tags before YouTube tags in AtomicParsley keywords', async () => {
+      Channel.findOne.mockResolvedValue({ ...customChannel, additional_tags: 'Custom One|Custom Two' });
+
+      await loadModule();
+      await settleAsync();
+
+      expect(childProcess.spawnSync).toHaveBeenCalledWith(
+        '/usr/bin/AtomicParsley',
+        expect.arrayContaining(['--keyword', 'Custom One;Custom Two;tag1;tag2']),
+        expect.any(Object)
+      );
+    });
+
+    it('drops YouTube tags that duplicate a custom tag, case-insensitively', async () => {
+      Channel.findOne.mockResolvedValue({ ...customChannel, additional_tags: 'Minecraft' });
+      fs.readFileSync.mockReturnValue(JSON.stringify({
+        id: 'abc123',
+        upload_date: '20240131',
+        title: 'Video Title',
+        uploader: 'Channel',
+        channel_id: 'channel123',
+        tags: ['minecraft', 'tag2']
+      }));
+
+      await loadModule();
+      await settleAsync();
+
+      expect(childProcess.spawnSync).toHaveBeenCalledWith(
+        '/usr/bin/AtomicParsley',
+        expect.arrayContaining(['--keyword', 'Minecraft;tag2']),
+        expect.any(Object)
+      );
+    });
+
+    it('trims whitespace and drops empty segments from additional_tags', async () => {
+      Channel.findOne.mockResolvedValue({ ...customChannel, additional_tags: '  Foo | | Bar  ' });
+
+      await loadModule();
+      await settleAsync();
+
+      expect(childProcess.spawnSync).toHaveBeenCalledWith(
+        '/usr/bin/AtomicParsley',
+        expect.arrayContaining(['--keyword', 'Foo;Bar;tag1;tag2']),
+        expect.any(Object)
+      );
+    });
+
+    it('leaves tags unchanged when additional_tags has no usable segments', async () => {
+      Channel.findOne.mockResolvedValue({ ...customChannel, additional_tags: ' | ' });
+
+      await loadModule();
+      await settleAsync();
+
+      expect(childProcess.spawnSync).toHaveBeenCalledWith(
+        '/usr/bin/AtomicParsley',
+        expect.arrayContaining(['--keyword', 'tag1;tag2']),
+        expect.any(Object)
+      );
+    });
+
+    it('does not merge custom tags for a disabled channel', async () => {
+      Channel.findOne.mockResolvedValue({ ...customChannel, enabled: false, additional_tags: 'Custom One' });
+
+      await loadModule();
+      await settleAsync();
+
+      expect(childProcess.spawnSync).toHaveBeenCalledWith(
+        '/usr/bin/AtomicParsley',
+        expect.arrayContaining(['--keyword', 'tag1;tag2']),
+        expect.any(Object)
+      );
+    });
+
+    it('does not merge custom tags when the channel is not tracked', async () => {
+      Channel.findOne.mockResolvedValue(null);
+
+      await loadModule();
+      await settleAsync();
+
+      expect(childProcess.spawnSync).toHaveBeenCalledWith(
+        '/usr/bin/AtomicParsley',
+        expect.arrayContaining(['--keyword', 'tag1;tag2']),
+        expect.any(Object)
+      );
+    });
+
+    it('uses custom tags as the full tag list when the video has no YouTube tags', async () => {
+      Channel.findOne.mockResolvedValue({ ...customChannel, additional_tags: 'Custom One|Custom Two' });
+      fs.readFileSync.mockReturnValue(JSON.stringify({
+        id: 'abc123',
+        upload_date: '20240131',
+        title: 'Video Title',
+        uploader: 'Channel',
+        channel_id: 'channel123'
+      }));
+
+      await loadModule();
+      await settleAsync();
+
+      expect(childProcess.spawnSync).toHaveBeenCalledWith(
+        '/usr/bin/AtomicParsley',
+        expect.arrayContaining(['--keyword', 'Custom One;Custom Two']),
+        expect.any(Object)
+      );
+    });
+
+    it('passes the merged tags (custom tags first) to the NFO writer', async () => {
+      Channel.findOne.mockResolvedValue({ ...customChannel, additional_tags: 'Custom One|Custom Two' });
+
+      await loadModule();
+      await settleAsync();
+
+      expect(nfoGenerator.writeVideoNfoFile).toHaveBeenCalledWith(
+        videoPath,
+        expect.objectContaining({ tags: ['Custom One', 'Custom Two', 'tag1', 'tag2'] })
       );
     });
   });

@@ -1,9 +1,11 @@
 import React from 'react';
 import { Box, Card, CardContent, Chip, Stack, Tooltip, Typography } from '../../ui';
-import { Info as InfoIcon } from '../../../lib/icons';
 import { MediaServerStatus, MediaServerType, Playlist } from '../../../types/playlist';
 import LibraryDownloadsGroup from './LibraryDownloadsGroup';
 import MediaServerSyncGroup from './MediaServerSyncGroup';
+import OpenInYouTubeLink, { youtubePlaylistUrl } from '../../shared/OpenInYouTubeLink';
+import PlaylistCountsInfo from '../../shared/PlaylistCountsInfo';
+import { formatPlaylistCounts } from '../../../utils/playlistCounts';
 
 interface PlaylistHeaderProps {
   playlist: Playlist;
@@ -11,6 +13,7 @@ interface PlaylistHeaderProps {
   isMobile: boolean;
   serverStatus: MediaServerStatus;
   anyConfigured: boolean;
+  downloadedCount?: number | null;
   newCount: number | null;
   followingExistingCount?: number | null;
   followingRequestedCount?: number | null;
@@ -44,6 +47,7 @@ const PlaylistHeader: React.FC<PlaylistHeaderProps> = ({
   isMobile,
   serverStatus,
   anyConfigured,
+  downloadedCount,
   newCount,
   followingExistingCount,
   followingRequestedCount,
@@ -82,9 +86,12 @@ const PlaylistHeader: React.FC<PlaylistHeaderProps> = ({
           />
           <div className="flex flex-col gap-4 flex-1 min-w-0">
             <div>
-              <Typography variant="h5" style={{ fontWeight: 700 }}>
-                {playlist.title}
-              </Typography>
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <Typography variant="h5" className="min-w-0" style={{ fontWeight: 700 }}>
+                  {playlist.title}
+                </Typography>
+                <OpenInYouTubeLink href={youtubePlaylistUrl(playlist.playlist_id)} />
+              </div>
               {playlist.uploader && (
                 <Typography variant="body2" color="text.secondary">
                   By {playlist.uploader}
@@ -107,15 +114,8 @@ const PlaylistHeader: React.FC<PlaylistHeaderProps> = ({
                   </span>
                 </Tooltip>
                 <Typography variant="body2" color="text.secondary" className="inline-flex items-center gap-1">
-                  {playlist.video_count} videos
-                  <Tooltip title="Private and members-only videos can't be accessed, so they're excluded from this list and never downloaded.">
-                    <span
-                      className="inline-flex items-center cursor-help"
-                      aria-label="Why some videos may be missing"
-                    >
-                      <InfoIcon size={14} />
-                    </span>
-                  </Tooltip>
+                  {formatPlaylistCounts(playlist.video_count, downloadedCount)}
+                  <PlaylistCountsInfo />
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   Last fetched: {formatTimestamp(playlist.lastFetched)}

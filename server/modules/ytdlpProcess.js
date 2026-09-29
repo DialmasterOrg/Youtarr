@@ -1,11 +1,23 @@
 const { spawn, spawnSync } = require('child_process');
 const { prepareExternalCookies } = require('./externalCookies');
+const uploadedCookies = require('./uploadedCookies');
+
+// yt-dlp writes its cookie jar back on exit, so neither the external source nor
+// the uploaded file is ever passed to it. Every invocation gets its own
+// writable copy instead.
+function prepareCookies(args) {
+  const external = prepareExternalCookies(args);
+  const uploaded = uploadedCookies.prepare(external.args);
+  const cleanups = [external.cleanup, uploaded.cleanup].filter(Boolean);
+  return {
+    args: uploaded.args,
+    cleanup: cleanups.length > 0 ? () => cleanups.forEach((cleanup) => cleanup()) : null,
+  };
+}
 
 // Keep the existing ChildProcess API and event handling at each call site.
-// The external source is never passed to yt-dlp, which writes its cookie jar
-// back on exit. Every invocation gets its own writable snapshot instead.
 function spawnYtDlp(args, options) {
-  const prepared = prepareExternalCookies(args);
+  const prepared = prepareCookies(args);
   try {
     const child = spawn('yt-dlp', prepared.args, options);
     if (prepared.cleanup) {
@@ -21,7 +33,7 @@ function spawnYtDlp(args, options) {
 }
 
 function spawnYtDlpSync(args, options) {
-  const prepared = prepareExternalCookies(args);
+  const prepared = prepareCookies(args);
   try {
     return spawnSync('yt-dlp', prepared.args, options);
   } finally {

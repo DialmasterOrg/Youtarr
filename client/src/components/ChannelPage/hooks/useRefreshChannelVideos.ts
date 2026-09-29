@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { ChannelVideo } from '../../../types/ChannelVideo';
 import { ChipFilterMode } from '../../shared/VideoList/types';
 
@@ -25,15 +25,20 @@ export function useRefreshChannelVideos(
 ): UseRefreshChannelVideosResult {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  // A load keeps running after a switch to another channel or tab; only the
+  // newest request for the current view may set loading or error.
+  const latestRequestId = useRef(0);
 
-  // Reset loading state when tab changes (the load is per-tab, not global)
+  // Reset loading state when the channel or tab changes (the load is per-tab, not global)
   useEffect(() => {
+    latestRequestId.current++;
     setLoading(false);
     setError(null);
-  }, [tabType]);
+  }, [channelId, tabType]);
 
   const refreshVideos = useCallback(async (): Promise<RefreshResult | null> => {
     if (!channelId || !token || !tabType) return null;
+    const requestId = ++latestRequestId.current;
 
     setLoading(true);
     setError(null);
@@ -73,10 +78,14 @@ export function useRefreshChannelVideos(
       };
     } catch (err: any) {
       console.error('Error fetching all videos:', err);
-      setError(err.message || 'Failed to fetch all videos for channel');
+      if (requestId === latestRequestId.current) {
+        setError(err.message || 'Failed to fetch all videos for channel');
+      }
       return null;
     } finally {
-      setLoading(false);
+      if (requestId === latestRequestId.current) {
+        setLoading(false);
+      }
     }
   }, [channelId, page, pageSize, downloadedFilter, tabType, token]);
 

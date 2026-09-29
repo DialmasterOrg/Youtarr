@@ -81,6 +81,61 @@ describe('usePlaylistDetail.triggerDownload', () => {
   });
 });
 
+describe('usePlaylistDetail.downloadedCount', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const mockPlaylistResponse = (data: Record<string, unknown>) => {
+    axios.get.mockImplementation((url: string) => {
+      if (url.endsWith('/videos')) {
+        return Promise.resolve({ data: { total: 0, videos: [] } });
+      }
+      return Promise.resolve({ data: { playlist: { playlist_id: 'PL1' }, ...data } });
+    });
+  };
+
+  test('exposes downloadedCount from the playlist response', async () => {
+    mockPlaylistResponse({ downloaded_count: 12 });
+
+    const { result } = renderHook(() =>
+      usePlaylistDetail({ token: 't', playlistId: 'PL1' })
+    );
+
+    await waitFor(() => {
+      expect(result.current.downloadedCount).toBe(12);
+    });
+  });
+
+  test('downloadedCount is null when the field is absent', async () => {
+    mockPlaylistResponse({});
+
+    const { result } = renderHook(() =>
+      usePlaylistDetail({ token: 't', playlistId: 'PL1' })
+    );
+
+    await waitFor(() => {
+      expect(result.current.playlist).not.toBeNull();
+    });
+    expect(result.current.downloadedCount).toBeNull();
+  });
+
+  test('refetchMeta updates downloadedCount', async () => {
+    mockPlaylistResponse({ downloaded_count: 3 });
+    const { result } = renderHook(() =>
+      usePlaylistDetail({ token: 't', playlistId: 'PL1' })
+    );
+    await waitFor(() => expect(result.current.downloadedCount).toBe(3));
+
+    mockPlaylistResponse({ downloaded_count: 2 });
+    await act(async () => {
+      await result.current.refetchMeta();
+    });
+
+    expect(result.current.downloadedCount).toBe(2);
+  });
+});
+
 describe('usePlaylistDetail.notDownloadedCount', () => {
   beforeEach(() => {
     jest.clearAllMocks();

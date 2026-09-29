@@ -125,6 +125,49 @@ describe('useChannelFetchStatus', () => {
 
       expect(result.current.startTime).toBeNull();
     });
+
+    test('exposes Load More progress when the server reports it', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({
+          isFetching: true,
+          startTime: '2023-01-01T00:00:00Z',
+          type: 'fetchAll',
+          tabType: 'videos',
+          progress: { itemsFetched: 120, stage: 'listing' },
+        }),
+      });
+
+      const { result } = renderHook(() =>
+        useChannelFetchStatus(mockChannelId, mockTabType, mockToken)
+      );
+
+      await waitFor(() => {
+        expect(result.current.progress).toEqual({ itemsFetched: 120, stage: 'listing' });
+      });
+    });
+
+    test('reports no progress when the server omits it', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({
+          isFetching: true,
+          startTime: '2023-01-01T00:00:00Z',
+          type: 'autoRefresh',
+          tabType: 'videos',
+        }),
+      });
+
+      const { result } = renderHook(() =>
+        useChannelFetchStatus(mockChannelId, mockTabType, mockToken)
+      );
+
+      await waitFor(() => {
+        expect(result.current.isFetching).toBe(true);
+      });
+
+      expect(result.current.progress).toBeNull();
+    });
   });
 
   describe('Error Handling', () => {
@@ -696,6 +739,209 @@ describe('useChannelFetchStatus', () => {
 
       const secondCallHeaders = mockFetch.mock.calls[1][1].headers;
       expect(secondCallHeaders['x-access-token']).toBe('new-token-456');
+    });
+  });
+
+  describe('Slow Responses', () => {
+    // Longer than the 3 s poll interval.
+    const SLOW_RESPONSE_MS = 4000;
+    const TIME_STEP_MS = 500;
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.runOnlyPendingTimers();
+      jest.useRealTimers();
+    });
+
+    // Each call answers with the next body (repeating the last) after SLOW_RESPONSE_MS.
+    const respondSlowly = (bodies: Array<Record<string, unknown>>) => {
+      let call = 0;
+      mockFetch.mockImplementation(() => {
+        const body = bodies[Math.min(call++, bodies.length - 1)];
+        return new Promise((resolve) => {
+          setTimeout(() => resolve({ ok: true, json: jest.fn().mockResolvedValueOnce(body) }), SLOW_RESPONSE_MS);
+        });
+      });
+    };
+
+    const advance = async (ms: number) => {
+      for (let elapsed = 0; elapsed < ms; elapsed += TIME_STEP_MS) {
+        await act(async () => {
+          jest.advanceTimersByTime(TIME_STEP_MS);
+          for (let i = 0; i < 5; i++) {
+            await Promise.resolve();
+          }
+        });
+      }
+    };
+
+    const fetchingWith = (itemsFetched: number) => ({
+      isFetching: true,
+      tabType: 'videos',
+      progress: { itemsFetched, stage: 'listing' },
+    });
+
+    const renderAndStartPolling = () => {
+      const view = renderHook(() => useChannelFetchStatus(mockChannelId, mockTabType, mockToken));
+      act(() => {
+        view.result.current.startPolling();
+      });
+      return view;
+    };
+
+    test('keeps updating progress when each check is slower than the poll interval', async () => {
+      respondSlowly([fetchingWith(30), fetchingWith(60)]);
+
+      const { result } = renderAndStartPolling();
+      await advance(10500);
+
+      expect(result.current.progress).toEqual({ itemsFetched: 60, stage: 'listing' });
+    });
+
+    test('reports completion when each check is slower than the poll interval', async () => {
+      respondSlowly([fetchingWith(30), fetchingWith(60), { isFetching: false, tabType: 'videos' }]);
+      const onComplete = jest.fn();
+
+      const { result } = renderAndStartPolling();
+      result.current.onFetchComplete(onComplete);
+      await advance(18000);
+
+      expect(onComplete).toHaveBeenCalledTimes(1);
+    });
+
+    test('reports the fetch while it runs and stops once a slow check says it finished', async () => {
+      respondSlowly([fetchingWith(30), fetchingWith(60), { isFetching: false, tabType: 'videos' }]);
+
+      const { result } = renderAndStartPolling();
+      await advance(4500);
+      const whileRunning = result.current.isFetching;
+      await advance(13500);
+
+      expect([whileRunning, result.current.isFetching]).toEqual([true, false]);
+    });
+
+    test('does not start a check while one is still waiting on the server', async () => {
+      respondSlowly([fetchingWith(30)]);
+
+      renderAndStartPolling();
+      await advance(3500);
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    test('checks a new tab right away while the previous tab check is still pending', async () => {
+      respondSlowly([fetchingWith(30), { isFetching: false, tabType: 'shorts' }]);
+
+      const { rerender } = renderHook(
+        ({ tabType }: { tabType: string }) => useChannelFetchStatus(mockChannelId, tabType, mockToken),
+        { initialProps: { tabType: 'videos' } }
+      );
+      rerender({ tabType: 'shorts' });
+      await advance(TIME_STEP_MS);
+
+      expect(mockFetch.mock.calls[1][0]).toContain('tabType=shorts');
+    });
+
+    test('ignores a slow response for the previous tab that arrives after the switch', async () => {
+      respondSlowly([fetchingWith(30), { isFetching: false, tabType: 'shorts' }]);
+
+      const { result, rerender } = renderHook(
+        ({ tabType }: { tabType: string }) => useChannelFetchStatus(mockChannelId, tabType, mockToken),
+        { initialProps: { tabType: 'videos' } }
+      );
+      rerender({ tabType: 'shorts' });
+      await advance(5000);
+
+      expect(result.current.isFetching).toBe(false);
+    });
+  });
+
+  describe('Switching Channel or Tab', () => {
+    const statusResponse = (body: Record<string, unknown>) => ({
+      ok: true,
+      json: jest.fn().mockResolvedValueOnce(body),
+    });
+    const fetchingVideos = {
+      isFetching: true,
+      startTime: '2023-01-01T00:00:00Z',
+      type: 'fetchAll',
+      tabType: 'videos',
+      progress: { itemsFetched: 3000, stage: 'listing' },
+    };
+
+    const renderForTab = () =>
+      renderHook(
+        ({ tabType }: { tabType: string }) =>
+          useChannelFetchStatus(mockChannelId, tabType, mockToken),
+        { initialProps: { tabType: 'videos' } }
+      );
+
+    test('drops the previous tab status as soon as the tab changes', async () => {
+      mockFetch.mockResolvedValueOnce(statusResponse(fetchingVideos));
+      mockFetch.mockImplementationOnce(() => new Promise(() => {}));
+
+      const { result, rerender } = renderForTab();
+      await waitFor(() => {
+        expect(result.current.progress).not.toBeNull();
+      });
+
+      rerender({ tabType: 'shorts' });
+
+      expect(result.current.progress).toBeNull();
+    });
+
+    test('reports not fetching for the new tab before its check returns', async () => {
+      mockFetch.mockResolvedValueOnce(statusResponse(fetchingVideos));
+      mockFetch.mockImplementationOnce(() => new Promise(() => {}));
+
+      const { result, rerender } = renderForTab();
+      await waitFor(() => {
+        expect(result.current.isFetching).toBe(true);
+      });
+
+      rerender({ tabType: 'shorts' });
+
+      expect(result.current.isFetching).toBe(false);
+    });
+
+    test('ignores a response for the previous tab that arrives after the switch', async () => {
+      let resolveVideosCheck: (value: unknown) => void = () => {};
+      mockFetch.mockImplementationOnce(() => new Promise((resolve) => { resolveVideosCheck = resolve; }));
+      mockFetch.mockResolvedValueOnce(statusResponse({ isFetching: false, tabType: 'shorts' }));
+
+      const { result, rerender } = renderForTab();
+      rerender({ tabType: 'shorts' });
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+      });
+
+      await act(async () => {
+        resolveVideosCheck(statusResponse(fetchingVideos));
+      });
+
+      expect(result.current.isFetching).toBe(false);
+    });
+
+    test('does not report a completion when switching away from a fetching tab', async () => {
+      mockFetch.mockResolvedValueOnce(statusResponse(fetchingVideos));
+      mockFetch.mockResolvedValueOnce(statusResponse({ isFetching: false, tabType: 'shorts' }));
+      const onComplete = jest.fn();
+
+      const { result, rerender } = renderForTab();
+      result.current.onFetchComplete(onComplete);
+      await waitFor(() => {
+        expect(result.current.isFetching).toBe(true);
+      });
+
+      rerender({ tabType: 'shorts' });
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+      });
+
+      expect(onComplete).not.toHaveBeenCalled();
     });
   });
 });

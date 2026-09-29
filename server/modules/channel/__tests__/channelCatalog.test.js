@@ -13,12 +13,14 @@ jest.mock('../../m3uGenerator', () => ({
   generateChannelM3UInBackground: jest.fn(),
   deleteChannelM3UInBackground: jest.fn(),
 }));
+jest.mock('../tabDownloadStats', () => ({ getForChannels: jest.fn().mockResolvedValue(new Map()) }));
 
 describe('channelCatalog', () => {
   let channelCatalog;
   let Channel;
   let logger;
   let m3uGenerator;
+  let tabDownloadStats;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -29,6 +31,7 @@ describe('channelCatalog', () => {
 
     logger = require('../../../logger');
     m3uGenerator = require('../../m3uGenerator');
+    tabDownloadStats = require('../tabDownloadStats');
 
     channelCatalog = require('../channelCatalog');
   });
@@ -231,6 +234,25 @@ describe('channelCatalog', () => {
         })
       }));
     });
+
+    test('adds tab download stats to each channel', async () => {
+      const stats = { videos: { total: 10, fetchedAt: null, downloaded: 5, ignored: 0, percent: 50 } };
+      Channel.findAndCountAll.mockResolvedValueOnce({ rows: [{ channel_id: 'UC1', url: 'u', available_tabs: 'videos' }], count: 1 });
+      tabDownloadStats.getForChannels.mockResolvedValueOnce(new Map([['UC1', stats]]));
+
+      const result = await channelCatalog.getChannelsPaginated();
+
+      expect(result.channels[0].tab_download_stats).toEqual(stats);
+    });
+
+    test('still lists channels when the stats query fails', async () => {
+      Channel.findAndCountAll.mockResolvedValueOnce({ rows: [{ channel_id: 'UC1', url: 'u', available_tabs: 'videos' }], count: 1 });
+      tabDownloadStats.getForChannels.mockRejectedValueOnce(new Error('db down'));
+
+      const result = await channelCatalog.getChannelsPaginated();
+
+      expect(result.channels).toHaveLength(1);
+    });
   });
 
   describe('writeChannels', () => {
@@ -374,11 +396,11 @@ describe('channelCatalog', () => {
       // Should try to find channel
       expect(Channel.findOne).toHaveBeenCalledWith({ where: { url: 'https://youtube.com/@newChannel' } });
 
-      // Should call getChannelInfo as fallback
+      // Should call getChannelInfo as fallback, provisioning the channel disabled
       expect(channelProvisioning.getChannelInfo).toHaveBeenCalledWith(
         'https://youtube.com/@newChannel',
         false,
-        true
+        false
       );
 
       // Should update with the fetched channel_id
@@ -386,6 +408,122 @@ describe('channelCatalog', () => {
         { enabled: true },
         { where: { channel_id: 'UCnew' } }
       );
+    });
+
+    describe('with settings chosen in the Add Channel dialog', () => {
+      let channelSettingsModule;
+      const settings = { video_quality: '720', auto_download_enabled_tabs: 'short' };
+
+      beforeEach(() => {
+        channelSettingsModule = {
+          validateNewChannelSettings: jest.fn(() => ({ valid: true })),
+          updateChannelSettings: jest.fn().mockResolvedValue({}),
+        };
+      });
+
+      test('applies the settings to an existing channel before enabling it', async () => {
+        const mockChannel = { channel_id: 'UCpending', update: jest.fn().mockResolvedValue(true) };
+        Channel.findOne = jest.fn().mockResolvedValue(mockChannel);
+
+        await channelCatalog.updateChannelsByDelta({
+          enableUrls: [{ url: 'https://youtube.com/@pending', channel_id: 'UCpending', settings }],
+          channelSettingsModule,
+        });
+
+        expect(channelSettingsModule.updateChannelSettings).toHaveBeenCalledWith('UCpending', settings);
+        expect(channelSettingsModule.updateChannelSettings.mock.invocationCallOrder[0])
+          .toBeLessThan(mockChannel.update.mock.invocationCallOrder[0]);
+      });
+
+      test('leaves settings untouched for an add item without settings', async () => {
+        const mockChannel = { channel_id: 'UCplain', update: jest.fn().mockResolvedValue(true) };
+        Channel.findOne = jest.fn().mockResolvedValue(mockChannel);
+
+        await channelCatalog.updateChannelsByDelta({
+          enableUrls: ['https://youtube.com/@plain'],
+          channelSettingsModule,
+        });
+
+        expect(channelSettingsModule.updateChannelSettings).not.toHaveBeenCalled();
+      });
+
+      test('applies the settings to a channel fetched from YouTube as a fallback', async () => {
+        Channel.findOne = jest.fn().mockResolvedValue(null);
+        Channel.update = jest.fn().mockResolvedValue([1]);
+        const channelProvisioning = require('../channelProvisioning');
+        jest.spyOn(channelProvisioning, 'getChannelInfo').mockResolvedValue({ id: 'UCfetched' });
+
+        await channelCatalog.updateChannelsByDelta({
+          enableUrls: [{ url: 'https://youtube.com/@fetched', settings }],
+          channelSettingsModule,
+        });
+
+        expect(channelSettingsModule.updateChannelSettings).toHaveBeenCalledWith('UCfetched', settings);
+      });
+
+      test('leaves an unchanged subfolder out so active downloads do not block the save', async () => {
+        const mockChannel = {
+          channel_id: 'UCpending',
+          sub_folder: '##USE_GLOBAL_DEFAULT##',
+          update: jest.fn().mockResolvedValue(true),
+        };
+        Channel.findOne = jest.fn().mockResolvedValue(mockChannel);
+
+        await channelCatalog.updateChannelsByDelta({
+          enableUrls: [{
+            url: 'https://youtube.com/@pending',
+            settings: { video_quality: '720', sub_folder: '##USE_GLOBAL_DEFAULT##' },
+          }],
+          channelSettingsModule,
+        });
+
+        expect(channelSettingsModule.updateChannelSettings).toHaveBeenCalledWith('UCpending', { video_quality: '720' });
+      });
+
+      test('passes a changed subfolder through', async () => {
+        const mockChannel = { channel_id: 'UCpending', sub_folder: null, update: jest.fn().mockResolvedValue(true) };
+        Channel.findOne = jest.fn().mockResolvedValue(mockChannel);
+
+        await channelCatalog.updateChannelsByDelta({
+          enableUrls: [{ url: 'https://youtube.com/@pending', settings: { sub_folder: 'Kids' } }],
+          channelSettingsModule,
+        });
+
+        expect(channelSettingsModule.updateChannelSettings).toHaveBeenCalledWith('UCpending', { sub_folder: 'Kids' });
+      });
+
+      test('provisions a fetched channel disabled and enables it only after applying settings', async () => {
+        Channel.findOne = jest.fn().mockResolvedValue(null);
+        Channel.update = jest.fn().mockResolvedValue([1]);
+        const channelProvisioning = require('../channelProvisioning');
+        jest.spyOn(channelProvisioning, 'getChannelInfo').mockResolvedValue({ id: 'UCfetched' });
+
+        await channelCatalog.updateChannelsByDelta({
+          enableUrls: [{ url: 'https://youtube.com/@fetched', settings }],
+          channelSettingsModule,
+        });
+
+        expect(channelProvisioning.getChannelInfo).toHaveBeenCalledWith('https://youtube.com/@fetched', false, false);
+        expect(channelSettingsModule.updateChannelSettings.mock.invocationCallOrder[0])
+          .toBeLessThan(Channel.update.mock.invocationCallOrder[0]);
+      });
+
+      test('enables no channel when any add item has invalid settings', async () => {
+        const mockChannel = { channel_id: 'UCok', update: jest.fn().mockResolvedValue(true) };
+        Channel.findOne = jest.fn().mockResolvedValue(mockChannel);
+        channelSettingsModule.validateNewChannelSettings
+          .mockReturnValueOnce({ valid: true })
+          .mockReturnValueOnce({ valid: false, error: 'Invalid video quality' });
+
+        await expect(channelCatalog.updateChannelsByDelta({
+          enableUrls: [
+            { url: 'https://youtube.com/@ok', settings },
+            { url: 'https://youtube.com/@bad', settings: { video_quality: '999' } },
+          ],
+          channelSettingsModule,
+        })).rejects.toMatchObject({ code: 'INVALID_CHANNEL_SETTINGS', message: 'Invalid video quality' });
+        expect(mockChannel.update).not.toHaveBeenCalled();
+      });
     });
 
     test('propagates errors from getChannelInfo', async () => {

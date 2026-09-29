@@ -79,6 +79,15 @@ describe('scheduledTaskRuns', () => {
       );
     });
 
+    test('records the time the work really ended when the task knows it', async () => {
+      const finishedAt = new Date('2026-09-28T16:21:17.000Z');
+      await runs.finish(row({ status: 'running' }), { status: 'success', finishedAt });
+      expect(ScheduledTaskRun.update).toHaveBeenCalledWith(
+        expect.objectContaining({ finished_at: finishedAt }),
+        { where: { id: 1 } }
+      );
+    });
+
     test('prunes rows beyond the retention limit for that task', async () => {
       const ids = Array.from({ length: 23 }, (_, i) => ({ id: 100 - i }));
       ScheduledTaskRun.findAll.mockResolvedValue(ids);
@@ -182,6 +191,33 @@ describe('scheduledTaskRuns', () => {
     test('returns an empty object when the table cannot be read', async () => {
       ScheduledTaskRun.findAll.mockRejectedValue(new Error('db down'));
       await expect(runs.getLatestRuns()).resolves.toEqual({});
+    });
+  });
+
+  describe('getLatestFinishedRuns', () => {
+    test('reads only runs that finished, newest first', async () => {
+      ScheduledTaskRun.findAll.mockResolvedValue([]);
+      await runs.getLatestFinishedRuns();
+      expect(ScheduledTaskRun.findAll).toHaveBeenCalledWith(expect.objectContaining({
+        where: { status: ['success', 'error'] },
+        order: [['started_at', 'DESC'], ['id', 'DESC']],
+      }));
+    });
+
+    test('returns the newest serialized finished run per task', async () => {
+      ScheduledTaskRun.findAll.mockResolvedValue([
+        row({ id: 5, status: 'error', outcome: 'error' }),
+        row({ id: 4 }),
+        row({ id: 3, task_key: 'sessionCleanupFrequency' }),
+      ]);
+      const latest = await runs.getLatestFinishedRuns();
+      expect(latest[taskKey]).toEqual(expect.objectContaining({ id: 5, status: 'error' }));
+      expect(latest.sessionCleanupFrequency).toEqual(expect.objectContaining({ id: 3 }));
+    });
+
+    test('returns an empty object when the table cannot be read', async () => {
+      ScheduledTaskRun.findAll.mockRejectedValue(new Error('db down'));
+      await expect(runs.getLatestFinishedRuns()).resolves.toEqual({});
     });
   });
 

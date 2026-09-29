@@ -26,10 +26,11 @@ describe('Cookie Module Integration Tests', () => {
     jest.doMock('fs', () => ({
       readFileSync: jest.fn().mockReturnValue(JSON.stringify(mockConfig)),
       writeFileSync: jest.fn(),
-      watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+      watch: jest.fn().mockReturnValue({ close: jest.fn(), on: jest.fn() }),
       existsSync: jest.fn().mockReturnValue(true),
       mkdirSync: jest.fn(),
       chmodSync: jest.fn(),
+      renameSync: jest.fn(),
       unlinkSync: jest.fn()
     }));
 
@@ -80,13 +81,14 @@ describe('Cookie Module Integration Tests', () => {
       const filePath = configModule.writeCustomCookiesFile(mockBuffer);
 
       expect(fs.writeFileSync).toHaveBeenCalledWith(
-        expect.stringContaining('cookies.user.txt'),
-        mockBuffer
+        expect.stringMatching(/cookies\.user\.txt\.\d+\.test-uuid-1234\.tmp$/),
+        mockBuffer,
+        { mode: 0o600, flag: 'wx' }
       );
 
-      expect(fs.chmodSync).toHaveBeenCalledWith(
-        expect.stringContaining('cookies.user.txt'),
-        0o600
+      expect(fs.renameSync).toHaveBeenCalledWith(
+        expect.stringMatching(/cookies\.user\.txt\.\d+\.test-uuid-1234\.tmp$/),
+        filePath
       );
 
       expect(configModule.config.cookiesEnabled).toBe(true);
@@ -139,15 +141,16 @@ describe('Cookie Module Integration Tests', () => {
   });
 
   describe('Cookie security', () => {
-    test('should set restrictive permissions on cookie file', () => {
+    test('should create the cookie file owner-only', () => {
       const testBuffer = Buffer.from('# Netscape HTTP Cookie File\ntest');
-
-      const fs = require('fs');
-      jest.spyOn(fs, 'chmodSync').mockImplementation();
 
       configModule.writeCustomCookiesFile(testBuffer);
 
-      expect(0o600).toBe(384);
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        expect.stringContaining('cookies.user.txt'),
+        testBuffer,
+        expect.objectContaining({ mode: 0o600 })
+      );
     });
 
     test('cookie file path should be in config directory', () => {

@@ -59,6 +59,12 @@ Subscribe to YouTube channels to automatically download new videos as they're pu
        - `@MrBeast`
        - `https://youtube.com/@MrBeast`
        - `https://www.youtube.com/channel/UCX6OQ3DkcsbYNE6H8uQQuVA`
+   - Youtarr looks the channel up on YouTube (this can take a few seconds), then opens the **Add channel** dialog with the usual defaults filled in:
+     - **Auto Downloads**: a toggle for each tab the channel has (**New Videos**, **New Shorts**, **New Live/Streams**)
+     - **Video Quality**, **Download Type** (Video Only, Video + MP3, or MP3 Only), and **Subfolder**
+   - Click **Continue** to keep the defaults or your changes. The channel joins the list as a pending addition; use its edit (pencil) button to change these settings before saving.
+   - A channel you subscribed to before comes back with its saved settings filled in.
+   - Click **Save Changes** to subscribe. Filters, ratings, and auto-removal are set later from the channel page.
 
 3. **Queue downloads when you're ready**
    - Newly added channels wait until you run a channel download or a scheduled cron cycle
@@ -67,7 +73,8 @@ Subscribe to YouTube channels to automatically download new videos as they're pu
 
 4. **Configure channel-specific settings** (optional)
    - Click on a channel to open its detail page
-   - Click **Edit** (the gear button) in the **Channel Settings** bar to open channel settings. The dialog has four tabs:
+   - Click **Open in YouTube** next to the channel name to open the channel on YouTube in a new tab
+   - Click **Edit** (the gear button) in the **Channel Settings** bar to open channel settings. The dialog has five tabs:
      - **General**:
        - **Subfolder**: pick or create a subfolder to organize channels into separate media libraries (e.g., `__kids`, `__music`); the picker has an inline **Add Subfolder** action for new names
        - **Resolution Override**: a **Channel Video Quality Override** that takes precedence over the global setting
@@ -75,6 +82,7 @@ Subscribe to YouTube channels to automatically download new videos as they're pu
        - **Auto Downloads**: separate toggles for **New Videos**, **New Shorts**, and **New Live/Streams**. These only take effect while the global **Enable Automatic Downloads** toggle in Settings -> Core is on.
      - **Filters**: duration limits and a title regex to control which videos auto-download
      - **Ratings**: a default content rating for this channel's downloads
+     - **Tags**: custom tags that can be automatically added to downloaded videos separated by '|'. This applies only to videos downloaded in the future.
      - **Auto-Removal**: **Protect this channel from auto-removal**, or use **Always keep newest downloads** to keep the channel's newest N downloads out of automatic cleanup (see [Configure Automation](#configure-automation))
 
 ### Channel playlist file (.m3u)
@@ -120,6 +128,7 @@ Export your subscription list from Google and upload the CSV file. This method d
    - On the import page, select the **Import Using CSV** tab
    - Click **Choose File** and select the file at: `Takeout/YouTube and YouTube Music/subscriptions/subscriptions.csv`
    - Click **Upload & Preview**
+   - To build the file by hand instead, use **Download an example CSV** on the same tab. It has the three Takeout columns (`Channel Id,Channel Url,Channel Title`). Every row needs the channel ID (it starts with `UC`); rows without one are skipped. On YouTube, open the channel's About panel, then **Share channel** -> **Copy channel ID**.
 
 ### Method 2: Cookies File
 
@@ -182,9 +191,11 @@ Subscribe to a YouTube playlist and Youtarr tracks its videos, downloads them, a
    - The **Add playlist** dialog opens and fetches a preview: the title, channel, thumbnail, and video count
    - If you opened the dialog without a URL first, paste the link inside it and click **Fetch info**
 
-3. **Subscribe**
+3. **Choose settings and subscribe**
+   - Below the preview, set **Automatically download new videos**, **Video Quality**, **Download Type**, and **Default Subfolder**. Automatic downloads only pick up videos added to the playlist from now on; choose existing videos to download from the playlist's detail page.
    - The dialog shows which media servers the playlist will sync to. If you haven't connected any, the videos still download and a `.m3u` file is still written; you just won't get a native server playlist.
    - Click **Subscribe**. Youtarr pulls in the video list and opens the playlist's detail page.
+   - A playlist you subscribed to before is restored with its saved settings, shown read-only in the dialog; change them from the playlist page afterwards. If you're already subscribed, the dialog offers **Go to playlist** instead.
 
 > Click the **?** icon on the Playlists tab for an in-app summary of how playlists work.
 
@@ -203,6 +214,7 @@ Private, deleted, and members-only videos can't be accessed, so Youtarr leaves t
 
 Open a playlist to manage it:
 
+- **Open in YouTube**: opens the playlist on YouTube in a new tab.
 - **Refresh from YouTube**: re-fetches the live playlist, updates the video list, then re-syncs and rewrites the `.m3u`. It doesn't download anything.
 - **Download all N videos**: shows the eligible count and downloads every tracked video you have not previously downloaded. A settings dialog lets you confirm resolution and other options first.
 - **Auto-download new videos**: first enable refreshes the playlist and defaults to following future additions only. You can also preview and select an existing batch during setup. Later runs download newly discovered entries wherever they appear, even when the video itself is old. Your global per-run download count applies to new discoveries. Each scheduled run can also retry up to the same number of older saved selections, starting with those attempted least recently. Extra entries wait for later runs; neither allowance borrows unused slots from the other. Already queued or downloading videos do not take another slot. Pause/resume preserves tracking (see [Configure Automation](#configure-automation)).
@@ -269,6 +281,7 @@ Set up automatic downloads on a schedule so Youtarr checks for new videos period
      - **Old videos**: **Delete videos older than** a set number of days
      - **Watched videos**: **Remove watched videos** once your media servers report them watched (see [Track Watch Status from Media Servers](#track-watch-status-from-media-servers)); you can add a **Wait after last watch** delay and a **Minimum time since download** so fresh downloads aren't removed right away
      - **Low disk space**: delete the oldest videos **When free space falls below** a threshold
+     - **Total size of downloads**: delete the oldest videos **When downloads total more than** a size, for example to stay under a cloud storage quota
    - Some videos are always kept, no matter which rules match:
      - Videos you've marked as Protected
      - The newest N downloads, if you set **Keep this many newest downloads**
@@ -277,7 +290,14 @@ Set up automatic downloads on a schedule so Youtarr checks for new videos period
      - This shows you exactly which videos would be deleted without actually removing them
      - Highly recommended before enabling auto-cleanup
 
-6. **Save configuration**
+6. **Pause downloads when storage is full** (optional)
+   - Open **Settings -> Storage Limits**
+   - **Pause when downloads total more than** a size, and/or **Pause when free space falls below** a size
+   - While paused, new downloads are refused, queued downloads wait, and a banner explains why; you also get a notification when downloads pause and when they resume
+   - Limits are checked between download jobs: a job already running finishes all of its videos, so storage can go past a limit until it ends
+   - Downloads resume automatically once storage is back within your limits (for example after Auto Removal frees space)
+
+7. **Save configuration**
    - Click "Save" to apply your settings
    - Changes take effect immediately for the next scheduled run
 
@@ -289,7 +309,11 @@ For example, if your server is off overnight, change **Automatic video cleanup**
 
 The page shows the server timezone. Times and interval presets follow that clock, regardless of your browser's timezone. Configure the server timezone through `TZ` and restart the deployment if it needs changing. Youtarr must be running at the scheduled time; missed runs are not replayed. Startup library repair and filesystem rescanning still run independently of their schedules.
 
-The **Upcoming runs** list at the top shows when each active schedule fires next. Each card also shows its last run and how it ended, for example "completed: Deleted 12 videos and freed 8.10 GB" or "failed: Permission denied", so you can confirm a schedule is working without reading the logs. A schedule whose feature is switched off says so and links to where to turn it on. If a run is still going when its next time comes around, that occurrence is skipped and recorded as such. Times on this page are in the server timezone, and the page keeps itself up to date while it is open.
+Each task is a row you can expand. The collapsed row shows the task's status, its schedule in words, when it runs next, when it last ran and whether that failed, and how long that run took, so you can check every task at a glance. If the latest run was skipped, the row shows how long the run before it took instead; a run cut short by a server restart shows **Interrupted ... by a server restart**, since there is no end time to measure. For automatic downloads the run covers the whole update, from checking for new videos until the last download (retries included) finishes, and its result counts the videos downloaded, failed, and skipped; any failed video marks the run **Partly failed**. If a storage limit pauses downloads partway, the run ends there and says how many queued jobs will run when downloads resume. A summary line at the top counts running tasks and failures and names the next run. A pulsing dot and a **Running** label mark a task that is running now; **Off** marks one whose feature is switched off, and **Unsaved** a schedule you changed but have not saved yet. Expand a row for its description, the full result of its last run (for example "completed: Deleted 12 videos and freed 8.10 GB" or "failed: Permission denied"), a link to where its feature is turned on, and the schedule editor. **Edit schedule** links from other settings pages open the matching row. If a run is still going when its next time comes around, that occurrence is skipped and recorded as such. Times on this page are in the server timezone, and the page keeps itself up to date while it is open.
+
+Each task has a **Run now** button that starts it immediately with your saved settings (on phones it is a play icon). If Run now is greyed out, the row says why in a few words and the expanded row explains in full: the task is already running, its feature is turned off (use the link on the card to turn it on, then save), downloads are paused by a storage limit, or, for channel video counts, it ran less than 15 minutes ago, in which case the card shows when you can run it again. Automatic downloads can be run now even while they are turned off; the switch only stops the schedule. Running automatic video cleanup asks you to confirm, because it permanently deletes the videos your removal rules match.
+
+While a scheduled task other than automatic downloads is running, a clock icon with a pulsing dot appears in the top bar next to the download indicator. Hover it to see which task is running, or click it to open **Settings -> Scheduling**.
 
 ## Configure SponsorBlock
 
@@ -378,6 +402,8 @@ Common cases:
 1. **Open Settings -> Maintenance & Rescan**
 2. Click **Rescan files on disk**
 3. The page shows progress in real time and a summary of the last run (videos updated, files marked missing)
+
+You can also start a rescan with **Run now** on the Rescan files on disk card in **Settings -> Scheduling**.
 
 A scan also runs daily on a schedule and once at server startup, so changes you make outside Youtarr will eventually be picked up even if you don't trigger a manual rescan.
 

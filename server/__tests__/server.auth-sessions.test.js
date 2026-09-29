@@ -149,6 +149,7 @@ const createServerModule = ({
           getConfig: jest.fn(() => configState),
           updateConfig: jest.fn((patch) => Object.assign(configState, patch)),
           getImagePath: jest.fn(() => '/images'),
+          getCookiesPath: jest.fn(() => null),
           getCookiesStatus: jest.fn(() => ({
             cookiesEnabled: false,
             customCookiesUploaded: false,
@@ -218,7 +219,9 @@ const createServerModule = ({
         jest.doMock('../modules/downloadModule', () => ({}));
         jest.doMock('../modules/jobModule', () => ({
           getRunningJobs: jest.fn(() => []),
-          getRunningJobsWithFreshVideos: jest.fn().mockResolvedValue([])
+          getRunningJobsWithFreshVideos: jest.fn().mockResolvedValue([]),
+          onJobAbandoned: jest.fn(),
+          onJobEnded: jest.fn()
         }));
         jest.doMock('../modules/videosModule', () => ({}));
         jest.doMock('../modules/videoMetadataModule', () => ({
@@ -277,6 +280,11 @@ const createServerModule = ({
           previewTemplate: jest.fn(),
           validateTemplate: jest.fn().mockResolvedValue({ ok: true })
         }));
+        // Same reason: cookieTest also loads ytDlpRunner.
+        jest.doMock('../modules/cookieTest', () => ({
+          run: jest.fn(),
+          isBusyError: jest.fn(() => false)
+        }));
         jest.doMock('../models/channelvideo', () => ({
           update: jest.fn().mockResolvedValue([1])
         }));
@@ -284,6 +292,16 @@ const createServerModule = ({
         jest.doMock('node-cron', () => ({ schedule: jest.fn() }));
         jest.doMock('../modules/mediaServers/watchStatusScheduler', () => ({ scheduleTask: jest.fn(), subscribe: jest.fn() }));
         jest.doMock('../modules/channel/channelBackdropBackfill', () => ({ subscribe: jest.fn() }));
+        jest.doMock('../modules/channel/tabVideoCounts', () => ({ setRunHistory: jest.fn(), setDownloadActivityCheck: jest.fn(), refreshAtStartup: jest.fn().mockResolvedValue({}) }));
+        jest.doMock('../modules/channel/autoDownloadScheduler', () => ({ setRunTracker: jest.fn() }));
+        jest.doMock('../modules/download/downloadRunTracker', () => ({ isActive: jest.fn(), getUnfinishedJobs: jest.fn() }));
+        jest.doMock('../modules/logLevelSync', () => ({ apply: jest.fn(), subscribe: jest.fn() }));
+        jest.doMock('../modules/storageGuard', () => ({
+          initialize: jest.fn().mockResolvedValue({ paused: false, reasons: [] }),
+          refresh: jest.fn().mockResolvedValue({ paused: false, reasons: [] }),
+          isPausedError: jest.fn(() => false),
+          describe: jest.fn(() => ''),
+        }));
         jest.doMock('express-rate-limit', () => jest.fn(() => (req, res, next) => next()));
         jest.doMock('https', () => ({ get: jest.fn() }));
 
@@ -408,7 +426,8 @@ describe('server routes - cookies', () => {
       expect(res.body).toEqual({
         cookiesEnabled: true,
         customCookiesUploaded: true,
-        customFileExists: true
+        customFileExists: true,
+        details: null
       });
     });
   });
@@ -487,7 +506,8 @@ describe('server routes - cookies', () => {
         cookieStatus: {
           cookiesEnabled: false,
           customCookiesUploaded: false,
-          customFileExists: false
+          customFileExists: false,
+          details: null
         }
       });
     });

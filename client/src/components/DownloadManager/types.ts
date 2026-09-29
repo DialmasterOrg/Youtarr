@@ -45,6 +45,13 @@ export interface TerminatedChannelSummary {
   terminatedAt?: string | null;
 }
 
+// A download job that ended in an error or was terminated, from a run summary.
+export interface DownloadJobIssue {
+  status: string;
+  reason?: string | null;
+  byUser?: boolean;
+}
+
 export interface FinalSummary {
   totalDownloaded: number;
   totalSkipped: number;
@@ -57,6 +64,7 @@ export interface FinalSummary {
   diagnoses?: DownloadDiagnosis[];
   terminatedChannels?: TerminatedChannelSummary[];
   terminationFailures?: string[];
+  jobIssues?: DownloadJobIssue[];
   jobType: string;
   completedAt?: string;
 }

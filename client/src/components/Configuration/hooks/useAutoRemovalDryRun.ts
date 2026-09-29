@@ -13,6 +13,7 @@ interface AutoRemovalDryRunConfig {
   autoRemovalWatchedMinDaysSinceWatched?: string;
   autoRemovalWatchedMinVideoAgeDays?: string;
   autoRemovalKeepRecentCount?: number;
+  autoRemovalUsageLimit?: string;
 }
 
 export const useAutoRemovalDryRun = ({ token }: UseAutoRemovalDryRunParams) => {
@@ -30,7 +31,8 @@ export const useAutoRemovalDryRun = ({ token }: UseAutoRemovalDryRunParams) => {
         autoRemovalWatchedEnabled: config.autoRemovalWatchedEnabled ?? false,
         autoRemovalWatchedMinDaysSinceWatched: config.autoRemovalWatchedMinDaysSinceWatched || '',
         autoRemovalWatchedMinVideoAgeDays: config.autoRemovalWatchedMinVideoAgeDays || '',
-        autoRemovalKeepRecentCount: config.autoRemovalKeepRecentCount ?? 0
+        autoRemovalKeepRecentCount: config.autoRemovalKeepRecentCount ?? 0,
+        autoRemovalUsageLimit: config.autoRemovalUsageLimit || ''
       })
     });
 

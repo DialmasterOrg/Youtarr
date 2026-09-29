@@ -39,6 +39,8 @@ services:
       - NODE_ENV=development
       - DEV_MODE=true
       - LOG_LEVEL=${LOG_LEVEL:-debug}
+      - LOG_FILE_MAX_SIZE=${LOG_FILE_MAX_SIZE:-}
+      - LOG_FILE_MAX_COUNT=${LOG_FILE_MAX_COUNT:-}
       - TZ=${TZ:-UTC}
       - DB_HOST=youtarr-db
       - DB_PORT=3306

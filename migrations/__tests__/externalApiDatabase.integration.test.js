@@ -12,8 +12,6 @@ const policyMigration = require('../20260908100000-add-external-api-key-policy')
 const requestsMigration = require('../20260908102000-create-external-requests');
 const usageMigration = require('../20260908106000-create-external-api-usage-buckets');
 
-const RUN_INTEGRATION = process.env.EXTERNAL_API_DATABASE_TEST === 'true';
-const describeDatabase = RUN_INTEGRATION ? describe : describe.skip;
 const BASELINE = '20260830201917-lowercased-table-column-names.js';
 const UNRELATED_CHARSET_MIGRATION = '20250907000000-upgrade-to-utf8mb4-if-needed.js';
 const EXTERNAL_MIGRATIONS = [
@@ -52,6 +50,12 @@ const tableNames = async () => query(
 
 const indexNames = async (tableName) => queryInterface.showIndex(tableName)
   .then((indexes) => indexes.map((index) => index.name));
+
+const tableCollation = async (tableName) => query(
+  'SELECT TABLE_COLLATION FROM information_schema.tables '
+    + 'WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
+  [tableName]
+).then((rows) => rows[0]?.TABLE_COLLATION);
 
 const foreignKeys = async () => query(
   'SELECT TABLE_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME '
@@ -93,6 +97,7 @@ const expectFinalSchema = async () => {
   expect(await indexNames('external_api_usage_buckets')).toEqual(expect.arrayContaining([
     'external_api_usage_key_window_uq', 'external_api_usage_window_idx',
   ]));
+  expect(await tableCollation('external_api_usage_buckets')).toBe('utf8mb4_unicode_ci');
 
   const keys = await foreignKeys();
   expect(keys).toEqual(expect.arrayContaining([
@@ -105,7 +110,7 @@ const expectFinalSchema = async () => {
   ]));
 };
 
-describeDatabase('external API migration lifecycle on MySQL-compatible engines', () => {
+describe('external API migration lifecycle on MySQL-compatible engines', () => {
   jest.setTimeout(120000);
 
   beforeAll(async () => {

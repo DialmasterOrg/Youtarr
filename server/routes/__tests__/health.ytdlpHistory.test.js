@@ -12,7 +12,7 @@ const express = require('express');
 const supertest = require('supertest');
 
 // health.js builds its router at module load, so each app needs a fresh module.
-function makeApp({ config = {} } = {}) {
+function makeApp({ config = {}, isElfhosted = false } = {}) {
   jest.resetModules();
   const ytdlpModule = require('../../modules/ytdlpModule');
   const ytdlpUpdateRunSummary = require('../../modules/ytdlpUpdateRunSummary');
@@ -21,18 +21,20 @@ function makeApp({ config = {} } = {}) {
     getLatestRun: jest.fn().mockResolvedValue(null),
     record: jest.fn().mockResolvedValue(undefined),
   };
-  const configModule = { getConfig: jest.fn(() => config), isElfhostedPlatform: jest.fn(() => false) };
-  const refreshYtDlpVersionCache = jest.fn();
+  const scheduledTaskManager = {
+    runNow: jest.fn(),
+  };
+  const configModule = { getConfig: jest.fn(() => config), isElfhostedPlatform: jest.fn(() => isElfhosted) };
   const app = express();
   app.use(createHealthRoutes({
     getCachedYtDlpVersion: () => '2026.09.19',
-    refreshYtDlpVersionCache,
     verifyToken: (req, res, next) => next(),
     configModule,
     scheduledTaskRuns,
     ytdlpUpdateRunSummary,
+    scheduledTaskManager,
   }));
-  return { app, ytdlpModule, scheduledTaskRuns, refreshYtDlpVersionCache };
+  return { app, ytdlpModule, scheduledTaskRuns, scheduledTaskManager };
 }
 
 describe('GET /api/ytdlp/latest-version update history', () => {
@@ -83,35 +85,68 @@ describe('GET /api/ytdlp/latest-version update history', () => {
   });
 });
 
-describe('POST /api/ytdlp/update history', () => {
-  test('records a manual update run', async () => {
-    const { app, ytdlpModule, scheduledTaskRuns, refreshYtDlpVersionCache } = makeApp();
-    ytdlpModule.performUpdate.mockResolvedValue({ success: true, reason: 'updated', message: 'Successfully updated to 2026.09.20', newVersion: '2026.09.20' });
+describe('POST /api/ytdlp/update', () => {
+  test('starts the run and returns its result when the update succeeds', async () => {
+    const { app, scheduledTaskManager } = makeApp();
+    scheduledTaskManager.runNow.mockResolvedValue({
+      started: true,
+      completion: Promise.resolve({
+        status: 'success',
+        outcome: 'updated',
+        message: 'Updated to 2026.09.20',
+        details: { version: '2026.09.20' },
+      }),
+    });
+
+    const res = await supertest(app).post('/api/ytdlp/update');
+
+    expect(scheduledTaskManager.runNow).toHaveBeenCalledWith('ytdlpUpdateFrequency', {
+      trigger: 'manual',
+      enforceEnabled: false,
+      enforceCooldown: false,
+    });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true, message: 'Updated to 2026.09.20', newVersion: '2026.09.20' });
+  });
+
+  test('starts the run and returns its message when the update fails', async () => {
+    const { app, scheduledTaskManager } = makeApp();
+    scheduledTaskManager.runNow.mockResolvedValue({
+      started: true,
+      completion: Promise.resolve({
+        status: 'error',
+        outcome: 'error',
+        message: 'yt-dlp exited with code 1',
+        details: null,
+      }),
+    });
 
     const res = await supertest(app).post('/api/ytdlp/update');
 
     expect(res.status).toBe(200);
-    expect(refreshYtDlpVersionCache).toHaveBeenCalled();
-    expect(scheduledTaskRuns.record).toHaveBeenCalledWith(expect.objectContaining({
-      taskKey: 'ytdlpUpdateFrequency',
-      trigger: 'manual',
-      status: 'success',
-      outcome: 'updated',
-      message: 'Updated to 2026.09.20',
-      details: { version: '2026.09.20' },
-      startedAt: expect.any(Date),
-      finishedAt: expect.any(Date),
-    }));
+    expect(res.body).toEqual({ success: false, message: 'yt-dlp exited with code 1' });
   });
 
-  test('records a failed manual update', async () => {
-    const { app, ytdlpModule, scheduledTaskRuns } = makeApp();
-    ytdlpModule.performUpdate.mockResolvedValue({ success: false, reason: 'error', message: 'Update failed with exit code 1' });
+  test('returns 409 when an update is already running', async () => {
+    const { app, scheduledTaskManager } = makeApp();
+    scheduledTaskManager.runNow.mockResolvedValue({
+      started: false,
+      reason: 'running',
+      message: 'This task is already running.',
+    });
 
-    await supertest(app).post('/api/ytdlp/update');
+    const res = await supertest(app).post('/api/ytdlp/update');
 
-    expect(scheduledTaskRuns.record).toHaveBeenCalledWith(expect.objectContaining({
-      trigger: 'manual', status: 'error', outcome: 'error', message: 'yt-dlp exited with code 1',
-    }));
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ success: false, message: 'An update is already in progress' });
+  });
+
+  test('returns 403 on Elfhosted without starting a run', async () => {
+    const { app, scheduledTaskManager } = makeApp({ isElfhosted: true });
+
+    const res = await supertest(app).post('/api/ytdlp/update');
+
+    expect(res.status).toBe(403);
+    expect(scheduledTaskManager.runNow).not.toHaveBeenCalled();
   });
 });

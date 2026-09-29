@@ -14,6 +14,7 @@ const base: ScheduleTaskStatus = {
   running: false,
   nextRunAt: '2026-09-21T02:00:00.000Z',
   lastRun: null,
+  runNow: { available: true, reason: null, message: null, availableAt: null },
 };
 
 const lastRun = {
@@ -35,12 +36,12 @@ test('shows the next run and that the task has never run', () => {
 
 test('describes the last run with its outcome and message', () => {
   render(<ScheduleRunStatus status={{ ...base, lastRun }} />);
-  expect(screen.getByText(`Last run: ${formatDateTime(lastRun.startedAt)}, completed: Deleted 2 videos.`)).toBeInTheDocument();
+  expect(screen.getByText(`Last run: ${formatDateTime(lastRun.startedAt)}, completed in 1m: Deleted 2 videos.`)).toBeInTheDocument();
 });
 
 test('labels a failed run and notes a manual trigger', () => {
   render(<ScheduleRunStatus status={{ ...base, lastRun: { ...lastRun, trigger: 'manual', status: 'error', message: 'Disk full' } }} />);
-  expect(screen.getByText(/Last run: .*, failed \(manual\): Disk full/)).toBeInTheDocument();
+  expect(screen.getByText(/Last run: .*, failed after 1m \(manual\): Disk full/)).toBeInTheDocument();
 });
 
 test('reports a task that is running now instead of a next run', () => {
@@ -64,11 +65,42 @@ test('warns when a rejected edit left the previous schedule running', () => {
 test('formats times in the server timezone when one is given', () => {
   render(<ScheduleRunStatus status={{ ...base, lastRun }} timeZone="Asia/Tokyo" />);
   expect(screen.getByText(`Next run: ${formatDateTimeInZone(base.nextRunAt, 'Asia/Tokyo')}`)).toBeInTheDocument();
-  expect(screen.getByText(`Last run: ${formatDateTimeInZone(lastRun.startedAt, 'Asia/Tokyo')}, completed: Deleted 2 videos.`)).toBeInTheDocument();
+  expect(screen.getByText(`Last run: ${formatDateTimeInZone(lastRun.startedAt, 'Asia/Tokyo')}, completed in 1m: Deleted 2 videos.`)).toBeInTheDocument();
 });
 
 test('shows no next run for a disabled feature', () => {
   render(<ScheduleRunStatus status={{ ...base, enabled: false, active: false, nextRunAt: null }} />);
   expect(screen.queryByText(/Next run:/)).not.toBeInTheDocument();
   expect(screen.getByText('Last run: never')).toBeInTheDocument();
+});
+
+test('says how long the last run took when durations are shown', () => {
+  render(<ScheduleRunStatus status={{ ...base, lastRun, lastFinishedRun: lastRun }} />);
+  expect(screen.getByText(`Last run: ${formatDateTime(lastRun.startedAt)}, completed in 1m: Deleted 2 videos.`)).toBeInTheDocument();
+});
+
+test('says how long a failed run went before failing', () => {
+  const failed = { ...lastRun, status: 'error' as const, trigger: 'manual' as const, message: 'Disk full' };
+  render(<ScheduleRunStatus status={{ ...base, lastRun: failed, lastFinishedRun: failed }} />);
+  expect(screen.getByText(/Last run: .*, failed after 1m \(manual\): Disk full/)).toBeInTheDocument();
+});
+
+test('shows the previous finished run when the last one was skipped', () => {
+  const skipped = {
+    ...lastRun, id: 2, status: 'skipped' as const, message: 'The previous run was still in progress.',
+    startedAt: '2026-09-20T03:00:00.000Z', finishedAt: '2026-09-20T03:00:00.000Z',
+  };
+  render(<ScheduleRunStatus status={{ ...base, lastRun: skipped, lastFinishedRun: lastRun }} />);
+  expect(screen.getByText(/Last run: .*, skipped: The previous run was still in progress\./)).toBeInTheDocument();
+  expect(screen.getByText(`Previous run: ${formatDateTime(lastRun.startedAt)}, completed in 1m`)).toBeInTheDocument();
+});
+
+test('shows the previous finished run under a run cut off by a restart', () => {
+  const interrupted = {
+    ...lastRun, id: 2, status: 'interrupted' as const, message: 'The server restarted before it finished.',
+    startedAt: '2026-09-20T03:00:00.000Z', finishedAt: null,
+  };
+  render(<ScheduleRunStatus status={{ ...base, lastRun: interrupted, lastFinishedRun: lastRun }} />);
+  expect(screen.getByText(/Last run: .*, interrupted: The server restarted before it finished\./)).toBeInTheDocument();
+  expect(screen.getByText(`Previous run: ${formatDateTime(lastRun.startedAt)}, completed in 1m`)).toBeInTheDocument();
 });

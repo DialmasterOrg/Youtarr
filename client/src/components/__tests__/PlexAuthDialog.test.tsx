@@ -103,6 +103,61 @@ describe('PlexAuthDialog', () => {
     expect(popup.close).toHaveBeenCalled();
   });
 
+  test('stops polling Plex after the dialog unmounts', async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    (window.open as jest.Mock).mockReturnValue({ focus: jest.fn(), close: jest.fn() });
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ authUrl: 'https://plex.example/auth', pinId: 'pin123' })
+      })
+      .mockResolvedValue({ ok: true, json: async () => ({ authToken: null }) });
+
+    const { unmount } = render(
+      <PlexAuthDialog open onClose={onClose} onSuccess={onSuccess} />
+    );
+    await user.click(screen.getByRole('button', { name: /authenticate with plex/i }));
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith('/plex/auth-url');
+    });
+
+    unmount();
+    await act(async () => {
+      jest.advanceTimersByTime(30000);
+    });
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not call onClose after unmounting during the success delay', async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    (window.open as jest.Mock).mockReturnValue({ focus: jest.fn(), close: jest.fn() });
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ authUrl: 'https://plex.example/auth', pinId: 'pin123' })
+      })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ authToken: 'token-abc' }) });
+
+    const { unmount } = render(
+      <PlexAuthDialog open onClose={onClose} onSuccess={onSuccess} />
+    );
+    await user.click(screen.getByRole('button', { name: /authenticate with plex/i }));
+    await act(async () => {
+      jest.advanceTimersByTime(5000);
+    });
+    await waitFor(() => {
+      expect(onSuccess).toHaveBeenCalledWith('token-abc');
+    });
+
+    unmount();
+    await act(async () => {
+      jest.advanceTimersByTime(1500);
+    });
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   test('shows error when polling returns invalid token', async () => {
     const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
     const popup = { focus: jest.fn(), close: jest.fn() };

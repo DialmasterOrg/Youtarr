@@ -9,6 +9,7 @@ jest.mock('axios', () => ({
 const axios = require('axios');
 
 import { VideoFilenameTemplate } from '../VideoFilenameTemplate';
+import { FILENAME_PRESETS } from '../../../../../utils/filenameTemplate/presets';
 
 const defaultPrefix = '%(uploader,channel,uploader_id).80B - %(title).76B';
 
@@ -47,6 +48,31 @@ describe('VideoFilenameTemplate', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /title only/i }));
     expect(handleChange).toHaveBeenCalledWith('%(title).64B');
+  });
+
+  describe('Plex TV Series channel prefix tip', () => {
+    const tvSeriesPrefix = FILENAME_PRESETS.find((preset) => preset.label === 'Plex TV Series')!.prefix;
+
+    it('shows the tip when the TV Series preset is active and the channel prefix is enabled', () => {
+      render(
+        <VideoFilenameTemplate value={tvSeriesPrefix} onChange={() => {}} token="tok" channelPrefixEnabled />
+      );
+      expect(screen.getByTestId('tv-series-channel-prefix-tip')).toBeInTheDocument();
+    });
+
+    it('hides the tip when the channel prefix is already disabled', () => {
+      render(
+        <VideoFilenameTemplate value={tvSeriesPrefix} onChange={() => {}} token="tok" channelPrefixEnabled={false} />
+      );
+      expect(screen.queryByTestId('tv-series-channel-prefix-tip')).not.toBeInTheDocument();
+    });
+
+    it('hides the tip for templates other than the TV Series preset', () => {
+      render(
+        <VideoFilenameTemplate value={defaultPrefix} onChange={() => {}} token="tok" channelPrefixEnabled />
+      );
+      expect(screen.queryByTestId('tv-series-channel-prefix-tip')).not.toBeInTheDocument();
+    });
   });
 
   it('does not show preview lines until the user clicks Preview', () => {

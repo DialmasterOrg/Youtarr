@@ -25,6 +25,18 @@ class FetchRegistry {
   }
 
   /**
+   * Merge fields into an in-flight operation's record; a no-op once it has ended.
+   * @param {string} key - Registry key (channelId:tabType)
+   * @param {Object} fields - Fields to merge
+   */
+  update(key, fields) {
+    const existing = this.activeFetches.get(key);
+    if (existing) {
+      this.activeFetches.set(key, { ...existing, ...fields });
+    }
+  }
+
+  /**
    * Check if a fetch operation is currently in progress for a channel/tab combination
    * @param {string} channelId - Channel ID to check
    * @param {string} tabType - Tab type to check (optional, defaults to checking any tab)
@@ -40,7 +52,8 @@ class FetchRegistry {
           isFetching: true,
           startTime: activeOperation.startTime,
           type: activeOperation.type,
-          tabType: tabType
+          tabType: tabType,
+          ...(activeOperation.progress ? { progress: activeOperation.progress } : {})
         };
       }
     } else {

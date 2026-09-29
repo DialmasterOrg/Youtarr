@@ -506,6 +506,29 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                     />
                   </FormControl>
                 </Grid>
+
+                <Grid item xs={12} md={6} className="mt-3">
+                  <FormControl>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          name="prefixChannelNameInTitle"
+                          checked={config.prefixChannelNameInTitle}
+                          onChange={handleCheckboxChange}
+                        />
+                      }
+                      label={
+                        <Box className="flex items-center">
+                          Prefix channel name in embedded video title
+                          <InfoTooltip
+                            text="Write the MP4's embedded title as 'Channel - Title'. Plex shows this tag as the video title. Turn it off for a Plex TV Shows library, where the channel is already the show name. Only applies to new downloads; existing files are not re-tagged."
+                            onMobileClick={onMobileTooltipClick}
+                          />
+                        </Box>
+                      }
+                    />
+                  </FormControl>
+                </Grid>
               </Grid>
             </AccordionDetails>
           </Accordion>
@@ -653,6 +676,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                       token={token}
                       saveRequirement={filenameTemplateSaveRequirement}
                       onPreviewSuccess={onFilenameTemplatePreviewSuccess}
+                      channelPrefixEnabled={config.prefixChannelNameInTitle}
                     />
                   </Box>
                 </Grid>

@@ -25,6 +25,10 @@ jest.mock('../download/downloadExecutor', () => {
   }));
 });
 jest.mock('../../logger');
+jest.mock('../storageGuard', () => ({
+  refresh: jest.fn().mockResolvedValue({ paused: false }),
+  on: jest.fn()
+}));
 
 const { v4: uuidv4 } = require('uuid');
 
@@ -40,6 +44,7 @@ describe('JobModule', () => {
   let ChannelVideo;
   let logger;
   let scheduledTaskRuns;
+  let videosModule;
   let originalDisableInitialBackfill;
 
   const mockJobsDir = '/test/jobs';
@@ -120,6 +125,12 @@ describe('JobModule', () => {
       record: jest.fn().mockResolvedValue(undefined)
     }));
     scheduledTaskRuns = require('../scheduledTaskRuns');
+
+    // Library repair walks the downloads folder through videosModule.
+    jest.doMock('../videosModule', () => ({
+      scanForVideoFiles: jest.fn().mockResolvedValue({ fileMap: new Map(), duplicates: new Map(), unreadable: 0 })
+    }));
+    videosModule = require('../videosModule');
 
     // Mock Sequelize models
     Job = require('../../models/job');
@@ -825,7 +836,7 @@ describe('JobModule', () => {
       JobModule = require('../jobModule');
     });
 
-    test('should invoke action for first pending job', () => {
+    test('should invoke action for first pending job', async () => {
       const mockAction = jest.fn();
       JobModule.jobs = {
         'job-1': { status: 'Complete' },
@@ -833,7 +844,7 @@ describe('JobModule', () => {
         'job-3': { status: 'Pending' }
       };
 
-      JobModule.startNextJob();
+      await JobModule.startNextJob();
 
       expect(logger.info).toHaveBeenCalledWith('Looking for next job to start');
       expect(mockAction).toHaveBeenCalledWith(
@@ -843,13 +854,13 @@ describe('JobModule', () => {
 
     });
 
-    test('should do nothing if no pending jobs', () => {
+    test('should do nothing if no pending jobs', async () => {
       JobModule.jobs = {
         'job-1': { status: 'Complete' },
         'job-2': { status: 'In Progress' }
       };
 
-      JobModule.startNextJob();
+      await JobModule.startNextJob();
 
       expect(logger.info).toHaveBeenCalledWith('Looking for next job to start');
 
@@ -857,23 +868,7 @@ describe('JobModule', () => {
 
     test('should terminate job with missing action function and try next job', async () => {
       const mockAction = jest.fn();
-      const mockUpdateJob = jest.fn().mockResolvedValue();
-
-      // Save original method
-      const originalUpdateJob = JobModule.updateJob;
-      const originalStartNextJob = JobModule.startNextJob;
-
-      // Mock updateJob to track calls
-      JobModule.updateJob = mockUpdateJob;
-
-      // Create a call counter to prevent infinite recursion
-      let startNextCallCount = 0;
-      JobModule.startNextJob = async function() {
-        startNextCallCount++;
-        if (startNextCallCount > 2) return; // Prevent infinite recursion
-        await originalStartNextJob.call(this);
-      };
-
+      JobModule.updateJob = jest.fn().mockResolvedValue();
       JobModule.jobs = {
         'job-1': { status: 'Complete' },
         'job-2': { status: 'Pending', jobType: 'Manually Added Urls' }, // No action function
@@ -882,23 +877,113 @@ describe('JobModule', () => {
 
       await JobModule.startNextJob();
 
-      expect(logger.warn).toHaveBeenCalledWith(
-        expect.objectContaining({ jobId: 'job-2', jobType: 'Manually Added Urls' }),
-        'Cannot start pending job - missing action function, marking as Terminated'
-      );
-      expect(mockUpdateJob).toHaveBeenCalledWith('job-2', {
+      expect(JobModule.updateJob).toHaveBeenCalledWith('job-2', {
         status: 'Terminated',
         output: 'Job could not be started after server restart',
       });
-      // Should recursively call startNextJob to try the next pending job
-      expect(startNextCallCount).toBeGreaterThan(1);
-
-      // Restore original methods
-      JobModule.updateJob = originalUpdateJob;
-      JobModule.startNextJob = originalStartNextJob;
+      expect(mockAction).toHaveBeenCalledWith(expect.objectContaining({ id: 'job-3' }), true);
     });
 
-    test('should not invoke action if job has no action function', () => {
+    test('overlapping calls start a pending job only once', async () => {
+      const mockAction = jest.fn();
+      JobModule.jobs = { 'job-1': { status: 'Pending', action: mockAction } };
+
+      await Promise.all([JobModule.startNextJob(), JobModule.startNextJob()]);
+
+      expect(mockAction).toHaveBeenCalledTimes(1);
+    });
+
+    test('logs instead of rejecting when a started job action fails', async () => {
+      JobModule.jobs = {
+        'job-1': { status: 'Pending', jobType: 'Channel Downloads', action: jest.fn().mockRejectedValue(new Error('boom')) }
+      };
+
+      await JobModule.startNextJob();
+      await new Promise(setImmediate);
+
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ jobId: 'job-1' }),
+        'Failed to start queued job'
+      );
+    });
+
+    test('marks a queued job whose action fails before it starts as an error and starts the next job', async () => {
+      const nextAction = jest.fn();
+      JobModule.updateJob = jest.fn(async (id, updates) => Object.assign(JobModule.jobs[id], updates));
+      JobModule.jobs = {
+        'job-1': { status: 'Pending', jobType: 'Channel Downloads', action: jest.fn().mockRejectedValue(new Error('boom')) },
+        'job-2': { status: 'Pending', jobType: 'Playlist Downloads', action: nextAction },
+      };
+
+      await JobModule.startNextJob();
+      // The release and the second scan each await the storage check first.
+      for (let tick = 0; tick < 10 && nextAction.mock.calls.length === 0; tick += 1) {
+        await new Promise(setImmediate);
+      }
+
+      expect(JobModule.updateJob).toHaveBeenCalledWith('job-1', {
+        status: 'Error', output: 'Job could not be started: boom',
+      });
+      expect(nextAction).toHaveBeenCalledTimes(1);
+    });
+
+    test('tells listeners about a queued job abandoned before it started, with its run', async () => {
+      const listener = jest.fn();
+      JobModule.onJobAbandoned(listener);
+      JobModule.updateJob = jest.fn(async (id, updates) => Object.assign(JobModule.jobs[id], updates));
+      JobModule.jobs = {
+        'job-1': {
+          status: 'Pending', jobType: 'Channel Downloads', data: { runId: 'run-1' },
+          action: jest.fn().mockRejectedValue(new Error('boom')),
+        },
+      };
+
+      await JobModule.startNextJob();
+      for (let tick = 0; tick < 10 && listener.mock.calls.length === 0; tick += 1) {
+        await new Promise(setImmediate);
+      }
+
+      expect(listener).toHaveBeenCalledWith({ jobId: 'job-1', runId: 'run-1', reason: 'Job could not be started: boom' });
+    });
+
+    test('tells listeners when a job gets a final status, before its videos are reloaded', async () => {
+      const RealJobModule = require('../jobModule');
+      const listener = jest.fn();
+      RealJobModule.onJobEnded(listener);
+      RealJobModule.jobs = { 'job-1': { status: 'In Progress', jobType: 'Manually Added Urls', data: {} } };
+
+      const update = RealJobModule.updateJob('job-1', { status: 'Error', output: 'boom' });
+
+      expect(listener).toHaveBeenCalledWith({ jobId: 'job-1' });
+      await update;
+    });
+
+    test('does not tell listeners about a status that is not final', async () => {
+      const RealJobModule = require('../jobModule');
+      const listener = jest.fn();
+      RealJobModule.onJobEnded(listener);
+      RealJobModule.jobs = { 'job-1': { status: 'Pending', jobType: 'Manually Added Urls', data: {} } };
+
+      await RealJobModule.updateJob('job-1', { status: 'In Progress' });
+
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    test('leaves a job the failing action already started to the download path', async () => {
+      JobModule.updateJob = jest.fn();
+      const action = jest.fn(async () => {
+        JobModule.jobs['job-1'].status = 'In Progress';
+        throw new Error('boom');
+      });
+      JobModule.jobs = { 'job-1': { status: 'Pending', jobType: 'Channel Downloads', action } };
+
+      await JobModule.startNextJob();
+      await new Promise(setImmediate);
+
+      expect(JobModule.updateJob).not.toHaveBeenCalled();
+    });
+
+    test('should not invoke action if job has no action function', async () => {
       JobModule.updateJob = jest.fn();
 
       JobModule.jobs = {
@@ -915,16 +1000,107 @@ describe('JobModule', () => {
       RealJobModule.startNextJob = function() {
         callCount++;
         if (callCount === 1) {
-          originalStartNext();
+          return originalStartNext();
         }
+        return Promise.resolve();
       };
 
-      RealJobModule.startNextJob();
+      await RealJobModule.startNextJob();
 
       expect(JobModule.updateJob).toHaveBeenCalledWith('job-1', {
         status: 'Terminated',
         output: 'Job could not be started after server restart',
       });
+    });
+  });
+
+  describe('startNextJob while downloads are paused', () => {
+    let storageGuard;
+
+    beforeEach(() => {
+      fs.existsSync.mockReturnValue(false);
+      fs.readFileSync.mockReturnValue(JSON.stringify({ plexApiKey: 'test-key' }));
+      JobModule = require('../jobModule');
+      storageGuard = require('../storageGuard');
+    });
+
+    test('holds pending jobs while storage limits pause downloads', async () => {
+      const mockAction = jest.fn();
+      storageGuard.refresh.mockResolvedValueOnce({ paused: true });
+      JobModule.jobs = { 'job-1': { status: 'Pending', action: mockAction } };
+
+      await JobModule.startNextJob();
+
+      expect(mockAction).not.toHaveBeenCalled();
+    });
+
+    test('starts pending jobs when the pause check fails', async () => {
+      const mockAction = jest.fn();
+      storageGuard.refresh.mockRejectedValueOnce(new Error('check failed'));
+      JobModule.jobs = { 'job-1': { status: 'Pending', action: mockAction } };
+
+      await JobModule.startNextJob();
+
+      expect(mockAction).toHaveBeenCalled();
+    });
+
+    test('a resume during a running scan starts the pending job only once', async () => {
+      const mockAction = jest.fn();
+      JobModule.jobs = { 'job-1': { status: 'Pending', action: mockAction } };
+      const onResumed = storageGuard.on.mock.calls.find(([event]) => event === 'resumed')[1];
+      // The guard emits 'resumed' from inside the refresh startNextJob awaits.
+      storageGuard.refresh.mockImplementationOnce(async () => {
+        onResumed();
+        return { paused: false };
+      });
+
+      await JobModule.startNextJob();
+      await new Promise(setImmediate);
+
+      expect(mockAction).toHaveBeenCalledTimes(1);
+    });
+
+    test('a held job skipped by a resume during an import starts when the queue next advances', async () => {
+      const mockAction = jest.fn();
+      JobModule.jobs = {
+        'import-1': { status: 'In Progress', jobType: 'Import Subscriptions' },
+        'job-1': { status: 'Pending', action: mockAction },
+      };
+      const onResumed = storageGuard.on.mock.calls.find(([event]) => event === 'resumed')[1];
+      onResumed();
+      await new Promise(setImmediate);
+      expect(mockAction).not.toHaveBeenCalled();
+
+      // The import finishes; subscriptionImport then advances the queue.
+      JobModule.jobs['import-1'].status = 'Complete';
+      await JobModule.startNextJob();
+
+      expect(mockAction).toHaveBeenCalledTimes(1);
+    });
+
+    test('starts held jobs when downloads resume', async () => {
+      const mockAction = jest.fn();
+      JobModule.jobs = { 'job-1': { status: 'Pending', action: mockAction } };
+      const onResumed = storageGuard.on.mock.calls.find(([event]) => event === 'resumed')[1];
+
+      onResumed();
+      await new Promise(setImmediate);
+
+      expect(mockAction).toHaveBeenCalled();
+    });
+
+    test('does not start another job on resume while one is running', async () => {
+      const mockAction = jest.fn();
+      JobModule.jobs = {
+        'job-1': { status: 'In Progress' },
+        'job-2': { status: 'Pending', action: mockAction }
+      };
+      const onResumed = storageGuard.on.mock.calls.find(([event]) => event === 'resumed')[1];
+
+      onResumed();
+      await new Promise(setImmediate);
+
+      expect(mockAction).not.toHaveBeenCalled();
     });
   });
 
@@ -1257,6 +1433,38 @@ describe('JobModule', () => {
         expect.objectContaining({ videos: ['video1', 'video2', 'video3'] })
       );
       expect(JobModule.jobs['job-1'].output).toBe('3 videos.');
+    });
+
+    test('keeps Error status for a failed download job', async () => {
+      JobModule.jobs = {
+        'job-1': { status: 'In Progress', jobType: 'Channel Downloads', data: { videos: [] } }
+      };
+      JobModule.saveJobOnly = jest.fn().mockResolvedValue();
+      JobVideo.findAll.mockResolvedValue([]);
+
+      await JobModule.updateJob('job-1', {
+        status: 'Error',
+        output: 'Bot detection encountered. Please set cookies in your Configuration.',
+        data: { videos: [] }
+      });
+
+      expect(JobModule.jobs['job-1'].status).toBe('Error');
+    });
+
+    test('keeps the failure output for a failed download job', async () => {
+      JobModule.jobs = {
+        'job-1': { status: 'In Progress', jobType: 'Channel Downloads', data: { videos: [] } }
+      };
+      JobModule.saveJobOnly = jest.fn().mockResolvedValue();
+      JobVideo.findAll.mockResolvedValue([]);
+
+      await JobModule.updateJob('job-1', {
+        status: 'Error',
+        output: 'Output directory is not accessible: EACCES',
+        data: { videos: [] }
+      });
+
+      expect(JobModule.jobs['job-1'].output).toBe('Output directory is not accessible: EACCES');
     });
 
     test('should preserve Complete with Warnings status for download jobs', async () => {
@@ -2211,7 +2419,7 @@ describe('JobModule', () => {
         status: 'error',
         outcome: 'partial',
         message: 'Recovered 1 video records and 2 channel video records; 1 write failed.',
-        details: { videosUpserts: 1, channelVideosUpserts: 2, failed: 1 }
+        details: { videosUpserts: 1, channelVideosUpserts: 2, failed: 1, unreadableOnDisk: 0, recreatedUnverified: 0 }
       }));
     });
 
@@ -2266,7 +2474,7 @@ describe('JobModule', () => {
         status: 'success',
         outcome: 'completed',
         message: 'Recovered 2 video records and 2 channel video records.',
-        details: { videosUpserts: 2, channelVideosUpserts: 2, failed: 0 }
+        details: { videosUpserts: 2, channelVideosUpserts: 2, failed: 0, unreadableOnDisk: 0, recreatedUnverified: 0 }
       }));
       expect(Video.create).toHaveBeenCalledTimes(2);
       expect(ChannelVideo.findOrCreate).toHaveBeenCalledTimes(2);
@@ -2412,8 +2620,11 @@ describe('JobModule', () => {
         throw new Error('Unknown file');
       });
 
-      // Mock stat to simulate file exists with size
-      fsPromises.stat.mockResolvedValue({ size: 123456789 });
+      const filePath = '/test/output/Channel 1/Channel 1 - Video 1 - video-1/Channel 1 - Video 1  [video-1].mp4';
+      videosModule.scanForVideoFiles.mockResolvedValue({
+        fileMap: new Map([['video-1', { videoFilePath: filePath, videoFileSize: 123456789, audioFilePath: null, audioFileSize: null }]]),
+        duplicates: new Map(),
+      });
 
       Video.findAll.mockResolvedValue([]);
       ChannelVideo.findAll.mockResolvedValue([]);
@@ -2421,11 +2632,12 @@ describe('JobModule', () => {
 
       await JobModule.backfillFromCompleteList();
 
+      expect(videosModule.scanForVideoFiles).toHaveBeenCalledWith('/test/output');
       expect(Video.create).toHaveBeenCalledTimes(1);
       expect(Video.create).toHaveBeenCalledWith(
         expect.objectContaining({
           youtubeId: 'video-1',
-          filePath: '/test/output/Channel 1/Channel 1 - Video 1 - video-1/Channel 1 - Video 1  [video-1].mp4',
+          filePath,
           fileSize: '123456789',
           removed: false
         })
@@ -2433,100 +2645,394 @@ describe('JobModule', () => {
 
     });
 
-    test('should update existing video with file metadata if not already set', async () => {
-
-      fsPromises.readFile.mockImplementation(async (path) => {
-        if (path.includes('complete.list')) {
-          return 'youtube video-1\n';
-        }
-        if (path.includes('video-1.info.json')) {
-          return JSON.stringify({
-            id: 'video-1',
-            uploader: 'Channel 1',
-            title: 'Video 1',
-            duration: 100,
-            description: 'Description 1',
-            upload_date: '20240101',
-            channel_id: 'channel-1'
-          });
-        }
-        throw new Error('Unknown file');
-      });
-
-      // Mock stat to simulate file exists with size
-      fsPromises.stat.mockResolvedValue({ size: 987654321 });
-
-      const mockVideoInstance = {
+    describe('existing and recreated rows', () => {
+      const mp4Path = '/test/output/Channel 1/Channel 1 - Video 1 - video-1/Channel 1 - Video 1  [video-1].mp4';
+      const existingRow = (overrides = {}) => ({
+        id: 7,
         youtubeId: 'video-1',
+        removed: false,
         filePath: null,
         fileSize: null,
-        update: jest.fn()
-      };
+        audioFilePath: null,
+        audioFileSize: null,
+        video_resolution: null,
+        last_downloaded_at: null,
+        media_type: 'video',
+        normalized_rating: null,
+        update: jest.fn(),
+        ...overrides,
+      });
+      const fileStat = (size) => ({ size, isFile: () => true });
 
-      Video.findAll.mockResolvedValue([{ youtubeId: 'video-1' }]);
-      ChannelVideo.findAll.mockResolvedValue([]);
-      Video.findOne.mockResolvedValue(mockVideoInstance);
-
-      await JobModule.backfillFromCompleteList();
-
-      // Should not create a new video
-      expect(Video.create).not.toHaveBeenCalled();
-      // Should update the existing video with file metadata
-      expect(mockVideoInstance.update).toHaveBeenCalledWith({
-        filePath: '/test/output/Channel 1/Channel 1 - Video 1 - video-1/Channel 1 - Video 1  [video-1].mp4',
-        fileSize: '987654321',
-        removed: false
+      beforeEach(() => {
+        fsPromises.readFile.mockImplementation(async (path) => {
+          if (path.includes('complete.list')) return 'youtube video-1\n';
+          if (path.includes('video-1.info.json')) {
+            return JSON.stringify({
+              id: 'video-1',
+              uploader: 'Channel 1',
+              title: 'Video 1',
+              duration: 100,
+              upload_date: '20240101',
+              channel_id: 'channel-1'
+            });
+          }
+          throw new Error('Unknown file');
+        });
+        ChannelVideo.findAll.mockResolvedValue([]);
+        Video.update.mockResolvedValue([1]);
       });
 
+      test('fills in the found file on a row missing its size, if the row is unchanged', async () => {
+        const row = existingRow({ filePath: mp4Path });
+        fsPromises.stat.mockResolvedValue(fileStat(987654321));
+        Video.findAll.mockResolvedValue([{ youtubeId: 'video-1' }]);
+        Video.findOne.mockResolvedValue(row);
+
+        await JobModule.backfillFromCompleteList();
+
+        expect(Video.create).not.toHaveBeenCalled();
+        expect(Video.update).toHaveBeenCalledWith(
+          { filePath: mp4Path, fileSize: '987654321', removed: false },
+          { where: expect.objectContaining({ id: 7, removed: false, filePath: mp4Path, fileSize: null }) }
+        );
+      });
+
+      test('leaves an audio-only row without a video path', async () => {
+        const row = existingRow({ audioFilePath: '/test/output/Channel 1/Video 1 [video-1].mp3', audioFileSize: '4096' });
+        fsPromises.stat.mockRejectedValue(new Error('ENOENT'));
+        Video.findAll.mockResolvedValue([{ youtubeId: 'video-1' }]);
+        Video.findOne.mockResolvedValue(row);
+
+        await JobModule.backfillFromCompleteList();
+
+        expect(Video.update).not.toHaveBeenCalled();
+        expect(row.update).not.toHaveBeenCalled();
+      });
+
+      test('keeps a deleted row missing when its file is not found', async () => {
+        const row = existingRow({ removed: true, filePath: mp4Path });
+        fsPromises.stat.mockRejectedValue(new Error('ENOENT'));
+        Video.findAll.mockResolvedValue([{ youtubeId: 'video-1' }]);
+        Video.findOne.mockResolvedValue(row);
+
+        await JobModule.backfillFromCompleteList();
+
+        expect(Video.update).not.toHaveBeenCalled();
+        expect(row.update).not.toHaveBeenCalled();
+      });
+
+      test('does not restore a row deleted just before it was read', async () => {
+        // Cleanup deletes the file and marks the row removed; the repair only
+        // sees that if it checks the disk after reading the row.
+        let deleted = false;
+        fsPromises.stat.mockImplementation(async () => {
+          if (deleted) throw new Error('ENOENT');
+          return fileStat(123);
+        });
+        const row = existingRow({ removed: true, filePath: mp4Path });
+        Video.findAll.mockResolvedValue([{ youtubeId: 'video-1' }]);
+        Video.findOne.mockImplementation(async () => {
+          deleted = true;
+          return row;
+        });
+
+        await JobModule.backfillFromCompleteList();
+
+        expect(Video.update).not.toHaveBeenCalled();
+        expect(row.update).not.toHaveBeenCalled();
+      });
+
+      test('skips the file update without a failure when the row changed after it was read', async () => {
+        fsPromises.stat.mockResolvedValue(fileStat(123));
+        Video.findAll.mockResolvedValue([{ youtubeId: 'video-1' }]);
+        Video.findOne.mockResolvedValue(existingRow({ filePath: mp4Path }));
+        Video.update.mockResolvedValue([0]);
+
+        const record = await JobModule.backfillFromCompleteList();
+
+        expect(record.details.failed).toBe(0);
+        expect(logger.info).toHaveBeenCalledWith(
+          { youtubeId: 'video-1' },
+          'Video changed during backfill, skipping file update'
+        );
+      });
+
+      test('does not record a directory at the guessed path as the file', async () => {
+        fsPromises.stat.mockResolvedValue({ size: 4096, isFile: () => false });
+        Video.findAll.mockResolvedValue([{ youtubeId: 'video-1' }]);
+        Video.findOne.mockResolvedValue(existingRow({ filePath: mp4Path }));
+
+        await JobModule.backfillFromCompleteList();
+
+        expect(Video.update).not.toHaveBeenCalled();
+      });
+
+      test('recreates a missing row as removed when its file is not found', async () => {
+        Video.findAll.mockResolvedValue([]);
+        Video.findOne.mockResolvedValue(null);
+
+        await JobModule.backfillFromCompleteList();
+
+        expect(Video.create).toHaveBeenCalledWith(
+          expect.objectContaining({ youtubeId: 'video-1', filePath: mp4Path, fileSize: null, removed: true })
+        );
+      });
+
+      test('recreates a lost audio-only row from the audio file found on disk', async () => {
+        const mp3Path = '/test/output/Channel 1/Video 1 [video-1].mp3';
+        videosModule.scanForVideoFiles.mockResolvedValue({
+          fileMap: new Map([['video-1', { videoFilePath: null, videoFileSize: null, audioFilePath: mp3Path, audioFileSize: 4096 }]]),
+          duplicates: new Map(),
+        });
+        Video.findAll.mockResolvedValue([]);
+        Video.findOne.mockResolvedValue(null);
+
+        await JobModule.backfillFromCompleteList();
+
+        expect(Video.create).toHaveBeenCalledWith(expect.objectContaining({
+          filePath: null, fileSize: null, audioFilePath: mp3Path, audioFileSize: '4096', removed: false,
+        }));
+      });
+
+      test('walks the downloads folder once per run however many rows were lost', async () => {
+        fsPromises.readFile.mockImplementation(async (path) => {
+          if (path.includes('complete.list')) return 'youtube video-1\nyoutube video-2\n';
+          const id = path.includes('video-1') ? 'video-1' : 'video-2';
+          return JSON.stringify({ id, uploader: 'Channel 1', title: id, channel_id: 'channel-1' });
+        });
+        Video.findAll.mockResolvedValue([]);
+        Video.findOne.mockResolvedValue(null);
+
+        await JobModule.backfillFromCompleteList();
+
+        expect(Video.create).toHaveBeenCalledTimes(2);
+        expect(videosModule.scanForVideoFiles).toHaveBeenCalledTimes(1);
+      });
+
+      test('logs how many files the walk found', async () => {
+        Video.findAll.mockResolvedValue([]);
+        Video.findOne.mockResolvedValue(null);
+
+        await JobModule.backfillFromCompleteList();
+
+        expect(logger.info).toHaveBeenCalledWith(
+          { filesOnDisk: 0 },
+          'Searched the downloads folder for lost video records'
+        );
+      });
+
+      test('still recreates a lost row as missing when parts of the folder could not be read', async () => {
+        videosModule.scanForVideoFiles.mockResolvedValue({ fileMap: new Map(), duplicates: new Map(), unreadable: 2 });
+        Video.findAll.mockResolvedValue([]);
+        Video.findOne.mockResolvedValue(null);
+
+        await JobModule.backfillFromCompleteList();
+
+        expect(logger.warn).toHaveBeenCalledWith(
+          { unreadable: 2 },
+          'Parts of the downloads folder could not be read; lost videos stored there are recreated as missing'
+        );
+        expect(Video.create).toHaveBeenCalledWith(expect.objectContaining({ youtubeId: 'video-1', removed: true }));
+      });
+
+      test('reports a run as partial when a lost row was recreated as missing during a partial walk', async () => {
+        videosModule.scanForVideoFiles.mockResolvedValue({ fileMap: new Map(), duplicates: new Map(), unreadable: 2 });
+        Video.findAll.mockResolvedValue([]);
+        Video.findOne.mockResolvedValue(null);
+
+        const record = await JobModule.backfillFromCompleteList();
+
+        expect(record).toEqual(expect.objectContaining({
+          status: 'error',
+          outcome: 'partial',
+          message: 'Recovered 1 video records and 1 channel video records; 1 recreated as missing because parts of the downloads folder could not be read.',
+          details: expect.objectContaining({ unreadableOnDisk: 2, recreatedUnverified: 1 }),
+        }));
+      });
+
+      test('keeps a partial walk completed when every lost row was found', async () => {
+        videosModule.scanForVideoFiles.mockResolvedValue({
+          fileMap: new Map([['video-1', { videoFilePath: mp4Path, videoFileSize: 123, audioFilePath: null, audioFileSize: null }]]),
+          duplicates: new Map(),
+          unreadable: 2,
+        });
+        Video.findAll.mockResolvedValue([]);
+        Video.findOne.mockResolvedValue(null);
+
+        const record = await JobModule.backfillFromCompleteList();
+
+        expect(record).toEqual(expect.objectContaining({
+          outcome: 'completed',
+          details: expect.objectContaining({ unreadableOnDisk: 2, recreatedUnverified: 0 }),
+        }));
+      });
+
+      test('does not walk the downloads folder when no row was lost', async () => {
+        fsPromises.stat.mockRejectedValue(new Error('ENOENT'));
+        Video.findAll.mockResolvedValue([{ youtubeId: 'video-1' }]);
+        Video.findOne.mockResolvedValue(existingRow({ filePath: mp4Path }));
+
+        await JobModule.backfillFromCompleteList();
+
+        expect(videosModule.scanForVideoFiles).not.toHaveBeenCalled();
+      });
+
+      test('finds another extension even when the title contains ".mp4"', async () => {
+        const base = '/test/output/Channel 1/Channel 1 - Convert .mp4 Files - video-1/Channel 1 - Convert .mp4 Files  [video-1]';
+        fsPromises.readFile.mockImplementation(async (path) => {
+          if (path.includes('complete.list')) return 'youtube video-1\n';
+          return JSON.stringify({ id: 'video-1', uploader: 'Channel 1', title: 'Convert .mp4 Files', channel_id: 'channel-1' });
+        });
+        fsPromises.stat.mockImplementation(async (path) => {
+          if (path === `${base}.webm`) return fileStat(777);
+          throw new Error('ENOENT');
+        });
+        Video.findAll.mockResolvedValue([{ youtubeId: 'video-1' }]);
+        Video.findOne.mockResolvedValue(existingRow());
+
+        await JobModule.backfillFromCompleteList();
+
+        expect(Video.update).toHaveBeenCalledWith(
+          { filePath: `${base}.webm`, fileSize: '777', removed: false },
+          expect.anything()
+        );
+      });
+
+      test('treats a row created concurrently by a download as already existing', async () => {
+        Video.findAll.mockResolvedValue([]);
+        Video.findOne.mockResolvedValue(null);
+        Video.create.mockRejectedValueOnce(Object.assign(new Error('Duplicate'), { name: 'SequelizeUniqueConstraintError' }));
+
+        const record = await JobModule.backfillFromCompleteList();
+
+        expect(record.details).toEqual(expect.objectContaining({ videosUpserts: 0, failed: 0 }));
+      });
+    });
+  });
+
+  describe('archive repair locking', () => {
+    let scheduledTaskManager;
+
+    beforeEach(() => {
+      fs.existsSync.mockReturnValue(false);
+      fs.readFileSync.mockReturnValue(JSON.stringify({ plexApiKey: 'test-key' }));
+      JobModule = require('../jobModule');
+      scheduledTaskManager = require('../scheduledTaskManager');
     });
 
-    test('should try alternative video extensions when mp4 not found', async () => {
-
-      fsPromises.readFile.mockImplementation(async (path) => {
-        if (path.includes('complete.list')) {
-          return 'youtube video-1\n';
-        }
-        if (path.includes('video-1.info.json')) {
-          return JSON.stringify({
-            id: 'video-1',
-            uploader: 'Channel 1',
-            title: 'Video 1',
-            duration: 100,
-            description: 'Description 1',
-            upload_date: '20240101',
-            channel_id: 'channel-1'
+    // Holds the complete.list read open until release() is called, so a
+    // second call can be made while the first is still in progress.
+    function deferArchiveRead() {
+      let releaseRead;
+      let readCalls = 0;
+      fsPromises.readFile.mockImplementation((filePath) => {
+        if (String(filePath).includes('complete.list')) {
+          readCalls += 1;
+          return new Promise((resolve, reject) => {
+            releaseRead = () => reject(Object.assign(new Error('missing'), { code: 'ENOENT' }));
           });
         }
-        throw new Error('Unknown file');
+        return Promise.reject(Object.assign(new Error('missing'), { code: 'ENOENT' }));
+      });
+      return { release: () => releaseRead(), readCalls: () => readCalls };
+    }
+
+    test('resolves an overlapping call as skipped and reads the archive only once', async () => {
+      const archiveRead = deferArchiveRead();
+
+      const first = JobModule.backfillFromCompleteList();
+      const second = await JobModule.backfillFromCompleteList();
+
+      expect(second).toEqual({
+        status: 'skipped',
+        outcome: 'skipped',
+        message: 'A library repair was already running.',
       });
 
-      // Mock stat to fail for mp4 but succeed for webm
-      fsPromises.stat.mockImplementation(async (path) => {
-        if (path.includes('.mp4')) {
-          throw new Error('ENOENT');
-        }
-        if (path.includes('.webm')) {
-          return { size: 555555555 };
-        }
-        throw new Error('ENOENT');
+      archiveRead.release();
+      await first;
+
+      expect(archiveRead.readCalls()).toBe(1);
+    });
+
+    test('isArchiveRepairRunning is true while the repair is pending and false once it finishes', async () => {
+      const archiveRead = deferArchiveRead();
+
+      expect(JobModule.isArchiveRepairRunning()).toBe(false);
+
+      const pending = JobModule.backfillFromCompleteList();
+
+      expect(JobModule.isArchiveRepairRunning()).toBe(true);
+
+      archiveRead.release();
+      await pending;
+
+      expect(JobModule.isArchiveRepairRunning()).toBe(false);
+    });
+
+    test('releases the lock when the repair throws', async () => {
+      JobModule._repairFromArchive = jest.fn().mockRejectedValue(new Error('boom'));
+
+      await expect(JobModule.backfillFromCompleteList()).rejects.toThrow('boom');
+
+      expect(JobModule.isArchiveRepairRunning()).toBe(false);
+    });
+
+    test('the repair reports as running through the scheduler', async () => {
+      const archiveRead = deferArchiveRead();
+
+      const pending = JobModule.backfillFromCompleteList();
+      JobModule.scheduleDailyBackfill();
+
+      expect(
+        scheduledTaskManager.getStatus().find((t) => t.id === 'archiveBackfillFrequency').running
+      ).toBe(true);
+
+      archiveRead.release();
+      await pending;
+
+      expect(
+        scheduledTaskManager.getStatus().find((t) => t.id === 'archiveBackfillFrequency').running
+      ).toBe(false);
+    });
+  });
+
+  describe('runStartupBackfill announces', () => {
+    let scheduledTaskManager;
+
+    beforeEach(() => {
+      fs.existsSync.mockReturnValue(false);
+      fs.readFileSync.mockReturnValue(JSON.stringify({ plexApiKey: 'test-key' }));
+      fsPromises.readFile.mockRejectedValue({ code: 'ENOENT' });
+      JobModule = require('../jobModule');
+      scheduledTaskManager = require('../scheduledTaskManager');
+    });
+
+    test('calls announceRun with the archive lock already held, and still records the startup run', async () => {
+      let runningAtCall;
+      const announceRunSpy = jest.spyOn(scheduledTaskManager, 'announceRun').mockImplementation((id, promise) => {
+        runningAtCall = JobModule.isArchiveRepairRunning();
+        return promise;
       });
 
-      Video.findAll.mockResolvedValue([]);
-      ChannelVideo.findAll.mockResolvedValue([]);
-      Video.findOne.mockResolvedValue(null);
+      await JobModule.runStartupBackfill();
 
-      await JobModule.backfillFromCompleteList();
-
-      expect(Video.create).toHaveBeenCalledTimes(1);
-      expect(Video.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          youtubeId: 'video-1',
-          filePath: '/test/output/Channel 1/Channel 1 - Video 1 - video-1/Channel 1 - Video 1  [video-1].webm',
-          fileSize: '555555555',
-          removed: false
-        })
+      expect(announceRunSpy).toHaveBeenCalledWith('archiveBackfillFrequency', expect.any(Promise));
+      expect(runningAtCall).toBe(true);
+      expect(scheduledTaskRuns.record).toHaveBeenCalledWith(
+        expect.objectContaining({ taskKey: 'archiveBackfillFrequency', trigger: 'startup' })
       );
+    });
 
+    test('broadcasts the archive task status through messageEmitter when the startup pass runs', async () => {
+      jest.spyOn(scheduledTaskManager, 'announceRun');
+
+      await JobModule.runStartupBackfill();
+
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
+        'broadcast', null, 'schedules', 'scheduledTaskStatus', { key: 'archiveBackfillFrequency' }
+      );
     });
   });
 

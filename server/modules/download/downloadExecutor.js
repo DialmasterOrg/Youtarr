@@ -16,6 +16,15 @@ const logger = require('../../logger');
 const { buildYtdlpEnv } = require('./ytdlpEnvBuilder');
 const DownloadTimeoutController = require('./DownloadTimeoutController');
 const { YtdlpErrorTracker } = require('./YtdlpErrorTracker');
+const downloadRunTracker = require('./downloadRunTracker');
+
+// Tells the job's download run about a job that failed before yt-dlp ran, so
+// the run counts it instead of treating the job as quietly finished.
+// Intermediate groups report through their grouped job instead.
+function reportJobFailureToRun(runId, jobId, jobType, reason, skipJobTransition) {
+  if (skipJobTransition || !downloadRunTracker.isActive(runId)) return;
+  downloadRunTracker.recordJobResult(runId, jobId, { jobType, jobIssue: { status: 'Error', reason, byUser: false } });
+}
 
 // Node fires 'exit' before stdout/stderr have necessarily drained; 'close'
 // fires once they have. We finalize on 'close', bounded by this timeout in
@@ -190,6 +199,7 @@ class DownloadExecutor {
         output: errorMsg,
         notes: 'The output directory could not be written to. If using NFS, check that the mount is healthy (not stale). See Youtarr docs for NFS mount recommendations.',
       });
+      reportJobFailureToRun(runId, jobId, jobType, errorMsg, skipJobTransition);
 
       MessageEmitter.emitMessage(
         'broadcast',
@@ -420,6 +430,7 @@ class DownloadExecutor {
       }).catch((err) => {
         logger.error({ err, jobId }, 'Failed to mark job as errored after process error');
       });
+      reportJobFailureToRun(runId, jobId, jobType, 'Download process error: ' + error.message, skipJobTransition);
 
       if (!skipJobTransition) {
         jobModule.startNextJob().catch(err => {

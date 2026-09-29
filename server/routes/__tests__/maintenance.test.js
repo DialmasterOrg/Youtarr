@@ -15,20 +15,23 @@ describe('Maintenance routes', () => {
   let mockVideosModule;
   let mockConfigModule;
   let mockScheduledTaskRuns;
+  let mockScheduledTaskManager;
   let mockVerifyToken;
 
   beforeEach(() => {
     jest.resetModules();
 
     mockVideosModule = {
-      isBackfillRunning: jest.fn().mockReturnValue(false),
-      tryStartBackfill: jest.fn()
+      isBackfillRunning: jest.fn().mockReturnValue(false)
     };
     mockConfigModule = {
       getConfig: jest.fn().mockReturnValue({})
     };
     mockScheduledTaskRuns = {
       getLatestRun: jest.fn().mockResolvedValue(null)
+    };
+    mockScheduledTaskManager = {
+      runNow: jest.fn()
     };
     mockVerifyToken = (req, res, next) => next();
 
@@ -42,28 +45,42 @@ describe('Maintenance routes', () => {
       videosModule: mockVideosModule,
       configModule: mockConfigModule,
       scheduledTaskRuns: mockScheduledTaskRuns,
-      rescanRunSummary
+      rescanRunSummary,
+      scheduledTaskManager: mockScheduledTaskManager
     }));
   });
 
   describe('POST /api/maintenance/rescan-files', () => {
     test('returns 202 when started', async () => {
-      mockVideosModule.tryStartBackfill.mockReturnValue({ started: true });
+      mockScheduledTaskManager.runNow.mockResolvedValue({ started: true, completion: Promise.resolve({}) });
 
       const res = await request(app).post('/api/maintenance/rescan-files');
 
       expect(res.status).toBe(202);
       expect(res.body).toEqual({ status: 'started', trigger: 'manual' });
-      expect(mockVideosModule.tryStartBackfill).toHaveBeenCalledWith({ trigger: 'manual' });
+      expect(mockScheduledTaskManager.runNow).toHaveBeenCalledWith(
+        'videoRescanFrequency', { trigger: 'manual', enforceCooldown: false }
+      );
     });
 
     test('returns 409 when already running', async () => {
-      mockVideosModule.tryStartBackfill.mockReturnValue({ started: false, reason: 'already-running' });
+      mockScheduledTaskManager.runNow.mockResolvedValue({
+        started: false, reason: 'running', message: 'x', availableAt: null
+      });
 
       const res = await request(app).post('/api/maintenance/rescan-files');
 
       expect(res.status).toBe(409);
-      expect(res.body).toEqual({ error: 'Rescan already in progress' });
+      expect(res.body).toEqual({ error: 'Rescan already in progress', reason: 'running', availableAt: null });
+    });
+
+    test('returns 500 when runNow throws', async () => {
+      mockScheduledTaskManager.runNow.mockRejectedValue(new Error('boom'));
+
+      const res = await request(app).post('/api/maintenance/rescan-files');
+
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({ error: 'Failed to start rescan' });
     });
   });
 

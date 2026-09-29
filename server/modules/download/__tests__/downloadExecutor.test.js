@@ -471,6 +471,27 @@ describe('DownloadExecutor', () => {
       expect(jobModule.startNextJob).toHaveBeenCalled();
     });
 
+    it('reports a health check failure to the job\'s download run', async () => {
+      const downloadRunTracker = require('../downloadRunTracker');
+      const activeSpy = jest.spyOn(downloadRunTracker, 'isActive').mockReturnValue(true);
+      const recordSpy = jest.spyOn(downloadRunTracker, 'recordJobResult').mockReturnValue(true);
+      jobModule.getJob.mockReturnValue({ status: 'In Progress', data: { runId: 'run-1' } });
+      mockFsPromises.writeFile.mockRejectedValue(new Error('EACCES: permission denied'));
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(recordSpy).toHaveBeenCalledWith('run-1', mockJobId, {
+        jobType: mockJobType,
+        jobIssue: {
+          status: 'Error',
+          reason: expect.stringContaining('Output directory is not accessible'),
+          byUser: false,
+        },
+      });
+      recordSpy.mockRestore();
+      activeSpy.mockRestore();
+    });
+
     it('should not start next job on health check failure when skipJobTransition is true', async () => {
       const error = new Error('EACCES: permission denied');
       error.code = 'EACCES';
@@ -1545,6 +1566,41 @@ describe('DownloadExecutor', () => {
           })
         );
         expect(jobModule.startNextJob).toHaveBeenCalled();
+      });
+
+      it('reports a process spawn error to the job\'s download run', async () => {
+        const downloadRunTracker = require('../downloadRunTracker');
+        const activeSpy = jest.spyOn(downloadRunTracker, 'isActive').mockReturnValue(true);
+        const recordSpy = jest.spyOn(downloadRunTracker, 'recordJobResult').mockReturnValue(true);
+        jobModule.getJob.mockReturnValue({ status: 'In Progress', data: { runId: 'run-1' } });
+        setTimeout(() => {
+          mockProcess.emit('error', new Error('spawn yt-dlp ENOENT'));
+        }, 5);
+
+        await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+        expect(recordSpy).toHaveBeenCalledWith('run-1', mockJobId, {
+          jobType: mockJobType,
+          jobIssue: { status: 'Error', reason: 'Download process error: spawn yt-dlp ENOENT', byUser: false },
+        });
+        recordSpy.mockRestore();
+        activeSpy.mockRestore();
+      });
+
+      it('leaves an intermediate group\'s spawn error to its grouped job', async () => {
+        const downloadRunTracker = require('../downloadRunTracker');
+        const activeSpy = jest.spyOn(downloadRunTracker, 'isActive').mockReturnValue(true);
+        const recordSpy = jest.spyOn(downloadRunTracker, 'recordJobResult').mockReturnValue(true);
+        jobModule.getJob.mockReturnValue({ status: 'In Progress', data: { runId: 'run-1' } });
+        setTimeout(() => {
+          mockProcess.emit('error', new Error('spawn yt-dlp ENOENT'));
+        }, 5);
+
+        await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, true);
+
+        expect(recordSpy).not.toHaveBeenCalled();
+        recordSpy.mockRestore();
+        activeSpy.mockRestore();
       });
 
       it('should not start next job on process spawn error when skipJobTransition is true', async () => {

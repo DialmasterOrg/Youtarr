@@ -130,6 +130,8 @@ module.exports = {
         'slide-up': 'slide-up 150ms ease',
         'slide-down': 'slide-down 150ms ease',
         'download-arrow-drop': 'download-arrow-drop 1.1s ease-in-out infinite',
+        // Tailwind's ping, slowed down: a calm "running" signal rather than a blink.
+        'ping-slow': 'ping 2s cubic-bezier(0, 0, 0.2, 1) infinite',
         spin: 'spin 1s linear infinite',
       },
     },

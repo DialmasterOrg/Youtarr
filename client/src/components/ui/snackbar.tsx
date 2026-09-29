@@ -59,7 +59,10 @@ const Snackbar: React.FC<SnackbarProps> = ({
     anchorOrigin.vertical === 'top' ? 'top-4' : null,
     anchorOrigin.horizontal === 'left' ? 'left-4' :
     anchorOrigin.horizontal === 'right' ? 'right-4' :
-    'left-1/2 -translate-x-1/2'
+    // Centered with auto margins, not a translate: the slide-up animation sets
+    // transform and would shove the toast off-center while it plays. Phones get
+    // the full width minus gutters; desktop keeps the half-screen cap.
+    'inset-x-0 mx-auto w-fit max-w-[calc(100%-32px)] md:max-w-[50%]'
   );
 
   const positionStyle: React.CSSProperties = anchorOrigin.vertical === 'bottom'

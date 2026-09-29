@@ -676,6 +676,7 @@ WebSocket shares the HTTP port (3011 in container, 3087 on host) and emits:
 - `channelsUpdated` - Channel list changed
 - `videosUpdated` - A video's database rows were persisted mid-batch
 - `rescanStatus` - Filesystem rescan started or finished
+- `scheduledTaskStatus` - A scheduled task run started or finished (payload `{ key }`); the Scheduling page refetches `/api/schedules`
 - `channelTabsDetected` - Tab detection finished for a channel
 - `progress` / `complete` / `error` (source `subscriptionImport`) - Subscription import job updates
 

@@ -50,6 +50,15 @@ describe('validateConfig', () => {
     expect(validateConfig(config)).toBeNull();
   });
 
+  test('passes when only a total size limit is configured', () => {
+    const config = createConfig({
+      autoRemovalEnabled: true,
+      autoRemovalUsageLimit: '500GB'
+    });
+
+    expect(validateConfig(config)).toBeNull();
+  });
+
   test('passes when only watched-based removal is enabled', () => {
     const config = createConfig({
       autoRemovalEnabled: true,

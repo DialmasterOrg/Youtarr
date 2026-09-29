@@ -10,6 +10,8 @@ export interface Playlist {
   uploader: string | null;
   thumbnail: string | null;
   video_count: number;
+  // Videos with a file on disk now; downloaded-then-deleted videos are not counted.
+  downloaded_count?: number;
   enabled: boolean;
   auto_download: boolean;
   auto_download_baseline_at?: string | null;
@@ -73,6 +75,18 @@ export interface MediaServerStatus {
   emby: boolean;
 }
 
+/** A playlist Youtarr has saved before, as reported by the add-playlist preview. */
+export interface PlaylistExistingSubscription {
+  /** True when the playlist is subscribed now; false when it was removed and can be restored. */
+  enabled: boolean;
+  settings: {
+    auto_download: boolean | null;
+    default_sub_folder: string | null;
+    video_quality: string | null;
+    audio_format: string | null;
+  };
+}
+
 export interface PlaylistPreview {
   title: string;
   url: string;
@@ -81,6 +95,7 @@ export interface PlaylistPreview {
   description: string | null;
   video_count: number;
   playlist_id: string;
+  existing_subscription?: PlaylistExistingSubscription | null;
 }
 
 export interface PlaylistSubscribeSettings {

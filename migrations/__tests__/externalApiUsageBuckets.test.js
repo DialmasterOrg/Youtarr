@@ -11,9 +11,9 @@ function queryInterface({ tables = ['apikeys'], columns = {} } = {}) {
     showIndex: jest.fn().mockResolvedValue([]),
     addColumn: jest.fn(async (_table, column) => operations.push(['addColumn', column])),
     removeColumn: jest.fn(async (_table, column) => operations.push(['removeColumn', column])),
-    createTable: jest.fn(async (table) => {
+    createTable: jest.fn(async (table, _columns, options) => {
       tables.push(table);
-      operations.push(['createTable', table]);
+      operations.push(['createTable', table, options]);
     }),
     dropTable: jest.fn(async (table) => operations.push(['dropTable', table])),
     addIndex: jest.fn(async (_table, _fields, options) =>
@@ -32,7 +32,9 @@ describe('external API usage bucket migration', () => {
       NOW: 'NOW',
     });
     expect(qi.operations).toEqual(expect.arrayContaining([
-      ['createTable', 'external_api_usage_buckets'],
+      ['createTable', 'external_api_usage_buckets', {
+        charset: 'utf8mb4', collate: 'utf8mb4_unicode_ci',
+      }],
       ['addIndex', 'external_api_usage_key_window_uq'],
       ['addIndex', 'external_api_usage_window_idx'],
     ]));

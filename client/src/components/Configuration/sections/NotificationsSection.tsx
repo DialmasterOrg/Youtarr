@@ -1,4 +1,4 @@
-import React, { useState, ChangeEvent } from 'react';
+import React, { useEffect, useRef, useState, ChangeEvent } from 'react';
 import {
   FormControlLabel,
   Switch,
@@ -73,6 +73,15 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
   const [editingRichFormatting, setEditingRichFormatting] = useState(true);
   // Track test status for each webhook by index
   const [webhookTestStatus, setWebhookTestStatus] = useState<Record<number, WebhookTestStatus>>({});
+  const statusResetTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+
+  useEffect(() => {
+    const timers = statusResetTimersRef.current;
+    return () => {
+      timers.forEach(clearTimeout);
+      timers.clear();
+    };
+  }, []);
   // Delete confirmation modal
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
@@ -195,12 +204,14 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
           [index]: { status: 'success', message: 'Sent successfully!' }
         }));
         // Clear success status after 5 seconds
-        setTimeout(() => {
+        const timer = setTimeout(() => {
+          statusResetTimersRef.current.delete(timer);
           setWebhookTestStatus(prev => ({
             ...prev,
             [index]: { status: 'idle' }
           }));
         }, 5000);
+        statusResetTimersRef.current.add(timer);
       } else {
         const error = await response.json();
         setWebhookTestStatus(prev => ({

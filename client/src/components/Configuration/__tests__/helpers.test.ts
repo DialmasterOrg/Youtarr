@@ -1,6 +1,28 @@
-import { formatBytes, getChannelFilesOptions } from '../helpers';
+import { formatBytes, getChannelFilesOptions, storageSizeToBytes } from '../helpers';
 
 describe('Configuration Helpers', () => {
+  describe('storageSizeToBytes', () => {
+    test('converts gigabytes', () => {
+      expect(storageSizeToBytes('500GB')).toBe(500 * 1024 ** 3);
+    });
+
+    test('converts terabytes', () => {
+      expect(storageSizeToBytes('2TB')).toBe(2 * 1024 ** 4);
+    });
+
+    test('converts megabytes', () => {
+      expect(storageSizeToBytes('500MB')).toBe(500 * 1024 ** 2);
+    });
+
+    test('returns null for a blank value', () => {
+      expect(storageSizeToBytes('')).toBeNull();
+    });
+
+    test('returns null for an unrecognized value', () => {
+      expect(storageSizeToBytes('lots')).toBeNull();
+    });
+  });
+
   describe('formatBytes', () => {
     describe('Basic Byte Formatting', () => {
       test('formats 0 bytes correctly', () => {

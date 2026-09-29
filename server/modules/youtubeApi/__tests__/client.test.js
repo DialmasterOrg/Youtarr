@@ -970,4 +970,75 @@ describe('youtubeApi/client', () => {
       expect(results[0].thumbnailUrl).toBe('https://yt3.ggpht.com/e=s240');
     });
   });
+
+  describe('getPlaylistItemCounts', () => {
+    test('returns each playlist item count from playlists.list', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: { items: [
+          { id: 'UULFabc', contentDetails: { itemCount: 449 } },
+          { id: 'UUSHabc', contentDetails: { itemCount: 87 } },
+        ] },
+      });
+
+      const counts = await client.getPlaylistItemCounts('key', ['UULFabc', 'UUSHabc']);
+
+      expect(counts).toEqual(new Map([['UULFabc', 449], ['UUSHabc', 87]]));
+    });
+
+    test('requests contentDetails for the joined ids', async () => {
+      axios.get.mockResolvedValueOnce({ data: { items: [] } });
+
+      await client.getPlaylistItemCounts('key', ['UULFabc', 'UUSHabc']);
+
+      expect(axios.get).toHaveBeenCalledWith(
+        'https://www.googleapis.com/youtube/v3/playlists',
+        expect.objectContaining({
+          params: expect.objectContaining({ id: 'UULFabc,UUSHabc', part: 'contentDetails' }),
+        })
+      );
+    });
+
+    test('maps a playlist YouTube does not return to 0', async () => {
+      axios.get.mockResolvedValueOnce({ data: { items: [] } });
+
+      const counts = await client.getPlaylistItemCounts('key', ['UULVabc']);
+
+      expect(counts.get('UULVabc')).toBe(0);
+    });
+
+    test('leaves out a playlist whose itemCount is unusable', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: { items: [{ id: 'UULFabc', contentDetails: { itemCount: 'lots' } }] },
+      });
+
+      const counts = await client.getPlaylistItemCounts('key', ['UULFabc']);
+
+      expect(counts.has('UULFabc')).toBe(false);
+    });
+
+    test('leaves out a playlist whose itemCount is null', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: { items: [{ id: 'UULFabc', contentDetails: { itemCount: null } }] },
+      });
+
+      const counts = await client.getPlaylistItemCounts('key', ['UULFabc']);
+
+      expect(counts.has('UULFabc')).toBe(false);
+    });
+
+    test('splits more than 50 ids into batches', async () => {
+      axios.get.mockResolvedValue({ data: { items: [] } });
+      const ids = Array.from({ length: 51 }, (_, i) => `UULF${i}`);
+
+      await client.getPlaylistItemCounts('key', ids);
+
+      expect(axios.get).toHaveBeenCalledTimes(2);
+    });
+
+    test('rejects when the API call fails', async () => {
+      axios.get.mockRejectedValueOnce({ response: { status: 500, data: {} } });
+
+      await expect(client.getPlaylistItemCounts('key', ['UULFabc'])).rejects.toMatchObject({ name: 'YoutubeApiError' });
+    });
+  });
 });

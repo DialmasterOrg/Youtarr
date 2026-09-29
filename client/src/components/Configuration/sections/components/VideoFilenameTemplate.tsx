@@ -7,7 +7,10 @@ import {
   Link,
   CircularProgress,
 } from '../../../ui';
-import { FILENAME_PRESETS } from '../../../../utils/filenameTemplate/presets';
+import {
+  FILENAME_PRESETS,
+  PLEX_TV_SERIES_PRESET_PREFIX,
+} from '../../../../utils/filenameTemplate/presets';
 import {
   validatePrefix,
   lengthSeverity,
@@ -23,6 +26,8 @@ interface VideoFilenameTemplateProps {
   token: string | null;
   saveRequirement?: string | null;
   onPreviewSuccess?: (prefix: string) => void;
+  /** Whether the embedded MP4 title is still prefixed with the channel name. */
+  channelPrefixEnabled?: boolean;
 }
 
 const SEVERITY_TEXT: Record<'warn' | 'danger', string> = {
@@ -38,8 +43,10 @@ export const VideoFilenameTemplate: React.FC<VideoFilenameTemplateProps> = ({
   token,
   saveRequirement,
   onPreviewSuccess,
+  channelPrefixEnabled = false,
 }) => {
   const validation = useMemo(() => validatePrefix(value), [value]);
+  const showTvSeriesPrefixTip = channelPrefixEnabled && value === PLEX_TV_SERIES_PRESET_PREFIX;
   const preview = useFilenamePreview(token);
   const isStale = preview.isStale(value);
 
@@ -116,6 +123,19 @@ export const VideoFilenameTemplate: React.FC<VideoFilenameTemplateProps> = ({
           </Button>
         ))}
       </Box>
+
+      {showTvSeriesPrefixTip && (
+        <Box
+          data-testid="tv-series-channel-prefix-tip"
+          className="rounded p-2 bg-muted"
+        >
+          <Typography variant="caption" color="text.secondary">
+            Tip: in a Plex TV Shows library the channel is already the show name, so turn off
+            &quot;Prefix channel name in embedded video title&quot; under Download Settings to keep
+            episode titles clean.
+          </Typography>
+        </Box>
+      )}
 
       <Box className="flex items-center gap-3">
         <Button

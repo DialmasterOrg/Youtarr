@@ -89,6 +89,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
   const {
     playlist,
     videos: playlistVideos,
+    downloadedCount,
     notDownloadedCount,
     followingExistingCount,
     followingRequestedCount,
@@ -420,6 +421,7 @@ function PlaylistPage({ token }: PlaylistPageProps) {
         isMobile={isMobile}
         serverStatus={serverStatus}
         anyConfigured={anyConfigured}
+        downloadedCount={downloadedCount}
         newCount={notDownloadedCount}
         followingExistingCount={followingExistingCount}
         followingRequestedCount={followingRequestedCount}

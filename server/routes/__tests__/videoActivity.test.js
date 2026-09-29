@@ -9,6 +9,7 @@ const activity = require('../../modules/download/videoActivity');
 describe('video activity endpoints', () => {
   let app;
   let enqueue;
+  let storageGuard;
   beforeEach(() => {
     jest.clearAllMocks();
     app = express();
@@ -17,8 +18,12 @@ describe('video activity endpoints', () => {
     const verifyToken = (req, res, next) => req.headers['x-access-token'] ? next() : res.sendStatus(401);
     enqueue = jest.fn().mockResolvedValue({ queued: 0, acceptedIds: [], alreadyActiveIds: ['aaaaaaaaaaa'] });
     const downloadModule = { doGroupedManualDownloads: enqueue };
-    app.use(require('../videos')({ verifyToken, videosModule: {}, downloadModule, videoLocalStatus: { applyLocalVideoStatus } }));
-    app.use(require('../jobs')({ verifyToken, jobModule: {}, downloadModule, videoActivity: activity }));
+    storageGuard = {
+      isPausedError: jest.fn((err) => Boolean(err && err.code === 'DOWNLOADS_PAUSED')),
+      refresh: jest.fn().mockResolvedValue({ paused: false, reasons: [] }),
+    };
+    app.use(require('../videos')({ verifyToken, videosModule: {}, downloadModule, videoLocalStatus: { applyLocalVideoStatus }, storageGuard }));
+    app.use(require('../jobs')({ verifyToken, jobModule: {}, downloadModule, videoActivity: activity, storageGuard }));
   });
 
   it('requires authentication for snapshots and local metadata', async () => {
@@ -48,6 +53,29 @@ describe('video activity endpoints', () => {
     const response = await request(app).post('/triggerspecificdownloads').set('x-access-token', 'token')
       .send({ urls: ['https://youtu.be/aaaaaaaaaaa'] }).expect(200);
     expect(response.body).toMatchObject({ queued: 0, alreadyActiveIds: ['aaaaaaaaaaa'] });
+  });
+
+  it('returns 409 with the reason when downloads are paused for storage', async () => {
+    enqueue.mockRejectedValue(Object.assign(new Error('Downloads are paused: over the limit'), { code: 'DOWNLOADS_PAUSED' }));
+    const response = await request(app).post('/triggerspecificdownloads').set('x-access-token', 'token')
+      .send({ urls: ['https://youtu.be/aaaaaaaaaaa'] }).expect(409);
+    expect(response.body).toEqual({ error: 'Downloads are paused: over the limit' });
+  });
+
+  it('returns the download pause state', async () => {
+    const status = { paused: true, reasons: [{ type: 'usage', text: 'over the limit' }] };
+    storageGuard.refresh.mockResolvedValue(status);
+    const response = await request(app).get('/api/jobs/download-pause').set('x-access-token', 'token').expect(200);
+    expect(response.body).toEqual(status);
+  });
+
+  it('measures the downloaded total for the download pause state', async () => {
+    await request(app).get('/api/jobs/download-pause').set('x-access-token', 'token').expect(200);
+    expect(storageGuard.refresh).toHaveBeenCalledWith({ includeUsage: true });
+  });
+
+  it('requires authentication for the download pause state', async () => {
+    await request(app).get('/api/jobs/download-pause').expect(401);
   });
 
   it('reports enqueue failure instead of returning early success', async () => {

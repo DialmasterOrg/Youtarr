@@ -28,6 +28,9 @@ jest.mock('../downloadModule', () => ({
 jest.mock('../jobModule', () => ({
   addJob: jest.fn().mockResolvedValue('mock-job-id'),
 }));
+jest.mock('../storageGuard', () => ({
+  isPausedError: (err) => Boolean(err && err.code === 'DOWNLOADS_PAUSED'),
+}));
 jest.mock('../youtubeApi', () => ({
   isAvailable: jest.fn(() => false),
   getApiKey: jest.fn(() => null),
@@ -143,6 +146,16 @@ describe('playlistModule', () => {
       mockChild.emit('close', 1);
 
       await expect(promise).rejects.toThrow('PLAYLIST_NOT_FOUND');
+    });
+  });
+
+  describe('buildTitleFilterRegExp', () => {
+    test('matches case-insensitively', () => {
+      expect(playlistModule.buildTitleFilterRegExp('review').test('GAME REVIEW')).toBe(true);
+    });
+
+    test('throws for a pattern JavaScript cannot compile', () => {
+      expect(() => playlistModule.buildTitleFilterRegExp('[unclosed')).toThrow(SyntaxError);
     });
   });
 
@@ -563,6 +576,25 @@ describe('playlistModule', () => {
         ]),
         expect.objectContaining({ updateOnDuplicate: expect.any(Array) })
       );
+    });
+
+    test('keeps entries whose titles match the title filter, ignoring case', async () => {
+      Playlist.findOne.mockResolvedValue({
+        id: 1, playlist_id: 'PLabc', url: 'https://u',
+        min_duration: null, max_duration: null, title_filter_regex: 'review',
+        update: jest.fn().mockResolvedValue(true),
+      });
+      PlaylistVideo.findAll.mockResolvedValue([]);
+      PlaylistVideo.bulkCreate.mockResolvedValue([]);
+      flatPlaylistSpawn.mockImplementation(() => completedChild([
+        { id: 'v1', title: 'Game REVIEW', duration: 100 },
+        { id: 'v2', title: 'Trailer', duration: 100 },
+      ]));
+
+      await playlistModule.fetchAllPlaylistVideos('PLabc');
+
+      const call = PlaylistVideo.bulkCreate.mock.calls[0][0];
+      expect(call.map((v) => v.youtube_id)).toEqual(['v1']);
     });
 
     test('applies min_duration filter', async () => {
@@ -1925,8 +1957,40 @@ describe('playlistModule', () => {
         enqueued: 3,
         failed: 1,
         errors: [{ playlistId: 'PL1', message: 'yt-dlp exited 1' }],
+        pausedReason: null,
       });
       expect(downloadModule.doPlaylistDownloads).toHaveBeenCalledTimes(2);
+    });
+
+    describe('when downloads are paused for storage', () => {
+      const pausedError = () => Object.assign(new Error('Downloads are paused: over the limit'), { code: 'DOWNLOADS_PAUSED' });
+
+      beforeEach(() => {
+        Playlist.findAll.mockResolvedValue([
+          { playlist_id: 'PL1', title: 'One' },
+          { playlist_id: 'PL2', title: 'Two' },
+        ]);
+        downloadModule.doPlaylistDownloads.mockRejectedValueOnce(pausedError());
+      });
+
+      test('stops the sweep at the first refused playlist', async () => {
+        await playlistModule.playlistAutoDownload();
+
+        expect(downloadModule.doPlaylistDownloads).toHaveBeenCalledTimes(1);
+      });
+
+      test('reports the pause instead of a failure', async () => {
+        await expect(playlistModule.playlistAutoDownload()).resolves.toMatchObject({
+          failed: 0,
+          pausedReason: 'Downloads are paused: over the limit',
+        });
+      });
+
+      test('does not record an idle sweep job', async () => {
+        await playlistModule.playlistAutoDownload();
+
+        expect(jobModule.addJob).not.toHaveBeenCalled();
+      });
     });
 
     test('reports a clean sweep with its counts', async () => {
@@ -1934,7 +1998,7 @@ describe('playlistModule', () => {
       downloadModule.doPlaylistDownloads.mockResolvedValueOnce(2);
 
       await expect(playlistModule.playlistAutoDownload()).resolves.toEqual({
-        playlists: 1, enqueued: 2, failed: 0, errors: [],
+        playlists: 1, enqueued: 2, failed: 0, errors: [], pausedReason: null,
       });
     });
 

@@ -49,6 +49,7 @@ export const validateConfig = (config: ConfigState): string | null => {
     config.autoRemovalEnabled &&
     !config.autoRemovalFreeSpaceThreshold &&
     !config.autoRemovalVideoAgeThreshold &&
+    !config.autoRemovalUsageLimit &&
     !config.autoRemovalWatchedEnabled
   ) {
     return 'Cannot save: Automatic removal is enabled but no removal rules are configured';
