@@ -139,21 +139,28 @@ Youtarr ships a named-volume override, `docker-compose.arm.yml`, that swaps the 
 cd /volume1/docker/Youtarr
 # Create .env from the template only if it does not exist yet (keeps an existing .env intact)
 [ -f .env ] || cp .env.example .env
-# Add the override unless .env already sets COMPOSE_FILE
-grep -q '^COMPOSE_FILE=' .env || printf 'COMPOSE_PATH_SEPARATOR=:\nCOMPOSE_FILE=docker-compose.yml:docker-compose.arm.yml\n' >> .env
+# Add the override unless .env already sets COMPOSE_FILE.
+# If you have a docker-compose.override.yml, it is kept in the list (before docker-compose.arm.yml).
+if ! grep -q '^COMPOSE_FILE=' .env; then
+  files=docker-compose.yml
+  [ -f docker-compose.override.yml ] && files="$files:docker-compose.override.yml"
+  printf 'COMPOSE_PATH_SEPARATOR=:\nCOMPOSE_FILE=%s:docker-compose.arm.yml\n' "$files" >> .env
+fi
 grep '^COMPOSE_' .env
 ```
 
-The last command should print exactly these two lines:
+The last command should print these two lines:
 
 ```env
 COMPOSE_PATH_SEPARATOR=:
 COMPOSE_FILE=docker-compose.yml:docker-compose.arm.yml
 ```
 
-If your `.env` already had a different `COMPOSE_FILE` line, the command above leaves it alone: edit that line (and add `COMPOSE_PATH_SEPARATOR=:` if it is missing) so it matches. Your other settings (download path, database credentials, UID/GID) are not touched.
+If you use a `docker-compose.override.yml` (for example, to mount a network share), the `COMPOSE_FILE` line lists it too, as `docker-compose.yml:docker-compose.override.yml:docker-compose.arm.yml`. Keep it there: once `COMPOSE_FILE` is set, Compose no longer loads the override automatically. See [Keeping docker-compose.override.yml](../DOCKER.md#keeping-docker-composeoverrideyml).
 
-With these two lines in `.env`, plain `docker compose` commands in this folder load both compose files and store the database in the named volume. In Step 5 you will edit this same `.env` file; do not copy `.env.example` over it again.
+If your `.env` already had a `COMPOSE_FILE` line, the command above leaves it alone. Check that it ends with `docker-compose.arm.yml` and that `COMPOSE_PATH_SEPARATOR=:` is present. If `docker-compose.arm.yml` is missing, add it to the end of the existing list rather than replacing the line, so any other files already listed (such as `docker-compose.override.yml`) stay loaded. Your other settings (download path, database credentials, UID/GID) are not touched.
+
+With this in `.env`, plain `docker compose` commands in this folder load the listed compose files and store the database in the named volume. In Step 5 you will edit this same `.env` file; do not copy `.env.example` over it again.
 
 > **Do not add a `volumes:` block to `docker-compose.yml`.** The file already declares `youtarr-db-data` at the bottom, and a second top-level `volumes:` key makes Compose fail with `mapping key "volumes" already defined`.
 

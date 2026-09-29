@@ -108,11 +108,13 @@ Run `docker compose up -d` after changing `.env` so the containers are recreated
 
 ### Manual Configuration
 
-To make plain `docker compose` commands always use the override, pin it in `.env` (`./start.sh` does this automatically for fresh installs):
+To make plain `docker compose` commands always use the named-volume override (`docker-compose.arm.yml`), pin it in `.env` (`./start.sh` does this automatically for fresh installs):
 ```env
 COMPOSE_PATH_SEPARATOR=:
 COMPOSE_FILE=docker-compose.yml:docker-compose.arm.yml
 ```
+
+If you also use `docker-compose.override.yml`, list it before `docker-compose.arm.yml` instead, as shown in [Keeping docker-compose.override.yml](#keeping-docker-composeoverrideyml). Otherwise Compose stops loading it once `COMPOSE_FILE` is set.
 
 Prefer this over editing `docker-compose.yml`: the compose file is tracked in git, so local edits conflict with `git pull` on updates. If you do edit it, change only the `youtarr-db` service's volume line to `- youtarr-db-data:/var/lib/mysql`. The file already declares `youtarr-db-data` in its top-level `volumes:` block; adding a second `volumes:` key makes Compose fail with `mapping key "volumes" already defined`.
 
