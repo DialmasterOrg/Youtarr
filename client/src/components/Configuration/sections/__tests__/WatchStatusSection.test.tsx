@@ -155,14 +155,14 @@ describe('WatchStatusSection', () => {
         startedAt: '2026-07-16T09:58:00Z',
         completedAt: '2026-07-16T10:00:00Z',
         servers: {
-          plex: { updated: 12 },
+          plex: { checked: 3120, changed: 4 },
           jellyfin: { error: 'server not reachable or not responding' },
         },
       },
     };
     renderWithProviders(<WatchStatusSection {...defaultProps} />);
     expect(screen.getByText(/last sync/i)).toBeInTheDocument();
-    expect(screen.getByText(/Plex: 12 videos updated/)).toBeInTheDocument();
+    expect(screen.getByText('Plex: 3,120 videos checked, 4 changed')).toBeInTheDocument();
     expect(screen.getByText(/Jellyfin: failed \(server not reachable or not responding\)/)).toBeInTheDocument();
   });
 

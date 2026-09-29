@@ -16,6 +16,13 @@ const { Video, VideoWatchStatus, MediaServerUser, WatchStatusSyncCursor } = requ
 // giant INSERT.
 const UPSERT_CHUNK_SIZE = 500;
 
+// last_watched_at is a DATETIME without fractional seconds (MariaDB truncates,
+// MySQL rounds), and percent_watched is a single-precision FLOAT the adapters
+// round to one decimal; differences inside these tolerances are storage
+// noise, not a change.
+const LAST_WATCHED_TOLERANCE_MS = 1000;
+const PERCENT_TOLERANCE = 0.05;
+
 // Pulled back from the stored history cursor when computing the Plex
 // incremental watermark, so an event on the boundary second is never missed.
 const WATERMARK_OVERLAP_MS = 60_000;
@@ -38,6 +45,39 @@ function clientErrorMessage(err) {
   }
   return 'internal error during sync; check Youtarr logs';
 }
+
+function sameNumber(stored, incoming, tolerance = 0) {
+  if (stored == null || incoming == null) return stored == null && incoming == null;
+  return Math.abs(Number(stored) - Number(incoming)) <= tolerance;
+}
+
+function sameTime(stored, incoming) {
+  if (stored == null || incoming == null) return stored == null && incoming == null;
+  return Math.abs(new Date(stored).getTime() - new Date(incoming).getTime()) < LAST_WATCHED_TOLERANCE_MS;
+}
+
+function hasWatchState(row) {
+  return row.played
+    || row.play_count > 0
+    || row.position_ms > 0
+    || row.percent_watched > 0
+    || row.last_watched_at != null;
+}
+
+// Compares a row about to be written with the stored one as read back from
+// the database (BOOLEAN as 0/1, BIGINT as a string). A missing row already
+// reads as unwatched, so a first-seen row counts only if it records some
+// watch state.
+function rowChanged(stored, row) {
+  if (!stored) return hasWatchState(row);
+  return !!stored.played !== row.played
+    || !sameNumber(stored.play_count, row.play_count)
+    || !sameNumber(stored.position_ms, row.position_ms)
+    || !sameNumber(stored.percent_watched, row.percent_watched, PERCENT_TOLERANCE)
+    || !sameTime(stored.last_watched_at, row.last_watched_at);
+}
+
+const rowKey = (videoId, serverUserId) => `${videoId}:${serverUserId}`;
 
 class WatchStatusSync {
   constructor() {
@@ -79,13 +119,16 @@ class WatchStatusSync {
       });
       logger.info({ trigger, videoCount: videos.length, serverCount: adapters.length }, 'Starting watch status sync');
 
+      // Across servers, so a video on two servers counts once.
+      const checkedIds = new Set();
+      const changedIds = new Set();
       for (const adapter of adapters) {
         const serverType = adapter.serverType;
         try {
           const opts = serverType === 'plex' ? await this._plexFetchOpts() : {};
           const { entries, users, historyCursor } = await adapter.fetchWatchStates(opts);
           const matches = this._matchVideos(videos, entries);
-          const rowsWritten = await this._persist(serverType, matches);
+          const { rowsWritten, changedVideoIds } = await this._persist(serverType, matches);
           // Advance the durable cursor only after rows persisted, and only
           // when the adapter reports a safely-scanned-through time (null means
           // the window must be rescanned, e.g. a section listing failed).
@@ -98,11 +141,15 @@ class WatchStatusSync {
           // sync still sees the account as new and repeats the full pull;
           // every write here is an idempotent upsert, so repeats are safe.
           await this._upsertUsers(serverType, users);
-          // `updated` is user-facing: distinct videos, not (video, user) rows.
-          const updated = new Set(matches.map((m) => m.video.id)).size;
-          summary.servers[serverType] = { updated };
+          // User-facing counts are distinct videos, not (video, user) rows.
+          const serverCheckedIds = new Set(matches.map((m) => m.video.id));
+          serverCheckedIds.forEach((id) => checkedIds.add(id));
+          changedVideoIds.forEach((id) => changedIds.add(id));
+          const checked = serverCheckedIds.size;
+          const changed = changedVideoIds.size;
+          summary.servers[serverType] = { checked, changed };
           logger.info(
-            { serverType, updated, rowsWritten, entries: entries.length, users: users.length },
+            { serverType, checked, changed, rowsWritten, entries: entries.length, users: users.length },
             'Watch status sync completed for server'
           );
         } catch (err) {
@@ -116,6 +163,7 @@ class WatchStatusSync {
           logger.warn({ err: logErr, serverType }, 'Watch status sync failed for server');
         }
       }
+      summary.totals = { checked: checkedIds.size, changed: changedIds.size };
       return summary;
     } catch (err) {
       const logErr = err && err.isAxiosError ? describeHttpError(err) : err;
@@ -206,8 +254,10 @@ class WatchStatusSync {
     return matches;
   }
 
+  // Returns the ids of videos with at least one new or changed row. Every row
+  // is still written, so last_synced_at stays current.
   async _persist(serverType, matches) {
-    if (matches.length === 0) return 0;
+    if (matches.length === 0) return { rowsWritten: 0, changedVideoIds: new Set() };
     const now = new Date();
     const rows = matches.map(({ video, entry }) => ({
       video_id: video.id,
@@ -220,6 +270,7 @@ class WatchStatusSync {
       last_watched_at: entry.lastWatchedAt || null,
       last_synced_at: now,
     }));
+    const changedVideoIds = await this._findChangedVideoIds(serverType, rows);
     for (let i = 0; i < rows.length; i += UPSERT_CHUNK_SIZE) {
       await VideoWatchStatus.bulkCreate(rows.slice(i, i + UPSERT_CHUNK_SIZE), {
         updateOnDuplicate: [
@@ -228,7 +279,32 @@ class WatchStatusSync {
         ],
       });
     }
-    return rows.length;
+    return { rowsWritten: rows.length, changedVideoIds };
+  }
+
+  // Read before any write, so a (video, user) key repeated across upsert
+  // chunks is compared with its state from before this sync. A repeated key
+  // is judged by its last row, the one the upsert keeps.
+  async _findChangedVideoIds(serverType, rows) {
+    const incoming = new Map(rows.map((row) => [rowKey(row.video_id, row.server_user_id), row]));
+    const videoIds = [...new Set(rows.map((row) => row.video_id))];
+    const stored = new Map();
+    for (let i = 0; i < videoIds.length; i += UPSERT_CHUNK_SIZE) {
+      const existing = await VideoWatchStatus.findAll({
+        where: { server_type: serverType, video_id: { [Op.in]: videoIds.slice(i, i + UPSERT_CHUNK_SIZE) } },
+        attributes: [
+          'video_id', 'server_user_id', 'played', 'play_count',
+          'position_ms', 'percent_watched', 'last_watched_at',
+        ],
+        raw: true,
+      });
+      for (const row of existing) stored.set(rowKey(row.video_id, row.server_user_id), row);
+    }
+    const changed = new Set();
+    for (const [key, row] of incoming) {
+      if (rowChanged(stored.get(key), row)) changed.add(row.video_id);
+    }
+    return changed;
   }
 }
 
