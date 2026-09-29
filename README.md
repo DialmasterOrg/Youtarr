@@ -41,7 +41,7 @@ https://github.com/user-attachments/assets/a80548fc-bcf9-4ad0-889c-dbd5aac250ee
 - **Scheduled Downloads**: Configure automatic downloads on your schedule (cron-based)
 - **Auto-Cleanup**: Age, free-space, and watched-based removal of videos with dry-run previews, plus per-video and per-channel protection and keep-recent guards
 - **Filesystem Rescan**: Move, rename, or convert downloaded files outside Youtarr (e.g., `.mp4` to `.mkv`) and trigger a rescan from Settings -> Maintenance & Rescan to reconcile the database; daily and startup scans pick up changes automatically
-- **Discord Notifications**: Optional webhook alerts for new downloads
+- **Notifications**: Optional alerts for new downloads, failures, cleanup, and storage pauses via Apprise (Discord, Slack, Telegram, email, Pushover, Gotify, ntfy, Matrix, and more)
 - **Web Interface**: Manage everything through a responsive (PC or mobile) web UI
 - **Secure Access**: Built-in authentication with admin controls
 - **REST API**: Full API with interactive [Swagger/OpenAPI documentation](http://localhost:3087/swagger) for automation and integrations

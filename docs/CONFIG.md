@@ -257,8 +257,8 @@ Youtarr must be running at the scheduled time; missed occurrences are not replay
 - **Type**: `string`
 - **Default**: `""` (empty)
 - **Description**: Optional full Plex base URL (e.g., `https://plex.example.com:32400`)
-- **Usage**: Not configurable via the web UI. Edit `config/config.json` manually or set the `PLEX_URL` environment variable to populate it.
-- **Note**: When this field is set it takes precedence over the `plexIP`, `plexPort`, and `plexViaHttps` values shown in the UI.
+- **Usage**: Not configurable via the web UI. Edit `config/config.json` manually. The `PLEX_URL` environment variable also works, but only if it actually reaches the container: the bundled `docker-compose.yml` does not forward it, so you must add `PLEX_URL: ${PLEX_URL:-}` to the `youtarr` service's `environment:` first (see [PLEX_URL](ENVIRONMENT_VARIABLES.md#plex_url)).
+- **Note**: When this field is set it takes precedence over the `plexIP`, `plexPort`, and `plexViaHttps` values shown in the UI. A `PLEX_URL` environment variable inside the container takes precedence over this field.
 
 ### Plex Playlist Token (advanced)
 - **Config Key**: `plexPlaylistToken`
@@ -819,8 +819,9 @@ For an SMB/CIFS share (Synology, QNAP, Windows file shares), see [Letting Docker
 - **Config Key**: `autoRemovalVideoAgeThreshold`
 - **Type**: `string`
 - **Default**: `null` (not set)
-- **Description**: Delete videos older than this age
-- **Examples**: `"30d"` (30 days), `"3m"` (3 months), `"1y"` (1 year)
+- **Description**: Delete videos older than this many days
+- **Examples**: `"30"` (30 days), `"90"` (about 3 months), `"365"` (1 year)
+- **Note**: The value is a whole number of days. Unit suffixes are not supported: the number is read and any suffix ignored, so `"3m"` means 3 days, not 3 months. The Settings page offers 7 days through 5 years (`"1825"`).
 
 ### Watched-Based Removal
 - **Config Key**: `autoRemovalWatchedEnabled`

@@ -194,7 +194,7 @@ See: [docs/YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md](../YOUTARR_DOWNLOADS_FOLDER_ST
 <img width="1478" height="1248" alt="Plex Video Details" src="https://github.com/user-attachments/assets/f146ba72-abe0-4e4d-93bb-6f34cea8e5e5" />
 
 ### Metadata Display
-- **Title**: Video title with channel prefix
+- **Title**: Video title with channel prefix, from the embedded MP4 title (turn off **Prefix channel name in embedded video title** in Settings -> Core for plain titles, for example in a TV Shows library)
 - **Description**: Full YouTube description
 - **Studio**: Channel name for grouping
 - **Album**: Channel name (alternative grouping)
