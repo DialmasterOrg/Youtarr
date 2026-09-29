@@ -11,6 +11,7 @@ const ExternalApiUsageBucket = require('../../server/models/externalapiusagebuck
 const policyMigration = require('../20260908100000-add-external-api-key-policy');
 const requestsMigration = require('../20260908102000-create-external-requests');
 const usageMigration = require('../20260908106000-create-external-api-usage-buckets');
+const runtimeIndexesMigration = require('../20260929100000-add-external-api-runtime-indexes');
 
 const BASELINE = '20260830201917-lowercased-table-column-names.js';
 const UNRELATED_CHARSET_MIGRATION = '20250907000000-upgrade-to-utf8mb4-if-needed.js';
@@ -19,6 +20,8 @@ const EXTERNAL_MIGRATIONS = [
   '20260908101000-create-api-key-channel-grants.js',
   '20260908102000-create-external-requests.js',
   '20260908106000-create-external-api-usage-buckets.js',
+  '20260925165655-add-channel-video-lookup-indexes.js',
+  '20260929100000-add-external-api-runtime-indexes.js',
 ];
 const DATABASE_NAME = `youtarr_external_api_${process.pid}`;
 const dbOptions = {
@@ -87,9 +90,17 @@ const expectFinalSchema = async () => {
   expect(requestIndexes).toEqual(expect.arrayContaining([
     'external_requests_active_dedupe_uq', 'external_requests_key_idempotency_uq',
     'external_requests_key_created_idx', 'external_requests_key_status_idx',
-  ]));
-  expect(requestIndexes).not.toEqual(expect.arrayContaining([
     'external_requests_catalog_status_idx', 'external_requests_management_idx',
+  ]));
+  expect(await indexNames('channelvideos')).toEqual(expect.arrayContaining([
+    'channelvideos_external_channel_idx', 'channelvideos_external_candidates_idx',
+  ]));
+  expect(await indexNames('channels')).toEqual(expect.arrayContaining([
+    'channels_channel_id_idx', 'channels_external_visibility_idx',
+    'channels_external_subfolder_idx',
+  ]));
+  expect(await indexNames('channels')).not.toEqual(expect.arrayContaining([
+    'channels_external_channel_id_idx',
   ]));
   expect(await indexNames('api_key_channel_grants')).toEqual(expect.arrayContaining([
     'api_key_channel_grants_key_channel_uq', 'api_key_channel_grants_channel_idx',
@@ -181,9 +192,12 @@ describe('external API migration lifecycle on MySQL-compatible engines', () => {
 
     // Recreate indexes after an interrupted post-table step, then rerun the full migrator.
     await queryInterface.removeIndex('external_requests', 'external_requests_key_status_idx');
+    await queryInterface.removeIndex('external_requests', 'external_requests_catalog_status_idx');
+    await queryInterface.removeIndex('external_requests', 'external_requests_management_idx');
     await queryInterface.removeIndex('external_api_usage_buckets', 'external_api_usage_window_idx');
     await requestsMigration.up(queryInterface, Sequelize);
     await usageMigration.up(queryInterface, Sequelize);
+    await runtimeIndexesMigration.up(queryInterface, Sequelize);
     await expectFinalSchema();
 
     await sequelize.query("UPDATE apikeys SET role = 'request' WHERE key_hash = 'hash-active'");

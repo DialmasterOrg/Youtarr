@@ -13,10 +13,10 @@ describe('external API persistence models', () => {
     expect(ExternalRequest.rawAttributes.status.validate.isIn[0]).toContain('pending');
     expect(ExternalApiUsageBucket.rawAttributes.window_type.validate.isIn[0]).toEqual(['hour', 'day']);
     expect(ExternalRequest.options.indexes.map((index) => index.name)).toEqual(expect.arrayContaining([
-      'external_requests_key_created_idx', 'external_requests_key_status_idx',
-    ]));
-    expect(ExternalRequest.options.indexes.map((index) => index.name)).not.toEqual(expect.arrayContaining([
-      'external_requests_catalog_status_idx', 'external_requests_management_idx',
+      'external_requests_key_created_idx',
+      'external_requests_key_status_idx',
+      'external_requests_catalog_status_idx',
+      'external_requests_management_idx',
     ]));
   });
 
