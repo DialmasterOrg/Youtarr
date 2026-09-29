@@ -266,8 +266,21 @@ describe('JellyfinAdapter', () => {
   });
 
   describe('fetchWatchStates', () => {
-    // Most tests run in single-user mode to keep one queued /Items response.
     const singleUserCfg = { ...cfg, jellyfinWatchStatusAllUsers: false };
+    const isWatchedQuery = (params) => params.isPlayed === true;
+    const itemsCalls = () => axios.get.mock.calls.filter(([url]) => url.endsWith('/Items'));
+
+    // Answers the watched listing with `watched` and the in-progress listing
+    // with `inProgress`, per user id.
+    const serveItems = ({ users = [], watched = {}, inProgress = {} } = {}) => {
+      axios.get.mockImplementation(async (url, { params }) => {
+        if (url.endsWith('/Users')) return { data: users };
+        const byUser = isWatchedQuery(params) ? watched : inProgress;
+        return { data: { Items: params.startIndex === 0 ? (byUser[params.userId] || []) : [] } };
+      });
+    };
+
+    afterEach(() => axios.get.mockReset());
 
     test.each([false, true])('fetches individual movie watch states with collection grouping (allUsers=%s)', async (allUsers) => {
       const groupedResponse = async (url, { params }) => {
@@ -281,9 +294,7 @@ describe('JellyfinAdapter', () => {
           }]
           : [{ Id: 'collection', Type: 'BoxSet', Path: '/collections/Chan [boxset]' }] } };
       };
-      for (let call = 0; call < (allUsers ? 3 : 1); call++) {
-        axios.get.mockImplementationOnce(groupedResponse);
-      }
+      axios.get.mockImplementation(groupedResponse);
 
       const adapter = new JellyfinAdapter({ ...cfg, jellyfinWatchStatusAllUsers: allUsers });
       const { entries } = await adapter.fetchWatchStates();
@@ -295,21 +306,23 @@ describe('JellyfinAdapter', () => {
     });
 
     test('maps UserData fields including ticks-to-ms conversion', async () => {
-      axios.get.mockResolvedValueOnce({
-        data: {
-          Items: [
+      serveItems({
+        watched: {
+          USR: [
             {
               Id: 'A',
               Path: '/media/Chan/Video A [id1].mp4',
               UserData: { Played: true, PlayCount: 3, PlaybackPositionTicks: 0, LastPlayedDate: '2026-07-10T12:00:00Z' },
             },
-            {
-              Id: 'B',
-              Path: '/media/Chan/Video B [id2].mp4',
-              UserData: { Played: false, PlayCount: 0, PlaybackPositionTicks: 1500000000, PlayedPercentage: 25 },
-            },
             { Id: 'C', UserData: { Played: true } }, // no Path -> excluded
           ],
+        },
+        inProgress: {
+          USR: [{
+            Id: 'B',
+            Path: '/media/Chan/Video B [id2].mp4',
+            UserData: { Played: false, PlayCount: 0, PlaybackPositionTicks: 1500000000, PlayedPercentage: 25 },
+          }],
         },
       });
 
@@ -333,10 +346,9 @@ describe('JellyfinAdapter', () => {
     });
 
     test('requests items with UserData enabled for the configured user', async () => {
-      axios.get.mockResolvedValueOnce({ data: { Items: [] } });
+      serveItems();
       const adapter = new JellyfinAdapter(singleUserCfg);
       await adapter.fetchWatchStates();
-      expect(axios.get).toHaveBeenCalledTimes(1);
       expect(axios.get).toHaveBeenCalledWith(
         expect.stringContaining('/Items'),
         expect.objectContaining({
@@ -350,12 +362,10 @@ describe('JellyfinAdapter', () => {
     });
 
     test('lists every user when all-users is enabled (the default)', async () => {
-      axios.get.mockResolvedValueOnce({ data: [{ Id: 'u1', Name: 'Alice' }, { Id: 'u2', Name: 'Bob' }] });
-      axios.get.mockResolvedValueOnce({
-        data: { Items: [{ Path: '/m/a.mp4', UserData: { Played: true, PlayCount: 2 } }] },
-      });
-      axios.get.mockResolvedValueOnce({
-        data: { Items: [{ Path: '/m/a.mp4', UserData: { Played: false } }] },
+      serveItems({
+        users: [{ Id: 'u1', Name: 'Alice' }, { Id: 'u2', Name: 'Bob' }],
+        watched: { u1: [{ Id: 'a', Path: '/m/a.mp4', UserData: { Played: true, PlayCount: 2 } }] },
+        inProgress: { u2: [{ Id: 'a', Path: '/m/a.mp4', UserData: { Played: false, PlaybackPositionTicks: 10 } }] },
       });
 
       const adapter = new JellyfinAdapter(cfg);
@@ -363,9 +373,81 @@ describe('JellyfinAdapter', () => {
 
       expect(users).toEqual([{ id: 'u1', name: 'Alice' }, { id: 'u2', name: 'Bob' }]);
       expect(entries.map((e) => e.serverUserId)).toEqual(['u1', 'u2']);
-      expect(axios.get.mock.calls[0][0]).toContain('/Users');
-      expect(axios.get.mock.calls[1][1].params.userId).toBe('u1');
-      expect(axios.get.mock.calls[2][1].params.userId).toBe('u2');
+    });
+
+    test('asks the server for watched and in-progress items only', async () => {
+      serveItems();
+      await new JellyfinAdapter(singleUserCfg).fetchWatchStates();
+
+      expect(itemsCalls().map(([, { params }]) => ({ isPlayed: params.isPlayed, filters: params.filters })))
+        .toEqual([{ isPlayed: true, filters: undefined }, { isPlayed: undefined, filters: 'IsResumable' }]);
+    });
+
+    test('reports every listed user as complete', async () => {
+      serveItems({ users: [{ Id: 'u1', Name: 'Alice' }, { Id: 'u2', Name: 'Bob' }] });
+      const { completeUserIds } = await new JellyfinAdapter(cfg).fetchWatchStates();
+      expect(completeUserIds).toEqual(['u1', 'u2']);
+    });
+
+    test('reports the configured user as complete in single-user mode', async () => {
+      serveItems();
+      const { completeUserIds } = await new JellyfinAdapter(singleUserCfg).fetchWatchStates();
+      expect(completeUserIds).toEqual(['USR']);
+    });
+
+    test('keeps an item returned by both listings once, as watched', async () => {
+      const item = (played) => ({ Id: 'A', Path: '/m/a.mp4', UserData: { Played: played, PlaybackPositionTicks: 10 } });
+      serveItems({ watched: { USR: [item(true)] }, inProgress: { USR: [item(false)] } });
+
+      const { entries } = await new JellyfinAdapter(singleUserCfg).fetchWatchStates();
+
+      expect(entries.map((e) => e.played)).toEqual([true]);
+    });
+
+    test('pages through a listing until a short page', async () => {
+      const page = (start, count) => Array.from({ length: count }, (_, i) => ({
+        Id: `w${start + i}`, Path: `/m/w${start + i}.mp4`, UserData: { Played: true },
+      }));
+      axios.get.mockImplementation(async (url, { params }) => {
+        if (!isWatchedQuery(params)) return { data: { Items: [] } };
+        return { data: { Items: params.startIndex === 0 ? page(0, params.limit) : page(params.limit, 3) } };
+      });
+
+      const { entries } = await new JellyfinAdapter(singleUserCfg).fetchWatchStates();
+
+      expect(entries).toHaveLength(itemsCalls()[0][1].params.limit + 3);
+    });
+
+    test('stops paging when the server ignores startIndex', async () => {
+      axios.get.mockImplementation(async (url, { params }) => ({
+        data: { Items: Array.from({ length: params.limit }, (_, i) => ({ Id: `w${i}`, Path: `/m/w${i}.mp4`, UserData: { Played: isWatchedQuery(params) } })) },
+      }));
+
+      const { entries } = await new JellyfinAdapter(singleUserCfg).fetchWatchStates();
+
+      expect(entries).toHaveLength(itemsCalls()[0][1].params.limit);
+    });
+
+    test('does not report a user as complete when the server ignores startIndex', async () => {
+      axios.get.mockImplementation(async (url, { params }) => ({
+        data: { Items: Array.from({ length: params.limit }, (_, i) => ({ Id: `w${i}`, Path: `/m/w${i}.mp4`, UserData: { Played: true } })) },
+      }));
+
+      const { completeUserIds } = await new JellyfinAdapter(singleUserCfg).fetchWatchStates();
+
+      expect(completeUserIds).toEqual([]);
+    });
+
+    test('treats a page longer than the limit as the whole listing', async () => {
+      axios.get.mockImplementation(async (url, { params }) => ({
+        data: { Items: Array.from({ length: params.limit + 5 }, (_, i) => ({ Id: `w${i}`, Path: `/m/w${i}.mp4`, UserData: { Played: true } })) },
+      }));
+
+      const { entries, completeUserIds } = await new JellyfinAdapter(singleUserCfg).fetchWatchStates();
+
+      expect({ entries: entries.length, completeUserIds }).toEqual({
+        entries: itemsCalls()[0][1].params.limit + 5, completeUserIds: ['USR'],
+      });
     });
 
     test('fails the fetch when the user listing fails', async () => {

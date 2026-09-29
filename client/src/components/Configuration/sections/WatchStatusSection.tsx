@@ -44,6 +44,11 @@ interface WatchStatusSectionProps {
   onConfigChange: (updates: Partial<ConfigState>) => void;
 }
 
+function describeChanges(changed: number): string {
+  if (changed === 0) return 'no changes';
+  return `${changed.toLocaleString('en-US')} ${changed === 1 ? 'video' : 'videos'} updated`;
+}
+
 function SyncRunSummary({ run }: { run: WatchStatusSyncRun }) {
   const completed = run.completedAt ? formatDateTime(run.completedAt) : null;
   if (run.skipped) {
@@ -72,7 +77,7 @@ function SyncRunSummary({ run }: { run: WatchStatusSyncRun }) {
           {MEDIA_SERVER_LABELS[server] || server}:{' '}
           {result.error
             ? `failed (${result.error})`
-            : `${(result.checked ?? 0).toLocaleString('en-US')} ${result.checked === 1 ? 'video' : 'videos'} checked, ${(result.changed ?? 0).toLocaleString('en-US')} changed`}
+            : describeChanges(result.changed ?? 0)}
         </Typography>
       ))}
     </Box>

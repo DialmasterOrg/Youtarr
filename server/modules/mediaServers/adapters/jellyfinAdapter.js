@@ -13,6 +13,9 @@ const logger = require('../../../logger');
 // Jellyfin/Emby report playback position in ticks (100ns units).
 const TICKS_PER_MS = 10000;
 
+const WATCH_STATE_FILTERS = [{ isPlayed: true }, { filters: 'IsResumable' }];
+const WATCH_STATE_PAGE_SIZE = 1000;
+
 class JellyfinAdapter extends BaseAdapter {
   constructor(config) {
     super(config);
@@ -82,13 +85,15 @@ class JellyfinAdapter extends BaseAdapter {
     }
   }
 
-  // Watch state per user, from the same /Items listing used for file
-  // resolution, run once per target user. Targets are every server user when
+  // Watch state per target user: every server user when
   // jellyfinWatchStatusAllUsers is on (the default), else just the configured
-  // one. UserData rides along when enableUserData is set and a userId is
-  // supplied (API-key auth returns no UserData otherwise). A failed /Users
-  // fetch fails the whole call: silently syncing nobody would masquerade as
-  // an empty success.
+  // one. Only watched and in-progress items are listed; a whole-server listing
+  // takes minutes on large libraries and would outlast the request timeout.
+  // Everything unlisted is unwatched, so users listed in full come back as
+  // completeUserIds. UserData rides along when enableUserData is set and a
+  // userId is supplied (API-key auth returns no UserData otherwise). A failed
+  // /Users fetch fails the whole call: silently syncing nobody would
+  // masquerade as an empty success.
   async fetchWatchStates() {
     try {
       let users = [];
@@ -101,27 +106,71 @@ class JellyfinAdapter extends BaseAdapter {
         targets = [{ id: this.userId, name: null }];
       }
       const entries = [];
+      const completeUserIds = [];
       for (const user of targets) {
+        const { items, complete } = await this._listItemsWithWatchState(user.id);
+        for (const item of items) {
+          if (item.Path) entries.push(this._itemWatchState(item, user.id));
+        }
+        if (!user.id) continue;
+        if (complete) {
+          completeUserIds.push(user.id);
+        } else {
+          logger.warn({ serverUserId: user.id }, 'jellyfin: server repeated a page of items; keeping stored watch state for this user');
+        }
+      }
+      return { entries, users, completeUserIds };
+    } catch (err) {
+      if (isServerUnavailableError(err)) throw new MediaServerUnavailableError(describeHttpError(err));
+      throw err;
+    }
+  }
+
+  // Server-side filters for watched, then in-progress items; combined in one
+  // request they must both hold, which matches nothing. An item in both
+  // listings is kept once, as watched. `complete` is false when a full page
+  // brought nothing new (the server ignored startIndex), so later pages were
+  // never seen. Offset paging can also skip an item when the listing shifts
+  // mid-sync (an earlier item marked unwatched between two pages); that
+  // resets the skipped row until the next sync, which only defers cleanup.
+  async _listItemsWithWatchState(userId) {
+    const itemsById = new Map();
+    let complete = true;
+    for (const filter of WATCH_STATE_FILTERS) {
+      const seen = new Set();
+      for (let startIndex = 0; ; startIndex += WATCH_STATE_PAGE_SIZE) {
         const params = {
-          userId: user.id,
+          userId,
           includeItemTypes: 'Video,Movie,Episode',
           // Collection containers do not carry the individual videos' watch state.
           collapseBoxSetItems: false,
           recursive: true,
           fields: 'Path',
           enableUserData: true,
+          sortBy: 'SortName',
+          startIndex,
+          limit: WATCH_STATE_PAGE_SIZE,
+          ...filter,
         };
         const res = await axios.get(`${this.url}/Items`, { headers: this._headers(), params, timeout: REQUEST_TIMEOUT_MS });
-        const items = res.data?.Items || [];
-        for (const item of items) {
-          if (item.Path) entries.push(this._itemWatchState(item, user.id));
+        const page = res.data?.Items || [];
+        let added = 0;
+        for (const item of page) {
+          if (seen.has(item.Id)) continue;
+          seen.add(item.Id);
+          added += 1;
+          if (!itemsById.has(item.Id)) itemsById.set(item.Id, item);
+        }
+        // A short page ends the listing; a longer one means the server
+        // ignored limit and returned everything.
+        if (page.length !== WATCH_STATE_PAGE_SIZE) break;
+        if (added === 0) {
+          complete = false;
+          break;
         }
       }
-      return { entries, users };
-    } catch (err) {
-      if (isServerUnavailableError(err)) throw new MediaServerUnavailableError(describeHttpError(err));
-      throw err;
     }
+    return { items: [...itemsById.values()], complete };
   }
 
   _itemWatchState(item, serverUserId) {

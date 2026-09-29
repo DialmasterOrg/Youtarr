@@ -53,7 +53,7 @@ describe('useWatchStatusSync', () => {
         .mockResolvedValueOnce({
           data: {
             running: false,
-            lastRun: { trigger: 'manual', startedAt: 's', completedAt: 'c', servers: { plex: { checked: 3, changed: 1 } } },
+            lastRun: { trigger: 'manual', startedAt: 's', completedAt: 'c', servers: { plex: { changed: 1 } } },
           },
         });
 
@@ -65,7 +65,7 @@ describe('useWatchStatusSync', () => {
       });
       expect(axios.get).toHaveBeenCalledTimes(2);
       expect(result.current.syncState?.running).toBe(false);
-      expect(result.current.syncState?.lastRun?.servers?.plex).toEqual({ checked: 3, changed: 1 });
+      expect(result.current.syncState?.lastRun?.servers?.plex).toEqual({ changed: 1 });
 
       // The interval is cleared once running flips false.
       await act(async () => {

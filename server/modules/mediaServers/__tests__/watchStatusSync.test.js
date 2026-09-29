@@ -1,6 +1,8 @@
 // Minimal fake adapters; the orchestrator keys server type off the adapter's
 // serverType property (the BaseAdapter contract), never off class names.
 // fetchWatchStates resolves the adapter contract shape { entries, users }.
+const { Op } = require('sequelize');
+
 const fakeAdapter = (serverType, fetchWatchStates) => ({ serverType, fetchWatchStates });
 const resolvedFetch = (entries, users = []) => jest.fn().mockResolvedValue({ entries, users });
 
@@ -67,7 +69,7 @@ describe('watchStatusSync', () => {
 
     const summary = await watchStatusSync.syncAll();
 
-    expect(summary.servers.plex).toEqual({ checked: 1, changed: 1 });
+    expect(summary.servers.plex).toEqual({ changed: 1 });
     expect(VideoWatchStatus.bulkCreate).toHaveBeenCalledTimes(1);
     const [rows, options] = VideoWatchStatus.bulkCreate.mock.calls[0];
     expect(rows).toHaveLength(1);
@@ -113,7 +115,7 @@ describe('watchStatusSync', () => {
 
     const summary = await watchStatusSync.syncAll();
 
-    expect(summary.servers.plex).toEqual({ checked: 1, changed: 1 });
+    expect(summary.servers.plex).toEqual({ changed: 1 });
     const [rows] = VideoWatchStatus.bulkCreate.mock.calls[0];
     expect(rows[0]).toMatchObject({ video_id: 7, played: true });
   });
@@ -129,7 +131,7 @@ describe('watchStatusSync', () => {
 
     const summary = await watchStatusSync.syncAll();
 
-    expect(summary.servers.jellyfin).toEqual({ checked: 1, changed: 1 });
+    expect(summary.servers.jellyfin).toEqual({ changed: 1 });
     const [rows] = VideoWatchStatus.bulkCreate.mock.calls[0];
     expect(rows[0]).toMatchObject({ video_id: 9, server_user_id: 'u1' });
   });
@@ -163,7 +165,7 @@ describe('watchStatusSync', () => {
     const summary = await watchStatusSync.syncAll();
 
     // Counts are distinct videos, not (video, user) rows.
-    expect(summary.servers.jellyfin).toEqual({ checked: 1, changed: 1 });
+    expect(summary.servers.jellyfin).toEqual({ changed: 1 });
     const [rows] = VideoWatchStatus.bulkCreate.mock.calls[0];
     expect(rows).toHaveLength(2);
     expect(rows.map((r) => r.server_user_id).sort()).toEqual(['u1', 'u2']);
@@ -310,7 +312,7 @@ describe('watchStatusSync', () => {
 
     // Unexpected internal errors are genericized, never rendered verbatim.
     expect(summary.servers.plex).toEqual({ error: 'internal error during sync; check Youtarr logs' });
-    expect(summary.servers.jellyfin).toEqual({ checked: 0, changed: 0 });
+    expect(summary.servers.jellyfin).toEqual({ changed: 0 });
     expect(VideoWatchStatus.bulkCreate).not.toHaveBeenCalled();
   });
 
@@ -356,6 +358,145 @@ describe('watchStatusSync', () => {
     );
   });
 
+  test('reports a request timeout as a slow server, not an unreachable one', async () => {
+    const { MediaServerUnavailableError } = require('../adapters/baseAdapter');
+    serverRegistry.getEnabledAdapters.mockReturnValue([fakeAdapter('jellyfin', jest.fn().mockRejectedValue(
+      new MediaServerUnavailableError({ message: 'timeout of 30000ms exceeded', code: 'ECONNABORTED' })
+    ))]);
+    Video.findAll.mockResolvedValue([]);
+
+    const summary = await watchStatusSync.syncAll();
+
+    expect(summary.servers.jellyfin).toEqual({ error: 'server took too long to respond' });
+  });
+
+  describe('users listed completely', () => {
+    const video = { id: 7, youtubeId: 'id1', filePath: '/data/Chan/Video A [id1].mp4' };
+    const watchedEntry = {
+      path: '/media/Chan/Video A [id1].mp4', serverUserId: 'u1',
+      played: true, playCount: 1, positionMs: 0, percentWatched: 100, lastWatchedAt: null,
+    };
+    // Stored rows with watch state (the reset lookup), then the stored rows the
+    // change check reads.
+    const syncCompleteUser = async ({ entries = [], stateRows = [], videos = [video] } = {}) => {
+      serverRegistry.getEnabledAdapters.mockReturnValue([fakeAdapter('jellyfin', jest.fn().mockResolvedValue({
+        entries, users: [], completeUserIds: ['u1'],
+      }))]);
+      Video.findAll.mockResolvedValue(videos);
+      VideoWatchStatus.findAll
+        .mockResolvedValueOnce(stateRows)
+        .mockResolvedValueOnce(stateRows.map((row) => ({ ...row, played: 1, play_count: 1 })));
+      return watchStatusSync.syncAll();
+    };
+    const writtenRows = () => VideoWatchStatus.bulkCreate.mock.calls.flatMap(([rows]) => rows);
+
+    test('resets stored watch state the server no longer lists', async () => {
+      await syncCompleteUser({ stateRows: [{ video_id: 7, server_user_id: 'u1' }] });
+
+      expect(writtenRows()).toEqual([expect.objectContaining({
+        video_id: 7, server_user_id: 'u1', played: false, play_count: 0,
+        position_ms: 0, percent_watched: null, last_watched_at: null,
+      })]);
+    });
+
+    test('counts a reset video as changed', async () => {
+      const summary = await syncCompleteUser({ stateRows: [{ video_id: 7, server_user_id: 'u1' }] });
+
+      expect(summary.servers.jellyfin).toEqual({ changed: 1 });
+    });
+
+    test('keeps watch state the server still lists', async () => {
+      await syncCompleteUser({ entries: [watchedEntry], stateRows: [{ video_id: 7, server_user_id: 'u1' }] });
+
+      expect(writtenRows()).toEqual([expect.objectContaining({ video_id: 7, played: true })]);
+    });
+
+    test('looks up stored watch state only for the users listed completely', async () => {
+      await syncCompleteUser();
+
+      expect(VideoWatchStatus.findAll).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({ server_type: 'jellyfin', server_user_id: { [Op.in]: ['u1'] } }),
+      }));
+    });
+
+    test('leaves rows of videos outside the sync alone', async () => {
+      await syncCompleteUser({ stateRows: [{ video_id: 99, server_user_id: 'u1' }] });
+
+      expect(VideoWatchStatus.bulkCreate).not.toHaveBeenCalled();
+    });
+
+    test('resets nothing for an adapter that does not list users completely', async () => {
+      serverRegistry.getEnabledAdapters.mockReturnValue([fakeAdapter('plex', resolvedFetch([]))]);
+      Video.findAll.mockResolvedValue([video]);
+
+      await watchStatusSync.syncAll();
+
+      expect(VideoWatchStatus.findAll).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('matching against listings of watched and in-progress items', () => {
+    const watched = (path) => ({
+      path, serverUserId: 'u1', played: true, playCount: 1, positionMs: 0, percentWatched: 100, lastWatchedAt: null,
+    });
+    const videoA = { id: 7, youtubeId: 'id1', filePath: '/data/Chan/Video A [id1]/Video A [id1].mp4', removed: false };
+    const videoB = { id: 8, youtubeId: 'id2', filePath: '/data/Chan/Video B [id2]/Video B [id2].mp4', removed: false };
+    // A copy of video B at its Youtarr path, so the server shows Youtarr's layout.
+    const currentCopyB = watched('/media/Chan/Video B [id2]/Video B [id2].mp4');
+    const syncListing = async (serverType, entries, videos, completeUserIds = ['u1']) => {
+      serverRegistry.getEnabledAdapters.mockReturnValue([fakeAdapter(serverType, jest.fn().mockResolvedValue({
+        entries, users: [], completeUserIds,
+      }))]);
+      Video.findAll.mockResolvedValue(videos);
+      await watchStatusSync.syncAll();
+      return VideoWatchStatus.bulkCreate.mock.calls.flatMap(([rows]) => rows).map((row) => row.video_id).sort();
+    };
+
+    test('ignores a watched stale copy of a video Youtarr still has', async () => {
+      const synced = await syncListing('jellyfin', [currentCopyB, watched('/old/Video A [id1].mp4')], [videoA, videoB]);
+
+      expect(synced).toEqual([8]);
+    });
+
+    test('matches every video on a server whose folder layout differs from Youtarr\'s', async () => {
+      const synced = await syncListing(
+        'jellyfin',
+        [watched('/mirror/Video A [id1].mp4'), watched('/mirror/Video B [id2].mp4')],
+        [videoA, videoB]
+      );
+
+      expect(synced).toEqual([7, 8]);
+    });
+
+    test('still matches a moved copy of a video Youtarr no longer has', async () => {
+      const synced = await syncListing(
+        'jellyfin',
+        [currentCopyB, watched('/old/Video A [id1].mp4')],
+        [{ ...videoA, removed: true }, videoB]
+      );
+
+      expect(synced).toEqual([7, 8]);
+    });
+
+    test('ignores another channel\'s video that shares a legacy basename', async () => {
+      const legacy = { id: 9, youtubeId: 'legacy1', filePath: '/data/ChanA/Episode 1.mp4', removed: false };
+      const synced = await syncListing('jellyfin', [currentCopyB, watched('/media/ChanB/Episode 1.mp4')], [legacy, videoB]);
+
+      expect(synced).toEqual([8]);
+    });
+
+    test('keeps the closest copy on servers that list every item', async () => {
+      const synced = await syncListing(
+        'plex',
+        [{ ...currentCopyB, serverUserId: '1' }, { ...watched('/old/Video A [id1].mp4'), serverUserId: '1' }],
+        [videoA, videoB],
+        null
+      );
+
+      expect(synced).toEqual([7, 8]);
+    });
+  });
+
   test('getStatus reflects the last run and running=false after completion', async () => {
     serverRegistry.getEnabledAdapters.mockReturnValue([]);
     await watchStatusSync.syncAll('manual');
@@ -391,7 +532,7 @@ describe('watchStatusSync', () => {
     test('does not count a video whose stored state matches what the server reports', async () => {
       const summary = await syncOneVideo([entry()], [storedRow()]);
 
-      expect(summary.servers.jellyfin).toEqual({ checked: 1, changed: 0 });
+      expect(summary.servers.jellyfin).toEqual({ changed: 0 });
     });
 
     test('still writes rows for videos whose state did not change', async () => {
@@ -407,7 +548,7 @@ describe('watchStatusSync', () => {
         [storedRow()]
       );
 
-      expect(summary.servers.jellyfin).toEqual({ checked: 1, changed: 1 });
+      expect(summary.servers.jellyfin).toEqual({ changed: 1 });
     });
 
     test('counts a video whose resume position moved', async () => {
@@ -431,7 +572,7 @@ describe('watchStatusSync', () => {
         [storedRow()]
       );
 
-      expect(summary.servers.jellyfin).toEqual({ checked: 1, changed: 1 });
+      expect(summary.servers.jellyfin).toEqual({ changed: 1 });
     });
 
     test('does not count a video first seen with no watch state', async () => {
@@ -442,7 +583,7 @@ describe('watchStatusSync', () => {
         []
       );
 
-      expect(summary.servers.jellyfin).toEqual({ checked: 1, changed: 0 });
+      expect(summary.servers.jellyfin).toEqual({ changed: 0 });
     });
 
     test('counts a video first seen with a resume position', async () => {
@@ -474,7 +615,7 @@ describe('watchStatusSync', () => {
 
       const summary = await watchStatusSync.syncAll();
 
-      expect(summary.totals).toEqual({ checked: 1, changed: 1 });
+      expect(summary.totals).toEqual({ changed: 1 });
     });
 
     test('totals leave out a server that failed', async () => {
@@ -486,7 +627,7 @@ describe('watchStatusSync', () => {
 
       const summary = await watchStatusSync.syncAll();
 
-      expect(summary.totals).toEqual({ checked: 0, changed: 0 });
+      expect(summary.totals).toEqual({ changed: 0 });
     });
   });
 });
