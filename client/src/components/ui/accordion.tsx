@@ -52,12 +52,16 @@ const AccordionContent = React.forwardRef<
     ref={ref}
     // forceMount keeps content in the DOM even when collapsed.
     // This ensures test queries (getByText, getByTestId) can find elements
-    // without needing to expand the accordion first.
+    // without needing to expand the accordion first. Collapsed content is
+    // made invisible so its controls leave the tab order and the
+    // accessibility tree; visibility is transitioned so the collapse still
+    // animates before it hides.
     forceMount
     className={cn(
       'overflow-hidden text-sm',
-      'transition-[max-height,opacity] duration-200 ease-out',
+      'transition-[max-height,opacity,visibility] duration-200 ease-out',
       'data-[state=closed]:max-h-0 data-[state=closed]:opacity-0 data-[state=closed]:pointer-events-none',
+      'data-[state=closed]:invisible',
       'data-[state=open]:max-h-[2400px] data-[state=open]:opacity-100',
       'data-[state=closed]:animate-[accordion-up_0.2s_ease-out]',
       'data-[state=open]:animate-[accordion-down_0.2s_ease-out]',

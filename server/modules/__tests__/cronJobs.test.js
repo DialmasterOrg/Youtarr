@@ -29,10 +29,14 @@ describe('CronJobs', () => {
     mockLogger = {
       info: jest.fn(),
       error: jest.fn(),
-      warn: jest.fn()
+      warn: jest.fn(),
+      debug: jest.fn()
     };
 
     jest.doMock('../../logger', () => mockLogger);
+
+    // Mock messageEmitter: scheduledTaskManager broadcasts through it on every run
+    jest.doMock('../messageEmitter', () => ({ emitMessage: jest.fn() }));
 
     // Mock database
     mockDb = {
@@ -51,7 +55,8 @@ describe('CronJobs', () => {
 
     // Mock videosModule
     mockVideosModule = {
-      backfillVideoMetadata: jest.fn()
+      backfillVideoMetadata: jest.fn(),
+      isBackfillRunning: jest.fn(() => false)
     };
 
     jest.doMock('../videosModule', () => mockVideosModule);
@@ -71,11 +76,16 @@ describe('CronJobs', () => {
 
     // Mock ytdlpModule
     mockYtdlpModule = {
-      performUpdate: jest.fn()
+      performUpdate: jest.fn(),
+      isUpdateInProgress: jest.fn(() => false)
     };
     jest.doMock('../ytdlpModule', () => mockYtdlpModule);
 
-    mockTabVideoCounts = { refreshAll: jest.fn() };
+    mockTabVideoCounts = {
+      refreshAll: jest.fn(),
+      isBulkRunning: jest.fn(() => false),
+      getBulkRunBlocker: jest.fn().mockResolvedValue(null)
+    };
     jest.doMock('../channel/tabVideoCounts', () => mockTabVideoCounts);
 
     // Mock configModule with a tiny in-memory store so the auto-update job can read/write
@@ -417,7 +427,7 @@ describe('CronJobs', () => {
       await resolvedPromise;
 
       expect(mockVideosModule.backfillVideoMetadata).toHaveBeenCalled();
-      expect(mockLogger.info).toHaveBeenCalledWith('Starting scheduled video metadata backfill');
+      expect(mockLogger.info).toHaveBeenCalledWith({ trigger: 'scheduled' }, 'Starting video metadata backfill');
     });
 
     test('should log success when backfill completes without timeout', async () => {
@@ -848,6 +858,125 @@ describe('CronJobs', () => {
       mockTabVideoCounts.refreshAll.mockRejectedValue(new Error('db down'));
 
       await expect(countsCallback()()).resolves.toEqual(expect.objectContaining({ status: 'error', outcome: 'error', message: 'db down' }));
+    });
+
+    test('a manual run enters cooldown until the next one is allowed', async () => {
+      const scheduledTaskManager = require('../scheduledTaskManager');
+      mockTabVideoCounts.refreshAll.mockResolvedValue({ status: 'success', outcome: 'completed', message: 'ok' });
+
+      const first = await scheduledTaskManager.runNow('channelVideoCountsFrequency', { trigger: 'manual' });
+      await first.completion;
+
+      const blocker = await scheduledTaskManager.getRunBlocker('channelVideoCountsFrequency');
+
+      expect(blocker).toEqual(expect.objectContaining({ reason: 'cooldown' }));
+    });
+
+    test('getStatus reports the counts task as running while a bulk refresh is in progress', () => {
+      const scheduledTaskManager = require('../scheduledTaskManager');
+      mockTabVideoCounts.isBulkRunning.mockReturnValue(true);
+
+      const status = scheduledTaskManager.getStatus().find((task) => task.id === 'channelVideoCountsFrequency');
+
+      expect(status.running).toBe(true);
+    });
+
+    test('passes a youtube-throttled blocker from getBulkRunBlocker through to getRunBlocker', async () => {
+      const scheduledTaskManager = require('../scheduledTaskManager');
+      const availableAt = new Date('2026-09-27T12:00:00.000Z');
+      mockTabVideoCounts.getBulkRunBlocker.mockResolvedValue({ reason: 'youtube-throttled', message: 'paused', availableAt });
+
+      const blocker = await scheduledTaskManager.getRunBlocker('channelVideoCountsFrequency');
+
+      expect(blocker).toEqual(expect.objectContaining({ reason: 'youtube-throttled', availableAt }));
+    });
+  });
+
+  describe('rescan run through the scheduler', () => {
+    beforeEach(() => {
+      cronJobs.initialize();
+    });
+
+    test('manual rescans pass their trigger through', async () => {
+      const scheduledTaskManager = require('../scheduledTaskManager');
+      const outcome = await scheduledTaskManager.runNow('videoRescanFrequency', { trigger: 'manual' });
+      await outcome.completion;
+      expect(mockVideosModule.backfillVideoMetadata).toHaveBeenCalledWith({ trigger: 'manual' });
+    });
+
+    test('the rescan reports as running while the module lock is held', () => {
+      const scheduledTaskManager = require('../scheduledTaskManager');
+      mockVideosModule.isBackfillRunning.mockReturnValue(true);
+      const status = scheduledTaskManager.getStatus().find((task) => task.id === 'videoRescanFrequency');
+      expect(status.running).toBe(true);
+    });
+  });
+
+  describe('yt-dlp update run through the scheduler', () => {
+    let mockRefreshCache;
+
+    beforeEach(() => {
+      mockRefreshCache = jest.fn();
+      cronJobs.initialize({ refreshYtDlpVersionCache: mockRefreshCache });
+    });
+
+    test('reports as running while ytdlpModule.isUpdateInProgress() is true', () => {
+      const scheduledTaskManager = require('../scheduledTaskManager');
+      mockYtdlpModule.isUpdateInProgress.mockReturnValue(true);
+      const status = scheduledTaskManager.getStatus().find((task) => task.id === 'ytdlpUpdateFrequency');
+      expect(status.running).toBe(true);
+    });
+
+    test('a manual run still updates and refreshes the version cache when auto-update is off', async () => {
+      const scheduledTaskManager = require('../scheduledTaskManager');
+      mockConfigStore = { autoUpdateYtdlp: false };
+      mockYtdlpModule.performUpdate.mockResolvedValue({
+        success: true,
+        reason: 'updated',
+        message: 'Successfully updated to 2026.09.20',
+        newVersion: '2026.09.20',
+      });
+
+      const outcome = await scheduledTaskManager.runNow('ytdlpUpdateFrequency', {
+        trigger: 'manual',
+        enforceEnabled: false,
+        enforceCooldown: false,
+      });
+      const record = await outcome.completion;
+
+      expect(mockYtdlpModule.performUpdate).toHaveBeenCalled();
+      expect(record).toEqual(expect.objectContaining({ outcome: 'updated' }));
+      expect(mockRefreshCache).toHaveBeenCalledTimes(1);
+    });
+
+    test('a scheduled run still returns the turned-off skip', async () => {
+      const scheduledTaskManager = require('../scheduledTaskManager');
+      mockConfigStore = { autoUpdateYtdlp: false };
+
+      const outcome = await scheduledTaskManager.runNow('ytdlpUpdateFrequency', {
+        trigger: 'scheduled',
+        enforceEnabled: false,
+        enforceCooldown: false,
+      });
+      const record = await outcome.completion;
+
+      expect(record).toEqual(expect.objectContaining({
+        status: 'skipped',
+        message: 'Automatic yt-dlp updates are turned off.',
+      }));
+      expect(mockYtdlpModule.performUpdate).not.toHaveBeenCalled();
+    });
+
+    test('resolves a managed blocker on Elfhosted', async () => {
+      const scheduledTaskManager = require('../scheduledTaskManager');
+      mockConfigModule.isElfhostedPlatform.mockReturnValue(true);
+
+      const blocker = await scheduledTaskManager.getRunBlocker('ytdlpUpdateFrequency');
+
+      expect(blocker).toEqual(expect.objectContaining({
+        reason: 'managed',
+        message: 'yt-dlp updates are managed by the hosting platform.',
+      }));
     });
   });
 });

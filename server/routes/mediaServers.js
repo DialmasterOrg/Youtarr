@@ -1,6 +1,7 @@
 const express = require('express');
+const { sendRunBlocked } = require('./runNowResponse');
 
-function createMediaServerRoutes({ verifyToken, configModule, mediaServers }) {
+function createMediaServerRoutes({ verifyToken, configModule, mediaServers, scheduledTaskManager }) {
   const router = express.Router();
   const { JellyfinAdapter, EmbyAdapter, BaseAdapter } = mediaServers.adapters;
   const { describeHttpError } = BaseAdapter;
@@ -85,18 +86,26 @@ function createMediaServerRoutes({ verifyToken, configModule, mediaServers }) {
    *       202:
    *         description: Sync started
    *       409:
-   *         description: A sync is already running
+   *         description: Sync already running, or it cannot start (reason in the body, for example no-media-server)
+   *       503:
+   *         description: The task is not registered yet (server still starting or database unavailable)
    */
-  router.post('/api/mediaservers/watch-status/sync', verifyToken, (req, res) => {
-    if (mediaServers.watchStatusSync.getStatus().running) {
-      return res.status(409).json({ error: 'Watch status sync is already running' });
+  router.post('/api/mediaservers/watch-status/sync', verifyToken, async (req, res) => {
+    try {
+      // Sync Now works while the schedule is off, as it always has.
+      const outcome = await scheduledTaskManager.runNow('watchStatusSyncFrequency', {
+        trigger: 'manual',
+        enforceEnabled: false,
+        enforceCooldown: false,
+      });
+      if (!outcome.started) {
+        return sendRunBlocked(res, outcome, { running: 'Watch status sync is already running' });
+      }
+      return res.status(202).json({ started: true });
+    } catch (err) {
+      req.log.error({ err }, 'Failed to start watch status sync');
+      return res.status(500).json({ error: 'Failed to start watch status sync' });
     }
-    // Fire-and-forget: syncAll never rejects for per-server failures; this
-    // catch covers unexpected rejections so no unhandled rejection escapes.
-    mediaServers.watchStatusSync.syncAll('manual').catch((err) => {
-      req.log.error({ err }, 'Manual watch status sync failed');
-    });
-    res.status(202).json({ started: true });
   });
 
   return router;

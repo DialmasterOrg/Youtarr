@@ -12,6 +12,8 @@ const {
   getStoppedGroups,
   hasFailureStop,
   formatStoppedGroupLine,
+  formatJobIssueLine,
+  getStoppedLines,
 } = require('../utils');
 
 describe('notification utils - terminated channel helpers', () => {
@@ -165,6 +167,37 @@ describe('notification utils - stopped group helpers', () => {
 
     test('is false when only a termination stopped the run', () => {
       expect(hasFailureStop({ stoppedGroups: [{ group: 'Group 1/2 (1080p)', terminated: true }] })).toBe(false);
+    });
+
+    test('is true when a download job failed', () => {
+      expect(hasFailureStop({ jobIssues: [{ status: 'Failed', reason: 'No valid channel URLs', byUser: false }] })).toBe(true);
+    });
+
+    test('is false when the user terminated the only job', () => {
+      expect(hasFailureStop({ jobIssues: [{ status: 'Terminated', reason: 'User requested termination', byUser: true }] })).toBe(false);
+    });
+  });
+
+  describe('formatJobIssueLine', () => {
+    test('describes a failed job with its reason', () => {
+      expect(formatJobIssueLine({ status: 'Failed', reason: 'No valid channel URLs.' }))
+        .toBe('A download job failed: No valid channel URLs.');
+    });
+
+    test('describes a terminated job', () => {
+      expect(formatJobIssueLine({ status: 'Terminated', reason: null })).toBe('A download job was terminated.');
+    });
+  });
+
+  describe('getStoppedLines', () => {
+    test('lists stopped groups, then job issues', () => {
+      expect(getStoppedLines({
+        stoppedGroups: [{ group: 'Group 2/3 (720p)', reason: null, terminated: false }],
+        jobIssues: [{ status: 'Error', reason: 'Download process error: spawn yt-dlp ENOENT' }],
+      })).toEqual([
+        'Stopped at Group 2/3 (720p). Later groups were skipped.',
+        'A download job failed: Download process error: spawn yt-dlp ENOENT.',
+      ]);
     });
   });
 

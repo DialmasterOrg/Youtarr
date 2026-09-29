@@ -1,6 +1,7 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { ROOT_SENTINEL, GLOBAL_DEFAULT_SENTINEL } = require('../modules/filesystem/constants');
+const { sendRunBlocked } = require('./runNowResponse');
 
 // Video validation rate limiter
 const videoValidationLimiter = rateLimit({
@@ -53,7 +54,9 @@ const apiKeyDownloadLimiter = rateLimit({
  * @param {Object} deps.downloadModule - Download module
  * @returns {express.Router}
  */
-module.exports = function createVideoRoutes({ verifyToken, videosModule, downloadModule, videoOembedEnricher, videoLocalStatus, storageGuard }) {
+module.exports = function createVideoRoutes({
+  verifyToken, videosModule, downloadModule, videoOembedEnricher, videoLocalStatus, storageGuard, scheduledTaskManager,
+}) {
   const router = express.Router();
   /**
    * @swagger
@@ -1043,11 +1046,11 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
    *                     description: Override number of videos to download per channel
    *     responses:
    *       200:
-   *         description: Channel download job started
+   *         description: Channel and playlist update started
    *       400:
-   *         description: Job already running or invalid settings
+   *         description: Invalid override settings
    *       409:
-   *         description: Downloads are paused because a storage limit was reached (Settings > Storage Limits); the error message gives the reason
+   *         description: A channel and playlist update is already running, or downloads are paused because a storage limit was reached (Settings > Storage Limits); the error message gives the reason
    *         content:
    *           application/json:
    *             schema:
@@ -1056,30 +1059,19 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
    *                 error:
    *                   type: string
    *                   example: 'Downloads are paused: downloaded videos use 512.0 GB, over the 500 GB limit'
+   *                 reason:
+   *                   type: string
+   *                   enum: [running, downloads-paused]
+   *                 availableAt:
+   *                   type: string
+   *                   format: date-time
+   *                   nullable: true
+   *       500:
+   *         description: The update could not be started
+   *       503:
+   *         description: The server has not finished starting
    */
   router.post('/triggerchanneldownloads', verifyToken, async (req, res) => {
-    // The sweep below is fire-and-forget, so check the pause up front to
-    // report it instead of answering success and silently doing nothing.
-    try {
-      const pauseStatus = await storageGuard.refresh();
-      if (pauseStatus.paused) {
-        return res.status(409).json({ error: storageGuard.describe(pauseStatus) });
-      }
-    } catch (err) {
-      req.log.warn({ err }, 'Could not check the download pause state before channel downloads');
-    }
-
-    const jobModule = require('../modules/jobModule');
-    const runningJobs = jobModule.getRunningJobs();
-    const channelDownloadJob = runningJobs.find(
-      (job) =>
-        job.jobType.includes('Channel Downloads') && job.status === 'In Progress'
-    );
-    if (channelDownloadJob) {
-      res.status(400).json({ error: 'Job Already Running' });
-      return;
-    }
-
     const { overrideSettings } = req.body;
     if (overrideSettings) {
       if (overrideSettings.resolution) {
@@ -1100,12 +1092,25 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
       }
     }
 
-    downloadModule
-      .doChannelAndPlaylistDownloads(req.body || {})
-      .catch((err) => {
-        req.log.error({ err }, 'Manual channel + playlist downloads failed');
+    try {
+      const outcome = await scheduledTaskManager.runNow('channelDownloadFrequency', {
+        trigger: 'manual',
+        args: { jobData: req.body || {} },
+        // Download New is the manual tool with override settings, so it is
+        // not held by the Run now cooldown. (The task already ignores the
+        // automatic downloads switch for manual runs; enforceEnabled: false
+        // keeps this caller independent of that registration detail.)
+        enforceEnabled: false,
+        enforceCooldown: false,
       });
-    res.json({ status: 'success' });
+      if (!outcome.started) {
+        return sendRunBlocked(res, outcome, { running: 'A channel and playlist update is already running.' });
+      }
+      return res.json({ status: 'success' });
+    } catch (err) {
+      req.log.error({ err }, 'Failed to start channel downloads');
+      return res.status(500).json({ error: 'Failed to start channel downloads' });
+    }
   });
 
   return router;

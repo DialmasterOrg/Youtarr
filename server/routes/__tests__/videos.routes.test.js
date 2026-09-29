@@ -2,11 +2,6 @@ const express = require('express');
 const createVideoRoutes = require('../../routes/videos');
 const { findRouteHandler } = require('../../__tests__/testUtils');
 
-jest.mock('../../modules/jobModule', () => ({
-  getRunningJobs: jest.fn().mockReturnValue([]),
-}));
-const jobModuleShared = require('../../modules/jobModule');
-
 jest.mock('../../modules/videoDeletionModule', () => ({
   performAutomaticCleanup: jest.fn(),
 }));
@@ -432,19 +427,13 @@ describe('POST /triggerchanneldownloads', () => {
     return res;
   };
 
-  let downloadModuleMock;
-  let storageGuardMock;
+  let scheduledTaskManagerMock;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    jobModuleShared.getRunningJobs.mockReturnValue([]);
 
-    downloadModuleMock = {
-      doChannelAndPlaylistDownloads: jest.fn().mockResolvedValue(undefined),
-    };
-    storageGuardMock = {
-      refresh: jest.fn().mockResolvedValue({ paused: false, reasons: [] }),
-      describe: jest.fn(() => 'Downloads are paused: over the limit'),
+    scheduledTaskManagerMock = {
+      runNow: jest.fn().mockResolvedValue({ started: true, completion: Promise.resolve(null) }),
     };
   });
 
@@ -452,8 +441,8 @@ describe('POST /triggerchanneldownloads', () => {
     const router = createVideoRoutes({
       verifyToken: (req, res, next) => next(),
       videosModule: {},
-      downloadModule: downloadModuleMock,
-      storageGuard: storageGuardMock,
+      downloadModule: {},
+      scheduledTaskManager: scheduledTaskManagerMock,
     });
     const app = express();
     app.use(express.json());
@@ -461,68 +450,86 @@ describe('POST /triggerchanneldownloads', () => {
     return findRouteHandler(app, 'post', '/triggerchanneldownloads');
   };
 
-  it('triggers combined channel + playlist downloads', async () => {
+  it('responds with success when the sweep starts', async () => {
     const handler = getHandler();
-    const req = {
-      body: {},
-      log: loggerMock,
-    };
     const res = createResponse();
 
-    await handler(req, res);
+    await handler({ body: {}, log: loggerMock }, res);
 
     expect(res.json).toHaveBeenCalledWith({ status: 'success' });
-    expect(downloadModuleMock.doChannelAndPlaylistDownloads).toHaveBeenCalled();
   });
 
-  it('returns 400 when a channel download job is already running', async () => {
-    jobModuleShared.getRunningJobs.mockReturnValue([
-      { jobType: 'Channel Downloads', status: 'In Progress' },
-    ]);
-
+  it('starts the automatic downloads task as a manual run outside the enabled and cooldown checks', async () => {
     const handler = getHandler();
-    const req = {
-      body: {},
-      log: loggerMock,
-    };
-    const res = createResponse();
 
-    await handler(req, res);
+    await handler({ body: {}, log: loggerMock }, createResponse());
 
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Job Already Running' });
-    expect(downloadModuleMock.doChannelAndPlaylistDownloads).not.toHaveBeenCalled();
+    expect(scheduledTaskManagerMock.runNow).toHaveBeenCalledWith('channelDownloadFrequency', {
+      trigger: 'manual',
+      args: { jobData: {} },
+      enforceEnabled: false,
+      enforceCooldown: false,
+    });
   });
 
-  it('returns 409 with the reason when downloads are paused for storage', async () => {
-    storageGuardMock.refresh.mockResolvedValue({ paused: true, reasons: [{ text: 'over the limit' }] });
-
+  it('returns 409 when a channel and playlist update is already running', async () => {
+    scheduledTaskManagerMock.runNow.mockResolvedValue({
+      started: false, reason: 'running', message: 'This task is already running.', availableAt: null,
+    });
     const handler = getHandler();
     const res = createResponse();
 
     await handler({ body: {}, log: loggerMock }, res);
 
     expect(res.status).toHaveBeenCalledWith(409);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Downloads are paused: over the limit' });
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'A channel and playlist update is already running.',
+      reason: 'running',
+      availableAt: null,
+    });
   });
 
-  it('does not start downloads while paused', async () => {
-    storageGuardMock.refresh.mockResolvedValue({ paused: true, reasons: [] });
-
+  it('returns 409 with the reason when downloads are paused for storage', async () => {
+    scheduledTaskManagerMock.runNow.mockResolvedValue({
+      started: false, reason: 'downloads-paused', message: 'Downloads are paused: over the limit', availableAt: null,
+    });
     const handler = getHandler();
+    const res = createResponse();
 
-    await handler({ body: {}, log: loggerMock }, createResponse());
+    await handler({ body: {}, log: loggerMock }, res);
 
-    expect(downloadModuleMock.doChannelAndPlaylistDownloads).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'Downloads are paused: over the limit',
+      reason: 'downloads-paused',
+      availableAt: null,
+    });
   });
 
-  it('still starts downloads when the pause check fails', async () => {
-    storageGuardMock.refresh.mockRejectedValue(new Error('check failed'));
+  it('returns 400 for an invalid override resolution', async () => {
+    const handler = getHandler();
+    const res = createResponse();
 
+    await handler({ body: { overrideSettings: { resolution: '999' } }, log: loggerMock }, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('does not start the sweep for an invalid override resolution', async () => {
     const handler = getHandler();
 
-    await handler({ body: {}, log: { ...loggerMock, warn: jest.fn() } }, createResponse());
+    await handler({ body: { overrideSettings: { resolution: '999' } }, log: loggerMock }, createResponse());
 
-    expect(downloadModuleMock.doChannelAndPlaylistDownloads).toHaveBeenCalled();
+    expect(scheduledTaskManagerMock.runNow).not.toHaveBeenCalled();
+  });
+
+  it('returns 500 when the sweep cannot be started', async () => {
+    scheduledTaskManagerMock.runNow.mockRejectedValue(new Error('boom'));
+    const handler = getHandler();
+    const res = createResponse();
+
+    await handler({ body: {}, log: loggerMock }, res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
   });
 });

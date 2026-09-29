@@ -142,7 +142,7 @@ See [Authentication - Cannot Find the Setup Token](AUTHENTICATION.md#cannot-find
 - Verify Automatic Video Removal is enabled on **Settings -> Auto Removal** and at least one rule is configured: an age threshold, a free-space threshold, a total size limit, or watched-based removal. Note that watched-based removal only runs while watch status sync is enabled.
 - Remember the exclusions. Videos you've marked as Protected, videos of channels with auto-removal protection enabled, and the newest downloads kept by "Keep this many newest downloads" (the global setting plus any per-channel keep counts) are never removed, so a run can legitimately delete nothing.
 - Run the dry-run preview to see how many videos currently match the rules - it also shows how many videos the protection settings are keeping. Adjust values if needed (for example, lower the free-space threshold or reduce the age requirement).
-- Check server logs around the time configured in **Settings -> Scheduling** for cleanup messages to confirm the job is executing (`docker compose logs -f youtarr`).
+- Use **Run now** on the Automatic video cleanup card in **Settings -> Scheduling** to see the result immediately (for example 'No videos matched the removal rules'), or check the logs directly with `docker compose logs -f youtarr`.
 - If errors appear in the logs (e.g., permission issues deleting files), resolve those first - the cron job will skip files it cannot delete.
 
 ## Library / File Issues
@@ -652,8 +652,8 @@ COMPOSE_FILE=docker-compose.yml:docker-compose.arm.yml
    ```bash
    docker compose logs -f youtarr | grep yt-dlp
    ```
-4. Ensure the cron schedule is configured (default: every 6 hours)
-5. Manually trigger a download from the Channels page
+4. Ensure the cron schedule is configured (default: hourly)
+5. Open **Settings -> Scheduling** and check the Automatic downloads card: it shows the next run, the last run and its result, and its **Run now** button starts a check immediately; you can also manually trigger a download with **Download new** under **Downloads -> Manual Download**.
 
 ### yt-dlp Errors
 

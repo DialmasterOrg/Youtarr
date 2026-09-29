@@ -22,8 +22,7 @@ const {
   formatTerminationFailureLine,
   getDiagnoses,
   formatDiagnosisLine,
-  getStoppedGroups,
-  formatStoppedGroupLine
+  getStoppedLines
 } = require('../utils');
 
 const DEFAULT_HEADER_GRADIENT = 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)';
@@ -158,10 +157,10 @@ function formatDownloadMessage(finalSummary, videoData) {
       </div>`;
   }
 
-  const stoppedGroups = getStoppedGroups(finalSummary);
-  if (stoppedGroups.length > 0) {
-    const stoppedItems = stoppedGroups.map(stopped =>
-      `<p>${escapeHtml(formatStoppedGroupLine(stopped))}</p>`
+  const stoppedLines = getStoppedLines(finalSummary);
+  if (stoppedLines.length > 0) {
+    const stoppedItems = stoppedLines.map(line =>
+      `<p>${escapeHtml(line)}</p>`
     ).join('');
     content += `
       <div class="warning-card">
