@@ -134,7 +134,9 @@ const setupServer = async ({ authEnabled = 'false', passwordHash = null } = {}) 
   jest.doMock('../modules/jobModule', () => ({
     getJob: jest.fn(),
     getRunningJobs: jest.fn(() => []),
-    getRunningJobsWithFreshVideos: jest.fn().mockResolvedValue([])
+    getRunningJobsWithFreshVideos: jest.fn().mockResolvedValue([]),
+    onJobAbandoned: jest.fn(),
+    onJobEnded: jest.fn()
   }));
   jest.doMock('../modules/videosModule', () => ({
     getVideos: jest.fn().mockResolvedValue([])
@@ -181,6 +183,16 @@ const setupServer = async ({ authEnabled = 'false', passwordHash = null } = {}) 
   jest.doMock('node-cron', () => ({ schedule: jest.fn() }));
   jest.doMock('../modules/mediaServers/watchStatusScheduler', () => ({ scheduleTask: jest.fn(), subscribe: jest.fn() }));
   jest.doMock('../modules/channel/channelBackdropBackfill', () => ({ subscribe: jest.fn() }));
+  jest.doMock('../modules/channel/tabVideoCounts', () => ({ setRunHistory: jest.fn(), setDownloadActivityCheck: jest.fn(), refreshAtStartup: jest.fn().mockResolvedValue({}) }));
+  jest.doMock('../modules/channel/autoDownloadScheduler', () => ({ setRunTracker: jest.fn() }));
+  jest.doMock('../modules/download/downloadRunTracker', () => ({ isActive: jest.fn(), getUnfinishedJobs: jest.fn() }));
+  jest.doMock('../modules/logLevelSync', () => ({ apply: jest.fn(), subscribe: jest.fn() }));
+  jest.doMock('../modules/storageGuard', () => ({
+    initialize: jest.fn().mockResolvedValue({ paused: false, reasons: [] }),
+    refresh: jest.fn().mockResolvedValue({ paused: false, reasons: [] }),
+    isPausedError: jest.fn(() => false),
+    describe: jest.fn(() => ''),
+  }));
   jest.doMock('express-rate-limit', () => jest.fn(() => (req, res, next) => next()));
 
   const serverModule = require('../server');

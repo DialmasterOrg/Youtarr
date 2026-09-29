@@ -39,7 +39,7 @@ jest.mock('../chips', () => ({
       subFolder || 'Default Folder'
     );
   },
-  AutoDownloadChips: function MockAutoDownloadChips({ availableTabs, autoDownloadTabs }: any) {
+  AutoDownloadChips: function MockAutoDownloadChips({ availableTabs, autoDownloadTabs, tabStats }: any) {
     const React = require('react');
     return React.createElement(
       'div',
@@ -47,6 +47,7 @@ jest.mock('../chips', () => ({
         'data-testid': 'auto-download-chips',
         'data-available': availableTabs,
         'data-enabled': autoDownloadTabs,
+        'data-videos-percent': tabStats?.videos?.percent,
       },
       'Auto'
     );
@@ -152,6 +153,16 @@ describe('ChannelListRow', () => {
       expect(screen.getByTestId('sub-folder-chip')).toHaveTextContent('Default Folder');
     });
 
+    test('passes the tab download stats to the auto-download chips', () => {
+      const channelWithStats = {
+        ...mockChannel,
+        tab_download_stats: { videos: { total: 449, fetchedAt: null, downloaded: 120, ignored: 0, percent: 26 } },
+      };
+      renderWithProviders(<ChannelListRow {...defaultProps} channel={channelWithStats} />);
+
+      expect(screen.getByTestId('auto-download-chips')).toHaveAttribute('data-videos-percent', '26');
+    });
+
     test('uses channel url in test id and default thumbnail when channel_id is missing', () => {
       const channelWithoutId = { ...mockChannel, channel_id: undefined };
       renderWithProviders(<ChannelListRow {...defaultProps} channel={channelWithoutId} />);
@@ -220,6 +231,23 @@ describe('ChannelListRow', () => {
 
       expect(screen.getByTestId('current-path')).toHaveTextContent(/^\/$/);
       expect(screen.getByText('Pending addition')).toBeInTheDocument();
+    });
+
+    test('opens the settings of a pending addition from its edit button', async () => {
+      const user = userEvent.setup();
+      const onEditPending = jest.fn();
+
+      renderWithProviders(<ChannelListRow {...defaultProps} isPendingAddition onEditPending={onEditPending} />);
+
+      await user.click(screen.getByRole('button', { name: 'Edit pending channel settings' }));
+
+      expect(onEditPending).toHaveBeenCalledTimes(1);
+    });
+
+    test('shows no edit button for a saved channel', () => {
+      renderWithProviders(<ChannelListRow {...defaultProps} onEditPending={jest.fn()} />);
+
+      expect(screen.queryByRole('button', { name: 'Edit pending channel settings' })).not.toBeInTheDocument();
     });
 
     test('calls onDelete when delete button is clicked', async () => {

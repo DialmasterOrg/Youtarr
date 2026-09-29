@@ -17,15 +17,24 @@ const videoActivity = require('./download/videoActivity');
 const { isDownloadJob, isSpecificUrlDownloadJob } = require('./download/jobTypes');
 const downloadCleanup = require('./download/downloadCleanup');
 const { serializeAuxData, parseAuxData } = require('./jobAuxData');
+const storageGuard = require('./storageGuard');
+const { unchangedSinceRead } = require('./videoRowGuard');
+const videosModule = require('./videosModule');
 const logger = require('../logger');
 
 const MAX_SAVE_RETRIES = 3;
+// Library repair looks for an existing row's missing file at its guessed .mp4 path, then these.
+const BACKFILL_ALT_VIDEO_EXTENSIONS = ['.webm', '.mkv', '.m4v', '.avi'];
 // Download History window: jobs older than this are purged from memory,
 // and at most MAX_HISTORY_JOBS are returned to the client. DB rows are
 // never deleted, so raising these resurfaces older persisted jobs.
 const JOB_RETENTION_DAYS = 42;
 const MAX_HISTORY_JOBS = 720;
 const ARCHIVE_BACKFILL_TASK_KEY = 'archiveBackfillFrequency';
+// Terminal download statuses whose output is rewritten to "N videos.".
+const SUCCESS_STATUSES = new Set(['Complete', 'Complete with Warnings']);
+// Statuses a job never leaves once set.
+const FINAL_JOB_STATUSES = new Set(['Complete', 'Complete with Warnings', 'Error', 'Failed', 'Terminated', 'Killed']);
 
 class JobModule {
   constructor() {
@@ -34,6 +43,10 @@ class JobModule {
     this.jobsFilePathOld = path.join(this.jobsDir, 'jobs.json.old');
     this.isSaving = false; // Locking mechanism to prevent multiple saves at the same time
     this.jobs = {}; // Initialize this.jobs as an empty object
+    // Told when failUnstartedJob gives up on a queued job; see onJobAbandoned.
+    this.jobAbandonedListeners = new Set();
+    // Told whenever updateJob gives a job a final status; see onJobEnded.
+    this.jobEndedListeners = new Set();
 
     if (!fs.existsSync(this.jobsDir)) {
       fs.mkdirSync(this.jobsDir, { recursive: true });
@@ -62,6 +75,14 @@ class JobModule {
       });
     }
 
+    // Jobs held while downloads were paused for storage start once it clears.
+    storageGuard.on('resumed', () => {
+      if (this.getInProgressJobId()) return;
+      this.startNextJob().catch((err) => {
+        logger.error({ err }, 'Failed to start queued job after downloads resumed');
+      });
+    });
+
     // Schedule a daily backfill from complete.list and run an initial backfill
     this.scheduleDailyBackfill();
     configModule.onConfigChange(this.scheduleDailyBackfill.bind(this));
@@ -79,7 +100,7 @@ class JobModule {
   // The startup pass is written as one finished row rather than started and
   // finished separately: it begins before server.js marks stale running rows
   // interrupted, so a running row created here would be flagged by that pass.
-  async runStartupBackfill() {
+  async _runStartupBackfill() {
     const startedAt = new Date();
     const record = await this.backfillFromCompleteList();
     await scheduledTaskRuns.record({
@@ -89,6 +110,12 @@ class JobModule {
       finishedAt: new Date(),
       ...record,
     });
+  }
+
+  // Runs outside the scheduler, so open Scheduling pages are told when it
+  // starts and ends. The repair's lock is set before this broadcasts.
+  runStartupBackfill() {
+    return scheduledTasks.announceRun(ARCHIVE_BACKFILL_TASK_KEY, this._runStartupBackfill());
   }
 
   /**
@@ -430,28 +457,129 @@ class JobModule {
     return null;
   }
 
-  async startNextJob() {
+  /**
+   * Start the first Pending job. Overlapping calls share one in-flight scan:
+   * a job stays Pending while its action prepares (channel downloads build
+   * their groups first), so two concurrent scans would both start it.
+   * @returns {Promise<void>}
+   */
+  startNextJob() {
+    if (!this.nextJobStart) {
+      // Deferred a tick so the promise is stored before the scan runs; a
+      // caller re-entering from inside the scan then joins this one.
+      this.nextJobStart = Promise.resolve()
+        .then(() => this._startNextJob())
+        .finally(() => {
+          this.nextJobStart = null;
+        });
+    }
+    return this.nextJobStart;
+  }
+
+  async _startNextJob() {
     logger.info('Looking for next job to start');
+    // Re-checking here also runs after every finished job, so crossing a
+    // storage limit pauses downloads (and alerts the user) right away.
+    // A failed check fails open, like the guard's own measurements.
+    let guardStatus = null;
+    try {
+      guardStatus = await storageGuard.refresh();
+    } catch (err) {
+      logger.error({ err }, 'Could not check the download pause state; starting the next job anyway');
+    }
+    if (guardStatus && guardStatus.paused) {
+      logger.info('Downloads are paused for storage; holding queued jobs');
+      return;
+    }
     const jobs = this.getAllJobs();
     for (let id in jobs) {
-      if (jobs[id].status === 'Pending') {
-        jobs[id].id = id;
-        if (jobs[id].action) {
-          jobs[id].action(jobs[id], true); // Invoke the function
-        } else {
-          // Job is missing its action function (likely loaded from DB after restart)
-          logger.warn({ jobId: id, jobType: jobs[id].jobType },
-            'Cannot start pending job - missing action function, marking as Terminated');
+      if (jobs[id].status !== 'Pending') continue;
+      jobs[id].id = id;
+      if (!jobs[id].action) {
+        // Job is missing its action function (likely loaded from DB after restart)
+        logger.warn({ jobId: id, jobType: jobs[id].jobType },
+          'Cannot start pending job - missing action function, marking as Terminated');
 
-          await this.updateJob(id, {
-            status: 'Terminated',
-            output: 'Job could not be started after server restart',
-          });
+        await this.updateJob(id, {
+          status: 'Terminated',
+          output: 'Job could not be started after server restart',
+        });
+        // Try the next pending job
+        continue;
+      }
+      // Not awaited (the job runs in the background), so catch here:
+      // an unhandled rejection would exit the process.
+      Promise.resolve(jobs[id].action(jobs[id], true)).catch((err) => {
+        logger.error({ err, jobId: id, jobType: jobs[id].jobType }, 'Failed to start queued job');
+        return this.failUnstartedJob(id, err);
+      }).catch((err) => {
+        logger.error({ err, jobId: id }, 'Could not release a queued job that failed to start');
+      });
+      break;
+    }
+  }
 
-          // Try to start the next pending job
-          this.startNextJob();
-        }
-        break;
+  /**
+   * A queued job whose action failed before the job left Pending would stay
+   * Pending forever and hold every later job behind it. Mark it as an error
+   * and start the next one. A job the action already moved on (In Progress
+   * or finished) is left to the download path that owns it.
+   * @param {string} jobId
+   * @param {Error} err
+   * @returns {Promise<void>}
+   */
+  async failUnstartedJob(jobId, err) {
+    const job = this.jobs[jobId];
+    if (!job || job.status !== 'Pending') return;
+    const reason = `Job could not be started: ${err && err.message ? err.message : 'Unknown error'}`;
+    const runId = job.data && job.data.runId ? job.data.runId : null;
+    await this.updateJob(jobId, { status: 'Error', output: reason });
+    this.notifyJobAbandoned({ jobId, runId, reason });
+    // The scan that launched this job may still be settling; joining it would
+    // start nothing, since it is past its job loop. Let it end, then scan again.
+    if (this.nextJobStart) await this.nextJobStart.catch(() => {});
+    await this.startNextJob();
+  }
+
+  /**
+   * Listen for queued jobs abandoned before they started, so a download run
+   * can count them without jobModule depending on the run tracker.
+   * @param {Function} listener - called with { jobId, runId, reason }
+   * @returns {Function} unsubscribe
+   */
+  onJobAbandoned(listener) {
+    this.jobAbandonedListeners.add(listener);
+    return () => this.jobAbandonedListeners.delete(listener);
+  }
+
+  /**
+   * Listen for jobs given a final status (by any path: the download
+   * finalizer, error handlers, or failUnstartedJob), so a download run can
+   * tell a job that ended without reporting from one still running.
+   * @param {Function} listener - called with { jobId }
+   * @returns {Function} unsubscribe
+   */
+  onJobEnded(listener) {
+    this.jobEndedListeners.add(listener);
+    return () => this.jobEndedListeners.delete(listener);
+  }
+
+  notifyJobEnded(event) {
+    for (const listener of this.jobEndedListeners) {
+      try {
+        listener(event);
+      } catch (err) {
+        logger.warn({ err, jobId: event.jobId }, 'Job ended listener failed');
+      }
+    }
+  }
+
+  notifyJobAbandoned(event) {
+    for (const listener of this.jobAbandonedListeners) {
+      try {
+        listener(event);
+      } catch (err) {
+        logger.warn({ err, jobId: event.jobId }, 'Abandoned job listener failed');
       }
     }
   }
@@ -654,8 +782,47 @@ class JobModule {
     return videoPersistence.upsertChannelVideoFromInfo(info, options);
   }
 
-  // Backfill Videos and channelvideos tables from complete.list and jobs info JSON
+  /**
+   * Look for a backfilled video's file at its guessed .mp4 path, then with the
+   * other common video extensions.
+   * @param {string} mp4Path - Guessed path ending in .mp4
+   * @returns {Promise<{path: string, size: string}|null>} The file found, or null
+   */
+  async _findArchivedVideoFile(mp4Path) {
+    // Swap only the trailing extension; the channel name or title may contain ".mp4" too.
+    const basePath = mp4Path.slice(0, -'.mp4'.length);
+    const candidates = [mp4Path, ...BACKFILL_ALT_VIDEO_EXTENSIONS.map((ext) => `${basePath}${ext}`)];
+    for (const candidate of candidates) {
+      try {
+        const stats = await fsPromises.stat(candidate);
+        if (stats.isFile()) return { path: candidate, size: stats.size.toString() };
+      } catch (err) {
+        // Try the next extension
+      }
+    }
+    return null;
+  }
+
+  // The startup pass runs outside the scheduler, so the repair keeps its own
+  // lock; two walks at once would race on the same rows.
   async backfillFromCompleteList() {
+    if (this._archiveRepairRunning) {
+      return { status: 'skipped', outcome: 'skipped', message: 'A library repair was already running.' };
+    }
+    this._archiveRepairRunning = true;
+    try {
+      return await this._repairFromArchive();
+    } finally {
+      this._archiveRepairRunning = false;
+    }
+  }
+
+  isArchiveRepairRunning() {
+    return Boolean(this._archiveRepairRunning);
+  }
+
+  // Backfill Videos and channelvideos tables from complete.list and jobs info JSON
+  async _repairFromArchive() {
     try {
       const archivePath = path.join(__dirname, '../../config', 'complete.list');
       let archiveContent;
@@ -708,6 +875,33 @@ class JobModule {
       const maxPerRun = 300;
       const capped = candidates.slice(0, maxPerRun);
 
+      // A lost row's files are looked up by YouTube id anywhere under the
+      // downloads folder: the guessed path only fits the oldest folder layout
+      // and never an audio file. The folder is walked at most once per run,
+      // and only if a lost row needs recreating.
+      let downloadedFiles = null;
+      let unreadableOnDisk = 0;
+      // Lost rows recreated as missing while the walk was partial: their file
+      // may sit in a part that couldn't be read.
+      let recreatedUnverified = 0;
+      const findDownloadedFiles = async (youtubeId) => {
+        if (!downloadedFiles) {
+          const outputDir = configModule.directoryPath;
+          if (outputDir) {
+            const { fileMap, unreadable } = await videosModule.scanForVideoFiles(outputDir);
+            downloadedFiles = fileMap;
+            unreadableOnDisk = unreadable;
+            logger.info({ filesOnDisk: fileMap.size }, 'Searched the downloads folder for lost video records');
+            if (unreadable > 0) {
+              logger.warn({ unreadable }, 'Parts of the downloads folder could not be read; lost videos stored there are recreated as missing');
+            }
+          } else {
+            downloadedFiles = new Map();
+          }
+        }
+        return downloadedFiles.get(youtubeId) || null;
+      };
+
       let processed = 0;
       for (const { id, needsVideo, needsChannelVideo } of capped) {
         const infoPath = path.join(__dirname, `../../jobs/info/${id}.info.json`);
@@ -759,53 +953,57 @@ class JobModule {
             rating_source: info.rating_source || null,
           };
 
-          // Check if file exists and get file size
-          try {
-            const stats = await fsPromises.stat(fullPath);
-            payload.filePath = fullPath;
-            payload.fileSize = stats.size.toString();
-            payload.removed = false;
-          } catch (err) {
-            // Try other common extensions
-            const extensions = ['.webm', '.mkv', '.m4v', '.avi'];
-            let fileFound = false;
+          // Read the row before searching the disk, so a deletion that lands
+          // in between can't be undone by an earlier "file found".
+          const videoInstance = await Video.findOne({ where: { youtubeId: info.id } });
+          const foundFile = videoInstance && (!videoInstance.filePath || !videoInstance.fileSize)
+            ? await this._findArchivedVideoFile(fullPath)
+            : null;
 
-            for (const ext of extensions) {
-              const altPath = fullPath.replace('.mp4', ext);
-              try {
-                const stats = await fsPromises.stat(altPath);
-                payload.filePath = altPath;
-                payload.fileSize = stats.size.toString();
-                payload.removed = false;
-                fileFound = true;
-                break;
-              } catch (altErr) {
-                // Continue trying other extensions
-              }
-            }
-
-            if (!fileFound) {
-              payload.filePath = fullPath;
-              payload.fileSize = null;
-              payload.removed = false;
-            }
-          }
-
-          let videoInstance = await Video.findOne({ where: { youtubeId: info.id } });
           if (!videoInstance && needsVideo) {
-            await Video.create(payload);
-            videosUpserts += 1;
+            const files = await findDownloadedFiles(info.id);
+            const sizeOf = (size) => (size === null || size === undefined ? null : String(size));
+            try {
+              // Without a file on disk the row is recreated as missing; the
+              // guessed path is kept, as the rescan keeps stored paths. This
+              // also applies when the walk was partial (unreadable folders):
+              // deferring instead would block recovery for good wherever a
+              // folder is never readable (lost+found, NAS recycle bins), while
+              // a row wrongly recreated as missing is restored by the next
+              // rescan that finds its file.
+              await Video.create({
+                ...payload,
+                filePath: files ? files.videoFilePath : fullPath,
+                fileSize: files ? sizeOf(files.videoFileSize) : null,
+                audioFilePath: files ? files.audioFilePath : null,
+                audioFileSize: files ? sizeOf(files.audioFileSize) : null,
+                removed: !files,
+              });
+              videosUpserts += 1;
+              if (!files && unreadableOnDisk > 0) recreatedUnverified += 1;
+            } catch (createErr) {
+              if (createErr.name !== 'SequelizeUniqueConstraintError' && createErr.original?.code !== 'ER_DUP_ENTRY') {
+                throw createErr;
+              }
+              // A download created the row in the meantime; its data is newer.
+              logger.info({ youtubeId: info.id }, 'Video already exists (created by another process), skipping backfill');
+            }
           } else if (videoInstance) {
-            const updates = {};
-
-            // Update file metadata only if not already set
-            if (!videoInstance.filePath || !videoInstance.fileSize) {
-              if (payload.filePath || payload.fileSize) {
-                updates.filePath = payload.filePath;
-                updates.fileSize = payload.fileSize;
-                updates.removed = payload.removed;
+            // Only claim a file that was actually found, and only if no other
+            // writer changed the row since it was read. This only runs when
+            // filePath or fileSize was empty, so the write always changes a
+            // column, which the zero-rows conflict check relies on.
+            if (foundFile) {
+              const [affected] = await Video.update(
+                { filePath: foundFile.path, fileSize: foundFile.size, removed: false },
+                { where: unchangedSinceRead(videoInstance) }
+              );
+              if (affected === 0) {
+                logger.info({ youtubeId: info.id }, 'Video changed during backfill, skipping file update');
               }
             }
+
+            const updates = {};
 
             // Update media_type only if currently set to default 'video' (meaning it hasn't been set yet)
             if (videoInstance.media_type === 'video' && payload.media_type && payload.media_type !== 'video') {
@@ -859,11 +1057,21 @@ class JobModule {
         logger.warn({ missingCount: missingInfoIds.length, missingIds: missingInfoIds.join(', ') }, 'Backfill skipped due to missing info.json');
       }
       const failures = failedWrites > 0 ? `; ${failedWrites} write${failedWrites === 1 ? '' : 's'} failed` : '';
+      const unverified = recreatedUnverified > 0
+        ? `; ${recreatedUnverified} recreated as missing because parts of the downloads folder could not be read`
+        : '';
+      const partial = failedWrites > 0 || recreatedUnverified > 0;
       return {
-        status: failedWrites > 0 ? 'error' : 'success',
-        outcome: failedWrites > 0 ? 'partial' : 'completed',
-        message: `Recovered ${videosUpserts} video records and ${channelVideosUpserts} channel video records${failures}.`,
-        details: { videosUpserts, channelVideosUpserts, failed: failedWrites },
+        status: partial ? 'error' : 'success',
+        outcome: partial ? 'partial' : 'completed',
+        message: `Recovered ${videosUpserts} video records and ${channelVideosUpserts} channel video records${failures}${unverified}.`,
+        details: {
+          videosUpserts,
+          channelVideosUpserts,
+          failed: failedWrites,
+          unreadableOnDisk,
+          recreatedUnverified,
+        },
       };
     } catch (err) {
       logger.error({ err }, 'Backfill error');
@@ -876,6 +1084,7 @@ class JobModule {
       id: ARCHIVE_BACKFILL_TASK_KEY,
       expression: getSchedule(configModule.getConfig(), ARCHIVE_BACKFILL_TASK_KEY),
       run: () => this.backfillFromCompleteList(),
+      isRunning: () => this.isArchiveRepairRunning(),
     });
   }
 
@@ -1031,13 +1240,11 @@ class JobModule {
         { text: 'Download job completed.', videos: updatedFields.data?.videos || [] }
       );
 
-      // Only modify output and status for actual completions, not terminations
-      if (updatedFields.status !== 'Terminated') {
+      // Successful completions report a video count; failures keep their own
+      // status and output so the reason survives into Download History.
+      if (SUCCESS_STATUSES.has(updatedFields.status)) {
         let numVideos = updatedFields.data?.videos?.length || 0;
         updatedFields.output = numVideos + ' videos.';
-        if (updatedFields.status !== 'Complete with Warnings') {
-          updatedFields.status = 'Complete';
-        }
       }
     }
 
@@ -1045,6 +1252,9 @@ class JobModule {
     for (let field in updatedFields) {
       job[field] = updatedFields[field];
     }
+    // Before the database work below: listeners (the download run tracker)
+    // must know the job has ended even while its results are still on the way.
+    if (FINAL_JOB_STATUSES.has(updatedFields.status)) this.notifyJobEnded({ jobId });
 
     // Save only THIS job to DB, don't iterate through all jobs
     const isCompletedJob = updatedFields.status === 'Complete' ||
@@ -1079,7 +1289,7 @@ class JobModule {
         job.data.videos = videos;
 
         // Update output message to reflect correct video count
-        if (updatedFields.status !== 'Terminated') {
+        if (SUCCESS_STATUSES.has(updatedFields.status)) {
           job.output = `${videos.length} videos.`;
         }
 

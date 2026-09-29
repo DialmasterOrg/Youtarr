@@ -83,6 +83,10 @@ If Youtarr can't connect to MariaDB on startup, check the MariaDB container logs
 
 > Newer MariaDB images use `mariadb` as the client binary, not `mysql`. If `docker exec ... mysql` returns "executable file not found in $PATH", use `mariadb` instead.
 
+## Troubleshooting "too many open files" / "Cannot watch config.json"
+
+Unraid servers running many containers can exhaust the host's inotify limit, because most containers run as the same user (`nobody`) and share it. Youtarr then logs `Cannot watch config.json for changes` (older versions crashed on startup with `EMFILE: too many open files, watch '/app/config/config.json'`). Youtarr still runs, but hand edits to `config.json` won't reload until a restart. See [the troubleshooting guide](../TROUBLESHOOTING.md#config-file-watcher-limit) for how to raise the limit and keep it across reboots.
+
 ## Running as Non-Root User
 
 By default, Youtarr runs as root inside the container. This works fine for most setups, but if you need Plex or Jellyfin to be able to delete files that Youtarr downloads, you'll need to run Youtarr as a non-root user with matching permissions.

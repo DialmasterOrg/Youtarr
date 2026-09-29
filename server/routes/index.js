@@ -21,6 +21,7 @@ const createSchedulesRoutes = require('./schedules');
 const createExternalRequestReviewRoutes = require('./externalRequests');
 const { createExternalApiRoutes } = require('./externalApi');
 const { sendExternalError } = require('../modules/externalApiResponse');
+const createLogRoutes = require('./logs');
 const videoMetadataModule = require('../modules/videoMetadataModule');
 const videoOembedEnricher = require('../modules/videoOembedEnricher');
 const playlistModule = require('../modules/playlistModule');
@@ -46,6 +47,11 @@ const { sharedExternalWorkLimiter } = require('../modules/externalWorkLimiter');
 const { createExternalRequestService } = require('../modules/externalRequestService');
 const { createExternalQuotaService } = require('../modules/externalQuotaService');
 const { isExternalApiEnabled } = require('../modules/externalApiConfig');
+const storageGuard = require('../modules/storageGuard');
+const cookieDetails = require('../modules/cookieDetails');
+const cookieTest = require('../modules/cookieTest');
+const logger = require('../logger');
+const logFilesModule = require('../modules/logFilesModule');
 
 /**
  * Registers all route modules with the Express app
@@ -62,6 +68,7 @@ function registerRoutes(app, deps) {
     youtubeApiKeyTestLimiter,
     ytdlpValidationRateLimiter,
     filenamePreviewRateLimiter,
+    cookieTestRateLimiter,
     configModule,
     channelModule,
     plexModule,
@@ -74,7 +81,6 @@ function registerRoutes(app, deps) {
     channelSearchModule,
     youtubeApi,
     getCachedYtDlpVersion,
-    refreshYtDlpVersionCache,
     validateEnvAuthCredentials,
     setupTokenModule,
     getClientAddress,
@@ -90,7 +96,7 @@ function registerRoutes(app, deps) {
 
   // Health routes (no auth required for health checks, but yt-dlp endpoints are authenticated)
   app.use(createHealthRoutes({
-    getCachedYtDlpVersion, refreshYtDlpVersionCache, verifyToken, configModule, scheduledTaskRuns, ytdlpUpdateRunSummary,
+    getCachedYtDlpVersion, verifyToken, configModule, scheduledTaskRuns, ytdlpUpdateRunSummary, scheduledTaskManager,
   }));
 
   // Auth routes
@@ -100,13 +106,18 @@ function registerRoutes(app, deps) {
   app.use(createSetupRoutes({ configModule, setupTokenModule, setupCreateAuthLimiter, getClientAddress }));
 
   // Config routes
-  app.use(createConfigRoutes({ verifyToken, configModule, validateEnvAuthCredentials, isWslEnvironment, filenamePreviewRateLimiter }));
+  app.use(createConfigRoutes({
+    verifyToken, configModule, validateEnvAuthCredentials, isWslEnvironment, filenamePreviewRateLimiter,
+    cookieDetails, cookieTest, cookieTestRateLimiter, getLoggingStatus: logger.getLoggingStatus,
+  }));
 
   // Channel routes
-  app.use(createChannelRoutes({ verifyToken, channelModule, archiveModule, channelDownloadAllModule, ratingMapper }));
+  app.use(createChannelRoutes({ verifyToken, channelModule, archiveModule, channelDownloadAllModule, ratingMapper, storageGuard }));
 
   // Video routes
-  app.use(createVideoRoutes({ verifyToken, videosModule, downloadModule, videoOembedEnricher, videoLocalStatus }));
+  app.use(createVideoRoutes({
+    verifyToken, videosModule, downloadModule, videoOembedEnricher, videoLocalStatus, storageGuard, scheduledTaskManager,
+  }));
 
   // Video search routes
   app.use(createVideoSearchRoutes({ verifyToken, videoSearchModule }));
@@ -121,7 +132,7 @@ function registerRoutes(app, deps) {
   app.use(createYtdlpOptionsRoutes({ verifyToken, ytdlpValidationRateLimiter }));
 
   // Job routes
-  app.use(createJobRoutes({ verifyToken, jobModule, downloadModule, videoActivity }));
+  app.use(createJobRoutes({ verifyToken, jobModule, downloadModule, videoActivity, storageGuard }));
 
   // Plex routes
   app.use(createPlexRoutes({ verifyToken, plexModule, configModule }));
@@ -143,13 +154,15 @@ function registerRoutes(app, deps) {
   app.use(createVideoDetailRoutes({ verifyToken, videoMetadataModule, mediaServers }));
 
   // Playlist routes
-  app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule }));
+  app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule, storageGuard }));
 
   // Media server routes
-  app.use(createMediaServerRoutes({ verifyToken, configModule, mediaServers }));
+  app.use(createMediaServerRoutes({ verifyToken, configModule, mediaServers, scheduledTaskManager }));
 
   // Maintenance routes
-  app.use(createMaintenanceRoutes({ verifyToken, videosModule, configModule, scheduledTaskRuns, rescanRunSummary }));
+  app.use(createMaintenanceRoutes({
+    verifyToken, videosModule, configModule, scheduledTaskRuns, rescanRunSummary, scheduledTaskManager,
+  }));
 
   // Subfolder registry routes
   app.use(createSubfolderRoutes({ verifyToken, subfolderModule }));
@@ -181,6 +194,9 @@ function registerRoutes(app, deps) {
       requestId: req.id,
     })
   );
+
+  // Log file download
+  app.use(createLogRoutes({ verifyToken, logFilesModule, configModule }));
 
   // Defensive redirect: /channels -> /subscriptions (frontend handles client-side routing,
   // this fallback covers direct server-side hits during the transition period)

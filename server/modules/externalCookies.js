@@ -188,4 +188,4 @@ function prepareExternalCookies(args) {
   return { args: preparedArgs, cleanup };
 }
 
-module.exports = { getExternalCookiesPath, getExternalCookiesStatus, prepareExternalCookies };
+module.exports = { getExternalCookiesPath, getExternalCookiesStatus, prepareExternalCookies, readExternalCookies };

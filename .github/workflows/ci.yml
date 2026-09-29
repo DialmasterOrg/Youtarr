@@ -201,9 +201,10 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts
       - name: Run external API migration lifecycle
-        run: npm run test:backend -- migrations/__tests__/externalApiDatabase.integration.test.js --runInBand
+        run: |
+          npm run test:external-api-database -- --json --outputFile=external-api-database-results.json
+          node -e "const result = require('./external-api-database-results.json'); if (result.numPassedTests < 1 || result.numPendingTestSuites !== 0 || result.numPendingTests !== 0 || result.numTodoTests !== 0) process.exit(1);"
         env:
-          EXTERNAL_API_DATABASE_TEST: 'true'
           DB_HOST: 127.0.0.1
           DB_PORT: 3321
           DB_USER: root

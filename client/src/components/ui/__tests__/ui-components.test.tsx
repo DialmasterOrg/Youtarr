@@ -281,6 +281,22 @@ describe('Accordion', () => {
     expect(screen.getByText('Content 1')).toBeInTheDocument();
   });
 
+  it('hides collapsed content from keyboard and assistive tech until expanded', async () => {
+    const user = userEvent.setup();
+    render(
+      <AccordionRoot type="single" collapsible>
+        <AccordionItem value="item1">
+          <AccordionTrigger>Section 1</AccordionTrigger>
+          <AccordionContent data-testid="content">Content 1</AccordionContent>
+        </AccordionItem>
+      </AccordionRoot>
+    );
+    expect(screen.getByTestId('content')).toHaveClass('data-[state=closed]:invisible');
+    expect(screen.getByTestId('content')).toHaveAttribute('data-state', 'closed');
+    await user.click(screen.getByText('Section 1'));
+    expect(screen.getByTestId('content')).toHaveAttribute('data-state', 'open');
+  });
+
   it('expands on trigger click', async () => {
     const user = userEvent.setup();
     render(

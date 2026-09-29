@@ -10,6 +10,11 @@ const supertest = require('supertest');
 const createConfigRoutes = require('../config');
 const filenamePreview = require('../../modules/filenamePreview');
 
+const LOGGING_STATUS = {
+  envLevel: 'info',
+  file: { enabled: true, directory: '/app/config/logs', maxSizeBytes: 10485760, maxFiles: 5, error: null },
+};
+
 function makeApp() {
   const app = express();
   app.use(express.json());
@@ -32,6 +37,7 @@ function makeApp() {
     getConfig: jest.fn(function () { return this._config; }),
     updateConfig: jest.fn(function (next) { this._config = next; }),
     getCookiesStatus: jest.fn(),
+    getCookiesPath: jest.fn(() => null),
     isElfhostedPlatform: jest.fn(() => false),
     writeCustomCookiesFile: jest.fn(),
     deleteCustomCookiesFile: jest.fn(),
@@ -41,18 +47,29 @@ function makeApp() {
   const validateEnvAuthCredentials = () => false;
   // No-op rate limiter for tests
   const filenamePreviewRateLimiter = (_req, _res, next) => next();
+  const cookieTestRateLimiter = (_req, _res, next) => next();
+  const cookieDetails = { getDetails: jest.fn(() => null) };
+  const cookieTest = {
+    run: jest.fn(),
+    isBusyError: jest.fn((error) => error?.code === 'COOKIE_TEST_IN_PROGRESS'),
+  };
+  const getLoggingStatus = jest.fn(() => LOGGING_STATUS);
   app.use(createConfigRoutes({
     verifyToken,
     configModule,
     validateEnvAuthCredentials,
     isWslEnvironment: false,
     filenamePreviewRateLimiter,
+    cookieDetails,
+    cookieTest,
+    cookieTestRateLimiter,
+    getLoggingStatus,
   }));
   // eslint-disable-next-line no-unused-vars -- Express identifies error handlers by 4-arg arity.
   app.use((err, _req, res, _next) => {
     res.status(500).json({ error: err.message });
   });
-  return { app, configModule };
+  return { app, configModule, cookieDetails, cookieTest };
 }
 
 beforeEach(() => {
@@ -85,6 +102,122 @@ describe('externally managed cookie routes', () => {
     const res = await supertest(app).delete('/api/cookies');
     expect(res.status).toBe(409);
     expect(configModule.deleteCustomCookiesFile).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/cookies/status', () => {
+  const details = {
+    loginCookiesFound: 10,
+    sessionLoginCookies: 0,
+    expiredLoginCookies: 0,
+    earliestExpiry: '2027-10-19T03:13:08.000Z',
+    earliestExpiryName: 'HSID',
+    lastModified: '2026-09-18T22:40:30.384Z',
+  };
+
+  test('includes details for the active cookie file', async () => {
+    const { app, configModule, cookieDetails } = makeApp();
+    configModule.getCookiesStatus.mockReturnValue({ cookiesEnabled: true, customCookiesUploaded: true, customFileExists: true });
+    configModule.getCookiesPath.mockReturnValue('/app/config/cookies.user.txt');
+    cookieDetails.getDetails.mockReturnValue(details);
+
+    const res = await supertest(app).get('/api/cookies/status');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ cookiesEnabled: true, customCookiesUploaded: true, customFileExists: true, details });
+    expect(cookieDetails.getDetails).toHaveBeenCalledWith('/app/config/cookies.user.txt');
+  });
+
+  test('returns null details when no cookie file is active', async () => {
+    const { app, configModule } = makeApp();
+    configModule.getCookiesStatus.mockReturnValue({ cookiesEnabled: false, customCookiesUploaded: false, customFileExists: false });
+
+    const res = await supertest(app).get('/api/cookies/status');
+
+    expect(res.body.details).toBeNull();
+  });
+});
+
+describe('cookie upload and delete responses', () => {
+  const details = { loginCookiesFound: 10, sessionLoginCookies: 0, expiredLoginCookies: 0,
+    earliestExpiry: null, earliestExpiryName: null, lastModified: '2026-09-25T00:00:00.000Z' };
+
+  test('upload returns cookie status with details for the new file', async () => {
+    const { app, configModule, cookieDetails } = makeApp();
+    configModule.getCookiesStatus.mockReturnValue({ cookiesEnabled: true, customCookiesUploaded: true, customFileExists: true });
+    configModule.getCookiesPath.mockReturnValue('/app/config/cookies.user.txt');
+    cookieDetails.getDetails.mockReturnValue(details);
+
+    const res = await supertest(app).post('/api/cookies/upload')
+      .attach('cookieFile', Buffer.from('# Netscape HTTP Cookie File\n'), 'cookies.txt');
+
+    expect(res.status).toBe(200);
+    expect(res.body.cookieStatus.details).toEqual(details);
+  });
+
+  test('delete returns cookie status with null details', async () => {
+    const { app, configModule } = makeApp();
+    configModule.getCookiesStatus.mockReturnValue({ cookiesEnabled: true, customCookiesUploaded: false, customFileExists: false });
+
+    const res = await supertest(app).delete('/api/cookies');
+
+    expect(res.status).toBe(200);
+    expect(res.body.cookieStatus).toHaveProperty('details', null);
+  });
+});
+
+describe('POST /api/cookies/test', () => {
+  test('returns 400 when no cookie file is active', async () => {
+    const { app, cookieTest } = makeApp();
+
+    const res = await supertest(app).post('/api/cookies/test');
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toEqual(expect.any(String));
+    expect(cookieTest.run).not.toHaveBeenCalled();
+  });
+
+  test('returns a successful test result with 200', async () => {
+    const { app, configModule, cookieTest } = makeApp();
+    configModule.getCookiesPath.mockReturnValue('/app/config/cookies.user.txt');
+    cookieTest.run.mockResolvedValue({ ok: true, message: 'Signed in.' });
+
+    const res = await supertest(app).post('/api/cookies/test');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true, message: 'Signed in.' });
+  });
+
+  test('returns a failed test result with 200', async () => {
+    const { app, configModule, cookieTest } = makeApp();
+    configModule.getCookiesPath.mockReturnValue('/app/config/cookies.user.txt');
+    cookieTest.run.mockResolvedValue({ ok: false, code: 'EXPIRED_COOKIES', error: 'Not signed in.' });
+
+    const res = await supertest(app).post('/api/cookies/test');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: false, code: 'EXPIRED_COOKIES', error: 'Not signed in.' });
+  });
+
+  test('returns 409 while another test is running', async () => {
+    const { app, configModule, cookieTest } = makeApp();
+    configModule.getCookiesPath.mockReturnValue('/app/config/cookies.user.txt');
+    cookieTest.run.mockRejectedValue(Object.assign(new Error('busy'), { code: 'COOKIE_TEST_IN_PROGRESS' }));
+
+    const res = await supertest(app).post('/api/cookies/test');
+
+    expect(res.status).toBe(409);
+  });
+
+  test('returns 500 when the test throws unexpectedly', async () => {
+    const { app, configModule, cookieTest } = makeApp();
+    configModule.getCookiesPath.mockReturnValue('/app/config/cookies.user.txt');
+    cookieTest.run.mockRejectedValue(new Error('boom'));
+
+    const res = await supertest(app).post('/api/cookies/test');
+
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ error: 'Failed to run cookie test' });
   });
 });
 
@@ -205,6 +338,61 @@ describe('POST /updateconfig', () => {
         expect(configModule.updateConfig).not.toHaveBeenCalled();
       }
     );
+  });
+
+  describe('logLevel validation', () => {
+    test.each(['', 'warn', 'info', 'debug'])('accepts %p', async (value) => {
+      const { app, configModule } = makeApp();
+      const res = await supertest(app).post('/updateconfig').send({ logLevel: value });
+      expect(res.status).toBe(200);
+      expect(configModule.updateConfig).toHaveBeenCalled();
+    });
+
+    test.each(['DEBUG', 'trace', 'verbose', 5])('rejects %p without saving', async (value) => {
+      const { app, configModule } = makeApp();
+      const res = await supertest(app).post('/updateconfig').send({ logLevel: value });
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: 'Log level must be Default, Warn, Info or Debug' });
+      expect(configModule.updateConfig).not.toHaveBeenCalled();
+    });
+  });
+
+  test('does not save the read-only logging status', async () => {
+    const { app, configModule } = makeApp();
+    await supertest(app).post('/updateconfig').send({ logLevel: 'debug', logging: LOGGING_STATUS });
+    expect(configModule.updateConfig.mock.calls[0][0]).not.toHaveProperty('logging');
+  });
+
+  describe('storage size validation', () => {
+    const fields = ['downloadPauseUsageLimit', 'downloadPauseMinFreeSpace', 'autoRemovalUsageLimit'];
+
+    test.each(fields.flatMap((field) => ['', '500MB', '50GB', '2TB'].map((value) => [field, value])))(
+      'accepts %s = %p',
+      async (field, value) => {
+        const { app, configModule } = makeApp();
+        const res = await supertest(app).post('/updateconfig').send({ [field]: value });
+        expect(res.status).toBe(200);
+        expect(configModule.updateConfig).toHaveBeenCalled();
+      }
+    );
+
+    test.each(fields.flatMap((field) => ['0GB', '5 GB', '5gb', '1.5TB', 'lots', 500].map((value) => [field, value])))(
+      'rejects %s = %p without saving',
+      async (field, value) => {
+        const { app, configModule } = makeApp();
+        const res = await supertest(app).post('/updateconfig').send({ [field]: value });
+        expect(res.status).toBe(400);
+        expect(configModule.updateConfig).not.toHaveBeenCalled();
+      }
+    );
+
+    test('names the rejected setting in the error', async () => {
+      const { app } = makeApp();
+      const res = await supertest(app).post('/updateconfig').send({ downloadPauseMinFreeSpace: 'lots' });
+      expect(res.body).toEqual({
+        error: 'Storage limits: minimum free space: use a whole number followed by MB, GB or TB (for example 500GB), or leave it blank',
+      });
+    });
   });
 });
 
@@ -542,5 +730,11 @@ describe('schedule configuration', () => {
     const res = await supertest(app).get('/getconfig');
     expect(res.status).toBe(200);
     expect(res.body.deploymentEnvironment.timezone).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  });
+
+  test('includes the logging status', async () => {
+    const { app } = makeApp();
+    const res = await supertest(app).get('/getconfig');
+    expect(res.body.logging).toEqual(LOGGING_STATUS);
   });
 });

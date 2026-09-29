@@ -14,6 +14,10 @@ const { setupSwagger } = require('./swagger');
 const { isAuthConfigured } = require('./modules/authState');
 const { createExternalApiAuth } = require('./middleware/externalApiAuth');
 const { sendExternalError } = require('./modules/externalApiResponse');
+
+// Start the channel tab count catch-up after the startup rescan has begun.
+const STARTUP_TAB_COUNT_REFRESH_DELAY_MS = 2 * 60 * 1000;
+
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', parseTrustProxySetting(process.env.TRUST_PROXY));
@@ -251,6 +255,10 @@ const initialize = async () => {
     }
 
     const configModule = require('./modules/configModule');
+    // Apply a log level chosen in Settings before the rest of startup logs.
+    const logLevelSync = require('./modules/logLevelSync');
+    logLevelSync.apply();
+    logLevelSync.subscribe();
     const channelModule = require('./modules/channelModule');
     const subfolderModule = require('./modules/subfolderModule');
     const plexModule = require('./modules/plexModule');
@@ -266,15 +274,27 @@ const initialize = async () => {
     const messageEmitter = require('./modules/messageEmitter');
     const watchStatusScheduler = require('./modules/mediaServers/watchStatusScheduler');
     const channelBackdropBackfill = require('./modules/channel/channelBackdropBackfill');
+    const tabVideoCounts = require('./modules/channel/tabVideoCounts');
+    const autoDownloadScheduler = require('./modules/channel/autoDownloadScheduler');
+    const downloadRunTracker = require('./modules/download/downloadRunTracker');
     const { Channel } = require('./models');
     const { registerRoutes } = require('./routes');
     const scheduledTaskRuns = require('./modules/scheduledTaskRuns');
     const scheduledTaskManager = require('./modules/scheduledTaskManager');
+    const storageGuard = require('./modules/storageGuard');
 
     // Runs left "running" by the previous process never finished; close them
     // out before any timer fires, then start recording this process's runs.
     await scheduledTaskRuns.markInterruptedRuns();
     scheduledTaskManager.setRunRecorder(scheduledTaskRuns);
+    tabVideoCounts.setRunHistory(scheduledTaskRuns);
+    tabVideoCounts.setDownloadActivityCheck(() => jobModule.getInProgressJobId() !== null);
+    autoDownloadScheduler.setRunTracker(downloadRunTracker);
+    // A queued job abandoned before it started still counts toward its run.
+    jobModule.onJobAbandoned((event) => downloadRunTracker.handleAbandonedJob(event));
+    // Every final status, whichever path set it, so a run never waits on a
+    // job that ended without reporting its results.
+    jobModule.onJobEnded((event) => downloadRunTracker.handleJobEnded(event));
 
     // Cache yt-dlp version once during startup to keep the version endpoint fast
     refreshYtDlpVersionCache();
@@ -291,8 +311,8 @@ const initialize = async () => {
           { configuredChannel, installedYtDlpVersion },
           'Installed yt-dlp does not match configured update channel; re-applying'
         );
-        ytdlpModule
-          .performUpdate({ channel: configuredChannel })
+        scheduledTaskManager
+          .announceRun('ytdlpUpdateFrequency', ytdlpModule.performUpdate({ channel: configuredChannel }))
           .then((result) => {
             if (result.success) {
               refreshYtDlpVersionCache();
@@ -342,6 +362,9 @@ const initialize = async () => {
     watchStatusScheduler.scheduleTask();
     watchStatusScheduler.subscribe();
     channelBackdropBackfill.subscribe();
+    storageGuard.initialize().catch((err) => {
+      logger.error({ err }, 'Initial download pause check failed');
+    });
     subscriptionImportModule.init({
       channelModule,
       jobModule,
@@ -732,6 +755,26 @@ const initialize = async () => {
       }
     };
 
+    // Rate limiter for /api/cookies/test. Each test spawns yt-dlp and makes a
+    // signed-in request to YouTube; repeated tests could draw a bot check.
+    const cookieTestRateLimiter = rateLimit({
+      windowMs: 1 * 60 * 1000,
+      max: 5,
+      message: { error: 'Too many cookie tests. Please wait a minute before trying again.' },
+      standardHeaders: true,
+      legacyHeaders: false,
+      validate: {
+        trustProxy: false,
+        ip: false,
+      },
+      keyGenerator: (req) => getRateLimitAddress(req),
+      handler: (_req, res) => {
+        res.status(429).json({
+          error: 'Too many cookie tests. Please wait a minute before trying again.',
+        });
+      },
+    });
+
     /**** ONLY ROUTES BELOW THIS LINE *********/
 
     // Setup Swagger documentation at /swagger
@@ -788,6 +831,7 @@ const initialize = async () => {
       youtubeApiKeyTestLimiter,
       ytdlpValidationRateLimiter,
       filenamePreviewRateLimiter,
+      cookieTestRateLimiter,
       configModule,
       channelModule,
       plexModule,
@@ -800,7 +844,6 @@ const initialize = async () => {
       channelSearchModule,
       youtubeApi,
       getCachedYtDlpVersion,
-      refreshYtDlpVersionCache,
       validateEnvAuthCredentials,
       setupTokenModule,
       getClientAddress,
@@ -866,6 +909,15 @@ const initialize = async () => {
                 logger.error({ err }, 'Video metadata backfill failed');
               });
           }, 5000); // Delay 5 seconds to avoid blocking startup
+
+          // Count channel tabs whose counts are missing or old (first run
+          // after upgrading, long downtime), after the startup rescan.
+          setTimeout(() => {
+            tabVideoCounts.refreshAtStartup()
+              .catch(err => {
+                logger.error({ err }, 'Startup channel video count refresh failed');
+              });
+          }, STARTUP_TAB_COUNT_REFRESH_DELAY_MS);
         } else {
           logger.warn('Skipping cron jobs and background tasks - database is not healthy');
         }

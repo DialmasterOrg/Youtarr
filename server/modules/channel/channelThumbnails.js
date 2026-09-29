@@ -1,7 +1,8 @@
 const fs = require('fs-extra');
 const fsPromises = fs.promises;
 const path = require('path');
-const { execSync } = require('child_process');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
 const configModule = require('../configModule');
 const logger = require('../../logger');
 const {
@@ -30,10 +31,14 @@ class ChannelThumbnails {
     );
 
     try {
-      execSync(
-        `${configModule.ffmpegPath} -loglevel error -y -i "${realImagePath}" -vf "scale=iw*0.4:ih*0.4" -q:v 2 "${smallImagePath}"`,
-        { stdio: 'inherit' }
-      );
+      // Argument array, no shell: paths containing quotes, $ or backticks stay literal.
+      await promisify(execFile)(configModule.ffmpegPath, [
+        '-loglevel', 'error', '-y',
+        '-i', realImagePath,
+        '-vf', 'scale=iw*0.4:ih*0.4',
+        '-q:v', '2',
+        smallImagePath,
+      ]);
       await fsPromises.rename(smallImagePath, realImagePath);
       logger.debug({ channelId }, 'Channel thumbnail resized successfully');
     } catch (err) {

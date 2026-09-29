@@ -22,6 +22,26 @@ describe('fetchRegistry', () => {
     });
   });
 
+  test('includes progress for a specific tab once the operation reports it', () => {
+    fetchRegistry.set('UC123:videos', { startTime: '2026-07-15T00:00:00Z', type: 'fetchAll' });
+    fetchRegistry.update('UC123:videos', { progress: { itemsFetched: 120, stage: 'listing' } });
+    expect(fetchRegistry.isFetchInProgress('UC123', 'videos').progress).toEqual({
+      itemsFetched: 120,
+      stage: 'listing',
+    });
+  });
+
+  test('update keeps the fields it does not replace', () => {
+    fetchRegistry.set('UC123:videos', { startTime: '2026-07-15T00:00:00Z', type: 'fetchAll' });
+    fetchRegistry.update('UC123:videos', { progress: { itemsFetched: 30, stage: 'listing' } });
+    expect(fetchRegistry.get('UC123:videos').type).toBe('fetchAll');
+  });
+
+  test('update does not recreate an operation that has ended', () => {
+    fetchRegistry.update('UC123:videos', { progress: { itemsFetched: 30, stage: 'listing' } });
+    expect(fetchRegistry.has('UC123:videos')).toBe(false);
+  });
+
   test('reports not fetching for a different tab of the same channel', () => {
     fetchRegistry.set('UC123:videos', { startTime: '2026-07-15T00:00:00Z', type: 'fetchAll' });
     expect(fetchRegistry.isFetchInProgress('UC123', 'shorts')).toEqual({ isFetching: false });

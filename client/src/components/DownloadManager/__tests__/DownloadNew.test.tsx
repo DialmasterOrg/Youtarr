@@ -311,15 +311,12 @@ describe('DownloadNew', () => {
     expect(mockDownloadInitiatedRef.current).toBe(true);
   });
 
-  test('shows alert when channel download already running', async () => {
+  test('shows the reason when channel downloads cannot start', async () => {
     const user = userEvent.setup({ delay: null });
-    const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {});
-
-    // Mock the fetch to return 400 status for the channel download endpoint
     mockFetch.mockResolvedValueOnce({
       ok: false,
-      status: 400,
-      json: jest.fn().mockResolvedValueOnce({}),
+      status: 409,
+      json: jest.fn().mockResolvedValueOnce({ error: 'A channel and playlist update is already running.' }),
     });
 
     render(<DownloadNew {...defaultProps} />);
@@ -333,14 +330,44 @@ describe('DownloadNew', () => {
     const confirmButton = screen.getByTestId('confirm-default');
     await user.click(confirmButton);
 
-    await waitFor(() => {
-      expect(alertSpy).toHaveBeenCalledWith('Channel Download already running');
+    expect(await screen.findByText('A channel and playlist update is already running.')).toBeInTheDocument();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  test('falls back to a generic message when the refusal has no reason', async () => {
+    const user = userEvent.setup({ delay: null });
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: jest.fn().mockRejectedValueOnce(new Error('not json')),
     });
 
-    expect(mockDownloadInitiatedRef.current).toBe(true);
-    expect(mockNavigate).not.toHaveBeenCalled();
+    render(<DownloadNew {...defaultProps} />);
 
-    alertSpy.mockRestore();
+    await user.click(screen.getByRole('tab', { name: 'Channel/Playlist Downloads' }));
+    await user.click(screen.getByRole('button', { name: 'Download new from all channels/playlists' }));
+    await user.click(screen.getByTestId('confirm-default'));
+
+    expect(await screen.findByText('Could not start channel downloads.')).toBeInTheDocument();
+  });
+
+  test('dismisses the refusal message', async () => {
+    const user = userEvent.setup({ delay: null });
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 409,
+      json: jest.fn().mockResolvedValueOnce({ error: 'A channel and playlist update is already running.' }),
+    });
+
+    render(<DownloadNew {...defaultProps} />);
+
+    await user.click(screen.getByRole('tab', { name: 'Channel/Playlist Downloads' }));
+    await user.click(screen.getByRole('button', { name: 'Download new from all channels/playlists' }));
+    await user.click(screen.getByTestId('confirm-default'));
+    await screen.findByText('A channel and playlist update is already running.');
+    await user.click(screen.getByRole('button', { name: /close/i }));
+
+    expect(screen.queryByText('A channel and playlist update is already running.')).not.toBeInTheDocument();
   });
 
   test('cancels channel settings dialog', async () => {

@@ -42,16 +42,25 @@ describe('useChannelMutations', () => {
     expect(result.current.hasPendingChanges).toBe(false);
   });
 
-  test('requires authentication to add a channel', async () => {
+  const lookupAndAdd = async (result: { current: ReturnType<typeof useChannelMutations> }) => {
+    let lookup: Awaited<ReturnType<ReturnType<typeof useChannelMutations>['lookupChannel']>> | undefined;
+    await act(async () => {
+      lookup = await result.current.lookupChannel(validUrl);
+    });
+    act(() => {
+      result.current.addPendingChannel(lookup!.channel!);
+    });
+  };
+
+  test('requires authentication to look up a channel', async () => {
     const { result } = renderHook(() => useChannelMutations({ token: null, onRefresh: jest.fn() }));
 
     let response;
     await act(async () => {
-      response = await result.current.addChannel(validUrl);
+      response = await result.current.lookupChannel(validUrl);
     });
 
     expect(response).toEqual({ success: false, message: 'Authentication required' });
-    expect(result.current.pendingAdditions).toHaveLength(0);
     expect(result.current.hasPendingChanges).toBe(false);
   });
 
@@ -60,35 +69,74 @@ describe('useChannelMutations', () => {
 
     let response;
     await act(async () => {
-      response = await result.current.addChannel('https://google.com/not-valid');
+      response = await result.current.lookupChannel('https://google.com/not-valid');
     });
 
     expect(response).toEqual({
       success: false,
       message: 'Invalid channel URL or handle. Please double-check the format.',
     });
-    expect(result.current.pendingAdditions).toHaveLength(0);
     expect(result.current.isAddingChannel).toBe(false);
   });
 
-  test('prevents adding the same channel twice while pending', async () => {
-    const { result } = renderHook(() => useChannelMutations({ token, onRefresh: jest.fn() }));
-
+  test('returns the looked-up channel without adding it to pending', async () => {
     mockedAxios.post.mockResolvedValueOnce({
       data: { status: 'success', channelInfo: mockChannelInfo },
     });
+    const { result } = renderHook(() => useChannelMutations({ token, onRefresh: jest.fn() }));
 
+    let response: Awaited<ReturnType<typeof result.current.lookupChannel>> | undefined;
     await act(async () => {
-      await result.current.addChannel(validUrl);
+      response = await result.current.lookupChannel(validUrl);
     });
 
-    let duplicateResponse;
+    expect(mockedAxios.post).toHaveBeenCalledWith('/addchannelinfo', { url: validUrl }, {
+      headers: { 'x-access-token': token },
+    });
+    expect(response?.channel).toMatchObject({
+      url: validUrl,
+      uploader: 'Example Uploader',
+      channel_id: 'chan-123',
+      auto_download_enabled_tabs: 'videos',
+      available_tabs: 'videos,streams',
+      sub_folder: 'folder',
+      video_quality: '1080',
+      restored: false,
+    });
+    expect(result.current.pendingAdditions).toHaveLength(0);
+  });
+
+  test('marks a soft-deleted channel as restored with its previous settings', async () => {
+    mockedAxios.post.mockResolvedValueOnce({
+      data: {
+        status: 'success',
+        channelInfo: { ...mockChannelInfo, audio_format: 'mp3_only', existing: true, enabled: false },
+      },
+    });
+    const { result } = renderHook(() => useChannelMutations({ token, onRefresh: jest.fn() }));
+
+    let response: Awaited<ReturnType<typeof result.current.lookupChannel>> | undefined;
     await act(async () => {
-      duplicateResponse = await result.current.addChannel(validUrl);
+      response = await result.current.lookupChannel(validUrl);
     });
 
-    expect(duplicateResponse).toEqual({ success: false, message: 'Channel already added and pending save' });
-    expect(result.current.pendingAdditions).toHaveLength(1);
+    expect(response?.channel).toMatchObject({ restored: true, audio_format: 'mp3_only', sub_folder: 'folder' });
+  });
+
+  test('returns the pending entry when the channel is already pending', async () => {
+    mockedAxios.post.mockResolvedValueOnce({
+      data: { status: 'success', channelInfo: mockChannelInfo },
+    });
+    const { result } = renderHook(() => useChannelMutations({ token, onRefresh: jest.fn() }));
+    await lookupAndAdd(result);
+
+    let duplicate: Awaited<ReturnType<typeof result.current.lookupChannel>> | undefined;
+    await act(async () => {
+      duplicate = await result.current.lookupChannel(validUrl);
+    });
+
+    expect(duplicate).toMatchObject({ success: true, alreadyPending: true, channel: { url: validUrl } });
+    expect(mockedAxios.post).toHaveBeenCalledTimes(1);
   });
 
   test('restores a channel that was queued for deletion', async () => {
@@ -102,7 +150,7 @@ describe('useChannelMutations', () => {
 
     let response;
     await act(async () => {
-      response = await result.current.addChannel(validUrl);
+      response = await result.current.lookupChannel(validUrl);
     });
 
     expect(response).toEqual({ success: true, message: 'Channel restored from pending removal' });
@@ -122,91 +170,64 @@ describe('useChannelMutations', () => {
 
     let response;
     await act(async () => {
-      response = await result.current.addChannel(validUrl);
+      response = await result.current.lookupChannel(validUrl);
     });
 
     expect(response).toEqual({ success: false, message: 'Channel already exists' });
-    expect(result.current.pendingAdditions).toHaveLength(0);
     expect(result.current.isAddingChannel).toBe(false);
   });
 
-  test('restores a soft-deleted channel as a pending addition with its previous settings', async () => {
-    mockedAxios.post.mockResolvedValueOnce({
-      data: {
-        status: 'success',
-        channelInfo: { ...mockChannelInfo, existing: true, enabled: false },
-      },
-    });
-
-    const { result } = renderHook(() => useChannelMutations({ token, onRefresh: jest.fn() }));
-
-    let response;
-    await act(async () => {
-      response = await result.current.addChannel(validUrl);
-    });
-
-    expect(response).toEqual({
-      success: true,
-      message: 'Channel restored with its previous settings. Click Save Changes to confirm.',
-    });
-    expect(result.current.pendingAdditions).toHaveLength(1);
-    expect(result.current.pendingAdditions[0]).toMatchObject({
-      url: validUrl,
-      channel_id: 'chan-123',
-      sub_folder: 'folder',
-      video_quality: '1080',
-    });
-  });
-
-  test('adds a channel successfully and formats channel info', async () => {
-    mockedAxios.post.mockResolvedValueOnce({
-      data: { status: 'success', channelInfo: mockChannelInfo },
-    });
-
-    const { result } = renderHook(() => useChannelMutations({ token, onRefresh: jest.fn() }));
-
-    let response;
-    await act(async () => {
-      response = await result.current.addChannel(validUrl);
-    });
-
-    expect(response).toEqual({ success: true });
-    expect(mockedAxios.post).toHaveBeenCalledWith('/addchannelinfo', { url: validUrl }, {
-      headers: { 'x-access-token': token },
-    });
-    expect(result.current.pendingAdditions).toHaveLength(1);
-    expect(result.current.pendingAdditions[0]).toMatchObject({
-      url: validUrl,
-      uploader: 'Example Uploader',
-      channel_id: 'chan-123',
-      auto_download_enabled_tabs: 'videos',
-      available_tabs: 'videos,streams',
-      sub_folder: 'folder',
-      video_quality: '1080',
-      min_duration: 10,
-      max_duration: 20,
-      title_filter_regex: '.*',
-    });
-    expect(result.current.isAddingChannel).toBe(false);
-    expect(result.current.hasPendingChanges).toBe(true);
-  });
-
-  test('returns specific error messages based on API errors when adding a channel', async () => {
+  test('returns specific error messages based on API errors when looking up a channel', async () => {
     mockedAxios.post.mockRejectedValueOnce({ response: { status: 503 } });
 
     const { result } = renderHook(() => useChannelMutations({ token, onRefresh: jest.fn() }));
 
     let response;
     await act(async () => {
-      response = await result.current.addChannel(validUrl);
+      response = await result.current.lookupChannel(validUrl);
     });
 
     expect(response).toEqual({
       success: false,
       message: 'Channel not found. Please check the URL or channel name and try again.',
     });
-    expect(result.current.pendingAdditions).toHaveLength(0);
     expect(result.current.isAddingChannel).toBe(false);
+  });
+
+  test('addPendingChannel adds the channel to pending changes', async () => {
+    mockedAxios.post.mockResolvedValueOnce({
+      data: { status: 'success', channelInfo: mockChannelInfo },
+    });
+    const { result } = renderHook(() => useChannelMutations({ token, onRefresh: jest.fn() }));
+
+    await lookupAndAdd(result);
+
+    expect(result.current.pendingAdditions).toHaveLength(1);
+    expect(result.current.hasPendingChanges).toBe(true);
+  });
+
+  test('updatePendingChannel replaces the settings of a pending channel', async () => {
+    mockedAxios.post.mockResolvedValueOnce({
+      data: { status: 'success', channelInfo: mockChannelInfo },
+    });
+    const { result } = renderHook(() => useChannelMutations({ token, onRefresh: jest.fn() }));
+    await lookupAndAdd(result);
+
+    act(() => {
+      result.current.updatePendingChannel(validUrl, {
+        auto_download_enabled_tabs: 'livestream',
+        video_quality: '720',
+        audio_format: 'video_mp3',
+        sub_folder: 'Kids',
+      });
+    });
+
+    expect(result.current.pendingAdditions[0]).toMatchObject({
+      auto_download_enabled_tabs: 'livestream',
+      video_quality: '720',
+      audio_format: 'video_mp3',
+      sub_folder: 'Kids',
+    });
   });
 
   test('queueChannelForDeletion removes pending additions instead of marking deleted', async () => {
@@ -216,9 +237,7 @@ describe('useChannelMutations', () => {
 
     const { result } = renderHook(() => useChannelMutations({ token, onRefresh: jest.fn() }));
 
-    await act(async () => {
-      await result.current.addChannel(validUrl);
-    });
+    await lookupAndAdd(result);
 
     act(() => {
       result.current.queueChannelForDeletion(result.current.pendingAdditions[0]);
@@ -297,9 +316,7 @@ describe('useChannelMutations', () => {
     const onRefresh = jest.fn();
     const { result } = renderHook(() => useChannelMutations({ token, onRefresh }));
 
-    await act(async () => {
-      await result.current.addChannel(validUrl);
-    });
+    await lookupAndAdd(result);
 
     mockedAxios.post.mockResolvedValueOnce({ data: { success: true } });
 
@@ -309,7 +326,16 @@ describe('useChannelMutations', () => {
     });
 
     expect(mockedAxios.post).toHaveBeenLastCalledWith('/updatechannels', {
-      add: [{ url: validUrl, channel_id: 'chan-123' }],
+      add: [{
+        url: validUrl,
+        channel_id: 'chan-123',
+        settings: {
+          auto_download_enabled_tabs: 'videos',
+          video_quality: '1080',
+          audio_format: null,
+          sub_folder: 'folder',
+        },
+      }],
       remove: [],
     }, {
       headers: { 'x-access-token': token },
@@ -329,21 +355,35 @@ describe('useChannelMutations', () => {
 
     const { result } = renderHook(() => useChannelMutations({ token, onRefresh: jest.fn() }));
 
-    await act(async () => {
-      await result.current.addChannel(validUrl);
-    });
+    await lookupAndAdd(result);
 
-    mockedAxios.post.mockRejectedValueOnce({ response: { data: { message: 'update failed' } } });
+    mockedAxios.post.mockRejectedValueOnce({ response: { data: { error: 'Invalid video quality' } } });
 
     let response;
     await act(async () => {
       response = await result.current.saveChanges();
     });
 
-    expect(response).toEqual({ success: false, message: 'update failed' });
+    expect(response).toEqual({ success: false, message: 'Invalid video quality' });
     expect(result.current.pendingAdditions).toHaveLength(1);
     expect(result.current.deletedChannels).toHaveLength(0);
     expect(result.current.isSaving).toBe(false);
     expect(result.current.hasPendingChanges).toBe(true);
+  });
+
+  test('saveChanges omits auto-download tabs when no tabs were detected', async () => {
+    mockedAxios.post.mockResolvedValueOnce({
+      data: { status: 'success', channelInfo: { ...mockChannelInfo, available_tabs: null } },
+    });
+    const { result } = renderHook(() => useChannelMutations({ token, onRefresh: jest.fn() }));
+    await lookupAndAdd(result);
+
+    mockedAxios.post.mockResolvedValueOnce({ data: { status: 'success' } });
+    await act(async () => {
+      await result.current.saveChanges();
+    });
+
+    const payload = mockedAxios.post.mock.calls[1][1];
+    expect(payload.add[0].settings).not.toHaveProperty('auto_download_enabled_tabs');
   });
 });

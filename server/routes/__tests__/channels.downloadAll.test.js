@@ -36,6 +36,9 @@ const buildDeps = () => ({
   },
   // Real ratingMapper: pure module, exercises actual rating validation.
   ratingMapper: require('../../modules/ratingMapper'),
+  storageGuard: {
+    isPausedError: jest.fn((err) => Boolean(err && err.code === 'DOWNLOADS_PAUSED')),
+  },
 });
 
 const getHandler = (method, path, deps) => {
@@ -213,6 +216,22 @@ describe('POST /api/channels/:channelId/download-all', () => {
 
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith({ error: 'Channel not found' });
+  });
+
+  test('returns 409 with the reason when downloads are paused for storage', async () => {
+    const deps = buildDeps();
+    deps.channelDownloadAllModule.startDownloadAll.mockRejectedValue(
+      Object.assign(new Error('Downloads are paused: over the limit'), { code: 'DOWNLOADS_PAUSED' })
+    );
+
+    const handler = getHandler('post', DOWNLOAD_PATH, deps);
+    const req = { params: { channelId: 'UC123' }, body: {}, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Downloads are paused: over the limit' });
   });
 
   test('returns 500 on unexpected errors', async () => {

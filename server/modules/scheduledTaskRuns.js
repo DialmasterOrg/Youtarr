@@ -13,6 +13,9 @@ const RUN_STATUS = {
   INTERRUPTED: 'interrupted',
 };
 
+// Runs that did their work and have a finish time.
+const FINISHED_STATUSES = [RUN_STATUS.SUCCESS, RUN_STATUS.ERROR];
+
 // Messages give the reason only; the status column and every display add the
 // "skipped" / "interrupted" framing themselves.
 const SKIPPED_MESSAGE = 'The previous run was still in progress.';
@@ -49,6 +52,15 @@ function serialize(row) {
   };
 }
 
+// Rows arrive newest first; keeps the first seen for each task.
+function newestPerTask(rows) {
+  const latest = {};
+  for (const row of rows) {
+    if (!latest[row.task_key]) latest[row.task_key] = serialize(row);
+  }
+  return latest;
+}
+
 /**
  * Durable run history for scheduled tasks. Every method is best-effort: a
  * database problem is logged and never propagates into the task itself.
@@ -68,11 +80,11 @@ class ScheduledTaskRuns {
     }
   }
 
-  async finish(run, { status, outcome = null, message = null, details = null }) {
+  async finish(run, { status, outcome = null, message = null, details = null, finishedAt = null }) {
     if (!run) return;
     try {
       await ScheduledTaskRun.update(
-        { status, outcome, message, details: toJson(details), finished_at: new Date() },
+        { status, outcome, message, details: toJson(details), finished_at: finishedAt || new Date() },
         { where: { id: run.id } }
       );
       await this.prune(run.task_key);
@@ -128,11 +140,22 @@ class ScheduledTaskRuns {
   async getLatestRuns() {
     try {
       const rows = await ScheduledTaskRun.findAll({ order: LATEST_FIRST });
-      const latest = {};
-      for (const row of rows) {
-        if (!latest[row.task_key]) latest[row.task_key] = serialize(row);
-      }
-      return latest;
+      return newestPerTask(rows);
+    } catch (err) {
+      logger.warn({ err }, 'Could not read scheduled task history');
+      return {};
+    }
+  }
+
+  // The newest run of each task that ran to an end, for how long a run takes:
+  // skipped runs did no work and interrupted ones have no finish time.
+  async getLatestFinishedRuns() {
+    try {
+      const rows = await ScheduledTaskRun.findAll({
+        where: { status: FINISHED_STATUSES },
+        order: LATEST_FIRST,
+      });
+      return newestPerTask(rows);
     } catch (err) {
       logger.warn({ err }, 'Could not read scheduled task history');
       return {};

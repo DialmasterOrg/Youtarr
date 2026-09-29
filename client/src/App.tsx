@@ -572,7 +572,7 @@ function AppContent() {
         <Snackbar
           open={showTmpWarning}
           anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-          className="mt-16 w-full flex justify-center"
+          className="mt-16 w-full md:max-w-none flex justify-center"
           style={{ zIndex: 1210 }}
           onClose={() => setShowTmpWarning(false)}
         >

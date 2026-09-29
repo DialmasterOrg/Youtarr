@@ -28,6 +28,8 @@ interface UsePlaylistDetailParams {
 
 interface PlaylistDetailResponse {
   playlist: Playlist;
+  // Videos with a file on disk now; downloaded-then-deleted videos are not counted.
+  downloaded_count?: number;
   not_downloaded_count?: number;
   following_existing_count?: number;
   following_requested_count?: number;
@@ -67,6 +69,7 @@ export const usePlaylistDetail = ({
   const [playlist, setPlaylist] = useState<Playlist | null>(null);
   const [videos, setVideos] = useState<PlaylistVideo[]>([]);
   const [videoTotal, setVideoTotal] = useState(0);
+  const [downloadedCount, setDownloadedCount] = useState<number | null>(null);
   const [notDownloadedCount, setNotDownloadedCount] = useState<number | null>(null);
   const [followingExistingCount, setFollowingExistingCount] = useState<number | null>(null);
   const [followingRequestedCount, setFollowingRequestedCount] = useState<number | null>(null);
@@ -120,6 +123,11 @@ export const usePlaylistDetail = ({
       setPlaylist(playlistRes.data.playlist || null);
       setFollowingExistingCount(playlistRes.data.following_existing_count ?? null);
       setFollowingRequestedCount(playlistRes.data.following_requested_count ?? null);
+      setDownloadedCount(
+        typeof playlistRes.data.downloaded_count === 'number'
+          ? playlistRes.data.downloaded_count
+          : null
+      );
       setNotDownloadedCount(
         typeof playlistRes.data.not_downloaded_count === 'number'
           ? playlistRes.data.not_downloaded_count
@@ -201,6 +209,11 @@ export const usePlaylistDetail = ({
       setPlaylist(res.data.playlist || null);
       setFollowingExistingCount(res.data.following_existing_count ?? null);
       setFollowingRequestedCount(res.data.following_requested_count ?? null);
+      setDownloadedCount(
+        typeof res.data.downloaded_count === 'number'
+          ? res.data.downloaded_count
+          : null
+      );
       setNotDownloadedCount(
         typeof res.data.not_downloaded_count === 'number'
           ? res.data.not_downloaded_count
@@ -286,6 +299,7 @@ export const usePlaylistDetail = ({
     playlist,
     videos,
     videoTotal,
+    downloadedCount,
     notDownloadedCount,
     followingExistingCount,
     followingRequestedCount,
