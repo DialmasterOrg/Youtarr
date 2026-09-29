@@ -4,12 +4,10 @@
 
 const capitalize = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 
-const plural = (count, noun) => `${count.toLocaleString('en-US')} ${noun}${count === 1 ? '' : 's'}`;
-
 function describeChanges(changed) {
   if (changed === 0) return 'no watch status changes';
-  if (changed === 1) return '1 had a watch status change';
-  return `${changed.toLocaleString('en-US')} had watch status changes`;
+  if (changed === 1) return '1 video had a watch status change';
+  return `${changed.toLocaleString('en-US')} videos had watch status changes`;
 }
 
 function toRunRecord(summary) {
@@ -26,13 +24,11 @@ function toRunRecord(summary) {
   const servers = Object.entries(summary.servers || {});
   const failed = servers.filter(([, result]) => result && result.error);
   const synced = servers.length - failed.length;
-  const checked = Number(summary.totals && summary.totals.checked) || 0;
   const changed = Number(summary.totals && summary.totals.changed) || 0;
-  const details = { servers: servers.length, failed: failed.length, checked, changed };
+  const details = { servers: servers.length, failed: failed.length, changed };
 
   const serverCount = failed.length > 0 ? `${synced} of ${servers.length}` : `${servers.length}`;
-  const counts = `Checked ${plural(checked, 'video')} on ${serverCount} ${servers.length === 1 ? 'server' : 'servers'}; `
-    + `${describeChanges(changed)}.`;
+  const counts = `Synced ${serverCount} ${servers.length === 1 ? 'server' : 'servers'}; ${describeChanges(changed)}.`;
 
   if (failed.length > 0) {
     const failures = failed.map(([name, result]) => `${capitalize(name)} failed: ${result.error}.`).join(' ');

@@ -10,7 +10,6 @@ const POLL_ERROR_MESSAGE =
   'Could not check sync status; it may still be running on the server.';
 
 export interface WatchStatusSyncServerResult {
-  checked?: number;
   changed?: number;
   error?: string;
 }
