@@ -795,6 +795,8 @@ volumes:
       device: ":/path/to/your/nfs/export"
 ```
 
+For an SMB/CIFS share (Synology, QNAP, Windows file shares), see [Letting Docker Mount the Share](DOCKER.md#letting-docker-mount-the-share).
+
 **Simplest workaround:** Set `useTmpForDownloads: false` (the default). Downloads are staged inside the output directory itself, so the move is a same-filesystem rename — atomic and immune to this class of error. Note: if the NFS mount is stale, downloads will still fail, but they will fail *before* yt-dlp marks them as archived — so they'll be automatically retried on the next scheduled run rather than getting permanently stuck.
 
 ## Auto-Removal Settings
