@@ -309,6 +309,35 @@ describe('DownloadProgress', () => {
     expect(screen.getByText(/Channel update.*Completed/)).toBeInTheDocument();
   });
 
+  test('names a download job that failed in the final summary', async () => {
+    renderWithContext(
+      <DownloadProgress
+        downloadProgressRef={mockDownloadProgressRef}
+        downloadInitiatedRef={mockDownloadInitiatedRef}
+        jobs={[]}
+        token="test-token"
+      />
+    );
+
+    const processCallback = getProcessCallback();
+
+    await act(async () => {
+      processCallback({
+        finalSummary: {
+          totalDownloaded: 0,
+          totalSkipped: 0,
+          jobType: 'Channel Downloads',
+          jobIssues: [{ status: 'Failed', reason: 'No valid channel URLs to download.', byUser: false }],
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('✗ Download job failed (No valid channel URLs to download)')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('No new videos downloaded')).not.toBeInTheDocument();
+  });
+
   test('displays queued auto-retries in the final summary', async () => {
     renderWithContext(
       <DownloadProgress

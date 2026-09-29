@@ -176,5 +176,19 @@ describe('channelMappers', () => {
       });
       expect(unsetEntry.auto_removal_keep_recent_count).toBeNull();
     });
+
+    test('adds tab download stats when given', () => {
+      const stats = { videos: { total: 10, fetchedAt: null, downloaded: 5, ignored: 0, percent: 50 } };
+
+      const entry = channelMappers.mapChannelListEntry({ channel_id: 'UC1', available_tabs: 'videos' }, stats);
+
+      expect(entry.tab_download_stats).toEqual(stats);
+    });
+
+    test('omits tab download stats when none were computed', () => {
+      const entry = channelMappers.mapChannelListEntry({ channel_id: 'UC1', available_tabs: 'videos' });
+
+      expect(entry).not.toHaveProperty('tab_download_stats');
+    });
   });
 });

@@ -37,7 +37,20 @@ describe('POST /api/videos/download subfolder registration', () => {
       videosModule: {},
       downloadModule,
       videoOembedEnricher: {},
+      storageGuard: { isPausedError: (err) => Boolean(err && err.code === 'DOWNLOADS_PAUSED') },
     }));
+  });
+
+  test('returns 409 with the reason when downloads are paused for storage', async () => {
+    downloadModule.doGroupedManualDownloads.mockRejectedValue(
+      Object.assign(new Error('Downloads are paused: over the limit'), { code: 'DOWNLOADS_PAUSED' })
+    );
+
+    const response = await request(app).post('/api/videos/download')
+      .send({ url: 'https://youtu.be/abcdefghijk' });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe('Downloads are paused: over the limit');
   });
 
   test('registers a real subfolder override', async () => {

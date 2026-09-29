@@ -13,6 +13,9 @@ const formatAgeThreshold = (threshold: string): string => {
 
 const formatDays = (value: string): string => `${value} day${value === '1' ? '' : 's'}`;
 
+// "500GB" -> "500 GB"
+const formatStorageSize = (value: string): string => value.replace(/^(\d+)(MB|GB|TB)$/, '$1 $2');
+
 interface AutoRemovalRulesSummaryProps {
   config: ConfigState;
 }
@@ -43,6 +46,12 @@ export const AutoRemovalRulesSummary: React.FC<AutoRemovalRulesSummaryProps> = (
   if (config.autoRemovalFreeSpaceThreshold) {
     rules.push(
       <>Free space is below <strong>{config.autoRemovalFreeSpaceThreshold}</strong> (the oldest videos are deleted first until space is freed)</>
+    );
+  }
+
+  if (config.autoRemovalUsageLimit) {
+    rules.push(
+      <>Downloaded videos total more than <strong>{formatStorageSize(config.autoRemovalUsageLimit)}</strong> (the oldest videos are deleted first until the total is back under it)</>
     );
   }
 

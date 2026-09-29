@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Alert, Button, FormControl, FormHelperText, InputLabel, MenuItem, Select, TextField } from '../../../ui';
 import { FREQUENCY_MAPPING } from '../../constants';
-import { describeSchedule, getDailyTime, isRecognizedSchedule, MIN_SCHEDULE_INTERVAL_MINUTES } from '../../schedules';
+import { describeSchedule, getDailyTime, isSupportedCronSyntax, MIN_SCHEDULE_INTERVAL_MINUTES } from '../../schedules';
 
 type Mode = 'daily' | 'preset' | 'custom';
 
@@ -113,7 +113,7 @@ export function ScheduleEditor({
                 </>
               ))}
             </FormHelperText>
-            {!error && isRecognizedSchedule(value) && (
+            {!error && isSupportedCronSyntax(value) && (
               <FormHelperText>Runs: {describeSchedule(value.trim())}</FormHelperText>
             )}
           </FormControl>

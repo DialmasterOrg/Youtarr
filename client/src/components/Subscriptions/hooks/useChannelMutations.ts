@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Channel } from '../../../types/Channel';
 import { normalizeChannelUrl } from '../../../utils/channelHelpers';
+import { NewChannelSettings, PendingChannel, toNewChannelSettingsPayload } from '../newChannelSettings';
 
 interface UseChannelMutationsOptions {
   token: string | null;
@@ -11,6 +12,13 @@ interface UseChannelMutationsOptions {
 interface OperationResult {
   success: boolean;
   message?: string;
+}
+
+export interface ChannelLookupResult extends OperationResult {
+  /** The looked-up channel, ready for the Add Channel dialog. */
+  channel?: PendingChannel;
+  /** True when `channel` is the entry already waiting in the pending list. */
+  alreadyPending?: boolean;
 }
 
 interface AddChannelInfoResponse {
@@ -25,14 +33,14 @@ interface AddChannelInfoResponse {
 }
 
 export const useChannelMutations = ({ token, onRefresh }: UseChannelMutationsOptions) => {
-  const [pendingAdditions, setPendingAdditions] = useState<Channel[]>([]);
+  const [pendingAdditions, setPendingAdditions] = useState<PendingChannel[]>([]);
   const [deletedChannels, setDeletedChannels] = useState<string[]>([]);
   const [isAddingChannel, setIsAddingChannel] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   const deletedSet = useMemo(() => new Set(deletedChannels), [deletedChannels]);
 
-  const addChannel = useCallback(async (input: string): Promise<OperationResult> => {
+  const lookupChannel = useCallback(async (input: string): Promise<ChannelLookupResult> => {
     if (!token) {
       return { success: false, message: 'Authentication required' };
     }
@@ -45,8 +53,9 @@ export const useChannelMutations = ({ token, onRefresh }: UseChannelMutationsOpt
       };
     }
 
-    if (pendingAdditions.some((channel) => channel.url === normalizedUrl)) {
-      return { success: false, message: 'Channel already added and pending save' };
+    const pendingMatch = pendingAdditions.find((channel) => channel.url === normalizedUrl);
+    if (pendingMatch) {
+      return { success: true, alreadyPending: true, channel: pendingMatch };
     }
 
     if (deletedSet.has(normalizedUrl)) {
@@ -74,7 +83,7 @@ export const useChannelMutations = ({ token, onRefresh }: UseChannelMutationsOpt
       if (channelInfo.enabled) {
         return { success: false, message: 'Channel already exists' };
       }
-      const formattedChannel: Channel = {
+      const channel: PendingChannel = {
         url: normalizedUrl,
         uploader: channelInfo.uploader || channelInfo.title || normalizedUrl,
         channel_id: channelInfo.channel_id || channelInfo.id,
@@ -82,19 +91,14 @@ export const useChannelMutations = ({ token, onRefresh }: UseChannelMutationsOpt
         available_tabs: channelInfo.available_tabs,
         sub_folder: channelInfo.sub_folder,
         video_quality: channelInfo.video_quality,
+        audio_format: channelInfo.audio_format,
         min_duration: channelInfo.min_duration,
         max_duration: channelInfo.max_duration,
         title_filter_regex: channelInfo.title_filter_regex,
+        restored: Boolean(channelInfo.existing),
       };
 
-      setPendingAdditions((prev) => [...prev, formattedChannel]);
-      if (channelInfo.existing) {
-        return {
-          success: true,
-          message: 'Channel restored with its previous settings. Click Save Changes to confirm.',
-        };
-      }
-      return { success: true };
+      return { success: true, channel };
     } catch (error: any) {
       const response = error?.response;
       if (response?.status === 503) {
@@ -124,6 +128,14 @@ export const useChannelMutations = ({ token, onRefresh }: UseChannelMutationsOpt
       setIsAddingChannel(false);
     }
   }, [token, pendingAdditions, deletedSet]);
+
+  const addPendingChannel = useCallback((channel: PendingChannel) => {
+    setPendingAdditions((prev) => [...prev.filter((item) => item.url !== channel.url), channel]);
+  }, []);
+
+  const updatePendingChannel = useCallback((url: string, settings: NewChannelSettings) => {
+    setPendingAdditions((prev) => prev.map((item) => (item.url === url ? { ...item, ...settings } : item)));
+  }, []);
 
   const queueChannelForDeletion = useCallback((channel: Channel) => {
     const isPendingAddition = pendingAdditions.some((item) => item.url === channel.url);
@@ -160,7 +172,8 @@ export const useChannelMutations = ({ token, onRefresh }: UseChannelMutationsOpt
       await axios.post('/updatechannels', {
         add: pendingAdditions.map((channel) => ({
           url: channel.url,
-          channel_id: channel.channel_id
+          channel_id: channel.channel_id,
+          settings: toNewChannelSettingsPayload(channel),
         })),
         remove: deletedChannels,
       }, {
@@ -175,7 +188,8 @@ export const useChannelMutations = ({ token, onRefresh }: UseChannelMutationsOpt
 
       return { success: true, message: 'Channels updated successfully' };
     } catch (err: any) {
-      const message = err?.response?.data?.message || 'Failed to save channels. Please try again.';
+      const data = err?.response?.data;
+      const message = data?.error || data?.message || 'Failed to save channels. Please try again.';
       return { success: false, message };
     } finally {
       setIsSaving(false);
@@ -187,7 +201,9 @@ export const useChannelMutations = ({ token, onRefresh }: UseChannelMutationsOpt
     deletedChannels,
     isAddingChannel,
     isSaving,
-    addChannel,
+    lookupChannel,
+    addPendingChannel,
+    updatePendingChannel,
     queueChannelForDeletion,
     undoChanges,
     saveChanges,

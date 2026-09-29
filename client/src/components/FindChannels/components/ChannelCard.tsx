@@ -1,6 +1,7 @@
 import React from 'react';
 import { Avatar, Box, Card, CardActionArea, Chip, Typography } from '../../ui';
 import { ChannelSearchResult } from '../types';
+import OpenInYouTubeLink from '../../shared/OpenInYouTubeLink';
 
 interface ChannelCardProps {
   result: ChannelSearchResult;
@@ -15,8 +16,9 @@ function formatCount(count: number): string {
 
 export default function ChannelCard({ result, onClick }: ChannelCardProps) {
   return (
-    <Card className="overflow-hidden hover:shadow-md transition-shadow">
+    <Card className="overflow-hidden hover:shadow-md transition-shadow flex flex-col">
       <CardActionArea
+        className="flex-1"
         onClick={onClick}
         aria-label={result.subscribed ? `View ${result.name}` : `Add ${result.name}`}
       >
@@ -50,6 +52,9 @@ export default function ChannelCard({ result, onClick }: ChannelCardProps) {
           {result.subscribed && <Chip label="Subscribed" size="small" color="success" />}
         </Box>
       </CardActionArea>
+      <Box className="flex justify-center px-3 pb-3">
+        <OpenInYouTubeLink href={result.url} ariaLabel={`Open ${result.name} in YouTube`} />
+      </Box>
     </Card>
   );
 }

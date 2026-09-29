@@ -10,9 +10,11 @@ import ChannelSettingsDialog from './ChannelPage/ChannelSettingsDialog';
 import TerminatedNotice from './ChannelPage/components/TerminatedNotice';
 import { useConfig } from '../hooks/useConfig';
 import SubscriptionsBackButton from './shared/SubscriptionsBackButton';
+import OpenInYouTubeLink, { youtubeChannelUrl } from './shared/OpenInYouTubeLink';
 import SubFolderChip from './Subscriptions/components/chips/SubFolderChip';
 import QualityChip from './Subscriptions/components/chips/QualityChip';
-import AutoDownloadChips from './Subscriptions/components/chips/AutoDownloadChips';
+import AutoDownloadTabToggles from './ChannelPage/components/AutoDownloadTabToggles';
+import { useAutoDownloadTabToggle } from './ChannelPage/hooks/useAutoDownloadTabToggle';
 import { SHARED_CHANNEL_META_CHIP_STYLE, SHARED_CHANNEL_META_DEFAULT_SURFACE_STYLE } from './shared/chipStyles';
 
 interface ChannelPageProps {
@@ -22,12 +24,17 @@ interface ChannelPageProps {
 function ChannelPage({ token }: ChannelPageProps) {
   const isMobile = useMediaQuery('(max-width: 767px)');
   const [channel, setChannel] = useState<Channel | null>(null);
+  // The route this `channel` was fetched for. The page is reused across
+  // /channel/:id routes, so `channel` holds the previous channel until the new
+  // one loads. The ref mirrors it for async callbacks.
+  const [loadedChannelId, setLoadedChannelId] = useState<string | null>(null);
+  const loadedChannelIdRef = useRef<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [regexAnchorEl, setRegexAnchorEl] = useState<HTMLElement | null>(null);
   const [regexDialogOpen, setRegexDialogOpen] = useState(false);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const { channel_id } = useParams();
-  const { config } = useConfig(token);
+  const { config, loading: configLoading } = useConfig(token);
   const globalPreferredResolution = config.preferredResolution || '1080';
 
   const handleSettingsSaved = (updated: {
@@ -80,6 +87,7 @@ function ChannelPage({ token }: ChannelPageProps) {
 
   const fetchAndCommitChannelInfo = useCallback(() => {
     const requestId = ++latestRequestIdRef.current;
+    const requestedChannelId = channel_id ?? null;
     fetch(`/getChannelInfo/${channel_id}`, {
       headers: {
         'x-access-token': token || '',
@@ -94,6 +102,8 @@ function ChannelPage({ token }: ChannelPageProps) {
       .then((data) => {
         if (requestId > appliedRequestIdRef.current) {
           appliedRequestIdRef.current = requestId;
+          loadedChannelIdRef.current = requestedChannelId;
+          setLoadedChannelId(requestedChannelId);
           setChannel(data);
         }
       })
@@ -221,13 +231,38 @@ function ChannelPage({ token }: ChannelPageProps) {
     return <SubFolderChip subFolder={channel.sub_folder} />;
   };
 
+  const handleAutoDownloadTabsChange = useCallback((enabledTabs: string, savedChannelId: string) => {
+    // A save can finish after navigating away; its tabs belong to the old channel.
+    if (savedChannelId !== loadedChannelIdRef.current) return;
+    setChannel((prev) => (prev ? { ...prev, auto_download_enabled_tabs: enabledTabs } : prev));
+  }, []);
+
+  // Lives here, not in the toggles, so the one-save-at-a-time lock survives the
+  // toggles unmounting for a route change or a mobile/desktop layout switch.
+  const autoDownloadToggle = useAutoDownloadTabToggle({
+    channelId: loadedChannelId ?? undefined,
+    token,
+    enabledTabs: channel?.auto_download_enabled_tabs,
+    onChange: handleAutoDownloadTabsChange,
+  });
+
   const renderAutoDownloadChips = () => {
     if (!channel) return null;
+    // Toggling now would save the previous channel's tabs to this one.
+    if (!loadedChannelId || loadedChannelId !== channel_id) {
+      return <span className="text-xs text-muted">Loading...</span>;
+    }
     return (
-      <AutoDownloadChips
+      <AutoDownloadTabToggles
         availableTabs={channel.available_tabs || 'videos,shorts,streams'}
-        autoDownloadTabs={channel.auto_download_enabled_tabs || undefined}
+        enabledTabs={channel.auto_download_enabled_tabs || undefined}
         isMobile={isMobile}
+        globalAutoDownloadOff={!configLoading && !config.channelAutoDownload}
+        saving={autoDownloadToggle.saving}
+        notice={autoDownloadToggle.notice}
+        onToggle={(tab, enabled) => { void autoDownloadToggle.toggleTab(tab, enabled); }}
+        onUndo={() => { void autoDownloadToggle.undo(); }}
+        onDismissNotice={autoDownloadToggle.dismissNotice}
       />
     );
   };
@@ -407,14 +442,17 @@ function ChannelPage({ token }: ChannelPageProps) {
               className="flex flex-col gap-5"
             >
               <Box className="flex flex-col gap-3">
-                <Typography
-                  variant={isMobile ? 'h5' : 'h4'}
-                  component="h2"
-                  gutterBottom
-                  className="mb-0"
-                >
-                  {channel ? channel.uploader : 'Loading...'}
-                </Typography>
+                <Box className="flex flex-wrap items-start justify-between gap-2">
+                  <Typography
+                    variant={isMobile ? 'h5' : 'h4'}
+                    component="h2"
+                    gutterBottom
+                    className="mb-0 min-w-0"
+                  >
+                    {channel ? channel.uploader : 'Loading...'}
+                  </Typography>
+                  {channel && channel_id && <OpenInYouTubeLink href={youtubeChannelUrl(channel_id)} />}
+                </Box>
                 {channel?.terminated_at && (
                   <TerminatedNotice terminatedAt={channel.terminated_at} isMobile={isMobile} />
                 )}
@@ -478,29 +516,37 @@ function ChannelPage({ token }: ChannelPageProps) {
           className="flex flex-col gap-4 justify-center"
         >
           {isMobile ? (
-            // Mobile: Compact layout with title and settings in a grid
-            <Box className="flex flex-col gap-4">
-              {/* Title */}
-              <Typography variant="h6" className="font-bold text-base">
-                Channel Settings
-              </Typography>
+            // Mobile: header with Edit, full-width auto-download toggles, then read-only details
+            <Box className="flex flex-col gap-3">
+              <Box className="flex items-center justify-between gap-2">
+                <Typography variant="h6" className="font-bold text-base">
+                  Channel Settings
+                </Typography>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<SettingsIcon size={14} />}
+                  onClick={() => setSettingsOpen(true)}
+                  aria-label="Edit settings"
+                  disabled={!channel}
+                  className="text-foreground border-border hover:bg-muted hover:border-foreground hover:text-foreground disabled:opacity-50"
+                  style={{ textTransform: 'none', minWidth: 0, paddingLeft: 10, paddingRight: 10, fontSize: '0.8rem', height: 28 }}
+                >
+                  Edit
+                </Button>
+              </Box>
 
-              {/* Compact grid layout */}
-              <Box className="grid grid-cols-2 gap-3 text-sm">
-                {/* Auto Download */}
-                <Box className="flex flex-col gap-1">
-                  <Typography variant="caption" color="text.secondary" className="font-semibold uppercase" style={{ fontSize: '0.65rem' }}>
-                    Auto Download
-                  </Typography>
-                  <Box className="flex gap-1 flex-wrap">
-                    {channel ? renderAutoDownloadChips() : <span className="text-xs text-muted">Loading...</span>}
-                  </Box>
-                </Box>
+              <Box className="flex flex-col gap-1.5">
+                <Typography variant="caption" color="text.secondary" className="font-semibold uppercase" style={{ fontSize: '0.65rem' }}>
+                  Auto Download
+                </Typography>
+                {channel ? renderAutoDownloadChips() : <span className="text-xs text-muted">Loading...</span>}
+              </Box>
 
-                {/* Content Rating */}
-                <Box className="flex flex-col gap-1">
+              <Box className="grid grid-cols-2 gap-3 text-sm border-t border-border pt-3">
+                <Box className="flex flex-col gap-1 min-w-0">
                   <Typography variant="caption" color="text.secondary" className="font-semibold uppercase" style={{ fontSize: '0.65rem' }}>
-                    Content Rating
+                    Rating
                   </Typography>
                   {channel ? (
                     channel.default_rating ? (
@@ -510,8 +556,8 @@ function ChannelPage({ token }: ChannelPageProps) {
                         size="small"
                       />
                     ) : (
-                      <Typography variant="caption" color="text.secondary" className="italic" style={{ fontSize: '0.7rem' }}>
-                        No rating override
+                      <Typography variant="caption" color="text.secondary" className="italic" style={{ fontSize: '0.75rem' }}>
+                        None
                       </Typography>
                     )
                   ) : (
@@ -519,30 +565,11 @@ function ChannelPage({ token }: ChannelPageProps) {
                   )}
                 </Box>
 
-                {/* Folder */}
-                <Box className="flex flex-col gap-1">
+                <Box className="flex flex-col gap-1 min-w-0">
                   <Typography variant="caption" color="text.secondary" className="font-semibold uppercase" style={{ fontSize: '0.65rem' }}>
                     Folder
                   </Typography>
                   {channel ? renderSubFolder() : <span className="text-xs text-muted">Loading...</span>}
-                </Box>
-
-                {/* Edit Button */}
-                <Box className="flex flex-col gap-1">
-                  <Typography variant="caption" color="text.secondary" className="font-semibold uppercase" style={{ fontSize: '0.65rem', visibility: 'hidden', height: '0.7rem' }}>
-                    Edit
-                  </Typography>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={() => setSettingsOpen(true)}
-                    aria-label="Edit settings"
-                    disabled={!channel}
-                    className="text-foreground border-border hover:bg-muted hover:border-foreground hover:text-foreground disabled:opacity-50"
-                    style={{ textTransform: 'none', minWidth: 0, paddingLeft: 12, paddingRight: 12, fontSize: '0.8rem', height: 28 }}
-                  >
-                    Edit
-                  </Button>
                 </Box>
               </Box>
             </Box>

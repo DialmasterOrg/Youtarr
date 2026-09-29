@@ -220,6 +220,8 @@ const createServerModule = ({
         };
 
         const jobModuleMock = {
+          onJobAbandoned: jest.fn(),
+          onJobEnded: jest.fn(),
           getJob: jest.fn((jobId) => {
             if (jobId === 'existing-job') {
               return { id: jobId, status: 'In Progress' };
@@ -393,6 +395,11 @@ const createServerModule = ({
           previewTemplate: jest.fn(),
           validateTemplate: jest.fn().mockResolvedValue({ ok: true })
         }));
+        // Same reason: cookieTest also loads ytDlpRunner.
+        jest.doMock('../modules/cookieTest', () => ({
+          run: jest.fn(),
+          isBusyError: jest.fn(() => false)
+        }));
         const ytdlpModuleMock = {
           getLatestVersion: jest.fn().mockResolvedValue('2026.04.20'),
           isUpdateAvailable: jest.fn(() => false),
@@ -414,6 +421,16 @@ const createServerModule = ({
         jest.doMock('node-cron', () => cronMock);
         jest.doMock('../modules/mediaServers/watchStatusScheduler', () => ({ scheduleTask: jest.fn(), subscribe: jest.fn() }));
         jest.doMock('../modules/channel/channelBackdropBackfill', () => ({ subscribe: jest.fn() }));
+        jest.doMock('../modules/channel/tabVideoCounts', () => ({ setRunHistory: jest.fn(), setDownloadActivityCheck: jest.fn(), refreshAtStartup: jest.fn().mockResolvedValue({}) }));
+        jest.doMock('../modules/channel/autoDownloadScheduler', () => ({ setRunTracker: jest.fn() }));
+        jest.doMock('../modules/download/downloadRunTracker', () => ({ isActive: jest.fn(), getUnfinishedJobs: jest.fn() }));
+        jest.doMock('../modules/logLevelSync', () => ({ apply: jest.fn(), subscribe: jest.fn() }));
+        jest.doMock('../modules/storageGuard', () => ({
+          initialize: jest.fn().mockResolvedValue({ paused: false, reasons: [] }),
+          refresh: jest.fn().mockResolvedValue({ paused: false, reasons: [] }),
+          isPausedError: jest.fn(() => false),
+          describe: jest.fn(() => ''),
+        }));
         jest.doMock('express-rate-limit', () => Object.assign(rateLimitMiddleware, { ipKeyGenerator: rateLimitMiddleware.ipKeyGenerator }));
         jest.doMock('multer', () => multerMock);
         jest.doMock('https', () => httpsMock);
@@ -1330,7 +1347,8 @@ describe('server routes - channels', () => {
 
       expect(channelModuleMock.updateChannelsByDelta).toHaveBeenCalledWith({
         enableUrls: ['https://youtube.com/@new'],
-        disableUrls: ['https://youtube.com/@old']
+        disableUrls: ['https://youtube.com/@old'],
+        channelSettingsModule: expect.any(Object)
       });
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({ status: 'success' });
@@ -1360,10 +1378,53 @@ describe('server routes - channels', () => {
           { url: 'https://youtube.com/@channel1', channel_id: 'UC123' },
           { url: 'https://youtube.com/@channel2', channel_id: 'UC456' }
         ],
-        disableUrls: []
+        disableUrls: [],
+        channelSettingsModule: expect.any(Object)
       });
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({ status: 'success' });
+    });
+
+    test('returns 400 with the validation message when add settings are invalid', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+      const invalid = new Error('Invalid video quality');
+      invalid.code = 'INVALID_CHANNEL_SETTINGS';
+      channelModuleMock.updateChannelsByDelta.mockRejectedValueOnce(invalid);
+
+      const handlers = findRouteHandlers(app, 'post', '/updatechannels');
+      const updateHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { add: [{ url: 'https://youtube.com/@new', settings: { video_quality: '999' } }] }
+      });
+      const res = createMockResponse();
+
+      await updateHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({ error: 'Invalid video quality' });
+    });
+
+    test('returns 409 when a changed subfolder is blocked by active downloads', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+      channelModuleMock.updateChannelsByDelta.mockRejectedValueOnce(
+        new Error('Cannot change subfolder while downloads are in progress for this channel')
+      );
+
+      const handlers = findRouteHandlers(app, 'post', '/updatechannels');
+      const updateHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { add: [{ url: 'https://youtube.com/@busy', settings: { sub_folder: 'Kids' } }] }
+      });
+      const res = createMockResponse();
+
+      await updateHandler(req, res);
+
+      expect(res.statusCode).toBe(409);
+      expect(res.body).toEqual({
+        error: 'Cannot change subfolder while downloads are in progress for this channel'
+      });
     });
 
     test('returns 400 when delta payload has no changes', async () => {
@@ -2057,9 +2118,10 @@ describe('server routes - downloads', () => {
   });
 
   describe('POST /triggerchanneldownloads', () => {
-    test('triggers channel downloads when no job is running', async () => {
-      const { app, downloadModuleMock, jobModuleMock } = await createServerModule();
-      jobModuleMock.getRunningJobs.mockReturnValueOnce([]);
+    test('starts the automatic downloads task with the requested settings', async () => {
+      const { app } = await createServerModule();
+      const scheduledTaskManager = require('../modules/scheduledTaskManager');
+      jest.spyOn(scheduledTaskManager, 'runNow').mockResolvedValue({ started: true, completion: Promise.resolve(null) });
 
       const handlers = findRouteHandlers(app, 'post', '/triggerchanneldownloads');
       const downloadHandler = handlers[handlers.length - 1];
@@ -2071,18 +2133,19 @@ describe('server routes - downloads', () => {
 
       await downloadHandler(req, res);
 
-      expect(downloadModuleMock.doChannelAndPlaylistDownloads).toHaveBeenCalledWith({
-        overrideSettings: { resolution: '720', videoCount: 5 }
-      });
+      expect(scheduledTaskManager.runNow).toHaveBeenCalledWith('channelDownloadFrequency', expect.objectContaining({
+        args: { jobData: { overrideSettings: { resolution: '720', videoCount: 5 } } }
+      }));
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({ status: 'success' });
     });
 
-    test('prevents duplicate channel download jobs', async () => {
-      const { app, jobModuleMock } = await createServerModule();
-      jobModuleMock.getRunningJobs.mockReturnValueOnce([
-        { jobType: 'Channel Downloads', status: 'In Progress' }
-      ]);
+    test('refuses while a channel and playlist update is running', async () => {
+      const { app } = await createServerModule();
+      const scheduledTaskManager = require('../modules/scheduledTaskManager');
+      jest.spyOn(scheduledTaskManager, 'runNow').mockResolvedValue({
+        started: false, reason: 'running', message: 'This task is already running.', availableAt: null
+      });
 
       const handlers = findRouteHandlers(app, 'post', '/triggerchanneldownloads');
       const downloadHandler = handlers[handlers.length - 1];
@@ -2094,8 +2157,10 @@ describe('server routes - downloads', () => {
 
       await downloadHandler(req, res);
 
-      expect(res.statusCode).toBe(400);
-      expect(res.body).toEqual({ error: 'Job Already Running' });
+      expect(res.statusCode).toBe(409);
+      expect(res.body).toEqual({
+        error: 'A channel and playlist update is already running.', reason: 'running', availableAt: null
+      });
     });
 
     test('validates video count in override settings', async () => {
@@ -2268,8 +2333,13 @@ describe('server routes - yt-dlp update', () => {
   });
 
   test('POST /api/ytdlp/update proceeds when not on Elfhosted', async () => {
-    const { app, configModuleMock, ytdlpModuleMock } = await createServerModule();
+    const { app, configModuleMock } = await createServerModule();
     configModuleMock.isElfhostedPlatform.mockReturnValue(false);
+    const scheduledTaskManager = require('../modules/scheduledTaskManager');
+    jest.spyOn(scheduledTaskManager, 'runNow').mockResolvedValue({
+      started: true,
+      completion: Promise.resolve({ status: 'success', message: 'yt-dlp updated', details: { version: '2026.09.20' } })
+    });
 
     const handlers = findRouteHandlers(app, 'post', '/api/ytdlp/update');
     const updateHandler = handlers[handlers.length - 1];
@@ -2280,14 +2350,33 @@ describe('server routes - yt-dlp update', () => {
     await updateHandler(req, res);
 
     expect(res.statusCode).toBe(200);
-    expect(res.body.success).toBe(true);
-    expect(ytdlpModuleMock.performUpdate).toHaveBeenCalledWith({ channel: 'stable' });
+    expect(res.body).toEqual({ success: true, message: 'yt-dlp updated', newVersion: '2026.09.20' });
   });
 
-  test('POST /api/ytdlp/update passes the configured nightly channel', async () => {
-    const { app, configModuleMock, ytdlpModuleMock } = await createServerModule();
+  test('POST /api/ytdlp/update starts the yt-dlp update task as a manual run', async () => {
+    const { app, configModuleMock } = await createServerModule();
     configModuleMock.isElfhostedPlatform.mockReturnValue(false);
-    configModuleMock.getConfig.mockReturnValue({ ytdlpUpdateChannel: 'nightly' });
+    const scheduledTaskManager = require('../modules/scheduledTaskManager');
+    jest.spyOn(scheduledTaskManager, 'runNow').mockResolvedValue({
+      started: true,
+      completion: Promise.resolve({ status: 'success', message: 'yt-dlp updated', details: { version: '2026.09.20' } })
+    });
+
+    const handlers = findRouteHandlers(app, 'post', '/api/ytdlp/update');
+    const updateHandler = handlers[handlers.length - 1];
+
+    await updateHandler(createMockRequest({ username: 'tester' }), createMockResponse());
+
+    expect(scheduledTaskManager.runNow).toHaveBeenCalledWith('ytdlpUpdateFrequency', expect.objectContaining({ trigger: 'manual' }));
+  });
+
+  test('POST /api/ytdlp/update returns 409 while an update is running', async () => {
+    const { app, configModuleMock } = await createServerModule();
+    configModuleMock.isElfhostedPlatform.mockReturnValue(false);
+    const scheduledTaskManager = require('../modules/scheduledTaskManager');
+    jest.spyOn(scheduledTaskManager, 'runNow').mockResolvedValue({
+      started: false, reason: 'running', message: 'This task is already running.', availableAt: null
+    });
 
     const handlers = findRouteHandlers(app, 'post', '/api/ytdlp/update');
     const updateHandler = handlers[handlers.length - 1];
@@ -2296,7 +2385,8 @@ describe('server routes - yt-dlp update', () => {
     const res = createMockResponse();
     await updateHandler(req, res);
 
-    expect(ytdlpModuleMock.performUpdate).toHaveBeenCalledWith({ channel: 'nightly' });
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toEqual({ success: false, message: 'An update is already in progress' });
   });
 
   test('GET /api/ytdlp/latest-version checks the configured channel and echoes it', async () => {

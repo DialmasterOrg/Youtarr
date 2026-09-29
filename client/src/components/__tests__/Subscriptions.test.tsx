@@ -21,7 +21,9 @@ jest.mock('react-router-dom', () => ({
 
 // Mock custom hooks
 const mockRefetchChannels = jest.fn();
-const mockAddChannel = jest.fn();
+const mockLookupChannel = jest.fn();
+const mockAddPendingChannel = jest.fn();
+const mockUpdatePendingChannel = jest.fn();
 const mockQueueChannelForDeletion = jest.fn();
 const mockUndoChanges = jest.fn();
 const mockSaveChanges = jest.fn();
@@ -43,7 +45,7 @@ jest.mock('../../hooks/useConfig', () => ({
 // Mock child components
 jest.mock('../Subscriptions/components/ChannelCard', () => ({
   __esModule: true,
-  default: function MockChannelCard({ channel, onDelete, isPendingAddition }: any) {
+  default: function MockChannelCard({ channel, onDelete, isPendingAddition, onEditPending }: any) {
     const React = require('react');
     return React.createElement('div', {
       'data-testid': `channel-card-${channel.url}`,
@@ -53,14 +55,18 @@ jest.mock('../Subscriptions/components/ChannelCard', () => ({
       React.createElement('button', {
         'data-testid': `delete-${channel.url}`,
         onClick: onDelete,
-      }, 'Delete')
+      }, 'Delete'),
+      onEditPending && React.createElement('button', {
+        'data-testid': `edit-${channel.url}`,
+        onClick: onEditPending,
+      }, 'Edit')
     );
   }
 }));
 
 jest.mock('../Subscriptions/components/ChannelListRow', () => ({
   __esModule: true,
-  default: function MockChannelListRow({ channel, onDelete, isPendingAddition }: any) {
+  default: function MockChannelListRow({ channel, onDelete, isPendingAddition, onEditPending }: any) {
     const React = require('react');
     return React.createElement('div', {
       'data-testid': `channel-row-${channel.url}`,
@@ -70,10 +76,34 @@ jest.mock('../Subscriptions/components/ChannelListRow', () => ({
       React.createElement('button', {
         'data-testid': `delete-${channel.url}`,
         onClick: onDelete,
-      }, 'Delete')
+      }, 'Delete'),
+      onEditPending && React.createElement('button', {
+        'data-testid': `edit-${channel.url}`,
+        onClick: onEditPending,
+      }, 'Edit')
     );
   },
   CHANNEL_LIST_DESKTOP_TEMPLATE: '2fr 1fr 1fr 1fr auto',
+}));
+
+jest.mock('../Subscriptions/components/AddChannelSettingsDialog', () => ({
+  __esModule: true,
+  default: function MockAddChannelSettingsDialog({ open, channel, mode, onConfirm, onClose }: any) {
+    const React = require('react');
+    if (!open || !channel) return null;
+    return React.createElement('div', { 'data-testid': 'add-channel-settings-dialog', 'data-mode': mode },
+      React.createElement('div', null, `Dialog for ${channel.uploader}`),
+      React.createElement('button', {
+        onClick: () => onConfirm({
+          auto_download_enabled_tabs: 'short',
+          video_quality: '720',
+          audio_format: null,
+          sub_folder: null,
+        }),
+      }, 'Confirm settings'),
+      React.createElement('button', { onClick: onClose }, 'Cancel settings')
+    );
+  }
 }));
 
 jest.mock('../Subscriptions/components/PendingSaveBanner', () => ({
@@ -199,7 +229,9 @@ describe('Subscriptions Component', () => {
       deletedChannels: [],
       isAddingChannel: false,
       isSaving: false,
-      addChannel: mockAddChannel,
+      lookupChannel: mockLookupChannel,
+      addPendingChannel: mockAddPendingChannel,
+      updatePendingChannel: mockUpdatePendingChannel,
       queueChannelForDeletion: mockQueueChannelForDeletion,
       undoChanges: mockUndoChanges,
       saveChanges: mockSaveChanges,
@@ -391,12 +423,53 @@ describe('Subscriptions Component', () => {
       expect(screen.getByText('Auto downloads')).toBeInTheDocument();
       expect(screen.getByText('Filters')).toBeInTheDocument();
     });
+
+    describe('download percentage info', () => {
+      const withChannels = () => useChannelList.mockReturnValue({
+        channels: mockChannels,
+        total: 2,
+        totalPages: 1,
+        loading: false,
+        error: null,
+        refetch: mockRefetchChannels,
+        subFolders: [],
+      });
+
+      test('appears once, in the list header, on desktop', () => {
+        withChannels();
+
+        renderSubscriptions();
+
+        expect(screen.getAllByRole('button', { name: 'Download percentage info' })).toHaveLength(1);
+      });
+
+      test('stays available once in grid view', async () => {
+        const user = userEvent.setup();
+        withChannels();
+        renderSubscriptions();
+
+        await user.click(screen.getByLabelText('Grid view'));
+
+        await waitFor(() => {
+          expect(screen.getAllByRole('button', { name: 'Download percentage info' })).toHaveLength(1);
+        });
+      });
+
+      test('appears once in the mobile toolbar', () => {
+        (useMediaQuery as jest.Mock).mockReturnValue(true);
+        withChannels();
+
+        renderSubscriptions();
+
+        expect(screen.getAllByRole('button', { name: 'Download percentage info' })).toHaveLength(1);
+      });
+    });
   });
 
   describe('Adding Channels', () => {
     test('adds channel when Channel button clicked', async () => {
       const user = userEvent.setup();
-      mockAddChannel.mockResolvedValue({ success: true });
+      mockLookupChannel.mockResolvedValue({ success: true });
 
       renderSubscriptions();
 
@@ -405,13 +478,13 @@ describe('Subscriptions Component', () => {
       await user.click(screen.getByRole('button', { name: /^channel$/i }));
 
       await waitFor(() => {
-        expect(mockAddChannel).toHaveBeenCalledWith('https://www.youtube.com/@newchannel');
+        expect(mockLookupChannel).toHaveBeenCalledWith('https://www.youtube.com/@newchannel');
       });
     });
 
     test('adds channel when Enter key pressed in input', async () => {
       const user = userEvent.setup();
-      mockAddChannel.mockResolvedValue({ success: true });
+      mockLookupChannel.mockResolvedValue({ success: true });
 
       renderSubscriptions();
 
@@ -420,7 +493,7 @@ describe('Subscriptions Component', () => {
       await user.keyboard('{Enter}');
 
       await waitFor(() => {
-        expect(mockAddChannel).toHaveBeenCalledWith('https://www.youtube.com/@newchannel');
+        expect(mockLookupChannel).toHaveBeenCalledWith('https://www.youtube.com/@newchannel');
       });
     });
 
@@ -430,12 +503,12 @@ describe('Subscriptions Component', () => {
       const addButton = screen.getByRole('button', { name: /^channel$/i });
       // Button should be disabled when input is empty
       expect(addButton).toBeDisabled();
-      expect(mockAddChannel).not.toHaveBeenCalled();
+      expect(mockLookupChannel).not.toHaveBeenCalled();
     });
 
     test('clears input after successful channel add', async () => {
       const user = userEvent.setup();
-      mockAddChannel.mockResolvedValue({ success: true });
+      mockLookupChannel.mockResolvedValue({ success: true });
 
       renderSubscriptions();
 
@@ -450,7 +523,7 @@ describe('Subscriptions Component', () => {
 
     test('shows error dialog when channel add fails', async () => {
       const user = userEvent.setup();
-      mockAddChannel.mockResolvedValue({
+      mockLookupChannel.mockResolvedValue({
         success: false,
         message: 'Channel not found'
       });
@@ -472,7 +545,9 @@ describe('Subscriptions Component', () => {
         deletedChannels: [],
         isAddingChannel: true,
         isSaving: false,
-        addChannel: mockAddChannel,
+        lookupChannel: mockLookupChannel,
+      addPendingChannel: mockAddPendingChannel,
+      updatePendingChannel: mockUpdatePendingChannel,
         queueChannelForDeletion: mockQueueChannelForDeletion,
         undoChanges: mockUndoChanges,
         saveChanges: mockSaveChanges,
@@ -480,12 +555,12 @@ describe('Subscriptions Component', () => {
       });
 
       renderSubscriptions();
-      expect(screen.getByRole('button', { name: /adding/i })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /looking up/i })).toBeDisabled();
     });
 
     test('shows success message when channel add returns message', async () => {
       const user = userEvent.setup();
-      mockAddChannel.mockResolvedValue({
+      mockLookupChannel.mockResolvedValue({
         success: true,
         message: 'Channel already exists'
       });
@@ -499,6 +574,96 @@ describe('Subscriptions Component', () => {
       await waitFor(() => {
         expect(screen.getByText('Channel already exists')).toBeInTheDocument();
       });
+    });
+
+    const lookedUpChannel = {
+      url: 'https://www.youtube.com/@newchannel',
+      uploader: 'New Channel',
+      channel_id: 'UCnew',
+      available_tabs: 'videos,shorts',
+      auto_download_enabled_tabs: 'video',
+      restored: false,
+    };
+    const chosenSettings = {
+      auto_download_enabled_tabs: 'short',
+      video_quality: '720',
+      audio_format: null,
+      sub_folder: null,
+    };
+
+    const lookUp = async (user: ReturnType<typeof userEvent.setup>) => {
+      await user.type(screen.getByPlaceholderText('Paste a channel URL or @handle'), lookedUpChannel.url);
+      await user.click(screen.getByRole('button', { name: /^channel$/i }));
+    };
+
+    test('opens the settings dialog for a looked-up channel', async () => {
+      const user = userEvent.setup();
+      mockLookupChannel.mockResolvedValue({ success: true, channel: lookedUpChannel });
+
+      renderSubscriptions();
+      await lookUp(user);
+
+      const dialog = await screen.findByTestId('add-channel-settings-dialog');
+      expect(dialog).toHaveAttribute('data-mode', 'add');
+      expect(screen.getByText('Dialog for New Channel')).toBeInTheDocument();
+      expect(mockAddPendingChannel).not.toHaveBeenCalled();
+    });
+
+    test('adds the channel to pending with the settings chosen in the dialog', async () => {
+      const user = userEvent.setup();
+      mockLookupChannel.mockResolvedValue({ success: true, channel: lookedUpChannel });
+
+      renderSubscriptions();
+      await lookUp(user);
+      await user.click(await screen.findByRole('button', { name: 'Confirm settings' }));
+
+      expect(mockAddPendingChannel).toHaveBeenCalledWith({ ...lookedUpChannel, ...chosenSettings });
+      expect(screen.queryByTestId('add-channel-settings-dialog')).not.toBeInTheDocument();
+    });
+
+    test('does not add the channel when the settings dialog is cancelled', async () => {
+      const user = userEvent.setup();
+      mockLookupChannel.mockResolvedValue({ success: true, channel: lookedUpChannel });
+
+      renderSubscriptions();
+      await lookUp(user);
+      await user.click(await screen.findByRole('button', { name: 'Cancel settings' }));
+
+      expect(mockAddPendingChannel).not.toHaveBeenCalled();
+    });
+
+    test('re-adding a pending channel opens it for editing', async () => {
+      const user = userEvent.setup();
+      mockLookupChannel.mockResolvedValue({ success: true, alreadyPending: true, channel: lookedUpChannel });
+
+      renderSubscriptions();
+      await lookUp(user);
+      await user.click(await screen.findByRole('button', { name: 'Confirm settings' }));
+
+      expect(mockUpdatePendingChannel).toHaveBeenCalledWith(lookedUpChannel.url, chosenSettings);
+      expect(mockAddPendingChannel).not.toHaveBeenCalled();
+    });
+
+    test('edits the settings of a pending channel from its row', async () => {
+      const user = userEvent.setup();
+      useChannelMutations.mockReturnValue({
+        pendingAdditions: [lookedUpChannel],
+        deletedChannels: [],
+        isAddingChannel: false,
+        isSaving: false,
+        lookupChannel: mockLookupChannel,
+        addPendingChannel: mockAddPendingChannel,
+        updatePendingChannel: mockUpdatePendingChannel,
+        queueChannelForDeletion: mockQueueChannelForDeletion,
+        undoChanges: mockUndoChanges,
+        saveChanges: mockSaveChanges,
+        hasPendingChanges: true,
+      });
+
+      renderSubscriptions();
+      await user.click(screen.getByTestId(`edit-${lookedUpChannel.url}`));
+
+      expect(await screen.findByTestId('add-channel-settings-dialog')).toHaveAttribute('data-mode', 'edit');
     });
 
     test('navigates to imports when Import button clicked', async () => {
@@ -744,7 +909,9 @@ describe('Subscriptions Component', () => {
         deletedChannels: [],
         isAddingChannel: false,
         isSaving: false,
-        addChannel: mockAddChannel,
+        lookupChannel: mockLookupChannel,
+      addPendingChannel: mockAddPendingChannel,
+      updatePendingChannel: mockUpdatePendingChannel,
         queueChannelForDeletion: mockQueueChannelForDeletion,
         undoChanges: mockUndoChanges,
         saveChanges: mockSaveChanges,
@@ -761,7 +928,9 @@ describe('Subscriptions Component', () => {
         deletedChannels: [],
         isAddingChannel: false,
         isSaving: false,
-        addChannel: mockAddChannel,
+        lookupChannel: mockLookupChannel,
+      addPendingChannel: mockAddPendingChannel,
+      updatePendingChannel: mockUpdatePendingChannel,
         queueChannelForDeletion: mockQueueChannelForDeletion,
         undoChanges: mockUndoChanges,
         saveChanges: mockSaveChanges,
@@ -782,7 +951,9 @@ describe('Subscriptions Component', () => {
         deletedChannels: [],
         isAddingChannel: false,
         isSaving: false,
-        addChannel: mockAddChannel,
+        lookupChannel: mockLookupChannel,
+      addPendingChannel: mockAddPendingChannel,
+      updatePendingChannel: mockUpdatePendingChannel,
         queueChannelForDeletion: mockQueueChannelForDeletion,
         undoChanges: mockUndoChanges,
         saveChanges: mockSaveChanges,
@@ -806,7 +977,9 @@ describe('Subscriptions Component', () => {
         deletedChannels: [],
         isAddingChannel: false,
         isSaving: false,
-        addChannel: mockAddChannel,
+        lookupChannel: mockLookupChannel,
+      addPendingChannel: mockAddPendingChannel,
+      updatePendingChannel: mockUpdatePendingChannel,
         queueChannelForDeletion: mockQueueChannelForDeletion,
         undoChanges: mockUndoChanges,
         saveChanges: mockSaveChanges,
@@ -832,7 +1005,9 @@ describe('Subscriptions Component', () => {
         deletedChannels: [],
         isAddingChannel: false,
         isSaving: false,
-        addChannel: mockAddChannel,
+        lookupChannel: mockLookupChannel,
+      addPendingChannel: mockAddPendingChannel,
+      updatePendingChannel: mockUpdatePendingChannel,
         queueChannelForDeletion: mockQueueChannelForDeletion,
         undoChanges: mockUndoChanges,
         saveChanges: mockSaveChanges,
@@ -854,7 +1029,9 @@ describe('Subscriptions Component', () => {
         deletedChannels: [],
         isAddingChannel: false,
         isSaving: true,
-        addChannel: mockAddChannel,
+        lookupChannel: mockLookupChannel,
+      addPendingChannel: mockAddPendingChannel,
+      updatePendingChannel: mockUpdatePendingChannel,
         queueChannelForDeletion: mockQueueChannelForDeletion,
         undoChanges: mockUndoChanges,
         saveChanges: mockSaveChanges,
@@ -888,7 +1065,9 @@ describe('Subscriptions Component', () => {
         deletedChannels: [],
         isAddingChannel: false,
         isSaving: false,
-        addChannel: mockAddChannel,
+        lookupChannel: mockLookupChannel,
+      addPendingChannel: mockAddPendingChannel,
+      updatePendingChannel: mockUpdatePendingChannel,
         queueChannelForDeletion: mockQueueChannelForDeletion,
         undoChanges: mockUndoChanges,
         saveChanges: mockSaveChanges,
@@ -917,7 +1096,9 @@ describe('Subscriptions Component', () => {
         deletedChannels: [mockChannels[0].url],
         isAddingChannel: false,
         isSaving: false,
-        addChannel: mockAddChannel,
+        lookupChannel: mockLookupChannel,
+      addPendingChannel: mockAddPendingChannel,
+      updatePendingChannel: mockUpdatePendingChannel,
         queueChannelForDeletion: mockQueueChannelForDeletion,
         undoChanges: mockUndoChanges,
         saveChanges: mockSaveChanges,
@@ -1178,7 +1359,9 @@ describe('Subscriptions Component', () => {
         deletedChannels: [],
         isAddingChannel: false,
         isSaving: false,
-        addChannel: mockAddChannel,
+        lookupChannel: mockLookupChannel,
+      addPendingChannel: mockAddPendingChannel,
+      updatePendingChannel: mockUpdatePendingChannel,
         queueChannelForDeletion: mockQueueChannelForDeletion,
         undoChanges: mockUndoChanges,
         saveChanges: mockSaveChanges,
@@ -1319,7 +1502,9 @@ describe('Subscriptions Component', () => {
         deletedChannels: [],
         isAddingChannel: false,
         isSaving: false,
-        addChannel: mockAddChannel,
+        lookupChannel: mockLookupChannel,
+      addPendingChannel: mockAddPendingChannel,
+      updatePendingChannel: mockUpdatePendingChannel,
         queueChannelForDeletion: mockQueueChannelForDeletion,
         undoChanges: mockUndoChanges,
         saveChanges: mockSaveChanges,
@@ -1361,7 +1546,9 @@ describe('Subscriptions Component', () => {
         deletedChannels: [],
         isAddingChannel: false,
         isSaving: false,
-        addChannel: mockAddChannel,
+        lookupChannel: mockLookupChannel,
+      addPendingChannel: mockAddPendingChannel,
+      updatePendingChannel: mockUpdatePendingChannel,
         queueChannelForDeletion: mockQueueChannelForDeletion,
         undoChanges: mockUndoChanges,
         saveChanges: mockSaveChanges,
@@ -1444,7 +1631,7 @@ describe('Subscriptions Component', () => {
 
     test('closes dialog when close button clicked', async () => {
       const user = userEvent.setup();
-      mockAddChannel.mockResolvedValue({
+      mockLookupChannel.mockResolvedValue({
         success: false,
         message: 'Test error'
       });
@@ -1510,7 +1697,7 @@ describe('Subscriptions Component', () => {
   describe('auto-add handoff via location.state.addChannelUrl', () => {
     beforeEach(() => {
       mockLocationState = { addChannelUrl: 'https://www.youtube.com/channel/UCabc' };
-      mockAddChannel.mockResolvedValue({ success: true });
+      mockLookupChannel.mockResolvedValue({ success: true });
     });
 
     afterEach(() => {
@@ -1521,14 +1708,25 @@ describe('Subscriptions Component', () => {
       renderSubscriptions();
 
       await waitFor(() => {
-        expect(mockAddChannel).toHaveBeenCalledWith('https://www.youtube.com/channel/UCabc');
+        expect(mockLookupChannel).toHaveBeenCalledWith('https://www.youtube.com/channel/UCabc');
       });
-      expect(mockAddChannel).toHaveBeenCalledTimes(1);
+      expect(mockLookupChannel).toHaveBeenCalledTimes(1);
       expect(mockNavigate).toHaveBeenCalledWith('/subscriptions', { replace: true });
     });
 
+    test('opens the settings dialog for the handed-off channel', async () => {
+      mockLookupChannel.mockResolvedValue({
+        success: true,
+        channel: { url: 'https://www.youtube.com/channel/UCabc', uploader: 'Handed Off' },
+      });
+
+      renderSubscriptions();
+
+      expect(await screen.findByText('Dialog for Handed Off')).toBeInTheDocument();
+    });
+
     test('surfaces the failure dialog when the auto-add fails', async () => {
-      mockAddChannel.mockResolvedValue({ success: false, message: 'Channel already exists' });
+      mockLookupChannel.mockResolvedValue({ success: false, message: 'Channel already exists' });
 
       renderSubscriptions();
 

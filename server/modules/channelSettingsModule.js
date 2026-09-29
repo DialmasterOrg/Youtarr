@@ -8,9 +8,11 @@ const logger = require('../logger');
 const ratingMapper = require('./ratingMapper');
 
 const { MEDIA_TAB_TYPE_MAP, VALID_TAB_TYPES, parseTabCsv } = require('./tabsUtils');
+const { parseAdditionalTags } = require('./additionalTags');
 const { validateSubFolderName } = require('./filesystem/subfolderValidation');
 const subfolderModule = require('./subfolderModule');
 const m3uGenerator = require('./m3uGenerator');
+const titleRegex = require('./titleFilterRegex');
 const {
   GLOBAL_DEFAULT_SENTINEL,
   buildChannelPath,
@@ -20,6 +22,9 @@ const {
   ensureDir,
   moveWithRetries
 } = require('./filesystem');
+
+// Settings the Add Channel dialog can set before a channel is subscribed.
+const NEW_CHANNEL_SETTING_KEYS = ['auto_download_enabled_tabs', 'video_quality', 'audio_format', 'sub_folder'];
 
 /**
  * Module for managing channel-level configuration settings
@@ -149,27 +154,65 @@ class ChannelSettingsModule {
       };
     }
 
-    // Test if it's a valid Python regex by testing against a sample string
-    try {
-      const { execFileSync } = require('child_process');
-      const path = require('path');
-      const scriptPath = path.join(__dirname, '../utils/test-python-regex.py');
+    return titleRegex.checkSyntax(trimmed);
+  }
 
-      // Use execFileSync with argument array to prevent shell injection
-      const result = execFileSync('python3', [scriptPath, trimmed, 'test'], {
-        encoding: 'utf8',
-        timeout: 1000,
-      });
+  /**
+   * Validate additionalTags
+   * @param {string|null} additionalTags - tags string to validate
+   * @returns {Object} - { valid: boolean, error?: string }
+   */
+  validateAdditionalTags(additionalTags) {
+    // NULL or empty string is valid
+    if (!additionalTags) {
+      return { valid: true };
+    }
 
-      const parsed = JSON.parse(result);
-      if (parsed.error) {
-        return { valid: false, error: parsed.error };
-      }
-    } catch (err) {
+    if (typeof additionalTags !== 'string') {
+      return { valid: false, error: 'Additional tags must be a string.' };
+    }
+
+    if (additionalTags.trim() === '') {
+      return { valid: true };
+    }
+
+    // Check for characters that aren't a-z, A-Z, underscore, dash, space, pipe, or some acceptable variant
+    if (/[^a-zA-Z0-9_ \p{L}\p{Nd}|-]/u.test(additionalTags)) {
       return {
         valid: false,
-        error: `Invalid Python regex pattern: ${err.message}`,
+        error: 'Additional tags must only contain alphanumeric characters, underscores, dashes, or spaces.'
       };
+    }
+
+    const trimmed = additionalTags.trim();
+
+    // Check length
+    if (trimmed.length > 1000) {
+      return {
+        valid: false,
+        error: 'Additional tags must be 1000 characters or less',
+      };
+    }
+
+    // Reject stray | characters (empty or whitespace-only segments)
+    if (trimmed.split('|').some((tag) => tag.trim() === '')) {
+      return {
+        valid: false,
+        error: 'Tags cannot be empty or whitespace-only (check for stray | characters)',
+      };
+    }
+
+    // Reject duplicate tags, compared case-insensitively so 'Gaming|gaming' is rejected too
+    const seen = new Set();
+    for (const tag of parseAdditionalTags(trimmed)) {
+      const lower = tag.toLowerCase();
+      if (seen.has(lower)) {
+        return {
+          valid: false,
+          error: `Duplicate tags are not allowed: ${tag}`,
+        };
+      }
+      seen.add(lower);
     }
 
     return { valid: true };
@@ -317,6 +360,44 @@ class ChannelSettingsModule {
   }
 
   /**
+   * Validate the settings a user picks while adding a channel, before the
+   * channel is subscribed. Only the add dialog's settings are accepted; the
+   * rest stay editable from the channel page after saving.
+   * @param {*} settings - Settings object from an /updatechannels add item
+   * @returns {{ valid: boolean, error?: string }}
+   */
+  validateNewChannelSettings(settings) {
+    if (settings === undefined) {
+      return { valid: true };
+    }
+    if (typeof settings !== 'object' || settings === null || Array.isArray(settings)) {
+      return { valid: false, error: 'Channel settings must be an object' };
+    }
+
+    const unsupported = Object.keys(settings).find((key) => !NEW_CHANNEL_SETTING_KEYS.includes(key));
+    if (unsupported) {
+      return { valid: false, error: `Unsupported channel setting: ${unsupported}` };
+    }
+
+    const nonString = NEW_CHANNEL_SETTING_KEYS.find(
+      (key) => settings[key] != null && typeof settings[key] !== 'string'
+    );
+    if (nonString) {
+      return { valid: false, error: `${nonString} must be a string or null` };
+    }
+
+    const allTabsCsv = Object.keys(MEDIA_TAB_TYPE_MAP).join(',');
+    const validations = [
+      settings.sub_folder !== undefined && this.validateSubFolder(settings.sub_folder),
+      settings.video_quality !== undefined && this.validateVideoQuality(settings.video_quality),
+      settings.audio_format !== undefined && this.validateAudioFormat(settings.audio_format),
+      this.validateAutoDownloadEnabledTabs(settings.auto_download_enabled_tabs, allTabsCsv, []),
+    ];
+    const failed = validations.find((result) => result && !result.valid);
+    return failed ? { valid: false, error: failed.error } : { valid: true };
+  }
+
+  /**
    * Check if a channel has any active downloads
    * @param {string} channelId - Channel ID to check
    * @returns {Promise<boolean>} - True if downloads are active
@@ -428,7 +509,6 @@ class ChannelSettingsModule {
    */
   async previewTitleFilter(channelId, regexPattern) {
     const ChannelVideo = require('../models/channelvideo');
-    const path = require('path');
 
     // Validate the regex pattern first
     const validation = this.validateTitleRegex(regexPattern);
@@ -460,43 +540,18 @@ class ChannelSettingsModule {
       };
     }
 
-    // Use Python to test each video title - same regex engine as yt-dlp
-    const { execFileSync } = require('child_process');
-    const scriptPath = path.join(__dirname, '../utils/test-python-regex.py');
-    const trimmedPattern = regexPattern.trim();
+    // Python regex, same engine as yt-dlp's match filter, in one process.
+    // A timeout or crash propagates: reporting "0 matches" would misdescribe
+    // a pattern that could not be evaluated.
+    const titles = channelVideos.map((cv) => cv.title || '');
+    const results = await titleRegex.matchTitles(regexPattern.trim(), titles);
 
-    const videos = channelVideos.map((cv) => {
-      const title = cv.title || '';
-      let matches = false;
-
-      try {
-        // Use execFileSync with argument array to prevent shell injection
-        const result = execFileSync(
-          'python3',
-          [scriptPath, trimmedPattern, title],
-          { encoding: 'utf8', timeout: 1000 }
-        );
-
-        const parsed = JSON.parse(result);
-        if (parsed.error) {
-          logger.error({ err: parsed.error, title }, 'Regex test error in previewTitleFilter');
-          matches = false;
-        } else {
-          matches = parsed.matches;
-        }
-      } catch (testError) {
-        // If Python execution fails for a specific title, consider it non-matching
-        logger.error({ err: testError.message, title }, 'Failed to test title in previewTitleFilter');
-        matches = false;
-      }
-
-      return {
-        video_id: cv.youtube_id,
-        title,
-        upload_date: cv.publishedAt,
-        matches,
-      };
-    });
+    const videos = channelVideos.map((cv, i) => ({
+      video_id: cv.youtube_id,
+      title: titles[i],
+      upload_date: cv.publishedAt,
+      matches: results[i],
+    }));
 
     const matchCount = videos.filter((v) => v.matches).length;
 
@@ -534,6 +589,7 @@ class ChannelSettingsModule {
       min_duration: channel.min_duration,
       max_duration: channel.max_duration,
       title_filter_regex: channel.title_filter_regex,
+      additional_tags: channel.additional_tags,
       audio_format: channel.audio_format,
       default_rating: channel.default_rating,
       skip_video_folder: channel.skip_video_folder,
@@ -653,6 +709,14 @@ class ChannelSettingsModule {
     // Validate title filter regex if provided
     if (settings.title_filter_regex !== undefined) {
       const validation = this.validateTitleRegex(settings.title_filter_regex);
+      if (!validation.valid) {
+        throw new Error(validation.error);
+      }
+    }
+
+    // Validate additional tags if provided
+    if (settings.additional_tags !== undefined) {
+      const validation = this.validateAdditionalTags(settings.additional_tags);
       if (!validation.valid) {
         throw new Error(validation.error);
       }
@@ -783,6 +847,10 @@ class ChannelSettingsModule {
         ? settings.title_filter_regex.trim()
         : null;
     }
+    if (settings.additional_tags !== undefined) {
+      const trimmedTags = typeof settings.additional_tags === 'string' ? settings.additional_tags.trim() : '';
+      updateData.additional_tags = trimmedTags || null;
+    }
     if (settings.default_rating !== undefined) {
       updateData.default_rating = normalizedDefaultRating;
     }
@@ -902,6 +970,7 @@ class ChannelSettingsModule {
         min_duration: updatedChannel.min_duration,
         max_duration: updatedChannel.max_duration,
         title_filter_regex: updatedChannel.title_filter_regex,
+        additional_tags: updatedChannel.additional_tags,
         audio_format: updatedChannel.audio_format,
         default_rating: updatedChannel.default_rating,
         skip_video_folder: updatedChannel.skip_video_folder,

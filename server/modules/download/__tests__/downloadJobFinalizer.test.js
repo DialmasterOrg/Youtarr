@@ -347,6 +347,75 @@ describe('downloadJobFinalizer', () => {
       expect(notificationModule.sendDownloadNotification).toHaveBeenCalled();
     });
 
+    describe('job issues reported to the run', () => {
+      beforeEach(() => {
+        downloadRunTracker.isActive.mockReturnValue(true);
+      });
+
+      it('reports a user termination with its reason', async () => {
+        jobModule.getJob.mockReturnValue({
+          status: 'Terminated', notes: 'User requested termination', output: '0 videos completed before termination', data: {},
+        });
+
+        await finalizeDownloadJob(makeContext({ runId: 'run-1', wasManuallyTerminated: true, manualReason: 'User requested termination' }));
+
+        expect(downloadRunTracker.recordJobResult).toHaveBeenCalledWith('run-1', mockJobId, expect.objectContaining({
+          jobIssue: { status: 'Terminated', reason: 'User requested termination', byUser: true },
+        }));
+      });
+
+      it('reports a job that ended in an error with its output', async () => {
+        jobModule.getJob.mockReturnValue({ status: 'Error', output: 'Bot detection encountered.', data: {} });
+
+        await finalizeDownloadJob(makeContext({ runId: 'run-1' }));
+
+        expect(downloadRunTracker.recordJobResult).toHaveBeenCalledWith('run-1', mockJobId, expect.objectContaining({
+          jobIssue: { status: 'Error', reason: 'Bot detection encountered.', byUser: false },
+        }));
+      });
+
+      describe('failures handed to an automatic retry', () => {
+        const failure = (youtubeId, error = 'unable to download video data: HTTP Error 403: Forbidden') => ({
+          youtubeId, title: 'Failing Video', channel: 'Some Channel', error, url: null,
+        });
+
+        const endWith = (failures) => {
+          downloadResultProcessor.partitionDownloadResults.mockReturnValue({ successfulVideos: [], failedVideosList: failures });
+          jobModule.getJob.mockReturnValue({ status: 'Error', output: '0 videos. Error: YouTube returned HTTP 403 (Forbidden)', data: {} });
+        };
+
+        it('reports no issue when every failed video went to the retry', async () => {
+          endWith([failure('vid403aaaa1')]);
+
+          await finalizeDownloadJob(makeContext({ runId: 'run-1', code: 1, enqueueAutoRetry: jest.fn().mockResolvedValue() }));
+
+          const [, , summary] = downloadRunTracker.recordJobResult.mock.calls[0];
+          expect(summary).toMatchObject({ totalFailed: 0 });
+          expect(summary).not.toHaveProperty('jobIssue');
+        });
+
+        it('still reports the error when a failed video was not retried', async () => {
+          endWith([failure('vid403aaaa1'), failure('vidprivate1', 'Private video. Sign in if you have been granted access')]);
+
+          await finalizeDownloadJob(makeContext({ runId: 'run-1', code: 1, enqueueAutoRetry: jest.fn().mockResolvedValue() }));
+
+          expect(downloadRunTracker.recordJobResult).toHaveBeenCalledWith('run-1', mockJobId, expect.objectContaining({
+            totalFailed: 1,
+            jobIssue: expect.objectContaining({ status: 'Error' }),
+          }));
+        });
+      });
+
+      it('reports no issue for a job that completed', async () => {
+        jobModule.getJob.mockReturnValue({ status: 'Complete', output: '2 videos.', data: {} });
+
+        await finalizeDownloadJob(makeContext({ runId: 'run-1' }));
+
+        const [, , summary] = downloadRunTracker.recordJobResult.mock.calls[0];
+        expect(summary).not.toHaveProperty('jobIssue');
+      });
+    });
+
     it('reports to the run tracker instead of summary/notification when the run is active', async () => {
       downloadRunTracker.isActive.mockReturnValue(true);
 

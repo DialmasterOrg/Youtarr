@@ -499,6 +499,35 @@ describe('NotificationsSection Component', () => {
       });
     });
 
+    test('leaves no pending status-reset timer after unmounting', async () => {
+      jest.useFakeTimers();
+      try {
+        const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: jest.fn().mockResolvedValueOnce({ success: true })
+        });
+        const props = createSectionProps({
+          config: createConfig({
+            notificationsEnabled: true,
+            appriseUrls: [{ url: 'discord://test', name: 'Discord', richFormatting: true }]
+          })
+        });
+        const { unmount } = renderWithProviders(<NotificationsSection {...props} />);
+
+        await user.click(screen.getByRole('button', { name: /Test notification/i }));
+        await waitFor(() => {
+          expect(screen.getByText(/Sent successfully/i)).toBeInTheDocument();
+        });
+        unmount();
+
+        expect(jest.getTimerCount()).toBe(0);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     test('shows error message when test fails', async () => {
       const user = setupUser();
       mockFetch.mockResolvedValueOnce({

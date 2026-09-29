@@ -61,6 +61,24 @@ describe('ChannelCard', () => {
     expect(screen.getByRole('button', { name: /view alpha channel/i })).toBeInTheDocument();
   });
 
+  test('links to the channel on YouTube outside the card action', () => {
+    render(<ChannelCard result={base} onClick={jest.fn()} />);
+
+    expect(screen.getByRole('link', { name: 'Open Alpha Channel in YouTube' })).toHaveAttribute(
+      'href',
+      'https://www.youtube.com/channel/UCa'
+    );
+  });
+
+  test('does not invoke onClick when the YouTube link is clicked', () => {
+    const onClick = jest.fn();
+    render(<ChannelCard result={base} onClick={onClick} />);
+
+    fireEvent.click(screen.getByRole('link', { name: 'Open Alpha Channel in YouTube' }));
+
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
   test('avatar image lazy-loads to avoid bursting the thumbnail CDN', () => {
     render(<ChannelCard result={base} onClick={jest.fn()} />);
 
