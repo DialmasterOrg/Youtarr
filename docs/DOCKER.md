@@ -13,7 +13,7 @@ Youtarr ships four Compose files so each supported runtime can layer the right o
 | File | Purpose |
 |------|---------|
 | `docker-compose.yml` | Production defaults with the bundled MariaDB container. Used by `./start.sh`. |
-| `docker-compose.dev.yml` | Development mode: mounts `./server/` and migrations into the container, runs the backend with `node --watch` for hot reload, and uses a separate `youtarr-db-dev` database with its own named volume. Used by `./scripts/start-dev.sh`. See [DEVELOPMENT.md](DEVELOPMENT.md). |
+| `docker-compose.dev.yml` | Development mode: mounts `./server/` and migrations into the container so backend changes load on a container restart without a rebuild, and uses a separate `youtarr-db-dev` database with its own named volume. Used by `./scripts/start-dev.sh`. See [DEVELOPMENT.md](DEVELOPMENT.md). |
 | `docker-compose.arm.yml` | Named-volume database override. The filename is historical: it was originally added for ARM systems, but it is also useful on Docker Desktop and NAS/virtualized filesystems. Layered on top of `docker-compose.yml` via `-f`. |
 | `docker-compose.external-db.yml` | Runs Youtarr against an external MariaDB/MySQL instance instead of the bundled database. Used by `./start-with-external-db.sh`. |
 
@@ -33,8 +33,8 @@ Youtarr ships four Compose files so each supported runtime can layer the right o
 - **Image**: `mariadb:10.3`
 - **Port**: 3321 inside the Docker network only; the bundled database is not published to the host
 - **Volumes**:
-  - `./database:/var/lib/mysql` - Database persistence (default)
-  - `youtarr-db-data:/var/lib/mysql` - Named volume (recommended for Docker Desktop/ARM/NAS)
+  - `youtarr-db-data:/var/lib/mysql` - Named volume, used by `./start.sh` for fresh installs on every platform. Compose prefixes it with the project name, so the actual volume is `<project>_youtarr-db-data` (usually `youtarr_youtarr-db-data`; list it with `docker volume ls | grep youtarr-db-data`).
+  - `./database:/var/lib/mysql` - Bind mount, kept by older installs that already have data in `./database/`
 - **Character Set**: utf8mb4 (full Unicode support)
 
 > **Docker Desktop/ARM/NAS users**: See [Named-Volume Database Override](#named-volume-database-override) below.
@@ -108,20 +108,13 @@ Run `docker compose up -d` after changing `.env` so the containers are recreated
 
 ### Manual Configuration
 
-Alternatively, edit `docker-compose.yml` directly:
-```yaml
-services:
-  youtarr-db:
-    volumes:
-      # Comment out bind mount:
-      # - ./database:/var/lib/mysql
-      # Use named volume:
-      - youtarr-db-data:/var/lib/mysql
-
-# Add at the bottom:
-volumes:
-  youtarr-db-data:
+To make plain `docker compose` commands always use the override, pin it in `.env` (`./start.sh` does this automatically for fresh installs):
+```env
+COMPOSE_PATH_SEPARATOR=:
+COMPOSE_FILE=docker-compose.yml:docker-compose.arm.yml
 ```
+
+Prefer this over editing `docker-compose.yml`: the compose file is tracked in git, so local edits conflict with `git pull` on updates. If you do edit it, change only the `youtarr-db` service's volume line to `- youtarr-db-data:/var/lib/mysql`. The file already declares `youtarr-db-data` in its top-level `volumes:` block; adding a second `volumes:` key makes Compose fail with `mapping key "volumes" already defined`.
 
 See [Troubleshooting](TROUBLESHOOTING.md#docker-desktop--arm-incorrect-information-in-file-errors) for more details on the underlying issue.
 
@@ -342,8 +335,11 @@ Without Git, updates require manual steps:
 # 1. Stop containers
 docker compose down
 
-# 2. Backup your configuration (recommended)
-tar -czf backup-$(date +%Y%m%d).tar.gz config jobs
+# 2. Backup your configuration and database (recommended)
+#    database/ holds the MariaDB data for this bind-mounted setup (owned by UID 999, hence sudo).
+#    Include it: updates can run database migrations, and a backup without it cannot undo them.
+#    If you switched to the named-volume override, back up that volume instead (see Backup and Restore below).
+sudo tar -czf backup-$(date +%Y%m%d).tar.gz config jobs server/images database
 
 # 3. Download updated compose file
 wget https://raw.githubusercontent.com/DialmasterOrg/Youtarr/main/docker-compose.yml -O docker-compose.yml
@@ -582,7 +578,7 @@ When `AUTH_ENABLED=false`:
 
 ### Persistent Data Locations
 
-- **Database**: `./database` directory
+- **Database**: the `<project>_youtarr-db-data` Docker volume (usually `youtarr_youtarr-db-data`) on installs started fresh with `./start.sh`; the `./database` directory on older bind-mounted installs and plain `docker compose up -d` setups without the named-volume override
 - **Config**: `./config` directory
 - **Videos**: User-specified directory (set via `YOUTUBE_OUTPUT_DIR`)
 - **Images/Jobs**: `./server/images` and `./jobs` directories
@@ -741,20 +737,29 @@ docker exec youtarr-db mysqldump -u root -p123qweasd youtarr > backup.sql
 docker exec -i youtarr-db mysql -u root -p123qweasd youtarr < backup.sql
 ```
 
-**Backup all data**:
+**Backup all data (recommended)**: use the backup and restore scripts. They detect whether your database lives in the named volume or in `./database` and include it automatically. See [Backup and Restore](BACKUP_RESTORE.md) for the full procedure.
 ```bash
-# Stop containers first
-./stop.sh
-
-# Create backup
-tar -czf youtarr-backup.tar.gz config/ database/ jobs/ server/images/
-
-# Include database directory (default compose setup)
-tar -czf db-backup.tar.gz database/
-
-# If you switched to a named Docker volume, adjust the command accordingly:
-# docker run --rm -v your_volume_name:/data -v $(pwd):/backup alpine tar -czf /backup/db-backup.tar.gz -C /data .
+docker stop youtarr
+./scripts/backup.sh
+docker start youtarr
 ```
+
+**Manual file-level backup**: stop both containers first so the database files are consistent. Then back up the Youtarr folders plus whichever database storage your install uses:
+```bash
+docker compose down
+
+# Youtarr folders
+tar -czf youtarr-backup.tar.gz config/ jobs/ server/images/
+
+# Named-volume installs (the default for fresh ./start.sh installs):
+docker volume ls | grep youtarr-db-data   # find the real name, usually youtarr_youtarr-db-data
+docker run --rm -v youtarr_youtarr-db-data:/data -v $(pwd):/backup alpine tar -czf /backup/db-backup.tar.gz -C /data .
+
+# Bind-mounted installs (older installs with data in ./database):
+sudo tar -czf db-backup.tar.gz database/
+```
+
+> **Use the real volume name.** Compose prefixes the volume with the project name. Running `docker run -v youtarr-db-data:/data ...` with the unprefixed name silently creates a new, empty volume and backs that up instead.
 
 ## Health Checks
 

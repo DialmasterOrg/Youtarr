@@ -78,7 +78,7 @@ In the library configuration:
 ### NFO Support
 
 Emby reads comprehensive NFO files containing:
-- **Title**: Video title with channel name
+- **Title**: Video title as it appears on YouTube (the NFO title never includes the channel name)
 - **Plot**: Complete YouTube description
 - **Premiered**: Original upload date
 - **Year**: Upload year (keeps Emby's production year accurate for sorting)

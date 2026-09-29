@@ -92,25 +92,25 @@ See [Authentication - Cannot Find the Setup Token](AUTHENTICATION.md#cannot-find
    - Restart: `./start.sh`
    - Get a new key using method 1 or 2 above
 
-### Discord Notifications Not Sending
+### Notifications Not Sending
 
-**Problem**: You never receive Discord alerts after downloads.
+**Problem**: You never receive notifications after downloads (Discord, Slack, Telegram, email, ntfy, or any other service).
 
 **Solution**:
 1. Open **Settings -> Notifications** and confirm **Enable Notifications** is on.
-2. Verify the Discord webhook URL is correct and saved; use the test notification button next to the saved URL to confirm delivery.
-3. Notifications only send when at least one new video downloads successfully—skipped runs will not trigger an alert.
-4. Check the server logs (`docker compose logs -f`) for `Failed to send notification` errors that may indicate network or webhook permission issues.
+2. Confirm your service appears in the list of added services. A URL typed into the **Notification URL** field is only added when you click **Add Service** (or press Enter); save the settings page afterwards.
+3. Use the test button (paper-plane icon, "Send test notification") next to the service to confirm delivery.
+4. Download notifications are sent when a run downloads at least one new video, or when a run fails with a diagnosed cause or stops early. A run with nothing new and no problems sends nothing.
+5. Check the server logs (`docker compose logs -f`) for `Failed to send notification` errors that may indicate network or permission issues.
 
 ### Test Notification Fails
 
 **Problem**: Sending a test notification shows an error.
 
 **Solution**:
-1. Ensure the webhook URL is saved and not blank or whitespace.
-2. Confirm the webhook belongs to Discord (URL should start with `https://discord.com/api/webhooks/`).
-3. Make sure the Discord channel still exists and the webhook has permission to post.
-4. Retry after checking network/firewall rules that may block outbound HTTPS requests.
+1. Check the URL format for your service. Notifications are delivered through [Apprise](https://github.com/caronc/apprise/wiki), so any Apprise URL works: for example `discord://webhook_id/webhook_token`, `https://discord.com/api/webhooks/...`, `slack://...`, `tgram://...`, or `ntfy://...`.
+2. Make sure the destination still exists (for example the Discord channel or webhook, Slack channel, or Telegram chat) and that the credentials in the URL still have permission to post.
+3. Retry after checking network/firewall rules that may block outbound requests to the service.
 
 ## Automatic Video Removal Issues
 
@@ -558,9 +558,11 @@ youtarr-db  | 2025-11-22  6:28:19 8 [Warning] Access denied for user '<DB_USER>'
 
    **WARNING: This will completely remove your DB data!**
    ```bash
+   docker compose down
    rm -rf ./database
-   # Or if using a named volume:
-   docker volume rm youtarr-db-data
+   # Or if using a named volume. Compose prefixes the name with the project name,
+   # usually youtarr_youtarr-db-data; confirm with: docker volume ls | grep youtarr-db-data
+   docker volume rm youtarr_youtarr-db-data
    ```
 
 4. Start Youtarr again:
@@ -579,7 +581,7 @@ ERROR 1396 (HY000) at line 21: Operation CREATE USER failed for 'root'@'%'
 
 **Solution**:
 1. Leave the `MYSQL_USER` / `MYSQL_PASSWORD` lines commented out in `docker-compose.yml` when `DB_USER=root` (the default). Only uncomment them if you explicitly set a non-root `DB_USER` / `DB_PASSWORD` in `.env`.
-2. Remove the broken datadir (`rm -rf ./database` or `docker volume rm youtarr-db-data`, depending on which storage you use).
+2. Stop the stack with `docker compose down`, then remove the broken datadir: `rm -rf ./database` for a bind mount, or `docker volume rm youtarr_youtarr-db-data` for a named volume. Compose prefixes the volume with the project name, so confirm yours with `docker volume ls | grep youtarr-db-data`.
 3. Run `docker compose up -d` again. MariaDB will initialize cleanly.
 
 ### Duplicate Column Errors After Upgrade
