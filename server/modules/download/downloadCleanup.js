@@ -58,9 +58,7 @@ async function cleanupInProgressVideos(jobId) {
 
             const dirFiles = await fsPromises.readdir(dirPath);
             for (const fileName of dirFiles) {
-              // Match files by YouTube ID: bracketed form [ID] is the yt-dlp default;
-              // dash form " - ID" is a fallback for non-standard naming patterns
-              if (fileName.includes(`[${youtubeId}]`) || fileName.includes(` - ${youtubeId}`)) {
+              if (filesystem.isFileForVideo(fileName, youtubeId)) {
                 const fullPath = path.join(dirPath, fileName);
                 try {
                   const stats = await fsPromises.stat(fullPath);

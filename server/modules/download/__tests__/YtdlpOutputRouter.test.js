@@ -123,6 +123,20 @@ describe('YtdlpOutputRouter', () => {
       });
     });
 
+    it('attributes a destination to its trailing ID when the title mentions another video\'s ID', () => {
+      router.handleStdoutChunk('[download] Destination: /output/Channel - Reference [aaaaaaaaaaa] [bbbbbbbbbbb].mp4\n');
+
+      expect(errorTracker.trackVideoFromDestination).toHaveBeenCalledWith('bbbbbbbbbbb');
+    });
+
+    it('keys the tracking entry by the trailing ID when the title mentions another video\'s ID', () => {
+      router.handleStdoutChunk('[download] Destination: /output/Channel - Reference [aaaaaaaaaaa] [bbbbbbbbbbb].mp4\n');
+
+      expect(JobVideoDownload.findOrCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { job_id: 'job-123', youtube_id: 'bbbbbbbbbbb' } })
+      );
+    });
+
     it('broadcasts videosUpdated for a video-persisted control marker line', () => {
       router.handleStdoutChunk('[Youtarr:videoPersisted] abc123XYZ_d\n');
 

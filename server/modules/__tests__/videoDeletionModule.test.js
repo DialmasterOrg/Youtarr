@@ -48,6 +48,7 @@ describe('VideoDeletionModule', () => {
     // wire it up explicitly; tests that need a failure path override per-test.
     mockFilesystem = {
       isVideoDirectory: jest.fn(() => true),
+      isFileForVideo: jest.requireActual('../filesystem/pathBuilder').isFileForVideo,
       cleanupEmptyChannelDirectory: jest.fn().mockResolvedValue(false),
       cleanupEmptyParents: jest.fn().mockResolvedValue(),
       isSubfolderDir: jest.fn((name) => name.startsWith('__')),
@@ -196,6 +197,30 @@ describe('VideoDeletionModule', () => {
 
       expect(mockFs.unlink).toHaveBeenCalledTimes(1);
       expect(mockFs.unlink).toHaveBeenCalledWith('/test/output/Channel Name/Song [abc123].mp3');
+    });
+
+    test('flat deletion leaves files of a video whose title mentions this video\'s ID', async () => {
+      mockFilesystem.isVideoDirectory.mockReturnValue(false);
+      mockFs.readdir.mockResolvedValue([
+        'Channel - Real [aaaaaaaaaaa].mp4',
+        'Channel - Real [aaaaaaaaaaa].en.srt',
+        'Channel - Reference [aaaaaaaaaaa] [bbbbbbbbbbb].mp4',
+        'Channel - talk - aaaaaaaaaaa rant [ccccccccccc].mp4'
+      ]);
+      mockVideo.findByPk.mockResolvedValue({
+        id: 1,
+        youtubeId: 'aaaaaaaaaaa',
+        filePath: '/test/output/Channel/Channel - Real [aaaaaaaaaaa].mp4',
+        removed: false,
+        update: jest.fn().mockResolvedValue()
+      });
+
+      await VideoDeletionModule.deleteVideoById(1);
+
+      expect(mockFs.unlink.mock.calls.map(([filePath]) => filePath)).toEqual([
+        '/test/output/Channel/Channel - Real [aaaaaaaaaaa].mp4',
+        '/test/output/Channel/Channel - Real [aaaaaaaaaaa].en.srt'
+      ]);
     });
 
     test('fails the safety check for an audio path without the youtube ID', async () => {
@@ -2152,6 +2177,7 @@ describe('VideoDeletionModule', () => {
       jest.doMock('fs', () => ({ promises: mockFs }));
       jest.doMock('../filesystem', () => ({
         isVideoDirectory: jest.fn(() => true),
+        isFileForVideo: jest.requireActual('../filesystem/pathBuilder').isFileForVideo,
         cleanupEmptyChannelDirectory: jest.fn().mockResolvedValue(false),
         cleanupEmptyParents: jest.fn().mockResolvedValue(),
         isSubfolderDir: jest.fn((name) => name.startsWith('__')),

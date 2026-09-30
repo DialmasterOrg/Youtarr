@@ -25,6 +25,7 @@ jest.mock('../../configModule', () => ({
 
 jest.mock('../../filesystem', () => ({
   isVideoDirectory: jest.fn(),
+  isFileForVideo: jest.requireActual('../../filesystem/pathBuilder').isFileForVideo,
   cleanupEmptyChannelDirectory: jest.fn().mockResolvedValue(false),
 }));
 
@@ -130,6 +131,30 @@ describe('downloadCleanup', () => {
       expect(mockFsPromises.unlink).not.toHaveBeenCalledWith('/output/Channel/other-video.mp4');
       // Should destroy the tracking entry
       expect(mockVideoDownload.destroy).toHaveBeenCalled();
+    });
+
+    it('leaves files of a video whose title mentions this video\'s ID in flat mode', async () => {
+      tempPathManager.isTempPath.mockReturnValue(true);
+      JobVideoDownload.findAll.mockResolvedValue([{
+        youtube_id: 'aaaaaaaaaaa',
+        file_path: '/output/Channel',
+        destroy: jest.fn().mockResolvedValue()
+      }]);
+      mockFsPromises.access.mockResolvedValue();
+      filesystem.isVideoDirectory.mockReturnValue(false);
+      mockFsPromises.readdir.mockResolvedValue([
+        'Channel - Real [aaaaaaaaaaa].f137.mp4.part',
+        'Channel - Reference [aaaaaaaaaaa] [bbbbbbbbbbb].mp4',
+        'Channel - talk - aaaaaaaaaaa rant [ccccccccccc].mp4'
+      ]);
+      mockFsPromises.stat.mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+      mockFsPromises.unlink.mockResolvedValue();
+
+      await cleanupInProgressVideos('job-123');
+
+      expect(mockFsPromises.unlink.mock.calls.map(([filePath]) => filePath)).toEqual([
+        '/output/Channel/Channel - Real [aaaaaaaaaaa].f137.mp4.part'
+      ]);
     });
 
     it('should check temp location when file path is final path', async () => {

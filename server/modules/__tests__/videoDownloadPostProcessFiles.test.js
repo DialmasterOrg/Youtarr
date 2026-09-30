@@ -1825,6 +1825,21 @@ describe('videoDownloadPostProcessFiles', () => {
       );
     });
 
+    it('flat move leaves files of a video whose title mentions this video\'s ID', async () => {
+      Channel.findOne.mockResolvedValue({ ...trackedChannel, skip_video_folder: true });
+      fs.readdir.mockResolvedValue([
+        'Video Title [abc123].mp4',
+        'Reference [abc123] [zzz999].mp4',
+        'talk - abc123 rant [yyy888].mp4',
+      ]);
+
+      await loadModule();
+      await settleAsync();
+
+      const movedFiles = moveWithRetries.mock.calls.map(([src]) => src.split('/').pop());
+      expect(movedFiles).toEqual(['Video Title [abc123].mp4']);
+    });
+
     it('explicit structure override beats the channel setting', async () => {
       process.env.YOUTARR_SKIP_VIDEO_FOLDER_OVERRIDE = 'true';
       Channel.findOne.mockResolvedValue({ ...trackedChannel, skip_video_folder: false });

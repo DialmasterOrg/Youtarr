@@ -8,6 +8,7 @@ const youtubeApi = require('./youtubeApi');
 const ChannelVideo = require('../models/channelvideo');
 const channelVideoReanchor = require('./channelVideoReanchor');
 const { parseTierFromFormatNote, selectionTierForHeight } = require('./resolutionTier');
+const { isFileForVideo } = require('./filesystem/pathBuilder');
 
 const NULL_METADATA = {
   description: null,
@@ -314,8 +315,7 @@ class VideoMetadataModule {
 
   /**
    * Find all related files for a video on disk (thumbnail, subtitles, nfo, etc.).
-   * Uses the same YouTube ID matching pattern as videoDeletionModule:
-   * files containing [youtubeId] or " - youtubeId" in the name.
+   * Uses the same file-ownership check as videoDeletionModule (isFileForVideo).
    * Excludes the main video and audio files (those are shown separately).
    * Returns only fileName, fileSize, and type - internal paths are stripped.
    */
@@ -334,9 +334,7 @@ class VideoMetadataModule {
       }
 
       // Filter to files belonging to this video
-      const matchingFiles = files.filter(
-        file => file.includes(`[${youtubeId}]`) || file.includes(` - ${youtubeId}`)
-      );
+      const matchingFiles = files.filter(file => isFileForVideo(file, youtubeId));
 
       // Get file stats and categorize
       const result = [];

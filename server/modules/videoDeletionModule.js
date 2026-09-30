@@ -2,7 +2,7 @@ const { Video } = require('../models');
 const fs = require('fs').promises;
 const path = require('path');
 const logger = require('../logger');
-const { isVideoDirectory, cleanupEmptyChannelDirectory, cleanupEmptyParents, isSubfolderDir, listSubdirectories, removeDirectoryResilient } = require('./filesystem');
+const { isVideoDirectory, isFileForVideo, cleanupEmptyChannelDirectory, cleanupEmptyParents, isSubfolderDir, listSubdirectories, removeDirectoryResilient } = require('./filesystem');
 const m3uGenerator = require('./m3uGenerator');
 const storageUsage = require('./storageUsage');
 const { STORED_BYTES_SQL } = storageUsage;
@@ -158,9 +158,7 @@ class VideoDeletionModule {
           logger.info({ videoId, videoDirectory, youtubeId: video.youtubeId }, 'Flat structure detected, deleting individual files');
           const files = await fs.readdir(videoDirectory);
           for (const file of files) {
-            // Match files by YouTube ID: bracketed form [ID] is the yt-dlp default;
-            // dash form " - ID" is a fallback for non-standard naming patterns
-            if (file.includes(`[${video.youtubeId}]`) || file.includes(` - ${video.youtubeId}`)) {
+            if (isFileForVideo(file, video.youtubeId)) {
               const fullPath = path.join(videoDirectory, file);
               try {
                 await fs.unlink(fullPath);
