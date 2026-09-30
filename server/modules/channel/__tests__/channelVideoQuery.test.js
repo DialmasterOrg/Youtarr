@@ -801,6 +801,76 @@ describe('channelVideoQuery', () => {
       expect(result).toHaveLength(1);
       expect(result[0].youtube_id).toBe('video1');
     });
+
+    describe('maxRating', () => {
+      const setupRatedVideos = () => {
+        const Video = require('../../../models/video');
+        ChannelVideo.findAll.mockResolvedValue([
+          { youtube_id: 'mature', publishedAt: '2024-01-04', toJSON() { return this; } },
+          { youtube_id: 'adults', publishedAt: '2024-01-03', toJSON() { return this; } },
+          { youtube_id: 'family', publishedAt: '2024-01-02', toJSON() { return this; } },
+          { youtube_id: 'notDownloaded', publishedAt: '2024-01-01', toJSON() { return this; } },
+        ]);
+        Video.findAll = jest.fn().mockResolvedValue([
+          { id: 1, youtubeId: 'mature', removed: false, normalized_rating: 'TV-MA' },
+          { id: 2, youtubeId: 'adults', removed: false, normalized_rating: 'NC-17' },
+          { id: 3, youtubeId: 'family', removed: false, normalized_rating: 'TV-G' },
+        ]);
+      };
+
+      const fetchWithRatingFilter = (ratingFilter) => channelVideoQuery.fetchNewestVideosFromDb(
+        'UC123', 50, 0, 'off', '', 'date', 'desc', false, 'video',
+        null, null, null, null, 'off', 'off', 'off', 'off', ratingFilter
+      );
+
+      test('hides videos rated above the maximum and keeps unrated ones', async () => {
+        setupRatedVideos();
+
+        const result = await fetchWithRatingFilter({ maxRating: 'PG', channelDefaultRating: null });
+
+        expect(result.map(v => v.youtube_id)).toEqual(['family', 'notDownloaded']);
+      });
+
+      test('keeps TV-MA but not NC-17 when the maximum is R', async () => {
+        setupRatedVideos();
+
+        const result = await fetchWithRatingFilter({ maxRating: 'R', channelDefaultRating: null });
+
+        expect(result.map(v => v.youtube_id)).toEqual(['mature', 'family', 'notDownloaded']);
+      });
+
+      test('judges videos not yet downloaded by the channel default rating', async () => {
+        setupRatedVideos();
+
+        const result = await fetchWithRatingFilter({ maxRating: 'PG', channelDefaultRating: 'TV-MA' });
+
+        expect(result.map(v => v.youtube_id)).toEqual(['family']);
+      });
+
+      test('treats a channel default of NR as unrated', async () => {
+        setupRatedVideos();
+
+        const result = await fetchWithRatingFilter({ maxRating: 'PG', channelDefaultRating: 'NR' });
+
+        expect(result.map(v => v.youtube_id)).toEqual(['family', 'notDownloaded']);
+      });
+
+      test('keeps the recorded rating of a downloaded video over the channel default', async () => {
+        setupRatedVideos();
+
+        const result = await fetchWithRatingFilter({ maxRating: 'TV-G', channelDefaultRating: 'TV-MA' });
+
+        expect(result.map(v => v.youtube_id)).toEqual(['family']);
+      });
+
+      test('returns every video when no maximum is set', async () => {
+        setupRatedVideos();
+
+        const result = await fetchWithRatingFilter(null);
+
+        expect(result).toHaveLength(4);
+      });
+    });
   });
 
   describe('getChannelVideoStats', () => {
@@ -926,6 +996,27 @@ describe('channelVideoQuery', () => {
 
       expect(result.totalCount).toBe(1);
       expect(result.oldestVideoDate).toBe('2024-01-01');
+    });
+
+    test('should count only videos within the rating filter', async () => {
+      const Video = require('../../../models/video');
+      const mockVideos = [
+        { youtube_id: 'video1', publishedAt: '2024-01-03', toJSON() { return this; } },
+        { youtube_id: 'video2', publishedAt: '2024-01-02', toJSON() { return this; } },
+        { youtube_id: 'video3', publishedAt: '2024-01-01', toJSON() { return this; } }
+      ];
+      ChannelVideo.findAll.mockResolvedValue(mockVideos);
+      Video.findAll = jest.fn().mockResolvedValue([
+        { id: 1, youtubeId: 'video1', removed: false, normalized_rating: 'TV-MA' },
+        { id: 2, youtubeId: 'video2', removed: false, normalized_rating: 'PG' }
+      ]);
+
+      const result = await channelVideoQuery.getChannelVideoStats(
+        'UC123', 'off', '', 'video', null, null, null, null, 'off', 'off', 'off', 'off',
+        { maxRating: 'TV-14', channelDefaultRating: null }
+      );
+
+      expect(result.totalCount).toBe(2); // video2 (PG) and video3 (unrated)
     });
 
     test('should combine downloadedFilter="exclude" and search filters', async () => {

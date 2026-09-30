@@ -2,6 +2,9 @@ import React from 'react';
 import { FormControl, InputLabel, Select, MenuItem } from '../../../ui';
 import { RATING_OPTIONS } from '../../../../utils/ratings';
 
+// "Not Rated" is not a level on the rating scale, so it cannot be a maximum.
+const MAX_RATING_OPTIONS = RATING_OPTIONS.filter((option) => option.value !== 'NR');
+
 export interface MaxRatingFilterProps {
   value: string;
   onChange: (value: string) => void;
@@ -22,7 +25,7 @@ function MaxRatingFilter({ value, onChange, label = 'Max Rating', compact = fals
         displayEmpty
         onChange={(event) => onChange(event.target.value as string)}
       >
-        {RATING_OPTIONS.map((option) => (
+        {MAX_RATING_OPTIONS.map((option) => (
           <MenuItem key={option.value} value={option.value}>
             {option.shortLabel}
           </MenuItem>

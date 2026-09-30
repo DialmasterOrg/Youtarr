@@ -98,7 +98,7 @@ function registerRoutes(app, deps) {
 
   // Video routes
   app.use(createVideoRoutes({
-    verifyToken, videosModule, downloadModule, videoOembedEnricher, videoLocalStatus, storageGuard, scheduledTaskManager,
+    verifyToken, videosModule, downloadModule, videoOembedEnricher, videoLocalStatus, storageGuard, scheduledTaskManager, ratingMapper,
   }));
 
   // Video search routes
