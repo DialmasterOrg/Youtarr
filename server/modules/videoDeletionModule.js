@@ -157,6 +157,7 @@ class VideoDeletionModule {
           // NEVER delete the directory itself (it's the channel folder containing other videos)
           logger.info({ videoId, videoDirectory, youtubeId: video.youtubeId }, 'Flat structure detected, deleting individual files');
           const files = await fs.readdir(videoDirectory);
+          let firstUnlinkError = null;
           for (const file of files) {
             if (isFileForVideo(file, video.youtubeId)) {
               const fullPath = path.join(videoDirectory, file);
@@ -166,9 +167,15 @@ class VideoDeletionModule {
               } catch (unlinkErr) {
                 if (unlinkErr.code !== 'ENOENT') {
                   logger.error({ videoId, file, err: unlinkErr }, 'Failed to delete file (flat mode)');
+                  firstUnlinkError = firstUnlinkError || unlinkErr;
                 }
               }
             }
+          }
+          // Keep going so every file we can remove is removed, but fail the
+          // delete so the row is not marked removed while files remain.
+          if (firstUnlinkError) {
+            throw firstUnlinkError;
           }
         } else {
           // Nested structure: delete the entire video directory.

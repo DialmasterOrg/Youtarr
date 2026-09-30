@@ -223,6 +223,57 @@ describe('VideoDeletionModule', () => {
       ]);
     });
 
+    describe('flat deletion unlink failures', () => {
+      const flatVideoRecord = () => ({
+        id: 1,
+        youtubeId: 'abc123',
+        filePath: '/test/output/Channel/Channel - Video [abc123].mp4',
+        removed: false,
+        update: jest.fn().mockResolvedValue()
+      });
+
+      const errorWithCode = (code) => Object.assign(new Error(code), { code });
+
+      beforeEach(() => {
+        mockFilesystem.isVideoDirectory.mockReturnValue(false);
+        mockFs.readdir.mockResolvedValue([
+          'Channel - Video [abc123].mp4',
+          'Channel - Video [abc123].jpg'
+        ]);
+      });
+
+      test('reports failure and leaves the row unremoved when a file cannot be deleted', async () => {
+        const record = flatVideoRecord();
+        mockVideo.findByPk.mockResolvedValue(record);
+        mockFs.unlink.mockRejectedValueOnce(errorWithCode('EACCES'));
+
+        const result = await VideoDeletionModule.deleteVideoById(1);
+
+        expect(result).toEqual(expect.objectContaining({ success: false, videoId: 1 }));
+        expect(record.update).not.toHaveBeenCalled();
+      });
+
+      test('still tries the remaining files after one fails', async () => {
+        mockVideo.findByPk.mockResolvedValue(flatVideoRecord());
+        mockFs.unlink.mockRejectedValueOnce(errorWithCode('EACCES'));
+
+        await VideoDeletionModule.deleteVideoById(1);
+
+        expect(mockFs.unlink).toHaveBeenCalledWith('/test/output/Channel/Channel - Video [abc123].jpg');
+      });
+
+      test('treats a file that is already gone as deleted', async () => {
+        const record = flatVideoRecord();
+        mockVideo.findByPk.mockResolvedValue(record);
+        mockFs.unlink.mockRejectedValueOnce(errorWithCode('ENOENT'));
+
+        const result = await VideoDeletionModule.deleteVideoById(1);
+
+        expect(result.success).toBe(true);
+        expect(record.update).toHaveBeenCalledWith({ removed: true });
+      });
+    });
+
     test('fails the safety check for an audio path without the youtube ID', async () => {
       mockVideo.findByPk.mockResolvedValue({
         id: 1,
