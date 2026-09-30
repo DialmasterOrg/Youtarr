@@ -2,11 +2,9 @@
 
 // Mock dependencies before requiring the module under test
 jest.mock('../../models/channel', () => {
-  const { Model } = require('sequelize');
-  class MockChannel extends Model {}
-  MockChannel.findAll = jest.fn();
-  MockChannel.init = jest.fn(() => MockChannel);
-  return MockChannel;
+  const Channel = jest.requireActual('../../models/channel');
+  Channel.findAll = jest.fn();
+  return Channel;
 });
 
 jest.mock('../configModule', () => ({

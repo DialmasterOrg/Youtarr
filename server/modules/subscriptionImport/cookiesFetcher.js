@@ -139,7 +139,7 @@ async function fetchWithCookies(buffer) {
     fs.writeFileSync(cookiesPath, buffer);
     fs.chmodSync(cookiesPath, COOKIES_FILE_MODE);
 
-    logger.info({ tempDir }, 'Running yt-dlp with one-time cookies to fetch subscriptions');
+    logger.info('Running yt-dlp with one-time cookies to fetch subscriptions');
 
     const { stdout } = await runYtdlp(cookiesPath);
     const channels = parseChannelEntries(stdout);

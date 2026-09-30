@@ -51,13 +51,14 @@ import { LoggingSection } from '../Configuration/sections/LoggingSection';
 
 interface SettingsProps {
   token: string | null;
+  onRequestsNavLinkPreview?: (visible: boolean | null) => void;
 }
 
 const PREVIEW_CUSTOM_TEMPLATE_MESSAGE = 'Preview this custom filename template before saving.';
 
 const normalizeFilenamePrefix = (prefix?: string | null) => (prefix ?? '').replace(/\s+$/, '');
 
-export function Settings({ token }: SettingsProps) {
+export function Settings({ token, onRequestsNavLinkPreview }: SettingsProps) {
   const location = useLocation();
 
   const {
@@ -243,6 +244,12 @@ export function Settings({ token }: SettingsProps) {
       clearYoutubeApiStatus();
     }
   };
+
+  useEffect(() => {
+    return () => {
+      onRequestsNavLinkPreview?.(null);
+    };
+  }, [onRequestsNavLinkPreview]);
 
   useEffect(() => {
     if (!initialConfig) {
@@ -483,6 +490,12 @@ export function Settings({ token }: SettingsProps) {
                 token={token}
                 apiKeyRateLimit={config.apiKeyRateLimit}
                 onRateLimitChange={(value) => handleConfigChange({ apiKeyRateLimit: value })}
+                externalApiEnabled={isPlatformManaged.externalApiEnabled}
+                showRequestsNavLink={config.showRequestsNavLink}
+                onShowRequestsNavLinkChange={(value) => {
+                  handleConfigChange({ showRequestsNavLink: value });
+                  onRequestsNavLinkPreview?.(value);
+                }}
               />
             }
           />

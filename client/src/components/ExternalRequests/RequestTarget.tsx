@@ -1,0 +1,18 @@
+import React, { useState } from 'react';
+import { ExternalLink, Radio, Trash2, Video } from 'lucide-react';
+import { Avatar, Chip } from '../ui';
+import RatingBadge from '../shared/RatingBadge';
+import { ExternalRequestReview } from '../../types/externalRequest';
+
+export const requestChannelLabel = (request: ExternalRequestReview) => request.target.channelTitle || (request.target.channelId ? `Channel ${request.target.channelId}` : request.type === 'channel' ? 'New channel request' : '-');
+const targetLabel = (request: ExternalRequestReview) => request.target.title || (request.type === 'channel' ? request.target.channelTitle || (request.target.channelUrl ? request.target.channelUrl.split('/').filter(Boolean).pop() : 'Requested YouTube channel') : request.target.youtubeId ? `YouTube video ${request.target.youtubeId}` : 'Request target');
+const targetUrl = (request: ExternalRequestReview) => request.type === 'channel' ? request.target.channelUrl || null : request.target.youtubeId ? `https://www.youtube.com/watch?v=${request.target.youtubeId}` : null;
+
+export default function RequestTarget({ request, compact = false }: { request: ExternalRequestReview; compact?: boolean }) {
+  const [thumbnailFailed, setThumbnailFailed] = useState(false); const label = targetLabel(request); const channel = request.type === 'channel'; const url = targetUrl(request);
+  return <div className="flex min-w-0 items-center gap-3">
+    {channel ? <Avatar src={thumbnailFailed ? undefined : request.target.youtubeChannelId ? `/images/channelthumb-${request.target.youtubeChannelId}.jpg` : undefined} alt={`${label} channel thumbnail`} size={compact ? 'medium' : 'large'} imgProps={{ onError: () => setThumbnailFailed(true) }}><Radio size={18} aria-hidden /></Avatar> : <div className={`relative shrink-0 overflow-hidden rounded-[var(--radius-thumb)] border border-border bg-muted ${compact ? 'h-[45px] w-20' : 'h-[54px] w-24'}`}>{request.target.youtubeId && !thumbnailFailed ? <img src={`https://i.ytimg.com/vi/${request.target.youtubeId}/mqdefault.jpg`} alt={`${label} thumbnail`} loading="lazy" onError={() => setThumbnailFailed(true)} className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center text-muted-foreground"><Video size={20} aria-hidden /></div>}</div>}
+    <div className="min-w-0 flex-1 space-y-1"><div className="flex min-w-0 items-start gap-1"><span className="min-w-0 flex-1 truncate font-medium text-foreground" title={label}>{label}</span>{url && <a href={url} target="_blank" rel="noreferrer" aria-label={`Open ${label} on YouTube`}><ExternalLink size={15} aria-hidden /></a>}</div><div className="flex flex-wrap items-center gap-1.5"><Chip label={request.type === 'delete_video' ? 'Video deletion' : channel ? 'Channel' : 'Video download'} icon={request.type === 'delete_video' ? <Trash2 size={13} aria-hidden /> : channel ? <Radio size={13} aria-hidden /> : <Video size={13} aria-hidden />} size="small" variant="outlined" />{!channel && <span className="truncate text-xs text-muted-foreground">{requestChannelLabel(request)}</span>}{(request.target.contentRating || request.target.rating) && <RatingBadge rating={request.target.contentRating || request.target.rating} size="small" />}</div></div>
+  </div>;
+}
+export function RequestStatus({ status }: { status: ExternalRequestReview['status'] }) { const color = status === 'completed' ? 'success' : ['failed', 'rejected', 'cancelled'].includes(status) ? 'error' : ['processing', 'approved'].includes(status) ? 'info' : 'warning'; return <Chip label={status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')} color={color as 'success' | 'error' | 'info' | 'warning'} size="small" />; }

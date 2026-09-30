@@ -19,6 +19,7 @@
     "test": "npm run lint && npm run test:unit",
     "test:unit": "npm run test:backend -- --passWithNoTests && npm run test:frontend -- --passWithNoTests",
     "test:backend": "jest --config jest.config.js",
+    "test:external-api-database": "jest --config jest.external-api-database.config.js --runInBand",
     "test:frontend": "cd client && npm test -- --watchAll=false",
     "test:coverage": "npm run lint && jest --config jest.config.js --coverage && cd client && npm test -- --coverage --watchAll=false",
     "test:watch": "jest --config jest.config.js --watch",
@@ -27,7 +28,9 @@
     "docs:generate": "npm --prefix website run generate",
     "docs:check": "npm --prefix website run check",
     "docs:build": "npm --prefix website run build",
-    "docs:serve": "npm --prefix website run serve"
+    "docs:serve": "npm --prefix website run serve",
+    "test:external-fixture": "jest --config jest.config.js server/modules/__tests__/externalContractFixtures.test.js --runInBand",
+    "test:external-contract-server": "node scripts/external-api-contract-server.js"
   },
   "lint-staged": {
     "./client/src/*.{ts,tsx},./server/*.js": [
@@ -64,7 +67,7 @@
     "express": "^4.18.2",
     "express-rate-limit": "^8.1.0",
     "fs-extra": "^11.1.1",
-    "multer": "^2.2.0",
+    "multer": "^2.3.0",
     "mysql2": "^3.9.4",
     "node-cron": "^3.0.2",
     "pino": "^10.0.0",

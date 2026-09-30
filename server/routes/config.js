@@ -4,6 +4,7 @@ const { SCHEDULES, getScheduleError, getSchedule } = require('../modules/schedul
 const customArgsParser = require('../modules/download/customArgsParser');
 const filenamePreview = require('../modules/filenamePreview');
 const { getExternalCookiesPath } = require('../modules/externalCookies');
+const { isExternalApiEnabled } = require('../modules/externalApiConfig');
 const { isValidLevelSetting } = require('../logging/logLevel');
 
 // Mirror of the frontend RATE_LIMIT_REGEX. Matches yt-dlp's --limit-rate
@@ -137,6 +138,11 @@ module.exports = function createConfigRoutes({
    *                   type: string
    *                 ytdlpUpdateFrequency:
    *                   type: string
+   *                 isPlatformManaged:
+   *                   type: object
+   *                   properties:
+   *                     externalApiEnabled:
+   *                       type: boolean
    *                 channelVideoCountsFrequency:
    *                   type: string
    *                 logLevel:
@@ -158,7 +164,8 @@ module.exports = function createConfigRoutes({
       plexUrl: !!process.env.PLEX_URL,
       authEnabled: process.env.AUTH_ENABLED === 'false' ? false : true,
       useTmpForDownloads: configModule.isElfhostedPlatform(),
-      ytdlpUpdates: configModule.isElfhostedPlatform()
+      ytdlpUpdates: configModule.isElfhostedPlatform(),
+      externalApiEnabled: isExternalApiEnabled()
     };
 
     safeConfig.deploymentEnvironment = {
