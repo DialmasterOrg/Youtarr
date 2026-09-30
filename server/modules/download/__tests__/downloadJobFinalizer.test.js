@@ -156,6 +156,16 @@ describe('downloadJobFinalizer', () => {
       expect('endDate' in fields).toBe(false);
     });
 
+    it('excludes the run\'s archive skips from the downloaded videos', async () => {
+      const archiveSkippedIds = new Set(['skip1234567']);
+
+      await finalizeDownloadJob(makeContext({ router: makeRouter({ archiveSkippedIds }) }));
+
+      expect(downloadResultProcessor.partitionDownloadResults).toHaveBeenCalledWith(
+        expect.anything(), expect.anything(), expect.anything(), archiveSkippedIds
+      );
+    });
+
     it('marks the job Error with COOKIES_REQUIRED when bot detection was seen', async () => {
       await finalizeDownloadJob(makeContext({ code: 1, router: makeRouter({ botDetected: true }) }));
 

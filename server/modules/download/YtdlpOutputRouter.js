@@ -12,6 +12,10 @@ const { VIDEO_PERSISTED_MARKER } = require('../constants/outputMarkers');
 const { containsHttp403, isSabrRestriction } = require('./ytdlpStderrSignals');
 
 const PROGRESS_THROTTLE_MS = 250;
+// yt-dlp prints "<id>: has already been recorded in the archive" when it skips
+// a URL before extraction, and "<id>: <title> has already been ..." when it
+// skips an extracted entry.
+const ARCHIVE_SKIP_PATTERN = /^\[download\]\s+([a-zA-Z0-9_-]{11}):.*has already been recorded in the archive/;
 // Must stay well under the client's 60s STALE_ACTIVITY_MS (useCurrentActivitySeed)
 // so the /api/jobs/current-activity snapshot is never considered stale mid-run.
 const PROGRESS_HEARTBEAT_MS = 25 * 1000;
@@ -40,6 +44,12 @@ class YtdlpOutputRouter {
     this.anonymousRetry = anonymousRetry;
     // Per-run detection state, read by the executor/finalizer after exit
     this.partialDestinations = new Set();
+    // Videos skipped as already in the download archive, minus any this run
+    // downloaded first (a URL listed twice downloads, then skips). Specific-URL
+    // jobs read metadata for every URL, so the finalizer must not count these
+    // as downloaded.
+    this.archiveSkippedIds = new Set();
+    this.downloadedIds = new Set();
     this.stderrBuffer = '';
     // Partial stderr line waiting on its newline, so a split line never
     // matches against half of itself.
@@ -128,10 +138,14 @@ class YtdlpOutputRouter {
         }
 
         if (line.includes('already been recorded in the archive') || line.includes('does not pass filter')) {
-          const id = line.includes('does not pass filter')
-            ? this.monitor.youtubeId
-            : line.match(/^\[download\]\s+([a-zA-Z0-9_-]{11}): has already been recorded in the archive/)?.[1];
+          const isArchiveSkip = !line.includes('does not pass filter');
+          const id = isArchiveSkip
+            ? line.match(ARCHIVE_SKIP_PATTERN)?.[1]
+            : this.monitor.youtubeId;
           if (id) videoActivity.finish(this.jobId, id);
+          if (isArchiveSkip && id && !this.downloadedIds.has(id)) {
+            this.archiveSkippedIds.add(id);
+          }
         }
 
         // Track destination files for cleanup
@@ -143,6 +157,8 @@ class YtdlpOutputRouter {
             // Create tracking entry for any video download
             const youtubeId = filesystem.extractYoutubeIdFromPath(destPath);
             if (youtubeId) {
+              this.downloadedIds.add(youtubeId);
+              this.archiveSkippedIds.delete(youtubeId);
               // Update current video ID if we can extract it from the path
               if (filesystem.isMainVideoFile(destPath)) {
                 this.errorTracker.trackVideoFromDestination(youtubeId);
