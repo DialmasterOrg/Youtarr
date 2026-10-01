@@ -30,6 +30,7 @@ const {
   isDirectoryEffectivelyEmpty,
   removeIfEmpty,
   isVideoDirectory,
+  isVideoDirectoryFor,
   isChannelDirectory,
   isSubfolderDir,
   cleanupEmptyChannelDirectory,
@@ -337,6 +338,59 @@ describe('filesystem/directoryManager', () => {
     it('should validate video ID characters', () => {
       expect(isVideoDirectory('/path/Channel - Title - abc_123-XYZ')).toBe(true);
       expect(isVideoDirectory('/path/Channel - Title - abc!@#$%^&')).toBe(false);
+    });
+  });
+
+  describe('isVideoDirectoryFor', () => {
+    const baseDir = '/videos';
+    const youtubeId = 'dQw4w9WgXcQ';
+
+    it('matches a "<prefix> - <id>" folder inside a channel folder', () => {
+      expect(isVideoDirectoryFor(`/videos/Channel/Channel - Title - ${youtubeId}`, youtubeId, baseDir)).toBe(true);
+    });
+
+    it('matches a video folder inside a subfolder\'s channel folder', () => {
+      expect(isVideoDirectoryFor(`/videos/__Music/Channel/Channel - Title - ${youtubeId}`, youtubeId, baseDir)).toBe(true);
+    });
+
+    it('matches a folder named by the bare video ID', () => {
+      expect(isVideoDirectoryFor(`/videos/Channel/${youtubeId}`, youtubeId, baseDir)).toBe(true);
+    });
+
+    it('does not match another video\'s folder', () => {
+      expect(isVideoDirectoryFor('/videos/Channel/Channel - Title - aaaaaaaaaaa', youtubeId, baseDir)).toBe(false);
+    });
+
+    it('does not match a channel folder whose name looks like a video folder', () => {
+      expect(isVideoDirectoryFor('/videos/Rick Beato - Music - Production', 'Production', baseDir)).toBe(false);
+    });
+
+    it('does not match a folder that only contains the ID mid-name', () => {
+      expect(isVideoDirectoryFor(`/videos/Channel/Channel - ${youtubeId} - Title`, youtubeId, baseDir)).toBe(false);
+    });
+
+    it('does not match a channel folder named by the video ID', () => {
+      expect(isVideoDirectoryFor(`/videos/${youtubeId}`, youtubeId, baseDir)).toBe(false);
+    });
+
+    it('does not match a channel folder ending in " - <id>"', () => {
+      expect(isVideoDirectoryFor(`/videos/Channel - ${youtubeId}`, youtubeId, baseDir)).toBe(false);
+    });
+
+    it('does not match a colliding channel folder inside a subfolder', () => {
+      expect(isVideoDirectoryFor(`/videos/__Music/Channel - ${youtubeId}`, youtubeId, baseDir)).toBe(false);
+    });
+
+    it('does not match a folder outside the base directory', () => {
+      expect(isVideoDirectoryFor(`/elsewhere/Channel/Channel - Title - ${youtubeId}`, youtubeId, baseDir)).toBe(false);
+    });
+
+    it('returns false without a video ID', () => {
+      expect(isVideoDirectoryFor('/videos/Channel/Channel - Title - ', undefined, baseDir)).toBe(false);
+    });
+
+    it('returns false without a base directory', () => {
+      expect(isVideoDirectoryFor(`/videos/Channel/Channel - Title - ${youtubeId}`, youtubeId, undefined)).toBe(false);
     });
   });
 

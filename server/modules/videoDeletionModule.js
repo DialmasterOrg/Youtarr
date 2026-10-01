@@ -2,7 +2,8 @@ const { Video } = require('../models');
 const fs = require('fs').promises;
 const path = require('path');
 const logger = require('../logger');
-const { isVideoDirectory, isFileForVideo, cleanupEmptyChannelDirectory, cleanupEmptyParents, isSubfolderDir, listSubdirectories, removeDirectoryResilient } = require('./filesystem');
+const configModule = require('./configModule');
+const { isVideoDirectoryFor, isFileForVideo, cleanupEmptyChannelDirectory, cleanupEmptyParents, isSubfolderDir, listSubdirectories, removeDirectoryResilient } = require('./filesystem');
 const m3uGenerator = require('./m3uGenerator');
 const storageUsage = require('./storageUsage');
 const { STORED_BYTES_SQL } = storageUsage;
@@ -20,15 +21,16 @@ class VideoDeletionModule {
   /**
    * Determine if a video's file path indicates flat structure (no video subfolder)
    * In nested mode, the parent directory name ends with " - <youtubeId>"
-   * In flat mode, the video file sits directly in the channel folder
+   * (or is just "<youtubeId>"); in flat mode, the video file sits directly
+   * in the channel folder. Paths outside baseDir are treated as flat, so
+   * nothing outside the downloads folder is ever removed recursively
    * @param {string} filePath - Full path to the video file
+   * @param {string} youtubeId - The video's YouTube ID
+   * @param {string} baseDir - The downloads root
    * @returns {boolean} - True if flat structure
    */
-  isFlat(filePath) {
-    const parentDir = path.dirname(filePath);
-    // If the parent directory looks like a video directory (ends with " - youtubeId"),
-    // then this is nested mode. Otherwise, it's flat mode.
-    return !isVideoDirectory(parentDir);
+  isFlat(filePath, youtubeId, baseDir) {
+    return !isVideoDirectoryFor(path.dirname(filePath), youtubeId, baseDir);
   }
 
   /**
@@ -67,7 +69,6 @@ class VideoDeletionModule {
    */
   async _tryCleanupChannelDirectory(filePath, flat) {
     try {
-      const configModule = require('./configModule');
       const baseDir = configModule.directoryPath;
 
       // Derive channel directory:
@@ -137,7 +138,7 @@ class VideoDeletionModule {
       // Nested: filePath = /path/to/channel/channel - title - id/video.mp4
       // Flat:   filePath = /path/to/channel/video.mp4
       const videoDirectory = path.dirname(primaryPath);
-      const flat = this.isFlat(primaryPath);
+      const flat = this.isFlat(primaryPath, video.youtubeId, configModule.directoryPath);
 
       // Safety check: ensure the path contains the youtube ID
       // This prevents accidentally deleting the wrong files
@@ -446,7 +447,6 @@ ${excludeClause}        ORDER BY timeCreated ASC
    * @returns {Promise<{removed: string[], errors: string[]}>}
    */
   async cleanupOrphanDirectories() {
-    const configModule = require('./configModule');
     const baseDir = configModule.directoryPath;
     const removed = [];
     const errors = [];
@@ -625,7 +625,6 @@ ${excludeClause}        ORDER BY timeCreated ASC
    */
   async performAutomaticCleanup(options = {}) {
     const { dryRun = false, overrides = {}, includeSamples = true } = options;
-    const configModule = require('./configModule');
     const autoRemovalQueries = require('./autoRemovalQueries');
     const baseConfig = configModule.getConfig();
     const config = { ...baseConfig, ...overrides };

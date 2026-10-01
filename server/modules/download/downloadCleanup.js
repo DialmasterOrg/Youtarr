@@ -51,7 +51,10 @@ async function cleanupInProgressVideos(jobId) {
 
           foundExistingPath = true;
 
-          if (!filesystem.isVideoDirectory(dirPath)) {
+          const baseDir = tempPathManager.isTempPath(dirPath)
+            ? tempPathManager.getTempBasePath()
+            : configModule.directoryPath;
+          if (!filesystem.isVideoDirectoryFor(dirPath, videoDownload.youtube_id, baseDir)) {
             // Flat mode (no video subfolder) - only delete files matching the youtube ID
             const youtubeId = videoDownload.youtube_id;
             logger.info({ youtubeId, dirPath }, 'Flat structure detected, cleaning up individual files');
