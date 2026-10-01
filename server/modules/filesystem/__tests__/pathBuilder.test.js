@@ -8,6 +8,7 @@ const {
   buildOutputTemplate,
   buildThumbnailTemplate,
   extractYoutubeIdFromPath,
+  isFileForVideo,
   calculateRelocatedPath,
   extractSubfolderFromAbsPath
 } = require('../pathBuilder');
@@ -198,6 +199,14 @@ describe('filesystem/pathBuilder', () => {
         .toBe('dQw4w9WgXcQ');
     });
 
+    it.each([
+      ['Reference [aaaaaaaaaaa] [bbbbbbbbbbb].mp4', 'bbbbbbbbbbb'],
+      ['Reference [aaaaaaaaaaa] [bbbbbbbbbbb].f137.mp4', 'bbbbbbbbbbb'],
+      ['Reference [aaaaaaaaaaa] [bbbbbbbbbbb].en.vtt', 'bbbbbbbbbbb']
+    ])('extracts the trailing ID, not one mentioned in the title, from %s', (fileName, expectedId) => {
+      expect(extractYoutubeIdFromPath(`/videos/Channel/${fileName}`)).toBe(expectedId);
+    });
+
     it('should extract ID from directory name', () => {
       expect(extractYoutubeIdFromPath('/videos/Channel/Video - Title - dQw4w9WgXcQ/poster.jpg'))
         .toBe('dQw4w9WgXcQ');
@@ -209,6 +218,51 @@ describe('filesystem/pathBuilder', () => {
 
     it('should handle empty path', () => {
       expect(extractYoutubeIdFromPath('')).toBeNull();
+    });
+  });
+
+  describe('isFileForVideo', () => {
+    const ID = 'aaaaaaaaaaa';
+
+    it.each([
+      'Channel - Title [aaaaaaaaaaa].mp4',
+      'Channel - Title [aaaaaaaaaaa].mp3',
+      'Channel - Title [aaaaaaaaaaa].jpg',
+      'Channel - Title [aaaaaaaaaaa].nfo',
+      'Channel - Title [aaaaaaaaaaa].en.srt',
+      'Channel - Title [aaaaaaaaaaa].en-orig.srt',
+      'Channel - Title [aaaaaaaaaaa]-fanart.jpg',
+      'Channel - Title [aaaaaaaaaaa]-backdrop.jpg',
+      'Channel - Title [aaaaaaaaaaa].f137.mp4.part',
+      'Channel - Title [aaaaaaaaaaa].temp.mp4',
+      '[aaaaaaaaaaa].mp4',
+      '._Channel - Title [aaaaaaaaaaa].mp4',
+      '._[aaaaaaaaaaa].mp4'
+    ])('matches this video\'s file %s', (fileName) => {
+      expect(isFileForVideo(fileName, ID)).toBe(true);
+    });
+
+    it.each([
+      'Channel - Reference [aaaaaaaaaaa] [bbbbbbbbbbb].mp4',
+      'Channel - Reference [aaaaaaaaaaa] [bbbbbbbbbbb].jpg',
+      'Channel - Reference [aaaaaaaaaaa]-x [bbbbbbbbbbb].mp4',
+      'Channel - talk - aaaaaaaaaaa rant [ccccccccccc].mp4',
+      'Channel - Title - aaaaaaaaaaa.mp4',
+      'Channel - Title [xaaaaaaaaaaa].mp4',
+      'Channel - Title [aaaaaaaaaaax].mp4',
+      'Channel - Title[aaaaaaaaaaa].mp4',
+      'poster.jpg'
+    ])('does not match other file %s', (fileName) => {
+      expect(isFileForVideo(fileName, ID)).toBe(false);
+    });
+
+    it('treats regex characters in the ID literally', () => {
+      expect(isFileForVideo('Title [a.a].mp4', 'a*a')).toBe(false);
+    });
+
+    it('returns false for a missing ID or file name', () => {
+      expect(isFileForVideo('Title [aaaaaaaaaaa].mp4', '')).toBe(false);
+      expect(isFileForVideo('', ID)).toBe(false);
     });
   });
 

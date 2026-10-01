@@ -338,6 +338,64 @@ function validateRating(input) {
   return { valid: true, value: normalized };
 }
 
+/**
+ * Ordering used by the video list "Max Rating" filter. Film and TV ratings
+ * share one scale; NC-17 ranks above R so a maximum of R excludes it.
+ * Kept separate from mapToNumericRating, whose levels feed NFO output.
+ */
+const RATING_FILTER_RANKS = {
+  'G': 1,
+  'TV-Y': 1,
+  'TV-G': 1,
+  'TV-Y7': 2,
+  'PG': 2,
+  'TV-PG': 2,
+  'PG-13': 3,
+  'TV-14': 3,
+  'R': 4,
+  'TV-MA': 4,
+  'NC-17': 5,
+};
+
+/**
+ * List the ratings a "Max Rating" filter allows.
+ * @param {string} maxRating - Normalized rating chosen as the maximum
+ * @returns {string[]|null} - Ratings ranked at or below maxRating, or null
+ *   when maxRating is not a known rating
+ */
+function getRatingsAtOrBelow(maxRating) {
+  const maxRank = RATING_FILTER_RANKS[maxRating];
+  if (!maxRank) return null;
+  return Object.keys(RATING_FILTER_RANKS).filter(rating => RATING_FILTER_RANKS[rating] <= maxRank);
+}
+
+/**
+ * Parse the maxRating query parameter shared by the video list routes.
+ * @param {*} input - Raw query value
+ * @returns {{ valid: boolean, value: (string|null) }} - value is null when no
+ *   limit was requested
+ */
+function parseMaxRatingParam(input) {
+  if (input === undefined || input === '') {
+    return { valid: true, value: null };
+  }
+  if (typeof input !== 'string' || !getRatingsAtOrBelow(input)) {
+    return { valid: false, value: null };
+  }
+  return { valid: true, value: input };
+}
+
+/**
+ * Whether a video's rating passes a "Max Rating" filter. Unrated videos
+ * always pass: most YouTube videos carry no rating.
+ * @param {string|null} rating - The video's normalized rating
+ * @param {string[]} allowedRatings - Result of getRatingsAtOrBelow
+ * @returns {boolean}
+ */
+function isRatingAllowed(rating, allowedRatings) {
+  return !rating || allowedRatings.includes(rating);
+}
+
 module.exports = {
   normalizeRating,
   mapAgeLimit,
@@ -346,6 +404,9 @@ module.exports = {
   mapToNumericRating,
   mapToITunEXTC,
   validateRating,
+  getRatingsAtOrBelow,
+  parseMaxRatingParam,
+  isRatingAllowed,
   NOT_RATED,
   MPAA_RATINGS,
   TVPG_RATINGS,

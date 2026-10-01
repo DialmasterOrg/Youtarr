@@ -646,6 +646,12 @@ How ratings are determined (priority):
 3. Mapped Metadata — ratings parsed and normalized from yt-dlp/YouTube metadata (MPAA, TV-PG, YT age-restrictions, or `age_limit` heuristics).
 4. NR / Not Rated — no rating could be determined; treated as unrated/null.
 
+### Max Rating filter
+
+The Videos and Channel pages have a **Max Rating** filter that hides videos rated above the rating you pick. Film and TV ratings share one scale: G, TV-Y, and TV-G; then PG, TV-PG, and TV-Y7; then PG-13 and TV-14; then R and TV-MA; then NC-17. For example, a maximum of R keeps TV-MA videos but hides NC-17 ones.
+
+Unrated videos are always shown, since most YouTube videos carry no rating. On a Channel page, a video that hasn't been downloaded is judged by the channel's default rating (the rating shown on its badge), so setting a channel default also controls how the filter treats that channel's undownloaded videos.
+
 ## External Access with API Keys
 Send videos to Youtarr from anywhere using API keys. This enables one-click downloads from browser bookmarklets, mobile shortcuts, and automation tools.
 

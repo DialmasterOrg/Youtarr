@@ -534,6 +534,50 @@ describe('VideosModule', () => {
       }));
     });
 
+    test('should keep unrated videos and ratings at or below maxRating', async () => {
+      mockVideo.count.mockResolvedValue(0);
+      mockVideo.findAll.mockResolvedValue([]);
+      mockSequelize.query.mockResolvedValueOnce([]);
+
+      await VideosModule.getVideosPaginated({ maxRating: 'PG' });
+
+      const ratingClause = mockVideo.count.mock.calls[0][0].where[Sequelize.Op.and][0];
+      const [unrated, rated] = ratingClause[Sequelize.Op.or];
+      expect(unrated).toEqual({ normalized_rating: null });
+      expect([...rated.normalized_rating[Sequelize.Op.in]].sort()).toEqual(['G', 'PG', 'TV-G', 'TV-PG', 'TV-Y', 'TV-Y7']);
+    });
+
+    test('should apply maxRating to the page query as well as the count', async () => {
+      mockVideo.count.mockResolvedValue(0);
+      mockVideo.findAll.mockResolvedValue([]);
+      mockSequelize.query.mockResolvedValueOnce([]);
+
+      await VideosModule.getVideosPaginated({ maxRating: 'R' });
+
+      const pageClause = mockVideo.findAll.mock.calls[0][0].where[Sequelize.Op.and][0];
+      expect(pageClause[Sequelize.Op.or][1].normalized_rating[Sequelize.Op.in]).not.toContain('NC-17');
+    });
+
+    test('should combine maxRating with search', async () => {
+      mockVideo.count.mockResolvedValue(0);
+      mockVideo.findAll.mockResolvedValue([]);
+      mockSequelize.query.mockResolvedValueOnce([]);
+
+      await VideosModule.getVideosPaginated({ search: 'cats', maxRating: 'PG' });
+
+      expect(mockVideo.count.mock.calls[0][0].where[Sequelize.Op.and]).toHaveLength(2);
+    });
+
+    test('should not filter on rating when maxRating is not set', async () => {
+      mockVideo.count.mockResolvedValue(0);
+      mockVideo.findAll.mockResolvedValue([]);
+      mockSequelize.query.mockResolvedValueOnce([]);
+
+      await VideosModule.getVideosPaginated();
+
+      expect(mockVideo.count.mock.calls[0][0].where[Sequelize.Op.and]).toBeUndefined();
+    });
+
     test('should omit the watched clause by default', async () => {
       mockVideo.count.mockResolvedValue(0);
       mockVideo.findAll.mockResolvedValue([]);

@@ -19,12 +19,16 @@ describe('videoPersistence', () => {
   let videoPersistence;
   let VideoMetadataProcessor;
   let Job;
+  let Video;
+  let JobVideo;
 
   beforeEach(() => {
     jest.clearAllMocks();
     jest.resetModules();
     VideoMetadataProcessor = require('../download/videoMetadataProcessor');
     Job = require('../../models/job');
+    Video = require('../../models/video');
+    JobVideo = require('../../models/jobvideo');
     videoPersistence = require('../videoPersistence');
   });
 
@@ -130,6 +134,41 @@ describe('videoPersistence', () => {
     });
   });
 
+  describe('upsertVideoForJob', () => {
+    const video = {
+      youtubeId: 'abc123',
+      filePath: '/videos/a.mp4',
+      fileSize: '1000',
+    };
+
+    test('links a newly created video to the job', async () => {
+      Video.findOne.mockResolvedValue(null);
+      Video.create.mockResolvedValue({ id: 7, youtubeId: 'abc123' });
+      JobVideo.findOne.mockResolvedValue(null);
+
+      await videoPersistence.upsertVideoForJob(video, { id: 'job1' });
+
+      expect(JobVideo.create).toHaveBeenCalledWith({ job_id: 'job1', video_id: 7 });
+    });
+
+    test('does not link an existing video outside recovery', async () => {
+      Video.findOne.mockResolvedValue({ id: 7, youtubeId: 'abc123', update: jest.fn() });
+
+      await videoPersistence.upsertVideoForJob(video, { id: 'job1' });
+
+      expect(JobVideo.create).not.toHaveBeenCalled();
+    });
+
+    test('links an existing video during recovery', async () => {
+      Video.findOne.mockResolvedValue({ id: 7, youtubeId: 'abc123', update: jest.fn() });
+      JobVideo.findOne.mockResolvedValue(null);
+
+      await videoPersistence.upsertVideoForJob(video, { id: 'job1' }, true);
+
+      expect(JobVideo.create).toHaveBeenCalledWith({ job_id: 'job1', video_id: 7 });
+    });
+  });
+
   describe('persistDownloadedVideoForJob', () => {
     const metadata = {
       youtubeId: 'abc123',
@@ -173,6 +212,30 @@ describe('videoPersistence', () => {
         })
       );
       expect(result).toEqual({ id: 7, youtubeId: 'abc123' });
+    });
+
+    test('links a re-downloaded existing video to the job', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([metadata]);
+      Job.findOne.mockResolvedValue({ id: 'job2' });
+      Video.findOne.mockResolvedValue({ id: 7, youtubeId: 'abc123', update: jest.fn() });
+      JobVideo.findOne.mockResolvedValue(null);
+      jest.spyOn(videoPersistence, 'upsertChannelVideoFromInfo').mockResolvedValue(undefined);
+
+      await videoPersistence.persistDownloadedVideoForJob({ jobId: 'job2', youtubeId: 'abc123' });
+
+      expect(JobVideo.create).toHaveBeenCalledWith({ job_id: 'job2', video_id: 7 });
+    });
+
+    test('does not duplicate an existing job link', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([metadata]);
+      Job.findOne.mockResolvedValue({ id: 'job2' });
+      Video.findOne.mockResolvedValue({ id: 7, youtubeId: 'abc123', update: jest.fn() });
+      JobVideo.findOne.mockResolvedValue({ job_id: 'job2', video_id: 7 });
+      jest.spyOn(videoPersistence, 'upsertChannelVideoFromInfo').mockResolvedValue(undefined);
+
+      await videoPersistence.persistDownloadedVideoForJob({ jobId: 'job2', youtubeId: 'abc123' });
+
+      expect(JobVideo.create).not.toHaveBeenCalled();
     });
 
     test('persists audio-only downloads (audioFilePath set, filePath null)', async () => {

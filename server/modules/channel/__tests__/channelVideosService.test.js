@@ -228,6 +228,58 @@ describe('channelVideosService', () => {
       expect(result.totalCount).toBe(1);
     });
 
+    describe('maxRating', () => {
+      const setupRatedChannel = (defaultRating) => {
+        const Video = require('../../../models/video');
+        const fileCheckModule = require('../../fileCheckModule');
+        fileCheckModule.checkVideoFiles.mockImplementation(async (videos) => ({ videos, updates: [] }));
+        Channel.findOne.mockResolvedValue({
+          ...mockChannelData,
+          lastFetchedByTab: JSON.stringify({ video: new Date().toISOString() }),
+          auto_download_enabled_tabs: 'video',
+          default_rating: defaultRating,
+        });
+        // A fresh check timestamp skips the live YouTube existence check.
+        const checkedAt = new Date();
+        ChannelVideo.findAll.mockResolvedValue([
+          { youtube_id: 'downloaded', publishedAt: new Date().toISOString(), youtube_removed_checked_at: checkedAt, toJSON() { return this; } },
+          { youtube_id: 'notDownloaded', publishedAt: new Date().toISOString(), youtube_removed_checked_at: checkedAt, toJSON() { return this; } },
+        ]);
+        Video.findAll = jest.fn().mockResolvedValue([
+          { id: 1, youtubeId: 'downloaded', removed: false, fileSize: 1000, filePath: '/path', normalized_rating: 'PG' },
+        ]);
+      };
+
+      const getWithMaxRating = (maxRating) => channelVideosService.getChannelVideos(
+        'UC123', 1, 50, 'off', '', 'date', 'desc', 'videos',
+        null, null, null, null, 'off', 'off', 'off', 'off', maxRating
+      );
+
+      test('hides videos whose channel default rating is above the maximum', async () => {
+        setupRatedChannel('TV-MA');
+
+        const result = await getWithMaxRating('PG');
+
+        expect(result.videos.map((v) => v.youtube_id)).toEqual(['downloaded']);
+      });
+
+      test('counts only videos within the maximum', async () => {
+        setupRatedChannel('TV-MA');
+
+        const result = await getWithMaxRating('PG');
+
+        expect(result.totalCount).toBe(1);
+      });
+
+      test('keeps unrated videos when the channel has no default rating', async () => {
+        setupRatedChannel(null);
+
+        const result = await getWithMaxRating('PG');
+
+        expect(result.totalCount).toBe(2);
+      });
+    });
+
     test('should skip auto-refresh when fetch already in progress', async () => {
       const Video = require('../../../models/video');
       const mockChannel = { ...mockChannelData, lastFetchedByTab: null, auto_download_enabled_tabs: 'video' };

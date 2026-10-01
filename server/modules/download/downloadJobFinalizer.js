@@ -202,7 +202,12 @@ async function finalizeDownloadJob({
     const videoCount = urlsToProcess.length;
     let videoData = await VideoMetadataProcessor.processVideoMetadata(urlsToProcess);
 
-    const { successfulVideos, failedVideosList } = downloadResultProcessor.partitionDownloadResults(videoData, errorTracker, urlsToProcess);
+    const { successfulVideos, failedVideosList } = downloadResultProcessor.partitionDownloadResults(
+      videoData,
+      errorTracker,
+      urlsToProcess,
+      router.archiveSkippedIds
+    );
     // Use successful videos for further processing (archive, database, etc.)
     videoData = successfulVideos;
 

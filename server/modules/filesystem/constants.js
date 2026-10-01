@@ -111,9 +111,13 @@ function composeVideoFolderName(prefix) {
 
 /**
  * Pattern to extract YouTube video ID from filename
- * Matches [VideoID] where VideoID is 10-12 alphanumeric characters (including - and _)
+ * Matches the file's own trailing [VideoID] (10-12 alphanumeric characters,
+ * including - and _), followed only by its extension or sidecar suffix
+ * (".mp4", ".f137.mp4", ".en.vtt"). Anchored to the last token so a title
+ * that mentions another video's ID ("Reference [ID] [otherId].mp4") yields
+ * otherId.
  */
-const YOUTUBE_ID_BRACKET_PATTERN = /\[([a-zA-Z0-9_-]{10,12})\]/;
+const YOUTUBE_ID_BRACKET_PATTERN = /\[([a-zA-Z0-9_-]{10,12})\][^\s[\]]*$/;
 
 /**
  * Pattern to extract YouTube video ID from directory name
