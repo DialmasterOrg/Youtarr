@@ -5,15 +5,25 @@ jest.mock('../../logger');
 describe('storageUsage', () => {
   let storageUsage;
   let mockSequelize;
+  let mockVideo;
 
   beforeEach(() => {
     jest.resetModules();
     jest.clearAllMocks();
 
-    mockSequelize = { query: jest.fn() };
+    mockSequelize = {
+      fn: jest.fn((...args) => ['fn', args]),
+      literal: jest.fn((sql) => sql),
+    };
     jest.doMock('../../db.js', () => ({
-      Sequelize: { QueryTypes: { SELECT: 'SELECT' } },
-      sequelize: mockSequelize
+      sequelize: mockSequelize,
+    }));
+
+    mockVideo = {
+      findOne: jest.fn(),
+    };
+    jest.doMock('../../models', () => ({
+      Video: mockVideo,
     }));
 
     storageUsage = require('../storageUsage');
@@ -21,29 +31,42 @@ describe('storageUsage', () => {
 
   describe('getDownloadedBytes', () => {
     test('returns the summed size as a number', async () => {
-      mockSequelize.query.mockResolvedValue([{ totalBytes: '5368709120' }]);
+      mockVideo.findOne.mockResolvedValue({ totalBytes: '5368709120' });
 
       await expect(storageUsage.getDownloadedBytes()).resolves.toBe(5368709120);
     });
 
     test('counts video and MP3 bytes of videos not marked removed', async () => {
-      mockSequelize.query.mockResolvedValue([{ totalBytes: 0 }]);
+      mockVideo.findOne.mockResolvedValue({ totalBytes: 0 });
 
       await storageUsage.getDownloadedBytes();
 
-      const [sql] = mockSequelize.query.mock.calls[0];
-      expect(sql).toContain(storageUsage.STORED_BYTES_SQL);
-      expect(sql).toContain('videos.removed = 0');
+      expect(mockVideo.findOne).toHaveBeenCalledWith({
+        attributes: [
+          [
+            mockSequelize.fn(
+              'COALESCE',
+              mockSequelize.fn('SUM', mockSequelize.literal(storageUsage.STORED_BYTES_SQL)),
+              0,
+            ),
+            'totalBytes',
+          ],
+        ],
+        where: {
+          removed: false,
+        },
+        raw: true,
+      });
     });
 
     test('returns 0 when the query yields no row', async () => {
-      mockSequelize.query.mockResolvedValue([]);
+      mockVideo.findOne.mockResolvedValue({ totalBytes: null });
 
       await expect(storageUsage.getDownloadedBytes()).resolves.toBe(0);
     });
 
     test('propagates query errors so callers can fail open or closed', async () => {
-      mockSequelize.query.mockRejectedValue(new Error('db down'));
+      mockVideo.findOne.mockRejectedValue(new Error('db down'));
 
       await expect(storageUsage.getDownloadedBytes()).rejects.toThrow('db down');
     });

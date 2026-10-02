@@ -33,6 +33,14 @@ const BACKFILL_PROBE_CONCURRENCY = 4;
 const RESCAN_WRITE_CONCURRENCY = 4;
 
 class VideosModule {
+  // The SQL to calcualte the timeCreated attribute for videos.
+  TIME_CREATED_ATTRIBUTE = sequelize.fn(
+    'COALESCE',
+    sequelize.col('Video.last_downloaded_at'),
+    sequelize.col('jobVideos->job.time_created'),
+    sequelize.fn('STR_TO_DATE', sequelize.col('Video.original_date'), '%Y%m%d'),
+  );
+
   constructor() {
     this._backfillRunning = false;
   }
@@ -134,15 +142,7 @@ class VideosModule {
       // Define attributes
       options.attributes = {
         include: [
-          [
-            sequelize.fn(
-              'COALESCE',
-              sequelize.col('Video.last_downloaded_at'),
-              sequelize.col('jobVideos->job.time_created'),
-              sequelize.fn('STR_TO_DATE', sequelize.col('Video.original_date'), '%Y%m%d'),
-            ),
-            'timeCreated',
-          ],
+          [this.TIME_CREATED_ATTRIBUTE, 'timeCreated'],
         ],
       };
 

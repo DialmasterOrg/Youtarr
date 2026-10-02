@@ -34,6 +34,9 @@ PlaylistSyncState.belongsTo(Playlist, { foreignKey: 'playlist_id', targetKey: 'i
 Video.hasMany(VideoWatchStatus, { foreignKey: 'video_id', as: 'watchStatuses' });
 VideoWatchStatus.belongsTo(Video, { foreignKey: 'video_id', as: 'video' });
 
+Video.belongsTo(Channel, { foreignKey: 'channel_id', as: 'channel' });
+Channel.hasMany(Video, { foreignKey: 'channel_id', as: 'videos' });
+
 module.exports = {
   Job,
   JobVideo,

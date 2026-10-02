@@ -238,7 +238,6 @@ describe('VideosModule', () => {
       mockVideo.count.mockResolvedValue(0);
       mockVideo.findAll.mockResolvedValue([]);
       mockVideo.aggregate.mockResolvedValue([]);
-      mockSequelize.fn.mockImplementation((...args) => ['fn', ...args]);
 
       await VideosModule.getVideosPaginated();
 

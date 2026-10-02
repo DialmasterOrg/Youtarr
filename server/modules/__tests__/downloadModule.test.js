@@ -40,6 +40,7 @@ jest.mock('../../models/channel', () => ({
 jest.mock('../../models/channelvideo', () => ({
   findAll: jest.fn()
 }));
+jest.mock('../../models', () => ({ }));
 jest.mock('../videoValidationModule', () => ({ getCachedChannelId: jest.fn(() => null) }));
 jest.mock('../channelDownloadGrouper', () => ({
   generateDownloadGroups: jest.fn()
