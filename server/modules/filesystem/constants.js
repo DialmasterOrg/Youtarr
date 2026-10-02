@@ -173,6 +173,32 @@ const M3U_FILE_PATTERN = /\.m3u(\.tmp)?$/i;
  */
 const APPLEDOUBLE_FILE_PATTERN = /^\._/;
 
+/**
+ * Library folder name of the downloads folder itself; subfolders are named
+ * without their __ prefix.
+ */
+const MAIN_LIBRARY_FOLDER = '';
+
+/**
+ * Season folder inside a TV show folder: "Season 00", "Season 01", "Season 2024".
+ */
+const SEASON_FOLDER_PATTERN = /^Season (\d+)$/;
+
+/**
+ * Season-level metadata and art that cannot keep an emptied season folder
+ * alive in a TV library folder: season.nfo plus the season poster names Plex,
+ * Jellyfin, Emby and Kodi read. Episode files and their sidecars carry the
+ * video's [id] and are deleted with it.
+ */
+const TV_SEASON_IGNORABLE_FILE_PATTERN = /^(season\.nfo|(poster|folder|banner|fanart|backdrop|landscape|thumb)\.(jpe?g|png|webp|tbn)|season(\d+|-specials)(-(poster|banner|fanart|landscape))?\.(jpe?g|png|webp|tbn))$/i;
+
+/**
+ * Show-level metadata and art that cannot keep a TV show folder alive once its
+ * season folders are gone: tvshow.nfo, show art, season posters stored at the
+ * show level, and .plexignore. Only applied inside TV library folders.
+ */
+const TV_SHOW_IGNORABLE_FILE_PATTERN = /^(tvshow\.nfo|\.plexignore|(poster|folder|banner|fanart|backdrop|landscape|logo|clearlogo|clearart|thumb)\.(jpe?g|png|webp|tbn)|season(\d+|-specials|-all)(-(poster|banner|fanart|landscape))?\.(jpe?g|png|webp|tbn))$/i;
+
 module.exports = {
   SUBFOLDER_PREFIX,
   GLOBAL_DEFAULT_SENTINEL,
@@ -193,5 +219,9 @@ module.exports = {
   FRAGMENT_FILE_PATTERN,
   CHANNEL_CLEANUP_IGNORABLE_FILES,
   M3U_FILE_PATTERN,
-  APPLEDOUBLE_FILE_PATTERN
+  APPLEDOUBLE_FILE_PATTERN,
+  MAIN_LIBRARY_FOLDER,
+  SEASON_FOLDER_PATTERN,
+  TV_SEASON_IGNORABLE_FILE_PATTERN,
+  TV_SHOW_IGNORABLE_FILE_PATTERN
 };

@@ -691,6 +691,7 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
     // Downloads are always staged in temp, so we move to final location here
     // This handles subfolder routing atomically (one move instead of two)
     let finalVideoPath = videoPath;
+    let movedChannelFolderPath = null;
 
     if (tempPathManager.isTempPath(videoPath)) {
       logger.info({ isFlatMode }, '[Post-Process] Moving files from temp to final location');
@@ -798,6 +799,7 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
           ? videoDirectory
           : (isFlatMode ? videoDirectory : path.dirname(videoDirectory));
         await cleanupEmptyParents(parentDir, tempBasePath);
+        movedChannelFolderPath = targetChannelFolderForMove;
 
         // Verify the final file exists
         if (!fs.existsSync(finalVideoPath)) {
@@ -917,11 +919,11 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
     }
 
     // Copy channel thumbnail as poster.jpg to channel folder (must be done AFTER all moves)
-    // Calculate the final channel folder path based on the final video path
-    // In flat mode, the file is directly in the channel folder
-    const finalChannelFolderPath = outgoingFlat
+    // Use the channel folder the move wrote to; without a move, derive it from
+    // the final video path (in flat mode, the file is directly in the channel folder)
+    const finalChannelFolderPath = movedChannelFolderPath || (outgoingFlat
       ? path.dirname(finalVideoPath)
-      : path.dirname(path.dirname(finalVideoPath));
+      : path.dirname(path.dirname(finalVideoPath)));
     if (jsonData.channel_id) {
       await copyChannelPosterIfNeeded(jsonData.channel_id, finalChannelFolderPath);
       await copyChannelBackdropIfNeeded(jsonData.channel_id, finalChannelFolderPath);

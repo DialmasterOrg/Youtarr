@@ -17,6 +17,8 @@ jest.mock('../storageGuard', () => ({
 // beforeEach installs persists across resetModules and only has `promises`,
 // which fs-extra (required by directoryManager) cannot load against.
 const { isVideoDirectoryFor } = jest.requireActual('../filesystem/directoryManager');
+const { resolveLibraryFolder, locateEpisodeFolders } = jest.requireActual('../filesystem/showFolderCleanup');
+const { extractSubfolderName } = jest.requireActual('../filesystem/pathBuilder');
 
 describe('VideoDeletionModule', () => {
   let VideoDeletionModule;
@@ -24,6 +26,7 @@ describe('VideoDeletionModule', () => {
   let mockFs;
   let mockLogger;
   let mockFilesystem;
+  let mockLibraryLayouts;
   let m3uGenerator;
 
   beforeEach(() => {
@@ -58,8 +61,20 @@ describe('VideoDeletionModule', () => {
       cleanupEmptyChannelDirectory: jest.fn().mockResolvedValue(false),
       cleanupEmptyParents: jest.fn().mockResolvedValue(),
       isSubfolderDir: jest.fn((name) => name.startsWith('__')),
+      extractSubfolderName,
       listSubdirectories: jest.fn().mockResolvedValue([]),
-      removeDirectoryResilient: jest.fn().mockResolvedValue()
+      removeDirectoryResilient: jest.fn().mockResolvedValue(),
+      resolveLibraryFolder,
+      locateEpisodeFolders,
+      cleanupEmptyShowFolders: jest.fn().mockResolvedValue({ removedSeason: false, removedShow: false }),
+      cleanupOrphanShowFolder: jest.fn().mockResolvedValue([])
+    };
+
+    // Every library folder uses the videos layout unless a test says otherwise.
+    mockLibraryLayouts = {
+      LAYOUT_VIDEOS: 'videos',
+      LAYOUT_TV: 'tv',
+      getLayoutResolver: jest.fn().mockResolvedValue(() => 'videos')
     };
 
     // Mock the models
@@ -73,6 +88,7 @@ describe('VideoDeletionModule', () => {
     }));
 
     jest.doMock('../filesystem', () => mockFilesystem);
+    jest.doMock('../tvShows/libraryLayouts', () => mockLibraryLayouts);
 
     // Mock configModule for _tryCleanupChannelDirectory
     jest.doMock('../configModule', () => ({
@@ -678,6 +694,124 @@ describe('VideoDeletionModule', () => {
       await VideoDeletionModule.deleteVideoById(1);
 
       expect(mockFilesystem.cleanupEmptyParents).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('episodes in TV library folders', () => {
+    const tvIn = (...tvFolders) => mockLibraryLayouts.getLayoutResolver
+      .mockResolvedValue((libraryFolder) => (tvFolders.includes(libraryFolder) ? 'tv' : 'videos'));
+
+    const episodeRecord = (filePath) => ({
+      id: 1,
+      youtubeId: 'abc123',
+      filePath,
+      removed: false,
+      update: jest.fn().mockResolvedValue()
+    });
+
+    test('deletes only the episode files from its season folder', async () => {
+      tvIn('');
+      mockVideo.findByPk.mockResolvedValue(
+        episodeRecord('/test/output/Show/Season 2024/S2024E01151200 - Title [abc123].mp4')
+      );
+      mockFs.readdir.mockResolvedValue([
+        'S2024E01151200 - Title [abc123].mp4',
+        'S2024E01151200 - Title [abc123].nfo',
+        'S2024E01151200 - Title [abc123].en.srt',
+        'S2024E01151300 - Other [zzz999].mp4',
+        'season.nfo'
+      ]);
+
+      await VideoDeletionModule.deleteVideoById(1);
+
+      expect(mockFs.unlink.mock.calls.map(([filePath]) => filePath)).toEqual([
+        '/test/output/Show/Season 2024/S2024E01151200 - Title [abc123].mp4',
+        '/test/output/Show/Season 2024/S2024E01151200 - Title [abc123].nfo',
+        '/test/output/Show/Season 2024/S2024E01151200 - Title [abc123].en.srt'
+      ]);
+    });
+
+    test('cleans up the season and show folders in a TV main folder instead of a channel folder', async () => {
+      tvIn('');
+      mockVideo.findByPk.mockResolvedValue(
+        episodeRecord('/test/output/Show/Season 2024/S2024E01151200 - Title [abc123].mp4')
+      );
+
+      await VideoDeletionModule.deleteVideoById(1);
+
+      expect({
+        showCleanup: mockFilesystem.cleanupEmptyShowFolders.mock.calls,
+        channelCleanup: mockFilesystem.cleanupEmptyChannelDirectory.mock.calls
+      }).toEqual({
+        showCleanup: [[{ showDir: '/test/output/Show', seasonDir: '/test/output/Show/Season 2024' }]],
+        channelCleanup: []
+      });
+    });
+
+    test('cleans up the season and show folders in a TV subfolder', async () => {
+      tvIn('TV Shows');
+      mockVideo.findByPk.mockResolvedValue(
+        episodeRecord('/test/output/__TV Shows/Show/Season 01/S01E20 - Title [abc123].mp4')
+      );
+
+      await VideoDeletionModule.deleteVideoById(1);
+
+      expect(mockFilesystem.cleanupEmptyShowFolders).toHaveBeenCalledWith({
+        showDir: '/test/output/__TV Shows/Show',
+        seasonDir: '/test/output/__TV Shows/Show/Season 01'
+      });
+    });
+
+    test('removes an emptied TV subfolder after removing its last show', async () => {
+      tvIn('TV Shows');
+      mockFilesystem.cleanupEmptyShowFolders.mockResolvedValueOnce({ removedSeason: true, removedShow: true });
+      mockVideo.findByPk.mockResolvedValue(
+        episodeRecord('/test/output/__TV Shows/Show/Season 01/S01E20 - Title [abc123].mp4')
+      );
+
+      await VideoDeletionModule.deleteVideoById(1);
+
+      expect(mockFilesystem.cleanupEmptyParents).toHaveBeenCalledWith('/test/output/__TV Shows', '/test/output');
+    });
+
+    test('leaves the TV subfolder alone while the show folder remains', async () => {
+      tvIn('TV Shows');
+      mockFilesystem.cleanupEmptyShowFolders.mockResolvedValueOnce({ removedSeason: true, removedShow: false });
+      mockVideo.findByPk.mockResolvedValue(
+        episodeRecord('/test/output/__TV Shows/Show/Season 01/S01E20 - Title [abc123].mp4')
+      );
+
+      await VideoDeletionModule.deleteVideoById(1);
+
+      expect(mockFilesystem.cleanupEmptyParents).not.toHaveBeenCalled();
+    });
+
+    test('uses channel folder cleanup for a movie-style file left in a TV folder', async () => {
+      tvIn('TV Shows');
+      mockVideo.findByPk.mockResolvedValue(
+        episodeRecord('/test/output/__TV Shows/Channel/Channel - Title [abc123].mp4')
+      );
+
+      await VideoDeletionModule.deleteVideoById(1);
+
+      expect({
+        showCleanup: mockFilesystem.cleanupEmptyShowFolders.mock.calls.length,
+        channelCleanup: mockFilesystem.cleanupEmptyChannelDirectory.mock.calls
+      }).toEqual({
+        showCleanup: 0,
+        channelCleanup: [['/test/output/__TV Shows/Channel', '/test/output', { includeIgnorableFiles: true }]]
+      });
+    });
+
+    test('uses channel folder cleanup for a season-shaped path in a videos folder', async () => {
+      tvIn('TV Shows');
+      mockVideo.findByPk.mockResolvedValue(
+        episodeRecord('/test/output/__Kids/Show/Season 01/S01E20 - Title [abc123].mp4')
+      );
+
+      await VideoDeletionModule.deleteVideoById(1);
+
+      expect(mockFilesystem.cleanupEmptyShowFolders).not.toHaveBeenCalled();
     });
   });
 
@@ -2328,8 +2462,13 @@ describe('VideoDeletionModule', () => {
         cleanupEmptyChannelDirectory: jest.fn().mockResolvedValue(false),
         cleanupEmptyParents: jest.fn().mockResolvedValue(),
         isSubfolderDir: jest.fn((name) => name.startsWith('__')),
+        extractSubfolderName,
         listSubdirectories: jest.fn().mockResolvedValue([]),
-        removeDirectoryResilient: jest.fn().mockResolvedValue()
+        removeDirectoryResilient: jest.fn().mockResolvedValue(),
+        resolveLibraryFolder,
+        locateEpisodeFolders,
+        cleanupEmptyShowFolders: jest.fn(),
+        cleanupOrphanShowFolder: jest.fn()
       }));
       jest.doMock('../configModule', () => ({
         directoryPath: null
@@ -2451,6 +2590,51 @@ describe('VideoDeletionModule', () => {
 
       expect(result.removed).toEqual(['/test/output/RootChannel']);
       expect(mockFilesystem.cleanupEmptyChannelDirectory).toHaveBeenCalledTimes(2);
+    });
+
+    describe('TV library folders', () => {
+      test('sweeps root-level folders as shows when the main folder is TV, and subfolders by their own layout', async () => {
+        mockLibraryLayouts.getLayoutResolver.mockResolvedValue((folder) => (folder === '' ? 'tv' : 'videos'));
+        mockFilesystem.listSubdirectories
+          .mockResolvedValueOnce(['/test/output/Show', '/test/output/__Music'])
+          .mockResolvedValueOnce(['/test/output/__Music/Empty']);
+        mockFilesystem.cleanupOrphanShowFolder.mockResolvedValueOnce(['/test/output/Show/Season 2023']);
+        mockFilesystem.cleanupEmptyChannelDirectory.mockResolvedValueOnce(true);
+
+        const result = await VideoDeletionModule.cleanupOrphanDirectories();
+
+        expect({
+          removed: result.removed,
+          showSweeps: mockFilesystem.cleanupOrphanShowFolder.mock.calls,
+          channelSweeps: mockFilesystem.cleanupEmptyChannelDirectory.mock.calls.map(([dir]) => dir)
+        }).toEqual({
+          removed: ['/test/output/Show/Season 2023', '/test/output/__Music/Empty'],
+          showSweeps: [['/test/output/Show']],
+          channelSweeps: ['/test/output/__Music/Empty']
+        });
+      });
+
+      test('sweeps the children of a TV subfolder as shows and then the subfolder itself', async () => {
+        mockLibraryLayouts.getLayoutResolver.mockResolvedValue((folder) => (folder === 'TV Shows' ? 'tv' : 'videos'));
+        mockFilesystem.listSubdirectories
+          .mockResolvedValueOnce(['/test/output/__TV Shows'])
+          .mockResolvedValueOnce(['/test/output/__TV Shows/Show A', '/test/output/__TV Shows/Show B']);
+        mockFilesystem.cleanupOrphanShowFolder
+          .mockResolvedValueOnce(['/test/output/__TV Shows/Show A/Season 01', '/test/output/__TV Shows/Show A'])
+          .mockResolvedValueOnce([]);
+
+        const result = await VideoDeletionModule.cleanupOrphanDirectories();
+
+        expect({
+          removed: result.removed,
+          channelSweeps: mockFilesystem.cleanupEmptyChannelDirectory.mock.calls.length,
+          parentCleanup: mockFilesystem.cleanupEmptyParents.mock.calls
+        }).toEqual({
+          removed: ['/test/output/__TV Shows/Show A/Season 01', '/test/output/__TV Shows/Show A'],
+          channelSweeps: 0,
+          parentCleanup: [['/test/output/__TV Shows', '/test/output']]
+        });
+      });
     });
   });
 

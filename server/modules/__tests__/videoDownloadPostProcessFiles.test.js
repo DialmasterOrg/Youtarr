@@ -1840,6 +1840,26 @@ describe('videoDownloadPostProcessFiles', () => {
       expect(movedFiles).toEqual(['Video Title [abc123].mp4']);
     });
 
+    it.each([
+      ['hoisted flat', true],
+      ['kept in its video folder', false],
+    ])('writes the channel backdrop into the channel folder the video was %s in', async (_label, skipVideoFolder) => {
+      const channelBannerCachePath = '/mock/images/channelbanner-channel123.jpg';
+      configModule.__setConfig({
+        writeChannelPosters: false,
+        writeVideoNfoFiles: true,
+        writeBackdropImages: true,
+      });
+      Channel.findOne.mockResolvedValue({ ...trackedChannel, skip_video_folder: skipVideoFolder });
+      fs.existsSync.mockImplementation((p) => p === tempJsonPath || p === channelBannerCachePath
+        || (p.startsWith('/library/') && !p.endsWith('/backdrop.jpg')));
+
+      await loadModule();
+      await settleAsync();
+
+      expect(fs.copySync).toHaveBeenCalledWith(channelBannerCachePath, '/library/Channel/backdrop.jpg', { overwrite: true });
+    });
+
     it('explicit structure override beats the channel setting', async () => {
       process.env.YOUTARR_SKIP_VIDEO_FOLDER_OVERRIDE = 'true';
       Channel.findOne.mockResolvedValue({ ...trackedChannel, skip_video_folder: false });

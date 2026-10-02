@@ -3,7 +3,9 @@ const fs = require('fs').promises;
 const path = require('path');
 const logger = require('../logger');
 const configModule = require('./configModule');
-const { isVideoDirectoryFor, isFileForVideo, cleanupEmptyChannelDirectory, cleanupEmptyParents, isSubfolderDir, listSubdirectories, removeDirectoryResilient } = require('./filesystem');
+const { isVideoDirectoryFor, isFileForVideo, cleanupEmptyChannelDirectory, cleanupEmptyParents, isSubfolderDir, extractSubfolderName, listSubdirectories, removeDirectoryResilient, resolveLibraryFolder, locateEpisodeFolders, cleanupEmptyShowFolders, cleanupOrphanShowFolder } = require('./filesystem');
+const { MAIN_LIBRARY_FOLDER } = require('./filesystem/constants');
+const libraryLayouts = require('./tvShows/libraryLayouts');
 const m3uGenerator = require('./m3uGenerator');
 const storageUsage = require('./storageUsage');
 const { STORED_BYTES_SQL } = storageUsage;
@@ -71,6 +73,10 @@ class VideoDeletionModule {
     try {
       const baseDir = configModule.directoryPath;
 
+      if (flat && await this._tryCleanupShowFolders(filePath, baseDir)) {
+        return;
+      }
+
       // Derive channel directory:
       //   Nested: grandparent of filePath (filePath -> videoDir -> channelDir)
       //   Flat: parent of filePath (filePath -> channelDir)
@@ -89,6 +95,33 @@ class VideoDeletionModule {
     } catch (error) {
       logger.warn({ err: error, filePath }, 'Error during channel directory cleanup (non-fatal)');
     }
+  }
+
+  /**
+   * For an episode in a TV library folder, remove its season folder and then
+   * its show folder once only metadata and art remain in them.
+   * @param {string} filePath - The deleted episode's file path
+   * @param {string} baseDir - The downloads root
+   * @returns {Promise<boolean>} - True if the file was a TV episode
+   * @private
+   */
+  async _tryCleanupShowFolders(filePath, baseDir) {
+    const library = resolveLibraryFolder(filePath, baseDir);
+    if (!library) {
+      return false;
+    }
+    const layoutOf = await libraryLayouts.getLayoutResolver();
+    const folders = layoutOf(library.libraryFolder) === libraryLayouts.LAYOUT_TV
+      ? locateEpisodeFolders(filePath, library.libraryRoot)
+      : null;
+    if (!folders) {
+      return false;
+    }
+    const { removedShow } = await cleanupEmptyShowFolders(folders);
+    if (removedShow) {
+      await cleanupEmptyParents(library.libraryRoot, baseDir);
+    }
+    return true;
   }
 
   /**
@@ -443,7 +476,8 @@ ${excludeClause}        ORDER BY timeCreated ASC
    * Scan the output directory for orphan empty channel directories and remove them.
    * Unlike _tryCleanupChannelDirectory (which only runs after a video deletion), this
    * proactively finds directories that are already empty (or contain only ignorable files
-   * like poster.jpg) and cleans them up. Handles both root-level and subfolder-level channels.
+   * like poster.jpg) and cleans them up. Handles both root-level and subfolder-level channels,
+   * and the show and season folders of TV library folders.
    * @returns {Promise<{removed: string[], errors: string[]}>}
    */
   async cleanupOrphanDirectories() {
@@ -457,21 +491,27 @@ ${excludeClause}        ORDER BY timeCreated ASC
     }
 
     try {
+      const layoutOf = await libraryLayouts.getLayoutResolver();
       const topLevelDirs = await listSubdirectories(baseDir);
 
       for (const dir of topLevelDirs) {
         const dirName = path.basename(dir);
 
         if (isSubfolderDir(dirName)) {
-          // Subfolder directory (e.g., __Music) — check its children as channel dirs
+          // Subfolder directory (e.g., __Music) — check its children as channel or show dirs
           try {
-            const channelDirs = await listSubdirectories(dir);
-            for (const channelDir of channelDirs) {
-              const wasRemoved = await cleanupEmptyChannelDirectory(channelDir, baseDir, {
+            const childDirs = await listSubdirectories(dir);
+            const isTv = layoutOf(extractSubfolderName(dirName)) === libraryLayouts.LAYOUT_TV;
+            for (const childDir of childDirs) {
+              if (isTv) {
+                removed.push(...await cleanupOrphanShowFolder(childDir));
+                continue;
+              }
+              const wasRemoved = await cleanupEmptyChannelDirectory(childDir, baseDir, {
                 includeIgnorableFiles: true
               });
               if (wasRemoved) {
-                removed.push(channelDir);
+                removed.push(childDir);
               }
             }
             // Clean up the subfolder itself if it's now empty
@@ -480,6 +520,9 @@ ${excludeClause}        ORDER BY timeCreated ASC
             logger.warn({ err: dirError, dir }, '[Orphan Cleanup] Error processing subfolder directory');
             errors.push(dirError.message);
           }
+        } else if (layoutOf(MAIN_LIBRARY_FOLDER) === libraryLayouts.LAYOUT_TV) {
+          // Root-level show directory
+          removed.push(...await cleanupOrphanShowFolder(dir));
         } else {
           // Root-level channel directory
           const wasRemoved = await cleanupEmptyChannelDirectory(dir, baseDir, {
@@ -492,7 +535,7 @@ ${excludeClause}        ORDER BY timeCreated ASC
       }
 
       if (removed.length > 0) {
-        logger.info({ count: removed.length, directories: removed }, '[Orphan Cleanup] Removed empty channel directories');
+        logger.info({ count: removed.length, directories: removed }, '[Orphan Cleanup] Removed empty channel and show directories');
       } else {
         logger.debug('[Orphan Cleanup] No orphan directories found');
       }
