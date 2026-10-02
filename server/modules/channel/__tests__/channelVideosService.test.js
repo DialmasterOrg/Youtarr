@@ -13,6 +13,7 @@ jest.mock('../../mediaServers/watchStatusQueries', () => ({
 jest.mock('../../configModule', () => mockFactories.mockConfigModule());
 jest.mock('../../fileCheckModule', () => mockFactories.mockFileCheckModule());
 jest.mock('../../youtubeApi', () => mockFactories.mockYoutubeApi());
+jest.mock('../../archiveModule', () => ({ filterArchivedVideoIds: jest.fn() }));
 jest.mock('../../../db', () => mockFactories.mockDb());
 
 // yt-dlp --dump-json output: one JSON document per line.
@@ -24,6 +25,7 @@ describe('channelVideosService', () => {
   let ChannelVideo;
   let logger;
   let youtubeApi;
+  let archiveModule;
 
   const mockChannelData = {
     channel_id: 'UC123456',
@@ -58,6 +60,9 @@ describe('channelVideosService', () => {
     youtubeApi.isAvailable.mockReturnValue(false);
     youtubeApi.getApiKey.mockReturnValue(null);
 
+    archiveModule = require('../../archiveModule');
+    archiveModule.filterArchivedVideoIds.mockReturnValue(new Set());
+
     channelVideosService = require('../channelVideosService');
   });
 
@@ -69,7 +74,7 @@ describe('channelVideosService', () => {
       const result = channelVideosService.buildChannelVideosResponse(videos, channel, 'yt_dlp', null, false, 'video');
 
       expect(result).toEqual({
-        videos: videos,
+        videos: [{ ...mockVideoData, inArchive: false }],
         dataSource: 'yt_dlp',
         lastFetched: new Date('2024-01-01'),
         totalCount: videos.length,
@@ -122,6 +127,35 @@ describe('channelVideosService', () => {
         const result = channelVideosService.buildChannelVideosResponse([{ ...mockVideoData, added: false }], nrChannel);
 
         expect(result.videos[0].normalized_rating).toBeUndefined();
+      });
+    });
+
+    describe('inArchive', () => {
+      // Every downloaded or ignored video is in the archive too, so the mock
+      // answers the way the real lookup does: only for the ids it is asked about.
+      const archived = new Set(['orphan', 'ignored', 'downloaded']);
+      const inArchiveFor = (video) => {
+        archiveModule.filterArchivedVideoIds.mockImplementation(
+          (ids) => new Set(ids.filter((id) => archived.has(id)))
+        );
+        const result = channelVideosService.buildChannelVideosResponse([video], mockChannelData);
+        return result.videos[0].inArchive;
+      };
+
+      test('flags a never-downloaded video that is listed in the archive', () => {
+        expect(inArchiveFor({ ...mockVideoData, youtube_id: 'orphan', added: false })).toBe(true);
+      });
+
+      test('does not flag a never-downloaded video that is not in the archive', () => {
+        expect(inArchiveFor({ ...mockVideoData, youtube_id: 'fresh', added: false })).toBe(false);
+      });
+
+      test('does not flag an ignored video, whose archive entry is deliberate', () => {
+        expect(inArchiveFor({ ...mockVideoData, youtube_id: 'ignored', added: false, ignored: true })).toBe(false);
+      });
+
+      test('does not flag a video that has a database record', () => {
+        expect(inArchiveFor({ ...mockVideoData, youtube_id: 'downloaded', added: true, removed: true })).toBe(false);
       });
     });
 

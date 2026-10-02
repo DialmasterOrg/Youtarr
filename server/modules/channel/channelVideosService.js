@@ -11,6 +11,7 @@ const channelVideoFetcher = require('./channelVideoFetcher');
 const fetchRegistry = require('./fetchRegistry');
 const tabState = require('./tabState');
 const ratingMapper = require('../ratingMapper');
+const archiveModule = require('../archiveModule');
 
 // Maximum number of videos to load when user clicks "Load More"
 // Limit set here because some channels have tens or hundreds of thousands of videos...
@@ -68,7 +69,7 @@ class ChannelVideosService {
     const lastFetched = channel ? tabState.getLastFetchedForTab(channel, mediaType) : null;
 
     return {
-      videos: this.applyChannelDefaultRating(videos, channel),
+      videos: this.applyChannelDefaultRating(this.applyArchiveFlag(videos), channel),
       dataSource: dataSource,
       lastFetched: lastFetched,
       totalCount: stats ? stats.totalCount : videos.length,
@@ -76,6 +77,20 @@ class ChannelVideosService {
       autoDownloadsEnabled: autoDownloadsEnabled,
       availableTabs: availableTabs,
     };
+  }
+
+  /**
+   * Flag videos yt-dlp would skip as already downloaded although no Videos
+   * row exists, so the download dialog can offer a re-download. Ignored videos
+   * are never flagged: ignoring writes the archive entry on purpose.
+   * @param {Array} videos - Enriched channel videos
+   * @returns {Array} - Videos with inArchive set
+   */
+  applyArchiveFlag(videos) {
+    const archiveOnlyIds = archiveModule.filterArchivedVideoIds(
+      videos.filter((video) => !video.added && !video.ignored).map((video) => video.youtube_id)
+    );
+    return videos.map((video) => ({ ...video, inArchive: archiveOnlyIds.has(video.youtube_id) }));
   }
 
   /**

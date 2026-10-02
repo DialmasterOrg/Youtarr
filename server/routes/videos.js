@@ -97,6 +97,9 @@ module.exports = function createVideoRoutes({
    *                       status:
    *                         type: string
    *                         enum: [never_downloaded, missing, downloaded]
+   *                       inArchive:
+   *                         type: boolean
+   *                         description: Listed in the download archive without a database record (ignored videos excluded); a download skips it unless re-downloading is allowed
    *       400:
    *         description: Invalid video IDs or more than 500 IDs
    *       401:
