@@ -277,6 +277,7 @@ When a code change creates or invalidates information in this file or in `docs/`
 - **New dev command or flag**: update `docs/DEVELOPMENT.md`.
 - **Schema changes**: update `docs/DATABASE.md`.
 - **API changes**: Swagger annotations live with the routes; update them so `/swagger` stays accurate.
+- **Changed services, environment, or ports in `docker-compose.yml`**: mirror the change in the stack in `docs/platforms/portainer.md`, which keeps its own copy with absolute paths.
 
 ## Git Workflow
 

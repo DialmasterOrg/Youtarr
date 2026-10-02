@@ -12,7 +12,7 @@ Before setting up Youtarr, ensure you have:
 
 Choose your preferred installation method
 
-> Running on a NAS or Unraid? There are dedicated platform guides for [Synology](platforms/synology.md), [Unraid](platforms/unraid.md), and [Asustor](platforms/asustor.md) - start there instead.
+> Running on a NAS or Unraid, or using Portainer? There are dedicated platform guides for [Synology](platforms/synology.md), [Unraid](platforms/unraid.md), [Asustor](platforms/asustor.md), and [Portainer](platforms/portainer.md) - start there instead.
 
 ### Method 1: First-Time Installation via `./start.sh` helper
 
@@ -106,7 +106,7 @@ This method gives you direct control over environment variables and compose file
 
 > **Not Recommended**: This method requires manual directory creation, permission management, and lacks helper scripts. It is more error-prone and provides limited community support.
 >
-> **For advanced users only.** If you cannot clone the repository (e.g., Portainer, TrueNAS, limited Git access), see [Manual Docker Setup Without Git](DOCKER.md#manual-setup-without-git-clone) in the Docker documentation.
+> **For advanced users only.** If you cannot clone the repository (e.g., TrueNAS, limited Git access), see [Manual Docker Setup Without Git](DOCKER.md#manual-setup-without-git-clone) in the Docker documentation. For Portainer, use the [Portainer guide](platforms/portainer.md) instead.
 
 Most users should use Method 1 or 2 above for the best experience and easiest updates.
 

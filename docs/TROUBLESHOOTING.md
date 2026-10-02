@@ -193,6 +193,8 @@ The start script:
 2. Using docker-compose commands:
 - Ensure that you have created your `.env` file from the provided `.env.example` and configured your `YOUTUBE_OUTPUT_DIR` before attempting to run `docker compose up -d`
 
+3. In Portainer: don't deploy the repository's compose file there at all. Use the stack in the [Portainer guide](platforms/portainer.md), which doesn't need `YOUTUBE_OUTPUT_DIR` set separately.
+
 ### Docker Desktop Mount Path Error (Windows)
 
 **Problem**: Error message: `Error response from daemon: error while creating mount source path '/run/desktop/mnt/host/...': mkdir /run/desktop/mnt/host/...: file exists`
@@ -531,6 +533,52 @@ value, so setting only one of them in `.env` makes the two sides disagree and th
 `.env` (or set neither). If the database volume was already initialized with a different root password,
 either use that password or wipe the database directory and let it re-initialize (**this deletes all DB
 data**). `docker logs youtarr-db` will show `Access denied` warnings when it's a credentials problem.
+
+MariaDB only reads its password settings the first time it starts with empty storage, so changing them
+later has no effect on an existing database. This often catches Portainer users: deleting and re-creating
+a stack keeps its database volume, so the old password is still in place. See
+[Changing the database password](platforms/portainer.md#changing-the-database-password) in the Portainer guide.
+
+### Database Empty After a Reboot or Redeploy {#database-empty-after-reboot-or-redeploy}
+
+**Problem**: After a server reboot, re-creating a stack, or moving Youtarr to a new folder, your channels
+and download history are gone. Some videos may still be listed: when the config folder survives, Youtarr
+refills up to 300 recent videos from its download record (`config/complete.list`) on startup, so the
+Videos page can look partly filled while the Channels page is empty.
+
+**Cause**: Youtarr started on a new, empty database because the database storage it used before is no
+longer the one mounted. Common ways this happens:
+- **A stack manager with the repository's compose file.** Portainer and similar tools run each stack from
+  their own folder, so `./database` lives somewhere like `/data/compose/<stack id>/database` on the host.
+  A re-created stack gets a new ID and a new, empty folder. On Unraid, that folder is in memory and is
+  wiped on reboot.
+- **A renamed folder or stack with a named volume.** Docker Compose names the `youtarr-db-data` volume
+  after the project (usually the folder or stack name), for example `youtarr_youtarr-db-data`. A new name
+  gives you a new, empty volume.
+- **A database folder copied into the wrong place**, for example ending up at `database/database`.
+
+To see where the current database is stored:
+```bash
+docker inspect youtarr-db --format '{{range .Mounts}}{{if .Name}}{{.Name}}{{else}}{{.Source}}{{end}}{{end}}'
+```
+
+To see when the current database was created (a date matching the day your data disappeared means
+Youtarr started from scratch then):
+```bash
+docker exec youtarr-db sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" youtarr -e "SELECT MIN(migration_date) AS created FROM _charset_migration_log"'
+```
+
+**Solution**:
+1. Look for the old database before changing anything: an older volume in `docker volume ls`, the old
+   `./database` folder, or, for Portainer, the other folders in `/data/compose/`. If you find it, point
+   the stack back at it (the [Portainer guide](platforms/portainer.md#moving-an-existing-install-out-of-datacompose)
+   shows how to move it to a permanent place).
+2. If it's gone, restore from a backup if you have one (see [Backup and Restore](BACKUP_RESTORE.md)).
+3. Otherwise, re-add your channels. As long as `config/complete.list` survived, Youtarr won't download
+   videos it already downloaded.
+
+**Prevention**: Store the database at a fixed, absolute path or in a volume with a fixed `name:`, and
+back it up. Portainer users should use the stack in the [Portainer guide](platforms/portainer.md).
 
 ### Access Denied for Custom Database User
 
