@@ -751,6 +751,7 @@ The old `discordWebhookUrl` and `notificationService` fields are automatically r
   - `false` (default): Downloads are staged in a hidden `.youtarr_tmp/` directory within your output folder. Uses fast atomic renames since source and destination are on the same filesystem. The dot-prefix hides in-progress downloads from media servers like Plex and Jellyfin.
   - `true`: Downloads are staged in the external path specified by `tmpFilePath` (e.g., `/tmp`). Useful when your output directory is on slow network storage and you want to download to fast local storage first.
 - **Note**: Some managed platforms (e.g., ElfHosted) force this value on.
+- **Space needed**: Wherever downloads are staged needs free space of about twice the size of the largest video you download, because merging the video and audio streams writes a second copy before the originals are removed. With `true`, that space is inside the container unless you mount a volume at `tmpFilePath`; on Docker Desktop (Windows/macOS) it comes out of Docker's own virtual disk, which is shared with images, build cache, and other containers, not out of your drives. See [Downloads Fail with "Conversion failed!" or "No space left on device"](TROUBLESHOOTING.md#download-out-of-space).
 
 ### External Temporary File Path
 - **Config Key**: `tmpFilePath`

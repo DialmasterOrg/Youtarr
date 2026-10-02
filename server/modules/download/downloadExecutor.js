@@ -316,7 +316,7 @@ class DownloadExecutor {
 
       // Runs once, from 'close' or the drain timeout. finalized is set before
       // any await so a late 'close', 'exit', or 'error' can't finalize again.
-      const finalizeRun = async (code, signal) => {
+      const finalizeRun = async (code, signal, stdioClosed) => {
         if (finalized) return;
         finalized = true;
         clearDrainTimer();
@@ -355,6 +355,7 @@ class DownloadExecutor {
             enqueueAutoRetry: this.enqueueAutoRetry,
             cookiesEnabled,
             anonymousRetry,
+            stdioClosed,
           });
           resolve();
         } catch (err) {
@@ -386,12 +387,12 @@ class DownloadExecutor {
             { jobId, code, signal },
             'yt-dlp stdio did not close after exit; finalizing without waiting for remaining output'
           );
-          finalizeRun(code, signal);
+          finalizeRun(code, signal, false);
         }, this.stdioDrainTimeoutMs);
       });
 
       proc.on('close', (code, signal) => {
-        finalizeRun(code, signal);
+        finalizeRun(code, signal, true);
       });
 
       proc.on('error', async (err) => {
