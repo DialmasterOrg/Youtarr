@@ -91,6 +91,7 @@ function channelVideoToModalData(
     addedAt: null,
     mediaType: video.media_type || 'video',
     status,
+    inArchive: video.inArchive,
     isDownloaded: video.added && !video.removed,
     filePath: video.filePath || null,
     fileSize: video.fileSize || null,
@@ -774,11 +775,15 @@ function ChannelVideos({
 
   // Accumulates missing status for every video seen on any loaded page, so
   // selections survive page swaps. Checkboxes only exist on loaded rows, so
-  // lookups always hit.
+  // lookups always hit. A video listed in the download archive without a
+  // database record counts too: yt-dlp skips it unless re-download is allowed.
   const missingByIdRef = useRef(new Map<string, boolean>());
   useEffect(() => {
     videos.forEach((video) => {
-      missingByIdRef.current.set(video.youtube_id, Boolean(video.added && video.removed));
+      missingByIdRef.current.set(
+        video.youtube_id,
+        Boolean(video.added ? video.removed : video.inArchive)
+      );
     });
   }, [videos]);
 

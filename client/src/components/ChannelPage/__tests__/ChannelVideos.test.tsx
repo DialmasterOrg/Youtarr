@@ -923,6 +923,35 @@ describe('ChannelVideos Component', () => {
       expect(screen.getByTestId('channel-videos-dialogs')).toHaveAttribute('data-missing-video-count', '0');
     });
 
+    test('counts a selected never-downloaded video that is in the download archive', async () => {
+      const user = userEvent.setup();
+      const archivedVideo: ChannelVideo = {
+        ...missingVideo,
+        title: 'Archived Video',
+        youtube_id: 'archived1',
+        added: false,
+        removed: false,
+        inArchive: true,
+      };
+
+      useChannelVideos.mockReturnValue({
+        videos: [...mockVideos, archivedVideo],
+        totalCount: 4,
+        oldestVideoDate: '2023-01-01',
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      await user.click(screen.getByTestId('select-video-archived1'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('channel-videos-dialogs')).toHaveAttribute('data-missing-video-count', '1');
+      });
+    });
+
     test('keeps counting a selected missing video after the loaded page no longer contains it', async () => {
       const user = userEvent.setup();
 

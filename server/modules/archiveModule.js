@@ -46,6 +46,31 @@ async function isVideoInArchive(videoId) {
   });
 }
 
+// Return the subset of youtubeIds listed in the archive, reading the file once.
+// A read failure returns an empty set: callers only use this to annotate
+// listings, which must still load when the archive cannot be read.
+function filterArchivedVideoIds(youtubeIds) {
+  const wanted = new Set((youtubeIds || []).filter(Boolean));
+  const archived = new Set();
+  if (wanted.size === 0) return archived;
+
+  let lines;
+  try {
+    lines = readCompleteListLines();
+  } catch (err) {
+    logger.warn({ err }, 'Failed to read archive, treating videos as not archived');
+    return archived;
+  }
+
+  for (const line of lines) {
+    const parts = line.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2 && parts[0] === 'youtube' && wanted.has(parts[1])) {
+      archived.add(parts[1]);
+    }
+  }
+  return archived;
+}
+
 // Add a video to the archive if it doesn't already exist
 async function addVideoToArchive(videoId) {
   if (!videoId) {
@@ -118,6 +143,7 @@ module.exports = {
   readCompleteListLines,
   getNewVideoUrlsSince,
   isVideoInArchive,
+  filterArchivedVideoIds,
   addVideoToArchive,
   removeVideoFromArchive,
 };
