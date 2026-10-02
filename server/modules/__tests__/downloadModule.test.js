@@ -763,6 +763,39 @@ describe('DownloadModule', () => {
       });
     });
 
+    describe('when the channel list cannot be written because the disk is full', () => {
+      const outOfSpaceText = `Out of disk space in the temporary folder (${require('os').tmpdir()}); free up space and try again`;
+
+      beforeEach(() => {
+        jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+        const error = new Error('ENOSPC: no space left on device, write');
+        error.code = 'ENOSPC';
+        channelModuleMock.generateChannelsFile.mockRejectedValue(error);
+      });
+
+      it('says the temporary folder is out of space in the job output', async () => {
+        await downloadModule.doSingleChannelDownloadJob();
+
+        expect(jobModuleMock.updateJob).toHaveBeenCalledWith(mockJobId, {
+          status: 'Failed',
+          output: `Error: ${outOfSpaceText}`
+        });
+      });
+
+      it('gives its download run the same plain reason', async () => {
+        const downloadRunTracker = require('../download/downloadRunTracker');
+        jest.spyOn(downloadRunTracker, 'isActive').mockReturnValue(true);
+        const recordSpy = jest.spyOn(downloadRunTracker, 'recordJobResult').mockReturnValue(true);
+
+        await downloadModule.doSingleChannelDownloadJob({ runId: 'run-1' });
+
+        expect(recordSpy).toHaveBeenCalledWith('run-1', mockJobId, {
+          jobType: 'Channel Downloads',
+          jobIssue: { status: 'Failed', reason: outOfSpaceText, byUser: false },
+        });
+      });
+    });
+
     it('starts the next queued job after failing, so the queue does not stall', async () => {
       jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
       channelModuleMock.generateChannelsFile.mockRejectedValue(new Error('No valid channel URLs'));
@@ -891,6 +924,42 @@ describe('DownloadModule', () => {
       expect(jobModuleMock.updateJob).toHaveBeenCalledWith('job-123', {
         status: 'Error',
         output: 'Error in Group 2/3 (720p): Download failed'
+      });
+    });
+
+    describe('when a group cannot start because the disk is full', () => {
+      const groups = [
+        { quality: '1080', subFolder: null, channels: [{ channel_id: 'UC1' }] },
+        { quality: '720', subFolder: null, channels: [{ channel_id: 'UC2' }] }
+      ];
+      const outOfSpaceText = `Out of disk space in the temporary folder (${require('os').tmpdir()}); free up space and try again`;
+
+      beforeEach(() => {
+        jobModuleMock.getJob.mockReturnValue({ status: 'In Progress', data: { videos: [] } });
+        const error = new Error('ENOSPC: no space left on device, write');
+        error.code = 'ENOSPC';
+        jest.spyOn(downloadModule, 'executeGroupDownload').mockRejectedValue(error);
+      });
+
+      it('says the temporary folder is out of space in the job output', async () => {
+        await downloadModule.doGroupedChannelDownloads({}, groups);
+
+        expect(jobModuleMock.updateJob).toHaveBeenCalledWith('job-123', {
+          status: 'Error',
+          output: `Error in Group 1/2 (1080p): ${outOfSpaceText}`
+        });
+      });
+
+      it('gives its download run the same plain reason for the stopped group', async () => {
+        const downloadRunTracker = require('../download/downloadRunTracker');
+        jest.spyOn(downloadRunTracker, 'isActive').mockReturnValue(true);
+        const recordSpy = jest.spyOn(downloadRunTracker, 'recordJobResult').mockReturnValue(true);
+
+        await downloadModule.doGroupedChannelDownloads({ runId: 'run-x' }, groups);
+
+        expect(recordSpy).toHaveBeenCalledWith('run-x', 'job-123', expect.objectContaining({
+          stoppedGroup: { group: 'Group 1/2 (1080p)', reason: outOfSpaceText, terminated: false },
+        }));
       });
     });
 

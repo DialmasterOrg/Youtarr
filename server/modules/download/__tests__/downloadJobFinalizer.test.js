@@ -55,6 +55,10 @@ jest.mock('../failedVideoEnricher', () => ({
   enrichFailedVideos: jest.fn().mockResolvedValue()
 }));
 
+jest.mock('../tempSpaceProbe', () => ({
+  findOutOfSpaceFailures: jest.fn().mockResolvedValue(new Set())
+}));
+
 const jobModule = require('../../jobModule');
 const configModule = require('../../configModule');
 const failureAdvisor = require('../failureAdvisor');
@@ -65,6 +69,7 @@ const downloadResultProcessor = require('../downloadResultProcessor');
 const downloadCleanup = require('../downloadCleanup');
 const { runCompletionSideEffects } = require('../downloadCompletionEffects');
 const failedVideoEnricher = require('../failedVideoEnricher');
+const tempSpaceProbe = require('../tempSpaceProbe');
 const logger = require('../../../logger');
 const {
   finalizeDownloadJob,
@@ -142,6 +147,7 @@ describe('downloadJobFinalizer', () => {
     downloadRunTracker.isActive.mockReturnValue(false);
     downloadResultProcessor.resolveUrlsToProcess.mockReturnValue([]);
     downloadResultProcessor.partitionDownloadResults.mockReturnValue({ successfulVideos: [], failedVideosList: [] });
+    tempSpaceProbe.findOutOfSpaceFailures.mockResolvedValue(new Set());
   });
 
   describe('finalizeDownloadJob', () => {
@@ -340,6 +346,40 @@ describe('downloadJobFinalizer', () => {
       const [, fields] = jobModule.updateJob.mock.calls[0];
       expect(fields.status).toBeUndefined();
       expect(fields.data).toEqual(expect.objectContaining({ cumulativeSkipped: 0 }));
+    });
+
+    it('removes the temp files of unfinished videos when yt-dlp exits non-zero', async () => {
+      await finalizeDownloadJob(makeContext({ code: 1 }));
+
+      expect(downloadCleanup.cleanupInProgressVideos).toHaveBeenCalledWith(mockJobId);
+    });
+
+    it('keeps the temp files when yt-dlp\'s output never closed, since a child may still be moving them', async () => {
+      await finalizeDownloadJob(makeContext({ code: 1, stdioClosed: false }));
+
+      expect(downloadCleanup.cleanupInProgressVideos).not.toHaveBeenCalled();
+    });
+
+    it('removes the temp files of unfinished videos when a bot check ended the run', async () => {
+      await finalizeDownloadJob(makeContext({ code: 1, router: makeRouter({ botDetected: true }) }));
+
+      expect(downloadCleanup.cleanupInProgressVideos).toHaveBeenCalledWith(mockJobId);
+    });
+
+    it('keeps the temp files after a bot check when yt-dlp\'s output never closed', async () => {
+      await finalizeDownloadJob(makeContext({
+        code: 1,
+        stdioClosed: false,
+        router: makeRouter({ botDetected: true })
+      }));
+
+      expect(downloadCleanup.cleanupInProgressVideos).not.toHaveBeenCalled();
+    });
+
+    it('leaves in-progress tracking alone after a clean exit', async () => {
+      await finalizeDownloadJob(makeContext());
+
+      expect(downloadCleanup.cleanupInProgressVideos).not.toHaveBeenCalled();
     });
 
     it('broadcasts a final payload with finalSummary for standalone completions', async () => {
@@ -807,6 +847,41 @@ describe('downloadJobFinalizer', () => {
         }));
 
         expect(notificationModule.sendDownloadNotification).not.toHaveBeenCalled();
+      });
+
+      describe('out of temp space', () => {
+        const mergeFailure = () => make403Failure({ youtubeId: 'bigvideo001', error: 'Conversion failed!' });
+
+        it('diagnoses a failed merge the probe measured as out of space', async () => {
+          const failure = mergeFailure();
+          primeFailure(failure);
+          tempSpaceProbe.findOutOfSpaceFailures.mockResolvedValue(new Set(['bigvideo001']));
+
+          await finalizeDownloadJob(makeContext({ code: 1 }));
+
+          expect(failure.diagnosisKey).toBe('temp-out-of-space');
+        });
+
+        it('gives the probe the failed videos and the files this run downloaded', async () => {
+          const failure = mergeFailure();
+          primeFailure(failure);
+          const partialDestinations = new Set(['/tmp/youtarr-downloads/Chan/Big [bigvideo001].f298.mp4']);
+
+          await finalizeDownloadJob(makeContext({ code: 1, router: makeRouter({ partialDestinations }) }));
+
+          expect(tempSpaceProbe.findOutOfSpaceFailures).toHaveBeenCalledWith([failure], partialDestinations);
+        });
+
+        it('measures before the failed video\'s temp files are removed', async () => {
+          primeFailure(mergeFailure());
+
+          await finalizeDownloadJob(makeContext({ code: 1 }));
+
+          const [measuredAt] = tempSpaceProbe.findOutOfSpaceFailures.mock.invocationCallOrder;
+          const [partialCleanedAt] = downloadCleanup.cleanupPartialFiles.mock.invocationCallOrder;
+          const [videoCleanedAt] = downloadCleanup.cleanupInProgressVideos.mock.invocationCallOrder;
+          expect(measuredAt).toBeLessThan(Math.min(partialCleanedAt, videoCleanedAt));
+        });
       });
 
       it('finalizes normally when the advisor throws', async () => {

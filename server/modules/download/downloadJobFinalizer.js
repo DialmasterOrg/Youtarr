@@ -17,6 +17,7 @@ const downloadCleanup = require('./downloadCleanup');
 const transient403RetryPlanner = require('./transient403RetryPlanner');
 const failureAdvisor = require('./failureAdvisor');
 const failedVideoEnricher = require('./failedVideoEnricher');
+const tempSpaceProbe = require('./tempSpaceProbe');
 const { containsHttp403 } = require('./ytdlpStderrSignals');
 const { runCompletionSideEffects } = require('./downloadCompletionEffects');
 const {
@@ -167,6 +168,7 @@ async function finalizeDownloadJob({
   enqueueAutoRetry = null,
   cookiesEnabled = Boolean(configModule.getCookiesPath()),
   anonymousRetry = false,
+  stdioClosed = true,
 }) {
   // True once the job's terminal status has been persisted; the catch
   // below must not overwrite it with 'Error' for failures that happen
@@ -281,11 +283,18 @@ async function finalizeDownloadJob({
     // must never break finalization.
     let diagnoses = [];
     try {
+      // Measured here, while the failed videos' files are still in temp; the
+      // cleanup further down frees the space this looks at.
+      const outOfSpaceVideoIds = await tempSpaceProbe.findOutOfSpaceFailures(
+        reportableFailedVideos,
+        partialDestinations
+      );
       diagnoses = failureAdvisor.adviseFailures(reportableFailedVideos, {
         cookiesEnabled,
         anonymousRetry,
         httpForbiddenDetected,
         botDetected,
+        outOfSpaceVideoIds,
       });
     } catch (err) {
       logger.error({ err, jobId }, 'Failure advisor threw; continuing without diagnoses');
@@ -329,6 +338,11 @@ async function finalizeDownloadJob({
           ? 'Bot detection encountered even though cookies are configured - they are likely expired or rotated.'
           : 'Bot detection encountered. Please set cookies in your Configuration.';
 
+      // Same leftovers, and the same guard, as the non-zero exit branch below.
+      if (stdioClosed) {
+        await downloadCleanup.cleanupInProgressVideos(jobId);
+      }
+
       await persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, failedVideosList);
       await jobModule.updateJob(jobId, {
         status: status,
@@ -370,6 +384,14 @@ async function finalizeDownloadJob({
     } else if (code !== 0) {
       // Download actually failed (non-zero exit code)
       await downloadCleanup.cleanupPartialFiles(Array.from(partialDestinations));
+      // A video that failed after its streams finished downloading (a failed
+      // merge, say) leaves them whole in temp, and they are not .part files.
+      // Left there they can fill the disk before the next job's temp clean.
+      // Skipped when yt-dlp's output never closed: a post-processor child may
+      // still be moving a finished video out of temp.
+      if (stdioClosed) {
+        await downloadCleanup.cleanupInProgressVideos(jobId);
+      }
 
       const failureDetails = monitor.lastParsed || null;
 

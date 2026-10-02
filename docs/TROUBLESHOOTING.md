@@ -743,6 +743,45 @@ This is the subtitle request (YouTube's timedtext endpoint), not the video: vide
 
 Even with impersonation, YouTube's subtitle endpoint is flaky at times. When the subtitle fetch fails, yt-dlp still downloads the video; Youtarr keeps the video, does not count it as a failed download, and marks the job "Complete with Warnings". If the extra retry time bothers you, disable subtitles in **Settings -> Core** until it settles.
 
+### Downloads Fail with "Conversion failed!" or "No space left on device" {#download-out-of-space}
+
+**Problem**: A video (usually a large one) downloads completely and then fails with `Conversion failed!`, or a job stops with `Out of disk space in the temporary folder`. If the disk is completely full you may also see every list in the app come up empty (no channels, no videos) until space is freed.
+
+`Conversion failed!` is what ffmpeg reports when it cannot write the merged file. Merging the video and audio streams needs a second copy of the video, so the folder downloads are staged in needs free space of about **twice the video's size**. When Youtarr measures that this is what happened, the failed job shows a "Not enough disk space to finish the download" diagnosis (Downloads page, Download History, and notifications) and the log has a `Download failed because the temporary download folder is out of space` line with the folder and its free space. Youtarr normally removes the failed video's leftover files when that download run ends, so the space comes back on its own; anything left is cleared when the next download job starts.
+
+Which disk is full depends on **Use external temp directory** (Settings -> Core):
+
+- **Off (default)**: downloads are staged in `.youtarr_tmp/` inside your output folder, so your media drive is the one that is short on space.
+- **On**: downloads are staged inside the container (`/tmp/youtarr-downloads` unless you changed it). Unless you mounted a volume there, this is Docker's own storage. On Docker Desktop (Windows/macOS) that is a virtual disk with a fixed maximum size, shared with every image, the build cache, and every other container; free space on your drives does not count.
+
+**To check**: look at free space on the folder downloads are staged in, as the container sees it. The log line above names that folder (`tempPath`); use it if you changed the output or temp path.
+
+```bash
+# Setting off (default): staging is under the output folder
+docker exec youtarr df -h /usr/src/app/data
+
+# Setting on: staging is the external temp path
+docker exec youtarr df -h /tmp/youtarr-downloads
+```
+
+**To fix**:
+
+- **Your media drive is full** (setting off, or a volume you mounted at the external temp path): free up space on that drive.
+- **Docker's own storage is full** (setting on, nothing mounted at the external temp path): see what is using it and reclaim what you do not need:
+
+  ```bash
+  # What is using Docker's disk
+  docker system df
+
+  # Reclaim build cache, then images no container uses
+  docker builder prune
+  docker image prune -a
+  ```
+
+If large videos regularly do not fit in the external temp path, mount a volume with enough room there, or turn **Use external temp directory** off so staging uses your output drive (some managed platforms, such as ElfHosted, choose the staging location for you).
+
+A channel video that failed this way is retried by each scheduled download for as long as it is still among the most recent videos the check looks at (**Files to Download per Channel**) and passes the channel's filters, so it normally completes once there is room. If it has dropped out of that window, download it manually.
+
 ### No Download Progress Shown (Downloads Work, Videos "Just Appear")
 
 **Problem**: Downloads complete successfully, but the **Downloads -> Activity** page never updates live: progress percentages stay frozen (or the page shows "Waiting for progress updates...") until you refresh the page or switch back to the tab. Other real-time updates (channel refresh status, download complete notifications) are also missing.
