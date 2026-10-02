@@ -23,6 +23,9 @@ const UNCLAIMED_SERVER_SENTINEL = 'UNCLAIMED_SERVER';
 // show-level items with no file parts; ?type=4 lists the episodes instead.
 const PLEX_TYPE_EPISODE = 4;
 
+// File names Plex's TV scanner reads as an episode (S01E02, S2024E03151200).
+const EPISODE_NAME_PATTERN = /S\d+E\d+/i;
+
 // Server-local accountID of the server owner: always 1 in /accounts and the
 // play-history endpoint. The owner's watch state comes from section listings
 // (full fidelity); history rows for account 1 are skipped as duplicates.
@@ -184,10 +187,20 @@ class PlexAdapter extends BaseAdapter {
     const candidatesByBasename = new Map(); // basename -> [{ ratingKey, segments }]
     const sections = await this._getSectionIds();
     // Music sections must be queried with type=10 (tracks): the default /all
-    // for an 'artist' section returns artists, which carry no file paths.
+    // for an 'artist' section returns artists, which carry no file paths. Show
+    // sections likewise need type=4 (episodes) instead of file-less shows. An
+    // episode listing covers every show on the server, which can be huge and
+    // is re-fetched on each polling round, so show sections are only listed
+    // when a file is named like an episode, as the TV preset and TV layout are.
     const hasAudio = targets.some((p) => /\.mp3$/i.test(p));
+    const mayBeEpisode = targets.some((p) => EPISODE_NAME_PATTERN.test(extractBasename(p)));
     const sources = [
-      ...sections.video.map((id) => ({ id, params: {} })),
+      ...sections.video
+        .filter((id) => mayBeEpisode || !sections.shows.includes(id))
+        .map((id) => ({
+          id,
+          params: sections.shows.includes(id) ? { type: PLEX_TYPE_EPISODE } : {},
+        })),
       ...(hasAudio ? sections.music.map((id) => ({ id, params: { type: 10 } })) : []),
     ];
     for (const { id: libraryId, params } of sources) {

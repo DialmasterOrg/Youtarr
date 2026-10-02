@@ -185,7 +185,8 @@ describe('PlexAdapter', () => {
       ]);
       axios.get.mockResolvedValue({ data: { MediaContainer: { Metadata: [] } } });
       const adapter = new PlexAdapter(cfg);
-      await adapter.resolveItemIdByFilepath('/data/x.mp4');
+      // An episode name, so the show section is searched too.
+      await adapter.resolveItemIdByFilepath('/data/Show/Season 01/S01E01 - x [x1].mp4');
       // enumeration + sections: 2 (configured), 37 (movie), 42 (show). Music/photo skipped.
       expect(axios.get).toHaveBeenCalledTimes(4);
       const queried = axios.get.mock.calls.slice(1).map((c) => c[0]);
@@ -287,6 +288,75 @@ describe('PlexAdapter', () => {
       axios.get.mockRejectedValueOnce({ isAxiosError: true, response: { status: 503 }, message: 'Request failed with status code 503' });
       const adapter = new PlexAdapter(cfg);
       await expect(adapter.resolveItemIdsByFilepaths(['/data/x.mp4'])).rejects.toBeInstanceOf(MediaServerUnavailableError);
+    });
+  });
+
+  describe('show (TV) sections', () => {
+    const MOVIE_SECTION = { key: '2', type: 'movie', title: 'YouTube' };
+    const SHOW_SECTION = { key: '5', type: 'show', title: 'YouTube TV' };
+    const EPISODE_FILE = '/plex/__TV/Chan/Season 2024/S2024E03151200 - Ep [vid1].mp4';
+    const MOVIE_FILE = '/plex/Chan/Clip [vid2] - vid2/Clip [vid2].mp4';
+    const item = (ratingKey, file) => ({ ratingKey, Media: [{ Part: [{ file }] }] });
+
+    // Mimics Plex: a show section's default /all lists show items, which carry
+    // no file parts; only type=4 lists its episodes. A movie section lists its
+    // files without a type, and nothing for the episode type.
+    const mockServer = (sections) => {
+      axios.get.mockImplementation(async (url, { params }) => {
+        if (url.endsWith('/library/sections')) {
+          return { data: { MediaContainer: { Directory: sections } } };
+        }
+        if (url.endsWith('/library/sections/2/all')) {
+          return { data: { MediaContainer: { Metadata: params.type === undefined ? [item('201', MOVIE_FILE)] : [] } } };
+        }
+        if (url.endsWith('/library/sections/5/all')) {
+          const metadata = params.type === 4 ? [item('501', EPISODE_FILE)] : [{ ratingKey: '500', title: 'Chan' }];
+          return { data: { MediaContainer: { Metadata: metadata } } };
+        }
+        throw new Error(`unexpected request ${url}`);
+      });
+    };
+
+    // clearAllMocks keeps implementations, so mockServer would leak into later tests.
+    afterEach(() => axios.get.mockReset());
+
+    test('resolves an episode file in a show section', async () => {
+      mockServer([MOVIE_SECTION, SHOW_SECTION]);
+      const adapter = new PlexAdapter(cfg);
+      const id = await adapter.resolveItemIdByFilepath('/data/__TV/Chan/Season 2024/S2024E03151200 - Ep [vid1].mp4');
+      expect(id).toBe('501');
+    });
+
+    test('resolves a file in a movie section listed beside a show section', async () => {
+      mockServer([MOVIE_SECTION, SHOW_SECTION]);
+      const adapter = new PlexAdapter(cfg);
+      const id = await adapter.resolveItemIdByFilepath('/data/Chan/Clip [vid2] - vid2/Clip [vid2].mp4');
+      expect(id).toBe('201');
+    });
+
+    test('does not list show sections when no file in the batch has an episode name', async () => {
+      mockServer([MOVIE_SECTION, SHOW_SECTION]);
+      const adapter = new PlexAdapter(cfg);
+      await adapter.resolveItemIdByFilepath('/data/Chan/Clip [vid2] - vid2/Clip [vid2].mp4');
+      const queried = axios.get.mock.calls.map((c) => c[0]);
+      expect(queried).not.toContain('http://plex:32400/library/sections/5/all');
+    });
+
+    test('resolves movie-style and episode files in one batch', async () => {
+      mockServer([MOVIE_SECTION, SHOW_SECTION]);
+      const adapter = new PlexAdapter(cfg);
+      const resolved = await adapter.resolveItemIdsByFilepaths([
+        '/data/Chan/Clip [vid2] - vid2/Clip [vid2].mp4',
+        '/data/__TV/Chan/Season 2024/S2024E03151200 - Ep [vid1].mp4',
+      ]);
+      expect([...resolved.values()]).toEqual(['201', '501']);
+    });
+
+    test('resolves an episode when the configured library is a show section', async () => {
+      mockServer([SHOW_SECTION]);
+      const adapter = new PlexAdapter({ ...cfg, plexYoutubeLibraryId: '5' });
+      const id = await adapter.resolveItemIdByFilepath('/data/__TV/Chan/Season 2024/S2024E03151200 - Ep [vid1].mp4');
+      expect(id).toBe('501');
     });
   });
 
