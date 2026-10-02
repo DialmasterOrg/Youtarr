@@ -22,7 +22,7 @@ The database is stored in a Docker volume named `youtarr-db-data`, so you don't 
 3. Under **Build method**, keep **Web editor** and paste the stack below.
 4. Replace every `/path/to/...` with your folders (the lines marked `CHANGE`). The `YOUTUBE_OUTPUT_DIR` line must match the videos folder.
 5. Set `TZ` to your timezone, written as Area/City (for example `America/New_York` or `Australia/Melbourne`).
-6. Optional: to use your own database password instead of the default, add an environment variable named `DB_PASSWORD` under **Environment variables**. Do this before the first deploy; see [Changing the database password](#changing-the-database-password).
+6. Optional: to use your own database password instead of the default, add an environment variable named `DB_PASSWORD` under **Environment variables**. Do this before the first deploy; see [Changing the database password](#changing-the-database-password). Don't use **Load variables from .env file** with the repository's `.env.example`: this stack doesn't read those variables, and the `YOUTUBE_OUTPUT_DIR=./downloads` in it is a relative path.
 7. Click **Deploy the stack**.
 
 ```yaml
@@ -83,7 +83,7 @@ If you started from a compose file you found somewhere else (a blog post, a gene
 
 ## First login
 
-Open `http://<your-server-ip>:3087`. On first start, Youtarr asks for a one-time setup token:
+Open `http://<your-server-ip>:3087` (or the port you used in place of 3087). On first start, Youtarr asks for a one-time setup token:
 
 - In Portainer, go to **Containers** -> **youtarr** -> **Logs** and look for the `Youtarr initial setup required` line. It includes the token as `setupToken`.
 - The token is also saved in the `setup-token` file in your config folder.
@@ -123,7 +123,7 @@ The repository's file also needs `YOUTUBE_OUTPUT_DIR` set. Without it, Portainer
 2. Click **Update the stack**.
 3. Turn on **Re-pull image and redeploy** and click **Update**.
 
-Your videos, settings, and database are kept. There's no need to delete the stack to update.
+This works while Youtarr is running, so you don't need to stop the stack first: Portainer only replaces the containers whose image changed. Your videos, settings, and database are kept, and there's no need to delete the stack to update.
 
 ## Changing the database password
 
