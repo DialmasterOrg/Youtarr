@@ -169,6 +169,8 @@ Both helpers automatically run migrations against the external database on boot,
 
 This section covers setting up Youtarr when you cannot (or prefer not to) clone the full repository—common in Portainer, TrueNAS, and similar Docker-native environments.
 
+> **Using Portainer?** Follow the [Portainer guide](platforms/portainer.md) instead. The `docker-compose.yml` used in this section stores data at paths relative to the compose file, which Portainer places in a hidden per-stack folder on the host.
+
 ### Important Warnings
 
 **This is an advanced installation method with limitations:**
@@ -363,10 +365,7 @@ docker compose logs -f
 ### Platform-Specific Notes
 
 #### Portainer
-- Use "Stacks" feature to paste docker-compose.yml content
-- Environment variables can be set in the Portainer UI under "Environment variables"
-- Create required directories via Portainer console or host SSH access
-- Ensure volume paths are accessible from the Docker host
+See the [Portainer guide](platforms/portainer.md). Don't paste this repository's `docker-compose.yml` into a Portainer stack: its relative paths (`./database`, `./config`) end up in Portainer's per-stack folder on the host (`/data/compose/<stack id>/`), which Portainer doesn't back up and a re-created stack doesn't reuse.
 
 #### TrueNAS Scale
 - Use "Custom App" feature in Apps section
@@ -431,7 +430,7 @@ sudo chown -R 999:999 database  # MariaDB runs as UID 999
 ### When to Use This Method
 
 **Good use cases:**
-- Portainer/TrueNAS/similar Docker-native platforms where Git is unavailable
+- TrueNAS and similar Docker-native platforms where Git is unavailable (for Portainer, use the [Portainer guide](platforms/portainer.md))
 - Systems where Git is not installed or cannot be installed
 - Testing Youtarr in isolated environments
 - Automated deployment scripts (though Git is still recommended)
