@@ -276,6 +276,28 @@ describe('FindVideos page', () => {
     expect(screen.getByTestId('dialog-missing-count')).toHaveTextContent('1');
   });
 
+  test('a selected never-downloaded video in the download archive counts as missing in the download dialog', async () => {
+    axios.post.mockResolvedValueOnce({
+      data: { results: [
+        { youtubeId: 'archived001', title: 'Archived', channelName: 'C', channelId: null, duration: 600, thumbnailUrl: null, publishedAt: null, viewCount: null, status: 'never_downloaded', inArchive: true },
+        { youtubeId: 'never000001', title: 'Never', channelName: 'C', channelId: null, duration: 600, thumbnailUrl: null, publishedAt: null, viewCount: null, status: 'never_downloaded', inArchive: false },
+      ] },
+    });
+
+    renderWithRouter(<FindVideos token="t" />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'q' } });
+    fireEvent.click(screen.getByRole('button', { name: /^search$/i }));
+    await screen.findByText('Archived');
+
+    fireEvent.click(screen.getByTestId('select-archived001'));
+    fireEvent.click(screen.getByTestId('select-never000001'));
+    fireEvent.click(screen.getByTestId('video-list-selection-pill'));
+    fireEvent.click(await screen.findByTestId('selection-menu-download'));
+
+    expect(await screen.findByTestId('mock-download-dialog')).toBeInTheDocument();
+    expect(screen.getByTestId('dialog-missing-count')).toHaveTextContent('1');
+  });
+
   test('mobile selection action opens the download dialog', async () => {
     mockMatchMedia(true);
     axios.post.mockResolvedValueOnce({

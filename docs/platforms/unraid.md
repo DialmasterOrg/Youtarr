@@ -69,6 +69,10 @@ curl -L https://codeberg.org/nwithan8/unraid_templates/raw/branch/main/templates
 5. Fill in the configuration as described above.
 6. Click "Apply" to start Youtarr.
 
+### Running Youtarr as a compose stack instead
+
+If you'd rather run Youtarr and its database as a compose stack through Portainer or a similar stack manager, follow the [Portainer guide](portainer.md) and keep every path under `/mnt/`. Don't use the repository's `docker-compose.yml` there: its relative paths (such as `./database`) can end up in the stack manager's own folder, and on Unraid any folder outside `/mnt` is in memory and is wiped on reboot.
+
 ## Troubleshooting MariaDB connection issues
 
 If Youtarr can't connect to MariaDB on startup, check the MariaDB container logs first. The common ones:

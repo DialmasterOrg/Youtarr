@@ -885,9 +885,17 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *           enum: [off, only, exclude]
    *           default: off
    *         description: Tri-state filter on watched status (per the configured watched rule). `only` keeps watched videos, `exclude` hides them.
+   *       - in: query
+   *         name: maxRating
+   *         schema:
+   *           type: string
+   *           enum: [G, PG, PG-13, R, NC-17, TV-Y, TV-Y7, TV-G, TV-PG, TV-14, TV-MA]
+   *         description: Hide videos rated above this rating. Unrated videos are always included. A video not yet downloaded is judged by the channel's default rating, if one is set.
    *     responses:
    *       200:
    *         description: List of channel videos
+   *       400:
+   *         description: Invalid maxRating
    */
   router.get('/getchannelvideos/:channelId', verifyToken, async (req, res) => {
     req.log.info({ channelId: req.params.channelId }, 'Getting channel videos');
@@ -910,7 +918,11 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
     const missingFilter = parseFilterMode(req.query.missingFilter);
     const ignoredFilter = parseFilterMode(req.query.ignoredFilter);
     const watchedFilter = parseFilterMode(req.query.watchedFilter);
-    const result = await channelModule.getChannelVideos(channelId, page, pageSize, downloadedFilter, searchQuery, sortBy, sortOrder, tabType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter);
+    const maxRating = ratingMapper.parseMaxRatingParam(req.query.maxRating);
+    if (!maxRating.valid) {
+      return res.status(400).json({ error: 'Invalid maxRating' });
+    }
+    const result = await channelModule.getChannelVideos(channelId, page, pageSize, downloadedFilter, searchQuery, sortBy, sortOrder, tabType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, maxRating.value);
 
     if (Array.isArray(result)) {
       res.status(200).json({ videos: result });

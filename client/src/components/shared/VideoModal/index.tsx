@@ -303,7 +303,7 @@ function VideoModal({
         onClose={() => setDownloadDialogOpen(false)}
         onConfirm={handleDownloadConfirm}
         videoCount={1}
-        missingVideoCount={displayVideo.status === 'missing' ? 1 : 0}
+        missingVideoCount={displayVideo.status === 'missing' || displayVideo.inArchive ? 1 : 0}
         mode="manual"
         token={token}
         defaultResolution={defaultResolution}

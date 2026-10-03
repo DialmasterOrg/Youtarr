@@ -57,7 +57,7 @@ interface ManualDownloadProps {
     urls: string[],
     settings?: DownloadSettings | null,
     videoChannelMap?: Record<string, string>
-  ) => void;
+  ) => Promise<void>;
   token: string | null;
   defaultResolution?: string;
 }
@@ -197,6 +197,8 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
 
   const handleConfirmDownload = useCallback(async (settings: DownloadSettings | null) => {
     setShowSettingsDialog(false);
+    setErrorMessage(null);
+    setSuccessMessage(null);
 
     setIsDownloading(true);
     try {
@@ -218,7 +220,11 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
       setPreviouslyDownloadedCount(0);
     } catch (error) {
       console.error('Error starting download:', error);
-      setErrorMessage('Failed to start download. Please try again.');
+      setErrorMessage(
+        error instanceof Error && error.message
+          ? error.message
+          : 'Failed to start download. Please try again.'
+      );
     } finally {
       setIsDownloading(false);
     }

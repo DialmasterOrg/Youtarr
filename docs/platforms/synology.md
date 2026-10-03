@@ -131,54 +131,38 @@ Choose one of the following options:
 
 Named volumes are managed by Docker internally and avoid all permission issues. This is the simplest and most reliable option for Synology users.
 
-**Edit docker-compose.yml before first start:**
+Youtarr ships a named-volume override, `docker-compose.arm.yml`, that swaps the database's `./database` bind mount for a Docker-managed volume. You enable it through `.env`, so you never edit the tracked `docker-compose.yml` (local edits there conflict with `git pull` when you update).
+
+**Pin the override in `.env` before first start:**
 
 ```bash
 cd /volume1/docker/Youtarr
-vi docker-compose.yml
+# Create .env from the template only if it does not exist yet (keeps an existing .env intact)
+[ -f .env ] || cp .env.example .env
+# Add the override unless .env already sets COMPOSE_FILE.
+# If you have a docker-compose.override.yml, it is kept in the list (before docker-compose.arm.yml).
+if ! grep -q '^COMPOSE_FILE=' .env; then
+  files=docker-compose.yml
+  [ -f docker-compose.override.yml ] && files="$files:docker-compose.override.yml"
+  printf 'COMPOSE_PATH_SEPARATOR=:\nCOMPOSE_FILE=%s:docker-compose.arm.yml\n' "$files" >> .env
+fi
+grep '^COMPOSE_' .env
 ```
 
-> **Tip**: If you prefer `nano` and have installed it, use `nano docker-compose.yml` instead.
+The last command should print these two lines:
 
-**Make these changes:**
+```env
+COMPOSE_PATH_SEPARATOR=:
+COMPOSE_FILE=docker-compose.yml:docker-compose.arm.yml
+```
 
-1. Find the `youtarr-db` service's `volumes:` section (around line 39):
-   ```yaml
-   volumes:
-     - ./database:/var/lib/mysql
-     # Synology and Apple Silicon macOS users:
-     # Uncomment the line below and comment out the line above to use named volume:
-     # - youtarr-db-data:/var/lib/mysql
-   ```
+If you use a `docker-compose.override.yml` (for example, to mount a network share), the `COMPOSE_FILE` line lists it too, as `docker-compose.yml:docker-compose.override.yml:docker-compose.arm.yml`. Keep it there: once `COMPOSE_FILE` is set, Compose no longer loads the override automatically. See [Keeping docker-compose.override.yml](../DOCKER.md#keeping-docker-composeoverrideyml).
 
-   Change it to:
-   ```yaml
-   volumes:
-     # - ./database:/var/lib/mysql
-     # Synology and Apple Silicon macOS users:
-     # Uncomment the line below and comment out the line above to use named volume:
-     - youtarr-db-data:/var/lib/mysql
-   ```
+If your `.env` already had a `COMPOSE_FILE` line, the command above leaves it alone. Check that it ends with `docker-compose.arm.yml` and that `COMPOSE_PATH_SEPARATOR=:` is present. If `docker-compose.arm.yml` is missing, add it to the end of the existing list rather than replacing the line, so any other files already listed (such as `docker-compose.override.yml`) stay loaded. Your other settings (download path, database credentials, UID/GID) are not touched.
 
-2. Find the `volumes:` section at the bottom of the file (around line 101):
-   ```yaml
-   # Synology and Apple Silicon macOS users:
-   # Uncomment the line below and comment out the line above to use named volume:
-   # volumes:
-   #   youtarr-db-data:
-   ```
+With this in `.env`, plain `docker compose` commands in this folder load the listed compose files and store the database in the named volume. In Step 5 you will edit this same `.env` file; do not copy `.env.example` over it again.
 
-   Change it to:
-   ```yaml
-   # Synology and Apple Silicon macOS users:
-   # Uncomment the line below and comment out the line above to use named volume:
-   volumes:
-     youtarr-db-data:
-   ```
-
-**Save the file**:
-- In `vi`: Press `Esc`, type `:wq`, press `Enter`
-- In `nano`: Press `Ctrl+O`, `Enter`, then `Ctrl+X`
+> **Do not add a `volumes:` block to `docker-compose.yml`.** The file already declares `youtarr-db-data` at the bottom, and a second top-level `volumes:` key makes Compose fail with `mapping key "volumes" already defined`.
 
 **Benefits of named volumes:**
 - No permission issues - Docker manages all permissions internally
@@ -186,7 +170,7 @@ vi docker-compose.yml
 - Portable across all platforms (Synology, QNAP, macOS, Linux)
 - No UID/GID configuration needed
 
-**Note about data location:** The named volume data is stored by Docker in `/volume/@docker/volumes/` on Synology. You can back it up using `docker exec youtarr-db mysqldump` (see Backup section).
+**Note about data location:** Compose prefixes the volume with the project (folder) name, so the actual volume is usually `youtarr_youtarr-db-data`; run `docker volume ls | grep youtarr-db-data` to see yours. Docker stores it under `/volume1/@docker/volumes/` on Synology. You can back it up with `./scripts/backup.sh` or `docker exec youtarr-db mysqldump` (see Backup section).
 
 ---
 
@@ -218,7 +202,7 @@ cd /volume1/docker/Youtarr
 vi docker-compose.yml
 ```
 
-**2. Replace the entire `youtarr-db` service** (starting around line 17) with:
+**2. Replace the entire `youtarr-db` service** (the first service under `services:`) with:
 
 ```yaml
   youtarr-db:
@@ -246,9 +230,9 @@ vi docker-compose.yml
       timeout: 5s
       retries: 5
       start_period: 30s
-    networks:
-      - youtarr-network
 ```
+
+Do not add a `networks:` entry to this service. Both services already share the compose file's default network (named `youtarr-network`), and referencing `youtarr-network` as a service network makes Compose fail with `refers to undefined network`.
 
 **3. Database directory:**
 By default, Docker will automatically create the ./database directory (as root:root) the first time the container starts. The linuxserver/mariadb image will then chown /config to PUID:PGID during its init step, so in most cases you don’t need to do anything extra.
@@ -294,7 +278,8 @@ Youtarr includes a `.env.example` template that you can use as a starting point:
 
 ```bash
 cd /volume1/docker/Youtarr
-cp .env.example .env
+# Creates .env only if it does not exist yet (for example from Step 4.5 Option 1)
+[ -f .env ] || cp .env.example .env
 vi .env
 ```
 
@@ -704,7 +689,7 @@ docker compose up -d
 
    #### If using volume mounted database
    ```bash
-   docker compose down -v # Removes the named volume (defaults to youtarr-db-data)
+   docker compose down -v # Removes the named volume (usually youtarr_youtarr-db-data)
    docker compose up -d   # Recreates the volume and initializes a fresh database
    ```
 
@@ -733,7 +718,7 @@ If you don't have important data yet or can re-add your channels:
    docker compose down
    ```
 
-2. **Follow Step 4.5 Option 1** to edit docker-compose.yml for named volumes
+2. **Follow Step 4.5 Option 1** to pin the named-volume override in `.env`. Those commands keep your existing `.env` and only add the two `COMPOSE_` lines, so your download path, database credentials, and other settings are preserved.
 
 3. **Remove failed bind mount data** (optional cleanup):
    ```bash
@@ -865,13 +850,18 @@ docker exec youtarr-db mysqldump -u <db_user> -p'<db_password>' <db_name> > /vol
   docker compose up -d
   ```
 
-- **Named volume installs** (default volume name is `youtarr-db-data`; adjust if you changed it):
+- **Named volume installs**: Compose prefixes the volume with the project (folder) name, so for a checkout in `/volume1/docker/Youtarr` the volume is `youtarr_youtarr-db-data`. Confirm yours with `docker volume ls | grep youtarr-db-data` and use that exact name below. With the unprefixed name, `docker run` silently creates a new, empty volume and backs that up instead.
   ```bash
+  docker compose down
   docker run --rm \
-    -v youtarr-db-data:/var/lib/mysql \
+    -v youtarr_youtarr-db-data:/var/lib/mysql \
     -v /volume1/backups/youtarr:/backup \
     busybox sh -c 'cd /var/lib/mysql && tar czf /backup/youtarr-db-$(date +%Y%m%d).tar.gz .'
+  docker compose up -d
   ```
+
+- **Named volume (Step 4.5 Option 1) or the standard `./database` bind mount with the official MariaDB image**: `./scripts/backup.sh` detects which of the two you use and backs up the database, config, and metadata in one archive. See [Backup and Restore](../BACKUP_RESTORE.md).
+  > **LinuxServer MariaDB (Step 4.5 Option 2) is not supported by the backup script.** The script requires the database container's data to be mounted at `/var/lib/mysql` and stops with an error otherwise; the LinuxServer image keeps its data under `/config`. Use the `mysqldump` backup above or the bind-mount file copy instead.
 
 ### Restore from Backup
 
@@ -903,14 +893,14 @@ docker exec youtarr-db mysqldump -u <db_user> -p'<db_password>' <db_name> > /vol
    - **Named volume installs**:
      ```bash
      docker compose down
-     docker volume rm youtarr-db-data
+     docker volume rm youtarr_youtarr-db-data
      docker run --rm \
-       -v youtarr-db-data:/var/lib/mysql \
+       -v youtarr_youtarr-db-data:/var/lib/mysql \
        -v /volume1/backups/youtarr:/backup \
        busybox sh -c 'cd /var/lib/mysql && tar xzf /backup/youtarr-db-YYYYMMDD.tar.gz'
      docker compose up -d
      ```
-     > Replace `youtarr-db-data` if you customized the volume name.
+     > Replace `youtarr_youtarr-db-data` with the name `docker volume ls | grep youtarr-db-data` shows for your install. The stack only mounts the project-prefixed volume, so restoring into any other name has no effect.
 
 ---
 

@@ -52,10 +52,11 @@ const apiKeyDownloadLimiter = rateLimit({
  * @param {Function} deps.verifyToken - Token verification middleware
  * @param {Object} deps.videosModule - Videos module
  * @param {Object} deps.downloadModule - Download module
+ * @param {Object} deps.ratingMapper - Rating validation/normalization module
  * @returns {express.Router}
  */
 module.exports = function createVideoRoutes({
-  verifyToken, videosModule, downloadModule, videoOembedEnricher, videoLocalStatus, storageGuard, scheduledTaskManager,
+  verifyToken, videosModule, downloadModule, videoOembedEnricher, videoLocalStatus, storageGuard, scheduledTaskManager, ratingMapper,
 }) {
   const router = express.Router();
   /**
@@ -96,6 +97,9 @@ module.exports = function createVideoRoutes({
    *                       status:
    *                         type: string
    *                         enum: [never_downloaded, missing, downloaded]
+   *                       inArchive:
+   *                         type: boolean
+   *                         description: Listed in the download archive without a database record (ignored videos excluded); a download skips it unless re-downloading is allowed
    *       400:
    *         description: Invalid video IDs or more than 500 IDs
    *       401:
@@ -195,9 +199,17 @@ module.exports = function createVideoRoutes({
    *           enum: [off, only, exclude]
    *           default: off
    *         description: Tri-state filter on watched videos (per the configured watched rule)
+   *       - in: query
+   *         name: maxRating
+   *         schema:
+   *           type: string
+   *           enum: [G, PG, PG-13, R, NC-17, TV-Y, TV-Y7, TV-G, TV-PG, TV-14, TV-MA]
+   *         description: Hide videos rated above this rating. Unrated videos are always included.
    *     responses:
    *       200:
    *         description: Paginated list of videos
+   *       400:
+   *         description: Invalid maxRating
    *       500:
    *         description: Failed to get videos
    */
@@ -206,6 +218,11 @@ module.exports = function createVideoRoutes({
 
     try {
       const { page, limit, search, dateFrom, dateTo, sortBy, sortOrder, channelFilter, protectedFilter, missingFilter, watchedFilter } = req.query;
+
+      const maxRating = ratingMapper.parseMaxRatingParam(req.query.maxRating);
+      if (!maxRating.valid) {
+        return res.status(400).json({ error: 'Invalid maxRating' });
+      }
 
       const parseFilterMode = (value) => (value === 'only' || value === 'exclude' ? value : 'off');
 
@@ -221,6 +238,7 @@ module.exports = function createVideoRoutes({
         protectedFilter: parseFilterMode(protectedFilter),
         missingFilter: parseFilterMode(missingFilter),
         watchedFilter: parseFilterMode(watchedFilter),
+        maxRating: maxRating.value,
       };
 
       const result = await videosModule.getVideosPaginated(options);

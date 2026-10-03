@@ -51,6 +51,11 @@ describe('filesystem/constants', () => {
       expect(match[1]).toBe('dQw4w9WgXcQ');
     });
 
+    it('captures the trailing ID when the title mentions another video\'s ID', () => {
+      const match = 'Reference [aaaaaaaaaaa] [bbbbbbbbbbb].mp4'.match(YOUTUBE_ID_BRACKET_PATTERN);
+      expect(match[1]).toBe('bbbbbbbbbbb');
+    });
+
     it('should match IDs with underscores and hyphens', () => {
       // This parser accepts the same defensive 10-12 character window as YOUTUBE_ID_PATTERN.
       const match = 'Video [a_b-c_d-e_f].mp4'.match(YOUTUBE_ID_BRACKET_PATTERN);
