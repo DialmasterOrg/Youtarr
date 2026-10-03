@@ -1,5 +1,6 @@
 const configModule = require('../configModule');
 const { resolveEffectiveSubfolder, ROOT_SENTINEL } = require('../filesystem');
+const { LAYOUT_TV, isMp3Format } = require('../tvShows/constants');
 
 const DEFAULT_RESOLUTION = '1080';
 
@@ -102,6 +103,41 @@ class DownloadSettingsResolver {
       return resolveEffectiveSubfolder(softFallback, globalDefault);
     }
     return globalDefault || null;
+  }
+
+  /**
+   * Pre-download estimate of the finalize-time subfolder, for decisions that
+   * depend on the destination's layout: resolveFinalSubfolder's precedence, fed
+   * the channel the grouper could attribute (null when untracked) and the
+   * routing directives it forwards. The finalizer may still know better once
+   * the .info.json names the real channel.
+   *
+   * @returns {string|null} Subfolder name, or null for the main folder
+   */
+  predictFinalSubfolder({ override = {}, channel = null, playlist = {}, globalDefault = null } = {}) {
+    const directives = this.buildRoutingDirectives({ override, playlist });
+    return this.resolveFinalSubfolder({
+      hardOverride: directives.subfolderOverride || null,
+      channelRecord: channel,
+      softFallback: directives.subfolderFallback || null,
+      globalDefault,
+    });
+  }
+
+  /**
+   * TV folders are video-only. Saved settings that would send MP3 there are
+   * refused at save time; a download-time MP3 type (dialog override, playlist
+   * default) whose destination has the TV layout is downgraded to video-only.
+   *
+   * @param {Object} params
+   * @param {string|null} params.audioFormat - Resolved download type (null = video-only)
+   * @param {string|null} params.subfolder - Destination subfolder, null for the main folder
+   * @param {(libraryFolder: string) => string} params.layoutOf - Layout of a library folder ('' = main)
+   * @returns {string|null}
+   */
+  coerceAudioFormatForLayout({ audioFormat, subfolder, layoutOf }) {
+    if (!isMp3Format(audioFormat)) return audioFormat;
+    return layoutOf(subfolder || '') === LAYOUT_TV ? null : audioFormat;
   }
 }
 

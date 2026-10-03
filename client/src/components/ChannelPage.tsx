@@ -13,8 +13,10 @@ import SubscriptionsBackButton from './shared/SubscriptionsBackButton';
 import OpenInYouTubeLink, { youtubeChannelUrl } from './shared/OpenInYouTubeLink';
 import SubFolderChip from './Subscriptions/components/chips/SubFolderChip';
 import QualityChip from './Subscriptions/components/chips/QualityChip';
+import TvChip from './Subscriptions/components/chips/TvChip';
 import AutoDownloadTabToggles from './ChannelPage/components/AutoDownloadTabToggles';
 import { useAutoDownloadTabToggle } from './ChannelPage/hooks/useAutoDownloadTabToggle';
+import { useChannelTv } from './ChannelPage/hooks/useChannelTv';
 import { SHARED_CHANNEL_META_CHIP_STYLE, SHARED_CHANNEL_META_DEFAULT_SURFACE_STYLE } from './shared/chipStyles';
 
 interface ChannelPageProps {
@@ -36,6 +38,7 @@ function ChannelPage({ token }: ChannelPageProps) {
   const { channel_id } = useParams();
   const { config, loading: configLoading } = useConfig(token);
   const globalPreferredResolution = config.preferredResolution || '1080';
+  const { tv: channelTv, refetch: refetchChannelTv } = useChannelTv(channel_id, token);
 
   const handleSettingsSaved = (updated: {
     sub_folder: string | null;
@@ -76,6 +79,8 @@ function ChannelPage({ token }: ChannelPageProps) {
       }
       return next;
     });
+    // A folder change can switch the channel between Videos and TV.
+    void refetchChannelTv();
   };
 
   // Monotonic request id keeps a slow in-flight /getChannelInfo from
@@ -228,7 +233,12 @@ function ChannelPage({ token }: ChannelPageProps) {
     if (!channel) {
       return null;
     }
-    return <SubFolderChip subFolder={channel.sub_folder} />;
+    return (
+      <Box className="flex flex-wrap items-center gap-1">
+        <SubFolderChip subFolder={channel.sub_folder} />
+        {channelTv?.layout === 'tv' && <TvChip />}
+      </Box>
+    );
   };
 
   const handleAutoDownloadTabsChange = useCallback((enabledTabs: string, savedChannelId: string) => {

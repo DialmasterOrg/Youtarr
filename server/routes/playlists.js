@@ -2,11 +2,12 @@ const express = require('express');
 const { MAX_PLAYLIST_VIDEOS, MAX_SELECTED_DOWNLOAD_IDS, DEFAULT_PREVIEW_COUNT, FETCH_IN_PROGRESS_MESSAGE } = require('../modules/playlistConstants');
 const { createOverrideSettingsValidator } = require('./overrideSettingsValidator');
 const { createSubscribeSettingsValidator } = require('./playlistSubscribeSettings');
+const { GLOBAL_DEFAULT_SENTINEL } = require('../modules/filesystem/constants');
 
 // Saved settings the Add Playlist dialog shows when a removed playlist is restored.
 const RESTORE_PREVIEW_SETTING_KEYS = ['auto_download', 'default_sub_folder', 'video_quality', 'audio_format'];
 
-function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule, storageGuard }) {
+function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule, storageGuard, layoutGuards }) {
   const router = express.Router();
   const { Playlist, PlaylistVideo, Video } = models;
   const downloadDeps = { PlaylistVideo, Video, playlistModule, downloadModule, storageGuard };
@@ -46,6 +47,18 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
 
   const logBgFailure = (req, playlistId, op) => (err) => {
     req.log.error({ err, playlist_id: playlistId }, `background ${op} failed`);
+  };
+
+  // TV folders are video-only. Returns the refusal message, or null.
+  const videoOnlyDestinationError = async (audioFormat, subFolderValue) => {
+    if (!layoutGuards) return null;
+    try {
+      await layoutGuards.assertVideoOnlyDestination({ audioFormat, subFolderValue });
+      return null;
+    } catch (err) {
+      if (err.status) return err.message;
+      throw err;
+    }
   };
 
   // Soft-deleted playlists (enabled: false) 404 on every id-addressed route.
@@ -234,6 +247,10 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
       const validated = validateSubscribeSettings(req.body.settings);
       if (!validated.ok) return res.status(400).json({ error: validated.error });
       const settings = validated.value;
+      const videoOnlyError = await videoOnlyDestinationError(settings.audio_format, 'default_sub_folder' in settings
+        ? settings.default_sub_folder
+        : GLOBAL_DEFAULT_SENTINEL);
+      if (videoOnlyError) return res.status(400).json({ error: videoOnlyError });
       const info = await playlistModule.getPlaylistInfo(url);
       const { playlist: created, restored } = await playlistModule.upsertPlaylist(info, { enabled: true, settings });
       // On restore the submitted settings are discarded in favor of the saved
@@ -436,6 +453,13 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
     try {
       const p = await findEnabledPlaylist(req.params.playlistId);
       if (!p) return res.status(404).json({ error: 'Playlist not found' });
+      if ('audio_format' in updates || 'default_sub_folder' in updates) {
+        const videoOnlyError = await videoOnlyDestinationError(
+          'audio_format' in updates ? updates.audio_format : p.audio_format,
+          'default_sub_folder' in updates ? updates.default_sub_folder : p.default_sub_folder
+        );
+        if (videoOnlyError) return res.status(400).json({ error: videoOnlyError });
+      }
       await p.update(updates);
       registerSubfolder(updates.default_sub_folder);
       res.json({ settings: updates });
@@ -941,6 +965,12 @@ function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3u
 
       const p = await findEnabledPlaylist(req.params.playlistId);
       if (!p) return res.status(404).json({ error: 'Playlist not found' });
+      const override = overrideResult.value || {};
+      const videoOnlyError = await videoOnlyDestinationError(
+        override.audioFormat,
+        override.subfolder !== undefined && override.subfolder !== null ? override.subfolder : p.default_sub_folder
+      );
+      if (videoOnlyError) return res.status(400).json({ error: videoOnlyError });
 
       const queued = await downloadModule.doPlaylistDownloads(p, {
         youtubeIds: videoIds,

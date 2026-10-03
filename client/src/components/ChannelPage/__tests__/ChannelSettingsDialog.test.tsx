@@ -33,6 +33,32 @@ jest.mock('../../../hooks/useSubfolders', () => ({
   }),
 }));
 
+// Library folder layouts drive the General section's TV-only controls.
+const mockLayoutOf = jest.fn((_folder: string) => 'videos');
+jest.mock('../../../hooks/useLibraryFolders', () => ({
+  LIBRARY_FOLDERS_UPDATED_EVENT: 'library-folders-updated',
+  useLibraryFolders: () => ({
+    folders: [],
+    loading: false,
+    error: null,
+    layoutOf: mockLayoutOf,
+    refetch: jest.fn(),
+    setFolderLayout: jest.fn(() => Promise.resolve()),
+  }),
+}));
+
+const mockSwitchLayout = jest.fn();
+const mockChannelTv: { current: unknown } = { current: null };
+jest.mock('../hooks/useChannelTv', () => ({
+  useChannelTv: () => ({
+    tv: mockChannelTv.current,
+    loading: false,
+    error: null,
+    refetch: jest.fn(),
+    switchLayout: mockSwitchLayout,
+  }),
+}));
+
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const mockAxios = require('axios');
 
@@ -106,9 +132,12 @@ describe('ChannelSettingsDialog', () => {
     mockRefetchConfig.mockResolvedValue(undefined);
     // Reset mockUseConfig to default
     mockUseConfig.mockReturnValue(buildUseConfigResult());
+    mockLayoutOf.mockImplementation(() => 'videos');
+    mockSwitchLayout.mockReset();
+    mockChannelTv.current = null;
   });
 
-  async function openSettingsSection(sectionName: 'General' | 'Auto Download' | 'Filters' | 'Ratings' | 'Auto-Removal') {
+  async function openSettingsSection(sectionName: 'General' | 'TV Show' | 'Auto Download' | 'Filters' | 'Ratings' | 'Auto-Removal') {
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: sectionName }));
     return user;
@@ -2051,6 +2080,127 @@ describe('ChannelSettingsDialog', () => {
       const body = JSON.parse(init!.body as string);
       expect(body.auto_removal_protected).toBe(true);
       expect(body.auto_removal_keep_recent_count).toBeNull();
+    });
+  });
+
+  describe('TV Show section', () => {
+    const videosChannelTv = {
+      layout: 'videos',
+      libraryFolder: '',
+      show: null,
+      tvFolders: ['Anime'],
+      defaultFolder: '',
+      defaultFolderLayout: 'videos',
+      hasDownloads: false,
+      canSwitch: true,
+    };
+
+    const renderLoaded = async (loaded: Record<string, unknown> = mockChannelSettings) => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(loaded),
+      });
+      render(<ChannelSettingsDialog {...defaultProps} />);
+      await waitFor(() => {
+        expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      });
+    };
+
+    test('opens the TV Show section', async () => {
+      mockChannelTv.current = videosChannelTv;
+      await renderLoaded();
+
+      await openSettingsSection('TV Show');
+
+      expect(screen.getByText('Show this channel as')).toBeInTheDocument();
+    });
+
+    test('hides the file structure and playlist file controls for a TV folder', async () => {
+      mockLayoutOf.mockImplementation((folder: string) => (folder === 'Anime' ? 'tv' : 'videos'));
+      await renderLoaded({ ...mockChannelSettings, sub_folder: 'Anime' });
+
+      expect(screen.queryByLabelText('Video File Structure')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/Generate channel playlist file/i)).not.toBeInTheDocument();
+    });
+
+    test('explains how a TV folder saves episodes', async () => {
+      mockLayoutOf.mockImplementation((folder: string) => (folder === 'Anime' ? 'tv' : 'videos'));
+      await renderLoaded({ ...mockChannelSettings, sub_folder: 'Anime' });
+
+      expect(
+        screen.getByText('Episodes are saved in season folders, and channel playlist files are off for TV shows.')
+      ).toBeInTheDocument();
+    });
+
+    test('marks the download type as video-only for a TV folder', async () => {
+      mockLayoutOf.mockImplementation((folder: string) => (folder === 'Anime' ? 'tv' : 'videos'));
+      await renderLoaded({ ...mockChannelSettings, sub_folder: 'Anime' });
+
+      expect(screen.getByText('TV folders are video-only.')).toBeInTheDocument();
+    });
+
+    test('a layout switch updates the subfolder without enabling Save', async () => {
+      mockChannelTv.current = videosChannelTv;
+      mockSwitchLayout.mockResolvedValueOnce({
+        settings: { sub_folder: 'Anime' },
+        tv: { ...videosChannelTv, layout: 'tv', libraryFolder: 'Anime' },
+      });
+      await renderLoaded();
+
+      const user = await openSettingsSection('TV Show');
+      await user.click(screen.getByRole('button', { name: 'TV show' }));
+      await waitFor(() => {
+        expect(mockOnSettingsSaved).toHaveBeenCalledWith(expect.objectContaining({ sub_folder: 'Anime' }));
+      });
+      await openSettingsSection('General');
+
+      expect(screen.getByLabelText('Subfolder')).toHaveValue('__Anime');
+      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    });
+
+    test('a layout switch reports the saved settings and tabs to the channel page', async () => {
+      mockChannelTv.current = videosChannelTv;
+      mockSwitchLayout.mockResolvedValueOnce({
+        settings: { sub_folder: 'Anime' },
+        tv: { ...videosChannelTv, layout: 'tv', libraryFolder: 'Anime' },
+      });
+      await renderLoaded({ ...mockChannelSettings, detected_tabs: ['videos', 'shorts'], hidden_tabs: ['shorts'] });
+
+      const user = await openSettingsSection('TV Show');
+      await user.click(screen.getByRole('button', { name: 'TV show' }));
+
+      await waitFor(() => {
+        expect(mockOnSettingsSaved).toHaveBeenCalledWith(expect.objectContaining({
+          sub_folder: 'Anime',
+          detectedTabs: ['videos', 'shorts'],
+          availableTabs: ['videos'],
+        }));
+      });
+    });
+
+    test("shows the server's 409 message when a save is refused", async () => {
+      const refusal = "This channel already has downloaded videos, so it can't switch between Videos and TV or move to another TV folder yet.";
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 409,
+          json: jest.fn().mockResolvedValueOnce({ error: refusal }),
+        });
+      render(<ChannelSettingsDialog {...defaultProps} />);
+      await waitFor(() => {
+        expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      });
+      const user = userEvent.setup();
+
+      await user.click(screen.getByLabelText('Channel Video Quality Override'));
+      await user.click(screen.getByText('720p (HD)'));
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+
+      expect(await screen.findByText(refusal)).toBeInTheDocument();
     });
   });
 });

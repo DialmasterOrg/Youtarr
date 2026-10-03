@@ -143,6 +143,28 @@ describe('VideoTechnical', () => {
       expect(screen.queryByText('Aspect Ratio')).not.toBeInTheDocument();
     });
 
+    test('shows the episode code and show name for a TV episode', () => {
+      renderTech({}, {
+        ...baseMetadata,
+        episode: { showName: 'Mark Rober', season: 2024, episode: 3151200, code: 'S2024E03151200' },
+      });
+      expect(screen.getByText('Episode')).toBeInTheDocument();
+      expect(screen.getByText('S2024E03151200 (Mark Rober)')).toBeInTheDocument();
+    });
+
+    test('shows only the episode code when the show name is unknown', () => {
+      renderTech({}, {
+        ...baseMetadata,
+        episode: { showName: null, season: 1, episode: 20, code: 'S01E20' },
+      });
+      expect(screen.getByText('S01E20')).toBeInTheDocument();
+    });
+
+    test('omits the Episode row for a video that is not a TV episode', () => {
+      renderTech({}, { ...baseMetadata, episode: null });
+      expect(screen.queryByText('Episode')).not.toBeInTheDocument();
+    });
+
     test('hides metadata-derived rows while loading', () => {
       renderTech(
         {},

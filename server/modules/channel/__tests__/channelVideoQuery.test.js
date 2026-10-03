@@ -9,6 +9,8 @@ jest.mock('../../mediaServers/watchStatusQueries', () => ({ getWatchedByMap: jes
 jest.mock('../../../db', () => mockFactories.mockDb());
 jest.mock('../../fileCheckModule', () => mockFactories.mockFileCheckModule());
 
+jest.mock('../../tvShows/episodeInfo', () => ({ getEpisodeInfoMap: jest.fn().mockResolvedValue(new Map()) }));
+
 describe('channelVideoQuery', () => {
   let channelVideoQuery;
   let ChannelVideo;
@@ -56,6 +58,23 @@ describe('channelVideoQuery', () => {
       expect(result[1].removed).toBe(true);
       expect(result[2].added).toBe(false);
       expect(result[2].removed).toBe(false);
+    });
+
+    test('adds the episode of a downloaded TV episode, and null otherwise', async () => {
+      const Video = require('../../../models/video');
+      const episodeInfo = require('../../tvShows/episodeInfo');
+      const episode = { showName: 'Show', season: 2024, episode: 3151200, code: 'S2024E03151200' };
+      Video.findAll = jest.fn().mockResolvedValue([
+        { id: 1, youtubeId: 'video1', removed: false, filePath: '/tv/S2024E03151200 - T [video1].mp4' },
+      ]);
+      episodeInfo.getEpisodeInfoMap.mockResolvedValueOnce(new Map([['video1', episode]]));
+
+      const result = await channelVideoQuery.enrichVideosWithDownloadStatus([{ youtube_id: 'video1' }, { youtube_id: 'video2' }]);
+
+      expect(episodeInfo.getEpisodeInfoMap).toHaveBeenCalledWith([
+        { youtubeId: 'video1', filePath: '/tv/S2024E03151200 - T [video1].mp4' },
+      ]);
+      expect(result.map((v) => v.episode)).toEqual([episode, null]);
     });
 
     test('carries video_resolution from the Videos row onto the enriched video', async () => {

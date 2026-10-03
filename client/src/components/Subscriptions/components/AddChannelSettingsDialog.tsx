@@ -134,6 +134,7 @@ const AddChannelSettingsDialog: React.FC<AddChannelSettingsDialogProps> = ({
             defaultSubfolder={config.defaultSubfolder || null}
             subfolderLabel="Subfolder"
             subfolderHelperText="Choose where this channel's videos are saved"
+            showTvShowCaption
           />
 
           <Typography variant="caption" color="text.secondary">

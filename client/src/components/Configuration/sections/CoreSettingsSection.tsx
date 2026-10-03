@@ -29,11 +29,13 @@ import { ConfigurationCard } from '../common/ConfigurationCard';
 import { InfoTooltip } from '../common/InfoTooltip';
 import SubtitleLanguageSelector from '../SubtitleLanguageSelector';
 import { VideoFilenameTemplate } from './components/VideoFilenameTemplate';
+import { LibraryFoldersList } from './components/LibraryFoldersList';
 import { SubfolderAutocomplete } from '../../shared/SubfolderAutocomplete';
 import { ManageSubfoldersDialog } from '../../shared/ManageSubfoldersDialog';
 import { AddSubfolderDialog } from '../../shared/AddSubfolderDialog';
 import { Plus as AddIcon, Settings as SettingsIcon } from '../../../lib/icons';
 import { useSubfolders } from '../../../hooks/useSubfolders';
+import { useLibraryFolders } from '../../../hooks/useLibraryFolders';
 import { ConfigState, DeploymentEnvironment, PlatformManagedState } from '../types';
 import { getChannelFilesOptions } from '../helpers';
 import { ScheduleSummary } from './components/ScheduleSummary';
@@ -61,6 +63,8 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
 }) => {
   // Fetch available subfolders
   const { subfolders, loading: subfoldersLoading, createSubfolder } = useSubfolders(token);
+  const libraryFolders = useLibraryFolders(token);
+  const { layoutOf } = libraryFolders;
 
   // State for confirmation dialog when setting default subfolder
   const [manageOpen, setManageOpen] = useState(false);
@@ -576,6 +580,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                       label="Default Subfolder"
                       helperText="Default download location for channels using 'Default Subfolder'"
                       showAddAction={false}
+                      layoutOf={layoutOf}
                     />
                     <Box className="flex items-center min-h-[48px] mt-5">
                       <InfoTooltip
@@ -665,6 +670,12 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                       text="When enabled, new downloads are saved directly in each channel folder instead of individual per-video subfolders. Channels can override this in their own settings (Flat or Video subfolders). Only affects new downloads; existing files are not moved."
                       onMobileClick={onMobileTooltipClick}
                     />
+                  </Box>
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Box className="border-t pt-3">
+                    <LibraryFoldersList library={libraryFolders} />
                   </Box>
                 </Grid>
 

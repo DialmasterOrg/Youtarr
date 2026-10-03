@@ -1,4 +1,4 @@
-const { seasonFolderName, episodeCode, buildEpisodeStem, EPISODE_TITLE_MAX_BYTES } = require('../episodeNaming');
+const { seasonFolderName, episodeCode, buildEpisodeStem, episodeFileName, EPISODE_TITLE_MAX_BYTES } = require('../episodeNaming');
 const { SEASON_FOLDER_PATTERN } = require('../../filesystem/constants');
 
 describe('episodeNaming', () => {
@@ -88,6 +88,20 @@ describe('episodeNaming', () => {
 
     it('rejects a value that is not a video id', () => {
       expect(() => buildEpisodeStem({ ...base, youtubeId: '../escape' })).toThrow(TypeError);
+    });
+  });
+
+  describe('episodeFileName', () => {
+    const id = 'abcdefghijk';
+    const stem = `S2024E03151200 - Big Build [${id}]`;
+
+    it.each([
+      [`Mark Rober - Big Build [${id}].mp4`, `${stem}.mp4`],
+      [`Mark Rober - Big Build [${id}].en.srt`, `${stem}.en.srt`],
+      [`Mark Rober - Big Build [${id}]-fanart.jpg`, `${stem}-fanart.jpg`],
+      [`._Mark Rober - Big Build [${id}].mp4`, `._${stem}.mp4`],
+    ])('renames %s', (fileName, expected) => {
+      expect(episodeFileName(fileName, id, stem)).toBe(expected);
     });
   });
 });

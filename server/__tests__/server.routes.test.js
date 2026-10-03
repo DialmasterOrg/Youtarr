@@ -417,6 +417,22 @@ const createServerModule = ({
           register: jest.fn().mockResolvedValue(undefined),
           delete: jest.fn().mockResolvedValue(undefined),
         }));
+        jest.doMock('../modules/tvShows/libraryFolders', () => ({
+          listLibraryFolders: jest.fn().mockResolvedValue([]),
+          setFolderLayout: jest.fn(),
+          checkDefaultSubfolderChange: jest.fn().mockResolvedValue(undefined),
+        }));
+        jest.doMock('../modules/tvShows/libraryLayouts', () => ({
+          getLayoutResolver: jest.fn().mockResolvedValue(() => 'videos'),
+          listTvFolders: jest.fn().mockResolvedValue([]),
+        }));
+        jest.doMock('../modules/tvShows/showStore', () => ({ findChannelShow: jest.fn().mockResolvedValue(null) }));
+        jest.doMock('../modules/tvShows/episodeInfo', () => ({ getEpisodeInfoMap: jest.fn().mockResolvedValue(new Map()) }));
+        jest.doMock('../modules/tvShows/layoutGuards', () => ({ assertVideoOnlyDestination: jest.fn(), isMp3Format: jest.fn(() => false) }));
+        jest.doMock('../modules/tvShows/channelLayout', () => ({
+          getChannelTvState: jest.fn(),
+          resolveLayoutTarget: jest.fn(),
+        }));
         jest.doMock('../modules/webSocketServer.js', () => jest.fn());
         jest.doMock('node-cron', () => cronMock);
         jest.doMock('../modules/mediaServers/watchStatusScheduler', () => ({ scheduleTask: jest.fn(), subscribe: jest.fn() }));
@@ -1388,7 +1404,8 @@ describe('server routes - channels', () => {
       expect(channelModuleMock.updateChannelsByDelta).toHaveBeenCalledWith({
         enableUrls: ['https://youtube.com/@new'],
         disableUrls: ['https://youtube.com/@old'],
-        channelSettingsModule: expect.any(Object)
+        channelSettingsModule: expect.any(Object),
+        isDownloadRunning: expect.any(Function)
       });
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({ status: 'success' });
@@ -1419,7 +1436,8 @@ describe('server routes - channels', () => {
           { url: 'https://youtube.com/@channel2', channel_id: 'UC456' }
         ],
         disableUrls: [],
-        channelSettingsModule: expect.any(Object)
+        channelSettingsModule: expect.any(Object),
+        isDownloadRunning: expect.any(Function)
       });
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({ status: 'success' });

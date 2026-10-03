@@ -57,6 +57,7 @@ const apiKeyDownloadLimiter = rateLimit({
  */
 module.exports = function createVideoRoutes({
   verifyToken, videosModule, downloadModule, videoOembedEnricher, videoLocalStatus, storageGuard, scheduledTaskManager, ratingMapper,
+  layoutGuards,
 }) {
   const router = express.Router();
   /**
@@ -924,7 +925,7 @@ module.exports = function createVideoRoutes({
    *       200:
    *         description: Download job started
    *       400:
-   *         description: Invalid resolution
+   *         description: Invalid override settings, or an MP3 download type with a TV-layout destination override
    *       409:
    *         description: Downloads are paused because a storage limit was reached (Settings > Storage Limits); the error message gives the reason
    *         content:
@@ -1026,11 +1027,22 @@ module.exports = function createVideoRoutes({
     }
 
     try {
+      // TV folders are video-only; a destination override makes the folder known up front.
+      const override = req.body.overrideSettings;
+      if (layoutGuards && override && override.subfolder !== undefined && override.subfolder !== null) {
+        await layoutGuards.assertVideoOnlyDestination({
+          audioFormat: override.audioFormat,
+          subFolderValue: override.subfolder,
+        });
+      }
       const admission = await downloadModule.doGroupedManualDownloads(req);
       res.json({ status: 'success', ...admission });
     } catch (err) {
       if (storageGuard.isPausedError(err)) {
         return res.status(409).json({ error: err.message });
+      }
+      if (err.status === 400) {
+        return res.status(400).json({ error: err.message });
       }
       req.log.error({ err }, 'Failed to start manual downloads');
       res.status(500).json({ error: 'Failed to queue downloads' });

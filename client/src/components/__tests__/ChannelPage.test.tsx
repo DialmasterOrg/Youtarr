@@ -51,6 +51,18 @@ jest.mock('axios', () => ({
   isAxiosError: jest.fn(),
 }));
 
+const mockRefetchChannelTv = jest.fn(() => Promise.resolve());
+const mockChannelTv: { current: { layout: 'videos' | 'tv' } | null } = { current: null };
+jest.mock('../ChannelPage/hooks/useChannelTv', () => ({
+  useChannelTv: () => ({
+    tv: mockChannelTv.current,
+    loading: false,
+    error: null,
+    refetch: mockRefetchChannelTv,
+    switchLayout: jest.fn(),
+  }),
+}));
+
 const axios = require('axios');
 
 // Mock fetch
@@ -94,6 +106,41 @@ describe('ChannelPage Component', () => {
     });
     dialogPropsStore.current = null;
     channelVideosPropsStore.current = null;
+    mockChannelTv.current = null;
+  });
+
+  describe('TV chip', () => {
+    const page = () => (
+      <BrowserRouter>
+        <ChannelPage token={mockToken} />
+      </BrowserRouter>
+    );
+
+    test('shows the TV chip for a channel saved as a TV show', async () => {
+      mockChannelTv.current = { layout: 'tv' };
+      render(page());
+
+      expect(await screen.findByTestId('tv-chip')).toBeInTheDocument();
+    });
+
+    test('hides the TV chip for a Videos channel', async () => {
+      mockChannelTv.current = { layout: 'videos' };
+      render(page());
+
+      await screen.findByText('Tech Channel');
+      expect(screen.queryByTestId('tv-chip')).not.toBeInTheDocument();
+    });
+
+    test('refreshes the TV state after the settings dialog saves', async () => {
+      render(page());
+      await screen.findByText('Tech Channel');
+
+      act(() => {
+        dialogPropsStore.current.onSettingsSaved?.({ sub_folder: 'Anime', video_quality: null });
+      });
+
+      expect(mockRefetchChannelTv).toHaveBeenCalled();
+    });
   });
 
   describe('Auto-download toggles', () => {

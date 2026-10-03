@@ -20,6 +20,18 @@ jest.mock('../../../../hooks/useSubfolders', () => ({
   }),
 }));
 
+// Mock useLibraryFolders hook to prevent network requests
+jest.mock('../../../../hooks/useLibraryFolders', () => ({
+  useLibraryFolders: () => ({
+    folders: [{ name: '', layout: 'videos', isDefault: true, hasFiles: false, channels: 0 }],
+    loading: false,
+    error: null,
+    layoutOf: () => 'videos',
+    refetch: () => Promise.resolve(),
+    setFolderLayout: () => Promise.resolve(),
+  }),
+}));
+
 // Mock SubtitleLanguageSelector to simplify testing
 jest.mock('../../SubtitleLanguageSelector', () => ({
   __esModule: true,
@@ -137,6 +149,12 @@ describe('CoreSettingsSection Component', () => {
 
       const infoTrigger = await screen.findByRole('button', { name: /Jellyfin \/ Kodi \/ Emby Setting Information/i });
       expect(infoTrigger).toHaveAttribute('data-state', 'closed');
+    });
+
+    test('renders the library folder layouts in File Structure Settings', () => {
+      const props = createSectionProps();
+      renderWithProviders(<CoreSettingsSection {...props} />);
+      expect(screen.getByRole('button', { name: 'Layout for Main folder' })).toBeInTheDocument();
     });
   });
 

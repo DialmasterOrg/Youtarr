@@ -27,6 +27,13 @@ jest.mock('../m3uGenerator', () => ({
   generateChannelM3UInBackground: jest.fn(),
   deleteChannelM3UInBackground: jest.fn(),
 }));
+jest.mock('../tvShows/channelFolders', () => ({
+  isTvChannel: jest.fn().mockResolvedValue(false),
+  resolveChannelDirectory: jest.fn(),
+}));
+jest.mock('../tvShows/libraryLayouts', () => ({
+  getLayoutResolver: jest.fn().mockResolvedValue(() => 'videos'),
+}));
 
 jest.mock('../downloadModule', () => ({
   doChannelDownloads: jest.fn(),
@@ -49,6 +56,8 @@ jest.mock('../ytDlpRunner', () => ({
 // mocks) keeps this file free of shared mock-value state that could race
 // other cases.
 const flushConstructorTasks = () => new Promise(setImmediate);
+
+jest.mock('../tvShows/episodeInfo', () => ({ getEpisodeInfoMap: jest.fn().mockResolvedValue(new Map()) }));
 
 describe('channelModule facade', () => {
   describe('constructor', () => {

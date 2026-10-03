@@ -88,13 +88,16 @@ const cookieUpload = multer({
  * @param {Function} deps.validateEnvAuthCredentials - Function to validate ENV auth credentials
  * @param {boolean} deps.isWslEnvironment - Whether running in WSL
  * @param {Function} deps.getLoggingStatus - Returns LOG_LEVEL and log file status
+ * @param {Object} [deps.libraryFolders] - Refuses default subfolder changes across library folder layouts
+ * @param {Object} [deps.jobModule] - Its running job blocks those changes
  * @returns {express.Router}
  */
 module.exports = function createConfigRoutes({
   verifyToken, configModule, validateEnvAuthCredentials, isWslEnvironment, filenamePreviewRateLimiter,
-  cookieDetails, cookieTest, cookieTestRateLimiter, getLoggingStatus,
+  cookieDetails, cookieTest, cookieTestRateLimiter, getLoggingStatus, libraryFolders, jobModule,
 }) {
   const router = express.Router();
+  const isDownloadRunning = () => Boolean(jobModule && jobModule.getInProgressJobId());
 
   /**
    * @swagger
@@ -222,6 +225,8 @@ module.exports = function createConfigRoutes({
    *     responses:
    *       400:
    *         description: Invalid configuration; schedule errors include a fieldErrors object keyed by config field
+   *       409:
+   *         description: A new defaultSubfolder has a different layout (videos or TV) and the channels using the default have downloads, a download is running, or they download MP3. mainFolderLayout is never changed here (see PUT /api/library-folders).
    *       200:
    *         description: Configuration updated successfully
    *         content:
@@ -346,6 +351,21 @@ module.exports = function createConfigRoutes({
       updateData.videoFilenamePrefix = basic.trimmed;
     }
 
+    // Moving the default subfolder to a folder with another layout switches
+    // every channel on the default between Videos and TV.
+    if (libraryFolders && Object.prototype.hasOwnProperty.call(updateData, 'defaultSubfolder')) {
+      try {
+        await libraryFolders.checkDefaultSubfolderChange({
+          oldDefault: configModule.getDefaultSubfolder(),
+          newDefault: typeof updateData.defaultSubfolder === 'string' ? updateData.defaultSubfolder : null,
+          isDownloadRunning,
+        });
+      } catch (error) {
+        if (!error.status) throw error;
+        return res.status(error.status).json({ error: error.message });
+      }
+    }
+
     delete updateData.passwordHash;
     delete updateData.username;
 
@@ -355,6 +375,8 @@ module.exports = function createConfigRoutes({
     updateData.ytdlpLastUpdated = currentConfig.ytdlpLastUpdated;
     updateData.ytdlpLastResult = currentConfig.ytdlpLastResult;
     updateData.rescanLastRun = currentConfig.rescanLastRun ?? null;
+    // Owned by the library folders API; a Settings save sends a stale copy.
+    updateData.mainFolderLayout = currentConfig.mainFolderLayout || 'videos';
 
     configModule.updateConfig(updateData);
 

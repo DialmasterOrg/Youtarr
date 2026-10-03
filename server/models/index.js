@@ -14,6 +14,8 @@ const VideoWatchStatus = require('./videowatchstatus');
 const MediaServerUser = require('./mediaserveruser');
 const WatchStatusSyncCursor = require('./watchstatussynccursor');
 const ScheduledTaskRun = require('./scheduledtaskrun');
+const TvShow = require('./tvshow');
+const VideoClassification = require('./videoclassification');
 
 Job.hasMany(JobVideo, { foreignKey: 'job_id', as: 'jobVideos' });
 Job.hasMany(JobVideoDownload, { foreignKey: 'job_id', as: 'jobVideoDownloads' });
@@ -34,6 +36,9 @@ PlaylistSyncState.belongsTo(Playlist, { foreignKey: 'playlist_id', targetKey: 'i
 Video.hasMany(VideoWatchStatus, { foreignKey: 'video_id', as: 'watchStatuses' });
 VideoWatchStatus.belongsTo(Video, { foreignKey: 'video_id', as: 'video' });
 
+TvShow.hasMany(VideoClassification, { foreignKey: 'show_id', as: 'classifications' });
+VideoClassification.belongsTo(TvShow, { foreignKey: 'show_id', as: 'show' });
+
 module.exports = {
   Job,
   JobVideo,
@@ -50,4 +55,6 @@ module.exports = {
   MediaServerUser,
   WatchStatusSyncCursor,
   ScheduledTaskRun,
+  TvShow,
+  VideoClassification,
 };

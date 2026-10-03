@@ -28,17 +28,25 @@ import {
   Tabs,
   Chip,
 } from '../ui';
-import { CheckCircle as CheckCircleIcon, XCircle as CancelIcon, Info as InfoIcon, Copy as ContentCopyIcon, Settings as SettingsIcon, Download as DownloadIcon, Filter as FilterAltIcon, Shield as RatingIcon, Tag as TagIcon, ShieldCheck as AutoRemovalIcon } from '../../lib/icons';
+import { CheckCircle as CheckCircleIcon, XCircle as CancelIcon, Info as InfoIcon, Copy as ContentCopyIcon, Settings as SettingsIcon, Download as DownloadIcon, Filter as FilterAltIcon, Shield as RatingIcon, Tag as TagIcon, ShieldCheck as AutoRemovalIcon, Tv as TvIcon } from '../../lib/icons';
 import useMediaQuery from '../../hooks/useMediaQuery';
 import { useConfig } from '../../hooks/useConfig';
 import { useSubfolders } from '../../hooks/useSubfolders';
+import { useLibraryFolders } from '../../hooks/useLibraryFolders';
 import { SubfolderAutocomplete } from '../shared/SubfolderAutocomplete';
 import { ResolutionSelect } from '../shared/ResolutionSelect';
 import { AudioFormatSelect } from '../shared/AudioFormatSelect';
 import { RatingSelect } from '../shared/RatingSelect';
 import { RATING_OPTIONS } from '../../utils/ratings';
+import { effectiveLibraryFolder } from '../../utils/libraryLayouts';
+import { LibraryLayout } from '../../types/tvShows';
 import RatingBadge from '../shared/RatingBadge';
 import TabsEditor, { TabsEditorRefreshResult } from './components/TabsEditor';
+import ChannelTvSection from './components/ChannelTvSection';
+import { useChannelTv } from './hooks/useChannelTv';
+
+const TV_FOLDER_GENERAL_CAPTION = 'Episodes are saved in season folders, and channel playlist files are off for TV shows.';
+const SUBFOLDER_BUSY_MESSAGE = 'Cannot change subfolder while downloads are in progress for this channel. Please wait for downloads to complete.';
 
 const M3U_SORT_ORDERS = ['oldest_first', 'newest_first'] as const;
 type M3uSortOrder = (typeof M3U_SORT_ORDERS)[number];
@@ -127,6 +135,7 @@ function ChannelSettingsDialog({
   open,
   onClose,
   channelId,
+  channelName,
   token,
   onSettingsSaved
 }: ChannelSettingsDialogProps) {
@@ -178,6 +187,9 @@ function ChannelSettingsDialog({
   const globalQuality = config.preferredResolution || '1080';
 
   const { subfolders, createSubfolder } = useSubfolders(token);
+  const { folders: libraryFolders, layoutOf, setFolderLayout } = useLibraryFolders(token);
+  const { tv, loading: tvLoading, error: tvError, switchLayout } = useChannelTv(channelId, token, open);
+  const draftIsTv = layoutOf(effectiveLibraryFolder(settings.sub_folder, config.defaultSubfolder)) === 'tv';
 
   // Duration input state (in minutes for UI convenience)
   const [minDurationMinutes, setMinDurationMinutes] = useState<string>('');
@@ -198,6 +210,7 @@ function ChannelSettingsDialog({
 
   const sections = [
     { id: 'general', label: 'General', icon: <SettingsIcon size={18} /> },
+    { id: 'tv', label: 'TV Show', icon: <TvIcon size={18} /> },
     { id: 'filters', label: 'Filters', icon: <FilterAltIcon size={18} /> },
     { id: 'ratings', label: 'Ratings', icon: <RatingIcon size={18} /> },
     { id: 'tags', label: 'Tags', icon: <TagIcon size={18} /> },
@@ -321,20 +334,23 @@ function ChannelSettingsDialog({
       });
 
       if (!response.ok) {
-        if (response.status === 409) {
-          throw new Error('Cannot change subfolder while downloads are in progress for this channel. Please wait for downloads to complete.');
-        }
-
-        let errorMessage = 'Failed to update settings';
+        let serverMessage: string | null = null;
+        let parseFailed = false;
         try {
           const data = await response.json();
-          errorMessage = data.error || errorMessage;
+          serverMessage = typeof data?.error === 'string' && data.error ? data.error : null;
         } catch (parseError) {
-          // If JSON parsing fails, use generic error with status
-          errorMessage = `Server error: ${response.status} ${response.statusText}`;
+          parseFailed = true;
         }
 
-        throw new Error(errorMessage);
+        if (serverMessage) {
+          throw new Error(serverMessage);
+        }
+        if (response.status === 409) {
+          throw new Error(SUBFOLDER_BUSY_MESSAGE);
+        }
+        // Without a JSON body, report the status instead
+        throw new Error(parseFailed ? `Server error: ${response.status} ${response.statusText}` : 'Failed to update settings');
       }
 
       const result = await response.json();
@@ -460,6 +476,22 @@ function ChannelSettingsDialog({
       hidden_tabs: result.hiddenTabs,
       auto_download_enabled_tabs: result.autoDownloadEnabledTabs ?? prev.auto_download_enabled_tabs,
     }));
+  };
+
+  // A layout switch saves the channel's new sub_folder on the server right away.
+  const handleLayoutSwitch = async (layout: LibraryLayout, folder?: string) => {
+    const result = await switchLayout(layout, folder);
+    const subFolder = result.settings.sub_folder ?? null;
+    setSettings((prev) => ({ ...prev, sub_folder: subFolder }));
+    setOriginalSettings((prev) => ({ ...prev, sub_folder: subFolder }));
+    if (onSettingsSaved) {
+      const savedSettings: ChannelSettings = { ...originalSettings, sub_folder: subFolder };
+      onSettingsSaved({
+        ...savedSettings,
+        detectedTabs,
+        availableTabs: detectedTabs.filter((tab) => !savedSettings.hidden_tabs.includes(tab)),
+      });
+    }
   };
 
   const handlePreviewFilter = async () => {
@@ -648,69 +680,78 @@ function ChannelSettingsDialog({
                 ...settings,
                 audio_format: value
               })}
-              helperText={settings.audio_format ? 'MP3 files are saved at 192kbps in the same folder as videos.' : undefined}
+              videoOnly={draftIsTv}
+              helperText={settings.audio_format && !draftIsTv ? 'MP3 files are saved at 192kbps in the same folder as videos.' : undefined}
             />
 
-            <div className="mt-2">
-              <FormControl fullWidth>
-                <InputLabel id="video-file-structure-label">Video File Structure</InputLabel>
-                <Select
-                  labelId="video-file-structure-label"
-                  value={settings.skip_video_folder === null ? 'default' : settings.skip_video_folder ? 'flat' : 'subfolders'}
-                  onChange={(e: SelectChangeEvent<string>) => setSettings({
-                    ...settings,
-                    skip_video_folder: e.target.value === 'default' ? null : e.target.value === 'flat'
-                  })}
-                  label="Video File Structure"
-                >
-                  <MenuItem value="default">
-                    Use global setting ({config.defaultSkipVideoFolder ? 'Flat' : 'Video subfolders'})
-                  </MenuItem>
-                  <MenuItem value="flat">Flat (no video subfolders)</MenuItem>
-                  <MenuItem value="subfolders">Video subfolders</MenuItem>
-                </Select>
-              </FormControl>
-              <Typography variant="caption" color="text.secondary" className="mt-1 mb-2 block">
-                Flat saves video files directly in the channel folder instead of individual video subfolders. Only affects new downloads.
+            {draftIsTv ? (
+              <Typography variant="caption" color="text.secondary" className="mt-2 block">
+                {TV_FOLDER_GENERAL_CAPTION}
               </Typography>
-            </div>
+            ) : (
+              <>
+                <div className="mt-2">
+                  <FormControl fullWidth>
+                    <InputLabel id="video-file-structure-label">Video File Structure</InputLabel>
+                    <Select
+                      labelId="video-file-structure-label"
+                      value={settings.skip_video_folder === null ? 'default' : settings.skip_video_folder ? 'flat' : 'subfolders'}
+                      onChange={(e: SelectChangeEvent<string>) => setSettings({
+                        ...settings,
+                        skip_video_folder: e.target.value === 'default' ? null : e.target.value === 'flat'
+                      })}
+                      label="Video File Structure"
+                    >
+                      <MenuItem value="default">
+                        Use global setting ({config.defaultSkipVideoFolder ? 'Flat' : 'Video subfolders'})
+                      </MenuItem>
+                      <MenuItem value="flat">Flat (no video subfolders)</MenuItem>
+                      <MenuItem value="subfolders">Video subfolders</MenuItem>
+                    </Select>
+                  </FormControl>
+                  <Typography variant="caption" color="text.secondary" className="mt-1 mb-2 block">
+                    Flat saves video files directly in the channel folder instead of individual video subfolders. Only affects new downloads.
+                  </Typography>
+                </div>
 
-            <div className="mt-2">
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={settings.m3u_enabled}
-                    onChange={(e) => setSettings({
-                      ...settings,
-                      m3u_enabled: e.target.checked
-                    })}
+                <div className="mt-2">
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={settings.m3u_enabled}
+                        onChange={(e) => setSettings({
+                          ...settings,
+                          m3u_enabled: e.target.checked
+                        })}
+                      />
+                    }
+                    label="Generate channel playlist file (.m3u)"
                   />
-                }
-                label="Generate channel playlist file (.m3u)"
-              />
-              <Typography variant="caption" color="text.secondary" className="mt-1 block">
-                Writes a playlist of this channel&apos;s downloaded videos to the top of the
-                channel folder. Jellyfin and Emby import it automatically; it updates after
-                downloads and deletions, and refreshes nightly.
-              </Typography>
-              {settings.m3u_enabled && (
-                <FormControl fullWidth className="mt-2">
-                  <InputLabel id="m3u-sort-order-label">Playlist Order</InputLabel>
-                  <Select
-                    labelId="m3u-sort-order-label"
-                    value={settings.m3u_sort_order}
-                    onChange={(e: SelectChangeEvent<string>) => setSettings({
-                      ...settings,
-                      m3u_sort_order: toM3uSortOrder(e.target.value)
-                    })}
-                    label="Playlist Order"
-                  >
-                    <MenuItem value="oldest_first">Oldest first (chronological)</MenuItem>
-                    <MenuItem value="newest_first">Newest first</MenuItem>
-                  </Select>
-                </FormControl>
-              )}
-            </div>
+                  <Typography variant="caption" color="text.secondary" className="mt-1 block">
+                    Writes a playlist of this channel&apos;s downloaded videos to the top of the
+                    channel folder. Jellyfin and Emby import it automatically; it updates after
+                    downloads and deletions, and refreshes nightly.
+                  </Typography>
+                  {settings.m3u_enabled && (
+                    <FormControl fullWidth className="mt-2">
+                      <InputLabel id="m3u-sort-order-label">Playlist Order</InputLabel>
+                      <Select
+                        labelId="m3u-sort-order-label"
+                        value={settings.m3u_sort_order}
+                        onChange={(e: SelectChangeEvent<string>) => setSettings({
+                          ...settings,
+                          m3u_sort_order: toM3uSortOrder(e.target.value)
+                        })}
+                        label="Playlist Order"
+                      >
+                        <MenuItem value="oldest_first">Oldest first (chronological)</MenuItem>
+                        <MenuItem value="newest_first">Newest first</MenuItem>
+                      </Select>
+                    </FormControl>
+                  )}
+                </div>
+              </>
+            )}
 
             <Alert severity="info" style={{ marginBottom: 16 }}>
               <Typography variant="body2" style={{ fontWeight: 'bold', marginBottom: 8 }}>
@@ -741,6 +782,7 @@ function ChannelSettingsDialog({
                 label="Subfolder"
                 helperText="Choose where this channel's videos are saved"
                 createSubfolder={createSubfolder}
+                layoutOf={layoutOf}
               />
               <Alert severity="info" style={{ marginTop: 8 }}>
                 <Typography variant="caption">
@@ -752,6 +794,20 @@ function ChannelSettingsDialog({
               </Typography>
             </div>
           </div>
+        );
+      case 'tv':
+        return (
+          <ChannelTvSection
+            channelName={channelName}
+            tv={tv}
+            loading={tvLoading}
+            error={tvError}
+            folders={libraryFolders}
+            onSwitch={handleLayoutSwitch}
+            createSubfolder={createSubfolder}
+            setFolderLayout={setFolderLayout}
+            disabled={saving}
+          />
         );
       case 'filters':
         return (

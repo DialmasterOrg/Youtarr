@@ -233,6 +233,22 @@ const createServerModule = ({
           register: jest.fn().mockResolvedValue(undefined),
           delete: jest.fn().mockResolvedValue(undefined),
         }));
+        jest.doMock('../modules/tvShows/libraryFolders', () => ({
+          listLibraryFolders: jest.fn().mockResolvedValue([]),
+          setFolderLayout: jest.fn(),
+          checkDefaultSubfolderChange: jest.fn().mockResolvedValue(undefined),
+        }));
+        jest.doMock('../modules/tvShows/libraryLayouts', () => ({
+          getLayoutResolver: jest.fn().mockResolvedValue(() => 'videos'),
+          listTvFolders: jest.fn().mockResolvedValue([]),
+        }));
+        jest.doMock('../modules/tvShows/showStore', () => ({ findChannelShow: jest.fn().mockResolvedValue(null) }));
+        jest.doMock('../modules/tvShows/episodeInfo', () => ({ getEpisodeInfoMap: jest.fn().mockResolvedValue(new Map()) }));
+        jest.doMock('../modules/tvShows/layoutGuards', () => ({ assertVideoOnlyDestination: jest.fn(), isMp3Format: jest.fn(() => false) }));
+        jest.doMock('../modules/tvShows/channelLayout', () => ({
+          getChannelTvState: jest.fn(),
+          resolveLayoutTarget: jest.fn(),
+        }));
         jest.doMock('../modules/archiveModule', () => ({
           getAutoRemovalDryRun: jest.fn().mockResolvedValue({ videos: [], totalSize: 0 })
         }));

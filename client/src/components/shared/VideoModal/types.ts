@@ -1,4 +1,5 @@
 import { VideoStatus } from '../../../utils/videoStatus';
+import type { EpisodeInfo } from '../../../types/tvShows';
 
 export interface VideoModalData {
   youtubeId: string;
@@ -63,6 +64,8 @@ export interface VideoExtendedMetadata {
   webpageUrl: string | null;
   relatedFiles: VideoRelatedFile[] | null;
   availableResolutions: number[] | null;
+  // Show and SxxEyy when the downloaded file is a TV episode (absent when metadata could not be read)
+  episode?: EpisodeInfo | null;
 }
 
 export interface VideoRelatedFile {

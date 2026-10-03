@@ -1,3 +1,4 @@
+import type { EpisodeInfo } from './tvShows';
 /*export interface VideoData {
   youtubeId: string;
   youTubeChannelName: string;
@@ -28,6 +29,8 @@ export interface VideoData {
   // Actual downloaded pixel dimensions, e.g. "1920x1080"; "0x0" = probe failed
   video_resolution?: string | null;
   watchedBy?: string[];
+  // Show and SxxEyy when the downloaded file is a TV episode
+  episode?: EpisodeInfo | null;
 }
 
 export interface EnabledChannel {

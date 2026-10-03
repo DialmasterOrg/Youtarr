@@ -51,6 +51,9 @@ describe('m3uGenerator', () => {
     jest.doMock('../../logger', () => ({
       info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn(),
     }));
+    jest.doMock('../tvShows/channelFolders', () => ({
+      isTvChannel: jest.fn().mockResolvedValue(false),
+    }));
 
     fs = require('fs');
     ({ Playlist, PlaylistVideo, Video, Channel } = require('../../models'));
@@ -185,6 +188,14 @@ describe('m3uGenerator', () => {
       m3u_enabled: true,
       m3u_sort_order: 'oldest_first',
     };
+
+    test('writes no channel m3u for a TV channel', async () => {
+      Channel.findOne.mockResolvedValue({ ...baseChannel });
+      require('../tvShows/channelFolders').isTvChannel.mockResolvedValue(true);
+
+      await expect(m3uGenerator.generateChannelM3U('UC1')).resolves.toBe(false);
+      expect(fs.writeFileSync).not.toHaveBeenCalled();
+    });
 
     test('writes channel m3u with relative paths, oldest first', async () => {
       Channel.findOne.mockResolvedValue({ ...baseChannel });

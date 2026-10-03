@@ -1,6 +1,8 @@
 /* eslint-env jest */
 const { Sequelize } = require('sequelize');
 
+jest.mock('../tvShows/episodeInfo', () => ({ getEpisodeInfoMap: jest.fn().mockResolvedValue(new Map()) }));
+
 describe('VideosModule', () => {
   let VideosModule;
   let mockSequelize;
@@ -890,6 +892,22 @@ describe('VideosModule', () => {
       expect(mockWatchStatusQueries.getWatchedByMap).toHaveBeenCalledWith([1, 2]);
       expect(result.videos[0].watchedBy).toEqual(['plex', 'jellyfin']);
       expect(result.videos[1].watchedBy).toEqual([]);
+    });
+
+    test('attaches the episode of each video that is a TV episode', async () => {
+      const episode = { showName: 'Show', season: 2024, episode: 3151200, code: 'S2024E03151200' };
+      mockVideo.count.mockResolvedValue(2);
+      mockVideo.findAll.mockResolvedValue([
+        { id: 1, youtubeId: 'abc123', filePath: '/tv/S2024E03151200 - T [abc123].mp4', removed: false },
+        { id: 2, youtubeId: 'def456', filePath: null, removed: false },
+      ]);
+      mockVideo.aggregate.mockResolvedValue([]);
+      const episodeInfo = require('../tvShows/episodeInfo');
+      episodeInfo.getEpisodeInfoMap.mockResolvedValueOnce(new Map([['abc123', episode]]));
+
+      const result = await VideosModule.getVideosPaginated({ page: 1, limit: 12 });
+
+      expect(result.videos.map((v) => v.episode)).toEqual([episode, null]);
     });
 
     test('passes an empty id list when the page has no videos', async () => {

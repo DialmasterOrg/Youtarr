@@ -3,6 +3,7 @@ const watchStatusQueries = require('../mediaServers/watchStatusQueries');
 const fileCheckModule = require('../fileCheckModule');
 const ratingMapper = require('../ratingMapper');
 const { PUBLISHED_AT_SOURCE } = require('../constants/publishedAtSource');
+const episodeInfo = require('../tvShows/episodeInfo');
 
 class ChannelVideoQuery {
   /**
@@ -90,6 +91,9 @@ class ChannelVideoQuery {
     const watchedByVideoId = await watchStatusQueries.getWatchedByMap(
       downloadedVideos.map((v) => v.id)
     );
+    const episodesByVideoId = await episodeInfo.getEpisodeInfoMap(
+      downloadedVideos.map((v) => ({ youtubeId: v.youtubeId, filePath: v.filePath }))
+    );
 
     return videos.map((video) => {
       const plainVideoObject = video.toJSON ? video.toJSON() : video;
@@ -114,6 +118,7 @@ class ChannelVideoQuery {
           ? new Date(status.last_downloaded_at).toISOString()
           : null;
         plainVideoObject.watchedBy = watchedByVideoId.get(status.id) || [];
+        plainVideoObject.episode = episodesByVideoId.get(videoId) || null;
       } else {
         // Video never downloaded
         plainVideoObject.added = false;
@@ -125,6 +130,7 @@ class ChannelVideoQuery {
         plainVideoObject.protected = false;
         plainVideoObject.video_resolution = null;
         plainVideoObject.watchedBy = [];
+        plainVideoObject.episode = null;
       }
 
       // Replace thumbnail with template format (unless video is removed from YouTube)

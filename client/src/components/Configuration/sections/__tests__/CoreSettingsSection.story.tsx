@@ -16,6 +16,15 @@ const meta: Meta<typeof CoreSettingsSection> = {
         http.get('/api/channels/subfolders', () =>
           HttpResponse.json(['Movies', 'Shows'])
         ),
+        http.get('/api/library-folders', () =>
+          HttpResponse.json({
+            folders: [
+              { name: '', layout: 'videos', isDefault: true, hasFiles: true, channels: 2 },
+              { name: 'Movies', layout: 'videos', isDefault: false, hasFiles: false, channels: 1 },
+              { name: 'Shows', layout: 'tv', isDefault: false, hasFiles: false, channels: 0 },
+            ],
+          })
+        ),
       ],
     },
   },

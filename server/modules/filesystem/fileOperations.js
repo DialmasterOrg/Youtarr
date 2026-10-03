@@ -73,6 +73,34 @@ async function moveWithRetries(src, dest, { retries = 5, delayMs = 200, overwrit
   }
 }
 
+// Staging name of a file being replaced; yt-dlp's in-progress suffix, which
+// media servers and the library scans ignore.
+const REPLACE_STAGING_SUFFIX = '.part';
+
+/**
+ * Move a file over an existing destination without a moment in which the
+ * destination is missing. fs-extra's overwrite removes the destination before
+ * it copies across filesystems, so a copy that fails (ENOSPC on a NAS) would
+ * lose the file being replaced. The data is moved to a sibling staging file
+ * first and an atomic rename then replaces the destination; on failure the
+ * staging file is removed and the destination is untouched.
+ *
+ * @param {string} src - Source file path
+ * @param {string} dest - Destination file path (may not exist yet)
+ * @param {Object} [options] - moveWithRetries options (retries, delayMs)
+ * @returns {Promise<void>}
+ */
+async function replaceFileWithRetries(src, dest, options = {}) {
+  const staging = `${dest}${REPLACE_STAGING_SUFFIX}`;
+  try {
+    await moveWithRetries(src, staging, { ...options, overwrite: true });
+    await fsPromises.rename(staging, dest);
+  } catch (err) {
+    await safeRemove(staging);
+    throw err;
+  }
+}
+
 /**
  * Remove a file or directory, ignoring ENOENT errors (already deleted)
  * Safe for cleanup operations where the file may already be gone
@@ -255,6 +283,7 @@ async function isDirectory(dirPath) {
 module.exports = {
   sleep,
   moveWithRetries,
+  replaceFileWithRetries,
   safeRemove,
   safeCopy,
   copySyncWithFallback,

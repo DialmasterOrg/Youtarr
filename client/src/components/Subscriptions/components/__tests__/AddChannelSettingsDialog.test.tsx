@@ -20,6 +20,17 @@ jest.mock('../../../../hooks/useSubfolders', () => ({
   }),
 }));
 
+// Library folders named here have the TV layout ('' = main folder).
+let mockTvFolders: string[] = [];
+jest.mock('../../../../hooks/useLibraryFolders', () => ({
+  useLibraryFolders: () => ({
+    folders: [],
+    loading: false,
+    error: null,
+    layoutOf: (name: string) => (mockTvFolders.includes(name) ? 'tv' : 'videos'),
+  }),
+}));
+
 const { useConfig } = require('../../../../hooks/useConfig');
 
 const channel: PendingChannel = {
@@ -51,6 +62,7 @@ const renderDialog = (overrides: Partial<React.ComponentProps<typeof AddChannelS
 describe('AddChannelSettingsDialog', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockTvFolders = [];
     useConfig.mockReturnValue({
       config: { preferredResolution: '1080', defaultSubfolder: null, channelAutoDownload: true },
       loading: false,
@@ -128,6 +140,13 @@ describe('AddChannelSettingsDialog', () => {
     renderDialog();
 
     expect(screen.queryByText(/Automatic downloads are turned off/)).not.toBeInTheDocument();
+  });
+
+  test('notes that a channel saved to a TV folder becomes a TV show', () => {
+    mockTvFolders = [''];
+    renderDialog();
+
+    expect(screen.getByText('Saved as a TV show (season folders and episode NFO files).')).toBeInTheDocument();
   });
 
   test('cancel closes without adding the channel', async () => {

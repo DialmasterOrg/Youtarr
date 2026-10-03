@@ -886,4 +886,17 @@ describe('VideoCard Component', () => {
       expect(screen.queryByText('Watched')).not.toBeInTheDocument();
     });
   });
+
+  describe('Episode Chip', () => {
+    test('renders the episode code for a downloaded TV episode', () => {
+      const episodeVideo = { ...mockVideo, added: true, removed: false, episode: { showName: 'Test Channel', season: 2024, episode: 3151200, code: 'S2024E03151200' } };
+      renderWithProviders(<VideoCard {...defaultProps} video={episodeVideo} />);
+      expect(screen.getByTestId('episode-chip')).toHaveTextContent('S2024E03151200');
+    });
+
+    test('does not render an episode chip for a video without episode details', () => {
+      renderWithProviders(<VideoCard {...defaultProps} />);
+      expect(screen.queryByTestId('episode-chip')).not.toBeInTheDocument();
+    });
+  });
 });

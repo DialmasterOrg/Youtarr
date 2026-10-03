@@ -8,6 +8,8 @@ Subfolder.init(
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true, allowNull: false },
     // Stored clean (no __ prefix). Unique under utf8mb4_unicode_ci (case-insensitive).
     name: { type: DataTypes.STRING(100), allowNull: false, unique: true },
+    // 'videos' (movie-style) or 'tv'.
+    layout: { type: DataTypes.STRING(10), allowNull: false, defaultValue: 'videos' },
   },
   {
     sequelize,

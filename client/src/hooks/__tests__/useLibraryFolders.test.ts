@@ -1,0 +1,80 @@
+import { renderHook, waitFor, act } from '@testing-library/react';
+
+jest.mock('axios', () => ({
+  get: jest.fn(),
+  put: jest.fn(),
+  isAxiosError: (e: unknown) => Boolean(e && (e as { isAxiosError?: boolean }).isAxiosError),
+}));
+
+const axios = require('axios');
+
+import { useLibraryFolders, LIBRARY_FOLDERS_UPDATED_EVENT } from '../useLibraryFolders';
+import { SUBFOLDERS_UPDATED_EVENT } from '../useSubfolders';
+
+const FOLDERS = [
+  { name: '', layout: 'videos', isDefault: true, hasFiles: true, channels: 3 },
+  { name: 'TV Shows', layout: 'tv', isDefault: false, hasFiles: false, channels: 1 },
+];
+
+describe('useLibraryFolders', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    axios.get.mockResolvedValue({ data: { folders: FOLDERS } });
+  });
+
+  test('does not fetch without a token', () => {
+    renderHook(() => useLibraryFolders(null));
+    expect(axios.get).not.toHaveBeenCalled();
+  });
+
+  test('loads the folders with the auth header', async () => {
+    const { result } = renderHook(() => useLibraryFolders('token'));
+    await waitFor(() => expect(result.current.folders).toEqual(FOLDERS));
+    expect(axios.get).toHaveBeenCalledWith('/api/library-folders', { headers: { 'x-access-token': 'token' } });
+  });
+
+  test('resolves layouts from the loaded folders', async () => {
+    const { result } = renderHook(() => useLibraryFolders('token'));
+    await waitFor(() => expect(result.current.layoutOf('tv shows')).toBe('tv'));
+  });
+
+  test('reports a load failure with the server message', async () => {
+    axios.get.mockRejectedValueOnce({ isAxiosError: true, response: { data: { error: 'boom' } } });
+    const { result } = renderHook(() => useLibraryFolders('token'));
+    await waitFor(() => expect(result.current.error).toBe('boom'));
+  });
+
+  test('changes a layout and announces it', async () => {
+    const updated = [FOLDERS[0], { ...FOLDERS[1], layout: 'videos' }];
+    axios.put.mockResolvedValueOnce({ data: { changed: true, folders: updated } });
+    const listener = jest.fn();
+    window.addEventListener(LIBRARY_FOLDERS_UPDATED_EVENT, listener);
+    const { result } = renderHook(() => useLibraryFolders('token'));
+    await waitFor(() => expect(result.current.folders).toEqual(FOLDERS));
+
+    await act(async () => { await result.current.setFolderLayout('TV Shows', 'videos'); });
+
+    expect(axios.put).toHaveBeenCalledWith(
+      '/api/library-folders', { name: 'TV Shows', layout: 'videos' }, { headers: { 'x-access-token': 'token' } }
+    );
+    expect(listener).toHaveBeenCalled();
+    window.removeEventListener(LIBRARY_FOLDERS_UPDATED_EVENT, listener);
+  });
+
+  test('throws the refusal message when a change is refused', async () => {
+    axios.put.mockRejectedValueOnce({ isAxiosError: true, response: { status: 409, data: { error: 'holds downloads' } } });
+    const { result } = renderHook(() => useLibraryFolders('token'));
+    await waitFor(() => expect(result.current.folders).toEqual(FOLDERS));
+
+    await expect(result.current.setFolderLayout('', 'tv')).rejects.toThrow('holds downloads');
+  });
+
+  test('refetches when subfolders change', async () => {
+    renderHook(() => useLibraryFolders('token'));
+    await waitFor(() => expect(axios.get).toHaveBeenCalledTimes(1));
+
+    act(() => { window.dispatchEvent(new Event(SUBFOLDERS_UPDATED_EVENT)); });
+
+    await waitFor(() => expect(axios.get).toHaveBeenCalledTimes(2));
+  });
+});

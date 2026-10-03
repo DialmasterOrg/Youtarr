@@ -158,17 +158,28 @@ Youtarr must be running at the scheduled time; missed occurrences are not replay
 - **Type**: `boolean`
 - **Default**: `false`
 - **Description**: When `true`, new downloads are saved directly in the channel folder (flat structure) instead of an individual per-video subfolder, for every channel that has not chosen its own File Structure setting.
+- **TV folders**: Ignored for folders with the TV layout (see Main Folder Layout), where episodes always sit directly in `Season NN` folders.
 - **Channel Override Semantics** (channel setting `skip_video_folder`, edited via the channel's "Video File Structure" select):
   - **"Use global setting"** (NULL in database): channel follows this global default
   - **"Flat (no video subfolders)"** (`true`): channel always uses flat structure
   - **"Video subfolders"** (`false`): channel always uses per-video subfolders, even when the global default is flat
 - **Note**: Only affects new downloads; existing files are not moved. The manual download dialog can override the structure for a single download ("Force flat" or "Force individual video subfolders"); its default option ("Use channel/global settings") follows the channel setting and this global default.
 
+### Main Folder Layout
+- **Config Key**: `mainFolderLayout`
+- **Type**: `string`
+- **Default**: `"videos"`
+- **Options**: `"videos"`, `"tv"`
+- **Description**: Layout of the main downloads folder, for files saved directly in it rather than in a `__subfolder`. `"videos"` saves each video movie-style, as before. `"tv"` saves channels as TV shows (`<show>/Season NN/SxxEyy - Title [id].ext`) for a TV-type media server library. Each `__subfolder` has its own layout, set in **Settings > Core > File Structure > Library folders**.
+- **Note**: Changed only through the Library folders list, which refuses the change while the folder holds downloaded files or a download is running. A Settings save keeps the stored value. Switching the main folder to TV writes a `.plexignore` containing `__*/*` to the main folder, so a Plex TV library pointed there skips the subfolders.
+- **TV folders are video-only**: TV library scanners skip audio files. A channel or playlist whose download type is MP3 cannot be saved to a TV folder, a folder with MP3 channels or playlists cannot switch to TV, and a download request that names a TV folder together with an MP3 type is refused. When the destination is only known per video (a pasted URL whose channel saves to a TV folder, an MP3 playlist with a video from such a channel), the MP3 type is downgraded to video for that video, so the episode is saved as video; an MP3 playlist's such videos therefore have no audio file and are left out of its music playlist sync (`unsyncable_count`).
+
 ### Video Filename Template
 - **Config Key**: `videoFilenamePrefix`
 - **Type**: `string`
 - **Default**: `"%(uploader,channel,uploader_id).80B - %(title).64B"`. The title is capped at 64 bytes because the prefix appears twice in the full path (per-video folder + filename) and Plex on Windows silently skips files whose full path reaches 260 characters. Installs that saved settings under an older default keep their persisted value (`.74B`/`.76B`) until the setting is edited.
 - **Description**: User-customizable prefix for downloaded video filenames AND per-video directory names. Youtarr always appends ` [VIDEO_ID].EXT` to filenames and ` - VIDEO_ID` to per-video folder names so it can re-find your videos on disk; those suffixes are not configurable.
+- **TV folders**: Not used for episodes in folders with the TV layout; they are always named `SxxEyy - <title> [VIDEO_ID].EXT` inside `<show>/Season NN/`.
 - **Syntax**: Uses [yt-dlp's output template syntax](https://github.com/yt-dlp/yt-dlp#output-template). Common tokens: `%(title)s`, `%(uploader)s`, `%(channel)s`, `%(upload_date>%Y-%m-%d)s`, `%(channel_id)s`, `%(display_id)s`. Use `.NB` to byte-truncate values (e.g. `%(title).64B`) or `.Ns` for character truncation (e.g. `%(title).40s`); recommended to keep paths under Windows' 260-char limit.
 - **Validation**: Empty values, path separators (`/`, `\`), `..`, ASCII control characters, values longer than 160 characters, malformed yt-dlp percent syntax, and invalid truncation like `%(title).40` are rejected. Escape literal percent signs as `%%`. Trailing whitespace is trimmed on save.
 - **Scope**: Global setting. Applies only to NEW downloads; existing files are not renamed.
@@ -393,6 +404,7 @@ Sync is one-way (server -> Youtarr). Non-owner Plex users come from the server's
 - **Type**: `boolean`
 - **Default**: `true`
 - **Description**: Generate channel poster images for media servers
+- **TV folders**: For a channel saved as a TV show, the poster goes in its show folder.
 - **Note**: Creates poster.jpg in each channel directory
 
 ### Write Video NFO Files
@@ -400,6 +412,7 @@ Sync is one-way (server -> Youtarr). Non-owner Plex users come from the server's
 - **Type**: `boolean`
 - **Default**: `true`
 - **Description**: Generate NFO metadata files for Kodi/Jellyfin/Emby
+- **TV folders**: Episodes in folders with the TV layout always get an episode NFO (`<episodedetails>`) and their show a `tvshow.nfo`, whatever this setting says: without them Jellyfin names episodes after the file name, and the Plex NFO agents need them.
 - **Note**: Creates .nfo XML files with video metadata
 
 ### Write Video Fanart
@@ -414,6 +427,7 @@ Sync is one-way (server -> Youtarr). Non-owner Plex users come from the server's
 - **Type**: `boolean`
 - **Default**: `false`
 - **Description**: Generate backdrop image files for Emby and Jellyfin background art
+- **TV folders**: For a channel saved as a TV show, the channel `backdrop.jpg` goes in its show folder.
 - **Note**: Creates `backdrop.jpg` in each channel directory (from the channel's YouTube banner) and a `-backdrop.jpg` file alongside each video (copy of the video thumbnail). When enabled, channel-level backdrops are backfilled for existing channel folders; video-level backdrops are created for new downloads only.
 
 ### Prefix Channel Name In Embedded Title
@@ -421,6 +435,7 @@ Sync is one-way (server -> Youtarr). Non-owner Plex users come from the server's
 - **Type**: `boolean`
 - **Default**: `true`
 - **Description**: Write the MP4's embedded title tag as `Channel - Title` instead of just `Title`
+- **TV folders**: Never applied to TV episodes, whose embedded title is always the episode title.
 - **Note**: Plex reads the embedded title tag (it does not read `.nfo` files). In an "Other Videos" library the prefix gives each video its channel context. In a TV Shows library the channel is already the show name, so turn this off to keep episode titles clean. The channel name is still written to the artist, album (Plex Collection), copyright (Plex Studio), and TV network tags, and the `.nfo` title is never prefixed. Only applies to new downloads; existing files are not re-tagged.
 
 ## Cookie Config

@@ -113,6 +113,10 @@ jest.mock('../chips', () => ({
       autoRemovalProtected ? 'Protected (All)' : `Protected (${keepRecentCount})`
     );
   },
+  TvChip: function MockTvChip() {
+    const React = require('react');
+    return React.createElement('div', { 'data-testid': 'tv-chip' }, 'TV');
+  },
 }));
 
 describe('ChannelListRow', () => {
@@ -203,6 +207,26 @@ describe('ChannelListRow', () => {
       renderWithProviders(<ChannelListRow {...defaultProps} />);
 
       expect(screen.queryByTestId('protected-chip')).not.toBeInTheDocument();
+    });
+
+    test('renders TvChip for a channel in a TV folder on desktop', () => {
+      renderWithProviders(<ChannelListRow {...defaultProps} channel={{ ...mockChannel, layout: 'tv' }} />);
+
+      expect(screen.getByTestId('tv-chip')).toBeInTheDocument();
+    });
+
+    test('renders TvChip for a channel in a TV folder on mobile', () => {
+      renderWithProviders(
+        <ChannelListRow {...defaultProps} isMobile channel={{ ...mockChannel, layout: 'tv' }} />
+      );
+
+      expect(screen.getByTestId('tv-chip')).toBeInTheDocument();
+    });
+
+    test('does not render TvChip for a channel in a Videos folder', () => {
+      renderWithProviders(<ChannelListRow {...defaultProps} channel={{ ...mockChannel, layout: 'videos' }} />);
+
+      expect(screen.queryByTestId('tv-chip')).not.toBeInTheDocument();
     });
   });
 

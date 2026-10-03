@@ -6,3 +6,4 @@ export { default as TitleFilterChip } from './TitleFilterChip';
 export { default as DownloadFormatConfigIndicator } from './DownloadFormatConfigIndicator';
 export { default as TerminatedChip } from './TerminatedChip';
 export { default as ProtectedChip } from './ProtectedChip';
+export { default as TvChip } from './TvChip';

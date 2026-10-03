@@ -19,6 +19,8 @@ jest.mock('../../../db', () => mockFactories.mockDb());
 // yt-dlp --dump-json output: one JSON document per line.
 const toEntryLines = (entries) => entries.map((entry) => `${JSON.stringify(entry)}\n`).join('');
 
+jest.mock('../../tvShows/episodeInfo', () => ({ getEpisodeInfoMap: jest.fn().mockResolvedValue(new Map()) }));
+
 describe('channelVideosService', () => {
   let channelVideosService;
   let Channel;

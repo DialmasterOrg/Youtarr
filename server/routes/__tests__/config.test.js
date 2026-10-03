@@ -15,7 +15,7 @@ const LOGGING_STATUS = {
   file: { enabled: true, directory: '/app/config/logs', maxSizeBytes: 10485760, maxFiles: 5, error: null },
 };
 
-function makeApp() {
+function makeApp(extraDeps = {}) {
   const app = express();
   app.use(express.json());
   // Attach a minimal logger BEFORE routes so req.log is available in handlers
@@ -35,6 +35,7 @@ function makeApp() {
       videoFilenamePrefix: '%(uploader,channel,uploader_id).80B - %(title).76B',
     },
     getConfig: jest.fn(function () { return this._config; }),
+    getDefaultSubfolder: jest.fn(function () { return this._config.defaultSubfolder || null; }),
     updateConfig: jest.fn(function (next) { this._config = next; }),
     getCookiesStatus: jest.fn(),
     getCookiesPath: jest.fn(() => null),
@@ -64,6 +65,7 @@ function makeApp() {
     cookieTest,
     cookieTestRateLimiter,
     getLoggingStatus,
+    ...extraDeps,
   }));
   // eslint-disable-next-line no-unused-vars -- Express identifies error handlers by 4-arg arity.
   app.use((err, _req, res, _next) => {
@@ -222,6 +224,44 @@ describe('POST /api/cookies/test', () => {
 });
 
 describe('POST /updateconfig', () => {
+  describe('library folder layouts', () => {
+    const refusal = (message, status) => Object.assign(new Error(message), { status });
+
+    test('keeps the stored mainFolderLayout over the one in the request', async () => {
+      const { app, configModule } = makeApp();
+      configModule._config.mainFolderLayout = 'tv';
+      await supertest(app).post('/updateconfig').send({ mainFolderLayout: 'videos' });
+      expect(configModule.updateConfig.mock.calls[0][0].mainFolderLayout).toBe('tv');
+    });
+
+    test('checks a default subfolder change against folder layouts', async () => {
+      const libraryFolders = { checkDefaultSubfolderChange: jest.fn().mockResolvedValue(undefined) };
+      const jobModule = { getInProgressJobId: jest.fn(() => 'job-1') };
+      const { app, configModule } = makeApp({ libraryFolders, jobModule });
+      configModule._config.defaultSubfolder = 'Kids';
+
+      const res = await supertest(app).post('/updateconfig').send({ defaultSubfolder: 'TV' });
+
+      expect(res.status).toBe(200);
+      const args = libraryFolders.checkDefaultSubfolderChange.mock.calls[0][0];
+      expect(args).toMatchObject({ oldDefault: 'Kids', newDefault: 'TV' });
+      expect(args.isDownloadRunning()).toBe(true);
+    });
+
+    test('refuses a default subfolder change the layout check rejects', async () => {
+      const libraryFolders = {
+        checkDefaultSubfolderChange: jest.fn().mockRejectedValue(refusal('channels have downloads', 409)),
+      };
+      const { app, configModule } = makeApp({ libraryFolders });
+
+      const res = await supertest(app).post('/updateconfig').send({ defaultSubfolder: 'TV' });
+
+      expect(res.status).toBe(409);
+      expect(res.body).toEqual({ error: 'channels have downloads' });
+      expect(configModule.updateConfig).not.toHaveBeenCalled();
+    });
+  });
+
   test('returns 200 when ytdlpCustomArgs is empty', async () => {
     const { app } = makeApp();
     const res = await supertest(app)

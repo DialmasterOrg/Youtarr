@@ -6,6 +6,7 @@ const path = require('path');
 const configModule = require('./configModule');
 const fileCheckModule = require('./fileCheckModule');
 const watchStatusQueries = require('./mediaServers/watchStatusQueries');
+const episodeInfo = require('./tvShows/episodeInfo');
 const ratingMapper = require('./ratingMapper');
 const logger = require('../logger');
 const messageEmitter = require('./messageEmitter');
@@ -241,8 +242,12 @@ class VideosModule {
       // Watched-servers summary for the list UI, honoring the configured
       // watched rule; per-server detail lives behind /api/videos/:id/watch-status.
       const watchedByVideoId = await watchStatusQueries.getWatchedByMap(videos.map((v) => v.id));
+      const episodesByVideoId = await episodeInfo.getEpisodeInfoMap(
+        videos.map((v) => ({ youtubeId: v.youtubeId, filePath: v.filePath }))
+      );
       for (const video of videos) {
         video.watchedBy = watchedByVideoId.get(video.id) || [];
+        video.episode = episodesByVideoId.get(video.youtubeId) || null;
       }
 
       // Get all unique channels for the filter dropdown

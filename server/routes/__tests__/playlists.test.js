@@ -2528,3 +2528,94 @@ describe('playlist setup recovery and validation', () => {
     });
   });
 });
+
+describe('TV folders are video-only', () => {
+  // Refuses MP3 into the folder named TV, like layoutGuards does for a TV-layout folder.
+  const withGuards = () => ({
+    ...buildDeps(),
+    layoutGuards: {
+      assertVideoOnlyDestination: jest.fn(async ({ audioFormat, subFolderValue }) => {
+        if (audioFormat && subFolderValue === 'TV') {
+          throw Object.assign(new Error('TV folders are video-only.'), { status: 400 });
+        }
+      }),
+    },
+  });
+
+  test('refuses subscribing with MP3 into a TV folder', async () => {
+    const deps = withGuards();
+    const handler = getHandler('post', '/api/playlists', deps);
+    const res = createResponse();
+
+    await handler({
+      body: { url: 'https://youtube.com/playlist?list=PLtest', settings: { default_sub_folder: 'TV', audio_format: 'mp3_only' } },
+      log: loggerMock,
+    }, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(deps.playlistModule.getPlaylistInfo).not.toHaveBeenCalled();
+  });
+
+  test('checks the global default when subscribing without a folder', async () => {
+    const deps = withGuards();
+    deps.playlistModule.getPlaylistInfo.mockResolvedValue({ playlist_id: 'PLtest' });
+    deps.playlistModule.upsertPlaylist.mockResolvedValue({ playlist: makePlaylist(), restored: false });
+    const handler = getHandler('post', '/api/playlists', deps);
+
+    await handler({
+      body: { url: 'https://youtube.com/playlist?list=PLtest', settings: { audio_format: 'mp3_only' } },
+      log: loggerMock,
+    }, createResponse());
+
+    expect(deps.layoutGuards.assertVideoOnlyDestination).toHaveBeenCalledWith({
+      audioFormat: 'mp3_only', subFolderValue: '##USE_GLOBAL_DEFAULT##',
+    });
+  });
+
+  test('refuses switching a playlist in a TV folder to MP3', async () => {
+    const deps = withGuards();
+    const p = makePlaylist({ default_sub_folder: 'TV', audio_format: null });
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+    const handler = getHandler('put', '/api/playlists/:playlistId/settings', deps);
+    const res = createResponse();
+
+    await handler({ params: { playlistId: 'PLtest123' }, body: { audio_format: 'video_mp3' }, log: loggerMock }, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(p.update).not.toHaveBeenCalled();
+  });
+
+  test('refuses moving an MP3 playlist into a TV folder', async () => {
+    const deps = withGuards();
+    const p = makePlaylist({ default_sub_folder: 'Music', audio_format: 'mp3_only' });
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+    const handler = getHandler('put', '/api/playlists/:playlistId/settings', deps);
+    const res = createResponse();
+
+    await handler({ params: { playlistId: 'PLtest123' }, body: { default_sub_folder: 'TV' }, log: loggerMock }, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  test('skips the check for settings unrelated to the destination', async () => {
+    const deps = withGuards();
+    deps.models.Playlist.findOne.mockResolvedValue(makePlaylist());
+    const handler = getHandler('put', '/api/playlists/:playlistId/settings', deps);
+
+    await handler({ params: { playlistId: 'PLtest123' }, body: { video_quality: '720' }, log: loggerMock }, createResponse());
+
+    expect(deps.layoutGuards.assertVideoOnlyDestination).not.toHaveBeenCalled();
+  });
+
+  test('refuses an MP3 download into the playlist\'s TV folder', async () => {
+    const deps = withGuards();
+    deps.models.Playlist.findOne.mockResolvedValue(makePlaylist({ default_sub_folder: 'TV' }));
+    const handler = getHandler('post', '/api/playlists/:playlistId/download', deps);
+    const res = createResponse();
+
+    await handler({ params: { playlistId: 'PLtest123' }, body: { overrideSettings: { audioFormat: 'mp3_only' } }, log: loggerMock }, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(deps.downloadModule.doPlaylistDownloads).not.toHaveBeenCalled();
+  });
+});

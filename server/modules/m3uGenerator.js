@@ -9,6 +9,7 @@ const {
   resolveChannelFolderName,
 } = require('./filesystem/pathBuilder');
 const configModule = require('./configModule');
+const channelFolders = require('./tvShows/channelFolders');
 
 const M3U_FOLDER_NAME = '__playlists__';
 // Empty marker file that tells the Jellyfin and Emby library scanners to skip
@@ -104,6 +105,11 @@ class M3uGenerator {
         return false;
       }
       if (!channel.m3u_enabled || !channel.enabled) {
+        return false;
+      }
+      // Jellyfin and Emby ignore .m3u files in a Shows library, and Kodi may
+      // scan one as a video.
+      if (await channelFolders.isTvChannel(channel)) {
         return false;
       }
       if (!resolveChannelFolderName(channel)) {

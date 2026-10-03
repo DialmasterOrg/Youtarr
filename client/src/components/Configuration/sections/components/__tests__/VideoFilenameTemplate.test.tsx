@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 
 jest.mock('axios', () => ({
@@ -48,6 +49,29 @@ describe('VideoFilenameTemplate', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /title only/i }));
     expect(handleChange).toHaveBeenCalledWith('%(title).64B');
+  });
+
+  describe('TV show hint next to the Plex TV Series preset', () => {
+    it('points TV-style channels at the TV Show channel setting on hover', async () => {
+      const user = userEvent.setup();
+      render(<VideoFilenameTemplate value={defaultPrefix} onChange={() => {}} token="tok" />);
+
+      await user.hover(screen.getByRole('button', { name: 'About saving channels as TV shows' }));
+
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(
+        'For TV-style channels, save the channel as a TV show instead: Channel Settings > TV Show. Episodes then get season folders and NFO files.'
+      );
+    });
+
+    it('still applies the Plex TV Series preset when clicked', () => {
+      const handleChange = jest.fn();
+      const tvSeriesPrefix = FILENAME_PRESETS.find((preset) => preset.label === 'Plex TV Series')!.prefix;
+      render(<VideoFilenameTemplate value="x" onChange={handleChange} token="tok" />);
+
+      fireEvent.click(screen.getByRole('button', { name: /plex tv series/i }));
+
+      expect(handleChange).toHaveBeenCalledWith(tvSeriesPrefix);
+    });
   });
 
   describe('Plex TV Series channel prefix tip', () => {

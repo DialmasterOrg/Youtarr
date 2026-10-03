@@ -512,4 +512,52 @@ describe('SubfolderAutocomplete', () => {
       expect(mockOnChange).toHaveBeenCalledWith('Music');
     });
   });
+
+  describe('folder layouts', () => {
+    const layoutOf = (folder: string) => (folder === 'Sports' || folder === '' ? 'tv' : 'videos') as 'tv' | 'videos';
+
+    test('labels TV subfolders', async () => {
+      const user = userEvent.setup();
+      render(<SubfolderAutocomplete mode="channel" value={null} onChange={mockOnChange} subfolders={defaultSubfolders} layoutOf={layoutOf} />);
+
+      await user.click(screen.getByRole('combobox'));
+
+      const listbox = screen.getByRole('listbox');
+      expect(within(listbox).getByText('__Sports (TV)')).toBeInTheDocument();
+      expect(within(listbox).getByText('__Music')).toBeInTheDocument();
+    });
+
+    test('labels the default subfolder by its layout', async () => {
+      const user = userEvent.setup();
+      render(
+        <SubfolderAutocomplete
+          mode="channel"
+          value={GLOBAL_DEFAULT_SENTINEL}
+          onChange={mockOnChange}
+          subfolders={defaultSubfolders}
+          defaultSubfolderDisplay="Sports"
+          layoutOf={layoutOf}
+        />
+      );
+
+      await user.click(screen.getByRole('combobox'));
+
+      expect(within(screen.getByRole('listbox')).getByText('Default Subfolder (__Sports) (TV)')).toBeInTheDocument();
+    });
+
+    test('labels the root option when the main folder is TV', () => {
+      render(<SubfolderAutocomplete mode="channel" value={null} onChange={mockOnChange} subfolders={[]} layoutOf={layoutOf} />);
+      expect(screen.getByRole('combobox')).toHaveValue('No Subfolder (root) (TV)');
+    });
+
+    test('shows no layout labels without a resolver', async () => {
+      const user = userEvent.setup();
+      render(<SubfolderAutocomplete mode="channel" value={null} onChange={mockOnChange} subfolders={defaultSubfolders} />);
+
+      await user.click(screen.getByRole('combobox'));
+
+      expect(within(screen.getByRole('listbox')).getByText('__Sports')).toBeInTheDocument();
+    });
+  });
 });
+

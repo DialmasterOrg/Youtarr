@@ -72,9 +72,26 @@ function buildEpisodeStem({ season, episode, dateNumbered = false, episodeTitle,
   return title ? `${code} - ${title} [${youtubeId}]` : `${code} [${youtubeId}]`;
 }
 
+/**
+ * New name for one of a video's files once it is an episode: the episode stem
+ * plus whatever follows the [id] token (".mp4", ".en.srt", "-fanart.jpg").
+ *
+ * @param {string} fileName - A file of the video, e.g. "Channel - Title [id].en.srt"
+ * @param {string} youtubeId
+ * @param {string} stem - The episode stem
+ * @returns {string}
+ */
+function episodeFileName(fileName, youtubeId, stem) {
+  const token = `[${youtubeId}]`;
+  const suffix = fileName.slice(fileName.lastIndexOf(token) + token.length);
+  const appleDoublePrefix = fileName.startsWith('._') ? '._' : '';
+  return `${appleDoublePrefix}${stem}${suffix}`;
+}
+
 module.exports = {
   EPISODE_TITLE_MAX_BYTES,
   seasonFolderName,
   episodeCode,
-  buildEpisodeStem
+  buildEpisodeStem,
+  episodeFileName
 };

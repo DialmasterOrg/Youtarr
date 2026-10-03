@@ -14,11 +14,8 @@
  * 4. In a videos folder the video is saved movie-style.
  */
 
-const { LAYOUT_VIDEOS, LAYOUT_TV } = require('./libraryLayouts');
+const { LAYOUT_VIDEOS, LAYOUT_TV, KIND_TITLE_SHOW, KIND_CHANNEL_SHOW } = require('./constants');
 const { MAIN_LIBRARY_FOLDER } = require('../filesystem/constants');
-
-const KIND_TITLE_SHOW = 'title';
-const KIND_CHANNEL_SHOW = 'channel';
 
 /**
  * @param {Object} inputs

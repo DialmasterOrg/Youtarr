@@ -9,6 +9,7 @@ const ChannelVideo = require('../models/channelvideo');
 const channelVideoReanchor = require('./channelVideoReanchor');
 const { parseTierFromFormatNote, selectionTierForHeight } = require('./resolutionTier');
 const { isFileForVideo } = require('./filesystem/pathBuilder');
+const episodeInfo = require('./tvShows/episodeInfo');
 
 const NULL_METADATA = {
   description: null,
@@ -221,6 +222,14 @@ class VideoMetadataModule {
       // Extract available resolutions from the formats array
       const availableResolutions = this._extractAvailableResolutions(rawData.formats);
 
+      // Show and SxxEyy when the downloaded file is a TV episode (decoration: never fails the request)
+      const episode = await episodeInfo.getEpisodeInfoMap([{ youtubeId, filePath: rawData._actual_filepath || null }])
+        .then((map) => map.get(youtubeId) || null)
+        .catch((err) => {
+          logger.warn({ err, youtubeId }, 'Failed to read episode details');
+          return null;
+        });
+
       return {
         description: rawData.description ?? null,
         viewCount: rawData.view_count ?? null,
@@ -243,6 +252,7 @@ class VideoMetadataModule {
         webpageUrl: rawData.webpage_url ?? null,
         relatedFiles,
         availableResolutions,
+        episode,
       };
     } catch (err) {
       logger.error({ err, youtubeId }, 'Unexpected error in getVideoMetadata');

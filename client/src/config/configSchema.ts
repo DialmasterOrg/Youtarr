@@ -38,6 +38,8 @@ export const CONFIG_FIELDS = {
   videoCodec: { default: 'default', trackChanges: true },
   defaultSubfolder: { default: '', trackChanges: true },
   defaultSkipVideoFolder: { default: false, trackChanges: true },
+  // Changed through the library folders API, never through a Settings save.
+  mainFolderLayout: { default: 'videos', trackChanges: false },
   videoFilenamePrefix: {
     default: '%(uploader,channel,uploader_id).80B - %(title).64B',
     trackChanges: true,
@@ -219,6 +221,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   videoCodec: CONFIG_FIELDS.videoCodec.default,
   defaultSubfolder: CONFIG_FIELDS.defaultSubfolder.default,
   defaultSkipVideoFolder: CONFIG_FIELDS.defaultSkipVideoFolder.default,
+  mainFolderLayout: CONFIG_FIELDS.mainFolderLayout.default,
   videoFilenamePrefix: CONFIG_FIELDS.videoFilenamePrefix.default,
   plexApiKey: CONFIG_FIELDS.plexApiKey.default,
   plexYoutubeLibraryId: CONFIG_FIELDS.plexYoutubeLibraryId.default,
