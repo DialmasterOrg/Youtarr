@@ -171,7 +171,7 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *       400:
    *         description: Invalid payload, invalid settings on an add item (no channel is changed), or an MP3 download type for a channel in a TV folder
    *       409:
-   *         description: An add item changes the subfolder of a channel that has downloads in progress, or moves a channel with downloaded videos between Videos and TV
+   *         description: An add item changes the subfolder of a channel that has downloads in progress or is being reorganized, or would move downloaded videos between Videos and TV (reorganizeRequired)
    *       500:
    *         description: Failed to update channels
    */
@@ -210,9 +210,9 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
       if (error.message?.includes('Cannot change subfolder while downloads are in progress')) {
         return res.status(409).json({ error: error.message });
       }
-      // Library folder layout refusals (MP3 into a TV folder, switching a channel with downloads)
+      // Library folder layout refusals (MP3 into a TV folder, a change that moves downloaded files)
       if (error.status === 400 || error.status === 409) {
-        return res.status(error.status).json({ error: error.message });
+        return res.status(error.status).json(layoutGuards.errorBody(error));
       }
       req.log.error({ err: error }, 'Failed to update channels');
       res.status(500).json({
@@ -690,7 +690,7 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *       400:
    *         description: An MP3 download type for a channel in a TV folder
    *       409:
-   *         description: Downloads are in progress, or a folder change would switch a channel with downloaded videos between Videos and TV
+   *         description: Downloads are in progress, a reorganize of the channel is running, or a folder change would move downloaded videos between Videos and TV (reorganizeRequired, with the change to preview through /api/tv/reorganize/preview)
    *       500:
    *         description: Failed to update settings
    */
@@ -704,8 +704,8 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
       res.json(result);
     } catch (error) {
       console.error('Error updating channel settings:', error);
-      const statusCode = error.status
-        || (error.message.includes('Cannot change subfolder while downloads are in progress') ? 409 : 500);
+      if (error.status) return res.status(error.status).json(layoutGuards.errorBody(error));
+      const statusCode = error.message.includes('Cannot change subfolder while downloads are in progress') ? 409 : 500;
       res.status(statusCode).json({ error: error.message });
     }
   });

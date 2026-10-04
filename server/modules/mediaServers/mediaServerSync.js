@@ -3,6 +3,7 @@ const configModule = require('../configModule');
 const serverRegistry = require('./serverRegistry');
 const { MediaServerUnavailableError, describeHttpError } = require('./adapters/baseAdapter');
 const { Playlist, PlaylistVideo, PlaylistSyncState, Video } = require('../../models');
+const reorganizeLock = require('../reorganize/reorganizeLock');
 
 // Backoff retry for resolving items after library scan. Tuned for typical Plex/Jellyfin
 // scan completion times — short initial delays, then longer as more time passes.
@@ -30,6 +31,19 @@ class MediaServerSync {
     // Tradeoff: if the initial run rejects, joiners share that rejection and
     // any rerun they requested is dropped (a later call starts fresh).
     this._inFlight = new Map();
+    // Playlists whose sync was put off while a reorganize moved files.
+    this._deferred = new Set();
+    reorganizeLock.on('released', () => this._runDeferred());
+  }
+
+  _runDeferred() {
+    const ids = [...this._deferred];
+    this._deferred.clear();
+    for (const playlistId of ids) {
+      this.syncPlaylist(playlistId).catch((err) => {
+        logger.error({ err, playlistId }, 'Deferred media server playlist sync failed');
+      });
+    }
   }
 
   syncPlaylist(playlistId) {
@@ -48,6 +62,11 @@ class MediaServerSync {
     return entry.promise;
   }
 
+  // A reorganize refuses to start while any playlist sync runs.
+  isAnySyncInFlight() {
+    return this._inFlight.size > 0;
+  }
+
   async _runWithRerun(key, playlistId, entry) {
     try {
       await this._doSync(playlistId);
@@ -61,6 +80,12 @@ class MediaServerSync {
   }
 
   async _doSync(playlistId) {
+    // Paths are mid-move; the sync runs once the reorganize ends.
+    if (reorganizeLock.isActive()) {
+      logger.info({ playlistId }, 'Downloads are being reorganized; deferring the media server playlist sync');
+      this._deferred.add(playlistId);
+      return;
+    }
     const playlist = await Playlist.findByPk(playlistId);
     if (!playlist) return;
 

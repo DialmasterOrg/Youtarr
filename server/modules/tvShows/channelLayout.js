@@ -13,14 +13,16 @@ const { getLayoutResolver, listTvFolders } = require('./libraryLayouts');
 const showStore = require('./showStore');
 const { effectiveLibraryFolder, showDirectory } = require('./channelFolders');
 const layoutGuards = require('./layoutGuards');
+const reorganizeLock = require('../reorganize/reorganizeLock');
+const { CHANGE_CHANNEL } = require('../reorganize/constants');
 
 const LAYOUTS = new Set([LAYOUT_VIDEOS, LAYOUT_TV]);
 
 const MESSAGES = {
   mp3: 'TV shows are video-only. Change this channel\'s download type to Video before saving it to a TV folder.',
   running: 'Wait for the current download to finish before switching this channel between Videos and TV.',
-  hasDownloads: 'This channel already has downloaded videos, so it can\'t switch between Videos and TV or move to '
-    + 'another TV folder yet.',
+  reorganize: 'This channel has downloaded videos, so switching between Videos and TV or to another TV folder '
+    + 'moves its files. Review the move first.',
 };
 
 // sub_folder value that targets a library folder explicitly.
@@ -30,8 +32,10 @@ function subFolderValueFor(libraryFolder) {
 
 /**
  * Check a channel settings change before it is saved. Refuses an MP3 download
- * type in a TV folder, and a folder change that crosses layouts or moves a
- * show between TV folders while the channel has downloads or a download runs.
+ * type in a TV folder; a folder change that crosses layouts or moves a show
+ * between TV folders goes through the reorganize when the channel has
+ * downloads (reorganizeRequired 409) and is refused while a download runs.
+ * Any change is refused while a reorganize is moving the channel's files.
  *
  * @param {Object} params
  * @param {Object} params.channel - Current channels row
@@ -41,6 +45,7 @@ function subFolderValueFor(libraryFolder) {
  * @returns {Promise<{oldFolder: string, newFolder: string, oldLayout: string, newLayout: string, involvesTv: boolean}>}
  */
 async function checkChannelSettingsChange({ channel, newSubFolder, newAudioFormat, isDownloadRunning }) {
+  reorganizeLock.assertChannelFree(channel.channel_id);
   const layoutOf = await getLayoutResolver();
   const oldFolder = effectiveLibraryFolder(channel.sub_folder);
   const newFolder = newSubFolder === undefined ? oldFolder : effectiveLibraryFolder(newSubFolder);
@@ -55,10 +60,12 @@ async function checkChannelSettingsChange({ channel, newSubFolder, newAudioForma
 
   const folderChanged = folderKey(oldFolder) !== folderKey(newFolder);
   if (folderChanged && change.involvesTv) {
-    layoutGuards.assertNoDownloadRunning(isDownloadRunning, MESSAGES.running);
     if (await layoutGuards.channelHasDownloads(channel.channel_id)) {
-      throw layoutGuards.guardError(MESSAGES.hasDownloads, 409);
+      throw layoutGuards.reorganizeRequiredError(MESSAGES.reorganize, {
+        type: CHANGE_CHANNEL, channelId: channel.channel_id, subFolder: newSubFolder === undefined ? null : newSubFolder,
+      });
     }
+    layoutGuards.assertNoDownloadRunning(isDownloadRunning, MESSAGES.running);
   }
   return change;
 }
@@ -174,7 +181,6 @@ async function getChannelTvState(channel) {
     defaultFolder,
     defaultFolderLayout: layoutOf(defaultFolder),
     hasDownloads,
-    canSwitch: !hasDownloads,
   };
 }
 

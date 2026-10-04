@@ -9,19 +9,24 @@ const MAX_FOLDER_NAME_LENGTH = 100;
  * @param {Function} deps.verifyToken
  * @param {Object} deps.libraryFolders - tvShows/libraryFolders
  * @param {Object} deps.channelLayout - tvShows/channelLayout
+ * @param {Object} deps.layoutGuards - tvShows/layoutGuards (refusal bodies)
+ * @param {Object} deps.reorganize - modules/reorganize (a channel's reorganize state)
  * @param {Object} deps.channelSettingsModule
  * @param {Object} deps.jobModule - Its running job blocks layout switches
  * @param {Object} deps.models
  * @returns {express.Router}
  */
-function createTvShowRoutes({ verifyToken, libraryFolders, channelLayout, channelSettingsModule, jobModule, models }) {
+function createTvShowRoutes({
+  verifyToken, libraryFolders, channelLayout, layoutGuards, reorganize, channelSettingsModule, jobModule, models,
+}) {
   const router = express.Router();
   const isDownloadRunning = () => Boolean(jobModule.getInProgressJobId());
 
-  // Refusals carry .status; anything else is unexpected.
+  // Refusals carry .status (a change that moves files also names the change
+  // to preview); anything else is unexpected.
   const sendError = (res, error, failure, context) => {
     if (error.status) {
-      return res.status(error.status).json({ error: error.message });
+      return res.status(error.status).json(layoutGuards.errorBody(error));
     }
     logger.error({ err: error, ...context }, failure);
     return res.status(500).json({ error: failure });
@@ -69,7 +74,7 @@ function createTvShowRoutes({ verifyToken, libraryFolders, channelLayout, channe
    * /api/library-folders:
    *   put:
    *     summary: Change a library folder's layout
-   *     description: Sets the layout of the main folder (name "") or a subfolder. Every channel that downloads to the folder changes layout with it, so the change is refused while the folder holds downloaded videos or a download runs, and TV is refused while a channel or playlist there downloads MP3. Switching the main folder to TV writes a .plexignore there that hides the __ subfolders from a Plex library pointed at it.
+   *     description: Sets the layout of the main folder (name "") or a subfolder. Every channel that downloads to the folder changes layout with it, so a folder holding downloaded videos is answered with a reorganizeRequired 409 (the change goes through the reorganize, which moves the files), a direct change is refused while a download runs, and TV is refused while a channel or playlist there downloads MP3. Switching the main folder to TV writes a .plexignore there that hides the __ subfolders from a Plex library pointed at it.
    *     tags: [TV Shows]
    *     requestBody:
    *       required: true
@@ -85,7 +90,7 @@ function createTvShowRoutes({ verifyToken, libraryFolders, channelLayout, channe
    *       200: { description: The updated folder list and whether anything changed }
    *       400: { description: Invalid name or layout }
    *       404: { description: Unknown subfolder }
-   *       409: { description: The folder holds downloads, a download is running, or its channels download MP3 }
+   *       409: { description: "The folder holds downloaded videos (reorganizeRequired, with the change to preview through /api/tv/reorganize/preview), a download or a reorganize is running, or its channels download MP3" }
    *       500: { description: Failed to change the folder layout }
    */
   router.put('/api/library-folders', verifyToken, async (req, res) => {
@@ -109,7 +114,7 @@ function createTvShowRoutes({ verifyToken, libraryFolders, channelLayout, channe
    * /api/channels/{channelId}/tv:
    *   get:
    *     summary: Get a channel's TV layout
-   *     description: Whether the channel downloads to a TV folder, its show (name and folder) when it has one, the TV folders it can use, and whether it can switch layouts (only while it has no downloaded videos).
+   *     description: Whether the channel downloads to a TV folder, its show (name and folder) when it has one, the TV folders it can use, whether it has downloaded videos (switching then goes through the reorganize), and its reorganize state (running, and videos a reorganize could not move).
    *     tags: [TV Shows]
    *     parameters:
    *       - in: path
@@ -125,7 +130,11 @@ function createTvShowRoutes({ verifyToken, libraryFolders, channelLayout, channe
     try {
       const channel = await findChannel(req.params.channelId);
       if (!channel) return res.status(404).json({ error: 'Channel not found' });
-      return res.json(await channelLayout.getChannelTvState(channel));
+      const [tv, reorganizeState] = await Promise.all([
+        channelLayout.getChannelTvState(channel),
+        reorganize.channelState(channel.channel_id),
+      ]);
+      return res.json({ ...tv, reorganize: reorganizeState });
     } catch (error) {
       return sendError(res, error, 'Failed to load the channel\'s TV state', { channelId: req.params.channelId });
     }
@@ -136,7 +145,7 @@ function createTvShowRoutes({ verifyToken, libraryFolders, channelLayout, channe
    * /api/channels/{channelId}/tv/layout:
    *   put:
    *     summary: Switch a channel between Videos and TV
-   *     description: Moves the channel to a folder with the requested layout. TV uses the given folder, else the default subfolder when it is a TV folder, else the only TV folder. Videos uses the given folder, else the folder the channel left for TV, else the default subfolder. Refused while the channel has downloaded videos or a download runs, and for TV while the channel downloads MP3.
+   *     description: Moves the channel to a folder with the requested layout. TV uses the given folder, else the default subfolder when it is a TV folder, else the only TV folder. Videos uses the given folder, else the folder the channel left for TV, else the default subfolder. A channel with downloaded videos is answered with a reorganizeRequired 409 naming the change to preview; refused while a download or a reorganize of the channel runs, and for TV while the channel downloads MP3.
    *     tags: [TV Shows]
    *     parameters:
    *       - in: path
@@ -157,7 +166,7 @@ function createTvShowRoutes({ verifyToken, libraryFolders, channelLayout, channe
    *       200: { description: The saved channel settings and the channel's TV state }
    *       400: { description: Invalid layout or folder, no TV folder, or a folder must be chosen }
    *       404: { description: Channel not found }
-   *       409: { description: The channel has downloaded videos or a download is running }
+   *       409: { description: "The channel has downloaded videos (reorganizeRequired, with the change to preview), or a download or a reorganize of the channel is running" }
    *       500: { description: Failed to switch the channel's layout }
    */
   router.put('/api/channels/:channelId/tv/layout', verifyToken, async (req, res) => {
@@ -177,7 +186,8 @@ function createTvShowRoutes({ verifyToken, libraryFolders, channelLayout, channe
         channelId, { sub_folder: subFolder }, { isDownloadRunning }
       );
       const updated = await findChannel(channelId);
-      return res.json({ settings: result.settings, tv: await channelLayout.getChannelTvState(updated) });
+      const tv = await channelLayout.getChannelTvState(updated);
+      return res.json({ settings: result.settings, tv: { ...tv, reorganize: await reorganize.channelState(channelId) } });
     } catch (error) {
       return sendError(res, error, 'Failed to switch the channel\'s layout', { channelId, layout });
     }

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { ChannelTvState, LibraryLayout } from '../../../types/tvShows';
 import { LIBRARY_FOLDERS_UPDATED_EVENT } from '../../../hooks/useLibraryFolders';
+import { toRequestError } from '../../shared/Reorganize/reorganizeErrors';
 
 export interface ChannelLayoutSwitchResult {
   settings: { sub_folder: string | null };
@@ -13,7 +14,10 @@ export interface UseChannelTvResult {
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
-  /** Switch the channel between Videos and TV; throws with the server's refusal message */
+  /**
+   * Switch the channel between Videos and TV; throws with the server's refusal
+   * message, or a ReorganizeRequiredError when the channel's files must move
+   */
   switchLayout: (layout: LibraryLayout, folder?: string) => Promise<ChannelLayoutSwitchResult>;
 }
 
@@ -64,7 +68,7 @@ export function useChannelTv(channelId: string | undefined, token: string | null
       if (seq === requestSeq.current) setTv(response.data.tv);
       return response.data;
     } catch (err) {
-      throw new Error(errorMessage(err, 'Failed to switch the channel\'s layout'));
+      throw toRequestError(err, 'Failed to switch the channel\'s layout');
     }
   }, [channelId, token]);
 

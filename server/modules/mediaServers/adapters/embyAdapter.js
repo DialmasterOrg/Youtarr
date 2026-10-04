@@ -2,6 +2,7 @@ const axios = require('axios');
 const BaseAdapter = require('./baseAdapter');
 const {
   extractBasename,
+  bestItemMatchesByPath,
   normalizeBaseUrl,
   REQUEST_TIMEOUT_MS,
   isServerUnavailableError,
@@ -230,6 +231,58 @@ class EmbyAdapter extends BaseAdapter {
       logger.warn({ status, playlistId }, 'emby replacePlaylistItems: delete failed, creating fresh');
     }
     return this.createPlaylist(opts.name, itemIds, { public: !!opts.public, mediaType: opts.mediaType });
+  }
+
+  // Every video item's path, paged, so moved files resolve to the item at
+  // their new path rather than a stale one with the same file name.
+  async resolveItemMatchesByPaths(filepaths) {
+    const items = [];
+    try {
+      for (let startIndex = 0; ; startIndex += WATCH_STATE_PAGE_SIZE) {
+        const params = {
+          userId: this.userId,
+          includeItemTypes: 'Video,Movie,Episode',
+          recursive: true,
+          fields: 'Path',
+          sortBy: 'SortName',
+          startIndex,
+          limit: WATCH_STATE_PAGE_SIZE,
+        };
+        const res = await axios.get(`${this.url}/Items`, { headers: this._headers(), params, timeout: REQUEST_TIMEOUT_MS });
+        const page = res.data?.Items || [];
+        for (const item of page) items.push({ id: item.Id, path: item.Path });
+        if (page.length !== WATCH_STATE_PAGE_SIZE) break;
+      }
+    } catch (err) {
+      if (isServerUnavailableError(err)) throw new MediaServerUnavailableError(describeHttpError(err));
+      throw err;
+    }
+    return bestItemMatchesByPath(items, filepaths);
+  }
+
+  async getWatchState(itemId, serverUserId) {
+    const userId = serverUserId || this.userId;
+    try {
+      const res = await axios.get(`${this.url}/Users/${userId}/Items/${itemId}`, { headers: this._headers(), timeout: REQUEST_TIMEOUT_MS });
+      return res.data ? this._itemWatchState(res.data, String(userId)) : null;
+    } catch (err) {
+      logger.debug({ ...describeHttpError(err), itemId }, 'emby: could not read an item\'s watch state before a push');
+      return null;
+    }
+  }
+
+  async setWatchState(itemId, serverUserId, { played, positionMs }) {
+    const userId = serverUserId || this.userId;
+    const options = { headers: this._headers(), timeout: REQUEST_TIMEOUT_MS };
+    if (played) {
+      await axios.post(`${this.url}/Users/${userId}/PlayedItems/${itemId}`, null, options);
+      return;
+    }
+    await axios.post(
+      `${this.url}/Users/${userId}/Items/${itemId}/UserData`,
+      { PlaybackPositionTicks: Math.round((positionMs || 0) * TICKS_PER_MS), Played: false },
+      options
+    );
   }
 }
 

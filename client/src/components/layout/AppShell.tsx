@@ -7,6 +7,7 @@ import { NavSidebar } from './NavSidebar';
 import { BackgroundDecorations } from './BackgroundDecorations';
 import UpdateAvailableBanner from './UpdateAvailableBanner';
 import DownloadPauseBanner from './DownloadPauseBanner';
+import ReorganizeBanner from './ReorganizeBanner';
 import { NavItem } from './navigation';
 import { getThemeById, getThemeLayoutCssVars, resolveThemeLayoutPolicy } from '../../themes';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
@@ -288,6 +289,7 @@ export function AppShell({
           }}
         >
           <DownloadPauseBanner token={token} />
+          <ReorganizeBanner token={token} />
           {children}
         </div>
       </main>

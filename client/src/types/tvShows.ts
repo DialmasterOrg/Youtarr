@@ -1,3 +1,5 @@
+import type { ChannelReorganizeState } from './reorganize';
+
 /** Layout of a library folder: movie-style videos or TV shows. */
 export type LibraryLayout = 'videos' | 'tv';
 
@@ -8,7 +10,7 @@ export interface LibraryFolder {
   layout: LibraryLayout;
   /** The default subfolder (the main folder when no default subfolder is set) */
   isDefault: boolean;
-  /** Holds downloaded files, so its layout can't change yet */
+  /** Holds downloaded files: changing its layout moves them (the reorganize) */
   hasFiles: boolean;
   /** Enabled channels that download to this folder */
   channels: number;
@@ -37,8 +39,10 @@ export interface ChannelTvState {
   tvFolders: string[];
   defaultFolder: string;
   defaultFolderLayout: LibraryLayout;
+  /** Switching layouts moves the channel's files, reviewed in the reorganize preview */
   hasDownloads: boolean;
-  canSwitch: boolean;
+  /** Whether a reorganize is moving the channel's files, and videos one left unmoved */
+  reorganize?: ChannelReorganizeState;
 }
 
 /** Episode details on a video in listing and detail responses. */

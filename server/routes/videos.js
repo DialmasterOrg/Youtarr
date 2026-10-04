@@ -53,11 +53,12 @@ const apiKeyDownloadLimiter = rateLimit({
  * @param {Object} deps.videosModule - Videos module
  * @param {Object} deps.downloadModule - Download module
  * @param {Object} deps.ratingMapper - Rating validation/normalization module
+ * @param {Object} [deps.reorganizeLock] - The running reorganize, whose videos can't be deleted
  * @returns {express.Router}
  */
 module.exports = function createVideoRoutes({
   verifyToken, videosModule, downloadModule, videoOembedEnricher, videoLocalStatus, storageGuard, scheduledTaskManager, ratingMapper,
-  layoutGuards,
+  layoutGuards, reorganizeLock,
 }) {
   const router = express.Router();
   /**
@@ -401,6 +402,8 @@ module.exports = function createVideoRoutes({
    *         description: Videos deleted successfully
    *       400:
    *         description: Invalid request
+   *       409:
+   *         description: Some of the videos are being reorganized
    *       500:
    *         description: Failed to delete videos
    */
@@ -417,6 +420,11 @@ module.exports = function createVideoRoutes({
           success: false,
           error: 'videoIds or youtubeIds array is required'
         });
+      }
+
+      // Moving files must not race a delete of the same videos.
+      if (reorganizeLock && reorganizeLock.coversAnyVideo({ ids: videoIds || [], youtubeIds: youtubeIds || [] })) {
+        return res.status(409).json({ error: 'Some of these videos are being reorganized. Try again when that finishes.' });
       }
 
       const videoDeletionModule = require('../modules/videoDeletionModule');

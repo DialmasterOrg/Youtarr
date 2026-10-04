@@ -260,6 +260,22 @@ describe('POST /updateconfig', () => {
       expect(res.body).toEqual({ error: 'channels have downloads' });
       expect(configModule.updateConfig).not.toHaveBeenCalled();
     });
+
+    test('names the reorganize to preview when the default change moves downloads', async () => {
+      const libraryFolders = {
+        checkDefaultSubfolderChange: jest.fn().mockRejectedValue(Object.assign(refusal('Review the move', 409), {
+          reorganizeRequired: true, change: { type: 'defaultSubfolder', value: 'TV' },
+        })),
+      };
+      const { app } = makeApp({ libraryFolders });
+
+      const res = await supertest(app).post('/updateconfig').send({ defaultSubfolder: 'TV' });
+
+      expect(res.status).toBe(409);
+      expect(res.body).toEqual({
+        error: 'Review the move', reorganizeRequired: true, change: { type: 'defaultSubfolder', value: 'TV' },
+      });
+    });
   });
 
   test('returns 200 when ytdlpCustomArgs is empty', async () => {

@@ -18,6 +18,7 @@ const { isDownloadJob, isSpecificUrlDownloadJob } = require('./download/jobTypes
 const downloadCleanup = require('./download/downloadCleanup');
 const { serializeAuxData, parseAuxData } = require('./jobAuxData');
 const storageGuard = require('./storageGuard');
+const reorganizeLock = require('./reorganize/reorganizeLock');
 const { unchangedSinceRead } = require('./videoRowGuard');
 const videosModule = require('./videosModule');
 const logger = require('../logger');
@@ -80,6 +81,13 @@ class JobModule {
       if (this.getInProgressJobId()) return;
       this.startNextJob().catch((err) => {
         logger.error({ err }, 'Failed to start queued job after downloads resumed');
+      });
+    });
+    // Download jobs held while a reorganize moved files start once it ends.
+    reorganizeLock.on('released', () => {
+      if (this.getInProgressJobId()) return;
+      this.startNextJob().catch((err) => {
+        logger.error({ err }, 'Failed to start queued job after the reorganize finished');
       });
     });
 
@@ -491,6 +499,10 @@ class JobModule {
       logger.info('Downloads are paused for storage; holding queued jobs');
       return;
     }
+    if (reorganizeLock.isActive()) {
+      logger.info('Downloads are being reorganized; holding queued jobs');
+      return;
+    }
     const jobs = this.getAllJobs();
     for (let id in jobs) {
       if (jobs[id].status !== 'Pending') continue;
@@ -587,10 +599,13 @@ class JobModule {
   async addOrUpdateJob(jobData, isNextJob = false) {
     let jobId;
     const inProgressJobId = this.getInProgressJobId();
+    // A reorganize moves files the download would write next to, so download
+    // jobs wait for it in the queue.
+    const heldForReorganize = reorganizeLock.isActive() && isDownloadJob(jobData.jobType);
     if (!isNextJob) {
-      if (inProgressJobId) {
+      if (inProgressJobId || heldForReorganize) {
         // If there is a job in progress, create a new job with status Pending
-        logger.info({ jobType: jobData.jobType }, 'A job is already in progress. Adding job to the queue');
+        logger.info({ jobType: jobData.jobType, heldForReorganize }, 'A job is already in progress. Adding job to the queue');
         jobData.status = 'Pending';
         jobId = await this.addJob(jobData);
       } else {
@@ -599,7 +614,7 @@ class JobModule {
         jobData.status = 'In Progress';
         jobId = await this.addJob(jobData);
       }
-    } else if (isNextJob && !inProgressJobId) {
+    } else if (isNextJob && !inProgressJobId && !heldForReorganize) {
       // If this is a next job and there's no job in progress, update its status to In Progress
       logger.info('This is a "next job", flipping from Pending to In Progress');
       await this.updateJob(jobData.id, {
@@ -608,6 +623,8 @@ class JobModule {
       });
       jobId = jobData.id;
       this.emitJobsUpdated(jobId, 'In Progress');
+    } else if (heldForReorganize) {
+      logger.info({ jobId: jobData.id }, 'Downloads are being reorganized; the queued job stays Pending');
     } else {
       logger.warn('Cannot start next job as a job is already in progress');
     }
@@ -804,6 +821,10 @@ class JobModule {
   async backfillFromCompleteList() {
     if (this._archiveRepairRunning) {
       return { status: 'skipped', outcome: 'skipped', message: 'A library repair was already running.' };
+    }
+    // Files are moving; the repair would recreate rows from stale paths.
+    if (reorganizeLock.isActive()) {
+      return { status: 'skipped', outcome: 'skipped', message: 'Skipped while downloads were being reorganized.' };
     }
     this._archiveRepairRunning = true;
     try {

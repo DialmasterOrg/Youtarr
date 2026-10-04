@@ -1104,6 +1104,76 @@ describe('JobModule', () => {
     });
   });
 
+  describe('download jobs while a reorganize moves files', () => {
+    let lock;
+    let token;
+
+    beforeEach(() => {
+      fs.existsSync.mockReturnValue(false);
+      fs.readFileSync.mockReturnValue(JSON.stringify({ plexApiKey: 'test-key' }));
+      JobModule = require('../jobModule');
+      lock = require('../reorganize/reorganizeLock');
+      JobModule.addJob = jest.fn().mockResolvedValue('new-job-id');
+      JobModule.updateJob = jest.fn();
+      token = lock.acquire({ label: 'Chan' });
+    });
+
+    afterEach(() => {
+      lock.release(token);
+    });
+
+    test('queues a new download job instead of starting it', async () => {
+      JobModule.jobs = {};
+
+      await JobModule.addOrUpdateJob({ jobType: 'Manually Added Urls' });
+
+      expect(JobModule.addJob).toHaveBeenCalledWith(expect.objectContaining({ status: 'Pending' }));
+    });
+
+    test('starts a job that is not a download', async () => {
+      JobModule.jobs = {};
+
+      await JobModule.addOrUpdateJob({ jobType: 'Import Subscriptions' });
+
+      expect(JobModule.addJob).toHaveBeenCalledWith(expect.objectContaining({ status: 'In Progress' }));
+    });
+
+    test('keeps a queued download Pending when its turn comes', async () => {
+      JobModule.jobs = {};
+
+      const result = await JobModule.addOrUpdateJob({ id: 'next-job', jobType: 'Channel Downloads' }, true);
+
+      expect(result).toBeUndefined();
+      expect(JobModule.updateJob).not.toHaveBeenCalled();
+    });
+
+    test('holds pending jobs', async () => {
+      const mockAction = jest.fn();
+      JobModule.jobs = { 'job-1': { status: 'Pending', action: mockAction } };
+
+      await JobModule.startNextJob();
+
+      expect(mockAction).not.toHaveBeenCalled();
+    });
+
+    test('starts held jobs when the reorganize ends', async () => {
+      const mockAction = jest.fn();
+      JobModule.jobs = { 'job-1': { status: 'Pending', action: mockAction } };
+
+      lock.release(token);
+      await new Promise(setImmediate);
+      await new Promise(setImmediate);
+
+      expect(mockAction).toHaveBeenCalled();
+    });
+
+    test('skips a library repair', async () => {
+      await expect(JobModule.backfillFromCompleteList()).resolves.toMatchObject({
+        status: 'skipped', message: expect.stringContaining('reorganized'),
+      });
+    });
+  });
+
   describe('addOrUpdateJob', () => {
     beforeEach(() => {
       fs.existsSync.mockReturnValue(false);

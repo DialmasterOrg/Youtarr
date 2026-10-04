@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import isEqual from 'lodash/isEqual';
 import {
   Alert,
@@ -48,6 +48,8 @@ import { SETTINGS_PAGES, SettingsIndex } from './SettingsIndex';
 import { MaintenanceSection } from './MaintenanceSection';
 import { SchedulingSection } from '../Configuration/sections/SchedulingSection';
 import { LoggingSection } from '../Configuration/sections/LoggingSection';
+import { ReorganizeDialog, useReorganizeOutcome } from '../shared/Reorganize';
+import { ReorganizeStartResult } from '../../types/reorganize';
 
 interface SettingsProps {
   token: string | null;
@@ -133,7 +135,9 @@ export function Settings({ token }: SettingsProps) {
     hasPlexServerConfigured,
   });
 
-  const { saveConfig, isSaving, fieldErrors, clearFieldErrors } = useConfigSave({
+  const {
+    saveConfig, isSaving, fieldErrors, clearFieldErrors, reorganizeChange, finishReorganize, readBackDefaultSubfolder,
+  } = useConfigSave({
     token,
     config,
     setInitialConfig,
@@ -179,6 +183,63 @@ export function Settings({ token }: SettingsProps) {
       confirmNav();
     }
   }, [validationError, saveConfig, confirmNav]);
+
+  // The move started or retried from here, followed to each end (the review may be closed by then).
+  const [trackedMove, setTrackedMove] = useState<{ operationId: number; requested: string; attempt: number } | null>(null);
+  // The default subfolder value this flow last put in the form: the requested
+  // one at the start, the read-back one after an end. The form is moved on
+  // only while it still holds that value, so an edit made meanwhile is kept.
+  const formDefaultSetByMove = useRef<string | null>(null);
+
+  // A default subfolder change that moved downloads is applied by the
+  // reorganize; the rest of the form is saved by saving again.
+  const handleDefaultSubfolderMoved = useCallback((result: ReorganizeStartResult) => {
+    if (!reorganizeChange || reorganizeChange.type !== 'defaultSubfolder') return;
+    const value = reorganizeChange.value;
+    setInitialConfig((current) => (current ? { ...current, defaultSubfolder: value } : current));
+    formDefaultSetByMove.current = value;
+    if (result.operationId) setTrackedMove({ operationId: result.operationId, requested: value, attempt: 0 });
+    setSnackbar({
+      open: true,
+      message: 'The default subfolder changed. Save again to apply your other changes.',
+      severity: 'info',
+    });
+  }, [reorganizeChange, setInitialConfig]);
+
+  // The server undoes the change when no video could be moved, and applies
+  // it again when a retry moves some: the form follows the value read back,
+  // unless the user has edited the field again meanwhile.
+  const followReadBack = useCallback((requested: string, saved: string | null) => {
+    const shown = formDefaultSetByMove.current;
+    if (saved === null || shown === null || saved === shown) return;
+    setConfig((current) => (current.defaultSubfolder === shown ? { ...current, defaultSubfolder: saved } : current));
+    formDefaultSetByMove.current = saved;
+    setSnackbar({
+      open: true,
+      message: saved === requested
+        ? 'The retry moved the videos, so the default subfolder change is applied after all.'
+        : 'The default subfolder change was undone because none of the videos could be moved.',
+      severity: saved === requested ? 'info' : 'warning',
+    });
+  }, [setConfig]);
+
+  const handleReorganizeClosed = useCallback(async () => {
+    const requested = reorganizeChange?.type === 'defaultSubfolder' ? reorganizeChange.value : null;
+    const saved = await finishReorganize();
+    if (requested !== null) followReadBack(requested, saved);
+  }, [reorganizeChange, finishReorganize, followReadBack]);
+
+  const handleReorganizeRetried = useCallback((operationId: number) => {
+    setTrackedMove((current) => (current && current.operationId === operationId
+      ? { ...current, attempt: current.attempt + 1 }
+      : current));
+  }, []);
+
+  useReorganizeOutcome(token, trackedMove?.operationId ?? null, () => {
+    const requested = trackedMove?.requested;
+    if (requested === undefined) return;
+    void readBackDefaultSubfolder().then((saved) => followReadBack(requested, saved));
+  }, { attempt: trackedMove?.attempt ?? 0 });
 
   const {
     versionInfo: ytDlpVersionInfo,
@@ -531,6 +592,15 @@ export function Settings({ token }: SettingsProps) {
         open={openPlexAuthDialog}
         onClose={() => setOpenPlexAuthDialog(false)}
         onSuccess={handlePlexAuthSuccess}
+      />
+
+      <ReorganizeDialog
+        open={reorganizeChange !== null}
+        token={token}
+        change={reorganizeChange}
+        onClose={() => { void handleReorganizeClosed(); }}
+        onApplied={handleDefaultSubfolderMoved}
+        onRetried={handleReorganizeRetried}
       />
 
       <Snackbar

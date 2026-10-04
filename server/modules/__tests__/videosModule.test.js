@@ -1693,6 +1693,18 @@ describe('VideosModule', () => {
       VideosModule._backfillRunning = false;
     });
 
+    test('skips the scan while a reorganize moves files', async () => {
+      const lock = require('../reorganize/reorganizeLock');
+      const token = lock.acquire({ label: 'Chan' });
+      try {
+        await expect(VideosModule.backfillVideoMetadata({ trigger: 'startup' }))
+          .resolves.toEqual({ skipped: true, reason: 'reorganizing' });
+        expect(VideosModule._backfillRunning).toBeFalsy();
+      } finally {
+        lock.release(token);
+      }
+    });
+
     test('should release lock on success', async () => {
       mockFs.readdir.mockResolvedValueOnce([]);
       mockVideo.count.mockResolvedValueOnce(0);

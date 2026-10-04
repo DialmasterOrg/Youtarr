@@ -267,6 +267,21 @@ describe('PlexAdapter', () => {
       expect(resolved.get('/data/__New/Ch/v [aaa].mp4')).toBe('200');
     });
 
+    test('reports how well each item matches, for moved files', async () => {
+      mockSections(THREE_SECTIONS);
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Metadata: [{ ratingKey: '100', Media: [{ Part: [{ file: '/plex/__Old/Ch/v [aaa].mp4' }] }] }] } },
+      });
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+
+      const adapter = new PlexAdapter(cfg);
+      const matches = await adapter.resolveItemMatchesByPaths(['/data/__New/Ch/v [aaa].mp4', '/data/__Old/Ch/v [aaa].mp4']);
+      expect(matches.get('/data/__New/Ch/v [aaa].mp4')).toEqual({ id: '100', score: 2 });
+      expect(matches.get('/data/__Old/Ch/v [aaa].mp4')).toEqual({ id: '100', score: 3 });
+    });
+
     test('makes no requests for an empty batch', async () => {
       const adapter = new PlexAdapter(cfg);
       const resolved = await adapter.resolveItemIdsByFilepaths([]);
@@ -1112,6 +1127,48 @@ describe('PlexAdapter', () => {
 
       expect(users).toEqual([]);
       expect(axios.get).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('push-back after a reorganize', () => {
+    test('reads the owner\'s state of an item before a push', async () => {
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [{ ratingKey: '42', viewCount: 1, viewOffset: 5000, lastViewedAt: 1700000000 }] } } });
+      const state = await new PlexAdapter(cfg).getWatchState('42', '1');
+      expect(axios.get).toHaveBeenCalledWith('http://plex:32400/library/metadata/42', expect.objectContaining({
+        params: { 'X-Plex-Token': 'TOKEN' },
+      }));
+      expect(state).toMatchObject({ played: true, playCount: 1, positionMs: 5000, lastWatchedAt: new Date(1700000000 * 1000) });
+    });
+
+    test('cannot read another account\'s state', async () => {
+      await expect(new PlexAdapter(cfg).getWatchState('42', '5')).resolves.toBeNull();
+      expect(axios.get).not.toHaveBeenCalled();
+    });
+
+    test('reports an unreadable item state as unknown', async () => {
+      axios.get.mockRejectedValueOnce(Object.assign(new Error('gone'), { response: { status: 404 } }));
+      await expect(new PlexAdapter(cfg).getWatchState('42', '1')).resolves.toBeNull();
+    });
+
+    test('scrobbles an item as the owner', async () => {
+      axios.get.mockResolvedValueOnce({});
+      await new PlexAdapter(cfg).setWatchState('42', '1', { played: true, positionMs: null });
+      expect(axios.get).toHaveBeenCalledWith('http://plex:32400/:/scrobble', expect.objectContaining({
+        params: { identifier: 'com.plexapp.plugins.library', key: '42', 'X-Plex-Token': 'TOKEN' },
+      }));
+    });
+
+    test('sets the owner\'s resume position', async () => {
+      axios.get.mockResolvedValueOnce({});
+      await new PlexAdapter(cfg).setWatchState('42', '1', { played: false, positionMs: 61000 });
+      expect(axios.get).toHaveBeenCalledWith('http://plex:32400/:/progress', expect.objectContaining({
+        params: expect.objectContaining({ key: '42', time: 61000, state: 'stopped' }),
+      }));
+    });
+
+    test('refuses accounts other than the owner', async () => {
+      await expect(new PlexAdapter(cfg).setWatchState('42', '5', { played: true })).rejects.toThrow(/owner/);
+      expect(axios.get).not.toHaveBeenCalled();
     });
   });
 });

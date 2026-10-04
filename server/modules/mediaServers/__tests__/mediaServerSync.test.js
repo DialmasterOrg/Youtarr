@@ -714,4 +714,34 @@ describe('mediaServerSync', () => {
       { public: false, mediaType: 'video' }
     );
   });
+
+  describe('while a reorganize moves files', () => {
+    test('puts the sync off and runs it when the reorganize ends', async () => {
+      const lock = require('../../reorganize/reorganizeLock');
+      const token = lock.acquire({ label: 'Chan' });
+      Playlist.findByPk.mockResolvedValue(null);
+
+      await mediaServerSync.syncPlaylist(5);
+      expect(Playlist.findByPk).not.toHaveBeenCalled();
+
+      lock.release(token);
+      await new Promise(setImmediate);
+      await new Promise(setImmediate);
+
+      expect(Playlist.findByPk).toHaveBeenCalledWith(5);
+    });
+
+    test('reports whether any playlist sync is in flight', async () => {
+      let finish;
+      Playlist.findByPk.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+
+      const pending = mediaServerSync.syncPlaylist(5);
+      await new Promise(setImmediate);
+      expect(mediaServerSync.isAnySyncInFlight()).toBe(true);
+
+      finish(null);
+      await pending;
+      expect(mediaServerSync.isAnySyncInFlight()).toBe(false);
+    });
+  });
 });

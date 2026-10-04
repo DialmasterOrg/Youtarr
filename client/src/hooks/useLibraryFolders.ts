@@ -3,6 +3,7 @@ import axios from 'axios';
 import { LibraryFolder, LibraryFoldersResponse, LibraryLayout } from '../types/tvShows';
 import { buildLayoutResolver, LayoutResolver } from '../utils/libraryLayouts';
 import { SUBFOLDERS_UPDATED_EVENT } from './useSubfolders';
+import { toRequestError } from '../components/shared/Reorganize/reorganizeErrors';
 
 export const LIBRARY_FOLDERS_UPDATED_EVENT = 'library-folders-updated';
 
@@ -17,7 +18,10 @@ export interface UseLibraryFoldersResult {
   /** Layout of a library folder ('' = main folder); videos until loaded */
   layoutOf: LayoutResolver;
   refetch: () => Promise<void>;
-  /** Change a folder's layout; throws with the server's refusal message */
+  /**
+   * Change a folder's layout; throws with the server's refusal message, or a
+   * ReorganizeRequiredError when the folder's files must move
+   */
   setFolderLayout: (name: string, layout: LibraryLayout) => Promise<void>;
 }
 
@@ -61,7 +65,7 @@ export function useLibraryFolders(token: string | null): UseLibraryFoldersResult
         { headers: { 'x-access-token': token } }
       );
     } catch (err) {
-      throw new Error(errorMessage(err, 'Failed to change the folder layout'));
+      throw toRequestError(err, 'Failed to change the folder layout');
     }
     if (Array.isArray(response.data?.folders)) setFolders(response.data.folders);
     window.dispatchEvent(new Event(LIBRARY_FOLDERS_UPDATED_EVENT));

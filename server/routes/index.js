@@ -20,6 +20,7 @@ const createSubfolderRoutes = require('./subfolders');
 const createSchedulesRoutes = require('./schedules');
 const createLogRoutes = require('./logs');
 const createTvShowRoutes = require('./tvShows');
+const createTvReorganizeRoutes = require('./tvReorganize');
 const videoMetadataModule = require('../modules/videoMetadataModule');
 const videoOembedEnricher = require('../modules/videoOembedEnricher');
 const playlistModule = require('../modules/playlistModule');
@@ -47,6 +48,9 @@ const logFilesModule = require('../modules/logFilesModule');
 const libraryFolders = require('../modules/tvShows/libraryFolders');
 const channelLayout = require('../modules/tvShows/channelLayout');
 const layoutGuards = require('../modules/tvShows/layoutGuards');
+const reorganize = require('../modules/reorganize');
+const watchStatusHolds = require('../modules/mediaServers/watchStatusHolds');
+const watchStatusPushBack = require('../modules/mediaServers/watchStatusPushBack');
 
 /**
  * Registers all route modules with the Express app
@@ -104,7 +108,7 @@ function registerRoutes(app, deps) {
   // Video routes
   app.use(createVideoRoutes({
     verifyToken, videosModule, downloadModule, videoOembedEnricher, videoLocalStatus, storageGuard, scheduledTaskManager, ratingMapper,
-    layoutGuards,
+    layoutGuards, reorganizeLock: reorganize.lock,
   }));
 
   // Video search routes
@@ -155,7 +159,12 @@ function registerRoutes(app, deps) {
   app.use(createLogRoutes({ verifyToken, logFilesModule, configModule }));
 
   // TV show layouts (library folders and channel layouts)
-  app.use(createTvShowRoutes({ verifyToken, libraryFolders, channelLayout, channelSettingsModule, jobModule, models }));
+  app.use(createTvShowRoutes({
+    verifyToken, libraryFolders, channelLayout, layoutGuards, reorganize, channelSettingsModule, jobModule, models,
+  }));
+
+  // Reorganize (moving downloads between the Videos and TV layouts) and watch-state restores
+  app.use(createTvReorganizeRoutes({ verifyToken, reorganize, watchStatusHolds, watchStatusPushBack }));
 
   // Defensive redirect: /channels -> /subscriptions (frontend handles client-side routing,
   // this fallback covers direct server-side hits during the transition period)

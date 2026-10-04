@@ -9,21 +9,23 @@ import {
   Select,
   Typography,
 } from '../../../ui';
-import type { UseLibraryFoldersResult } from '../../../../hooks/useLibraryFolders';
+import { LIBRARY_FOLDERS_UPDATED_EVENT, type UseLibraryFoldersResult } from '../../../../hooks/useLibraryFolders';
 import { libraryFolderLabel } from '../../../../utils/libraryLayouts';
 import { LibraryFolder, LibraryLayout } from '../../../../types/tvShows';
 import { MainFolderTvDialog } from './MainFolderTvDialog';
+import { ReorganizeDialog, useReorganizeRequest, isReorganizeRequired } from '../../../shared/Reorganize';
 
 interface LibraryFoldersListProps {
   /** The section's useLibraryFolders result, shared so the page loads the folders once */
   library: UseLibraryFoldersResult;
+  token: string | null;
 }
 
 const MAIN_FOLDER = '';
 const CHANGE_FAILED = 'Failed to change the folder layout';
 const EXPLANATION =
   "Each folder's layout must match its media server library: Videos for a Plex Other Videos or Jellyfin/Emby Movies library, TV shows for a TV library.";
-const HAS_FILES_CAPTION = "Holds downloaded videos, so its layout can't change yet.";
+const HAS_FILES_CAPTION = 'Holds downloaded videos: changing its layout moves them, and you review the move first.';
 const DEFAULT_TV_NOTE =
   "The default subfolder is a TV folder, so downloads from channels you haven't subscribed to are each saved as their own TV show.";
 
@@ -66,7 +68,7 @@ const LibraryFolderRow: React.FC<LibraryFolderRowProps> = ({ folder, disabled, o
       <Select
         size="small"
         value={folder.layout}
-        disabled={disabled || folder.hasFiles}
+        disabled={disabled}
         onValueChange={(next) => onLayoutChange(folder, next as LibraryLayout)}
         inputProps={{ 'aria-label': `Layout for ${label}` }}
         className="w-full sm:w-40 shrink-0"
@@ -82,11 +84,13 @@ const LibraryFolderRow: React.FC<LibraryFolderRowProps> = ({ folder, disabled, o
 };
 
 /** Library folders with their layouts (Videos or TV shows). */
-export const LibraryFoldersList: React.FC<LibraryFoldersListProps> = ({ library }) => {
+export const LibraryFoldersList: React.FC<LibraryFoldersListProps> = ({ library, token }) => {
   const { folders, loading, error, refetch, setFolderLayout } = library;
   const [changing, setChanging] = useState(false);
   const [changeError, setChangeError] = useState<string | null>(null);
   const [confirmMainTv, setConfirmMainTv] = useState(false);
+  // A layout change that moves downloaded files is reviewed in the reorganize dialog.
+  const reorganize = useReorganizeRequest();
 
   const applyLayout = async (name: string, layout: LibraryLayout) => {
     setChanging(true);
@@ -94,10 +98,23 @@ export const LibraryFoldersList: React.FC<LibraryFoldersListProps> = ({ library 
       await setFolderLayout(name, layout);
       setChangeError(null);
     } catch (err: unknown) {
+      if (isReorganizeRequired(err)) {
+        setChangeError(null);
+        reorganize.review(err.change);
+        return;
+      }
       setChangeError(err instanceof Error && err.message ? err.message : CHANGE_FAILED);
     } finally {
       setChanging(false);
     }
+  };
+
+  // Channels change layout with their folder, so every listener refetches.
+  const announceFolderChange = () => window.dispatchEvent(new Event(LIBRARY_FOLDERS_UPDATED_EVENT));
+
+  const handleReorganizeClosed = () => {
+    reorganize.close();
+    announceFolderChange();
   };
 
   const handleLayoutChange = (folder: LibraryFolder, layout: LibraryLayout) => {
@@ -171,6 +188,15 @@ export const LibraryFoldersList: React.FC<LibraryFoldersListProps> = ({ library 
         busy={changing}
         onCancel={() => setConfirmMainTv(false)}
         onConfirm={handleConfirmMainTv}
+      />
+
+      <ReorganizeDialog
+        open={reorganize.open}
+        token={token}
+        change={reorganize.change}
+        operationId={reorganize.operationId}
+        onClose={handleReorganizeClosed}
+        onApplied={announceFolderChange}
       />
     </Box>
   );

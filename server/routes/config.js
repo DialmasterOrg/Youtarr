@@ -226,7 +226,7 @@ module.exports = function createConfigRoutes({
    *       400:
    *         description: Invalid configuration; schedule errors include a fieldErrors object keyed by config field
    *       409:
-   *         description: A new defaultSubfolder has a different layout (videos or TV) and the channels using the default have downloads, a download is running, or they download MP3. mainFolderLayout is never changed here (see PUT /api/library-folders).
+   *         description: A new defaultSubfolder has a different layout (videos or TV) and the channels using the default have downloaded videos (reorganizeRequired, with the change to preview through /api/tv/reorganize/preview), a download or a reorganize is running, or they download MP3. mainFolderLayout is never changed here (see PUT /api/library-folders).
    *       200:
    *         description: Configuration updated successfully
    *         content:
@@ -362,7 +362,9 @@ module.exports = function createConfigRoutes({
         });
       } catch (error) {
         if (!error.status) throw error;
-        return res.status(error.status).json({ error: error.message });
+        const body = { error: error.message };
+        if (error.reorganizeRequired) Object.assign(body, { reorganizeRequired: true, change: error.change });
+        return res.status(error.status).json(body);
       }
     }
 

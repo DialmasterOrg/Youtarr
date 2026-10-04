@@ -449,4 +449,41 @@ describe('EmbyAdapter', () => {
       await expect(adapter.fetchWatchStates()).rejects.toBeInstanceOf(MediaServerUnavailableError);
     });
   });
+
+  describe('push-back after a reorganize', () => {
+    test('reads one user\'s state of an item before a push', async () => {
+      axios.get.mockResolvedValueOnce({ data: { Path: '/m/x.mp4', UserData: { Played: false, PlayCount: 0, PlaybackPositionTicks: 15000000 } } });
+      const state = await new EmbyAdapter(cfg).getWatchState('ITEM', 'U2');
+      expect(axios.get).toHaveBeenCalledWith(`${new EmbyAdapter(cfg).url}/Users/U2/Items/ITEM`, expect.anything());
+      expect(state).toMatchObject({ played: false, positionMs: 1500 });
+    });
+
+    test('reports an unreadable item state as unknown', async () => {
+      axios.get.mockRejectedValueOnce(Object.assign(new Error('gone'), { response: { status: 404 } }));
+      await expect(new EmbyAdapter(cfg).getWatchState('ITEM', 'U2')).resolves.toBeNull();
+    });
+
+    test('marks an item played for a user', async () => {
+      axios.post.mockResolvedValueOnce({});
+      await new EmbyAdapter(cfg).setWatchState('ITEM', 'U2', { played: true, positionMs: null });
+      expect(axios.post).toHaveBeenCalledWith(`${new EmbyAdapter(cfg).url}/Users/U2/PlayedItems/ITEM`, null, expect.anything());
+    });
+
+    test('sets a resume position in ticks', async () => {
+      axios.post.mockResolvedValueOnce({});
+      await new EmbyAdapter(cfg).setWatchState('ITEM', 'U2', { played: false, positionMs: 2000 });
+      expect(axios.post).toHaveBeenCalledWith(`${new EmbyAdapter(cfg).url}/Users/U2/Items/ITEM/UserData`,
+        { PlaybackPositionTicks: 20000000, Played: false }, expect.anything());
+    });
+
+    test('pages through the library to resolve moved files', async () => {
+      const fullPage = Array.from({ length: 1000 }, (_, i) => ({ Id: `X${i}`, Path: `/m/other/f${i} [x${i}].mp4` }));
+      axios.get
+        .mockResolvedValueOnce({ data: { Items: fullPage } })
+        .mockResolvedValueOnce({ data: { Items: [{ Id: 'HIT', Path: '/m/__TV/Chan/Season 2024/E [id1].mp4' }] } });
+      const matches = await new EmbyAdapter(cfg).resolveItemMatchesByPaths(['/data/__TV/Chan/Season 2024/E [id1].mp4']);
+      expect(axios.get).toHaveBeenCalledTimes(2);
+      expect(matches.get('/data/__TV/Chan/Season 2024/E [id1].mp4')).toEqual({ id: 'HIT', score: 4 });
+    });
+  });
 });

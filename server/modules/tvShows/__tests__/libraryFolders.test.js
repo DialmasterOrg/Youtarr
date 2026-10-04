@@ -110,15 +110,28 @@ describe('libraryFolders', () => {
         .rejects.toThrow(libraryFolders.MESSAGES.running);
     });
 
-    it('refuses a folder that holds downloaded files', async () => {
+    it('sends a folder that holds downloaded files to the reorganize', async () => {
       writeFile('__Kids/Channel/video [abcdefghijk].mp4');
-      await expect(libraryFolders.setFolderLayout('Kids', 'tv')).rejects.toThrow(libraryFolders.MESSAGES.hasFiles);
+      await expect(libraryFolders.setFolderLayout('Kids', 'tv')).rejects.toMatchObject({
+        status: 409, reorganizeRequired: true, change: { type: 'folderLayout', folder: 'Kids', layout: 'tv' },
+        message: libraryFolders.MESSAGES.reorganize,
+      });
     });
 
-    it('refuses when a channel in the folder has downloads elsewhere on record', async () => {
+    it('sends a folder whose channels have downloads on record to the reorganize', async () => {
       Channel.findAll.mockResolvedValue([{ channel_id: 'UC1', sub_folder: 'Kids', enabled: true }]);
       Video.count.mockResolvedValue(4);
-      await expect(libraryFolders.setFolderLayout('Kids', 'tv')).rejects.toMatchObject({ status: 409 });
+      await expect(libraryFolders.setFolderLayout('Kids', 'tv')).rejects.toMatchObject({ status: 409, reorganizeRequired: true });
+    });
+
+    it('refuses while a reorganize runs', async () => {
+      const lock = require('../../reorganize/reorganizeLock');
+      const token = lock.acquire({ label: 'x' });
+      try {
+        await expect(libraryFolders.setFolderLayout('Kids', 'tv')).rejects.toThrow(libraryFolders.MESSAGES.reorganizing);
+      } finally {
+        lock.release(token);
+      }
     });
 
     it('refuses TV for a folder whose channels download MP3', async () => {
@@ -165,14 +178,28 @@ describe('libraryFolders', () => {
       await expect(check()).resolves.toBeUndefined();
     });
 
-    it('refuses when channels on the default have downloads', async () => {
+    it('sends a default whose channels have downloads to the reorganize', async () => {
       Channel.findAll.mockResolvedValue([{ channel_id: 'UC1', enabled: true }]);
       Video.count.mockResolvedValue(1);
-      await expect(check()).rejects.toThrow(libraryFolders.MESSAGES.defaultHasDownloads);
+      await expect(check()).rejects.toMatchObject({
+        status: 409, reorganizeRequired: true, message: libraryFolders.MESSAGES.defaultReorganize,
+        change: { type: 'defaultSubfolder' },
+      });
     });
 
     it('refuses while a download runs', async () => {
       await expect(check({ isDownloadRunning: () => true })).rejects.toThrow(libraryFolders.MESSAGES.defaultRunning);
+    });
+
+    it('refuses any change of the default while a reorganize runs, but not a save of the same value', async () => {
+      const lock = require('../../reorganize/reorganizeLock');
+      const token = lock.acquire({ label: 'x' });
+      try {
+        await expect(check({ newDefault: 'Music' })).rejects.toThrow(libraryFolders.MESSAGES.reorganizing);
+        await expect(check({ newDefault: 'kids' })).resolves.toBeUndefined();
+      } finally {
+        lock.release(token);
+      }
     });
 
     it('refuses a TV default when a playlist on the default downloads MP3', async () => {

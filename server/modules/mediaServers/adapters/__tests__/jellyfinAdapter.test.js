@@ -469,4 +469,55 @@ describe('JellyfinAdapter', () => {
       await expect(adapter.fetchWatchStates()).rejects.toBeInstanceOf(MediaServerUnavailableError);
     });
   });
+
+  describe('push-back after a reorganize', () => {
+    const notFound = () => Object.assign(new Error('not found'), { response: { status: 404 } });
+
+    test('reads one user\'s state of an item before a push', async () => {
+      axios.get.mockResolvedValueOnce({ data: { Path: '/m/x.mp4', UserData: { Played: true, PlayCount: 2, PlaybackPositionTicks: 0, LastPlayedDate: '2026-10-01T10:00:00Z' } } });
+      const state = await new JellyfinAdapter(cfg).getWatchState('ITEM', 'U2');
+      expect(axios.get).toHaveBeenCalledWith('http://jf:8096/Users/U2/Items/ITEM', expect.anything());
+      expect(state).toMatchObject({ played: true, playCount: 2, positionMs: 0, lastWatchedAt: new Date('2026-10-01T10:00:00Z') });
+    });
+
+    test('reports an unreadable item state as unknown', async () => {
+      axios.get.mockRejectedValueOnce(notFound());
+      await expect(new JellyfinAdapter(cfg).getWatchState('ITEM', 'U2')).resolves.toBeNull();
+    });
+
+    test('marks an item played for a user through the 10.9+ endpoint', async () => {
+      axios.post.mockResolvedValueOnce({});
+      await new JellyfinAdapter(cfg).setWatchState('ITEM', 'U2', { played: true, positionMs: null });
+      expect(axios.post).toHaveBeenCalledWith('http://jf:8096/UserPlayedItems/ITEM', null,
+        expect.objectContaining({ params: { userId: 'U2' } }));
+    });
+
+    test('falls back to the legacy played endpoint on older servers', async () => {
+      axios.post.mockRejectedValueOnce(notFound()).mockResolvedValueOnce({});
+      await new JellyfinAdapter(cfg).setWatchState('ITEM', 'U2', { played: true, positionMs: null });
+      expect(axios.post).toHaveBeenLastCalledWith('http://jf:8096/Users/U2/PlayedItems/ITEM', null, expect.anything());
+    });
+
+    test('sets a resume position in ticks', async () => {
+      axios.post.mockResolvedValueOnce({});
+      await new JellyfinAdapter(cfg).setWatchState('ITEM', 'U2', { played: false, positionMs: 1500 });
+      expect(axios.post).toHaveBeenCalledWith('http://jf:8096/UserItems/ITEM/UserData',
+        { PlaybackPositionTicks: 15000000, Played: false }, expect.objectContaining({ params: { userId: 'U2' } }));
+    });
+
+    test('does not fall back on other errors', async () => {
+      axios.post.mockRejectedValueOnce(Object.assign(new Error('denied'), { response: { status: 401 } }));
+      await expect(new JellyfinAdapter(cfg).setWatchState('ITEM', 'U2', { played: true })).rejects.toThrow('denied');
+      expect(axios.post).toHaveBeenCalledTimes(1);
+    });
+
+    test('resolves a moved file to the item at its new path, not a stale one with the same name', async () => {
+      axios.get.mockResolvedValueOnce({ data: { Items: [
+        { Id: 'OLD', Path: '/media/Old/Season 2024/S2024E01 - T [id1].mp4' },
+        { Id: 'NEW', Path: '/media/__TV/Chan/Season 2024/S2024E01 - T [id1].mp4' },
+      ] } });
+      const matches = await new JellyfinAdapter(cfg).resolveItemMatchesByPaths(['/data/__TV/Chan/Season 2024/S2024E01 - T [id1].mp4']);
+      expect(matches.get('/data/__TV/Chan/Season 2024/S2024E01 - T [id1].mp4')).toEqual({ id: 'NEW', score: 4 });
+    });
+  });
 });

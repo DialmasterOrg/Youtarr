@@ -52,20 +52,39 @@ describe('channelLayout', () => {
       await expect(check({ newSubFolder: 'TV', newAudioFormat: 'mp3_only' })).rejects.toMatchObject({ status: 400 });
     });
 
-    it('refuses a channel with downloads switching layouts', async () => {
+    it('sends a channel with downloads switching layouts to the reorganize', async () => {
       Video.count.mockResolvedValue(3);
-      await expect(check({ newSubFolder: 'TV' })).rejects.toMatchObject({ status: 409 });
+      await expect(check({ newSubFolder: 'TV' })).rejects.toMatchObject({
+        status: 409, reorganizeRequired: true, change: { type: 'channel', channelId: 'UC1', subFolder: 'TV' },
+      });
     });
 
-    it('refuses a TV channel with downloads moving to another TV folder', async () => {
+    it('sends a TV channel with downloads moving to another TV folder to the reorganize', async () => {
       Video.count.mockResolvedValue(3);
       await expect(check({ channel: { ...channel, sub_folder: 'TV' }, newSubFolder: 'Kids TV' }))
-        .rejects.toMatchObject({ status: 409 });
+        .rejects.toMatchObject({ status: 409, reorganizeRequired: true });
     });
 
-    it('refuses a switch while a download runs', async () => {
+    it('sends a channel with downloads to the reorganize even while a download runs', async () => {
+      Video.count.mockResolvedValue(3);
+      await expect(check({ newSubFolder: 'TV', isDownloadRunning: () => true }))
+        .rejects.toMatchObject({ reorganizeRequired: true });
+    });
+
+    it('refuses a direct switch while a download runs', async () => {
       await expect(check({ newSubFolder: 'TV', isDownloadRunning: () => true }))
         .rejects.toThrow(channelLayout.MESSAGES.running);
+    });
+
+    it('refuses any change while a reorganize moves the channel\'s files', async () => {
+      const lock = require('../../reorganize/reorganizeLock');
+      const token = lock.acquire({ label: 'Mark Rober' });
+      lock.setScope(token, { channelIds: ['UC1'] });
+      try {
+        await expect(check({ newAudioFormat: null })).rejects.toMatchObject({ status: 409, code: 'REORGANIZE_RUNNING' });
+      } finally {
+        lock.release(token);
+      }
     });
 
     it('keeps allowing videos-folder moves for channels with downloads', async () => {
@@ -185,14 +204,14 @@ describe('channelLayout', () => {
         libraryFolder: 'TV',
         show: { name: 'Mark Rober', folderName: 'MR', libraryFolder: 'TV' },
         tvFolders: ['TV'],
-        canSwitch: true,
+        hasDownloads: false,
       });
     });
 
-    it('reports a channel with downloads as unable to switch', async () => {
+    it('reports a channel with downloads', async () => {
       Video.count.mockResolvedValue(1);
       const state = await channelLayout.getChannelTvState(channel);
-      expect(state).toMatchObject({ layout: 'videos', show: null, canSwitch: false });
+      expect(state).toMatchObject({ layout: 'videos', show: null, hasDownloads: true });
     });
   });
 });

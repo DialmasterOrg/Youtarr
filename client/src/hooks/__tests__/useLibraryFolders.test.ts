@@ -69,6 +69,18 @@ describe('useLibraryFolders', () => {
     await expect(result.current.setFolderLayout('', 'tv')).rejects.toThrow('holds downloads');
   });
 
+  test('throws a ReorganizeRequiredError when the folder\'s files must move', async () => {
+    const change = { type: 'folderLayout', folder: '', layout: 'tv' };
+    axios.put.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { status: 409, data: { error: 'Review the move', reorganizeRequired: true, change } },
+    });
+    const { result } = renderHook(() => useLibraryFolders('token'));
+    await waitFor(() => expect(result.current.folders).toEqual(FOLDERS));
+
+    await expect(result.current.setFolderLayout('', 'tv')).rejects.toMatchObject({ name: 'ReorganizeRequiredError', change });
+  });
+
   test('refetches when subfolders change', async () => {
     renderHook(() => useLibraryFolders('token'));
     await waitFor(() => expect(axios.get).toHaveBeenCalledTimes(1));

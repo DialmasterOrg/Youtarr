@@ -127,4 +127,56 @@ describe('showStore', () => {
       });
     });
   });
+
+  describe('planned placement (reorganize)', () => {
+    it('plans the first folder name no other show in the library folder uses', async () => {
+      TvShow.findAll.mockResolvedValue([{ id: 2, folder_name: 'Mark Rober' }]);
+
+      const name = await showStore.planChannelShowFolder({ channelId: CHANNEL_ID, folderName: 'Mark Rober', libraryFolder: 'TV' });
+
+      expect(name).toBe(`Mark Rober (${CHANNEL_ID})`);
+      expect(TvShow.create).not.toHaveBeenCalled();
+    });
+
+    it('compares folder names ignoring case and accents, like the unique key', async () => {
+      TvShow.findAll.mockResolvedValue([{ id: 2, folder_name: 'cafe' }]);
+
+      await expect(showStore.planChannelShowFolder({ channelId: CHANNEL_ID, folderName: 'Café', libraryFolder: 'TV' }))
+        .resolves.toBe(`Café (${CHANNEL_ID})`);
+    });
+
+    it('lets a moving show keep its own name', async () => {
+      TvShow.findAll.mockResolvedValue([{ id: 5, folder_name: 'Mark Rober' }]);
+
+      await expect(showStore.planChannelShowFolder({
+        channelId: CHANNEL_ID, folderName: 'Mark Rober', libraryFolder: 'TV', excludeShowId: 5,
+      })).resolves.toBe('Mark Rober');
+    });
+
+    it('never plans the same name twice in one change', async () => {
+      TvShow.findAll.mockResolvedValue([]);
+      const reserved = new Set();
+
+      const first = await showStore.planChannelShowFolder({ channelId: 'UCA', folderName: 'Music', libraryFolder: 'TV', reserved });
+      const second = await showStore.planChannelShowFolder({ channelId: 'UCB', folderName: 'Music', libraryFolder: 'TV', reserved });
+
+      expect([first, second]).toEqual(['Music', 'Music (UCB)']);
+    });
+
+    it('creates a show at exactly the planned location', async () => {
+      await showStore.createChannelShowAt({ channelId: CHANNEL_ID, name: 'Mark Rober', folderName: 'Mark Rober (x)', libraryFolder: 'TV' });
+
+      expect(TvShow.create).toHaveBeenCalledWith(expect.objectContaining({
+        channel_id: CHANNEL_ID, folder_name: 'Mark Rober (x)', library_folder: 'TV', external_key: CHANNEL_ID, kind: 'channel',
+      }));
+    });
+
+    it('moves a show to exactly the planned location', async () => {
+      const show = { update: jest.fn().mockResolvedValue(undefined) };
+
+      await showStore.moveShowTo(show, { libraryFolder: '', folderName: 'Mark Rober' });
+
+      expect(show.update).toHaveBeenCalledWith({ library_folder: '', folder_name: 'Mark Rober' });
+    });
+  });
 });

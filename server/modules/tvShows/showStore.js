@@ -111,6 +111,66 @@ async function relocateChannelShow(show, libraryFolder) {
   });
 }
 
+// Folder names compare like the unique key's utf8mb4_unicode_ci collation:
+// ignoring case and accents.
+function folderNameKey(libraryFolder, folderName) {
+  const fold = (value) => String(value || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+  return `${fold(libraryFolder)}/${fold(folderName)}`;
+}
+
+/**
+ * The folder name a channel show would get in a library folder, without
+ * writing anything: the first candidate no other show there uses and no
+ * earlier plan reserved. The reorganize previews and then creates shows with
+ * exactly these names.
+ *
+ * @param {Object} params
+ * @param {string} params.channelId
+ * @param {string} params.folderName - Wanted name (sanitized here)
+ * @param {string} params.libraryFolder
+ * @param {number|null} [params.excludeShowId] - The show being moved, whose own name doesn't count
+ * @param {Set<string>} [params.reserved] - Names planned for other shows in the same change; updated
+ * @returns {Promise<string>}
+ */
+async function planChannelShowFolder({ channelId, folderName, libraryFolder, excludeShowId = null, reserved = new Set() }) {
+  const candidates = folderNameCandidates(sanitizeShowFolderName(folderName), channelId);
+  const used = await TvShow.findAll({ where: { library_folder: libraryFolder || '' }, attributes: ['id', 'folder_name'] });
+  const taken = new Set(used
+    .filter((row) => row.id !== excludeShowId)
+    .map((row) => folderNameKey(libraryFolder, row.folder_name)));
+  const choice = candidates.find((name) => {
+    const key = folderNameKey(libraryFolder, name);
+    return !taken.has(key) && !reserved.has(key);
+  });
+  if (!choice) throw new Error(`No free show folder name among: ${candidates.join(', ')}`);
+  reserved.add(folderNameKey(libraryFolder, choice));
+  return choice;
+}
+
+/**
+ * Create a channel show at an exact, planned location.
+ */
+async function createChannelShowAt({ channelId, name, folderName, libraryFolder, previousVideosFolder = null }) {
+  return TvShow.create({
+    channel_id: channelId,
+    kind: KIND_CHANNEL_SHOW,
+    name: name || folderName,
+    folder_name: folderName,
+    library_folder: libraryFolder || '',
+    external_key: channelId,
+    previous_videos_folder: previousVideosFolder,
+  });
+}
+
+/**
+ * Point a show at an exact, planned location. Moving the files is the
+ * caller's job.
+ */
+async function moveShowTo(show, { libraryFolder, folderName }) {
+  await show.update({ library_folder: libraryFolder || '', folder_name: folderName });
+  return show;
+}
+
 /**
  * @param {Object} show - tv_shows row
  * @returns {{id: number, libraryFolder: string, folderName: string}}
@@ -125,5 +185,8 @@ module.exports = {
   findChannelShow,
   createChannelShow,
   relocateChannelShow,
+  planChannelShowFolder,
+  createChannelShowAt,
+  moveShowTo,
   toLocation
 };

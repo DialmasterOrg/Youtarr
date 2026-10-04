@@ -15,7 +15,9 @@ describe('TV show routes', () => {
   let channelSettingsModule;
   let jobModule;
   let models;
+  let reorganize;
   const channel = { channel_id: 'UC1', sub_folder: 'Kids' };
+  const REORGANIZE_STATE = { running: false, unmoved: null };
 
   beforeEach(() => {
     jest.resetModules();
@@ -32,6 +34,7 @@ describe('TV show routes', () => {
     };
     jobModule = { getInProgressJobId: jest.fn().mockReturnValue(null) };
     models = { Channel: { findOne: jest.fn().mockResolvedValue(channel) } };
+    reorganize = { channelState: jest.fn().mockResolvedValue(REORGANIZE_STATE) };
     const createTvShowRoutes = require('../tvShows');
     app = express();
     app.use(express.json());
@@ -39,6 +42,13 @@ describe('TV show routes', () => {
       verifyToken: (req, res, next) => next(),
       libraryFolders,
       channelLayout,
+      layoutGuards: {
+        errorBody: (error) => ({
+          error: error.message,
+          ...(error.reorganizeRequired ? { reorganizeRequired: true, change: error.change } : {}),
+        }),
+      },
+      reorganize,
       channelSettingsModule,
       jobModule,
       models,
@@ -91,13 +101,25 @@ describe('TV show routes', () => {
       expect(res.status).toBe(409);
       expect(res.body).toEqual({ error: 'holds downloads' });
     });
+
+    test('names the change to preview when the folder\'s files must move', async () => {
+      libraryFolders.setFolderLayout.mockRejectedValueOnce(Object.assign(refusal('Review the move', 409), {
+        reorganizeRequired: true, change: { type: 'folderLayout', folder: 'TV', layout: 'tv' },
+      }));
+      const res = await request(app).put('/api/library-folders').send({ name: 'TV', layout: 'tv' });
+      expect(res.status).toBe(409);
+      expect(res.body).toEqual({
+        error: 'Review the move', reorganizeRequired: true, change: { type: 'folderLayout', folder: 'TV', layout: 'tv' },
+      });
+    });
   });
 
   describe('GET /api/channels/:channelId/tv', () => {
-    test('returns the channel TV state', async () => {
+    test('returns the channel TV state with its reorganize state', async () => {
       const res = await request(app).get('/api/channels/UC1/tv');
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ layout: 'tv' });
+      expect(res.body).toEqual({ layout: 'tv', reorganize: REORGANIZE_STATE });
+      expect(reorganize.channelState).toHaveBeenCalledWith('UC1');
     });
 
     test('returns 404 for an unknown channel', async () => {
@@ -115,7 +137,7 @@ describe('TV show routes', () => {
       expect(channelSettingsModule.updateChannelSettings).toHaveBeenCalledWith(
         'UC1', { sub_folder: 'TV' }, expect.objectContaining({ isDownloadRunning: expect.any(Function) })
       );
-      expect(res.body).toEqual({ settings: { sub_folder: 'TV' }, tv: { layout: 'tv' } });
+      expect(res.body).toEqual({ settings: { sub_folder: 'TV' }, tv: { layout: 'tv', reorganize: REORGANIZE_STATE } });
     });
 
     test('rejects a non-string layout with 400', async () => {
@@ -141,10 +163,13 @@ describe('TV show routes', () => {
       expect(res.body).toEqual({ error: 'Choose a TV folder.' });
     });
 
-    test('passes a has-downloads refusal through as 409', async () => {
-      channelSettingsModule.updateChannelSettings.mockRejectedValueOnce(refusal('has downloads', 409));
+    test('passes a reorganize-required refusal through as 409 with the change', async () => {
+      channelSettingsModule.updateChannelSettings.mockRejectedValueOnce(Object.assign(refusal('Review the move', 409), {
+        reorganizeRequired: true, change: { type: 'channel', channelId: 'UC1', subFolder: 'TV' },
+      }));
       const res = await request(app).put('/api/channels/UC1/tv/layout').send({ layout: 'tv' });
       expect(res.status).toBe(409);
+      expect(res.body).toMatchObject({ reorganizeRequired: true, change: { type: 'channel', channelId: 'UC1', subFolder: 'TV' } });
     });
 
     test('returns 500 for an unexpected failure', async () => {

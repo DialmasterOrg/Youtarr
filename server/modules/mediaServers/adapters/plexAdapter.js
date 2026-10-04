@@ -31,6 +31,9 @@ const EPISODE_NAME_PATTERN = /S\d+E\d+/i;
 // (full fidelity); history rows for account 1 are skipped as duplicates.
 const PLEX_OWNER_ACCOUNT_ID = '1';
 
+// Library items' identifier for the scrobble and progress endpoints.
+const PLEX_LIBRARY_IDENTIFIER = 'com.plexapp.plugins.library';
+
 // Play-history pagination. The page cap bounds a single sync on servers with
 // enormous history; anything past it is picked up by later incremental syncs.
 const HISTORY_PAGE_SIZE = 1000;
@@ -178,6 +181,11 @@ class PlexAdapter extends BaseAdapter {
   // libraries, so every section is scanned and the best-scoring candidate wins;
   // see trailingSegmentMatch in baseAdapter.
   async resolveItemIdsByFilepaths(filepaths) {
+    const matches = await this.resolveItemMatchesByPaths(filepaths);
+    return new Map([...matches].map(([filepath, match]) => [filepath, match ? match.id : null]));
+  }
+
+  async resolveItemMatchesByPaths(filepaths) {
     const results = new Map();
     const targets = [...new Set((filepaths || []).filter(Boolean))];
     if (targets.length === 0) return results;
@@ -233,12 +241,12 @@ class PlexAdapter extends BaseAdapter {
 
     for (const filepath of targets) {
       const targetSegments = pathSegments(filepath);
-      let best = null; // { ratingKey, score }
+      let best = null; // { id, score }
       for (const candidate of candidatesByBasename.get(extractBasename(filepath)) || []) {
         const score = trailingSegmentMatch(targetSegments, candidate.segments);
-        if (!best || score > best.score) best = { ratingKey: candidate.ratingKey, score };
+        if (!best || score > best.score) best = { id: candidate.ratingKey, score };
       }
-      results.set(filepath, best ? best.ratingKey : null);
+      results.set(filepath, best);
     }
     return results;
   }
@@ -584,6 +592,40 @@ class PlexAdapter extends BaseAdapter {
       percentWatched,
       lastWatchedAt: item.lastViewedAt ? new Date(Number(item.lastViewedAt) * 1000) : null,
     };
+  }
+
+  // The owner's state of one item (the admin token reads as the owner; other
+  // accounts can't be read this way, so they report unknown).
+  async getWatchState(itemId, serverUserId) {
+    if (String(serverUserId) !== PLEX_OWNER_ACCOUNT_ID) return null;
+    const auth = this.anonymousScope ? this._plParams() : { 'X-Plex-Token': this.token };
+    try {
+      const res = await axios.get(`${this.url}/library/metadata/${itemId}`, { params: auth, timeout: REQUEST_TIMEOUT_MS });
+      const item = (res.data?.MediaContainer?.Metadata || [])[0];
+      return item ? this._itemWatchState(item) : null;
+    } catch (err) {
+      logger.debug({ ...describeHttpError(err), itemId }, 'plex: could not read an item\'s watch state before a push');
+      return null;
+    }
+  }
+
+  // Restores the owner's state only: the admin token writes as the owner, and
+  // other accounts' tokens are out of scope. /:/scrobble leaves no play
+  // history, which is fine for the owner (read from section listings).
+  async setWatchState(itemId, serverUserId, { played, positionMs }) {
+    if (String(serverUserId) !== PLEX_OWNER_ACCOUNT_ID) {
+      throw new Error('Youtarr can only restore the Plex server owner\'s watch state.');
+    }
+    const auth = this.anonymousScope ? this._plParams() : { 'X-Plex-Token': this.token };
+    const params = { identifier: PLEX_LIBRARY_IDENTIFIER, key: itemId, ...auth };
+    if (played) {
+      await axios.get(`${this.url}/:/scrobble`, { params, timeout: REQUEST_TIMEOUT_MS });
+      return;
+    }
+    await axios.get(`${this.url}/:/progress`, {
+      params: { ...params, time: Math.round(positionMs || 0), state: 'stopped' },
+      timeout: REQUEST_TIMEOUT_MS,
+    });
   }
 }
 

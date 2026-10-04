@@ -48,6 +48,64 @@ class BaseAdapter {
    * MediaServerUnavailableError when the server is unreachable.
    */
   async fetchWatchStates(/* opts: { since } */) { throw new Error('not implemented'); }
+
+  /**
+   * Items for files Youtarr moved: for each file, the item whose path shares
+   * the most trailing segments with it, with that count (the score), or null.
+   * The caller compares the scores of a video's new and old paths, because
+   * until the server rescans, the stale item at the old path still shares the
+   * file name (and, between two TV folders, the show and season folders too).
+   * Returns Map<filepath, {id, score}|null>.
+   */
+  async resolveItemMatchesByPaths(/* filepaths */) { throw new Error('not implemented'); }
+
+  /**
+   * One server user's current watch state of an item, read before a push so
+   * a state at least as watched (or watched since) is left alone. Resolves to
+   * { played, playCount, positionMs, percentWatched, lastWatchedAt }, or null
+   * when it cannot be read (the push then proceeds).
+   * @param {string} itemId
+   * @param {string} serverUserId
+   */
+  async getWatchState(/* itemId, serverUserId */) { return null; }
+
+  /**
+   * Write one server user's watch state for an item: played, or a resume
+   * position. Used to restore watch state after a reorganize moved the file.
+   * @param {string} itemId
+   * @param {string} serverUserId
+   * @param {{played: boolean, positionMs: number|null}} state
+   */
+  async setWatchState(/* itemId, serverUserId, state */) { throw new Error('not implemented'); }
+}
+
+/**
+ * Pick, for each file path, the item whose path shares the most trailing
+ * segments with it (at least the file name), with that count.
+ *
+ * @param {Array<{id: string, path: string}>} items
+ * @param {string[]} filepaths
+ * @returns {Map<string, {id: string, score: number}|null>}
+ */
+function bestItemMatchesByPath(items, filepaths) {
+  const byBasename = new Map();
+  for (const item of items) {
+    if (!item.path) continue;
+    const base = extractBasename(item.path);
+    if (!byBasename.has(base)) byBasename.set(base, []);
+    byBasename.get(base).push({ id: item.id, segments: pathSegments(item.path) });
+  }
+  const results = new Map();
+  for (const filepath of filepaths) {
+    const target = pathSegments(filepath);
+    let best = null;
+    for (const candidate of byBasename.get(extractBasename(filepath)) || []) {
+      const score = trailingSegmentMatch(target, candidate.segments);
+      if (!best || score > best.score) best = { id: candidate.id, score };
+    }
+    results.set(filepath, best);
+  }
+  return results;
 }
 
 /**
@@ -152,6 +210,7 @@ module.exports = BaseAdapter;
 module.exports.extractBasename = extractBasename;
 module.exports.pathSegments = pathSegments;
 module.exports.trailingSegmentMatch = trailingSegmentMatch;
+module.exports.bestItemMatchesByPath = bestItemMatchesByPath;
 module.exports.normalizeBaseUrl = normalizeBaseUrl;
 module.exports.REQUEST_TIMEOUT_MS = REQUEST_TIMEOUT_MS;
 module.exports.MediaServerUnavailableError = MediaServerUnavailableError;

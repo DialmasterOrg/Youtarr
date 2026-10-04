@@ -17,8 +17,9 @@ import TvFolderSetup from './TvFolderSetup';
 /** The server's refusal when it can't tell which Videos folder to switch back to. */
 export const CHOOSE_VIDEOS_FOLDER_MESSAGE = 'Choose a Videos folder.';
 const SWITCH_FAILED_MESSAGE = "Couldn't switch this channel's layout.";
-const HAS_DOWNLOADS_NOTE = "This channel already has downloaded videos, so it can't switch between Videos and TV yet.";
+const HAS_DOWNLOADS_NOTE = 'This channel has downloaded videos: switching moves them, and you review the move first.';
 const SWITCH_SAVES_NOTE = 'Switching saves right away.';
+const REORGANIZING_NOTE = "This channel's downloaded videos are being moved.";
 const DEFAULT_FOLDER_TV_NOTE =
   "The default subfolder is a TV folder, so downloads from channels you haven't subscribed to are each saved as their own TV show.";
 const NO_VIDEOS_FOLDER_MESSAGE = 'No library folder uses the Videos layout yet.';
@@ -41,6 +42,8 @@ export interface ChannelTvSectionProps {
   onSwitch: (layout: LibraryLayout, folder?: string) => Promise<void>;
   createSubfolder: (name: string) => Promise<void>;
   setFolderLayout: (name: string, layout: LibraryLayout) => Promise<void>;
+  /** Show the result of the reorganize that left some of this channel's videos unmoved */
+  onShowReorganize?: (operationId: number) => void;
   disabled?: boolean;
 }
 
@@ -113,6 +116,7 @@ function ChannelTvSection({
   onSwitch,
   createSubfolder,
   setFolderLayout,
+  onShowReorganize,
   disabled = false,
 }: ChannelTvSectionProps) {
   const headingId = useId();
@@ -134,7 +138,9 @@ function ChannelTvSection({
   }
 
   const isTv = tv.layout === 'tv';
-  const locked = !tv.canSwitch || pending || disabled;
+  const reorganizing = Boolean(tv.reorganize?.running);
+  const unmoved = tv.reorganize?.unmoved ?? null;
+  const locked = reorganizing || pending || disabled;
   const videosFolders = folders.filter((folder) => folder.layout === 'videos').map((folder) => folder.name);
 
   const runSwitch = async (layout: LibraryLayout, folder?: string) => {
@@ -224,9 +230,22 @@ function ChannelTvSection({
           {destination}
         </Typography>
         <Typography variant="caption" color="text.secondary">
-          {tv.canSwitch ? SWITCH_SAVES_NOTE : HAS_DOWNLOADS_NOTE}
+          {tv.hasDownloads ? HAS_DOWNLOADS_NOTE : SWITCH_SAVES_NOTE}
         </Typography>
       </Box>
+
+      {reorganizing && <Alert severity="info">{REORGANIZING_NOTE}</Alert>}
+
+      {!reorganizing && unmoved && unmoved.failed > 0 && (
+        <Alert
+          severity="warning"
+          action={onShowReorganize ? (
+            <Button size="small" variant="outlined" onClick={() => onShowReorganize(unmoved.operationId)}>Review</Button>
+          ) : undefined}
+        >
+          {unmoved.failed === 1 ? '1 video was' : `${unmoved.failed} videos were`} not moved when this channel was reorganized.
+        </Alert>
+      )}
 
       {error && <Alert severity="error">{error}</Alert>}
 

@@ -675,7 +675,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
 
                 <Grid item xs={12}>
                   <Box className="border-t pt-3">
-                    <LibraryFoldersList library={libraryFolders} />
+                    <LibraryFoldersList library={libraryFolders} token={token} />
                   </Box>
                 </Grid>
 

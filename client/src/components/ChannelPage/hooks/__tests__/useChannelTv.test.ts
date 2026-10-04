@@ -73,6 +73,18 @@ describe('useChannelTv', () => {
     await expect(result.current.switchLayout('tv')).rejects.toThrow('has downloads');
   });
 
+  test('throws a ReorganizeRequiredError when the channel\'s files must move', async () => {
+    const change = { type: 'channel', channelId: 'UC1', subFolder: 'TV' };
+    axios.put.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { status: 409, data: { error: 'Review the move', reorganizeRequired: true, change } },
+    });
+    const { result } = renderHook(() => useChannelTv('UC1', 'token'));
+    await waitFor(() => expect(result.current.tv).not.toBeNull());
+
+    await expect(result.current.switchLayout('tv')).rejects.toMatchObject({ name: 'ReorganizeRequiredError', change });
+  });
+
   test('refetches when a folder layout changes', async () => {
     renderHook(() => useChannelTv('UC1', 'token'));
     await waitFor(() => expect(axios.get).toHaveBeenCalledTimes(1));

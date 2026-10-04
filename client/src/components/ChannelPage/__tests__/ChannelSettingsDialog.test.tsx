@@ -17,6 +17,7 @@ jest.mock('../../../hooks/useConfig', () => ({
 // for the refresh button. Existing dialog tests do not click refresh so the
 // mock is passive for them; it's only exercised by the refresh-path test.
 jest.mock('axios', () => ({
+  get: jest.fn(() => new Promise(() => {})),
   post: jest.fn(),
   isAxiosError: jest.fn(() => false),
 }));
@@ -46,6 +47,26 @@ jest.mock('../../../hooks/useLibraryFolders', () => ({
     setFolderLayout: jest.fn(() => Promise.resolve()),
   }),
 }));
+
+jest.mock('../../shared/Reorganize', () => {
+  const actual = jest.requireActual('../../shared/Reorganize');
+  return {
+    ...actual,
+    ReorganizeDialog: function MockReorganizeDialog(props: {
+      open: boolean; change: unknown; onClose: () => void;
+      onApplied?: (result: { operationId: number | null; applied: boolean }) => void;
+      onRetried?: (operationId: number) => void;
+    }) {
+      const React = require('react');
+      if (!props.open) return null;
+      return React.createElement('div', { 'data-testid': 'reorganize-dialog' },
+        JSON.stringify(props.change),
+        React.createElement('button', { type: 'button', onClick: () => props.onApplied?.({ operationId: 5, applied: false }) }, 'mock apply'),
+        React.createElement('button', { type: 'button', onClick: () => props.onRetried?.(5) }, 'mock retry'),
+        React.createElement('button', { type: 'button', onClick: () => props.onClose() }, 'mock close'));
+    },
+  };
+});
 
 const mockSwitchLayout = jest.fn();
 const mockChannelTv: { current: unknown } = { current: null };
@@ -2092,7 +2113,6 @@ describe('ChannelSettingsDialog', () => {
       defaultFolder: '',
       defaultFolderLayout: 'videos',
       hasDownloads: false,
-      canSwitch: true,
     };
 
     const renderLoaded = async (loaded: Record<string, unknown> = mockChannelSettings) => {
@@ -2201,6 +2221,150 @@ describe('ChannelSettingsDialog', () => {
       await user.click(screen.getByRole('button', { name: 'Save' }));
 
       expect(await screen.findByText(refusal)).toBeInTheDocument();
+    });
+
+    test('opens the move review when a layout switch must move downloaded files', async () => {
+      const { ReorganizeRequiredError } = jest.requireActual('../../shared/Reorganize');
+      mockChannelTv.current = { ...videosChannelTv, hasDownloads: true };
+      mockSwitchLayout.mockRejectedValueOnce(
+        new ReorganizeRequiredError('Review the move', { type: 'channel', channelId: 'UC123', subFolder: 'Anime' })
+      );
+      await renderLoaded();
+
+      const user = await openSettingsSection('TV Show');
+      await user.click(screen.getByRole('button', { name: 'TV show' }));
+
+      expect(await screen.findByTestId('reorganize-dialog')).toHaveTextContent('"subFolder":"Anime"');
+      expect(screen.queryByText('Review the move')).not.toBeInTheDocument();
+    });
+
+    test('opens the move review when a save must move downloaded files', async () => {
+      const change = { type: 'channel', channelId: 'UC123', subFolder: 'Anime' };
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 409,
+          json: jest.fn().mockResolvedValueOnce({ error: 'Review the move', reorganizeRequired: true, change }),
+        });
+      render(<ChannelSettingsDialog {...defaultProps} />);
+      await waitFor(() => {
+        expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      });
+      const user = userEvent.setup();
+
+      await user.click(screen.getByLabelText('Channel Video Quality Override'));
+      await user.click(screen.getByText('720p (HD)'));
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+
+      expect(await screen.findByTestId('reorganize-dialog')).toHaveTextContent('"subFolder":"Anime"');
+      expect(screen.queryByText('Review the move')).not.toBeInTheDocument();
+    });
+
+    test('says the other changes still need saving once the move is started from a save', async () => {
+      const change = { type: 'channel', channelId: 'UC123', subFolder: 'Anime' };
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, json: jest.fn().mockResolvedValueOnce(mockChannelSettings) })
+        .mockResolvedValueOnce({
+          ok: false, status: 409,
+          json: jest.fn().mockResolvedValueOnce({ error: 'Review the move', reorganizeRequired: true, change }),
+        });
+      render(<ChannelSettingsDialog {...defaultProps} />);
+      await waitFor(() => {
+        expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      });
+      const user = userEvent.setup();
+      await user.click(screen.getByLabelText('Channel Video Quality Override'));
+      await user.click(screen.getByText('720p (HD)'));
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      await screen.findByTestId('reorganize-dialog');
+
+      await user.click(screen.getByRole('button', { name: 'mock apply' }));
+
+      expect(await screen.findByText(/Save again to apply your other changes/)).toBeInTheDocument();
+    });
+
+    test('re-reads the saved folder when the move ends, whether or not the review is still open', async () => {
+      const { ReorganizeRequiredError } = jest.requireActual('../../shared/Reorganize');
+      mockChannelTv.current = { ...videosChannelTv, hasDownloads: true };
+      mockSwitchLayout.mockRejectedValueOnce(
+        new ReorganizeRequiredError('Review the move', { type: 'channel', channelId: 'UC123', subFolder: 'Anime' })
+      );
+      // The started operation ends with nothing moved: the server undid the folder change.
+      mockAxios.get.mockImplementation((url: string) => (url === '/api/tv/operations/5'
+        ? Promise.resolve({ data: { id: 5, label: 'Chan', status: 'failed', total: 2, done: 0, failed: 2, failedItems: [] } })
+        : new Promise(() => {})));
+      mockFetch.mockResolvedValue({ ok: true, json: jest.fn().mockResolvedValue({ ...mockChannelSettings, sub_folder: 'Kids' }) });
+      await renderLoaded();
+      const user = await openSettingsSection('TV Show');
+      await user.click(screen.getByRole('button', { name: 'TV show' }));
+      await screen.findByTestId('reorganize-dialog');
+
+      await user.click(screen.getByRole('button', { name: 'mock apply' }));
+
+      await waitFor(() => {
+        expect(mockOnSettingsSaved).toHaveBeenLastCalledWith(expect.objectContaining({ sub_folder: 'Kids' }));
+      });
+      expect(mockFetch).toHaveBeenCalledWith('/api/channels/channel123/settings', expect.objectContaining({ headers: expect.anything() }));
+    });
+
+    test('follows a retry that succeeds after a rollback, so the form ends on the new folder', async () => {
+      const { ReorganizeRequiredError } = jest.requireActual('../../shared/Reorganize');
+      mockChannelTv.current = { ...videosChannelTv, hasDownloads: true };
+      mockSwitchLayout.mockRejectedValueOnce(
+        new ReorganizeRequiredError('Review the move', { type: 'channel', channelId: 'UC123', subFolder: 'Anime' })
+      );
+      const outcomes = [
+        { id: 5, label: 'Chan', status: 'failed', total: 2, done: 0, failed: 2, finishedAt: '2026-10-03T12:00:00.000Z', failedItems: [] },
+        { id: 5, label: 'Chan', status: 'completed', total: 2, done: 2, failed: 0, finishedAt: '2026-10-03T12:05:00.000Z', failedItems: [] },
+      ];
+      mockAxios.get.mockImplementation((url: string) => (url === '/api/tv/operations/5'
+        ? Promise.resolve({ data: outcomes.length > 1 ? outcomes.shift() : outcomes[0] })
+        : new Promise(() => {})));
+      const savedFolders = ['Kids', 'Anime'];
+      mockFetch.mockImplementation(() => Promise.resolve({
+        ok: true, json: jest.fn().mockResolvedValue({ ...mockChannelSettings, sub_folder: savedFolders.length > 1 ? savedFolders.shift() : savedFolders[0] }),
+      }));
+      await renderLoaded();
+      const user = await openSettingsSection('TV Show');
+      await user.click(screen.getByRole('button', { name: 'TV show' }));
+      await screen.findByTestId('reorganize-dialog');
+      await user.click(screen.getByRole('button', { name: 'mock apply' }));
+      await waitFor(() => {
+        expect(mockOnSettingsSaved).toHaveBeenLastCalledWith(expect.objectContaining({ sub_folder: 'Kids' }));
+      });
+
+      await user.click(screen.getByRole('button', { name: 'mock retry' }));
+
+      await waitFor(() => {
+        expect(mockOnSettingsSaved).toHaveBeenLastCalledWith(expect.objectContaining({ sub_folder: 'Anime' }));
+      });
+    });
+
+    test('re-reads the saved folder when the move review closes, in case the move was undone', async () => {
+      const { ReorganizeRequiredError } = jest.requireActual('../../shared/Reorganize');
+      mockChannelTv.current = { ...videosChannelTv, hasDownloads: true };
+      mockSwitchLayout.mockRejectedValueOnce(
+        new ReorganizeRequiredError('Review the move', { type: 'channel', channelId: 'UC123', subFolder: 'Anime' })
+      );
+      await renderLoaded();
+      const user = await openSettingsSection('TV Show');
+      await user.click(screen.getByRole('button', { name: 'TV show' }));
+      await screen.findByTestId('reorganize-dialog');
+      await user.click(screen.getByRole('button', { name: 'mock apply' }));
+      expect(mockOnSettingsSaved).toHaveBeenLastCalledWith(expect.objectContaining({ sub_folder: 'Anime' }));
+      // Every video failed to move, so the server put the folder back.
+      mockFetch.mockResolvedValueOnce({ ok: true, json: jest.fn().mockResolvedValueOnce({ ...mockChannelSettings, sub_folder: 'Kids' }) });
+
+      await user.click(screen.getByRole('button', { name: 'mock close' }));
+
+      await waitFor(() => {
+        expect(mockOnSettingsSaved).toHaveBeenLastCalledWith(expect.objectContaining({ sub_folder: 'Kids' }));
+      });
+      expect(screen.queryByTestId('reorganize-dialog')).not.toBeInTheDocument();
     });
   });
 });

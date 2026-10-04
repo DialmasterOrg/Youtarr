@@ -18,6 +18,11 @@ describe('watchStatusSync', () => {
     }));
     jest.doMock('../../configModule', () => ({ getConfig: jest.fn(() => ({})) }));
     jest.doMock('../serverRegistry', () => ({ getEnabledAdapters: jest.fn() }));
+    jest.doMock('../watchStatusHolds', () => ({
+      applyHolds: jest.fn(async (serverType, matches) => matches),
+      expireHolds: jest.fn().mockResolvedValue(0),
+    }));
+    jest.doMock('../watchStatusPushBack', () => ({ pushPendingHolds: jest.fn().mockResolvedValue({}) }));
     jest.doMock('../../../models', () => ({
       Video: { findAll: jest.fn(), findOne: jest.fn() },
       VideoWatchStatus: {
@@ -38,6 +43,33 @@ describe('watchStatusSync', () => {
     ({ Video, VideoWatchStatus, MediaServerUser, WatchStatusSyncCursor } = require('../../../models'));
 
     configModule.getConfig.mockReturnValue({ jellyfinUserId: 'JF_USER' });
+  });
+
+  test('writes only the matches the watch-state holds let through', async () => {
+    const watchStatusHolds = require('../watchStatusHolds');
+    watchStatusHolds.applyHolds.mockResolvedValue([]);
+    serverRegistry.getEnabledAdapters.mockReturnValue([fakeAdapter('plex', resolvedFetch([{
+      path: '/media/Chan/Video A [id1].mp4', serverUserId: '1', played: false, playCount: 0,
+      positionMs: 0, percentWatched: 0, lastWatchedAt: null,
+    }]))]);
+    Video.findAll.mockResolvedValue([{ id: 7, youtubeId: 'id1', filePath: '/data/Chan/Video A [id1].mp4' }]);
+
+    await watchStatusSync.syncAll();
+
+    expect(watchStatusHolds.applyHolds).toHaveBeenCalledWith('plex', [expect.objectContaining({ video: expect.objectContaining({ id: 7 }) })]);
+    expect(VideoWatchStatus.bulkCreate).not.toHaveBeenCalled();
+  });
+
+  test('expires old holds and pushes pending ones after reading the servers', async () => {
+    const watchStatusHolds = require('../watchStatusHolds');
+    const watchStatusPushBack = require('../watchStatusPushBack');
+    serverRegistry.getEnabledAdapters.mockReturnValue([fakeAdapter('plex', resolvedFetch([]))]);
+    Video.findAll.mockResolvedValue([]);
+
+    await watchStatusSync.syncAll();
+
+    expect(watchStatusHolds.expireHolds).toHaveBeenCalled();
+    expect(watchStatusPushBack.pushPendingHolds).toHaveBeenCalled();
   });
 
   test('skips when no media servers are configured', async () => {

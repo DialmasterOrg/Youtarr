@@ -12,7 +12,6 @@ const videosTv: ChannelTvState = {
   defaultFolder: '',
   defaultFolderLayout: 'videos',
   hasDownloads: false,
-  canSwitch: true,
 };
 
 const tvTv: ChannelTvState = {
@@ -75,14 +74,34 @@ describe('ChannelTvSection', () => {
     expect(screen.getByRole('button', { name: 'TV show' })).toHaveAttribute('aria-pressed', 'true');
   });
 
-  test('locks both choices and explains why when the channel has downloads', () => {
-    renderSection({ tv: { ...videosTv, hasDownloads: true, canSwitch: false } });
+  test('lets a channel with downloads switch and says the move is reviewed first', () => {
+    renderSection({ tv: { ...videosTv, hasDownloads: true } });
+
+    expect(screen.getByRole('button', { name: 'TV show' })).toBeEnabled();
+    expect(
+      screen.getByText('This channel has downloaded videos: switching moves them, and you review the move first.')
+    ).toBeInTheDocument();
+  });
+
+  test('locks both choices while the channel\'s files are being moved', () => {
+    renderSection({ tv: { ...videosTv, hasDownloads: true, reorganize: { running: true, unmoved: null } } });
 
     expect(screen.getByRole('button', { name: 'Videos' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'TV show' })).toBeDisabled();
-    expect(
-      screen.getByText("This channel already has downloaded videos, so it can't switch between Videos and TV yet.")
-    ).toBeInTheDocument();
+    expect(screen.getByText("This channel's downloaded videos are being moved.")).toBeInTheDocument();
+  });
+
+  test('offers to review videos a reorganize left unmoved', async () => {
+    const onShowReorganize = jest.fn();
+    const { user } = renderSection({
+      tv: { ...tvTv, reorganize: { running: false, unmoved: { operationId: 7, failed: 2, status: 'partial' } } },
+      onShowReorganize,
+    });
+
+    expect(screen.getByText('2 videos were not moved when this channel was reorganized.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Review' }));
+
+    expect(onShowReorganize).toHaveBeenCalledWith(7);
   });
 
   describe('switching to TV', () => {

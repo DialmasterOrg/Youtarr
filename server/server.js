@@ -263,6 +263,9 @@ const initialize = async () => {
     const scheduledTaskRuns = require('./modules/scheduledTaskRuns');
     const scheduledTaskManager = require('./modules/scheduledTaskManager');
     const storageGuard = require('./modules/storageGuard');
+    const reorganize = require('./modules/reorganize');
+    const mediaServerSync = require('./modules/mediaServers/mediaServerSync');
+    const watchStatusSync = require('./modules/mediaServers/watchStatusSync');
 
     // Runs left "running" by the previous process never finished; close them
     // out before any timer fires, then start recording this process's runs.
@@ -346,6 +349,15 @@ const initialize = async () => {
     storageGuard.initialize().catch((err) => {
       logger.error({ err }, 'Initial download pause check failed');
     });
+    // A reorganize (moving downloads between the Videos and TV layouts) holds
+    // download jobs and refuses the tasks that touch files. One a restart
+    // interrupted resumes once startup work on downloads has finished.
+    reorganize.initialize({ jobModule, scheduledTaskManager, videosModule, mediaServerSync, watchStatusSync });
+    if (process.env.NODE_ENV !== 'test') {
+      reorganize.recoverInterrupted().catch((err) => {
+        logger.error({ err }, 'Could not resume an interrupted reorganize');
+      });
+    }
     subscriptionImportModule.init({
       channelModule,
       jobModule,

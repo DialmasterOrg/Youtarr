@@ -1,9 +1,11 @@
 /**
- * Refusals that keep a library folder from mixing layouts. Until downloads can
- * be reorganized, a channel or folder that already holds downloaded videos
- * can't switch between videos and TV, and nothing switches while a download
- * runs (its later videos would land in the new layout, its earlier ones in
- * the old). TV layout is also video-only: MP3 downloads stay out of TV folders.
+ * Refusals that keep a library folder from mixing layouts. A channel or folder
+ * that already holds downloaded videos switches between videos and TV only
+ * through the reorganize, which moves its files (a reorganizeRequired 409
+ * names the change for its preview), and nothing switches directly while a
+ * download runs (its later videos would land in the new layout, its earlier
+ * ones in the old). TV layout is also video-only: MP3 downloads stay out of
+ * TV folders.
  */
 
 const fs = require('fs');
@@ -22,6 +24,34 @@ function guardError(message, status) {
   const err = new Error(message);
   err.status = status;
   return err;
+}
+
+/**
+ * A 409 for a change that moves downloaded files: the client opens the
+ * reorganize preview for `change` instead of saving directly.
+ * @param {string} message
+ * @param {Object} change - A reorganize change (see reorganize/changeContext)
+ */
+function reorganizeRequiredError(message, change) {
+  const err = guardError(message, 409);
+  err.reorganizeRequired = true;
+  err.change = change;
+  return err;
+}
+
+/**
+ * Response body for a refusal: { error }, plus the change to review when the
+ * refusal asks for a reorganize, and the error code when there is one.
+ * @param {Error} error - An error carrying .status
+ */
+function errorBody(error) {
+  const body = { error: error.message };
+  if (error.reorganizeRequired) {
+    body.reorganizeRequired = true;
+    body.change = error.change;
+  }
+  if (error.code) body.code = error.code;
+  return body;
 }
 
 /**
@@ -138,22 +168,11 @@ async function assertVideoOnlyDestination({ audioFormat, subFolderValue }) {
   }
 }
 
-/**
- * Refuse when any of the channels has downloaded videos.
- * @param {Array} channels - channels rows
- * @param {string} message
- */
-async function assertChannelsHaveNoDownloads(channels, message) {
-  for (const channel of channels) {
-    if (await channelHasDownloads(channel.channel_id)) {
-      throw guardError(message, 409);
-    }
-  }
-}
-
 module.exports = {
   MP3_AUDIO_FORMATS,
   guardError,
+  reorganizeRequiredError,
+  errorBody,
   isMp3Format,
   assertNoDownloadRunning,
   channelHasDownloads,
@@ -162,6 +181,5 @@ module.exports = {
   usersOfFolder,
   usersOfGlobalDefault,
   assertNoMp3Users,
-  assertVideoOnlyDestination,
-  assertChannelsHaveNoDownloads
+  assertVideoOnlyDestination
 };

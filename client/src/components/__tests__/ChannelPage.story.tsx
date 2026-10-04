@@ -75,7 +75,6 @@ export const Default: Story = {
             defaultFolder: '',
             defaultFolderLayout: 'videos',
             hasDownloads: false,
-            canSwitch: true,
           })
         ),
         http.get('/api/library-folders', () =>

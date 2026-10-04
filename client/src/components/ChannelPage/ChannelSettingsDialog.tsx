@@ -44,9 +44,14 @@ import RatingBadge from '../shared/RatingBadge';
 import TabsEditor, { TabsEditorRefreshResult } from './components/TabsEditor';
 import ChannelTvSection from './components/ChannelTvSection';
 import { useChannelTv } from './hooks/useChannelTv';
+import {
+  ReorganizeDialog, useReorganizeRequest, useReorganizeOutcome, isReorganizeRequired, reorganizeChangeOf,
+} from '../shared/Reorganize';
+import { ReorganizeStartResult } from '../../types/reorganize';
 
 const TV_FOLDER_GENERAL_CAPTION = 'Episodes are saved in season folders, and channel playlist files are off for TV shows.';
 const SUBFOLDER_BUSY_MESSAGE = 'Cannot change subfolder while downloads are in progress for this channel. Please wait for downloads to complete.';
+const OTHER_CHANGES_NOTICE = 'The folder change is being applied by the move. Save again to apply your other changes.';
 
 const M3U_SORT_ORDERS = ['oldest_first', 'newest_first'] as const;
 type M3uSortOrder = (typeof M3U_SORT_ORDERS)[number];
@@ -181,6 +186,8 @@ function ChannelSettingsDialog({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  // After a reorganize saved the folder on its own, the other edits still wait for Save.
+  const [notice, setNotice] = useState<string | null>(null);
 
   // Use config hook to get global quality setting
   const { config, refetch: refetchConfig } = useConfig(token);
@@ -188,7 +195,11 @@ function ChannelSettingsDialog({
 
   const { subfolders, createSubfolder } = useSubfolders(token);
   const { folders: libraryFolders, layoutOf, setFolderLayout } = useLibraryFolders(token);
-  const { tv, loading: tvLoading, error: tvError, switchLayout } = useChannelTv(channelId, token, open);
+  const { tv, loading: tvLoading, error: tvError, switchLayout, refetch: refetchTv } = useChannelTv(channelId, token, open);
+  // A folder change that moves downloaded files is reviewed in the reorganize dialog.
+  const reorganize = useReorganizeRequest();
+  // The move started or retried from here, followed to each end (the review may be closed by then).
+  const [trackedMove, setTrackedMove] = useState<{ operationId: number; attempt: number } | null>(null);
   const draftIsTv = layoutOf(effectiveLibraryFolder(settings.sub_folder, config.defaultSubfolder)) === 'tv';
 
   // Duration input state (in minutes for UI convenience)
@@ -229,6 +240,7 @@ function ChannelSettingsDialog({
       // Reset state when dialog closes
       setSuccess(false);
       setError(null);
+      setNotice(null);
       return;
     }
 
@@ -306,6 +318,7 @@ function ChannelSettingsDialog({
     setSaving(true);
     setError(null);
     setSuccess(false);
+    setNotice(null);
 
     try {
       const response = await fetch(`/api/channels/${channelId}/settings`, {
@@ -338,6 +351,11 @@ function ChannelSettingsDialog({
         let parseFailed = false;
         try {
           const data = await response.json();
+          const change = reorganizeChangeOf(data);
+          if (change) {
+            reorganize.review(change);
+            return;
+          }
           serverMessage = typeof data?.error === 'string' && data.error ? data.error : null;
         } catch (parseError) {
           parseFailed = true;
@@ -423,26 +441,28 @@ function ChannelSettingsDialog({
     onClose();
   };
 
-  const hasChanges = () => {
+  const settingsDiffer = (a: ChannelSettings, b: ChannelSettings) => {
     const tabsChanged =
-      settings.hidden_tabs.length !== originalSettings.hidden_tabs.length ||
-      settings.hidden_tabs.some((tab) => !originalSettings.hidden_tabs.includes(tab));
-    return settings.sub_folder !== originalSettings.sub_folder ||
-           settings.video_quality !== originalSettings.video_quality ||
-           settings.min_duration !== originalSettings.min_duration ||
-           settings.max_duration !== originalSettings.max_duration ||
-           settings.title_filter_regex !== originalSettings.title_filter_regex ||
-           settings.additional_tags !== originalSettings.additional_tags ||
-           settings.audio_format !== originalSettings.audio_format ||
-           settings.default_rating !== originalSettings.default_rating ||
-           settings.auto_download_enabled_tabs !== originalSettings.auto_download_enabled_tabs ||
-           settings.skip_video_folder !== originalSettings.skip_video_folder ||
-           settings.m3u_enabled !== originalSettings.m3u_enabled ||
-           settings.m3u_sort_order !== originalSettings.m3u_sort_order ||
-           settings.auto_removal_protected !== originalSettings.auto_removal_protected ||
-           settings.auto_removal_keep_recent_count !== originalSettings.auto_removal_keep_recent_count ||
+      a.hidden_tabs.length !== b.hidden_tabs.length ||
+      a.hidden_tabs.some((tab) => !b.hidden_tabs.includes(tab));
+    return a.sub_folder !== b.sub_folder ||
+           a.video_quality !== b.video_quality ||
+           a.min_duration !== b.min_duration ||
+           a.max_duration !== b.max_duration ||
+           a.title_filter_regex !== b.title_filter_regex ||
+           a.additional_tags !== b.additional_tags ||
+           a.audio_format !== b.audio_format ||
+           a.default_rating !== b.default_rating ||
+           a.auto_download_enabled_tabs !== b.auto_download_enabled_tabs ||
+           a.skip_video_folder !== b.skip_video_folder ||
+           a.m3u_enabled !== b.m3u_enabled ||
+           a.m3u_sort_order !== b.m3u_sort_order ||
+           a.auto_removal_protected !== b.auto_removal_protected ||
+           a.auto_removal_keep_recent_count !== b.auto_removal_keep_recent_count ||
            tabsChanged;
   };
+
+  const hasChanges = () => settingsDiffer(settings, originalSettings);
 
   const allTabsHidden = detectedTabs.length > 0 &&
     detectedTabs.every((tab) => settings.hidden_tabs.includes(tab));
@@ -478,10 +498,7 @@ function ChannelSettingsDialog({
     }));
   };
 
-  // A layout switch saves the channel's new sub_folder on the server right away.
-  const handleLayoutSwitch = async (layout: LibraryLayout, folder?: string) => {
-    const result = await switchLayout(layout, folder);
-    const subFolder = result.settings.sub_folder ?? null;
+  const applySavedSubFolder = (subFolder: string | null) => {
     setSettings((prev) => ({ ...prev, sub_folder: subFolder }));
     setOriginalSettings((prev) => ({ ...prev, sub_folder: subFolder }));
     if (onSettingsSaved) {
@@ -493,6 +510,64 @@ function ChannelSettingsDialog({
       });
     }
   };
+
+  // A layout switch saves the channel's new sub_folder on the server right away,
+  // unless the channel's files must move: then the move is reviewed first.
+  const handleLayoutSwitch = async (layout: LibraryLayout, folder?: string) => {
+    try {
+      const result = await switchLayout(layout, folder);
+      applySavedSubFolder(result.settings.sub_folder ?? null);
+    } catch (err: unknown) {
+      if (!isReorganizeRequired(err)) throw err;
+      reorganize.review(err.change);
+    }
+  };
+
+  // The reorganize applies the folder change when it starts.
+  const handleReorganizeApplied = (result: ReorganizeStartResult) => {
+    if (reorganize.change && reorganize.change.type === 'channel') {
+      const subFolder = reorganize.change.subFolder;
+      applySavedSubFolder(subFolder);
+      if (settingsDiffer({ ...settings, sub_folder: subFolder }, { ...originalSettings, sub_folder: subFolder })) {
+        setNotice(OTHER_CHANGES_NOTICE);
+      }
+    }
+    if (result.operationId) setTrackedMove({ operationId: result.operationId, attempt: 0 });
+    else void refetchTv();
+  };
+
+  const handleReorganizeRetried = (operationId: number) => {
+    setTrackedMove((current) => ({
+      operationId,
+      attempt: current && current.operationId === operationId ? current.attempt + 1 : 1,
+    }));
+  };
+
+  // The server undoes the folder change when no video could be moved, so the
+  // saved folder is read back rather than assumed; the other draft edits stay.
+  const reloadSavedSubFolder = async () => {
+    try {
+      const response = await fetch(`/api/channels/${channelId}/settings`, { headers: { 'x-access-token': token || '' } });
+      if (!response.ok) return;
+      const data = await response.json();
+      const subFolder = data?.sub_folder || null;
+      if (subFolder !== originalSettings.sub_folder) applySavedSubFolder(subFolder);
+    } catch {
+      // The next open of the dialog loads the saved settings anyway.
+    }
+  };
+
+  const handleReorganizeClosed = () => {
+    reorganize.close();
+    void refetchTv();
+    void reloadSavedSubFolder();
+  };
+
+  // Each end of the move (the first run or a retry) decides the saved folder.
+  useReorganizeOutcome(token, trackedMove?.operationId ?? null, () => {
+    void refetchTv();
+    void reloadSavedSubFolder();
+  }, { attempt: trackedMove?.attempt ?? 0 });
 
   const handlePreviewFilter = async () => {
     setLoadingPreview(true);
@@ -806,6 +881,7 @@ function ChannelSettingsDialog({
             onSwitch={handleLayoutSwitch}
             createSubfolder={createSubfolder}
             setFolderLayout={setFolderLayout}
+            onShowReorganize={reorganize.showOperation}
             disabled={saving}
           />
         );
@@ -1184,6 +1260,12 @@ function ChannelSettingsDialog({
                 </Alert>
               )}
 
+              {notice && (
+                <Alert severity="info" style={{ marginBottom: 16 }} onClose={() => setNotice(null)}>
+                  {notice}
+                </Alert>
+              )}
+
               {isMobile ? (
                 renderSectionContent(activeSection)
               ) : (
@@ -1206,6 +1288,15 @@ function ChannelSettingsDialog({
           {saving ? <CircularProgress size={24} /> : 'Save'}
         </Button>
       </DialogActions>
+      <ReorganizeDialog
+        open={reorganize.open}
+        token={token}
+        change={reorganize.change}
+        operationId={reorganize.operationId}
+        onClose={handleReorganizeClosed}
+        onApplied={handleReorganizeApplied}
+        onRetried={handleReorganizeRetried}
+      />
     </Dialog>
   );
 }

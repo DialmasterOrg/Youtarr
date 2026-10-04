@@ -168,11 +168,26 @@ describe('layoutGuards', () => {
     });
   });
 
-  describe('assertChannelsHaveNoDownloads', () => {
-    it('refuses with the given message when a channel has downloads', async () => {
-      Video.count.mockResolvedValueOnce(0).mockResolvedValueOnce(1);
-      await expect(layoutGuards.assertChannelsHaveNoDownloads([{ channel_id: 'A' }, { channel_id: 'B' }], 'has files'))
-        .rejects.toThrow('has files');
+  describe('reorganizeRequiredError', () => {
+    it('carries the change to review in a 409', () => {
+      const err = layoutGuards.reorganizeRequiredError('Review it', { type: 'folderLayout', folder: 'Kids', layout: 'tv' });
+
+      expect(err).toMatchObject({ status: 409, reorganizeRequired: true, change: { type: 'folderLayout', folder: 'Kids', layout: 'tv' } });
+    });
+  });
+
+  describe('errorBody', () => {
+    it('is the error message for a plain refusal', () => {
+      expect(layoutGuards.errorBody(layoutGuards.guardError('No', 400))).toEqual({ error: 'No' });
+    });
+
+    it('adds the change to review and the error code', () => {
+      const err = layoutGuards.reorganizeRequiredError('Review it', { type: 'channel', channelId: 'UC1', subFolder: 'TV' });
+      err.code = 'X';
+
+      expect(layoutGuards.errorBody(err)).toEqual({
+        error: 'Review it', reorganizeRequired: true, change: { type: 'channel', channelId: 'UC1', subFolder: 'TV' }, code: 'X',
+      });
     });
   });
 });

@@ -39,7 +39,6 @@ const meta: Meta<typeof ChannelSettingsDialog> = {
             defaultFolder: '',
             defaultFolderLayout: 'videos',
             hasDownloads: false,
-            canSwitch: true,
           })
         ),
         http.get('/api/library-folders', () =>

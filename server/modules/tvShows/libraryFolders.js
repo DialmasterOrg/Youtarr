@@ -2,8 +2,9 @@
  * Library folders as Settings shows them: the main downloads folder and each
  * __subfolder, with its layout and what uses it. Changing a folder's layout,
  * or moving the default subfolder to a folder with another layout, changes
- * the layout of every channel that downloads there, so both are refused
- * while that would leave a folder with videos of the old layout.
+ * the layout of every channel that downloads there, so when downloaded videos
+ * would be left in the old layout the change goes through the reorganize
+ * (a reorganizeRequired 409 naming the change for its preview).
  */
 
 const fs = require('fs');
@@ -16,6 +17,8 @@ const { LAYOUT_TV, LAYOUT_VIDEOS, folderKey } = require('./constants');
 const libraryLayouts = require('./libraryLayouts');
 const layoutGuards = require('./layoutGuards');
 const { effectiveLibraryFolder } = require('./channelFolders');
+const reorganizeLock = require('../reorganize/reorganizeLock');
+const { CHANGE_FOLDER_LAYOUT, CHANGE_DEFAULT_SUBFOLDER } = require('../reorganize/constants');
 
 const LAYOUTS = new Set([LAYOUT_VIDEOS, LAYOUT_TV]);
 // Main folder as TV: a Plex TV library pointed there skips the subfolders.
@@ -25,11 +28,12 @@ const PLEXIGNORE_CONTENT = `${PLEXIGNORE_SUBFOLDER_RULE}\n`;
 
 const MESSAGES = {
   running: 'Wait for the current download to finish before changing a folder\'s layout.',
-  hasFiles: 'This folder already holds downloaded videos, so its layout can\'t change yet.',
+  reorganize: 'This folder holds downloaded videos, so changing its layout moves them. Review the move first.',
   defaultRunning: 'Wait for the current download to finish before switching the default subfolder to a folder '
     + 'with a different layout.',
-  defaultHasDownloads: 'Channels that use the default subfolder already have downloaded videos, so the default can\'t '
-    + 'switch to a folder with a different layout yet.',
+  defaultReorganize: 'Channels that use the default subfolder have downloaded videos, so switching the default to a '
+    + 'folder with a different layout moves them. Review the move first.',
+  reorganizing: 'Downloads are being reorganized. Change folder layouts when that finishes.',
 };
 
 /**
@@ -107,13 +111,19 @@ async function setFolderLayout(name, layout, { isDownloadRunning } = {}) {
   const layoutOf = await libraryLayouts.getLayoutResolver();
   if (layoutOf(folder) === layout) return { changed: false };
 
-  layoutGuards.assertNoDownloadRunning(isDownloadRunning, MESSAGES.running);
+  reorganizeLock.assertInactive(MESSAGES.reorganizing);
   const users = await layoutGuards.usersOfFolder(folder);
   if (layout === LAYOUT_TV) layoutGuards.assertNoMp3Users(users, 'this folder');
+  const reorganize = { type: CHANGE_FOLDER_LAYOUT, folder, layout };
   if (await layoutGuards.folderHasFiles(folder)) {
-    throw layoutGuards.guardError(MESSAGES.hasFiles, 409);
+    throw layoutGuards.reorganizeRequiredError(MESSAGES.reorganize, reorganize);
   }
-  await layoutGuards.assertChannelsHaveNoDownloads(users.channels, MESSAGES.hasFiles);
+  for (const channel of users.channels) {
+    if (await layoutGuards.channelHasDownloads(channel.channel_id)) {
+      throw layoutGuards.reorganizeRequiredError(MESSAGES.reorganize, reorganize);
+    }
+  }
+  layoutGuards.assertNoDownloadRunning(isDownloadRunning, MESSAGES.running);
 
   // A subfolder known only from config (the default subfolder, Plex mappings)
   // gets its row before the layout is stored on it.
@@ -131,9 +141,10 @@ async function setFolderLayout(name, layout, { isDownloadRunning } = {}) {
 }
 
 /**
- * Refuse a default subfolder change that would switch the channels and
- * playlists following the default between videos and TV while that can't
- * be done cleanly.
+ * Check a default subfolder change that switches the channels and playlists
+ * following the default between videos and TV: refused while a reorganize
+ * runs or for MP3 users, sent to the reorganize when those channels have
+ * downloads, and refused while a download runs otherwise.
  *
  * @param {Object} params
  * @param {string|null} params.oldDefault
@@ -141,20 +152,33 @@ async function setFolderLayout(name, layout, { isDownloadRunning } = {}) {
  * @param {() => boolean} [params.isDownloadRunning]
  */
 async function checkDefaultSubfolderChange({ oldDefault, newDefault, isDownloadRunning }) {
+  const before = String(oldDefault || '').trim();
+  const after = String(newDefault || '').trim();
+  if (folderKey(before) === folderKey(after)) return;
+  // A running reorganize planned its destinations against the current
+  // default; the channels that follow it must not move under it.
+  reorganizeLock.assertInactive(MESSAGES.reorganizing);
   const layoutOf = await libraryLayouts.getLayoutResolver();
-  const newLayout = layoutOf(String(newDefault || '').trim());
-  if (layoutOf(String(oldDefault || '').trim()) === newLayout) return;
+  const newLayout = layoutOf(after);
+  if (layoutOf(before) === newLayout) return;
 
   const users = await layoutGuards.usersOfGlobalDefault();
   if (newLayout === LAYOUT_TV) layoutGuards.assertNoMp3Users(users, 'the default subfolder');
+  for (const channel of users.channels) {
+    if (await layoutGuards.channelHasDownloads(channel.channel_id)) {
+      throw layoutGuards.reorganizeRequiredError(MESSAGES.defaultReorganize, {
+        type: CHANGE_DEFAULT_SUBFOLDER, value: String(newDefault || '').trim(),
+      });
+    }
+  }
   layoutGuards.assertNoDownloadRunning(isDownloadRunning, MESSAGES.defaultRunning);
-  await layoutGuards.assertChannelsHaveNoDownloads(users.channels, MESSAGES.defaultHasDownloads);
 }
 
 module.exports = {
   PLEXIGNORE_NAME,
   PLEXIGNORE_CONTENT,
   MESSAGES,
+  syncPlexIgnore,
   listLibraryFolders,
   setFolderLayout,
   checkDefaultSubfolderChange

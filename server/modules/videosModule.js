@@ -18,6 +18,7 @@ const { probeVideoDimensions } = require('./resolutionTier');
 const createLimiter = require('./subscriptionImport/concurrencyLimiter');
 const { isRescanCandidate, resolveRescanUpdate } = require('./rescanRowUpdate');
 const { unchangedSinceRead, GUARDED_COLUMNS } = require('./videoRowGuard');
+const reorganizeLock = require('./reorganize/reorganizeLock');
 
 // Backfill row updates are applied in parameterized batches of this size,
 // and flushed mid-chunk at the same cadence so completed work survives a
@@ -532,6 +533,12 @@ class VideosModule {
     if (this._backfillRunning) {
       logger.info({ trigger }, 'Backfill already running, skipping');
       return { skipped: true, reason: 'already-running' };
+    }
+    // A reorganize moves files the scan would read; the startup pass checks
+    // here, scheduled runs are refused by the task manager.
+    if (reorganizeLock.isActive()) {
+      logger.info({ trigger }, 'Downloads are being reorganized; skipping the rescan');
+      return { skipped: true, reason: 'reorganizing' };
     }
     this._backfillRunning = true;
 

@@ -5,6 +5,7 @@
 
 const fs = require('fs-extra');
 const fsPromises = require('fs').promises;
+const path = require('path');
 const { execFile, execFileSync } = require('child_process');
 const { promisify } = require('util');
 const execFileAsync = promisify(execFile);
@@ -258,6 +259,112 @@ async function appendFile(filePath, content, encoding = 'utf8') {
   await fsPromises.appendFile(filePath, content, encoding);
 }
 
+// Staging name of a file being copied across filesystems by a move that must
+// never replace an existing file. Distinct from REPLACE_STAGING_SUFFIX, so a
+// leftover of either is never mistaken for the other.
+const NO_CLOBBER_STAGING_SUFFIX = '.reorganize.part';
+// A preserved timestamp passes through a Date (whole milliseconds) and a
+// float of seconds, so a copy's mtime can differ from its source's by a hair.
+const COPY_MTIME_TOLERANCE_MS = 2;
+
+function destinationExistsError(dest) {
+  return Object.assign(new Error(`A file already exists at ${dest}`), { code: 'EEXIST', path: dest });
+}
+
+// A path is absent when it or one of its parent folders is missing, and
+// when a parent turns out to be a file (ENOTDIR).
+async function statOrNull(filePath) {
+  try {
+    return await fsPromises.stat(filePath);
+  } catch (err) {
+    if (err.code === 'ENOENT' || err.code === 'ENOTDIR') return null;
+    throw err;
+  }
+}
+
+async function copyWithFallback(src, dest) {
+  try {
+    await fs.copy(src, dest, { overwrite: true, preserveTimestamps: true });
+  } catch (err) {
+    if (!(err && err.code === 'EPERM' && err.syscall === 'copyfile')) throw err;
+    await fs.remove(dest);
+    await execFileAsync('cp', ['--', src, dest]);
+  }
+}
+
+/**
+ * Move one file to a destination that must not already hold another file.
+ * Safe to call again after an interruption: a leftover staging copy is
+ * removed, a source already moved is reported as such, and a destination
+ * that is a finished copy of the source (same size and modification time,
+ * left when a cross-filesystem move stopped before removing the source)
+ * completes the move.
+ *
+ * On one filesystem the move is a rename. Across filesystems (a __subfolder
+ * can be another mount) the file is copied to `<dest>.reorganize.part`,
+ * renamed into place, and only then is the source removed, so no moment
+ * exists in which neither copy is complete.
+ *
+ * @param {string} src - Source file path
+ * @param {string} dest - Destination file path
+ * @param {Object} [options]
+ * @param {number} [options.retries=3] - Attempts for the cross-filesystem copy
+ * @param {number} [options.delayMs=200] - Base backoff between copy attempts
+ * @returns {Promise<'moved'|'already-moved'>}
+ * @throws {Error} code EEXIST when another file holds the destination, ENOENT when neither exists
+ */
+async function moveFileNoClobber(src, dest, { retries = 3, delayMs = 200 } = {}) {
+  const staging = `${dest}${NO_CLOBBER_STAGING_SUFFIX}`;
+  await safeRemove(staging);
+
+  const [srcStat, destStat] = await Promise.all([statOrNull(src), statOrNull(dest)]);
+  if (!srcStat) {
+    if (destStat) return 'already-moved';
+    throw Object.assign(new Error(`Source file is missing: ${src}`), { code: 'ENOENT', path: src });
+  }
+  if (destStat) {
+    // The same file under another spelling (a case-only rename on a
+    // case-insensitive filesystem): rename it.
+    if (srcStat.ino === destStat.ino && srcStat.dev === destStat.dev) {
+      await fsPromises.rename(src, dest);
+      return 'moved';
+    }
+    if (srcStat.size === destStat.size && Math.abs(srcStat.mtimeMs - destStat.mtimeMs) < COPY_MTIME_TOLERANCE_MS) {
+      await fsPromises.unlink(src);
+      return 'already-moved';
+    }
+    throw destinationExistsError(dest);
+  }
+
+  await fsPromises.mkdir(path.dirname(dest), { recursive: true });
+  try {
+    await fsPromises.rename(src, dest);
+    return 'moved';
+  } catch (err) {
+    if (err.code !== 'EXDEV') throw err;
+  }
+
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await copyWithFallback(src, staging);
+      break;
+    } catch (err) {
+      await safeRemove(staging);
+      if (attempt >= retries) throw err;
+      await sleep(delayMs * Math.pow(2, attempt));
+    }
+  }
+  try {
+    if (await statOrNull(dest)) throw destinationExistsError(dest);
+    await fsPromises.rename(staging, dest);
+  } catch (err) {
+    await safeRemove(staging);
+    throw err;
+  }
+  await fsPromises.unlink(src);
+  return 'moved';
+}
+
 /**
  * Check if a path is a file
  *
@@ -284,6 +391,8 @@ module.exports = {
   sleep,
   moveWithRetries,
   replaceFileWithRetries,
+  moveFileNoClobber,
+  NO_CLOBBER_STAGING_SUFFIX,
   safeRemove,
   safeCopy,
   copySyncWithFallback,
