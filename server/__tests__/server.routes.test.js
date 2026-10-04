@@ -440,6 +440,7 @@ const createServerModule = ({
           describeHolds: jest.fn(), countHolds: jest.fn(), reopenHold: jest.fn(), dismissHold: jest.fn(), applyHolds: jest.fn(), expireHolds: jest.fn(),
         }));
         jest.doMock('../modules/mediaServers/watchStatusPushBack', () => ({ pushPendingHolds: jest.fn(), scheduleFollowUps: jest.fn() }));
+        jest.doMock('../modules/mediaServers/libraryCheck', () => ({ check: jest.fn(), applyPlexMapping: jest.fn() }));
         jest.doMock('../modules/tvShows/channelLayout', () => ({
           getChannelTvState: jest.fn(),
           resolveLayoutTarget: jest.fn(),

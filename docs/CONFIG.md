@@ -171,7 +171,7 @@ Youtarr must be running at the scheduled time; missed occurrences are not replay
 - **Default**: `"videos"`
 - **Options**: `"videos"`, `"tv"`
 - **Description**: Layout of the main downloads folder, for files saved directly in it rather than in a `__subfolder`. `"videos"` saves each video movie-style, as before. `"tv"` saves channels as TV shows (`<show>/Season NN/SxxEyy - Title [id].ext`) for a TV-type media server library. Each `__subfolder` has its own layout, set in **Settings > Core > File Structure > Library folders**.
-- **Note**: Changed only through the Library folders list, which refuses the change while the folder holds downloaded files or a download is running. A Settings save keeps the stored value. Switching the main folder to TV writes a `.plexignore` containing `__*/*` to the main folder, so a Plex TV library pointed there skips the subfolders.
+- **Note**: Changed only through the Library folders list. When the main folder holds downloaded videos, the change moves them into the other layout after you review the move (the reorganize); a direct change is refused while a download runs. A Settings save keeps the stored value. Switching the main folder to TV writes a `.plexignore` containing `__*/*` to the main folder, so a Plex TV library pointed there skips the subfolders.
 - **TV folders are video-only**: TV library scanners skip audio files. A channel or playlist whose download type is MP3 cannot be saved to a TV folder, a folder with MP3 channels or playlists cannot switch to TV, and a download request that names a TV folder together with an MP3 type is refused. When the destination is only known per video (a pasted URL whose channel saves to a TV folder, an MP3 playlist with a video from such a channel), the MP3 type is downgraded to video for that video, so the episode is saved as video; an MP3 playlist's such videos therefore have no audio file and are left out of its music playlist sync (`unsyncable_count`).
 
 ### Video Filename Template
@@ -242,6 +242,7 @@ Youtarr must be running at the scheduled time; missed occurrences are not replay
   ]
   ```
 - **Fallback**: Any subfolder not listed here will fall back to `plexYoutubeLibraryId`.
+- **TV folders**: Youtarr adds the entry for a TV subfolder when exactly one Plex TV Shows library holds it: automatically in Channel Settings -> TV Show, or with **Refresh this library** in the library check under Settings -> Core -> File Structure. It never replaces an existing entry.
 
 ### Plex IP
 - **Config Key**: `plexIP`
@@ -338,7 +339,7 @@ These fields work like the Jellyfin fields above, with `emby*` names. They're re
 | `embyWatchStatusAllUsers` | `boolean` | `true` | Sync watch status for every Emby user. When `false`, only the configured `embyUserId`. |
 | `watchStatusWatchedRule` | `string` | `"any"` | When a video counts as "Watched" in listings: `"any"` (any synced user watched it) or `"primary"` (only the Plex owner / configured Jellyfin/Emby user). |
 
-Sync is one-way (server -> Youtarr). Non-owner Plex users come from the server's play history, which records plays but not in-progress positions: any play marks the video watched for that user. User names are stored in the `media_server_users` table so the video modal can show who watched what. The history pull is incremental via a durable cursor in the `watch_status_sync_cursors` table; deleting that table's `plex` row forces a full history re-scan on the next sync (useful after repairing a path mismatch that had prevented videos from matching).
+Sync is one-way (server -> Youtarr), except that Youtarr restores watch state on the servers after it moves files between the Videos and TV layouts (see `watch_status_holds` in [DATABASE.md](DATABASE.md)). Non-owner Plex users come from the server's play history, which records plays but not in-progress positions: any play marks the video watched for that user. User names are stored in the `media_server_users` table so the video modal can show who watched what. The history pull is incremental via a durable cursor in the `watch_status_sync_cursors` table; deleting that table's `plex` row forces a full history re-scan on the next sync (useful after repairing a path mismatch that had prevented videos from matching).
 
 ## YouTube Data API (Optional)
 

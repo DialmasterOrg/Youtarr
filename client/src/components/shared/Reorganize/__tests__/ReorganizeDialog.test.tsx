@@ -123,4 +123,49 @@ describe('ReorganizeDialog', () => {
     expect(axios.post).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument();
   });
+
+  test('checks the media server libraries of the TV folders videos move into', async () => {
+    axios.post.mockResolvedValueOnce({ data: { ...PREVIEW, tvFolders: ['TV'] } });
+    axios.get.mockResolvedValue({
+      data: {
+        servers: [{ serverType: 'emby', name: 'Emby', reachable: true, error: null }],
+        folders: [{ name: 'TV', layout: 'tv', hasFiles: true, channels: 1, servers: [{ serverType: 'emby', status: 'missing', libraries: [], issues: [] }] }],
+      },
+    });
+    renderDialog();
+
+    expect(await screen.findByText(/Add a TV Shows library for __TV/)).toBeInTheDocument();
+    const [url, options] = axios.get.mock.calls.find(([calledUrl]: [string]) => calledUrl === '/api/library-folders/check');
+    expect(url).toBe('/api/library-folders/check');
+    expect((options.params as URLSearchParams).getAll('folder')).toEqual(['TV']);
+    // The folder may still be saved as a Videos folder: the move is what makes it a TV folder.
+    expect((options.params as URLSearchParams).get('layout')).toBe('tv');
+  });
+
+  test('forgets the previous move\'s library problems when the next move has no TV folder', async () => {
+    const problems = {
+      servers: [{ serverType: 'emby', name: 'Emby', reachable: true, error: null }],
+      folders: [{ name: 'TV', layout: 'tv', hasFiles: true, channels: 1, servers: [{ serverType: 'emby', status: 'missing', libraries: [], issues: [] }] }],
+    };
+    axios.post.mockResolvedValueOnce({ data: { ...PREVIEW, tvFolders: ['TV'] } });
+    axios.get.mockResolvedValue({ data: problems });
+    const onClose = jest.fn();
+    const { rerender } = render(<ReorganizeDialog open token="token" change={CHANGE} onClose={onClose} onApplied={jest.fn()} />);
+    expect(await screen.findByText(/Check the media server libraries/)).toBeInTheDocument();
+
+    const back = { type: 'channelLayout' as const, channelId: 'UC1', layout: 'videos' as const };
+    axios.post.mockResolvedValueOnce({ data: { ...PREVIEW, revision: 'rev2', tvFolders: [] } });
+    rerender(<ReorganizeDialog open token="token" change={back} onClose={onClose} onApplied={jest.fn()} />);
+
+    await screen.findByRole('button', { name: 'Move 2 videos' });
+    await waitFor(() => expect(screen.queryByText(/Check the media server libraries/)).not.toBeInTheDocument());
+  });
+
+  test("doesn't check media servers when no video becomes a TV episode", async () => {
+    axios.post.mockResolvedValueOnce({ data: { ...PREVIEW, tvFolders: [] } });
+    renderDialog();
+
+    expect(await screen.findByRole('button', { name: 'Move 2 videos' })).toBeInTheDocument();
+    expect(axios.get).not.toHaveBeenCalledWith('/api/library-folders/check', expect.anything());
+  });
 });

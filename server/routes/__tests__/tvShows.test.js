@@ -16,6 +16,7 @@ describe('TV show routes', () => {
   let jobModule;
   let models;
   let reorganize;
+  let libraryCheck;
   const channel = { channel_id: 'UC1', sub_folder: 'Kids' };
   const REORGANIZE_STATE = { running: false, unmoved: null };
 
@@ -35,6 +36,10 @@ describe('TV show routes', () => {
     jobModule = { getInProgressJobId: jest.fn().mockReturnValue(null) };
     models = { Channel: { findOne: jest.fn().mockResolvedValue(channel) } };
     reorganize = { channelState: jest.fn().mockResolvedValue(REORGANIZE_STATE) };
+    libraryCheck = {
+      check: jest.fn().mockResolvedValue({ servers: [], folders: [] }),
+      applyPlexMapping: jest.fn().mockResolvedValue({ mappedLibraryId: '41' }),
+    };
     const createTvShowRoutes = require('../tvShows');
     app = express();
     app.use(express.json());
@@ -52,7 +57,84 @@ describe('TV show routes', () => {
       channelSettingsModule,
       jobModule,
       models,
+      libraryCheck,
     }));
+  });
+
+  describe('GET /api/library-folders/check', () => {
+    test('checks every folder without a folder parameter', async () => {
+      const res = await request(app).get('/api/library-folders/check');
+
+      expect(res.status).toBe(200);
+      expect(libraryCheck.check).toHaveBeenCalledWith({});
+    });
+
+    test('checks only the folders asked for, including the main folder', async () => {
+      await request(app).get('/api/library-folders/check?folder=TV%20Shows&folder=');
+
+      expect(libraryCheck.check).toHaveBeenCalledWith({ folders: ['TV Shows', ''] });
+    });
+
+    test('rejects an overlong folder name', async () => {
+      const res = await request(app).get(`/api/library-folders/check?folder=${'x'.repeat(101)}`);
+
+      expect(res.status).toBe(400);
+    });
+
+    test('checks the folders asked for as another layout', async () => {
+      await request(app).get('/api/library-folders/check?folder=TV%20Shows&layout=tv');
+
+      expect(libraryCheck.check).toHaveBeenCalledWith({ folders: ['TV Shows'], layout: 'tv' });
+    });
+
+    test.each([
+      ['an unknown layout', '?folder=TV&layout=movies'],
+      ['a layout without folders', '?layout=tv'],
+    ])('rejects %s', async (_label, query) => {
+      const res = await request(app).get(`/api/library-folders/check${query}`);
+
+      expect(res.status).toBe(400);
+      expect(libraryCheck.check).not.toHaveBeenCalled();
+    });
+
+    test('answers 500 when the check fails unexpectedly', async () => {
+      libraryCheck.check.mockRejectedValue(new Error('boom'));
+
+      const res = await request(app).get('/api/library-folders/check');
+
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({ error: 'Failed to check the media server libraries' });
+    });
+  });
+
+  describe('PUT /api/library-folders/plex-mapping', () => {
+    test('maps the folder to the library', async () => {
+      const res = await request(app).put('/api/library-folders/plex-mapping').send({ folder: 'TV Shows', libraryId: '41' });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ mappedLibraryId: '41' });
+      expect(libraryCheck.applyPlexMapping).toHaveBeenCalledWith('TV Shows', '41');
+    });
+
+    test.each([
+      [{ folder: '', libraryId: '41' }],
+      [{ folder: 'TV', libraryId: 'abc' }],
+      [{ folder: 'TV' }],
+    ])('rejects %o', async (body) => {
+      const res = await request(app).put('/api/library-folders/plex-mapping').send(body);
+
+      expect(res.status).toBe(400);
+      expect(libraryCheck.applyPlexMapping).not.toHaveBeenCalled();
+    });
+
+    test('passes the check\'s refusal through', async () => {
+      libraryCheck.applyPlexMapping.mockRejectedValue(refusal('__TV already refreshes another Plex library.', 409));
+
+      const res = await request(app).put('/api/library-folders/plex-mapping').send({ folder: 'TV', libraryId: '41' });
+
+      expect(res.status).toBe(409);
+      expect(res.body).toEqual({ error: '__TV already refreshes another Plex library.' });
+    });
   });
 
   describe('GET /api/library-folders', () => {

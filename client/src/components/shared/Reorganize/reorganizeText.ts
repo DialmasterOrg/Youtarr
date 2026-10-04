@@ -26,9 +26,9 @@ export function folderName(libraryFolder: string): string {
 
 export const DOWNLOADS_WAIT_NOTE = 'Downloads wait in the queue until the move finishes.';
 
-export const WATCH_STATE_NOTE = 'Media servers show moved videos as new, unwatched items. Youtarr keeps its own watched '
+export const WATCH_STATE_NOTE = 'Media servers may show moved videos as new, unwatched items. Youtarr keeps its own watched '
   + 'state and restores it on Plex (the server owner), Jellyfin and Emby once they have scanned the moved files. '
   + 'Other Plex accounts keep their history in Youtarr, but not on Plex.';
 
-export const MOVIE_TAGS_NOTE = 'keep movie tags inside the video file. The NFO files are rewritten, but Plex Personal '
+export const MOVIE_TAGS_NOTE = 'movie tags inside the video file. The NFO files are rewritten, but Plex Personal '
   + 'Media may keep showing the old title.';

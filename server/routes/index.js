@@ -51,6 +51,7 @@ const layoutGuards = require('../modules/tvShows/layoutGuards');
 const reorganize = require('../modules/reorganize');
 const watchStatusHolds = require('../modules/mediaServers/watchStatusHolds');
 const watchStatusPushBack = require('../modules/mediaServers/watchStatusPushBack');
+const libraryCheck = require('../modules/mediaServers/libraryCheck');
 
 /**
  * Registers all route modules with the Express app
@@ -161,6 +162,7 @@ function registerRoutes(app, deps) {
   // TV show layouts (library folders and channel layouts)
   app.use(createTvShowRoutes({
     verifyToken, libraryFolders, channelLayout, layoutGuards, reorganize, channelSettingsModule, jobModule, models,
+    libraryCheck,
   }));
 
   // Reorganize (moving downloads between the Videos and TV layouts) and watch-state restores

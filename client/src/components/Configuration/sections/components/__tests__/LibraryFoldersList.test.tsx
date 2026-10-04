@@ -21,6 +21,27 @@ jest.mock('../../../../shared/Reorganize', () => {
 
 const mockSetFolderLayout = jest.fn();
 const mockRefetch = jest.fn();
+const mockCheckRefetch = jest.fn();
+const mockApplyPlexMapping = jest.fn();
+let mockCheckData: unknown = null;
+
+jest.mock('../../../../../hooks/useLibraryCheck', () => ({
+  useLibraryCheck: () => ({
+    data: mockCheckData,
+    loading: false,
+    error: null,
+    refetch: mockCheckRefetch,
+    applyPlexMapping: mockApplyPlexMapping,
+  }),
+}));
+
+const checkReport = (name: string, layout: 'videos' | 'tv', status: string, issues: { code: string; message: string; libraryId?: string }[] = []) => ({
+  name,
+  layout,
+  hasFiles: true,
+  channels: 1,
+  servers: [{ serverType: 'plex', status, libraries: [{ id: '41', name: 'YouTube TV', type: layout, location: 'Q:\\Y', relation: 'exact' }], issues }],
+});
 
 const FOLDERS: LibraryFolder[] = [
   { name: '', layout: 'videos', isDefault: true, hasFiles: false, channels: 3 },
@@ -59,6 +80,7 @@ async function chooseLayout(user: User, folderLabel: string, optionLabel: string
 describe('LibraryFoldersList', () => {
   beforeEach(() => {
     mockHook();
+    mockCheckData = null;
   });
 
   test('renders a row for each folder with its label', () => {
@@ -266,5 +288,58 @@ describe('LibraryFoldersList', () => {
     await user.click(screen.getByRole('button', { name: 'Retry' }));
 
     expect(mockRefetch).toHaveBeenCalled();
+  });
+
+  describe('media server check', () => {
+    const servers = [{ serverType: 'plex', name: 'Plex', reachable: true, error: null }];
+
+    test("shows each TV folder's libraries", () => {
+      mockCheckData = { servers, folders: [checkReport('Kids', 'tv', 'ok')] };
+      render(<LibraryFoldersList library={library} token="token" />);
+
+      expect(within(rowFor('__Kids')).getByText(/YouTube TV/)).toBeInTheDocument();
+    });
+
+    test('shows only problems for a Videos folder', () => {
+      mockCheckData = {
+        servers,
+        folders: [checkReport('', 'videos', 'ok'), checkReport('Shows', 'videos', 'warning', [{ code: 'wrongType', message: 'YouTube TV is a TV Shows library.' }])],
+      };
+      render(<LibraryFoldersList library={library} token="token" />);
+
+      expect(within(rowFor('Main folder')).queryByText(/YouTube TV/)).not.toBeInTheDocument();
+      expect(within(rowFor('__Shows')).getByText('YouTube TV is a TV Shows library.')).toBeInTheDocument();
+    });
+
+    test('maps a TV folder for Plex refreshes from its issue', async () => {
+      const user = userEvent.setup();
+      mockApplyPlexMapping.mockResolvedValue(undefined);
+      mockCheckData = {
+        servers,
+        folders: [checkReport('Kids', 'tv', 'warning', [{ code: 'plexMappingMissing', message: "New episodes don't refresh YouTube TV.", libraryId: '41' }])],
+      };
+      render(<LibraryFoldersList library={library} token="token" />);
+
+      await user.click(screen.getByRole('button', { name: 'Refresh this library' }));
+
+      expect(mockApplyPlexMapping).toHaveBeenCalledWith('Kids', '41');
+    });
+
+    test('checks again on request', async () => {
+      const user = userEvent.setup();
+      mockCheckData = { servers, folders: [] };
+      render(<LibraryFoldersList library={library} token="token" />);
+
+      await user.click(screen.getByRole('button', { name: 'Check again' }));
+
+      expect(mockCheckRefetch).toHaveBeenCalled();
+    });
+
+    test('shows nothing without configured media servers', () => {
+      mockCheckData = { servers: [], folders: [checkReport('Kids', 'tv', 'ok')] };
+      render(<LibraryFoldersList library={library} token="token" />);
+
+      expect(screen.queryByRole('button', { name: 'Check again' })).not.toBeInTheDocument();
+    });
   });
 });

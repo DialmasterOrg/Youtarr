@@ -4,6 +4,7 @@ const serverRegistry = require('./serverRegistry');
 const { MediaServerUnavailableError, describeHttpError } = require('./adapters/baseAdapter');
 const { Playlist, PlaylistVideo, PlaylistSyncState, Video } = require('../../models');
 const reorganizeLock = require('../reorganize/reorganizeLock');
+const libraryLocator = require('./libraryLocator');
 
 // Backoff retry for resolving items after library scan. Tuned for typical Plex/Jellyfin
 // scan completion times — short initial delays, then longer as more time passes.
@@ -153,9 +154,12 @@ class MediaServerSync {
     // ignore the hint (their refresh already covers every library).
     await adapter.triggerLibraryScan(null, { mediaType });
 
+    // Plex lists whole sections each round, so only the ones that hold Youtarr's folders.
+    const libraryIds = serverType === 'plex' ? await libraryLocator.scopeFor(adapter) : null;
     const resolvedByPath = await this._resolveAllWithBackoff(
       adapter,
-      entries.map((entry) => entry.filePath)
+      entries.map((entry) => entry.filePath),
+      { libraryIds }
     );
     const itemIds = [];
     for (const entry of entries) {
@@ -235,7 +239,7 @@ class MediaServerSync {
   // (Plex) this costs (sections x rounds) listing fetches instead of
   // (sections x files x rounds). Returns Map<filePath, itemId> for resolved
   // paths only.
-  async _resolveAllWithBackoff(adapter, filepaths) {
+  async _resolveAllWithBackoff(adapter, filepaths, { libraryIds = null } = {}) {
     const resolved = new Map();
     let pending = [...new Set(filepaths)];
     const collect = (results) => {
@@ -246,11 +250,11 @@ class MediaServerSync {
     };
 
     if (!pending.length) return resolved;
-    collect(await adapter.resolveItemIdsByFilepaths(pending));
+    collect(await adapter.resolveItemIdsByFilepaths(pending, { libraryIds }));
     for (const delay of POLL_BACKOFFS_MS) {
       if (!pending.length) break;
       await new Promise((r) => setTimeout(r, delay));
-      collect(await adapter.resolveItemIdsByFilepaths(pending));
+      collect(await adapter.resolveItemIdsByFilepaths(pending, { libraryIds }));
     }
     return resolved;
   }

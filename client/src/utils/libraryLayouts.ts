@@ -26,6 +26,11 @@ export function buildLayoutResolver(folders: LibraryFolder[]): LayoutResolver {
   return (libraryFolder) => layouts.get((libraryFolder || '').trim().toLowerCase()) || 'videos';
 }
 
+/** Comparison key for a library folder name ('' = main folder), ignoring case like the server. */
+export function folderKey(name: string | null | undefined): string {
+  return (name || '').trim().toLowerCase();
+}
+
 /** "Main folder" or "__Name". */
 export function libraryFolderLabel(name: string): string {
   return name ? `__${name}` : 'Main folder';

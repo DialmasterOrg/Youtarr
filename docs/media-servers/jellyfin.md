@@ -5,6 +5,7 @@ Complete guide for integrating Youtarr with Jellyfin Media Server.
 ## Table of Contents
 - [Overview](#overview)
 - [Library Setup](#library-setup)
+- [TV Shows](#tv-shows)
 - [Metadata Configuration](#metadata-configuration)
 - [Native Playlist Sync](#native-playlist-sync)
 - [Channel Playlist Files (.m3u)](#channel-playlist-files-m3u)
@@ -19,6 +20,7 @@ Youtarr provides full Jellyfin support through:
 - Optional channel and video backdrop art
 - Proper folder structure for organization
 - Multi-library support for content separation
+- TV show folders with season folders and episode NFO files (see [TV Shows](#tv-shows))
 - Real-time monitoring capability
 - Native playlist sync: subscribed YouTube playlists appear as Jellyfin playlists (see [Native Playlist Sync](#native-playlist-sync))
 
@@ -38,7 +40,9 @@ Youtarr writes each video as a standalone "movie" with its own NFO metadata, so 
 
 - **`Movies` (current recommendation)**: the most reliable option. Every video displays as a movie with full metadata and artwork. Limitation: Jellyfin will NOT automatically import Youtarr's optional per-channel `.m3u` playlist files; Jellyfin only imports playlist files from libraries whose content type is Mixed or Music. See [Channel Playlist Files (.m3u)](#channel-playlist-files-m3u).
 - **`Mixed Movies and Shows`**: automatically imports the per-channel `.m3u` files as Jellyfin playlists, but comes with real risks. [Jellyfin's own documentation](https://jellyfin.org/docs/general/server/media/mixed-movies-and-shows/) says this library type "is broken and deprecated" and recommends against using it, and its TV-detection heuristics can misclassify channel content as TV series: video titles that look episode-like ("Season 3", "Episode 12") or folder names starting with digits can be picked up as episodes, and a single misdetected video folder can flip an entire channel folder into displaying as a series. This tends to work on smaller libraries and break as the library grows, since more titles means more chances for a false match.
-- **`Shows`**: not currently supported. Writing videos and metadata in a way that is compatible with Shows-type libraries is on our roadmap but is not supported yet.
+- **`Shows`**: for Youtarr TV folders only, where channels are saved as TV shows. See [TV Shows](#tv-shows).
+
+We recommend against `Mixed Movies and Shows` for any Youtarr folder, Videos or TV: in our testing it behaved inconsistently with Youtarr's files, and Youtarr's library check reports a Mixed library on a TV folder as the wrong type.
 
 ### Step 2: Add Folders
 
@@ -48,30 +52,62 @@ Add your Youtarr download directory:
 3. For subfolders, add specific paths:
    - Kids: `/path/to/youtube/__kids`
    - Music: `/path/to/youtube/__music`
-   - All: `/path/to/youtube`
+
+   Jellyfin shows a folder in only one library, so don't add a library at `/path/to/youtube` next to subfolder libraries: the subfolder libraries would stay empty. One library per folder; see [One library per folder](#one-library-per-folder).
 
 ### Step 3: Configure Metadata Sources
 
-In the library settings:
+In the library's settings (everything not listed can keep its default):
 
-**Top level library settings**
-1. **Preferred download language**: Your language
-2. **Country**: Your country
-3. **Prefer embedded titles over filenames**: Set to enabled
-4. **Enable real time monitoring**: Recommended as enabled
-5. **Automatically refresh metadata**: Never (metadata is all embedded/included via `.nfo`)
-
-**Metadata downloaders** (in order):
-1. Disable **ALL** metadata downloaders since metadata is included!
-
-**Metadata savers**:
-- **Disable**: Nfo
+| Setting | Value | Why |
+|---------|-------|-----|
+| Prefer embedded titles over filenames | On | Only used when a video has no NFO file (NFO files turned off in Youtarr): the MP4's embedded title beats a title parsed from the file name. Jellyfin reads NFO files without a setting |
+| Metadata downloaders (Movies) | All off | An online match can replace a video's title, plot and artwork with an unrelated movie's |
+| Automatically refresh metadata from the internet | Never | |
+| Metadata savers: Nfo | Off | Jellyfin would rewrite Youtarr's NFO files (see the warning below) |
+| Image fetchers (Movies) | TheMovieDb and The Open Movie Database off | Youtarr writes `poster.jpg` per channel and a thumbnail per video; Jellyfin reads local images on its own. **Embedded Image Extractor** and **Screen Grabber** can stay on: they only run when no image exists |
+| Save artwork into media folders | Off | |
+| Trickplay and Chapter Images | Off (the defaults) | Slow and disk-hungry; Youtarr's files carry no chapter markers |
 
 > **Warning**: Do NOT enable the Nfo metadata saver. Youtarr generates and maintains the `.nfo` file for every video it downloads. If the saver is enabled, Jellyfin will update and overwrite those files with its own data, which can cause problems for your library.
 
-**Image fetchers**:
-- Disable all internet fetchers
-- Local images will be used automatically
+## TV Shows
+
+Youtarr can save channels as TV shows in a **TV folder**: a library folder whose layout is TV shows (Settings -> Core -> File Structure -> **Library folders**, or Channel Settings -> **TV Show**). Each channel becomes a show with year seasons and episodes named `Season 2026/S2026E09281530 - Title [id].mp4`, each with an episode NFO file and a thumbnail, plus `tvshow.nfo`, `poster.jpg` and (when enabled) `backdrop.jpg` in the show folder. The episode number is the upload's month, day, hour and minute in UTC, so Jellyfin lists episodes in upload order with large numbers (`9281530. Title` is September 28 at 15:30).
+
+### Library setup
+
+Add a library with content type **Shows** for each TV folder and point it at the folder itself, for example `/path/to/youtube/__TV Shows`. Use the Shows type, not `Mixed Movies and Shows`: a Mixed library decides per folder whether it holds a movie or a series, and in our testing it was inconsistent with Youtarr's files. In the library's settings (everything not listed can keep its default):
+
+| Setting | Value | Why |
+|---------|-------|-----|
+| Prefer embedded titles over filenames | Off | Episode titles come from Youtarr's NFO files (Jellyfin reads NFO files without a setting) |
+| Prefer embedded episode information over filenames | Off | Episode numbers come from the file names and NFO files, never from MP4 tags |
+| Metadata downloaders (TV Shows), (Seasons) and (Episodes) | All off | An online match can replace a channel's titles and numbers with an unrelated show's |
+| Automatically refresh metadata from the internet | Never | |
+| Metadata savers: Nfo | Off | Jellyfin would rewrite Youtarr's NFO files (see the warning above) |
+| Image fetchers (TV Shows), (Seasons) and (Episodes) | TheMovieDb and The Open Movie Database off | Youtarr writes `poster.jpg`, `backdrop.jpg` and an episode thumbnail; Jellyfin reads local images on its own. **Embedded Image Extractor** and **Screen Grabber** can stay on: they only run when no image exists |
+| Save artwork into media folders | Off | |
+| Trickplay and Chapter Images | Off (the defaults) | Slow and disk-hungry; Youtarr's files carry no chapter markers |
+
+Youtarr's library check (below) reports the Nfo saver and the online metadata downloaders when they are on.
+
+### One library per folder
+
+Jellyfin shows a folder in only one library. A library whose folder sits inside another library's folder is skipped (the Jellyfin log says `Found duplicate path`), so a Shows library for `__TV Shows` stays empty while another library includes your downloads folder. Once you use a TV folder:
+
+- Point your Movies library at your Videos folders one by one, not at the downloads folder.
+- Channels saved directly in the downloads folder (no subfolder) can only be reached through a library at the downloads folder, which would include the TV folder. Give those channels a subfolder first (Channel Settings -> Subfolder).
+
+Youtarr's library check points this out: Settings -> Core -> File Structure lists, under each folder, the libraries that hold it and anything to fix (also a library of the wrong type, the Nfo saver, or online metadata downloaders). Channel Settings -> **TV Show** shows the same for the channel's TV folder.
+
+### Watch state
+
+Jellyfin keeps watch state when Youtarr moves a show's episodes to another TV folder: `tvshow.nfo` carries the channel ID as a custom ID, and Jellyfin keys episode watch state on the show's ID and the episode number. A video that moves between a Videos folder and a TV folder shows up as a new, unwatched item; Youtarr restores the played state and resume position for every Jellyfin user once Jellyfin has scanned the moved file.
+
+### Replace all metadata
+
+Prefer **Scan for new and updated files**. On Jellyfin 12.1, **Replace all metadata** on a show kept Youtarr's episode numbers, titles and air dates in our tests; Jellyfin 10.11 was not tested.
 
 ## Metadata Configuration
 
@@ -116,7 +152,7 @@ The library and metadata setup above is all you need for downloaded videos to sh
 
 Once connected, open a playlist in Youtarr and turn on its Jellyfin sync chip. See [Media Server Playlists](../MEDIA_SERVER_PLAYLISTS.md) for how syncing, ordering, and updates work.
 
-Connecting Jellyfin also enables watch status sync: Youtarr periodically pulls per-video watch state (played, percent watched, last watched) for every user on the server and shows it as Watched chips and filters on its listing pages. It's one-way; Youtarr never marks anything watched on Jellyfin. Jellyfin decides when a video counts as played: **Maximum resume percentage** under Server -> Playback -> Resume. Settings live under **Settings -> Watch Status**; see [Track Watch Status from Media Servers](../USAGE_GUIDE.md#track-watch-status-from-media-servers).
+Connecting Jellyfin also enables watch status sync: Youtarr periodically pulls per-video watch state (played, percent watched, last watched) for every user on the server and shows it as Watched chips and filters on its listing pages. Youtarr writes to Jellyfin only to restore watch state after it moves your files (see [Watch state](#watch-state)). Jellyfin decides when a video counts as played: **Maximum resume percentage** under Server -> Playback -> Resume. Settings live under **Settings -> Watch Status**; see [Track Watch Status from Media Servers](../USAGE_GUIDE.md#track-watch-status-from-media-servers).
 
 Videos inside Jellyfin Collections remain available for watch status and native playlist sync with **Group movies into collections** enabled. You do not need to change that display setting.
 
@@ -150,8 +186,10 @@ Organize content by type:
    Path: /path/to/youtube/__music
 
    Library: "YouTube - General"
-   Path: /path/to/youtube
+   Paths: /path/to/youtube/__news, /path/to/youtube/__gaming
    ```
+
+   Jellyfin shows a folder in only one library, so don't add the downloads folder itself to a library when other libraries use its subfolders: they would stay empty. Channels saved directly in the downloads folder need a subfolder once you split libraries.
 
 2. **Configure each library** independently:
    - Kids: Enable parental ratings
@@ -214,6 +252,14 @@ Organize content by type:
    ```
 3. Clear cache and rescan
 4. Check image format (JPEG required)
+
+### TV Library Is Empty
+
+**Problem**: A Shows library for a Youtarr TV folder shows nothing, while the episodes appear in another library
+
+**Cause**: Another library includes the TV folder (usually a library at the downloads folder). Jellyfin shows a folder in one library only and skips the nested one; its log says `Found duplicate path`.
+
+**Solution**: Point the other library at your Videos folders one by one instead of the downloads folder, then scan. See [One library per folder](#one-library-per-folder).
 
 ## File Structure
 

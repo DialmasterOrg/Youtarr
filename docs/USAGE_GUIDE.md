@@ -14,6 +14,7 @@ This guide provides step-by-step instructions for common tasks in Youtarr. After
 - [Re-download Missing Videos](#re-download-missing-videos)
 - [Rescan Files on Disk](#rescan-files-on-disk)
 - [Organize Channels with Multi-Library Support](#organize-channels-with-multi-library-support)
+- [Save Channels as TV Shows](#save-channels-as-tv-shows)
 - [Browse and Filter Channel Videos](#browse-and-filter-channel-videos)
 - [Find Videos on YouTube](#find-videos-on-youtube)
 - [Preview and Play Videos](#preview-and-play-videos)
@@ -448,11 +449,48 @@ Create separate media server libraries for different content types (e.g., kids c
      - Library 1: `/path/to/downloads/__kids`
      - Library 2: `/path/to/downloads/__music`
      - Library 3: `/path/to/downloads` (for channels without a subfolder)
+   - Jellyfin and Emby show a folder in only one library, so a library at `/path/to/downloads` leaves libraries for its subfolders empty there; give every channel a subfolder instead. Plex shows those videos in both libraries.
 
 4. **Apply restrictions and sharing**
    - Configure library-specific access controls in your media server
    - Set age ratings and content restrictions per library
    - Share specific libraries with specific users
+
+## Save Channels as TV Shows
+
+Media servers show Youtarr's videos as movies. A **TV folder** shows them as TV shows instead: each channel is a show, each upload year a season, and each video an episode with its own NFO file.
+
+### Set up a TV folder
+
+- **From a channel**: open the channel page, click the settings icon (gear), open **TV Show** and click **TV show**. Without a TV folder yet, Youtarr asks for a name (default `TV Shows`, saved as `__TV Shows`), creates the folder and switches the channel to it. With several TV folders, you pick one.
+- **From Settings**: under Settings -> Core -> File Structure -> **Library folders**, set a folder's layout to **TV shows**. Every channel that downloads to that folder becomes a show.
+
+Then add a TV library for the folder on your media server (see [Media Server Integration](MEDIA_SERVERS.md#tv-shows)). The **Media servers** box under Channel Settings -> **TV Show** shows, per server, whether a library holds the folder and what to fix. For Plex, Youtarr adds the folder's refresh mapping as soon as it finds the one TV Shows library that holds it.
+
+What changes for a TV channel:
+
+- Episodes go to `<TV folder>/<channel>/Season <year>/` and are named by upload time in UTC: `S2026E09281530 - Title [id].mp4` was uploaded on September 28 at 15:30. See [TV folders](YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md#tv-folders).
+- The download type is video only, and the file structure and channel playlist (.m3u) options don't apply.
+- The channel page and Subscriptions show a **TV** chip, and videos show their episode code.
+- If the default subfolder is a TV folder, a download from a channel you haven't subscribed to becomes a show of its own.
+
+### Switch a channel or folder that already has downloads
+
+Switching moves the downloaded files into the other layout, so Youtarr opens **Review the move** first. It lists:
+
+- every move, with the old and new path and the episode number;
+- the shows it creates;
+- anything it can't move, such as a file missing from disk or a file already at the destination;
+- how many videos have watch state on each media server;
+- media server library problems for the TV folders the videos move into.
+
+Click **Move N videos** to start. While the files move, a banner shows on every page, downloads wait in the queue, and the rescan and other maintenance tasks wait too. Files named by the Plex TV Series preset keep their episode numbers. Switching back to Videos names the files with your current filename template, and switching to TV again later brings back the same episode numbers.
+
+- **Blocked**: if a download or a sync is running, the review says so and enables the button once it finishes.
+- **Videos not moved**: the result lists them with **Retry**. The channel's settings also say how many videos were not moved, with a **Review** link to the result.
+- **Restarted**: a move interrupted by a restart resumes when Youtarr starts.
+
+The same review opens when you change the default subfolder (Settings -> Core) to a folder with the other layout while channels on the default have downloads. Save again afterwards to apply your other changes.
 
 ## Browse and Filter Channel Videos
 
@@ -557,7 +595,7 @@ Click any thumbnail on the Videos page or a channel page to open a video detail 
 
 ## Track Watch Status from Media Servers
 
-If you've connected Plex, Jellyfin, or Emby, Youtarr can pull watch status from them: which videos have been played, how far through, and when. The sync is one-way; Youtarr only reads from your servers and never writes anything back.
+If you've connected Plex, Jellyfin, or Emby, Youtarr can pull watch status from them: which videos have been played, how far through, and when. Youtarr only reads from your servers, except to restore watch state after it moves your files (see [Restore watch state after a move](#restore-watch-state-after-a-move)).
 
 ### How it works
 
@@ -594,6 +632,12 @@ Youtarr doesn't decide this; it shows whatever your media servers report. All th
 - **Jellyfin**: Server -> Playback -> Resume -> **Maximum resume percentage**
 
 On Emby and Jellyfin the same setting also controls resume: stop after the threshold and the title counts as fully played instead of resumable. If you finished a video and it isn't showing as watched in Youtarr, check this setting on the server you played it on, then run a sync.
+
+### Restore watch state after a move
+
+When Youtarr moves a video's files (see [Save Channels as TV Shows](#save-channels-as-tv-shows)), a media server can see the moved file as a new, unwatched item. Youtarr keeps its own watched state for those videos while the servers catch up, and restores the played state and resume position on each server once it has scanned the moved files: for every Jellyfin and Emby user, and for the Plex server owner. It tries 1, 5 and 15 minutes after the move and after each sync. Plex (with the Plex NFO Series agent) and Jellyfin keep watch state on their own when a show moves to another TV folder; then nothing needs restoring.
+
+**Settings -> Watch Status** shows how many restores are pending. A restore that hasn't happened after 14 days shows as failed, with **Retry** (try again now) and **Dismiss** (stop protecting the old state). Other Plex accounts keep their history in Youtarr, but Plex itself loses it for moved videos.
 
 ## Common tasks
 

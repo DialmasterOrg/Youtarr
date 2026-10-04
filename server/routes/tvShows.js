@@ -2,6 +2,7 @@ const express = require('express');
 const logger = require('../logger');
 
 const MAX_FOLDER_NAME_LENGTH = 100;
+const LIBRARY_LAYOUTS = new Set(['videos', 'tv']);
 
 /**
  * TV show routes: library folder layouts and per-channel TV layout.
@@ -14,10 +15,12 @@ const MAX_FOLDER_NAME_LENGTH = 100;
  * @param {Object} deps.channelSettingsModule
  * @param {Object} deps.jobModule - Its running job blocks layout switches
  * @param {Object} deps.models
+ * @param {Object} deps.libraryCheck - mediaServers/libraryCheck
  * @returns {express.Router}
  */
 function createTvShowRoutes({
   verifyToken, libraryFolders, channelLayout, layoutGuards, reorganize, channelSettingsModule, jobModule, models,
+  libraryCheck,
 }) {
   const router = express.Router();
   const isDownloadRunning = () => Boolean(jobModule.getInProgressJobId());
@@ -106,6 +109,143 @@ function createTvShowRoutes({
       return res.json({ changed, folders: await libraryFolders.listLibraryFolders() });
     } catch (error) {
       return sendError(res, error, 'Failed to change the folder layout', { name, layout });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/library-folders/check:
+   *   get:
+   *     summary: Check the media server libraries that hold each library folder
+   *     description: For each library folder and each configured media server (Plex, Jellyfin, Emby), the libraries that hold the folder and what works against Youtarr's files there - no library of the right kind, a library of the wrong type, the Plex Series agent or a legacy Plex agent, a Jellyfin/Emby library that saves NFO files or looks items up online, another library showing the same files again, or a library mounted at the folder under another name. Server paths differ from Youtarr's, so a folder is found by its __name and by matching a few files from each library to Youtarr's downloads. A TV subfolder held by exactly one Plex TV library also reports its Plex refresh mapping.
+   *     tags: [TV Shows]
+   *     parameters:
+   *       - in: query
+   *         name: folder
+   *         required: false
+   *         schema:
+   *           type: array
+   *           items: { type: string }
+   *         description: Only report these folders ("" for the main folder); repeat for more than one
+   *       - in: query
+   *         name: layout
+   *         required: false
+   *         schema:
+   *           type: string
+   *           enum: [videos, tv]
+   *         description: Check the folders given as this layout instead of their saved one (the reorganize preview checks the folders videos are about to move into as TV folders). Needs folder.
+   *     responses:
+   *       200:
+   *         description: Per-server reachability and a report per folder
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 servers:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       serverType: { type: string, enum: [plex, jellyfin, emby] }
+   *                       name: { type: string }
+   *                       reachable: { type: boolean }
+   *                       error: { type: string, nullable: true }
+   *                 folders:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       name: { type: string }
+   *                       layout: { type: string, enum: [videos, tv] }
+   *                       hasFiles: { type: boolean }
+   *                       channels: { type: integer }
+   *                       servers:
+   *                         type: array
+   *                         items:
+   *                           type: object
+   *                           properties:
+   *                             serverType: { type: string }
+   *                             status: { type: string, enum: [ok, warning, missing, unreachable] }
+   *                             libraries:
+   *                               type: array
+   *                               items:
+   *                                 type: object
+   *                                 properties:
+   *                                   id: { type: string }
+   *                                   name: { type: string }
+   *                                   type: { type: string, enum: [videos, tv, mixed, music, other] }
+   *                                   location: { type: string }
+   *                                   relation: { type: string, enum: [exact, covers, inside] }
+   *                             issues:
+   *                               type: array
+   *                               items:
+   *                                 type: object
+   *                                 properties:
+   *                                   code: { type: string }
+   *                                   message: { type: string }
+   *                                   libraryId: { type: string }
+   *                             plexMapping:
+   *                               type: object
+   *                               description: Plex only, TV subfolders only
+   *                               properties:
+   *                                 mappedLibraryId: { type: string, nullable: true }
+   *                                 suggestedLibraryId: { type: string, nullable: true }
+   *       400: { description: Invalid folder parameter }
+   *       500: { description: Failed to check the media server libraries }
+   */
+  router.get('/api/library-folders/check', verifyToken, async (req, res) => {
+    const raw = req.query.folder;
+    const folders = raw === undefined ? null : [].concat(raw);
+    if (folders && folders.some((name) => typeof name !== 'string' || name.length > MAX_FOLDER_NAME_LENGTH)) {
+      return res.status(400).json({ error: 'folder must be a folder name ("" for the main folder)' });
+    }
+    const layout = req.query.layout;
+    if (layout !== undefined && (!folders || !LIBRARY_LAYOUTS.has(layout))) {
+      return res.status(400).json({ error: 'layout must be "videos" or "tv", for the folders given' });
+    }
+    try {
+      return res.json(await libraryCheck.check(folders ? { folders, ...(layout ? { layout } : {}) } : {}));
+    } catch (error) {
+      return sendError(res, error, 'Failed to check the media server libraries');
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/library-folders/plex-mapping:
+   *   put:
+   *     summary: Map a TV folder to its Plex library for refreshes
+   *     description: Adds a Plex subfolder library mapping so new episodes in a TV subfolder refresh the one Plex TV Shows library that holds it (as the library check reports it). An existing mapping for the folder is never replaced.
+   *     tags: [TV Shows]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [folder, libraryId]
+   *             properties:
+   *               folder: { type: string, description: Subfolder name without __ }
+   *               libraryId: { type: string }
+   *     responses:
+   *       200: { description: "The mapping, as { mappedLibraryId, plexSubfolderLibraryMappings } with the saved mappings" }
+   *       400: { description: Invalid folder or library id, or the folder isn't a TV subfolder }
+   *       409: { description: "Plex can't be reached, the folder already has another mapping, or that library isn't the one Plex TV library holding the folder" }
+   *       500: { description: Failed to save the mapping }
+   */
+  router.put('/api/library-folders/plex-mapping', verifyToken, async (req, res) => {
+    const { folder, libraryId } = req.body || {};
+    if (typeof folder !== 'string' || !folder.trim() || folder.length > MAX_FOLDER_NAME_LENGTH) {
+      return res.status(400).json({ error: 'folder must be a subfolder name' });
+    }
+    if (typeof libraryId !== 'string' || !/^\d+$/.test(libraryId)) {
+      return res.status(400).json({ error: 'libraryId must be a Plex library id' });
+    }
+    try {
+      return res.json(await libraryCheck.applyPlexMapping(folder.trim(), libraryId));
+    } catch (error) {
+      return sendError(res, error, 'Failed to save the Plex library mapping', { folder, libraryId });
     }
   });
 

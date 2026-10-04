@@ -13,6 +13,7 @@ import {
 import { ChannelTvState, LibraryFolder, LibraryLayout } from '../../../types/tvShows';
 import { libraryFolderLabel } from '../../../utils/libraryLayouts';
 import TvFolderSetup from './TvFolderSetup';
+import ChannelTvMediaServers, { MediaServerSetupNotes } from './ChannelTvMediaServers';
 
 /** The server's refusal when it can't tell which Videos folder to switch back to. */
 export const CHOOSE_VIDEOS_FOLDER_MESSAGE = 'Choose a Videos folder.';
@@ -23,15 +24,11 @@ const REORGANIZING_NOTE = "This channel's downloaded videos are being moved.";
 const DEFAULT_FOLDER_TV_NOTE =
   "The default subfolder is a TV folder, so downloads from channels you haven't subscribed to are each saved as their own TV show.";
 const NO_VIDEOS_FOLDER_MESSAGE = 'No library folder uses the Videos layout yet.';
-const PLEX_SETUP_NOTE =
-  'Plex: add a TV Shows library for this folder (scanner Plex TV Series, agent Plex Personal Media or Plex NFO Series). '
-  + 'Then map the folder under Settings > Plex > subfolder library mappings so new episodes refresh it.';
-const JELLYFIN_EMBY_SETUP_NOTE =
-  'Jellyfin and Emby: add a Shows library for this folder with the NFO reader on, NFO saving off and online metadata off.';
 
 type Step = 'idle' | 'pickTv' | 'pickVideos' | 'setupTv';
 
 export interface ChannelTvSectionProps {
+  token: string | null;
   channelName: string;
   tv: ChannelTvState | null;
   loading: boolean;
@@ -90,24 +87,9 @@ function FolderPicker({ prompt, label, folders, value, onChange, actionLabel, on
   );
 }
 
-function MediaServerSetupNotes() {
-  return (
-    <Box className="flex flex-col gap-1 rounded-[var(--radius-ui)] bg-muted p-3">
-      <Typography variant="body2" className="font-semibold">
-        Media server setup
-      </Typography>
-      <Typography variant="caption" color="text.secondary">
-        {PLEX_SETUP_NOTE}
-      </Typography>
-      <Typography variant="caption" color="text.secondary">
-        {JELLYFIN_EMBY_SETUP_NOTE}
-      </Typography>
-    </Box>
-  );
-}
-
 /** Channel Settings section that switches a channel between Videos and TV show. */
 function ChannelTvSection({
+  token,
   channelName,
   tv,
   loading,
@@ -294,7 +276,8 @@ function ChannelTvSection({
 
       {tv.defaultFolderLayout === 'tv' && <Alert severity="info">{DEFAULT_FOLDER_TV_NOTE}</Alert>}
 
-      {(isTv || step === 'setupTv') && <MediaServerSetupNotes />}
+      {isTv && <ChannelTvMediaServers token={token} folder={tv.show?.libraryFolder ?? tv.libraryFolder} />}
+      {!isTv && step === 'setupTv' && <MediaServerSetupNotes />}
     </Box>
   );
 }

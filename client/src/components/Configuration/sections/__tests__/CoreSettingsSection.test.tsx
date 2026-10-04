@@ -21,14 +21,22 @@ jest.mock('../../../../hooks/useSubfolders', () => ({
 }));
 
 // Mock useLibraryFolders hook to prevent network requests
+const mockLayouts: Record<string, string> = {};
 jest.mock('../../../../hooks/useLibraryFolders', () => ({
   useLibraryFolders: () => ({
     folders: [{ name: '', layout: 'videos', isDefault: true, hasFiles: false, channels: 0 }],
     loading: false,
     error: null,
-    layoutOf: () => 'videos',
+    layoutOf: (name: string) => mockLayouts[name] ?? 'videos',
     refetch: () => Promise.resolve(),
     setFolderLayout: () => Promise.resolve(),
+  }),
+}));
+
+// Mock useLibraryCheck hook to prevent network requests
+jest.mock('../../../../hooks/useLibraryCheck', () => ({
+  useLibraryCheck: () => ({
+    data: null, loading: false, error: null, refetch: () => Promise.resolve(), applyPlexMapping: () => Promise.resolve(),
   }),
 }));
 
@@ -1164,6 +1172,32 @@ describe('CoreSettingsSection Component', () => {
         ok: true,
         json: jest.fn().mockResolvedValue({ count: 0, channelNames: [] })
       } as unknown as Response);
+    });
+
+    test('says existing videos stay put between folders with the same layout', async () => {
+      const user = userEvent.setup();
+      mockFetch.mockResolvedValue({ ok: true, json: jest.fn().mockResolvedValue({ count: 0, channelNames: [] }) });
+      renderWithProviders(<CoreSettingsSection {...createSectionProps({ config: createConfig({ defaultSubfolder: '' }) })} />);
+
+      await openSubfolderDialog(user);
+
+      expect(await screen.findByText('Existing videos will not be moved.')).toBeInTheDocument();
+    });
+
+    test('says videos move when the new default has the other layout', async () => {
+      const user = userEvent.setup();
+      mockLayouts.NewFolder = 'tv';
+      mockFetch.mockResolvedValue({ ok: true, json: jest.fn().mockResolvedValue({ count: 0, channelNames: [] }) });
+      try {
+        renderWithProviders(<CoreSettingsSection {...createSectionProps({ config: createConfig({ defaultSubfolder: '' }) })} />);
+
+        await openSubfolderDialog(user);
+
+        expect(await screen.findByText(/the downloaded videos of the channels that use the default subfolder move/)).toBeInTheDocument();
+        expect(screen.queryByText('Existing videos will not be moved.')).not.toBeInTheDocument();
+      } finally {
+        delete mockLayouts.NewFolder;
+      }
     });
 
     test('shows "No tracked channels" message when count is 0', async () => {

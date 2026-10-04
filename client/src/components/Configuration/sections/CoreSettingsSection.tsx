@@ -40,6 +40,10 @@ import { ConfigState, DeploymentEnvironment, PlatformManagedState } from '../typ
 import { getChannelFilesOptions } from '../helpers';
 import { ScheduleSummary } from './components/ScheduleSummary';
 
+const DEFAULT_LAYOUT_CHANGE_NOTE =
+  'One of these folders saves videos and the other saves TV shows, so the downloaded videos of the channels that use '
+  + 'the default subfolder move. When you save, you review the move first.';
+
 interface CoreSettingsSectionProps {
   config: ConfigState;
   deploymentEnvironment: DeploymentEnvironment;
@@ -114,6 +118,10 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
       setLoadingAffectedChannels(false);
     }
   };
+
+  // Between a Videos and a TV folder, saving moves the downloaded videos of the channels on the default.
+  const defaultLayoutChanges = pendingDefaultSubfolder !== null
+    && layoutOf(config.defaultSubfolder || '') !== layoutOf(pendingDefaultSubfolder || '');
 
   const handleConfirmDefaultSubfolder = () => {
     onConfigChange({ defaultSubfolder: pendingDefaultSubfolder || '' });
@@ -764,7 +772,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
             </strong>
           </DialogContentText>
           <DialogContentText className="mt-2" style={{ fontStyle: 'italic' }}>
-            Existing videos will not be moved.
+            {defaultLayoutChanges ? DEFAULT_LAYOUT_CHANGE_NOTE : 'Existing videos will not be moved.'}
           </DialogContentText>
         </DialogContent>
         <DialogActions>

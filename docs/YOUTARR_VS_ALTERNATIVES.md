@@ -72,7 +72,7 @@ Legend: ✅ supported, ❌ not supported, ⚠️ partial/caveat, "unclear" = not
 | Retention / auto-prune | ✅ Age, free-space, and watched-based rules with dry-run; per-video and per-channel "protection" shields; global and per-channel keep-recent guards; Apprise notifications on auto-removal | ✅ Per-source "auto-delete after N days" | ✅ Global + per-channel |
 | **Playback & viewing** | | | |
 | In-browser video player | ✅ Detail modal + streaming | ❌ Intentionally out of scope | ✅ Full HTML5 player with SponsorBlock skip, keyboard shortcuts, Cast |
-| Watched-state tracking | ✅ Synced from Plex/Jellyfin/Emby for all server users; Watched chips + filters on every listing page; one-way pull, needs a connected media server (the built-in player doesn't track) | ❌ | ✅ With threshold + "Continue watching" |
+| Watched-state tracking | ✅ Synced from Plex/Jellyfin/Emby for all server users; Watched chips + filters on every listing page; pulled from the servers (and restored on them after Youtarr moves files), needs a connected media server (the built-in player doesn't track) | ❌ | ✅ With threshold + "Continue watching" |
 | Full-text search across transcripts | ❌ | ❌ | ✅ Flagship feature via Elasticsearch |
 | Search across comments | ❌ | ❌ | ⚠️ Comments archived; dedicated comment-search UI still on roadmap |
 | **Integrations** | | | |

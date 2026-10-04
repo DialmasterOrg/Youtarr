@@ -1,12 +1,33 @@
 import React from 'react';
 import { Alert, Box, Chip, Typography } from '../../ui';
 import { ReorganizePreview, ReorganizePreviewItem } from '../../../types/reorganize';
+import { LibraryCheckResponse } from '../../../types/libraryCheck';
+import { LibraryCheckNotes } from '../LibraryCheck/LibraryCheckNotes';
 import {
   agree, countOf, DOWNLOADS_WAIT_NOTE, folderName, MOVIE_TAGS_NOTE, serverName, WATCH_STATE_NOTE,
 } from './reorganizeText';
 
 interface ReorganizePreviewBodyProps {
   preview: ReorganizePreview;
+  /** The library check for the TV folders videos move into */
+  libraryCheck?: LibraryCheckResponse | null;
+}
+
+/** Media server library problems for the TV folders videos move into. */
+function LibraryProblems({ libraryCheck }: { libraryCheck: LibraryCheckResponse }) {
+  const folders = libraryCheck.folders.filter((folder) => folder.servers.some((server) => server.status !== 'ok'));
+  if (folders.length === 0) return null;
+  return (
+    <Alert severity="warning">
+      <Typography variant="body2" className="mb-1">Check the media server libraries for these TV folders before or after the move:</Typography>
+      {folders.map((folder) => (
+        <Box key={folder.name || 'main-folder'} className="mt-1">
+          <Typography variant="body2" className="font-semibold">{folderName(folder.name)}</Typography>
+          <LibraryCheckNotes folder={folder} servers={libraryCheck.servers} showSetupHints problemsOnly />
+        </Box>
+      ))}
+    </Alert>
+  );
 }
 
 function MoveRow({ item }: { item: ReorganizePreviewItem }) {
@@ -91,7 +112,7 @@ function BlockedAlert({ blocked }: { blocked: NonNullable<ReorganizePreview['blo
 }
 
 /** The dry run of a reorganize: what moves where, and what to know first. */
-function ReorganizePreviewBody({ preview }: ReorganizePreviewBodyProps) {
+function ReorganizePreviewBody({ preview, libraryCheck = null }: ReorganizePreviewBodyProps) {
   const problems = problemLines(preview);
   if (!preview.needed) {
     return (
@@ -139,6 +160,7 @@ function ReorganizePreviewBody({ preview }: ReorganizePreviewBodyProps) {
           {problems.map((line) => <Typography key={line} variant="body2">{line}</Typography>)}
         </Alert>
       )}
+      {libraryCheck && <LibraryProblems libraryCheck={libraryCheck} />}
       {preview.watchState.length > 0 && (
         <Alert severity="info">
           <Typography variant="body2">{WATCH_STATE_NOTE}</Typography>

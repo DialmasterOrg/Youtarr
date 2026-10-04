@@ -4,6 +4,18 @@ import '@testing-library/jest-dom';
 import ChannelTvSection, { ChannelTvSectionProps } from '../ChannelTvSection';
 import { ChannelTvState, LibraryFolder } from '../../../../types/tvShows';
 
+jest.mock('../ChannelTvMediaServers', () => {
+  const actual = jest.requireActual('../ChannelTvMediaServers');
+  return {
+    __esModule: true,
+    ...actual,
+    default: function MockChannelTvMediaServers({ folder }: { folder: string }) {
+      const React = require('react');
+      return React.createElement('div', { 'data-testid': 'tv-media-servers' }, `check:${folder}`);
+    },
+  };
+});
+
 const videosTv: ChannelTvState = {
   layout: 'videos',
   libraryFolder: 'Gaming',
@@ -33,6 +45,7 @@ const libraryFolders = [folder('', 'videos'), folder('Gaming', 'videos'), folder
 
 function renderSection(overrides: Partial<ChannelTvSectionProps> = {}) {
   const props: ChannelTvSectionProps = {
+    token: 'token',
     channelName: 'Tech Channel',
     tv: videosTv,
     loading: false,
@@ -213,16 +226,17 @@ describe('ChannelTvSection', () => {
     ).toBeInTheDocument();
   });
 
-  test('shows the media server notes for a TV channel', () => {
+  test("checks the media server libraries of a TV channel's show folder", () => {
     renderSection({ tv: tvTv });
 
-    expect(screen.getByText(/Plex: add a TV Shows library for this folder/)).toBeInTheDocument();
+    expect(screen.getByTestId('tv-media-servers')).toHaveTextContent('check:Anime');
   });
 
   test('hides the media server notes for a Videos channel', () => {
     renderSection();
 
     expect(screen.queryByText('Media server setup')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('tv-media-servers')).not.toBeInTheDocument();
   });
 
   test('shows a spinner while the TV state loads', () => {

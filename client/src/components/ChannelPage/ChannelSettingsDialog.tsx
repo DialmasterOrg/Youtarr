@@ -873,6 +873,7 @@ function ChannelSettingsDialog({
       case 'tv':
         return (
           <ChannelTvSection
+            token={token}
             channelName={channelName}
             tv={tv}
             loading={tvLoading}

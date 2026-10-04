@@ -16,6 +16,7 @@ import { useReorganizeOperation } from './hooks/useReorganizeOperation';
 import ReorganizePreviewBody from './ReorganizePreviewBody';
 import ReorganizeOperationBody from './ReorganizeOperationBody';
 import { serverCodeOf, serverMessageOf } from './reorganizeErrors';
+import { useLibraryCheck } from '../../../hooks/useLibraryCheck';
 import { countOf } from './reorganizeText';
 
 const STALE_PREVIEW_CODE = 'STALE_PREVIEW';
@@ -57,6 +58,11 @@ function ReorganizeDialog({
   const previewing = open && operationId === null;
   const { preview, loading, error: previewError, refresh } = useReorganizePreview(token, previewing ? change : null);
   const { operation, error: operationError, retrying, retry } = useReorganizeOperation(token, open ? operationId : null);
+  const tvFolders = preview?.tvFolders ?? [];
+  // Checked as TV folders: a folder switching layouts is still saved as a Videos folder until the move.
+  const { data: libraryCheck } = useLibraryCheck(token, {
+    folders: tvFolders, layout: 'tv', enabled: previewing && tvFolders.length > 0,
+  });
 
   const start = async () => {
     if (!preview || !change || startingRef.current) return;
@@ -101,7 +107,7 @@ function ReorganizeDialog({
             {loading && <LinearProgress />}
             {previewError && <Alert severity="error">{previewError}</Alert>}
             {startError && <Alert severity="error">{startError}</Alert>}
-            {preview && <ReorganizePreviewBody preview={preview} />}
+            {preview && <ReorganizePreviewBody preview={preview} libraryCheck={libraryCheck} />}
           </div>
         ) : (
           <div className="pt-2">

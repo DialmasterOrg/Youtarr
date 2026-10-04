@@ -73,6 +73,8 @@ export interface ReorganizePreview {
   change: ReorganizeChange & { label: string };
   totals: ReorganizeTotals;
   shows: ReorganizePreviewShow[];
+  /** The TV library folders videos move into ('' = main folder) */
+  tvFolders?: string[];
   /** The first 200 moves */
   items: ReorganizePreviewItem[];
   /** The first 200 videos that can't move or need attention */

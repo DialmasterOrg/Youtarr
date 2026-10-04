@@ -24,6 +24,7 @@ const logger = require('../../logger');
 const { describeHttpError } = require('./adapters/baseAdapter');
 const { HOLD_STATE } = require('./watchStatusHolds');
 const { isAtLeast, isLaterWatch } = require('./watchStateCompare');
+const libraryLocator = require('./libraryLocator');
 
 // A sync retries a hold whose last push did not take at most this often.
 const PUSH_RETRY_INTERVAL_MS = 60 * 60 * 1000;
@@ -123,7 +124,8 @@ async function pushPendingHolds({ holdIds = null, onlyDue = true, now = new Date
     let matches;
     try {
       const paths = [...new Set(serverHolds.flatMap((hold) => [pathOf.get(hold.video_id), fromPathOf(hold)]).filter(Boolean))];
-      matches = await adapter.resolveItemMatchesByPaths(paths);
+      // Only the libraries that hold Youtarr's folders, not every item on the server.
+      matches = await adapter.resolveItemMatchesByPaths(paths, { libraryIds: await libraryLocator.scopeFor(adapter) });
     } catch (err) {
       logger.warn({ err: err && err.isAxiosError ? describeHttpError(err) : err, serverType }, 'Could not look up moved files on the media server');
       for (const hold of serverHolds) await recordAttempt(hold, errorMessage(err), now);

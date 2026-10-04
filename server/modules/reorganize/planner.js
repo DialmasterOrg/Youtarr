@@ -144,6 +144,8 @@ async function summarizePlan(plan, { blocked = null } = {}) {
     shows: plan.shows.map((show) => ({
       name: show.name, libraryFolder: show.libraryFolder, folderName: show.folderName, action: show.action,
     })),
+    // The TV folders videos move into: the preview shows their media server libraries.
+    tvFolders: [...new Set(items.filter((item) => item.layout === LAYOUT_TV).map((item) => item.libraryFolder || ''))],
     items: items.slice(0, PREVIEW_ITEM_LIMIT).map(describeItem),
     problems: problems.slice(0, PREVIEW_ITEM_LIMIT).map((problem) => ({ ...problem, detail: relative(problem.detail) })),
     watchState: await watchStateAtRisk(items),

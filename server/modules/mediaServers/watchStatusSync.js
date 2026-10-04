@@ -13,6 +13,7 @@ const {
 const { Video, VideoWatchStatus, MediaServerUser, WatchStatusSyncCursor } = require('../../models');
 const watchStatusHolds = require('./watchStatusHolds');
 const watchStatusPushBack = require('./watchStatusPushBack');
+const libraryLocator = require('./libraryLocator');
 
 // Rows per bulk upsert statement; keeps a 10k-video library from producing one
 // giant INSERT.
@@ -143,7 +144,7 @@ class WatchStatusSync {
       for (const adapter of adapters) {
         const serverType = adapter.serverType;
         try {
-          const opts = serverType === 'plex' ? await this._plexFetchOpts() : {};
+          const opts = serverType === 'plex' ? await this._plexFetchOpts(adapter) : {};
           const { entries, users, historyCursor, completeUserIds } = await adapter.fetchWatchStates(opts);
           const listed = this._matchVideos(videos, entries, { requireCurrentCopy: !!completeUserIds });
           const cleared = await this._clearedMatches(serverType, completeUserIds, videos, listed);
@@ -206,7 +207,9 @@ class WatchStatusSync {
   // account ids so the adapter can detect a new account and backfill it with
   // a full pull. since is null on the first run (full history pull); deleting
   // the cursor row forces a full re-scan.
-  async _plexFetchOpts() {
+  // Plex lists whole sections (every episode of a TV section), so its
+  // listings are limited to the sections that hold Youtarr's folders.
+  async _plexFetchOpts(adapter) {
     const row = await WatchStatusSyncCursor.findOne({ where: { server_type: 'plex' } });
     const since = row && row.cursor
       ? new Date(new Date(row.cursor).getTime() - WATERMARK_OVERLAP_MS)
@@ -216,7 +219,8 @@ class WatchStatusSync {
       attributes: ['server_user_id'],
       raw: true,
     });
-    return { since, knownUserIds: knownUsers.map((u) => u.server_user_id) };
+    const libraryIds = await libraryLocator.scopeFor(adapter);
+    return { since, knownUserIds: knownUsers.map((u) => u.server_user_id), libraryIds };
   }
 
   // Account directory upsert; adapters return [] in single-user mode so

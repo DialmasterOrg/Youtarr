@@ -1,4 +1,5 @@
 import {
+  folderKey,
   effectiveLibraryFolder,
   buildLayoutResolver,
   libraryFolderLabel,
@@ -45,5 +46,9 @@ describe('libraryLayouts utils', () => {
 
   test('resolves everything to videos before folders load', () => {
     expect(VIDEOS_EVERYWHERE('TV')).toBe('videos');
+  });
+
+  test('compares folder names ignoring case and surrounding spaces', () => {
+    expect([folderKey(' TV Shows '), folderKey(''), folderKey(null)]).toEqual(['tv shows', '', '']);
   });
 });

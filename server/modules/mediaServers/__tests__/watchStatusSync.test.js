@@ -23,6 +23,7 @@ describe('watchStatusSync', () => {
       expireHolds: jest.fn().mockResolvedValue(0),
     }));
     jest.doMock('../watchStatusPushBack', () => ({ pushPendingHolds: jest.fn().mockResolvedValue({}) }));
+    jest.doMock('../libraryLocator', () => ({ scopeFor: jest.fn().mockResolvedValue(null) }));
     jest.doMock('../../../models', () => ({
       Video: { findAll: jest.fn(), findOne: jest.fn() },
       VideoWatchStatus: {
@@ -264,8 +265,21 @@ describe('watchStatusSync', () => {
     expect(plex.fetchWatchStates).toHaveBeenCalledWith({
       since: new Date(stored.getTime() - 60_000),
       knownUserIds: ['55'],
+      libraryIds: null,
     });
     expect(jellyfin.fetchWatchStates).toHaveBeenCalledWith({});
+  });
+
+  test('limits plex\'s listings to the libraries that hold Youtarr\'s folders', async () => {
+    const scope = new Set(['37', '41']);
+    require('../libraryLocator').scopeFor.mockResolvedValue(scope);
+    const plex = fakeAdapter('plex', resolvedFetch([]));
+    serverRegistry.getEnabledAdapters.mockReturnValue([plex]);
+    Video.findAll.mockResolvedValue([]);
+
+    await watchStatusSync.syncAll();
+
+    expect(plex.fetchWatchStates).toHaveBeenCalledWith(expect.objectContaining({ libraryIds: scope }));
   });
 
   test('persists the history cursor the adapter reports after rows are written', async () => {

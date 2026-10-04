@@ -14,6 +14,10 @@ import { libraryFolderLabel } from '../../../../utils/libraryLayouts';
 import { LibraryFolder, LibraryLayout } from '../../../../types/tvShows';
 import { MainFolderTvDialog } from './MainFolderTvDialog';
 import { ReorganizeDialog, useReorganizeRequest, isReorganizeRequired } from '../../../shared/Reorganize';
+import { LibraryCheckNotes } from '../../../shared/LibraryCheck/LibraryCheckNotes';
+import { useLibraryCheck } from '../../../../hooks/useLibraryCheck';
+import { folderKey } from '../../../../utils/libraryLayouts';
+import { LibraryCheckFolder, LibraryCheckServer } from '../../../../types/libraryCheck';
 
 interface LibraryFoldersListProps {
   /** The section's useLibraryFolders result, shared so the page loads the folders once */
@@ -26,6 +30,7 @@ const CHANGE_FAILED = 'Failed to change the folder layout';
 const EXPLANATION =
   "Each folder's layout must match its media server library: Videos for a Plex Other Videos or Jellyfin/Emby Movies library, TV shows for a TV library.";
 const HAS_FILES_CAPTION = 'Holds downloaded videos: changing its layout moves them, and you review the move first.';
+const MEDIA_SERVER_CHECK_CAPTION = 'Under each folder: the media server libraries that hold it, and what to fix.';
 const DEFAULT_TV_NOTE =
   "The default subfolder is a TV folder, so downloads from channels you haven't subscribed to are each saved as their own TV show.";
 
@@ -42,9 +47,12 @@ interface LibraryFolderRowProps {
   folder: LibraryFolder;
   disabled: boolean;
   onLayoutChange: (folder: LibraryFolder, layout: LibraryLayout) => void;
+  /** The library check's report for this folder, once loaded */
+  check?: { report: LibraryCheckFolder; servers: LibraryCheckServer[] } | null;
+  onApplyPlexMapping?: (folder: string, libraryId: string) => Promise<void>;
 }
 
-const LibraryFolderRow: React.FC<LibraryFolderRowProps> = ({ folder, disabled, onLayoutChange }) => {
+const LibraryFolderRow: React.FC<LibraryFolderRowProps> = ({ folder, disabled, onLayoutChange, check, onApplyPlexMapping }) => {
   const label = libraryFolderLabel(folder.name);
 
   return (
@@ -63,6 +71,16 @@ const LibraryFolderRow: React.FC<LibraryFolderRowProps> = ({ folder, disabled, o
           <Typography variant="caption" color="text.secondary" className="block">
             {HAS_FILES_CAPTION}
           </Typography>
+        )}
+        {check && (
+          <Box className="mt-1">
+            <LibraryCheckNotes
+              folder={check.report}
+              servers={check.servers}
+              onApplyPlexMapping={onApplyPlexMapping}
+              problemsOnly={folder.layout !== 'tv'}
+            />
+          </Box>
         )}
       </Box>
       <Select
@@ -91,6 +109,14 @@ export const LibraryFoldersList: React.FC<LibraryFoldersListProps> = ({ library,
   const [confirmMainTv, setConfirmMainTv] = useState(false);
   // A layout change that moves downloaded files is reviewed in the reorganize dialog.
   const reorganize = useReorganizeRequest();
+  const libraryCheck = useLibraryCheck(token);
+  const checkServers = libraryCheck.data?.servers ?? [];
+  // Folders in use: TV folders, and Videos folders that hold files or channels.
+  const checkFor = (folder: LibraryFolder) => {
+    if (checkServers.length === 0 || (folder.layout !== 'tv' && !folder.hasFiles && folder.channels === 0)) return null;
+    const report = libraryCheck.data?.folders.find((entry) => folderKey(entry.name) === folderKey(folder.name));
+    return report ? { report, servers: checkServers } : null;
+  };
 
   const applyLayout = async (name: string, layout: LibraryLayout) => {
     setChanging(true);
@@ -161,6 +187,18 @@ export const LibraryFoldersList: React.FC<LibraryFoldersListProps> = ({ library,
         </Alert>
       )}
 
+      {checkServers.length > 0 && (
+        <Box className="flex flex-wrap items-center gap-2">
+          <Typography variant="caption" color="text.secondary">
+            {MEDIA_SERVER_CHECK_CAPTION}
+          </Typography>
+          <Button size="small" variant="text" loading={libraryCheck.loading} onClick={() => void libraryCheck.refetch()}>
+            Check again
+          </Button>
+        </Box>
+      )}
+      {libraryCheck.error && <Alert severity="warning">{libraryCheck.error}</Alert>}
+
       {loading && folders.length === 0 ? (
         <Box className="flex items-center gap-2 text-sm text-muted-foreground">
           <CircularProgress size={16} />
@@ -175,6 +213,8 @@ export const LibraryFoldersList: React.FC<LibraryFoldersListProps> = ({ library,
                 folder={folder}
                 disabled={changing}
                 onLayoutChange={handleLayoutChange}
+                check={checkFor(folder)}
+                onApplyPlexMapping={libraryCheck.applyPlexMapping}
               />
             ))}
           </Box>

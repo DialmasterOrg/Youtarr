@@ -9,6 +9,7 @@ const {
   describeHttpError,
   MediaServerUnavailableError,
   WatchStateFetchError,
+  LIBRARY_TYPES,
 } = require('./baseAdapter');
 const logger = require('../../../logger');
 const plexModule = require('../../plexModule');
@@ -34,6 +35,16 @@ const PLEX_OWNER_ACCOUNT_ID = '1';
 // Library items' identifier for the scrobble and progress endpoints.
 const PLEX_LIBRARY_IDENTIFIER = 'com.plexapp.plugins.library';
 
+// Plex metadata type for music tracks (an artist section's file-backed leaves).
+const PLEX_TYPE_TRACK = 10;
+
+// Section types as the library check names them.
+const SECTION_LIBRARY_TYPES = {
+  movie: LIBRARY_TYPES.VIDEOS,
+  show: LIBRARY_TYPES.TV,
+  artist: LIBRARY_TYPES.MUSIC,
+};
+
 // Play-history pagination. The page cap bounds a single sync on servers with
 // enormous history; anything past it is picked up by later incremental syncs.
 const HISTORY_PAGE_SIZE = 1000;
@@ -46,6 +57,11 @@ class PlexAdapter extends BaseAdapter {
     this.url = config.plexUrl;
     this.token = config.plexApiKey;
     this.libraryId = config.plexYoutubeLibraryId;
+    // Sections the user mapped subfolders to (Settings > Plex): known to hold
+    // Youtarr's files whatever the library check finds.
+    this.mappedLibraryIds = new Set((Array.isArray(config.plexSubfolderLibraryMappings) ? config.plexSubfolderLibraryMappings : [])
+      .filter((mapping) => mapping && typeof mapping === 'object' && mapping.libraryId != null)
+      .map((mapping) => String(mapping.libraryId).trim()));
     // Section ids to search when resolving files, split { video, music }, keyed
     // by scope ('playlist' | 'admin', see _getSectionIds). Populated lazily
     // per scope on first use.
@@ -136,6 +152,19 @@ class PlexAdapter extends BaseAdapter {
     return params;
   }
 
+  // Auth for reads as the owner (anonymous on unclaimed servers, see anonymousScope).
+  _ownerParams(extra = {}) {
+    return this.anonymousScope ? this._plParams(extra) : { ...extra, 'X-Plex-Token': this.token };
+  }
+
+  // Whether a section may hold Youtarr's files: every section without a
+  // scope, and the configured YouTube library and mapped sections always.
+  _inScope(sectionId, libraryIds) {
+    if (!libraryIds) return true;
+    const id = String(sectionId);
+    return libraryIds.has(id) || this.mappedLibraryIds.has(id) || (this.libraryId != null && String(this.libraryId).trim() === id);
+  }
+
   async testConnection() {
     try {
       await axios.get(`${this.url}/identity`, { params: { 'X-Plex-Token': this.token }, timeout: REQUEST_TIMEOUT_MS });
@@ -180,12 +209,12 @@ class PlexAdapter extends BaseAdapter {
   // in two sections when a stale item lingers after a file moved between
   // libraries, so every section is scanned and the best-scoring candidate wins;
   // see trailingSegmentMatch in baseAdapter.
-  async resolveItemIdsByFilepaths(filepaths) {
-    const matches = await this.resolveItemMatchesByPaths(filepaths);
+  async resolveItemIdsByFilepaths(filepaths, opts = {}) {
+    const matches = await this.resolveItemMatchesByPaths(filepaths, opts);
     return new Map([...matches].map(([filepath, match]) => [filepath, match ? match.id : null]));
   }
 
-  async resolveItemMatchesByPaths(filepaths) {
+  async resolveItemMatchesByPaths(filepaths, { libraryIds = null } = {}) {
     const results = new Map();
     const targets = [...new Set((filepaths || []).filter(Boolean))];
     if (targets.length === 0) return results;
@@ -204,12 +233,15 @@ class PlexAdapter extends BaseAdapter {
     const mayBeEpisode = targets.some((p) => EPISODE_NAME_PATTERN.test(extractBasename(p)));
     const sources = [
       ...sections.video
+        .filter((id) => this._inScope(id, libraryIds))
         .filter((id) => mayBeEpisode || !sections.shows.includes(id))
         .map((id) => ({
           id,
           params: sections.shows.includes(id) ? { type: PLEX_TYPE_EPISODE } : {},
         })),
-      ...(hasAudio ? sections.music.map((id) => ({ id, params: { type: 10 } })) : []),
+      ...(hasAudio
+        ? sections.music.filter((id) => this._inScope(id, libraryIds)).map((id) => ({ id, params: { type: PLEX_TYPE_TRACK } }))
+        : []),
     ];
     for (const { id: libraryId, params } of sources) {
       try {
@@ -387,9 +419,12 @@ class PlexAdapter extends BaseAdapter {
     const entries = [];
     const ratingKeyPaths = new Map(); // ratingKey -> [file paths] for history mapping
     const sections = await this._getSectionIds(this.anonymousScope ? 'playlist' : 'admin');
+    // Sections that can't hold Youtarr's files are skipped (a large TV
+    // library of other shows is listed episode by episode otherwise).
+    const videoSections = sections.video.filter((id) => this._inScope(id, opts.libraryIds || null));
     let sectionsListed = 0;
     let lastError = null;
-    for (const libraryId of sections.video) {
+    for (const libraryId of videoSections) {
       // Show sections need type=4 to list episode leaves, which carry both the
       // file paths and the per-episode watch state; the default /all would
       // return file-less show items and nothing could match.
@@ -427,7 +462,7 @@ class PlexAdapter extends BaseAdapter {
     // "0 updated" and hide the problem from the sync summary. This includes
     // enumeration itself failing with no configured library to fall back on
     // (sections.video is empty then, but the fetch still didn't succeed).
-    if (sectionsListed === 0 && (sections.video.length > 0 || sections.enumerationError)) {
+    if (sectionsListed === 0 && (videoSections.length > 0 || sections.enumerationError)) {
       const failure = lastError || sections.enumerationError;
       if (isServerUnavailableError(failure)) throw new MediaServerUnavailableError(describeHttpError(failure));
       const info = describeHttpError(failure);
@@ -453,7 +488,7 @@ class PlexAdapter extends BaseAdapter {
       // Advance the stored cursor only when every section listed successfully:
       // with a partial ratingKey map, events skipped as "unknown item" may
       // belong to the failed section and must be rescanned next sync.
-      const listingComplete = sectionsListed === sections.video.length;
+      const listingComplete = sectionsListed === videoSections.length;
       historyCursor = listingComplete ? history.scannedThrough : null;
       // On an incomplete scan, withhold not-yet-known accounts from the user
       // list: reporting one would mark it "known" and consume its one-time
@@ -592,6 +627,43 @@ class PlexAdapter extends BaseAdapter {
       percentWatched,
       lastWatchedAt: item.lastViewedAt ? new Date(Number(item.lastViewedAt) * 1000) : null,
     };
+  }
+
+  async listLibraries() {
+    const res = await axios.get(`${this.url}/library/sections`, { params: this._ownerParams(), timeout: REQUEST_TIMEOUT_MS });
+    return (res.data?.MediaContainer?.Directory || []).map((dir) => ({
+      id: String(dir.key),
+      name: dir.title || String(dir.key),
+      type: SECTION_LIBRARY_TYPES[dir.type] || LIBRARY_TYPES.OTHER,
+      agent: dir.agent || null,
+      scanner: dir.scanner || null,
+      locations: (dir.Location || []).map((location) => location.path).filter(Boolean),
+    }));
+  }
+
+  async sampleItemPaths(library, limit) {
+    const typeParams = {
+      [LIBRARY_TYPES.TV]: { type: PLEX_TYPE_EPISODE },
+      [LIBRARY_TYPES.MUSIC]: { type: PLEX_TYPE_TRACK },
+    }[library.type] || {};
+    try {
+      const res = await axios.get(`${this.url}/library/sections/${library.id}/all`, {
+        params: this._ownerParams({ ...typeParams, 'X-Plex-Container-Start': 0, 'X-Plex-Container-Size': limit }),
+        timeout: REQUEST_TIMEOUT_MS,
+      });
+      const paths = [];
+      for (const item of (res.data?.MediaContainer?.Metadata || []).slice(0, limit)) {
+        for (const media of item.Media || []) {
+          for (const part of media.Part || []) {
+            if (part.file) paths.push(part.file);
+          }
+        }
+      }
+      return paths;
+    } catch (err) {
+      logger.debug({ ...describeHttpError(err), libraryId: library.id }, 'plex: could not sample a library section');
+      return [];
+    }
   }
 
   // The owner's state of one item (the admin token reads as the owner; other

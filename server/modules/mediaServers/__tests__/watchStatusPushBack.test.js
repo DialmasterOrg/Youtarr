@@ -25,6 +25,7 @@ describe('watchStatusPushBack', () => {
     jest.doMock('../../configModule', () => ({ getConfig: jest.fn(() => ({})) }));
     jest.doMock('../serverRegistry', () => ({ getEnabledAdapters: jest.fn(() => []) }));
     jest.doMock('../watchStatusHolds', () => ({ HOLD_STATE: { PENDING: 'pending' } }));
+    jest.doMock('../libraryLocator', () => ({ scopeFor: jest.fn().mockResolvedValue(null) }));
     WatchStatusHold = require('../../../models/watchstatushold');
     Video = require('../../../models/video');
     serverRegistry = require('../serverRegistry');
@@ -46,10 +47,20 @@ describe('watchStatusPushBack', () => {
 
     const result = await pushBack.pushPendingHolds();
 
-    expect(adapter.resolveItemMatchesByPaths).toHaveBeenCalledWith(expect.arrayContaining([NEW_PATH, FROM_PATH]));
+    expect(adapter.resolveItemMatchesByPaths).toHaveBeenCalledWith(expect.arrayContaining([NEW_PATH, FROM_PATH]), { libraryIds: null });
     expect(adapter.setWatchState).toHaveBeenCalledWith('item-1', 'u1', expect.objectContaining({ played: true, positionMs: null }));
     expect(result).toEqual({ pushed: 1, notIndexed: 0, failed: 0 });
     expect(pending.update).toHaveBeenCalledWith(expect.objectContaining({ attempts: 1, last_error: null, last_pushed_at: expect.any(Date) }));
+  });
+
+  it('looks moved files up only in the libraries that hold Youtarr\'s folders', async () => {
+    const scope = new Set(['lib-tv']);
+    require('../libraryLocator').scopeFor.mockResolvedValue(scope);
+    WatchStatusHold.findAll.mockResolvedValue([hold()]);
+
+    await pushBack.pushPendingHolds();
+
+    expect(adapter.resolveItemMatchesByPaths).toHaveBeenCalledWith(expect.any(Array), { libraryIds: scope });
   });
 
   it('records that the server has not indexed the moved file yet', async () => {

@@ -1,8 +1,36 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { ConfigState, PlatformManagedState, DeploymentEnvironment, LoggingStatus } from '../components/Configuration/types';
 import { DEFAULT_CONFIG } from '../config/configSchema';
+import { mergeServerChange } from '../utils/configPatch';
+import { folderKey } from '../utils/libraryLayouts';
 
 export const CONFIG_UPDATED_EVENT = 'config-updated';
+/**
+ * A field the server saved outside the Settings form (detail: the saved
+ * fields). The saved copy takes the field as is; the draft takes only what
+ * the server changed since that copy, so an open Settings page keeps its
+ * unsaved edits, including edits to the same list, and its next save carries
+ * the server's change.
+ */
+export const CONFIG_PATCHED_EVENT = 'config-patched';
+
+type PlexMapping = ConfigState['plexSubfolderLibraryMappings'][number];
+const mappingKey = (mapping: PlexMapping) => folderKey(mapping.subfolder);
+
+// The draft after a server-side change: keyed lists are merged entry by entry
+// against the saved copy they were edited from; other fields are replaced.
+function patchDraft(draft: ConfigState, baseline: ConfigState | null, patch: Partial<ConfigState>): ConfigState {
+  const next = { ...draft, ...patch };
+  if (patch.plexSubfolderLibraryMappings) {
+    next.plexSubfolderLibraryMappings = mergeServerChange(
+      draft.plexSubfolderLibraryMappings,
+      baseline?.plexSubfolderLibraryMappings,
+      patch.plexSubfolderLibraryMappings,
+      mappingKey
+    );
+  }
+  return next;
+}
 
 interface UseConfigResult {
   config: ConfigState;
@@ -20,6 +48,9 @@ interface UseConfigResult {
 export function useConfig(token: string | null): UseConfigResult {
   const [config, setConfig] = useState<ConfigState>(DEFAULT_CONFIG);
   const [initialConfig, setInitialConfig] = useState<ConfigState | null>(null);
+  // The saved copy as the patch handler sees it (state updaters can't read each other).
+  const initialConfigRef = useRef<ConfigState | null>(null);
+  initialConfigRef.current = initialConfig;
   const [isPlatformManaged, setIsPlatformManaged] = useState<PlatformManagedState>({
     plexUrl: false,
     authEnabled: true,
@@ -126,10 +157,20 @@ export function useConfig(token: string | null): UseConfigResult {
       }
     };
 
+    const handleConfigPatched = (event: Event) => {
+      const patch = (event as CustomEvent<Partial<ConfigState> | undefined>).detail;
+      if (!patch) return;
+      const baseline = initialConfigRef.current;
+      setConfig((prev) => patchDraft(prev, baseline, patch));
+      setInitialConfig((prev) => (prev ? { ...prev, ...patch } : prev));
+    };
+
     window.addEventListener(CONFIG_UPDATED_EVENT, handleConfigUpdated);
+    window.addEventListener(CONFIG_PATCHED_EVENT, handleConfigPatched);
 
     return () => {
       window.removeEventListener(CONFIG_UPDATED_EVENT, handleConfigUpdated);
+      window.removeEventListener(CONFIG_PATCHED_EVENT, handleConfigPatched);
     };
   }, [fetchConfig]);
 

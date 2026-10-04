@@ -1,5 +1,5 @@
 import { renderHook, waitFor, act } from '@testing-library/react';
-import { useReorganizePreview } from '../useReorganizePreview';
+import { useReorganizePreview, BLOCKED_RECHECK_MS } from '../useReorganizePreview';
 
 jest.mock('axios', () => ({
   post: jest.fn(),
@@ -48,5 +48,72 @@ describe('useReorganizePreview', () => {
     await act(async () => { await result.current.refresh(); });
 
     expect(result.current.preview).toEqual({ ...PREVIEW, revision: 'rev2' });
+  });
+
+  describe('a preview held up by a running task', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.runOnlyPendingTimers();
+      jest.useRealTimers();
+    });
+
+    test('is computed again until the task ends', async () => {
+      axios.post
+        .mockResolvedValueOnce({ data: { ...PREVIEW, blocked: { reason: 'task-running', message: 'A sync is running.' } } })
+        .mockResolvedValueOnce({ data: { ...PREVIEW, blocked: null } });
+      const { result } = renderHook(() => useReorganizePreview('token', CHANGE));
+      await waitFor(() => expect(result.current.preview?.blocked).toBeTruthy());
+
+      await act(async () => { jest.advanceTimersByTime(BLOCKED_RECHECK_MS); });
+
+      await waitFor(() => expect(result.current.preview?.blocked).toBeNull());
+      expect(axios.post).toHaveBeenCalledTimes(2);
+      expect(result.current.loading).toBe(false);
+    });
+
+    test('is not computed again when no video could be planned', async () => {
+      axios.post.mockResolvedValueOnce({ data: { ...PREVIEW, blocked: { reason: 'problems', message: 'Nothing can move.' } } });
+      const { result } = renderHook(() => useReorganizePreview('token', CHANGE));
+      await waitFor(() => expect(result.current.preview?.blocked).toBeTruthy());
+
+      await act(async () => { jest.advanceTimersByTime(BLOCKED_RECHECK_MS * 3); });
+
+      expect(axios.post).toHaveBeenCalledTimes(1);
+    });
+
+    test('keeps the preview when a recheck fails', async () => {
+      const blocked = { ...PREVIEW, blocked: { reason: 'task-running', message: 'A sync is running.' } };
+      axios.post
+        .mockResolvedValueOnce({ data: blocked })
+        .mockRejectedValueOnce({ response: { status: 500, data: { error: 'boom' } } });
+      const { result } = renderHook(() => useReorganizePreview('token', CHANGE));
+      await waitFor(() => expect(result.current.preview).toEqual(blocked));
+
+      await act(async () => { jest.advanceTimersByTime(BLOCKED_RECHECK_MS); });
+
+      await waitFor(() => expect(axios.post).toHaveBeenCalledTimes(2));
+      expect(result.current.preview).toEqual(blocked);
+      expect(result.current.error).toBeNull();
+    });
+
+    test('is computed again after a failed recheck', async () => {
+      const blocked = { ...PREVIEW, blocked: { reason: 'task-running', message: 'A sync is running.' } };
+      axios.post
+        .mockResolvedValueOnce({ data: blocked })
+        .mockRejectedValueOnce({ response: { status: 500, data: { error: 'boom' } } })
+        .mockResolvedValueOnce({ data: { ...PREVIEW, blocked: null } });
+      const { result } = renderHook(() => useReorganizePreview('token', CHANGE));
+      await waitFor(() => expect(result.current.preview).toEqual(blocked));
+
+      await act(async () => { jest.advanceTimersByTime(BLOCKED_RECHECK_MS); });
+      await waitFor(() => expect(axios.post).toHaveBeenCalledTimes(2));
+      await act(async () => { jest.advanceTimersByTime(BLOCKED_RECHECK_MS); });
+
+      await waitFor(() => expect(result.current.preview?.blocked).toBeNull());
+      expect(axios.post).toHaveBeenCalledTimes(3);
+    });
   });
 });

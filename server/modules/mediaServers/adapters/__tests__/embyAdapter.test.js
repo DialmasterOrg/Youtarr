@@ -486,4 +486,39 @@ describe('EmbyAdapter', () => {
       expect(matches.get('/data/__TV/Chan/Season 2024/E [id1].mp4')).toEqual({ id: 'HIT', score: 4 });
     });
   });
+
+  describe('library check', () => {
+    test('lists libraries from /Library/VirtualFolders/Query', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: {
+          Items: [{
+            Name: 'TV', ItemId: '8112', CollectionType: 'tvshows', Locations: ['Q:\\Media\\__TV'],
+            LibraryOptions: { SaveLocalMetadata: true, MetadataSavers: ['Nfo'], TypeOptions: [{ Type: 'Episode', MetadataFetchers: ['TheTVDB'] }] },
+          }],
+        },
+      });
+
+      const libraries = await new EmbyAdapter(cfg).listLibraries();
+
+      expect(axios.get).toHaveBeenCalledWith('http://emby:8096/Library/VirtualFolders/Query', expect.any(Object));
+      expect(libraries).toEqual([{
+        id: '8112', name: 'TV', type: 'tv', locations: ['Q:\\Media\\__TV'], nfoSaver: true, onlineFetchers: true,
+      }]);
+    });
+
+    test('returns no samples when a library cannot be read', async () => {
+      axios.get.mockRejectedValueOnce(new Error('boom'));
+
+      expect(await new EmbyAdapter(cfg).sampleItemPaths({ id: '8112', type: 'tv' }, 10)).toEqual([]);
+    });
+
+    test('lists only the scoped libraries when looking up moved files', async () => {
+      axios.get.mockResolvedValueOnce({ data: { Items: [] } });
+
+      await new EmbyAdapter(cfg).resolveItemMatchesByPaths(['/data/x [id1].mp4'], { libraryIds: new Set(['8112']) });
+
+      expect(axios.get).toHaveBeenCalledTimes(1);
+      expect(axios.get.mock.calls[0][1].params.parentId).toBe('8112');
+    });
+  });
 });

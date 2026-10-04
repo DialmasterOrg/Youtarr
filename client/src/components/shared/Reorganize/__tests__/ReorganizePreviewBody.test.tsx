@@ -101,4 +101,36 @@ describe('ReorganizePreviewBody', () => {
 
     expect(screen.getByText(/1 video would land outside the downloads folder/)).toBeInTheDocument();
   });
+
+  test('says how many videos keep movie tags, in one sentence', () => {
+    render(<ReorganizePreviewBody preview={preview({ totals: { ...TOTALS, movieTags: 1 } })} />);
+
+    expect(screen.getByText(/^1 video keeps movie tags inside the video file\./)).toBeInTheDocument();
+  });
+
+  describe('media server libraries', () => {
+    const libraryCheck = (status: 'ok' | 'missing') => ({
+      servers: [{ serverType: 'jellyfin' as const, name: 'Jellyfin', reachable: true, error: null }],
+      folders: [{
+        name: 'TV',
+        layout: 'tv' as const,
+        hasFiles: true,
+        channels: 1,
+        servers: [{ serverType: 'jellyfin' as const, status, libraries: [], issues: [] }],
+      }],
+    });
+
+    test('points out a TV folder no library holds yet', () => {
+      render(<ReorganizePreviewBody preview={preview()} libraryCheck={libraryCheck('missing')} />);
+
+      expect(screen.getByText(/Check the media server libraries for these TV folders/)).toBeInTheDocument();
+      expect(screen.getByText(/Add a Shows library for __TV/)).toBeInTheDocument();
+    });
+
+    test('says nothing when every library is fine', () => {
+      render(<ReorganizePreviewBody preview={preview()} libraryCheck={libraryCheck('ok')} />);
+
+      expect(screen.queryByText(/Check the media server libraries/)).not.toBeInTheDocument();
+    });
+  });
 });

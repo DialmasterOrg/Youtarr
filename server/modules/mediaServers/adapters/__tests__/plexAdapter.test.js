@@ -1171,4 +1171,75 @@ describe('PlexAdapter', () => {
       expect(axios.get).not.toHaveBeenCalled();
     });
   });
+
+  describe('library check', () => {
+    test('lists sections with their type, agent, scanner and locations', async () => {
+      mockSections([
+        { key: '41', type: 'show', title: 'TV', agent: 'tv.plex.agents.nfo.series', scanner: 'Plex TV Series', Location: [{ path: 'Q:\\Y\\__TV' }] },
+        { key: '40', type: 'artist', title: 'Music', agent: 'tv.plex.agents.music', scanner: 'Plex Music', Location: [{ path: 'Q:\\Y' }] },
+        { key: '9', type: 'photo', title: 'Photos', Location: [] },
+      ]);
+
+      const libraries = await new PlexAdapter(cfg).listLibraries();
+
+      expect(libraries.map(({ id, type, agent, locations }) => ({ id, type, agent, locations }))).toEqual([
+        { id: '41', type: 'tv', agent: 'tv.plex.agents.nfo.series', locations: ['Q:\\Y\\__TV'] },
+        { id: '40', type: 'music', agent: 'tv.plex.agents.music', locations: ['Q:\\Y'] },
+        { id: '9', type: 'other', agent: null, locations: [] },
+      ]);
+    });
+
+    test('samples episodes from a TV section', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: { MediaContainer: { Metadata: [{ Media: [{ Part: [{ file: 'Q:\\Y\\__TV\\Chan\\Season 2024\\E [id1].mp4' }] }] }] } },
+      });
+
+      const paths = await new PlexAdapter(cfg).sampleItemPaths({ id: '41', type: 'tv' }, 10);
+
+      expect(paths).toEqual(['Q:\\Y\\__TV\\Chan\\Season 2024\\E [id1].mp4']);
+      expect(axios.get.mock.calls[0][1].params).toEqual(expect.objectContaining({ type: 4, 'X-Plex-Container-Size': 10 }));
+    });
+
+    test('lists only scoped sections, and the configured library, when resolving files', async () => {
+      mockSections([
+        { key: '2', type: 'movie' },
+        { key: '41', type: 'show' },
+        { key: '50', type: 'show' },
+      ]);
+      axios.get.mockResolvedValue({ data: { MediaContainer: { Metadata: [] } } });
+
+      await new PlexAdapter(cfg).resolveItemMatchesByPaths(['/data/__TV/Chan/Season 2024/S2024E01 - T [id1].mp4'], {
+        libraryIds: new Set(['41']),
+      });
+
+      const listed = axios.get.mock.calls.slice(1).map(([url]) => url);
+      expect(listed).toEqual(['http://plex:32400/library/sections/2/all', 'http://plex:32400/library/sections/41/all']);
+    });
+
+    test('lists only scoped sections for watch state', async () => {
+      const adapter = new PlexAdapter({ ...cfg, plexWatchStatusAllUsers: false });
+      mockSections([{ key: '2', type: 'movie' }, { key: '50', type: 'show' }]);
+      axios.get.mockResolvedValue({ data: { MediaContainer: { Metadata: [] } } });
+
+      await adapter.fetchWatchStates({ libraryIds: new Set(['2']) });
+
+      const listed = axios.get.mock.calls.slice(1).map(([url]) => url);
+      expect(listed).toEqual(['http://plex:32400/library/sections/2/all']);
+    });
+
+    test('always lists a section a subfolder is mapped to', async () => {
+      const adapter = new PlexAdapter({
+        ...cfg,
+        plexWatchStatusAllUsers: false,
+        plexSubfolderLibraryMappings: [{ subfolder: 'Kids', libraryId: 50 }],
+      });
+      mockSections([{ key: '2', type: 'movie' }, { key: '50', type: 'show' }, { key: '60', type: 'show' }]);
+      axios.get.mockResolvedValue({ data: { MediaContainer: { Metadata: [] } } });
+
+      await adapter.fetchWatchStates({ libraryIds: new Set(['2']) });
+
+      const listed = axios.get.mock.calls.slice(1).map(([url]) => url);
+      expect(listed).toEqual(['http://plex:32400/library/sections/2/all', 'http://plex:32400/library/sections/50/all']);
+    });
+  });
 });

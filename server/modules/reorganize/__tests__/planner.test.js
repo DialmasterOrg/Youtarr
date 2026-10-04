@@ -72,6 +72,19 @@ describe('reorganize planner', () => {
     });
   });
 
+  it('names the TV folders videos move into', async () => {
+    require('../destinationPlanner').planDestinations.mockResolvedValue({
+      items: [item({ libraryFolder: 'TV' }), item({ youtubeId: 'ccccccccccc', libraryFolder: '', layout: 'tv' }), item({ youtubeId: 'ddddddddddd', layout: 'videos', libraryFolder: 'Kids' })],
+      problems: [],
+      unchanged: 0,
+    });
+    const plan = await planner.buildPlan({ type: 'channel' });
+
+    const preview = await planner.summarizePlan(plan);
+
+    expect(preview.tvFolders).toEqual(['TV', '']);
+  });
+
   it('counts videos whose watch state the servers will lose, leaving out other Plex accounts', async () => {
     VideoWatchStatus.findAll.mockResolvedValue([
       { video_id: 1, server_type: 'jellyfin', server_user_id: 'u1', played: true },
