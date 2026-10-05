@@ -504,7 +504,7 @@ Open the channel page, click the settings icon (gear), open **TV Show**, and und
 - **Exclude titles containing**: a title with any of these words never joins the show, for example `Official Clip`.
 - **Season names**: written to the show's NFO files, so the media server shows "Season 2: V-Force" instead of "Season 2". Upload-year seasons (such as 2024) can be named too.
 
-The preview updates as you type: **Episodes** (with the episode each video would get, and whether it's downloaded), **Duplicates**, **Gaps** (numbers no video has), **Unmatched videos**, and **Not supported** (compilations such as `Ep.19 ... Ep.20` and parts such as `Episode 1 Part 2`, which Youtarr can't place yet, and titles missing a number the pattern needs). Downloads whose files are outside the downloads folder join a show but their files stay where they are. When several shows match a title, the first in the list takes the video; the arrows in the list reorder the shows.
+The preview updates as you type: **Episodes** (with the episode each video would get, and whether it's downloaded), **Duplicates**, **Gaps** (numbers no video has; none for seasons numbered by upload year or date), **Unmatched videos**, and **Not supported** (compilations such as `Ep.19 ... Ep.20` and parts such as `Episode 1 Part 2`, which Youtarr can't place yet, and titles missing a number the pattern needs). Downloads whose files are outside the downloads folder join a show but their files stay where they are. When several shows match a title, the first in the list takes the video; the arrows in the list reorder the shows.
 
 When saving would move downloaded videos (into the show, between shows, or out of one), the same **Review the move** dialog opens first. Changing a show that only affects videos you haven't downloaded saves right away, and a new show name or season name is written to the show's NFO files on save. **Remove** retires a show: its downloaded videos move back to the channel's layout. **Restore** (under **Removed shows**) brings it back.
 
@@ -514,7 +514,7 @@ When saving would move downloaded videos (into the show, between shows, or out o
 
 **Only download videos that belong to a show**: with this switch on, the channel's automatic downloads and **Download All** fetch only videos that match one of its shows. It does nothing while the channel has no shows.
 
-On the channel page, a **N shows** chip appears in the header and on Subscriptions, and the video list gets a show filter (**All videos** or one show) with **Missing episodes**: per season, the episodes not downloaded yet and the numbers no video has.
+On the channel page, a **N shows** chip appears in the header and on Subscriptions, and the video list gets a show filter (**All videos** or one show) with **Missing episodes**: per season, the episodes not downloaded yet and the numbers no video has (none for seasons numbered by upload year or date).
 
 ## Browse and Filter Channel Videos
 

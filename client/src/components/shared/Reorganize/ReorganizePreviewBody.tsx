@@ -59,7 +59,7 @@ function summaryLines(preview: ReorganizePreview): string[] {
 function noteLines(preview: ReorganizePreview): string[] {
   const { totals } = preview;
   const notes: string[] = [];
-  const { overridePlaced, adopted, uploadDateOnly, downloadTime, movieTags } = totals;
+  const { overridePlaced, adopted, uploadDateOnly, downloadTime, movieTags, audioToTv } = totals;
   if (overridePlaced > 0) {
     notes.push(`${countOf(overridePlaced, 'video')} downloaded to another folder with a download override `
       + `${agree(overridePlaced, 'moves', 'move')} with the channel.`);
@@ -77,6 +77,10 @@ function noteLines(preview: ReorganizePreview): string[] {
       + `${agree(downloadTime, 'it is', 'they are')} numbered by download time.`);
   }
   if (movieTags > 0) notes.push(`${countOf(movieTags, 'video')} ${agree(movieTags, 'keeps', 'keep')} ${MOVIE_TAGS_NOTE}`);
+  if (audioToTv > 0) {
+    notes.push(`${countOf(audioToTv, 'MP3 file')} ${agree(audioToTv, 'moves', 'move')} into a TV folder, `
+      + `where TV libraries don't show ${agree(audioToTv, 'it', 'them')}.`);
+  }
   return notes;
 }
 

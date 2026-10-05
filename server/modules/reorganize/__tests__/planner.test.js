@@ -125,6 +125,14 @@ describe('reorganize planner', () => {
     });
   });
 
+  it('counts the MP3 files that move into a TV folder', async () => {
+    require('../destinationPlanner').planDestinations.mockResolvedValue({
+      items: [item({ flags: ['audio-to-tv'] }), item({ youtubeId: 'ccccccccccc' })], problems: [],
+    });
+    const preview = await planner.summarizePlan(await planner.buildPlan({ type: 'channel' }));
+    expect(preview.totals.audioToTv).toBe(1);
+  });
+
   it('names the TV folders videos move into', async () => {
     require('../destinationPlanner').planDestinations.mockResolvedValue({
       items: [item({ libraryFolder: 'TV' }), item({ youtubeId: 'ccccccccccc', libraryFolder: '', layout: 'tv' }), item({ youtubeId: 'ddddddddddd', layout: 'videos', libraryFolder: 'Kids' })],

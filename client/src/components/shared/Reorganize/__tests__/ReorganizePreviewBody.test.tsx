@@ -6,7 +6,7 @@ import { ReorganizePreview } from '../../../../types/reorganize';
 
 const TOTALS = {
   videos: 2, toTv: 2, toVideos: 0, betweenFolders: 0, unchanged: 1, missing: 0, collisions: 0, noName: 0, noDate: 0,
-  unsafeName: 0, overridePlaced: 0, adopted: 0, uploadDateOnly: 0, downloadTime: 0, movieTags: 0,
+  unsafeName: 0, overridePlaced: 0, adopted: 0, uploadDateOnly: 0, downloadTime: 0, movieTags: 0, audioToTv: 0,
 };
 
 const preview = (overrides: Partial<ReorganizePreview> = {}): ReorganizePreview => ({
@@ -120,6 +120,12 @@ describe('ReorganizePreviewBody', () => {
     render(<ReorganizePreviewBody preview={preview({ totals: { ...TOTALS, movieTags: 1 } })} />);
 
     expect(screen.getByText(/^1 video keeps movie tags inside the video file\./)).toBeInTheDocument();
+  });
+
+  test('says how many MP3 files move into a TV folder', () => {
+    render(<ReorganizePreviewBody preview={preview({ totals: { ...TOTALS, audioToTv: 2 } })} />);
+
+    expect(screen.getByText(/2 MP3 files move into a TV folder, where TV libraries don't show them\./)).toBeInTheDocument();
   });
 
   describe('media server libraries', () => {

@@ -377,6 +377,17 @@ describe('titleNumbering.computeGaps', () => {
     expect(computeGaps([row(1010101, 'date', 2024), row(5050505, 'date', 2024)])).toEqual([]);
   });
 
+  // Uploads of one year hold numbers a series spreads over several years.
+  it('skips upload-year seasons with title episodes', () => {
+    expect(computeGaps([row(11, 'title', 2021), row(44, 'title', 2021)])).toEqual([]);
+  });
+
+  it('still lists gaps in season 199, the highest fixed season', () => {
+    expect(computeGaps([row(1, 'title', 199), row(3, 'title', 199)])).toEqual([
+      expect.objectContaining({ season: 199, missing: [2] }),
+    ]);
+  });
+
   it('caps the missing list', () => {
     const [gap] = computeGaps([row(1), row(400)], { limit: 3 });
     expect([gap.missing, gap.truncated]).toEqual([[2, 3, 4], true]);

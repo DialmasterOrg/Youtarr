@@ -3,6 +3,7 @@ jest.mock('../../../models', () => ({
   VideoClassification: { findAll: jest.fn() },
   Video: { findAll: jest.fn() },
   TvShowSeason: { findAll: jest.fn() },
+  EpisodeConflict: { findAll: jest.fn() },
 }));
 jest.mock('../../../models/channelvideo', () => ({ findAll: jest.fn() }));
 
@@ -26,6 +27,7 @@ describe('titleShowQueries', () => {
     models.Video.findAll.mockResolvedValue([]);
     ChannelVideo.findAll.mockResolvedValue([]);
     models.TvShowSeason.findAll.mockResolvedValue([]);
+    models.EpisodeConflict.findAll.mockResolvedValue([]);
   });
 
   describe('countsByShow', () => {
@@ -34,10 +36,19 @@ describe('titleShowQueries', () => {
         classification('a'), classification('b', { status: 'pending_number', season: null, episode: null }),
         classification('c', { status: 'duplicate' }), classification('d', { status: 'unsupported', show_id: 4 }),
       ]);
+      models.EpisodeConflict.findAll.mockResolvedValue([{ show_id: 3 }]);
       models.Video.findAll.mockResolvedValue([{ youtubeId: 'a' }]);
       const counts = await queries.countsByShow([3, 4]);
       expect(counts.get(3)).toEqual({ episodes: 2, downloaded: 1, duplicates: 1, unsupported: 0 });
       expect(counts.get(4)).toEqual({ episodes: 0, downloaded: 0, duplicates: 0, unsupported: 1 });
+    });
+
+    // The duplicates list reads conflicts too; a duplicate that kept its channel-show row has no duplicate row.
+    it('counts the duplicates recorded as conflicts', async () => {
+      models.VideoClassification.findAll.mockResolvedValue([classification('a')]);
+      models.EpisodeConflict.findAll.mockResolvedValue([{ show_id: 3 }]);
+      const counts = await queries.countsByShow([3]);
+      expect(counts.get(3).duplicates).toBe(1);
     });
 
     it('asks only for downloaded files that are present', async () => {

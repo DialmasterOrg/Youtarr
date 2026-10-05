@@ -40,6 +40,7 @@ import { useYouTubeApiKey } from '../Configuration/hooks/useYouTubeApiKey';
 import { useStorageStatus } from '../../hooks/useStorageStatus';
 import { useConfig } from '../../hooks/useConfig';
 import { TRACKABLE_CONFIG_KEYS } from '../../config/configSchema';
+import { defaultSubfolderMoveNotice } from './defaultSubfolderMove';
 import { ConfigState, SnackbarState } from '../Configuration/types';
 import { validateConfig } from '../Configuration/utils/configValidation';
 import { FILENAME_PRESETS } from '../../utils/filenameTemplate/presets';
@@ -196,15 +197,12 @@ export function Settings({ token }: SettingsProps) {
   const handleDefaultSubfolderMoved = useCallback((result: ReorganizeStartResult) => {
     if (!reorganizeChange || reorganizeChange.type !== 'defaultSubfolder') return;
     const value = reorganizeChange.value;
+    const notice = initialConfig ? defaultSubfolderMoveNotice(config, initialConfig, value) : null;
     setInitialConfig((current) => (current ? { ...current, defaultSubfolder: value } : current));
     formDefaultSetByMove.current = value;
     if (result.operationId) setTrackedMove({ operationId: result.operationId, requested: value, attempt: 0 });
-    setSnackbar({
-      open: true,
-      message: 'The default subfolder changed. Save again to apply your other changes.',
-      severity: 'info',
-    });
-  }, [reorganizeChange, setInitialConfig]);
+    if (notice) setSnackbar({ open: true, message: notice, severity: 'info' });
+  }, [reorganizeChange, setInitialConfig, config, initialConfig]);
 
   // The server undoes the change when no video could be moved, and applies
   // it again when a retry moves some: the form follows the value read back,

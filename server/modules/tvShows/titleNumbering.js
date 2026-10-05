@@ -282,7 +282,11 @@ function computeGaps(rows, { limit = DEFAULT_GAP_LIMIT } = {}) {
   }
   const gaps = [];
   for (const { showKey, season, episodes, dated } of seasons.values()) {
-    if (dated) continue;
+    // A year season holds a year's uploads, not a run of the series' numbers.
+    // Seasons from MIN_YEAR_SEASON up only come from the upload year or a
+    // hand assignment: a season read from a title stays within 0..199
+    // (patternCompiler.MAX_SEASON; titleMatcher marks a larger one unsupported).
+    if (dated || season >= MIN_YEAR_SEASON) continue;
     const highest = Math.max(...episodes);
     const missing = [];
     let truncated = false;

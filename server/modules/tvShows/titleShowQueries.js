@@ -5,9 +5,9 @@
  * downloaded yet (their episode chip).
  */
 
-const { TvShow, VideoClassification, Video, TvShowSeason } = require('../../models');
+const { TvShow, VideoClassification, Video, TvShowSeason, EpisodeConflict } = require('../../models');
 const ChannelVideo = require('../../models/channelvideo');
-const { KIND_TITLE_SHOW } = require('./constants');
+const { KIND_TITLE_SHOW, CONFLICT_KIND_DUPLICATE } = require('./constants');
 const { episodeCode } = require('./episodeNaming');
 const { computeGaps, ROW_STATUS, SOURCE } = require('./titleNumbering');
 
@@ -39,11 +39,18 @@ async function countsByShow(showIds) {
     if (EPISODE_STATUSES.includes(row.status)) {
       count.episodes += 1;
       if (downloaded.has(row.youtube_id)) count.downloaded += 1;
-    } else if (row.status === ROW_STATUS.DUPLICATE) {
-      count.duplicates += 1;
     } else if (row.status === ROW_STATUS.UNSUPPORTED) {
       count.unsupported += 1;
     }
+  }
+  // Counted from the conflicts the duplicates list shows: a channel-show
+  // episode that lost a title claim keeps its channel-show row.
+  const duplicates = await EpisodeConflict.findAll({
+    where: { show_id: showIds, kind: CONFLICT_KIND_DUPLICATE }, attributes: ['show_id'], raw: true,
+  });
+  for (const duplicate of duplicates) {
+    const count = counts.get(duplicate.show_id);
+    if (count) count.duplicates += 1;
   }
   return counts;
 }

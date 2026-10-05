@@ -1,7 +1,8 @@
 const fs = require('fs').promises;
 const path = require('path');
 const { Video } = require('../models');
-const { VIDEO_EXTENSIONS, AUDIO_EXTENSIONS } = require('./filesystem/constants');
+const { VIDEO_EXTENSIONS, AUDIO_EXTENSIONS, APPLEDOUBLE_FILE_PATTERN } = require('./filesystem/constants');
+const { isFileForVideo } = require('./filesystem/pathBuilder');
 const createLimiter = require('./subscriptionImport/concurrencyLimiter');
 
 // Per-video checks run concurrently up to this bound: each stat costs a full
@@ -12,7 +13,8 @@ const MAX_CONCURRENT_FILE_CHECKS = 16;
 /**
  * Check file existence and update video metadata.
  * Real-time per-page check: stats the stored path, falls back to same-dir
- * same-basename files with any supported extension if the original is missing.
+ * same-basename files with any supported extension if the original is missing,
+ * then to a same-dir media file named with the video's [id].
  */
 class FileCheckModule {
   /**
@@ -25,7 +27,7 @@ class FileCheckModule {
    *   { exists: false, statusKnown: true }              - definitively missing
    *   { exists: false, statusKnown: false }             - non-ENOENT error
    */
-  async _findExistingMediaFile(originalPath, extensionList) {
+  async _findExistingMediaFile(originalPath, extensionList, youtubeId, listings = new Map()) {
     try {
       const stats = await fs.stat(originalPath);
       return { exists: true, replaced: false, path: originalPath, size: stats.size };
@@ -56,6 +58,37 @@ class FileCheckModule {
       }
     }
 
+    return this._findByVideoId(dir, youtubeId, extensionList, listings);
+  }
+
+  /**
+   * A file renamed in place (e.g. to a TV naming scheme) keeps its [id]:
+   * look for a media file carrying it in the stored folder, as the rescan does.
+   * `listings` (folder -> listing promise) lists each folder once per batch.
+   */
+  async _findByVideoId(dir, youtubeId, extensionList, listings) {
+    if (!youtubeId) return { exists: false, statusKnown: true };
+    if (!listings.has(dir)) listings.set(dir, fs.readdir(dir));
+    let names;
+    try {
+      names = await listings.get(dir);
+    } catch (err) {
+      return { exists: false, statusKnown: err.code === 'ENOENT' || err.code === 'ENOTDIR' };
+    }
+    const extensions = new Set(extensionList.map((ext) => ext.toLowerCase()));
+    // isFileForVideo also matches macOS AppleDouble copies ("._<name>"), which
+    // keep the media extension and sort first.
+    const candidates = names.filter((entry) => !APPLEDOUBLE_FILE_PATTERN.test(entry)
+      && extensions.has(path.extname(entry).toLowerCase()) && isFileForVideo(entry, youtubeId));
+    for (const name of candidates) {
+      const candidatePath = path.join(dir, name);
+      try {
+        const stats = await fs.stat(candidatePath);
+        if (stats.isFile()) return { exists: true, replaced: true, path: candidatePath, size: stats.size };
+      } catch (err) {
+        if (err.code !== 'ENOENT') return { exists: false, statusKnown: false };
+      }
+    }
     return { exists: false, statusKnown: true };
   }
 
@@ -65,6 +98,8 @@ class FileCheckModule {
     // One slot per video keeps `updates` in input order no matter which
     // check finishes first.
     const updateSlots = new Array(updatedVideos.length).fill(null);
+    // Missing files of one folder share its listing.
+    const listings = new Map();
 
     await Promise.all(updatedVideos.map((video, i) => limit(async () => {
       const update = { id: video.id };
@@ -75,7 +110,7 @@ class FileCheckModule {
       let audioFileStatusKnown = !video.audioFilePath;
 
       if (video.filePath) {
-        const result = await this._findExistingMediaFile(video.filePath, VIDEO_EXTENSIONS);
+        const result = await this._findExistingMediaFile(video.filePath, VIDEO_EXTENSIONS, video.youtubeId, listings);
         if (result.exists) {
           videoFileExists = true;
           videoFileStatusKnown = true;
@@ -95,7 +130,7 @@ class FileCheckModule {
       }
 
       if (video.audioFilePath) {
-        const result = await this._findExistingMediaFile(video.audioFilePath, AUDIO_EXTENSIONS);
+        const result = await this._findExistingMediaFile(video.audioFilePath, AUDIO_EXTENSIONS, video.youtubeId, listings);
         if (result.exists) {
           audioFileExists = true;
           audioFileStatusKnown = true;

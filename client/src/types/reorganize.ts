@@ -62,6 +62,8 @@ export interface ReorganizeTotals {
   uploadDateOnly: number;
   downloadTime: number;
   movieTags: number;
+  /** Videos whose MP3 file goes into a TV folder */
+  audioToTv: number;
 }
 
 export interface ReorganizeWatchState {

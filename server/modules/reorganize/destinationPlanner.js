@@ -404,6 +404,9 @@ async function planDestinations({ subjects, context, targets, shows, titleTarget
       && planned.files.some((file) => file.from === video.filePath && MOVIE_TAG_EXTENSIONS.has(path.extname(file.from).toLowerCase()))) {
       itemFlags.push(FLAG.MOVIE_TAGS);
     }
+    if (target.layout === LAYOUT_TV && subject.currentLayout !== LAYOUT_TV && planned.newAudioPath) {
+      itemFlags.push(FLAG.AUDIO_TO_TV);
+    }
     for (const collision of planned.collisions) problems.push(problemOf(subject, PROBLEM.COLLISION, collision));
 
     items.push({

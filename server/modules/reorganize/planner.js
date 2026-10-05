@@ -161,6 +161,7 @@ async function summarizePlan(plan, { blocked = null } = {}) {
       uploadDateOnly: flagged(FLAG.UPLOAD_DATE_ONLY),
       downloadTime: flagged(FLAG.DOWNLOAD_TIME),
       movieTags: flagged(FLAG.MOVIE_TAGS),
+      audioToTv: flagged(FLAG.AUDIO_TO_TV),
     },
     shows: plan.shows.map((show) => ({
       name: show.name, libraryFolder: show.libraryFolder, folderName: show.folderName, action: show.action,

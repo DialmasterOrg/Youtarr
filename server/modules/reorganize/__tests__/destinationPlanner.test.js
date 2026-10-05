@@ -95,6 +95,22 @@ describe('reorganize destinationPlanner', () => {
       expect(items[0].flags).toContain('movie-tags');
     });
 
+    it('flags a video whose MP3 file moves into a TV folder', async () => {
+      const audioPath = touch(`__Kids/Chan/Chan - Big Build - ${ID}/Chan - Big Build [${ID}].mp3`);
+
+      const { items } = await planTo(subjectFor(null, { video: { audioFilePath: audioPath } }), { libraryFolder: 'TV', layout: 'tv' });
+
+      expect(items[0].flags).toContain('audio-to-tv');
+    });
+
+    it('does not flag a video without an MP3 file', async () => {
+      const videoPath = touch(`__Kids/Chan/Chan - Big Build - ${ID}/Chan - Big Build [${ID}].mp4`);
+
+      const { items } = await planTo(subjectFor(videoPath), { libraryFolder: 'TV', layout: 'tv' });
+
+      expect(items[0].flags).not.toContain('audio-to-tv');
+    });
+
     it('keeps the code of a file named by the Plex TV Series preset', async () => {
       const videoPath = touch(`Chan/S2024E03151230 Big Build [${ID}].mp4`);
 
@@ -367,6 +383,15 @@ describe('reorganize destinationPlanner', () => {
     const { items } = await planTo(subjectFor(videoPath), { libraryFolder: 'TV', layout: 'tv' });
 
     expect(items[0].files).toHaveLength(1);
+  });
+
+  it('does not flag an MP3 that is already in a TV folder', async () => {
+    const audioPath = touch(`__TV/Chan/Season 2024/S2024E03151200 - Big Build [${ID}].mp3`);
+    const subject = subjectFor(null, { video: { audioFilePath: audioPath }, subject: { libraryFolder: 'TV', currentLayout: 'tv' } });
+
+    const { items } = await planTo(subject, { libraryFolder: 'TV2', layout: 'tv' }, new Map([['UC1', { ...show, libraryFolder: 'TV2' }]]));
+
+    expect(items[0].flags).not.toContain('audio-to-tv');
   });
 
   it('counts a video already where it belongs as unchanged', async () => {

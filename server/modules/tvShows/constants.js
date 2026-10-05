@@ -11,6 +11,9 @@ const LAYOUT_TV = 'tv';
 const KIND_TITLE_SHOW = 'title';
 const KIND_CHANNEL_SHOW = 'channel';
 
+// episode_conflicts.kind of a video whose episode number another video holds.
+const CONFLICT_KIND_DUPLICATE = 'duplicate';
+
 // Download types that produce MP3 output. TV folders are video-only.
 const MP3_AUDIO_FORMATS = new Set(['mp3_only', 'video_mp3']);
 
@@ -33,5 +36,6 @@ module.exports = {
   LAYOUT_VIDEOS,
   LAYOUT_TV,
   KIND_TITLE_SHOW,
-  KIND_CHANNEL_SHOW
+  KIND_CHANNEL_SHOW,
+  CONFLICT_KIND_DUPLICATE
 };

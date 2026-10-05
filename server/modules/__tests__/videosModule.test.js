@@ -656,8 +656,10 @@ describe('VideosModule', () => {
       mockVideo.aggregate.mockResolvedValue([]);
 
       // Mock file does not exist; fileCheckModule's same-dir fallback will
-      // also try .webm/.mkv/.m4v/.avi variants, all of which must ENOENT.
+      // also try .webm/.mkv/.m4v/.avi variants, all of which must ENOENT,
+      // and then look for the video's [id] in a folder that doesn't hold it.
       mockFs.stat.mockRejectedValue({ code: 'ENOENT' });
+      mockFs.readdir.mockResolvedValue([]);
 
       const result = await VideosModule.getVideosPaginated();
 

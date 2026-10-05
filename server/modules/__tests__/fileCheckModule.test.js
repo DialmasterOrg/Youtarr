@@ -2,7 +2,8 @@
 
 jest.mock('fs', () => ({
   promises: {
-    stat: jest.fn()
+    stat: jest.fn(),
+    readdir: jest.fn()
   }
 }));
 
@@ -16,6 +17,7 @@ describe('FileCheckModule', () => {
     jest.clearAllMocks();
 
     mockFs = require('fs').promises;
+    mockFs.readdir.mockResolvedValue([]);
 
     // Mock the Video model
     mockVideo = {
@@ -463,6 +465,100 @@ describe('FileCheckModule', () => {
       expect(result.updates[0]).toEqual({ id: 1, removed: true });
       expect(result.updates[0].filePath).toBeUndefined();
       expect(result.updates[0].fileSize).toBeUndefined();
+    });
+
+    test('finds a renamed file by the video id in its name in the same folder', async () => {
+      const renamed = '/videos/channel/S2024E03161200 The Farm Life [An3UrW9P58Y].mp4';
+      const videos = [{ id: 1, youtubeId: 'An3UrW9P58Y', filePath: '/videos/channel/The Farm Life [An3UrW9P58Y].mp4', fileSize: '1000', removed: false }];
+      mockFs.stat.mockImplementation(async (p) => {
+        if (p === renamed) return { size: 1000, isFile: () => true };
+        throw { code: 'ENOENT' };
+      });
+      mockFs.readdir.mockResolvedValue([
+        'S2024E03161200 The Farm Life [An3UrW9P58Y].jpg',
+        'Other [zzzzzzzzzzz].mp4',
+        'S2024E03161200 The Farm Life [An3UrW9P58Y].mp4',
+      ]);
+
+      const result = await fileCheckModule.checkVideoFiles(videos);
+
+      expect(result.updates).toEqual([{ id: 1, filePath: renamed, fileSize: 1000 }]);
+    });
+
+    test('takes the video file, not its macOS AppleDouble copy', async () => {
+      const renamed = '/videos/channel/S2024E03161200 The Farm Life [An3UrW9P58Y].mp4';
+      const videos = [{ id: 1, youtubeId: 'An3UrW9P58Y', filePath: '/videos/channel/The Farm Life [An3UrW9P58Y].mp4', fileSize: '1000', removed: false }];
+      mockFs.stat.mockImplementation(async (p) => {
+        if (p === renamed) return { size: 1000, isFile: () => true };
+        if (p === '/videos/channel/._S2024E03161200 The Farm Life [An3UrW9P58Y].mp4') return { size: 4096, isFile: () => true };
+        throw { code: 'ENOENT' };
+      });
+      mockFs.readdir.mockResolvedValue([
+        '._S2024E03161200 The Farm Life [An3UrW9P58Y].mp4',
+        'S2024E03161200 The Farm Life [An3UrW9P58Y].mp4',
+      ]);
+
+      const result = await fileCheckModule.checkVideoFiles(videos);
+
+      expect(result.updates).toEqual([{ id: 1, filePath: renamed, fileSize: 1000 }]);
+    });
+
+    test('marks the video removed when only an AppleDouble copy carries its id', async () => {
+      const videos = [{ id: 1, youtubeId: 'abc123', filePath: '/videos/channel/video [abc123].mp4', removed: false }];
+      mockFs.stat.mockImplementation(async (p) => {
+        if (p === '/videos/channel/._video [abc123].mp4') return { size: 4096, isFile: () => true };
+        throw { code: 'ENOENT' };
+      });
+      mockFs.readdir.mockResolvedValue(['._video [abc123].mp4']);
+
+      const result = await fileCheckModule.checkVideoFiles(videos);
+
+      expect(result.updates).toEqual([{ id: 1, removed: true }]);
+    });
+
+    test('does not take a folder named like the video', async () => {
+      const videos = [{ id: 1, youtubeId: 'abc123', filePath: '/videos/channel/video [abc123].mp4', removed: false }];
+      mockFs.stat.mockImplementation(async (p) => {
+        if (p === '/videos/channel/Renamed [abc123].mp4') return { size: 4096, isFile: () => false };
+        throw { code: 'ENOENT' };
+      });
+      mockFs.readdir.mockResolvedValue(['Renamed [abc123].mp4']);
+
+      const result = await fileCheckModule.checkVideoFiles(videos);
+
+      expect(result.updates).toEqual([{ id: 1, removed: true }]);
+    });
+
+    test('lists a folder once for every missing file in it', async () => {
+      const videos = [
+        { id: 1, youtubeId: 'aaaaaaaaaaa', filePath: '/videos/channel/A [aaaaaaaaaaa].mp4', audioFilePath: '/videos/channel/A [aaaaaaaaaaa].mp3', removed: false },
+        { id: 2, youtubeId: 'bbbbbbbbbbb', filePath: '/videos/channel/B [bbbbbbbbbbb].mp4', removed: false },
+      ];
+      mockFs.stat.mockRejectedValue({ code: 'ENOENT' });
+
+      await fileCheckModule.checkVideoFiles(videos);
+
+      expect(mockFs.readdir).toHaveBeenCalledTimes(1);
+    });
+
+    test('marks the video removed when its folder is gone', async () => {
+      const videos = [{ id: 1, youtubeId: 'abc123', filePath: '/videos/gone/video [abc123].mp4', removed: false }];
+      mockFs.stat.mockRejectedValue({ code: 'ENOENT' });
+      mockFs.readdir.mockRejectedValue({ code: 'ENOENT' });
+
+      const result = await fileCheckModule.checkVideoFiles(videos);
+
+      expect(result.updates).toEqual([{ id: 1, removed: true }]);
+    });
+
+    test('leaves the removed status alone when its folder cannot be read', async () => {
+      const videos = [{ id: 1, youtubeId: 'abc123', filePath: '/videos/locked/video [abc123].mp4', removed: false }];
+      mockFs.stat.mockRejectedValue({ code: 'ENOENT' });
+      mockFs.readdir.mockRejectedValue({ code: 'EACCES' });
+
+      const result = await fileCheckModule.checkVideoFiles(videos);
+
+      expect(result.updates).toEqual([]);
     });
 
     test('should not flip removed status when stat fails with non-ENOENT error', async () => {

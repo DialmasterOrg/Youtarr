@@ -47,6 +47,8 @@ const FLAG = Object.freeze({
   UPLOAD_DATE_ONLY: 'upload-date-only',
   DOWNLOAD_TIME: 'download-time',
   MOVIE_TAGS: 'movie-tags',
+  // An MP3 file comes from a Videos folder into a TV folder, where TV libraries don't show it.
+  AUDIO_TO_TV: 'audio-to-tv',
 });
 
 // The preview lists at most this many moves and problems; totals are complete.

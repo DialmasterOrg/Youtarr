@@ -19,7 +19,7 @@ const PREVIEW = {
   change: { type: 'channel', channelId: 'UC1', subFolder: 'TV', label: 'Chan' },
   totals: {
     videos: 2, toTv: 2, toVideos: 0, betweenFolders: 0, unchanged: 0, missing: 0, collisions: 0, noName: 0, noDate: 0,
-    overridePlaced: 0, adopted: 0, uploadDateOnly: 0, downloadTime: 0, movieTags: 0,
+    overridePlaced: 0, adopted: 0, uploadDateOnly: 0, downloadTime: 0, movieTags: 0, audioToTv: 0,
   },
   shows: [],
   items: [],

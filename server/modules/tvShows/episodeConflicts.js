@@ -15,8 +15,8 @@
 const { EpisodeConflict } = require('../../models');
 const ChannelVideo = require('../../models/channelvideo');
 const { ARCHIVE_ADD, ARCHIVE_REMOVE, KIND_RELEASED } = require('./archiveSuppressor');
+const { CONFLICT_KIND_DUPLICATE: KIND_DUPLICATE } = require('./constants');
 
-const KIND_DUPLICATE = 'duplicate';
 const KIND_ERROR = 'classification_error';
 
 function parseDetails(text) {
