@@ -46,7 +46,12 @@ async function createOperation(plan) {
     const operation = await TvReorganizeOperation.create({
       change_type: context.type,
       scope: String(context.scope || ''),
-      settings_change: JSON.stringify({ change: context.stored, label: context.label, shows: plan.shows }),
+      settings_change: JSON.stringify({
+        change: context.stored,
+        label: context.label,
+        shows: plan.shows,
+        ...(plan.snapshot ? { snapshot: plan.snapshot } : {}),
+      }),
       settings_applied: false,
       revision: plan.revision,
       status: OPERATION_STATUS.RUNNING,
@@ -69,7 +74,7 @@ async function createOperation(plan) {
   });
 }
 
-/** @returns {{change: Object, label: string, shows: Array<Object>}} */
+/** @returns {{change: Object, label: string, shows: Array<Object>, snapshot?: Object}} */
 function settingsOf(operation) {
   return JSON.parse(operation.settings_change);
 }
@@ -156,6 +161,7 @@ function describeOperation(operation, failedItems = []) {
     finishedAt: operation.finished_at,
     failedItems: failedItems.map((item) => ({
       id: item.id, youtubeId: item.youtube_id, title: item.title, channelId: item.channel_id, error: item.error,
+      filesMoved: Boolean(item.files_moved),
     })),
   };
 }

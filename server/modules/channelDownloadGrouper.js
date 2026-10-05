@@ -3,17 +3,23 @@ const configModule = require('./configModule');
 const channelSettingsModule = require('./channelSettingsModule');
 const { buildOutputTemplate, buildThumbnailTemplate } = require('./filesystem');
 const downloadSettingsResolver = require('./download/downloadSettingsResolver');
+const titleShowStore = require('./tvShows/titleShowStore');
 
 /**
  * Encapsulates channel filter settings for download filtering
  */
 class ChannelFilterConfig {
-  constructor(minDuration = null, maxDuration = null, titleFilterRegex = null, audioFormat = null, skipVideoFolder = false) {
+  /**
+   * @param {Array<{filterRegex: string, excludeRegexes: string[]}>|null} [showFilters] - One per title show
+   *   when the channel downloads only its title shows
+   */
+  constructor(minDuration = null, maxDuration = null, titleFilterRegex = null, audioFormat = null, skipVideoFolder = false, showFilters = null) {
     this.minDuration = minDuration;
     this.maxDuration = maxDuration;
     this.titleFilterRegex = titleFilterRegex;
     this.audioFormat = audioFormat;
     this.skipVideoFolder = !!skipVideoFolder;
+    this.showFilters = showFilters && showFilters.length > 0 ? showFilters : null;
   }
 
   /**
@@ -23,13 +29,15 @@ class ChannelFilterConfig {
    */
   buildFilterKey() {
     // Use JSON to safely encode null values without collision risk
-    return JSON.stringify({
+    const key = {
       min: this.minDuration,
       max: this.maxDuration,
       regex: this.titleFilterRegex,
       audio: this.audioFormat,
       skipVF: this.skipVideoFolder
-    });
+    };
+    if (this.showFilters) key.shows = this.showFilters;
+    return JSON.stringify(key);
   }
 
   /**
@@ -45,22 +53,26 @@ class ChannelFilterConfig {
            this.audioFormat !== null ||
            // skipVideoFolder affects download path structure, so channels with
            // different settings must be in separate download groups
-           this.skipVideoFolder;
+           this.skipVideoFolder ||
+           this.showFilters !== null;
   }
 
   /**
    * Create a ChannelFilterConfig from a channel record
    * @param {Object} channel - Channel record from database
    * @param {Object} [config] - Global config (defaults to configModule.config)
+   * @param {Array<Object>|null} [showFilters] - The channel's title show filters; applied only when the
+   *   channel downloads just its title shows
    * @returns {ChannelFilterConfig} - New filter config instance
    */
-  static fromChannel(channel, config = configModule.config) {
+  static fromChannel(channel, config = configModule.config, showFilters = null) {
     return new ChannelFilterConfig(
       channel.min_duration,
       channel.max_duration,
       channel.title_filter_regex,
       channel.audio_format,
-      downloadSettingsResolver.resolveSkipVideoFolder({ channel, config })
+      downloadSettingsResolver.resolveSkipVideoFolder({ channel, config }),
+      channel.tv_show_only_downloads ? showFilters : null
     );
   }
 }
@@ -87,7 +99,8 @@ class ChannelDownloadGrouper {
         'max_duration',
         'title_filter_regex',
         'audio_format',
-        'skip_video_folder'
+        'skip_video_folder',
+        'tv_show_only_downloads'
       ]
     });
 
@@ -99,9 +112,10 @@ class ChannelDownloadGrouper {
    * Channels with identical settings can be downloaded together in a single yt-dlp invocation
    * @param {Array} channels - Array of channel records
    * @param {string} globalQuality - Global quality setting (fallback)
+   * @param {Map<string, Array<Object>>} [showFilters] - Title show filters by channel id
    * @returns {Array} - Array of groups, each with { quality, subfolder, filterConfig, channels }
    */
-  groupChannels(channels, globalQuality) {
+  groupChannels(channels, globalQuality, showFilters = new Map()) {
     const groups = new Map();
 
     for (const channel of channels) {
@@ -112,7 +126,7 @@ class ChannelDownloadGrouper {
       const subFolder = channelSettingsModule.resolveEffectiveSubfolder(channel.sub_folder);
 
       // Create filter config for this channel
-      const filterConfig = ChannelFilterConfig.fromChannel(channel);
+      const filterConfig = ChannelFilterConfig.fromChannel(channel, undefined, showFilters.get(channel.channel_id));
 
       // Create group key including filter settings
       const groupKey = `${quality}|${subFolder || 'root'}|${filterConfig.buildFilterKey()}`;
@@ -160,10 +174,13 @@ class ChannelDownloadGrouper {
   async generateDownloadGroups(overrideQuality = null) {
     const channels = await this.getEnabledChannelsWithSettings();
     const globalQuality = overrideQuality || configModule.config.preferredResolution || '1080';
+    // Channels downloading only their title shows get one match filter per show.
+    const showOnly = channels.filter((channel) => channel.tv_show_only_downloads).map((channel) => channel.channel_id);
+    const showFilters = showOnly.length > 0 ? await titleShowStore.showFiltersByChannel(showOnly) : new Map();
 
     // If override quality is specified, use it for ALL channels (ignore per-channel settings)
     if (overrideQuality) {
-      const groups = this.groupChannelsBySubfolderOnly(channels);
+      const groups = this.groupChannelsBySubfolderOnly(channels, showFilters);
       return groups.map(group => ({
         ...group,
         quality: overrideQuality,
@@ -173,7 +190,7 @@ class ChannelDownloadGrouper {
     }
 
     // Otherwise, respect per-channel quality settings
-    const groups = this.groupChannels(channels, globalQuality);
+    const groups = this.groupChannels(channels, globalQuality, showFilters);
 
     return groups.map(group => ({
       ...group,
@@ -186,9 +203,10 @@ class ChannelDownloadGrouper {
    * Group channels by subfolder and filters (for use with quality override)
    * Quality override should not affect duration/title filters
    * @param {Array} channels - Array of channel records
+   * @param {Map<string, Array<Object>>} [showFilters] - Title show filters by channel id
    * @returns {Array} - Array of groups by subfolder and filter config
    */
-  groupChannelsBySubfolderOnly(channels) {
+  groupChannelsBySubfolderOnly(channels, showFilters = new Map()) {
     const groups = new Map();
 
     for (const channel of channels) {
@@ -196,7 +214,7 @@ class ChannelDownloadGrouper {
       const subFolder = channelSettingsModule.resolveEffectiveSubfolder(channel.sub_folder);
 
       // Create filter config for this channel (filters still apply with quality override)
-      const filterConfig = ChannelFilterConfig.fromChannel(channel);
+      const filterConfig = ChannelFilterConfig.fromChannel(channel, undefined, showFilters.get(channel.channel_id));
 
       // Group by both subfolder and filter settings
       const groupKey = `${subFolder || 'root'}|${filterConfig.buildFilterKey()}`;

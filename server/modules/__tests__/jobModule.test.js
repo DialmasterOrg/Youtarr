@@ -854,6 +854,26 @@ describe('JobModule', () => {
 
     });
 
+    test('runs the before-next-job listeners before starting the next job', async () => {
+      const order = [];
+      JobModule.onBeforeNextJob(async () => { order.push('listener'); });
+      JobModule.jobs = { 'job-1': { status: 'Pending', action: () => { order.push('job'); } } };
+
+      await JobModule.startNextJob();
+
+      expect(order).toEqual(['listener', 'job']);
+    });
+
+    test('starts the next job when a before-next-job listener fails', async () => {
+      const mockAction = jest.fn();
+      JobModule.onBeforeNextJob(async () => { throw new Error('archive busy'); });
+      JobModule.jobs = { 'job-1': { status: 'Pending', action: mockAction } };
+
+      await JobModule.startNextJob();
+
+      expect(mockAction).toHaveBeenCalled();
+    });
+
     test('should do nothing if no pending jobs', async () => {
       JobModule.jobs = {
         'job-1': { status: 'Complete' },

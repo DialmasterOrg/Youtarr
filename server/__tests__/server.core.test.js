@@ -177,6 +177,7 @@ const createServerModule = ({
         const jobModuleMock = {
           onJobAbandoned: jest.fn(),
           onJobEnded: jest.fn(),
+          onBeforeNextJob: jest.fn(),
           getJob: jest.fn(),
           getRunningJobs: jest.fn(() => []),
           getRunningJobsWithFreshVideos: jest.fn().mockResolvedValue([]),
@@ -279,6 +280,8 @@ const createServerModule = ({
         }));
         jest.doMock('../modules/mediaServers/watchStatusPushBack', () => ({ pushPendingHolds: jest.fn(), scheduleFollowUps: jest.fn() }));
         jest.doMock('../modules/mediaServers/libraryCheck', () => ({ check: jest.fn(), applyPlexMapping: jest.fn() }));
+        jest.doMock('../modules/tvShows/titleShowService', () => ({}));
+        jest.doMock('../modules/tvShows/archiveSuppressor', () => ({ initialize: jest.fn(), flush: jest.fn().mockResolvedValue() }));
         jest.doMock('../modules/tvShows/channelLayout', () => ({
           getChannelTvState: jest.fn(),
           resolveLayoutTarget: jest.fn(),

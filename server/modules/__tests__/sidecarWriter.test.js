@@ -1,6 +1,6 @@
 jest.mock('../../logger', () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }));
 jest.mock('../configModule', () => ({ getConfig: jest.fn(), getImagePath: jest.fn() }));
-jest.mock('../tvShows/episodePlacement', () => ({ earliestEpisodeDate: jest.fn() }));
+jest.mock('../tvShows/episodePlacement', () => ({ earliestEpisodeDate: jest.fn(), seasonNamesOf: jest.fn().mockResolvedValue({}) }));
 
 const fs = require('fs');
 const os = require('os');
@@ -138,6 +138,24 @@ describe('sidecarWriter', () => {
       expect(nfo).toContain('<premiered>2024-03-15</premiered>');
       expect(nfo).toContain('<uniqueid type="custom">UC1</uniqueid>');
       expect(fs.existsSync(path.join(showDir, 'poster.jpg'))).toBe(true);
+    });
+
+    it('writes a title show\'s tvshow.nfo with its Youtarr id, season names and season.nfo files', async () => {
+      const showDir = path.join(root, 'Beyblade');
+      fs.mkdirSync(path.join(showDir, 'Season 02'), { recursive: true });
+      require('../tvShows/episodePlacement').seasonNamesOf.mockResolvedValue({ 2: 'V-Force' });
+
+      await sidecarWriter.writeShowMetadata({
+        show: { id: 4, kind: 'title', name: 'Beyblade', channel_id: 'UC1', external_key: 'uuid-4' },
+        showDir,
+        plot: 'Channel description',
+      });
+
+      const nfo = fs.readFileSync(path.join(showDir, 'tvshow.nfo'), 'utf8');
+      expect(nfo).toContain('<uniqueid type="youtarr" default="true">uuid-4</uniqueid>');
+      expect(nfo).toContain('<namedseason number="2">V-Force</namedseason>');
+      expect(nfo).not.toContain('Channel description');
+      expect(fs.readFileSync(path.join(showDir, 'Season 02', 'season.nfo'), 'utf8')).toContain('<title>V-Force</title>');
     });
   });
 });

@@ -20,4 +20,9 @@ describe('EpisodeChip', () => {
     render(<EpisodeChip episode={null} />);
     expect(screen.queryByTestId('episode-chip')).not.toBeInTheDocument();
   });
+
+  test('marks the episode a title show gives a video not downloaded yet', () => {
+    render(<EpisodeChip episode={{ showName: 'Beyblade', season: 1, episode: 20, code: 'S01E20' }} planned />);
+    expect(screen.getByLabelText('Planned TV episode Beyblade, S01E20, once downloaded')).toBeInTheDocument();
+  });
 });

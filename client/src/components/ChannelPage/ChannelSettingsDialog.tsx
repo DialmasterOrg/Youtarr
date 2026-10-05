@@ -43,6 +43,7 @@ import { LibraryLayout } from '../../types/tvShows';
 import RatingBadge from '../shared/RatingBadge';
 import TabsEditor, { TabsEditorRefreshResult } from './components/TabsEditor';
 import ChannelTvSection from './components/ChannelTvSection';
+import TitleShowsSection from './components/TitleShows/TitleShowsSection';
 import { useChannelTv } from './hooks/useChannelTv';
 import {
   ReorganizeDialog, useReorganizeRequest, useReorganizeOutcome, isReorganizeRequired, reorganizeChangeOf,
@@ -872,19 +873,28 @@ function ChannelSettingsDialog({
         );
       case 'tv':
         return (
-          <ChannelTvSection
-            token={token}
-            channelName={channelName}
-            tv={tv}
-            loading={tvLoading}
-            error={tvError}
-            folders={libraryFolders}
-            onSwitch={handleLayoutSwitch}
-            createSubfolder={createSubfolder}
-            setFolderLayout={setFolderLayout}
-            onShowReorganize={reorganize.showOperation}
-            disabled={saving}
-          />
+          <div className="flex flex-col gap-6">
+            <ChannelTvSection
+              token={token}
+              channelName={channelName}
+              tv={tv}
+              loading={tvLoading}
+              error={tvError}
+              folders={libraryFolders}
+              onSwitch={handleLayoutSwitch}
+              createSubfolder={createSubfolder}
+              setFolderLayout={setFolderLayout}
+              onShowReorganize={reorganize.showOperation}
+              disabled={saving}
+            />
+            <TitleShowsSection
+              token={token}
+              channelId={channelId}
+              disabled={saving}
+              tvKey={tv ? `${tv.layout}|${tv.libraryFolder}` : ''}
+              onMoveEnded={() => { void refetchTv(); }}
+            />
+          </div>
         );
       case 'filters':
         return (

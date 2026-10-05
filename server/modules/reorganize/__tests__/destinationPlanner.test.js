@@ -3,6 +3,7 @@ jest.mock('../../configModule', () => ({ getConfig: jest.fn(() => ({})), directo
 jest.mock('../../../models/videoclassification', () => ({ findAll: jest.fn() }));
 jest.mock('../../videoInfoStore', () => ({ readInfoOrFallback: jest.fn() }));
 jest.mock('../movieNameRenderer', () => ({ renderMovieNames: jest.fn() }));
+jest.mock('../../tvShows/titleShowStore', () => ({ highWaterMarks: jest.fn(async () => new Map()) }));
 jest.mock('../showPlanner', () => {
   const path = require('path');
   return {
@@ -140,6 +141,82 @@ describe('reorganize destinationPlanner', () => {
     });
   });
 
+  describe('Videos to a title show', () => {
+    const titleShow = { key: 'title:3', kind: 'title', ownerChannelId: 'UC1', showId: 3, name: 'Beyblade', libraryFolder: 'TV', folderName: 'Beyblade' };
+    const target = { libraryFolder: 'TV', layout: 'tv', showKey: 'title:3' };
+    const planTitle = (subject, titleTarget, context = tvContext) => planner.planDestinations({
+      subjects: [subject],
+      context,
+      targets: new Map([[subject.video.id, target]]),
+      shows: new Map([['title:3', titleShow]]),
+      titleTargets: new Map([[subject.video.id, titleTarget]]),
+    });
+    const assigned = { showKey: 'title:3', status: 'assigned', season: 1, episode: 20, source: 'title', episodeTitle: 'Relative' };
+
+    it('moves the video into the show\'s season folder under its title number', async () => {
+      const videoPath = touch(`__Kids/Chan/Chan - Big Build [${ID}].mp4`);
+      const { items, problems } = await planTitle(subjectFor(videoPath), { showKey: 'title:3', after: assigned, pattern: null, stored: null });
+      expect(problems).toEqual([]);
+      expect(items[0].newVideoPath).toBe(path.join(root, '__TV', 'Beyblade', 'Season 01', `S01E20 - Relative [${ID}].mp4`));
+      expect(items[0].classification).toMatchObject({ showKey: 'title:3', kind: 'title', season: 1, episode: 20, source: 'title' });
+    });
+
+    it('numbers a video waiting for an upload-time number from its info', async () => {
+      const videoPath = touch(`__Kids/Chan/Chan - Big Build [${ID}].mp4`);
+      const { items } = await planTitle(subjectFor(videoPath), {
+        showKey: 'title:3', after: { ...assigned, status: 'pending_number', season: null, episode: null }, pattern: { seasonSource: 'year', episodeSource: 'date' }, stored: null,
+      });
+      expect(items[0].classification).toMatchObject({ season: 2024, episode: 3151200, source: 'date' });
+    });
+
+    it('keeps clear of numbers the title plan gives other videos', async () => {
+      const videoPath = touch(`__Kids/Chan/Chan - Big Build [${ID}].mp4`);
+      const context = {
+        ...tvContext,
+        type: 'titleShows',
+        titlePlan: { entries: [{ youtubeId: 'other000000', after: { showKey: 'title:3', status: 'assigned', season: 2024, episode: 3151200 } }] },
+      };
+      const { items } = await planTitle(subjectFor(videoPath), {
+        showKey: 'title:3', after: { ...assigned, status: 'pending_number', season: null, episode: null }, pattern: { seasonSource: 'year', episodeSource: 'date' }, stored: null,
+      }, context);
+      expect(items[0].classification.episode).toBe(3151201);
+    });
+
+    it('reports a waiting video with no time at all', async () => {
+      videoInfoStore.readInfoOrFallback.mockResolvedValue({ id: ID, title: 'Big Build' });
+      const videoPath = touch(`__Kids/Chan/Chan - Big Build [${ID}].mp4`);
+      const { problems } = await planTitle(subjectFor(videoPath), {
+        showKey: 'title:3', after: { ...assigned, status: 'pending_number', season: null, episode: null }, pattern: { seasonSource: 'year', episodeSource: 'date' }, stored: null,
+      });
+      expect(problems.map((problem) => problem.problem)).toEqual(['no-date']);
+    });
+
+    it('does not count an episode of a title show as placed by a download override', async () => {
+      const videoPath = touch(`__TV/Beyblade/Season 01/S01E19 - Relative [${ID}].mp4`);
+      const subject = subjectFor(videoPath, { subject: { libraryFolder: 'TV', currentLayout: 'tv' } });
+      const context = {
+        ...tvContext,
+        type: 'titleShows',
+        titlePlan: { entries: [], stored: new Map([[ID, { showKey: 'title:3', showKind: 'title', status: 'assigned', season: 1, episode: 19 }]]) },
+      };
+      const { items } = await planTitle(subject, { showKey: 'title:3', after: assigned, pattern: null, stored: null }, context);
+      expect(items[0].flags).not.toContain('override-placed');
+    });
+
+    it('reports a waiting title episode whose number another video holds', async () => {
+      const videoPath = touch(`__Kids/Chan/Chan - Big Build [${ID}].mp4`);
+      const context = {
+        ...tvContext,
+        type: 'titleShows',
+        titlePlan: { entries: [{ youtubeId: 'other000000', after: { showKey: 'title:3', status: 'assigned', season: 2024, episode: 4 } }] },
+      };
+      const { problems } = await planTitle(subjectFor(videoPath), {
+        showKey: 'title:3', after: { ...assigned, status: 'pending_number', season: null, episode: 4 }, pattern: { seasonSource: 'year', episodeSource: 'title' }, stored: null,
+      }, context);
+      expect(problems.map((problem) => problem.problem)).toEqual(['episode-taken']);
+    });
+  });
+
   describe('TV to Videos', () => {
     const tvSubject = (videoPath) => subjectFor(videoPath, { subject: { libraryFolder: 'TV', currentLayout: 'tv' } });
 
@@ -156,6 +233,25 @@ describe('reorganize destinationPlanner', () => {
 
       expect(items[0].newVideoPath).toBe(path.join(root, '__Kids', 'Chan', `Chan - Big Build - ${ID}`, `Chan - Big Build [${ID}].mp4`));
       expect(items[0].classification).toBeNull();
+    });
+
+    it('counts a video another folder holds as placed by a download override', async () => {
+      const videoPath = touch(`__TV/Chan/Season 2024/S2024E03151200 - Big Build [${ID}].mp4`);
+      const { items } = await planTo(tvSubject(videoPath), { libraryFolder: 'Kids', layout: 'videos' });
+      expect(items[0].flags).toContain('override-placed');
+    });
+
+    it('does not count an episode leaving a title show as placed by a download override', async () => {
+      const videoPath = touch(`__TV/Beyblade/Season 01/S01E19 - Relative [${ID}].mp4`);
+      const context = {
+        ...tvContext,
+        type: 'titleShows',
+        titlePlan: { entries: [], stored: new Map([[ID, { showKey: 'title:3', showKind: 'title', status: 'assigned', season: 1, episode: 19 }]]) },
+      };
+      const { items } = await planner.planDestinations({
+        subjects: [tvSubject(videoPath)], context, targets: new Map([[1, { libraryFolder: 'Kids', layout: 'videos' }]]), shows: new Map(),
+      });
+      expect(items[0].flags).not.toContain('override-placed');
     });
 
     it('moves the episode flat into the channel folder when the channel saves flat', async () => {
@@ -246,6 +342,16 @@ describe('reorganize destinationPlanner', () => {
   it('reports a destination held by another file but still plans the move', async () => {
     const videoPath = touch(`__Kids/Chan/Chan - Big Build [${ID}].mp4`);
     touch(`__TV/Chan/Season 2024/S2024E03151200 - Big Build [${ID}].mp4`, 'other');
+
+    const { items, problems } = await planTo(subjectFor(videoPath), { libraryFolder: 'TV', layout: 'tv' });
+
+    expect(items).toHaveLength(1);
+    expect(problems).toEqual([expect.objectContaining({ problem: 'collision' })]);
+  });
+
+  it('reports a file where the destination folder belongs as a collision', async () => {
+    const videoPath = touch(`__Kids/Chan/Chan - Big Build [${ID}].mp4`);
+    touch('__TV/Chan/Season 2024', 'not a folder');
 
     const { items, problems } = await planTo(subjectFor(videoPath), { libraryFolder: 'TV', layout: 'tv' });
 

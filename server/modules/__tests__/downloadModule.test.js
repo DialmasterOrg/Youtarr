@@ -41,6 +41,8 @@ jest.mock('../../models/channelvideo', () => ({
   findAll: jest.fn()
 }));
 jest.mock('../videoValidationModule', () => ({ getCachedChannelId: jest.fn(() => null) }));
+jest.mock('../archiveModule', () => ({ removeVideoFromArchive: jest.fn().mockResolvedValue(true) }));
+jest.mock('../tvShows/episodeConflicts', () => ({ noteArchiveLinesRemoved: jest.fn().mockResolvedValue() }));
 jest.mock('../channelDownloadGrouper', () => ({
   generateDownloadGroups: jest.fn()
 }));
@@ -1672,6 +1674,16 @@ describe('DownloadModule', () => {
       jobModuleMock = require('../jobModule');
       YtdlpCommandBuilderMock = require('../download/ytdlpCommandBuilder');
       jobModuleMock.addOrUpdateJob.mockResolvedValue(mockJobId);
+    });
+
+    it('tells title shows which ignored videos lost their archive line', async () => {
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+      require('../../models/channelvideo').findAll.mockResolvedValueOnce([{ youtube_id: 'abc12345678' }]);
+      const episodeConflicts = require('../tvShows/episodeConflicts');
+
+      await downloadModule.doSpecificDownloads({ body: { urls: ['https://youtube.com/watch?v=abc12345678'] } });
+
+      expect(episodeConflicts.noteArchiveLinesRemoved).toHaveBeenCalledWith(['abc12345678']);
     });
 
     it('should handle request object with body', async () => {

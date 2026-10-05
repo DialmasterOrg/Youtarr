@@ -37,6 +37,12 @@ describe('reorganize operationStore', () => {
     store = require('../operationStore');
   });
 
+  it('keeps a title show change\'s snapshot with the change', async () => {
+    const snapshot = { shows: [], rows: [{ youtube_id: 'abcdefghijk' }], conflicts: [] };
+    const operation = await store.createOperation({ ...plan, snapshot });
+    expect(store.settingsOf(operation).snapshot).toEqual(snapshot);
+  });
+
   it('records the operation and its items in one transaction', async () => {
     const operation = await store.createOperation(plan);
 
@@ -107,6 +113,21 @@ describe('reorganize operationStore', () => {
       id: 3, label: 'Chan', status: 'partial', total: 2, done: 1, failed: 1,
       failedItems: [{ id: 8, youtubeId: 'abcdefghijk', error: 'EEXIST' }],
     });
+  });
+
+  it('says which failed videos already had their files moved', async () => {
+    TvReorganizeOperation.findByPk.mockResolvedValue({
+      id: 3, change_type: 'titleShows', status: 'partial', total_items: 2, done_items: 0, failed_items: 2, error: null,
+      started_at: null, finished_at: null, settings_change: JSON.stringify({ change: { type: 'titleShows' }, label: 'Chan', shows: [] }),
+    });
+    TvReorganizeItem.findAll.mockResolvedValue([
+      { id: 8, youtube_id: 'abcdefghijk', title: 'T', channel_id: 'UC1', error: 'EEXIST', files_moved: false },
+      { id: 9, youtube_id: 'bcdefghijkl', title: 'U', channel_id: 'UC1', error: 'finishing failed', files_moved: true },
+    ]);
+
+    const view = await store.getOperationView(3);
+
+    expect(view.failedItems.map((item) => item.filesMoved)).toEqual([false, true]);
   });
 
   it('returns null for an unknown operation', async () => {

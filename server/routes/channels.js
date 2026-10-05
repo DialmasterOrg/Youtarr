@@ -909,11 +909,16 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *           type: string
    *           enum: [G, PG, PG-13, R, NC-17, TV-Y, TV-Y7, TV-G, TV-PG, TV-14, TV-MA]
    *         description: Hide videos rated above this rating. Unrated videos are always included. A video not yet downloaded is judged by the channel's default rating, if one is set.
+   *       - in: query
+   *         name: showId
+   *         schema:
+   *           type: integer
+   *         description: Only the episodes of this title show of the channel (numbered or waiting for a number).
    *     responses:
    *       200:
    *         description: List of channel videos
    *       400:
-   *         description: Invalid maxRating
+   *         description: Invalid maxRating or showId
    */
   router.get('/getchannelvideos/:channelId', verifyToken, async (req, res) => {
     req.log.info({ channelId: req.params.channelId }, 'Getting channel videos');
@@ -940,7 +945,12 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
     if (!maxRating.valid) {
       return res.status(400).json({ error: 'Invalid maxRating' });
     }
-    const result = await channelModule.getChannelVideos(channelId, page, pageSize, downloadedFilter, searchQuery, sortBy, sortOrder, tabType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, maxRating.value);
+    // Only the episodes of one of the channel's title shows.
+    const showId = req.query.showId === undefined || req.query.showId === '' ? null : Number(req.query.showId);
+    if (showId !== null && (!Number.isInteger(showId) || showId <= 0)) {
+      return res.status(400).json({ error: 'Invalid showId' });
+    }
+    const result = await channelModule.getChannelVideos(channelId, page, pageSize, downloadedFilter, searchQuery, sortBy, sortOrder, tabType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, maxRating.value, showId);
 
     if (Array.isArray(result)) {
       res.status(200).json({ videos: result });

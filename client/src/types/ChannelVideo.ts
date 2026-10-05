@@ -1,4 +1,5 @@
 import type { EpisodeInfo } from './tvShows';
+import type { PlannedEpisode } from './titleShows';
 /*{
   "title": "Five Nights at Freddy’s SCARY Truth…",
   "id": "WEywwDLeZE0",
@@ -43,4 +44,6 @@ export interface ChannelVideo {
   watchedBy?: string[];
   // Show and SxxEyy when the downloaded file is a TV episode
   episode?: EpisodeInfo | null;
+  // The episode a title show gives the video before it downloads
+  plannedEpisode?: PlannedEpisode | null;
 }

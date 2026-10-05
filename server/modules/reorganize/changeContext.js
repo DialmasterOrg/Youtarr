@@ -14,11 +14,13 @@ const { LAYOUT_TV, LAYOUT_VIDEOS, folderKey, isMp3Format } = require('../tvShows
 const { getLayoutResolver } = require('../tvShows/libraryLayouts');
 const layoutGuards = require('../tvShows/layoutGuards');
 const channelLayout = require('../tvShows/channelLayout');
+const titleShowSaver = require('../tvShows/titleShowSaver');
 const {
   CHANGE_CHANNEL,
   CHANGE_CHANNEL_LAYOUT,
   CHANGE_FOLDER_LAYOUT,
   CHANGE_DEFAULT_SUBFOLDER,
+  CHANGE_TITLE_SHOWS,
 } = require('./constants');
 
 const LAYOUTS = new Set([LAYOUT_VIDEOS, LAYOUT_TV]);
@@ -99,6 +101,8 @@ async function resolveFolderLayoutChange(raw, base) {
   }
   if (layout === LAYOUT_TV) {
     layoutGuards.assertNoMp3Users(await layoutGuards.usersOfFolder(folder), 'this folder');
+  } else {
+    await layoutGuards.assertNoTitleShows(folder);
   }
   const key = folderKey(folder);
   return {
@@ -142,6 +146,31 @@ async function resolveDefaultSubfolderChange(raw, base) {
   };
 }
 
+// A channel's title shows (and episode assignments) after the change: the
+// channel stays in its folder, and the title plan says where its videos go.
+async function resolveTitleShowsChange(raw, base) {
+  const channel = await findChannel(raw.channelId);
+  const overrides = raw.overrides === undefined || raw.overrides === null ? [] : raw.overrides;
+  if (!Array.isArray(raw.shows) || !Array.isArray(overrides)) throw badRequest('shows and overrides must be lists');
+  const { drafts, plan } = await titleShowSaver.prepare({ channel, rawShows: raw.shows, rawOverrides: overrides });
+  const folder = libraryFolderOf(channel.sub_folder, base.defaultBefore);
+  return {
+    ...base,
+    type: CHANGE_TITLE_SHOWS,
+    stored: { type: CHANGE_TITLE_SHOWS, channelId: channel.channel_id, shows: raw.shows, overrides },
+    scope: channel.channel_id,
+    label: `${channel.title || channel.uploader || channel.channel_id}: shows`,
+    channel,
+    fromFolder: folder,
+    toFolder: folder,
+    layoutAfter: base.layoutBefore,
+    defaultAfter: base.defaultBefore,
+    folderAfter: base.folderBefore,
+    drafts,
+    titlePlan: plan,
+  };
+}
+
 /**
  * Resolve a change requested by the API.
  *
@@ -150,6 +179,7 @@ async function resolveDefaultSubfolderChange(raw, base) {
  *   | { type: 'channel', channelId, subFolder }
  *   | { type: 'folderLayout', folder, layout }
  *   | { type: 'defaultSubfolder', value }
+ *   | { type: 'titleShows', channelId, shows, overrides? }
  * @returns {Promise<Object>} The resolved change. Errors carry .status (400/404/409).
  */
 async function resolveChange(raw) {
@@ -176,6 +206,8 @@ async function resolveChange(raw) {
     return resolveFolderLayoutChange(raw, base);
   case CHANGE_DEFAULT_SUBFOLDER:
     return resolveDefaultSubfolderChange(raw, base);
+  case CHANGE_TITLE_SHOWS:
+    return resolveTitleShowsChange(raw, base);
   default:
     throw badRequest('Unknown change type');
   }

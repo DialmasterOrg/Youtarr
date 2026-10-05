@@ -98,6 +98,11 @@ function problemLines(preview: ReorganizePreview): string[] {
   if (totals.unsafeName > 0) {
     lines.push(`${countOf(totals.unsafeName, 'video')} would land outside the downloads folder and ${stays(totals.unsafeName)}.`);
   }
+  const episodeTaken = totals.episodeTaken ?? 0;
+  if (episodeTaken > 0) {
+    lines.push(`${countOf(episodeTaken, 'video')} waiting for ${agree(episodeTaken, 'its', 'their')} upload year `
+      + `${agree(episodeTaken, 'has an episode number', 'have episode numbers')} another video holds and ${stays(episodeTaken)}.`);
+  }
   if (totals.collisions > 0) {
     lines.push(`${countOf(totals.collisions, 'file')} would replace a file that is already there. `
       + `${agree(totals.collisions, 'Its video fails', 'Those videos fail')} until it is removed.`);

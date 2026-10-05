@@ -23,6 +23,8 @@ interface UseChannelVideosParams {
   missingFilter?: ChipFilterMode;
   ignoredFilter?: ChipFilterMode;
   watchedFilter?: ChipFilterMode;
+  /** Only the episodes of this title show */
+  showId?: number | null;
   onFirstLoad?: (channelId: string) => void;
 }
 
@@ -58,6 +60,7 @@ export function useChannelVideos({
   missingFilter,
   ignoredFilter,
   watchedFilter,
+  showId = null,
   onFirstLoad,
 }: UseChannelVideosParams): UseChannelVideosResult {
   const [videos, setVideos] = useState<ChannelVideo[]>([]);
@@ -134,6 +137,9 @@ export function useChannelVideos({
       if (watchedFilter && watchedFilter !== 'off') {
         queryParams.append('watchedFilter', watchedFilter);
       }
+      if (showId !== null) {
+        queryParams.append('showId', String(showId));
+      }
 
       const response = await fetch(`/getchannelvideos/${channelId}?${queryParams}`, {
         headers: {
@@ -201,7 +207,7 @@ export function useChannelVideos({
         setLoading(false);
       }
     }
-  }, [channelId, page, pageSize, downloadedFilter, searchQuery, sortBy, sortOrder, tabType, maxRating, token, append, resetKey, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter]);
+  }, [channelId, page, pageSize, downloadedFilter, searchQuery, sortBy, sortOrder, tabType, maxRating, token, append, resetKey, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, showId]);
 
   useEffect(() => {
     fetchVideos();

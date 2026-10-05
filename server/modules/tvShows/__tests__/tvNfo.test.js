@@ -80,6 +80,47 @@ describe('tvNfo', () => {
       const bare = tvNfo.buildTvShowNfo({ title: 'X', externalKey: 'UC1' });
       expect(bare).not.toMatch(/<plot>|<premiered>/);
     });
+
+    it('identifies a title show by its Youtarr key', () => {
+      const titleShow = tvNfo.buildTvShowNfo({ title: 'Beyblade', externalKey: 'uuid-1', idType: 'youtarr' });
+      expect(titleShow).toContain('<uniqueid type="youtarr" default="true">uuid-1</uniqueid>');
+      expect(titleShow).not.toContain('type="youtube"');
+    });
+
+    it('names seasons in order', () => {
+      const named = tvNfo.buildTvShowNfo({ title: 'Beyblade', externalKey: 'k', namedSeasons: { 2: 'V-Force', 1: 'Beyblade & Co' } });
+      expect(named).toContain('  <namedseason number="1">Beyblade &amp; Co</namedseason>\n  <namedseason number="2">V-Force</namedseason>');
+    });
+  });
+
+  describe('buildSeasonNfo', () => {
+    it('writes the season name and number', () => {
+      const xml = tvNfo.buildSeasonNfo({ season: 2, name: 'V-Force' });
+      expect(xml).toMatch(/<season>\s*<title>V-Force<\/title>\s*<seasonnumber>2<\/seasonnumber>\s*<\/season>/);
+    });
+  });
+
+  describe('writeSeasonNfo', () => {
+    let tmpDir;
+    beforeEach(() => { tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tvnfo-season-')); });
+    afterEach(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+
+    it('writes season.nfo for a named season', async () => {
+      await tvNfo.writeSeasonNfo(tmpDir, { season: 1, name: 'Beyblade' });
+      expect(fs.readFileSync(path.join(tmpDir, 'season.nfo'), 'utf8')).toContain('<title>Beyblade</title>');
+    });
+
+    it('removes Youtarr\'s season.nfo when the season has no name', async () => {
+      await tvNfo.writeSeasonNfo(tmpDir, { season: 1, name: 'Beyblade' });
+      await tvNfo.writeSeasonNfo(tmpDir, { season: 1, name: null });
+      expect(fs.existsSync(path.join(tmpDir, 'season.nfo'))).toBe(false);
+    });
+
+    it('leaves a season.nfo Youtarr didn\'t write', async () => {
+      fs.writeFileSync(path.join(tmpDir, 'season.nfo'), '<season><title>Mine</title></season>');
+      await tvNfo.writeSeasonNfo(tmpDir, { season: 1, name: null });
+      expect(fs.existsSync(path.join(tmpDir, 'season.nfo'))).toBe(true);
+    });
   });
 
   describe('dateFromEpisodeCode', () => {

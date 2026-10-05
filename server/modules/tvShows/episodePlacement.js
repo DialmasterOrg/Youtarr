@@ -11,20 +11,36 @@
 const fs = require('fs');
 const path = require('path');
 const VideoClassification = require('../../models/videoclassification');
+const TvShowSeason = require('../../models/tvshowseason');
 const logger = require('../../logger');
 const { buildSubfolderSegment, isFileForVideo, replaceFileWithRetries, ensureDirWithRetries } = require('../filesystem');
-const { LAYOUT_TV } = require('./constants');
+const { LAYOUT_TV, KIND_TITLE_SHOW } = require('./constants');
 const { getLayoutResolver } = require('./libraryLayouts');
 const { resolveDestination } = require('./routing');
 const showStore = require('./showStore');
+const titleEpisodeAssigner = require('./titleEpisodeAssigner');
+const episodeConflicts = require('./episodeConflicts');
 const { assignDateEpisode, STATUS_ASSIGNED } = require('./episodeAllocator');
 const { seasonFolderName, episodeFileName } = require('./episodeNaming');
-const { dateFromEpisodeCode, buildEpisodeNfo, writeTvShowNfoIfChanged } = require('./tvNfo');
+const {
+  dateFromEpisodeCode, buildEpisodeNfo, writeTvShowNfoIfChanged, writeSeasonNfo, ID_TYPE_YOUTARR, ID_TYPE_YOUTUBE,
+} = require('./tvNfo');
 
 const MOVE_RETRY_OPTIONS = { retries: 5, delayMs: 500 };
 
 function libraryFolderPath(baseDir, libraryFolder) {
   return libraryFolder ? path.join(baseDir, buildSubfolderSegment(libraryFolder)) : baseDir;
+}
+
+function placementAt(show, assignment, baseDir) {
+  const showDir = path.join(libraryFolderPath(baseDir, show.library_folder), show.folder_name);
+  return {
+    show,
+    assignment,
+    showDir,
+    seasonDir: path.join(showDir, seasonFolderName(assignment.season)),
+    stem: assignment.fileStem,
+  };
 }
 
 /**
@@ -54,6 +70,21 @@ async function planEpisode({
     logger.error({ err, youtubeId }, 'Could not read library folder layouts; saving the video movie-style');
     return null;
   }
+  try {
+    await episodeConflicts.noteDownloaded(youtubeId);
+  } catch (err) {
+    logger.warn({ err, youtubeId }, 'Could not update the duplicate record of a downloaded episode');
+  }
+
+  // A title show of the owner channel wins over the resolved folder.
+  const titlePlacement = await titleEpisodeAssigner.resolveTitlePlacement({ youtubeId, info, ownerChannelId, channelEnabled });
+  if (titlePlacement) {
+    if (layoutOf(titlePlacement.show.library_folder || '') === LAYOUT_TV) {
+      return placementAt(titlePlacement.show, titlePlacement.assignment, baseDir);
+    }
+    logger.warn({ youtubeId, showId: titlePlacement.show.id }, 'The title show\'s folder is no longer a TV folder; saving the video by the channel layout');
+  }
+
   if (layoutOf(resolvedSubfolder || '') !== LAYOUT_TV) return null;
 
   let channelShow = ownerChannelId ? await showStore.findChannelShow(ownerChannelId) : null;
@@ -84,14 +115,7 @@ async function planEpisode({
   });
 
   const assignment = await assignDateEpisode({ show, youtubeId, channelId: ownerChannelId, info });
-  const showDir = path.join(libraryFolderPath(baseDir, show.library_folder), show.folder_name);
-  return {
-    show,
-    assignment,
-    showDir,
-    seasonDir: path.join(showDir, seasonFolderName(assignment.season)),
-    stem: assignment.fileStem,
-  };
+  return placementAt(show, assignment, baseDir);
 }
 
 /**
@@ -157,17 +181,42 @@ async function writeEpisodeMetadata({ placement, info, showPlot = null }) {
     episodeTitle: assignment.episodeTitle,
   });
   await fs.promises.writeFile(path.join(seasonDir, `${stem}.nfo`), episodeXml, 'utf8');
+  if (show.kind !== KIND_TITLE_SHOW) {
+    await writeTvShowNfoIfChanged(showDir, {
+      title: show.name,
+      plot: showPlot,
+      premiered: await earliestEpisodeDate(show.id),
+      externalKey: show.external_key,
+      idType: ID_TYPE_YOUTUBE,
+    });
+    return;
+  }
+  // A title show: identified by its own key, seasons named as the user set
+  // them (Emby reads season names only from season.nfo).
+  const namedSeasons = await seasonNamesOf(show.id);
   await writeTvShowNfoIfChanged(showDir, {
     title: show.name,
-    plot: showPlot,
-    premiered: await earliestEpisodeDate(show.id),
     externalKey: show.external_key,
+    idType: ID_TYPE_YOUTARR,
+    namedSeasons,
   });
+  await writeSeasonNfo(seasonDir, { season: assignment.season, name: namedSeasons[assignment.season] || null });
+}
+
+/**
+ * A title show's season names by season number.
+ */
+async function seasonNamesOf(showId) {
+  const rows = await TvShowSeason.findAll({ where: { show_id: showId }, attributes: ['season', 'name'] });
+  const names = {};
+  for (const row of rows) if (row.name) names[row.season] = row.name;
+  return names;
 }
 
 module.exports = {
   planEpisode,
   moveEpisodeFiles,
   earliestEpisodeDate,
+  seasonNamesOf,
   writeEpisodeMetadata
 };

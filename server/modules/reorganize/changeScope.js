@@ -7,6 +7,7 @@
  * - A library folder's videos: every row whose file is in that folder,
  *   tracked or not.
  * - The default subfolder's videos: those of every channel that follows it.
+ * - A title show change: the downloaded videos its title plan moves.
  *
  * Only rows with a file inside the downloads folder are moved; rows marked
  * missing are left alone.
@@ -24,7 +25,7 @@ const { resolveChannelFolderName, buildSubfolderSegment } = require('../filesyst
 const { GLOBAL_DEFAULT_SENTINEL } = require('../filesystem/constants');
 const { LAYOUT_TV, folderKey } = require('../tvShows/constants');
 const { resolveChannelDirectory } = require('../tvShows/channelFolders');
-const { CHANGE_CHANNEL, CHANGE_FOLDER_LAYOUT, CHANGE_DEFAULT_SUBFOLDER } = require('./constants');
+const { CHANGE_CHANNEL, CHANGE_FOLDER_LAYOUT, CHANGE_DEFAULT_SUBFOLDER, CHANGE_TITLE_SHOWS } = require('./constants');
 
 const VIDEO_ATTRIBUTES = [
   'id', 'youtubeId', 'channel_id', 'youTubeVideoName', 'youTubeChannelName', 'originalDate', 'removed',
@@ -149,6 +150,17 @@ async function videosOfFolder(libraryFolder, context, channels) {
     .filter(Boolean);
 }
 
+// A title show change moves exactly the downloaded videos its title plan
+// says must move.
+async function videosOfTitleChange(context, channels) {
+  const ids = context.titlePlan.entries.filter((entry) => entry.moves).map((entry) => entry.youtubeId);
+  if (ids.length === 0) return [];
+  const videos = await Video.findAll({ where: { youtubeId: ids, removed: false }, attributes: VIDEO_ATTRIBUTES, raw: true });
+  return videos
+    .map((video) => toSubject(video, context.channel.channel_id, channels, context))
+    .filter(Boolean);
+}
+
 /**
  * @param {Object} context - changeContext.resolveChange's result
  * @returns {Promise<{subjects: Array<Object>, channels: Map<string, Object>}>}
@@ -161,6 +173,8 @@ async function selectSubjects(context) {
     subjects = await videosOfChannel(channels.get(context.channel.channel_id) || context.channel, context, channels);
   } else if (context.type === CHANGE_FOLDER_LAYOUT) {
     subjects = await videosOfFolder(context.folder, context, channels);
+  } else if (context.type === CHANGE_TITLE_SHOWS) {
+    subjects = await videosOfTitleChange(context, channels);
   } else if (context.type === CHANGE_DEFAULT_SUBFOLDER) {
     for (const channel of channels.values()) {
       if (channel.sub_folder !== GLOBAL_DEFAULT_SENTINEL) continue;

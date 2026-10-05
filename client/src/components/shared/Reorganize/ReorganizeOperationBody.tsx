@@ -21,12 +21,16 @@ function resultAlert(operation: ReorganizeOperation) {
     return <Alert severity="success">Moved {countOf(done, 'video')}.</Alert>;
   }
   if (operation.status === 'partial') {
-    return (
-      <Alert severity="warning">
-        Moved {countOf(done, 'video')}. {countOf(failed, 'video')} could not be moved and
-        {' '}{agree(failed, 'stays where it was', 'stay where they were')}.
-      </Alert>
-    );
+    const unfinished = (operation.failedItems ?? []).filter((item) => item.filesMoved).length;
+    const stayed = Math.max(failed - unfinished, 0);
+    const parts = [`Moved ${countOf(done, 'video')}.`];
+    if (stayed > 0) {
+      parts.push(`${countOf(stayed, 'video')} could not be moved and ${agree(stayed, 'stays where it was', 'stay where they were')}.`);
+    }
+    if (unfinished > 0) {
+      parts.push(`${countOf(unfinished, 'video')} ${agree(unfinished, 'was', 'were')} moved but did not finish.`);
+    }
+    return <Alert severity="warning">{parts.join(' ')}</Alert>;
   }
   return <Alert severity="error">{operation.error || 'The move failed.'}</Alert>;
 }

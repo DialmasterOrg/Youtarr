@@ -370,7 +370,7 @@ function VideoListItem({
               showNA
               style={{ ...SHARED_STATUS_CHIP_SMALL_STYLE }}
             />
-            <EpisodeChip episode={video.episode} />
+            <EpisodeChip episode={video.episode ?? video.plannedEpisode} planned={!video.episode && Boolean(video.plannedEpisode)} />
             <WatchedChip watchedBy={video.watchedBy || []} />
             <Chip
               icon={getStatusIcon(status)}

@@ -63,6 +63,25 @@ jest.mock('../ChannelPage/hooks/useChannelTv', () => ({
   }),
 }));
 
+const mockRefetchTitleShows = jest.fn(() => Promise.resolve());
+const mockTitleShows: { current: { shows: Array<{ id: number; name: string; retired: boolean }> } | null } = { current: null };
+jest.mock('../ChannelPage/hooks/useTitleShows', () => ({
+  useTitleShows: () => ({
+    data: mockTitleShows.current,
+    loading: false,
+    error: null,
+    refetch: mockRefetchTitleShows,
+  }),
+}));
+
+// The listing-refresh subscriptions the page makes (download events, a reorganize's end).
+const listingRefreshCallbacks: Array<() => void> = [];
+jest.mock('../../hooks/useDownloadListingsRefresh', () => ({
+  useDownloadListingsRefresh: (onRefresh: () => void) => {
+    listingRefreshCallbacks.push(onRefresh);
+  },
+}));
+
 const axios = require('axios');
 
 // Mock fetch
@@ -107,6 +126,7 @@ describe('ChannelPage Component', () => {
     dialogPropsStore.current = null;
     channelVideosPropsStore.current = null;
     mockChannelTv.current = null;
+    mockTitleShows.current = null;
   });
 
   describe('TV chip', () => {
@@ -139,6 +159,81 @@ describe('ChannelPage Component', () => {
         dialogPropsStore.current.onSettingsSaved?.({ sub_folder: 'Anime', video_quality: null });
       });
 
+      expect(mockRefetchChannelTv).toHaveBeenCalled();
+    });
+  });
+
+  describe('Title shows', () => {
+    const page = () => (
+      <BrowserRouter>
+        <ChannelPage token={mockToken} />
+      </BrowserRouter>
+    );
+    const shows = [
+      { id: 1, name: 'Tier Lists', retired: false },
+      { id: 2, name: 'Old Series', retired: true },
+      { id: 3, name: 'Q&A', retired: false },
+    ];
+
+    test('counts the active title shows in the header chip', async () => {
+      mockTitleShows.current = { shows };
+      render(page());
+
+      expect(await screen.findByTestId('shows-chip')).toHaveTextContent('2 shows');
+    });
+
+    test('shows no shows chip for a channel without title shows', async () => {
+      mockTitleShows.current = { shows: [] };
+      render(page());
+
+      await screen.findByText('Tech Channel');
+      expect(screen.queryByTestId('shows-chip')).not.toBeInTheDocument();
+    });
+
+    test('offers only the active shows to the video list', async () => {
+      mockTitleShows.current = { shows };
+      render(page());
+      await screen.findByText('Tech Channel');
+
+      expect(channelVideosPropsStore.current.titleShows).toEqual([
+        { id: 1, name: 'Tier Lists' },
+        { id: 3, name: 'Q&A' },
+      ]);
+    });
+
+    test('asks the video list to reload when the settings dialog closes', async () => {
+      render(page());
+      await screen.findByText('Tech Channel');
+      const before = channelVideosPropsStore.current.refreshKey;
+      act(() => {
+        dialogPropsStore.current.onClose();
+      });
+      expect(channelVideosPropsStore.current.refreshKey).not.toBe(before);
+    });
+
+    test('reloads the shows when the settings dialog closes', async () => {
+      render(page());
+      await screen.findByText('Tech Channel');
+
+      act(() => {
+        dialogPropsStore.current.onClose();
+      });
+
+      expect(mockRefetchTitleShows).toHaveBeenCalled();
+    });
+
+    test('reloads the shows and TV state on a listing refresh (a reorganize ended)', async () => {
+      listingRefreshCallbacks.length = 0;
+      render(page());
+      await screen.findByText('Tech Channel');
+      mockRefetchTitleShows.mockClear();
+      mockRefetchChannelTv.mockClear();
+
+      act(() => {
+        listingRefreshCallbacks.forEach((callback) => callback());
+      });
+
+      expect(mockRefetchTitleShows).toHaveBeenCalled();
       expect(mockRefetchChannelTv).toHaveBeenCalled();
     });
   });

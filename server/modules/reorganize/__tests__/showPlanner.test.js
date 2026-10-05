@@ -5,6 +5,9 @@ jest.mock('../../tvShows/channelFolders', () => {
     showDirectory: (show) => path.join('/data', show.library_folder ? `__${show.library_folder}` : '', show.folder_name),
   };
 });
+jest.mock('../titleTargets', () => ({
+  resolveTitleTargets: jest.fn(async () => ({ targets: new Map(), shows: new Map() })),
+}));
 jest.mock('../changeScope', () => {
   const path = require('path');
   return { libraryRootOf: (folder) => (folder ? path.join('/data', `__${folder}`) : '/data') };
@@ -109,6 +112,38 @@ describe('reorganize showPlanner', () => {
       const { shows } = await showPlanner.planShows([subject()], folderToTv);
 
       expect(shows.get('UC1')).toMatchObject({ action: 'keep', libraryFolder: 'TV' });
+    });
+  });
+
+  describe('title shows', () => {
+    const titleShow = { key: 'title:3', kind: 'title', ownerChannelId: 'UC1', showId: 3, action: 'keep', name: 'Beyblade', libraryFolder: 'Anime', folderName: 'Beyblade' };
+
+    beforeEach(() => {
+      require('../titleTargets').resolveTitleTargets.mockResolvedValue({
+        targets: new Map([[1, { showKey: 'title:3', after: { season: 1, episode: 20 } }]]),
+        shows: new Map([['title:3', titleShow]]),
+      });
+    });
+
+    it('sends an episode of a title show to its show\'s folder', async () => {
+      const { targets } = await showPlanner.planShows([subject()], channelToTv, new Map());
+      expect(targets.get(1)).toEqual({ libraryFolder: 'Anime', layout: 'tv', showKey: 'title:3' });
+    });
+
+    it('plans the title show and no channel show for it', async () => {
+      const { shows } = await showPlanner.planShows([subject()], channelToTv, new Map());
+      expect([...shows.keys()]).toEqual(['title:3']);
+    });
+
+    it('hands the title targets on for numbering', async () => {
+      const { titleTargets } = await showPlanner.planShows([subject()], channelToTv, new Map());
+      expect(titleTargets.get(1).after).toEqual({ season: 1, episode: 20 });
+    });
+
+    it('passes the channels to the title show lookup', async () => {
+      const channels = new Map([['UC1', OWNER]]);
+      await showPlanner.planShows([subject()], channelToTv, channels);
+      expect(require('../titleTargets').resolveTitleTargets).toHaveBeenCalledWith([subject()], channelToTv, channels);
     });
   });
 

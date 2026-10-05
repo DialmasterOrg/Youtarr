@@ -492,6 +492,30 @@ Click **Move N videos** to start. While the files move, a banner shows on every 
 
 The same review opens when you change the default subfolder (Settings -> Core) to a folder with the other layout while channels on the default have downloads. Save again afterwards to apply your other changes.
 
+### Title shows: series inside a channel
+
+Some channels upload real series: "Hermitcraft 10: Episode 5 - ...", "BEYBLADE EN Episode 20: ...". A **title show** turns the videos whose titles match a pattern into a show of their own, numbered the way the titles number them. The channel can stay a Videos channel: only the matching videos go to the show, and everything else downloads as before (or to the channel show, if the channel is a TV channel).
+
+Open the channel page, click the settings icon (gear), open **TV Show**, and under **Shows in this channel** click **Add show**:
+
+- **Name** and **Folder name** (the show folder; the name by default). A title show needs a TV folder: Youtarr uses the channel's TV folder, else the default subfolder if it is a TV folder, else your only TV folder, and asks when there is more than one. Two shows can't share a folder name in one TV folder; Youtarr suggests `<Name> (<Channel>)`, or offers to restore a removed show that used the name.
+- **Title patterns**, tried in order. Text matches ignoring case and spaces match any spacing; `*` matches any text; a pattern matches anywhere in the title unless it starts with `^`. Placeholders capture the numbers and the episode title: `{season}`, `{episode}` and `{title}`. For example `Hermitcraft {season}: Episode {episode} - {title}`. **Edit as regular expression** shows the pattern as a Python regular expression with the named groups `season`, `episode` and `title`.
+- **Season** and **Episode** per pattern: the season from the title, a fixed season (0 is specials), or the upload year; the episode from the title, the next number in the season (given once, oldest upload first, and never reused), or the upload time (with upload-year seasons only, like channel shows). A video not downloaded yet gets its upload-year season when it downloads; a downloaded video's year is already known, so the preview shows its number.
+- **Exclude titles containing**: a title with any of these words never joins the show, for example `Official Clip`.
+- **Season names**: written to the show's NFO files, so the media server shows "Season 2: V-Force" instead of "Season 2". Upload-year seasons (such as 2024) can be named too.
+
+The preview updates as you type: **Episodes** (with the episode each video would get, and whether it's downloaded), **Duplicates**, **Gaps** (numbers no video has), **Unmatched videos**, and **Not supported** (compilations such as `Ep.19 ... Ep.20` and parts such as `Episode 1 Part 2`, which Youtarr can't place yet, and titles missing a number the pattern needs). Downloads whose files are outside the downloads folder join a show but their files stay where they are. When several shows match a title, the first in the list takes the video; the arrows in the list reorder the shows.
+
+When saving would move downloaded videos (into the show, between shows, or out of one), the same **Review the move** dialog opens first. Changing a show that only affects videos you haven't downloaded saves right away, and a new show name or season name is written to the show's NFO files on save. **Remove** retires a show: its downloaded videos move back to the channel's layout. **Restore** (under **Removed shows**) brings it back.
+
+**Duplicates**: when two uploads claim the same episode (a re-upload, a remaster), the earliest upload still on YouTube keeps the number. A copy you haven't downloaded is ignored, so automatic downloads skip it. A copy you already downloaded is never deleted: it stays where it is, listed under **Duplicates and errors** with **Delete this copy**, **Use this copy instead** (it takes the number) and **Not a duplicate**.
+
+**Fix one video**: in the video's details (click its thumbnail), **Change episode...** in the **Episode** section lets you pick a show, season and episode, or mark the video **Not an episode** (it leaves the title shows for good, even after pattern edits). **Back to automatic** undoes either.
+
+**Only download videos that belong to a show**: with this switch on, the channel's automatic downloads and **Download All** fetch only videos that match one of its shows. It does nothing while the channel has no shows.
+
+On the channel page, a **N shows** chip appears in the header and on Subscriptions, and the video list gets a show filter (**All videos** or one show) with **Missing episodes**: per season, the episodes not downloaded yet and the numbers no video has.
+
 ## Browse and Filter Channel Videos
 
 Explore all videos available from your subscribed channels, even if you haven't downloaded them yet. This feature uses yt-dlp to fetch channel information directly from YouTube - no API key required.

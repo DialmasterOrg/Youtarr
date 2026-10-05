@@ -39,6 +39,7 @@ export interface VideoModalProps {
   onRatingChanged?: (youtubeId: string, rating: string | null) => void;
   onAvailabilityDetected?: (youtubeId: string, availability: string) => void;
   onPublishedDateDetected?: (youtubeId: string, isoDate: string) => void;
+  onEpisodeChanged?: (youtubeId: string) => void;
   allowIgnore?: boolean;
 }
 

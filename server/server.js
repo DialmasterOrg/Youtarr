@@ -264,6 +264,7 @@ const initialize = async () => {
     const scheduledTaskManager = require('./modules/scheduledTaskManager');
     const storageGuard = require('./modules/storageGuard');
     const reorganize = require('./modules/reorganize');
+    const archiveSuppressor = require('./modules/tvShows/archiveSuppressor');
     const mediaServerSync = require('./modules/mediaServers/mediaServerSync');
     const watchStatusSync = require('./modules/mediaServers/watchStatusSync');
 
@@ -358,6 +359,13 @@ const initialize = async () => {
         logger.error({ err }, 'Could not resume an interrupted reorganize');
       });
     }
+    // Title shows suppress duplicate episodes in complete.list, which must not
+    // change under a running download job: writes wait for the queue to idle.
+    archiveSuppressor.initialize({ isDownloadRunning: () => Boolean(jobModule.getInProgressJobId()) });
+    jobModule.onBeforeNextJob(() => archiveSuppressor.flush());
+    archiveSuppressor.flush().catch((err) => {
+      logger.error({ err }, 'Could not apply pending complete.list changes for duplicate episodes');
+    });
     subscriptionImportModule.init({
       channelModule,
       jobModule,

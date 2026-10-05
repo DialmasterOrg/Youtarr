@@ -124,6 +124,12 @@ Channel.init(
       defaultValue: false,
       comment: 'When true, no videos from this channel are ever auto-removed',
     },
+    tv_show_only_downloads: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      comment: 'When true, channel downloads only fetch videos that belong to one of its title shows',
+    },
     auto_removal_keep_recent_count: {
       type: DataTypes.INTEGER,
       allowNull: true,

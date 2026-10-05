@@ -18,7 +18,7 @@ function planRevision({ change, shows, items }) {
   const payload = {
     change,
     shows: shows
-      .map((show) => [show.ownerChannelId, show.action, show.libraryFolder, show.folderName])
+      .map((show) => [show.key || show.ownerChannelId, show.action, show.libraryFolder, show.folderName])
       .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)),
     items: items.map((item) => [
       item.youtubeId,

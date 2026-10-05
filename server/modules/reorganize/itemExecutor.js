@@ -21,8 +21,10 @@ const { unchangedSinceRead, GUARDED_COLUMNS } = require('../videoRowGuard');
 const { moveFileNoClobber } = require('../filesystem/fileOperations');
 const { isDirectoryEffectivelyEmpty, removeDirectoryResilient, isVideoDirectoryFor } = require('../filesystem/directoryManager');
 const { resolveLibraryFolder, locateEpisodeFolders, cleanupEmptyShowFolders } = require('../filesystem/showFolderCleanup');
-const { LAYOUT_TV } = require('../tvShows/constants');
+const titleShowStore = require('../tvShows/titleShowStore');
+const { LAYOUT_TV, KIND_TITLE_SHOW } = require('../tvShows/constants');
 const { STATUS_ASSIGNED } = require('../tvShows/episodeAllocator');
+const { SOURCE } = require('../tvShows/titleNumbering');
 
 function itemError(message) {
   return new Error(message);
@@ -63,6 +65,7 @@ async function loadVideo(videoId) {
 }
 
 async function storeClassification(youtubeId, classification, showId) {
+  const titleShow = classification.kind === KIND_TITLE_SHOW;
   const values = {
     channel_id: classification.ownerChannelId,
     show_id: showId,
@@ -71,15 +74,20 @@ async function storeClassification(youtubeId, classification, showId) {
     episode: classification.episode,
     source: classification.source,
     timestamp_source: classification.timestampSource || null,
-    pattern_id: null,
     episode_title: classification.episodeTitle,
     file_stem: classification.fileStem,
   };
+  // A title show's row was written with its pattern when the change was
+  // applied; a channel show has none.
+  if (!titleShow) values.pattern_id = null;
   const row = await VideoClassification.findByPk(youtubeId);
   if (row) {
     await row.update(values);
   } else {
     await VideoClassification.create({ youtube_id: youtubeId, ...values });
+  }
+  if (titleShow && classification.source === SOURCE.ORDER) {
+    await titleShowStore.raiseHighWater(showId, classification.season, classification.episode);
   }
 }
 
@@ -176,7 +184,8 @@ async function cleanupSources(plan, youtubeId) {
  *
  * @param {Object} record - tv_reorganize_items row
  * @param {Object} params
- * @param {(ownerChannelId: string) => number|null} params.showIdFor - The pinned show of an owner channel
+ * @param {(showKey: string) => number|null} params.showIdFor - The pinned show of an owner channel (channel
+ *   shows) or of a title show key
  * @returns {Promise<void>} Throws with a user-facing message when the video can't move
  */
 async function executeItem(record, { showIdFor }) {
@@ -192,7 +201,7 @@ async function executeItem(record, { showIdFor }) {
   assertInsideDownloads(plan.files);
 
   if (classification) {
-    const showId = showIdFor(classification.ownerChannelId);
+    const showId = showIdFor(classification.showKey || classification.ownerChannelId);
     if (!showId) throw itemError('The video\'s show could not be found.');
     await storeClassification(record.youtube_id, classification, showId);
   }

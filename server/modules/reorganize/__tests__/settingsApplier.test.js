@@ -14,6 +14,8 @@ jest.mock('../../tvShows/channelLayout', () => ({ applyChannelFolderChange: jest
 jest.mock('../../tvShows/libraryFolders', () => ({ syncPlexIgnore: jest.fn() }));
 jest.mock('../showPlanner', () => ({ SHOW_ACTION: { KEEP: 'keep', CREATE: 'create', MOVE: 'move' } }));
 jest.mock('../changeContext', () => ({ libraryFolderOf: (value, def) => (value === '##USE_GLOBAL_DEFAULT##' ? def : value || '') }));
+jest.mock('../../tvShows/titleShowSaver', () => ({ prepare: jest.fn(), applyPrepared: jest.fn() }));
+jest.mock('../titleSnapshot', () => ({ restoreTitleSnapshot: jest.fn() }));
 
 const layoutOf = (folder) => (folder === 'TV' ? 'tv' : 'videos');
 
@@ -141,6 +143,44 @@ describe('reorganize settingsApplier', () => {
       await applier.rollbackSettings({ change: { type: 'defaultSubfolder', value: 'TV', previousValue: 'GlobalDefault' }, shows: [] });
 
       expect(configModule.updateConfig).toHaveBeenCalledWith({ x: 1, defaultSubfolder: 'GlobalDefault' });
+    });
+  });
+
+  describe('title show changes', () => {
+    const change = { type: 'titleShows', channelId: 'UC1', shows: [{ name: 'Beyblade' }], overrides: [] };
+    const planned = [
+      { key: 'new:0', kind: 'title', ownerChannelId: 'UC1', showId: null, action: 'create', name: 'Beyblade', libraryFolder: 'TV', folderName: 'Beyblade' },
+      { key: 'title:3', kind: 'title', ownerChannelId: 'UC1', showId: 3, action: 'keep', name: 'Old', libraryFolder: 'TV', folderName: 'Old' },
+    ];
+    let titleShowSaver;
+
+    beforeEach(() => {
+      titleShowSaver = require('../../tvShows/titleShowSaver');
+      Channel.findOne.mockResolvedValue({ channel_id: 'UC1' });
+      titleShowSaver.prepare.mockResolvedValue({ drafts: ['drafts'], plan: { entries: [] } });
+      titleShowSaver.applyPrepared.mockResolvedValue({ showIds: new Map([['new:0', 9], ['title:3', 3]]), patternIds: new Map() });
+    });
+
+    it('saves the shows and every episode row of the channel', async () => {
+      await applier.applySettings({ change, shows: planned, layoutBefore: layoutOf });
+      expect(titleShowSaver.prepare).toHaveBeenCalledWith({ channel: { channel_id: 'UC1' }, rawShows: change.shows, rawOverrides: [] });
+      expect(titleShowSaver.applyPrepared).toHaveBeenCalledWith({ channel: { channel_id: 'UC1' }, drafts: ['drafts'], plan: { entries: [] } });
+    });
+
+    it('gives new title shows their saved ids', async () => {
+      const pinned = await applier.applySettings({ change, shows: planned, layoutBefore: layoutOf });
+      expect(pinned.map((show) => show.showId)).toEqual([9, 3]);
+    });
+
+    it('creates no channel show for a title show', async () => {
+      await applier.applySettings({ change, shows: planned, layoutBefore: layoutOf });
+      expect(showStore.createChannelShowAt).not.toHaveBeenCalled();
+    });
+
+    it('puts the shows and episodes back from the snapshot', async () => {
+      const snapshot = { shows: [], rows: [], conflicts: [] };
+      await applier.rollbackSettings({ change, shows: planned, snapshot });
+      expect(require('../titleSnapshot').restoreTitleSnapshot).toHaveBeenCalledWith({ channel_id: 'UC1' }, snapshot);
     });
   });
 });

@@ -89,6 +89,26 @@ YouTube Downloads/
 
 Switching a channel or a folder that already has downloads between Videos and TV shows moves its files into the other layout; you review the move first. See [Save Channels as TV Shows](USAGE_GUIDE.md#save-channels-as-tv-shows).
 
+### Title shows
+
+A [title show](USAGE_GUIDE.md#title-shows-series-inside-a-channel) is a series inside a channel, numbered from its video titles. It is a show folder like any other in a TV folder, with two-digit numbers and, for named seasons, a `season.nfo`:
+
+```
+__TV Shows/
+├── Hermitcraft/                                   # A title show of the Grian channel
+│   ├── tvshow.nfo                                 # Show metadata, season names
+│   ├── Season 10/
+│   │   ├── season.nfo                             # Only for a named season
+│   │   └── S10E05 - Title [id].mp4
+│   └── Season 11/
+│       └── S11E01 - Title [id].mp4
+└── Grian/                                         # The channel show, if the channel is a TV channel
+    └── Season 2026/
+        └── S2026E09281530 - Title [id].mp4
+```
+
+Videos that match no title show stay where the channel puts them: its Videos folder, or the channel show for a TV channel.
+
 ## Layout For Channels with Flat File Structure (No Video Subfolders)
 
 You can use a flat file structure, where video files are placed directly in the channel folder instead of individual video subfolders. It only affects new downloads. There are three places to set it:

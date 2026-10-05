@@ -1,13 +1,19 @@
+import type { EpisodeAssignment, TitleShowDraft } from './titleShows';
+
+/** An episode assignment within a title show change */
+export type EpisodeOverride = { youtubeId: string } & EpisodeAssignment;
+
 /** A settings change that moves downloaded files (POST /api/tv/reorganize[/preview]). */
 export type ReorganizeChange =
   | { type: 'channelLayout'; channelId: string; layout: 'videos' | 'tv'; folder?: string }
   | { type: 'channel'; channelId: string; subFolder: string | null; previousSubFolder?: string | null }
   | { type: 'folderLayout'; folder: string; layout: 'videos' | 'tv'; previousLayout?: 'videos' | 'tv' }
-  | { type: 'defaultSubfolder'; value: string; previousValue?: string };
+  | { type: 'defaultSubfolder'; value: string; previousValue?: string }
+  | { type: 'titleShows'; channelId: string; shows: TitleShowDraft[]; overrides?: EpisodeOverride[] };
 
 export type ReorganizeFlag = 'override-placed' | 'adopted' | 'upload-date-only' | 'download-time' | 'movie-tags';
 
-export type ReorganizeProblemKind = 'missing' | 'collision' | 'no-name' | 'no-date' | 'unsafe-name';
+export type ReorganizeProblemKind = 'missing' | 'collision' | 'no-name' | 'no-date' | 'unsafe-name' | 'episode-taken';
 
 export interface ReorganizePreviewItem {
   youtubeId: string;
@@ -34,6 +40,8 @@ export interface ReorganizePreviewShow {
   libraryFolder: string;
   folderName: string;
   action: 'create' | 'move' | 'keep';
+  /** A channel's show, or a title show */
+  kind?: 'channel' | 'title';
 }
 
 export interface ReorganizeTotals {
@@ -47,6 +55,8 @@ export interface ReorganizeTotals {
   noName: number;
   noDate: number;
   unsafeName: number;
+  /** Title episodes waiting for their upload year whose number another video holds */
+  episodeTaken?: number;
   overridePlaced: number;
   adopted: number;
   uploadDateOnly: number;
@@ -97,6 +107,8 @@ export interface ReorganizeFailedItem {
   title: string | null;
   channelId: string | null;
   error: string | null;
+  /** Its files reached their destination, but finishing failed */
+  filesMoved?: boolean;
 }
 
 /** GET /api/tv/operations/:id */

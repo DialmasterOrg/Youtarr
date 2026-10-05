@@ -42,6 +42,29 @@ describe('ReorganizeOperationBody', () => {
     expect(onRetry).toHaveBeenCalled();
   });
 
+  test('does not say a video whose files moved stays where it was', () => {
+    renderBody(operation({
+      status: 'partial', done: 1, failed: 1,
+      failedItems: [{ id: 9, youtubeId: 'b2', title: 'Second', channelId: 'UC1', error: 'finishing failed', filesMoved: true }],
+    }));
+
+    expect(screen.getByText('Moved 1 video. 1 video was moved but did not finish.')).toBeInTheDocument();
+  });
+
+  test('tells apart the videos that stayed and the ones that did not finish', () => {
+    renderBody(operation({
+      status: 'partial', done: 1, failed: 2,
+      failedItems: [
+        { id: 8, youtubeId: 'a1', title: 'First', channelId: 'UC1', error: 'A file already exists', filesMoved: false },
+        { id: 9, youtubeId: 'b2', title: 'Second', channelId: 'UC1', error: 'finishing failed', filesMoved: true },
+      ],
+    }));
+
+    expect(screen.getByText(
+      'Moved 1 video. 1 video could not be moved and stays where it was. 1 video was moved but did not finish.'
+    )).toBeInTheDocument();
+  });
+
   test('shows why a move failed', () => {
     renderBody(operation({ status: 'failed', done: 0, error: 'No video could be moved, so the settings change was undone.' }));
 

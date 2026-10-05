@@ -8,7 +8,9 @@ jest.mock('../../tvShows/layoutGuards', () => ({
   assertNoMp3Users: jest.fn(),
   usersOfFolder: jest.fn().mockResolvedValue({ channels: [], playlists: [] }),
   usersOfGlobalDefault: jest.fn().mockResolvedValue({ channels: [], playlists: [] }),
+  assertNoTitleShows: jest.fn(),
 }));
+jest.mock('../../tvShows/titleShowSaver', () => ({ prepare: jest.fn() }));
 jest.mock('../../tvShows/channelLayout', () => ({
   MESSAGES: { mp3: 'TV shows are video-only.' },
   resolveLayoutTarget: jest.fn(),
@@ -42,6 +44,46 @@ describe('reorganize changeContext', () => {
     configModule.getDefaultSubfolder.mockReturnValue('GlobalDefault');
     subfolderModule.getAll.mockResolvedValue(['__Kids', '__TV Shows', '__GlobalDefault']);
     changeContext = require('../changeContext');
+  });
+
+  describe('title show changes', () => {
+    const change = { type: 'titleShows', channelId: 'UC1', shows: [{ name: 'Beyblade' }], overrides: [] };
+
+    beforeEach(() => {
+      Channel.findOne.mockResolvedValue(channel({ title: 'BEYBLADE Official' }));
+      require('../../tvShows/titleShowSaver').prepare.mockResolvedValue({ drafts: [{ key: 'new:0' }], plan: { entries: [] } });
+    });
+
+    it('plans the channel\'s title shows', async () => {
+      const context = await changeContext.resolveChange(change);
+      expect(require('../../tvShows/titleShowSaver').prepare).toHaveBeenCalledWith({
+        channel: expect.objectContaining({ channel_id: 'UC1' }), rawShows: change.shows, rawOverrides: [],
+      });
+      expect([context.type, context.drafts, context.titlePlan]).toEqual(['titleShows', [{ key: 'new:0' }], { entries: [] }]);
+    });
+
+    it('keeps the channel where it is', async () => {
+      const context = await changeContext.resolveChange(change);
+      expect([context.fromFolder, context.toFolder, context.folderAfter({ sub_folder: 'Kids' })]).toEqual(['Kids', 'Kids', 'Kids']);
+    });
+
+    it('stores the change as requested', async () => {
+      const context = await changeContext.resolveChange(change);
+      expect([context.stored, context.scope, context.label]).toEqual([change, 'UC1', 'BEYBLADE Official: shows']);
+    });
+
+    it('refuses shows that are not a list', async () => {
+      await expect(changeContext.resolveChange({ ...change, shows: 'x' })).rejects.toMatchObject({ status: 400 });
+    });
+  });
+
+  describe('a folder holding title shows', () => {
+    it('refuses to switch it to Videos', async () => {
+      layoutGuards.assertNoTitleShows.mockRejectedValue(Object.assign(new Error('Move its title shows first.'), { status: 400 }));
+      await expect(changeContext.resolveChange({ type: 'folderLayout', folder: 'TV Shows', layout: 'videos' }))
+        .rejects.toMatchObject({ status: 400 });
+      expect(layoutGuards.assertNoTitleShows).toHaveBeenCalledWith('TV Shows');
+    });
   });
 
   describe('channel changes', () => {

@@ -111,6 +111,24 @@ describe('reorganize changeScope', () => {
     });
   });
 
+  describe('a title show change', () => {
+    const titleContext = (entries) => context({ type: 'titleShows', titlePlan: { entries } });
+
+    it('selects the downloaded videos its plan moves', async () => {
+      Video.findAll.mockResolvedValue([video(1, 'aaaaaaaaaaa', '/data/__Kids/Chan/A [aaaaaaaaaaa].mp4')]);
+      const { subjects } = await changeScope.selectSubjects(titleContext([
+        { youtubeId: 'aaaaaaaaaaa', moves: true }, { youtubeId: 'bbbbbbbbbbb', moves: false },
+      ]));
+      expect(Video.findAll.mock.calls[0][0].where).toEqual({ youtubeId: ['aaaaaaaaaaa'], removed: false });
+      expect(subjects.map((subject) => [subject.video.id, subject.ownerChannelId])).toEqual([[1, 'UC1']]);
+    });
+
+    it('selects nothing when nothing moves', async () => {
+      const { subjects } = await changeScope.selectSubjects(titleContext([{ youtubeId: 'aaaaaaaaaaa', moves: false }]));
+      expect([subjects, Video.findAll.mock.calls.length]).toEqual([[], 0]);
+    });
+  });
+
   it('selects the videos of every channel that follows the default subfolder', async () => {
     const onDefault = { ...CHANNEL, sub_folder: '##USE_GLOBAL_DEFAULT##' };
     Channel.findAll.mockResolvedValue([onDefault, { ...CHANNEL, channel_id: 'UC2', sub_folder: 'Kids' }]);

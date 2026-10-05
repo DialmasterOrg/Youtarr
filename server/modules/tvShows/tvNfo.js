@@ -14,6 +14,9 @@ const path = require('path');
 const nfoGenerator = require('../nfoGenerator');
 
 const TV_SHOW_NFO_NAME = 'tvshow.nfo';
+const SEASON_NFO_NAME = 'season.nfo';
+const ID_TYPE_YOUTUBE = 'youtube';
+const ID_TYPE_YOUTARR = 'youtarr';
 const SHOW_STUDIO = 'YouTube';
 const XML_HEADER = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
 
@@ -78,10 +81,12 @@ function buildEpisodeNfo({ info, showTitle, season, episode, episodeTitle }) {
  * @param {string} params.title - Show title
  * @param {string} [params.plot]
  * @param {string} [params.premiered] - YYYY-MM-DD of the earliest episode
- * @param {string} params.externalKey - Stable show id (the channel id for channel shows)
+ * @param {string} params.externalKey - Stable show id (the channel id for channel shows, a UUID for title shows)
+ * @param {string} [params.idType] - 'youtube' (channel shows) or 'youtarr' (title shows)
+ * @param {Object<string, string>} [params.namedSeasons] - Season names by season number
  * @returns {string}
  */
-function buildTvShowNfo({ title, plot, premiered, externalKey }) {
+function buildTvShowNfo({ title, plot, premiered, externalKey, idType = ID_TYPE_YOUTUBE, namedSeasons = {} }) {
   let xml = XML_HEADER;
   xml += '<tvshow>\n';
   xml += element('title', title);
@@ -89,11 +94,50 @@ function buildTvShowNfo({ title, plot, premiered, externalKey }) {
   if (premiered) xml += element('premiered', premiered);
   xml += element('studio', SHOW_STUDIO);
   // The custom id keeps Jellyfin's played state across a folder rename and
-  // stops Jellyfin 12 merging two same-named shows.
-  xml += `  <uniqueid type="youtube" default="true">${escape(externalKey)}</uniqueid>\n`;
+  // stops Jellyfin 12 merging two same-named shows. Plex's NFO agent builds
+  // the show's GUID from the default id, so neither ever changes.
+  xml += `  <uniqueid type="${idType}" default="true">${escape(externalKey)}</uniqueid>\n`;
   xml += `  <uniqueid type="custom">${escape(externalKey)}</uniqueid>\n`;
+  const seasons = Object.keys(namedSeasons).map(Number).sort((a, b) => a - b);
+  for (const season of seasons) {
+    xml += `  <namedseason number="${season}">${escape(namedSeasons[season])}</namedseason>\n`;
+  }
   xml += '</tvshow>\n';
   return xml;
+}
+
+/**
+ * season.nfo for a named season (Emby reads season names only from it).
+ * @param {{season: number, name: string}} params
+ */
+function buildSeasonNfo({ season, name }) {
+  return `${XML_HEADER}<season>\n${element('title', name)}  <seasonnumber>${season}</seasonnumber>\n</season>\n`;
+}
+
+function isYoutarrSeasonNfo(content) {
+  return content.startsWith(`${XML_HEADER}<season>\n  <title>`);
+}
+
+/**
+ * Write a named season's season.nfo, or remove the one Youtarr wrote when the
+ * season lost its name. A season.nfo written by someone else stays.
+ * @param {string} seasonDir
+ * @param {{season: number, name: string|null}} params
+ */
+async function writeSeasonNfo(seasonDir, { season, name }) {
+  const nfoPath = path.join(seasonDir, SEASON_NFO_NAME);
+  let current = null;
+  try {
+    current = await fs.promises.readFile(nfoPath, 'utf8');
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+  if (!name) {
+    if (current !== null && isYoutarrSeasonNfo(current)) await fs.promises.unlink(nfoPath);
+    return;
+  }
+  const xml = buildSeasonNfo({ season, name });
+  if (current !== xml) await fs.promises.writeFile(nfoPath, xml, 'utf8');
 }
 
 /**
@@ -116,8 +160,13 @@ async function writeTvShowNfoIfChanged(showDir, params) {
 
 module.exports = {
   TV_SHOW_NFO_NAME,
+  SEASON_NFO_NAME,
+  ID_TYPE_YOUTUBE,
+  ID_TYPE_YOUTARR,
   dateFromEpisodeCode,
   buildEpisodeNfo,
   buildTvShowNfo,
+  buildSeasonNfo,
+  writeSeasonNfo,
   writeTvShowNfoIfChanged
 };

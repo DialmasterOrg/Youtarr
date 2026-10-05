@@ -21,6 +21,7 @@ const createSchedulesRoutes = require('./schedules');
 const createLogRoutes = require('./logs');
 const createTvShowRoutes = require('./tvShows');
 const createTvReorganizeRoutes = require('./tvReorganize');
+const createTvTitleShowRoutes = require('./tvTitleShows');
 const videoMetadataModule = require('../modules/videoMetadataModule');
 const videoOembedEnricher = require('../modules/videoOembedEnricher');
 const playlistModule = require('../modules/playlistModule');
@@ -48,6 +49,7 @@ const logFilesModule = require('../modules/logFilesModule');
 const libraryFolders = require('../modules/tvShows/libraryFolders');
 const channelLayout = require('../modules/tvShows/channelLayout');
 const layoutGuards = require('../modules/tvShows/layoutGuards');
+const titleShowService = require('../modules/tvShows/titleShowService');
 const reorganize = require('../modules/reorganize');
 const watchStatusHolds = require('../modules/mediaServers/watchStatusHolds');
 const watchStatusPushBack = require('../modules/mediaServers/watchStatusPushBack');
@@ -164,6 +166,9 @@ function registerRoutes(app, deps) {
     verifyToken, libraryFolders, channelLayout, layoutGuards, reorganize, channelSettingsModule, jobModule, models,
     libraryCheck,
   }));
+
+  // Title shows (shows defined on a channel by title patterns) and episode assignment
+  app.use(createTvTitleShowRoutes({ verifyToken, titleShowService, models, layoutGuards }));
 
   // Reorganize (moving downloads between the Videos and TV layouts) and watch-state restores
   app.use(createTvReorganizeRoutes({ verifyToken, reorganize, watchStatusHolds, watchStatusPushBack }));

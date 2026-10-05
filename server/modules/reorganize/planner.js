@@ -17,19 +17,34 @@ const { selectSubjects } = require('./changeScope');
 const { planShows } = require('./showPlanner');
 const { planDestinations } = require('./destinationPlanner');
 const { planRevision } = require('./revision');
-const { PREVIEW_ITEM_LIMIT, PROBLEM, FLAG } = require('./constants');
+const { takeTitleSnapshot } = require('./titleSnapshot');
+const { PREVIEW_ITEM_LIMIT, PROBLEM, FLAG, CHANGE_TITLE_SHOWS } = require('./constants');
+
+// Date-numbered codes (channel shows, adopted preset names, year/date title
+// patterns) are 8 digits; title, order and manual numbers 2.
+const DATE_SOURCES = new Set(['date', 'adopted']);
+
+// A planned show's key: its owner channel for a channel show, its show key for a title show.
+function showKeyOf(show) {
+  return show.key || show.ownerChannelId;
+}
+
+function itemShowKey(item) {
+  return (item.classification && item.classification.showKey) || item.channelId;
+}
 
 /**
  * @param {Object} rawChange - The requested change (changeContext.resolveChange)
- * @returns {Promise<Object>} { context, items, problems, unchanged, shows, revision }
+ * @returns {Promise<Object>} { context, items, problems, unchanged, shows, revision, snapshot }
+ *   snapshot: a title show change's shows and episode rows before it (to undo it), else null
  */
 async function buildPlan(rawChange) {
   const context = await resolveChange(rawChange);
-  const { subjects } = await selectSubjects(context);
-  const { targets, shows } = await planShows(subjects, context);
-  const { items, problems, unchanged } = await planDestinations({ subjects, context, targets, shows });
-  const tvOwners = new Set(items.filter((item) => item.layout === LAYOUT_TV).map((item) => item.channelId));
-  const plannedShows = [...shows.values()].filter((show) => tvOwners.has(show.ownerChannelId));
+  const { subjects, channels } = await selectSubjects(context);
+  const { targets, shows, titleTargets } = await planShows(subjects, context, channels);
+  const { items, problems, unchanged } = await planDestinations({ subjects, context, targets, shows, titleTargets });
+  const receiving = new Set(items.filter((item) => item.layout === LAYOUT_TV).map(itemShowKey));
+  const plannedShows = [...shows.values()].filter((show) => receiving.has(showKeyOf(show)));
   return {
     context,
     items,
@@ -37,6 +52,7 @@ async function buildPlan(rawChange) {
     unchanged,
     shows: plannedShows,
     revision: planRevision({ change: context.stored, shows: plannedShows, items }),
+    snapshot: context.type === CHANGE_TITLE_SHOWS ? await takeTitleSnapshot(context.channel.channel_id) : null,
   };
 }
 
@@ -102,7 +118,11 @@ function describeItem(item) {
     from: relative(from),
     to: relative(to),
     episode: item.classification
-      ? episodeCode({ season: item.classification.season, episode: item.classification.episode, dateNumbered: true })
+      ? episodeCode({
+        season: item.classification.season,
+        episode: item.classification.episode,
+        dateNumbered: !item.classification.source || DATE_SOURCES.has(item.classification.source),
+      })
       : null,
     flags: item.flags,
   };
@@ -135,6 +155,7 @@ async function summarizePlan(plan, { blocked = null } = {}) {
       noName: problemCount(PROBLEM.NO_NAME),
       noDate: problemCount(PROBLEM.NO_DATE),
       unsafeName: problemCount(PROBLEM.UNSAFE_NAME),
+      episodeTaken: problemCount(PROBLEM.EPISODE_TAKEN),
       overridePlaced: flagged(FLAG.OVERRIDE_PLACED),
       adopted: flagged(FLAG.ADOPTED),
       uploadDateOnly: flagged(FLAG.UPLOAD_DATE_ONLY),
@@ -143,6 +164,7 @@ async function summarizePlan(plan, { blocked = null } = {}) {
     },
     shows: plan.shows.map((show) => ({
       name: show.name, libraryFolder: show.libraryFolder, folderName: show.folderName, action: show.action,
+      kind: show.kind || 'channel',
     })),
     // The TV folders videos move into: the preview shows their media server libraries.
     tvFolders: [...new Set(items.filter((item) => item.layout === LAYOUT_TV).map((item) => item.libraryFolder || ''))],

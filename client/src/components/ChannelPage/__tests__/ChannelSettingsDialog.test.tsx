@@ -69,15 +69,24 @@ jest.mock('../../shared/Reorganize', () => {
 });
 
 const mockSwitchLayout = jest.fn();
+const mockRefetchTv = jest.fn();
 const mockChannelTv: { current: unknown } = { current: null };
 jest.mock('../hooks/useChannelTv', () => ({
   useChannelTv: () => ({
     tv: mockChannelTv.current,
     loading: false,
     error: null,
-    refetch: jest.fn(),
+    refetch: mockRefetchTv,
     switchLayout: mockSwitchLayout,
   }),
+}));
+
+jest.mock('../components/TitleShows/TitleShowsSection', () => ({
+  __esModule: true,
+  default: function MockTitleShowsSection(props: { onMoveEnded?: () => void }) {
+    const React = require('react');
+    return React.createElement('button', { type: 'button', onClick: () => props.onMoveEnded?.() }, 'mock title show move ended');
+  },
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -2133,6 +2142,17 @@ describe('ChannelSettingsDialog', () => {
       await openSettingsSection('TV Show');
 
       expect(screen.getByText('Show this channel as')).toBeInTheDocument();
+    });
+
+    test('reloads the channel\'s TV state when a title show move ends', async () => {
+      mockChannelTv.current = videosChannelTv;
+      await renderLoaded();
+      const user = await openSettingsSection('TV Show');
+      mockRefetchTv.mockClear();
+
+      await user.click(screen.getByRole('button', { name: 'mock title show move ended' }));
+
+      expect(mockRefetchTv).toHaveBeenCalledTimes(1);
     });
 
     test('hides the file structure and playlist file controls for a TV folder', async () => {

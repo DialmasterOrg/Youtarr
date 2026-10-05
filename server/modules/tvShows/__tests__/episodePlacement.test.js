@@ -7,6 +7,9 @@ jest.mock('../showStore', () => ({
 }));
 jest.mock('../episodeAllocator', () => ({ assignDateEpisode: jest.fn() }));
 jest.mock('../../../models/videoclassification', () => ({ findOne: jest.fn() }));
+jest.mock('../../../models/tvshowseason', () => ({ findAll: jest.fn().mockResolvedValue([]) }));
+jest.mock('../titleEpisodeAssigner', () => ({ resolveTitlePlacement: jest.fn() }));
+jest.mock('../episodeConflicts', () => ({ noteDownloaded: jest.fn() }));
 jest.mock('../../../logger', () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }));
 // Retries of a failing move are instant.
 jest.mock('../../filesystem/sleep', () => ({ sleep: () => Promise.resolve() }));
@@ -53,6 +56,35 @@ describe('episodePlacement', () => {
       resolvedSubfolder: 'TV',
       baseDir: '/data',
       ...overrides,
+    });
+
+    it('places a title-show episode at the show\'s location, even from a videos folder', async () => {
+      const titleAssigner = require('../titleEpisodeAssigner');
+      const show = { id: 3, kind: 'title', name: 'Beyblade', folder_name: 'Beyblade', library_folder: 'TV', external_key: 'u' };
+      const assignment = { season: 1, episode: 20, dateNumbered: false, episodeTitle: 'Relative', fileStem: `S01E20 - Relative [${ID}]` };
+      titleAssigner.resolveTitlePlacement.mockResolvedValue({ show, assignment });
+      await expect(plan({ resolvedSubfolder: 'Kids' })).resolves.toEqual({
+        show, assignment, showDir: path.join('/data', '__TV', 'Beyblade'), seasonDir: path.join('/data', '__TV', 'Beyblade', 'Season 01'), stem: assignment.fileStem,
+      });
+    });
+
+    it('asks the title shows of the owner channel first', async () => {
+      const titleAssigner = require('../titleEpisodeAssigner');
+      await plan({ channelRecord: { title: 'Mark Rober' }, channelEnabled: true });
+      expect(titleAssigner.resolveTitlePlacement).toHaveBeenCalledWith(expect.objectContaining({ youtubeId: ID, ownerChannelId: 'UC1', channelEnabled: true }));
+    });
+
+    it('saves a title-show episode by the channel layout when its show\'s folder is no longer TV', async () => {
+      const titleAssigner = require('../titleEpisodeAssigner');
+      titleAssigner.resolveTitlePlacement.mockResolvedValue({
+        show: { id: 3, kind: 'title', library_folder: 'Kids', folder_name: 'Beyblade' }, assignment: ASSIGNMENT,
+      });
+      await expect(plan({ resolvedSubfolder: 'Kids' })).resolves.toBeNull();
+    });
+
+    it('hands a downloaded duplicate\'s archive line to the download', async () => {
+      await plan({ resolvedSubfolder: 'Kids' });
+      expect(require('../episodeConflicts').noteDownloaded).toHaveBeenCalledWith(ID);
     });
 
     it('returns null for a videos folder without touching shows', async () => {
@@ -152,6 +184,25 @@ describe('episodePlacement', () => {
       await write();
       const xml = fs.readFileSync(path.join(showDir, 'Season 2024', `${STEM}.nfo`), 'utf8');
       expect(xml).toContain('<episode>3151200</episode>');
+    });
+
+    it('writes a title show\'s tvshow.nfo with its Youtarr id and season names', async () => {
+      require('../../../models/tvshowseason').findAll.mockResolvedValue([{ season: 1, name: 'Beyblade' }]);
+      const seasonDir = path.join(showDir, 'Season 01');
+      fs.mkdirSync(seasonDir);
+      await episodePlacement.writeEpisodeMetadata({
+        placement: {
+          show: { id: 3, kind: 'title', name: 'Beyblade', external_key: 'uuid-3' },
+          assignment: { season: 1, episode: 20, dateNumbered: false, episodeTitle: 'Relative' }, showDir, seasonDir, stem: `S01E20 - Relative [${ID}]`,
+        },
+        info: { id: ID, title: 'x' },
+        showPlot: 'Channel description',
+      });
+      const xml = fs.readFileSync(path.join(showDir, 'tvshow.nfo'), 'utf8');
+      expect(xml).toContain('<uniqueid type="youtarr" default="true">uuid-3</uniqueid>');
+      expect(xml).toContain('<namedseason number="1">Beyblade</namedseason>');
+      expect(xml).not.toContain('Channel description');
+      expect(fs.readFileSync(path.join(seasonDir, 'season.nfo'), 'utf8')).toContain('<title>Beyblade</title>');
     });
 
     it('writes tvshow.nfo with the earliest episode as premiered', async () => {

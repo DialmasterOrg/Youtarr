@@ -222,6 +222,7 @@ const createServerModule = ({
         const jobModuleMock = {
           onJobAbandoned: jest.fn(),
           onJobEnded: jest.fn(),
+          onBeforeNextJob: jest.fn(),
           getJob: jest.fn((jobId) => {
             if (jobId === 'existing-job') {
               return { id: jobId, status: 'In Progress' };
@@ -441,6 +442,8 @@ const createServerModule = ({
         }));
         jest.doMock('../modules/mediaServers/watchStatusPushBack', () => ({ pushPendingHolds: jest.fn(), scheduleFollowUps: jest.fn() }));
         jest.doMock('../modules/mediaServers/libraryCheck', () => ({ check: jest.fn(), applyPlexMapping: jest.fn() }));
+        jest.doMock('../modules/tvShows/titleShowService', () => ({}));
+        jest.doMock('../modules/tvShows/archiveSuppressor', () => ({ initialize: jest.fn(), flush: jest.fn().mockResolvedValue() }));
         jest.doMock('../modules/tvShows/channelLayout', () => ({
           getChannelTvState: jest.fn(),
           resolveLayoutTarget: jest.fn(),
@@ -1088,7 +1091,8 @@ describe('server routes - channels', () => {
         'off', // default missingFilter
         'off', // default ignoredFilter
         'off', // default watchedFilter
-        null // default maxRating
+        null, // default maxRating
+        null // default showId
       );
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
@@ -1158,7 +1162,8 @@ describe('server routes - channels', () => {
         'off', // default missingFilter
         'off', // default ignoredFilter
         'only', // watchedFilter
-        null // default maxRating
+        null, // default maxRating
+        null // default showId
       );
       expect(res.statusCode).toBe(200);
     });
@@ -1202,9 +1207,40 @@ describe('server routes - channels', () => {
         'off', // default missingFilter
         'off', // default ignoredFilter
         'off', // default watchedFilter
-        null // default maxRating
+        null, // default maxRating
+        null // default showId
       );
       expect(res.statusCode).toBe(200);
+    });
+
+    test('passes a show filter to channel module', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'get', '/getchannelvideos/:channelId');
+      const getVideosHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({ params: { channelId: 'channel-1' }, query: { showId: '7' } });
+      const res = createMockResponse();
+
+      await getVideosHandler(req, res);
+
+      const args = channelModuleMock.getChannelVideos.mock.calls[0];
+      expect(args[17]).toBe(7);
+    });
+
+    test('rejects a show filter that is not a show id with 400', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'get', '/getchannelvideos/:channelId');
+      const getVideosHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({ params: { channelId: 'channel-1' }, query: { showId: 'abc' } });
+      const res = createMockResponse();
+
+      await getVideosHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(channelModuleMock.getChannelVideos).not.toHaveBeenCalled();
     });
 
     test('passes maxRating to channel module', async () => {
@@ -1222,7 +1258,7 @@ describe('server routes - channels', () => {
       await getVideosHandler(req, res);
 
       const args = channelModuleMock.getChannelVideos.mock.calls[0];
-      expect(args[args.length - 1]).toBe('TV-14');
+      expect(args[16]).toBe('TV-14');
     });
 
     test('rejects an unknown maxRating with 400', async () => {

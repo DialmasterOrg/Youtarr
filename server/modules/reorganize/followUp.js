@@ -32,7 +32,7 @@ const serverRegistry = require('../mediaServers/serverRegistry');
 const watchStatusPushBack = require('../mediaServers/watchStatusPushBack');
 const { cleanupEmptyChannelDirectory } = require('../filesystem/directoryManager');
 const { cleanupOrphanShowFolder, resolveLibraryFolder } = require('../filesystem/showFolderCleanup');
-const { LAYOUT_TV } = require('../tvShows/constants');
+const { LAYOUT_TV, KIND_TITLE_SHOW } = require('../tvShows/constants');
 const { showDirectory } = require('../tvShows/channelFolders');
 
 // Playlists are synced again once the servers have had time to index the
@@ -81,14 +81,28 @@ async function safely(label, context, action) {
  * @param {Object} params
  * @param {Array<Object>} params.items - Done items, each { channelId, plan, classification }
  * @param {Array<Object>} params.shows - Pinned shows (with showId)
+ * @param {string|null} [params.titleShowChannelId] - The channel whose title shows the change edited: every
+ *   active one is rewritten, since a new name or season name changes no file
  */
-async function finishFiles({ items, shows }) {
-  const showIds = new Set(items.filter((item) => item.classification).map((item) => item.classification.ownerChannelId));
+async function finishFiles({ items, shows, titleShowChannelId = null }) {
+  // A channel show by its owner channel, a title show by its key.
+  const receiving = new Set(items.filter((item) => item.classification)
+    .map((item) => item.classification.showKey || item.classification.ownerChannelId));
+  const written = new Set();
   for (const planned of shows) {
-    if (!planned.showId || !showIds.has(planned.ownerChannelId)) continue;
+    if (!planned.showId || !receiving.has(planned.key || planned.ownerChannelId)) continue;
+    written.add(planned.showId);
     await safely('Could not write the show metadata after a reorganize', { showId: planned.showId }, async () => {
       const show = await TvShow.findByPk(planned.showId);
       if (show) await sidecarWriter.writeShowMetadata({ show, showDir: showDirectory(show), plot: planned.plot || null });
+    });
+  }
+  if (titleShowChannelId) {
+    await safely('Could not write the title show metadata after a reorganize', { channelId: titleShowChannelId }, async () => {
+      const titleShows = await TvShow.findAll({ where: { channel_id: titleShowChannelId, kind: KIND_TITLE_SHOW, retired_at: null } });
+      for (const show of titleShows) {
+        if (!written.has(show.id)) await sidecarWriter.writeShowMetadata({ show, showDir: showDirectory(show) });
+      }
     });
   }
 

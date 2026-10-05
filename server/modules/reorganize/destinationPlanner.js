@@ -23,8 +23,11 @@ const { LAYOUT_TV, folderKey } = require('../tvShows/constants');
 const { STATUS_ASSIGNED } = require('../tvShows/episodeAllocator');
 const { releaseTime, parseDateEpisodeCode, assignDateEpisodes, SOURCE_UPLOAD_DATE } = require('../tvShows/dateNumbering');
 const { buildEpisodeStem, episodeFileName, seasonFolderName } = require('../tvShows/episodeNaming');
+const titleShowStore = require('../tvShows/titleShowStore');
+const { KIND_TITLE_SHOW } = require('../tvShows/constants');
 const { renderMovieNames } = require('./movieNameRenderer');
 const { plannedShowDirectory } = require('./showPlanner');
+const { assignTitleEpisodes } = require('./titleAssignments');
 const { PROBLEM, FLAG, CHANGE_FOLDER_LAYOUT } = require('./constants');
 
 // Partial downloads and copies left by an interrupted move are not the video's files.
@@ -62,14 +65,22 @@ async function statFile(filePath) {
     const stat = await fs.promises.stat(filePath);
     return { size: stat.size, mtimeMs: Math.trunc(stat.mtimeMs) };
   } catch (err) {
-    if (err.code === 'ENOENT') return null;
+    if (err.code === 'ENOENT' || err.code === 'ENOTDIR') return null;
     throw err;
   }
 }
 
 async function existsOtherThan(target, source) {
   if (target === source) return false;
-  return (await statFile(target)) !== null;
+  try {
+    await fs.promises.stat(target);
+    return true;
+  } catch (err) {
+    if (err.code === 'ENOENT') return false;
+    // A file where a folder of the path belongs blocks the move as surely as a file at the path.
+    if (err.code === 'ENOTDIR') return true;
+    throw err;
+  }
 }
 
 /**
@@ -222,6 +233,45 @@ async function numberShow(show, entries, stored) {
   return { assignments, flags, noDate };
 }
 
+// Numbers the title plan gives videos of a show, by season: a video waiting
+// for an upload-time number must keep clear of them.
+function takenByTitlePlan(context, showKey) {
+  const taken = new Map();
+  for (const entry of (context.titlePlan && context.titlePlan.entries) || []) {
+    const { after } = entry;
+    if (!after || after.showKey !== showKey || after.status !== STATUS_ASSIGNED || after.season === null || after.episode === null) continue;
+    if (!taken.has(after.season)) taken.set(after.season, new Set());
+    taken.get(after.season).add(after.episode);
+  }
+  return taken;
+}
+
+/**
+ * Episode assignments for the videos going to one title show.
+ * @returns {Promise<{assignments: Map<string, Object>, noDate: Set<string>, taken: Set<string>}>}
+ */
+async function numberTitleShow(show, entries, titleTargets, context) {
+  const marks = show.showId ? await titleShowStore.highWaterMarks([show.showId]) : new Map();
+  const highWater = new Map([...marks].map(([key, value]) => [Number(key.slice(key.lastIndexOf('|') + 1)), value]));
+  return assignTitleEpisodes({
+    show,
+    entries: entries.map(({ subject, info }) => {
+      const target = titleTargets.get(subject.video.id);
+      return {
+        youtubeId: subject.video.youtubeId,
+        title: subject.video.youTubeVideoName,
+        info,
+        downloadedAt: subject.video.last_downloaded_at,
+        after: target.after,
+        pattern: target.pattern || {},
+        stored: target.stored,
+      };
+    }),
+    taken: takenByTitlePlan(context, show.key),
+    highWater,
+  });
+}
+
 function problemOf(subject, kind, detail = null) {
   const { video } = subject;
   return { videoId: video.id, youtubeId: video.youtubeId, title: video.youTubeVideoName, problem: kind, detail };
@@ -241,10 +291,11 @@ function isInside(baseDir, dir) {
  * @param {Array<Object>} params.subjects - changeScope subjects
  * @param {Object} params.context - resolved change
  * @param {Map<number, {libraryFolder: string, layout: string}>} params.targets - showPlanner targets
- * @param {Map<string, Object>} params.shows - showPlanner shows by owner channel id
+ * @param {Map<string, Object>} params.shows - showPlanner shows by owner channel id or title show key
+ * @param {Map<number, Object>} [params.titleTargets] - showPlanner title targets by Videos.id
  * @returns {Promise<{items: Array<Object>, problems: Array<Object>, unchanged: number}>}
  */
-async function planDestinations({ subjects, context, targets, shows }) {
+async function planDestinations({ subjects, context, targets, shows, titleTargets = new Map() }) {
   const config = configModule.getConfig() || {};
   const baseDir = configModule.directoryPath;
   const infos = new Map();
@@ -255,9 +306,9 @@ async function planDestinations({ subjects, context, targets, shows }) {
   for (const subject of subjects) {
     const target = targets.get(subject.video.id);
     if (target.layout === LAYOUT_TV) {
-      const owner = subject.ownerChannelId;
-      if (!tvEntries.has(owner)) tvEntries.set(owner, []);
-      tvEntries.get(owner).push({ subject, info: infos.get(subject.video.youtubeId) });
+      const key = target.showKey || subject.ownerChannelId;
+      if (!tvEntries.has(key)) tvEntries.set(key, []);
+      tvEntries.get(key).push({ subject, info: infos.get(subject.video.youtubeId) });
     } else {
       movieSubjects.push(subject);
     }
@@ -267,11 +318,16 @@ async function planDestinations({ subjects, context, targets, shows }) {
   const assignments = new Map();
   const flags = new Map();
   const noDate = new Set();
-  for (const [owner, entries] of tvEntries) {
-    const numbered = await numberShow(shows.get(owner), entries, stored);
+  const episodeTaken = new Set();
+  for (const [key, entries] of tvEntries) {
+    const show = shows.get(key);
+    const numbered = show.kind === KIND_TITLE_SHOW
+      ? await numberTitleShow(show, entries, titleTargets, context)
+      : await numberShow(show, entries, stored);
     for (const [id, value] of numbered.assignments) assignments.set(id, value);
-    for (const [id, value] of numbered.flags) flags.set(id, value);
+    for (const [id, value] of numbered.flags || []) flags.set(id, value);
     for (const id of numbered.noDate) noDate.add(id);
+    for (const id of numbered.taken || []) episodeTaken.add(id);
   }
   const names = await renderMovieNames(movieSubjects.map((subject) => ({
     youtubeId: subject.video.youtubeId, info: infos.get(subject.video.youtubeId),
@@ -292,9 +348,14 @@ async function planDestinations({ subjects, context, targets, shows }) {
         problems.push(problemOf(subject, PROBLEM.NO_DATE));
         continue;
       }
+      if (episodeTaken.has(video.youtubeId)) {
+        problems.push(problemOf(subject, PROBLEM.EPISODE_TAKEN));
+        continue;
+      }
       classification = assignments.get(video.youtubeId);
       stem = classification.fileStem;
-      destDir = path.join(plannedShowDirectory(shows.get(subject.ownerChannelId)), seasonFolderName(classification.season));
+      const show = shows.get(target.showKey || subject.ownerChannelId);
+      destDir = path.join(plannedShowDirectory(show), seasonFolderName(classification.season));
     } else {
       const rendered = names.get(video.youtubeId);
       if (!rendered) {
@@ -332,7 +393,10 @@ async function planDestinations({ subjects, context, targets, shows }) {
       continue;
     }
     const itemFlags = [...(flags.get(video.youtubeId) || [])];
-    if (context.type !== CHANGE_FOLDER_LAYOUT && subject.ownerChannel
+    // A title show episode sits in its show's TV folder by design, not by a download override.
+    const storedRow = context.titlePlan && context.titlePlan.stored ? context.titlePlan.stored.get(video.youtubeId) : null;
+    const inTitleShow = Boolean(storedRow && storedRow.showKind === KIND_TITLE_SHOW);
+    if (context.type !== CHANGE_FOLDER_LAYOUT && subject.ownerChannel && !inTitleShow
       && folderKey(subject.libraryFolder) !== folderKey(context.folderBefore(subject.ownerChannel))) {
       itemFlags.push(FLAG.OVERRIDE_PLACED);
     }

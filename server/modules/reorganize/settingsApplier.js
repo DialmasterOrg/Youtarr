@@ -18,10 +18,12 @@ const libraryLayouts = require('../tvShows/libraryLayouts');
 const layoutGuards = require('../tvShows/layoutGuards');
 const channelLayout = require('../tvShows/channelLayout');
 const { syncPlexIgnore } = require('../tvShows/libraryFolders');
-const { LAYOUT_TV, folderKey } = require('../tvShows/constants');
+const titleShowSaver = require('../tvShows/titleShowSaver');
+const { LAYOUT_TV, folderKey, KIND_TITLE_SHOW } = require('../tvShows/constants');
 const { SHOW_ACTION } = require('./showPlanner');
 const { libraryFolderOf } = require('./changeContext');
-const { CHANGE_CHANNEL, CHANGE_FOLDER_LAYOUT, CHANGE_DEFAULT_SUBFOLDER } = require('./constants');
+const { restoreTitleSnapshot } = require('./titleSnapshot');
+const { CHANGE_CHANNEL, CHANGE_FOLDER_LAYOUT, CHANGE_DEFAULT_SUBFOLDER, CHANGE_TITLE_SHOWS } = require('./constants');
 
 function sameLocation(show, planned) {
   return folderKey(show.library_folder) === folderKey(planned.libraryFolder)
@@ -29,7 +31,8 @@ function sameLocation(show, planned) {
 }
 
 async function pinShow(planned) {
-  if (planned.action === SHOW_ACTION.KEEP) return { ...planned };
+  // Title shows are saved with the rest of a title show change.
+  if (planned.action === SHOW_ACTION.KEEP || planned.kind === KIND_TITLE_SHOW) return { ...planned };
   // Also reached again after a restart: the show may already be in place.
   const existing = planned.showId
     ? await TvShow.findByPk(planned.showId)
@@ -78,6 +81,21 @@ async function setFolderLayout(folder, layout) {
   }
 }
 
+async function findChannelOrFail(channelId) {
+  const channel = await Channel.findOne({ where: { channel_id: channelId } });
+  if (!channel) throw new Error('The channel no longer exists.');
+  return channel;
+}
+
+// A title show change: the channel's shows and every episode row as planned
+// (the plan is recomputed: the lock is held, so it is the one previewed).
+async function applyTitleShows(change, pinned) {
+  const channel = await findChannelOrFail(change.channelId);
+  const { drafts, plan } = await titleShowSaver.prepare({ channel, rawShows: change.shows, rawOverrides: change.overrides || [] });
+  const { showIds } = await titleShowSaver.applyPrepared({ channel, drafts, plan });
+  return pinned.map((show) => (show.kind === KIND_TITLE_SHOW ? { ...show, showId: showIds.get(show.key) || show.showId } : show));
+}
+
 /**
  * Apply the change and pin its shows.
  *
@@ -120,6 +138,8 @@ async function applySettings({ change, shows, layoutBefore }) {
     }
     await subfolderModule.register(change.value);
     setDefaultSubfolder(change.value);
+  } else if (change.type === CHANGE_TITLE_SHOWS) {
+    return applyTitleShows(change, pinned);
   }
   return pinned;
 }
@@ -131,8 +151,9 @@ async function applySettings({ change, shows, layoutBefore }) {
  * @param {Object} params
  * @param {Object} params.change
  * @param {Array<Object>} params.shows - Pinned shows
+ * @param {Object} [params.snapshot] - A title show change's shows and episodes before it
  */
-async function rollbackSettings({ change, shows }) {
+async function rollbackSettings({ change, shows, snapshot = null }) {
   for (const show of shows) {
     if (show.action !== SHOW_ACTION.MOVE || !show.previousLocation || !show.showId) continue;
     const row = await TvShow.findByPk(show.showId);
@@ -144,6 +165,8 @@ async function rollbackSettings({ change, shows }) {
     await setFolderLayout(change.folder, change.previousLayout);
   } else if (change.type === CHANGE_DEFAULT_SUBFOLDER) {
     setDefaultSubfolder(change.previousValue);
+  } else if (change.type === CHANGE_TITLE_SHOWS && snapshot) {
+    await restoreTitleSnapshot(await findChannelOrFail(change.channelId), snapshot);
   }
 }
 

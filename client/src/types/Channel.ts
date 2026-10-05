@@ -40,4 +40,6 @@ export interface Channel {
   tab_download_stats?: TabDownloadStatsByTab;
   // Layout of the folder the channel downloads to. Only on /getchannels entries.
   layout?: LibraryLayout;
+  // Active title shows, when the channel has any. Only on /getchannels entries.
+  titleShows?: number;
 }

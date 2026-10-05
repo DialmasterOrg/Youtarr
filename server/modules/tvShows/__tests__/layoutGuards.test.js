@@ -2,6 +2,7 @@ jest.mock('../../../models/channel', () => ({ findAll: jest.fn() }));
 jest.mock('../../../models/playlist', () => ({ findAll: jest.fn() }));
 jest.mock('../../../models/video', () => ({ count: jest.fn() }));
 jest.mock('../../../models/videoclassification', () => ({ findAll: jest.fn() }));
+jest.mock('../../../models/tvshow', () => ({ findAll: jest.fn() }));
 jest.mock('../../configModule', () => ({ getDefaultSubfolder: jest.fn(), directoryPath: '/data' }));
 jest.mock('../showStore', () => ({ findChannelShow: jest.fn() }));
 jest.mock('../libraryLayouts', () => ({ getLayoutResolver: jest.fn() }));
@@ -188,6 +189,23 @@ describe('layoutGuards', () => {
       expect(layoutGuards.errorBody(err)).toEqual({
         error: 'Review it', reorganizeRequired: true, change: { type: 'channel', channelId: 'UC1', subFolder: 'TV' }, code: 'X',
       });
+    });
+  });
+
+  describe('assertNoTitleShows', () => {
+    it('refuses a folder that holds active title shows, naming them', async () => {
+      require('../../../models/tvshow').findAll.mockResolvedValue([{ name: 'Beyblade' }, { name: 'Hermitcraft' }]);
+      await expect(layoutGuards.assertNoTitleShows('TV Shows')).rejects.toMatchObject({
+        status: 400, message: expect.stringContaining('Beyblade, Hermitcraft'),
+      });
+      expect(require('../../../models/tvshow').findAll.mock.calls[0][0].where).toEqual({
+        library_folder: 'TV Shows', kind: 'title', retired_at: null,
+      });
+    });
+
+    it('lets a folder without title shows through', async () => {
+      require('../../../models/tvshow').findAll.mockResolvedValue([]);
+      await expect(layoutGuards.assertNoTitleShows('')).resolves.toBeUndefined();
     });
   });
 });

@@ -8,6 +8,7 @@ jest.mock('../../../models/channel', () => ({ findAll: jest.fn() }));
 jest.mock('../../../models/playlist', () => ({ findAll: jest.fn() }));
 jest.mock('../../../models/video', () => ({ count: jest.fn() }));
 jest.mock('../../../models/videoclassification', () => ({ findAll: jest.fn().mockResolvedValue([]) }));
+jest.mock('../../../models/tvshow', () => ({ findAll: jest.fn().mockResolvedValue([]) }));
 jest.mock('../../../logger', () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }));
 jest.mock('../../configModule', () => ({ getDefaultSubfolder: jest.fn(), directoryPath: mockRoot }));
 jest.mock('../../subfolderModule', () => ({ getUsage: jest.fn(), getAll: jest.fn(), register: jest.fn() }));
@@ -90,6 +91,12 @@ describe('libraryFolders', () => {
     it('does not register the main folder', async () => {
       await libraryFolders.setFolderLayout('', 'tv');
       expect(subfolderModule.register).not.toHaveBeenCalled();
+    });
+
+    it('refuses to switch a folder holding title shows to Videos', async () => {
+      require('../../../models/tvshow').findAll.mockResolvedValueOnce([{ name: 'Beyblade' }]);
+      await expect(libraryFolders.setFolderLayout('TV', 'videos')).rejects.toMatchObject({ status: 400 });
+      expect(libraryLayouts.setLayout).not.toHaveBeenCalled();
     });
 
     it('leaves a folder that already has the layout alone', async () => {

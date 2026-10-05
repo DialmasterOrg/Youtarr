@@ -14,11 +14,12 @@ const Channel = require('../../models/channel');
 const Playlist = require('../../models/playlist');
 const Video = require('../../models/video');
 const VideoClassification = require('../../models/videoclassification');
+const TvShow = require('../../models/tvshow');
 const configModule = require('../configModule');
 const { buildSubfolderSegment, directoryHasFiles, GLOBAL_DEFAULT_SENTINEL } = require('../filesystem');
 const { effectiveLibraryFolder } = require('./channelFolders');
 const { getLayoutResolver } = require('./libraryLayouts');
-const { LAYOUT_TV, folderKey, isMp3Format, MP3_AUDIO_FORMATS } = require('./constants');
+const { LAYOUT_TV, folderKey, isMp3Format, MP3_AUDIO_FORMATS, KIND_TITLE_SHOW } = require('./constants');
 
 function guardError(message, status) {
   const err = new Error(message);
@@ -168,8 +169,26 @@ async function assertVideoOnlyDestination({ audioFormat, subFolderValue }) {
   }
 }
 
+/**
+ * Refuse switching a folder that holds title shows to the Videos layout:
+ * title shows always live in a TV folder.
+ * @param {string} libraryFolder - '' for the main folder
+ */
+async function assertNoTitleShows(libraryFolder) {
+  const shows = await TvShow.findAll({
+    where: { library_folder: libraryFolder || '', kind: KIND_TITLE_SHOW, retired_at: null }, attributes: ['name'],
+  });
+  if (shows.length === 0) return;
+  throw guardError(
+    `Title shows always live in a TV folder, and this folder holds ${shows.map((show) => show.name).join(', ')}. `
+    + 'Move them to another TV folder or remove them first.',
+    400
+  );
+}
+
 module.exports = {
   MP3_AUDIO_FORMATS,
+  assertNoTitleShows,
   guardError,
   reorganizeRequiredError,
   errorBody,

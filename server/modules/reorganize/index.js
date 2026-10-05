@@ -1,12 +1,16 @@
 /**
  * Reorganize: move already-downloaded files to where changed settings say
  * they belong, when a channel, a library folder or the default subfolder
- * switches between the Videos and TV layouts.
+ * switches between the Videos and TV layouts, or a channel's title shows
+ * change.
  *
  * - reorganizeLock: the running reorganize; holds downloads, refuses tasks and changes
  * - changeContext: a settings change resolved into the world before and after it
  * - changeScope: which videos a change moves, and their owner channels
  * - showPlanner: destinations, and the shows a change creates or moves
+ * - titleTargets: the videos that belong to a title show, and its planned show
+ * - titleAssignments: numbers and stems of videos moving into a title show
+ * - titleSnapshot: a title show change's previous state, to undo it
  * - destinationPlanner: every video's files, names and episode numbers
  * - movieNameRenderer: movie-style names rendered by yt-dlp from stored info
  * - revision: the plan's revision token

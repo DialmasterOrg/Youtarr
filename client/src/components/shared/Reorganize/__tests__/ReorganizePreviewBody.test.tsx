@@ -34,6 +34,20 @@ describe('ReorganizePreviewBody', () => {
     expect(screen.getByText('1 video is already where it belongs.')).toBeInTheDocument();
   });
 
+  test('says when a title episode\'s number is held by another video', () => {
+    render(<ReorganizePreviewBody preview={preview({ totals: { ...TOTALS, episodeTaken: 1 } })} />);
+
+    expect(screen.getByText(/1 video waiting for its upload year has an episode number another video holds/)).toBeInTheDocument();
+  });
+
+  test('names a new title show', () => {
+    render(<ReorganizePreviewBody preview={preview({
+      shows: [{ name: 'Beyblade', libraryFolder: 'TV', folderName: 'Beyblade', action: 'create', kind: 'title' }],
+    })} />);
+
+    expect(screen.getByText('New show: __TV/Beyblade')).toBeInTheDocument();
+  });
+
   test('lists each move with its old and new path and episode', () => {
     render(<ReorganizePreviewBody preview={preview()} />);
 

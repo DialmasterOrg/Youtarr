@@ -114,6 +114,7 @@ async function setFolderLayout(name, layout, { isDownloadRunning } = {}) {
   reorganizeLock.assertInactive(MESSAGES.reorganizing);
   const users = await layoutGuards.usersOfFolder(folder);
   if (layout === LAYOUT_TV) layoutGuards.assertNoMp3Users(users, 'this folder');
+  else await layoutGuards.assertNoTitleShows(folder);
   const reorganize = { type: CHANGE_FOLDER_LAYOUT, folder, layout };
   if (await layoutGuards.folderHasFiles(folder)) {
     throw layoutGuards.reorganizeRequiredError(MESSAGES.reorganize, reorganize);

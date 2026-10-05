@@ -23,7 +23,10 @@ const { buildPlan, summarizePlan, applyRefusal } = require('./planner');
 const { applySettings, rollbackSettings } = require('./settingsApplier');
 const { executeItem } = require('./itemExecutor');
 const followUp = require('./followUp');
-const { OPERATION_STATUS, ITEM_STATUS, PROGRESS_MESSAGE_TYPE, CHANGE_CHANNEL } = require('./constants');
+const { OPERATION_STATUS, ITEM_STATUS, PROGRESS_MESSAGE_TYPE, CHANGE_CHANNEL, CHANGE_TITLE_SHOWS } = require('./constants');
+
+// Changes made to one channel, which the lock covers from the start.
+const CHANNEL_CHANGES = new Set([CHANGE_CHANNEL, CHANGE_TITLE_SHOWS]);
 
 // Scheduled tasks that read or write downloaded files or their rows, refused
 // while a reorganize runs (and which refuse a reorganize while they run).
@@ -164,7 +167,7 @@ class OperationRunner {
         label: plan.context.label,
         channelIds: [
           ...plan.items.map((item) => item.channelId),
-          ...(plan.context.type === CHANGE_CHANNEL ? [plan.context.channel.channel_id] : []),
+          ...(CHANNEL_CHANGES.has(plan.context.type) ? [plan.context.channel.channel_id] : []),
         ],
         videoIds: plan.items.map((item) => item.videoId),
         youtubeIds: plan.items.map((item) => item.youtubeId),
@@ -328,7 +331,8 @@ class OperationRunner {
         shows = await applySettings({ change: settings.change, shows, layoutBefore });
         await operationStore.markSettingsApplied(operation, shows);
       }
-      const showIds = new Map(shows.map((show) => [show.ownerChannelId, show.showId]));
+      // A channel show by its owner channel, a title show by its key.
+      const showIds = new Map(shows.map((show) => [show.key || show.ownerChannelId, show.showId]));
 
       for (const item of items) {
         try {
@@ -350,7 +354,7 @@ class OperationRunner {
 
       const counts = await operationStore.refreshCounts(operation);
       if (counts.moved === 0 && counts.failed > 0) {
-        await rollbackSettings({ change: settings.change, shows });
+        await rollbackSettings({ change: settings.change, shows, snapshot: settings.snapshot || null });
         await operation.update({ settings_applied: false });
         status = OPERATION_STATUS.FAILED;
         error = NOTHING_MOVED_MESSAGE;
@@ -359,7 +363,11 @@ class OperationRunner {
       }
       finished = (await operationStore.itemsWithStatus(operation.id, [ITEM_STATUS.DONE])).map(describeDone);
       try {
-        await followUp.finishFiles({ items: finished, shows });
+        await followUp.finishFiles({
+          items: finished,
+          shows,
+          titleShowChannelId: settings.change.type === CHANGE_TITLE_SHOWS ? settings.change.channelId : null,
+        });
       } catch (err) {
         logger.warn({ err, operationId: operation.id }, 'Could not finish the metadata and folders after a reorganize');
       }
@@ -369,7 +377,7 @@ class OperationRunner {
       error = err.message;
       if (operation.settings_applied && moved.size === 0) {
         try {
-          await rollbackSettings({ change: settings.change, shows });
+          await rollbackSettings({ change: settings.change, shows, snapshot: settings.snapshot || null });
           await operation.update({ settings_applied: false });
         } catch (rollbackErr) {
           logger.error({ err: rollbackErr, operationId: operation.id }, 'Could not undo the settings change of a failed reorganize');

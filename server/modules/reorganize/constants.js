@@ -9,6 +9,12 @@ const CHANGE_DEFAULT_SUBFOLDER = 'defaultSubfolder';
 // Accepted on the API and normalized to CHANGE_CHANNEL with the folder the
 // Channel Settings layout toggle picks.
 const CHANGE_CHANNEL_LAYOUT = 'channelLayout';
+// A channel's title shows (or episode assignments) changed in a way that
+// moves downloaded videos.
+const CHANGE_TITLE_SHOWS = 'titleShows';
+
+// What a change does to a show it plans.
+const SHOW_ACTION = Object.freeze({ KEEP: 'keep', CREATE: 'create', MOVE: 'move' });
 
 const OPERATION_STATUS = Object.freeze({
   RUNNING: 'running',
@@ -30,6 +36,8 @@ const PROBLEM = Object.freeze({
   NO_NAME: 'no-name',
   NO_DATE: 'no-date',
   UNSAFE_NAME: 'unsafe-name',
+  // A title episode waiting for its upload year whose number another video holds.
+  EPISODE_TAKEN: 'episode-taken',
 });
 
 // Notes about a planned move, reported by the preview.
@@ -52,6 +60,8 @@ module.exports = {
   CHANGE_FOLDER_LAYOUT,
   CHANGE_DEFAULT_SUBFOLDER,
   CHANGE_CHANNEL_LAYOUT,
+  CHANGE_TITLE_SHOWS,
+  SHOW_ACTION,
   OPERATION_STATUS,
   ITEM_STATUS,
   PROBLEM,

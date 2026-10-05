@@ -15,10 +15,9 @@ const { resolveChannelFolderName } = require('../filesystem/pathBuilder');
 const { ROOT_SENTINEL } = require('../filesystem/constants');
 const { LAYOUT_TV, LAYOUT_VIDEOS, folderKey } = require('../tvShows/constants');
 const { showDirectory } = require('../tvShows/channelFolders');
-const { CHANGE_CHANNEL, CHANGE_FOLDER_LAYOUT } = require('./constants');
+const { CHANGE_CHANNEL, CHANGE_FOLDER_LAYOUT, SHOW_ACTION } = require('./constants');
 const { libraryRootOf } = require('./changeScope');
-
-const SHOW_ACTION = Object.freeze({ KEEP: 'keep', CREATE: 'create', MOVE: 'move' });
+const { resolveTitleTargets } = require('./titleTargets');
 
 /**
  * @param {Object} subject - changeScope subject
@@ -86,18 +85,30 @@ async function planShow({ ownerChannelId, subject, libraryFolder, context, reser
 }
 
 /**
- * Plan the show of every owner channel with videos going to a TV folder.
+ * Plan the show of every video going to a TV folder: its title show (an
+ * episode of an active title show stays in, or goes to, that show), else its
+ * owner channel's show.
  *
  * @param {Array<Object>} subjects - changeScope subjects
  * @param {Object} context - resolved change
- * @returns {Promise<{targets: Map<number, {libraryFolder: string, layout: string}>, shows: Map<string, Object>}>}
- *   targets by Videos.id; shows by owner channel id
+ * @param {Map<string, Object>} [channels] - channels rows by id
+ * @returns {Promise<{targets: Map<number, Object>, shows: Map<string, Object>, titleTargets: Map<number, Object>}>}
+ *   targets by Videos.id ({ libraryFolder, layout }, plus showKey for a title show); shows by
+ *   owner channel id (channel shows) or show key (title shows); titleTargets by Videos.id
  */
-async function planShows(subjects, context) {
+async function planShows(subjects, context, channels = new Map()) {
   const targets = new Map();
   const shows = new Map();
   const reserved = new Set();
+  const title = await resolveTitleTargets(subjects, context, channels);
   for (const subject of subjects) {
+    const titleTarget = title.targets.get(subject.video.id);
+    if (titleTarget) {
+      const show = title.shows.get(titleTarget.showKey);
+      targets.set(subject.video.id, { libraryFolder: show.libraryFolder, layout: LAYOUT_TV, showKey: show.key });
+      shows.set(show.key, show);
+      continue;
+    }
     const target = targetOf(subject, context);
     targets.set(subject.video.id, target);
     if (target.layout !== LAYOUT_TV || shows.has(subject.ownerChannelId)) continue;
@@ -105,7 +116,7 @@ async function planShows(subjects, context) {
       ownerChannelId: subject.ownerChannelId, subject, libraryFolder: target.libraryFolder, context, reserved,
     }));
   }
-  return { targets, shows };
+  return { targets, shows, titleTargets: title.targets };
 }
 
 /**

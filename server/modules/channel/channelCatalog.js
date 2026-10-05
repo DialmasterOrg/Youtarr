@@ -7,6 +7,7 @@ const channelProvisioning = require('./channelProvisioning');
 const tabDownloadStats = require('./tabDownloadStats');
 const m3uGenerator = require('../m3uGenerator');
 const channelFolders = require('../tvShows/channelFolders');
+const titleShowQueries = require('../tvShows/titleShowQueries');
 const { getLayoutResolver } = require('../tvShows/libraryLayouts');
 const { LAYOUT_TV, LAYOUT_VIDEOS } = require('../tvShows/constants');
 
@@ -215,6 +216,13 @@ class ChannelCatalog {
         return () => LAYOUT_VIDEOS;
       });
 
+      // The "N shows" chip, decoration as well.
+      const titleShowCounts = await titleShowQueries.countActiveByChannel(rows.map((channel) => channel.channel_id))
+        .catch((err) => {
+          logger.warn({ err }, 'Failed to count channel title shows');
+          return new Map();
+        });
+
       const totalPages = count > 0 ? Math.ceil(count / safePageSize) : 0;
       const normalizedSubFolders = distinctSubFolders
         .map((entry) => entry.sub_folder)
@@ -230,6 +238,7 @@ class ChannelCatalog {
         channels: rows.map((channel) => ({
           ...channelMappers.mapChannelListEntry(channel, statsByChannel.get(channel.channel_id)),
           layout: layoutOf(channelFolders.effectiveLibraryFolder(channel.sub_folder)),
+          ...(titleShowCounts.get(channel.channel_id) ? { titleShows: titleShowCounts.get(channel.channel_id) } : {}),
         })),
         total: count,
         page: safePage,

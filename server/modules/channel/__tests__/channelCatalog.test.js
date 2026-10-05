@@ -18,6 +18,7 @@ jest.mock('../tabDownloadStats', () => ({ getForChannels: jest.fn().mockResolved
 jest.mock('../../tvShows/episodeInfo', () => ({ getEpisodeInfoMap: jest.fn().mockResolvedValue(new Map()) }));
 jest.mock('../../tvShows/libraryLayouts', () => ({ getLayoutResolver: jest.fn().mockResolvedValue(() => 'videos'), listTvFolders: jest.fn().mockResolvedValue([]) }));
 jest.mock('../../tvShows/showStore', () => ({ findChannelShow: jest.fn().mockResolvedValue(null) }));
+jest.mock('../../tvShows/titleShowQueries', () => ({ countActiveByChannel: jest.fn().mockResolvedValue(new Map()) }));
 
 describe('channelCatalog', () => {
   let channelCatalog;
@@ -220,6 +221,27 @@ describe('channelCatalog', () => {
       const result = await channelCatalog.getChannelsPaginated();
 
       expect(result.channels.map((c) => c.layout)).toEqual(['tv', 'videos']);
+    });
+
+    test('counts the title shows of channels that have some', async () => {
+      require('../../tvShows/titleShowQueries').countActiveByChannel.mockResolvedValueOnce(new Map([['UC1', 3]]));
+      Channel.findAndCountAll.mockResolvedValueOnce({
+        rows: [{ channel_id: 'UC1', sub_folder: 'TV' }, { channel_id: 'UC2', sub_folder: 'Kids' }],
+        count: 2,
+      });
+
+      const result = await channelCatalog.getChannelsPaginated();
+
+      expect(result.channels.map((c) => c.titleShows)).toEqual([3, undefined]);
+    });
+
+    test('still lists channels when the title shows can\'t be counted', async () => {
+      require('../../tvShows/titleShowQueries').countActiveByChannel.mockRejectedValueOnce(new Error('db'));
+      Channel.findAndCountAll.mockResolvedValueOnce({ rows: [{ channel_id: 'UC1', sub_folder: 'TV' }], count: 1 });
+
+      const result = await channelCatalog.getChannelsPaginated();
+
+      expect(result.channels).toHaveLength(1);
     });
 
     test('filters to channels in TV folders', async () => {

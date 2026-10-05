@@ -48,6 +48,8 @@ class JobModule {
     this.jobAbandonedListeners = new Set();
     // Told whenever updateJob gives a job a final status; see onJobEnded.
     this.jobEndedListeners = new Set();
+    // Awaited before the queue starts its next job; see onBeforeNextJob.
+    this.beforeNextJobListeners = new Set();
 
     if (!fs.existsSync(this.jobsDir)) {
       fs.mkdirSync(this.jobsDir, { recursive: true });
@@ -503,6 +505,7 @@ class JobModule {
       logger.info('Downloads are being reorganized; holding queued jobs');
       return;
     }
+    await this.runBeforeNextJob();
     const jobs = this.getAllJobs();
     for (let id in jobs) {
       if (jobs[id].status !== 'Pending') continue;
@@ -574,6 +577,28 @@ class JobModule {
   onJobEnded(listener) {
     this.jobEndedListeners.add(listener);
     return () => this.jobEndedListeners.delete(listener);
+  }
+
+  /**
+   * Run work that must happen between download jobs (title shows write
+   * complete.list only while no job runs). Awaited before the next queued
+   * job starts; a failing listener never holds the queue.
+   * @param {Function} listener - async, called with no arguments
+   * @returns {Function} unsubscribe
+   */
+  onBeforeNextJob(listener) {
+    this.beforeNextJobListeners.add(listener);
+    return () => this.beforeNextJobListeners.delete(listener);
+  }
+
+  async runBeforeNextJob() {
+    for (const listener of this.beforeNextJobListeners) {
+      try {
+        await listener();
+      } catch (err) {
+        logger.warn({ err }, 'Before-next-job listener failed');
+      }
+    }
   }
 
   notifyJobEnded(event) {

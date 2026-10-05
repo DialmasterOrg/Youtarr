@@ -7,6 +7,7 @@ jest.mock('../changeContext', () => ({ resolveChange: jest.fn() }));
 jest.mock('../changeScope', () => ({ selectSubjects: jest.fn() }));
 jest.mock('../showPlanner', () => ({ planShows: jest.fn() }));
 jest.mock('../destinationPlanner', () => ({ planDestinations: jest.fn() }));
+jest.mock('../titleSnapshot', () => ({ takeTitleSnapshot: jest.fn(async () => ({ shows: [], rows: [], conflicts: [] })) }));
 
 const item = (overrides = {}) => ({
   videoId: 1,
@@ -55,6 +56,58 @@ describe('reorganize planner', () => {
 
     expect(plan.shows.map((show) => show.ownerChannelId)).toEqual(['UC1']);
     expect(plan.revision).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  describe('a title show change', () => {
+    const titleItem = item({
+      classification: { showKey: 'title:3', kind: 'title', season: 1, episode: 20, source: 'title', fileStem: 'S01E20 - A [abcdefghijk]' },
+    });
+
+    beforeEach(() => {
+      require('../changeContext').resolveChange.mockResolvedValue({
+        type: 'titleShows', label: 'Chan: shows', channel: { channel_id: 'UC1' },
+        stored: { type: 'titleShows', channelId: 'UC1', shows: [], overrides: [] },
+      });
+      require('../showPlanner').planShows.mockResolvedValue({
+        targets: new Map(),
+        shows: new Map([['title:3', { key: 'title:3', kind: 'title', ownerChannelId: 'UC1', action: 'keep', name: 'Beyblade', libraryFolder: 'TV', folderName: 'Beyblade' }]]),
+        titleTargets: new Map([[1, { showKey: 'title:3' }]]),
+      });
+      require('../destinationPlanner').planDestinations.mockResolvedValue({ items: [titleItem], problems: [], unchanged: 0 });
+    });
+
+    it('keeps the title show that receives a moved video', async () => {
+      const plan = await planner.buildPlan({ type: 'titleShows' });
+      expect(plan.shows.map((show) => show.key)).toEqual(['title:3']);
+    });
+
+    it('hands the title targets to the destination planner', async () => {
+      await planner.buildPlan({ type: 'titleShows' });
+      expect(require('../destinationPlanner').planDestinations.mock.calls[0][0].titleTargets).toEqual(new Map([[1, { showKey: 'title:3' }]]));
+    });
+
+    it('snapshots the channel\'s shows and episodes to undo the change', async () => {
+      const plan = await planner.buildPlan({ type: 'titleShows' });
+      expect(require('../titleSnapshot').takeTitleSnapshot).toHaveBeenCalledWith('UC1');
+      expect(plan.snapshot).toEqual({ shows: [], rows: [], conflicts: [] });
+    });
+
+    it('shows a title episode code with two-digit numbers', async () => {
+      const summary = await planner.summarizePlan(await planner.buildPlan({ type: 'titleShows' }));
+      expect(summary.items[0].episode).toBe('S01E20');
+    });
+  });
+
+  it('takes no snapshot for other changes', async () => {
+    const plan = await planner.buildPlan({ type: 'channel' });
+    expect([plan.snapshot, require('../titleSnapshot').takeTitleSnapshot.mock.calls.length]).toEqual([null, 0]);
+  });
+
+  it('passes the channels on to the show planner', async () => {
+    const channels = new Map([['UC1', {}]]);
+    require('../changeScope').selectSubjects.mockResolvedValue({ subjects: [], channels });
+    await planner.buildPlan({ type: 'channel' });
+    expect(require('../showPlanner').planShows.mock.calls[0][2]).toBe(channels);
   });
 
   it('summarizes the plan for the preview with paths relative to the downloads folder', async () => {

@@ -7,6 +7,7 @@ jest.mock('../../videoInfoStore', () => ({
   rewriteActualPaths: jest.fn().mockResolvedValue(true),
 }));
 jest.mock('../../sidecarWriter', () => ({ writeVideoSidecars: jest.fn().mockResolvedValue([]) }));
+jest.mock('../../tvShows/titleShowStore', () => ({ raiseHighWater: jest.fn() }));
 
 const fs = require('fs');
 const os = require('os');
@@ -82,6 +83,37 @@ describe('reorganize itemExecutor', () => {
 
   afterEach(() => {
     fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  describe('a title show episode', () => {
+    const titleRecord = (extra = {}) => {
+      const record = toTvRecord();
+      return {
+        ...record,
+        classification: JSON.stringify({ ...classification, showKey: 'new:0', kind: 'title', season: 1, episode: 7, source: 'order', ...extra }),
+      };
+    };
+
+    it('stores the episode in the title show found by its key, keeping the row\'s pattern', async () => {
+      const record = titleRecord();
+      touch(record.plan.oldVideoPath, 'video');
+      Video.findByPk.mockResolvedValue(videoRow(record.plan.oldVideoPath));
+      const stored = { update: jest.fn() };
+      VideoClassification.findByPk.mockResolvedValue(stored);
+      const showIdFor = jest.fn((key) => (key === 'new:0' ? 9 : null));
+      await executor.executeItem(record, { showIdFor });
+      expect(showIdFor).toHaveBeenCalledWith('new:0');
+      const values = stored.update.mock.calls[0][0];
+      expect([values.show_id, values.season, values.episode, 'pattern_id' in values]).toEqual([9, 1, 7, false]);
+    });
+
+    it('raises the season\'s high-water mark for an order number', async () => {
+      const record = titleRecord();
+      touch(record.plan.oldVideoPath, 'video');
+      Video.findByPk.mockResolvedValue(videoRow(record.plan.oldVideoPath));
+      await executor.executeItem(record, { showIdFor: () => 9 });
+      expect(require('../../tvShows/titleShowStore').raiseHighWater).toHaveBeenCalledWith(9, 1, 7);
+    });
   });
 
   it('moves a movie-style video into its season folder as an episode', async () => {

@@ -170,6 +170,48 @@ describe('reorganize operationRunner', () => {
       expect(lock.isActive()).toBe(false);
     });
 
+    describe('a title show change', () => {
+      const TITLE_CHANGE = { type: 'titleShows', channelId: 'UC1', shows: [], overrides: [] };
+      const titleShows = [{ key: 'new:0', kind: 'title', ownerChannelId: 'UC1', showId: null }];
+      const snapshot = { shows: [], rows: [], conflicts: [] };
+
+      beforeEach(() => {
+        operation.settings_change = JSON.stringify({ change: TITLE_CHANGE, label: 'Chan: shows', shows: titleShows, snapshot });
+        planner.buildPlan.mockResolvedValue({
+          ...plan(),
+          shows: titleShows,
+          context: { type: 'titleShows', label: 'Chan: shows', stored: TITLE_CHANGE, channel: { channel_id: 'UC1' }, layoutBefore: () => 'videos' },
+        });
+      });
+
+      it('locks the channel whose shows change', async () => {
+        await runner.start(TITLE_CHANGE, 'rev');
+        expect(lock.coversChannel('UC1')).toBe(true);
+        await flush(() => !lock.isActive());
+      });
+
+      it('finds a title show\'s id by its key', async () => {
+        await runner.start(TITLE_CHANGE, 'rev');
+        await flush(() => !lock.isActive());
+        expect(executor.executeItem.mock.calls[0][1].showIdFor('new:0')).toBe(9);
+      });
+
+      it('has the follow-up rewrite the channel\'s title show metadata', async () => {
+        await runner.start(TITLE_CHANGE, 'rev');
+        await flush(() => !lock.isActive());
+        expect(followUp.finishFiles.mock.calls[0][0].titleShowChannelId).toBe('UC1');
+      });
+
+      it('undoes the change from its snapshot when no video could move', async () => {
+        executor.executeItem.mockRejectedValue(new Error('EACCES'));
+        store.itemsWithStatus.mockImplementation(async (id, statuses) => (statuses.includes('pending') ? [item(1), item(2)] : []));
+        store.refreshCounts.mockResolvedValue({ done: 0, failed: 2, pending: 0, moved: 0 });
+        await runner.start(TITLE_CHANGE, 'rev');
+        await flush(() => !lock.isActive());
+        expect(applier.rollbackSettings).toHaveBeenCalledWith(expect.objectContaining({ change: TITLE_CHANGE, snapshot }));
+      });
+    });
+
     it('records a partial run when some videos fail', async () => {
       executor.executeItem.mockRejectedValueOnce(new Error('EEXIST'));
       store.refreshCounts.mockResolvedValue({ done: 1, failed: 1, pending: 0 });

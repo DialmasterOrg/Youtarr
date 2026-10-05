@@ -3,7 +3,7 @@ jest.mock('../../configModule', () => ({ directoryPath: '/data', getConfig: jest
 jest.mock('../../plexModule', () => ({ refreshLibrariesForSubfolders: jest.fn() }));
 jest.mock('../../m3uGenerator', () => ({ generateChannelM3U: jest.fn(), generatePlaylistM3U: jest.fn() }));
 jest.mock('../../../models/channel', () => ({ findAll: jest.fn() }));
-jest.mock('../../../models/tvshow', () => ({ findByPk: jest.fn() }));
+jest.mock('../../../models/tvshow', () => ({ findByPk: jest.fn(), findAll: jest.fn(async () => []) }));
 jest.mock('../../../models/playlist', () => ({ findAll: jest.fn() }));
 jest.mock('../../../models/playlistvideo', () => ({ findAll: jest.fn() }));
 jest.mock('../../sidecarWriter', () => ({ writeShowMetadata: jest.fn(), writeFolderArt: jest.fn() }));
@@ -58,6 +58,22 @@ describe('reorganize followUp', () => {
   });
 
   describe('finishFiles', () => {
+    it('writes the metadata of a title show that received episodes', async () => {
+      const toTitleShow = { ...toTv, classification: { ownerChannelId: 'UC1', showKey: 'title:7', kind: 'title' } };
+      await followUp.finishFiles({
+        items: [toTitleShow],
+        shows: [{ ownerChannelId: 'UC1', showId: 5 }, { key: 'title:7', kind: 'title', ownerChannelId: 'UC1', showId: 7 }],
+      });
+      expect(require('../../../models/tvshow').findByPk.mock.calls.map(([id]) => id)).toEqual([7]);
+    });
+
+    it('rewrites every active title show of a channel whose title shows changed', async () => {
+      const renamed = { id: 8, kind: 'title', folder_name: 'Renamed' };
+      require('../../../models/tvshow').findAll.mockResolvedValue([renamed]);
+      await followUp.finishFiles({ items: [], shows: [], titleShowChannelId: 'UC1' });
+      expect(require('../../sidecarWriter').writeShowMetadata).toHaveBeenCalledWith({ show: renamed, showDir: '/data/__TV/Renamed' });
+    });
+
     it('writes the metadata of shows that received episodes', async () => {
       await followUp.finishFiles({ items: [toTv], shows: [{ ownerChannelId: 'UC1', showId: 5, plot: 'About' }] });
 

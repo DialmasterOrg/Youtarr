@@ -16,8 +16,10 @@ const configModule = require('./configModule');
 const nfoGenerator = require('./nfoGenerator');
 const logger = require('../logger');
 const { copySyncWithFallback } = require('./filesystem/fileOperations');
-const { buildEpisodeNfo, writeTvShowNfoIfChanged } = require('./tvShows/tvNfo');
-const { earliestEpisodeDate } = require('./tvShows/episodePlacement');
+const { buildEpisodeNfo, writeTvShowNfoIfChanged, writeSeasonNfo, ID_TYPE_YOUTARR } = require('./tvShows/tvNfo');
+const { earliestEpisodeDate, seasonNamesOf } = require('./tvShows/episodePlacement');
+const { seasonFolderName } = require('./tvShows/episodeNaming');
+const { KIND_TITLE_SHOW } = require('./tvShows/constants');
 
 const POSTER_FILE = 'poster.jpg';
 const BACKDROP_FILE = 'backdrop.jpg';
@@ -115,13 +117,33 @@ function writeFolderArt({ channelId, folderPath }) {
  */
 async function writeShowMetadata({ show, showDir, plot = null }) {
   if (!fs.existsSync(showDir)) return;
-  await writeTvShowNfoIfChanged(showDir, {
-    title: show.name,
-    plot,
-    premiered: await earliestEpisodeDate(show.id),
-    externalKey: show.external_key,
-  });
+  if (show.kind === KIND_TITLE_SHOW) {
+    await writeTitleShowMetadata(show, showDir);
+  } else {
+    await writeTvShowNfoIfChanged(showDir, {
+      title: show.name,
+      plot,
+      premiered: await earliestEpisodeDate(show.id),
+      externalKey: show.external_key,
+    });
+  }
   writeFolderArt({ channelId: show.channel_id, folderPath: showDir });
+}
+
+// A title show is identified by its own key and has the season names the
+// user gave it, in tvshow.nfo and each season folder's season.nfo.
+async function writeTitleShowMetadata(show, showDir) {
+  const namedSeasons = await seasonNamesOf(show.id);
+  await writeTvShowNfoIfChanged(showDir, {
+    title: show.name, externalKey: show.external_key, idType: ID_TYPE_YOUTARR, namedSeasons,
+  });
+  for (const entry of await fs.promises.readdir(showDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const match = /^Season (\d+)$/.exec(entry.name);
+    if (!match || seasonFolderName(Number(match[1])) !== entry.name) continue;
+    const season = Number(match[1]);
+    await writeSeasonNfo(path.join(showDir, entry.name), { season, name: namedSeasons[season] || null });
+  }
 }
 
 module.exports = {
