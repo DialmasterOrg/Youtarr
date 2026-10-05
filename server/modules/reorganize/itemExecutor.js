@@ -145,8 +145,13 @@ async function moveFiles(files, mediaPaths) {
 }
 
 async function removeOldNfos(nfoSources, keep) {
+  const kept = await statOrNull(keep);
   for (const nfo of nfoSources) {
     if (nfo === keep) continue;
+    // The NFO just written under another spelling (a case-only rename on a
+    // case-insensitive filesystem).
+    const stat = kept ? await statOrNull(nfo) : null;
+    if (stat && stat.ino === kept.ino && stat.dev === kept.dev) continue;
     await fs.promises.rm(nfo, { force: true });
   }
 }

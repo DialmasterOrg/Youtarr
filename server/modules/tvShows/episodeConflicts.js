@@ -151,9 +151,16 @@ async function clearError(youtubeId, { transaction = null } = {}) {
 
 /**
  * Forget a channel's classification errors: its titles just classified.
+ * @param {string} channelId
+ * @param {Object} [options]
+ * @param {Object} [options.transaction]
+ * @param {string[]|null} [options.youtubeIds] - Only these videos' errors (null: every one of the channel's)
  */
-async function clearErrorsForChannel(channelId, { transaction = null } = {}) {
-  await EpisodeConflict.destroy({ where: { channel_id: channelId, kind: KIND_ERROR }, transaction });
+async function clearErrorsForChannel(channelId, { transaction = null, youtubeIds = null } = {}) {
+  if (youtubeIds && youtubeIds.length === 0) return;
+  const where = { channel_id: channelId, kind: KIND_ERROR };
+  if (youtubeIds) where.youtube_id = youtubeIds;
+  await EpisodeConflict.destroy({ where, transaction });
 }
 
 /**

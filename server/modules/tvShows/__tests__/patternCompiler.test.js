@@ -120,6 +120,37 @@ describe('patternCompiler', () => {
       expect(() => regex('(?P<episode>[0-9]+) (?P=episode)')).toThrow('backreference');
     });
 
+    // Unnaming groups, and joining a show's patterns into one alternation,
+    // renumbers groups: a \1 would point at another group in the filter.
+    it('refuses numbered backreferences', () => {
+      expect(() => regex('^(?P<episode>[0-9]+)-(x)-\\1$')).toThrow('backreference');
+    });
+
+    it('refuses numbered backreferences in a pattern without named groups', () => {
+      expect(() => regex('(a)\\12')).toThrow('backreference');
+    });
+
+    // Python reads a backslash and three octal digits as a character.
+    it('allows a three-digit octal escape', () => {
+      expect(regex('^\\123(?P<episode>[0-9]+)$').filterRegex).toBe('(?:^\\123(?:[0-9]+)$)');
+    });
+
+    it('allows a three-digit octal escape followed by another digit', () => {
+      expect(regex('\\1234(?P<episode>[0-9]+)').compiledRegex).toBe('\\1234(?P<episode>[0-9]+)');
+    });
+
+    it.each(['(a)\\12', '(a)\\18', '(a)\\8', '(a)\\1x'])('refuses %s as a backreference', (pattern) => {
+      expect(() => regex(pattern)).toThrow('backreference');
+    });
+
+    it('refuses conditional groups', () => {
+      expect(() => regex('(a)?(?(1)b|c)(?P<episode>[0-9]+)')).toThrow('Conditional');
+    });
+
+    it('allows escaped backslashes before digits, octal escapes and digits in a character class', () => {
+      expect(regex('a\\\\1\\0[\\1](?P<episode>[0-9]+)').filterRegex).toBe('(?:a\\\\1\\0[\\1](?:[0-9]+))');
+    });
+
     it('refuses group names other than the placeholders', () => {
       expect(() => regex('(?P<number>[0-9]+)')).toThrow('number');
     });

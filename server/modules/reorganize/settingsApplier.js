@@ -89,11 +89,21 @@ async function findChannelOrFail(channelId) {
 
 // A title show change: the channel's shows and every episode row as planned
 // (the plan is recomputed: the lock is held, so it is the one previewed).
-async function applyTitleShows(change, pinned) {
+// It is recorded as applied in the same transaction: a restart between the
+// two would replay it, and its new shows would then hold their own folders.
+async function applyTitleShows(change, pinned, markApplied) {
   const channel = await findChannelOrFail(change.channelId);
   const { drafts, plan } = await titleShowSaver.prepare({ channel, rawShows: change.shows, rawOverrides: change.overrides || [] });
-  const { showIds } = await titleShowSaver.applyPrepared({ channel, drafts, plan });
-  return pinned.map((show) => (show.kind === KIND_TITLE_SHOW ? { ...show, showId: showIds.get(show.key) || show.showId } : show));
+  const withIds = ({ showIds }) => pinned.map((show) => (
+    show.kind === KIND_TITLE_SHOW ? { ...show, showId: showIds.get(show.key) || show.showId } : show
+  ));
+  const saved = await titleShowSaver.applyPrepared({
+    channel,
+    drafts,
+    plan,
+    onWritten: markApplied ? (result, transaction) => markApplied(withIds(result), transaction) : null,
+  });
+  return withIds(saved);
 }
 
 /**
@@ -103,9 +113,11 @@ async function applyTitleShows(change, pinned) {
  * @param {Object} params.change - The stored (normalized) change
  * @param {Array<Object>} params.shows - Planned shows
  * @param {(libraryFolder: string) => string} params.layoutBefore - Layouts before the change
+ * @param {(shows: Array<Object>, transaction?: Object) => Promise<void>} [params.markApplied] - Records
+ *   the change as applied (an operation's); a title show change calls it inside its write transaction
  * @returns {Promise<Array<Object>>} The shows with their ids
  */
-async function applySettings({ change, shows, layoutBefore }) {
+async function applySettings({ change, shows, layoutBefore, markApplied = null }) {
   const pinned = [];
   for (const planned of shows) pinned.push(await pinShow(planned));
 
@@ -139,8 +151,9 @@ async function applySettings({ change, shows, layoutBefore }) {
     await subfolderModule.register(change.value);
     setDefaultSubfolder(change.value);
   } else if (change.type === CHANGE_TITLE_SHOWS) {
-    return applyTitleShows(change, pinned);
+    return applyTitleShows(change, pinned, markApplied);
   }
+  if (markApplied) await markApplied(pinned);
   return pinned;
 }
 

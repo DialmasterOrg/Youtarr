@@ -328,8 +328,12 @@ class OperationRunner {
 
       if (!operation.settings_applied) {
         const layoutBefore = plan ? plan.context.layoutBefore : await getLayoutResolver();
-        shows = await applySettings({ change: settings.change, shows, layoutBefore });
-        await operationStore.markSettingsApplied(operation, shows);
+        shows = await applySettings({
+          change: settings.change,
+          shows,
+          layoutBefore,
+          markApplied: (pinned, transaction) => operationStore.markSettingsApplied(operation, pinned, { transaction }),
+        });
       }
       // A channel show by its owner channel, a title show by its key.
       const showIds = new Map(shows.map((show) => [show.key || show.ownerChannelId, show.showId]));

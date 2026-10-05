@@ -271,6 +271,12 @@ function destinationExistsError(dest) {
   return Object.assign(new Error(`A file already exists at ${dest}`), { code: 'EEXIST', path: dest });
 }
 
+// Two paths a filesystem that ignores case or accents reads as one.
+function sameIgnoringCaseAndAccents(a, b) {
+  const fold = (value) => value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+  return fold(a) === fold(b);
+}
+
 // A path is absent when it or one of its parent folders is missing, and
 // when a parent turns out to be a file (ENOTDIR).
 async function statOrNull(filePath) {
@@ -298,7 +304,7 @@ async function copyWithFallback(src, dest) {
  * removed, a source already moved is reported as such, and a destination
  * that is a finished copy of the source (same size and modification time,
  * left when a cross-filesystem move stopped before removing the source)
- * completes the move.
+ * completes the move, unless the two paths differ only in case or accents.
  *
  * On one filesystem the move is a rename. Across filesystems (a __subfolder
  * can be another mount) the file is copied to `<dest>.reorganize.part`,
@@ -329,7 +335,12 @@ async function moveFileNoClobber(src, dest, { retries = 3, delayMs = 200 } = {})
       await fsPromises.rename(src, dest);
       return 'moved';
     }
-    if (srcStat.size === destStat.size && Math.abs(srcStat.mtimeMs - destStat.mtimeMs) < COPY_MTIME_TOLERANCE_MS) {
+    // A spelling that differs only in case or accents may be the source
+    // itself on a filesystem whose inode numbers vary by spelling (SMB
+    // without server inode numbers): never taken for a finished copy, which
+    // would delete the only one.
+    if (!sameIgnoringCaseAndAccents(src, dest)
+      && srcStat.size === destStat.size && Math.abs(srcStat.mtimeMs - destStat.mtimeMs) < COPY_MTIME_TOLERANCE_MS) {
       await fsPromises.unlink(src);
       return 'already-moved';
     }

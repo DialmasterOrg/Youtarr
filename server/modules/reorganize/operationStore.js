@@ -79,12 +79,12 @@ function settingsOf(operation) {
   return JSON.parse(operation.settings_change);
 }
 
-async function markSettingsApplied(operation, shows) {
+async function markSettingsApplied(operation, shows, { transaction = null } = {}) {
   const settings = settingsOf(operation);
   await operation.update({
     settings_change: JSON.stringify({ ...settings, shows }),
     settings_applied: true,
-  });
+  }, { transaction });
 }
 
 async function itemsWithStatus(operationId, statuses) {

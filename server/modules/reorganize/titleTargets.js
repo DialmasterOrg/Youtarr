@@ -11,7 +11,6 @@
 
 const { VideoClassification, TvShow } = require('../../models');
 const { KIND_TITLE_SHOW } = require('../tvShows/constants');
-const { folderNameKey } = require('../tvShows/showFolderNames');
 const { ROW_STATUS } = require('../tvShows/titleNumbering');
 const { CHANGE_TITLE_SHOWS, SHOW_ACTION } = require('./constants');
 
@@ -44,7 +43,8 @@ function fromTitlePlan(subjects, context) {
     });
     if (shows.has(draft.key)) continue;
     const before = titlePlan.storedShows.get(draft.key);
-    const moved = before && folderNameKey(before.libraryFolder, before.folderName) !== folderNameKey(draft.libraryFolder, draft.folderName);
+    // Spelled exactly: a rename that changes only case or accents moves the files too.
+    const moved = before && ((before.libraryFolder || '') !== (draft.libraryFolder || '') || before.folderName !== draft.folderName);
     shows.set(draft.key, plannedShow({
       key: draft.key,
       ownerChannelId: channelId,
@@ -86,7 +86,7 @@ async function fromStoredRows(subjects, channels) {
         episodeTitle: row.episode_title,
       },
       pattern: null,
-      stored: { showKey: key, season: row.season, episode: row.episode, fileStem: row.file_stem },
+      stored: { showKey: key, season: row.season, episode: row.episode, fileStem: row.file_stem, timestampSource: row.timestamp_source },
     });
     if (!shows.has(key)) {
       shows.set(key, plannedShow({

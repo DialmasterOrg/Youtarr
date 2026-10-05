@@ -52,6 +52,10 @@ describe('titleShowDrafts', () => {
       expect(() => normalizeDrafts([draft(), draft({ name: 'beyblade' })], context)).toThrow('same folder');
     });
 
+    it('refuses the same show twice', () => {
+      expect(() => normalizeDrafts([draft({ id: 4 }), draft({ id: 4, name: 'Other' })], context)).toThrow('more than once');
+    });
+
     it('compiles each pattern', () => {
       const [show] = normalizeDrafts([draft()], context);
       expect(show.patterns[0]).toMatchObject({

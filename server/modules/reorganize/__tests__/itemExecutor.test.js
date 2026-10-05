@@ -325,4 +325,35 @@ describe('reorganize itemExecutor', () => {
     expect(VideoClassification.create).not.toHaveBeenCalled();
     expect(sidecarWriter.writeVideoSidecars).toHaveBeenCalledWith(expect.objectContaining({ episode: null }));
   });
+
+  // A show folder renamed only in case on a case-insensitive filesystem: both
+  // spellings reach the same files (a folder symlink stands in for that here).
+  it('keeps the episode NFO it wrote when the old NFO path spells the same file', async () => {
+    const newSeasonDir = at('__TV', 'chan', 'Season 2024');
+    fs.mkdirSync(newSeasonDir, { recursive: true });
+    fs.symlinkSync(at('__TV', 'chan'), at('__TV', 'Chan'));
+    const oldVideo = touch(path.join(seasonDir, `${STEM}.mp4`), 'video');
+    touch(path.join(seasonDir, `${STEM}.nfo`), '<episodedetails/>');
+    const newVideo = path.join(newSeasonDir, `${STEM}.mp4`);
+    const plan = {
+      files: [{ from: oldVideo, to: newVideo }],
+      nfoSources: [path.join(seasonDir, `${STEM}.nfo`)],
+      sourceDirs: [seasonDir],
+      oldVideoPath: oldVideo,
+      newVideoPath: newVideo,
+      oldAudioPath: null,
+      newAudioPath: null,
+      layout: 'tv',
+      fromLayout: 'tv',
+    };
+    Video.findByPk.mockResolvedValue(videoRow(oldVideo));
+    sidecarWriter.writeVideoSidecars.mockImplementationOnce(async ({ videoPath }) => {
+      fs.writeFileSync(videoPath.replace(/\.mp4$/, '.nfo'), '<episodedetails>new</episodedetails>');
+      return [];
+    });
+
+    await executor.executeItem({ youtube_id: ID, video_id: 1, files: JSON.stringify(plan), classification: null }, { showIdFor: () => null });
+
+    expect(fs.readFileSync(path.join(newSeasonDir, `${STEM}.nfo`), 'utf8')).toBe('<episodedetails>new</episodedetails>');
+  });
 });

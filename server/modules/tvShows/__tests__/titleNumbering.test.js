@@ -70,6 +70,24 @@ describe('titleNumbering.planNumbers', () => {
     expect([result.rows.get('a').episode, result.rows.get('b').episode]).toEqual([8, 9]);
   });
 
+  // A video without a date (publishedAtMs 0) is not the oldest upload.
+  it('allocates order numbers to videos without a date after the dated ones', () => {
+    const order = { kind: MATCH_KIND.ORDER, showKey: 'title:2', patternKey: 'p2', season: 0, episode: null, episodeTitle: null, reason: null };
+    const result = plan({
+      videos: [{ ...video('dateless'), publishedAtMs: 0 }, video('dated', { daysAgo: 5 })],
+      matches: new Map([['dateless', order], ['dated', order]]),
+    });
+    expect([result.rows.get('dated').episode, result.rows.get('dateless').episode]).toEqual([1, 2]);
+  });
+
+  it('gives a shared number to a dated upload over one without a date', () => {
+    const result = plan({
+      videos: [{ ...video('dateless'), publishedAtMs: 0 }, video('dated', { daysAgo: 5 })],
+      matches: new Map([['dateless', numbered(20)], ['dated', numbered(20)]]),
+    });
+    expect(result.rows.get('dateless').status).toBe(ROW_STATUS.DUPLICATE);
+  });
+
   it('raises the high-water mark past the numbers it allocates', () => {
     const order = { kind: MATCH_KIND.ORDER, showKey: 'title:2', patternKey: 'p2', season: 0, episode: null, episodeTitle: null, reason: null };
     const result = plan({ videos: [video('a')], matches: new Map([['a', order]]), highWater: new Map([['title:2|0', 7]]) });
@@ -361,6 +379,22 @@ describe('titleNumbering.planNumbers frozen videos', () => {
       videos: [video('a')], matches: new Map(), stored: new Map(), highWater: new Map(), frozen: new Set(['a']),
     });
     expect(result.rows.has('a')).toBe(false);
+  });
+
+  // A listing refresh leaves out a video that would have to move; the video
+  // it would have beaten takes the number instead of becoming its duplicate.
+  it('lets a frozen video without a row claim no number', () => {
+    const result = plan({
+      videos: [video('left-out', { daysAgo: 700 }), video('later', { daysAgo: 10 })],
+      matches: new Map([['left-out', numbered(20)], ['later', numbered(20)]]),
+    });
+    const frozenResult = planNumbers({
+      videos: [video('left-out', { daysAgo: 700 }), video('later', { daysAgo: 10 })],
+      matches: new Map([['left-out', numbered(20)], ['later', numbered(20)]]),
+      stored: new Map(), highWater: new Map(), frozen: new Set(['left-out']),
+    });
+    expect([result.rows.get('later').status, frozenResult.rows.get('later').status, frozenResult.duplicates])
+      .toEqual([ROW_STATUS.DUPLICATE, ROW_STATUS.ASSIGNED, []]);
   });
 });
 

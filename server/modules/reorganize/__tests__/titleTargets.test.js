@@ -63,6 +63,26 @@ describe('reorganize titleTargets', () => {
       });
     });
 
+    it('plans a show whose folder name changes only in case to move', async () => {
+      const storedShows = new Map([['title:3', { key: 'title:3', libraryFolder: 'TV', folderName: 'beyblade' }]]);
+      const result = await titleTargets.resolveTitleTargets(
+        [subject(1, 'aaaaaaaaaaa')],
+        context([draft('title:3')], [{ youtubeId: 'aaaaaaaaaaa', after: after('title:3') }], storedShows)
+      );
+      expect(result.shows.get('title:3')).toMatchObject({
+        action: 'move', previousLocation: { libraryFolder: 'TV', folderName: 'beyblade' },
+      });
+    });
+
+    it('keeps a show whose folder stays the same', async () => {
+      const storedShows = new Map([['title:3', { key: 'title:3', libraryFolder: 'TV', folderName: 'Beyblade' }]]);
+      const result = await titleTargets.resolveTitleTargets(
+        [subject(1, 'aaaaaaaaaaa')],
+        context([draft('title:3')], [{ youtubeId: 'aaaaaaaaaaa', after: after('title:3') }], storedShows)
+      );
+      expect(result.shows.get('title:3').action).toBe('keep');
+    });
+
     it('leaves a video that leaves its show to the channel layout', async () => {
       const result = await titleTargets.resolveTitleTargets(
         [subject(1, 'aaaaaaaaaaa')],
@@ -103,6 +123,13 @@ describe('reorganize titleTargets', () => {
       const result = await titleTargets.resolveTitleTargets([subject(1, 'aaaaaaaaaaa')], { type: 'channel' }, channels);
       expect(result.targets.get(1)).toMatchObject({ showKey: 'title:3', after: { season: 1, episode: 20, source: 'title' } });
       expect(result.shows.get('title:3')).toMatchObject({ action: 'keep', showId: 3, libraryFolder: 'TV', folderName: 'Beyblade' });
+    });
+
+    it('passes the stored row\'s time source along, so a kept number keeps it', async () => {
+      models.VideoClassification.findAll.mockResolvedValue([row({ source: 'date', timestamp_source: 'upload_date' })]);
+      models.TvShow.findAll.mockResolvedValue([titleShow]);
+      const result = await titleTargets.resolveTitleTargets([subject(1, 'aaaaaaaaaaa')], { type: 'channel' }, channels);
+      expect(result.targets.get(1).stored.timestampSource).toBe('upload_date');
     });
 
     it('asks only for active title shows', async () => {

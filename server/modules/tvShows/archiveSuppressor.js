@@ -7,7 +7,8 @@
  * from where it started, so the file must not change under a running job.
  * Requests are stored on their episode_conflicts row (archive_pending) and
  * applied when no download job is In Progress: right away when the queue is
- * idle, else when jobModule is about to start the next job, and at startup.
+ * idle, else before jobModule starts the next job (which waits for a pass
+ * already running), and at startup.
  */
 
 const { EpisodeConflict } = require('../../models');
@@ -48,7 +49,15 @@ class ArchiveSuppressor {
 
   async _flush() {
     if (this.isDownloadRunning()) return;
-    const rows = await EpisodeConflict.findAll({ where: { archive_pending: [ARCHIVE_ADD, ARCHIVE_REMOVE] } });
+    // Callers flush after their own write committed, so a failed read is
+    // logged, not thrown: the rows stay pending for the next flush.
+    let rows;
+    try {
+      rows = await EpisodeConflict.findAll({ where: { archive_pending: [ARCHIVE_ADD, ARCHIVE_REMOVE] } });
+    } catch (err) {
+      logger.error({ err }, 'Could not read the pending complete.list changes for duplicate episodes');
+      return;
+    }
     for (const row of rows) {
       if (this.isDownloadRunning()) return;
       try {

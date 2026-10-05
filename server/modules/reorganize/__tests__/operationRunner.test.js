@@ -70,7 +70,13 @@ describe('reorganize operationRunner', () => {
     store.createOperation.mockResolvedValue(operation);
     store.itemsWithStatus.mockResolvedValue([item(1), item(2)]);
     store.refreshCounts.mockResolvedValue({ done: 2, failed: 0, pending: 0 });
-    applier.applySettings.mockImplementation(async ({ shows }) => shows.map((show) => ({ ...show, showId: 9 })));
+    // The applier records the change as applied itself (a title show change
+    // inside the transaction that writes it).
+    applier.applySettings.mockImplementation(async ({ shows, markApplied }) => {
+      const pinned = shows.map((show) => ({ ...show, showId: 9 }));
+      if (markApplied) await markApplied(pinned, 'tx');
+      return pinned;
+    });
     planner.buildPlan.mockResolvedValue(plan());
     deps = {
       jobModule: { getInProgressJobId: jest.fn(() => null), isArchiveRepairRunning: jest.fn(() => false) },
@@ -159,7 +165,7 @@ describe('reorganize operationRunner', () => {
       await flush(() => !lock.isActive());
 
       expect(applier.applySettings).toHaveBeenCalledTimes(1);
-      expect(store.markSettingsApplied).toHaveBeenCalledWith(operation, [{ ownerChannelId: 'UC1', showId: 9 }]);
+      expect(store.markSettingsApplied.mock.calls).toEqual([[operation, [{ ownerChannelId: 'UC1', showId: 9 }], { transaction: 'tx' }]]);
       expect(executor.executeItem).toHaveBeenCalledTimes(2);
       expect(executor.executeItem.mock.calls[0][1].showIdFor('UC1')).toBe(9);
       expect(store.finishOperation).toHaveBeenCalledWith(operation, 'completed', null);

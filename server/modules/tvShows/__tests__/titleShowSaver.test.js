@@ -10,7 +10,7 @@ jest.mock('../titleShowDrafts', () => ({
   assertDraftsCompile: jest.fn(),
 }));
 jest.mock('../titleShowStore', () => ({
-  assertFolderNamesFree: jest.fn(), highWaterMarks: jest.fn(async () => new Map()), listTitleShows: jest.fn(async () => []),
+  assertOwnShows: jest.fn(), assertFolderNamesFree: jest.fn(), highWaterMarks: jest.fn(async () => new Map()), listTitleShows: jest.fn(async () => []),
 }));
 jest.mock('../titlePlanner', () => ({ planChannel: jest.fn() }));
 jest.mock('../titleRowWriter', () => ({
@@ -112,6 +112,13 @@ describe('titleShowSaver', () => {
       })).rejects.toMatchObject({ status: 400 });
     });
 
+    // The preview would otherwise let such a draft keep that show's folder.
+    it('refuses a show the channel doesn\'t have before planning', async () => {
+      require('../titleShowStore').assertOwnShows.mockRejectedValue(Object.assign(new Error('Show not found'), { status: 404 }));
+      await expect(saver.prepare({ channel, rawShows: [{ ...rawShows[0], id: 9 }] })).rejects.toMatchObject({ status: 404 });
+      expect(planner.planChannel).not.toHaveBeenCalled();
+    });
+
     it('refuses an override for an invalid video id', async () => {
       await expect(saver.prepare({ channel, rawShows, rawOverrides: [{ youtubeId: '../x', notAnEpisode: true }] }))
         .rejects.toMatchObject({ status: 400 });
@@ -164,6 +171,21 @@ describe('titleShowSaver', () => {
       expect([result.showIds.get('new:0'), writer.applyPlan.mock.calls[0][0].transaction]).toEqual([9, 't']);
       expect(suppressor.flush).toHaveBeenCalled();
     });
+
+    it('runs the caller\'s record inside the write transaction', async () => {
+      const saved = { showIds: new Map([['new:0', 9]]), patternIds: new Map() };
+      writer.applyPlan.mockResolvedValue(saved);
+      const onWritten = jest.fn();
+      await saver.applyPrepared({ channel, drafts: [], plan: plan(true), onWritten });
+      expect(onWritten).toHaveBeenCalledWith(saved, 't');
+    });
+
+    it('fails the write when the caller\'s record fails', async () => {
+      writer.applyPlan.mockResolvedValue({ showIds: new Map(), patternIds: new Map() });
+      const onWritten = jest.fn().mockRejectedValue(new Error('record failed'));
+      await expect(saver.applyPrepared({ channel, drafts: [], plan: plan(true), onWritten })).rejects.toThrow('record failed');
+      expect(suppressor.flush).not.toHaveBeenCalled();
+    });
   });
 
   describe('classifyNew', () => {
@@ -192,6 +214,46 @@ describe('titleShowSaver', () => {
       planner.planChannel.mockResolvedValue({ ...plan(true), entries: [{ youtubeId: 'a', moves: true }, { youtubeId: 'b', moves: false }] });
       await saver.classifyNew({ channel, youtubeIds: ['a', 'b'] });
       expect(writer.applyPlan.mock.calls[0][0].plan.entries).toEqual([{ youtubeId: 'b', moves: false }]);
+    });
+
+    it('plans again without the videos that would move, so they spend no episode numbers', async () => {
+      require('../titleShowStore').listTitleShows.mockResolvedValue([storedShow]);
+      planner.planChannel
+        .mockResolvedValueOnce({ ...plan(true), entries: [{ youtubeId: 'a', moves: true }, { youtubeId: 'b', moves: false }], highWater: new Map([['title:3|1', 2]]) })
+        .mockResolvedValueOnce({ ...plan(false), entries: [{ youtubeId: 'b', moves: false }], highWater: new Map([['title:3|1', 1]]) });
+      await saver.classifyNew({ channel, youtubeIds: ['a', 'b'] });
+      expect([planner.planChannel.mock.calls[1][0].onlyIds, writer.applyPlan.mock.calls[0][0].plan.highWater])
+        .toEqual([new Set(['b']), new Map([['title:3|1', 1]])]);
+    });
+
+    // A and B are downloaded and claim the same episode as C, oldest first:
+    // each winner that has to move is left out in turn, until C wins.
+    it('plans again until no winner has to move, so no duplicate points at a video left out', async () => {
+      require('../titleShowStore').listTitleShows.mockResolvedValue([storedShow]);
+      const duplicateOf = (youtubeId, winner) => ({ youtubeId, showKey: 'title:3', season: 1, episode: 20, duplicateOf: winner });
+      planner.planChannel
+        .mockResolvedValueOnce({
+          ...plan(true),
+          entries: [{ youtubeId: 'a', moves: true }, { youtubeId: 'b', moves: false }, { youtubeId: 'c', moves: false }],
+          duplicates: [duplicateOf('b', 'a'), duplicateOf('c', 'a')],
+        })
+        .mockResolvedValueOnce({
+          ...plan(true),
+          entries: [{ youtubeId: 'b', moves: true }, { youtubeId: 'c', moves: false }],
+          duplicates: [duplicateOf('c', 'b')],
+        })
+        .mockResolvedValueOnce({ ...plan(false), entries: [{ youtubeId: 'c', moves: false }] });
+      await saver.classifyNew({ channel, youtubeIds: ['a', 'b', 'c'] });
+      const written = writer.applyPlan.mock.calls[0][0];
+      expect([planner.planChannel.mock.calls[2][0].onlyIds, written.plan.entries, written.plan.duplicates, written.clearErrorsOf])
+        .toEqual([new Set(['c']), [{ youtubeId: 'c', moves: false }], [], ['c']]);
+    });
+
+    it('clears only the classification errors of the videos it classified', async () => {
+      require('../titleShowStore').listTitleShows.mockResolvedValue([storedShow]);
+      planner.planChannel.mockResolvedValue({ ...plan(true), entries: [{ youtubeId: 'a', moves: true }, { youtubeId: 'b', moves: false }] });
+      await saver.classifyNew({ channel, youtubeIds: ['a', 'b'] });
+      expect(writer.applyPlan.mock.calls[0][0].clearErrorsOf).toEqual(['b']);
     });
 
     it('classifies again once when a download changed an episode row meanwhile', async () => {

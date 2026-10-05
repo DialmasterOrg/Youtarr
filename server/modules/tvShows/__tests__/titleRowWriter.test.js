@@ -230,7 +230,14 @@ describe('titleRowWriter.applyPlan', () => {
 
   it('clears the channel\'s classification errors once its titles classified', async () => {
     await apply(plan([]));
-    expect(conflicts.clearErrorsForChannel).toHaveBeenCalledWith(CHANNEL_ID, { transaction: 't' });
+    expect(conflicts.clearErrorsForChannel).toHaveBeenCalledWith(CHANNEL_ID, { transaction: 't', youtubeIds: null });
+  });
+
+  // A listing refresh classifies only its new videos: an error recorded at
+  // download for another video stays until that title is checked again.
+  it('clears only the errors of the videos it is told were classified', async () => {
+    await writer.applyPlan({ channel, drafts: [], plan: plan([]), highWaterBefore: new Map(), transaction: 't', clearErrorsOf: ['abcdefghijk'] });
+    expect(conflicts.clearErrorsForChannel).toHaveBeenCalledWith(CHANNEL_ID, { transaction: 't', youtubeIds: ['abcdefghijk'] });
   });
 
   it('raises the high-water marks of seasons that allocated order numbers', async () => {

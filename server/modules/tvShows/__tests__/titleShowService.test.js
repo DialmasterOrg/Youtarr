@@ -110,6 +110,11 @@ describe('titleShowService', () => {
       expect(saver.save.mock.calls[0][0].rawShows).toEqual([draftOf(3), draftOf(4), { name: 'New' }]);
     });
 
+    it('adds a new show even when the request names an id', async () => {
+      await service.createShow(channel, { name: 'New', id: 4 });
+      expect(saver.save.mock.calls[0][0].rawShows).toEqual([draftOf(3), draftOf(4), { name: 'New' }]);
+    });
+
     it('replaces a show\'s definition, keeping its id', async () => {
       await service.updateShow(channel, 4, { name: 'Renamed', id: 99 });
       expect(saver.save.mock.calls[0][0].rawShows).toEqual([draftOf(3), { name: 'Renamed', id: 4 }]);

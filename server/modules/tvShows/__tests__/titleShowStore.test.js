@@ -150,9 +150,35 @@ describe('titleShowStore', () => {
         .rejects.toMatchObject({ details: { retiredShowId: 2 } });
     });
 
+    // The location index is unique, so a hand-off within one change would fail
+    // partway through the save or its undo, depending on the order of the writes.
+    it('refuses a folder another show of the channel gives up in the same change', async () => {
+      models.TvShow.findAll.mockResolvedValue([{ id: 3, name: 'Beyblade', folder_name: 'Beyblade', library_folder: 'TV Shows', channel_id: CHANNEL_ID, kind: 'title', retired_at: null }]);
+      const drafts = [draft('title:3', { folderName: 'Beyblade (2001)' }), draft('new:1')];
+      await expect(store.assertFolderNamesFree({ channelTitle: 'x', channelId: CHANNEL_ID, drafts })).rejects.toMatchObject({ status: 409 });
+    });
+
     it('lets a show keep its own folder', async () => {
       models.TvShow.findAll.mockResolvedValue([{ id: 3, name: 'Beyblade', folder_name: 'Beyblade', library_folder: 'TV Shows', channel_id: CHANNEL_ID, kind: 'title', retired_at: null }]);
       await expect(store.assertFolderNamesFree({ channelTitle: 'x', channelId: CHANNEL_ID, drafts: [draft('title:3')] })).resolves.toBeUndefined();
+    });
+  });
+
+  describe('assertOwnShows', () => {
+    it('refuses a draft naming a show of another channel', async () => {
+      models.TvShow.findAll.mockResolvedValue([{ id: 3 }]);
+      await expect(store.assertOwnShows({ channelId: CHANNEL_ID, drafts: [draft('title:3'), draft('title:9')] }))
+        .rejects.toMatchObject({ status: 404 });
+    });
+
+    it('accepts the channel\'s own shows and new ones', async () => {
+      models.TvShow.findAll.mockResolvedValue([{ id: 3 }]);
+      await expect(store.assertOwnShows({ channelId: CHANNEL_ID, drafts: [draft('title:3'), draft('new:0')] })).resolves.toBeUndefined();
+    });
+
+    it('reads nothing when every draft is new', async () => {
+      await store.assertOwnShows({ channelId: CHANNEL_ID, drafts: [draft('new:0')] });
+      expect(models.TvShow.findAll).not.toHaveBeenCalled();
     });
   });
 

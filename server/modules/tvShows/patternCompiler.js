@@ -116,13 +116,15 @@ function compileSimple(text) {
 
 // Walk a regex outside escapes and character classes, calling visit(i) at
 // each '(' that opens a group; visit returns how many characters it consumed
-// (0 to copy the '(' as is).
-function scanGroups(source, visit) {
+// (0 to copy the '(' as is). onEscape, when given, sees each escape outside
+// a character class (the backslash and up to three characters after it).
+function scanGroups(source, visit, onEscape = null) {
   let out = '';
   let inClass = false;
   for (let i = 0; i < source.length;) {
     const char = source[i];
     if (char === '\\') {
+      if (!inClass && onEscape) onEscape(source.slice(i, i + 4));
       out += source.slice(i, i + 2);
       i += 2;
       continue;
@@ -182,6 +184,9 @@ function compileRegex(text) {
     if (tail.startsWith('(?P=')) {
       throw new PatternError('Named backreferences such as (?P=episode) are not supported: the download filter drops group names.');
     }
+    if (tail.startsWith('(?(')) {
+      throw new PatternError('Conditional groups such as (?(1)...) are not supported: the download filter renumbers groups.');
+    }
     if (FLAG_GROUP.test(tail)) throw new PatternError('Global flags such as (?i) must be at the start of the pattern.');
     const named = /^\(\?P<([A-Za-z_][A-Za-z0-9_]*)>/.exec(tail);
     if (named) {
@@ -193,6 +198,11 @@ function compileRegex(text) {
       groups.push(name);
     }
     return null;
+  }, (escape) => {
+    // \1 to \99; a backslash and three octal digits is a character, as \0 is.
+    if (/^\\[1-9]/.test(escape) && !/^\\[0-7]{3}/.test(escape)) {
+      throw new PatternError('Numbered backreferences such as \\1 are not supported: the download filter renumbers groups.');
+    }
   });
 
   return {

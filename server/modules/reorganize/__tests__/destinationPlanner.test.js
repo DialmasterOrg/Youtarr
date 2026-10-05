@@ -185,6 +185,16 @@ describe('reorganize destinationPlanner', () => {
       expect(items[0].classification).toMatchObject({ season: 2024, episode: 3151200, source: 'date' });
     });
 
+    it('flags a title episode numbered by its download time for the review', async () => {
+      const videoPath = touch(`__Kids/Chan/Chan - Big Build [${ID}].mp4`);
+      videoInfoStore.readInfoOrFallback.mockResolvedValue({ id: ID, title: 'Big Build' });
+      const subject = subjectFor(videoPath, { video: { last_downloaded_at: '2024-03-15T12:00:00.000Z' } });
+      const { items } = await planTitle(subject, {
+        showKey: 'title:3', after: { ...assigned, status: 'pending_number', season: null, episode: null }, pattern: { seasonSource: 'year', episodeSource: 'date' }, stored: null,
+      });
+      expect(items[0].flags).toContain('download-time');
+    });
+
     it('keeps clear of numbers the title plan gives other videos', async () => {
       const videoPath = touch(`__Kids/Chan/Chan - Big Build [${ID}].mp4`);
       const context = {
@@ -362,6 +372,36 @@ describe('reorganize destinationPlanner', () => {
     const { items, problems } = await planTo(subjectFor(videoPath), { libraryFolder: 'TV', layout: 'tv' });
 
     expect(items).toHaveLength(1);
+    expect(problems).toEqual([expect.objectContaining({ problem: 'collision' })]);
+  });
+
+  // A case-only rename on a case-insensitive filesystem: the destination
+  // spelling opens the source itself (a hard link stands in for it here).
+  it('does not report a destination that is the source file under another spelling', async () => {
+    const videoPath = touch(`__Kids/Chan/Chan - Big Build [${ID}].mp4`);
+    const destination = path.join(root, `__TV/Chan/Season 2024/S2024E03151200 - Big Build [${ID}].mp4`);
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    fs.linkSync(videoPath, destination);
+
+    const { items, problems } = await planTo(subjectFor(videoPath), { libraryFolder: 'TV', layout: 'tv' });
+
+    expect([items.length, problems]).toEqual([1, []]);
+  });
+
+  it('checks a destination against the source as first read, not a second look', async () => {
+    const videoPath = touch(`__Kids/Chan/Chan - Big Build [${ID}].mp4`);
+    touch(`__TV/Chan/Season 2024/S2024E03151200 - Big Build [${ID}].mp4`, 'other');
+    const realStat = fs.promises.stat;
+    let sourceStats = 0;
+    // The source vanishes right after planning read it.
+    const stat = jest.spyOn(fs.promises, 'stat').mockImplementation(async (target, ...rest) => {
+      if (target === videoPath && ++sourceStats > 1) throw Object.assign(new Error('gone'), { code: 'ENOENT' });
+      return realStat(target, ...rest);
+    });
+
+    const planned = planTo(subjectFor(videoPath), { libraryFolder: 'TV', layout: 'tv' });
+    const { problems } = await planned.finally(() => stat.mockRestore());
+
     expect(problems).toEqual([expect.objectContaining({ problem: 'collision' })]);
   });
 

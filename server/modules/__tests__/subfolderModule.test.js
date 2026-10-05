@@ -220,6 +220,14 @@ describe('delete', () => {
     await expect(subfolderModule.delete('TV')).resolves.toBeUndefined();
   });
 
+  // A title show lives in a TV folder whatever folder its channel uses.
+  test('counts a title show of a channel that downloads to a videos folder', async () => {
+    VideoClassification.findAll.mockResolvedValue([{ show_id: 4 }]);
+    TvShow.findAll.mockResolvedValue([{ library_folder: 'TV', channel_id: 'UC1', kind: 'title' }]);
+    Channel.findAll.mockResolvedValue([{ channel_id: 'UC1', sub_folder: 'Kids' }]);
+    await expect(subfolderModule.delete('TV')).rejects.toThrow('holds 1 TV show(s)');
+  });
+
   test('counts the show of an untracked channel, which has no folder of its own', async () => {
     VideoClassification.findAll.mockResolvedValue([{ show_id: 4 }]);
     TvShow.findAll.mockResolvedValue([{ library_folder: 'TV', channel_id: 'UCuntracked' }]);

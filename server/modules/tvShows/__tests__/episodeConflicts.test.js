@@ -187,6 +187,20 @@ describe('episodeConflicts', () => {
       await conflicts.clearErrorsForChannel(CHANNEL_ID, { transaction: 't' });
       expect(models.EpisodeConflict.destroy).toHaveBeenCalledWith({ where: { channel_id: CHANNEL_ID, kind: 'classification_error' }, transaction: 't' });
     });
+
+    it('removes only the errors of the videos given', async () => {
+      models.EpisodeConflict.destroy = jest.fn();
+      await conflicts.clearErrorsForChannel(CHANNEL_ID, { transaction: 't', youtubeIds: ['a'] });
+      expect(models.EpisodeConflict.destroy).toHaveBeenCalledWith({
+        where: { channel_id: CHANNEL_ID, kind: 'classification_error', youtube_id: ['a'] }, transaction: 't',
+      });
+    });
+
+    it('removes nothing when no video is given', async () => {
+      models.EpisodeConflict.destroy = jest.fn();
+      await conflicts.clearErrorsForChannel(CHANNEL_ID, { youtubeIds: [] });
+      expect(models.EpisodeConflict.destroy).not.toHaveBeenCalled();
+    });
   });
 
   describe('duplicateIdsForChannel', () => {

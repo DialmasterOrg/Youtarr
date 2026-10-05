@@ -93,6 +93,7 @@ async function prepare({ channel, rawShows, rawOverrides = [] }) {
   });
   const overrides = normalizeOverrides(rawOverrides, drafts);
   await assertDraftsCompile(drafts);
+  await titleShowStore.assertOwnShows({ channelId: channel.channel_id, drafts });
   await titleShowStore.assertFolderNamesFree({
     channelId: channel.channel_id,
     channelTitle: channel.title || channel.uploader || channel.channel_id,
@@ -114,12 +115,21 @@ async function highWaterOf(plan) {
  * Write a prepared plan (definitions, rows, conflicts) in one transaction,
  * then apply the archive changes it queued. The reorganize calls this when
  * it starts a title show change.
- * @param {{channel: Object, drafts: Array<Object>, plan: Object}} prepared
+ * @param {Object} prepared
+ * @param {Object} prepared.channel
+ * @param {Array<Object>} prepared.drafts
+ * @param {Object} prepared.plan
+ * @param {(saved: Object, transaction: Object) => Promise<void>} [prepared.onWritten] - Runs inside
+ *   the write's transaction with what was saved (the reorganize records its operation as applied)
  * @returns {Promise<{showIds: Map<string, number>, patternIds: Map<string, number>}>}
  */
-async function applyPrepared({ channel, drafts, plan }) {
+async function applyPrepared({ channel, drafts, plan, onWritten = null }) {
   const highWaterBefore = await highWaterOf(plan);
-  const saved = await sequelize.transaction((transaction) => applyPlan({ channel, drafts, plan, highWaterBefore, transaction }));
+  const saved = await sequelize.transaction(async (transaction) => {
+    const result = await applyPlan({ channel, drafts, plan, highWaterBefore, transaction });
+    if (onWritten) await onWritten(result, transaction);
+    return result;
+  });
   await archiveSuppressor.flush();
   return saved;
 }
@@ -173,9 +183,21 @@ async function classifyNew({ channel, youtubeIds }) {
     showIds: new Map(shows.map((show) => [show.key, show.id])),
     patternIds: new Map(shows.flatMap((show) => show.patterns.map((pattern) => [pattern.key, pattern.id]))),
   };
+  const planFor = (ids) => planChannel({ channel, drafts: shows, onlyIds: ids, downloadsDir: configModule.directoryPath });
+  const newMovers = (planned, moving) => planned.entries
+    .filter((entry) => entry.moves && !moving.has(entry.youtubeId)).map((entry) => entry.youtubeId);
   for (let attempt = 0; ; attempt += 1) {
-    const planned = await planChannel({ channel, drafts: shows, onlyIds: new Set(youtubeIds), downloadsDir: configModule.directoryPath });
-    const moving = new Set(planned.entries.filter((entry) => entry.moves).map((entry) => entry.youtubeId));
+    // Videos that would have to move are left out and the channel planned
+    // again without them, until no other one would (a duplicate of one can
+    // win next): otherwise their order numbers would be spent (high-water
+    // marks only go up) and the videos losing to them recorded as duplicates
+    // of a video that holds nothing. Each pass leaves out at least one video.
+    const moving = new Set();
+    let planned = await planFor(new Set(youtubeIds));
+    for (let found = newMovers(planned, moving); found.length > 0; found = newMovers(planned, moving)) {
+      for (const youtubeId of found) moving.add(youtubeId);
+      planned = await planFor(new Set(youtubeIds.filter((youtubeId) => !moving.has(youtubeId))));
+    }
     const plan = {
       ...planned,
       entries: planned.entries.filter((entry) => !moving.has(entry.youtubeId)),
@@ -184,7 +206,13 @@ async function classifyNew({ channel, youtubeIds }) {
     const highWaterBefore = await highWaterOf(plan);
     try {
       await sequelize.transaction((transaction) => applyPlan({
-        channel, drafts: shows, plan, highWaterBefore, transaction, definitions,
+        channel,
+        drafts: shows,
+        plan,
+        highWaterBefore,
+        transaction,
+        definitions,
+        clearErrorsOf: youtubeIds.filter((youtubeId) => !moving.has(youtubeId)),
       }));
     } catch (err) {
       if (attempt === 0 && (isUniqueConstraintError(err) || isRowChangedError(err))) continue;

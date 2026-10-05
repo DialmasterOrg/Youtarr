@@ -62,25 +62,29 @@ class DirectoryIndex {
 
 async function statFile(filePath) {
   try {
-    const stat = await fs.promises.stat(filePath);
-    return { size: stat.size, mtimeMs: Math.trunc(stat.mtimeMs) };
+    return await fs.promises.stat(filePath);
   } catch (err) {
     if (err.code === 'ENOENT' || err.code === 'ENOTDIR') return null;
     throw err;
   }
 }
 
-async function existsOtherThan(target, source) {
+// sourceStat: the source as planning read it (a second look could find it
+// gone and fail the whole plan).
+async function existsOtherThan(target, source, sourceStat) {
   if (target === source) return false;
+  let targetStat;
   try {
-    await fs.promises.stat(target);
-    return true;
+    targetStat = await fs.promises.stat(target);
   } catch (err) {
     if (err.code === 'ENOENT') return false;
     // A file where a folder of the path belongs blocks the move as surely as a file at the path.
     if (err.code === 'ENOTDIR') return true;
     throw err;
   }
+  // The source itself under another spelling (a case-only rename on a
+  // case-insensitive filesystem), which moveFileNoClobber renames in place.
+  return sourceStat.ino !== targetStat.ino || sourceStat.dev !== targetStat.dev;
 }
 
 /**
@@ -94,6 +98,7 @@ async function existsOtherThan(target, source) {
 async function planFiles(video, destDir, stem, index = new DirectoryIndex()) {
   const sourceDirs = [...new Set([video.filePath, video.audioFilePath].filter(Boolean).map((p) => path.dirname(p)))];
   const files = [];
+  const sourceStats = new Map();
   const nfoSources = [];
   for (const dir of sourceDirs) {
     let names;
@@ -113,7 +118,10 @@ async function planFiles(video, destDir, stem, index = new DirectoryIndex()) {
       if (files.some((file) => file.from === from)) continue;
       const stat = await statFile(from);
       if (!stat) continue;
-      files.push({ from, to: path.join(destDir, episodeFileName(name, video.youtubeId, stem)), ...stat });
+      sourceStats.set(from, stat);
+      files.push({
+        from, to: path.join(destDir, episodeFileName(name, video.youtubeId, stem)), size: stat.size, mtimeMs: Math.trunc(stat.mtimeMs),
+      });
     }
   }
   const mediaPath = video.filePath || video.audioFilePath;
@@ -122,7 +130,7 @@ async function planFiles(video, destDir, stem, index = new DirectoryIndex()) {
   const destinationOf = (source) => (source ? (files.find((file) => file.from === source) || {}).to || null : null);
   const collisions = [];
   for (const file of files) {
-    if (await existsOtherThan(file.to, file.from)) collisions.push(file.to);
+    if (await existsOtherThan(file.to, file.from, sourceStats.get(file.from))) collisions.push(file.to);
   }
   return {
     files,

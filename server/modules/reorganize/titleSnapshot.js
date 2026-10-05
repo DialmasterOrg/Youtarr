@@ -5,7 +5,7 @@
  */
 
 const { sequelize } = require('../../db');
-const { VideoClassification, EpisodeConflict, Video } = require('../../models');
+const { VideoClassification, EpisodeConflict, Video, TvShowPattern } = require('../../models');
 const titleShowStore = require('../tvShows/titleShowStore');
 const episodeConflicts = require('../tvShows/episodeConflicts');
 const archiveSuppressor = require('../tvShows/archiveSuppressor');
@@ -113,6 +113,18 @@ async function restoreConflicts(channelId, snapshot, transaction) {
   }
 }
 
+// The patterns of shows that stay removed (saveDefinitions leaves them as
+// they are), by pattern key, so the rows of those shows keep pointing at them.
+async function removedShowPatternIds(snapshot, drafts, transaction) {
+  const saved = new Set(drafts.map((show) => show.id));
+  const showIds = snapshot.shows.filter((show) => !saved.has(show.id)).map((show) => show.id);
+  if (showIds.length === 0) return new Map();
+  const patterns = await TvShowPattern.findAll({
+    where: { show_id: showIds }, attributes: ['id', 'show_id', 'position'], raw: true, transaction,
+  });
+  return new Map(patterns.map((pattern) => [`title:${pattern.show_id}#${pattern.position}`, pattern.id]));
+}
+
 // Shows the change added are deleted, not retired: a retired show would hold
 // its folder name, and a retry of the same change would be refused for it.
 async function deleteAddedShows(channelId, snapshot, transaction) {
@@ -135,7 +147,8 @@ async function restoreTitleSnapshot(channel, snapshot) {
   await sequelize.transaction(async (transaction) => {
     const drafts = snapshot.shows.filter((show) => !show.retired);
     const { patternIds } = await titleShowStore.saveDefinitions({ channelId, drafts, transaction });
-    await restoreRows(channelId, snapshot, patternIds, transaction);
+    const removedPatternIds = await removedShowPatternIds(snapshot, drafts, transaction);
+    await restoreRows(channelId, snapshot, new Map([...removedPatternIds, ...patternIds]), transaction);
     await restoreConflicts(channelId, snapshot, transaction);
     await deleteAddedShows(channelId, snapshot, transaction);
   });

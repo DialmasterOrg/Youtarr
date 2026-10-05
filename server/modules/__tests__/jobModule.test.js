@@ -1272,6 +1272,39 @@ describe('JobModule', () => {
       );
     });
 
+    // Title shows write complete.list between jobs, and a channel job counts
+    // archive lines from its start: pending writes land first.
+    test('finishes the before-next-job work before a new job starts In Progress', async () => {
+      JobModule.jobs = {};
+      const order = [];
+      JobModule.onBeforeNextJob(async () => { order.push('listener'); });
+      JobModule.addJob.mockImplementation(async (job) => { order.push(job.status); return 'new-job-id'; });
+
+      await JobModule.addOrUpdateJob({ jobType: 'download' });
+
+      expect(order).toEqual(['listener', 'In Progress']);
+    });
+
+    test('finishes the before-next-job work before a queued job flips to In Progress', async () => {
+      JobModule.jobs = {};
+      const order = [];
+      JobModule.onBeforeNextJob(async () => { order.push('listener'); });
+      JobModule.updateJob.mockImplementation(async (id, values) => { order.push(values.status); });
+
+      await JobModule.addOrUpdateJob({ id: 'next-job', jobType: 'download' }, true);
+
+      expect(order).toEqual(['listener', 'In Progress']);
+    });
+
+    test('queues a new job when another started while the before-next-job work ran', async () => {
+      JobModule.jobs = {};
+      JobModule.onBeforeNextJob(async () => { JobModule.jobs = { other: { status: 'In Progress' } }; });
+
+      await JobModule.addOrUpdateJob({ jobType: 'download' });
+
+      expect(JobModule.addJob).toHaveBeenCalledWith(expect.objectContaining({ status: 'Pending' }));
+    });
+
     test('should not emit jobsUpdated when next job cannot start', async () => {
       JobModule.jobs = {
         'existing-job': { status: 'In Progress' }

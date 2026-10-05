@@ -127,7 +127,10 @@ class TitleShowService {
 
   async createShow(channel, rawDraft) {
     const drafts = await this.currentDrafts(channel.channel_id);
-    return this.saveAndDescribe(channel, [...drafts, rawDraft]);
+    // Always a new show: an id would make it a second copy of an existing one.
+    const draft = { ...rawDraft };
+    delete draft.id;
+    return this.saveAndDescribe(channel, [...drafts, draft]);
   }
 
   async updateShow(channel, showId, rawDraft) {

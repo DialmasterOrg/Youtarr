@@ -116,9 +116,11 @@ function unchangedSincePlan(youtubeId, before, numberFreed) {
  * @param {Object} params.transaction
  * @param {{showIds: Map<string, number>, patternIds: Map<string, number>}} [params.definitions] - The stored
  *   shows' ids when the definitions are unchanged (a listing refresh); otherwise the drafts are saved
+ * @param {string[]|null} [params.clearErrorsOf] - The videos whose classification errors the plan settles
+ *   (a listing refresh classifies only its new videos); null for every one of the channel's
  * @returns {Promise<{showIds: Map<string, number>, patternIds: Map<string, number>}>}
  */
-async function applyPlan({ channel, drafts, plan, highWaterBefore, transaction, definitions = null }) {
+async function applyPlan({ channel, drafts, plan, highWaterBefore, transaction, definitions = null, clearErrorsOf = null }) {
   const channelId = channel.channel_id;
   const { showIds, patternIds } = definitions || await titleShowStore.saveDefinitions({ channelId, drafts, transaction });
   const showIdOf = (key, fallback = null) => (key.startsWith('channel:') ? fallback : showIds.get(key) || null);
@@ -210,7 +212,7 @@ async function applyPlan({ channel, drafts, plan, highWaterBefore, transaction, 
     }
   }
 
-  await episodeConflicts.clearErrorsForChannel(channelId, { transaction });
+  await episodeConflicts.clearErrorsForChannel(channelId, { transaction, youtubeIds: clearErrorsOf });
 
   for (const [key, value] of plan.highWater) {
     if (value <= (highWaterBefore.get(key) || 0)) continue;

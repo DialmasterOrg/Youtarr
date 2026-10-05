@@ -58,12 +58,12 @@ describe('reorganize operationStore', () => {
   it('stores the pinned shows when the settings are applied', async () => {
     const operation = { settings_change: JSON.stringify({ change: {}, label: 'Chan', shows: [] }), update: jest.fn() };
 
-    await store.markSettingsApplied(operation, [{ ownerChannelId: 'UC1', showId: 9 }]);
+    await store.markSettingsApplied(operation, [{ ownerChannelId: 'UC1', showId: 9 }], { transaction: 'tx' });
 
     expect(operation.update).toHaveBeenCalledWith({
       settings_change: JSON.stringify({ change: {}, label: 'Chan', shows: [{ ownerChannelId: 'UC1', showId: 9 }] }),
       settings_applied: true,
-    });
+    }, { transaction: 'tx' });
   });
 
   it('recounts item statuses into the operation, with the items whose files moved', async () => {

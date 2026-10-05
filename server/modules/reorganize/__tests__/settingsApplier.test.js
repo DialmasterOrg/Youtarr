@@ -52,6 +52,13 @@ describe('reorganize settingsApplier', () => {
     previousVideosFolder: 'Kids',
   };
 
+  it('records the change as applied once it is applied', async () => {
+    Channel.findOne.mockResolvedValue({ update: jest.fn() });
+    const markApplied = jest.fn();
+    await applier.applySettings({ change: channelChange, shows: [plannedShow], layoutBefore: layoutOf, markApplied });
+    expect(markApplied).toHaveBeenCalledWith([expect.objectContaining({ ownerChannelId: 'UC1', showId: 11 })]);
+  });
+
   it('creates a planned show and moves the channel to its new folder', async () => {
     const channel = { update: jest.fn() };
     Channel.findOne.mockResolvedValue(channel);
@@ -164,7 +171,20 @@ describe('reorganize settingsApplier', () => {
     it('saves the shows and every episode row of the channel', async () => {
       await applier.applySettings({ change, shows: planned, layoutBefore: layoutOf });
       expect(titleShowSaver.prepare).toHaveBeenCalledWith({ channel: { channel_id: 'UC1' }, rawShows: change.shows, rawOverrides: [] });
-      expect(titleShowSaver.applyPrepared).toHaveBeenCalledWith({ channel: { channel_id: 'UC1' }, drafts: ['drafts'], plan: { entries: [] } });
+      expect(titleShowSaver.applyPrepared).toHaveBeenCalledWith(expect.objectContaining({ channel: { channel_id: 'UC1' }, drafts: ['drafts'], plan: { entries: [] } }));
+    });
+
+    // A restart between the write and the record would replay the change,
+    // whose new shows would then hold their own folders.
+    it('records the change as applied inside the transaction that writes it', async () => {
+      titleShowSaver.applyPrepared.mockImplementation(async ({ onWritten }) => {
+        const saved = { showIds: new Map([['new:0', 9], ['title:3', 3]]), patternIds: new Map() };
+        await onWritten(saved, 'tx');
+        return saved;
+      });
+      const markApplied = jest.fn();
+      await applier.applySettings({ change, shows: planned, layoutBefore: layoutOf, markApplied });
+      expect(markApplied.mock.calls).toEqual([[[expect.objectContaining({ key: 'new:0', showId: 9 }), expect.objectContaining({ key: 'title:3', showId: 3 })], 'tx']]);
     });
 
     it('gives new title shows their saved ids', async () => {

@@ -15,7 +15,6 @@ const ChannelVideo = require('../../models/channelvideo');
 const titleShowStore = require('./titleShowStore');
 const { matchVideos } = require('./titleMatcher');
 const { planNumbers, ROW_STATUS } = require('./titleNumbering');
-const { folderNameKey } = require('./showFolderNames');
 const { KIND_TITLE_SHOW } = require('./constants');
 
 const MEMBERS_ONLY = 'subscriber_only';
@@ -41,8 +40,11 @@ function uploadYearOf(originalDate) {
   return /^\d{8}$/.test(String(originalDate || '')) ? Number(String(originalDate).slice(0, 4)) : null;
 }
 
+// A show's folder as spelled: the database tells folder names apart ignoring
+// case and accents (folderNameKey), but most filesystems don't, so a rename
+// that changes only those still moves the files.
 function locationKey(show) {
-  return folderNameKey(show.libraryFolder, show.folderName);
+  return `${show.libraryFolder || ''}/${show.folderName}`;
 }
 
 // The reorganize moves only files under the downloads folder.

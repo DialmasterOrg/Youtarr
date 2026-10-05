@@ -67,6 +67,28 @@ describe('filesystem/fileOperations moveFileNoClobber', () => {
     expect(fs.readFileSync(dest, 'utf8')).toBe('video');
   });
 
+  // A case-insensitive filesystem that reports another inode for each
+  // spelling (SMB without server inode numbers) shows the same file at both
+  // paths; two real files stand in for it. Taking it for a finished copy
+  // would delete the only copy.
+  it.each([
+    ['case', 'cafe'],
+    ['accents', 'Café'],
+  ])('refuses, keeping the source, when the destination differs only in %s and looks like a finished copy', async (_label, destFolder) => {
+    const source = path.join(root, 'Cafe', 'Title [abcdefghijk].mp4');
+    const target = path.join(root, destFolder, 'Title [abcdefghijk].mp4');
+    fs.mkdirSync(path.dirname(source), { recursive: true });
+    fs.writeFileSync(source, 'video');
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.copyFileSync(source, target);
+    const { atime, mtime } = fs.statSync(source);
+    fs.utimesSync(target, atime, mtime);
+
+    await expect(moveFileNoClobber(source, target)).rejects.toMatchObject({ code: 'EEXIST' });
+
+    expect(fs.readFileSync(source, 'utf8')).toBe('video');
+  });
+
   it('removes a staging copy left by an interrupted move before moving', async () => {
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.writeFileSync(`${dest}${NO_CLOBBER_STAGING_SUFFIX}`, 'partial');

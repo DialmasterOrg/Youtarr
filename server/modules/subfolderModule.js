@@ -9,7 +9,7 @@ const configModule = require('./configModule');
 const { buildSubfolderSegment, directoryHasFiles, removeIfEmpty, resolveEffectiveSubfolder } = require('./filesystem');
 const { GLOBAL_DEFAULT_SENTINEL, ROOT_SENTINEL } = require('./filesystem/constants');
 const { getLayoutResolver } = require('./tvShows/libraryLayouts');
-const { LAYOUT_TV } = require('./tvShows/constants');
+const { LAYOUT_TV, KIND_TITLE_SHOW } = require('./tvShows/constants');
 
 const SENTINELS = new Set([GLOBAL_DEFAULT_SENTINEL, ROOT_SENTINEL]);
 
@@ -74,9 +74,10 @@ async function tvChannelLookup(channelIds) {
 /**
  * TV shows with numbered episodes, per library folder (lowercased). Their
  * numbers are kept even when files are deleted, so a re-download returns to
- * the same episode; a show without any only pins a location. A show whose
- * tracked channel has since moved to a videos folder is not counted; an
- * untracked channel's show always is, since the folder is all it has.
+ * the same episode; a show without any only pins a location. A channel show
+ * whose tracked channel has since moved to a videos folder is not counted; an
+ * untracked channel's show always is, since the folder is all it has, and so
+ * is a title show, which lives in its TV folder whatever folder its channel uses.
  * @returns {Promise<Map<string, number>>}
  */
 async function tallyNumberedShows() {
@@ -90,11 +91,11 @@ async function tallyNumberedShows() {
   if (showIds.length === 0) return counts;
   const shows = await TvShow.findAll({
     where: { id: showIds, retired_at: null },
-    attributes: ['library_folder', 'channel_id'],
+    attributes: ['library_folder', 'channel_id', 'kind'],
   });
   const channels = await tvChannelLookup([...new Set(shows.map((show) => show.channel_id).filter(Boolean))]);
   for (const show of shows) {
-    if (channels.isTracked(show.channel_id) && !channels.isTv(show.channel_id)) continue;
+    if (show.kind !== KIND_TITLE_SHOW && channels.isTracked(show.channel_id) && !channels.isTv(show.channel_id)) continue;
     const key = String(show.library_folder || '').trim().toLowerCase();
     if (key) counts.set(key, (counts.get(key) || 0) + 1);
   }

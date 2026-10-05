@@ -47,6 +47,13 @@ describe('archiveSuppressor', () => {
       archiveModule.isVideoInArchive.mockImplementation(async (id) => archiveModule.addVideoToArchive.mock.calls.some(([added]) => added === id));
     });
 
+    // Callers flush after their own write committed; a failed read must not
+    // turn that into a failure (the rows stay pending for the next flush).
+    it('resolves when the pending rows cannot be read', async () => {
+      models.EpisodeConflict.findAll.mockRejectedValue(new Error('connection lost'));
+      await expect(suppressor.flush()).resolves.toBeUndefined();
+    });
+
     it('adds a pending line and records that Youtarr wrote it', async () => {
       const row = conflict('a', { archive_pending: 'add' });
       models.EpisodeConflict.findAll.mockResolvedValue([row]);

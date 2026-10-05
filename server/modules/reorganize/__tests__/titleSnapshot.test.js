@@ -3,6 +3,7 @@ jest.mock('../../../models', () => ({
   VideoClassification: { findAll: jest.fn(), update: jest.fn(), destroy: jest.fn(), findByPk: jest.fn(), create: jest.fn() },
   EpisodeConflict: { findAll: jest.fn(), update: jest.fn() },
   Video: { findAll: jest.fn() },
+  TvShowPattern: { findAll: jest.fn() },
 }));
 jest.mock('../../tvShows/titleShowStore', () => ({
   listTitleShows: jest.fn(), saveDefinitions: jest.fn(), titleShowIds: jest.fn(), deleteShows: jest.fn(),
@@ -61,6 +62,7 @@ describe('reorganize titleSnapshot', () => {
       models.VideoClassification.findAll.mockResolvedValue([{ youtube_id: 'aaaaaaaaaaa' }, { youtube_id: 'new00000000' }]);
       models.EpisodeConflict.findAll.mockResolvedValue([]);
       store.titleShowIds.mockResolvedValue([3]);
+      models.TvShowPattern.findAll.mockResolvedValue([]);
     });
 
     it('saves the shows that were active', async () => {
@@ -76,6 +78,18 @@ describe('reorganize titleSnapshot', () => {
         { season: null, episode: null }, { where: { channel_id: CHANNEL_ID }, transaction: 't' }
       );
       expect(stored.update).toHaveBeenCalledWith(expect.objectContaining({ season: 1, episode: 20, pattern_id: 31 }), { transaction: 't' });
+    });
+
+    it('keeps the pattern of a row whose show stays removed', async () => {
+      const stored = { update: jest.fn() };
+      models.VideoClassification.findByPk.mockResolvedValue(stored);
+      models.TvShowPattern.findAll.mockResolvedValue([{ id: 50, show_id: 5, position: 0 }]);
+      await titleSnapshot.restoreTitleSnapshot(channel, {
+        shows: [show(3), show(5, { retired: true })],
+        rows: [row('bbbbbbbbbbb', { show_id: 5, source: 'order', pattern_id: 50 })],
+        conflicts: [],
+      });
+      expect(stored.update).toHaveBeenCalledWith(expect.objectContaining({ show_id: 5, pattern_id: 50 }), { transaction: 't' });
     });
 
     it('deletes rows the change created', async () => {

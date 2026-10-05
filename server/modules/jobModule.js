@@ -581,8 +581,8 @@ class JobModule {
 
   /**
    * Run work that must happen between download jobs (title shows write
-   * complete.list only while no job runs). Awaited before the next queued
-   * job starts; a failing listener never holds the queue.
+   * complete.list only while no job runs). Awaited before any job starts,
+   * queued or new; a failing listener never holds the queue.
    * @param {Function} listener - async, called with no arguments
    * @returns {Function} unsubscribe
    */
@@ -622,6 +622,10 @@ class JobModule {
   }
 
   async addOrUpdateJob(jobData, isNextJob = false) {
+    // Work that must happen between jobs (title shows' complete.list writes:
+    // a channel job counts archive lines from its start) finishes before a
+    // job starts here too, and the queue state is read after it.
+    if (!this.getInProgressJobId()) await this.runBeforeNextJob();
     let jobId;
     const inProgressJobId = this.getInProgressJobId();
     // A reorganize moves files the download would write next to, so download

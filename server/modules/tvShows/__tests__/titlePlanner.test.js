@@ -117,6 +117,21 @@ describe('titlePlanner', () => {
       expect([plan.entries[0].moves, plan.relocated]).toEqual([true, ['title:3']]);
     });
 
+    // The database compares folder names ignoring case and accents; most
+    // filesystems don't, so a new download would land in a second folder.
+    it.each([
+      ['case', 'beyblade'],
+      ['accents', 'Beybladé'],
+    ])('moves the downloaded episodes of a show whose folder name changes only in %s', (_label, folderName) => {
+      const plan = build({
+        drafts: [draftShow('title:3', { folderName })],
+        videos: [video('a', { downloaded: true, filePath: '/d/__TV Shows/Beyblade/Season 01/S01E20 - E20 [a].mp4' })],
+        stored: new Map([['a', storedRow()]]),
+        matches: new Map([['a', numbered('title:3', 20)]]),
+      });
+      expect([plan.entries[0].moves, plan.relocated]).toEqual([true, ['title:3']]);
+    });
+
     it('moves a downloaded episode out of a show it leaves', () => {
       const plan = build({
         drafts: [],
@@ -137,7 +152,7 @@ describe('titlePlanner', () => {
 
     it('moves a downloaded duplicate nowhere', () => {
       const plan = build({
-        videos: [video('old'), video('new', { downloaded: true, publishedAtMs: 5, filePath: '/d/__Kids/Ch/new.mp4' })],
+        videos: [video('old', { publishedAtMs: 1 }), video('new', { downloaded: true, publishedAtMs: 5, filePath: '/d/__Kids/Ch/new.mp4' })],
         matches: new Map([['old', numbered('title:3', 20)], ['new', numbered('title:3', 20)]]),
       });
       expect(plan.entries.find((entry) => entry.youtubeId === 'new')).toMatchObject({ moves: false, after: expect.objectContaining({ status: 'duplicate' }) });

@@ -203,6 +203,18 @@ async function saveDefinitions({ channelId, drafts, transaction = null }) {
 }
 
 /**
+ * Refuse drafts naming a show that isn't one of the channel's title shows
+ * (saving them would fail; the preview would let them keep that show's folder).
+ * @throws {Error} status 404
+ */
+async function assertOwnShows({ channelId, drafts }) {
+  const ids = drafts.filter((draft) => draft.id).map((draft) => draft.id);
+  if (ids.length === 0) return;
+  const own = new Set(await titleShowIds(channelId));
+  if (ids.some((id) => !own.has(id))) throw storeError('Show not found', 404);
+}
+
+/**
  * Refuse drafts whose folder another show already uses in that library
  * folder (retired shows included: their folder is kept for a restore).
  * @throws {Error} status 409 with details { suggestion, retiredShowId? }
@@ -214,10 +226,12 @@ async function assertFolderNamesFree({ channelId, channelTitle, drafts }) {
     where: { library_folder: folders },
     attributes: ['id', 'name', 'folder_name', 'library_folder', 'channel_id', 'kind', 'retired_at'],
   });
-  const ownIds = new Set(drafts.filter((draft) => draft.id).map((draft) => draft.id));
   for (const draft of drafts) {
     const key = folderNameKey(draft.libraryFolder, draft.folderName);
-    const holder = rows.find((row) => !ownIds.has(row.id) && folderNameKey(row.library_folder, row.folder_name) === key);
+    // Only the show itself may hold its folder: a folder another of the
+    // channel's shows gives up in the same change is refused too, since the
+    // unique location index could fail the save (or its undo) partway through.
+    const holder = rows.find((row) => row.id !== draft.id && folderNameKey(row.library_folder, row.folder_name) === key);
     if (!holder) continue;
     const restorable = holder.kind === KIND_TITLE_SHOW && holder.retired_at && holder.channel_id === channelId;
     const details = { suggestion: `${draft.name} (${channelTitle})` };
@@ -302,6 +316,7 @@ module.exports = {
   listActiveByChannel,
   toDraft,
   saveDefinitions,
+  assertOwnShows,
   assertFolderNamesFree,
   highWaterMarks,
   raiseHighWater,

@@ -35,6 +35,12 @@ describe('reorganize titleAssignments', () => {
     expect(assignments.get('aaaaaaaaaaa').fileStem).toBe('S01E20 - Old [aaaaaaaaaaa]');
   });
 
+  it('keeps the stored time source of an episode whose number stays', () => {
+    const stored = { showKey: 'title:3', season: 1, episode: 20, fileStem: 'S01E20 - Old [aaaaaaaaaaa]', timestampSource: 'timestamp' };
+    const { assignments } = assign([entry('aaaaaaaaaaa', {}, { stored })]);
+    expect(assignments.get('aaaaaaaaaaa').timestampSource).toBe('timestamp');
+  });
+
   it('numbers a waiting date episode from its upload time', () => {
     const pending = entry('aaaaaaaaaaa', { status: 'pending_number', season: null, episode: null, source: null }, {
       pattern: { seasonSource: 'year', episodeSource: 'date' },
@@ -97,6 +103,28 @@ describe('reorganize titleAssignments', () => {
       info: {}, downloadedAt: '2021-01-02T03:04:00.000Z', pattern: { seasonSource: 'year', episodeSource: 'date' },
     });
     expect(assign([pending]).assignments.get('aaaaaaaaaaa')).toMatchObject({ season: 2021, episode: 1020304, timestampSource: null });
+  });
+
+  // The move review counts these, as it does for channel shows.
+  it('flags a waiting episode numbered by its download time', () => {
+    const pending = entry('aaaaaaaaaaa', { status: 'pending_number', season: null, episode: null }, {
+      info: {}, downloadedAt: '2021-01-02T03:04:00.000Z', pattern: { seasonSource: 'year', episodeSource: 'order' },
+    });
+    expect(assign([pending]).flags.get('aaaaaaaaaaa')).toEqual(['download-time']);
+  });
+
+  it('flags a waiting date episode numbered by its upload day', () => {
+    const pending = entry('aaaaaaaaaaa', { status: 'pending_number', season: null, episode: null }, {
+      info: { upload_date: '20200809' }, pattern: { seasonSource: 'year', episodeSource: 'date' },
+    });
+    expect(assign([pending]).flags.get('aaaaaaaaaaa')).toEqual(['upload-date-only']);
+  });
+
+  it('does not flag a year-season episode whose upload day gives its year', () => {
+    const pending = entry('aaaaaaaaaaa', { status: 'pending_number', season: null, episode: 4 }, {
+      info: { upload_date: '20200809' }, pattern: { seasonSource: 'year', episodeSource: 'title' },
+    });
+    expect(assign([pending]).flags.has('aaaaaaaaaaa')).toBe(false);
   });
 
   it('leaves out a waiting episode with no time at all', () => {

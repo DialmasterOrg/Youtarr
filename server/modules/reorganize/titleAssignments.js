@@ -5,11 +5,12 @@
  * numbered from its stored info.json the way the post-processor would.
  */
 
-const { releaseTime, dateEpisodeFor, allocateEpisode } = require('../tvShows/dateNumbering');
+const { releaseTime, dateEpisodeFor, allocateEpisode, SOURCE_UPLOAD_DATE } = require('../tvShows/dateNumbering');
 const { buildEpisodeStem } = require('../tvShows/episodeNaming');
 const { SEASON_SOURCE, EPISODE_SOURCE } = require('../tvShows/patternCompiler');
 const { ROW_STATUS, SOURCE } = require('../tvShows/titleNumbering');
 const { KIND_TITLE_SHOW } = require('../tvShows/constants');
+const { FLAG } = require('./constants');
 
 function setOf(map, key) {
   if (!map.has(key)) map.set(key, new Set());
@@ -21,7 +22,7 @@ function timeOf(entry) {
   const release = releaseTime(entry.info || {});
   if (release) return release;
   const downloaded = entry.downloadedAt ? Math.floor(new Date(entry.downloadedAt).getTime() / 1000) : null;
-  return Number.isFinite(downloaded) ? { epochSeconds: downloaded, source: null } : null;
+  return Number.isFinite(downloaded) ? { epochSeconds: downloaded, source: null, downloadTime: true } : null;
 }
 
 /**
@@ -31,11 +32,13 @@ function timeOf(entry) {
  *   after: the title plan's row; pattern: its { seasonSource, episodeSource }; stored: the video's stored row
  * @param {Map<number, Set<number>>} params.taken - Numbers other videos hold in the show after the change, by season
  * @param {Map<number, number>} params.highWater - Order high-water marks by season
- * @returns {{assignments: Map<string, Object>, noDate: Set<string>, taken: Set<string>}}
+ * @returns {{assignments: Map<string, Object>, flags: Map<string, string[]>, noDate: Set<string>, taken: Set<string>}}
+ *   flags: the review's notes on how a waiting video was numbered (download time, upload day);
  *   taken: videos whose title number another video holds
  */
 function assignTitleEpisodes({ show, entries, taken, highWater }) {
   const assignments = new Map();
+  const flags = new Map();
   const noDate = new Set();
   const numberTaken = new Set();
   const held = new Map([...taken].map(([season, numbers]) => [season, new Set(numbers)]));
@@ -43,7 +46,8 @@ function assignTitleEpisodes({ show, entries, taken, highWater }) {
 
   const classification = (entry, { season, episode, source, timestampSource = null }) => {
     const { stored } = entry;
-    const keepsStem = stored && stored.showKey === show.key && stored.season === season && stored.episode === episode && stored.fileStem;
+    // A number that stays keeps its time source and its stem, as the row writer does.
+    const keepsNumber = Boolean(stored) && stored.showKey === show.key && stored.season === season && stored.episode === episode;
     return {
       showKey: show.key,
       kind: KIND_TITLE_SHOW,
@@ -52,9 +56,9 @@ function assignTitleEpisodes({ show, entries, taken, highWater }) {
       season,
       episode,
       source,
-      timestampSource,
+      timestampSource: keepsNumber ? stored.timestampSource ?? null : timestampSource,
       episodeTitle: entry.after.episodeTitle || entry.title || null,
-      fileStem: keepsStem ? stored.fileStem : buildEpisodeStem({
+      fileStem: keepsNumber && stored.fileStem ? stored.fileStem : buildEpisodeStem({
         season, episode, dateNumbered: source === SOURCE.DATE, episodeTitle: entry.after.episodeTitle, videoTitle: entry.title, youtubeId: entry.youtubeId,
       }),
     };
@@ -102,8 +106,11 @@ function assignTitleEpisodes({ show, entries, taken, highWater }) {
     assignments.set(entry.youtubeId, classification(entry, {
       season, episode, source, timestampSource: source === SOURCE.DATE ? time.source : null,
     }));
+    // An upload day settles a year season but not a date episode's time.
+    if (time.downloadTime) flags.set(entry.youtubeId, [FLAG.DOWNLOAD_TIME]);
+    else if (source === SOURCE.DATE && time.source === SOURCE_UPLOAD_DATE) flags.set(entry.youtubeId, [FLAG.UPLOAD_DATE_ONLY]);
   }
-  return { assignments, noDate, taken: numberTaken };
+  return { assignments, flags, noDate, taken: numberTaken };
 }
 
 module.exports = {

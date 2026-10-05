@@ -62,11 +62,12 @@ function sameNumber(a, b) {
   return a.showKey === b.showKey && a.season === b.season && a.episode === b.episode;
 }
 
-// The earliest available upload first; ids break ties so the result never
-// depends on listing order.
+// The earliest available upload first, videos without a date (0) after the
+// dated ones; ids break ties so the result never depends on listing order.
 function byUploadOrder(a, b) {
   if (a.available !== b.available) return a.available ? -1 : 1;
-  if (a.publishedAtMs !== b.publishedAtMs) return a.publishedAtMs - b.publishedAtMs;
+  const timeOf = (video) => video.publishedAtMs || Infinity;
+  if (timeOf(a) !== timeOf(b)) return timeOf(a) < timeOf(b) ? -1 : 1;
   return a.youtubeId < b.youtubeId ? -1 : a.youtubeId > b.youtubeId ? 1 : 0;
 }
 

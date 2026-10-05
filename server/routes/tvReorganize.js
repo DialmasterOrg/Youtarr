@@ -52,15 +52,19 @@ function createTvReorganizeRoutes({ verifyToken, reorganize, watchStatusHolds, w
    *         { type: channelLayout, channelId, layout (videos|tv), folder? } (the Channel Settings toggle),
    *         { type: channel, channelId, subFolder } (a channel's sub_folder value),
    *         { type: folderLayout, folder ("" = main folder), layout },
-   *         { type: defaultSubfolder, value ("" = main folder)}.
+   *         { type: defaultSubfolder, value ("" = main folder)},
+   *         { type: titleShows, channelId, shows, overrides? } (a channel's title shows after the change, as a
+   *         reorganizeRequired refusal from a title show save names them).
    *       required: [type]
    *       properties:
-   *         type: { type: string, enum: [channelLayout, channel, folderLayout, defaultSubfolder] }
+   *         type: { type: string, enum: [channelLayout, channel, folderLayout, defaultSubfolder, titleShows] }
    *         channelId: { type: string }
    *         layout: { type: string, enum: [videos, tv] }
    *         folder: { type: string }
    *         subFolder: { type: string, nullable: true }
    *         value: { type: string }
+   *         shows: { type: array, items: { type: object }, description: 'titleShows - the channel''s whole set of draft shows, in order; existing shows carry their id' }
+   *         overrides: { type: array, items: { type: object }, description: 'titleShows - episode assignments, "Not an episode" and back-to-automatic entries' }
    */
 
   /**

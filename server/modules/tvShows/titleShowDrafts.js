@@ -149,9 +149,12 @@ function normalizeDrafts(rawDrafts, context) {
   if (!Array.isArray(rawDrafts)) throw invalid('shows must be a list.');
   if (rawDrafts.length > MAX_SHOWS_PER_CHANNEL) throw invalid(`A channel can have at most ${MAX_SHOWS_PER_CHANNEL} shows.`);
   const locations = new Set();
+  const keys = new Set();
   return rawDrafts.map((raw, index) => {
     if (!raw || typeof raw !== 'object') throw invalid('Each show must be an object.');
     const key = showKeyOf(raw, index);
+    if (keys.has(key)) throw invalid('A show appears more than once.');
+    keys.add(key);
     const name = normalizeName(raw);
     const folderName = normalizeFolderName(raw, name);
     const libraryFolder = normalizeLibraryFolder(raw, context);
