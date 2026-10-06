@@ -75,6 +75,30 @@ async function channelHasDownloads(channelId) {
   return (await Video.count({ where: { youtubeId: youtubeIds, removed: false } })) > 0;
 }
 
+/**
+ * Ids of the channels with downloaded videos: channelHasDownloads for every
+ * channel at once (their own videos, plus the episodes routed to their show
+ * from another uploader's id).
+ * @returns {Promise<Set<string>>}
+ */
+async function channelIdsWithDownloads() {
+  const [owned, classified] = await Promise.all([
+    Video.findAll({ where: { removed: false }, attributes: ['channel_id'], group: ['channel_id'], raw: true }),
+    VideoClassification.findAll({ attributes: ['channel_id', 'youtube_id'], raw: true }),
+  ]);
+  const ids = new Set(owned.map((row) => row.channel_id).filter(Boolean));
+  const pending = classified.filter((row) => !ids.has(row.channel_id));
+  if (pending.length === 0) return ids;
+  const present = await Video.findAll({
+    where: { youtubeId: pending.map((row) => row.youtube_id), removed: false }, attributes: ['youtubeId'], raw: true,
+  });
+  const presentIds = new Set(present.map((row) => row.youtubeId));
+  for (const row of pending) {
+    if (presentIds.has(row.youtube_id)) ids.add(row.channel_id);
+  }
+  return ids;
+}
+
 // Downloaded files directly in the main folder; __subfolders, the local temp
 // folder and dotfiles are not the main folder's content.
 async function mainFolderHasFiles(baseDir) {
@@ -195,6 +219,7 @@ module.exports = {
   isMp3Format,
   assertNoDownloadRunning,
   channelHasDownloads,
+  channelIdsWithDownloads,
   mainFolderHasFiles,
   folderHasFiles,
   usersOfFolder,

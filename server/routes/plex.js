@@ -50,12 +50,20 @@ module.exports = function createPlexRoutes({ verifyToken, plexModule, configModu
    *               items:
    *                 type: object
    *                 properties:
-   *                   key:
+   *                   id:
    *                     type: string
    *                   title:
    *                     type: string
    *                   type:
    *                     type: string
+   *                     description: Plex section type (movie, show, artist, photo)
+   *                   locations:
+   *                     type: array
+   *                     items:
+   *                       type: object
+   *                       properties:
+   *                         id: { type: integer }
+   *                         path: { type: string }
    */
   router.get('/getplexlibraries', verifyToken, async (req, res) => {
     try {

@@ -7,13 +7,22 @@ const mockRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'library-folders-'));
 jest.mock('../../../models/channel', () => ({ findAll: jest.fn() }));
 jest.mock('../../../models/playlist', () => ({ findAll: jest.fn() }));
 jest.mock('../../../models/video', () => ({ count: jest.fn() }));
+jest.mock('../../../models/subfolder', () => ({ findOne: jest.fn() }));
 jest.mock('../../../models/videoclassification', () => ({ findAll: jest.fn().mockResolvedValue([]) }));
 jest.mock('../../../models/tvshow', () => ({ findAll: jest.fn().mockResolvedValue([]) }));
 jest.mock('../../../logger', () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }));
-jest.mock('../../configModule', () => ({ getDefaultSubfolder: jest.fn(), directoryPath: mockRoot }));
+jest.mock('../../configModule', () => ({
+  getDefaultSubfolder: jest.fn(),
+  getConfig: jest.fn(() => ({ defaultSubfolder: 'Kids' })),
+  updateConfig: jest.fn(),
+  directoryPath: mockRoot,
+}));
 jest.mock('../../subfolderModule', () => ({ getUsage: jest.fn(), getAll: jest.fn(), register: jest.fn() }));
 jest.mock('../libraryLayouts', () => ({ getLayoutResolver: jest.fn(), setLayout: jest.fn() }));
 jest.mock('../showStore', () => ({ findChannelShow: jest.fn() }));
+jest.mock('../folderUsage', () => ({
+  describeUsage: jest.fn(async (folders) => folders.map((f) => ({ ...f, fileCount: 0 }))),
+}));
 
 const usage = (name, overrides = {}) => ({
   name,
@@ -26,6 +35,7 @@ describe('libraryFolders', () => {
   let Channel;
   let Playlist;
   let Video;
+  let Subfolder;
   let configModule;
   let subfolderModule;
   let libraryLayouts;
@@ -45,6 +55,7 @@ describe('libraryFolders', () => {
     Channel = require('../../../models/channel');
     Playlist = require('../../../models/playlist');
     Video = require('../../../models/video');
+    Subfolder = require('../../../models/subfolder');
     configModule = require('../../configModule');
     subfolderModule = require('../../subfolderModule');
     libraryLayouts = require('../libraryLayouts');
@@ -71,6 +82,16 @@ describe('libraryFolders', () => {
         { name: 'Kids', layout: 'videos', isDefault: true, hasFiles: true, channels: 2 },
         { name: 'TV', layout: 'tv', isDefault: false, hasFiles: false, channels: 1 },
       ]);
+    });
+
+    it('adds usage when asked to, and leaves plain calls unchanged', async () => {
+      const folderUsage = require('../folderUsage');
+      await libraryFolders.listLibraryFolders({ include: ['files'] });
+      expect(folderUsage.describeUsage).toHaveBeenCalledWith(expect.any(Array), { usage: false, files: true });
+
+      folderUsage.describeUsage.mockClear();
+      await libraryFolders.listLibraryFolders();
+      expect(folderUsage.describeUsage).not.toHaveBeenCalled();
     });
   });
 
@@ -169,6 +190,96 @@ describe('libraryFolders', () => {
       writeFile('.plexignore', 'Extras/*\n__*/*\n');
       await libraryFolders.setFolderLayout('', 'videos');
       expect(fs.existsSync(plexIgnorePath())).toBe(true);
+    });
+  });
+
+  describe('createLibraryFolder', () => {
+    beforeEach(() => {
+      Subfolder.findOne.mockResolvedValue(null);
+      subfolderModule.register.mockImplementation(async (name, { layout }) => ({ name, layout, created: true }));
+    });
+
+    it('creates the directory and registers a new TV folder in one insert', async () => {
+      await expect(libraryFolders.createLibraryFolder('Science', 'tv')).resolves.toEqual({
+        name: 'Science', layout: 'tv', created: true, existingContent: false,
+      });
+      expect(fs.existsSync(path.join(mockRoot, '__Science'))).toBe(true);
+      expect(subfolderModule.register).toHaveBeenCalledWith('Science', { layout: 'tv', throwOnError: true });
+    });
+
+    it('registers nothing when the directory cannot be created', async () => {
+      writeFile('__Blocked');
+
+      await expect(libraryFolders.createLibraryFolder('Blocked', null)).rejects.toMatchObject({
+        status: 500, message: expect.stringMatching(/^Couldn't create the folder on disk: /),
+      });
+      expect(subfolderModule.register).not.toHaveBeenCalled();
+    });
+
+    it('registers a directory that already holds files as Videos and reports it', async () => {
+      writeFile('__Old/Chan/video [abcdefghijk].mp4');
+
+      await expect(libraryFolders.createLibraryFolder('Old', null)).resolves.toEqual({
+        name: 'Old', layout: 'videos', created: true, existingContent: true,
+      });
+    });
+
+    it('sends TV over a directory with files to the reorganize', async () => {
+      writeFile('__Old/Chan/video [abcdefghijk].mp4');
+      subfolderModule.getAll.mockResolvedValue(['__Old']);
+
+      await expect(libraryFolders.createLibraryFolder('Old', 'tv')).rejects.toMatchObject({
+        status: 409, reorganizeRequired: true, change: { type: 'folderLayout', folder: 'Old', layout: 'tv' },
+      });
+      expect(subfolderModule.register).toHaveBeenCalledWith('Old', { layout: 'videos', throwOnError: true });
+    });
+
+    it('keeps an existing folder\'s layout when none is given', async () => {
+      Subfolder.findOne.mockResolvedValue({ name: 'TV', layout: 'tv' });
+
+      await expect(libraryFolders.createLibraryFolder('tv', null)).resolves.toEqual({ name: 'TV', layout: 'tv', created: false });
+      expect(subfolderModule.register).not.toHaveBeenCalled();
+    });
+
+    it('changes an existing folder\'s layout through the guards', async () => {
+      Subfolder.findOne.mockResolvedValue({ name: 'Kids', layout: 'videos' });
+      writeFile('__Kids/Chan/video [abcdefghijk].mp4');
+
+      await expect(libraryFolders.createLibraryFolder('Kids', 'tv')).rejects.toMatchObject({ status: 409, reorganizeRequired: true });
+    });
+  });
+
+  describe('setDefaultFolder', () => {
+    it('answers unchanged for the current default, ignoring case', async () => {
+      await expect(libraryFolders.setDefaultFolder('kids')).resolves.toEqual({ changed: false, defaultSubfolder: 'Kids' });
+      expect(configModule.updateConfig).not.toHaveBeenCalled();
+    });
+
+    it('saves a same-layout switch at once, in the registry spelling', async () => {
+      subfolderModule.getAll.mockResolvedValue(['__Kids', '__Music']);
+
+      await expect(libraryFolders.setDefaultFolder('music')).resolves.toEqual({ changed: true, defaultSubfolder: 'Music' });
+      expect(configModule.updateConfig).toHaveBeenCalledWith(expect.objectContaining({ defaultSubfolder: 'Music' }));
+    });
+
+    it('saves the main folder as an empty string', async () => {
+      await libraryFolders.setDefaultFolder('');
+      expect(configModule.updateConfig).toHaveBeenCalledWith(expect.objectContaining({ defaultSubfolder: '' }));
+    });
+
+    it('404s an unknown folder', async () => {
+      await expect(libraryFolders.setDefaultFolder('Nope')).rejects.toMatchObject({ status: 404 });
+    });
+
+    it('sends a layout-changing switch with downloaded followers to the reorganize', async () => {
+      Channel.findAll.mockResolvedValue([{ channel_id: 'UC1', sub_folder: '##USE_GLOBAL_DEFAULT##', enabled: false }]);
+      Video.count.mockResolvedValue(3);
+
+      await expect(libraryFolders.setDefaultFolder('TV')).rejects.toMatchObject({
+        status: 409, reorganizeRequired: true, change: { type: 'defaultSubfolder', value: 'TV' },
+        message: expect.stringContaining('default folder'),
+      });
+      expect(configModule.updateConfig).not.toHaveBeenCalled();
     });
   });
 

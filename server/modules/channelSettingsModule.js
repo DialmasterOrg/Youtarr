@@ -14,6 +14,9 @@ const subfolderModule = require('./subfolderModule');
 const m3uGenerator = require('./m3uGenerator');
 const titleRegex = require('./titleFilterRegex');
 const channelLayout = require('./tvShows/channelLayout');
+const { getLayoutResolver } = require('./tvShows/libraryLayouts');
+const { effectiveLibraryFolder } = require('./tvShows/channelFolders');
+const { LAYOUT_TV } = require('./tvShows/constants');
 const {
   GLOBAL_DEFAULT_SENTINEL,
   buildChannelPath,
@@ -472,23 +475,27 @@ class ChannelSettingsModule {
   }
 
   /**
-   * Get channels that follow the global file-structure setting
-   * (skip_video_folder is NULL = inherit). Only enabled channels are counted:
-   * disabled channels include hidden auto-created playlist source channels.
-   * @returns {Promise<Object>} - { count, channelNames }
+   * Enabled channels that follow the global flat-structure default (no
+   * override) and download to a Videos folder: TV folder episodes always go
+   * flat into Season folders, so the setting doesn't apply to them.
+   * Disabled channels include hidden auto-created playlist source channels.
+   * @returns {Promise<{count: number, channelNames: string[]}>}
    */
   async getChannelsUsingGlobalFileStructure() {
-    const channels = await Channel.findAll({
-      attributes: ['uploader'],
-      where: {
-        enabled: true,
-        skip_video_folder: null
-      }
-    });
-
+    const [channels, layoutOf] = await Promise.all([
+      Channel.findAll({
+        attributes: ['uploader', 'sub_folder'],
+        where: {
+          enabled: true,
+          skip_video_folder: null
+        }
+      }),
+      getLayoutResolver(),
+    ]);
+    const affected = channels.filter((channel) => layoutOf(effectiveLibraryFolder(channel.sub_folder)) !== LAYOUT_TV);
     return {
-      count: channels.length,
-      channelNames: channels.map(ch => ch.uploader).slice(0, 10) // First 10 for display
+      count: affected.length,
+      channelNames: affected.map((channel) => channel.uploader).slice(0, 10) // First 10 for display
     };
   }
 

@@ -18,6 +18,7 @@ const serverRegistry = require('./serverRegistry');
 const libraryLocator = require('./libraryLocator');
 const { LIBRARY_TYPES, describeHttpError } = require('./adapters/baseAdapter');
 const { RELATION_EXACT, RELATION_COVERS, RELATION_INSIDE } = require('./libraryMatcher');
+const { readMappings, mappingOf, CHOICE_DEFAULT, CHOICE_NONE } = require('./plexMappingEntries');
 
 const SERVER_NAMES = { plex: 'Plex', jellyfin: 'Jellyfin', emby: 'Emby' };
 const TYPE_NAMES = {
@@ -59,6 +60,12 @@ function libraryView(library, relation) {
   };
 }
 
+// Where a server sees the downloads folder, when exactly one place is known.
+function downloadsPathOf(match) {
+  const candidates = match.folderPaths('');
+  return candidates.length === 1 ? candidates[0].path : null;
+}
+
 class LibraryCheck {
   /**
    * @param {Object} [options]
@@ -90,6 +97,7 @@ class LibraryCheck {
         name: SERVER_NAMES[server.adapter.serverType] || server.adapter.serverType,
         reachable: !server.error,
         error: server.error || null,
+        downloadsPath: server.error ? null : downloadsPathOf(server.match),
       })),
       folders: folders
         .filter((folder) => !wanted || wanted.has(folderKey(folder.name)))
@@ -315,25 +323,21 @@ class LibraryCheck {
     return issues;
   }
 
-  _mappedLibraryId(folder, config) {
-    const mappings = Array.isArray(config.plexSubfolderLibraryMappings) ? config.plexSubfolderLibraryMappings : [];
-    const mapping = mappings.find((entry) => entry && typeof entry === 'object'
-      && entry.subfolder && folderKey(entry.subfolder) === folderKey(folder.name));
-    return mapping?.libraryId ? String(mapping.libraryId) : null;
-  }
-
   _plexMapping(folder, exact, byId, config) {
     const tvLibraries = [...new Set(exact
       .filter((relation) => byId.get(relation.libraryId).type === LIBRARY_TYPES.TV)
       .map((relation) => relation.libraryId))];
+    const { choice, libraryId } = mappingOf(readMappings(config), folder.name);
     return {
-      mappedLibraryId: this._mappedLibraryId(folder, config),
+      mappedLibraryId: libraryId,
       suggestedLibraryId: tvLibraries.length === 1 ? tvLibraries[0] : null,
+      choice,
     };
   }
 
-  _plexMappingIssue(folder, { mappedLibraryId, suggestedLibraryId }, byId, config) {
-    if (!suggestedLibraryId || mappedLibraryId === suggestedLibraryId) return null;
+  // An explicit default choice is the user's: no issue, no automatic mapping.
+  _plexMappingIssue(folder, { mappedLibraryId, suggestedLibraryId, choice }, byId, config) {
+    if (!suggestedLibraryId || choice === CHOICE_DEFAULT || mappedLibraryId === suggestedLibraryId) return null;
     const suggested = byId.get(suggestedLibraryId);
     if (mappedLibraryId) {
       const mapped = byId.get(mappedLibraryId);
@@ -341,7 +345,7 @@ class LibraryCheck {
         code: 'plexMappingMismatch',
         libraryId: suggestedLibraryId,
         message: `New episodes in ${folderLabel(folder.name)} refresh ${mapped ? mapped.name : `library ${mappedLibraryId}`}, `
-          + `not ${suggested.name}. Change the subfolder mapping in Settings > Plex.`,
+          + `not ${suggested.name}.`,
       };
     }
     const fallback = config.plexYoutubeLibraryId ? byId.get(String(config.plexYoutubeLibraryId)) : null;
@@ -358,7 +362,7 @@ class LibraryCheck {
    * episodes refresh that library. Never replaces an existing mapping.
    * @param {string} folder - Subfolder name without __
    * @param {string} libraryId
-   * @returns {Promise<{mappedLibraryId: string, plexSubfolderLibraryMappings: Array<Object>}>}
+   * @returns {Promise<{mappedLibraryId: string, choice: string, plexSubfolderLibraryMappings: Array<Object>}>}
    *   with the saved mappings, so the client can take the change into its
    *   copy of the config without reloading it
    */
@@ -369,18 +373,18 @@ class LibraryCheck {
     if (!entry || !entry.name) throw this._error('Choose a TV subfolder to map.', 400);
     if (!plex || plex.status === STATUS.UNREACHABLE) throw this._error('Plex isn\'t configured or can\'t be reached.', 409);
     if (entry.layout !== LAYOUT_TV) throw this._error(`${folderLabel(entry.name)} isn't a TV folder.`, 400);
-    const { mappedLibraryId, suggestedLibraryId } = plex.plexMapping;
+    const { mappedLibraryId, suggestedLibraryId, choice } = plex.plexMapping;
     const config = configModule.getConfig();
     const mappings = Array.isArray(config.plexSubfolderLibraryMappings) ? config.plexSubfolderLibraryMappings : [];
-    if (mappedLibraryId === String(libraryId)) return { mappedLibraryId, plexSubfolderLibraryMappings: mappings };
-    if (mappedLibraryId) throw this._error(`${folderLabel(entry.name)} already refreshes another Plex library. Change it in Settings > Plex.`, 409);
+    if (mappedLibraryId === String(libraryId)) return { mappedLibraryId, choice, plexSubfolderLibraryMappings: mappings };
+    if (choice !== CHOICE_NONE) throw this._error(`${folderLabel(entry.name)} already refreshes another Plex library.`, 409);
     if (suggestedLibraryId !== String(libraryId)) {
       throw this._error(`That Plex library isn't the one TV Shows library that holds ${folderLabel(entry.name)}.`, 409);
     }
     const plexSubfolderLibraryMappings = [...mappings, { subfolder: entry.name, libraryId: String(libraryId) }];
     configModule.updateConfig({ ...config, plexSubfolderLibraryMappings });
     logger.info({ libraryFolder: entry.name, libraryId }, 'Mapped a TV folder to its Plex library for refreshes');
-    return { mappedLibraryId: String(libraryId), plexSubfolderLibraryMappings };
+    return { mappedLibraryId: String(libraryId), choice: 'library', plexSubfolderLibraryMappings };
   }
 
   _error(message, status) {

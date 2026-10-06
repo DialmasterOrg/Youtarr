@@ -5,6 +5,7 @@ jest.mock('../../models/subfolder', () => ({
   findOrCreate: jest.fn(),
   destroy: jest.fn(),
   count: jest.fn(),
+  findOne: jest.fn(),
 }));
 jest.mock('../../models/channel', () => ({ count: jest.fn(), findAll: jest.fn() }));
 jest.mock('../../models/playlist', () => ({ count: jest.fn(), findAll: jest.fn() }));
@@ -13,6 +14,7 @@ jest.mock('../../models/videoclassification', () => ({ findAll: jest.fn() }));
 jest.mock('../configModule', () => ({
   getDefaultSubfolder: jest.fn(),
   getConfig: jest.fn(),
+  updateConfig: jest.fn(),
   directoryPath: '/data',
 }));
 jest.mock('../filesystem', () => ({
@@ -81,7 +83,9 @@ describe('getUsage', () => {
       {
         name: 'Spare',
         displayName: '__Spare',
-        usage: { channels: 0, playlists: 0, shows: 0, isDefault: false, plexMapped: false, hasFiles: false },
+        usage: {
+          channels: 0, disabledChannels: 0, playlists: 0, shows: 0, isDefault: false, plexMapped: false, hasFiles: false,
+        },
         deletable: true,
       },
     ]);
@@ -132,12 +136,22 @@ describe('getUsage', () => {
     expect(item.usage.hasFiles).toBe(true);
     expect(item.deletable).toBe(false);
   });
+
+  test('a Plex mapping alone leaves an unused, empty folder deletable', async () => {
+    Subfolder.findAll.mockResolvedValue([{ name: 'Movies' }]);
+    configModule.getConfig.mockReturnValue({ plexSubfolderLibraryMappings: [{ subfolder: 'Movies', libraryId: '5' }] });
+
+    const [item] = await subfolderModule.getUsage();
+
+    expect(item.usage.plexMapped).toBe(true);
+    expect(item.deletable).toBe(true);
+  });
 });
 
 describe('register', () => {
   test('upserts a real name', async () => {
     Subfolder.findOrCreate.mockResolvedValue([{ name: 'Sports' }, true]);
-    await subfolderModule.register('  Sports ');
+    await expect(subfolderModule.register('  Sports ')).resolves.toEqual({ name: 'Sports', layout: 'videos', created: true });
     expect(Subfolder.findOrCreate).toHaveBeenCalledWith({ where: { name: 'Sports' }, defaults: { name: 'Sports' } });
   });
 
@@ -152,7 +166,26 @@ describe('register', () => {
   test('tolerates a unique-constraint race', async () => {
     const err = new Error('dup'); err.name = 'SequelizeUniqueConstraintError';
     Subfolder.findOrCreate.mockRejectedValueOnce(err);
-    await expect(subfolderModule.register('Dup')).resolves.toBeUndefined();
+    await expect(subfolderModule.register('Dup')).resolves.toBeNull();
+  });
+
+  test('stores a layout and reports a new row', async () => {
+    Subfolder.findOrCreate.mockResolvedValue([{ name: 'TV', layout: 'tv' }, true]);
+
+    await expect(subfolderModule.register('TV', { layout: 'tv' })).resolves.toEqual({ name: 'TV', layout: 'tv', created: true });
+    expect(Subfolder.findOrCreate).toHaveBeenCalledWith({ where: { name: 'TV' }, defaults: { name: 'TV', layout: 'tv' } });
+  });
+
+  test('swallows a database error by default, for download-time registration', async () => {
+    Subfolder.findOrCreate.mockRejectedValue(new Error('db down'));
+
+    await expect(subfolderModule.register('TV')).resolves.toBeNull();
+  });
+
+  test('throws a database error when asked to', async () => {
+    Subfolder.findOrCreate.mockRejectedValue(new Error('db down'));
+
+    await expect(subfolderModule.register('TV', { throwOnError: true })).rejects.toThrow('db down');
   });
 });
 
@@ -179,7 +212,7 @@ describe('delete', () => {
   });
 
   test('409 when a channel uses it', async () => {
-    Channel.count.mockResolvedValue(2);
+    Channel.count.mockImplementation(async ({ where }) => (where.enabled ? 2 : 0));
     await expect(subfolderModule.delete('Used')).rejects.toMatchObject({ status: 409 });
     expect(Subfolder.destroy).not.toHaveBeenCalled();
   });
@@ -195,9 +228,9 @@ describe('delete', () => {
     await expect(subfolderModule.delete('used')).rejects.toMatchObject({ status: 409 });
   });
 
-  test('409 when a plex mapping references it', async () => {
+  test('deletes despite a plex mapping that references it', async () => {
     configModule.getConfig.mockReturnValue({ plexSubfolderLibraryMappings: [{ subfolder: 'Used', libraryId: '3' }] });
-    await expect(subfolderModule.delete('used')).rejects.toMatchObject({ status: 409 });
+    await expect(subfolderModule.delete('used')).resolves.toBeUndefined();
   });
 
   test('409 when it holds a TV show with numbered episodes', async () => {
@@ -246,5 +279,58 @@ describe('delete', () => {
   test('409 when the directory still holds files', async () => {
     filesystem.directoryHasFiles.mockResolvedValue(true);
     await expect(subfolderModule.delete('Full')).rejects.toMatchObject({ status: 409 });
+  });
+});
+
+describe('delete with Plex mappings', () => {
+  beforeEach(() => {
+    Channel.count.mockResolvedValue(0);
+    Playlist.count.mockResolvedValue(0);
+    filesystem.directoryHasFiles.mockResolvedValue(false);
+  });
+
+  test('a mapping no longer blocks delete, and delete removes it', async () => {
+    Subfolder.count.mockResolvedValue(1);
+    configModule.getConfig.mockReturnValue({
+      plexSubfolderLibraryMappings: [{ subfolder: 'kids', libraryId: '2' }, { subfolder: 'TV', libraryId: '41' }],
+    });
+
+    await subfolderModule.delete('Kids');
+
+    expect(Subfolder.destroy).toHaveBeenCalledWith({ where: { name: 'Kids' } });
+    expect(configModule.updateConfig).toHaveBeenCalledWith({
+      plexSubfolderLibraryMappings: [{ subfolder: 'TV', libraryId: '41' }],
+    });
+  });
+
+  test('deletes a folder known only from a mapping (no registry row) and answers success', async () => {
+    Subfolder.count.mockResolvedValue(0);
+    configModule.getConfig.mockReturnValue({ plexSubfolderLibraryMappings: [{ subfolder: 'Old', libraryId: '9' }] });
+
+    await expect(subfolderModule.delete('Old')).resolves.toBeUndefined();
+    expect(Subfolder.destroy).not.toHaveBeenCalled();
+    expect(configModule.updateConfig).toHaveBeenCalledWith({ plexSubfolderLibraryMappings: [] });
+  });
+
+  test('the config-only default folder still blocks with 409', async () => {
+    Subfolder.count.mockResolvedValue(0);
+    configModule.getDefaultSubfolder.mockReturnValue('Kids');
+
+    await expect(subfolderModule.delete('Kids')).rejects.toMatchObject({ status: 409 });
+  });
+
+  test('a name known nowhere is 404', async () => {
+    Subfolder.count.mockResolvedValue(0);
+
+    await expect(subfolderModule.delete('Nope')).rejects.toMatchObject({ status: 404 });
+  });
+
+  test('counts disabled channels as blockers with the combined message', async () => {
+    Subfolder.count.mockResolvedValue(1);
+    Channel.count.mockImplementation(async ({ where }) => (where.enabled ? 0 : 2));
+
+    await expect(subfolderModule.delete('Kids')).rejects.toMatchObject({
+      status: 409, message: 'Subfolder is in use by 2 channel(s)',
+    });
   });
 });

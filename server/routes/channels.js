@@ -774,7 +774,7 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    * /api/channels/using-global-file-structure:
    *   get:
    *     summary: Get channels using the global file structure setting
-   *     description: Get count and names of enabled channels that inherit the global flat-folder-structure default (no per-channel override).
+   *     description: Count and names of enabled channels that inherit the global flat-folder-structure default (no per-channel override) and download to a Videos folder. Channels in TV shows folders are left out; their episodes always go into Season folders.
    *     tags: [Channels]
    *     responses:
    *       200:

@@ -33,6 +33,19 @@ function segmentsOf(p) {
   return String(p || '').split(/[\\/]+/).filter(Boolean);
 }
 
+// How a server spells its paths: a POSIX leading slash or a UNC prefix, and
+// its separator, so a path rebuilt from segments reads as the server shows it.
+function pathStyleOf(original) {
+  const text = String(original || '');
+  const separator = text.includes('\\') && !text.includes('/') ? '\\' : '/';
+  const root = text.startsWith('\\\\') ? '\\\\' : text.startsWith('/') ? '/' : '';
+  return { separator, root };
+}
+
+function formatPath(segments, style) {
+  return `${style.root}${segments.join(style.separator)}`;
+}
+
 function sameSegment(a, b) {
   return a.toLowerCase() === b.toLowerCase();
 }
@@ -61,17 +74,23 @@ function subfolderOfSegment(segment, subfolderKeys) {
 
 class FolderPaths {
   constructor() {
-    this.byFolder = new Map(); // folderKey -> Map(pathKey -> { segments, source })
+    this.byFolder = new Map(); // folderKey -> Map(pathKey -> { segments, source, style })
   }
 
-  add(folder, segments, source) {
+  /**
+   * @param {string} folder
+   * @param {string[]} segments
+   * @param {string} source
+   * @param {{separator: string, root: string}} style - how the server spells the path (pathStyleOf)
+   */
+  add(folder, segments, source, style) {
     if (segments.length === 0) return;
     const key = folderKey(folder);
     if (!this.byFolder.has(key)) this.byFolder.set(key, new Map());
     const paths = this.byFolder.get(key);
     const existing = paths.get(pathKey(segments));
     // A path found by name or content outranks one only assumed.
-    if (!existing || existing.source === SOURCE_DERIVED) paths.set(pathKey(segments), { segments, source });
+    if (!existing || existing.source === SOURCE_DERIVED) paths.set(pathKey(segments), { segments, source, style });
   }
 
   of(folder) {
@@ -106,7 +125,7 @@ function mappingFromSample({ serverPath, containerPath }, rootSegments, subfolde
   // video before the server rescans): it says nothing about this folder.
   const serverFolder = subfolderOfSegment(serverPrefix[serverPrefix.length - 1], subfolderKeys);
   if (serverFolder !== null && folderKey(serverFolder) !== folderKey(folder)) return null;
-  return { folder, segments: serverPrefix };
+  return { folder, segments: serverPrefix, style: pathStyleOf(serverPath) };
 }
 
 /**
@@ -119,7 +138,7 @@ function mappingFromSample({ serverPath, containerPath }, rootSegments, subfolde
  * @returns {{
  *   relations: Array<{libraryId: string, location: string, folder: string, relation: string, source: string,
  *     folderSegmentMissing: boolean}>,
- *   folderPaths: (folder: string) => Array<{path: string, source: string}>,
+ *   folderPaths: (folder: string) => Array<{path: string, source: string}>,  path in the server's own spelling
  *   mainKnown: boolean,
  *   scope: Set<string>|null
  * }}
@@ -139,18 +158,19 @@ function matchLibraries({ folders, libraries, samples = [], containerRoot }) {
       const segments = segmentsOf(location);
       const folder = subfolderOfSegment(segments[segments.length - 1], subfolderKeys);
       if (folder === null) continue;
-      paths.add(folder, segments, SOURCE_NAME);
-      paths.add('', segments.slice(0, -1), SOURCE_NAME);
+      const style = pathStyleOf(location);
+      paths.add(folder, segments, SOURCE_NAME, style);
+      paths.add('', segments.slice(0, -1), SOURCE_NAME, style);
     }
   }
   for (const sample of samples) {
     const mapping = mappingFromSample(sample, rootSegments, subfolderKeys);
-    if (mapping) paths.add(mapping.folder, mapping.segments, SOURCE_SAMPLE);
+    if (mapping) paths.add(mapping.folder, mapping.segments, SOURCE_SAMPLE, mapping.style);
   }
   const mains = paths.of('');
   for (const folder of subfolderKeys.values()) {
     for (const main of mains) {
-      paths.add(folder, [...main.segments, `${SUBFOLDER_PREFIX}${folder}`], SOURCE_DERIVED);
+      paths.add(folder, [...main.segments, `${SUBFOLDER_PREFIX}${folder}`], SOURCE_DERIVED, main.style);
     }
   }
 
@@ -181,7 +201,7 @@ function matchLibraries({ folders, libraries, samples = [], containerRoot }) {
   const scope = mainKnown ? new Set(relations.map((relation) => relation.libraryId)) : null;
   return {
     relations: dedupeRelations(relations),
-    folderPaths: (folder) => paths.of(folder).map((known) => ({ path: known.segments.join('/'), source: known.source })),
+    folderPaths: (folder) => paths.of(folder).map((known) => ({ path: formatPath(known.segments, known.style), source: known.source })),
     mainKnown,
     scope,
   };

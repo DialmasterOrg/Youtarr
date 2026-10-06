@@ -59,14 +59,14 @@ describe('libraryCheck', () => {
 
       const report = reportOf(result, 'TV', 'plex');
       expect(report.status).toBe('ok');
-      expect(report.plexMapping).toEqual({ mappedLibraryId: '41', suggestedLibraryId: '41' });
+      expect(report.plexMapping).toEqual({ mappedLibraryId: '41', suggestedLibraryId: '41', choice: 'library' });
     });
 
     test('suggests the Plex refresh mapping when the folder has none', async () => {
       const result = await run([folder('', 'videos'), folder('TV', 'tv')], [server('plex', [plexTv()])]);
 
       const report = reportOf(result, 'TV', 'plex');
-      expect(report.plexMapping).toEqual({ mappedLibraryId: null, suggestedLibraryId: '41' });
+      expect(report.plexMapping).toEqual({ mappedLibraryId: null, suggestedLibraryId: '41', choice: 'none' });
       expect(codes(report)).toEqual(['plexMappingMissing']);
     });
 
@@ -170,6 +170,57 @@ describe('libraryCheck', () => {
 
       expect(reportOf(result, 'Kids', 'plex').status).toBe('ok');
     });
+
+    test('reports no missing mapping when the user chose the default library', async () => {
+      config.plexSubfolderLibraryMappings = [{ subfolder: 'TV', libraryId: null }];
+      const result = await run([folder('', 'videos'), folder('TV', 'tv')], [server('plex', [plexTv()])]);
+
+      const report = reportOf(result, 'TV', 'plex');
+      expect(report.plexMapping).toEqual({ mappedLibraryId: null, suggestedLibraryId: '41', choice: 'default' });
+      expect(codes(report)).toEqual([]);
+    });
+
+    test('a mapping mismatch no longer points at Settings > Plex', async () => {
+      config.plexSubfolderLibraryMappings = [{ subfolder: 'tv', libraryId: '37' }];
+      const result = await run([folder('', 'videos'), folder('TV', 'tv')], [server('plex', [plexTv()])]);
+
+      const issue = reportOf(result, 'TV', 'plex').issues[0];
+      expect(issue).toMatchObject({ code: 'plexMappingMismatch' });
+      expect(issue.message).toBe('New episodes in __TV refresh library 37, not YouTube TV.');
+    });
+
+    test('applyPlexMapping refuses a folder that already has a setting', async () => {
+      config.plexSubfolderLibraryMappings = [{ subfolder: 'TV', libraryId: null }];
+      libraryFolders.listLibraryFolders.mockResolvedValue([folder('', 'videos'), folder('TV', 'tv')]);
+      serverRegistry.getEnabledAdapters.mockReturnValue([server('plex', [plexTv()])]);
+
+      await expect(libraryCheck.applyPlexMapping('TV', '41')).rejects.toMatchObject({
+        status: 409, message: '__TV already refreshes another Plex library.',
+      });
+    });
+  });
+
+  describe('downloadsPath', () => {
+    test('gives the server\'s downloads folder when one candidate is known', async () => {
+      const result = await run([folder('', 'videos'), folder('TV', 'tv')], [server('plex', [plexTv()])]);
+      expect(result.servers[0].downloadsPath).toBe('Q:\\Y');
+    });
+
+    test('is null when the main folder can\'t be found', async () => {
+      const result = await run([folder('', 'videos')], [server('jellyfin', [{ id: '1', name: 'Films', type: 'videos', locations: ['/films'] }])]);
+      expect(result.servers[0].downloadsPath).toBeNull();
+    });
+
+    test('is null when two candidates disagree', async () => {
+      const libraries = [plexTv(), plexTv({ id: '42', name: 'Other', locations: ['R:\\Elsewhere\\__TV'] })];
+      const result = await run([folder('', 'videos'), folder('TV', 'tv')], [server('plex', libraries)]);
+      expect(result.servers[0].downloadsPath).toBeNull();
+    });
+
+    test('is null for an unreachable server', async () => {
+      const result = await run([folder('', 'videos')], [{ serverType: 'plex', unreachable: true }]);
+      expect(result.servers[0].downloadsPath).toBeNull();
+    });
   });
 
   describe('Videos folders', () => {
@@ -254,7 +305,7 @@ describe('libraryCheck', () => {
 
       const entry = result.folders[0];
       expect(entry.layout).toBe('tv');
-      expect(reportOf(result, 'TV', 'plex').plexMapping).toEqual({ mappedLibraryId: null, suggestedLibraryId: '41' });
+      expect(reportOf(result, 'TV', 'plex').plexMapping).toEqual({ mappedLibraryId: null, suggestedLibraryId: '41', choice: 'none' });
       expect(codes(reportOf(result, 'TV', 'plex'))).toEqual(['plexMappingMissing']);
     });
 
@@ -276,6 +327,7 @@ describe('libraryCheck', () => {
 
       expect(await libraryCheck.applyPlexMapping('TV', '41')).toEqual({
         mappedLibraryId: '41',
+        choice: 'library',
         plexSubfolderLibraryMappings: [{ subfolder: 'Kids', libraryId: '12' }, { subfolder: 'TV', libraryId: '41' }],
       });
       expect(configModule.updateConfig).toHaveBeenCalledWith(expect.objectContaining({
@@ -288,6 +340,7 @@ describe('libraryCheck', () => {
 
       expect(await libraryCheck.applyPlexMapping('TV', '41')).toEqual({
         mappedLibraryId: '41',
+        choice: 'library',
         plexSubfolderLibraryMappings: [{ subfolder: 'TV', libraryId: '41' }],
       });
       expect(configModule.updateConfig).not.toHaveBeenCalled();

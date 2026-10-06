@@ -132,6 +132,21 @@ describe('libraryMatcher', () => {
 
       expect(relationsFor(result, 'TV Shows').filter((relation) => relation.relation === RELATION_EXACT)).toEqual([]);
     });
+
+    test('folderPaths keeps a POSIX leading slash', () => {
+      const result = matchLibraries({ folders: FOLDERS, libraries: [library('41', '/data/yt/__TV Shows')], containerRoot: ROOT });
+
+      expect(result.folderPaths('')).toEqual([{ path: '/data/yt', source: 'name' }]);
+      expect(result.folderPaths('Kids')).toEqual([{ path: '/data/yt/__Kids', source: 'derived' }]);
+    });
+
+    test('folderPaths keeps Windows separators and UNC roots', () => {
+      const windows = matchLibraries({ folders: FOLDERS, libraries: [library('41', 'Q:\\Youtube_test\\__TV Shows')], containerRoot: ROOT });
+      const unc = matchLibraries({ folders: FOLDERS, libraries: [library('41', '\\\\nas\\media\\yt\\__Kids')], containerRoot: ROOT });
+
+      expect(windows.folderPaths('')).toEqual([{ path: 'Q:\\Youtube_test', source: 'name' }]);
+      expect(unc.folderPaths('')).toEqual([{ path: '\\\\nas\\media\\yt', source: 'name' }]);
+    });
   });
 
   describe('mappingFromSample', () => {
@@ -144,7 +159,7 @@ describe('libraryMatcher', () => {
         containerPath: `${ROOT}/Chan/Chan - T - abcDEF12345/Chan - T [abcDEF12345].mp4`,
       }, rootSegments, subfolderKeys);
 
-      expect(mapping).toEqual({ folder: '', segments: ['srv', 'data'] });
+      expect(mapping).toEqual({ folder: '', segments: ['srv', 'data'], style: { separator: '/', root: '/' } });
     });
 
     test('needs at least the file name and its folder in common', () => {

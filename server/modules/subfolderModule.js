@@ -9,7 +9,9 @@ const configModule = require('./configModule');
 const { buildSubfolderSegment, directoryHasFiles, removeIfEmpty, resolveEffectiveSubfolder } = require('./filesystem');
 const { GLOBAL_DEFAULT_SENTINEL, ROOT_SENTINEL } = require('./filesystem/constants');
 const { getLayoutResolver } = require('./tvShows/libraryLayouts');
-const { LAYOUT_TV, KIND_TITLE_SHOW } = require('./tvShows/constants');
+const { LAYOUT_TV, LAYOUT_VIDEOS, KIND_TITLE_SHOW } = require('./tvShows/constants');
+const { deletionBlockers, deletionBlockReason } = require('./subfolderDeletion');
+const { readMappings, findEntry, withoutEntry } = require('./mediaServers/plexMappingEntries');
 
 const SENTINELS = new Set([GLOBAL_DEFAULT_SENTINEL, ROOT_SENTINEL]);
 
@@ -21,34 +23,6 @@ function makeError(message, status) {
   const err = new Error(message);
   err.status = status;
   return err;
-}
-
-/**
- * Single rule for why a subfolder can't be deleted, shared by delete() and
- * getUsage() so they can't drift.
- * @param {{channels:number, playlists:number, shows:number, isDefault:boolean, plexMapped:boolean, hasFiles:boolean}} usage
- * @returns {string|null} reason, or null when the subfolder is safe to delete
- */
-function deletionBlockReason(usage) {
-  if (usage.channels > 0) {
-    return `Subfolder is in use by ${usage.channels} channel(s)`;
-  }
-  if (usage.playlists > 0) {
-    return `Subfolder is in use by ${usage.playlists} playlist(s)`;
-  }
-  if (usage.shows > 0) {
-    return `Subfolder holds ${usage.shows} TV show(s) with numbered episodes`;
-  }
-  if (usage.isDefault) {
-    return 'Subfolder is the global default and cannot be deleted';
-  }
-  if (usage.plexMapped) {
-    return 'Subfolder is mapped to a Plex library and cannot be deleted';
-  }
-  if (usage.hasFiles) {
-    return 'Subfolder still contains downloaded files and cannot be deleted';
-  }
-  return null;
 }
 
 /**
@@ -162,17 +136,17 @@ class SubfolderModule {
    * Compute the usage of a single subfolder name (per-name queries). Used by
    * delete() where only one name is in play.
    * @param {string} clean - Clean subfolder name (no __ prefix)
-   * @returns {Promise<{channels:number, playlists:number, shows:number, isDefault:boolean, plexMapped:boolean, hasFiles:boolean}>}
+   * @returns {Promise<import('./subfolderDeletion').FolderUsage>}
    */
   async _usageForName(clean) {
-    const channels = await Channel.count({ where: { sub_folder: clean } });
+    const channels = await Channel.count({ where: { sub_folder: clean, enabled: true } });
+    const disabledChannels = await Channel.count({ where: { sub_folder: clean, enabled: false } });
     const playlists = await Playlist.count({ where: { default_sub_folder: clean } });
     const shows = (await tallyNumberedShows()).get(clean.toLowerCase()) || 0;
     const def = configModule.getDefaultSubfolder();
     const isDefault = !!(def && def.toLowerCase() === clean.toLowerCase());
-    const plexMapped = this._plexMappingSubfolders().some((s) => s.toLowerCase() === clean.toLowerCase());
     const hasFiles = await directoryHasFiles(path.join(configModule.directoryPath, buildSubfolderSegment(clean)));
-    return { channels, playlists, shows, isDefault, plexMapped, hasFiles };
+    return { channels, disabledChannels, playlists, shows, isDefault, hasFiles };
   }
 
   /**
@@ -210,6 +184,7 @@ class SubfolderModule {
         );
         const usage = {
           channels: channelTally.get(key) || 0,
+          disabledChannels: 0,
           playlists: playlistTally.get(key) || 0,
           shows: showTally.get(key) || 0,
           isDefault: defaultKey === key,
@@ -228,43 +203,79 @@ class SubfolderModule {
     return items.sort((a, b) => a.displayName.localeCompare(b.displayName));
   }
 
+  /** Every reason a folder can't be deleted, in guard order (see subfolderDeletion). */
+  deletionBlockers(usage) {
+    return deletionBlockers(usage);
+  }
+
+  /** TV shows with numbered episodes per library folder (lowercased name -> count). */
+  numberedShowCounts() {
+    return tallyNumberedShows();
+  }
+
+  _removePlexMapping(clean) {
+    const config = configModule.getConfig();
+    const mappings = readMappings(config);
+    if (!findEntry(mappings, clean)) return;
+    configModule.updateConfig({ ...config, plexSubfolderLibraryMappings: withoutEntry(mappings, clean) });
+    logger.info({ subfolder: clean }, 'Removed the Plex refresh setting of a deleted library folder');
+  }
+
   /**
    * Idempotently register a subfolder name. Ignores sentinels/null/empty.
+   * Download-time callers rely on it never throwing; the Library folders
+   * create path asks for errors.
    * @param {string} name
-   * @returns {Promise<void>}
+   * @param {Object} [options]
+   * @param {string} [options.layout] - Layout for a new row ('videos' | 'tv'); an existing row keeps its own
+   * @param {boolean} [options.throwOnError=false]
+   * @returns {Promise<{name: string, layout: string, created: boolean}|null>}
    */
-  async register(name) {
-    if (!isRealName(name)) return;
+  async register(name, { layout, throwOnError = false } = {}) {
+    if (!isRealName(name)) return null;
     const clean = name.trim();
     try {
-      await Subfolder.findOrCreate({ where: { name: clean }, defaults: { name: clean } });
+      const [row, created] = await Subfolder.findOrCreate({
+        where: { name: clean },
+        defaults: { name: clean, ...(layout ? { layout } : {}) },
+      });
+      return { name: row.name, layout: row.layout === LAYOUT_TV ? LAYOUT_TV : LAYOUT_VIDEOS, created };
     } catch (err) {
-      // Unique-constraint race under case/accent-insensitive collation: treat as success.
-      if (err && err.name === 'SequelizeUniqueConstraintError') return;
+      // Unique-constraint race under case/accent-insensitive collation: the row exists.
+      if (err && err.name === 'SequelizeUniqueConstraintError') {
+        if (!throwOnError) return null;
+        const row = await Subfolder.findOne({ where: { name: clean } });
+        return { name: row ? row.name : clean, layout: row && row.layout === LAYOUT_TV ? LAYOUT_TV : LAYOUT_VIDEOS, created: false };
+      }
+      if (throwOnError) throw err;
       logger.warn({ err, name: clean }, 'Failed to register subfolder');
+      return null;
     }
   }
 
   /**
-   * Delete a subfolder from the registry, only when empty on disk and unused.
-   * @param {string} name
-   * @returns {Promise<void>}
-   * @throws {Error} with .status 404 (unknown) or 409 (guard failed)
+   * Delete a library folder: its registry row, its Plex refresh mapping, and
+   * the directory when empty. A folder known only from a Plex mapping has no
+   * row; it is deleted the same way.
+   * @throws {Error} with .status 400, 404 (unknown) or 409 (guard failed)
    */
   async delete(name) {
     const clean = (name || '').trim();
     if (!clean) throw makeError('Invalid subfolder name', 400);
 
     const exists = await Subfolder.count({ where: { name: clean } });
-    if (exists === 0) throw makeError('Subfolder not found', 404);
+    const mapped = Boolean(findEntry(readMappings(configModule.getConfig()), clean));
+    const def = configModule.getDefaultSubfolder();
+    const isDefault = Boolean(def && def.toLowerCase() === clean.toLowerCase());
+    if (exists === 0 && !mapped && !isDefault) throw makeError('Subfolder not found', 404);
 
     const reason = deletionBlockReason(await this._usageForName(clean));
     if (reason) throw makeError(reason, 409);
 
-    const dirPath = path.join(configModule.directoryPath, buildSubfolderSegment(clean));
-    await Subfolder.destroy({ where: { name: clean } });
+    if (exists > 0) await Subfolder.destroy({ where: { name: clean } });
+    this._removePlexMapping(clean);
     // Best-effort, non-recursive cleanup of the now-empty directory.
-    await removeIfEmpty(dirPath);
+    await removeIfEmpty(path.join(configModule.directoryPath, buildSubfolderSegment(clean)));
   }
 }
 

@@ -17,6 +17,8 @@ describe('TV show routes', () => {
   let models;
   let reorganize;
   let libraryCheck;
+  let folderDetail;
+  let plexRefreshMappings;
   const channel = { channel_id: 'UC1', sub_folder: 'Kids' };
   const REORGANIZE_STATE = { running: false, unmoved: null };
 
@@ -25,6 +27,7 @@ describe('TV show routes', () => {
     libraryFolders = {
       listLibraryFolders: jest.fn().mockResolvedValue([{ name: '', layout: 'videos' }]),
       setFolderLayout: jest.fn().mockResolvedValue({ changed: true }),
+      setDefaultFolder: jest.fn().mockResolvedValue({ changed: true, defaultSubfolder: 'TV' }),
     };
     channelLayout = {
       getChannelTvState: jest.fn().mockResolvedValue({ layout: 'tv' }),
@@ -40,6 +43,11 @@ describe('TV show routes', () => {
       check: jest.fn().mockResolvedValue({ servers: [], folders: [] }),
       applyPlexMapping: jest.fn().mockResolvedValue({ mappedLibraryId: '41' }),
     };
+    folderDetail = { getFolderDetail: jest.fn().mockResolvedValue({ name: 'check' }) };
+    plexRefreshMappings = {
+      setMapping: jest.fn().mockResolvedValue({ choice: 'library' }),
+      removeMapping: jest.fn().mockResolvedValue({ choice: 'none' }),
+    };
     const createTvShowRoutes = require('../tvShows');
     app = express();
     app.use(express.json());
@@ -51,6 +59,7 @@ describe('TV show routes', () => {
         errorBody: (error) => ({
           error: error.message,
           ...(error.reorganizeRequired ? { reorganizeRequired: true, change: error.change } : {}),
+          ...(error.code ? { code: error.code } : {}),
         }),
       },
       reorganize,
@@ -58,6 +67,8 @@ describe('TV show routes', () => {
       jobModule,
       models,
       libraryCheck,
+      folderDetail,
+      plexRefreshMappings,
     }));
   });
 
@@ -137,6 +148,62 @@ describe('TV show routes', () => {
     });
   });
 
+  describe('plex-mapping replace and delete', () => {
+    test('replace sets any folder, the main folder included', async () => {
+      await request(app).put('/api/library-folders/plex-mapping').send({ folder: '', libraryId: '37', replace: true });
+      expect(plexRefreshMappings.setMapping).toHaveBeenCalledWith('', '37');
+    });
+
+    test('replace accepts the explicit default choice', async () => {
+      await request(app).put('/api/library-folders/plex-mapping').send({ folder: 'TV', libraryId: null, replace: true });
+      expect(plexRefreshMappings.setMapping).toHaveBeenCalledWith('TV', null);
+    });
+
+    test('replace rejects a non-numeric library id', async () => {
+      const res = await request(app).put('/api/library-folders/plex-mapping').send({ folder: 'TV', libraryId: 'abc', replace: true });
+      expect(res.status).toBe(400);
+    });
+
+    test('without replace keeps today\'s applyPlexMapping', async () => {
+      await request(app).put('/api/library-folders/plex-mapping').send({ folder: 'TV', libraryId: '41' });
+      expect(libraryCheck.applyPlexMapping).toHaveBeenCalledWith('TV', '41');
+      expect(plexRefreshMappings.setMapping).not.toHaveBeenCalled();
+    });
+
+    test('delete removes a folder\'s entry, the main folder included', async () => {
+      const res = await request(app).delete('/api/library-folders/plex-mapping?folder=');
+      expect(res.status).toBe(200);
+      expect(plexRefreshMappings.removeMapping).toHaveBeenCalledWith('');
+    });
+
+    test('delete requires the folder parameter', async () => {
+      const res = await request(app).delete('/api/library-folders/plex-mapping');
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe('GET /api/library-folders/folder/:key', () => {
+    test('answers a folder named check (outside the /check path)', async () => {
+      const res = await request(app).get('/api/library-folders/folder/check');
+      expect(res.status).toBe(200);
+      expect(folderDetail.getFolderDetail).toHaveBeenCalledWith('check');
+    });
+
+    test('decodes the key and passes the main folder key as is', async () => {
+      await request(app).get('/api/library-folders/folder/Science%20Shows');
+      expect(folderDetail.getFolderDetail).toHaveBeenCalledWith('Science Shows');
+      await request(app).get('/api/library-folders/folder/~main');
+      expect(folderDetail.getFolderDetail).toHaveBeenLastCalledWith('~main');
+    });
+
+    test('answers 404 with the module\'s message', async () => {
+      folderDetail.getFolderDetail.mockRejectedValueOnce(refusal('Library folder not found', 404));
+      const res = await request(app).get('/api/library-folders/folder/Nope');
+      expect(res.status).toBe(404);
+      expect(res.body).toEqual({ error: 'Library folder not found' });
+    });
+  });
+
   describe('GET /api/library-folders', () => {
     test('returns the folder list', async () => {
       const res = await request(app).get('/api/library-folders');
@@ -148,6 +215,21 @@ describe('TV show routes', () => {
       libraryFolders.listLibraryFolders.mockRejectedValueOnce(new Error('disk'));
       const res = await request(app).get('/api/library-folders');
       expect(res.status).toBe(500);
+    });
+
+    test('passes include to the module', async () => {
+      await request(app).get('/api/library-folders?include=usage,files');
+      expect(libraryFolders.listLibraryFolders).toHaveBeenCalledWith({ include: ['usage', 'files'] });
+    });
+
+    test('keeps the plain call without include', async () => {
+      await request(app).get('/api/library-folders');
+      expect(libraryFolders.listLibraryFolders).toHaveBeenCalledWith();
+    });
+
+    test('rejects an unknown include', async () => {
+      const res = await request(app).get('/api/library-folders?include=everything');
+      expect(res.status).toBe(400);
     });
   });
 
@@ -193,6 +275,43 @@ describe('TV show routes', () => {
       expect(res.body).toEqual({
         error: 'Review the move', reorganizeRequired: true, change: { type: 'folderLayout', folder: 'TV', layout: 'tv' },
       });
+    });
+  });
+
+  describe('PUT /api/library-folders/default', () => {
+    test('saves and answers with the folders', async () => {
+      const res = await request(app).put('/api/library-folders/default').send({ name: 'TV' });
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ changed: true, defaultSubfolder: 'TV', folders: [{ name: '', layout: 'videos' }] });
+      expect(libraryFolders.setDefaultFolder).toHaveBeenCalledWith('TV', { isDownloadRunning: expect.any(Function) });
+    });
+
+    test('answers unchanged', async () => {
+      libraryFolders.setDefaultFolder.mockResolvedValueOnce({ changed: false, defaultSubfolder: 'TV' });
+      const res = await request(app).put('/api/library-folders/default').send({ name: 'TV' });
+      expect(res.body.changed).toBe(false);
+    });
+
+    test('passes a reorganize refusal with its change', async () => {
+      libraryFolders.setDefaultFolder.mockRejectedValueOnce(Object.assign(refusal('Review the move first.', 409), {
+        reorganizeRequired: true, change: { type: 'defaultSubfolder', value: 'TV' },
+      }));
+      const res = await request(app).put('/api/library-folders/default').send({ name: 'TV' });
+      expect(res.status).toBe(409);
+      expect(res.body).toEqual({ error: 'Review the move first.', reorganizeRequired: true, change: { type: 'defaultSubfolder', value: 'TV' } });
+    });
+
+    test('passes the reorganize-running code', async () => {
+      libraryFolders.setDefaultFolder.mockRejectedValueOnce(Object.assign(refusal('Downloads are being reorganized.', 409), {
+        code: 'REORGANIZE_RUNNING',
+      }));
+      const res = await request(app).put('/api/library-folders/default').send({ name: 'TV' });
+      expect(res.body.code).toBe('REORGANIZE_RUNNING');
+    });
+
+    test('rejects an invalid name', async () => {
+      const res = await request(app).put('/api/library-folders/default').send({ name: 'bad/name' });
+      expect(res.status).toBe(400);
     });
   });
 

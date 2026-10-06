@@ -1,6 +1,6 @@
 jest.mock('../../../models/channel', () => ({ findAll: jest.fn() }));
 jest.mock('../../../models/playlist', () => ({ findAll: jest.fn() }));
-jest.mock('../../../models/video', () => ({ count: jest.fn() }));
+jest.mock('../../../models/video', () => ({ count: jest.fn(), findAll: jest.fn() }));
 jest.mock('../../../models/videoclassification', () => ({ findAll: jest.fn() }));
 jest.mock('../../../models/tvshow', () => ({ findAll: jest.fn() }));
 jest.mock('../../configModule', () => ({ getDefaultSubfolder: jest.fn(), directoryPath: '/data' }));
@@ -43,6 +43,26 @@ describe('layoutGuards', () => {
     it('allows the change when nothing runs or no check is given', () => {
       expect(() => layoutGuards.assertNoDownloadRunning(() => false, 'busy')).not.toThrow();
       expect(() => layoutGuards.assertNoDownloadRunning(undefined, 'busy')).not.toThrow();
+    });
+  });
+
+  describe('channelIdsWithDownloads', () => {
+    test('collects channels with their own videos and owners of routed episodes', async () => {
+      Video.findAll
+        .mockResolvedValueOnce([{ channel_id: 'UC1' }, { channel_id: null }])
+        .mockResolvedValueOnce([{ youtubeId: 'vevo1' }]);
+      VideoClassification.findAll.mockResolvedValue([
+        { channel_id: 'UC1', youtube_id: 'a' },
+        { channel_id: 'UC2', youtube_id: 'vevo1' },
+        { channel_id: 'UC3', youtube_id: 'gone' },
+      ]);
+
+      const ids = await layoutGuards.channelIdsWithDownloads();
+
+      expect([...ids].sort()).toEqual(['UC1', 'UC2']);
+      expect(Video.findAll).toHaveBeenLastCalledWith({
+        where: { youtubeId: ['vevo1', 'gone'], removed: false }, attributes: ['youtubeId'], raw: true,
+      });
     });
   });
 

@@ -62,6 +62,8 @@ jest.mock('../tvShows/channelLayout', () => ({
   checkChannelSettingsChange: jest.fn(),
   applyChannelFolderChange: jest.fn(),
 }));
+jest.mock('../tvShows/libraryLayouts', () => ({ getLayoutResolver: jest.fn() }));
+jest.mock('../tvShows/channelFolders', () => ({ effectiveLibraryFolder: jest.fn((value) => value || '') }));
 
 describe('ChannelSettingsModule', () => {
   let channelSettingsModule;
@@ -104,6 +106,8 @@ describe('ChannelSettingsModule', () => {
     jobModule = require('../jobModule');
     plexModule = require('../plexModule');
     m3uGenerator = require('../m3uGenerator');
+
+    require('../tvShows/libraryLayouts').getLayoutResolver.mockResolvedValue(() => 'videos');
 
     // Reset mock implementations
     Channel.findOne.mockResolvedValue(null);
@@ -527,7 +531,7 @@ describe('ChannelSettingsModule', () => {
       const result = await channelSettingsModule.getChannelsUsingGlobalFileStructure();
 
       expect(Channel.findAll).toHaveBeenCalledWith({
-        attributes: ['uploader'],
+        attributes: ['uploader', 'sub_folder'],
         where: {
           enabled: true,
           skip_video_folder: null
@@ -548,6 +552,18 @@ describe('ChannelSettingsModule', () => {
       expect(result.count).toBe(12);
       expect(result.channelNames).toHaveLength(10);
       expect(result.channelNames).toEqual(channels.slice(0, 10).map(ch => ch.uploader));
+    });
+
+    test('leaves out channels whose folder uses the TV shows layout', async () => {
+      require('../tvShows/libraryLayouts').getLayoutResolver.mockResolvedValue((folder) => (folder === 'TV' ? 'tv' : 'videos'));
+      Channel.findAll.mockResolvedValue([
+        { uploader: 'Movies A', sub_folder: 'Kids' },
+        { uploader: 'Show B', sub_folder: 'TV' },
+      ]);
+
+      const result = await channelSettingsModule.getChannelsUsingGlobalFileStructure();
+
+      expect(result).toEqual({ count: 1, channelNames: ['Movies A'] });
     });
   });
 

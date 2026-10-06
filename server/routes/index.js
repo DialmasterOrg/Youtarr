@@ -47,6 +47,8 @@ const cookieTest = require('../modules/cookieTest');
 const logger = require('../logger');
 const logFilesModule = require('../modules/logFilesModule');
 const libraryFolders = require('../modules/tvShows/libraryFolders');
+const folderDetail = require('../modules/tvShows/folderDetail');
+const plexRefreshMappings = require('../modules/mediaServers/plexRefreshMappings');
 const channelLayout = require('../modules/tvShows/channelLayout');
 const layoutGuards = require('../modules/tvShows/layoutGuards');
 const titleShowService = require('../modules/tvShows/titleShowService');
@@ -153,7 +155,7 @@ function registerRoutes(app, deps) {
   }));
 
   // Subfolder registry routes
-  app.use(createSubfolderRoutes({ verifyToken, subfolderModule }));
+  app.use(createSubfolderRoutes({ verifyToken, subfolderModule, libraryFolders, layoutGuards, jobModule }));
 
   // Scheduled task status routes
   app.use(createSchedulesRoutes({ verifyToken, scheduledTaskManager, scheduledTaskRuns, scheduleConfig }));
@@ -164,7 +166,7 @@ function registerRoutes(app, deps) {
   // TV show layouts (library folders and channel layouts)
   app.use(createTvShowRoutes({
     verifyToken, libraryFolders, channelLayout, layoutGuards, reorganize, channelSettingsModule, jobModule, models,
-    libraryCheck,
+    libraryCheck, folderDetail, plexRefreshMappings,
   }));
 
   // Title shows (shows defined on a channel by title patterns) and episode assignment

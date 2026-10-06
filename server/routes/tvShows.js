@@ -1,8 +1,10 @@
 const express = require('express');
 const logger = require('../logger');
+const { validateSubFolderName } = require('../modules/filesystem/subfolderValidation');
 
 const MAX_FOLDER_NAME_LENGTH = 100;
 const LIBRARY_LAYOUTS = new Set(['videos', 'tv']);
+const INCLUDE_OPTIONS = new Set(['usage', 'files']);
 
 /**
  * TV show routes: library folder layouts and per-channel TV layout.
@@ -16,11 +18,13 @@ const LIBRARY_LAYOUTS = new Set(['videos', 'tv']);
  * @param {Object} deps.jobModule - Its running job blocks layout switches
  * @param {Object} deps.models
  * @param {Object} deps.libraryCheck - mediaServers/libraryCheck
+ * @param {Object} deps.folderDetail - tvShows/folderDetail
+ * @param {Object} deps.plexRefreshMappings - mediaServers/plexRefreshMappings
  * @returns {express.Router}
  */
 function createTvShowRoutes({
   verifyToken, libraryFolders, channelLayout, layoutGuards, reorganize, channelSettingsModule, jobModule, models,
-  libraryCheck,
+  libraryCheck, folderDetail, plexRefreshMappings,
 }) {
   const router = express.Router();
   const isDownloadRunning = () => Boolean(jobModule.getInProgressJobId());
@@ -44,6 +48,12 @@ function createTvShowRoutes({
    *     summary: List library folders with their layouts
    *     description: The main downloads folder (name "") and every subfolder, each with its layout (videos or tv), whether it is the default subfolder, whether it holds downloaded files, and how many enabled channels download to it.
    *     tags: [TV Shows]
+   *     parameters:
+   *       - in: query
+   *         name: include
+   *         required: false
+   *         schema: { type: string, example: 'usage,files' }
+   *         description: "usage adds what uses each folder and what a change would need; files adds fileCount (one scan of the videos table)"
    *     responses:
    *       200:
    *         description: Library folders
@@ -62,11 +72,42 @@ function createTvShowRoutes({
    *                       isDefault: { type: boolean }
    *                       hasFiles: { type: boolean }
    *                       channels: { type: integer }
+   *                       channelsChosen: { type: integer, description: 'usage: enabled channels whose own setting names this folder' }
+   *                       channelsFollowing: { type: integer, description: 'usage: enabled channels following the default folder (default folder only)' }
+   *                       playlists: { type: integer, description: 'usage: enabled playlists downloading here by default' }
+   *                       titleShows: { type: integer, description: 'usage: active title shows in this folder' }
+   *                       layoutChangeNeedsReview: { type: boolean, description: 'usage: a layout change answers 409 reorganizeRequired' }
+   *                       makeDefaultNeedsReview: { type: boolean, description: 'usage: making this the default answers 409 reorganizeRequired' }
+   *                       plexMapping:
+   *                         type: object
+   *                         properties:
+   *                           choice: { type: string, enum: [library, default, none] }
+   *                           libraryId: { type: string, nullable: true }
+   *                       deleteBlockers:
+   *                         type: array
+   *                         items:
+   *                           type: object
+   *                           properties:
+   *                             code: { type: string, enum: [channels, disabledChannels, playlists, shows, default, files, main] }
+   *                             count: { type: integer }
+   *                       deletable: { type: boolean }
+   *                       fileCount: { type: integer, description: 'files: downloaded videos whose file sits in this folder' }
+   *       400: { description: Unknown include value }
    *       500: { description: Failed to list library folders }
    */
   router.get('/api/library-folders', verifyToken, async (req, res) => {
+    const include = [].concat(req.query.include ?? [])
+      .flatMap((value) => String(value).split(','))
+      .map((value) => value.trim())
+      .filter(Boolean);
+    if (include.some((value) => !INCLUDE_OPTIONS.has(value))) {
+      return res.status(400).json({ error: 'include must be usage and/or files' });
+    }
     try {
-      return res.json({ folders: await libraryFolders.listLibraryFolders() });
+      const folders = include.length
+        ? await libraryFolders.listLibraryFolders({ include })
+        : await libraryFolders.listLibraryFolders();
+      return res.json({ folders });
     } catch (error) {
       return sendError(res, error, 'Failed to list library folders');
     }
@@ -114,6 +155,44 @@ function createTvShowRoutes({
 
   /**
    * @swagger
+   * /api/library-folders/default:
+   *   put:
+   *     summary: Set the default folder
+   *     description: Makes a library folder ("" for the main folder) the default folder. A switch between two folders with the same layout is saved at once; downloaded videos stay where they are. A switch to a folder with the other layout, while a channel following the default (enabled or not) has downloaded videos, is answered with a reorganizeRequired 409 naming the defaultSubfolder change to preview; it is refused while a download or a reorganize runs, and for TV while channels or playlists following the default download MP3. The only writer of defaultSubfolder.
+   *     tags: [TV Shows]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [name]
+   *             properties:
+   *               name: { type: string }
+   *     responses:
+   *       200: { description: "{ changed, defaultSubfolder, folders }" }
+   *       400: { description: Invalid folder name }
+   *       404: { description: Library folder not found }
+   *       409: { description: "Review the move (reorganizeRequired, change), a reorganize is running (code REORGANIZE_RUNNING), a download is running, or MP3 users refuse TV" }
+   *       500: { description: Failed to change the default folder }
+   */
+  router.put('/api/library-folders/default', verifyToken, async (req, res) => {
+    const { name } = req.body || {};
+    if (typeof name !== 'string' || name.length > MAX_FOLDER_NAME_LENGTH) {
+      return res.status(400).json({ error: 'name must be a folder name ("" for the main folder)' });
+    }
+    const validation = validateSubFolderName(name);
+    if (!validation.valid) return res.status(400).json({ error: validation.error });
+    try {
+      const result = await libraryFolders.setDefaultFolder(name, { isDownloadRunning });
+      return res.json({ ...result, folders: await libraryFolders.listLibraryFolders() });
+    } catch (error) {
+      return sendError(res, error, 'Failed to change the default folder', { name });
+    }
+  });
+
+  /**
+   * @swagger
    * /api/library-folders/check:
    *   get:
    *     summary: Check the media server libraries that hold each library folder
@@ -151,6 +230,7 @@ function createTvShowRoutes({
    *                       name: { type: string }
    *                       reachable: { type: boolean }
    *                       error: { type: string, nullable: true }
+   *                       downloadsPath: { type: string, nullable: true, description: "Where the server sees the downloads folder, in its own path spelling; null unless exactly one place is known" }
    *                 folders:
    *                   type: array
    *                   items:
@@ -191,6 +271,7 @@ function createTvShowRoutes({
    *                               properties:
    *                                 mappedLibraryId: { type: string, nullable: true }
    *                                 suggestedLibraryId: { type: string, nullable: true }
+   *                                 choice: { type: string, enum: [library, default, none] }
    *       400: { description: Invalid folder parameter }
    *       500: { description: Failed to check the media server libraries }
    */
@@ -213,10 +294,38 @@ function createTvShowRoutes({
 
   /**
    * @swagger
+   * /api/library-folders/folder/{key}:
+   *   get:
+   *     summary: Get one library folder in detail
+   *     description: The enabled channels that chose the folder, the channels following the default folder into it (default folder only), the playlists and title shows that use it, each with its downloaded videos in this folder, and the most recently downloaded video as an example (its upload time from the stored info.json, else its upload date at 00:00 UTC).
+   *     tags: [TV Shows]
+   *     parameters:
+   *       - in: path
+   *         name: key
+   *         required: true
+   *         schema: { type: string }
+   *         description: The subfolder name without __, or ~main for the main folder
+   *     responses:
+   *       200: { description: "{ name, layout, channels, followers: { count, sample }, playlists, titleShows, example }" }
+   *       404: { description: Library folder not found }
+   *       500: { description: Failed to load the library folder }
+   */
+  router.get('/api/library-folders/folder/:key', verifyToken, async (req, res) => {
+    const { key } = req.params;
+    if (key.length > MAX_FOLDER_NAME_LENGTH) return res.status(400).json({ error: 'key must be a folder name or ~main' });
+    try {
+      return res.json(await folderDetail.getFolderDetail(key));
+    } catch (error) {
+      return sendError(res, error, 'Failed to load the library folder', { key });
+    }
+  });
+
+  /**
+   * @swagger
    * /api/library-folders/plex-mapping:
    *   put:
-   *     summary: Map a TV folder to its Plex library for refreshes
-   *     description: Adds a Plex subfolder library mapping so new episodes in a TV subfolder refresh the one Plex TV Shows library that holds it (as the library check reports it). An existing mapping for the folder is never replaced.
+   *     summary: Set the Plex library a library folder refreshes
+   *     description: Without replace, adds the mapping a TV subfolder's library check suggests (the one Plex TV Shows library holding it), never replacing an existing setting. With replace true, sets any folder's ("" = main folder, stored as subfolder null) library, overwriting its entry; libraryId null stores the explicit choice of the default library (no Plex connection needed), which automatic mapping leaves alone.
    *     tags: [TV Shows]
    *     requestBody:
    *       required: true
@@ -226,16 +335,31 @@ function createTvShowRoutes({
    *             type: object
    *             required: [folder, libraryId]
    *             properties:
-   *               folder: { type: string, description: Subfolder name without __ }
-   *               libraryId: { type: string }
+   *               folder: { type: string, description: Subfolder name without __ ("" for the main folder with replace) }
+   *               libraryId: { type: string, nullable: true }
+   *               replace: { type: boolean }
    *     responses:
-   *       200: { description: "The mapping, as { mappedLibraryId, plexSubfolderLibraryMappings } with the saved mappings" }
-   *       400: { description: Invalid folder or library id, or the folder isn't a TV subfolder }
-   *       409: { description: "Plex can't be reached, the folder already has another mapping, or that library isn't the one Plex TV library holding the folder" }
+   *       200: { description: "{ mappedLibraryId, choice (library|default|none), plexSubfolderLibraryMappings }" }
+   *       400: { description: "Invalid folder or library id, a library Plex doesn't list, or (without replace) not a TV subfolder" }
+   *       404: { description: Library folder not found (replace) }
+   *       409: { description: "Plex isn't configured or can't be reached, or (without replace) the folder already has a setting or that library isn't the suggested one" }
    *       500: { description: Failed to save the mapping }
    */
   router.put('/api/library-folders/plex-mapping', verifyToken, async (req, res) => {
-    const { folder, libraryId } = req.body || {};
+    const { folder, libraryId, replace } = req.body || {};
+    if (replace === true) {
+      if (typeof folder !== 'string' || folder.length > MAX_FOLDER_NAME_LENGTH) {
+        return res.status(400).json({ error: 'folder must be a folder name ("" for the main folder)' });
+      }
+      if (libraryId !== null && (typeof libraryId !== 'string' || !/^\d+$/.test(libraryId))) {
+        return res.status(400).json({ error: 'libraryId must be a Plex library id or null' });
+      }
+      try {
+        return res.json(await plexRefreshMappings.setMapping(folder.trim(), libraryId));
+      } catch (error) {
+        return sendError(res, error, 'Failed to save the Plex library mapping', { folder, libraryId });
+      }
+    }
     if (typeof folder !== 'string' || !folder.trim() || folder.length > MAX_FOLDER_NAME_LENGTH) {
       return res.status(400).json({ error: 'folder must be a subfolder name' });
     }
@@ -246,6 +370,36 @@ function createTvShowRoutes({
       return res.json(await libraryCheck.applyPlexMapping(folder.trim(), libraryId));
     } catch (error) {
       return sendError(res, error, 'Failed to save the Plex library mapping', { folder, libraryId });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/library-folders/plex-mapping:
+   *   delete:
+   *     summary: Remove a library folder's Plex refresh setting
+   *     description: Removes the folder's entry from plexSubfolderLibraryMappings, so its downloads refresh the default library and a later suggestion may map it again. Needs no Plex connection. A folder without an entry is answered the same way.
+   *     tags: [TV Shows]
+   *     parameters:
+   *       - in: query
+   *         name: folder
+   *         required: true
+   *         schema: { type: string }
+   *         description: Subfolder name without __, or empty for the main folder
+   *     responses:
+   *       200: { description: "{ mappedLibraryId: null, choice: none, plexSubfolderLibraryMappings }" }
+   *       400: { description: Invalid folder }
+   *       500: { description: Failed to remove the mapping }
+   */
+  router.delete('/api/library-folders/plex-mapping', verifyToken, async (req, res) => {
+    const { folder } = req.query;
+    if (typeof folder !== 'string' || folder.length > MAX_FOLDER_NAME_LENGTH) {
+      return res.status(400).json({ error: 'folder must be a folder name ("" for the main folder)' });
+    }
+    try {
+      return res.json(await plexRefreshMappings.removeMapping(folder.trim()));
+    } catch (error) {
+      return sendError(res, error, 'Failed to remove the Plex library mapping', { folder });
     }
   });
 
