@@ -1,9 +1,11 @@
 const Video = require('../models/video');
 const ChannelVideo = require('../models/channelvideo');
 const configModule = require('./configModule');
+const logger = require('../logger');
 const playlistDownloadGrouper = require('./playlistDownloadGrouper');
 const downloadSettingsResolver = require('./download/downloadSettingsResolver');
 const youtubeUrlParser = require('./youtubeUrlParser');
+const { getLayoutResolver } = require('./tvShows/libraryLayouts');
 
 /**
  * Buckets manually pasted URLs by their resolved pre-download settings
@@ -15,7 +17,9 @@ const youtubeUrlParser = require('./youtubeUrlParser');
  * settings, mirroring finalize-time routing. File structure and routing
  * settings (subfolder, rating) are intentionally not resolved here; they
  * resolve per-video at finalize. See downloadSettingsResolver and
- * videoDownloadPostProcessFiles.
+ * videoDownloadPostProcessFiles. The one exception is the destination's
+ * layout: TV folders are video-only, so an MP3 type is downgraded for URLs
+ * whose predicted folder is TV.
  */
 class ManualDownloadGrouper {
   extractYoutubeId(url) {
@@ -53,9 +57,13 @@ class ManualDownloadGrouper {
       [claimed[id], ownChannelById.get(id), ...(listersById.get(id) || [])].filter(Boolean);
 
     const allCandidates = [...new Set(ids.flatMap(candidatesFor))];
-    const channelMap = await playlistDownloadGrouper.loadChannelMap(allCandidates);
+    const [channelMap, layoutOf] = await Promise.all([
+      playlistDownloadGrouper.loadChannelMap(allCandidates),
+      getLayoutResolver(),
+    ]);
 
     const groups = new Map();
+    let downgraded = 0;
     for (const url of urls) {
       const id = idByUrl.get(url);
       const ownerId = id ? candidatesFor(id).find((candidate) => channelMap.has(candidate)) : undefined;
@@ -66,18 +74,20 @@ class ManualDownloadGrouper {
         playlist: {},
         config: configModule.config,
       });
-      // Preserve the executor's audio contract: an explicitly provided
-      // audioFormat wins even when it is null (= force video-only). The
-      // generic resolver treats null as "no override".
-      const audioFormat = overrideSettings.audioFormat !== undefined
-        ? overrideSettings.audioFormat
-        : resolved.audioFormat;
+      const audio = playlistDownloadGrouper.resolveAudioFormat({
+        overrideSettings, resolved, channel, playlist: {}, layoutOf,
+      });
+      if (audio.downgraded) downgraded += 1;
+      const { audioFormat } = audio;
       const { resolution } = resolved;
       const key = JSON.stringify({ resolution, audioFormat });
       if (!groups.has(key)) {
         groups.set(key, { resolution, audioFormat, urls: [] });
       }
       groups.get(key).urls.push(url);
+    }
+    if (downgraded > 0) {
+      logger.warn({ downgraded }, 'MP3 download type downgraded to video for URLs saved to TV folders');
     }
     return Array.from(groups.values());
   }

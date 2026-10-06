@@ -30,6 +30,7 @@ const SHORT_BLOCK_REASONS: Partial<Record<RunBlockReason, string>> = {
   'no-media-server': 'no media server',
   'youtube-throttled': 'YouTube is throttling',
   'downloads-active': 'downloads are running',
+  reorganizing: 'downloads are being moved',
   'not-registered': 'not available',
 };
 

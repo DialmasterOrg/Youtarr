@@ -13,6 +13,7 @@ const { validateSubFolderName } = require('./filesystem/subfolderValidation');
 const subfolderModule = require('./subfolderModule');
 const m3uGenerator = require('./m3uGenerator');
 const titleRegex = require('./titleFilterRegex');
+const channelLayout = require('./tvShows/channelLayout');
 const {
   GLOBAL_DEFAULT_SENTINEL,
   buildChannelPath,
@@ -649,9 +650,11 @@ class ChannelSettingsModule {
    * Update channel settings
    * @param {string} channelId - Channel ID
    * @param {Object} settings - Settings to update { sub_folder?, video_quality? }
+   * @param {Object} [options]
+   * @param {() => boolean} [options.isDownloadRunning] - Refuses switching between Videos and TV while true
    * @returns {Promise<Object>} - Updated settings and move result
    */
-  async updateChannelSettings(channelId, settings) {
+  async updateChannelSettings(channelId, settings, options = {}) {
     const channel = await Channel.findOne({
       where: { channel_id: channelId }
     });
@@ -828,6 +831,14 @@ class ChannelSettingsModule {
     // Check if subfolder changed
     const subFolderChanged = settings.sub_folder !== undefined && oldSubFolder !== newSubFolder;
 
+    // TV layout: refuse changes that would mix layouts in a folder (throws with .status)
+    const layoutChange = await channelLayout.checkChannelSettingsChange({
+      channel,
+      newSubFolder: settings.sub_folder !== undefined ? newSubFolder : undefined,
+      newAudioFormat: settings.audio_format,
+      isDownloadRunning: options.isDownloadRunning,
+    });
+
     // Prepare update payload
     const updateData = {};
     if (settings.sub_folder !== undefined) {
@@ -917,8 +928,10 @@ class ChannelSettingsModule {
 
     // Move the channel folder if subfolder changed
     // If this fails, we'll roll back the database change
+    // A change involving a TV folder has no files to move (checked above);
+    // the channel's show is created or pointed at the new folder instead.
     let moveResult = null;
-    if (subFolderChanged) {
+    if (subFolderChanged && !layoutChange.involvesTv) {
       try {
         moveResult = await this.moveChannelFolder(updatedChannel, oldSubFolder, newSubFolder);
       } catch (moveError) {
@@ -941,6 +954,24 @@ class ChannelSettingsModule {
     // register() ignores null/empty/sentinels and never throws.
     if (subFolderChanged && newSubFolder) {
       await subfolderModule.register(newSubFolder);
+    }
+
+    // A show left at the old location would keep receiving episodes (its stored
+    // location wins), so a failed show update rolls the folder change back.
+    if (subFolderChanged && layoutChange.involvesTv) {
+      try {
+        await channelLayout.applyChannelFolderChange({
+          channel: updatedChannel, previousSubFolder: oldSubFolder, change: layoutChange,
+        });
+      } catch (showError) {
+        logger.error({ err: showError, channelId }, 'Could not update the channel\'s TV show; rolling back the folder change');
+        try {
+          await updatedChannel.update({ sub_folder: oldSubFolder });
+        } catch (rollbackError) {
+          logger.error({ err: rollbackError, channelId }, 'Could not roll back the folder change after a TV show update failure');
+        }
+        throw showError;
+      }
     }
 
     // Keep the channel .m3u in sync without ever failing the save. Audio format

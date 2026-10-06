@@ -18,7 +18,10 @@ jest.mock('../configModule', () => ({
   getDefaultSubfolder: jest.fn().mockReturnValue(null)
 }));
 
+jest.mock('../tvShows/titleShowStore', () => ({ showFiltersByChannel: jest.fn().mockResolvedValue(new Map()) }));
+
 const channelDownloadGrouper = require('../channelDownloadGrouper');
+const titleShowStore = require('../tvShows/titleShowStore');
 const Channel = require('../../models/channel');
 const configModule = require('../configModule');
 const path = require('path');
@@ -166,6 +169,35 @@ describe('ChannelDownloadGrouper', () => {
       });
     });
 
+    describe('title show filters', () => {
+      const SHOWS = [{ filterRegex: '(?i:a)', excludeRegexes: [] }];
+
+      it('counts title show filters as grouping criteria', () => {
+        expect(new ChannelFilterConfig(null, null, null, null, false, SHOWS).hasGroupingCriteria()).toBe(true);
+      });
+
+      it('tells channels with different show filters apart', () => {
+        const other = [{ filterRegex: '(?i:b)', excludeRegexes: [] }];
+        expect(new ChannelFilterConfig(null, null, null, null, false, SHOWS).buildFilterKey())
+          .not.toBe(new ChannelFilterConfig(null, null, null, null, false, other).buildFilterKey());
+      });
+
+      it('applies show filters to a channel downloading only its title shows', () => {
+        const filterConfig = ChannelFilterConfig.fromChannel({ tv_show_only_downloads: true }, {}, SHOWS);
+        expect(filterConfig.showFilters).toEqual(SHOWS);
+      });
+
+      it('ignores show filters of a channel downloading every video', () => {
+        const filterConfig = ChannelFilterConfig.fromChannel({ tv_show_only_downloads: false }, {}, SHOWS);
+        expect(filterConfig.showFilters).toBeNull();
+      });
+
+      it('ignores the switch while the channel has no title shows', () => {
+        const filterConfig = ChannelFilterConfig.fromChannel({ tv_show_only_downloads: true }, {}, []);
+        expect(filterConfig.hasGroupingCriteria()).toBe(false);
+      });
+    });
+
     describe('fromChannel with global flat default', () => {
       const baseChannel = {
         min_duration: null,
@@ -240,7 +272,8 @@ describe('ChannelDownloadGrouper', () => {
           'max_duration',
           'title_filter_regex',
           'audio_format',
-          'skip_video_folder'
+          'skip_video_folder',
+          'tv_show_only_downloads'
         ]
       });
       expect(result).toEqual(mockChannels);
@@ -737,6 +770,26 @@ describe('ChannelDownloadGrouper', () => {
   });
 
   describe('generateDownloadGroups', () => {
+    it('loads the show filters of channels downloading only their title shows', async () => {
+      Channel.findAll.mockResolvedValue([
+        { channel_id: 'shows', sub_folder: null, tv_show_only_downloads: true },
+        { channel_id: 'all', sub_folder: null, tv_show_only_downloads: false },
+      ]);
+      await channelDownloadGrouper.generateDownloadGroups();
+      expect(titleShowStore.showFiltersByChannel).toHaveBeenCalledWith(['shows']);
+    });
+
+    it('downloads a channel limited to its title shows in its own group', async () => {
+      Channel.findAll.mockResolvedValue([
+        { channel_id: 'shows', sub_folder: null, tv_show_only_downloads: true },
+        { channel_id: 'all', sub_folder: null, tv_show_only_downloads: false },
+      ]);
+      titleShowStore.showFiltersByChannel.mockResolvedValueOnce(new Map([['shows', [{ filterRegex: '(?i:a)', excludeRegexes: [] }]]]));
+      const groups = await channelDownloadGrouper.generateDownloadGroups();
+      expect(groups.map((group) => [group.channels.map((channel) => channel.channel_id), group.filterConfig.showFilters]))
+        .toEqual([[['shows'], [{ filterRegex: '(?i:a)', excludeRegexes: [] }]], [['all'], null]]);
+    });
+
     it('should generate groups with output paths', async () => {
       const mockChannels = [
         {

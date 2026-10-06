@@ -19,6 +19,13 @@ jest.mock('../../../db', () => mockFactories.mockDb());
 // yt-dlp --dump-json output: one JSON document per line.
 const toEntryLines = (entries) => entries.map((entry) => `${JSON.stringify(entry)}\n`).join('');
 
+jest.mock('../../tvShows/episodeInfo', () => ({ getEpisodeInfoMap: jest.fn().mockResolvedValue(new Map()) }));
+jest.mock('../../tvShows/titleShowSaver', () => ({ classifyNew: jest.fn() }));
+jest.mock('../../tvShows/titleShowQueries', () => ({
+  plannedEpisodes: jest.fn().mockResolvedValue(new Map()),
+  youtubeIdsForShow: jest.fn().mockResolvedValue(new Set()),
+}));
+
 describe('channelVideosService', () => {
   let channelVideosService;
   let Channel;
@@ -311,6 +318,34 @@ describe('channelVideosService', () => {
         const result = await getWithMaxRating('PG');
 
         expect(result.totalCount).toBe(2);
+      });
+    });
+
+    describe('show filter', () => {
+      test('lists and counts only the episodes of the chosen show', async () => {
+        const Video = require('../../../models/video');
+        const fileCheckModule = require('../../fileCheckModule');
+        fileCheckModule.checkVideoFiles.mockImplementation(async (videos) => ({ videos, updates: [] }));
+        Channel.findOne.mockResolvedValue({
+          ...mockChannelData,
+          lastFetchedByTab: JSON.stringify({ video: new Date().toISOString() }),
+          auto_download_enabled_tabs: 'video',
+        });
+        const checkedAt = new Date();
+        ChannelVideo.findAll.mockResolvedValue([
+          { youtube_id: 'episode', publishedAt: new Date().toISOString(), youtube_removed_checked_at: checkedAt, toJSON() { return this; } },
+          { youtube_id: 'loose', publishedAt: new Date().toISOString(), youtube_removed_checked_at: checkedAt, toJSON() { return this; } },
+        ]);
+        Video.findAll = jest.fn().mockResolvedValue([]);
+        require('../../tvShows/titleShowQueries').youtubeIdsForShow.mockResolvedValue(new Set(['episode']));
+
+        const result = await channelVideosService.getChannelVideos(
+          'UC123', 1, 50, 'off', '', 'date', 'desc', 'videos',
+          null, null, null, null, 'off', 'off', 'off', 'off', null, 3
+        );
+
+        expect([result.videos.map((v) => v.youtube_id), result.totalCount]).toEqual([['episode'], 1]);
+        expect(require('../../tvShows/titleShowQueries').youtubeIdsForShow).toHaveBeenCalledWith(3);
       });
     });
 

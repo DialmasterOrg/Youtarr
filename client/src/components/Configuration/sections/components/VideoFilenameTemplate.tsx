@@ -6,7 +6,9 @@ import {
   Button,
   Link,
   CircularProgress,
+  Tooltip,
 } from '../../../ui';
+import { Info as InfoIcon } from '../../../../lib/icons';
 import {
   FILENAME_PRESETS,
   PLEX_TV_SERIES_PRESET_PREFIX,
@@ -36,6 +38,9 @@ const SEVERITY_TEXT: Record<'warn' | 'danger', string> = {
   danger:
     "Filename is very long. Downloads are likely to fail on Windows and SMB-mounted NAS shares (260-char path limit). Pure CJK or emoji content can also exceed Linux/macOS' 255-byte per-filename limit.",
 };
+
+const TV_SHOW_HINT =
+  'For TV-style channels, save the channel as a TV show instead: Channel Settings > TV Show. Episodes then get season folders and NFO files.';
 
 export const VideoFilenameTemplate: React.FC<VideoFilenameTemplateProps> = ({
   value,
@@ -111,17 +116,34 @@ export const VideoFilenameTemplate: React.FC<VideoFilenameTemplateProps> = ({
       />
 
       <Box className="flex flex-wrap gap-2">
-        {FILENAME_PRESETS.map((preset) => (
-          <Button
-            key={preset.label}
-            variant="outlined"
-            size="small"
-            onClick={() => onChange(preset.prefix)}
-            title={preset.description}
-          >
-            {preset.label}
-          </Button>
-        ))}
+        {FILENAME_PRESETS.map((preset) => {
+          const presetButton = (
+            <Button
+              key={preset.label}
+              variant="outlined"
+              size="small"
+              onClick={() => onChange(preset.prefix)}
+              title={preset.description}
+            >
+              {preset.label}
+            </Button>
+          );
+          if (preset.prefix !== PLEX_TV_SERIES_PRESET_PREFIX) return presetButton;
+          return (
+            <Box key={preset.label} className="inline-flex items-center gap-1">
+              {presetButton}
+              <Tooltip title={TV_SHOW_HINT} placement="top">
+                <button
+                  type="button"
+                  aria-label="About saving channels as TV shows"
+                  className="inline-flex items-center justify-center rounded-full p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <InfoIcon size={16} aria-hidden />
+                </button>
+              </Tooltip>
+            </Box>
+          );
+        })}
       </Box>
 
       {showTvSeriesPrefixTip && (

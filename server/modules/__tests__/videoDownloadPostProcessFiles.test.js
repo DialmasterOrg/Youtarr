@@ -88,6 +88,16 @@ const mockVideoPersistence = {
 
 jest.mock('../videoPersistence', () => mockVideoPersistence);
 
+// The TV branch is decided by episodePlacement (tested on its own); null
+// keeps the movie-style path every other test here exercises.
+const mockEpisodePlacement = {
+  planEpisode: jest.fn(() => Promise.resolve(null)),
+  moveEpisodeFiles: jest.fn(() => Promise.resolve([])),
+  writeEpisodeMetadata: jest.fn(() => Promise.resolve()),
+};
+
+jest.mock('../tvShows/episodePlacement', () => mockEpisodePlacement);
+
 jest.mock('../../logger');
 
 // downloadSettingsResolver is intentionally not mocked: it is a pure function, so these
@@ -118,7 +128,7 @@ const ChannelVideo = require('../../models/channelvideo');
 
 const flushPromises = () => new Promise((resolve) => queueMicrotask(resolve));
 
-async function settleAsync(iterations = 5) {
+async function settleAsync(iterations = 10) {
   for (let i = 0; i < iterations; i += 1) {
     await flushPromises();
   }
@@ -143,6 +153,9 @@ describe('videoDownloadPostProcessFiles', () => {
     logger.error.mockClear();
     JobVideoDownload.update.mockResolvedValue([0]);
     mockVideoPersistence.persistDownloadedVideoForJob.mockResolvedValue(null);
+    mockEpisodePlacement.planEpisode.mockResolvedValue(null);
+    mockEpisodePlacement.moveEpisodeFiles.mockResolvedValue([]);
+    mockEpisodePlacement.writeEpisodeMetadata.mockResolvedValue();
     Channel.findOne.mockResolvedValue(null);
     Channel.findAll.mockResolvedValue([]);
     ChannelVideo.findAll.mockResolvedValue([]);
@@ -280,6 +293,205 @@ describe('videoDownloadPostProcessFiles', () => {
     await settleAsync();
 
     expect(getEmbeddedTitle(videoPath)).toBe('Video Title');
+  });
+
+  describe('TV episodes', () => {
+    const stem = 'S2024E01310000 - Video Title [abc123]';
+    const showDir = '/library/__TV/Channel';
+    const seasonDir = '/library/__TV/Channel/Season 2024';
+    const episodePath = `${seasonDir}/${stem}.mp4`;
+    const placement = {
+      show: { id: 5, channel_id: 'channel123', name: 'Channel Show', folder_name: 'Channel', library_folder: 'TV', external_key: 'channel123' },
+      assignment: { season: 2024, episode: 1310000, dateNumbered: true, episodeTitle: 'Video Title', fileStem: stem },
+      showDir,
+      seasonDir,
+      stem,
+    };
+
+    beforeEach(() => {
+      mockEpisodePlacement.planEpisode.mockResolvedValue(placement);
+      tempPathManager.isTempPath.mockReturnValue(true);
+      fs.existsSync.mockImplementation((p) => p === jsonPath || p === episodePath);
+    });
+
+    it('asks for a placement with the resolved owner and folder', async () => {
+      await loadModule();
+      await settleAsync();
+
+      expect(mockEpisodePlacement.planEpisode).toHaveBeenCalledWith(expect.objectContaining({
+        youtubeId: 'abc123',
+        ownerChannelId: 'channel123',
+        resolvedSubfolder: null,
+        baseDir: '/library',
+      }));
+    });
+
+    it('moves the files into the season folder under the episode stem', async () => {
+      await loadModule();
+      await settleAsync();
+
+      expect(mockEpisodePlacement.moveEpisodeFiles).toHaveBeenCalledWith({
+        sourceDir: '/library/Channel', youtubeId: 'abc123', seasonDir, stem,
+      });
+    });
+
+    it('records the episode path as the final file path', async () => {
+      await loadModule();
+      await settleAsync();
+
+      expect(JobVideoDownload.update).toHaveBeenCalledWith(
+        { status: 'completed', file_path: episodePath },
+        expect.any(Object)
+      );
+      const savedInfo = fs.writeFileSync.mock.calls
+        .filter(([target]) => target === '/mock/jobs/info/abc123.info.json')
+        .map(([, content]) => JSON.parse(content))
+        .pop();
+      expect(savedInfo._actual_filepath).toBe(episodePath);
+    });
+
+    it('tags the file as a TV episode without the channel prefix or season atoms', async () => {
+      await loadModule();
+      await settleAsync();
+
+      const args = getAtomicParsleyArgs(videoPath);
+      expect(args).toEqual(expect.arrayContaining([
+        '--title', 'Video Title', '--TVShowName', 'Channel Show', '--TVEpisode', 'abc123', '--stik', 'TV Show',
+      ]));
+      expect(args).not.toEqual(expect.arrayContaining(['--TVSeasonNum']));
+      expect(args).not.toEqual(expect.arrayContaining(['--TVEpisodeNum']));
+    });
+
+    it('writes episode NFO files instead of the movie NFO', async () => {
+      await loadModule();
+      await settleAsync();
+
+      expect(nfoGenerator.writeVideoNfoFile).not.toHaveBeenCalled();
+      expect(mockEpisodePlacement.writeEpisodeMetadata).toHaveBeenCalledWith(expect.objectContaining({
+        placement,
+        info: expect.objectContaining({ id: 'abc123' }),
+      }));
+    });
+
+    it('writes episode NFO files even when video NFO files are off', async () => {
+      configModule.__setConfig({ writeChannelPosters: false, writeVideoNfoFiles: false });
+
+      await loadModule();
+      await settleAsync();
+
+      expect(mockEpisodePlacement.writeEpisodeMetadata).toHaveBeenCalled();
+    });
+
+    it('copies the channel banner into the show folder', async () => {
+      configModule.__setConfig({ writeChannelPosters: false, writeVideoNfoFiles: true, writeBackdropImages: true });
+      const bannerCache = '/mock/images/channelbanner-channel123.jpg';
+      fs.existsSync.mockImplementation((p) => p === jsonPath || p === episodePath || p === bannerCache);
+
+      await loadModule();
+      await settleAsync();
+
+      expect(fs.copySync).toHaveBeenCalledWith(bannerCache, `${showDir}/backdrop.jpg`, { overwrite: true });
+    });
+
+    it('uses the show owner\'s banner for a video uploaded by another channel', async () => {
+      configModule.__setConfig({ writeChannelPosters: false, writeVideoNfoFiles: true, writeBackdropImages: true });
+      mockEpisodePlacement.planEpisode.mockResolvedValue({ ...placement, show: { ...placement.show, channel_id: 'owner456' } });
+      const ownerBanner = '/mock/images/channelbanner-owner456.jpg';
+      fs.existsSync.mockImplementation((p) => p === jsonPath || p === episodePath || p === ownerBanner);
+
+      await loadModule();
+      await settleAsync();
+
+      expect(fs.copySync).toHaveBeenCalledWith(ownerBanner, `${showDir}/backdrop.jpg`, { overwrite: true });
+    });
+
+    // Settings keep MP3 types away from TV folders; MP3 output that still
+    // arrives (a pasted URL of a TV channel's video, an MP3 playlist) is placed
+    // as the episode, never movie-style, so a folder never mixes layouts.
+    describe('MP3 output that reaches a TV folder', () => {
+      const audioPath = '/library/Channel/Video Title [abc123].mp3';
+      const companionVideoPath = '/library/Channel/Video Title [abc123].mp4';
+      const episodeAudioPath = `${seasonDir}/${stem}.mp3`;
+      const savedInfo = () => fs.writeFileSync.mock.calls
+        .filter(([target]) => target === '/mock/jobs/info/abc123.info.json')
+        .map(([, content]) => JSON.parse(content))
+        .pop();
+
+      beforeEach(() => {
+        process.argv = ['node', 'script', audioPath];
+      });
+
+      it('places an MP3-only download under the episode stem', async () => {
+        fs.existsSync.mockImplementation((p) => p === jsonPath || p === episodeAudioPath);
+
+        await loadModule();
+        await settleAsync();
+
+        expect(savedInfo()._actual_audio_filepath).toBe(episodeAudioPath);
+        expect(JobVideoDownload.update).toHaveBeenCalledWith(
+          { status: 'completed', file_path: episodeAudioPath },
+          expect.any(Object)
+        );
+      });
+
+      it('warns that an MP3-only episode has no video for the media server', async () => {
+        fs.existsSync.mockImplementation((p) => p === jsonPath || p === episodeAudioPath);
+
+        await loadModule();
+        await settleAsync();
+
+        expect(logger.warn).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'abc123', seasonDir }),
+          expect.stringMatching(/MP3/)
+        );
+      });
+
+      it('does not warn for a Video + MP3 download, whose MP4 is the episode', async () => {
+        fs.existsSync.mockImplementation((p) => [jsonPath, companionVideoPath, episodeAudioPath].includes(p));
+
+        await loadModule();
+        await settleAsync();
+
+        expect(logger.warn).not.toHaveBeenCalledWith(expect.anything(), expect.stringMatching(/MP3/));
+      });
+
+      it('places a Video + MP3 download\'s MP4 under the episode stem too', async () => {
+        fs.existsSync.mockImplementation((p) => [jsonPath, companionVideoPath, episodeAudioPath].includes(p));
+
+        await loadModule();
+        await settleAsync();
+
+        expect(savedInfo()._actual_video_filepath).toBe(episodePath);
+      });
+
+      it('tags the MP4 of a Video + MP3 download as the episode', async () => {
+        fs.existsSync.mockImplementation((p) => [jsonPath, companionVideoPath, episodeAudioPath].includes(p));
+
+        await loadModule();
+        await settleAsync();
+
+        expect(getAtomicParsleyArgs(companionVideoPath)).toEqual(expect.arrayContaining(['--stik', 'TV Show']));
+      });
+    });
+
+    it('fails the video when its files cannot be moved', async () => {
+      mockEpisodePlacement.moveEpisodeFiles.mockRejectedValue(new Error('EACCES'));
+
+      await loadModule();
+      await settleAsync();
+
+      expect(process.exit).toHaveBeenCalledWith(1);
+    });
+
+    it('fails the video rather than saving it movie-style when it cannot be placed', async () => {
+      mockEpisodePlacement.planEpisode.mockRejectedValue(new Error('db down'));
+
+      await loadModule();
+      await settleAsync();
+
+      expect(process.exit).toHaveBeenCalledWith(1);
+      expect(fs.move).not.toHaveBeenCalled();
+    });
   });
 
   describe('video_mp3 dual-format downloads', () => {
@@ -1838,6 +2050,26 @@ describe('videoDownloadPostProcessFiles', () => {
 
       const movedFiles = moveWithRetries.mock.calls.map(([src]) => src.split('/').pop());
       expect(movedFiles).toEqual(['Video Title [abc123].mp4']);
+    });
+
+    it.each([
+      ['hoisted flat', true],
+      ['kept in its video folder', false],
+    ])('writes the channel backdrop into the channel folder the video was %s in', async (_label, skipVideoFolder) => {
+      const channelBannerCachePath = '/mock/images/channelbanner-channel123.jpg';
+      configModule.__setConfig({
+        writeChannelPosters: false,
+        writeVideoNfoFiles: true,
+        writeBackdropImages: true,
+      });
+      Channel.findOne.mockResolvedValue({ ...trackedChannel, skip_video_folder: skipVideoFolder });
+      fs.existsSync.mockImplementation((p) => p === tempJsonPath || p === channelBannerCachePath
+        || (p.startsWith('/library/') && !p.endsWith('/backdrop.jpg')));
+
+      await loadModule();
+      await settleAsync();
+
+      expect(fs.copySync).toHaveBeenCalledWith(channelBannerCachePath, '/library/Channel/backdrop.jpg', { overwrite: true });
     });
 
     it('explicit structure override beats the channel setting', async () => {

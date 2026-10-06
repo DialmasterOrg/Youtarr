@@ -5,6 +5,7 @@ Complete guide for integrating Youtarr with Kodi media center.
 ## Table of Contents
 - [Overview](#overview)
 - [Library Setup](#library-setup)
+- [TV Shows](#tv-shows)
 - [Metadata Configuration](#metadata-configuration)
 - [Multi-Library Organization](#multi-library-organization)
 - [Playlist Files (.m3u)](#playlist-files-m3u)
@@ -43,6 +44,18 @@ Configure the following settings:
 - **Scan recursively**: Yes
 - **Selected folder contains a single video**: No
 - **Exclude path from library updates**: No
+
+## TV Shows
+
+Youtarr can save channels as TV shows in a **TV folder**: a library folder whose layout is TV shows (Settings -> Core -> File Structure -> **Library folders**, or Channel Settings -> **TV Show**). Each channel becomes a show with year seasons and episodes named `Season 2026/S2026E09281530 - Title [id].mp4`, each with an episode NFO file and a thumbnail, plus `tvshow.nfo` and `poster.jpg` in the show folder. The episode number is the upload's month, day, hour and minute in UTC.
+
+To add a TV folder to Kodi:
+
+1. Add the TV folder itself as a video source, for example `/path/to/youtube/__TV Shows`.
+2. Set its content type to **TV shows** with **Local information only**.
+3. Keep your Videos folders in a separate **Movies** source, and don't add the downloads folder itself once one of its folders is a TV folder.
+
+Kodi takes the season and episode from the file name, and it scans the rest of the name for a second `SxxEyy`: a video titled, for example, "Breaking Bad S05E14 Reaction" may show up as an extra, phantom episode. Kodi was not part of Youtarr's media server tests.
 
 ## Metadata Configuration
 

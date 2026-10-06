@@ -51,6 +51,23 @@ function isTaskRunning(id, state) {
 
 const tasks = new Map();
 let runRecorder = null;
+// One blocker that applies across tasks (a reorganize moving files), checked
+// for scheduled occurrences as well as manual runs: (id) => block | null.
+let exclusiveBlocker = null;
+
+function setExclusiveBlocker(blocker) {
+  exclusiveBlocker = typeof blocker === 'function' ? blocker : null;
+}
+
+function exclusiveBlockFor(id) {
+  if (!exclusiveBlocker) return null;
+  try {
+    return exclusiveBlocker(id) || null;
+  } catch (err) {
+    logger.warn({ err, task: id }, 'Could not check the cross-task run blocker');
+    return null;
+  }
+}
 
 // The recorder (scheduledTaskRuns) is injected at startup once the database is
 // ready; without one, tasks still run but leave no history.
@@ -122,6 +139,14 @@ async function execute(id, state, { trigger = 'scheduled', args = {}, force = fa
   if (state.running) {
     if (runRecorder) await withRecorder((recorder) => recorder.recordSkipped(id));
     return null;
+  }
+  const exclusive = exclusiveBlockFor(id);
+  if (exclusive) {
+    const skipped = { status: 'skipped', outcome: 'skipped', message: exclusive.message, details: null };
+    const now = new Date();
+    await withRecorder((recorder) => recorder.record({ taskKey: id, trigger, startedAt: now, finishedAt: now, ...skipped }));
+    notifyStatusChanged(id);
+    return skipped;
   }
   state.running = true;
   // Remembered so a skipped run (the task did nothing) can leave the
@@ -247,6 +272,12 @@ function describeTask(id, state) {
   };
 }
 
+// Whether a registered task is running now (by the manager or its own lock).
+function isTaskRunningById(id) {
+  const state = tasks.get(id);
+  return state ? isTaskRunning(id, state) : false;
+}
+
 function getStatus() {
   return [...tasks.entries()].map(([id, state]) => describeTask(id, state));
 }
@@ -264,6 +295,8 @@ async function getRunBlocker(id, { enforceEnabled = true, enforceCooldown = true
   const state = tasks.get(id);
   if (!state) return block(RUN_BLOCK_REASONS.NOT_REGISTERED);
   if (isTaskRunning(id, state)) return block(RUN_BLOCK_REASONS.RUNNING);
+  const exclusive = exclusiveBlockFor(id);
+  if (exclusive) return { availableAt: null, ...exclusive };
   if (state.getRunBlocker) {
     let taskBlock = null;
     try {
@@ -322,6 +355,6 @@ function announceRun(id, promise) {
 }
 
 module.exports = {
-  updateTask, stopAll, getStatus, getTaskSnapshot, setRunRecorder, runNow, getRunBlocker,
-  notifyStatusChanged, announceRun, RUN_BLOCK_REASONS,
+  updateTask, stopAll, getStatus, getTaskSnapshot, setRunRecorder, setExclusiveBlocker, runNow, getRunBlocker,
+  notifyStatusChanged, announceRun, isTaskRunningById, RUN_BLOCK_REASONS,
 };

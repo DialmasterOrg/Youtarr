@@ -31,6 +31,9 @@ import { ResolutionSelect } from '../../shared/ResolutionSelect';
 import { OptionSelect } from '../../shared/OptionSelect';
 import { RatingSelect } from '../../shared/RatingSelect';
 import { useSubfolders } from '../../../hooks/useSubfolders';
+import { useLibraryFolders } from '../../../hooks/useLibraryFolders';
+import { effectiveLibraryFolder } from '../../../utils/libraryLayouts';
+import { VIDEO_ONLY_HELPER_TEXT } from '../../shared/AudioFormatSelect';
 import { RESOLUTION_OPTIONS, AUDIO_FORMAT_OPTIONS, SelectOption } from '../../../utils/downloadOptions';
 
 const LARGE_DOWNLOAD_WARNING_THRESHOLD = 50;
@@ -45,6 +48,8 @@ const DOWNLOAD_TYPE_OPTIONS: SelectOption[] = [
   { value: VIDEO_ONLY_CHOICE, label: 'Video Only' },
   ...AUDIO_FORMAT_OPTIONS,
 ];
+// TV folders are video-only, so a TV destination override offers no MP3 types.
+const VIDEO_ONLY_DOWNLOAD_TYPE_OPTIONS: SelectOption[] = [DOWNLOAD_TYPE_OPTIONS[0]];
 
 interface DownloadSettingsDialogProps {
   open: boolean;
@@ -99,6 +104,11 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
 
   // Fetch available subfolders
   const { subfolders, loading: subfoldersLoading, createSubfolder } = useSubfolders(token);
+  // Only the manual Destination Override needs folder layouts; load them while open.
+  const { folders: libraryFolders, layoutOf } = useLibraryFolders(open && mode === 'manual' ? token : null);
+  const defaultLibraryFolder = libraryFolders.find((folder) => folder.isDefault)?.name ?? '';
+  const overrideIsTvFolder = subfolderOverride !== null
+    && layoutOf(effectiveLibraryFolder(subfolderOverride, defaultLibraryFolder)) === 'tv';
 
   const selectedDefaultOption = RESOLUTION_OPTIONS.find((option) => option.value === defaultResolution);
   const defaultQualityLabel = selectedDefaultOption
@@ -129,11 +139,20 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
         : 'No override (per channel, else Video Only)';
 
   const isMp3Format = audioFormat === 'video_mp3' || audioFormat === 'mp3_only';
-  const downloadTypeHelperText = isMp3Format
+  const downloadTypeHelperText = overrideIsTvFolder
+    ? VIDEO_ONLY_HELPER_TEXT
+    : isMp3Format
     ? 'MP3 files are saved at 192kbps in the same folder as videos.'
     : audioFormat === null && defaultAudioFormatSource === 'global'
       ? 'Configured channels use their Download Type setting; all other videos download as Video Only.'
       : undefined;
+
+  // An MP3 type chosen before the override moved to a TV folder becomes Video Only.
+  useEffect(() => {
+    if (overrideIsTvFolder && isMp3Format) {
+      setAudioFormat(VIDEO_ONLY_CHOICE);
+    }
+  }, [overrideIsTvFolder, isMp3Format]);
 
   // Auto-detect re-download need
   useEffect(() => {
@@ -483,6 +502,8 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                     subfolders={subfolders}
                     loading={subfoldersLoading}
                     createSubfolder={createSubfolder}
+                    defaultSubfolderDisplay={defaultLibraryFolder || null}
+                    layoutOf={layoutOf}
                     label="Override Destination"
                     helperText="Configured channels use their subfolder, unconfigured channels use global default."
                   />
@@ -493,7 +514,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
 
                   <OptionSelect
                     className="mb-4 audio-control audio-control--download-type"
-                    options={DOWNLOAD_TYPE_OPTIONS}
+                    options={overrideIsTvFolder ? VIDEO_ONLY_DOWNLOAD_TYPE_OPTIONS : DOWNLOAD_TYPE_OPTIONS}
                     label="Download Type"
                     emptyLabel={downloadTypeEmptyLabel}
                     value={audioFormat}

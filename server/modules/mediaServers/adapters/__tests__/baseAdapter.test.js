@@ -3,6 +3,7 @@ const {
   extractBasename,
   pathSegments,
   trailingSegmentMatch,
+  bestItemMatchesByPath,
   isServerUnavailableError,
   describeHttpError,
   MediaServerUnavailableError,
@@ -134,5 +135,19 @@ describe('baseAdapter helpers', () => {
       expect(e.code).toBe('X');
       expect(e.message).toBe('m');
     });
+  });
+});
+
+describe('bestItemMatchesByPath', () => {
+  test('picks the item sharing the most trailing folders with each file, with that count', () => {
+    const matches = bestItemMatchesByPath([
+      { id: 'stale', path: 'Q:\\Media\\Old\\Show\\Season 2024\\E [id1].mp4' },
+      { id: 'current', path: '/srv/__TV/Show/Season 2024/E [id1].mp4' },
+    ], ['/data/__TV/Show/Season 2024/E [id1].mp4']);
+    expect(matches.get('/data/__TV/Show/Season 2024/E [id1].mp4')).toEqual({ id: 'current', score: 4 });
+  });
+
+  test('maps a file no item matches to null', () => {
+    expect(bestItemMatchesByPath([{ id: 'a', path: '/x/a.mp4' }], ['/y/b.mp4']).get('/y/b.mp4')).toBeNull();
   });
 });

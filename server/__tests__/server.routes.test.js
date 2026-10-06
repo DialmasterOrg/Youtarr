@@ -222,6 +222,7 @@ const createServerModule = ({
         const jobModuleMock = {
           onJobAbandoned: jest.fn(),
           onJobEnded: jest.fn(),
+          onBeforeNextJob: jest.fn(),
           getJob: jest.fn((jobId) => {
             if (jobId === 'existing-job') {
               return { id: jobId, status: 'In Progress' };
@@ -416,6 +417,36 @@ const createServerModule = ({
           getAll: jest.fn().mockResolvedValue([]),
           register: jest.fn().mockResolvedValue(undefined),
           delete: jest.fn().mockResolvedValue(undefined),
+        }));
+        jest.doMock('../modules/tvShows/libraryFolders', () => ({
+          listLibraryFolders: jest.fn().mockResolvedValue([]),
+          setFolderLayout: jest.fn(),
+          checkDefaultSubfolderChange: jest.fn().mockResolvedValue(undefined),
+        }));
+        jest.doMock('../modules/tvShows/libraryLayouts', () => ({
+          getLayoutResolver: jest.fn().mockResolvedValue(() => 'videos'),
+          listTvFolders: jest.fn().mockResolvedValue([]),
+        }));
+        jest.doMock('../modules/tvShows/showStore', () => ({ findChannelShow: jest.fn().mockResolvedValue(null) }));
+        jest.doMock('../modules/tvShows/episodeInfo', () => ({ getEpisodeInfoMap: jest.fn().mockResolvedValue(new Map()) }));
+        jest.doMock('../modules/tvShows/layoutGuards', () => ({ assertVideoOnlyDestination: jest.fn(), isMp3Format: jest.fn(() => false) }));
+        jest.doMock('../modules/reorganize', () => ({
+          lock: { coversAnyVideo: jest.fn(() => false) },
+          initialize: jest.fn(),
+          recoverInterrupted: jest.fn().mockResolvedValue(undefined),
+          channelState: jest.fn().mockResolvedValue({ running: false, unmoved: null }),
+          preview: jest.fn(), start: jest.fn(), retry: jest.fn(), getOperation: jest.fn(), getActive: jest.fn(),
+        }));
+        jest.doMock('../modules/mediaServers/watchStatusHolds', () => ({
+          describeHolds: jest.fn(), countHolds: jest.fn(), reopenHold: jest.fn(), dismissHold: jest.fn(), applyHolds: jest.fn(), expireHolds: jest.fn(),
+        }));
+        jest.doMock('../modules/mediaServers/watchStatusPushBack', () => ({ pushPendingHolds: jest.fn(), scheduleFollowUps: jest.fn() }));
+        jest.doMock('../modules/mediaServers/libraryCheck', () => ({ check: jest.fn(), applyPlexMapping: jest.fn() }));
+        jest.doMock('../modules/tvShows/titleShowService', () => ({}));
+        jest.doMock('../modules/tvShows/archiveSuppressor', () => ({ initialize: jest.fn(), flush: jest.fn().mockResolvedValue() }));
+        jest.doMock('../modules/tvShows/channelLayout', () => ({
+          getChannelTvState: jest.fn(),
+          resolveLayoutTarget: jest.fn(),
         }));
         jest.doMock('../modules/webSocketServer.js', () => jest.fn());
         jest.doMock('node-cron', () => cronMock);
@@ -1060,7 +1091,8 @@ describe('server routes - channels', () => {
         'off', // default missingFilter
         'off', // default ignoredFilter
         'off', // default watchedFilter
-        null // default maxRating
+        null, // default maxRating
+        null // default showId
       );
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
@@ -1130,7 +1162,8 @@ describe('server routes - channels', () => {
         'off', // default missingFilter
         'off', // default ignoredFilter
         'only', // watchedFilter
-        null // default maxRating
+        null, // default maxRating
+        null // default showId
       );
       expect(res.statusCode).toBe(200);
     });
@@ -1174,9 +1207,40 @@ describe('server routes - channels', () => {
         'off', // default missingFilter
         'off', // default ignoredFilter
         'off', // default watchedFilter
-        null // default maxRating
+        null, // default maxRating
+        null // default showId
       );
       expect(res.statusCode).toBe(200);
+    });
+
+    test('passes a show filter to channel module', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'get', '/getchannelvideos/:channelId');
+      const getVideosHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({ params: { channelId: 'channel-1' }, query: { showId: '7' } });
+      const res = createMockResponse();
+
+      await getVideosHandler(req, res);
+
+      const args = channelModuleMock.getChannelVideos.mock.calls[0];
+      expect(args[17]).toBe(7);
+    });
+
+    test('rejects a show filter that is not a show id with 400', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'get', '/getchannelvideos/:channelId');
+      const getVideosHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({ params: { channelId: 'channel-1' }, query: { showId: 'abc' } });
+      const res = createMockResponse();
+
+      await getVideosHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(channelModuleMock.getChannelVideos).not.toHaveBeenCalled();
     });
 
     test('passes maxRating to channel module', async () => {
@@ -1194,7 +1258,7 @@ describe('server routes - channels', () => {
       await getVideosHandler(req, res);
 
       const args = channelModuleMock.getChannelVideos.mock.calls[0];
-      expect(args[args.length - 1]).toBe('TV-14');
+      expect(args[16]).toBe('TV-14');
     });
 
     test('rejects an unknown maxRating with 400', async () => {
@@ -1388,7 +1452,8 @@ describe('server routes - channels', () => {
       expect(channelModuleMock.updateChannelsByDelta).toHaveBeenCalledWith({
         enableUrls: ['https://youtube.com/@new'],
         disableUrls: ['https://youtube.com/@old'],
-        channelSettingsModule: expect.any(Object)
+        channelSettingsModule: expect.any(Object),
+        isDownloadRunning: expect.any(Function)
       });
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({ status: 'success' });
@@ -1419,7 +1484,8 @@ describe('server routes - channels', () => {
           { url: 'https://youtube.com/@channel2', channel_id: 'UC456' }
         ],
         disableUrls: [],
-        channelSettingsModule: expect.any(Object)
+        channelSettingsModule: expect.any(Object),
+        isDownloadRunning: expect.any(Function)
       });
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({ status: 'success' });

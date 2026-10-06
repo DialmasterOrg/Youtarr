@@ -3,6 +3,8 @@ const watchStatusQueries = require('../mediaServers/watchStatusQueries');
 const fileCheckModule = require('../fileCheckModule');
 const ratingMapper = require('../ratingMapper');
 const { PUBLISHED_AT_SOURCE } = require('../constants/publishedAtSource');
+const episodeInfo = require('../tvShows/episodeInfo');
+const titleShowQueries = require('../tvShows/titleShowQueries');
 
 class ChannelVideoQuery {
   /**
@@ -90,6 +92,14 @@ class ChannelVideoQuery {
     const watchedByVideoId = await watchStatusQueries.getWatchedByMap(
       downloadedVideos.map((v) => v.id)
     );
+    const episodesByVideoId = await episodeInfo.getEpisodeInfoMap(
+      downloadedVideos.map((v) => ({ youtubeId: v.youtubeId, filePath: v.filePath }))
+    );
+    // A title show numbers an episode before it downloads; its chip shows that number.
+    const notDownloaded = videos
+      .map((video) => video.youtube_id || video.youtubeId)
+      .filter((id) => !downloadStatusMap.has(id) || downloadStatusMap.get(id).removed);
+    const plannedByVideoId = await titleShowQueries.plannedEpisodes(notDownloaded);
 
     return videos.map((video) => {
       const plainVideoObject = video.toJSON ? video.toJSON() : video;
@@ -114,6 +124,8 @@ class ChannelVideoQuery {
           ? new Date(status.last_downloaded_at).toISOString()
           : null;
         plainVideoObject.watchedBy = watchedByVideoId.get(status.id) || [];
+        plainVideoObject.episode = episodesByVideoId.get(videoId) || null;
+        plainVideoObject.plannedEpisode = plannedByVideoId.get(videoId) || null;
       } else {
         // Video never downloaded
         plainVideoObject.added = false;
@@ -125,6 +137,8 @@ class ChannelVideoQuery {
         plainVideoObject.protected = false;
         plainVideoObject.video_resolution = null;
         plainVideoObject.watchedBy = [];
+        plainVideoObject.episode = null;
+        plainVideoObject.plannedEpisode = plannedByVideoId.get(videoId) || null;
       }
 
       // Replace thumbnail with template format (unless video is removed from YouTube)
@@ -214,6 +228,16 @@ class ChannelVideoQuery {
    * @param {string} watchedMode - 'off' | 'only' | 'exclude'
    * @returns {Array} - Filtered array of videos
    */
+  /**
+   * Keep only the episodes of one title show.
+   * @param {Array} videos
+   * @param {Set<string>|null} showFilter - The show's video ids, or null for every video
+   */
+  _applyShowFilter(videos, showFilter) {
+    if (!showFilter) return videos;
+    return videos.filter((video) => showFilter.has(video.youtube_id || video.youtubeId));
+  }
+
   _applyStatusFilters(videos, protectedMode, missingMode, ignoredMode, watchedMode) {
     let filtered = videos;
 
@@ -262,7 +286,7 @@ class ChannelVideoQuery {
    * @param {string|null} dateTo - Filter videos to this date (ISO string, default null)
    * @returns {Promise<Array>} - Array of video objects with download status
    */
-  async fetchNewestVideosFromDb(channelId, limit = 50, offset = 0, downloadedFilter = 'off', searchQuery = '', sortBy = 'date', sortOrder = 'desc', checkFiles = false, mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = 'off', missingFilter = 'off', ignoredFilter = 'off', watchedFilter = 'off', ratingFilter = null) {
+  async fetchNewestVideosFromDb(channelId, limit = 50, offset = 0, downloadedFilter = 'off', searchQuery = '', sortBy = 'date', sortOrder = 'desc', checkFiles = false, mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = 'off', missingFilter = 'off', ignoredFilter = 'off', watchedFilter = 'off', ratingFilter = null, showFilter = null) {
     // First get all videos to enrich with download status
     const allChannelVideos = await ChannelVideo.findAll({
       where: {
@@ -298,6 +322,8 @@ class ChannelVideoQuery {
     filteredVideos = this._applyStatusFilters(filteredVideos, protectedFilter, missingFilter, ignoredFilter, watchedFilter);
 
     filteredVideos = this._applyRatingFilter(filteredVideos, ratingFilter);
+
+    filteredVideos = this._applyShowFilter(filteredVideos, showFilter);
 
     // Apply sorting
     filteredVideos.sort((a, b) => {
@@ -383,9 +409,9 @@ class ChannelVideoQuery {
    * @param {string|null} dateTo - Filter videos to this date (ISO string, default null)
    * @returns {Promise<Object>} - Object with totalCount and oldestVideoDate
    */
-  async getChannelVideoStats(channelId, downloadedFilter = 'off', searchQuery = '', mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = 'off', missingFilter = 'off', ignoredFilter = 'off', watchedFilter = 'off', ratingFilter = null) {
+  async getChannelVideoStats(channelId, downloadedFilter = 'off', searchQuery = '', mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = 'off', missingFilter = 'off', ignoredFilter = 'off', watchedFilter = 'off', ratingFilter = null, showFilter = null) {
     // If we have search or filter, we need to get all videos
-    if (downloadedFilter !== 'off' || searchQuery || minDuration !== null || maxDuration !== null || dateFrom || dateTo || protectedFilter !== 'off' || missingFilter !== 'off' || ignoredFilter !== 'off' || watchedFilter !== 'off' || ratingFilter) {
+    if (downloadedFilter !== 'off' || searchQuery || minDuration !== null || maxDuration !== null || dateFrom || dateTo || protectedFilter !== 'off' || missingFilter !== 'off' || ignoredFilter !== 'off' || watchedFilter !== 'off' || ratingFilter || showFilter) {
       // Need to filter by download status and/or search
       const allChannelVideos = await ChannelVideo.findAll({
         where: {
@@ -420,6 +446,8 @@ class ChannelVideoQuery {
       filteredVideos = this._applyStatusFilters(filteredVideos, protectedFilter, missingFilter, ignoredFilter, watchedFilter);
 
       filteredVideos = this._applyRatingFilter(filteredVideos, ratingFilter);
+
+      filteredVideos = this._applyShowFilter(filteredVideos, showFilter);
 
       // Estimated dates are ordering-only placeholders; never surface them.
       const oldest = filteredVideos.length > 0 ? filteredVideos[filteredVideos.length - 1] : null;

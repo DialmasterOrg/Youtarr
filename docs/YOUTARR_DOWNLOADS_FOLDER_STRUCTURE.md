@@ -56,6 +56,59 @@ YouTube Downloads/
     └── [videos]
 ```
 
+## TV Folders
+
+A library folder (the main folder or a `__subfolder`) can use the **TV shows** layout instead of Videos: set it under Settings -> Core -> File Structure -> **Library folders**, or switch a channel to **TV show** under Channel Settings -> **TV Show**. Every channel that downloads to a TV folder is saved as a show:
+
+```
+YouTube Downloads/
+├── __TV Shows/                                    # A TV folder
+│   └── Channel Name/                              # The show folder
+│       ├── tvshow.nfo                             # Show metadata (always written)
+│       ├── poster.jpg                             # Channel poster
+│       ├── backdrop.jpg                           # Optional; "Create backdrop images"
+│       ├── Season 2025/
+│       │   └── S2025E12011500 - Title [id].mp4
+│       └── Season 2026/
+│           ├── S2026E09281530 - Title [id].mp4    # Video file
+│           ├── S2026E09281530 - Title [id].nfo    # Episode metadata (always written)
+│           ├── S2026E09281530 - Title [id].jpg    # Episode thumbnail
+│           ├── S2026E09281530 - Title [id].[lang].srt
+│           ├── S2026E09281530 - Title [id]-fanart.jpg     # Optional; "Create video fanart files"
+│           └── S2026E09281530 - Title [id]-backdrop.jpg   # Optional; "Create backdrop images"
+└── __Kids/                                        # A Videos folder, laid out as above
+```
+
+- **Seasons are years, episodes are upload times.** `S2026E09281530` is the video uploaded on September 28, 2026 at 15:30 UTC: the season is the year and the episode is the month, day, hour and minute, so episodes sort in upload order. Two uploads in the same minute get the next free number. Youtarr stores each number and never reassigns it, and a re-download replaces the episode's files under the same name.
+- **The show folder name is fixed** when the show is created, from the channel name, so a later channel rename doesn't start a second folder. Two channels with the same name get `Name (channel ID)`.
+- **No video folders and no channel `.m3u`**: TV folders are always flat inside season folders, and video-only (MP3 download types aren't offered for them).
+- **Titles** in file names are cut to 64 bytes; the full title is in the episode NFO file and the embedded MP4 title (never prefixed with the channel name).
+- **Deleting** an episode in Youtarr removes its files, then an empty season folder, then the show folder once it holds only show files.
+- **Downloads from channels you haven't subscribed to** that land in a TV folder (a manual download, a playlist, or a TV default subfolder) each become a show of their own channel.
+- **Main folder as TV**: when the main folder uses the TV shows layout, Youtarr writes a `.plexignore` containing `__*/*` there so a Plex TV library pointed at it skips your subfolders. Jellyfin and Emby can't skip them, so they'd show each `__subfolder` as an extra show.
+
+Switching a channel or a folder that already has downloads between Videos and TV shows moves its files into the other layout; you review the move first. See [Save Channels as TV Shows](USAGE_GUIDE.md#save-channels-as-tv-shows).
+
+### Title shows
+
+A [title show](USAGE_GUIDE.md#title-shows-series-inside-a-channel) is a series inside a channel, numbered from its video titles. It is a show folder like any other in a TV folder, with two-digit numbers and, for named seasons, a `season.nfo`:
+
+```
+__TV Shows/
+├── Hermitcraft/                                   # A title show of the Grian channel
+│   ├── tvshow.nfo                                 # Show metadata, season names
+│   ├── Season 10/
+│   │   ├── season.nfo                             # Only for a named season
+│   │   └── S10E05 - Title [id].mp4
+│   └── Season 11/
+│       └── S11E01 - Title [id].mp4
+└── Grian/                                         # The channel show, if the channel is a TV channel
+    └── Season 2026/
+        └── S2026E09281530 - Title [id].mp4
+```
+
+Videos that match no title show stay where the channel puts them: its Videos folder, or the channel show for a TV channel.
+
 ## Layout For Channels with Flat File Structure (No Video Subfolders)
 
 You can use a flat file structure, where video files are placed directly in the channel folder instead of individual video subfolders. It only affects new downloads. There are three places to set it:

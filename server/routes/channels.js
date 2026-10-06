@@ -13,10 +13,13 @@ const parseFilterMode = (value) =>
  * @param {Object} deps.archiveModule - Archive module
  * @param {Object} deps.channelDownloadAllModule - Channel download-all module
  * @param {Object} deps.ratingMapper - Rating validation/normalization module
+ * @param {Object} [deps.jobModule] - Its running job blocks switching a channel between Videos and TV
+ * @param {Object} [deps.layoutGuards] - Keeps MP3 downloads out of TV folders
  * @returns {express.Router}
  */
-module.exports = function createChannelRoutes({ verifyToken, channelModule, archiveModule, channelDownloadAllModule, ratingMapper, storageGuard }) {
+module.exports = function createChannelRoutes({ verifyToken, channelModule, archiveModule, channelDownloadAllModule, ratingMapper, storageGuard, jobModule, layoutGuards }) {
   const router = express.Router();
+  const isDownloadRunning = () => Boolean(jobModule && jobModule.getInProgressJobId());
   const logger = require('../logger');
   const channelSettingsModule = require('../modules/channelSettingsModule');
   const ChannelVideo = require('../models/channelvideo');
@@ -71,6 +74,12 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *           enum: [asc, desc]
    *         description: Sort order
    *       - in: query
+   *         name: layout
+   *         schema:
+   *           type: string
+   *           enum: [tv]
+   *         description: Only channels that download to a TV folder. Each channel in the response carries its layout (videos or tv).
+   *       - in: query
    *         name: subFolder
    *         schema:
    *           type: string
@@ -90,6 +99,7 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
         sortBy: req.query.sortBy,
         sortOrder: req.query.sortOrder,
         subFolder: req.query.subFolder,
+        layout: req.query.layout,
       });
       res.json(result);
     } catch (error) {
@@ -159,9 +169,9 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *       200:
    *         description: Channels updated successfully
    *       400:
-   *         description: Invalid payload, or invalid settings on an add item (no channel is changed)
+   *         description: Invalid payload, invalid settings on an add item (no channel is changed), or an MP3 download type for a channel in a TV folder
    *       409:
-   *         description: An add item changes the subfolder of a channel that has downloads in progress
+   *         description: An add item changes the subfolder of a channel that has downloads in progress or is being reorganized, or would move downloaded videos between Videos and TV (reorganizeRequired)
    *       500:
    *         description: Failed to update channels
    */
@@ -185,7 +195,7 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
           });
         }
 
-        await channelModule.updateChannelsByDelta({ enableUrls, disableUrls, channelSettingsModule });
+        await channelModule.updateChannelsByDelta({ enableUrls, disableUrls, channelSettingsModule, isDownloadRunning });
         return res.json({ status: 'success' });
       }
 
@@ -199,6 +209,10 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
       }
       if (error.message?.includes('Cannot change subfolder while downloads are in progress')) {
         return res.status(409).json({ error: error.message });
+      }
+      // Library folder layout refusals (MP3 into a TV folder, a change that moves downloaded files)
+      if (error.status === 400 || error.status === 409) {
+        return res.status(error.status).json(layoutGuards.errorBody(error));
       }
       req.log.error({ err: error }, 'Failed to update channels');
       res.status(500).json({
@@ -673,8 +687,10 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *     responses:
    *       200:
    *         description: Settings updated successfully
+   *       400:
+   *         description: An MP3 download type for a channel in a TV folder
    *       409:
-   *         description: Cannot change subfolder while downloads are in progress
+   *         description: Downloads are in progress, a reorganize of the channel is running, or a folder change would move downloaded videos between Videos and TV (reorganizeRequired, with the change to preview through /api/tv/reorganize/preview)
    *       500:
    *         description: Failed to update settings
    */
@@ -682,11 +698,13 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
     try {
       const result = await channelSettingsModule.updateChannelSettings(
         req.params.channelId,
-        req.body
+        req.body,
+        { isDownloadRunning }
       );
       res.json(result);
     } catch (error) {
       console.error('Error updating channel settings:', error);
+      if (error.status) return res.status(error.status).json(layoutGuards.errorBody(error));
       const statusCode = error.message.includes('Cannot change subfolder while downloads are in progress') ? 409 : 500;
       res.status(statusCode).json({ error: error.message });
     }
@@ -891,11 +909,16 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *           type: string
    *           enum: [G, PG, PG-13, R, NC-17, TV-Y, TV-Y7, TV-G, TV-PG, TV-14, TV-MA]
    *         description: Hide videos rated above this rating. Unrated videos are always included. A video not yet downloaded is judged by the channel's default rating, if one is set.
+   *       - in: query
+   *         name: showId
+   *         schema:
+   *           type: integer
+   *         description: Only the episodes of this title show of the channel (numbered or waiting for a number).
    *     responses:
    *       200:
    *         description: List of channel videos
    *       400:
-   *         description: Invalid maxRating
+   *         description: Invalid maxRating or showId
    */
   router.get('/getchannelvideos/:channelId', verifyToken, async (req, res) => {
     req.log.info({ channelId: req.params.channelId }, 'Getting channel videos');
@@ -922,7 +945,12 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
     if (!maxRating.valid) {
       return res.status(400).json({ error: 'Invalid maxRating' });
     }
-    const result = await channelModule.getChannelVideos(channelId, page, pageSize, downloadedFilter, searchQuery, sortBy, sortOrder, tabType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, maxRating.value);
+    // Only the episodes of one of the channel's title shows.
+    const showId = req.query.showId === undefined || req.query.showId === '' ? null : Number(req.query.showId);
+    if (showId !== null && (!Number.isInteger(showId) || showId <= 0)) {
+      return res.status(400).json({ error: 'Invalid showId' });
+    }
+    const result = await channelModule.getChannelVideos(channelId, page, pageSize, downloadedFilter, searchQuery, sortBy, sortOrder, tabType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, maxRating.value, showId);
 
     if (Array.isArray(result)) {
       res.status(200).json({ videos: result });
@@ -1181,7 +1209,7 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *                 queued:
    *                   type: integer
    *       400:
-   *         description: Invalid tabType or overrideSettings
+   *         description: Invalid tabType or overrideSettings, or an MP3 download type for a channel in a TV folder
    *       404:
    *         description: Channel not found
    *       409:
@@ -1210,10 +1238,20 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
     }
 
     try {
+      const override = overrideResult.value || {};
+      if (layoutGuards && layoutGuards.isMp3Format(override.audioFormat)) {
+        let destination = override.subfolder;
+        if (destination === undefined || destination === null) {
+          const settings = await channelSettingsModule.getChannelSettings(channelId);
+          if (!settings) return res.status(404).json({ error: 'Channel not found' });
+          destination = settings.sub_folder;
+        }
+        await layoutGuards.assertVideoOnlyDestination({ audioFormat: override.audioFormat, subFolderValue: destination });
+      }
       const result = await channelDownloadAllModule.startDownloadAll(
         channelId,
         tabType,
-        overrideResult.value || {}
+        override
       );
       res.status(202).json({ status: 'accepted', queued: result.queued });
     } catch (error) {
@@ -1222,6 +1260,9 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
       }
       if (storageGuard.isPausedError(error)) {
         return res.status(409).json({ error: error.message });
+      }
+      if (error.status === 400) {
+        return res.status(400).json({ error: error.message });
       }
       req.log.error({ err: error, channelId, tabType }, 'Failed to start channel download-all');
       res.status(500).json({ error: 'Failed to start channel download-all' });

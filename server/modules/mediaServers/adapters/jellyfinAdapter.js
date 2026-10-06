@@ -2,12 +2,14 @@ const axios = require('axios');
 const BaseAdapter = require('./baseAdapter');
 const {
   extractBasename,
+  bestItemMatchesByPath,
   normalizeBaseUrl,
   REQUEST_TIMEOUT_MS,
   isServerUnavailableError,
   describeHttpError,
   MediaServerUnavailableError,
 } = require('./baseAdapter');
+const { libraryTypeOf, nfoSaverOf, onlineFetchersOf, needsServerDefaults } = require('./libraryOptions');
 const logger = require('../../../logger');
 
 // Jellyfin/Emby report playback position in ticks (100ns units).
@@ -15,6 +17,8 @@ const TICKS_PER_MS = 10000;
 
 const WATCH_STATE_FILTERS = [{ isPlayed: true }, { filters: 'IsResumable' }];
 const WATCH_STATE_PAGE_SIZE = 1000;
+// Statuses meaning an endpoint doesn't exist in this server version.
+const MISSING_ENDPOINT_STATUSES = new Set([404, 405]);
 
 class JellyfinAdapter extends BaseAdapter {
   constructor(config) {
@@ -222,6 +226,124 @@ class JellyfinAdapter extends BaseAdapter {
       logger.warn({ status, playlistId }, 'jellyfin replacePlaylistItems: delete failed, creating fresh');
     }
     return this.createPlaylist(opts.name, itemIds, { public: !!opts.public, mediaType: opts.mediaType });
+  }
+
+  // Every video item's path, paged, so moved files resolve to the item at
+  // their new path rather than a stale one with the same file name. With a
+  // scope, only the libraries that hold Youtarr's folders are listed.
+  async resolveItemMatchesByPaths(filepaths, { libraryIds = null } = {}) {
+    const items = [];
+    try {
+      const parents = libraryIds ? [...libraryIds] : [undefined];
+      for (const parentId of parents) {
+        for (let startIndex = 0; ; startIndex += WATCH_STATE_PAGE_SIZE) {
+          const params = {
+            userId: this.userId,
+            parentId,
+            includeItemTypes: 'Video,Movie,Episode',
+            collapseBoxSetItems: false,
+            recursive: true,
+            fields: 'Path',
+            sortBy: 'SortName',
+            startIndex,
+            limit: WATCH_STATE_PAGE_SIZE,
+          };
+          const res = await axios.get(`${this.url}/Items`, { headers: this._headers(), params, timeout: REQUEST_TIMEOUT_MS });
+          const page = res.data?.Items || [];
+          for (const item of page) items.push({ id: item.Id, path: item.Path });
+          if (page.length !== WATCH_STATE_PAGE_SIZE) break;
+        }
+      }
+    } catch (err) {
+      if (isServerUnavailableError(err)) throw new MediaServerUnavailableError(describeHttpError(err));
+      throw err;
+    }
+    return bestItemMatchesByPath(items, filepaths);
+  }
+
+  async listLibraries() {
+    const options = { headers: this._headers(), timeout: REQUEST_TIMEOUT_MS };
+    const res = await axios.get(`${this.url}/Library/VirtualFolders`, options);
+    const folders = Array.isArray(res.data) ? res.data : [];
+    let serverMetadataOptions = null;
+    if (needsServerDefaults(folders)) {
+      try {
+        const config = await axios.get(`${this.url}/System/Configuration`, options);
+        serverMetadataOptions = config.data?.MetadataOptions || null;
+      } catch (err) {
+        logger.debug({ ...describeHttpError(err) }, 'jellyfin: could not read the server metadata defaults');
+      }
+    }
+    return folders.map((folder) => {
+      const type = libraryTypeOf(folder.CollectionType);
+      return {
+        id: String(folder.ItemId),
+        name: folder.Name || String(folder.ItemId),
+        type,
+        locations: (folder.Locations || []).filter(Boolean),
+        nfoSaver: nfoSaverOf(folder.LibraryOptions, type, serverMetadataOptions),
+        onlineFetchers: onlineFetchersOf(folder.LibraryOptions, type),
+      };
+    });
+  }
+
+  async sampleItemPaths(library, limit) {
+    try {
+      const res = await axios.get(`${this.url}/Items`, {
+        headers: this._headers(),
+        params: {
+          userId: this.userId,
+          parentId: library.id,
+          includeItemTypes: 'Video,Movie,Episode,Audio',
+          recursive: true,
+          fields: 'Path',
+          limit,
+        },
+        timeout: REQUEST_TIMEOUT_MS,
+      });
+      return (res.data?.Items || []).map((item) => item.Path).filter(Boolean).slice(0, limit);
+    } catch (err) {
+      logger.debug({ ...describeHttpError(err), libraryId: library.id }, 'jellyfin: could not sample a library');
+      return [];
+    }
+  }
+
+  async getWatchState(itemId, serverUserId) {
+    const userId = serverUserId || this.userId;
+    try {
+      const res = await axios.get(`${this.url}/Users/${userId}/Items/${itemId}`, { headers: this._headers(), timeout: REQUEST_TIMEOUT_MS });
+      return res.data ? this._itemWatchState(res.data, String(userId)) : null;
+    } catch (err) {
+      logger.debug({ ...describeHttpError(err), itemId }, 'jellyfin: could not read an item\'s watch state before a push');
+      return null;
+    }
+  }
+
+  async setWatchState(itemId, serverUserId, { played, positionMs }) {
+    const userId = serverUserId || this.userId;
+    if (played) {
+      await this._postFirstAvailable(
+        [`/UserPlayedItems/${itemId}`, { userId }],
+        [`/Users/${userId}/PlayedItems/${itemId}`, {}],
+        null
+      );
+      return;
+    }
+    await this._postFirstAvailable(
+      [`/UserItems/${itemId}/UserData`, { userId }],
+      [`/Users/${userId}/Items/${itemId}/UserData`, {}],
+      { PlaybackPositionTicks: Math.round((positionMs || 0) * TICKS_PER_MS), Played: false }
+    );
+  }
+
+  async _postFirstAvailable([path, params], [fallbackPath, fallbackParams], body) {
+    const options = (query) => ({ headers: this._headers(), params: query, timeout: REQUEST_TIMEOUT_MS });
+    try {
+      await axios.post(`${this.url}${path}`, body, options(params));
+    } catch (err) {
+      if (!MISSING_ENDPOINT_STATUSES.has(err.response?.status)) throw err;
+      await axios.post(`${this.url}${fallbackPath}`, body, options(fallbackParams));
+    }
   }
 }
 

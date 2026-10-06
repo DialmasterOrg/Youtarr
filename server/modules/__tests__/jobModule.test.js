@@ -854,6 +854,26 @@ describe('JobModule', () => {
 
     });
 
+    test('runs the before-next-job listeners before starting the next job', async () => {
+      const order = [];
+      JobModule.onBeforeNextJob(async () => { order.push('listener'); });
+      JobModule.jobs = { 'job-1': { status: 'Pending', action: () => { order.push('job'); } } };
+
+      await JobModule.startNextJob();
+
+      expect(order).toEqual(['listener', 'job']);
+    });
+
+    test('starts the next job when a before-next-job listener fails', async () => {
+      const mockAction = jest.fn();
+      JobModule.onBeforeNextJob(async () => { throw new Error('archive busy'); });
+      JobModule.jobs = { 'job-1': { status: 'Pending', action: mockAction } };
+
+      await JobModule.startNextJob();
+
+      expect(mockAction).toHaveBeenCalled();
+    });
+
     test('should do nothing if no pending jobs', async () => {
       JobModule.jobs = {
         'job-1': { status: 'Complete' },
@@ -1104,6 +1124,76 @@ describe('JobModule', () => {
     });
   });
 
+  describe('download jobs while a reorganize moves files', () => {
+    let lock;
+    let token;
+
+    beforeEach(() => {
+      fs.existsSync.mockReturnValue(false);
+      fs.readFileSync.mockReturnValue(JSON.stringify({ plexApiKey: 'test-key' }));
+      JobModule = require('../jobModule');
+      lock = require('../reorganize/reorganizeLock');
+      JobModule.addJob = jest.fn().mockResolvedValue('new-job-id');
+      JobModule.updateJob = jest.fn();
+      token = lock.acquire({ label: 'Chan' });
+    });
+
+    afterEach(() => {
+      lock.release(token);
+    });
+
+    test('queues a new download job instead of starting it', async () => {
+      JobModule.jobs = {};
+
+      await JobModule.addOrUpdateJob({ jobType: 'Manually Added Urls' });
+
+      expect(JobModule.addJob).toHaveBeenCalledWith(expect.objectContaining({ status: 'Pending' }));
+    });
+
+    test('starts a job that is not a download', async () => {
+      JobModule.jobs = {};
+
+      await JobModule.addOrUpdateJob({ jobType: 'Import Subscriptions' });
+
+      expect(JobModule.addJob).toHaveBeenCalledWith(expect.objectContaining({ status: 'In Progress' }));
+    });
+
+    test('keeps a queued download Pending when its turn comes', async () => {
+      JobModule.jobs = {};
+
+      const result = await JobModule.addOrUpdateJob({ id: 'next-job', jobType: 'Channel Downloads' }, true);
+
+      expect(result).toBeUndefined();
+      expect(JobModule.updateJob).not.toHaveBeenCalled();
+    });
+
+    test('holds pending jobs', async () => {
+      const mockAction = jest.fn();
+      JobModule.jobs = { 'job-1': { status: 'Pending', action: mockAction } };
+
+      await JobModule.startNextJob();
+
+      expect(mockAction).not.toHaveBeenCalled();
+    });
+
+    test('starts held jobs when the reorganize ends', async () => {
+      const mockAction = jest.fn();
+      JobModule.jobs = { 'job-1': { status: 'Pending', action: mockAction } };
+
+      lock.release(token);
+      await new Promise(setImmediate);
+      await new Promise(setImmediate);
+
+      expect(mockAction).toHaveBeenCalled();
+    });
+
+    test('skips a library repair', async () => {
+      await expect(JobModule.backfillFromCompleteList()).resolves.toMatchObject({
+        status: 'skipped', message: expect.stringContaining('reorganized'),
+      });
+    });
+  });
+
   describe('addOrUpdateJob', () => {
     beforeEach(() => {
       fs.existsSync.mockReturnValue(false);
@@ -1180,6 +1270,39 @@ describe('JobModule', () => {
         'jobsUpdated',
         { jobId: 'next-job', status: 'In Progress' }
       );
+    });
+
+    // Title shows write complete.list between jobs, and a channel job counts
+    // archive lines from its start: pending writes land first.
+    test('finishes the before-next-job work before a new job starts In Progress', async () => {
+      JobModule.jobs = {};
+      const order = [];
+      JobModule.onBeforeNextJob(async () => { order.push('listener'); });
+      JobModule.addJob.mockImplementation(async (job) => { order.push(job.status); return 'new-job-id'; });
+
+      await JobModule.addOrUpdateJob({ jobType: 'download' });
+
+      expect(order).toEqual(['listener', 'In Progress']);
+    });
+
+    test('finishes the before-next-job work before a queued job flips to In Progress', async () => {
+      JobModule.jobs = {};
+      const order = [];
+      JobModule.onBeforeNextJob(async () => { order.push('listener'); });
+      JobModule.updateJob.mockImplementation(async (id, values) => { order.push(values.status); });
+
+      await JobModule.addOrUpdateJob({ id: 'next-job', jobType: 'download' }, true);
+
+      expect(order).toEqual(['listener', 'In Progress']);
+    });
+
+    test('queues a new job when another started while the before-next-job work ran', async () => {
+      JobModule.jobs = {};
+      JobModule.onBeforeNextJob(async () => { JobModule.jobs = { other: { status: 'In Progress' } }; });
+
+      await JobModule.addOrUpdateJob({ jobType: 'download' });
+
+      expect(JobModule.addJob).toHaveBeenCalledWith(expect.objectContaining({ status: 'Pending' }));
     });
 
     test('should not emit jobsUpdated when next job cannot start', async () => {

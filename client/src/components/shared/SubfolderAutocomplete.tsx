@@ -15,6 +15,7 @@ import {
 } from '../../utils/channelHelpers';
 import { AddSubfolderDialog } from './AddSubfolderDialog';
 import { addSubfolderPrefix, stripSubfolderPrefix } from '../../utils/subfolderDisplay';
+import type { LayoutResolver } from '../../utils/libraryLayouts';
 
 /**
  * Represents an option in the subfolder autocomplete
@@ -52,6 +53,8 @@ interface SubfolderAutocompleteProps {
   createSubfolder?: (name: string) => Promise<void>;
   /** Whether to render the inline "Add Subfolder" action (default true). Set false when the parent provides its own add flow */
   showAddAction?: boolean;
+  /** Folder layouts ('' = main folder): TV folders are labelled "(TV)" */
+  layoutOf?: LayoutResolver;
 }
 
 const ADD_NEW_SENTINEL = '__ADD_NEW__';
@@ -75,6 +78,7 @@ export function SubfolderAutocomplete({
   label = 'Subfolder',
   createSubfolder,
   showAddAction = true,
+  layoutOf,
 }: SubfolderAutocompleteProps) {
   // State for the Add Subfolder dialog
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -104,12 +108,13 @@ export function SubfolderAutocomplete({
   // Build options based on mode
   const options = useMemo((): SubfolderOption[] => {
     const opts: SubfolderOption[] = [];
+    const tvTag = (libraryFolder: string) => (layoutOf && layoutOf(libraryFolder) === 'tv' ? ' (TV)' : '');
 
     // Add special options based on mode
     if (mode === 'global') {
       // "No Subfolder" option - maps to null (root directory)
       opts.push({
-        label: 'No Subfolder (root)',
+        label: `No Subfolder (root)${tvTag('')}`,
         value: null,
         isSpecial: true,
         isAddNew: false,
@@ -118,7 +123,7 @@ export function SubfolderAutocomplete({
     } else if (mode === 'channel') {
       // "No Subfolder" option - maps to null (backwards compatible root)
       opts.push({
-        label: 'No Subfolder (root)',
+        label: `No Subfolder (root)${tvTag('')}`,
         value: null,
         isSpecial: true,
         isAddNew: false,
@@ -126,9 +131,9 @@ export function SubfolderAutocomplete({
       });
 
       // "Default Subfolder" option - maps to ##USE_GLOBAL_DEFAULT##
-      const defaultLabel = defaultSubfolderDisplay
+      const defaultLabel = (defaultSubfolderDisplay
         ? `Default Subfolder (__${defaultSubfolderDisplay})`
-        : 'Default Subfolder (root)';
+        : 'Default Subfolder (root)') + tvTag(defaultSubfolderDisplay || '');
       opts.push({
         label: defaultLabel,
         value: GLOBAL_DEFAULT_SENTINEL,
@@ -148,7 +153,7 @@ export function SubfolderAutocomplete({
 
       // "Root directory" option - explicitly download to root (no subfolder)
       opts.push({
-        label: 'Root directory (no subfolder)',
+        label: `Root directory (no subfolder)${tvTag('')}`,
         value: ROOT_SENTINEL,
         isSpecial: true,
         isAddNew: false,
@@ -157,7 +162,7 @@ export function SubfolderAutocomplete({
 
       // "Use Global Default" option - uses global default subfolder
       opts.push({
-        label: 'Use Global Default Subfolder',
+        label: `Use Global Default Subfolder${tvTag(defaultSubfolderDisplay || '')}`,
         value: GLOBAL_DEFAULT_SENTINEL,
         isSpecial: true,
         isAddNew: false,
@@ -168,7 +173,7 @@ export function SubfolderAutocomplete({
     // Add existing subfolders (strip __ prefix from display, store clean value)
     allSubfolders.forEach((folder) => {
       const cleanValue = stripSubfolderPrefix(folder);
-      const displayLabel = addSubfolderPrefix(folder);
+      const displayLabel = addSubfolderPrefix(folder) + tvTag(cleanValue);
       opts.push({
         label: displayLabel,
         value: cleanValue,
@@ -182,7 +187,7 @@ export function SubfolderAutocomplete({
     // This makes it reliably clickable in tests without depending on Radix Select portal events.
 
     return opts;
-  }, [mode, allSubfolders, defaultSubfolderDisplay]);
+  }, [mode, allSubfolders, defaultSubfolderDisplay, layoutOf]);
 
   // Find the current option based on value
   const currentOption = useMemo((): SubfolderOption | null => {

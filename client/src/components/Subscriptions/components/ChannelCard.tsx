@@ -3,7 +3,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { Avatar, Card, CardActionArea, CardContent, Chip, Tooltip, Typography } from '../../ui';
 import { Delete as DeleteIcon, Edit as EditIcon, Image as ImageIcon, Folder as FolderIcon } from '../../../lib/icons';
 import { Channel } from '../../../types/Channel';
-import { QualityChip, AutoDownloadChips, DurationFilterChip, TitleFilterChip, DownloadFormatConfigIndicator, TerminatedChip, ProtectedChip } from './chips';
+import { QualityChip, AutoDownloadChips, DurationFilterChip, TitleFilterChip, DownloadFormatConfigIndicator, TerminatedChip, ProtectedChip, TvChip, ShowsChip } from './chips';
 
 const THUMBNAIL_ASPECT_PADDING = '56.25%';
 
@@ -139,6 +139,8 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
                                 <Typography variant="body2" color="text.secondary" noWrap>
                                     {channel.sub_folder ? `/${channel.sub_folder}` : 'Default Folder'}
                                 </Typography>
+                                {channel.layout === 'tv' && <TvChip />}
+                                <ShowsChip count={channel.titleShows ?? 0} />
                             </div>
                         </div>
                         {isPendingAddition && <Chip label="Pending" size="small" color="warning" />}

@@ -449,4 +449,76 @@ describe('EmbyAdapter', () => {
       await expect(adapter.fetchWatchStates()).rejects.toBeInstanceOf(MediaServerUnavailableError);
     });
   });
+
+  describe('push-back after a reorganize', () => {
+    test('reads one user\'s state of an item before a push', async () => {
+      axios.get.mockResolvedValueOnce({ data: { Path: '/m/x.mp4', UserData: { Played: false, PlayCount: 0, PlaybackPositionTicks: 15000000 } } });
+      const state = await new EmbyAdapter(cfg).getWatchState('ITEM', 'U2');
+      expect(axios.get).toHaveBeenCalledWith(`${new EmbyAdapter(cfg).url}/Users/U2/Items/ITEM`, expect.anything());
+      expect(state).toMatchObject({ played: false, positionMs: 1500 });
+    });
+
+    test('reports an unreadable item state as unknown', async () => {
+      axios.get.mockRejectedValueOnce(Object.assign(new Error('gone'), { response: { status: 404 } }));
+      await expect(new EmbyAdapter(cfg).getWatchState('ITEM', 'U2')).resolves.toBeNull();
+    });
+
+    test('marks an item played for a user', async () => {
+      axios.post.mockResolvedValueOnce({});
+      await new EmbyAdapter(cfg).setWatchState('ITEM', 'U2', { played: true, positionMs: null });
+      expect(axios.post).toHaveBeenCalledWith(`${new EmbyAdapter(cfg).url}/Users/U2/PlayedItems/ITEM`, null, expect.anything());
+    });
+
+    test('sets a resume position in ticks', async () => {
+      axios.post.mockResolvedValueOnce({});
+      await new EmbyAdapter(cfg).setWatchState('ITEM', 'U2', { played: false, positionMs: 2000 });
+      expect(axios.post).toHaveBeenCalledWith(`${new EmbyAdapter(cfg).url}/Users/U2/Items/ITEM/UserData`,
+        { PlaybackPositionTicks: 20000000, Played: false }, expect.anything());
+    });
+
+    test('pages through the library to resolve moved files', async () => {
+      const fullPage = Array.from({ length: 1000 }, (_, i) => ({ Id: `X${i}`, Path: `/m/other/f${i} [x${i}].mp4` }));
+      axios.get
+        .mockResolvedValueOnce({ data: { Items: fullPage } })
+        .mockResolvedValueOnce({ data: { Items: [{ Id: 'HIT', Path: '/m/__TV/Chan/Season 2024/E [id1].mp4' }] } });
+      const matches = await new EmbyAdapter(cfg).resolveItemMatchesByPaths(['/data/__TV/Chan/Season 2024/E [id1].mp4']);
+      expect(axios.get).toHaveBeenCalledTimes(2);
+      expect(matches.get('/data/__TV/Chan/Season 2024/E [id1].mp4')).toEqual({ id: 'HIT', score: 4 });
+    });
+  });
+
+  describe('library check', () => {
+    test('lists libraries from /Library/VirtualFolders/Query', async () => {
+      axios.get.mockResolvedValueOnce({
+        data: {
+          Items: [{
+            Name: 'TV', ItemId: '8112', CollectionType: 'tvshows', Locations: ['Q:\\Media\\__TV'],
+            LibraryOptions: { SaveLocalMetadata: true, MetadataSavers: ['Nfo'], TypeOptions: [{ Type: 'Episode', MetadataFetchers: ['TheTVDB'] }] },
+          }],
+        },
+      });
+
+      const libraries = await new EmbyAdapter(cfg).listLibraries();
+
+      expect(axios.get).toHaveBeenCalledWith('http://emby:8096/Library/VirtualFolders/Query', expect.any(Object));
+      expect(libraries).toEqual([{
+        id: '8112', name: 'TV', type: 'tv', locations: ['Q:\\Media\\__TV'], nfoSaver: true, onlineFetchers: true,
+      }]);
+    });
+
+    test('returns no samples when a library cannot be read', async () => {
+      axios.get.mockRejectedValueOnce(new Error('boom'));
+
+      expect(await new EmbyAdapter(cfg).sampleItemPaths({ id: '8112', type: 'tv' }, 10)).toEqual([]);
+    });
+
+    test('lists only the scoped libraries when looking up moved files', async () => {
+      axios.get.mockResolvedValueOnce({ data: { Items: [] } });
+
+      await new EmbyAdapter(cfg).resolveItemMatchesByPaths(['/data/x [id1].mp4'], { libraryIds: new Set(['8112']) });
+
+      expect(axios.get).toHaveBeenCalledTimes(1);
+      expect(axios.get.mock.calls[0][1].params.parentId).toBe('8112');
+    });
+  });
 });

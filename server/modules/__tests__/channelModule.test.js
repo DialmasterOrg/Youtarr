@@ -27,6 +27,13 @@ jest.mock('../m3uGenerator', () => ({
   generateChannelM3UInBackground: jest.fn(),
   deleteChannelM3UInBackground: jest.fn(),
 }));
+jest.mock('../tvShows/channelFolders', () => ({
+  isTvChannel: jest.fn().mockResolvedValue(false),
+  resolveChannelDirectory: jest.fn(),
+}));
+jest.mock('../tvShows/libraryLayouts', () => ({
+  getLayoutResolver: jest.fn().mockResolvedValue(() => 'videos'),
+}));
 
 jest.mock('../downloadModule', () => ({
   doChannelDownloads: jest.fn(),
@@ -49,6 +56,14 @@ jest.mock('../ytDlpRunner', () => ({
 // mocks) keeps this file free of shared mock-value state that could race
 // other cases.
 const flushConstructorTasks = () => new Promise(setImmediate);
+
+jest.mock('../tvShows/episodeInfo', () => ({ getEpisodeInfoMap: jest.fn().mockResolvedValue(new Map()) }));
+jest.mock('../tvShows/titleShowSaver', () => ({ classifyNew: jest.fn() }));
+jest.mock('../tvShows/titleShowQueries', () => ({
+  countActiveByChannel: jest.fn().mockResolvedValue(new Map()),
+  plannedEpisodes: jest.fn().mockResolvedValue(new Map()),
+  youtubeIdsForShow: jest.fn().mockResolvedValue(new Set()),
+}));
 
 describe('channelModule facade', () => {
   describe('constructor', () => {
@@ -83,7 +98,7 @@ describe('channelModule facade', () => {
       ['getChannelsPaginated', '../channel/channelCatalog', 'getChannelsPaginated', [{ page: 2, pageSize: 10 }], 'async'],
       ['writeChannels', '../channel/channelCatalog', 'writeChannels', [['https://www.youtube.com/@a']], 'async'],
       ['updateChannelsByDelta', '../channel/channelCatalog', 'updateChannelsByDelta', [{ enableUrls: ['https://www.youtube.com/@a'], disableUrls: [] }], 'async'],
-      ['getChannelVideos', '../channel/channelVideosService', 'getChannelVideos', ['UC1', 2, 25, 'only', 'q', 'title', 'asc', 'shorts', 60, 600, '2026-01-01', '2026-02-01', 'only', 'exclude', 'off', 'only', 'PG'], 'async'],
+      ['getChannelVideos', '../channel/channelVideosService', 'getChannelVideos', ['UC1', 2, 25, 'only', 'q', 'title', 'asc', 'shorts', 60, 600, '2026-01-01', '2026-02-01', 'only', 'exclude', 'off', 'only', 'PG', 7], 'async'],
       ['fetchAllChannelVideos', '../channel/channelVideosService', 'fetchAllChannelVideos', ['UC1', 2, 25, 'only', 'shorts'], 'async'],
       ['getChannelAvailableTabs', '../channel/tabManager', 'getChannelAvailableTabs', ['UC1'], 'async'],
       ['updateAutoDownloadForTab', '../channel/tabManager', 'updateAutoDownloadForTab', ['UC1', 'shorts', true], 'async'],

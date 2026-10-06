@@ -1,3 +1,5 @@
+import type { EpisodeInfo } from './tvShows';
+import type { PlannedEpisode } from './titleShows';
 /*{
   "title": "Five Nights at Freddy’s SCARY Truth…",
   "id": "WEywwDLeZE0",
@@ -40,4 +42,8 @@ export interface ChannelVideo {
   // Actual downloaded pixel dimensions, e.g. "1920x1080"; "0x0" = probe failed
   video_resolution?: string | null;
   watchedBy?: string[];
+  // Show and SxxEyy when the downloaded file is a TV episode
+  episode?: EpisodeInfo | null;
+  // The episode a title show gives the video before it downloads
+  plannedEpisode?: PlannedEpisode | null;
 }

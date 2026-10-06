@@ -97,6 +97,18 @@ jest.mock('../VideoCard', () => ({
   }
 }));
 
+jest.mock('../../shared/VideoModal', () => ({
+  __esModule: true,
+  default: function MockVideoModal({ video, onEpisodeChanged }: any) {
+    const React = require('react');
+    return React.createElement('button', {
+      type: 'button',
+      'data-testid': 'modal-episode-changed',
+      onClick: () => onEpisodeChanged?.(video.youtubeId),
+    }, 'Episode changed');
+  }
+}));
+
 jest.mock('../VideoListItem', () => ({
   __esModule: true,
   default: function MockVideoListItem({ video }: any) {
@@ -197,6 +209,7 @@ jest.mock('../../shared/VideoList', () => {
         props.headerSlot,
         props.tabsSlot,
         watchedControl,
+        props.customFilters,
         content,
         props.infiniteScrollSentinel,
         props.pagination,
@@ -247,6 +260,24 @@ const mockRefreshVideos = jest.fn();
 const mockClearError = jest.fn();
 const mockTriggerDownloads = jest.fn();
 const mockDeleteVideosByYoutubeIds = jest.fn();
+
+jest.mock('../components/TitleShows/ChannelShowFilter', () => ({
+  __esModule: true,
+  default: function MockShowFilter(props: { onChange: (id: number | null) => void; onShowMissing: (id: number) => void }) {
+    const React = require('react');
+    return React.createElement('div', null,
+      React.createElement('button', { type: 'button', 'data-testid': 'show-filter-3', onClick: () => props.onChange(3) }, 'Show 3'),
+      React.createElement('button', { type: 'button', 'data-testid': 'show-missing-3', onClick: () => props.onShowMissing(3) }, 'Missing'));
+  },
+}));
+
+jest.mock('../components/TitleShows/MissingEpisodesDialog', () => ({
+  __esModule: true,
+  default: function MockMissing(props: { open: boolean; showId: number | null }) {
+    const React = require('react');
+    return props.open ? React.createElement('div', { 'data-testid': 'missing-episodes' }, `show ${props.showId}`) : null;
+  },
+}));
 
 jest.mock('../hooks/useChannelVideos', () => ({
   useChannelVideos: jest.fn(),
@@ -473,6 +504,61 @@ describe('ChannelVideos Component', () => {
           expect.objectContaining({ watchedFilter: 'only', page: 1 })
         );
       });
+    });
+  });
+
+  describe('Refresh requests', () => {
+    test('reloads the videos when the page asks for a refresh', () => {
+      const view = renderChannelVideos({ refreshKey: 0 });
+      const before = mockRefetchVideos.mock.calls.length;
+      view.rerender(<ChannelVideos token={mockToken} refreshKey={1} />);
+      expect(mockRefetchVideos.mock.calls.length).toBe(before + 1);
+    });
+
+    test('reloads the videos when the video modal changes an episode', async () => {
+      useChannelVideos.mockReturnValue({
+        videos: [mockVideos[0]], totalCount: 1, oldestVideoDate: '2023-01-01',
+        autoDownloadsEnabled: false, loading: false, refetch: mockRefetchVideos,
+      });
+      renderChannelVideos();
+      fireEvent.click(await screen.findByTestId('open-video-video1'));
+      const before = mockRefetchVideos.mock.calls.length;
+      fireEvent.click(screen.getByTestId('modal-episode-changed'));
+      expect(mockRefetchVideos.mock.calls.length).toBe(before + 1);
+    });
+
+    test('does not reload on a render without a new refresh', () => {
+      const view = renderChannelVideos({ refreshKey: 0 });
+      const before = mockRefetchVideos.mock.calls.length;
+      view.rerender(<ChannelVideos token={mockToken} refreshKey={0} />);
+      expect(mockRefetchVideos.mock.calls.length).toBe(before);
+    });
+  });
+
+  describe('Show filter', () => {
+    test('offers no show filter for a channel without title shows', () => {
+      renderChannelVideos();
+      expect(screen.queryByTestId('show-filter-3')).not.toBeInTheDocument();
+    });
+
+    test('lists one title show\'s episodes', async () => {
+      const user = userEvent.setup();
+      renderChannelVideos({ titleShows: [{ id: 3, name: 'Beyblade' }] });
+
+      await user.click(screen.getByTestId('show-filter-3'));
+
+      await waitFor(() => {
+        expect(useChannelVideos).toHaveBeenLastCalledWith(expect.objectContaining({ showId: 3, page: 1 }));
+      });
+    });
+
+    test('opens a show\'s missing episodes', async () => {
+      const user = userEvent.setup();
+      renderChannelVideos({ titleShows: [{ id: 3, name: 'Beyblade' }] });
+
+      await user.click(screen.getByTestId('show-missing-3'));
+
+      expect(screen.getByTestId('missing-episodes')).toHaveTextContent('show 3');
     });
   });
 

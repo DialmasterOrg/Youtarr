@@ -19,6 +19,9 @@ const createMaintenanceRoutes = require('./maintenance');
 const createSubfolderRoutes = require('./subfolders');
 const createSchedulesRoutes = require('./schedules');
 const createLogRoutes = require('./logs');
+const createTvShowRoutes = require('./tvShows');
+const createTvReorganizeRoutes = require('./tvReorganize');
+const createTvTitleShowRoutes = require('./tvTitleShows');
 const videoMetadataModule = require('../modules/videoMetadataModule');
 const videoOembedEnricher = require('../modules/videoOembedEnricher');
 const playlistModule = require('../modules/playlistModule');
@@ -43,6 +46,14 @@ const cookieDetails = require('../modules/cookieDetails');
 const cookieTest = require('../modules/cookieTest');
 const logger = require('../logger');
 const logFilesModule = require('../modules/logFilesModule');
+const libraryFolders = require('../modules/tvShows/libraryFolders');
+const channelLayout = require('../modules/tvShows/channelLayout');
+const layoutGuards = require('../modules/tvShows/layoutGuards');
+const titleShowService = require('../modules/tvShows/titleShowService');
+const reorganize = require('../modules/reorganize');
+const watchStatusHolds = require('../modules/mediaServers/watchStatusHolds');
+const watchStatusPushBack = require('../modules/mediaServers/watchStatusPushBack');
+const libraryCheck = require('../modules/mediaServers/libraryCheck');
 
 /**
  * Registers all route modules with the Express app
@@ -91,14 +102,16 @@ function registerRoutes(app, deps) {
   app.use(createConfigRoutes({
     verifyToken, configModule, validateEnvAuthCredentials, isWslEnvironment, filenamePreviewRateLimiter,
     cookieDetails, cookieTest, cookieTestRateLimiter, getLoggingStatus: logger.getLoggingStatus,
+    libraryFolders, jobModule,
   }));
 
   // Channel routes
-  app.use(createChannelRoutes({ verifyToken, channelModule, archiveModule, channelDownloadAllModule, ratingMapper, storageGuard }));
+  app.use(createChannelRoutes({ verifyToken, channelModule, archiveModule, channelDownloadAllModule, ratingMapper, storageGuard, jobModule, layoutGuards }));
 
   // Video routes
   app.use(createVideoRoutes({
     verifyToken, videosModule, downloadModule, videoOembedEnricher, videoLocalStatus, storageGuard, scheduledTaskManager, ratingMapper,
+    layoutGuards, reorganizeLock: reorganize.lock,
   }));
 
   // Video search routes
@@ -129,7 +142,7 @@ function registerRoutes(app, deps) {
   app.use(createVideoDetailRoutes({ verifyToken, videoMetadataModule, mediaServers }));
 
   // Playlist routes
-  app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule, storageGuard }));
+  app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models, channelSettingsModule, ratingMapper, subfolderModule, playlistVideoFilters, playlistDownloadModule, storageGuard, layoutGuards }));
 
   // Media server routes
   app.use(createMediaServerRoutes({ verifyToken, configModule, mediaServers, scheduledTaskManager }));
@@ -147,6 +160,18 @@ function registerRoutes(app, deps) {
 
   // Log file download
   app.use(createLogRoutes({ verifyToken, logFilesModule, configModule }));
+
+  // TV show layouts (library folders and channel layouts)
+  app.use(createTvShowRoutes({
+    verifyToken, libraryFolders, channelLayout, layoutGuards, reorganize, channelSettingsModule, jobModule, models,
+    libraryCheck,
+  }));
+
+  // Title shows (shows defined on a channel by title patterns) and episode assignment
+  app.use(createTvTitleShowRoutes({ verifyToken, titleShowService, models, layoutGuards }));
+
+  // Reorganize (moving downloads between the Videos and TV layouts) and watch-state restores
+  app.use(createTvReorganizeRoutes({ verifyToken, reorganize, watchStatusHolds, watchStatusPushBack }));
 
   // Defensive redirect: /channels -> /subscriptions (frontend handles client-side routing,
   // this fallback covers direct server-side hits during the transition period)

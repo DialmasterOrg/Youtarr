@@ -4,6 +4,7 @@ jest.mock('../../models', () => ({
   Channel: { findOne: jest.fn() },
 }));
 jest.mock('../downloadModule', () => ({ doSpecificDownloads: jest.fn() }));
+jest.mock('../tvShows/titleShowQueries', () => ({ showEpisodeIds: jest.fn() }));
 jest.mock('../../logger', () => ({
   info: jest.fn(),
   debug: jest.fn(),
@@ -101,6 +102,39 @@ describe('getDownloadableVideos', () => {
 
     expect(result).toEqual([]);
     expect(Video.findAll).not.toHaveBeenCalled();
+  });
+});
+
+describe('channels downloading only their title shows', () => {
+  const titleShowQueries = require('../tvShows/titleShowQueries');
+  const showOnly = { ...channelRow, tv_show_only_downloads: true };
+
+  beforeEach(() => {
+    ChannelVideo.findAll.mockResolvedValue([cv('ep1'), cv('loose')]);
+  });
+
+  it('keeps only videos classified into a title show', async () => {
+    titleShowQueries.showEpisodeIds.mockResolvedValue(new Set(['ep1']));
+    const videos = await channelDownloadAllModule.getDownloadableVideos(CHANNEL_ID, 'videos', showOnly);
+    expect(videos.map((video) => video.youtube_id)).toEqual(['ep1']);
+  });
+
+  it('keeps every video while the channel has no title show', async () => {
+    titleShowQueries.showEpisodeIds.mockResolvedValue(null);
+    const videos = await channelDownloadAllModule.getDownloadableVideos(CHANNEL_ID, 'videos', showOnly);
+    expect(videos).toHaveLength(2);
+  });
+
+  it('keeps every video of a channel with the switch off', async () => {
+    const videos = await channelDownloadAllModule.getDownloadableVideos(CHANNEL_ID, 'videos', channelRow);
+    expect([videos.length, titleShowQueries.showEpisodeIds]).toEqual([2, expect.any(Function)]);
+    expect(titleShowQueries.showEpisodeIds).not.toHaveBeenCalled();
+  });
+
+  it('previews only the title show episodes', async () => {
+    Channel.findOne.mockResolvedValue(showOnly);
+    titleShowQueries.showEpisodeIds.mockResolvedValue(new Set(['ep1']));
+    expect((await channelDownloadAllModule.getPreview(CHANNEL_ID, 'videos')).count).toBe(1);
   });
 });
 

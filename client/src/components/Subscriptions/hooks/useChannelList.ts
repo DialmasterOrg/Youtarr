@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { Channel } from '../../../types/Channel';
 import { normalizeSubFolderKey } from '../../../utils/channelHelpers';
+import { LibraryLayout } from '../../../types/tvShows';
 
 interface UseChannelListParams {
   token: string | null;
@@ -10,6 +11,8 @@ interface UseChannelListParams {
   searchTerm: string;
   sortOrder: 'asc' | 'desc';
   subFolder?: string;
+  /** 'tv' lists only channels that download to a TV folder */
+  layout?: LibraryLayout;
   append?: boolean;
 }
 
@@ -27,6 +30,7 @@ export const useChannelList = ({
   searchTerm,
   sortOrder,
   subFolder,
+  layout,
   append = false,
 }: UseChannelListParams) => {
   const [channels, setChannels] = useState<Channel[]>([]);
@@ -59,6 +63,7 @@ export const useChannelList = ({
           search: searchTerm || undefined,
           sortOrder,
           subFolder: subFolder || undefined,
+          ...(layout === 'tv' ? { layout } : {}),
         },
       });
 
@@ -91,7 +96,7 @@ export const useChannelList = ({
     } finally {
       setLoading(false);
     }
-  }, [token, page, pageSize, searchTerm, sortOrder, subFolder, append]);
+  }, [token, page, pageSize, searchTerm, sortOrder, subFolder, layout, append]);
 
   useEffect(() => {
     fetchChannels();

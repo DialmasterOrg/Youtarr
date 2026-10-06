@@ -6,6 +6,7 @@ const path = require('path');
 const configModule = require('./configModule');
 const fileCheckModule = require('./fileCheckModule');
 const watchStatusQueries = require('./mediaServers/watchStatusQueries');
+const episodeInfo = require('./tvShows/episodeInfo');
 const ratingMapper = require('./ratingMapper');
 const logger = require('../logger');
 const messageEmitter = require('./messageEmitter');
@@ -17,6 +18,7 @@ const { probeVideoDimensions } = require('./resolutionTier');
 const createLimiter = require('./subscriptionImport/concurrencyLimiter');
 const { isRescanCandidate, resolveRescanUpdate } = require('./rescanRowUpdate');
 const { unchangedSinceRead, GUARDED_COLUMNS } = require('./videoRowGuard');
+const reorganizeLock = require('./reorganize/reorganizeLock');
 
 // Backfill row updates are applied in parameterized batches of this size,
 // and flushed mid-chunk at the same cadence so completed work survives a
@@ -241,8 +243,12 @@ class VideosModule {
       // Watched-servers summary for the list UI, honoring the configured
       // watched rule; per-server detail lives behind /api/videos/:id/watch-status.
       const watchedByVideoId = await watchStatusQueries.getWatchedByMap(videos.map((v) => v.id));
+      const episodesByVideoId = await episodeInfo.getEpisodeInfoMap(
+        videos.map((v) => ({ youtubeId: v.youtubeId, filePath: v.filePath }))
+      );
       for (const video of videos) {
         video.watchedBy = watchedByVideoId.get(video.id) || [];
+        video.episode = episodesByVideoId.get(video.youtubeId) || null;
       }
 
       // Get all unique channels for the filter dropdown
@@ -527,6 +533,12 @@ class VideosModule {
     if (this._backfillRunning) {
       logger.info({ trigger }, 'Backfill already running, skipping');
       return { skipped: true, reason: 'already-running' };
+    }
+    // A reorganize moves files the scan would read; the startup pass checks
+    // here, scheduled runs are refused by the task manager.
+    if (reorganizeLock.isActive()) {
+      logger.info({ trigger }, 'Downloads are being reorganized; skipping the rescan');
+      return { skipped: true, reason: 'reorganizing' };
     }
     this._backfillRunning = true;
 

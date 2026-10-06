@@ -53,10 +53,12 @@ const apiKeyDownloadLimiter = rateLimit({
  * @param {Object} deps.videosModule - Videos module
  * @param {Object} deps.downloadModule - Download module
  * @param {Object} deps.ratingMapper - Rating validation/normalization module
+ * @param {Object} [deps.reorganizeLock] - The running reorganize, whose videos can't be deleted
  * @returns {express.Router}
  */
 module.exports = function createVideoRoutes({
   verifyToken, videosModule, downloadModule, videoOembedEnricher, videoLocalStatus, storageGuard, scheduledTaskManager, ratingMapper,
+  layoutGuards, reorganizeLock,
 }) {
   const router = express.Router();
   /**
@@ -400,6 +402,8 @@ module.exports = function createVideoRoutes({
    *         description: Videos deleted successfully
    *       400:
    *         description: Invalid request
+   *       409:
+   *         description: Some of the videos are being reorganized
    *       500:
    *         description: Failed to delete videos
    */
@@ -416,6 +420,11 @@ module.exports = function createVideoRoutes({
           success: false,
           error: 'videoIds or youtubeIds array is required'
         });
+      }
+
+      // Moving files must not race a delete of the same videos.
+      if (reorganizeLock && reorganizeLock.coversAnyVideo({ ids: videoIds || [], youtubeIds: youtubeIds || [] })) {
+        return res.status(409).json({ error: 'Some of these videos are being reorganized. Try again when that finishes.' });
       }
 
       const videoDeletionModule = require('../modules/videoDeletionModule');
@@ -924,7 +933,7 @@ module.exports = function createVideoRoutes({
    *       200:
    *         description: Download job started
    *       400:
-   *         description: Invalid resolution
+   *         description: Invalid override settings, or an MP3 download type with a TV-layout destination override
    *       409:
    *         description: Downloads are paused because a storage limit was reached (Settings > Storage Limits); the error message gives the reason
    *         content:
@@ -1026,11 +1035,22 @@ module.exports = function createVideoRoutes({
     }
 
     try {
+      // TV folders are video-only; a destination override makes the folder known up front.
+      const override = req.body.overrideSettings;
+      if (layoutGuards && override && override.subfolder !== undefined && override.subfolder !== null) {
+        await layoutGuards.assertVideoOnlyDestination({
+          audioFormat: override.audioFormat,
+          subFolderValue: override.subfolder,
+        });
+      }
       const admission = await downloadModule.doGroupedManualDownloads(req);
       res.json({ status: 'success', ...admission });
     } catch (err) {
       if (storageGuard.isPausedError(err)) {
         return res.status(409).json({ error: err.message });
+      }
+      if (err.status === 400) {
+        return res.status(400).json({ error: err.message });
       }
       req.log.error({ err }, 'Failed to start manual downloads');
       res.status(500).json({ error: 'Failed to queue downloads' });

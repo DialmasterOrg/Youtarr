@@ -50,3 +50,7 @@ test('active download links to download activity', () => {
   expect(describeRunNowBlock({ ...base, availability: blocked('downloads-active') })?.link)
     .toEqual({ to: '/downloads/activity', label: 'Download activity' });
 });
+
+test('a running reorganize shows the server\'s message', () => {
+  expect(describeRunNowBlock({ ...base, availability: blocked('reorganizing') })?.text).toBe('server says reorganizing');
+});

@@ -482,6 +482,20 @@ release and runs this suite in the **yt-dlp Cookie Loader Tests** job, required
 by **All Checks**. The helper imports that executable so the parser follows
 yt-dlp updates; it does not maintain a separate installation or format parser.
 
+### Filename Sanitizer Fixtures
+
+`sanitizeFilenameLikeYtDlp` (in `server/modules/filesystem/sanitizer.js`) ports
+yt-dlp's title sanitization to JavaScript. Its expected outputs in
+`server/modules/filesystem/__tests__/fixtures/ytdlpTitleSanitizer.json` come
+from the yt-dlp in the development image, rendered offline from fake info files.
+Regenerate them after a yt-dlp update or when adding cases to the corpus in the
+script:
+
+```bash
+./scripts/build-dev.sh                        # if the image is not built yet
+node scripts/generate-sanitizer-fixtures.js   # optional: pass another image name
+```
+
 ### Frontend Tests
 
 ```bash

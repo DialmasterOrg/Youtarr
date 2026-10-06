@@ -469,4 +469,116 @@ describe('JellyfinAdapter', () => {
       await expect(adapter.fetchWatchStates()).rejects.toBeInstanceOf(MediaServerUnavailableError);
     });
   });
+
+  describe('push-back after a reorganize', () => {
+    const notFound = () => Object.assign(new Error('not found'), { response: { status: 404 } });
+
+    test('reads one user\'s state of an item before a push', async () => {
+      axios.get.mockResolvedValueOnce({ data: { Path: '/m/x.mp4', UserData: { Played: true, PlayCount: 2, PlaybackPositionTicks: 0, LastPlayedDate: '2026-10-01T10:00:00Z' } } });
+      const state = await new JellyfinAdapter(cfg).getWatchState('ITEM', 'U2');
+      expect(axios.get).toHaveBeenCalledWith('http://jf:8096/Users/U2/Items/ITEM', expect.anything());
+      expect(state).toMatchObject({ played: true, playCount: 2, positionMs: 0, lastWatchedAt: new Date('2026-10-01T10:00:00Z') });
+    });
+
+    test('reports an unreadable item state as unknown', async () => {
+      axios.get.mockRejectedValueOnce(notFound());
+      await expect(new JellyfinAdapter(cfg).getWatchState('ITEM', 'U2')).resolves.toBeNull();
+    });
+
+    test('marks an item played for a user through the 10.9+ endpoint', async () => {
+      axios.post.mockResolvedValueOnce({});
+      await new JellyfinAdapter(cfg).setWatchState('ITEM', 'U2', { played: true, positionMs: null });
+      expect(axios.post).toHaveBeenCalledWith('http://jf:8096/UserPlayedItems/ITEM', null,
+        expect.objectContaining({ params: { userId: 'U2' } }));
+    });
+
+    test('falls back to the legacy played endpoint on older servers', async () => {
+      axios.post.mockRejectedValueOnce(notFound()).mockResolvedValueOnce({});
+      await new JellyfinAdapter(cfg).setWatchState('ITEM', 'U2', { played: true, positionMs: null });
+      expect(axios.post).toHaveBeenLastCalledWith('http://jf:8096/Users/U2/PlayedItems/ITEM', null, expect.anything());
+    });
+
+    test('sets a resume position in ticks', async () => {
+      axios.post.mockResolvedValueOnce({});
+      await new JellyfinAdapter(cfg).setWatchState('ITEM', 'U2', { played: false, positionMs: 1500 });
+      expect(axios.post).toHaveBeenCalledWith('http://jf:8096/UserItems/ITEM/UserData',
+        { PlaybackPositionTicks: 15000000, Played: false }, expect.objectContaining({ params: { userId: 'U2' } }));
+    });
+
+    test('does not fall back on other errors', async () => {
+      axios.post.mockRejectedValueOnce(Object.assign(new Error('denied'), { response: { status: 401 } }));
+      await expect(new JellyfinAdapter(cfg).setWatchState('ITEM', 'U2', { played: true })).rejects.toThrow('denied');
+      expect(axios.post).toHaveBeenCalledTimes(1);
+    });
+
+    test('resolves a moved file to the item at its new path, not a stale one with the same name', async () => {
+      axios.get.mockResolvedValueOnce({ data: { Items: [
+        { Id: 'OLD', Path: '/media/Old/Season 2024/S2024E01 - T [id1].mp4' },
+        { Id: 'NEW', Path: '/media/__TV/Chan/Season 2024/S2024E01 - T [id1].mp4' },
+      ] } });
+      const matches = await new JellyfinAdapter(cfg).resolveItemMatchesByPaths(['/data/__TV/Chan/Season 2024/S2024E01 - T [id1].mp4']);
+      expect(matches.get('/data/__TV/Chan/Season 2024/S2024E01 - T [id1].mp4')).toEqual({ id: 'NEW', score: 4 });
+    });
+  });
+
+  describe('library check', () => {
+    const virtualFolder = (overrides = {}) => ({
+      Name: 'TV', ItemId: 'lib1', CollectionType: 'tvshows', Locations: ['/media/__TV Shows'],
+      LibraryOptions: { SaveLocalMetadata: false, MetadataSavers: [], TypeOptions: [{ Type: 'Series', MetadataFetchers: [] }] },
+      ...overrides,
+    });
+
+    test('lists libraries with their type, locations and metadata settings', async () => {
+      axios.get.mockResolvedValueOnce({ data: [virtualFolder()] });
+
+      const libraries = await new JellyfinAdapter(cfg).listLibraries();
+
+      expect(libraries).toEqual([{
+        id: 'lib1', name: 'TV', type: 'tv', locations: ['/media/__TV Shows'], nfoSaver: false, onlineFetchers: false,
+      }]);
+    });
+
+    test('reads a library without CollectionType as Mixed', async () => {
+      axios.get.mockResolvedValueOnce({ data: [virtualFolder({ CollectionType: undefined })] });
+
+      const [library] = await new JellyfinAdapter(cfg).listLibraries();
+
+      expect(library.type).toBe('mixed');
+    });
+
+    test('reads the server default when a library leaves its savers unset', async () => {
+      axios.get
+        .mockResolvedValueOnce({ data: [virtualFolder({ LibraryOptions: { SaveLocalMetadata: true, MetadataSavers: null } })] })
+        .mockResolvedValueOnce({ data: { MetadataOptions: [{ ItemType: 'Series', DisabledMetadataSavers: [] }] } });
+
+      const [library] = await new JellyfinAdapter(cfg).listLibraries();
+
+      expect(axios.get).toHaveBeenLastCalledWith('http://jf:8096/System/Configuration', expect.any(Object));
+      expect(library.nfoSaver).toBe(true);
+    });
+
+    test('samples a few file paths from one library', async () => {
+      axios.get.mockResolvedValueOnce({ data: { Items: [{ Path: '/media/a.mp4' }, { Path: null }, { Path: '/media/b.mp4' }] } });
+
+      const paths = await new JellyfinAdapter(cfg).sampleItemPaths({ id: 'lib1', type: 'tv' }, 10);
+
+      expect(paths).toEqual(['/media/a.mp4', '/media/b.mp4']);
+      expect(axios.get).toHaveBeenCalledWith('http://jf:8096/Items', expect.objectContaining({
+        params: expect.objectContaining({ parentId: 'lib1', limit: 10 }),
+      }));
+    });
+
+    test('lists only the scoped libraries when looking up moved files', async () => {
+      axios.get
+        .mockResolvedValueOnce({ data: { Items: [{ Id: 'A', Path: '/media/__TV Shows/Chan/Season 2024/E [id1].mp4' }] } })
+        .mockResolvedValueOnce({ data: { Items: [] } });
+
+      await new JellyfinAdapter(cfg).resolveItemMatchesByPaths(['/data/__TV Shows/Chan/Season 2024/E [id1].mp4'], {
+        libraryIds: new Set(['lib1', 'lib2']),
+      });
+
+      const parents = axios.get.mock.calls.map(([, options]) => options.params.parentId);
+      expect(parents).toEqual(['lib1', 'lib2']);
+    });
+  });
 });

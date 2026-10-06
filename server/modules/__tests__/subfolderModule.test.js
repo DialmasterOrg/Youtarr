@@ -8,6 +8,8 @@ jest.mock('../../models/subfolder', () => ({
 }));
 jest.mock('../../models/channel', () => ({ count: jest.fn(), findAll: jest.fn() }));
 jest.mock('../../models/playlist', () => ({ count: jest.fn(), findAll: jest.fn() }));
+jest.mock('../../models/tvshow', () => ({ findAll: jest.fn() }));
+jest.mock('../../models/videoclassification', () => ({ findAll: jest.fn() }));
 jest.mock('../configModule', () => ({
   getDefaultSubfolder: jest.fn(),
   getConfig: jest.fn(),
@@ -17,11 +19,18 @@ jest.mock('../filesystem', () => ({
   buildSubfolderSegment: (n) => (n ? `__${n}` : null),
   directoryHasFiles: jest.fn(),
   removeIfEmpty: jest.fn(),
+  resolveEffectiveSubfolder: jest.requireActual('../filesystem/pathBuilder').resolveEffectiveSubfolder,
+}));
+// Folder layouts for the show count: TV and Kids TV are TV folders.
+jest.mock('../tvShows/libraryLayouts', () => ({
+  getLayoutResolver: jest.fn().mockResolvedValue((folder) => (/^(tv|kids tv)$/i.test(folder) ? 'tv' : 'videos')),
 }));
 
 const Subfolder = require('../../models/subfolder');
 const Channel = require('../../models/channel');
 const Playlist = require('../../models/playlist');
+const TvShow = require('../../models/tvshow');
+const VideoClassification = require('../../models/videoclassification');
 const configModule = require('../configModule');
 const filesystem = require('../filesystem');
 
@@ -30,6 +39,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   configModule.getDefaultSubfolder.mockReturnValue(null);
   configModule.getConfig.mockReturnValue({ plexSubfolderLibraryMappings: [] });
+  VideoClassification.findAll.mockResolvedValue([]);
+  TvShow.findAll.mockResolvedValue([]);
   subfolderModule = require('../subfolderModule');
 });
 
@@ -70,7 +81,7 @@ describe('getUsage', () => {
       {
         name: 'Spare',
         displayName: '__Spare',
-        usage: { channels: 0, playlists: 0, isDefault: false, plexMapped: false, hasFiles: false },
+        usage: { channels: 0, playlists: 0, shows: 0, isDefault: false, plexMapped: false, hasFiles: false },
         deletable: true,
       },
     ]);
@@ -85,6 +96,17 @@ describe('getUsage', () => {
 
     expect(item.usage.channels).toBe(2);
     expect(item.usage.playlists).toBe(1);
+    expect(item.deletable).toBe(false);
+  });
+
+  test('counts TV shows with numbered episodes and blocks deletion', async () => {
+    Subfolder.findAll.mockResolvedValue([{ name: 'TV' }]);
+    VideoClassification.findAll.mockResolvedValue([{ show_id: 1 }, { show_id: 2 }]);
+    TvShow.findAll.mockResolvedValue([{ library_folder: 'tv' }, { library_folder: 'Other' }]);
+
+    const [item] = await subfolderModule.getUsage();
+
+    expect(item.usage.shows).toBe(1);
     expect(item.deletable).toBe(false);
   });
 
@@ -176,6 +198,49 @@ describe('delete', () => {
   test('409 when a plex mapping references it', async () => {
     configModule.getConfig.mockReturnValue({ plexSubfolderLibraryMappings: [{ subfolder: 'Used', libraryId: '3' }] });
     await expect(subfolderModule.delete('used')).rejects.toMatchObject({ status: 409 });
+  });
+
+  test('409 when it holds a TV show with numbered episodes', async () => {
+    VideoClassification.findAll.mockResolvedValue([{ show_id: 4 }]);
+    TvShow.findAll.mockResolvedValue([{ library_folder: 'TV' }]);
+    await expect(subfolderModule.delete('tv')).rejects.toThrow('holds 1 TV show(s)');
+  });
+
+  test('still counts the show of a channel that downloads to the folder', async () => {
+    VideoClassification.findAll.mockResolvedValue([{ show_id: 4 }]);
+    TvShow.findAll.mockResolvedValue([{ library_folder: 'TV', channel_id: 'UC1' }]);
+    Channel.findAll.mockResolvedValue([{ channel_id: 'UC1', sub_folder: 'TV' }]);
+    await expect(subfolderModule.delete('TV')).rejects.toThrow('holds 1 TV show(s)');
+  });
+
+  test('ignores the show of a channel that has moved back to a videos folder', async () => {
+    VideoClassification.findAll.mockResolvedValue([{ show_id: 4 }]);
+    TvShow.findAll.mockResolvedValue([{ library_folder: 'TV', channel_id: 'UC1' }]);
+    Channel.findAll.mockResolvedValue([{ channel_id: 'UC1', sub_folder: 'Kids' }]);
+    await expect(subfolderModule.delete('TV')).resolves.toBeUndefined();
+  });
+
+  // A title show lives in a TV folder whatever folder its channel uses.
+  test('counts a title show of a channel that downloads to a videos folder', async () => {
+    VideoClassification.findAll.mockResolvedValue([{ show_id: 4 }]);
+    TvShow.findAll.mockResolvedValue([{ library_folder: 'TV', channel_id: 'UC1', kind: 'title' }]);
+    Channel.findAll.mockResolvedValue([{ channel_id: 'UC1', sub_folder: 'Kids' }]);
+    await expect(subfolderModule.delete('TV')).rejects.toThrow('holds 1 TV show(s)');
+  });
+
+  test('counts the show of an untracked channel, which has no folder of its own', async () => {
+    VideoClassification.findAll.mockResolvedValue([{ show_id: 4 }]);
+    TvShow.findAll.mockResolvedValue([{ library_folder: 'TV', channel_id: 'UCuntracked' }]);
+    Channel.findAll.mockResolvedValue([]);
+    await expect(subfolderModule.delete('TV')).rejects.toThrow('holds 1 TV show(s)');
+  });
+
+  test('ignores retired shows when counting', async () => {
+    VideoClassification.findAll.mockResolvedValue([{ show_id: 4 }]);
+    await subfolderModule.delete('TV');
+    expect(TvShow.findAll).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: [4], retired_at: null },
+    }));
   });
 
   test('409 when the directory still holds files', async () => {

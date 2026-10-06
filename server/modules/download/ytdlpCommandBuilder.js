@@ -492,18 +492,46 @@ class YtdlpCommandBuilder {
 
     // Add title regex filter if specified
     if (filterConfig.titleFilterRegex) {
-      // yt-dlp's match_str splits filters on unescaped '&' and, inside a quoted
-      // value, only unescapes the quote character. Backslashes pass through
-      // untouched, so doubling them would turn `\d` into a literal backslash.
-      const escapedRegex = filterConfig.titleFilterRegex
-        .replace(/'/g, '\\\'')
-        .replace(/&/g, '\\&');
-      additionalFilters.push(`title ~= '${escapedRegex}'`);
+      additionalFilters.push(`title ~= '${this.escapeMatchFilterValue(filterConfig.titleFilterRegex)}'`);
     }
 
     // Combine all filters
     const allFilters = [...baseFilters, ...additionalFilters];
     return allFilters.join(' & ');
+  }
+
+  /**
+   * A regex as a quoted match filter value. yt-dlp's match_str splits filters
+   * on unescaped '&' and, inside a quoted value, only unescapes the quote
+   * character. Backslashes pass through untouched, so doubling them would
+   * turn `\d` into a literal backslash.
+   * @param {string} regex
+   * @returns {string}
+   */
+  static escapeMatchFilterValue(regex) {
+    return regex.replace(/'/g, '\\\'').replace(/&/g, '\\&');
+  }
+
+  /**
+   * The match filters of a channel download, each passed as its own
+   * --match-filter (yt-dlp downloads a video any one of them accepts). A
+   * channel downloading only its title shows gets one filter per show: its
+   * own filters, the show's patterns, and that show's exclude terms (so a
+   * term excluded by one show never blocks another show). Patterns of
+   * different shows are never joined into one regex: repeated group names or
+   * flags would crash yt-dlp mid-run.
+   * @param {Object} filterConfig - ChannelFilterConfig (showFilters: [{ filterRegex, excludeRegexes }])
+   * @returns {string[]}
+   */
+  static buildMatchFilterList(filterConfig = null) {
+    const channelFilter = this.buildMatchFilters(filterConfig);
+    const shows = filterConfig && Array.isArray(filterConfig.showFilters) ? filterConfig.showFilters : [];
+    if (shows.length === 0) return [channelFilter];
+    return shows.map((show) => [
+      channelFilter,
+      `title ~= '${this.escapeMatchFilterValue(show.filterRegex)}'`,
+      ...(show.excludeRegexes || []).map((exclude) => `title !~= '${this.escapeMatchFilterValue(exclude)}'`),
+    ].join(' & '));
   }
 
   static buildSearchArgs(query, count) {
@@ -605,8 +633,8 @@ class YtdlpCommandBuilder {
       args.push('--download-archive', archiveModule.getArchivePath());
     }
 
-    // Build match filter with any channel-specific filtering
-    const matchFilter = this.buildMatchFilters(filterConfig);
+    // Build match filters with any channel-specific filtering
+    const matchFilters = this.buildMatchFilterList(filterConfig).flatMap((filter) => ['--match-filter', filter]);
 
     args.push(
       '--ignore-errors',
@@ -614,7 +642,7 @@ class YtdlpCommandBuilder {
       '--write-info-json',
       '--no-write-playlist-metafiles',
       '--extractor-args', 'youtubetab:tab=videos;sort=dd',
-      '--match-filter', matchFilter,
+      ...matchFilters,
       '-o', outputPath,
       '--datebefore', 'now',
       '-o', `thumbnail:${thumbnailPath}`,

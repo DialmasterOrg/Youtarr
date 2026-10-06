@@ -29,14 +29,20 @@ import { ConfigurationCard } from '../common/ConfigurationCard';
 import { InfoTooltip } from '../common/InfoTooltip';
 import SubtitleLanguageSelector from '../SubtitleLanguageSelector';
 import { VideoFilenameTemplate } from './components/VideoFilenameTemplate';
+import { LibraryFoldersList } from './components/LibraryFoldersList';
 import { SubfolderAutocomplete } from '../../shared/SubfolderAutocomplete';
 import { ManageSubfoldersDialog } from '../../shared/ManageSubfoldersDialog';
 import { AddSubfolderDialog } from '../../shared/AddSubfolderDialog';
 import { Plus as AddIcon, Settings as SettingsIcon } from '../../../lib/icons';
 import { useSubfolders } from '../../../hooks/useSubfolders';
+import { useLibraryFolders } from '../../../hooks/useLibraryFolders';
 import { ConfigState, DeploymentEnvironment, PlatformManagedState } from '../types';
 import { getChannelFilesOptions } from '../helpers';
 import { ScheduleSummary } from './components/ScheduleSummary';
+
+const DEFAULT_LAYOUT_CHANGE_NOTE =
+  'One of these folders saves videos and the other saves TV shows, so the downloaded videos of the channels that use '
+  + 'the default subfolder move. When you save, you review the move first.';
 
 interface CoreSettingsSectionProps {
   config: ConfigState;
@@ -61,6 +67,8 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
 }) => {
   // Fetch available subfolders
   const { subfolders, loading: subfoldersLoading, createSubfolder } = useSubfolders(token);
+  const libraryFolders = useLibraryFolders(token);
+  const { layoutOf } = libraryFolders;
 
   // State for confirmation dialog when setting default subfolder
   const [manageOpen, setManageOpen] = useState(false);
@@ -110,6 +118,10 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
       setLoadingAffectedChannels(false);
     }
   };
+
+  // Between a Videos and a TV folder, saving moves the downloaded videos of the channels on the default.
+  const defaultLayoutChanges = pendingDefaultSubfolder !== null
+    && layoutOf(config.defaultSubfolder || '') !== layoutOf(pendingDefaultSubfolder || '');
 
   const handleConfirmDefaultSubfolder = () => {
     onConfigChange({ defaultSubfolder: pendingDefaultSubfolder || '' });
@@ -576,6 +588,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                       label="Default Subfolder"
                       helperText="Default download location for channels using 'Default Subfolder'"
                       showAddAction={false}
+                      layoutOf={layoutOf}
                     />
                     <Box className="flex items-center min-h-[48px] mt-5">
                       <InfoTooltip
@@ -670,6 +683,12 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
 
                 <Grid item xs={12}>
                   <Box className="border-t pt-3">
+                    <LibraryFoldersList library={libraryFolders} token={token} />
+                  </Box>
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Box className="border-t pt-3">
                     <VideoFilenameTemplate
                       value={config.videoFilenamePrefix}
                       onChange={(newValue) => onConfigChange({ videoFilenamePrefix: newValue })}
@@ -753,7 +772,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
             </strong>
           </DialogContentText>
           <DialogContentText className="mt-2" style={{ fontStyle: 'italic' }}>
-            Existing videos will not be moved.
+            {defaultLayoutChanges ? DEFAULT_LAYOUT_CHANGE_NOTE : 'Existing videos will not be moved.'}
           </DialogContentText>
         </DialogContent>
         <DialogActions>

@@ -205,6 +205,7 @@ const createServerModule = ({
         const jobModuleMock = {
           onJobAbandoned: jest.fn(),
           onJobEnded: jest.fn(),
+          onBeforeNextJob: jest.fn(),
           getJob: jest.fn(),
           getRunningJobs: jest.fn(() => []),
           getRunningJobsWithFreshVideos: jest.fn().mockResolvedValue([]),
@@ -264,6 +265,36 @@ const createServerModule = ({
           getAll: jest.fn().mockResolvedValue([]),
           register: jest.fn().mockResolvedValue(undefined),
           delete: jest.fn().mockResolvedValue(undefined),
+        }));
+        jest.doMock('../modules/tvShows/libraryFolders', () => ({
+          listLibraryFolders: jest.fn().mockResolvedValue([]),
+          setFolderLayout: jest.fn(),
+          checkDefaultSubfolderChange: jest.fn().mockResolvedValue(undefined),
+        }));
+        jest.doMock('../modules/tvShows/libraryLayouts', () => ({
+          getLayoutResolver: jest.fn().mockResolvedValue(() => 'videos'),
+          listTvFolders: jest.fn().mockResolvedValue([]),
+        }));
+        jest.doMock('../modules/tvShows/showStore', () => ({ findChannelShow: jest.fn().mockResolvedValue(null) }));
+        jest.doMock('../modules/tvShows/episodeInfo', () => ({ getEpisodeInfoMap: jest.fn().mockResolvedValue(new Map()) }));
+        jest.doMock('../modules/tvShows/layoutGuards', () => ({ assertVideoOnlyDestination: jest.fn(), isMp3Format: jest.fn(() => false) }));
+        jest.doMock('../modules/reorganize', () => ({
+          lock: { coversAnyVideo: jest.fn(() => false) },
+          initialize: jest.fn(),
+          recoverInterrupted: jest.fn().mockResolvedValue(undefined),
+          channelState: jest.fn().mockResolvedValue({ running: false, unmoved: null }),
+          preview: jest.fn(), start: jest.fn(), retry: jest.fn(), getOperation: jest.fn(), getActive: jest.fn(),
+        }));
+        jest.doMock('../modules/mediaServers/watchStatusHolds', () => ({
+          describeHolds: jest.fn(), countHolds: jest.fn(), reopenHold: jest.fn(), dismissHold: jest.fn(), applyHolds: jest.fn(), expireHolds: jest.fn(),
+        }));
+        jest.doMock('../modules/mediaServers/watchStatusPushBack', () => ({ pushPendingHolds: jest.fn(), scheduleFollowUps: jest.fn() }));
+        jest.doMock('../modules/mediaServers/libraryCheck', () => ({ check: jest.fn(), applyPlexMapping: jest.fn() }));
+        jest.doMock('../modules/tvShows/titleShowService', () => ({}));
+        jest.doMock('../modules/tvShows/archiveSuppressor', () => ({ initialize: jest.fn(), flush: jest.fn().mockResolvedValue() }));
+        jest.doMock('../modules/tvShows/channelLayout', () => ({
+          getChannelTvState: jest.fn(),
+          resolveLayoutTarget: jest.fn(),
         }));
         jest.doMock('../modules/videoDeletionModule', () => ({
           deleteVideos: jest.fn().mockResolvedValue({ deleted: [], failed: [] }),

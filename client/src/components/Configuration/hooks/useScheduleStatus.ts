@@ -21,7 +21,7 @@ export interface ScheduleRun {
 
 export type RunBlockReason =
   | 'not-registered' | 'running' | 'disabled' | 'cooldown' | 'managed'
-  | 'downloads-paused' | 'no-media-server' | 'youtube-throttled' | 'downloads-active';
+  | 'downloads-paused' | 'no-media-server' | 'youtube-throttled' | 'downloads-active' | 'reorganizing';
 
 export interface ScheduleRunAvailability {
   available: boolean;

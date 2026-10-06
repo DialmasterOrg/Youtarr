@@ -30,6 +30,25 @@ const meta: Meta<typeof ChannelSettingsDialog> = {
         http.get('/api/channels/subfolders', () =>
           HttpResponse.json(['Movies', 'Shows'])
         ),
+        http.get('/api/channels/chan-1/tv', () =>
+          HttpResponse.json({
+            layout: 'videos',
+            libraryFolder: '',
+            show: null,
+            tvFolders: ['Shows'],
+            defaultFolder: '',
+            defaultFolderLayout: 'videos',
+            hasDownloads: false,
+          })
+        ),
+        http.get('/api/library-folders', () =>
+          HttpResponse.json({
+            folders: [
+              { name: '', layout: 'videos', isDefault: true, hasFiles: true, channels: 1 },
+              { name: 'Shows', layout: 'tv', isDefault: false, hasFiles: false, channels: 0 },
+            ],
+          })
+        ),
       ],
     },
   },

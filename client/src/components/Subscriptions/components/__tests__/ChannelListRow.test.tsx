@@ -113,6 +113,14 @@ jest.mock('../chips', () => ({
       autoRemovalProtected ? 'Protected (All)' : `Protected (${keepRecentCount})`
     );
   },
+  TvChip: function MockTvChip() {
+    const React = require('react');
+    return React.createElement('div', { 'data-testid': 'tv-chip' }, 'TV');
+  },
+  ShowsChip: function MockShowsChip({ count }: { count: number }) {
+    const React = require('react');
+    return count ? React.createElement('div', { 'data-testid': 'shows-chip' }, `${count} shows`) : null;
+  },
 }));
 
 describe('ChannelListRow', () => {
@@ -203,6 +211,31 @@ describe('ChannelListRow', () => {
       renderWithProviders(<ChannelListRow {...defaultProps} />);
 
       expect(screen.queryByTestId('protected-chip')).not.toBeInTheDocument();
+    });
+
+    test('renders TvChip for a channel in a TV folder on desktop', () => {
+      renderWithProviders(<ChannelListRow {...defaultProps} channel={{ ...mockChannel, layout: 'tv' }} />);
+
+      expect(screen.getByTestId('tv-chip')).toBeInTheDocument();
+    });
+
+    test('renders TvChip for a channel in a TV folder on mobile', () => {
+      renderWithProviders(
+        <ChannelListRow {...defaultProps} isMobile channel={{ ...mockChannel, layout: 'tv' }} />
+      );
+
+      expect(screen.getByTestId('tv-chip')).toBeInTheDocument();
+    });
+
+    test('counts the channel\'s title shows', () => {
+      renderWithProviders(<ChannelListRow {...defaultProps} channel={{ ...mockChannel, titleShows: 2 }} />);
+      expect(screen.getByTestId('shows-chip')).toHaveTextContent('2 shows');
+    });
+
+    test('does not render TvChip for a channel in a Videos folder', () => {
+      renderWithProviders(<ChannelListRow {...defaultProps} channel={{ ...mockChannel, layout: 'videos' }} />);
+
+      expect(screen.queryByTestId('tv-chip')).not.toBeInTheDocument();
     });
   });
 

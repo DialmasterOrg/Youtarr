@@ -58,6 +58,10 @@ jest.mock('../titleFilterRegex', () => ({
   checkSyntax: jest.fn(),
   matchTitles: jest.fn(),
 }));
+jest.mock('../tvShows/channelLayout', () => ({
+  checkChannelSettingsChange: jest.fn(),
+  applyChannelFolderChange: jest.fn(),
+}));
 
 describe('ChannelSettingsModule', () => {
   let channelSettingsModule;
@@ -718,6 +722,59 @@ describe('ChannelSettingsModule', () => {
       };
       Channel.findOne.mockResolvedValue(channel);
       jobModule.getAllJobs.mockReturnValue({});
+      const channelLayout = require('../tvShows/channelLayout');
+      channelLayout.checkChannelSettingsChange.mockResolvedValue({ involvesTv: false });
+      channelLayout.applyChannelFolderChange.mockResolvedValue(null);
+    });
+
+    describe('TV layout', () => {
+      let channelLayout;
+      beforeEach(() => {
+        channelLayout = require('../tvShows/channelLayout');
+      });
+
+      test('passes the new folder, audio format and download check to the layout guard', async () => {
+        const isDownloadRunning = () => false;
+        await channelSettingsModule.updateChannelSettings('UC123456', { sub_folder: ' TV ', audio_format: null }, { isDownloadRunning });
+
+        expect(channelLayout.checkChannelSettingsChange).toHaveBeenCalledWith(expect.objectContaining({
+          newSubFolder: 'TV', newAudioFormat: null, isDownloadRunning,
+        }));
+      });
+
+      test('saves nothing when the layout guard refuses', async () => {
+        const refusal = Object.assign(new Error('has downloads'), { status: 409 });
+        channelLayout.checkChannelSettingsChange.mockRejectedValue(refusal);
+
+        await expect(channelSettingsModule.updateChannelSettings('UC123456', { sub_folder: 'TV' }))
+          .rejects.toBe(refusal);
+        const channel = await Channel.findOne();
+        expect(channel.update).not.toHaveBeenCalled();
+      });
+
+      test('gives the channel its show instead of moving files when TV is involved', async () => {
+        const change = { involvesTv: true, newLayout: 'tv' };
+        channelLayout.checkChannelSettingsChange.mockResolvedValue(change);
+        const moveSpy = jest.spyOn(channelSettingsModule, 'moveChannelFolder');
+
+        await channelSettingsModule.updateChannelSettings('UC123456', { sub_folder: 'TV' });
+
+        expect(moveSpy).not.toHaveBeenCalled();
+        expect(channelLayout.applyChannelFolderChange).toHaveBeenCalledWith(expect.objectContaining({
+          previousSubFolder: mockChannel.sub_folder, change,
+        }));
+        moveSpy.mockRestore();
+      });
+
+      test('rolls the folder back and reports the error when the show update fails', async () => {
+        channelLayout.checkChannelSettingsChange.mockResolvedValue({ involvesTv: true, newLayout: 'tv' });
+        channelLayout.applyChannelFolderChange.mockRejectedValue(new Error('No free show folder name'));
+
+        await expect(channelSettingsModule.updateChannelSettings('UC123456', { sub_folder: 'TV' }))
+          .rejects.toThrow('No free show folder name');
+        const channel = await Channel.findOne();
+        expect(channel.update).toHaveBeenLastCalledWith({ sub_folder: mockChannel.sub_folder });
+      });
     });
 
     test('should throw error when channel not found', async () => {

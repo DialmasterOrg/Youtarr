@@ -27,6 +27,8 @@ import VideoCard from './VideoCard';
 import VideoListItem from './VideoListItem';
 import VideoTableView from './VideoTableView';
 import ChannelVideosDialogs from './ChannelVideosDialogs';
+import ChannelShowFilter from './components/TitleShows/ChannelShowFilter';
+import MissingEpisodesDialog from './components/TitleShows/MissingEpisodesDialog';
 import DownloadAllVideosDialog from './DownloadAllVideosDialog';
 import { useChannelVideos } from './hooks/useChannelVideos';
 import { useRefreshChannelVideos } from './hooks/useRefreshChannelVideos';
@@ -68,12 +70,17 @@ interface ChannelVideosProps {
   channelAudioFormat?: string | null;
   channelAvailableTabs?: string | null;
   onVideosLoaded?: (channelId: string) => void;
+  /** The channel's active title shows, for the show filter */
+  titleShows?: Array<{ id: number; name: string }>;
+  /** Changed by the page to reload the list (e.g. after Channel Settings closes) */
+  refreshKey?: number;
 }
 
 type SortBy = 'date' | 'title' | 'duration' | 'size';
 type SortOrder = 'asc' | 'desc';
 
 const VIEW_MODE_STORAGE_KEY = 'youtarr:channelVideosViewMode';
+const EMPTY_SHOWS: Array<{ id: number; name: string }> = [];
 
 function channelVideoToModalData(
   video: ChannelVideo,
@@ -115,6 +122,8 @@ function ChannelVideos({
   channelAudioFormat,
   channelAvailableTabs,
   onVideosLoaded,
+  titleShows = EMPTY_SHOWS,
+  refreshKey = 0,
 }: ChannelVideosProps) {
   const isMobile = useMediaQuery('(max-width: 767px)');
   const initialViewMode: VideoListViewMode = isMobile ? 'list' : 'table';
@@ -137,6 +146,12 @@ function ChannelVideos({
   const [missingFilter, setMissingFilter] = useState<ChipFilterMode>('off');
   const [ignoredFilter, setIgnoredFilter] = useState<ChipFilterMode>('off');
   const [watchedFilter, setWatchedFilter] = useState<ChipFilterMode>('off');
+  // One title show's episodes, and the show whose missing episodes are shown.
+  const [showFilter, setShowFilter] = useState<number | null>(null);
+  const [missingShowId, setMissingShowId] = useState<number | null>(null);
+  useEffect(() => {
+    if (showFilter !== null && !titleShows.some((show) => show.id === showFilter)) setShowFilter(null);
+  }, [showFilter, titleShows]);
 
   const [selectedTab, setSelectedTab] = useState<string | null>(null);
   const [availableTabs, setAvailableTabs] = useState<string[]>([]);
@@ -293,6 +308,7 @@ function ChannelVideos({
         missingFilter,
         ignoredFilter,
         watchedFilter,
+        showFilter ?? '',
         useInfiniteScroll,
       ].join('|'),
     [
@@ -311,6 +327,7 @@ function ChannelVideos({
       missingFilter,
       ignoredFilter,
       watchedFilter,
+      showFilter,
       useInfiniteScroll,
     ]
   );
@@ -344,10 +361,17 @@ function ChannelVideos({
     missingFilter,
     ignoredFilter,
     watchedFilter,
+    showId: showFilter,
     onFirstLoad: onVideosLoaded,
   });
 
   useDownloadListingsRefresh(refetchVideos);
+  const loadedRefreshKey = useRef(refreshKey);
+  useEffect(() => {
+    if (loadedRefreshKey.current === refreshKey) return;
+    loadedRefreshKey.current = refreshKey;
+    refetchVideos();
+  }, [refreshKey, refetchVideos]);
 
   const { data: tabStats, refetch: refetchTabStats } = useChannelTabStats(channelId, token);
   useDownloadListingsRefresh(refetchTabStats);
@@ -399,6 +423,7 @@ function ChannelVideos({
     missingFilter,
     ignoredFilter,
     watchedFilter,
+    showFilter,
     downloadedFilter,
     sortBy,
     sortOrder,
@@ -1069,7 +1094,7 @@ function ChannelVideos({
   );
   // The summary already gives the tab's size; the list count only adds
   // something while a search or filter narrows the list.
-  const listIsFiltered = Boolean(listState.search) || hasDurationOrDateFilter || maxRating !== ''
+  const listIsFiltered = Boolean(listState.search) || hasDurationOrDateFilter || maxRating !== '' || showFilter !== null
     || [downloadedFilter, protectedFilter, missingFilter, ignoredFilter, watchedFilter].some((mode) => mode !== 'off');
   let countChipLabel: string | null = null;
   if (totalCount > 0 && listIsFiltered) {
@@ -1315,8 +1340,21 @@ function ChannelVideos({
           paginationMode={useInfiniteScroll ? 'infinite' : 'pages'}
           infiniteScrollSentinel={infiniteSentinel}
           isMobile={isMobile}
+          customFilters={titleShows.length > 0 ? (
+            <ChannelShowFilter shows={titleShows} value={showFilter} onChange={setShowFilter} onShowMissing={setMissingShowId} />
+          ) : undefined}
         />
       </Card>
+
+      {channelId && (
+        <MissingEpisodesDialog
+          open={missingShowId !== null}
+          token={token}
+          channelId={channelId}
+          showId={missingShowId}
+          onClose={() => setMissingShowId(null)}
+        />
+      )}
 
       <ChannelVideosDialogs
         token={token}
@@ -1382,6 +1420,7 @@ function ChannelVideos({
           }}
           onDownloadQueued={() => setModalVideo(null)}
           onRatingChanged={() => refetchVideos()}
+          onEpisodeChanged={() => refetchVideos()}
           onAvailabilityDetected={(youtubeId, availability) => {
             setLocalAvailabilityStatus((prev) => ({ ...prev, [youtubeId]: availability }));
           }}

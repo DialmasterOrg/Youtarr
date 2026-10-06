@@ -14,6 +14,7 @@ describe('mediaServerSync', () => {
       Video: { findAll: jest.fn() },
     }));
     jest.doMock('../../configModule', () => ({ getConfig: () => ({}) }));
+    jest.doMock('../libraryLocator', () => ({ scopeFor: jest.fn().mockResolvedValue(null) }));
     jest.doMock('../../../logger', () => ({
       info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn(),
     }));
@@ -120,9 +121,40 @@ describe('mediaServerSync', () => {
     }
 
     expect(batchResolve).toHaveBeenCalledTimes(2);
-    expect(batchResolve).toHaveBeenNthCalledWith(1, ['/youtube/A/v1.mp4', '/youtube/B/v2.mp4']);
-    expect(batchResolve).toHaveBeenNthCalledWith(2, ['/youtube/B/v2.mp4']);
+    expect(batchResolve).toHaveBeenNthCalledWith(1, ['/youtube/A/v1.mp4', '/youtube/B/v2.mp4'], { libraryIds: null });
+    expect(batchResolve).toHaveBeenNthCalledWith(2, ['/youtube/B/v2.mp4'], { libraryIds: null });
     expect(plexAdapter.createPlaylist).toHaveBeenCalledWith('YT: PL', ['rk1', 'rk2'], { public: false, mediaType: 'video' });
+  });
+
+  test('resolves Plex items only in the libraries that hold Youtarr\'s folders', async () => {
+    const scope = new Set(['41']);
+    require('../libraryLocator').scopeFor.mockResolvedValue(scope);
+    Playlist.findByPk.mockResolvedValue({
+      id: 1, playlist_id: 'PL1', title: 'PL',
+      sync_to_plex: true, sync_to_jellyfin: true, sync_to_emby: false,
+      public_on_servers: false,
+    });
+    PlaylistVideo.findAll.mockResolvedValue([{ youtube_id: 'v1', position: 1, ignored: false }]);
+    Video.findAll.mockResolvedValue([{ youtubeId: 'v1', filePath: '/youtube/A/v1.mp4' }]);
+    PlaylistSyncState.findOne.mockResolvedValue(null);
+    PlaylistSyncState.create.mockResolvedValue({ id: 1 });
+    const plexResolve = jest.fn().mockResolvedValue(new Map([['/youtube/A/v1.mp4', 'rk1']]));
+    const jellyfinResolve = jest.fn().mockResolvedValue(new Map([['/youtube/A/v1.mp4', 'jf1']]));
+    const plexAdapter = makeAdapter('PlexAdapter', {
+      resolveItemIdsByFilepaths: plexResolve,
+      createPlaylist: jest.fn().mockResolvedValue({ id: 'pid' }),
+    });
+    const jellyfinAdapter = makeAdapter('JellyfinAdapter', {
+      resolveItemIdsByFilepaths: jellyfinResolve,
+      createPlaylist: jest.fn().mockResolvedValue({ id: 'jid' }),
+    });
+    serverRegistry.getEnabledAdapters.mockReturnValue([plexAdapter, jellyfinAdapter]);
+
+    await mediaServerSync.syncPlaylist(1);
+
+    expect(plexResolve).toHaveBeenCalledWith(['/youtube/A/v1.mp4'], { libraryIds: scope });
+    expect(jellyfinResolve).toHaveBeenCalledWith(['/youtube/A/v1.mp4'], { libraryIds: null });
+    expect(require('../libraryLocator').scopeFor).toHaveBeenCalledTimes(1);
   });
 
   test('replaces items when sync state already exists', async () => {
@@ -713,5 +745,35 @@ describe('mediaServerSync', () => {
       ['rk2', 'rk1'],
       { public: false, mediaType: 'video' }
     );
+  });
+
+  describe('while a reorganize moves files', () => {
+    test('puts the sync off and runs it when the reorganize ends', async () => {
+      const lock = require('../../reorganize/reorganizeLock');
+      const token = lock.acquire({ label: 'Chan' });
+      Playlist.findByPk.mockResolvedValue(null);
+
+      await mediaServerSync.syncPlaylist(5);
+      expect(Playlist.findByPk).not.toHaveBeenCalled();
+
+      lock.release(token);
+      await new Promise(setImmediate);
+      await new Promise(setImmediate);
+
+      expect(Playlist.findByPk).toHaveBeenCalledWith(5);
+    });
+
+    test('reports whether any playlist sync is in flight', async () => {
+      let finish;
+      Playlist.findByPk.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+
+      const pending = mediaServerSync.syncPlaylist(5);
+      await new Promise(setImmediate);
+      expect(mediaServerSync.isAnySyncInFlight()).toBe(true);
+
+      finish(null);
+      await pending;
+      expect(mediaServerSync.isAnySyncInFlight()).toBe(false);
+    });
   });
 });

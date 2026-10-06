@@ -96,6 +96,15 @@ describe('rescanRunSummary', () => {
       expect(toRunRecord({ processed: 100 })).toEqual(expect.objectContaining({ outcome: 'completed' }));
     });
 
+    test('reports a scan skipped while downloads were being reorganized', () => {
+      expect(toRunRecord({ skipped: true, reason: 'reorganizing' })).toEqual({
+        status: 'skipped',
+        outcome: 'skipped',
+        message: 'Skipped while downloads were being reorganized.',
+        details: null,
+      });
+    });
+
     test('reports a scan that was skipped because one was already running', () => {
       expect(toRunRecord({ skipped: true, reason: 'already-running' })).toEqual({
         status: 'skipped',

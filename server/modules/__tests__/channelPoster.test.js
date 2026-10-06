@@ -59,6 +59,12 @@ describe('Channel Poster Functionality', () => {
     jest.doMock('../messageEmitter', () => ({
       emitMessage: jest.fn()
     }));
+    jest.doMock('../tvShows/libraryLayouts', () => ({
+      getLayoutResolver: jest.fn().mockResolvedValue((folder) => (folder === 'TV' ? 'tv' : 'videos')),
+    }));
+    jest.doMock('../tvShows/showStore', () => ({
+      findChannelShow: jest.fn().mockResolvedValue({ library_folder: 'TV', folder_name: 'Pinned Show' }),
+    }));
 
     // Re-import after mocking
     fs = require('fs-extra');
@@ -293,6 +299,29 @@ describe('Channel Poster Functionality', () => {
       expect(fs.copySync).toHaveBeenCalledWith(
         '/images/channelthumb-UC123.jpg',
         '/videos/__Library1/Test Channel/poster.jpg',
+        { overwrite: true }
+      );
+    });
+
+    it('backfills poster.jpg into the show folder of a TV channel', async () => {
+      configModule.getConfig.mockReturnValue({ writeChannelPosters: true, writeBackdropImages: false });
+
+      const channels = [
+        { channel_id: 'UC123', uploader: 'Test Channel', sub_folder: 'TV' }
+      ];
+
+      fs.existsSync.mockImplementation((path) => {
+        if (path === '/videos') return true;
+        if (path === '/videos/__TV/Pinned Show') return true;
+        if (path === '/images/channelthumb-UC123.jpg') return true;
+        return false;
+      });
+
+      await channelModule.backfillChannelImages(channels);
+
+      expect(fs.copySync).toHaveBeenCalledWith(
+        '/images/channelthumb-UC123.jpg',
+        '/videos/__TV/Pinned Show/poster.jpg',
         { overwrite: true }
       );
     });

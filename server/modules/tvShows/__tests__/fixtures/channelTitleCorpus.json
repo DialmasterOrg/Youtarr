@@ -1,0 +1,899 @@
+{
+  "description": "Real channel titles with the classification Youtarr title shows should produce, for testing title patterns. Titles come from flat channel listings fetched on 2026-10-02 with yt-dlp 2026.09.27; listingIndex is the position in that listing (0 = newest), the only upload order a never-downloaded video has. Patterns use the simple title-pattern syntax. status: assigned, duplicate (another upload holds the number; earliest available upload wins), unsupported (compilation or part, not placed yet), unmatched (no show; intended = the manual assignment that fixes format drift). An order-numbered episode has episodeSource instead of a number.",
+  "channels": [
+    {
+      "channelId": "UCDrqiuwNRbEahL1UEB0hkKQ",
+      "name": "BEYBLADE Official",
+      "url": "https://www.youtube.com/channel/UCDrqiuwNRbEahL1UEB0hkKQ/videos",
+      "listingSize": 522,
+      "shows": [
+        {
+          "key": "beyblade",
+          "name": "Beyblade",
+          "patterns": [
+            {
+              "pattern": "BEYBLADE EN Episode {episode}: {title}",
+              "season": "fixed",
+              "seasonFixed": 1,
+              "episode": "title"
+            },
+            {
+              "pattern": "BEYBLADE VFORCE EN Episode {episode}: {title}",
+              "season": "fixed",
+              "seasonFixed": 2,
+              "episode": "title"
+            },
+            {
+              "pattern": "BEYBLADE GREVOLUTION EN Episode {episode}: {title}",
+              "season": "fixed",
+              "seasonFixed": 3,
+              "episode": "title"
+            }
+          ],
+          "excludeTerms": [],
+          "seasonNames": {
+            "1": "Beyblade",
+            "2": "V-Force",
+            "3": "G-Revolution"
+          }
+        }
+      ],
+      "videos": [
+        {
+          "id": "gMiqfnp96ps",
+          "title": "BEYBLADE BPO EPISÓDIO 20: IT’S ALL RELATIVE / TUDO É RELATIVO",
+          "duration": 1319,
+          "listingIndex": 0,
+          "expected": {
+            "status": "unmatched",
+            "note": "BPO dub, title also carries the English episode title"
+          }
+        },
+        {
+          "id": "JN49nXLOqQI",
+          "title": "BEYBLADE EN Episode 20: It's All Relative",
+          "duration": 1285,
+          "listingIndex": 1,
+          "expected": {
+            "status": "duplicate",
+            "show": "beyblade",
+            "season": 1,
+            "episode": 20,
+            "duplicateOf": "y7xVT7DTt2k",
+            "note": "2022 re-upload of the 2020 upload"
+          }
+        },
+        {
+          "id": "wSsbSX4njYs",
+          "title": "BEYBLADE PT-BR EPISÓDIO 6: TEMPESTADE DRAGOON",
+          "duration": 1319,
+          "listingIndex": 43,
+          "expected": {
+            "status": "unmatched",
+            "note": "Brazilian Portuguese dub"
+          }
+        },
+        {
+          "id": "J88TiNAqAbc",
+          "title": "BEYBLADE EN Episode 2: Day of the Dragoon",
+          "duration": 1285,
+          "listingIndex": 54,
+          "expected": {
+            "status": "duplicate",
+            "show": "beyblade",
+            "season": 1,
+            "episode": 2,
+            "duplicateOf": "3RroYKe_-2s",
+            "note": "2022 re-upload of the 2020 upload"
+          }
+        },
+        {
+          "id": "9VVBR3_LRak",
+          "title": "BEYBLADE EN Episode 1: The Blade Raider",
+          "duration": 1285,
+          "listingIndex": 59,
+          "expected": {
+            "status": "assigned",
+            "show": "beyblade",
+            "season": 1,
+            "episode": 1,
+            "episodeTitle": "The Blade Raider"
+          }
+        },
+        {
+          "id": "L8mK8TARwl4",
+          "title": "BEYBLADE G REVOLUTION PT-BR EPISÓDIO 52: BEYLUTA PARA SEMPRE",
+          "duration": 1318,
+          "listingIndex": 60,
+          "expected": {
+            "status": "unmatched",
+            "note": "G Revolution Brazilian Portuguese dub"
+          }
+        },
+        {
+          "id": "bZZVbrJFEtQ",
+          "title": "BEYBLADE VFORCE PT-BR EPISÓDIO 51: O DESTINO DA ÚLTIMA LUTA.",
+          "duration": 1318,
+          "listingIndex": 112,
+          "expected": {
+            "status": "unmatched",
+            "note": "V-Force Brazilian Portuguese dub"
+          }
+        },
+        {
+          "id": "soQjUiSQef4",
+          "title": "BEYBLADE GREVOLUTION EN Episode 52: BEYBATTLE FOR THE AGES",
+          "duration": 1317,
+          "listingIndex": 128,
+          "expected": {
+            "status": "assigned",
+            "show": "beyblade",
+            "season": 3,
+            "episode": 52,
+            "episodeTitle": "BEYBATTLE FOR THE AGES"
+          }
+        },
+        {
+          "id": "ZR53V61W4lk",
+          "title": "BEYBLADE GREVOLUTION ES-LA Episodio 52: BEYBATALLA PARA TODAS LAS ERAS",
+          "duration": 1318,
+          "listingIndex": 129,
+          "expected": {
+            "status": "unmatched",
+            "note": "G-Revolution Latin American Spanish dub"
+          }
+        },
+        {
+          "id": "Om0XY6vX_Hw",
+          "title": "BEYBLADE GREVOLUTION ES-LA Episodio 20: LA CARGA DE UN CAMPEÓN",
+          "duration": 1318,
+          "listingIndex": 226,
+          "expected": {
+            "status": "unmatched",
+            "note": "G-Revolution Latin American Spanish dub, same episode numbers"
+          }
+        },
+        {
+          "id": "T5buNkXwy1Q",
+          "title": "BEYBLADE GREVOLUTION EN Episode 1: New Kid in Town",
+          "duration": 1317,
+          "listingIndex": 283,
+          "expected": {
+            "status": "assigned",
+            "show": "beyblade",
+            "season": 3,
+            "episode": 1,
+            "episodeTitle": "New Kid in Town"
+          }
+        },
+        {
+          "id": "W3sL5CTa8AY",
+          "title": "BEYBLADE VFORCE EN Episode 51: Destiny of the Final Battle",
+          "duration": 1317,
+          "listingIndex": 290,
+          "expected": {
+            "status": "assigned",
+            "show": "beyblade",
+            "season": 2,
+            "episode": 51,
+            "episodeTitle": "Destiny of the Final Battle"
+          }
+        },
+        {
+          "id": "qEiNl1VBlr4",
+          "title": "BEYBLADE VFORCE ES-LA Episodio 20: La media hora de poder",
+          "duration": 1318,
+          "listingIndex": 380,
+          "expected": {
+            "status": "unmatched",
+            "note": "V-Force Latin American Spanish dub"
+          }
+        },
+        {
+          "id": "IRiIXyVSFfQ",
+          "title": "BEYBLADE VFORCE EN Episode 20: The Power Half Hour!!",
+          "duration": 1317,
+          "listingIndex": 381,
+          "expected": {
+            "status": "assigned",
+            "show": "beyblade",
+            "season": 2,
+            "episode": 20,
+            "episodeTitle": "The Power Half Hour!!"
+          }
+        },
+        {
+          "id": "6fYg2nW3yAo",
+          "title": "BEYBLADE VFORCE EN Episode 1: Shot Down in Flames!",
+          "duration": 1318,
+          "listingIndex": 419,
+          "expected": {
+            "status": "assigned",
+            "show": "beyblade",
+            "season": 2,
+            "episode": 1,
+            "episodeTitle": "Shot Down in Flames!"
+          }
+        },
+        {
+          "id": "zvOkST_xRQQ",
+          "title": "BEYBLADE EN Episode 51: Final Showdown",
+          "duration": 1318,
+          "listingIndex": 420,
+          "expected": {
+            "status": "assigned",
+            "show": "beyblade",
+            "season": 1,
+            "episode": 51,
+            "episodeTitle": "Final Showdown"
+          }
+        },
+        {
+          "id": "y7xVT7DTt2k",
+          "title": "BEYBLADE EN Episode 20: It's All Relative",
+          "duration": 1285,
+          "listingIndex": 482,
+          "expected": {
+            "status": "assigned",
+            "show": "beyblade",
+            "season": 1,
+            "episode": 20,
+            "episodeTitle": "It's All Relative"
+          }
+        },
+        {
+          "id": "3RroYKe_-2s",
+          "title": "BEYBLADE EN Episode 2: Day of the Dragoon",
+          "duration": 1285,
+          "listingIndex": 519,
+          "expected": {
+            "status": "assigned",
+            "show": "beyblade",
+            "season": 1,
+            "episode": 2,
+            "episodeTitle": "Day of the Dragoon"
+          }
+        }
+      ]
+    },
+    {
+      "channelId": "UCktgoAFaL39_rYfiMZiD9jw",
+      "name": "BEYBLADE English - Official Channel",
+      "url": "https://www.youtube.com/@BeybladeOfficial/videos",
+      "listingSize": 1161,
+      "shows": [
+        {
+          "key": "quadstrike",
+          "name": "Beyblade Burst QuadStrike",
+          "patterns": [
+            {
+              "pattern": "BEYBLADE BURST QUADSTRIKE Episode {episode}: {title}",
+              "season": "fixed",
+              "seasonFixed": 1,
+              "episode": "title"
+            },
+            {
+              "pattern": "BEYBLADE BURST QUADSTRIKE Episode {episode} Part {part}: {title}",
+              "season": "fixed",
+              "seasonFixed": 1,
+              "episode": "title"
+            },
+            {
+              "pattern": "BEYBLADE BURST QUADSTRIKE EP{episode}",
+              "season": "fixed",
+              "seasonFixed": 1,
+              "episode": "title"
+            }
+          ],
+          "excludeTerms": [
+            "Official Clip"
+          ],
+          "seasonNames": {}
+        },
+        {
+          "key": "quadstrike-clips",
+          "name": "Beyblade Burst QuadStrike Clips",
+          "patterns": [
+            {
+              "pattern": "{title} | BEYBLADE BURST QUADSTRIKE EP* | Official Clip",
+              "season": "fixed",
+              "seasonFixed": 1,
+              "episode": "order"
+            }
+          ],
+          "excludeTerms": [],
+          "seasonNames": {}
+        },
+        {
+          "key": "burst-evolution",
+          "name": "Beyblade Burst Evolution",
+          "patterns": [
+            {
+              "pattern": "BEYBLADE BURST EVOLUTION Episode {episode}: {title}",
+              "season": "fixed",
+              "seasonFixed": 1,
+              "episode": "title"
+            },
+            {
+              "pattern": "BEYBLADE BURST EVOLUTION | Ep.{episode} * | Ep.{episode_end} *",
+              "season": "fixed",
+              "seasonFixed": 1,
+              "episode": "title"
+            }
+          ],
+          "excludeTerms": [],
+          "seasonNames": {}
+        },
+        {
+          "key": "metal-fusion",
+          "name": "Beyblade Metal Fusion",
+          "patterns": [
+            {
+              "pattern": "BEYBLADE METAL FUSION | Ep.{episode} {title}",
+              "season": "fixed",
+              "seasonFixed": 1,
+              "episode": "title"
+            }
+          ],
+          "excludeTerms": [],
+          "seasonNames": {}
+        }
+      ],
+      "videos": [
+        {
+          "id": "zq7eaJqcloo",
+          "title": "Find the ODD One Out 🌀 BEYBLADE X Challenge! 💥",
+          "duration": 188,
+          "listingIndex": 1,
+          "expected": {
+            "status": "unmatched",
+            "note": "loose video"
+          }
+        },
+        {
+          "id": "AYTF71Kjy88",
+          "title": "BEYBLADE METAL FUSION | Ep.31 The Twin Gemios",
+          "duration": 1324,
+          "listingIndex": 2,
+          "expected": {
+            "status": "assigned",
+            "show": "metal-fusion",
+            "season": 1,
+            "episode": 31,
+            "episodeTitle": "The Twin Gemios"
+          }
+        },
+        {
+          "id": "YA12xsZKqwQ",
+          "title": "BEYBLADE METAL FUSION | Ep.30 The Bewitching Pisces",
+          "duration": 1324,
+          "listingIndex": 7,
+          "expected": {
+            "status": "assigned",
+            "show": "metal-fusion",
+            "season": 1,
+            "episode": 30,
+            "episodeTitle": "The Bewitching Pisces"
+          }
+        },
+        {
+          "id": "ZYHLxq3DlF0",
+          "title": "TV Anime “BEYBLADE X”: TOMORROW X TOGETHER “Rise” Non-credit opening [90 sec] 🎶",
+          "duration": 90,
+          "listingIndex": 9,
+          "expected": {
+            "status": "unmatched",
+            "note": "opening theme"
+          }
+        },
+        {
+          "id": "q8l9UGsmvWs",
+          "title": "BEYBLADE METAL FUSION | Ep.1 Pegasus Has Landed!",
+          "duration": 1324,
+          "listingIndex": 129,
+          "expected": {
+            "status": "assigned",
+            "show": "metal-fusion",
+            "season": 1,
+            "episode": 1,
+            "episodeTitle": "Pegasus Has Landed!"
+          }
+        },
+        {
+          "id": "EWnfVnzPy5I",
+          "title": "BEYBLADE BURST EVOLUTION | Ep.19 Secret Fire! Red Eye! | Ep.20 New Teammates! New Rivals!",
+          "duration": 2416,
+          "listingIndex": 220,
+          "expected": {
+            "status": "unsupported",
+            "show": "burst-evolution",
+            "reason": "compilation",
+            "season": 1,
+            "episode": 19,
+            "episodeEnd": 20,
+            "note": "both episodes also uploaded singly"
+          }
+        },
+        {
+          "id": "3kH46KffELs",
+          "title": "BEYBLADE GREVOLUTION | Ep.19 One for All...Free for All! | Ep.20 Burdens of a Champion",
+          "duration": 2634,
+          "listingIndex": 356,
+          "expected": {
+            "status": "unmatched",
+            "note": "G-Revolution compilation; no show for that series here"
+          }
+        },
+        {
+          "id": "WsznwjmoqAs",
+          "title": "Belfyre faces Pandora in a fierce battle | BEYBLADE BURST QUADSTRIKE EP1 | Official Clip",
+          "duration": 145,
+          "listingIndex": 651,
+          "expected": {
+            "status": "assigned",
+            "show": "quadstrike-clips",
+            "season": 1,
+            "episodeSource": "order",
+            "episodeTitle": "Belfyre faces Pandora in a fierce battle"
+          }
+        },
+        {
+          "id": "2fVmOfAAWnM",
+          "title": "Bel battles Quadra | BEYBLADE BURST QUADSTRIKE EP1 | Official Clip",
+          "duration": 75,
+          "listingIndex": 655,
+          "expected": {
+            "status": "assigned",
+            "show": "quadstrike-clips",
+            "season": 1,
+            "episodeSource": "order",
+            "episodeTitle": "Bel battles Quadra",
+            "note": "matches the quadstrike EP pattern but its exclude term passes it on"
+          }
+        },
+        {
+          "id": "3FuWJj8suI4",
+          "title": "The secrets of the hidden cave | BEYBLADE BURST QUADSTRIKE EP1 | Official Clip",
+          "duration": 152,
+          "listingIndex": 657,
+          "expected": {
+            "status": "assigned",
+            "show": "quadstrike-clips",
+            "season": 1,
+            "episodeSource": "order",
+            "episodeTitle": "The secrets of the hidden cave"
+          }
+        },
+        {
+          "id": "M-mZ8j1xzf4",
+          "title": "BEYBLADE BURST QUADSTRIKE Episode 1 Part 2: Thunder and Lightning! Elemental Power!",
+          "duration": 570,
+          "listingIndex": 775,
+          "expected": {
+            "status": "unsupported",
+            "show": "quadstrike",
+            "reason": "part",
+            "season": 1,
+            "episode": 1,
+            "part": 2
+          }
+        },
+        {
+          "id": "ae1ge_MqAxs",
+          "title": "BEYBLADE BURST QUADSTRIKE Episode 1 Part 1: Thunder and Lightning! Elemental Power!",
+          "duration": 879,
+          "listingIndex": 776,
+          "expected": {
+            "status": "unsupported",
+            "show": "quadstrike",
+            "reason": "part",
+            "season": 1,
+            "episode": 1,
+            "part": 1
+          }
+        },
+        {
+          "id": "Ux53C6pjlvE",
+          "title": "BEYBLADE BURST EVOLUTION Episode 20: New Teammates! New Rivals!",
+          "duration": 1365,
+          "listingIndex": 1096,
+          "expected": {
+            "status": "assigned",
+            "show": "burst-evolution",
+            "season": 1,
+            "episode": 20,
+            "episodeTitle": "New Teammates! New Rivals!"
+          }
+        },
+        {
+          "id": "EdOi3V3ufx8",
+          "title": "BEYBLADE BURST EVOLUTION Episode 19: Secret Fire! Red Eye!",
+          "duration": 1367,
+          "listingIndex": 1097,
+          "expected": {
+            "status": "assigned",
+            "show": "burst-evolution",
+            "season": 1,
+            "episode": 19,
+            "episodeTitle": "Secret Fire! Red Eye!"
+          }
+        },
+        {
+          "id": "1R1YrGoqKXQ",
+          "title": "BEYBLADE BURST EVOLUTION Episode 1: Fresh Start! Valtryek's Evolution!",
+          "duration": 1340,
+          "listingIndex": 1122,
+          "expected": {
+            "status": "assigned",
+            "show": "burst-evolution",
+            "season": 1,
+            "episode": 1,
+            "episodeTitle": "Fresh Start! Valtryek's Evolution!"
+          }
+        }
+      ]
+    },
+    {
+      "channelId": "UCR9Gcq0CMm6YgTzsDxAxjOQ",
+      "name": "Grian",
+      "url": "https://www.youtube.com/@grian/videos",
+      "listingSize": 836,
+      "shows": [
+        {
+          "key": "hermitcraft",
+          "name": "Hermitcraft",
+          "patterns": [
+            {
+              "pattern": "Hermitcraft {season}: Episode {episode} - {title}",
+              "season": "title",
+              "episode": "title"
+            }
+          ],
+          "excludeTerms": [],
+          "seasonNames": {}
+        },
+        {
+          "key": "life-series",
+          "name": "Life Series",
+          "patterns": [
+            {
+              "pattern": "3rd Life: Episode {episode} - {title}",
+              "season": "fixed",
+              "seasonFixed": 1,
+              "episode": "title"
+            },
+            {
+              "pattern": "Last Life: Episode {episode} - {title}",
+              "season": "fixed",
+              "seasonFixed": 2,
+              "episode": "title"
+            },
+            {
+              "pattern": "Double Life: Episode {episode} - {title}",
+              "season": "fixed",
+              "seasonFixed": 3,
+              "episode": "title"
+            },
+            {
+              "pattern": "Limited Life: Episode {episode} - {title}",
+              "season": "fixed",
+              "seasonFixed": 4,
+              "episode": "title"
+            },
+            {
+              "pattern": "Secret Life: Episode {episode} - {title}",
+              "season": "fixed",
+              "seasonFixed": 5,
+              "episode": "title"
+            },
+            {
+              "pattern": "Wild Life: Episode {episode} - {title}",
+              "season": "fixed",
+              "seasonFixed": 6,
+              "episode": "title"
+            }
+          ],
+          "excludeTerms": [],
+          "seasonNames": {
+            "1": "3rd Life",
+            "2": "Last Life",
+            "3": "Double Life",
+            "4": "Limited Life",
+            "5": "Secret Life",
+            "6": "Wild Life"
+          }
+        },
+        {
+          "key": "evolution",
+          "name": "Minecraft Evolution",
+          "patterns": [
+            {
+              "pattern": "Minecraft Evo: Episode {episode} - {title}",
+              "season": "fixed",
+              "seasonFixed": 1,
+              "episode": "title"
+            }
+          ],
+          "excludeTerms": [],
+          "seasonNames": {}
+        }
+      ],
+      "videos": [
+        {
+          "id": "X3NqE6rj_AY",
+          "title": "Playing Minecraft Dungeons II For the FIRST TIME!",
+          "duration": 3208,
+          "listingIndex": 0,
+          "expected": {
+            "status": "unmatched",
+            "note": "loose video"
+          }
+        },
+        {
+          "id": "E_RXOSNzztg",
+          "title": "Hermitcraft 11: Episode 28 - TANGO'S GAME!",
+          "duration": 2288,
+          "listingIndex": 1,
+          "expected": {
+            "status": "assigned",
+            "show": "hermitcraft",
+            "season": 11,
+            "episode": 28,
+            "episodeTitle": "TANGO'S GAME!"
+          }
+        },
+        {
+          "id": "k6kvRUbPp_0",
+          "title": "Hermit Master in REAL LIFE ",
+          "duration": 3986,
+          "listingIndex": 17,
+          "expected": {
+            "status": "unmatched",
+            "note": "loose video with \"LIFE\" in the title"
+          }
+        },
+        {
+          "id": "9O8wxI1VAs0",
+          "title": "Hermitcraft 10: Episode 43 - THE LAST DAY!",
+          "duration": 5416,
+          "listingIndex": 36,
+          "expected": {
+            "status": "assigned",
+            "show": "hermitcraft",
+            "season": 10,
+            "episode": 43,
+            "episodeTitle": "THE LAST DAY!"
+          }
+        },
+        {
+          "id": "4G5seww-ATY",
+          "title": "Wild Life: Episode 1 - ANYTHING COULD HAPPEN!",
+          "duration": 2736,
+          "listingIndex": 81,
+          "expected": {
+            "status": "assigned",
+            "show": "life-series",
+            "season": 6,
+            "episode": 1,
+            "episodeTitle": "ANYTHING COULD HAPPEN!"
+          }
+        },
+        {
+          "id": "8XWhMFbxwVk",
+          "title": "Secret Life: Episode 9 - THE FINALE",
+          "duration": 1421,
+          "listingIndex": 118,
+          "expected": {
+            "status": "assigned",
+            "show": "life-series",
+            "season": 5,
+            "episode": 9,
+            "episodeTitle": "THE FINALE"
+          }
+        },
+        {
+          "id": "6zMdLcEAenc",
+          "title": "Secret Life: Episode 8 - A GHOSTLY TASK",
+          "duration": 1951,
+          "listingIndex": 120,
+          "expected": {
+            "status": "assigned",
+            "show": "life-series",
+            "season": 5,
+            "episode": 8,
+            "episodeTitle": "A GHOSTLY TASK"
+          }
+        },
+        {
+          "id": "gzaIHdjLIyM",
+          "title": "Limited Life: Episode 1 - 24 HOURS TO LIVE",
+          "duration": 1485,
+          "listingIndex": 156,
+          "expected": {
+            "status": "assigned",
+            "show": "life-series",
+            "season": 4,
+            "episode": 1,
+            "episodeTitle": "24 HOURS TO LIVE"
+          }
+        },
+        {
+          "id": "UwFbtE4YS7g",
+          "title": "Double Life: Episode 1 - DOUBLE TROUBLE!",
+          "duration": 2585,
+          "listingIndex": 188,
+          "expected": {
+            "status": "assigned",
+            "show": "life-series",
+            "season": 3,
+            "episode": 1,
+            "episodeTitle": "DOUBLE TROUBLE!"
+          }
+        },
+        {
+          "id": "mup3zqmXObc",
+          "title": "Hermitcraft 9: Episode 1 - LET'S BEGIN!",
+          "duration": 2022,
+          "listingIndex": 202,
+          "expected": {
+            "status": "assigned",
+            "show": "hermitcraft",
+            "season": 9,
+            "episode": 1,
+            "episodeTitle": "LET'S BEGIN!"
+          }
+        },
+        {
+          "id": "tXoc3OHxW9w",
+          "title": "Last Life: Episode 9 - THE FINALE!",
+          "duration": 1028,
+          "listingIndex": 218,
+          "expected": {
+            "status": "assigned",
+            "show": "life-series",
+            "season": 2,
+            "episode": 9,
+            "episodeTitle": "THE FINALE!"
+          }
+        },
+        {
+          "id": "jft49jbtbxU",
+          "title": "3rd Life: Episode 8 - THE FINAL LIFE",
+          "duration": 1864,
+          "listingIndex": 249,
+          "expected": {
+            "status": "assigned",
+            "show": "life-series",
+            "season": 1,
+            "episode": 8,
+            "episodeTitle": "THE FINAL LIFE"
+          }
+        },
+        {
+          "id": "LtZBJbkDETc",
+          "title": "The Next Evolution of Minecraft",
+          "duration": 1287,
+          "listingIndex": 328,
+          "expected": {
+            "status": "unmatched",
+            "note": "loose video that mentions Evolution"
+          }
+        },
+        {
+          "id": "bYDDH8rbWhQ",
+          "title": "Hermitcraft 7: Episode 1 - HERE WE GO!",
+          "duration": 1805,
+          "listingIndex": 342,
+          "expected": {
+            "status": "assigned",
+            "show": "hermitcraft",
+            "season": 7,
+            "episode": 1,
+            "episodeTitle": "HERE WE GO!"
+          }
+        },
+        {
+          "id": "neDQk6wrltc",
+          "title": "Hermitcraft 6: Episode 110 - END OF THE SEASON!",
+          "duration": 4175,
+          "listingIndex": 343,
+          "expected": {
+            "status": "assigned",
+            "show": "hermitcraft",
+            "season": 6,
+            "episode": 110,
+            "episodeTitle": "END OF THE SEASON!"
+          }
+        },
+        {
+          "id": "fd8oecwIFxs",
+          "title": "Minecraft Evolution SMP FINALE (Episode 51)",
+          "duration": 1396,
+          "listingIndex": 479,
+          "expected": {
+            "status": "unmatched",
+            "note": "format drift",
+            "intended": {
+              "show": "evolution",
+              "season": 1,
+              "episode": 51
+            }
+          }
+        },
+        {
+          "id": "vQZuS7SGFk0",
+          "title": "Minecraft Evo: Episode 50 - THROUGH THE PORTAL!",
+          "duration": 1187,
+          "listingIndex": 488,
+          "expected": {
+            "status": "assigned",
+            "show": "evolution",
+            "season": 1,
+            "episode": 50,
+            "episodeTitle": "THROUGH THE PORTAL!"
+          }
+        },
+        {
+          "id": "enYrsxLisC8",
+          "title": "SECRET Staircase Room! - Minecraft Evo Ep. 49",
+          "duration": 1300,
+          "listingIndex": 496,
+          "expected": {
+            "status": "unmatched",
+            "note": "format drift",
+            "intended": {
+              "show": "evolution",
+              "season": 1,
+              "episode": 49
+            }
+          }
+        },
+        {
+          "id": "D24PS7BJuuQ",
+          "title": "ONE HOUR OF EVO! - Minecraft Evo 48",
+          "duration": 3624,
+          "listingIndex": 497,
+          "expected": {
+            "status": "unmatched",
+            "note": "format drift",
+            "intended": {
+              "show": "evolution",
+              "season": 1,
+              "episode": 48
+            }
+          }
+        },
+        {
+          "id": "2M2rM4msjgI",
+          "title": "SERVER TOUR! - Minecraft Evo SMP #47",
+          "duration": 1309,
+          "listingIndex": 500,
+          "expected": {
+            "status": "unmatched",
+            "note": "format drift",
+            "intended": {
+              "show": "evolution",
+              "season": 1,
+              "episode": 47
+            }
+          }
+        },
+        {
+          "id": "LWUzXe8cqcY",
+          "title": "TREASURE HUNT CHOICE! - Minecraft Evo #46",
+          "duration": 1487,
+          "listingIndex": 505,
+          "expected": {
+            "status": "unmatched",
+            "note": "format drift",
+            "intended": {
+              "show": "evolution",
+              "season": 1,
+              "episode": 46
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

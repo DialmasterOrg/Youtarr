@@ -5,13 +5,20 @@ const { channelDownloadAllJobLabel } = require('./download/jobTypes');
 const { MEDIA_TAB_TYPE_MAP } = require('./tabsUtils');
 const logger = require('../logger');
 const videoActivity = require('./download/videoActivity');
+const titleShowQueries = require('./tvShows/titleShowQueries');
 
 const WATCH_URL_PREFIX = 'https://www.youtube.com/watch?v=';
 
 // "Download all videos for a channel" (one tab at a time). Assumes the caller
 // already ran the fetch-all ("Load More") flow, so channelvideos is complete.
 class ChannelDownloadAllModule {
-  async getDownloadableVideos(channelId, tabType) {
+  /**
+   * @param {string} channelId
+   * @param {string} tabType
+   * @param {Object|null} [channel] - channels row; with tv_show_only_downloads only title show
+   *   episodes are downloadable (while the channel has a title show)
+   */
+  async getDownloadableVideos(channelId, tabType, channel = null) {
     const mediaType = MEDIA_TAB_TYPE_MAP[tabType] || 'video';
 
     const rows = await ChannelVideo.findAll({
@@ -47,14 +54,19 @@ class ChannelDownloadAllModule {
     // preview count would overstate.
     const downloaded = new Set(existing.map((video) => video.youtubeId));
 
-    return candidates
-      .filter((row) => !downloaded.has(row.youtube_id) && !videoActivity.isActive(row.youtube_id))
+    const downloadable = candidates
+      .filter((row) => !downloaded.has(row.youtube_id) && !videoActivity.isActive(row.youtube_id));
+    const episodes = channel && channel.tv_show_only_downloads
+      ? await titleShowQueries.showEpisodeIds(channelId, downloadable.map((row) => row.youtube_id))
+      : null;
+    return downloadable
+      .filter((row) => !episodes || episodes.has(row.youtube_id))
       .map((row) => ({ youtube_id: row.youtube_id, duration: row.duration }));
   }
 
   async getPreview(channelId, tabType) {
-    await this.findChannelOrThrow(channelId);
-    const videos = await this.getDownloadableVideos(channelId, tabType);
+    const channel = await this.findChannelOrThrow(channelId);
+    const videos = await this.getDownloadableVideos(channelId, tabType, channel);
 
     let totalDurationSeconds = 0;
     let missingDurations = 0;
@@ -71,7 +83,7 @@ class ChannelDownloadAllModule {
 
   async startDownloadAll(channelId, tabType, overrideSettings = {}) {
     const channel = await this.findChannelOrThrow(channelId);
-    const videos = await this.getDownloadableVideos(channelId, tabType);
+    const videos = await this.getDownloadableVideos(channelId, tabType, channel);
 
     if (videos.length === 0) {
       return { queued: 0 };

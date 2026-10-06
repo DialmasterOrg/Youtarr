@@ -49,6 +49,16 @@ const watchStatusReturn = {
   loading: false,
 };
 const watchStatusCalls: unknown[][] = [];
+// The episode section fetches /api/videos/:id/episode on its own; it has its own tests.
+const mockEpisodeSection: { props: { onChanged?: (youtubeId: string) => void } | null } = { props: null };
+jest.mock('../components/VideoEpisodeSection', () => ({
+  __esModule: true,
+  default: (props: { onChanged?: (youtubeId: string) => void }) => {
+    mockEpisodeSection.props = props;
+    return null;
+  },
+}));
+
 jest.mock('../hooks/useWatchStatus', () => ({
   useWatchStatus: (...args: unknown[]) => {
     watchStatusCalls.push(args);
@@ -665,6 +675,15 @@ describe('VideoModal', () => {
       await waitFor(() => {
         expect(screen.getByText('Network error')).toBeInTheDocument();
       });
+    });
+  });
+
+  describe('episode changes', () => {
+    test('tells its page when the episode section changes the episode', () => {
+      const onEpisodeChanged = jest.fn();
+      renderModal({ onEpisodeChanged });
+      act(() => { mockEpisodeSection.props?.onChanged?.('test123'); });
+      expect(onEpisodeChanged).toHaveBeenCalledWith('test123');
     });
   });
 

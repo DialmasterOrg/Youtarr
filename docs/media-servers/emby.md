@@ -5,6 +5,7 @@ Complete guide for integrating Youtarr with Emby Media Server.
 ## Table of Contents
 - [Overview](#overview)
 - [Library Setup](#library-setup)
+- [TV Shows](#tv-shows)
 - [Metadata Configuration](#metadata-configuration)
 - [Native Playlist Sync](#native-playlist-sync)
 - [Channel Playlist Files (.m3u)](#channel-playlist-files-m3u)
@@ -20,6 +21,7 @@ Youtarr provides comprehensive Emby support through:
 - Optional channel and video backdrop art
 - Embedded MP4 metadata
 - Multi-library support for content organization
+- TV show folders with season folders and episode NFO files (see [TV Shows](#tv-shows))
 - Compatible folder structure
 - Native playlist sync: subscribed YouTube playlists appear as Emby playlists (see [Native Playlist Sync](#native-playlist-sync))
 
@@ -39,7 +41,9 @@ Youtarr writes each video as a standalone "movie" with its own NFO metadata, so 
 
 - **`Movies` (current recommendation)**: the most reliable option. Every video displays as a movie with full metadata and artwork. Limitation: Emby will NOT automatically import Youtarr's optional per-channel `.m3u` playlist files as playlists; that only happens in Mixed Content libraries. See [Channel Playlist Files (.m3u)](#channel-playlist-files-m3u).
 - **`Mixed Content`**: automatically imports the per-channel `.m3u` files as Emby playlists, but [Emby's own documentation](https://emby.media/support/articles/Library-Setup.html) notes that "support for mixed content is limited", and its TV-detection heuristics can misclassify channel content as TV series: video titles that look episode-like ("Season 3", "Episode 12") can be picked up as episodes and display with wrong metadata. This tends to work on smaller libraries and break as the library grows, since more titles means more chances for a false match.
-- **`TV Shows`**: not currently supported. Writing videos and metadata in a way that is compatible with TV Shows libraries is on our roadmap but is not supported yet.
+- **`TV Shows`**: for Youtarr TV folders only, where channels are saved as TV shows. See [TV Shows](#tv-shows).
+
+We recommend against `Mixed Content` for any Youtarr folder, Videos or TV: in our testing it behaved inconsistently with Youtarr's files, and Youtarr's library check reports a Mixed library on a TV folder as the wrong type.
 
 ### Step 2: Add Media Folders
 
@@ -49,29 +53,66 @@ Configure folder settings:
 3. For specific content types, use subfolders associated to different libraries:
    - `/path/to/youtube/__kids`
    - `/path/to/youtube/__music`
-   - `/path/to/youtube` (all content)
+
+   Emby shows a folder in only one library, so don't add a library at `/path/to/youtube` next to subfolder libraries: the subfolder libraries would stay empty. One library per folder; see [One library per folder](#one-library-per-folder).
 
 ### Step 3: Configure Library Settings
 
-In the library configuration:
+In the library's settings (Emby 4.10 labels; everything not listed can keep its default):
 
-**Metadata downloaders**:
-1. **NFO** (enable and move to top)
-2. Disable all internet providers (TheMovieDb, etc.)
-
-**Metadata savers**:
-- **Disable**: Nfo ("Save metadata to NFO")
+| Setting | Value | Why |
+|---------|-------|-----|
+| Prefer embedded titles over filenames | On | Only used when a video has no NFO file (NFO files turned off in Youtarr): the MP4's embedded title beats a title parsed from the file name |
+| Ignore files containing the word sample ... less than (MB) | 0 | A video whose title contains "sample" and is under 300 MB would otherwise be hidden |
+| Enable multi-part items | Off | Emby groups files named "part 1", "part 2" into one item; YouTube titles use those words all the time, and Youtarr never produces multi-part files |
+| Metadata Readers: Nfo | On | Youtarr's NFO file for every video |
+| Movie Metadata Downloaders | All off | An online match can replace a video's title, plot and artwork with an unrelated movie's |
+| After the initial import, automatically refresh metadata from the internet | Never | |
+| Metadata Savers: Nfo | Off | Emby would rewrite Youtarr's NFO files (see the warning below) |
+| Movie Image Fetchers | All internet fetchers off | Youtarr writes `poster.jpg` per channel and a thumbnail per video; Emby reads local images on its own. **Image Capture** can stay on: it only grabs a frame when no thumbnail exists |
+| Save artwork into media folders | Off | |
+| Generate chapters for videos that don't contain embedded chapter information | Off | Youtarr's files carry no chapter markers, so Emby would add one every 5 minutes to every video and extract a frame for each at scan time |
+| Subtitle Downloaders / Automatic Subtitle Downloads | Off / no download languages | OpenSubtitles has nothing for YouTube videos. Youtarr's own subtitle option (Settings -> Core) saves YouTube captions as an `.srt` next to the video, which Emby picks up |
 
 > **Warning**: Do NOT enable Emby's NFO metadata saver. Youtarr generates and maintains the `.nfo` file for every video it downloads. If the saver is enabled, Emby will update and overwrite those files with its own data (for example, incorrectly guessed season/episode tags), which can cause problems for your library.
 
-**Image fetchers**:
-- **Local Images** (enable)
-- Disable all internet image providers
+## TV Shows
 
-**Advanced Settings**:
-- **Save artwork and metadata into media folders**: No (see the NFO saver warning above)
-- **Prefer embedded metadata**: Yes
-- **Enable real-time monitoring**: Optional
+Youtarr can save channels as TV shows in a **TV folder**: a library folder whose layout is TV shows (Settings -> Core -> File Structure -> **Library folders**, or Channel Settings -> **TV Show**). Each channel becomes a show with year seasons and episodes named `Season 2026/S2026E09281530 - Title [id].mp4`, each with an episode NFO file and a thumbnail, plus `tvshow.nfo`, `poster.jpg` and (when enabled) `backdrop.jpg` in the show folder. The episode number is the upload's month, day, hour and minute in UTC, so Emby lists episodes in upload order with large numbers (`S2026:E9281530` is September 28 at 15:30).
+
+### Library setup
+
+Add a library with content type **TV shows** for each TV folder and point it at the folder itself, for example `Q:\Youtube\__TV Shows`. Use the TV shows type, not `Mixed Content`: a Mixed library decides per folder whether it holds a movie or a series, and in our testing it was inconsistent with Youtarr's files. In the library's settings (Emby 4.10 labels; everything not listed can keep its default):
+
+| Setting | Value | Why |
+|---------|-------|-----|
+| Prefer embedded titles over filenames | Off | Episode titles come from Youtarr's NFO files; for a file without one, the file name beats the MP4's `Channel - Title` tag |
+| Ignore files containing the word sample ... less than (MB) | 0 | A video whose title contains "sample" and is under 300 MB would otherwise be hidden |
+| Automatically merge series that are spread across multiple folders | Off | Emby merges series by name, and two channels can share one |
+| Metadata Readers: Nfo | On | Youtarr's episode and `tvshow.nfo` files |
+| Series, Season and Episode Metadata Downloaders | All off | An online match can replace a channel's titles and numbers with an unrelated show's |
+| After the initial import, automatically refresh metadata from the internet | Never | |
+| Metadata Savers: Nfo | Off | Emby would rewrite Youtarr's NFO files (see the warning above) |
+| Series, Season and Episode Image Fetchers | All internet fetchers off | Youtarr writes `poster.jpg`, `backdrop.jpg` and an episode thumbnail; Emby reads local images on its own. Episode **Image Capture** can stay on: it only grabs a frame when no thumbnail exists |
+| Save artwork into media folders | Off | |
+| Generate chapters for videos that don't contain embedded chapter information | Off | Youtarr's files carry no chapter markers, so Emby would add one every 5 minutes to every episode and extract a frame for each at scan time |
+| Subtitle Downloaders / Automatic Subtitle Downloads | Off / no download languages | OpenSubtitles has nothing for YouTube videos. Youtarr's own subtitle option (Settings -> Core) saves YouTube captions as an `.srt` next to the video, which Emby picks up |
+| Enable support for .plexignore files as an alias to .embyignore | Off | Youtarr writes a `.plexignore` only in a TV main folder, for Plex; a library at a subfolder never sees one |
+
+Youtarr's library check (below) reports the NFO saver and the online metadata downloaders when they are on.
+
+### One library per folder
+
+Emby shows a folder in only one library, so a TV Shows library for `__TV Shows` stays empty while another library includes your downloads folder. Once you use a TV folder:
+
+- Point your Movies library at your Videos folders one by one, not at the downloads folder.
+- Channels saved directly in the downloads folder (no subfolder) can only be reached through a library at the downloads folder, which would include the TV folder. Give those channels a subfolder first (Channel Settings -> Subfolder).
+
+Youtarr's library check points this out: Settings -> Core -> File Structure lists, under each folder, the libraries that hold it and anything to fix (also a library of the wrong type, the NFO saver, or internet metadata providers). Channel Settings -> **TV Show** shows the same for the channel's TV folder.
+
+### Watch state
+
+Emby keys watch state by file path, so an episode Youtarr moves (between a Videos folder and a TV folder, or to another TV folder) shows up as a new, unwatched item. Youtarr restores the played state and resume position for every Emby user once Emby has scanned the moved file.
 
 ## Metadata Configuration
 
@@ -125,7 +166,7 @@ The library and metadata setup above is all you need for downloaded videos to sh
 
 Once connected, open a playlist in Youtarr and turn on its Emby sync chip. See [Media Server Playlists](../MEDIA_SERVER_PLAYLISTS.md) for how syncing, ordering, and updates work.
 
-Connecting Emby also enables watch status sync: Youtarr periodically pulls per-video watch state (played, percent watched, last watched) for every user on the server and shows it as Watched chips and filters on its listing pages. It's one-way; Youtarr never marks anything watched on Emby. Emby decides when a video counts as played: edit the library and set **Max resume percentage**; stop after that point and the title counts as fully played. Settings live under **Settings -> Watch Status**; see [Track Watch Status from Media Servers](../USAGE_GUIDE.md#track-watch-status-from-media-servers).
+Connecting Emby also enables watch status sync: Youtarr periodically pulls per-video watch state (played, percent watched, last watched) for every user on the server and shows it as Watched chips and filters on its listing pages. Youtarr writes to Emby only to restore watch state after it moves your files (see [Watch state](#watch-state)). Emby decides when a video counts as played: edit the library and set **Max resume percentage**; stop after that point and the title counts as fully played. Settings live under **Settings -> Watch Status**; see [Track Watch Status from Media Servers](../USAGE_GUIDE.md#track-watch-status-from-media-servers).
 
 ### Visibility
 
@@ -153,8 +194,10 @@ Create content-specific libraries:
    "YouTube - Kids" → /youtube/__kids
    "YouTube - Music" → /youtube/__music
    "YouTube - Education" → /youtube/__education
-   "YouTube - General" → /youtube
+   "YouTube - General" → /youtube/__news, /youtube/__gaming
    ```
+
+   Emby shows a folder in only one library, so don't add the downloads folder itself to a library when other libraries use its subfolders: they would stay empty. Channels saved directly in the downloads folder need a subfolder once you split libraries.
 
 2. **Configure Each Library**:
    - Kids: Parental controls enabled
@@ -272,6 +315,14 @@ Configure in Advanced settings:
    ```
 3. For Docker: Verify volume permissions
 4. Check SELinux/AppArmor if applicable
+
+### TV Library Is Empty
+
+**Problem**: A TV Shows library for a Youtarr TV folder shows nothing, while the episodes appear in another library
+
+**Cause**: Another library includes the TV folder (usually a library at the downloads folder). Emby shows a folder in one library only.
+
+**Solution**: Point the other library at your Videos folders one by one instead of the downloads folder, then scan. See [One library per folder](#one-library-per-folder).
 
 ### Duplicate Entries
 

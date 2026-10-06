@@ -12,6 +12,8 @@ const {
   resolveChannelFolderName,
 } = require('../filesystem');
 const channelYtdlpExecutor = require('./channelYtdlpExecutor');
+const channelFolders = require('../tvShows/channelFolders');
+const { getLayoutResolver } = require('../tvShows/libraryLayouts');
 
 class ChannelThumbnails {
   /**
@@ -222,6 +224,7 @@ class ChannelThumbnails {
         return;
       }
 
+      const layoutOf = await getLayoutResolver();
       for (const channel of channels) {
         if (!channel.channel_id) continue;
 
@@ -230,15 +233,20 @@ class ChannelThumbnails {
 
         // Channels can live under a __subfolder (explicit or via the global
         // default); resolve the real folder path the same way downloads do.
+        // A TV channel's art goes in its show folder instead.
         let channelFolderPath;
         try {
-          const subfolder = resolveEffectiveSubfolder(channel.sub_folder, configModule.getDefaultSubfolder());
-          channelFolderPath = buildChannelPath(outputDir, subfolder, channelFolderName);
+          if (await channelFolders.isTvChannel(channel, layoutOf)) {
+            channelFolderPath = (await channelFolders.resolveChannelDirectory(channel, { layoutOf })).dir;
+          } else {
+            const subfolder = resolveEffectiveSubfolder(channel.sub_folder, configModule.getDefaultSubfolder());
+            channelFolderPath = buildChannelPath(outputDir, subfolder, channelFolderName);
+          }
         } catch (pathErr) {
           logger.warn({ err: pathErr, channelId: channel.channel_id }, 'Skipping channel with unresolvable folder path during image backfill');
           continue;
         }
-        if (!fs.existsSync(channelFolderPath)) continue;
+        if (!channelFolderPath || !fs.existsSync(channelFolderPath)) continue;
 
         if (shouldWritePosters) {
           this.copyChannelImageIfMissing(

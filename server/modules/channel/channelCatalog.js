@@ -6,6 +6,10 @@ const channelThumbnails = require('./channelThumbnails');
 const channelProvisioning = require('./channelProvisioning');
 const tabDownloadStats = require('./tabDownloadStats');
 const m3uGenerator = require('../m3uGenerator');
+const channelFolders = require('../tvShows/channelFolders');
+const titleShowQueries = require('../tvShows/titleShowQueries');
+const { getLayoutResolver } = require('../tvShows/libraryLayouts');
+const { LAYOUT_TV, LAYOUT_VIDEOS } = require('../tvShows/constants');
 
 const SUB_FOLDER_DEFAULT_KEY = '__default__';
 
@@ -138,6 +142,7 @@ class ChannelCatalog {
     sortBy = 'name',
     sortOrder = 'asc',
     subFolder = null,
+    layout = null,
   } = {}) {
     const parsedPage = parseInt(page, 10);
     const parsedPageSize = parseInt(pageSize, 10);
@@ -179,6 +184,11 @@ class ChannelCatalog {
     const direction = typeof sortOrder === 'string' && sortOrder.toLowerCase() === 'desc' ? 'DESC' : 'ASC';
 
     try {
+      // TV filter: channels whose folder (explicit, global default or root) is TV.
+      if (layout === LAYOUT_TV) {
+        whereClause[Op.and] = [(await channelFolders.tvChannelCondition()) || { id: null }];
+      }
+
       const { rows, count } = await Channel.findAndCountAll({
         where: whereClause,
         limit: safePageSize,
@@ -200,6 +210,19 @@ class ChannelCatalog {
         return new Map();
       });
 
+      // Layout is decoration too: unreadable layouts show every channel as videos.
+      const layoutOf = await getLayoutResolver().catch((err) => {
+        logger.warn({ err }, 'Failed to read library folder layouts');
+        return () => LAYOUT_VIDEOS;
+      });
+
+      // The "N shows" chip, decoration as well.
+      const titleShowCounts = await titleShowQueries.countActiveByChannel(rows.map((channel) => channel.channel_id))
+        .catch((err) => {
+          logger.warn({ err }, 'Failed to count channel title shows');
+          return new Map();
+        });
+
       const totalPages = count > 0 ? Math.ceil(count / safePageSize) : 0;
       const normalizedSubFolders = distinctSubFolders
         .map((entry) => entry.sub_folder)
@@ -212,7 +235,11 @@ class ChannelCatalog {
         });
 
       return {
-        channels: rows.map((channel) => channelMappers.mapChannelListEntry(channel, statsByChannel.get(channel.channel_id))),
+        channels: rows.map((channel) => ({
+          ...channelMappers.mapChannelListEntry(channel, statsByChannel.get(channel.channel_id)),
+          layout: layoutOf(channelFolders.effectiveLibraryFolder(channel.sub_folder)),
+          ...(titleShowCounts.get(channel.channel_id) ? { titleShows: titleShowCounts.get(channel.channel_id) } : {}),
+        })),
         total: count,
         page: safePage,
         pageSize: safePageSize,
@@ -302,7 +329,7 @@ class ChannelCatalog {
    * @returns {Promise<void>}
    * @throws {Error} code INVALID_CHANNEL_SETTINGS when any add item's settings are invalid; nothing is changed
    */
-  async updateChannelsByDelta({ enableUrls = [], disableUrls = [], channelSettingsModule } = {}) {
+  async updateChannelsByDelta({ enableUrls = [], disableUrls = [], channelSettingsModule, isDownloadRunning } = {}) {
     // Handle both string URLs and objects with url/channel_id/settings
     const toEnable = (enableUrls || []).map((item) => {
       if (typeof item === 'string') {
@@ -359,7 +386,8 @@ class ChannelCatalog {
               const provisioned = await Channel.findOne({ where: { channel_id: channelInfo.id } });
               await channelSettingsModule.updateChannelSettings(
                 channelInfo.id,
-                withoutUnchangedSubFolder(settings, provisioned)
+                withoutUnchangedSubFolder(settings, provisioned),
+                { isDownloadRunning }
               );
             }
             await Channel.update({ enabled: true }, { where: { channel_id: channelInfo.id } });
@@ -371,7 +399,8 @@ class ChannelCatalog {
           if (settings) {
             await channelSettingsModule.updateChannelSettings(
               foundChannel.channel_id,
-              withoutUnchangedSubFolder(settings, foundChannel)
+              withoutUnchangedSubFolder(settings, foundChannel),
+              { isDownloadRunning }
             );
           }
           await foundChannel.update({ enabled: true });

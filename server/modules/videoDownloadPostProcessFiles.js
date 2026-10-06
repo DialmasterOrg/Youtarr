@@ -15,6 +15,8 @@ const { VIDEO_PERSISTED_MARKER } = require('./constants/outputMarkers');
 const logger = require('../logger');
 const logLevelSync = require('./logLevelSync');
 const { buildChannelPath, isFileForVideo, cleanupEmptyParents, moveWithRetries, ensureDirWithRetries, copySyncWithFallback } = require('./filesystem');
+const episodePlacement = require('./tvShows/episodePlacement');
+const { episodeFileName } = require('./tvShows/episodeNaming');
 
 // Match the server's log level, including a level chosen in Settings. Quietly:
 // this process starts at LOG_LEVEL for every video, and its output is relayed
@@ -106,13 +108,21 @@ function shouldPrefixChannelNameInTitle() {
 // AtomicParsley writes directly to the iTunes atom container (moov.udta.meta.ilst)
 // which Plex reads for "Other Videos" / Personal Media libraries.
 // It modifies the file in-place (--overWrite), so no temp file dance is needed.
-function embedVideoMetadata(targetPath, jsonData) {
+// tvEpisode ({ showName, episodeTitle }) tags the file as a TV episode. The
+// season and episode atoms are never written: AtomicParsley keeps 16 bits,
+// ffprobe reads 8, and Jellyfin's "Replace all metadata" would read them.
+function embedVideoMetadata(targetPath, jsonData, tvEpisode = null) {
   try {
     const apArgs = [targetPath];
 
-    // Title: "Channel - Title" unless the channel prefix is turned off
+    // Title: "Channel - Title" unless the channel prefix is turned off; an
+    // episode title is never prefixed.
     const channelName = jsonData.uploader || jsonData.channel || jsonData.uploader_id || '';
-    if (channelName && jsonData.title) {
+    if (tvEpisode) {
+      apArgs.push('--title', tvEpisode.episodeTitle || jsonData.title || '');
+      apArgs.push('--TVShowName', tvEpisode.showName);
+      apArgs.push('--TVEpisode', jsonData.id);
+    } else if (channelName && jsonData.title) {
       const title = shouldPrefixChannelNameInTitle()
         ? `${channelName} - ${jsonData.title}`
         : jsonData.title;
@@ -157,7 +167,7 @@ function embedVideoMetadata(targetPath, jsonData) {
     }
 
     // Media type (stik=9 → Movie, used by Plex for personal media)
-    apArgs.push('--stik', 'Movie');
+    apArgs.push('--stik', tvEpisode ? 'TV Show' : 'Movie');
 
     // Content rating via iTunEXTC atom — this is what Plex actually reads
     const iTunEXTC = ratingMapper.mapToITunEXTC(jsonData.normalized_rating);
@@ -358,6 +368,33 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
   }
 }
 
+// Clean up yt-dlp intermediate files before moving
+// In video_mp3 mode with --extract-audio --keep-video, yt-dlp doesn't always
+// clean up these intermediate files as it normally would
+async function removeYtdlpIntermediates(videoDirectory) {
+  const filesInDir = await fs.readdir(videoDirectory);
+  for (const file of filesInDir) {
+    // Match yt-dlp fragment patterns: .f###.ext or .f###-###.ext where ext is mp4/m4a/webm/mkv
+    if (/\.f[\d-]+\.(mp4|m4a|webm|mkv)$/i.test(file)) {
+      const fragmentPath = path.join(videoDirectory, file);
+      logger.info({ fragmentPath }, '[Post-Process] Removing yt-dlp fragment file');
+      await fs.remove(fragmentPath);
+    }
+    // Remove original thumbnail files (.webp) - these should have been converted to .jpg
+    else if (/\.webp$/i.test(file)) {
+      const webpPath = path.join(videoDirectory, file);
+      logger.info({ webpPath }, '[Post-Process] Removing original webp thumbnail');
+      await fs.remove(webpPath);
+    }
+    // Remove original subtitle files (.vtt) - these should have been converted to .srt
+    else if (/\.vtt$/i.test(file)) {
+      const vttPath = path.join(videoDirectory, file);
+      logger.info({ vttPath }, '[Post-Process] Removing original vtt subtitle');
+      await fs.remove(vttPath);
+    }
+  }
+}
+
 // Main execution wrapped in async IIFE to handle async operations
 (async () => {
   if (fs.existsSync(jsonPath)) {
@@ -439,7 +476,7 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
         const channelId = lookupChannelId;
         channelRecord = await Channel.findOne({
           where: { channel_id: channelId },
-          attributes: ['id', 'sub_folder', 'title', 'uploader', 'folder_name', 'default_rating', 'enabled', 'skip_video_folder', 'additional_tags']
+          attributes: ['id', 'sub_folder', 'title', 'uploader', 'folder_name', 'default_rating', 'enabled', 'skip_video_folder', 'additional_tags', 'description']
         });
 
         logger.info({ channelId, ownerProvided: !!ownerChannelId, found: !!channelRecord }, 'Post-process channel lookup');
@@ -556,11 +593,39 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
     }
     logger.info({ subfolder: channelSubFolder }, 'Post-process resolved target subfolder');
 
+    // TV layout: the episode's show, number and file name; null saves the
+    // video movie-style. Throws rather than misplace an episode.
+    let tvPlacement = null;
+    try {
+      tvPlacement = await episodePlacement.planEpisode({
+        youtubeId: id,
+        info: jsonData,
+        ownerChannelId: lookupChannelId,
+        channelRecord,
+        channelEnabled: Boolean(settingsChannelRecord),
+        uploaderFolderName: actualChannelFolderName,
+        resolvedSubfolder: channelSubFolder,
+        baseDir: configModule.directoryPath,
+      });
+    } catch (err) {
+      logger.error({ err, id }, '[Post-Process] Could not place the video as a TV episode');
+      throw err;
+    }
+    // Final name of one of this video's files (episodes are renamed to the stem).
+    const finalFileName = (filePath) => (tvPlacement
+      ? episodeFileName(path.basename(filePath), id, tvPlacement.stem)
+      : path.basename(filePath));
+    if (tvPlacement) {
+      logger.info({ seasonDir: tvPlacement.seasonDir, stem: tvPlacement.stem }, 'Post-process placing the video as a TV episode');
+    }
+
     // Phase 2: Calculate the final path for _actual_filepath with subfolder if applicable
     // Downloads always go to temp first, so we need to store the FINAL path, not the temp path
     let finalVideoPathForJson;
 
-    if (targetChannelFolder) {
+    if (tvPlacement) {
+      finalVideoPathForJson = path.join(tvPlacement.seasonDir, finalFileName(videoPath));
+    } else if (targetChannelFolder) {
       // Channel has subfolder - calculate path with subfolder included
       const videoFileName = path.basename(videoPath);
       if (outgoingFlat) {
@@ -591,7 +656,8 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
     fs.moveSync(jsonPath, newJsonPath, { overwrite: true }); // move the file
 
     // Generate NFO file for Jellyfin/Kodi/Emby compatibility if enabled
-    if (shouldWriteVideoNfoFiles()) {
+    // (episodes get an episode NFO once their files are in place)
+    if (!tvPlacement && shouldWriteVideoNfoFiles()) {
       nfoGenerator.writeVideoNfoFile(videoPath, jsonData);
     }
 
@@ -611,14 +677,23 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
       }
     }
 
+    // Settings and the groupers keep MP3 out of TV folders; an MP3 that still
+    // arrives is placed as the episode, which TV library scanners skip.
+    if (tvPlacement && isAudioFile && !companionVideoPath) {
+      logger.warn({ id, seasonDir: tvPlacement.seasonDir }, '[Post-Process] MP3-only download saved as a TV episode; media servers show no video for it');
+    }
+
     // MP3 files carry yt-dlp's own embedded tags, so AtomicParsley only runs
     // against an MP4: the download itself, or the companion in video_mp3 mode.
+    const tvEpisodeTags = tvPlacement
+      ? { showName: tvPlacement.show.name, episodeTitle: tvPlacement.assignment.episodeTitle }
+      : null;
     if (companionVideoPath) {
-      embedVideoMetadata(companionVideoPath, jsonData);
+      embedVideoMetadata(companionVideoPath, jsonData, tvEpisodeTags);
     } else if (isAudioFile) {
       logger.info('[Post-Process] Audio file detected, skipping video metadata embedding');
     } else {
-      embedVideoMetadata(videoPath, jsonData);
+      embedVideoMetadata(videoPath, jsonData, tvEpisodeTags);
     }
 
     if (fs.existsSync(imagePath)) {
@@ -691,8 +766,28 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
     // Downloads are always staged in temp, so we move to final location here
     // This handles subfolder routing atomically (one move instead of two)
     let finalVideoPath = videoPath;
+    let movedChannelFolderPath = null;
 
-    if (tempPathManager.isTempPath(videoPath)) {
+    if (tvPlacement) {
+      const { seasonDir, stem, showDir } = tvPlacement;
+      logger.info({ from: videoDirectory, to: seasonDir }, '[Post-Process] Moving episode files');
+      try {
+        await removeYtdlpIntermediates(videoDirectory);
+        await episodePlacement.moveEpisodeFiles({ sourceDir: videoDirectory, youtubeId: id, seasonDir, stem });
+        if (tempPathManager.isTempPath(videoPath)) {
+          await cleanupEmptyParents(videoDirectory, tempPathManager.getTempBasePath());
+        }
+        finalVideoPath = path.join(seasonDir, finalFileName(videoPath));
+        movedChannelFolderPath = showDir;
+      } catch (error) {
+        logger.error({ err: error, src: videoDirectory, dest: seasonDir }, '[Post-Process] ERROR moving episode files');
+        process.exit(1);
+      }
+      if (!fs.existsSync(finalVideoPath)) {
+        logger.error({ finalVideoPath }, '[Post-Process] Final episode file doesn\'t exist after move');
+        process.exit(1);
+      }
+    } else if (tempPathManager.isTempPath(videoPath)) {
       logger.info({ isFlatMode }, '[Post-Process] Moving files from temp to final location');
 
       // Calculate target video directory based on subfolder setting
@@ -726,30 +821,7 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
         // Ensure parent channel directory exists (with retries for NFS/cross-filesystem transient errors)
         await ensureDirWithRetries(targetChannelFolderForMove, { retries: 5, delayMs: 500 });
 
-        // Clean up yt-dlp intermediate files before moving
-        // In video_mp3 mode with --extract-audio --keep-video, yt-dlp doesn't always
-        // clean up these intermediate files as it normally would
-        const filesInDir = await fs.readdir(videoDirectory);
-        for (const file of filesInDir) {
-          // Match yt-dlp fragment patterns: .f###.ext or .f###-###.ext where ext is mp4/m4a/webm/mkv
-          if (/\.f[\d-]+\.(mp4|m4a|webm|mkv)$/i.test(file)) {
-            const fragmentPath = path.join(videoDirectory, file);
-            logger.info({ fragmentPath }, '[Post-Process] Removing yt-dlp fragment file');
-            await fs.remove(fragmentPath);
-          }
-          // Remove original thumbnail files (.webp) - these should have been converted to .jpg
-          else if (/\.webp$/i.test(file)) {
-            const webpPath = path.join(videoDirectory, file);
-            logger.info({ webpPath }, '[Post-Process] Removing original webp thumbnail');
-            await fs.remove(webpPath);
-          }
-          // Remove original subtitle files (.vtt) - these should have been converted to .srt
-          else if (/\.vtt$/i.test(file)) {
-            const vttPath = path.join(videoDirectory, file);
-            logger.info({ vttPath }, '[Post-Process] Removing original vtt subtitle');
-            await fs.remove(vttPath);
-          }
-        }
+        await removeYtdlpIntermediates(videoDirectory);
 
         if (outgoingFlat) {
           // Flat mode: move individual files from temp channel folder to final channel folder
@@ -798,6 +870,7 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
           ? videoDirectory
           : (isFlatMode ? videoDirectory : path.dirname(videoDirectory));
         await cleanupEmptyParents(parentDir, tempBasePath);
+        movedChannelFolderPath = targetChannelFolderForMove;
 
         // Verify the final file exists
         if (!fs.existsSync(finalVideoPath)) {
@@ -844,7 +917,7 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
         // Calculate final path for companion video (same directory as the audio file)
         const finalCompanionVideoPath = path.join(
           path.dirname(finalVideoPath),
-          path.basename(companionVideoPath)
+          finalFileName(companionVideoPath)
         );
 
         // Store both paths for videoMetadataProcessor
@@ -873,6 +946,18 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
     } catch (jsonErr) {
       logger.error({ err: jsonErr }, '[Post-Process] Error updating JSON file with final path');
       // Don't fail the process, but log the error
+    }
+
+    if (tvPlacement) {
+      try {
+        await episodePlacement.writeEpisodeMetadata({
+          placement: tvPlacement,
+          info: jsonData,
+          showPlot: channelRecord ? channelRecord.description : null,
+        });
+      } catch (err) {
+        logger.warn({ err, id }, '[Post-Process] Error writing episode NFO files');
+      }
     }
 
     // Create fanart.jpg in video folder if enabled (for Plex background image on compatible clients)
@@ -917,14 +1002,17 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
     }
 
     // Copy channel thumbnail as poster.jpg to channel folder (must be done AFTER all moves)
-    // Calculate the final channel folder path based on the final video path
-    // In flat mode, the file is directly in the channel folder
-    const finalChannelFolderPath = outgoingFlat
+    // Use the channel folder the move wrote to; without a move, derive it from
+    // the final video path (in flat mode, the file is directly in the channel folder)
+    const finalChannelFolderPath = movedChannelFolderPath || (outgoingFlat
       ? path.dirname(finalVideoPath)
-      : path.dirname(path.dirname(finalVideoPath));
-    if (jsonData.channel_id) {
-      await copyChannelPosterIfNeeded(jsonData.channel_id, finalChannelFolderPath);
-      await copyChannelBackdropIfNeeded(jsonData.channel_id, finalChannelFolderPath);
+      : path.dirname(path.dirname(finalVideoPath)));
+    // A show's art is its owner channel's, which is not the uploader for a
+    // VEVO/Topic upload routed to the owner's show.
+    const artChannelId = tvPlacement ? tvPlacement.show.channel_id : jsonData.channel_id;
+    if (artChannelId) {
+      await copyChannelPosterIfNeeded(artChannelId, finalChannelFolderPath);
+      await copyChannelBackdropIfNeeded(artChannelId, finalChannelFolderPath);
     }
 
     // Save to the videos + channelvideos tables now so listing pages can show

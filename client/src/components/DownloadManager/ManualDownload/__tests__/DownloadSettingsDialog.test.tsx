@@ -4,6 +4,24 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import DownloadSettingsDialog from '../DownloadSettingsDialog';
 
+jest.mock('../../../../hooks/useLibraryFolders', () => ({
+  useLibraryFolders: jest.fn(),
+}));
+
+const { useLibraryFolders } = require('../../../../hooks/useLibraryFolders');
+
+const mockLibraryFolders = (
+  folders: Array<{ name: string; layout: 'videos' | 'tv'; isDefault: boolean }>
+) => {
+  const layouts = new Map(folders.map((folder) => [folder.name, folder.layout]));
+  useLibraryFolders.mockReturnValue({
+    folders: folders.map((folder) => ({ ...folder, hasFiles: false, channels: 0 })),
+    loading: false,
+    error: null,
+    layoutOf: (name: string) => layouts.get(name) || 'videos',
+  });
+};
+
 describe('DownloadSettingsDialog', () => {
   const mockOnClose = jest.fn();
   const mockOnConfirm = jest.fn();
@@ -17,6 +35,7 @@ describe('DownloadSettingsDialog', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
+    mockLibraryFolders([{ name: '', layout: 'videos', isDefault: true }]);
   });
 
   describe('Rendering', () => {
@@ -1156,6 +1175,83 @@ describe('DownloadSettingsDialog', () => {
       await user.click(screen.getByRole('option', { name: 'MP3 Only' }));
 
       expect(screen.getByText(/192kbps/)).toBeInTheDocument();
+    });
+  });
+
+  describe('TV destination override', () => {
+    const openCustomSettings = () => {
+      fireEvent.click(screen.getByRole('checkbox', { name: /Use custom settings/i }));
+    };
+
+    const chooseDestination = async (user: ReturnType<typeof userEvent.setup>, name: RegExp) => {
+      await user.click(screen.getByLabelText('Override Destination'));
+      await user.click(screen.getByRole('option', { name }));
+    };
+
+    beforeEach(() => {
+      mockLibraryFolders([{ name: '', layout: 'tv', isDefault: true }]);
+    });
+
+    test('hides the MP3 download types for a TV destination', async () => {
+      const user = userEvent.setup();
+      render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
+      openCustomSettings();
+
+      await chooseDestination(user, /Root directory \(no subfolder\) \(TV\)/);
+      await user.click(screen.getByLabelText('Download Type'));
+
+      expect(screen.getByRole('option', { name: 'Video Only' })).toBeInTheDocument();
+      expect(screen.queryByRole('option', { name: 'MP3 Only' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('option', { name: 'Video + MP3' })).not.toBeInTheDocument();
+    });
+
+    test('explains that TV folders are video-only', async () => {
+      const user = userEvent.setup();
+      render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
+      openCustomSettings();
+
+      await chooseDestination(user, /Root directory \(no subfolder\) \(TV\)/);
+
+      expect(screen.getByText('TV folders are video-only.')).toBeInTheDocument();
+    });
+
+    test('keeps the MP3 download types when no destination override is chosen', async () => {
+      const user = userEvent.setup();
+      render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
+      openCustomSettings();
+
+      await user.click(screen.getByLabelText('Download Type'));
+
+      expect(screen.getByRole('option', { name: 'MP3 Only' })).toBeInTheDocument();
+    });
+
+    test('resets a selected MP3 type to Video Only when the destination becomes a TV folder', async () => {
+      const user = userEvent.setup();
+      render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
+      openCustomSettings();
+
+      await user.click(screen.getByLabelText('Download Type'));
+      await user.click(screen.getByRole('option', { name: 'MP3 Only' }));
+      await chooseDestination(user, /Root directory \(no subfolder\) \(TV\)/);
+      fireEvent.click(screen.getByRole('button', { name: /Start Download/i }));
+
+      expect(mockOnConfirm).toHaveBeenCalledWith(
+        expect.objectContaining({ subfolder: '##ROOT##', audioFormat: null })
+      );
+    });
+
+    test('resolves the global default destination through the default subfolder', async () => {
+      const user = userEvent.setup();
+      mockLibraryFolders([
+        { name: '', layout: 'videos', isDefault: false },
+        { name: 'Shows', layout: 'tv', isDefault: true },
+      ]);
+      render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
+      openCustomSettings();
+
+      await chooseDestination(user, /Use Global Default Subfolder \(TV\)/);
+
+      expect(screen.getByText('TV folders are video-only.')).toBeInTheDocument();
     });
   });
 

@@ -134,6 +134,10 @@ function VideoTechnical({ video, metadata, loading }: VideoTechnicalProps) {
         metaTechDetails.push({ label: 'Downloaded', value: downloadRes });
       }
     }
+    if (metadata?.episode) {
+      const { code, showName } = metadata.episode;
+      metaTechDetails.push({ label: 'Episode', value: showName ? `${code} (${showName})` : code });
+    }
     if (metadata?.fps != null) {
       metaTechDetails.push({ label: 'FPS', value: `${metadata.fps}` });
     }

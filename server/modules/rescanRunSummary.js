@@ -34,7 +34,10 @@ function describe(outcome, result) {
 
 function toRunRecord(result = {}) {
   if (result.skipped) {
-    return { status: 'skipped', outcome: 'skipped', message: 'A rescan was already running.', details: null };
+    const message = result.reason === 'reorganizing'
+      ? 'Skipped while downloads were being reorganized.'
+      : 'A rescan was already running.';
+    return { status: 'skipped', outcome: 'skipped', message, details: null };
   }
   let outcome = result.status || (result.timedOut ? 'timed-out' : 'completed');
   // A finished scan with failed row writes partly failed, like other scheduled

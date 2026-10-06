@@ -120,6 +120,7 @@ export {
   Moon,
   Sun,
   Monitor,
+  Tv,
   Smartphone,
   Tablet,
   Code,

@@ -687,6 +687,60 @@ describe('YtdlpCommandBuilder', () => {
     });
   });
 
+  describe('buildMatchFilterList', () => {
+    const BASE = 'availability!=subscriber_only & !is_live & live_status!=is_upcoming';
+
+    it('holds the one channel filter when the channel downloads every video', () => {
+      expect(YtdlpCommandBuilder.buildMatchFilterList({ hasGroupingCriteria: () => true, minDuration: 60 }))
+        .toEqual([`${BASE} & duration >= 60`]);
+    });
+
+    it('holds the base filter without a filter config', () => {
+      expect(YtdlpCommandBuilder.buildMatchFilterList(null)).toEqual([BASE]);
+    });
+
+    it('holds one filter per title show, each with the channel\'s own filters', () => {
+      const filterConfig = {
+        hasGroupingCriteria: () => true,
+        minDuration: 60,
+        titleFilterRegex: 'EN',
+        showFilters: [
+          { filterRegex: '(?i:BEYBLADE\\s+EN\\s+Episode\\s+(?:[0-9]+))', excludeRegexes: ['(?i:Official\\s+Clip)'] },
+          { filterRegex: '(?i:Clip)', excludeRegexes: [] },
+        ],
+      };
+      expect(YtdlpCommandBuilder.buildMatchFilterList(filterConfig)).toEqual([
+        `${BASE} & duration >= 60 & title ~= 'EN' & title ~= '(?i:BEYBLADE\\s+EN\\s+Episode\\s+(?:[0-9]+))' & title !~= '(?i:Official\\s+Clip)'`,
+        `${BASE} & duration >= 60 & title ~= 'EN' & title ~= '(?i:Clip)'`,
+      ]);
+    });
+
+    it('escapes quotes and ampersands in show filters and exclude terms', () => {
+      const filterConfig = {
+        hasGroupingCriteria: () => true,
+        showFilters: [{ filterRegex: '(?i:Rock\\s+&\\s+Roll\'s)', excludeRegexes: ['(?i:Q&A\'s)'] }],
+      };
+      expect(YtdlpCommandBuilder.buildMatchFilterList(filterConfig)).toEqual([
+        `${BASE} & title ~= '(?i:Rock\\s+\\&\\s+Roll\\'s)' & title !~= '(?i:Q\\&A\\'s)'`,
+      ]);
+    });
+  });
+
+  describe('getBaseCommandArgs with title shows', () => {
+    it('passes one --match-filter per title show', () => {
+      const filterConfig = {
+        hasGroupingCriteria: () => true,
+        showFilters: [{ filterRegex: '(?i:a)', excludeRegexes: [] }, { filterRegex: '(?i:b)', excludeRegexes: [] }],
+      };
+      const result = YtdlpCommandBuilder.getBaseCommandArgs('1080', false, null, filterConfig);
+      const filters = result.filter((arg, index) => result[index - 1] === '--match-filter');
+      expect(filters).toEqual([
+        'availability!=subscriber_only & !is_live & live_status!=is_upcoming & title ~= \'(?i:a)\'',
+        'availability!=subscriber_only & !is_live & live_status!=is_upcoming & title ~= \'(?i:b)\'',
+      ]);
+    });
+  });
+
   describe('getBaseCommandArgs', () => {
     it('should build basic command args with default values', () => {
       const result = YtdlpCommandBuilder.getBaseCommandArgs();

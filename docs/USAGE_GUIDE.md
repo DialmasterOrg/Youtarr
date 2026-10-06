@@ -14,6 +14,7 @@ This guide provides step-by-step instructions for common tasks in Youtarr. After
 - [Re-download Missing Videos](#re-download-missing-videos)
 - [Rescan Files on Disk](#rescan-files-on-disk)
 - [Organize Channels with Multi-Library Support](#organize-channels-with-multi-library-support)
+- [Save Channels as TV Shows](#save-channels-as-tv-shows)
 - [Browse and Filter Channel Videos](#browse-and-filter-channel-videos)
 - [Find Videos on YouTube](#find-videos-on-youtube)
 - [Preview and Play Videos](#preview-and-play-videos)
@@ -448,11 +449,72 @@ Create separate media server libraries for different content types (e.g., kids c
      - Library 1: `/path/to/downloads/__kids`
      - Library 2: `/path/to/downloads/__music`
      - Library 3: `/path/to/downloads` (for channels without a subfolder)
+   - Jellyfin and Emby show a folder in only one library, so a library at `/path/to/downloads` leaves libraries for its subfolders empty there; give every channel a subfolder instead. Plex shows those videos in both libraries.
 
 4. **Apply restrictions and sharing**
    - Configure library-specific access controls in your media server
    - Set age ratings and content restrictions per library
    - Share specific libraries with specific users
+
+## Save Channels as TV Shows
+
+Media servers show Youtarr's videos as movies. A **TV folder** shows them as TV shows instead: each channel is a show, each upload year a season, and each video an episode with its own NFO file.
+
+### Set up a TV folder
+
+- **From a channel**: open the channel page, click the settings icon (gear), open **TV Show** and click **TV show**. Without a TV folder yet, Youtarr asks for a name (default `TV Shows`, saved as `__TV Shows`), creates the folder and switches the channel to it. With several TV folders, you pick one.
+- **From Settings**: under Settings -> Core -> File Structure -> **Library folders**, set a folder's layout to **TV shows**. Every channel that downloads to that folder becomes a show.
+
+Then add a TV library for the folder on your media server (see [Media Server Integration](MEDIA_SERVERS.md#tv-shows)). The **Media servers** box under Channel Settings -> **TV Show** shows, per server, whether a library holds the folder and what to fix. For Plex, Youtarr adds the folder's refresh mapping as soon as it finds the one TV Shows library that holds it.
+
+What changes for a TV channel:
+
+- Episodes go to `<TV folder>/<channel>/Season <year>/` and are named by upload time in UTC: `S2026E09281530 - Title [id].mp4` was uploaded on September 28 at 15:30. See [TV folders](YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md#tv-folders).
+- The download type is video only, and the file structure and channel playlist (.m3u) options don't apply.
+- The channel page and Subscriptions show a **TV** chip, and videos show their episode code.
+- If the default subfolder is a TV folder, a download from a channel you haven't subscribed to becomes a show of its own.
+
+### Switch a channel or folder that already has downloads
+
+Switching moves the downloaded files into the other layout, so Youtarr opens **Review the move** first. It lists:
+
+- every move, with the old and new path and the episode number;
+- the shows it creates;
+- anything it can't move, such as a file missing from disk or a file already at the destination;
+- how many videos have watch state on each media server;
+- media server library problems for the TV folders the videos move into.
+
+Click **Move N videos** to start. While the files move, a banner shows on every page, downloads wait in the queue, and the rescan and other maintenance tasks wait too. Files named by the Plex TV Series preset keep their episode numbers. Switching back to Videos names the files with your current filename template, and switching to TV again later brings back the same episode numbers.
+
+- **Blocked**: if a download or a sync is running, the review says so and enables the button once it finishes.
+- **Videos not moved**: the result lists them with **Retry**. The channel's settings also say how many videos were not moved, with a **Review** link to the result.
+- **Restarted**: a move interrupted by a restart resumes when Youtarr starts.
+
+The same review opens when you change the default subfolder (Settings -> Core) to a folder with the other layout while channels on the default have downloads. Save again afterwards to apply your other changes.
+
+### Title shows: series inside a channel
+
+Some channels upload real series: "Hermitcraft 10: Episode 5 - ...", "BEYBLADE EN Episode 20: ...". A **title show** turns the videos whose titles match a pattern into a show of their own, numbered the way the titles number them. The channel can stay a Videos channel: only the matching videos go to the show, and everything else downloads as before (or to the channel show, if the channel is a TV channel).
+
+Open the channel page, click the settings icon (gear), open **TV Show**, and under **Shows in this channel** click **Add show**:
+
+- **Name** and **Folder name** (the show folder; the name by default). A title show needs a TV folder: Youtarr uses the channel's TV folder, else the default subfolder if it is a TV folder, else your only TV folder, and asks when there is more than one. Two shows can't share a folder name in one TV folder; Youtarr suggests `<Name> (<Channel>)`, or offers to restore a removed show that used the name.
+- **Title patterns**, tried in order. Text matches ignoring case and spaces match any spacing; `*` matches any text; a pattern matches anywhere in the title unless it starts with `^`. Placeholders capture the numbers and the episode title: `{season}`, `{episode}` and `{title}`. For example `Hermitcraft {season}: Episode {episode} - {title}`. **Edit as regular expression** shows the pattern as a Python regular expression with the named groups `season`, `episode` and `title`; backreferences and conditional groups aren't supported there (channel downloads use the same regular expression with its groups unnamed).
+- **Season** and **Episode** per pattern: the season from the title, a fixed season (0 is specials), or the upload year; the episode from the title, the next number in the season (given once, oldest upload first, and never reused), or the upload time (with upload-year seasons only, like channel shows). A video not downloaded yet gets its upload-year season when it downloads; a downloaded video's year is already known, so the preview shows its number.
+- **Exclude titles containing**: a title with any of these words never joins the show, for example `Official Clip`.
+- **Season names**: written to the show's NFO files, so the media server shows "Season 2: V-Force" instead of "Season 2". Upload-year seasons (such as 2024) can be named too.
+
+The preview updates as you type: **Episodes** (with the episode each video would get, and whether it's downloaded), **Duplicates**, **Gaps** (numbers no video has; none for seasons numbered by upload year or date), **Unmatched videos**, and **Not supported** (compilations such as `Ep.19 ... Ep.20` and parts such as `Episode 1 Part 2`, which Youtarr can't place yet, and titles missing a number the pattern needs). Downloads whose files are outside the downloads folder join a show but their files stay where they are. When several shows match a title, the first in the list takes the video; the arrows in the list reorder the shows.
+
+When saving would move downloaded videos (into the show, between shows, or out of one), the same **Review the move** dialog opens first. Changing a show that only affects videos you haven't downloaded saves right away, and a new show name or season name is written to the show's NFO files on save. **Remove** retires a show: its downloaded videos move back to the channel's layout. **Restore** (under **Removed shows**) brings it back.
+
+**Duplicates**: when two uploads claim the same episode (a re-upload, a remaster), the earliest upload still on YouTube keeps the number. A copy you haven't downloaded is ignored, so automatic downloads skip it. A copy you already downloaded is never deleted: it stays where it is, listed under **Duplicates and errors** with **Delete this copy**, **Use this copy instead** (it takes the number) and **Not a duplicate**.
+
+**Fix one video**: in the video's details (click its thumbnail), **Change episode...** in the **Episode** section lets you pick a show, season and episode, or mark the video **Not an episode** (it leaves the title shows for good, even after pattern edits). **Back to automatic** undoes either.
+
+**Only download videos that belong to a show**: with this switch on, the channel's automatic downloads and **Download All** fetch only videos that match one of its shows. It does nothing while the channel has no shows.
+
+On the channel page, a **N shows** chip appears in the header and on Subscriptions, and the video list gets a show filter (**All videos** or one show) with **Missing episodes**: per season, the episodes not downloaded yet and the numbers no video has (none for seasons numbered by upload year or date).
 
 ## Browse and Filter Channel Videos
 
@@ -557,7 +619,7 @@ Click any thumbnail on the Videos page or a channel page to open a video detail 
 
 ## Track Watch Status from Media Servers
 
-If you've connected Plex, Jellyfin, or Emby, Youtarr can pull watch status from them: which videos have been played, how far through, and when. The sync is one-way; Youtarr only reads from your servers and never writes anything back.
+If you've connected Plex, Jellyfin, or Emby, Youtarr can pull watch status from them: which videos have been played, how far through, and when. Youtarr only reads from your servers, except to restore watch state after it moves your files (see [Restore watch state after a move](#restore-watch-state-after-a-move)).
 
 ### How it works
 
@@ -594,6 +656,12 @@ Youtarr doesn't decide this; it shows whatever your media servers report. All th
 - **Jellyfin**: Server -> Playback -> Resume -> **Maximum resume percentage**
 
 On Emby and Jellyfin the same setting also controls resume: stop after the threshold and the title counts as fully played instead of resumable. If you finished a video and it isn't showing as watched in Youtarr, check this setting on the server you played it on, then run a sync.
+
+### Restore watch state after a move
+
+When Youtarr moves a video's files (see [Save Channels as TV Shows](#save-channels-as-tv-shows)), a media server can see the moved file as a new, unwatched item. Youtarr keeps its own watched state for those videos while the servers catch up, and restores the played state and resume position on each server once it has scanned the moved files: for every Jellyfin and Emby user, and for the Plex server owner. It tries 1, 5 and 15 minutes after the move and after each sync. Plex (with the Plex NFO Series agent) and Jellyfin keep watch state on their own when a show moves to another TV folder; then nothing needs restoring.
+
+**Settings -> Watch Status** shows how many restores are pending. A restore that hasn't happened after 14 days shows as failed, with **Retry** (try again now) and **Dismiss** (stop protecting the old state). Other Plex accounts keep their history in Youtarr, but Plex itself loses it for moved videos.
 
 ## Common tasks
 

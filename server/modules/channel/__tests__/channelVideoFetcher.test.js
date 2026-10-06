@@ -8,6 +8,7 @@ jest.mock('../../../models/channel', () => mockFactories.mockChannelModel());
 jest.mock('../../../models/channelvideo', () => mockFactories.mockChannelVideoModel());
 jest.mock('../../configModule', () => mockFactories.mockConfigModule());
 jest.mock('../../../db', () => mockFactories.mockDb());
+jest.mock('../../tvShows/titleShowSaver', () => ({ classifyNew: jest.fn() }));
 jest.mock('../../youtubeApi', () => mockFactories.mockYoutubeApi());
 
 describe('channelVideoFetcher', () => {
