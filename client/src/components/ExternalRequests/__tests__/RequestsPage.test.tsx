@@ -260,7 +260,8 @@ describe('RequestsPage', () => {
     });
     mockedAxios.get
       .mockResolvedValueOnce(axiosResponse(page([pendingRequest, other])))
-      .mockImplementationOnce(() => deferredDetails);
+      .mockImplementationOnce(() => deferredDetails)
+      .mockResolvedValue(axiosResponse(page([other])));
     mockedAxios.post.mockResolvedValueOnce(axiosResponse({ ...other, status: 'approved' }));
 
     const user = userEvent.setup();
@@ -276,4 +277,26 @@ describe('RequestsPage', () => {
       `/api/external-requests/${other.id}/approve`, {}, expect.anything()
     ));
   });
+  test('offers a retry for approved requests without a job and locks the original channel grant', async () => {
+    const approved: ExternalRequestReview = { ...pendingRequest, type: 'channel', status: 'approved', grantToRequestingKey: false };
+    mockedAxios.get.mockResolvedValueOnce(axiosResponse(page([approved])));
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Retry approval' }));
+    expect(screen.getByLabelText('Grant the provisioned channel to the requesting key')).not.toBeChecked();
+    expect(screen.getByLabelText('Grant the provisioned channel to the requesting key')).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  test('does not offer decisions using stale details after a permission failure', async () => {
+    mockedAxios.get.mockResolvedValueOnce(axiosResponse(page()))
+      .mockRejectedValueOnce({ response: { status: 403 } });
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Details' }));
+    expect(await screen.findByText('Your session cannot review this request.')).toBeInTheDocument();
+    expect(within(screen.getByRole('dialog')).queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+  });
+
 });

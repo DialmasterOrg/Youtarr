@@ -19,7 +19,7 @@ describe('useExternalRequests', () => {
     mockedAxios.get.mockResolvedValueOnce({ data: page(1) });
     const { result } = renderHook(() => useExternalRequests('token'));
     await waitFor(() => expect(result.current.requests).toHaveLength(1));
-    mockedAxios.get.mockResolvedValueOnce({ data: { ...page(0), data: [] } });
+    mockedAxios.get.mockResolvedValue({ data: { ...page(0), data: [] } });
     act(() => result.current.setPage(3));
     await waitFor(() => expect(result.current.page).toBe(1));
     expect(mockedAxios.get).toHaveBeenNthCalledWith(
