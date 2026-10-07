@@ -10,6 +10,9 @@ export interface VideoModalData {
   addedAt: string | null;
   mediaType: string;
   status: VideoStatus;
+  // Listed in the download archive without a database record. Pages that know
+  // it pass it in; the modal's local status lookup then keeps it current.
+  inArchive?: boolean;
   isDownloaded: boolean;
   filePath: string | null;
   fileSize: number | null;

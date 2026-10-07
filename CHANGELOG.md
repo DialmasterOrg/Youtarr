@@ -1,5 +1,28 @@
 # Changelog
 
+## [v1.87.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.87.0) - 2026-09-29
+
+### Features
+
+* add run now for scheduled tasks ([cbccbec](https://github.com/DialmasterOrg/Youtarr/commit/cbccbecfc9f981bebaf08de889732e9f35693aa5)), closes [#892](https://github.com/DialmasterOrg/Youtarr/issues/892)
+* redesign scheduling page and time task runs ([b532bb8](https://github.com/DialmasterOrg/Youtarr/commit/b532bb8250ccd95f414d0240943819e5fbbca44e)), closes [#892](https://github.com/DialmasterOrg/Youtarr/issues/892)
+
+
+### Bug Fixes
+
+* avoid full-library watch status requests ([68ac489](https://github.com/DialmasterOrg/Youtarr/commit/68ac4891d647a78e1ab31c456ee2ecbcbba40a7a))
+* harden rescan, library repair, and cookies ([2719ed6](https://github.com/DialmasterOrg/Youtarr/commit/2719ed62e6e4f652feac9297eb3c9b6ea5465b03))
+* report only real watch status changes ([d5ba1a7](https://github.com/DialmasterOrg/Youtarr/commit/d5ba1a751453757e1cad0fd6eb14595c0b0d958e)), closes [#892](https://github.com/DialmasterOrg/Youtarr/issues/892)
+* tighten rescan, library repair, cookie copies ([571d1f5](https://github.com/DialmasterOrg/Youtarr/commit/571d1f5d8aef1e7551fff6f3722cda9da3635d8e)), closes [#893](https://github.com/DialmasterOrg/Youtarr/issues/893)
+
+
+### Documentation
+
+* clarify scheduled task descriptions ([570e82d](https://github.com/DialmasterOrg/Youtarr/commit/570e82dd93d18d7fe95d9aad090c8c780fa0f385)), closes [#892](https://github.com/DialmasterOrg/Youtarr/issues/892)
+* update CHANGELOG for v1.86.1 [skip ci] ([be1b4c2](https://github.com/DialmasterOrg/Youtarr/commit/be1b4c25e4e45ac0d764f21e8d7e8a10707b067b))
+
+**Full Changelog**: https://github.com/DialmasterOrg/Youtarr/compare/v1.86.1...v1.87.0
+
 ## [v1.86.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.86.1) - 2026-09-27
 
 ### Bug Fixes

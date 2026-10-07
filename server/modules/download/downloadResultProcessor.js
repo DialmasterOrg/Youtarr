@@ -39,8 +39,10 @@ function resolveUrlsToProcess(jobType, originalUrls, initialCount) {
 }
 
 // Backfills URLs into errorTracker.failedVideos (read later by reconcileArchive),
-// then splits videoData into successful vs failed by file presence.
-function partitionDownloadResults(videoData, errorTracker, urlsToProcess) {
+// then splits videoData into successful vs failed by file presence. Videos
+// yt-dlp skipped as already archived are neither: their files are from an
+// earlier download.
+function partitionDownloadResults(videoData, errorTracker, urlsToProcess, archiveSkippedIds = new Set()) {
   for (const url of urlsToProcess) {
     const videoId = url.split('youtu.be/')[1]?.trim().split('?')[0].split('&')[0];
     if (videoId && errorTracker.failedVideos.has(videoId)) {
@@ -54,6 +56,10 @@ function partitionDownloadResults(videoData, errorTracker, urlsToProcess) {
   const failedVideosList = [];
 
   for (const video of videoData) {
+    if (archiveSkippedIds.has(video.youtubeId)) {
+      continue;
+    }
+
     // Check if this video was explicitly marked as failed during download
     const wasMarkedFailed = errorTracker.failedVideos.has(video.youtubeId);
 

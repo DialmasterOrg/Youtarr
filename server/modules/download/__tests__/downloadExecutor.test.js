@@ -369,6 +369,37 @@ describe('DownloadExecutor', () => {
       expect(jobModule.startNextJob).toHaveBeenCalledTimes(1);
     });
 
+    it('cleans up unfinished videos after a failed run whose output closed', async () => {
+      setTimeout(() => {
+        mockProcess.emit('exit', 1, null);
+        mockProcess.emit('close', 1, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(JobVideoDownload.findAll).toHaveBeenCalledWith({
+        where: { job_id: mockJobId, status: 'in_progress' }
+      });
+    });
+
+    it('does not clean up unfinished videos when a failed run finalizes without its output closing', async () => {
+      jest.useFakeTimers();
+      const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+      await jest.advanceTimersByTimeAsync(0);
+
+      mockProcess.emit('exit', 1, null);
+      await jest.advanceTimersByTimeAsync(DRAIN_TIMEOUT_MS);
+      await downloadPromise;
+
+      // The run did reach the failed-exit path, so the cleanup was skipped
+      // rather than never reached.
+      expect(jobModule.updateJob).toHaveBeenCalledWith(mockJobId, expect.objectContaining({
+        status: 'Error',
+        notes: 'Download failed (exit 1)',
+      }));
+      expect(JobVideoDownload.findAll).not.toHaveBeenCalled();
+    });
+
     it('ignores output that arrives after fallback finalization', async () => {
       jest.useFakeTimers();
       const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);

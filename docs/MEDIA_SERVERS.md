@@ -98,7 +98,7 @@ See [Youtarr Downloads Folder Structure](YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md)
 **NFO Files Include**:
 | Field                | Description                               |
 | -------------------- | ----------------------------------------- |
-| `<title>`            | Title with channel prefix                 |
+| `<title>`            | Video title as it appears on YouTube (no channel prefix) |
 | `<plot>`             | Full description of video from YouTube    |
 | `<premiered>`        | Original upload/release date              |
 | `<year>`             | Year of the upload/release date           |
@@ -117,7 +117,7 @@ See [Youtarr Downloads Folder Structure](YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md)
 **Embedded MP4 Metadata**:
 | Field                | Description                               |
 | -------------------- | ----------------------------------------- |
-| `title`              | Title with channel prefix                 |
+| `title`              | `Channel - Title` by default; just the title when **Prefix channel name in embedded video title** is off |
 | `artist`             | Channel name                              |
 | `studio`             | Channel name                              |
 | `album`              | Channel name (for collection grouping)    |

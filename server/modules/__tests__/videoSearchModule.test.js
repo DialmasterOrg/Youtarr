@@ -5,6 +5,8 @@ jest.mock('../download/ytdlpCommandBuilder', () => ({
 jest.mock('../../models', () => ({
   Video: { findAll: jest.fn().mockResolvedValue([]) },
 }));
+jest.mock('../../models/channelvideo', () => ({ findAll: jest.fn().mockResolvedValue([]) }));
+jest.mock('../archiveModule', () => ({ filterArchivedVideoIds: jest.fn(() => new Set()) }));
 jest.mock('../../logger', () => ({
   info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn(),
   child: jest.fn(() => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() })),

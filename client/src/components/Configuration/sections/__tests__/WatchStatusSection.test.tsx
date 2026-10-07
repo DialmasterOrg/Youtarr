@@ -155,15 +155,32 @@ describe('WatchStatusSection', () => {
         startedAt: '2026-07-16T09:58:00Z',
         completedAt: '2026-07-16T10:00:00Z',
         servers: {
-          plex: { updated: 12 },
+          plex: { changed: 1200 },
           jellyfin: { error: 'server not reachable or not responding' },
         },
       },
     };
     renderWithProviders(<WatchStatusSection {...defaultProps} />);
     expect(screen.getByText(/last sync/i)).toBeInTheDocument();
-    expect(screen.getByText(/Plex: 12 videos updated/)).toBeInTheDocument();
+    expect(screen.getByText('Plex: 1,200 videos updated')).toBeInTheDocument();
     expect(screen.getByText(/Jellyfin: failed \(server not reachable or not responding\)/)).toBeInTheDocument();
+  });
+
+  test.each([
+    [0, 'Emby: no changes'],
+    [1, 'Emby: 1 video updated'],
+  ])('describes a server with %i changed videos', (changed, text) => {
+    watchStatusSyncReturn.syncState = {
+      running: false,
+      lastRun: {
+        trigger: 'manual',
+        startedAt: '2026-07-16T09:58:00Z',
+        completedAt: '2026-07-16T10:00:00Z',
+        servers: { emby: { changed } },
+      },
+    };
+    renderWithProviders(<WatchStatusSection {...defaultProps} />);
+    expect(screen.getByText(text)).toBeInTheDocument();
   });
 
   test('shows a skipped last run', () => {

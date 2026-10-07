@@ -1,6 +1,7 @@
 const ChannelVideo = require('../../models/channelvideo');
 const watchStatusQueries = require('../mediaServers/watchStatusQueries');
 const fileCheckModule = require('../fileCheckModule');
+const ratingMapper = require('../ratingMapper');
 const { PUBLISHED_AT_SOURCE } = require('../constants/publishedAtSource');
 
 class ChannelVideoQuery {
@@ -182,6 +183,25 @@ class ChannelVideoQuery {
   }
 
   /**
+   * Drop videos rated above the maximum, judging each by the rating the
+   * listing shows: a downloaded video's recorded rating, otherwise the
+   * channel default (see channelVideosService.applyChannelDefaultRating).
+   * Unrated videos are kept.
+   * @param {Array} videos - Array of enriched videos
+   * @param {{ maxRating: string, channelDefaultRating: (string|null) }|null} ratingFilter
+   *   - Highest rating to keep and the channel's default rating, or null for no limit
+   * @returns {Array} - Filtered array of videos
+   */
+  _applyRatingFilter(videos, ratingFilter) {
+    const allowedRatings = ratingFilter ? ratingMapper.getRatingsAtOrBelow(ratingFilter.maxRating) : null;
+    if (!allowedRatings) return videos;
+    const { normalized_rating: defaultRating } =
+      ratingMapper.determineEffectiveRating({}, ratingFilter.channelDefaultRating);
+    return videos.filter(video =>
+      ratingMapper.isRatingAllowed(video.added ? video.normalized_rating : defaultRating, allowedRatings));
+  }
+
+  /**
    * Apply tri-state status filters (protected / missing / ignored / watched).
    * Mode is 'off' (no filtering), 'only' (keep matches), or 'exclude' (drop matches).
    * Missing is "previously downloaded, file no longer present".
@@ -242,7 +262,7 @@ class ChannelVideoQuery {
    * @param {string|null} dateTo - Filter videos to this date (ISO string, default null)
    * @returns {Promise<Array>} - Array of video objects with download status
    */
-  async fetchNewestVideosFromDb(channelId, limit = 50, offset = 0, downloadedFilter = 'off', searchQuery = '', sortBy = 'date', sortOrder = 'desc', checkFiles = false, mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = 'off', missingFilter = 'off', ignoredFilter = 'off', watchedFilter = 'off') {
+  async fetchNewestVideosFromDb(channelId, limit = 50, offset = 0, downloadedFilter = 'off', searchQuery = '', sortBy = 'date', sortOrder = 'desc', checkFiles = false, mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = 'off', missingFilter = 'off', ignoredFilter = 'off', watchedFilter = 'off', ratingFilter = null) {
     // First get all videos to enrich with download status
     const allChannelVideos = await ChannelVideo.findAll({
       where: {
@@ -276,6 +296,8 @@ class ChannelVideoQuery {
     filteredVideos = this._applyDurationAndDateFilters(filteredVideos, minDuration, maxDuration, dateFrom, dateTo);
 
     filteredVideos = this._applyStatusFilters(filteredVideos, protectedFilter, missingFilter, ignoredFilter, watchedFilter);
+
+    filteredVideos = this._applyRatingFilter(filteredVideos, ratingFilter);
 
     // Apply sorting
     filteredVideos.sort((a, b) => {
@@ -361,9 +383,9 @@ class ChannelVideoQuery {
    * @param {string|null} dateTo - Filter videos to this date (ISO string, default null)
    * @returns {Promise<Object>} - Object with totalCount and oldestVideoDate
    */
-  async getChannelVideoStats(channelId, downloadedFilter = 'off', searchQuery = '', mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = 'off', missingFilter = 'off', ignoredFilter = 'off', watchedFilter = 'off') {
+  async getChannelVideoStats(channelId, downloadedFilter = 'off', searchQuery = '', mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = 'off', missingFilter = 'off', ignoredFilter = 'off', watchedFilter = 'off', ratingFilter = null) {
     // If we have search or filter, we need to get all videos
-    if (downloadedFilter !== 'off' || searchQuery || minDuration !== null || maxDuration !== null || dateFrom || dateTo || protectedFilter !== 'off' || missingFilter !== 'off' || ignoredFilter !== 'off' || watchedFilter !== 'off') {
+    if (downloadedFilter !== 'off' || searchQuery || minDuration !== null || maxDuration !== null || dateFrom || dateTo || protectedFilter !== 'off' || missingFilter !== 'off' || ignoredFilter !== 'off' || watchedFilter !== 'off' || ratingFilter) {
       // Need to filter by download status and/or search
       const allChannelVideos = await ChannelVideo.findAll({
         where: {
@@ -396,6 +418,8 @@ class ChannelVideoQuery {
       filteredVideos = this._applyDurationAndDateFilters(filteredVideos, minDuration, maxDuration, dateFrom, dateTo);
 
       filteredVideos = this._applyStatusFilters(filteredVideos, protectedFilter, missingFilter, ignoredFilter, watchedFilter);
+
+      filteredVideos = this._applyRatingFilter(filteredVideos, ratingFilter);
 
       // Estimated dates are ordering-only placeholders; never surface them.
       const oldest = filteredVideos.length > 0 ? filteredVideos[filteredVideos.length - 1] : null;

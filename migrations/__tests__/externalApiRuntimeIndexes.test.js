@@ -1,83 +1,34 @@
-'use strict';
+const migration = require('../20261007041058-add-external-api-runtime-indexes');
 
-const migration = require('../20260929100000-add-external-api-runtime-indexes');
-
-const indexShape = (name, fields) => ({
-  name,
-  fields: fields.map((field) => ({
-    attribute: typeof field === 'string' ? field : field.name,
-  })),
-});
-
-function queryInterface(initialIndexes = {}) {
-  const indexes = Object.fromEntries(Object.entries(initialIndexes).map(([table, entries]) => [
-    table,
-    entries.map(({ name, fields }) => indexShape(name, fields)),
-  ]));
-  const operations = [];
-
+function queryInterface(initial = []) {
+  const indexes = [...initial];
   return {
-    operations,
     indexes,
-    showIndex: jest.fn(async (table) => indexes[table] || []),
-    addIndex: jest.fn(async (table, fields, { name }) => {
-      operations.push(['add', table, name]);
-      indexes[table] = [...(indexes[table] || []), indexShape(name, fields)];
+    showIndex: async () => indexes,
+    addIndex: jest.fn(async (_table, fields, { name }) => {
+      indexes.push({ name, fields: fields.map(attribute => ({ attribute })) });
     }),
-    removeIndex: jest.fn(async (table, name) => {
-      operations.push(['remove', table, name]);
-      indexes[table] = (indexes[table] || []).filter((index) => index.name !== name);
+    removeIndex: jest.fn(async (_table, name) => {
+      indexes.splice(indexes.findIndex(index => index.name === name), 1);
     }),
   };
 }
 
-describe('external API runtime index migration', () => {
-  test('adds the justified catalog and request-list indexes once', async () => {
-    const qi = queryInterface();
+test('reapply repairs missing runtime indexes without duplicating an equivalent index', async () => {
+  const custom = { name: 'operator_catalog_index',
+    fields: migration.INDEXES[0].fields.map(attribute => ({ attribute })) };
+  const query = queryInterface([custom]);
+  await migration.up(query);
+  await migration.up(query);
+  expect(query.addIndex).toHaveBeenCalledTimes(1);
+  await migration.down(query);
+  expect(query.indexes).toEqual([custom]);
+});
 
-    await migration.up(qi);
-    await migration.up(qi);
-
-    expect(qi.operations.filter(([operation]) => operation === 'add')).toEqual(
-      migration.INDEXES.map(({ table, name }) => ['add', table, name])
-    );
-    expect(qi.operations.map(([, , name]) => name)).not.toEqual(expect.arrayContaining([
-      'channels_external_channel_id_idx',
-      'channelvideos_external_youtube_idx',
-      'channelvideos_external_catalog_seek_idx',
-    ]));
-    expect(qi.showIndex).toHaveBeenCalled();
-  });
-
-  test('accepts equivalent indexes under existing names', async () => {
-    const equivalents = migration.INDEXES.reduce((result, { table, fields }, index) => {
-      result[table] = [...(result[table] || []), {
-        name: `existing_equivalent_${index}`,
-        fields,
-      }];
-      return result;
-    }, {});
-    const qi = queryInterface(equivalents);
-
-    await migration.up(qi);
-    await migration.down(qi);
-
-    expect(qi.operations).toEqual([]);
-  });
-
-  test('removes only its own named indexes on rollback', async () => {
-    const ownIndexes = migration.INDEXES.reduce((result, { table, fields, name }) => {
-      result[table] = [...(result[table] || []), { name, fields }];
-      return result;
-    }, {});
-    ownIndexes.channels.push({ name: 'channels_channel_id_idx', fields: ['channel_id'] });
-    const qi = queryInterface(ownIndexes);
-
-    await migration.down(qi);
-
-    expect(qi.operations).toEqual(
-      migration.INDEXES.slice().reverse().map(({ table, name }) => ['remove', table, name])
-    );
-    expect(qi.indexes.channels.map((index) => index.name)).toContain('channels_channel_id_idx');
-  });
+test('rollback preserves unrelated indexes even when their names collide', async () => {
+  const unrelated = { name: migration.INDEXES[0].name, fields: [{ attribute: 'message' }] };
+  const query = queryInterface([unrelated]);
+  await migration.up(query);
+  await migration.down(query);
+  expect(query.indexes).toEqual([unrelated]);
 });

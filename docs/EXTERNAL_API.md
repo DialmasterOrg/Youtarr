@@ -7,8 +7,8 @@ external trust boundary and proxy rules have been reviewed.
 
 ## Enablement and authentication
 
-Create an external-role key in **Settings → API Keys → API Keys & External
-Access**. The key is revealed once. Send it only in the `x-api-key` header over
+Create an external-role key through the session-authenticated management API
+described below. The key is revealed once. Send it only in the `x-api-key` header over
 HTTPS. Set `EXTERNAL_API_ENABLED=true` and restart Youtarr to enable the
 namespace; leave it unset or set to `false` to keep it disabled.
 
@@ -47,8 +47,7 @@ Every external key has:
   per UTC hour, and 200 per UTC day (administrators may select lower values);
 - an explicit set of granted Youtarr channel database IDs.
 
-The HTTP contract retains a compact `maxRatingLevel` value, but the
-administrator UI presents the actual rating ceilings:
+The HTTP contract uses a compact `maxRatingLevel` value with these rating ceilings:
 
 | Level | Administrator label | Movie ratings | TV ratings |
 | --- | --- | --- | --- |
@@ -315,14 +314,14 @@ its idempotent operation.
 
 ## Administrator review
 
-The web queue uses session-only endpoints under `/api/external-requests`:
+Administrator clients use session-only endpoints under `/api/external-requests`:
 
 - list with `status`, `requestType`, and `apiKeyId` filters;
 - request detail;
 - approve;
 - reject with a 1–300 character reason.
 
-Approval locks the current request, reloads the current key policy, and
+Approval locks the key before the request, reloads the current key policy, and
 revalidates authorization and target state immediately before execution.
 Revocation or a policy/grant change therefore takes effect immediately.
 
@@ -380,15 +379,38 @@ may contain secrets.
 
 ## Configuration and administration
 
-1. In **Settings → API Keys → API Keys & External Access**, create an external
-   key and save the raw secret; it is shown only once.
+This runtime includes the management APIs. The external-access editor and
+request-review UI are a separate follow-up in [PR #809](https://github.com/DialmasterOrg/Youtarr/pull/809).
+
+1. Create an external key with session-authenticated `POST /api/keys` and save
+   the returned raw secret; it is shown only once. Omitting `policy` creates a
+   legacy download key. For example, a body for a read-only external key is:
+
+   ```json
+   {"name":"Catalog reader","policy":{"role":"view","maxRatingLevel":2,"allowUnrated":false,"allowedMediaTypes":["video"]},"channelIds":[12]}
+   ```
+
+   Use `x-access-token` with an administrator session for management calls.
+   Obtain channel database IDs from `GET /getchannels` (`database_id`), not its
+   YouTube `channel_id`. Do not copy the example ID without checking your channels.
 2. The session-authenticated `GET /api/keys` management response includes
    `channel_grant_count`: the number of grants whose channels are currently
    enabled and non-terminated. It is not part of the `/external-api/v1` contract.
 3. Choose the smallest request permissions, rating ceiling, media types,
    quotas, and enabled channel grants.
-4. Use the administrator **External Requests** queue to approve or reject
-   pending requests when auto-approval is not enabled.
+4. Review pending requests using `GET /api/external-requests` and
+   `POST /api/external-requests/{id}/approve` or `/reject` (a rejection requires
+   a JSON `reason`). Policy and grants can be replaced atomically with
+   `PUT /api/keys/{id}/external-access` and a `{ "policy": ..., "channelIds": [...] }` body.
+
+`GET /getconfig` reports the effective feature flag in
+`isPlatformManaged.externalApiEnabled`; clients should use this value when
+deciding whether to offer external API controls.
+
+When the shared work queue is full, writes return 503 while retaining the
+accepted request and its idempotency key. Retry the same body to resume it
+without charging another accepted write. Completed video, channel, and
+deletion requests return their original result on an idempotent retry.
 
 Saving an external key with zero approved channels is intentional and does not
 backfill or grant access. That key fails closed: catalog reads and requests
@@ -400,6 +422,53 @@ Existing keys migrate as `legacy_download` and remain limited to
 keys cannot use the legacy direct-download endpoint.
 
 ## Synthetic consumer contract
+
+### Database integration and query plans
+
+`npm run test:external-api-database` runs the migration lifecycle and runtime
+regressions against a real local database. CI runs both MariaDB 10.3 and
+MySQL 8.0; the default backend suite excludes these files instead of skipping
+tests. The tests create and remove disposable databases and use synthetic data.
+Configure `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` and, if different,
+`DB_ADMIN_USER` / `DB_ADMIN_PASSWORD`. The administrator needs database
+creation and removal privileges.
+
+`npm run test:external-index-plans` creates 300,000 cached videos, 1,000 channels,
+30,000 request records, and 10 channel grants in a disposable local database.
+It executes the actual catalog and management service methods, captures their
+SQL, compares results before and after the runtime migration, and records
+`EXPLAIN` plans in `/tmp/youtarr-external-index-plans.json`. Set
+`EXTERNAL_API_INDEX_REPORT` to choose another report path. CI uploads this report
+for each engine. No YouTube or media-server calls are made.
+
+Only two indexes are added, both on `external_requests`:
+
+- `external_requests_catalog_status_idx`: `(api_key_id, request_type, youtube_id, created_at, id, status)`.
+  Latest request status is fetched in a batch for the displayed page using
+  `ROW_NUMBER()`, avoiding a correlated history scan for every candidate video.
+- `external_requests_management_idx`: `(request_type, status, created_at, id)`
+  supports the filtered administrator queue.
+
+Measured plans on the synthetic fixture (estimated rows for the request-table
+access, not actual rows returned):
+
+| Engine | Query | Before index | After index |
+| --- | --- | --- | --- |
+| MariaDB 10.3.39 | Latest status for displayed videos | 14,935 | 500, covering catalog-status index |
+| MySQL 8.0.46 | Latest status for displayed videos | 19,923 | 50, covering catalog-status index |
+| MariaDB 10.3.39 | Video requests, pending | 29,870, table scan | 1,500, management index |
+| MySQL 8.0.46 | Video requests, pending | 39,847, table scan | 1,500, management index |
+
+The four service reads took 119 → 25 ms on MariaDB and 180 → 64 ms on MySQL
+with the batched lookup; building both indexes took 168 ms and 255 ms respectively
+in this local run. These are fixture measurements, not deployment guarantees.
+MySQL still sorts the joined management result. Existing channel lookup indexes
+already cover granted-channel joins; this migration adds no catalog-table indexes
+and does not consolidate duplicate channels. Equivalent indexes under other names
+are retained, and rollback removes only matching definitions under the migration's
+own index names.
+
+### HTTP fixture
 
 The canonical, production-free consumer dataset lives in
 `fixtures/external-api-v1/contract.json`. Validate its published checksum with

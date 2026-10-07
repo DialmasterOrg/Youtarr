@@ -18,10 +18,10 @@ const createYtdlpOptionsRoutes = require('./ytdlpOptions');
 const createMaintenanceRoutes = require('./maintenance');
 const createSubfolderRoutes = require('./subfolders');
 const createSchedulesRoutes = require('./schedules');
+const createLogRoutes = require('./logs');
 const createExternalRequestReviewRoutes = require('./externalRequests');
 const { createExternalApiRoutes } = require('./externalApi');
 const { sendExternalError } = require('../modules/externalApiResponse');
-const createLogRoutes = require('./logs');
 const videoMetadataModule = require('../modules/videoMetadataModule');
 const videoOembedEnricher = require('../modules/videoOembedEnricher');
 const playlistModule = require('../modules/playlistModule');
@@ -41,17 +41,17 @@ const scheduledTaskRuns = require('../modules/scheduledTaskRuns');
 const scheduleConfig = require('../modules/scheduleConfig');
 const rescanRunSummary = require('../modules/rescanRunSummary');
 const ytdlpUpdateRunSummary = require('../modules/ytdlpUpdateRunSummary');
+const storageGuard = require('../modules/storageGuard');
+const cookieDetails = require('../modules/cookieDetails');
+const cookieTest = require('../modules/cookieTest');
+const logger = require('../logger');
+const logFilesModule = require('../modules/logFilesModule');
 const externalCatalogService = require('../modules/externalCatalogService');
 const externalThumbnailProxy = require('../modules/externalThumbnailProxy');
 const { sharedExternalWorkLimiter } = require('../modules/externalWorkLimiter');
 const { createExternalRequestService } = require('../modules/externalRequestService');
 const { createExternalQuotaService } = require('../modules/externalQuotaService');
 const { isExternalApiEnabled } = require('../modules/externalApiConfig');
-const storageGuard = require('../modules/storageGuard');
-const cookieDetails = require('../modules/cookieDetails');
-const cookieTest = require('../modules/cookieTest');
-const logger = require('../logger');
-const logFilesModule = require('../modules/logFilesModule');
 
 /**
  * Registers all route modules with the Express app
@@ -116,7 +116,7 @@ function registerRoutes(app, deps) {
 
   // Video routes
   app.use(createVideoRoutes({
-    verifyToken, videosModule, downloadModule, videoOembedEnricher, videoLocalStatus, storageGuard, scheduledTaskManager,
+    verifyToken, videosModule, downloadModule, videoOembedEnricher, videoLocalStatus, storageGuard, scheduledTaskManager, ratingMapper,
   }));
 
   // Video search routes
@@ -169,6 +169,10 @@ function registerRoutes(app, deps) {
 
   // Scheduled task status routes
   app.use(createSchedulesRoutes({ verifyToken, scheduledTaskManager, scheduledTaskRuns, scheduleConfig }));
+
+  // Log file download
+  app.use(createLogRoutes({ verifyToken, logFilesModule, configModule }));
+
   // The versioned external API stays unreachable until a deployment opts in
   // explicitly. This fail-closed default is independent of AUTH_ENABLED.
   if (isExternalApiEnabled()) {
@@ -194,9 +198,6 @@ function registerRoutes(app, deps) {
       requestId: req.id,
     })
   );
-
-  // Log file download
-  app.use(createLogRoutes({ verifyToken, logFilesModule, configModule }));
 
   // Defensive redirect: /channels -> /subscriptions (frontend handles client-side routing,
   // this fallback covers direct server-side hits during the transition period)

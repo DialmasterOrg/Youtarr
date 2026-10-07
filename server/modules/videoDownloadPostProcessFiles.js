@@ -14,7 +14,7 @@ const videoPersistence = require('./videoPersistence');
 const { VIDEO_PERSISTED_MARKER } = require('./constants/outputMarkers');
 const logger = require('../logger');
 const logLevelSync = require('./logLevelSync');
-const { buildChannelPath, cleanupEmptyParents, moveWithRetries, ensureDirWithRetries, copySyncWithFallback } = require('./filesystem');
+const { buildChannelPath, isFileForVideo, cleanupEmptyParents, moveWithRetries, ensureDirWithRetries, copySyncWithFallback } = require('./filesystem');
 
 // Match the server's log level, including a level chosen in Settings. Quietly:
 // this process starts at LOG_LEVEL for every video, and its output is relayed
@@ -755,10 +755,7 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
           // Flat mode: move individual files from temp channel folder to final channel folder
           // Filter by video ID to avoid moving files belonging to other downloads
           const allFilesInDir = await fs.readdir(videoDirectory);
-          // Bracketed form [ID] is the yt-dlp default; dash form " - ID" is a fallback
-          const updatedFilesInDir = allFilesInDir.filter(
-            file => file.includes(`[${id}]`) || file.includes(` - ${id}`)
-          );
+          const updatedFilesInDir = allFilesInDir.filter(file => isFileForVideo(file, id));
           for (const file of updatedFilesInDir) {
             const srcPath = path.join(videoDirectory, file);
             const destPath = path.join(targetVideoDirectory, file);

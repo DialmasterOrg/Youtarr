@@ -76,7 +76,6 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
     settings?: DownloadSettings | null,
     videoChannelMap?: Record<string, string>
   ) => {
-    downloadInitiatedRef.current = true;
     const strippedUrls = urls.map((url) =>
       url.includes('&') ? url.substring(0, url.indexOf('&')) : url
     );
@@ -90,15 +89,25 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
       body.videoChannelMap = videoChannelMap;
     }
 
-    await fetch('/triggerspecificdownloads', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-access-token': token || '',
-      },
-      body: JSON.stringify(body),
-    });
+    let result: Response;
+    try {
+      result = await fetch('/triggerspecificdownloads', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-access-token': token || '',
+        },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      throw new Error('Could not start downloads.');
+    }
+    if (!result.ok) {
+      const data: { error?: string } = await result.json().catch(() => ({}));
+      throw new Error(data.error || 'Could not start downloads.');
+    }
 
+    downloadInitiatedRef.current = true;
     setTimeout(fetchRunningJobs, 1000);
     navigate('/downloads/activity');
   }, [token, fetchRunningJobs, downloadInitiatedRef, navigate]);

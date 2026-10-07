@@ -76,6 +76,7 @@ export function useVideoModalActions({
       ...previous,
       status: previous.isIgnored ? 'ignored' : current.status === 'never_downloaded' && previous.status === 'members_only' ? 'members_only' : current.status,
       isDownloaded: current.status === 'downloaded',
+      inArchive: current.inArchive ?? false,
       databaseId: current.databaseId ?? null,
       filePath: current.filePath ?? null,
       fileSize: current.fileSize ?? null,

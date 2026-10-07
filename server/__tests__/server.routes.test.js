@@ -1059,7 +1059,8 @@ describe('server routes - channels', () => {
         'off', // default protectedFilter
         'off', // default missingFilter
         'off', // default ignoredFilter
-        'off' // default watchedFilter
+        'off', // default watchedFilter
+        null // default maxRating
       );
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
@@ -1128,7 +1129,8 @@ describe('server routes - channels', () => {
         'off', // default protectedFilter
         'off', // default missingFilter
         'off', // default ignoredFilter
-        'only' // watchedFilter
+        'only', // watchedFilter
+        null // default maxRating
       );
       expect(res.statusCode).toBe(200);
     });
@@ -1171,9 +1173,47 @@ describe('server routes - channels', () => {
         'off', // default protectedFilter
         'off', // default missingFilter
         'off', // default ignoredFilter
-        'off' // default watchedFilter
+        'off', // default watchedFilter
+        null // default maxRating
       );
       expect(res.statusCode).toBe(200);
+    });
+
+    test('passes maxRating to channel module', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'get', '/getchannelvideos/:channelId');
+      const getVideosHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'channel-1' },
+        query: { maxRating: 'TV-14' }
+      });
+      const res = createMockResponse();
+
+      await getVideosHandler(req, res);
+
+      const args = channelModuleMock.getChannelVideos.mock.calls[0];
+      expect(args[args.length - 1]).toBe('TV-14');
+    });
+
+    test('rejects an unknown maxRating with 400', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'get', '/getchannelvideos/:channelId');
+      const getVideosHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'channel-1' },
+        query: { maxRating: 'NR' }
+      });
+      const res = createMockResponse();
+
+      await getVideosHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({ error: 'Invalid maxRating' });
+      expect(channelModuleMock.getChannelVideos).not.toHaveBeenCalled();
     });
   });
 
@@ -1498,6 +1538,7 @@ describe('server routes - videos', () => {
         protectedFilter: 'off',
         missingFilter: 'off',
         watchedFilter: 'off',
+        maxRating: null,
       });
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
@@ -1549,8 +1590,41 @@ describe('server routes - videos', () => {
         protectedFilter: 'off',
         missingFilter: 'off',
         watchedFilter: 'exclude',
+        maxRating: null,
       });
       expect(res.statusCode).toBe(200);
+    });
+
+    test('passes maxRating to the videos module', async () => {
+      const { app, videosModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'get', '/getVideos');
+      const getVideosHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({ query: { maxRating: 'PG-13' } });
+      const res = createMockResponse();
+
+      await getVideosHandler(req, res);
+
+      expect(videosModuleMock.getVideosPaginated).toHaveBeenCalledWith(
+        expect.objectContaining({ maxRating: 'PG-13' })
+      );
+    });
+
+    test('rejects an unknown maxRating with 400', async () => {
+      const { app, videosModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'get', '/getVideos');
+      const getVideosHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({ query: { maxRating: 'bogus' } });
+      const res = createMockResponse();
+
+      await getVideosHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({ error: 'Invalid maxRating' });
+      expect(videosModuleMock.getVideosPaginated).not.toHaveBeenCalled();
     });
 
     test('handles error when fetching videos', async () => {

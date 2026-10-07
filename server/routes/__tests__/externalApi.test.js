@@ -541,3 +541,10 @@ describe('external API capabilities', () => {
     expect(response.headers['cache-control']).toBe('private, no-store');
   });
 });
+
+test.each(['sortOrder[]=desc', 'pageSize[x]=2', 'search=a&search=b'])(
+  'rejects non-scalar query parameters: %s', async query => {
+    const { app } = makeApp({ key: externalKey() });
+    await request(app).get(`/external-api/v1/videos?${query}`).set('x-api-key', 'valid').expect(400);
+  }
+);

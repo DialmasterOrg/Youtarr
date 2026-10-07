@@ -748,24 +748,25 @@ describe('VideoMetadataModule', () => {
       expect(result).toBeNull();
     });
 
-    test('matches files using " - youtubeId" pattern', async () => {
+    test('excludes files of a video whose title mentions this video\'s ID', async () => {
       mockVideo.findOne.mockResolvedValue({
-        youtubeId: 'dash1',
-        filePath: '/data/channel/Video - dash1.mp4',
+        youtubeId: 'aaaaaaaaaaa',
+        filePath: '/data/channel/Real [aaaaaaaaaaa].mp4',
         audioFilePath: null,
       });
 
       mockFs.readdir.mockResolvedValue([
-        'Video - dash1.mp4',
-        'Video - dash1.srt',
+        'Real [aaaaaaaaaaa].mp4',
+        'Real [aaaaaaaaaaa].en.srt',
+        'Reference [aaaaaaaaaaa] [bbbbbbbbbbb].jpg',
+        'talk - aaaaaaaaaaa rant [ccccccccccc].srt',
       ]);
 
-      mockFs.stat.mockResolvedValueOnce({ size: 500 });
+      mockFs.stat.mockResolvedValue({ size: 500 });
 
-      const result = await videoMetadataModule._getVideoRelatedFiles('dash1');
+      const result = await videoMetadataModule._getVideoRelatedFiles('aaaaaaaaaaa');
 
-      expect(result).toHaveLength(1);
-      expect(result[0]).toEqual({ fileName: 'Video - dash1.srt', fileSize: 500, type: 'Subtitles' });
+      expect(result).toEqual([{ fileName: 'Real [aaaaaaaaaaa].en.srt', fileSize: 500, type: 'Subtitles' }]);
     });
 
     test('handles stat failure for individual files gracefully', async () => {

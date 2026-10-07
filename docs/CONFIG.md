@@ -257,8 +257,8 @@ Youtarr must be running at the scheduled time; missed occurrences are not replay
 - **Type**: `string`
 - **Default**: `""` (empty)
 - **Description**: Optional full Plex base URL (e.g., `https://plex.example.com:32400`)
-- **Usage**: Not configurable via the web UI. Edit `config/config.json` manually or set the `PLEX_URL` environment variable to populate it.
-- **Note**: When this field is set it takes precedence over the `plexIP`, `plexPort`, and `plexViaHttps` values shown in the UI.
+- **Usage**: Not configurable via the web UI. Edit `config/config.json` manually. The `PLEX_URL` environment variable also works, but only if it actually reaches the container: the bundled `docker-compose.yml` does not forward it, so you must add `PLEX_URL: ${PLEX_URL:-}` to the `youtarr` service's `environment:` first (see [PLEX_URL](ENVIRONMENT_VARIABLES.md#plex_url)).
+- **Note**: When this field is set it takes precedence over the `plexIP`, `plexPort`, and `plexViaHttps` values shown in the UI. A `PLEX_URL` environment variable inside the container takes precedence over this field.
 
 ### Plex Playlist Token (advanced)
 - **Config Key**: `plexPlaylistToken`
@@ -751,6 +751,7 @@ The old `discordWebhookUrl` and `notificationService` fields are automatically r
   - `false` (default): Downloads are staged in a hidden `.youtarr_tmp/` directory within your output folder. Uses fast atomic renames since source and destination are on the same filesystem. The dot-prefix hides in-progress downloads from media servers like Plex and Jellyfin.
   - `true`: Downloads are staged in the external path specified by `tmpFilePath` (e.g., `/tmp`). Useful when your output directory is on slow network storage and you want to download to fast local storage first.
 - **Note**: Some managed platforms (e.g., ElfHosted) force this value on.
+- **Space needed**: Wherever downloads are staged needs free space of about twice the size of the largest video you download, because merging the video and audio streams writes a second copy before the originals are removed. With `true`, that space is inside the container unless you mount a volume at `tmpFilePath`; on Docker Desktop (Windows/macOS) it comes out of Docker's own virtual disk, which is shared with images, build cache, and other containers, not out of your drives. See [Downloads Fail with "Conversion failed!" or "No space left on device"](TROUBLESHOOTING.md#download-out-of-space).
 
 ### External Temporary File Path
 - **Config Key**: `tmpFilePath`
@@ -795,6 +796,8 @@ volumes:
       device: ":/path/to/your/nfs/export"
 ```
 
+For an SMB/CIFS share (Synology, QNAP, Windows file shares), see [Letting Docker Mount the Share](DOCKER.md#letting-docker-mount-the-share).
+
 **Simplest workaround:** Set `useTmpForDownloads: false` (the default). Downloads are staged inside the output directory itself, so the move is a same-filesystem rename — atomic and immune to this class of error. Note: if the NFS mount is stale, downloads will still fail, but they will fail *before* yt-dlp marks them as archived — so they'll be automatically retried on the next scheduled run rather than getting permanently stuck.
 
 ## Auto-Removal Settings
@@ -817,8 +820,9 @@ volumes:
 - **Config Key**: `autoRemovalVideoAgeThreshold`
 - **Type**: `string`
 - **Default**: `null` (not set)
-- **Description**: Delete videos older than this age
-- **Examples**: `"30d"` (30 days), `"3m"` (3 months), `"1y"` (1 year)
+- **Description**: Delete videos older than this many days
+- **Examples**: `"30"` (30 days), `"90"` (about 3 months), `"365"` (1 year)
+- **Note**: The value is a whole number of days. Unit suffixes are not supported: the number is read and any suffix ignored, so `"3m"` means 3 days, not 3 months. The Settings page offers 7 days through 5 years (`"1825"`).
 
 ### Watched-Based Removal
 - **Config Key**: `autoRemovalWatchedEnabled`

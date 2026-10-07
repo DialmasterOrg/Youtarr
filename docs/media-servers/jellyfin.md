@@ -78,7 +78,7 @@ In the library settings:
 ### NFO Support
 
 Jellyfin reads NFO files containing:
-- **Title**: Video title with channel prefix
+- **Title**: Video title as it appears on YouTube (the NFO title never includes the channel name)
 - **Plot**: Full YouTube description
 - **Premiered**: Original upload date
 - **Year**: Upload year

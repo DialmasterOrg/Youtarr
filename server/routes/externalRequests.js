@@ -16,7 +16,7 @@ function createExternalRequestReviewRoutes({
   };
 
   const sendError = (req, res, error) => {
-    if (error.name === 'RequestError' && error.status >= 400 && error.status < 500) {
+    if (error.name === 'RequestError' && error.status >= 400 && error.status <= 503) {
       return res.status(error.status).json({ error: error.message });
     }
     req.log?.error({ err: error }, 'External request review operation failed');

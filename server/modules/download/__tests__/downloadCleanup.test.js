@@ -20,11 +20,12 @@ jest.mock('fs', () => {
 jest.mock('../../../logger');
 
 jest.mock('../../configModule', () => ({
-  directoryPath: '/mock/output'
+  directoryPath: '/output'
 }));
 
 jest.mock('../../filesystem', () => ({
-  isVideoDirectory: jest.fn(),
+  isVideoDirectoryFor: jest.requireActual('../../filesystem/directoryManager').isVideoDirectoryFor,
+  isFileForVideo: jest.requireActual('../../filesystem/pathBuilder').isFileForVideo,
   cleanupEmptyChannelDirectory: jest.fn().mockResolvedValue(false),
 }));
 
@@ -46,10 +47,10 @@ describe('downloadCleanup', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    filesystem.isVideoDirectory.mockReturnValue(true);
     filesystem.cleanupEmptyChannelDirectory.mockResolvedValue(false);
     tempPathManager.isTempPath.mockReturnValue(false);
     tempPathManager.convertFinalToTemp.mockImplementation((p) => p);
+    tempPathManager.getTempBasePath.mockReturnValue('/tmp');
 
     mockFsPromises.access.mockResolvedValue();
     mockFsPromises.readdir.mockResolvedValue([]);
@@ -71,7 +72,7 @@ describe('downloadCleanup', () => {
     it('should cleanup video directory and database entry', async () => {
       const mockVideoDownload = {
         youtube_id: 'abc123XYZ_d',
-        file_path: '/output/Channel - Title - abc123XYZ_d',
+        file_path: '/output/Channel/Channel - Title - abc123XYZ_d',
         destroy: jest.fn().mockResolvedValue()
       };
 
@@ -79,19 +80,19 @@ describe('downloadCleanup', () => {
       // File path is a final path, not a temp path
       tempPathManager.isTempPath.mockReturnValue(false);
       // Mock temp path conversion to return a different path
-      tempPathManager.convertFinalToTemp.mockReturnValue('/tmp/youtarr-downloads/Channel - Title - abc123XYZ_d');
+      tempPathManager.convertFinalToTemp.mockReturnValue('/tmp/Channel/Channel - Title - abc123XYZ_d');
       // Final path exists, temp path doesn't
       mockFsPromises.access.mockImplementation((path) => {
-        if (path === '/output/Channel - Title - abc123XYZ_d') return Promise.resolve();
+        if (path === '/output/Channel/Channel - Title - abc123XYZ_d') return Promise.resolve();
         return Promise.reject(new Error('ENOENT'));
       });
       mockFsPromises.readdir.mockResolvedValue(['video.mp4', 'poster.jpg']);
 
       await cleanupInProgressVideos('job-123');
 
-      expect(mockFsPromises.readdir).toHaveBeenCalledWith('/output/Channel - Title - abc123XYZ_d');
+      expect(mockFsPromises.readdir).toHaveBeenCalledWith('/output/Channel/Channel - Title - abc123XYZ_d');
       expect(mockFsPromises.unlink).toHaveBeenCalledTimes(2);
-      expect(mockFsPromises.rmdir).toHaveBeenCalledWith('/output/Channel - Title - abc123XYZ_d');
+      expect(mockFsPromises.rmdir).toHaveBeenCalledWith('/output/Channel/Channel - Title - abc123XYZ_d');
       expect(mockVideoDownload.destroy).toHaveBeenCalled();
     });
 
@@ -104,8 +105,6 @@ describe('downloadCleanup', () => {
 
       JobVideoDownload.findAll.mockResolvedValue([mockVideoDownload]);
       mockFsPromises.access.mockResolvedValue(); // Directory exists
-      // Mock filesystem.isVideoDirectory to return false (flat mode)
-      filesystem.isVideoDirectory.mockReturnValue(false);
       // Mock directory contents with matching files
       mockFsPromises.readdir.mockResolvedValue([
         'Channel - Title [abc123XYZ_d].mp4',
@@ -132,13 +131,127 @@ describe('downloadCleanup', () => {
       expect(mockVideoDownload.destroy).toHaveBeenCalled();
     });
 
+    it('leaves files of a video whose title mentions this video\'s ID in flat mode', async () => {
+      tempPathManager.isTempPath.mockReturnValue(true);
+      JobVideoDownload.findAll.mockResolvedValue([{
+        youtube_id: 'aaaaaaaaaaa',
+        file_path: '/output/Channel',
+        destroy: jest.fn().mockResolvedValue()
+      }]);
+      mockFsPromises.access.mockResolvedValue();
+      mockFsPromises.readdir.mockResolvedValue([
+        'Channel - Real [aaaaaaaaaaa].f137.mp4.part',
+        'Channel - Reference [aaaaaaaaaaa] [bbbbbbbbbbb].mp4',
+        'Channel - talk - aaaaaaaaaaa rant [ccccccccccc].mp4'
+      ]);
+      mockFsPromises.stat.mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+      mockFsPromises.unlink.mockResolvedValue();
+
+      await cleanupInProgressVideos('job-123');
+
+      expect(mockFsPromises.unlink.mock.calls.map(([filePath]) => filePath)).toEqual([
+        '/output/Channel/Channel - Real [aaaaaaaaaaa].f137.mp4.part'
+      ]);
+    });
+
+    describe('with a flat channel folder whose name looks like a video folder', () => {
+      const channelDir = '/tmp/Rick Beato - Music - Production';
+
+      beforeEach(() => {
+        tempPathManager.isTempPath.mockReturnValue(true);
+        JobVideoDownload.findAll.mockResolvedValue([{
+          youtube_id: 'dQw4w9WgXcQ',
+          file_path: channelDir,
+          destroy: jest.fn().mockResolvedValue()
+        }]);
+        mockFsPromises.readdir.mockResolvedValue([
+          'Rick Beato - Song [dQw4w9WgXcQ].mp4.part',
+          'Rick Beato - Other [aaaaaaaaaaa].mp4.part'
+        ]);
+      });
+
+      it('keeps the channel folder', async () => {
+        await cleanupInProgressVideos('job-123');
+
+        expect(mockFsPromises.rmdir).not.toHaveBeenCalled();
+      });
+
+      it('removes only the video\'s own files', async () => {
+        await cleanupInProgressVideos('job-123');
+
+        expect(mockFsPromises.unlink.mock.calls.map(([filePath]) => filePath)).toEqual([
+          `${channelDir}/Rick Beato - Song [dQw4w9WgXcQ].mp4.part`
+        ]);
+      });
+    });
+
+    it('removes a nested video folder named by the bare video ID', async () => {
+      tempPathManager.isTempPath.mockReturnValue(true);
+      JobVideoDownload.findAll.mockResolvedValue([{
+        youtube_id: 'dQw4w9WgXcQ',
+        file_path: '/tmp/Channel/dQw4w9WgXcQ',
+        destroy: jest.fn().mockResolvedValue()
+      }]);
+
+      await cleanupInProgressVideos('job-123');
+
+      expect(mockFsPromises.rmdir).toHaveBeenCalledWith('/tmp/Channel/dQw4w9WgXcQ');
+    });
+
+    describe.each([
+      ['named by the video ID', '/tmp/dQw4w9WgXcQ'],
+      ['ending in " - <video ID>"', '/tmp/Chan - dQw4w9WgXcQ']
+    ])('with a flat channel folder %s', (_label, channelDir) => {
+      beforeEach(() => {
+        tempPathManager.isTempPath.mockReturnValue(true);
+        JobVideoDownload.findAll.mockResolvedValue([{
+          youtube_id: 'dQw4w9WgXcQ',
+          file_path: channelDir,
+          destroy: jest.fn().mockResolvedValue()
+        }]);
+        mockFsPromises.readdir.mockResolvedValue([
+          'Song [dQw4w9WgXcQ].mp4.part',
+          'Other [aaaaaaaaaaa].mp4.part'
+        ]);
+      });
+
+      it('keeps the channel folder', async () => {
+        await cleanupInProgressVideos('job-123');
+
+        expect(mockFsPromises.rmdir).not.toHaveBeenCalled();
+      });
+
+      it('removes only the video\'s own files', async () => {
+        await cleanupInProgressVideos('job-123');
+
+        expect(mockFsPromises.unlink.mock.calls.map(([filePath]) => filePath)).toEqual([
+          `${channelDir}/Song [dQw4w9WgXcQ].mp4.part`
+        ]);
+      });
+    });
+
+    it('checks final-folder paths against the downloads folder', async () => {
+      JobVideoDownload.findAll.mockResolvedValue([{
+        youtube_id: 'dQw4w9WgXcQ',
+        file_path: '/output/Channel/Channel - Song - dQw4w9WgXcQ',
+        destroy: jest.fn().mockResolvedValue()
+      }]);
+      mockFsPromises.access.mockImplementation((dirPath) => (
+        dirPath.startsWith('/output/') ? Promise.resolve() : Promise.reject(new Error('ENOENT'))
+      ));
+
+      await cleanupInProgressVideos('job-123');
+
+      expect(mockFsPromises.rmdir).toHaveBeenCalledWith('/output/Channel/Channel - Song - dQw4w9WgXcQ');
+    });
+
     it('should check temp location when file path is final path', async () => {
       tempPathManager.isTempPath.mockReturnValue(false);
-      tempPathManager.convertFinalToTemp.mockReturnValue('/tmp/Channel - Title - abc123XYZ_d');
+      tempPathManager.convertFinalToTemp.mockReturnValue('/tmp/Channel/Channel - Title - abc123XYZ_d');
 
       const mockVideoDownload = {
         youtube_id: 'abc123XYZ_d',
-        file_path: '/output/Channel - Title - abc123XYZ_d',
+        file_path: '/output/Channel/Channel - Title - abc123XYZ_d',
         destroy: jest.fn().mockResolvedValue()
       };
 
@@ -148,8 +261,8 @@ describe('downloadCleanup', () => {
 
       await cleanupInProgressVideos('job-123');
 
-      expect(mockFsPromises.access).toHaveBeenCalledWith('/output/Channel - Title - abc123XYZ_d');
-      expect(mockFsPromises.access).toHaveBeenCalledWith('/tmp/Channel - Title - abc123XYZ_d');
+      expect(mockFsPromises.access).toHaveBeenCalledWith('/output/Channel/Channel - Title - abc123XYZ_d');
+      expect(mockFsPromises.access).toHaveBeenCalledWith('/tmp/Channel/Channel - Title - abc123XYZ_d');
     });
 
     it('should not convert to temp path when file path is already a temp path', async () => {
@@ -178,7 +291,7 @@ describe('downloadCleanup', () => {
     it('should handle file removal errors gracefully', async () => {
       const mockVideoDownload = {
         youtube_id: 'abc123XYZ_d',
-        file_path: '/output/Channel - Title - abc123XYZ_d',
+        file_path: '/output/Channel/Channel - Title - abc123XYZ_d',
         destroy: jest.fn().mockResolvedValue()
       };
 

@@ -12,6 +12,12 @@ jest.mock('../storageGuard', () => ({
   refresh: jest.fn().mockResolvedValue({ paused: false })
 }));
 
+// The real flat-vs-nested check, so the tests exercise actual folder paths
+// rather than a forced answer. Loaded here at file scope: the fs mock that
+// beforeEach installs persists across resetModules and only has `promises`,
+// which fs-extra (required by directoryManager) cannot load against.
+const { isVideoDirectoryFor } = jest.requireActual('../filesystem/directoryManager');
+
 describe('VideoDeletionModule', () => {
   let VideoDeletionModule;
   let mockVideo;
@@ -43,11 +49,12 @@ describe('VideoDeletionModule', () => {
       unlink: jest.fn()
     };
 
-    // Mock the filesystem module (isVideoDirectory, cleanupEmptyChannelDirectory, etc.).
+    // Mock the filesystem module (isVideoDirectoryFor, cleanupEmptyChannelDirectory, etc.).
     // removeDirectoryResilient defaults to success so existing tests don't need to
     // wire it up explicitly; tests that need a failure path override per-test.
     mockFilesystem = {
-      isVideoDirectory: jest.fn(() => true),
+      isVideoDirectoryFor,
+      isFileForVideo: jest.requireActual('../filesystem/pathBuilder').isFileForVideo,
       cleanupEmptyChannelDirectory: jest.fn().mockResolvedValue(false),
       cleanupEmptyParents: jest.fn().mockResolvedValue(),
       isSubfolderDir: jest.fn((name) => name.startsWith('__')),
@@ -181,7 +188,6 @@ describe('VideoDeletionModule', () => {
     });
 
     test('deletes matching files of a flat audio-only download', async () => {
-      mockFilesystem.isVideoDirectory.mockReturnValue(false);
       mockFs.readdir.mockResolvedValue(['Song [abc123].mp3', 'Other [zzz999].mp3']);
       mockVideo.findByPk.mockResolvedValue({
         id: 1,
@@ -196,6 +202,79 @@ describe('VideoDeletionModule', () => {
 
       expect(mockFs.unlink).toHaveBeenCalledTimes(1);
       expect(mockFs.unlink).toHaveBeenCalledWith('/test/output/Channel Name/Song [abc123].mp3');
+    });
+
+    test('flat deletion leaves files of a video whose title mentions this video\'s ID', async () => {
+      mockFs.readdir.mockResolvedValue([
+        'Channel - Real [aaaaaaaaaaa].mp4',
+        'Channel - Real [aaaaaaaaaaa].en.srt',
+        'Channel - Reference [aaaaaaaaaaa] [bbbbbbbbbbb].mp4',
+        'Channel - talk - aaaaaaaaaaa rant [ccccccccccc].mp4'
+      ]);
+      mockVideo.findByPk.mockResolvedValue({
+        id: 1,
+        youtubeId: 'aaaaaaaaaaa',
+        filePath: '/test/output/Channel/Channel - Real [aaaaaaaaaaa].mp4',
+        removed: false,
+        update: jest.fn().mockResolvedValue()
+      });
+
+      await VideoDeletionModule.deleteVideoById(1);
+
+      expect(mockFs.unlink.mock.calls.map(([filePath]) => filePath)).toEqual([
+        '/test/output/Channel/Channel - Real [aaaaaaaaaaa].mp4',
+        '/test/output/Channel/Channel - Real [aaaaaaaaaaa].en.srt'
+      ]);
+    });
+
+    describe('flat deletion unlink failures', () => {
+      const flatVideoRecord = () => ({
+        id: 1,
+        youtubeId: 'abc123',
+        filePath: '/test/output/Channel/Channel - Video [abc123].mp4',
+        removed: false,
+        update: jest.fn().mockResolvedValue()
+      });
+
+      const errorWithCode = (code) => Object.assign(new Error(code), { code });
+
+      beforeEach(() => {
+        mockFs.readdir.mockResolvedValue([
+          'Channel - Video [abc123].mp4',
+          'Channel - Video [abc123].jpg'
+        ]);
+      });
+
+      test('reports failure and leaves the row unremoved when a file cannot be deleted', async () => {
+        const record = flatVideoRecord();
+        mockVideo.findByPk.mockResolvedValue(record);
+        mockFs.unlink.mockRejectedValueOnce(errorWithCode('EACCES'));
+
+        const result = await VideoDeletionModule.deleteVideoById(1);
+
+        expect(result).toEqual(expect.objectContaining({ success: false, videoId: 1 }));
+        expect(record.update).not.toHaveBeenCalled();
+      });
+
+      test('still tries the remaining files after one fails', async () => {
+        mockVideo.findByPk.mockResolvedValue(flatVideoRecord());
+        mockFs.unlink.mockRejectedValueOnce(errorWithCode('EACCES'));
+
+        await VideoDeletionModule.deleteVideoById(1);
+
+        expect(mockFs.unlink).toHaveBeenCalledWith('/test/output/Channel/Channel - Video [abc123].jpg');
+      });
+
+      test('treats a file that is already gone as deleted', async () => {
+        const record = flatVideoRecord();
+        mockVideo.findByPk.mockResolvedValue(record);
+        mockFs.unlink.mockRejectedValueOnce(errorWithCode('ENOENT'));
+
+        const result = await VideoDeletionModule.deleteVideoById(1);
+
+        expect(result.success).toBe(true);
+        expect(record.update).toHaveBeenCalledWith({ removed: true });
+      });
     });
 
     test('fails the safety check for an audio path without the youtube ID', async () => {
@@ -366,6 +445,101 @@ describe('VideoDeletionModule', () => {
         error: 'Unknown error occurred'
       });
     });
+
+    describe('flat vs nested detection', () => {
+      const flatChannelDir = '/test/output/Rick Beato - Music - Production';
+
+      beforeEach(() => {
+        mockVideo.findByPk.mockResolvedValue({
+          id: 1,
+          youtubeId: 'dQw4w9WgXcQ',
+          filePath: `${flatChannelDir}/Rick Beato - Song [dQw4w9WgXcQ].mp4`,
+          removed: false,
+          update: jest.fn().mockResolvedValue()
+        });
+        mockFs.readdir.mockResolvedValue([
+          'Rick Beato - Song [dQw4w9WgXcQ].mp4',
+          'Rick Beato - Other [aaaaaaaaaaa].mp4'
+        ]);
+      });
+
+      test('never removes a flat channel folder whose name looks like a video folder', async () => {
+        await VideoDeletionModule.deleteVideoById(1);
+
+        expect(mockFilesystem.removeDirectoryResilient).not.toHaveBeenCalled();
+      });
+
+      test('deletes only the video\'s own files from such a channel folder', async () => {
+        await VideoDeletionModule.deleteVideoById(1);
+
+        expect(mockFs.unlink.mock.calls).toEqual([
+          [`${flatChannelDir}/Rick Beato - Song [dQw4w9WgXcQ].mp4`]
+        ]);
+      });
+
+      test('removes a nested video folder named by the bare video ID', async () => {
+        mockVideo.findByPk.mockResolvedValue({
+          id: 1,
+          youtubeId: 'dQw4w9WgXcQ',
+          filePath: '/test/output/Channel/dQw4w9WgXcQ/[dQw4w9WgXcQ].mp4',
+          removed: false,
+          update: jest.fn().mockResolvedValue()
+        });
+
+        await VideoDeletionModule.deleteVideoById(1);
+
+        expect(mockFilesystem.removeDirectoryResilient).toHaveBeenCalledWith(
+          '/test/output/Channel/dQw4w9WgXcQ'
+        );
+      });
+
+      describe.each([
+        ['named by the video ID', '/test/output/dQw4w9WgXcQ'],
+        ['ending in " - <video ID>"', '/test/output/Chan - dQw4w9WgXcQ']
+      ])('with a flat channel folder %s', (_label, channelDir) => {
+        beforeEach(() => {
+          mockVideo.findByPk.mockResolvedValue({
+            id: 1,
+            youtubeId: 'dQw4w9WgXcQ',
+            filePath: `${channelDir}/Song [dQw4w9WgXcQ].mp4`,
+            removed: false,
+            update: jest.fn().mockResolvedValue()
+          });
+          mockFs.readdir.mockResolvedValue([
+            'Song [dQw4w9WgXcQ].mp4',
+            'Other [aaaaaaaaaaa].mp4'
+          ]);
+        });
+
+        test('keeps the channel folder', async () => {
+          await VideoDeletionModule.deleteVideoById(1);
+
+          expect(mockFilesystem.removeDirectoryResilient).not.toHaveBeenCalled();
+        });
+
+        test('deletes only the video\'s own files', async () => {
+          await VideoDeletionModule.deleteVideoById(1);
+
+          expect(mockFs.unlink.mock.calls).toEqual([
+            [`${channelDir}/Song [dQw4w9WgXcQ].mp4`]
+          ]);
+        });
+      });
+
+      test('never removes a video folder outside the downloads folder', async () => {
+        mockVideo.findByPk.mockResolvedValue({
+          id: 1,
+          youtubeId: 'dQw4w9WgXcQ',
+          filePath: '/old/output/Channel/Channel - Song - dQw4w9WgXcQ/Song [dQw4w9WgXcQ].mp4',
+          removed: false,
+          update: jest.fn().mockResolvedValue()
+        });
+
+        await VideoDeletionModule.deleteVideoById(1);
+
+        expect(mockFilesystem.removeDirectoryResilient).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe('_tryCleanupChannelDirectory', () => {
@@ -390,9 +564,6 @@ describe('VideoDeletionModule', () => {
     });
 
     test('should call cleanupEmptyChannelDirectory with parent path for flat deletion', async () => {
-      // Override isVideoDirectory to return false for flat mode
-      mockFilesystem.isVideoDirectory.mockReturnValue(false);
-
       const mockVideoRecord = {
         id: 1,
         youtubeId: 'abc123',
@@ -1188,6 +1359,7 @@ describe('VideoDeletionModule', () => {
 
     beforeEach(() => {
       mockConfigModule = {
+        directoryPath: '/test',
         getConfig: jest.fn(),
         getStorageStatus: jest.fn(),
         convertStorageThresholdToBytes: jest.fn()
@@ -2151,7 +2323,8 @@ describe('VideoDeletionModule', () => {
       jest.doMock('../../models', () => ({ Video: mockVideo }));
       jest.doMock('fs', () => ({ promises: mockFs }));
       jest.doMock('../filesystem', () => ({
-        isVideoDirectory: jest.fn(() => true),
+        isVideoDirectoryFor,
+        isFileForVideo: jest.requireActual('../filesystem/pathBuilder').isFileForVideo,
         cleanupEmptyChannelDirectory: jest.fn().mockResolvedValue(false),
         cleanupEmptyParents: jest.fn().mockResolvedValue(),
         isSubfolderDir: jest.fn((name) => name.startsWith('__')),

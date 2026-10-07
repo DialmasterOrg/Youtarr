@@ -4,7 +4,7 @@ import WebSocketContext from '../contexts/WebSocketContext';
 import { SearchResult } from '../components/FindVideos/types';
 import { useVideoActivity } from '../providers/VideoActivityProvider';
 
-export type LocalVideoStatus = Pick<SearchResult, 'youtubeId' | 'status' | 'databaseId' | 'filePath' | 'fileSize' | 'audioFilePath' | 'audioFileSize' | 'addedAt' | 'isProtected' | 'normalizedRating' | 'ratingSource'>;
+export type LocalVideoStatus = Pick<SearchResult, 'youtubeId' | 'status' | 'inArchive' | 'databaseId' | 'filePath' | 'fileSize' | 'audioFilePath' | 'audioFileSize' | 'addedAt' | 'isProtected' | 'normalizedRating' | 'ratingSource'>;
 
 // Refresh only local DB metadata; never re-run a YouTube search for activity.
 export function useLocalVideoStatus(ids: string[], token: string | null) {

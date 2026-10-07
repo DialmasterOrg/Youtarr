@@ -632,6 +632,7 @@ describe('server initialization', () => {
       protectedFilter: 'off',
       missingFilter: 'off',
       watchedFilter: 'off',
+      maxRating: null,
     });
 
     expect(res.statusCode).toBe(200);
@@ -729,6 +730,7 @@ describe('server initialization', () => {
       protectedFilter: 'off',
       missingFilter: 'off',
       watchedFilter: 'off',
+      maxRating: null,
     });
 
     expect(res.statusCode).toBe(200);

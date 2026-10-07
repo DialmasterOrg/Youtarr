@@ -15,6 +15,16 @@ function response({ body = Buffer.from('jpeg'), contentType = 'image/jpeg', leng
 }
 
 describe('external thumbnail proxy', () => {
+  test.each([
+    'http://i.ytimg.com/image.jpg', 'https://i.ytimg.com.evil.example/image.jpg',
+    'https://127.0.0.1/image.jpg', 'https://secret@i.ytimg.com/image.jpg',
+    'https://i.ytimg.com:8443/image.jpg', 'file:///tmp/image.jpg',
+  ])('rejects unsafe destinations before fetching: %s', async url => {
+    const fetchImpl = jest.fn();
+    await expect(fetchExternalThumbnail(url, fetchImpl)).rejects.toBeInstanceOf(ThumbnailProxyError);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   test('returns bounded image bytes without following redirects', async () => {
     const fetchImpl = jest.fn().mockResolvedValue(response());
 

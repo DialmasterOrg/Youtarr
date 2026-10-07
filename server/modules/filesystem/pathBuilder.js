@@ -183,6 +183,27 @@ function extractYoutubeIdFromPath(filePath) {
 }
 
 /**
+ * Decide whether a file in a flat channel folder belongs to a given video.
+ * Youtarr names every per-video file "<prefix> [ID]<rest>" (or "[ID]<rest>"
+ * with an empty prefix), where <rest> is the extension and any sidecar or
+ * in-progress suffix (".jpg", ".en.srt", "-fanart.jpg", ".f137.mp4.part").
+ * The file's own ID is therefore the last bracketed token, with nothing but
+ * a space-free, bracket-free suffix after it. A title that mentions another
+ * video's ID ("Reference [ID] [otherId].mp4") belongs to otherId, not ID.
+ * macOS AppleDouble copies ("._<name>") match along with their file.
+ * @param {string} fileName - Bare file name (no directory)
+ * @param {string} youtubeId - The video's YouTube ID
+ * @returns {boolean}
+ */
+function isFileForVideo(fileName, youtubeId) {
+  if (!fileName || !youtubeId) {
+    return false;
+  }
+  const escapedId = youtubeId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?:^(?:\\._)?|\\s)\\[${escapedId}\\][^\\s\\[\\]]*$`).test(fileName);
+}
+
+/**
  * Calculate the new path after moving from oldBase to newBase
  * Used when relocating files after a subfolder change
  * @param {string} oldBasePath - The old base path
@@ -247,6 +268,7 @@ module.exports = {
   buildOutputTemplate,
   buildThumbnailTemplate,
   extractYoutubeIdFromPath,
+  isFileForVideo,
   calculateRelocatedPath,
   extractSubfolderFromAbsPath
 };

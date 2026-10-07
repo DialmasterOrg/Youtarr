@@ -1,7 +1,8 @@
 // Pure decision logic mapping known download-failure signatures to
 // plain-language diagnoses with fix guidance. The finalizer runs this over
 // the reportable failed videos. Advice text is stored once per job in the
-// returned list; videos only carry a short diagnosisKey. No I/O here.
+// returned list; videos only carry a short diagnosisKey. No I/O here: disk
+// measurements arrive in the context.
 
 const { isTransient403Failure } = require('./transient403RetryPlanner');
 
@@ -13,6 +14,15 @@ const BOT_CHECK_PATTERN = /sign in to confirm.*not a bot/i;
 const DOWNLOAD_FAILURE_PATTERN = /unable to (download|extract)/i;
 
 const ADVICE = {
+  'temp-out-of-space': {
+    title: 'Not enough disk space to finish the download',
+    message:
+      'There was not enough free space in the temporary download folder to ' +
+      'finish this video. Merging the video and audio needs roughly twice ' +
+      'the video\'s size. Free up space there, then try again. The server ' +
+      'log names the folder and how much space it had; where downloads are ' +
+      'staged depends on "Use external temp directory" in Settings.',
+  },
   'http-403-cookies-enabled': {
     title: 'YouTube blocked the download while using your cookies',
     message:
@@ -59,10 +69,16 @@ const ADVICE = {
   },
 };
 
-// Ordered registry; first match wins. Bot-check outranks http-403 because a
-// bot-flagged run blocks the 403 retry plan and the bot advice is the more
-// specific diagnosis.
+// Ordered registry; first match wins. Out-of-space comes first: the finalizer
+// measured it for that video (tempSpaceProbe), so it is not a guess from the
+// error text. Bot-check outranks http-403 because a bot-flagged run blocks the
+// 403 retry plan and the bot advice is the more specific diagnosis.
 const REGISTRY = [
+  {
+    matches: (video, context) =>
+      Boolean(context.outOfSpaceVideoIds && context.outOfSpaceVideoIds.has(video.youtubeId)),
+    keyFor: () => 'temp-out-of-space',
+  },
   {
     matches: (video, context) => {
       const error = String(video.error || '');

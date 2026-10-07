@@ -102,29 +102,33 @@ class VideoPersistence {
       }
     }
 
-    // Create JobVideo relationship if needed
-    const shouldCreateJobVideo = alwaysCreateJobVideo || !videoExisted;
-
-    if (shouldCreateJobVideo) {
-      const existingJobVideo = await JobVideo.findOne({
-        where: {
-          job_id: jobInstance.id,
-          video_id: videoInstance.id
-        }
-      });
-
-      if (!existingJobVideo) {
-        await JobVideo.create({
-          job_id: jobInstance.id,
-          video_id: videoInstance.id,
-        });
-        logger.debug({ youtubeId: video.youtubeId, job_id: jobInstance.id, video_id: videoInstance.id }, 'Created JobVideo relationship');
-      } else {
-        logger.debug({ youtubeId: video.youtubeId }, 'JobVideo relationship already exists');
-      }
+    // Existing videos are only linked during recovery here; the per-video
+    // post-processor links re-downloads (see persistDownloadedVideoForJob).
+    if (alwaysCreateJobVideo || !videoExisted) {
+      await this.ensureJobVideo(jobInstance, videoInstance);
     }
 
     return videoInstance;
+  }
+
+  async ensureJobVideo(jobInstance, videoInstance) {
+    const existingJobVideo = await JobVideo.findOne({
+      where: {
+        job_id: jobInstance.id,
+        video_id: videoInstance.id
+      }
+    });
+
+    if (existingJobVideo) {
+      logger.debug({ youtubeId: videoInstance.youtubeId }, 'JobVideo relationship already exists');
+      return;
+    }
+
+    await JobVideo.create({
+      job_id: jobInstance.id,
+      video_id: videoInstance.id,
+    });
+    logger.debug({ youtubeId: videoInstance.youtubeId, job_id: jobInstance.id, video_id: videoInstance.id }, 'Created JobVideo relationship');
   }
 
   // Convert yt-dlp upload_date (YYYYMMDD) to ISO string
@@ -237,6 +241,11 @@ class VideoPersistence {
     }
 
     const videoInstance = await this.upsertVideoForJob(metadata, jobInstance);
+    // yt-dlp runs the post-processor only for videos this job actually
+    // downloaded (never archive skips), so link it to the job even when the
+    // row already existed; otherwise a re-download vanishes from the job's
+    // results, which are rebuilt from jobvideos at completion.
+    await this.ensureJobVideo(jobInstance, videoInstance);
 
     // Upsert the channelvideos row too (creates it for manual downloads, clears
     // ignored otherwise). A failure must not lose the videos write above.

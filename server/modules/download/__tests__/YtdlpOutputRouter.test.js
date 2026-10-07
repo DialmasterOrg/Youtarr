@@ -81,6 +81,41 @@ describe('YtdlpOutputRouter', () => {
     expect(videoActivity.isActive('aaaaaaaaaaa')).toBe(false);
   });
 
+  describe('archive skip tracking', () => {
+    it('records a video skipped before extraction', () => {
+      router.handleStdoutChunk('[download] aaaaaaaaaaa: has already been recorded in the archive\n');
+
+      expect([...router.archiveSkippedIds]).toEqual(['aaaaaaaaaaa']);
+    });
+
+    it('records a titled archive skip by its ID', () => {
+      router.handleStdoutChunk('[download] aaaaaaaaaaa: Some Title has already been recorded in the archive\n');
+
+      expect([...router.archiveSkippedIds]).toEqual(['aaaaaaaaaaa']);
+    });
+
+    it('releases a titled archive skip from video activity', () => {
+      videoActivity.claim('job-123', ['https://youtu.be/aaaaaaaaaaa']);
+      router.handleStdoutChunk('[download] aaaaaaaaaaa: Some Title has already been recorded in the archive\n');
+
+      expect(videoActivity.isActive('aaaaaaaaaaa')).toBe(false);
+    });
+
+    it('does not record a video this run downloaded before skipping it', () => {
+      router.handleStdoutChunk('[download] Destination: /output/Channel - Title [aaaaaaaaaaa].mp4\n');
+      router.handleStdoutChunk('[download] aaaaaaaaaaa: has already been recorded in the archive\n');
+
+      expect(router.archiveSkippedIds.size).toBe(0);
+    });
+
+    it('does not record filter skips', () => {
+      router.handleStdoutChunk('[youtube] Extracting URL: https://youtu.be/aaaaaaaaaaa\n');
+      router.handleStdoutChunk('[download] Title does not pass filter (members only)\n');
+
+      expect(router.archiveSkippedIds.size).toBe(0);
+    });
+  });
+
   it('uses the current video for filter skips, not an ID-shaped title word', () => {
     videoActivity.claim('job-123', ['https://youtu.be/Introducing']);
     router.handleStdoutChunk(Buffer.from('[youtube] Extracting URL: https://youtu.be/aaaaaaaaaaa\n'));
@@ -121,6 +156,20 @@ describe('YtdlpOutputRouter', () => {
           status: 'in_progress'
         }
       });
+    });
+
+    it('attributes a destination to its trailing ID when the title mentions another video\'s ID', () => {
+      router.handleStdoutChunk('[download] Destination: /output/Channel - Reference [aaaaaaaaaaa] [bbbbbbbbbbb].mp4\n');
+
+      expect(errorTracker.trackVideoFromDestination).toHaveBeenCalledWith('bbbbbbbbbbb');
+    });
+
+    it('keys the tracking entry by the trailing ID when the title mentions another video\'s ID', () => {
+      router.handleStdoutChunk('[download] Destination: /output/Channel - Reference [aaaaaaaaaaa] [bbbbbbbbbbb].mp4\n');
+
+      expect(JobVideoDownload.findOrCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { job_id: 'job-123', youtube_id: 'bbbbbbbbbbb' } })
+      );
     });
 
     it('broadcasts videosUpdated for a video-persisted control marker line', () => {

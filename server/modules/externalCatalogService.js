@@ -1,40 +1,32 @@
 const fs = require('fs').promises;
 const path = require('path');
 const crypto = require('crypto');
+const { attachRequestStatuses } = require('./externalCatalogRequests');
 const { QueryTypes } = require('sequelize');
 const { sequelize } = require('../db');
 const configModule = require('./configModule');
 const { normalizePolicy, ratingPolicy } = require('./externalEligibility');
+const { publicVideoThumbnail } = require('./externalThumbnailProxy');
 const {
   CatalogError,
+  parseInteger,
+  paginationDto,
   decodePageCursor,
   encodePageCursor,
   pagination,
 } = require('./externalPagination');
 
 const TAB_MEDIA_TYPES = { videos: 'video', shorts: 'short', streams: 'livestream' };
-const SAFE_THUMBNAIL_HOSTS = ['ytimg.com', 'ggpht.com', 'googleusercontent.com'];
 const ACTIVE_REQUEST_STATUSES = ['pending', 'approved', 'processing'];
 const MAX_PAGE = 100;
 const MAX_DESCRIPTION_LENGTH = 2000;
 const MAX_TITLE_LENGTH = 500;
-const MAX_PUBLIC_URL_LENGTH = 2048;
 
 function boundedString(value, maximum) {
   if (value === null || value === undefined) return null;
   return String(value).slice(0, maximum);
 }
 
-
-function parseInteger(value, fallback, minimum, maximum, name) {
-  if (value === undefined) return fallback;
-  if (!/^\d+$/.test(String(value))) throw new CatalogError(`${name} must be an integer`);
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) {
-    throw new CatalogError(`${name} must be between ${minimum} and ${maximum}`);
-  }
-  return parsed;
-}
 
 function normalizeSearch(value) {
   if (value === undefined) return null;
@@ -70,17 +62,6 @@ function ratingSql(policy, effectiveRatingSql) {
 }
 
 
-function paginationDto(page, pageSize, total, maximumPage = MAX_PAGE) {
-  const totalPages = total === 0 ? 0 : Math.min(maximumPage, Math.ceil(total / pageSize));
-  return {
-    page,
-    pageSize,
-    total,
-    totalPages,
-    nextCursor: page < totalPages ? encodePageCursor(page + 1) : null,
-  };
-}
-
 function catalogCursorFingerprint(endpoint, filters) {
   return crypto.createHash('sha256')
     .update(JSON.stringify({ endpoint, ...filters }))
@@ -90,7 +71,7 @@ function catalogCursorFingerprint(endpoint, filters) {
 
 function decodeCatalogCursor(value, expected) {
   if (value === undefined) return null;
-  if (typeof value !== 'string' || value.length > 500) {
+  if (typeof value !== 'string' || value.length > 4096) {
     throw new CatalogError('cursor is invalid');
   }
   try {
@@ -104,7 +85,9 @@ function decodeCatalogCursor(value, expected) {
         !Number.isSafeInteger(parsed.channelDatabaseId) || parsed.channelDatabaseId < 1 ||
         typeof parsed.youtubeId !== 'string' || parsed.youtubeId.length === 0 ||
         parsed.youtubeId.length > 32 ||
-        !Object.prototype.hasOwnProperty.call(parsed, 'sortValue')) {
+        (expected.sortBy === 'duration'
+          ? !Number.isFinite(parsed.sortValue) || parsed.sortValue < -1
+          : typeof parsed.sortValue !== 'string' || parsed.sortValue.length > MAX_TITLE_LENGTH)) {
       throw new Error('invalid cursor');
     }
     return parsed;
@@ -185,21 +168,6 @@ function lastFetched(channel, mediaType = null) {
     const dates = Object.values(values).filter(Boolean).map((value) => new Date(value));
     if (dates.length === 0 || dates.some((value) => Number.isNaN(value.getTime()))) return null;
     return new Date(Math.max(...dates.map((value) => value.getTime()))).toISOString();
-  } catch (_error) {
-    return null;
-  }
-}
-
-function publicVideoThumbnail(value) {
-  if (typeof value !== 'string' || value.length > MAX_PUBLIC_URL_LENGTH) return null;
-  try {
-    const url = new URL(value);
-    const hostname = url.hostname.toLowerCase();
-    if (url.protocol !== 'https:' ||
-        !SAFE_THUMBNAIL_HOSTS.some((host) => hostname === host || hostname.endsWith(`.${host}`))) {
-      return null;
-    }
-    return url.toString();
   } catch (_error) {
     return null;
   }
@@ -307,7 +275,7 @@ async function listChannelVideos(key, channelDatabaseId, query = {}) {
     duration: 'COALESCE(cv.duration, -1)',
   };
   const sortBy = query.sortBy || 'date';
-  if (!sortColumns[sortBy]) throw new CatalogError('sortBy must be date, title, or duration');
+  if (!Object.hasOwn(sortColumns, sortBy)) throw new CatalogError('sortBy must be date, title, or duration');
   const sortOrder = (query.sortOrder || 'desc').toLowerCase();
   if (!['asc', 'desc'].includes(sortOrder)) throw new CatalogError('sortOrder must be asc or desc');
   const minDuration = parseInteger(query.minDuration, null, 0, 604800, 'minDuration');
@@ -402,14 +370,7 @@ async function listChannelVideos(key, channelDatabaseId, query = {}) {
             cv.duration, cv.media_type, v.description, v.id AS downloaded_id,
             v.removed AS downloaded_removed, ${effectiveRating} AS rating,
             c.id AS channel_database_id,
-            ${sortExpressions[sortBy]} AS cursor_sort_value,
-            (SELECT er.status
-               FROM external_requests er
-              WHERE er.api_key_id = :keyId
-                AND er.request_type = 'video'
-                AND er.youtube_id = cv.youtube_id
-              ORDER BY er.created_at DESC, er.id DESC
-              LIMIT 1) AS request_status
+            ${sortExpressions[sortBy]} AS cursor_sort_value
        ${from}
        ${seekSql}
       ORDER BY ${sortExpressions[sortBy]} ${sortOrder.toUpperCase()}, c.id ASC, cv.youtube_id ASC
@@ -418,6 +379,7 @@ async function listChannelVideos(key, channelDatabaseId, query = {}) {
   );
   const hasMore = fetchedRows.length > pageSize;
   const rows = fetchedRows.slice(0, pageSize);
+  await attachRequestStatuses(key, rows);
   const total = Number(countRows[0]?.total || 0);
   const lastIndexedAt = lastFetched(channel, mediaType);
   return {
@@ -467,7 +429,7 @@ async function listVideos(key, query = {}) {
     duration: 'COALESCE(cv.duration, -1)',
   };
   const sortBy = query.sortBy || 'date';
-  if (!sortColumns[sortBy]) throw new CatalogError('sortBy must be date, title, or duration');
+  if (!Object.hasOwn(sortColumns, sortBy)) throw new CatalogError('sortBy must be date, title, or duration');
   const sortOrder = (query.sortOrder || 'desc').toLowerCase();
   if (!['asc', 'desc'].includes(sortOrder)) throw new CatalogError('sortOrder must be asc or desc');
   const minDuration = parseInteger(query.minDuration, null, 0, 604800, 'minDuration');
@@ -562,14 +524,7 @@ async function listVideos(key, query = {}) {
             cv.duration, cv.media_type, v.description, v.id AS downloaded_id,
             v.removed AS downloaded_removed, ${effectiveRating} AS rating,
             c.id AS channel_database_id, c.channel_id, COALESCE(c.title, c.uploader, '') AS channel_title,
-            ${sortExpressions[sortBy]} AS cursor_sort_value,
-            (SELECT er.status
-               FROM external_requests er
-              WHERE er.api_key_id = :keyId
-                AND er.request_type = 'video'
-                AND er.youtube_id = cv.youtube_id
-              ORDER BY er.created_at DESC, er.id DESC
-              LIMIT 1) AS request_status
+            ${sortExpressions[sortBy]} AS cursor_sort_value
        ${from}
        ${seekSql}
       ORDER BY ${sortExpressions[sortBy]} ${sortOrder.toUpperCase()}, c.id ASC, cv.youtube_id ASC
@@ -578,6 +533,7 @@ async function listVideos(key, query = {}) {
   );
   const hasMore = fetchedRows.length > pageSize;
   const rows = fetchedRows.slice(0, pageSize);
+  await attachRequestStatuses(key, rows);
   const total = Number(countRows[0]?.total || 0);
   return {
     data: rows.map((row) => ({
@@ -626,14 +582,7 @@ async function getVideoDetail(key, youtubeId, metadataService = null) {
             v.last_downloaded_at, v.file_size AS fileSize, v.audio_file_size AS audioFileSize, v.protected,
             v.rating_source, v.video_resolution, ${effectiveRating} AS rating,
             c.id AS channel_database_id, c.channel_id,
-            COALESCE(c.title, c.uploader, '') AS channel_title,
-            (SELECT er.status
-               FROM external_requests er
-              WHERE er.api_key_id = :keyId
-                AND er.request_type = 'video'
-                AND er.youtube_id = cv.youtube_id
-              ORDER BY er.created_at DESC, er.id DESC
-              LIMIT 1) AS request_status
+            COALESCE(c.title, c.uploader, '') AS channel_title
        FROM channelvideos cv
        INNER JOIN channels c ON c.channel_id = cv.channel_id
        INNER JOIN api_key_channel_grants g
@@ -658,6 +607,7 @@ async function getVideoDetail(key, youtubeId, metadataService = null) {
   );
   const row = rows[0];
   if (!row) throw new CatalogError('Video not found', 404);
+  await attachRequestStatuses(key, [row]);
 
   const metadataProvider = metadataService || require('./videoMetadataModule');
   const metadata = await metadataProvider.getVideoMetadata(youtubeId);

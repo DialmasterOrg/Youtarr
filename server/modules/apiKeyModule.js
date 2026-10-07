@@ -231,7 +231,7 @@ class ApiKeyModule {
 
   async updateApiKey(id, policy, { transaction } = {}) {
     const apiKey = transaction
-      ? await ApiKey.findByPk(id, { transaction })
+      ? await ApiKey.findByPk(id, { transaction, lock: transaction.LOCK.UPDATE })
       : await ApiKey.findByPk(id);
     if (!apiKey || !apiKey.is_active || apiKey.revoked_at) return null;
     if (apiKey.role === 'legacy_download' || policy?.role === 'legacy_download') {

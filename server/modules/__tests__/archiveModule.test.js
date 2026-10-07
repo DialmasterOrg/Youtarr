@@ -375,6 +375,74 @@ youtube video2
     });
   });
 
+  describe('filterArchivedVideoIds', () => {
+    test('returns only the requested ids that are in the archive', () => {
+      fs.readFileSync.mockReturnValue(mockArchiveContent);
+
+      const result = ArchiveModule.filterArchivedVideoIds(['video2', 'video999', 'video5']);
+
+      expect([...result].sort()).toEqual(['video2', 'video5']);
+    });
+
+    test('reads the archive once for any number of ids', () => {
+      fs.readFileSync.mockReturnValue(mockArchiveContent);
+
+      ArchiveModule.filterArchivedVideoIds(['video1', 'video2', 'video3']);
+
+      expect(fs.readFileSync).toHaveBeenCalledTimes(1);
+    });
+
+    test('does not read the archive when no ids are given', () => {
+      const result = ArchiveModule.filterArchivedVideoIds([]);
+
+      expect(result.size).toBe(0);
+      expect(fs.readFileSync).not.toHaveBeenCalled();
+    });
+
+    test('ignores empty ids', () => {
+      const result = ArchiveModule.filterArchivedVideoIds([null, undefined, '']);
+
+      expect(result.size).toBe(0);
+      expect(fs.readFileSync).not.toHaveBeenCalled();
+    });
+
+    test('matches exact ids on youtube lines only', () => {
+      fs.readFileSync.mockReturnValue('youtube video123\nvimeo video2\nyoutube   video3');
+
+      const result = ArchiveModule.filterArchivedVideoIds(['video12', 'video2', 'video3']);
+
+      expect([...result]).toEqual(['video3']);
+    });
+
+    test('returns an empty set when the archive file does not exist', () => {
+      const error = new Error('File not found');
+      error.code = 'ENOENT';
+      fs.readFileSync.mockImplementation(() => {
+        throw error;
+      });
+
+      const result = ArchiveModule.filterArchivedVideoIds(['video1']);
+
+      expect(result.size).toBe(0);
+    });
+
+    test('returns an empty set and warns when the archive cannot be read', () => {
+      const error = new Error('Permission denied');
+      error.code = 'EACCES';
+      fs.readFileSync.mockImplementation(() => {
+        throw error;
+      });
+
+      const result = ArchiveModule.filterArchivedVideoIds(['video1']);
+
+      expect(result.size).toBe(0);
+      expect(logger.warn).toHaveBeenCalledWith(
+        { err: error },
+        'Failed to read archive, treating videos as not archived'
+      );
+    });
+  });
+
   describe('addVideoToArchive', () => {
     test('should add video to archive successfully', async () => {
       fs.readFileSync.mockReturnValue('youtube video1');

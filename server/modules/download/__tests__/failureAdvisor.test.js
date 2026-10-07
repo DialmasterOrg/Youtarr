@@ -123,6 +123,46 @@ describe('failureAdvisor', () => {
     });
   });
 
+  describe('out-of-space advice', () => {
+    const mergeFailure = (overrides = {}) => failedVideo({ error: 'Conversion failed!', ...overrides });
+
+    it('diagnoses a failure the finalizer measured as out of temp space', () => {
+      const videos = [mergeFailure()];
+      const diagnoses = adviseFailures(videos, context({ outOfSpaceVideoIds: new Set(['abc123def45']) }));
+
+      expect(videos[0].diagnosisKey).toBe('temp-out-of-space');
+      expect(diagnoses).toHaveLength(1);
+      expect(diagnoses[0].count).toBe(1);
+      expect(diagnoses[0].message).toMatch(/temporary download folder/i);
+      expect(diagnoses[0].message).toMatch(/twice/i);
+    });
+
+    it('does not assume where the temp folder lives or that the setting can be changed', () => {
+      const diagnoses = adviseFailures([mergeFailure()], context({ outOfSpaceVideoIds: new Set(['abc123def45']) }));
+
+      expect(diagnoses[0].message).toMatch(/server log names the folder/i);
+      expect(diagnoses[0].message).not.toMatch(/inside the container|docker|turning it off/i);
+    });
+
+    it('leaves a failed merge undiagnosed when it was not measured as out of space', () => {
+      const videos = [mergeFailure()];
+      const diagnoses = adviseFailures(videos, context({ outOfSpaceVideoIds: new Set(['othervideo1']) }));
+
+      expect(videos[0].diagnosisKey).toBeUndefined();
+      expect(diagnoses).toEqual([]);
+    });
+
+    it('prefers out-of-space over a run-wide bot check', () => {
+      const videos = [mergeFailure({ error: 'unable to download video data: [Errno 28] No space left on device' })];
+      adviseFailures(videos, context({
+        botDetected: true,
+        outOfSpaceVideoIds: new Set(['abc123def45']),
+      }));
+
+      expect(videos[0].diagnosisKey).toBe('temp-out-of-space');
+    });
+  });
+
   describe('aggregation', () => {
     it('dedupes repeated diagnoses into one entry with a count', () => {
       const videos = [failedVideo(), failedVideo({ youtubeId: 'second00000' }), failedVideo({ youtubeId: 'third000000' })];
