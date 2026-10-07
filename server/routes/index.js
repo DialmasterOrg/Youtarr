@@ -19,6 +19,9 @@ const createMaintenanceRoutes = require('./maintenance');
 const createSubfolderRoutes = require('./subfolders');
 const createSchedulesRoutes = require('./schedules');
 const createLogRoutes = require('./logs');
+const createExternalRequestReviewRoutes = require('./externalRequests');
+const { createExternalApiRoutes } = require('./externalApi');
+const { sendExternalError } = require('../modules/externalApiResponse');
 const videoMetadataModule = require('../modules/videoMetadataModule');
 const videoOembedEnricher = require('../modules/videoOembedEnricher');
 const playlistModule = require('../modules/playlistModule');
@@ -43,6 +46,12 @@ const cookieDetails = require('../modules/cookieDetails');
 const cookieTest = require('../modules/cookieTest');
 const logger = require('../logger');
 const logFilesModule = require('../modules/logFilesModule');
+const externalCatalogService = require('../modules/externalCatalogService');
+const externalThumbnailProxy = require('../modules/externalThumbnailProxy');
+const { sharedExternalWorkLimiter } = require('../modules/externalWorkLimiter');
+const { createExternalRequestService } = require('../modules/externalRequestService');
+const { createExternalQuotaService } = require('../modules/externalQuotaService');
+const { isExternalApiEnabled } = require('../modules/externalApiConfig');
 
 /**
  * Registers all route modules with the Express app
@@ -50,6 +59,8 @@ const logFilesModule = require('../modules/logFilesModule');
  * @param {Object} deps - Dependencies to inject into route modules
  */
 function registerRoutes(app, deps) {
+  const externalRequestService = createExternalRequestService();
+  const externalQuotaService = createExternalQuotaService();
   const {
     verifyToken,
     loginLimiter,
@@ -74,6 +85,13 @@ function registerRoutes(app, deps) {
     setupTokenModule,
     getClientAddress,
     isWslEnvironment,
+    externalApiAuth,
+    externalApiIngressLimiter,
+    externalApiLimiter,
+    externalApiWriteLimiter,
+    recordExternalApiUse,
+    externalRequestReviewLimiter,
+    serverVersion,
   } = deps;
 
   // Health routes (no auth required for health checks, but yt-dlp endpoints are authenticated)
@@ -122,6 +140,13 @@ function registerRoutes(app, deps) {
   // API Key routes
   app.use(createApiKeyRoutes({ verifyToken }));
 
+  // Session-authenticated administrator review of external requests
+  app.use(createExternalRequestReviewRoutes({
+    verifyToken,
+    reviewLimiter: externalRequestReviewLimiter,
+    requestService: externalRequestService,
+  }));
+
   // Subscription import routes
   app.use(createSubscriptionRoutes({ verifyToken, subscriptionImportModule }));
 
@@ -147,6 +172,32 @@ function registerRoutes(app, deps) {
 
   // Log file download
   app.use(createLogRoutes({ verifyToken, logFilesModule, configModule }));
+
+  // The versioned external API stays unreachable until a deployment opts in
+  // explicitly. This fail-closed default is independent of AUTH_ENABLED.
+  if (isExternalApiEnabled()) {
+    app.use('/external-api/v1', createExternalApiRoutes({
+      externalApiAuth,
+      externalApiIngressLimiter,
+      externalApiLimiter,
+      externalApiWriteLimiter,
+      recordExternalApiUse,
+      serverVersion,
+      catalogService: externalCatalogService,
+      thumbnailProxy: externalThumbnailProxy,
+      externalWorkLimiter: sharedExternalWorkLimiter,
+      requestService: externalRequestService,
+      quotaService: externalQuotaService,
+    }));
+  }
+  // Do not allow unknown or disabled external routes to fall through to the
+  // SPA. Keep the public namespace on the same versioned error contract.
+  app.use('/external-api', (req, res) =>
+    sendExternalError(res, 404, 'External API route not found', {
+      code: 'not_found',
+      requestId: req.id,
+    })
+  );
 
   // Defensive redirect: /channels -> /subscriptions (frontend handles client-side routing,
   // this fallback covers direct server-side hits during the transition period)

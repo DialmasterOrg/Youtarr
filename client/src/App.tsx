@@ -31,6 +31,7 @@ import InitialSetup from './components/InitialSetup';
 import ChannelPage from './components/ChannelPage';
 import PlaylistPage from './components/PlaylistPage';
 import ImportSubscriptionsPage from './components/SubscriptionImport';
+import RequestsPage from './components/ExternalRequests/RequestsPage';
 import ChangelogPage from './components/ChangelogPage';
 import { AuthSplash } from './components/AuthSplash';
 import { useConfig } from './hooks/useConfig';
@@ -82,10 +83,11 @@ function AppContent() {
   const [dbErrors, setDbErrors] = useState<string[]>([]);
   const [dbRecovered, setDbRecovered] = useState(false);
   const [countdown, setCountdown] = useState(15);
+  const [requestsNavLinkPreview, setRequestsNavLinkPreview] = useState<boolean | null>(null);
   const location = useLocation();
 
   // Use config hook for global configuration access
-  const { config: appConfig, deploymentEnvironment } = useConfig(token);
+  const { config: appConfig, isPlatformManaged: platformManagedConfig, deploymentEnvironment } = useConfig(token);
   const { version } = packageJson;
   const clientVersion = `v${version}`; // Create a version with 'v' prefix for comparison
   const tmpDirectory = '/tmp';
@@ -517,6 +519,7 @@ function AppContent() {
                     serverVersion={serverVersion}
                     ytDlpUpdateAvailable={ytDlpUpdateAvailable}
                     ytDlpUpdateTooltip={ytDlpUpdateTooltip}
+                    showRequestsNavLink={platformManagedConfig.externalApiEnabled && (requestsNavLinkPreview ?? appConfig.showRequestsNavLink)}
                     onLogout={handleLogout}
                   >
                     <Container
@@ -530,7 +533,15 @@ function AppContent() {
                             path="/changelog"
                             element={<ChangelogPage updateAvailable={updateAvailable} serverVersion={serverVersion} />}
                           />
-                          <Route path="/settings/*" element={<Settings token={token} />} />
+                          <Route
+                            path="/settings/*"
+                            element={
+                              <Settings
+                                token={token}
+                                onRequestsNavLinkPreview={setRequestsNavLinkPreview}
+                              />
+                            }
+                          />
                           <Route path="/configuration" element={<Navigate to="/settings" replace />} />
                           <Route path="/subscriptions" element={<Subscriptions token={token} />} />
                           <Route path="/subscriptions/imports" element={<ImportSubscriptionsPage token={token} />} />
@@ -540,6 +551,7 @@ function AppContent() {
                           <Route path="/downloads/*" element={<DownloadManager token={token} />} />
                           <Route path="/videos" element={<VideosPage token={token} />} />
                           <Route path="/videos/find" element={<FindVideos token={token} />} />
+                          <Route path="/requests" element={platformManagedConfig.externalApiEnabled ? <RequestsPage token={token} /> : <Navigate to="/settings/api-keys" replace />} />
                           <Route path="/channel/:channel_id" element={<ChannelPage token={token} />} />
                           <Route path="/playlist/:id" element={<PlaylistPage token={token} />} />
                           <Route path="/" element={<Navigate to="/subscriptions" replace />} />

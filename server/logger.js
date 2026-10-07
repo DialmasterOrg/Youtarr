@@ -79,7 +79,13 @@ const pinoConfig = {
       'jellyfinApiKey',
       'embyApiKey',
       'youtubeApiKey',
+      'apiKey',
+      'key',
+      'key_hash',
+      'idempotencyKey',
       'req.body.apiKey',
+      'req.body.key',
+      'req.body.idempotencyKey',
       'req.headers.authorization',
       'req.headers["x-access-token"]',
       'req.headers["x-api-key"]',
@@ -105,6 +111,9 @@ const pinoConfig = {
     pid: process.pid,
   },
 };
+
+// Tests use a synchronous destination without opening transport workers.
+if (process.env.NODE_ENV === 'test') delete pinoConfig.transport;
 
 const logger = pino(pinoConfig);
 

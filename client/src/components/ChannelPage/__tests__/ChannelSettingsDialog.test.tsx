@@ -79,7 +79,8 @@ describe('ChannelSettingsDialog', () => {
       plexUrl: false,
       authEnabled: true,
       useTmpForDownloads: false,
-      ytdlpUpdates: false
+      ytdlpUpdates: false,
+      externalApiEnabled: false
     },
     deploymentEnvironment: {
       platform: null,
@@ -360,7 +361,8 @@ describe('ChannelSettingsDialog', () => {
           plexUrl: false,
           authEnabled: true,
           useTmpForDownloads: false,
-          ytdlpUpdates: false
+          ytdlpUpdates: false,
+          externalApiEnabled: false
         },
         deploymentEnvironment: {
           platform: null,

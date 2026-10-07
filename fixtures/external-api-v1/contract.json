@@ -1,0 +1,566 @@
+{
+  "fixtureVersion": 4,
+  "capabilities": {
+    "apiVersion": "1",
+    "serverVersion": "1.77.0",
+    "role": "request",
+    "scopes": [
+      "catalog:read",
+      "requests:read",
+      "video:request"
+    ],
+    "policy": {
+      "allowVideoRequests": true,
+      "allowChannelRequests": false,
+      "allowDeleteVideoRequests": false,
+      "autoApproveVideoRequests": false,
+      "autoApproveChannelRequests": false,
+      "autoApproveDeleteRequests": false,
+      "maxRatingLevel": 2,
+      "allowUnrated": true,
+      "allowedMediaTypes": ["video", "short", "livestream"]
+    },
+    "features": {
+      "catalog": true,
+      "requests": true,
+      "channelRequests": true,
+      "deleteRequests": true,
+      "recommendations": true,
+      "authenticatedAssets": true,
+      "videoDetails": true
+    },
+    "quota": {
+      "limits": {
+        "maxActiveJobs": 5,
+        "hourlyWriteLimit": 30,
+        "dailyWriteLimit": 200
+      },
+      "remaining": {
+        "activeJobs": 5,
+        "hourlyWrites": 30,
+        "dailyWrites": 200
+      }
+    }
+  },
+  "representativeProfile": {
+    "basis": "sanitized-live-shape",
+    "channelCount": 4,
+    "catalogFirstPageCount": 12,
+    "mediaTypeCounts": {
+      "video": 7,
+      "short": 4,
+      "livestream": 1
+    },
+    "commonRatings": ["TV-Y", "TV-Y7"],
+    "typicalNullFields": ["description", "requestStatus"],
+    "shortsMayOmitPublishedAt": true,
+    "artworkUsesAuthenticatedSameOriginPaths": true
+  },
+  "channelsPage": {
+    "data": [
+      {
+        "id": 8,
+        "channelId": "UC0000000000000000000001",
+        "title": "Fixture channel",
+        "descriptionSummary": "A populated channel contract record.",
+        "thumbnailUrl": "/external-api/v1/assets/channels/8/thumbnail",
+        "subfolder": "Learning",
+        "videoCount": 4,
+        "downloadedCount": 1,
+        "lastFetchedAt": "2026-07-31T11:30:00.000Z"
+      },
+      {
+        "id": 9,
+        "channelId": "UC0000000000000000000002",
+        "title": "Science fixture channel",
+        "descriptionSummary": null,
+        "thumbnailUrl": "/external-api/v1/assets/channels/9/thumbnail",
+        "subfolder": null,
+        "videoCount": 3,
+        "downloadedCount": 0,
+        "lastFetchedAt": null
+      },
+      {
+        "id": 10,
+        "channelId": "UC0000000000000000000003",
+        "title": "Story fixture channel",
+        "descriptionSummary": null,
+        "thumbnailUrl": "/external-api/v1/assets/channels/10/thumbnail",
+        "subfolder": null,
+        "videoCount": 3,
+        "downloadedCount": 0,
+        "lastFetchedAt": "2026-07-31T11:20:00.000Z"
+      },
+      {
+        "id": 11,
+        "channelId": "UC0000000000000000000004",
+        "title": "Music fixture channel",
+        "descriptionSummary": "A second populated synthetic channel.",
+        "thumbnailUrl": "/external-api/v1/assets/channels/11/thumbnail",
+        "subfolder": null,
+        "videoCount": 3,
+        "downloadedCount": 0,
+        "lastFetchedAt": "2026-07-31T11:10:00.000Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "pageSize": 100,
+      "total": 4,
+      "totalPages": 1,
+      "nextCursor": null
+    },
+    "dataSource": "cache"
+  },
+  "error": {
+    "error": {
+      "code": "not_found",
+      "message": "External API route not found",
+      "requestId": "00000000-0000-4000-8000-000000000001"
+    }
+  },
+  "requests": [
+    {
+      "id": "00000000-0000-4000-8000-000000000010",
+      "type": "video",
+      "status": "processing",
+      "target": {
+        "youtubeId": "abcdefghijk",
+        "channelId": 8,
+        "channelUrl": null
+      },
+      "createdAt": "2026-07-26T12:00:00.000Z",
+      "updatedAt": "2026-07-26T12:01:00.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000013",
+      "type": "video",
+      "status": "approved",
+      "target": {
+        "youtubeId": "shortvid001",
+        "channelId": 8,
+        "channelUrl": null
+      },
+      "createdAt": "2026-07-26T12:04:00.000Z",
+      "updatedAt": "2026-07-26T12:04:30.000Z",
+      "decidedAt": "2026-07-26T12:04:30.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000014",
+      "type": "video",
+      "status": "rejected",
+      "target": {
+        "youtubeId": "streamvid01",
+        "channelId": 9,
+        "channelUrl": null
+      },
+      "createdAt": "2026-07-26T12:05:00.000Z",
+      "updatedAt": "2026-07-26T12:05:30.000Z",
+      "decidedAt": "2026-07-26T12:05:30.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000015",
+      "type": "video",
+      "status": "failed",
+      "target": {
+        "youtubeId": "unrated0001",
+        "channelId": 9,
+        "channelUrl": null
+      },
+      "createdAt": "2026-07-26T12:06:00.000Z",
+      "updatedAt": "2026-07-26T12:06:30.000Z",
+      "completedAt": "2026-07-26T12:06:30.000Z",
+      "message": "Sanitized fixture failure"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000016",
+      "type": "video",
+      "status": "cancelled",
+      "target": {
+        "youtubeId": "cancelled01",
+        "channelId": 9,
+        "channelUrl": null
+      },
+      "createdAt": "2026-07-26T12:07:00.000Z",
+      "updatedAt": "2026-07-26T12:07:30.000Z",
+      "completedAt": "2026-07-26T12:07:30.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000011",
+      "type": "channel",
+      "status": "pending",
+      "target": {
+        "youtubeId": null,
+        "channelId": null,
+        "channelUrl": "https://www.youtube.com/@example"
+      },
+      "createdAt": "2026-07-26T12:02:00.000Z",
+      "updatedAt": "2026-07-26T12:02:00.000Z",
+      "grantToRequestingKey": true
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000012",
+      "type": "delete_video",
+      "status": "completed",
+      "target": {
+        "youtubeId": "lmnopqrstuv",
+        "channelId": 9,
+        "channelUrl": null
+      },
+      "createdAt": "2026-07-26T12:03:00.000Z",
+      "updatedAt": "2026-07-26T12:03:00.000Z",
+      "decidedAt": "2026-07-26T12:03:00.000Z",
+      "completedAt": "2026-07-26T12:03:00.000Z",
+      "message": "Video is already deleted"
+    }
+  ],
+  "catalogPage": {
+    "data": [
+      {
+        "youtubeId": "abcdefghijk",
+        "title": "Fixture candidate",
+        "thumbnailUrl": "/external-api/v1/assets/videos/abcdefghijk/thumbnail",
+        "publishedAt": "2026-07-20T00:00:00.000Z",
+        "duration": 120,
+        "description": null,
+        "isDownloaded": false,
+        "isRequested": false,
+        "requestStatus": null,
+        "rating": "TV-Y7",
+        "channelDatabaseId": 8,
+        "channelId": "UC0000000000000000000001",
+        "channelTitle": "Fixture channel",
+        "mediaType": "video"
+      },
+      {
+        "youtubeId": "shortvid001",
+        "title": "Fixture short",
+        "thumbnailUrl": "/external-api/v1/assets/videos/shortvid001/thumbnail",
+        "publishedAt": null,
+        "duration": 45,
+        "description": null,
+        "isDownloaded": false,
+        "isRequested": false,
+        "requestStatus": null,
+        "rating": "TV-Y",
+        "channelDatabaseId": 8,
+        "channelId": "UC0000000000000000000001",
+        "channelTitle": "Fixture channel",
+        "mediaType": "short"
+      },
+      {
+        "youtubeId": "streamvid01",
+        "title": "Fixture livestream",
+        "thumbnailUrl": "/external-api/v1/assets/videos/streamvid01/thumbnail",
+        "publishedAt": "2026-07-19T00:00:00.000Z",
+        "duration": 3600,
+        "description": null,
+        "isDownloaded": false,
+        "isRequested": false,
+        "requestStatus": null,
+        "rating": "TV-Y7",
+        "channelDatabaseId": 9,
+        "channelId": "UC0000000000000000000002",
+        "channelTitle": "Science fixture channel",
+        "mediaType": "livestream"
+      },
+      {
+        "youtubeId": "lessonvid02",
+        "title": "Fixture lesson two",
+        "thumbnailUrl": "/external-api/v1/assets/videos/lessonvid02/thumbnail",
+        "publishedAt": "2026-07-18T00:00:00.000Z",
+        "duration": 742,
+        "description": null,
+        "isDownloaded": false,
+        "isRequested": false,
+        "requestStatus": null,
+        "rating": "TV-Y",
+        "channelDatabaseId": 9,
+        "channelId": "UC0000000000000000000002",
+        "channelTitle": "Science fixture channel",
+        "mediaType": "video"
+      },
+      {
+        "youtubeId": "lessonvid03",
+        "title": "Fixture lesson three",
+        "thumbnailUrl": "/external-api/v1/assets/videos/lessonvid03/thumbnail",
+        "publishedAt": "2026-07-17T00:00:00.000Z",
+        "duration": 615,
+        "description": null,
+        "isDownloaded": false,
+        "isRequested": false,
+        "requestStatus": null,
+        "rating": "TV-Y7",
+        "channelDatabaseId": 10,
+        "channelId": "UC0000000000000000000003",
+        "channelTitle": "Story fixture channel",
+        "mediaType": "video"
+      },
+      {
+        "youtubeId": "lessonvid04",
+        "title": "Fixture lesson four",
+        "thumbnailUrl": "/external-api/v1/assets/videos/lessonvid04/thumbnail",
+        "publishedAt": "2026-07-16T00:00:00.000Z",
+        "duration": 488,
+        "description": null,
+        "isDownloaded": false,
+        "isRequested": false,
+        "requestStatus": null,
+        "rating": "TV-Y",
+        "channelDatabaseId": 11,
+        "channelId": "UC0000000000000000000004",
+        "channelTitle": "Music fixture channel",
+        "mediaType": "video"
+      },
+      {
+        "youtubeId": "lessonvid05",
+        "title": "Fixture lesson five",
+        "thumbnailUrl": "/external-api/v1/assets/videos/lessonvid05/thumbnail",
+        "publishedAt": "2026-07-15T00:00:00.000Z",
+        "duration": 901,
+        "description": null,
+        "isDownloaded": false,
+        "isRequested": false,
+        "requestStatus": null,
+        "rating": "TV-Y7",
+        "channelDatabaseId": 8,
+        "channelId": "UC0000000000000000000001",
+        "channelTitle": "Fixture channel",
+        "mediaType": "video"
+      },
+      {
+        "youtubeId": "lessonvid06",
+        "title": "Fixture lesson six",
+        "thumbnailUrl": "/external-api/v1/assets/videos/lessonvid06/thumbnail",
+        "publishedAt": "2026-07-14T00:00:00.000Z",
+        "duration": 533,
+        "description": null,
+        "isDownloaded": false,
+        "isRequested": false,
+        "requestStatus": null,
+        "rating": "TV-Y",
+        "channelDatabaseId": 9,
+        "channelId": "UC0000000000000000000002",
+        "channelTitle": "Science fixture channel",
+        "mediaType": "video"
+      },
+      {
+        "youtubeId": "lessonvid07",
+        "title": "Fixture lesson seven",
+        "thumbnailUrl": "/external-api/v1/assets/videos/lessonvid07/thumbnail",
+        "publishedAt": "2026-07-13T00:00:00.000Z",
+        "duration": 676,
+        "description": null,
+        "isDownloaded": false,
+        "isRequested": false,
+        "requestStatus": null,
+        "rating": "TV-Y7",
+        "channelDatabaseId": 10,
+        "channelId": "UC0000000000000000000003",
+        "channelTitle": "Story fixture channel",
+        "mediaType": "video"
+      },
+      {
+        "youtubeId": "shortvid002",
+        "title": "Fixture short two",
+        "thumbnailUrl": "/external-api/v1/assets/videos/shortvid002/thumbnail",
+        "publishedAt": null,
+        "duration": 51,
+        "description": null,
+        "isDownloaded": false,
+        "isRequested": false,
+        "requestStatus": null,
+        "rating": "TV-Y",
+        "channelDatabaseId": 11,
+        "channelId": "UC0000000000000000000004",
+        "channelTitle": "Music fixture channel",
+        "mediaType": "short"
+      },
+      {
+        "youtubeId": "shortvid003",
+        "title": "Fixture short three",
+        "thumbnailUrl": "/external-api/v1/assets/videos/shortvid003/thumbnail",
+        "publishedAt": null,
+        "duration": 38,
+        "description": null,
+        "isDownloaded": false,
+        "isRequested": false,
+        "requestStatus": null,
+        "rating": "TV-Y7",
+        "channelDatabaseId": 9,
+        "channelId": "UC0000000000000000000002",
+        "channelTitle": "Science fixture channel",
+        "mediaType": "short"
+      },
+      {
+        "youtubeId": "shortvid004",
+        "title": "Fixture short four",
+        "thumbnailUrl": "/external-api/v1/assets/videos/shortvid004/thumbnail",
+        "publishedAt": null,
+        "duration": 57,
+        "description": null,
+        "isDownloaded": false,
+        "isRequested": false,
+        "requestStatus": null,
+        "rating": "TV-Y",
+        "channelDatabaseId": 10,
+        "channelId": "UC0000000000000000000003",
+        "channelTitle": "Story fixture channel",
+        "mediaType": "short"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "pageSize": 100,
+      "total": 13,
+      "totalPages": 2,
+      "nextCursor": "eyJ2IjoxLCJwYWdlIjoyfQ"
+    },
+    "dataSource": "cache",
+    "isFullyIndexed": true,
+    "lastIndexedAt": null,
+    "indexingHint": null
+  },
+  "catalogNextPage": {
+    "data": [
+      {
+        "youtubeId": "unrated0001",
+        "title": "Final fixture page",
+        "thumbnailUrl": null,
+        "publishedAt": "2026-07-18T00:00:00.000Z",
+        "duration": 3600,
+        "description": null,
+        "isDownloaded": false,
+        "isRequested": false,
+        "requestStatus": "rejected",
+        "rating": null,
+        "channelDatabaseId": 9,
+        "channelId": "UC0000000000000000000002",
+        "channelTitle": "Science fixture channel",
+        "mediaType": "video"
+      }
+    ],
+    "pagination": {
+      "page": 2,
+      "pageSize": 100,
+      "total": 4,
+      "totalPages": 2,
+      "nextCursor": null
+    },
+    "dataSource": "cache",
+    "isFullyIndexed": true,
+    "lastIndexedAt": null,
+    "indexingHint": null
+  },
+  "videoDetail": {
+    "youtubeId": "abcdefghijk",
+    "title": "Fixture candidate",
+    "thumbnailUrl": "/external-api/v1/assets/videos/abcdefghijk/thumbnail",
+    "publishedAt": "2026-07-20T00:00:00.000Z",
+    "duration": 120,
+    "isDownloaded": false,
+    "isRequested": false,
+    "requestStatus": null,
+    "rating": "TV-Y7",
+    "ratingSource": null,
+    "channelDatabaseId": 8,
+    "channelId": "UC0000000000000000000001",
+    "channelTitle": "Fixture channel",
+    "mediaType": "video",
+    "availability": "public",
+    "downloadedAt": null,
+    "fileSize": null,
+    "audioFileSize": null,
+    "isProtected": false,
+    "videoResolution": null,
+    "metadata": {
+      "description": "Complete fixture description for the one-video detail response.",
+      "viewCount": 1000,
+      "likeCount": 50,
+      "commentCount": null,
+      "tags": ["fixture", "video"],
+      "categories": ["Education"],
+      "uploadDate": "20260720",
+      "resolution": "1920x1080",
+      "width": 1920,
+      "height": 1080,
+      "fps": 30,
+      "aspectRatio": 1.78,
+      "language": "en",
+      "isLive": false,
+      "wasLive": false,
+      "availability": "public",
+      "channelFollowerCount": 10000,
+      "ageLimit": 0,
+      "webpageUrl": "https://www.youtube.com/watch?v=abcdefghijk",
+      "relatedFiles": null,
+      "availableResolutions": [360, 720, 1080]
+    }
+  },
+  "sparseVideoDetail": {
+    "youtubeId": "shortvid001",
+    "title": "Fixture short",
+    "thumbnailUrl": null,
+    "publishedAt": null,
+    "duration": "0:45",
+    "isDownloaded": false,
+    "isRequested": false,
+    "requestStatus": null,
+    "rating": 1,
+    "ratingSource": null,
+    "channelDatabaseId": 8,
+    "channelId": "UC0000000000000000000001",
+    "channelTitle": "Fixture channel",
+    "mediaType": "short",
+    "availability": null,
+    "downloadedAt": null,
+    "fileSize": null,
+    "audioFileSize": null,
+    "isProtected": null,
+    "videoResolution": null,
+    "metadata": null
+  },
+  "videoRequestResponses": [
+    {
+      "outcome": "created",
+      "request": {
+        "id": "00000000-0000-4000-8000-000000000010",
+        "type": "video",
+        "status": "processing",
+        "target": {
+          "youtubeId": "abcdefghijk",
+          "channelId": 8,
+          "channelUrl": null
+        },
+        "createdAt": "2026-07-26T12:00:00.000Z",
+        "updatedAt": "2026-07-26T12:01:00.000Z"
+      }
+    },
+    {
+      "outcome": "duplicate",
+      "request": null
+    },
+    {
+      "outcome": "already_downloaded",
+      "request": null
+    }
+  ],
+  "unknownEnumSamples": {
+    "request": {
+      "id": "00000000-0000-4000-8000-000000000099",
+      "type": "future_request_type",
+      "status": "future_status",
+      "target": {
+        "youtubeId": null,
+        "channelId": null,
+        "channelUrl": null
+      },
+      "createdAt": "2026-07-31T12:00:00.000Z",
+      "updatedAt": "2026-07-31T12:00:00.000Z"
+    },
+    "videoRequestResponse": {
+      "outcome": "future_outcome",
+      "request": null
+    }
+  }
+}

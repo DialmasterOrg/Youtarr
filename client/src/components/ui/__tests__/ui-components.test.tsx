@@ -97,7 +97,7 @@ describe('Dialog', () => {
       </Dialog>
     );
     const backdrop = screen.getByTestId('backdrop');
-    fireEvent.click(backdrop);
+    fireEvent.pointerDown(backdrop);
     expect(onClose).toHaveBeenCalledWith({}, 'backdropClick');
   });
 });
