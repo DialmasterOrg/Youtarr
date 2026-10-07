@@ -445,7 +445,7 @@ git commit --no-verify
 
 ### Running Tests
 
-All tests run on your host machine (not in Docker) since they're isolated unit tests:
+The unit suites run on your host machine without a database:
 
 ```bash
 # Run all tests (backend + frontend)
@@ -463,6 +463,15 @@ npm run test:coverage
 # Watch mode (backend)
 npm run test:watch
 ```
+
+### External API Database Tests
+
+The separate external API integration suite requires a disposable MariaDB 10.3
+or MySQL 8.0 server. It runs the real migrations and model-backed request,
+approval, quota, and catalog flows without contacting YouTube. Follow the
+[database setup and query-plan commands](EXTERNAL_API.md#database-integration-and-query-plans)
+to run both engines, including rollback/reapply and the synthetic index report.
+The ordinary backend Jest command does not run these database tests.
 
 ### External Cookie Validation Tests
 

@@ -9,6 +9,8 @@ const { normalizePolicy, ratingPolicy } = require('./externalEligibility');
 const { publicVideoThumbnail } = require('./externalThumbnailProxy');
 const {
   CatalogError,
+  parseInteger,
+  paginationDto,
   decodePageCursor,
   encodePageCursor,
   pagination,
@@ -25,16 +27,6 @@ function boundedString(value, maximum) {
   return String(value).slice(0, maximum);
 }
 
-
-function parseInteger(value, fallback, minimum, maximum, name) {
-  if (value === undefined) return fallback;
-  if (!/^\d+$/.test(String(value))) throw new CatalogError(`${name} must be an integer`);
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) {
-    throw new CatalogError(`${name} must be between ${minimum} and ${maximum}`);
-  }
-  return parsed;
-}
 
 function normalizeSearch(value) {
   if (value === undefined) return null;
@@ -69,17 +61,6 @@ function ratingSql(policy, effectiveRatingSql) {
   };
 }
 
-
-function paginationDto(page, pageSize, total, maximumPage = MAX_PAGE) {
-  const totalPages = total === 0 ? 0 : Math.min(maximumPage, Math.ceil(total / pageSize));
-  return {
-    page,
-    pageSize,
-    total,
-    totalPages,
-    nextCursor: page < totalPages ? encodePageCursor(page + 1) : null,
-  };
-}
 
 function catalogCursorFingerprint(endpoint, filters) {
   return crypto.createHash('sha256')

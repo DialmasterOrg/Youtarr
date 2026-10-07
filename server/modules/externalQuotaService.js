@@ -1,4 +1,5 @@
 const { Op } = require('sequelize');
+const { createExternalRequestReconciliation } = require('./externalRequestReconciliation');
 const { normalizeExternalApiKey } = require('../middleware/externalApiAuth');
 const { hasExternalScope } = require('./externalPermissions');
 
@@ -36,7 +37,8 @@ function createExternalQuotaService({
   sequelize = require('../db').sequelize,
   now = () => new Date(),
 } = {}) {
-  const { ApiKey, ExternalRequest, ExternalApiUsageBucket, Video, Job } = models;
+  const { ApiKey, ExternalRequest, ExternalApiUsageBucket } = models;
+  const reconcile = createExternalRequestReconciliation({ models, now });
 
   async function reloadAuthorizedKey(keyId, requiredScope, transaction = null) {
     const record = await ApiKey.findByPk(keyId, {
@@ -62,53 +64,7 @@ function createExternalQuotaService({
       ],
       ...(transaction ? { transaction, lock: transaction.LOCK.UPDATE } : {}),
     });
-    if (processing.length > 0) {
-      const youtubeIds = [...new Set(processing.map((record) => record.youtube_id))];
-      const videos = await Video.findAll({
-        where: { youtubeId: youtubeIds, removed: false },
-        attributes: ['youtubeId'],
-        ...(transaction ? { transaction } : {}),
-      });
-      const present = new Set(videos.map((video) => video.youtubeId));
-      const terminalAt = now();
-      const completed = processing.filter((record) =>
-        (record.request_type === 'video' && present.has(record.youtube_id)) ||
-        (record.request_type === 'delete_video' && !present.has(record.youtube_id))
-      );
-      await Promise.all(completed.map((record) => record.update({
-        status: 'completed',
-        active_dedupe_key: null,
-        completed_at: terminalAt,
-        updated_at: terminalAt,
-      }, transaction ? { transaction } : {})));
-
-      const unresolved = processing.filter((record) =>
-        record.request_type === 'video' &&
-        !present.has(record.youtube_id) &&
-        record.job_id &&
-        !completed.includes(record)
-      );
-      if (unresolved.length > 0) {
-        const jobs = await Job.findAll({
-          where: { id: [...new Set(unresolved.map((record) => record.job_id))] },
-          attributes: ['id', 'status'],
-          ...(transaction ? { transaction } : {}),
-        });
-        const terminalJobs = new Set(jobs
-          .filter((job) => [
-            'Error', 'Killed', 'Terminated', 'Complete', 'Complete with Warnings',
-          ].includes(job.status))
-          .map((job) => job.id));
-        await Promise.all(unresolved
-          .filter((record) => terminalJobs.has(record.job_id))
-          .map((record) => record.update({
-            status: 'failed',
-            active_dedupe_key: null,
-            message: 'Download did not complete',
-            updated_at: terminalAt,
-          }, transaction ? { transaction } : {})));
-      }
-    }
+    await reconcile(processing, transaction);
     return ExternalRequest.count({
       where: {
         api_key_id: keyId,
