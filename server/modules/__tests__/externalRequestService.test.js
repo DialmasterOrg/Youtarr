@@ -31,7 +31,7 @@ function fixture(overrides = {}) {
       create: jest.fn(async (values) => Object.assign(created, values)),
       update: jest.fn().mockResolvedValue([1]),
       findOne: jest.fn().mockResolvedValue(null),
-      findByPk: jest.fn().mockResolvedValue(null),
+      findByPk: jest.fn().mockResolvedValue(created),
       findAndCountAll: jest.fn().mockResolvedValue({ rows: [], count: 0 }),
     },
     ApiKeyChannelGrant: {
@@ -54,7 +54,7 @@ function fixture(overrides = {}) {
       findAll: jest.fn().mockResolvedValue([]),
     },
     Video: { findOne: jest.fn().mockResolvedValue(null), findAll: jest.fn().mockResolvedValue([]) },
-    Job: { findAll: jest.fn().mockResolvedValue([]) },
+    Job: { findByPk: jest.fn().mockResolvedValue(null), findAll: jest.fn().mockResolvedValue([]) },
     ApiKey: {
       findByPk: jest.fn().mockResolvedValue({
         id: 4,
@@ -202,7 +202,7 @@ describe('external video request service', () => {
         channelId: 'UC1234567890123456789012',
         ownerChannelMap: { [youtubeId]: 'UC1234567890123456789012' },
         initiatedBy: { type: 'api_key', name: 'External Client' },
-        jobLabel: 'External video request',
+        jobLabel: 'Manually Added Urls (external request)',
         externalRequestId: '9b89e5bc-8c90-4e72-b245-270fed2eacc2',
       },
     });
@@ -276,6 +276,7 @@ describe('external video request service', () => {
       executor: retryExecutor,
     });
     retry.models.ExternalRequest.findOne.mockResolvedValue(interrupted);
+    retry.models.ExternalRequest.findByPk.mockResolvedValue(interrupted);
     const result = await retry.service.createVideoRequest(
       retry.key,
       { youtubeId, channelId: 8, idempotencyKey: 'same-request' }
@@ -287,7 +288,7 @@ describe('external video request service', () => {
     expect(interrupted.update).toHaveBeenCalledWith(expect.objectContaining({
       status: 'processing',
       job_id: interrupted.id,
-    }));
+    }), { transaction: retry.transaction });
     expect(result).toMatchObject({
       outcome: 'duplicate',
       request: { status: 'processing' },

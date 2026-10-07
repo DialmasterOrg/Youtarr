@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { MANUAL_DOWNLOAD_LABEL } = require('./download/jobTypes');
 const { Op, UniqueConstraintError } = require('sequelize');
 const { normalizePolicy, isMediaTypeEligible, isRatingEligible } = require('./externalEligibility');
 const { hasExternalScope, normalizeExternalPermissions } = require('./externalPermissions');
@@ -467,7 +468,7 @@ function createExternalRequestService({
     if (idempotencyHash) clauses.push({ api_key_id: keyId, idempotency_hash: idempotencyHash });
     const existing = await ExternalRequest.findOne({ where: { [Op.or]: clauses } });
     if (!existing) return null;
-    if (existing.youtube_id !== youtubeId || existing.channel_id !== channelId) {
+    if (existing.request_type !== 'video' || existing.youtube_id !== youtubeId || existing.channel_id !== channelId) {
       throw new RequestError('Idempotency key was already used for another target', 409);
     }
     await reconcile([existing]);
@@ -492,8 +493,9 @@ function createExternalRequestService({
   }
 
   async function dispatchAutoApproved(record, key) {
+    let accepted = false;
     try {
-      const jobId = await workLimiter.run(() =>
+      await workLimiter.run(() =>
         sequelize.transaction(async (transaction) => {
           const currentKey = await quotas.assertExecutionCapacity(
             key.id,
@@ -501,6 +503,8 @@ function createExternalRequestService({
             record.id,
             transaction
           );
+          const locked = await ExternalRequest.findByPk(record.id, { transaction, lock: transaction.LOCK.UPDATE });
+          if (!locked || locked.status !== 'pending' || locked.job_id) return;
           requireCurrentAutoApproval(currentKey, 'video');
           const target = await validateTarget(
             currentKey,
@@ -508,28 +512,31 @@ function createExternalRequestService({
             record.channel_id,
             transaction
           );
-          return executor({
+          const existingJob = await Job.findByPk(record.id, { transaction });
+          const jobId = existingJob?.id || await executor({
             body: {
               urls: [`https://www.youtube.com/watch?v=${record.youtube_id}`],
               channelId: target.channel.channel_id,
               ownerChannelMap: { [record.youtube_id]: target.channel.channel_id },
               initiatedBy: { type: 'api_key', name: currentKey.name },
-              jobLabel: 'External video request',
+              jobLabel: `${MANUAL_DOWNLOAD_LABEL} (external request)`,
               // The downloader uses this UUID as the job identity. A retry after a
               // crash can therefore observe/reuse the accepted job instead of
               // starting the same download twice.
               externalRequestId: record.id,
             },
           });
+          if (jobId && typeof jobId !== 'string') throw new Error('Download was not accepted');
+          accepted = true;
+          await record.update({
+            status: 'processing', job_id: jobId || record.id, updated_at: now(),
+          }, { transaction });
         })
       );
-      const acceptedAt = now();
-      await record.update({
-        status: 'processing',
-        job_id: jobId || record.id,
-        updated_at: acceptedAt,
-      });
     } catch (error) {
+      // The downloader persists separately. Leave the request retryable if the
+      // process loses its database connection after enqueueing the stable job.
+      if (accepted) throw error;
       if (error?.name === 'ExternalWorkLimitError') {
         await record.update({ status: 'pending', updated_at: now() });
         rethrowWorkLimit(error);
@@ -586,7 +593,7 @@ function createExternalRequestService({
           );
           await dispatchAutoApproved(existing, currentKey, currentTarget.channel);
         } catch (error) {
-          if (error?.status === 503) throw error;
+          if (![403, 404].includes(error?.status)) throw error;
           await failAuthorityChange(existing);
         }
       }
@@ -632,7 +639,7 @@ function createExternalRequestService({
         const finalTarget = await validateTarget(finalKey, input.youtubeId, channelId);
         await dispatchAutoApproved(record, finalKey, finalTarget.channel);
       } catch (error) {
-        if (error?.status === 503) throw error;
+        if (![403, 404].includes(error?.status)) throw error;
         await failAuthorityChange(record);
       }
     }
@@ -745,7 +752,7 @@ function createExternalRequestService({
             requireAutoApproval: existing.status !== 'approved',
           });
         } catch (error) {
-          if (error?.status === 503) throw error;
+          if (![403, 404].includes(error?.status)) throw error;
           await failAuthorityChange(existing);
         }
       }
@@ -792,7 +799,7 @@ function createExternalRequestService({
         );
         await provisionChannelRequest(record, finalKey, { requireAutoApproval: true });
       } catch (error) {
-        if (error?.status === 503) throw error;
+        if (![403, 404].includes(error?.status)) throw error;
         await failAuthorityChange(record);
       }
     }
@@ -899,7 +906,7 @@ function createExternalRequestService({
             requireAutoApproval: existing.status !== 'approved',
           });
         } catch (error) {
-          if (error?.status === 503) throw error;
+          if (![403, 404].includes(error?.status)) throw error;
           await failAuthorityChange(existing);
         }
       }
@@ -950,7 +957,7 @@ function createExternalRequestService({
         await validateTarget(finalKey, input.youtubeId, channelId);
         await executeDeleteRequest(record, { requireAutoApproval: true });
       } catch (error) {
-        if (error?.status === 503) throw error;
+        if (![403, 404].includes(error?.status)) throw error;
         await failAuthorityChange(record);
       }
     }
@@ -1087,7 +1094,10 @@ function createExternalRequestService({
     }
     const reason = action === 'reject' ? sanitizeReason(input.reason) : null;
 
-    await sequelize.transaction(async (transaction) => {
+    const current = await ExternalRequest.findByPk(id);
+    if (!current || current.request_type !== 'video') throw new RequestError('Request not found', 404);
+    const review = () => sequelize.transaction(async (transaction) => {
+      await ApiKey.findByPk(current.api_key_id, { transaction, lock: transaction.LOCK.UPDATE });
       const record = await ExternalRequest.findOne({
         where: { id, request_type: 'video' },
         transaction,
@@ -1200,16 +1210,18 @@ function createExternalRequestService({
         }, { transaction });
       }
       try {
-        const jobId = await workLimiter.run(() => executor({
+        const existingJob = await Job.findByPk(record.id, { transaction });
+        const jobId = existingJob?.id || await executor({
           body: {
             urls: [`https://www.youtube.com/watch?v=${record.youtube_id}`],
             channelId: target.channel.channel_id,
             ownerChannelMap: { [record.youtube_id]: target.channel.channel_id },
             initiatedBy: { type: 'api_key', name: key.name },
-            jobLabel: 'External video request',
+            jobLabel: `${MANUAL_DOWNLOAD_LABEL} (external request)`,
             externalRequestId: record.id,
           },
-        }));
+        });
+        if (jobId && typeof jobId !== 'string') throw new Error('Download was not accepted');
         const acceptedAt = now();
         await record.update({
           status: 'processing',
@@ -1220,6 +1232,12 @@ function createExternalRequestService({
         await failApproval('Download could not be queued');
       }
     });
+    try {
+      await (action === 'approve' ? workLimiter.run(review) : review());
+    } catch (error) {
+      rethrowWorkLimit(error);
+      throw error;
+    }
 
     return getAdminRequest(id);
   }
@@ -1253,6 +1271,7 @@ function createExternalRequestService({
     let key;
     let claimed;
     await sequelize.transaction(async (transaction) => {
+      await ApiKey.findByPk(current.api_key_id, { transaction, lock: transaction.LOCK.UPDATE });
       const record = await ExternalRequest.findByPk(id, {
         transaction,
         lock: transaction.LOCK.UPDATE,
