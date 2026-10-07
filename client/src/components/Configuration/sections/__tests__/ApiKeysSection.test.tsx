@@ -20,6 +20,7 @@ global.fetch = mockFetch;
 const props = (): React.ComponentProps<typeof ApiKeysSection> => ({
   token: 'test-token-123',
   apiKeyRateLimit: 10,
+  externalApiEnabled: true,
   onRateLimitChange: jest.fn(),
   showRequestsNavLink: true,
   onShowRequestsNavLinkChange: jest.fn(),

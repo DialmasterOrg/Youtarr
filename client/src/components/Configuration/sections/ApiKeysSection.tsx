@@ -16,93 +16,24 @@ import {
   Skeleton,
   Snackbar,
   Divider,
-  Checkbox,
-  Switch,
-  FormControlLabel,
-  Select,
-  MenuItem,
 } from '../../ui';
 import {
   Trash2 as DeleteIcon,
   Plus as AddIcon,
   Copy as ContentCopyIcon,
   AlertTriangle as WarningIcon,
-  Pencil as EditIcon,
-  RefreshCw as RegenerateIcon,
-  Video as VideoIcon,
-  Radio as ChannelIcon,
-  Clock3 as ClockIcon,
-  Zap as AutoApproveIcon,
-  Eye as ViewIcon,
   Filter as FilterIcon,
 } from 'lucide-react';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
 import { InfoTooltip } from '../common/InfoTooltip';
 
 import { locationUtils } from '../../../utils/location';
-import PolicyEditor from './ApiKeysSection/PolicyEditor';
-import ChannelGrantPicker from './ApiKeysSection/ChannelGrantPicker';
-import { ApiKey, ApiKeyPolicy, ApiKeyRole, ApiKeyCreatedResponse, NormalizedApiKeyPolicy, normalizePolicy, useApiKeys } from './ApiKeysSection/useApiKeys';
-import type { ChannelListEntry } from '../../Subscriptions/hooks/useChannelList';
-import {
-  EXTERNAL_RATING_BANDS,
-  formatExternalRatingBand,
-  getExternalRatingBand,
-} from '../../../utils/externalRatingPolicy';
-import RatingBadge from '../../shared/RatingBadge';
+import CreateKeyDialog from './ApiKeysSection/CreateKeyDialog';
+import EditKeyDialog from './ApiKeysSection/EditKeyDialog';
+import ExternalKeyCard, { formatKeyDate } from './ApiKeysSection/ExternalKeyCard';
+import { apiKeyError } from './ApiKeysSection/apiKeyError';
+import { ApiKey, ApiKeyRole, ApiKeyCreatedResponse, useApiKeys } from './ApiKeysSection/useApiKeys';
 
-const defaultPolicy: ApiKeyPolicy = {
-  role: 'view',
-  allowVideoRequests: false,
-  allowChannelRequests: false,
-  allowDeleteVideoRequests: false,
-  autoApproveVideoRequests: false,
-  autoApproveChannelRequests: false,
-  autoApproveDeleteRequests: false,
-  maxRatingLevel: 3,
-  allowUnrated: false,
-  allowedMediaTypes: ['video'],
-  maxActiveJobs: 5,
-  hourlyWriteLimit: 30,
-  dailyWriteLimit: 200,
-};
-
-const legacyRolePermissions = (role: ApiKeyRole) => ({
-  allowVideoRequests: ['request', 'delete', 'admin'].includes(role),
-  allowChannelRequests: ['request', 'delete', 'admin'].includes(role),
-  allowDeleteVideoRequests: ['delete', 'admin'].includes(role),
-});
-
-const permissionsFromKey = (key: ApiKey) => {
-  const fallback = legacyRolePermissions(key.role);
-  return {
-    allowVideoRequests: key.allow_video_requests ?? fallback.allowVideoRequests,
-    allowChannelRequests: key.allow_channel_requests ?? fallback.allowChannelRequests,
-    allowDeleteVideoRequests:
-      key.allow_delete_video_requests ?? fallback.allowDeleteVideoRequests,
-  };
-};
-
-const roleForPolicy = (policy: ApiKeyPolicy): ApiKeyRole => {
-  if (policy.role === 'admin') return 'admin';
-  if (policy.allowDeleteVideoRequests) return 'delete';
-  if (policy.allowVideoRequests || policy.allowChannelRequests) return 'request';
-  return 'view';
-};
-
-const policyFromKey = (key: ApiKey): ApiKeyPolicy => ({
-  role: key.role,
-  ...permissionsFromKey(key),
-  autoApproveVideoRequests: key.auto_approve_video_requests,
-  autoApproveChannelRequests: key.auto_approve_channel_requests,
-  autoApproveDeleteRequests: key.auto_approve_delete_requests,
-  maxRatingLevel: key.max_rating_level,
-  allowUnrated: key.allow_unrated,
-  allowedMediaTypes: key.allowed_media_types,
-  maxActiveJobs: key.max_active_jobs ?? 5,
-  hourlyWriteLimit: key.hourly_write_limit ?? 30,
-  dailyWriteLimit: key.daily_write_limit ?? 200,
-});
 
 interface ApiKeysSectionProps {
   token: string | null;
@@ -117,7 +48,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
   token,
   apiKeyRateLimit,
   onRateLimitChange,
-  externalApiEnabled = true,
+  externalApiEnabled = false,
   showRequestsNavLink,
   onShowRequestsNavLinkChange,
 }) => {
@@ -126,29 +57,11 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createKeyType, setCreateKeyType] = useState<'external' | 'legacy'>('external');
   const [createdKeyDialogOpen, setCreatedKeyDialogOpen] = useState(false);
-  const [newKeyName, setNewKeyName] = useState('');
-  const [newKeyPolicy, setNewKeyPolicy] = useState<ApiKeyPolicy>(defaultPolicy);
-  const [newKeyChannelIds, setNewKeyChannelIds] = useState<number[]>([]);
-  const [newKeyChannelSearch, setNewKeyChannelSearch] = useState('');
   const [createdKey, setCreatedKey] = useState<ApiKeyCreatedResponse | null>(null);
   const [createdKeyRole, setCreatedKeyRole] = useState<ApiKeyRole>('legacy_download');
   const [createdKeyAction, setCreatedKeyAction] = useState<'created' | 'regenerated'>('created');
   const [error, setError] = useState<string | null>(null);
   const [editKey, setEditKey] = useState<ApiKey | null>(null);
-  const [editPolicy, setEditPolicy] = useState<ApiKeyPolicy>(defaultPolicy);
-  const [channelOptions, setChannelOptions] = useState<ChannelListEntry[]>([]);
-  const [channelSearch, setChannelSearch] = useState('');
-  const [selectedChannelIds, setSelectedChannelIds] = useState<number[]>([]);
-  const [originalChannelIds, setOriginalChannelIds] = useState<number[]>([]);
-  const [savingPolicy, setSavingPolicy] = useState(false);
-  const [channelsLoading, setChannelsLoading] = useState(false);
-  const [grantsLoading, setGrantsLoading] = useState(false);
-  const [editLoadError, setEditLoadError] = useState<string | null>(null);
-  const [editSubmitError, setEditSubmitError] = useState<string | null>(null);
-  const [channelsLoadError, setChannelsLoadError] = useState<string | null>(null);
-  const [grantsLoadError, setGrantsLoadError] = useState<string | null>(null);
-  const [pendingExternalUpdate, setPendingExternalUpdate] = useState<{ keyId: number; policy: NormalizedApiKeyPolicy; channelIds: number[] } | null>(null);
-  const editLoadSequence = useRef(0);
   const apiKeyApi = useApiKeys(token);
   const [externalKeySearch, setExternalKeySearch] = useState('');
   const [showActiveExternalKeys, setShowActiveExternalKeys] = useState(true);
@@ -167,208 +80,50 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
     locationUtils.getProtocol() !== 'https:' && locationUtils.getHostname() !== 'localhost'
   );
 
+  const loadSequence = useRef(0);
+  const sessionSequence = useRef(0);
+  const mutationBusy = useRef(false);
+  const [revoking, setRevoking] = useState(false);
   const fetchApiKeys = useCallback(async () => {
+    const sequence = ++loadSequence.current;
     try {
-      setApiKeys(await apiKeyApi.fetchApiKeys());
+      const keys = await apiKeyApi.fetchApiKeys();
+      if (sequence === loadSequence.current) { setApiKeys(keys); setError(null); }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch API keys');
+      if (sequence === loadSequence.current) setError(apiKeyError(err, 'Failed to fetch API keys'));
     } finally {
-      setLoading(false);
+      if (sequence === loadSequence.current) setLoading(false);
     }
   }, [apiKeyApi]);
 
   useEffect(() => {
+    ++sessionSequence.current;
+    setLoading(true);
+    setCreateDialogOpen(false); setEditKey(null); setCreatedKeyDialogOpen(false); setCreatedKey(null);
     void fetchApiKeys();
+    return () => { ++loadSequence.current; ++sessionSequence.current; };
   }, [fetchApiKeys]);
 
-  const loadAvailableChannels = async () => {
-    setChannelsLoading(true);
-    setEditLoadError(null);
-    try {
-      const channels = await apiKeyApi.fetchAvailableChannels();
-      setChannelOptions(channels.filter((channel) => channel.database_id && !channel.terminated_at));
-    } catch (err) {
-      setEditLoadError(err instanceof Error ? err.message : 'Failed to load channels');
-    } finally {
-      setChannelsLoading(false);
-    }
-  };
-
   const openCreateDialog = (type: 'external' | 'legacy' = 'external') => {
-    setCreateKeyType(type);
-    setCreateDialogOpen(true);
-    setNewKeyPolicy(defaultPolicy);
-    setNewKeyChannelIds([]);
-    setNewKeyChannelSearch('');
-    setChannelOptions([]);
-    if (type === 'external') void loadAvailableChannels();
+    setCreateKeyType(type); setCreateDialogOpen(true);
   };
-
-  const changeNewKeyPolicy = (policy: ApiKeyPolicy) => {
-    setNewKeyPolicy(policy);
-  };
-
-  const handleCreateKey = async () => {
-    if (!token || !newKeyName.trim()) return;
-    const normalized = createKeyType === 'legacy' ? null : normalizePolicy(newKeyPolicy);
-    if (normalized && !normalized.policy) {
-      setError(normalized.error || 'Invalid policy values');
-      return;
-    }
-    try {
-      const data = await apiKeyApi.createApiKey(
-        newKeyName.trim(),
-        normalized?.policy,
-        createKeyType === 'legacy' ? undefined : newKeyChannelIds
-      );
-      if (data.success) {
-        setCreatedKey(data);
-        setCreatedKeyAction('created');
-        setCreatedKeyRole(createKeyType === 'legacy' ? 'legacy_download' : newKeyPolicy.role);
-        setCreateDialogOpen(false);
-        setCreatedKeyDialogOpen(true);
-        setNewKeyName('');
-        setNewKeyPolicy(defaultPolicy);
-        setNewKeyChannelIds([]);
-        setNewKeyChannelSearch('');
-        void fetchApiKeys();
-      } else {
-        setError(data.message || 'Failed to create API key');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create API key');
-    }
-  };
-
-  const loadEditData = useCallback(async (key: ApiKey) => {
-    const sequence = ++editLoadSequence.current;
-    setChannelsLoading(true);
-    setGrantsLoading(true);
-    setChannelsLoadError(null);
-    setGrantsLoadError(null);
-    setEditLoadError(null);
-    setEditSubmitError(null);
-    const [grantsResult, channelsResult] = await Promise.allSettled([
-      apiKeyApi.fetchChannelGrants(key.id),
-      apiKeyApi.fetchAvailableChannels(),
-    ]);
-    if (sequence !== editLoadSequence.current) return;
-    const nextGrantsError = grantsResult.status === 'rejected'
-      ? (grantsResult.reason instanceof Error ? grantsResult.reason.message : 'Failed to load channel grants')
-      : null;
-    const nextChannelsError = channelsResult.status === 'rejected'
-      ? (channelsResult.reason instanceof Error ? channelsResult.reason.message : 'Failed to load channels')
-      : null;
-    setGrantsLoadError(nextGrantsError);
-    setChannelsLoadError(nextChannelsError);
-    setEditLoadError(nextGrantsError || nextChannelsError);
-    if (grantsResult.status === 'fulfilled') {
-      setSelectedChannelIds(grantsResult.value);
-      setOriginalChannelIds(grantsResult.value);
-    }
-    if (channelsResult.status === 'fulfilled') {
-      setChannelOptions(channelsResult.value.filter((channel) => channel.database_id && !channel.terminated_at));
-    }
-    setChannelsLoading(false);
-    setGrantsLoading(false);
-  }, [apiKeyApi]);
-
   const openEditDialog = (key: ApiKey) => {
-    if (!token || key.role === 'legacy_download' || key.revoked_at) return;
-    ++editLoadSequence.current;
-    setEditSubmitError(null);
-    setEditKey(key);
-    setEditPolicy(policyFromKey(key));
-    setSelectedChannelIds([]);
-    setOriginalChannelIds([]);
-    setChannelSearch('');
-    void loadEditData(key);
-  };
-
-  const closeEditDialog = () => {
-    ++editLoadSequence.current;
-    setEditKey(null);
-    setPendingExternalUpdate(null);
-    setEditLoadError(null);
-    setEditSubmitError(null);
-    setChannelsLoadError(null);
-    setGrantsLoadError(null);
-    setChannelsLoading(false);
-    setGrantsLoading(false);
-  };
-
-  const submitExternalAccess = async (update: { keyId: number; policy: NormalizedApiKeyPolicy; channelIds: number[] }) => {
-    if (savingPolicy) return;
-    setEditSubmitError(null);
-    setSavingPolicy(true);
-    try {
-      await apiKeyApi.updateExternalAccess(update.keyId, {
-        policy: update.policy,
-        channelIds: update.channelIds,
-      });
-      setPendingExternalUpdate(null);
-      setSnackbar({ open: true, message: 'External access updated' });
-      closeEditDialog();
-      await fetchApiKeys();
-    } catch (err) {
-      setPendingExternalUpdate(null);
-      setEditSubmitError(err instanceof Error ? err.message : 'Failed to save external access');
-    } finally {
-      setSavingPolicy(false);
-    }
-  };
-
-  const saveExternalAccess = async () => {
-    if (!token || !editKey || channelsLoading || grantsLoading || editLoadError) return;
-    setEditSubmitError(null);
-    const normalized = normalizePolicy(editPolicy);
-    if (!normalized.policy) {
-      setEditSubmitError(normalized.error || 'Invalid policy values');
-      return;
-    }
-    const normalizedPolicy = normalized.policy;
-    const update = { keyId: editKey.id, policy: normalizedPolicy, channelIds: selectedChannelIds };
-    const increasesPrivilege =
-      (normalizedPolicy.allowVideoRequests && !permissionsFromKey(editKey).allowVideoRequests) ||
-      (normalizedPolicy.allowChannelRequests && !permissionsFromKey(editKey).allowChannelRequests) ||
-      (normalizedPolicy.allowDeleteVideoRequests && !permissionsFromKey(editKey).allowDeleteVideoRequests) ||
-      (normalizedPolicy.autoApproveVideoRequests && !editKey.auto_approve_video_requests) ||
-      (normalizedPolicy.autoApproveChannelRequests && !editKey.auto_approve_channel_requests) ||
-      (normalizedPolicy.autoApproveDeleteRequests && !editKey.auto_approve_delete_requests) ||
-      normalizedPolicy.maxRatingLevel > editKey.max_rating_level ||
-      (normalizedPolicy.allowUnrated && !editKey.allow_unrated) ||
-      normalizedPolicy.allowedMediaTypes.some(
-        (mediaType) => !editKey.allowed_media_types.includes(mediaType)
-      ) ||
-      normalizedPolicy.maxActiveJobs > (editKey.max_active_jobs ?? 5) ||
-      normalizedPolicy.hourlyWriteLimit > (editKey.hourly_write_limit ?? 30) ||
-      normalizedPolicy.dailyWriteLimit > (editKey.daily_write_limit ?? 200) ||
-      selectedChannelIds.some((channelId) => !originalChannelIds.includes(channelId));
-    if (increasesPrivilege) {
-      setPendingExternalUpdate(update);
-      return;
-    }
-    await submitExternalAccess(update);
-  };
-
-  const cancelPrivilegeConfirmation = () => {
-    if (!savingPolicy) setPendingExternalUpdate(null);
-  };
-
-  const confirmPrivilegeIncrease = async () => {
-    if (!pendingExternalUpdate) return;
-    await submitExternalAccess(pendingExternalUpdate);
+    if (token && key.role !== 'legacy_download' && !key.revoked_at) setEditKey(key);
   };
 
   const handleDeleteKey = async () => {
-    if (!token || !deleteConfirmDialog.keyId) return;
+    if (!token || !deleteConfirmDialog.keyId || mutationBusy.current) return;
+    mutationBusy.current = true; setRevoking(true); setError(null);
+    const session = sessionSequence.current;
     try {
       await apiKeyApi.revokeApiKey(deleteConfirmDialog.keyId);
+      if (session !== sessionSequence.current) return;
       setSnackbar({ open: true, message: 'API key revoked' });
       void fetchApiKeys();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to revoke API key');
+      if (session === sessionSequence.current) setError(apiKeyError(err, 'Failed to revoke API key'));
     } finally {
+      mutationBusy.current = false; setRevoking(false);
       setDeleteConfirmDialog({ open: false, keyId: null, keyName: '' });
     }
   };
@@ -378,11 +133,14 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
   };
 
   const handleRegenerateKey = async () => {
-    if (!token || !regenerateConfirmDialog.key) return;
+    if (!token || !regenerateConfirmDialog.key || mutationBusy.current) return;
+    mutationBusy.current = true; setError(null);
+    const session = sessionSequence.current;
     const key = regenerateConfirmDialog.key;
     setRegenerating(true);
     try {
       const body = await apiKeyApi.regenerateApiKey(key.id);
+      if (session !== sessionSequence.current) return;
       setRegenerateConfirmDialog({ open: false, key: null });
       setCreatedKey(body);
       setCreatedKeyRole(key.role);
@@ -390,27 +148,22 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
       setCreatedKeyDialogOpen(true);
       await fetchApiKeys();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to regenerate API key');
+      if (session === sessionSequence.current) setError(apiKeyError(err, 'Failed to regenerate API key'));
     } finally {
+      mutationBusy.current = false;
       setRegenerating(false);
     }
   };
 
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    setSnackbar({ open: true, message: `${label} copied to clipboard` });
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setSnackbar({ open: true, message: `${label} copied to clipboard` });
+    } catch {
+      setSnackbar({ open: true, message: 'Unable to copy. Select and copy the key manually.' });
+    }
   };
 
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return 'Never';
-    return new Date(dateStr).toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
 
   if (loading) {
     return (
@@ -441,6 +194,11 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
         toggleTestId: 'requests-nav-link-switch',
       } : undefined}
     >
+      {error && (
+        <Alert severity="error" className="mb-4" onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
       {externalApiEnabled ? (
         <>
       <Box className="mb-4 flex flex-wrap items-start justify-between gap-3">
@@ -467,11 +225,6 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
         </Alert>
       )}
 
-      {error && (
-        <Alert severity="error" className="mb-4" onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
 
       {externalKeys.length > 0 && (
         <Box className="mb-3 flex flex-col items-start gap-2 sm:flex-row sm:items-stretch">
@@ -511,162 +264,8 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
       ) : (
         <div className="grid gap-3" aria-label="External API key cards">
           {visibleExternalKeys.map((key) => {
-            const rawChannelGrantCount = key.channel_grant_count;
-            const channelGrantCount = typeof rawChannelGrantCount === 'number' &&
-              Number.isInteger(rawChannelGrantCount) && rawChannelGrantCount >= 0
-              ? rawChannelGrantCount
-              : null;
-            const permissions = permissionsFromKey(key);
-            const ratingBand = getExternalRatingBand(key.max_rating_level);
-            const movieCeiling = ratingBand.movieRatings[ratingBand.movieRatings.length - 1];
-            const tvCeiling = ratingBand.tvRatings[ratingBand.tvRatings.length - 1];
-            const permissionChips = [
-              permissions.allowVideoRequests && {
-                label: key.auto_approve_video_requests ? 'Videos · Auto' : 'Videos',
-                title: key.auto_approve_video_requests
-                  ? 'Video requests are enabled and auto-approved after policy checks.'
-                  : 'Video requests are enabled and require administrator approval.',
-                icon: <VideoIcon size={13} />,
-                auto: key.auto_approve_video_requests,
-              },
-              permissions.allowChannelRequests && {
-                label: key.auto_approve_channel_requests ? 'Channels · Auto' : 'Channels',
-                title: key.auto_approve_channel_requests
-                  ? 'Channel requests are enabled and auto-approved after policy checks.'
-                  : 'Channel requests are enabled and require administrator approval.',
-                icon: <ChannelIcon size={13} />,
-                auto: key.auto_approve_channel_requests,
-              },
-              permissions.allowDeleteVideoRequests && {
-                label: key.auto_approve_delete_requests ? 'Delete · Auto' : 'Delete video',
-                title: key.auto_approve_delete_requests
-                  ? 'Downloaded-video deletion requests are enabled and auto-approved after policy checks.'
-                  : 'Downloaded-video deletion requests are enabled and require administrator approval.',
-                icon: <DeleteIcon size={13} />,
-                auto: key.auto_approve_delete_requests,
-              },
-            ].filter(Boolean) as Array<{
-              label: string;
-              title: string;
-              icon: React.ReactElement;
-              auto: boolean;
-            }>;
-
-            return (
-              <Paper
-                key={key.id}
-                className="flex flex-col gap-3 border border-border p-4 shadow-none sm:flex-row sm:items-center"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Typography variant="subtitle2" className="mr-1 truncate">
-                      {key.name}
-                    </Typography>
-                    {key.revoked_at && (
-                      <Chip label="Revoked" size="small" color="error" variant="outlined" />
-                    )}
-                    <RatingBadge
-                      rating={movieCeiling}
-                      ratingSource={`Movie ceiling: ${ratingBand.movieRatings.join(' / ')}`}
-                      ariaLabel={`Movie rating ceiling ${movieCeiling}`}
-                    />
-                    <RatingBadge
-                      rating={tvCeiling}
-                      ratingSource={`TV ceiling: ${ratingBand.tvRatings.join(' / ')}`}
-                      ariaLabel={`TV rating ceiling ${tvCeiling}`}
-                    />
-                    {key.allow_unrated && (
-                      <RatingBadge rating={null} showNA ariaLabel="Unrated content allowed" />
-                    )}
-                  </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    <Chip
-                      label={channelGrantCount === null
-                        ? 'Approved channel count unavailable'
-                        : `${channelGrantCount} approved ${channelGrantCount === 1 ? 'channel' : 'channels'}`}
-                      size="small"
-                      color={channelGrantCount === 0 ? 'warning' : 'default'}
-                      variant="outlined"
-                    />
-                    {permissionChips.length === 0 ? (
-                      <Tooltip title="Catalog viewing and request-status access only.">
-                        <Chip
-                          label="View only"
-                          size="small"
-                          variant="outlined"
-                          icon={<ViewIcon size={13} />}
-                        />
-                      </Tooltip>
-                    ) : permissionChips.map((permission) => (
-                      <Tooltip key={permission.label} title={permission.title}>
-                        <Chip
-                          label={permission.label}
-                          size="small"
-                          variant="outlined"
-                          color={permission.auto ? 'primary' : 'default'}
-                          icon={permission.auto
-                            ? <AutoApproveIcon size={13} />
-                            : permission.icon}
-                        />
-                      </Tooltip>
-                    ))}
-                  </div>
-                  {channelGrantCount === 0 && (
-                    <Alert severity="warning" className="mt-3" icon={<WarningIcon size={18} />}>
-                      No approved channels. This key cannot view or request catalog content until you add grants.
-                    </Alert>
-                  )}
-                </div>
-
-                <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
-                  <div className="min-w-0 text-left sm:text-right">
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground sm:justify-end">
-                      <ClockIcon size={13} aria-hidden="true" />
-                      Last used
-                    </div>
-                    <Typography variant="body2" className="whitespace-nowrap">
-                      {formatDate(key.last_used_at)}
-                    </Typography>
-                  </div>
-                  <div className="flex items-center">
-                    {!key.revoked_at && (
-                      <Tooltip title="Edit external access">
-                        <IconButton
-                          size="small"
-                          onClick={() => openEditDialog(key)}
-                          aria-label={`Edit ${key.name} external access`}
-                        >
-                          <EditIcon size={16} />
-                        </IconButton>
-                      </Tooltip>
-                    )}
-                    {!key.revoked_at && (
-                      <Tooltip title="Regenerate key">
-                        <IconButton
-                          size="small"
-                          onClick={() => setRegenerateConfirmDialog({ open: true, key })}
-                          aria-label={`Regenerate ${key.name}`}
-                        >
-                          <RegenerateIcon size={16} />
-                        </IconButton>
-                      </Tooltip>
-                    )}
-                    {!key.revoked_at && (
-                      <Tooltip title="Revoke">
-                        <IconButton
-                          size="small"
-                          onClick={() => openDeleteConfirmDialog(key.id, key.name)}
-                          color="error"
-                          aria-label={`Revoke ${key.name}`}
-                        >
-                          <DeleteIcon size={16} />
-                        </IconButton>
-                      </Tooltip>
-                    )}
-                  </div>
-                </div>
-              </Paper>
-            );
+            return <ExternalKeyCard key={key.id} apiKey={key} onEdit={openEditDialog}
+              onRegenerate={key => setRegenerateConfirmDialog({ open: true, key })} onRevoke={openDeleteConfirmDialog} />;
           })}
         </div>
       )}
@@ -743,7 +342,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
                   />
                 </div>
                 <Typography variant="caption" color="secondary">
-                  Last used {formatDate(key.last_used_at)}
+                  Last used {formatKeyDate(key.last_used_at)}
                 </Typography>
               </div>
               {!key.revoked_at && (
@@ -763,152 +362,20 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
         </div>
       )}
 
-      {/* Create Key Dialog */}
-      <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          {createKeyType === 'legacy' ? 'Create Legacy Download Key' : 'Create External Access Key'}
-        </DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Key Name"
-            placeholder={createKeyType === 'legacy' ? 'e.g., Bookmarklet' : 'e.g., External Client'}
-            fullWidth
-            value={newKeyName}
-            onChange={(e) => setNewKeyName(e.target.value)}
-            inputProps={{ maxLength: 100 }}
-            helperText="A descriptive name to identify this key"
-          />
-          {createKeyType === 'external' && (
-            <>
-              <Typography variant="subtitle2" className="mt-4 mb-2">Access policy</Typography>
-              <PolicyEditor
-                policy={newKeyPolicy}
-                onChange={changeNewKeyPolicy}
-              />
-              <Divider className="my-5" />
-              <Typography variant="subtitle2" className="mb-2">
-                Approved channels ({newKeyChannelIds.length})
-              </Typography>
-              <Typography variant="body2" color="secondary" className="mb-3">
-                The key cannot browse or request from channels that are not selected.
-              </Typography>
-              {newKeyChannelIds.length === 0 && (
-                <Alert severity="warning" className="mb-3" icon={<WarningIcon size={18} />}>
-                  Saving with zero approved channels is allowed, but the key will fail closed and cannot view or request catalog content until grants are added.
-                </Alert>
-              )}
-              <ChannelGrantPicker channels={channelOptions} selectedIds={newKeyChannelIds} search={newKeyChannelSearch} onSearchChange={setNewKeyChannelSearch} onSelectedIdsChange={setNewKeyChannelIds} />
-            </>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
-          <Button
-            onClick={handleCreateKey}
-            variant="contained"
-            disabled={!newKeyName.trim()}
-          >
-            Create
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog
-        open={Boolean(editKey)}
-        onClose={closeEditDialog}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>Edit External Access — {editKey?.name}</DialogTitle>
-        <DialogContent>
-          <Alert severity="info" className="mb-4">
-            Permissions, policy, and channel grants are enforced by Youtarr on every request.
-          </Alert>
-          {editLoadError && (
-            <Alert severity="error" className="mb-4">
-              <div className="space-y-2">
-                <Typography variant="body2">{channelsLoadError || grantsLoadError || editLoadError}</Typography>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={() => editKey && void loadEditData(editKey)}
-                >
-                  Retry
-                </Button>
-              </div>
-            </Alert>
-          )}
-          {editSubmitError && (
-            <Alert severity="error" className="mb-4">{editSubmitError}</Alert>
-          )}
-          {!editLoadError && (channelsLoading || grantsLoading) && (
-            <Alert severity="info" className="mb-4">
-              Loading channel grants and available channels...
-            </Alert>
-          )}
-          <PolicyEditor
-            policy={editPolicy}
-            onChange={(policy) => {
-              setEditPolicy(policy);
-              setEditSubmitError(null);
-            }}
-          />
-          <Divider className="my-5" />
-          <Typography variant="subtitle2" className="mb-2">
-            Approved channels ({selectedChannelIds.length})
-          </Typography>
-          {selectedChannelIds.length === 0 && (
-            <Alert severity="warning" className="mb-3" icon={<WarningIcon size={18} />}>
-              Saving with zero approved channels is allowed, but this key will fail closed and cannot view or request catalog content until grants are added.
-            </Alert>
-          )}
-          <ChannelGrantPicker channels={channelOptions} selectedIds={selectedChannelIds} search={channelSearch} onSearchChange={setChannelSearch} onSelectedIdsChange={setSelectedChannelIds} maxHeight="320px" />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={closeEditDialog}>Cancel</Button>
-          <Button
-            variant="contained"
-            onClick={saveExternalAccess}
-            disabled={savingPolicy || channelsLoading || grantsLoading || Boolean(editLoadError) || !editKey}
-          >
-            {savingPolicy ? 'Saving…' : 'Save External Access'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog
-        open={Boolean(pendingExternalUpdate)}
-        onClose={cancelPrivilegeConfirmation}
-      >
-        <DialogTitle>Confirm expanded external access?</DialogTitle>
-        <DialogContent>
-          <Alert severity="warning" className="mb-3">
-            This change may increase what the external integration can view or request.
-          </Alert>
-          <Typography variant="body2">
-            Continue saving these expanded permissions and channel grants?
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={cancelPrivilegeConfirmation} disabled={savingPolicy}>
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            onClick={confirmPrivilegeIncrease}
-            disabled={savingPolicy}
-          >
-            {savingPolicy ? 'Saving...' : 'Continue'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {createDialogOpen && (createKeyType === 'legacy' || externalApiEnabled) && <CreateKeyDialog key={token} api={apiKeyApi} createKeyType={createKeyType}
+        onClose={() => setCreateDialogOpen(false)} onCreated={(key, role) => {
+          setCreatedKey(key); setCreatedKeyRole(role); setCreatedKeyAction('created');
+          setCreateDialogOpen(false); setCreatedKeyDialogOpen(true); void fetchApiKeys();
+        }} />}
+      {externalApiEnabled && editKey && <EditKeyDialog key={`${token}:${editKey.id}`} apiKey={editKey} api={apiKeyApi}
+        onClose={() => setEditKey(null)} onSaved={() => {
+          setEditKey(null); setSnackbar({ open: true, message: 'External access updated' }); void fetchApiKeys();
+        }} />}
 
       {/* Key Created Dialog */}
       <Dialog
         open={createdKeyDialogOpen}
-        onClose={() => setCreatedKeyDialogOpen(false)}
+        onClose={() => { setCreatedKeyDialogOpen(false); setCreatedKey(null); }}
         maxWidth="md"
         fullWidth
       >
@@ -928,7 +395,8 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
           >
             <code>{createdKey?.key}</code>
             <IconButton
-              onClick={() => copyToClipboard(createdKey?.key || '', 'API key')}
+              aria-label="Copy API key"
+              onClick={() => void copyToClipboard(createdKey?.key || '', 'API key')}
               size="small"
             >
               <ContentCopyIcon size={16} />
@@ -947,13 +415,13 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
                 Use this key only with <strong>{locationUtils.getOrigin()}/external-api/v1</strong>.
               </Typography>
               <Typography variant="body2" color="secondary">
-                Add channel grants from this key&apos;s edit action before connecting an external client.
+                Only approved channels are available. You can update grants from this key&apos;s edit action.
               </Typography>
             </Paper>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCreatedKeyDialogOpen(false)} variant="contained">
+          <Button onClick={() => { setCreatedKeyDialogOpen(false); setCreatedKey(null); }} variant="contained">
             Done
           </Button>
         </DialogActions>
@@ -998,7 +466,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
       {/* Delete Confirmation Dialog */}
       <Dialog
         open={deleteConfirmDialog.open}
-        onClose={() => setDeleteConfirmDialog({ open: false, keyId: null, keyName: '' })}
+        onClose={() => !revoking && setDeleteConfirmDialog({ open: false, keyId: null, keyName: '' })}
       >
         <DialogTitle>Revoke API Key?</DialogTitle>
         <DialogContent>
@@ -1010,10 +478,10 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteConfirmDialog({ open: false, keyId: null, keyName: '' })}>
+          <Button disabled={revoking} onClick={() => setDeleteConfirmDialog({ open: false, keyId: null, keyName: '' })}>
             Cancel
           </Button>
-          <Button onClick={handleDeleteKey} color="error" variant="contained">
+          <Button disabled={revoking} onClick={handleDeleteKey} color="error" variant="contained">
             Revoke
           </Button>
         </DialogActions>
