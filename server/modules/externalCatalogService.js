@@ -1,6 +1,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const crypto = require('crypto');
+const { attachRequestStatuses } = require('./externalCatalogRequests');
 const { QueryTypes } = require('sequelize');
 const { sequelize } = require('../db');
 const configModule = require('./configModule');
@@ -388,14 +389,7 @@ async function listChannelVideos(key, channelDatabaseId, query = {}) {
             cv.duration, cv.media_type, v.description, v.id AS downloaded_id,
             v.removed AS downloaded_removed, ${effectiveRating} AS rating,
             c.id AS channel_database_id,
-            ${sortExpressions[sortBy]} AS cursor_sort_value,
-            (SELECT er.status
-               FROM external_requests er
-              WHERE er.api_key_id = :keyId
-                AND er.request_type = 'video'
-                AND er.youtube_id = cv.youtube_id
-              ORDER BY er.created_at DESC, er.id DESC
-              LIMIT 1) AS request_status
+            ${sortExpressions[sortBy]} AS cursor_sort_value
        ${from}
        ${seekSql}
       ORDER BY ${sortExpressions[sortBy]} ${sortOrder.toUpperCase()}, c.id ASC, cv.youtube_id ASC
@@ -404,6 +398,7 @@ async function listChannelVideos(key, channelDatabaseId, query = {}) {
   );
   const hasMore = fetchedRows.length > pageSize;
   const rows = fetchedRows.slice(0, pageSize);
+  await attachRequestStatuses(key, rows);
   const total = Number(countRows[0]?.total || 0);
   const lastIndexedAt = lastFetched(channel, mediaType);
   return {
@@ -548,14 +543,7 @@ async function listVideos(key, query = {}) {
             cv.duration, cv.media_type, v.description, v.id AS downloaded_id,
             v.removed AS downloaded_removed, ${effectiveRating} AS rating,
             c.id AS channel_database_id, c.channel_id, COALESCE(c.title, c.uploader, '') AS channel_title,
-            ${sortExpressions[sortBy]} AS cursor_sort_value,
-            (SELECT er.status
-               FROM external_requests er
-              WHERE er.api_key_id = :keyId
-                AND er.request_type = 'video'
-                AND er.youtube_id = cv.youtube_id
-              ORDER BY er.created_at DESC, er.id DESC
-              LIMIT 1) AS request_status
+            ${sortExpressions[sortBy]} AS cursor_sort_value
        ${from}
        ${seekSql}
       ORDER BY ${sortExpressions[sortBy]} ${sortOrder.toUpperCase()}, c.id ASC, cv.youtube_id ASC
@@ -564,6 +552,7 @@ async function listVideos(key, query = {}) {
   );
   const hasMore = fetchedRows.length > pageSize;
   const rows = fetchedRows.slice(0, pageSize);
+  await attachRequestStatuses(key, rows);
   const total = Number(countRows[0]?.total || 0);
   return {
     data: rows.map((row) => ({
@@ -612,14 +601,7 @@ async function getVideoDetail(key, youtubeId, metadataService = null) {
             v.last_downloaded_at, v.file_size AS fileSize, v.audio_file_size AS audioFileSize, v.protected,
             v.rating_source, v.video_resolution, ${effectiveRating} AS rating,
             c.id AS channel_database_id, c.channel_id,
-            COALESCE(c.title, c.uploader, '') AS channel_title,
-            (SELECT er.status
-               FROM external_requests er
-              WHERE er.api_key_id = :keyId
-                AND er.request_type = 'video'
-                AND er.youtube_id = cv.youtube_id
-              ORDER BY er.created_at DESC, er.id DESC
-              LIMIT 1) AS request_status
+            COALESCE(c.title, c.uploader, '') AS channel_title
        FROM channelvideos cv
        INNER JOIN channels c ON c.channel_id = cv.channel_id
        INNER JOIN api_key_channel_grants g
@@ -644,6 +626,7 @@ async function getVideoDetail(key, youtubeId, metadataService = null) {
   );
   const row = rows[0];
   if (!row) throw new CatalogError('Video not found', 404);
+  await attachRequestStatuses(key, [row]);
 
   const metadataProvider = metadataService || require('./videoMetadataModule');
   const metadata = await metadataProvider.getVideoMetadata(youtubeId);
