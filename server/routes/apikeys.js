@@ -13,6 +13,7 @@ module.exports = function createApiKeyRoutes({ verifyToken }) {
   const { sequelize } = require('../db');
 
   const isPolicyValidationError = (error) =>
+    error.name === 'ChannelGrantValidationError' ||
     error.message.includes('Invalid') ||
     error.message.includes('Policy') ||
     error.message.includes('Unsupported') ||
@@ -267,8 +268,7 @@ module.exports = function createApiKeyRoutes({ verifyToken }) {
       if (!grants) return res.status(404).json({ error: 'API key not found' });
       return res.json({ success: true, ...grants });
     } catch (error) {
-      if (error.message.includes('channelIds') || error.message.includes('enabled channel') ||
-          error.message.includes('Only active external API keys')) {
+      if (isPolicyValidationError(error)) {
         return res.status(400).json({ error: error.message });
       }
       req.log.error({ err: error }, 'Failed to replace API key channel grants');
