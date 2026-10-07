@@ -5,6 +5,7 @@ const { QueryTypes } = require('sequelize');
 const { sequelize } = require('../db');
 const configModule = require('./configModule');
 const { normalizePolicy, ratingPolicy } = require('./externalEligibility');
+const { publicVideoThumbnail } = require('./externalThumbnailProxy');
 const {
   CatalogError,
   decodePageCursor,
@@ -13,12 +14,10 @@ const {
 } = require('./externalPagination');
 
 const TAB_MEDIA_TYPES = { videos: 'video', shorts: 'short', streams: 'livestream' };
-const SAFE_THUMBNAIL_HOSTS = ['ytimg.com', 'ggpht.com', 'googleusercontent.com'];
 const ACTIVE_REQUEST_STATUSES = ['pending', 'approved', 'processing'];
 const MAX_PAGE = 100;
 const MAX_DESCRIPTION_LENGTH = 2000;
 const MAX_TITLE_LENGTH = 500;
-const MAX_PUBLIC_URL_LENGTH = 2048;
 
 function boundedString(value, maximum) {
   if (value === null || value === undefined) return null;
@@ -90,7 +89,7 @@ function catalogCursorFingerprint(endpoint, filters) {
 
 function decodeCatalogCursor(value, expected) {
   if (value === undefined) return null;
-  if (typeof value !== 'string' || value.length > 500) {
+  if (typeof value !== 'string' || value.length > 4096) {
     throw new CatalogError('cursor is invalid');
   }
   try {
@@ -104,7 +103,9 @@ function decodeCatalogCursor(value, expected) {
         !Number.isSafeInteger(parsed.channelDatabaseId) || parsed.channelDatabaseId < 1 ||
         typeof parsed.youtubeId !== 'string' || parsed.youtubeId.length === 0 ||
         parsed.youtubeId.length > 32 ||
-        !Object.prototype.hasOwnProperty.call(parsed, 'sortValue')) {
+        (expected.sortBy === 'duration'
+          ? !Number.isFinite(parsed.sortValue) || parsed.sortValue < -1
+          : typeof parsed.sortValue !== 'string' || parsed.sortValue.length > MAX_TITLE_LENGTH)) {
       throw new Error('invalid cursor');
     }
     return parsed;
@@ -185,21 +186,6 @@ function lastFetched(channel, mediaType = null) {
     const dates = Object.values(values).filter(Boolean).map((value) => new Date(value));
     if (dates.length === 0 || dates.some((value) => Number.isNaN(value.getTime()))) return null;
     return new Date(Math.max(...dates.map((value) => value.getTime()))).toISOString();
-  } catch (_error) {
-    return null;
-  }
-}
-
-function publicVideoThumbnail(value) {
-  if (typeof value !== 'string' || value.length > MAX_PUBLIC_URL_LENGTH) return null;
-  try {
-    const url = new URL(value);
-    const hostname = url.hostname.toLowerCase();
-    if (url.protocol !== 'https:' ||
-        !SAFE_THUMBNAIL_HOSTS.some((host) => hostname === host || hostname.endsWith(`.${host}`))) {
-      return null;
-    }
-    return url.toString();
   } catch (_error) {
     return null;
   }
@@ -307,7 +293,7 @@ async function listChannelVideos(key, channelDatabaseId, query = {}) {
     duration: 'COALESCE(cv.duration, -1)',
   };
   const sortBy = query.sortBy || 'date';
-  if (!sortColumns[sortBy]) throw new CatalogError('sortBy must be date, title, or duration');
+  if (!Object.hasOwn(sortColumns, sortBy)) throw new CatalogError('sortBy must be date, title, or duration');
   const sortOrder = (query.sortOrder || 'desc').toLowerCase();
   if (!['asc', 'desc'].includes(sortOrder)) throw new CatalogError('sortOrder must be asc or desc');
   const minDuration = parseInteger(query.minDuration, null, 0, 604800, 'minDuration');
@@ -467,7 +453,7 @@ async function listVideos(key, query = {}) {
     duration: 'COALESCE(cv.duration, -1)',
   };
   const sortBy = query.sortBy || 'date';
-  if (!sortColumns[sortBy]) throw new CatalogError('sortBy must be date, title, or duration');
+  if (!Object.hasOwn(sortColumns, sortBy)) throw new CatalogError('sortBy must be date, title, or duration');
   const sortOrder = (query.sortOrder || 'desc').toLowerCase();
   if (!['asc', 'desc'].includes(sortOrder)) throw new CatalogError('sortOrder must be asc or desc');
   const minDuration = parseInteger(query.minDuration, null, 0, 604800, 'minDuration');

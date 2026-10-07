@@ -96,6 +96,8 @@ afterAll(async () => {
 });
 
 test('catalog IDs feed real request models and management DTOs', async () => {
+  const mapper = require('../modules/channel/channelMappers');
+  expect(mapper.mapChannelListEntry(channel).database_id).toBe(channel.id);
   const channels = await catalog.listChannels(key);
   expect(channels.data[0]).toMatchObject({ id: channel.id, channelId: youtubeChannelId });
   const api = service();
@@ -103,6 +105,17 @@ test('catalog IDs feed real request models and management DTOs', async () => {
   const detail = await api.getAdminRequest(created.request.id);
   expect(detail.target).toMatchObject({ channelId: channel.id, youtubeChannelId, title: 'Synthetic video' });
 });
+
+test('title cursors round trip long Unicode titles from real catalog rows', async () => {
+  await models.ChannelVideo.update({ title: '長'.repeat(240) }, { where: { youtube_id: youtubeId } });
+  await models.ChannelVideo.create({ youtube_id: 'lmnopqrstuv', channel_id: youtubeChannelId,
+    title: '長'.repeat(240), publishedAt: timestamp.toISOString() });
+  const first = await catalog.listVideos(key, { sortBy: 'title', pageSize: '1' });
+  const second = await catalog.listVideos(key, { sortBy: 'title', pageSize: '1', cursor: first.pagination.nextCursor });
+  expect(second.data).toHaveLength(1);
+  expect(second.data[0].youtubeId).not.toBe(first.data[0].youtubeId);
+});
+
 
 test('concurrent duplicates reserve one accepted write', async () => {
   const api = service();

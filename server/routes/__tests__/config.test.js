@@ -738,3 +738,19 @@ describe('schedule configuration', () => {
     expect(res.body.logging).toEqual(LOGGING_STATUS);
   });
 });
+
+test.each([[undefined, false], ['false', false], ['invalid', false], ['true', true]])(
+  'reports effective external API availability for %s', async (value, enabled) => {
+    const original = process.env.EXTERNAL_API_ENABLED;
+    try {
+      if (value === undefined) delete process.env.EXTERNAL_API_ENABLED;
+      else process.env.EXTERNAL_API_ENABLED = value;
+      const { app } = makeApp();
+      const response = await supertest(app).get('/getconfig').expect(200);
+      expect(response.body.isPlatformManaged.externalApiEnabled).toBe(enabled);
+    } finally {
+      if (original === undefined) delete process.env.EXTERNAL_API_ENABLED;
+      else process.env.EXTERNAL_API_ENABLED = original;
+    }
+  }
+);
