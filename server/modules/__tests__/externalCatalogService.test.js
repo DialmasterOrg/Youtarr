@@ -17,7 +17,10 @@ const key = (overrides = {}) => ({
 });
 
 describe('external cached catalog', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    sequelize.query.mockResolvedValue([]);
+  });
 
   test('lists only granted enabled channels with SQL paging and policy-filtered counts', async () => {
     sequelize.query
@@ -71,8 +74,9 @@ describe('external cached catalog', () => {
         youtube_id: 'abc', title: 'Allowed', thumbnail: 'https://i.ytimg.com/vi/abc/hqdefault.jpg',
         publishedAt: '2026-07-10T00:00:00.000Z', published_at_source: 'exact',
         duration: 90, media_type: 'short', description: null, downloaded_id: null,
-        downloaded_removed: null, rating: 'TV-Y', request_status: 'processing',
-      }]);
+        downloaded_removed: null, rating: 'TV-Y',
+      }])
+      .mockResolvedValueOnce([{ youtube_id: 'abc', status: 'processing' }]);
     const result = await catalog.listChannelVideos(
       key({ allowedMediaTypes: ['video', 'short'] }),
       '8',
@@ -101,8 +105,7 @@ describe('external cached catalog', () => {
       'ORDER BY COALESCE(cv.published_at, \'\') DESC, c.id ASC, cv.youtube_id ASC'
     );
     expect(listSql).toContain('LIMIT :fetchLimit OFFSET :offset');
-    expect(listSql).toContain('FROM external_requests er');
-    expect(listSql).toContain('er.api_key_id = :keyId');
+    expect(sequelize.query.mock.calls[3][1].replacements).toMatchObject({ keyId: 4, youtubeIds: ['abc'] });
   });
 
   test('returns the complete deterministic cross-channel catalog beyond the former three-page cap', async () => {
@@ -123,8 +126,8 @@ describe('external cached catalog', () => {
         channel_database_id: 8,
         channel_id: 'UCsafe',
         channel_title: 'Safe Channel',
-        request_status: 'failed',
-      }]);
+        }])
+      .mockResolvedValueOnce([{ youtube_id: 'abcdefghijk', status: 'failed' }]);
 
     const result = await catalog.listVideos(key(), {
       page: '3',
@@ -320,8 +323,8 @@ describe('external cached catalog', () => {
       channel_database_id: 8,
       channel_id: 'UCsafe',
       channel_title: 'Safe Channel',
-      request_status: 'approved',
-    }]);
+      }])
+      .mockResolvedValueOnce([{ youtube_id: 'abcdefghijk', status: 'approved' }]);
     const metadataService = {
       getVideoMetadata: jest.fn().mockResolvedValue({
         description: 'full description',

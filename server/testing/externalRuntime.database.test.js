@@ -257,3 +257,25 @@ test('idempotency keys cannot replay a deletion as a video request', async () =>
   await video.update({ removed: true });
   await expect(api.createVideoRequest(key, input)).rejects.toMatchObject({ status: 409 });
 });
+test('runtime indexes preserve equivalent indexes and survive rollback and partial reapply', async () => {
+  const migration = require('../../migrations/20261007041058-add-external-api-runtime-indexes');
+  const queryInterface = sequelize.getQueryInterface();
+  await migration.down(queryInterface);
+  const customName = 'custom_external_catalog_lookup';
+  await queryInterface.addIndex('external_requests', migration.INDEXES[0].fields, { name: customName });
+  try {
+    await migration.up(queryInterface);
+    await migration.up(queryInterface);
+    let names = (await queryInterface.showIndex('external_requests')).map(index => index.name);
+    expect(names).toContain(customName);
+    expect(names).not.toContain(migration.INDEXES[0].name);
+    expect(names).toContain(migration.INDEXES[1].name);
+    await migration.down(queryInterface);
+    names = (await queryInterface.showIndex('external_requests')).map(index => index.name);
+    expect(names).toContain(customName);
+    expect(names).not.toContain(migration.INDEXES[1].name);
+  } finally {
+    await queryInterface.removeIndex('external_requests', customName);
+    await migration.up(queryInterface);
+  }
+});
