@@ -4,6 +4,9 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import axios from 'axios';
 import RequestsPage from '../RequestsPage';
+import { useMediaQuery } from '../../../hooks/useMediaQuery';
+
+jest.mock('../../../hooks/useMediaQuery', () => ({ useMediaQuery: jest.fn(() => false) }));
 import { ExternalRequestReview } from '../../../types/externalRequest';
 
 jest.mock('axios', () => ({
@@ -62,6 +65,7 @@ const renderPage = () => render(
 
 describe('RequestsPage', () => {
   beforeEach(() => {
+    (useMediaQuery as jest.Mock).mockReturnValue(false);
     mockedAxios.get.mockReset();
     mockedAxios.post.mockReset();
   });
@@ -297,6 +301,16 @@ describe('RequestsPage', () => {
     await user.click(await screen.findByRole('button', { name: 'Details' }));
     expect(await screen.findByText('Your session cannot review this request.')).toBeInTheDocument();
     expect(within(screen.getByRole('dialog')).queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+  });
+
+  test('keeps request actions in a compact card on mobile', async () => {
+    (useMediaQuery as jest.Mock).mockReturnValue(true);
+    mockedAxios.get.mockResolvedValueOnce(axiosResponse(page()));
+    renderPage();
+    const card = await screen.findByRole('article');
+    expect(within(card).getByRole('button', { name: 'Approve request' })).toBeEnabled();
+    expect(within(card).getByText('External Client')).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 
 });

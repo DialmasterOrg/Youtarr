@@ -906,9 +906,9 @@ Settings for API key authentication used by bookmarklets, mobile shortcuts, and 
 - **Config Key**: `apiKeyRateLimit`
 - **Type**: `number`
 - **Default**: `10`
-- **Description**: Maximum download requests per minute per API key
+- **Description**: Maximum legacy download requests per minute per API key
 - **Range**: 1-100
-- **Note**: Helps prevent abuse from external integrations. Each API key is rate-limited independently.
+- **Note**: Applies to legacy download keys. Versioned external access has separate read, write, and durable workload limits; see [External API rate limits](EXTERNAL_API.md#rate-limits).
 
 ### Requests Navigation Link
 - **Config Key**: `showRequestsNavLink`
