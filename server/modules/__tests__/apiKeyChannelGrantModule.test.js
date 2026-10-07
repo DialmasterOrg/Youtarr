@@ -1,6 +1,6 @@
 jest.mock('../../db', () => ({
   sequelize: {
-    transaction: jest.fn(async (callback) => callback({ id: 'transaction' })),
+    transaction: jest.fn(async (callback) => callback({ id: 'transaction', LOCK: { UPDATE: 'UPDATE' } })),
   },
 }));
 const { Op } = require('sequelize');
@@ -26,11 +26,11 @@ describe('API key channel grants', () => {
     const result = await grants.replaceChannelGrants(7, [9, 3, 9]);
     expect(result).toEqual({ keyId: 7, channelIds: [3, 9] });
     expect(ApiKeyChannelGrant.destroy).toHaveBeenCalledWith({
-      where: { api_key_id: 7 }, transaction: { id: 'transaction' },
+      where: { api_key_id: 7 }, transaction: { id: 'transaction', LOCK: { UPDATE: 'UPDATE' } },
     });
     expect(ApiKeyChannelGrant.bulkCreate).toHaveBeenCalledWith(
       [{ api_key_id: 7, channel_id: 3 }, { api_key_id: 7, channel_id: 9 }],
-      { transaction: { id: 'transaction' } }
+      { transaction: { id: 'transaction', LOCK: { UPDATE: 'UPDATE' } } }
     );
   });
 

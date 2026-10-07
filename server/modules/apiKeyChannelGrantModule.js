@@ -12,7 +12,7 @@ function normalizeChannelIds(channelIds) {
 }
 
 async function requireExternalKey(keyId, transaction) {
-  const key = await ApiKey.findByPk(keyId, { transaction });
+  const key = await ApiKey.findByPk(keyId, { transaction, ...(transaction ? { lock: transaction.LOCK.UPDATE } : {}) });
   if (!key) return null;
   if (!key.is_active || key.revoked_at || key.role === 'legacy_download') {
     throw new Error('Only active external API keys can receive channel grants');

@@ -11,6 +11,7 @@ const { normalizeExternalApiKey } = require('../middleware/externalApiAuth');
 const { createExternalRequestService } = require('../modules/externalRequestService');
 const { createExternalQuotaService } = require('../modules/externalQuotaService');
 const { createExternalWorkLimiter } = require('../modules/externalWorkLimiter');
+const { isSpecificUrlDownloadJob } = require('../modules/download/jobTypes');
 const catalog = require('../modules/externalCatalogService');
 const configModule = require('../modules/configModule');
 
@@ -26,6 +27,7 @@ function service(options = {}) {
   return createExternalRequestService({
     models, sequelize, now: () => timestamp,
     executor: async ({ body }) => {
+      expect(isSpecificUrlDownloadJob(body.jobLabel)).toBe(true);
       await models.Job.findOrCreate({
         where: { id: body.externalRequestId },
         defaults: { status: 'Pending', timeCreated: timestamp, timeInitiated: timestamp, jobType: 'Manual Download' },
@@ -76,7 +78,7 @@ beforeEach(async () => {
   channel = await models.Channel.create({ channel_id: youtubeChannelId,
     title: 'Synthetic channel', enabled: true, default_rating: 'TV-Y' });
   await models.ChannelVideo.create({ youtube_id: youtubeId, channel_id: youtubeChannelId,
-    title: 'Synthetic video', publishedAt: '20261007' });
+    title: 'Synthetic video', publishedAt: '2026-10-07T00:00:00.000Z' });
   keyRecord = await models.ApiKey.create({ name: 'Synthetic test key', key_hash: 'test-only-hash',
     key_prefix: 'testonly', created_at: timestamp, role: 'admin', allow_video_requests: true,
     allow_channel_requests: true, allow_delete_video_requests: true, allow_unrated: true });
@@ -189,4 +191,56 @@ test('reconciliation keeps a downloaded video completed when its job is Complete
   await downloadedVideo();
   await models.Job.update({ status: 'Complete' }, { where: { id: created.request.id } });
   expect((await api.getRequest(key, created.request.id)).status).toBe('completed');
+});
+
+test('two administrators cannot enqueue the same approval twice', async () => {
+  const api = service();
+  const created = await api.createVideoRequest(key, { youtubeId, channelId: channel.id });
+  const results = await Promise.allSettled([api.reviewRequest(created.request.id, 'approve'),
+    api.reviewRequest(created.request.id, 'approve')]);
+  expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+  expect(results.find(result => result.status === 'rejected').reason.status).toBe(409);
+  expect(await models.Job.count()).toBe(1);
+});
+
+test('grant revocation while an approval waits for a work slot prevents enqueue', async () => {
+  const limiter = createExternalWorkLimiter({ concurrency: 1, maxQueue: 1 });
+  let release;
+  const blocker = limiter.run(() => new Promise(resolve => { release = resolve; }));
+  const api = service({ workLimiter: limiter });
+  const created = await api.createVideoRequest(key, { youtubeId, channelId: channel.id });
+  const approval = api.reviewRequest(created.request.id, 'approve');
+  await models.ApiKeyChannelGrant.destroy({ where: { api_key_id: key.id } });
+  release();
+  await blocker;
+  expect((await approval).status).toBe('failed');
+  expect(await models.Job.count()).toBe(0);
+});
+
+test('retry after enqueue but before request persistence reuses the durable job', async () => {
+  await policy({ auto_approve_video_requests: true });
+  const api = service();
+  const input = { youtubeId, channelId: channel.id, idempotencyKey: 'enqueue-crash' };
+  models.ExternalRequest.addHook('beforeUpdate', 'simulateConnectionLoss', row => {
+    if (row.status === 'processing') throw new Error('Synthetic connection loss after enqueue');
+  });
+  try {
+    await expect(api.createVideoRequest(key, input)).rejects.toThrow('Synthetic connection loss');
+  } finally {
+    models.ExternalRequest.removeHook('beforeUpdate', 'simulateConnectionLoss');
+  }
+  const executor = jest.fn();
+  const result = await service({ executor }).createVideoRequest(key, input);
+  expect(result.request.status).toBe('processing');
+  expect(executor).not.toHaveBeenCalled();
+  expect(await models.Job.count()).toBe(1);
+});
+
+test('idempotency keys cannot replay a deletion as a video request', async () => {
+  const video = await downloadedVideo();
+  const api = service();
+  const input = { youtubeId, channelId: channel.id, idempotencyKey: 'cross-operation' };
+  await api.createDeleteVideoRequest(key, input);
+  await video.update({ removed: true });
+  await expect(api.createVideoRequest(key, input)).rejects.toMatchObject({ status: 409 });
 });
