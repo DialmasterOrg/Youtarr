@@ -347,3 +347,31 @@ test('catalog request status selects the newest own-key history and preserves du
   expect((await catalog.listChannels(key)).data.map(row => row.id)).toEqual([channel.id]);
   expect(await models.Channel.count()).toBe(2);
 });
+
+test.each(['missing', 'disabled', 'terminated'])('management rejects a %s channel grant and rolls back key changes', async state => {
+  const express = require('express');
+  const request = require('supertest');
+  const createApiKeyRoutes = require('../routes/apikeys');
+  const app = express();
+  app.use(express.json());
+  app.use(createApiKeyRoutes({ verifyToken: (req, _res, next) => {
+    req.authType = 'session';
+    req.log = { error: () => {} };
+    next();
+  } }));
+  if (state === 'disabled') await channel.update({ enabled: false });
+  if (state === 'terminated') await channel.update({ terminated_at: timestamp });
+  const channelIds = [state === 'missing' ? channel.id + 1000 : channel.id];
+  const error = { error: 'Every channel ID must identify an enabled, non-terminated channel' };
+  const beforeCount = await models.ApiKey.count();
+  await request(app).post('/api/keys')
+    .send({ name: 'Invalid grant client', policy: { role: 'view' }, channelIds }).expect(400, error);
+  expect(await models.ApiKey.count()).toBe(beforeCount);
+  await request(app).put(`/api/keys/${key.id}/external-access`)
+    .send({ policy: { role: 'view', maxRatingLevel: 1 }, channelIds }).expect(400, error);
+  await keyRecord.reload();
+  expect(keyRecord.role).toBe('admin');
+  expect(keyRecord.max_rating_level).toBe(4);
+  await request(app).put(`/api/keys/${key.id}/channels`).send({ channelIds }).expect(400, error);
+  expect(await models.ApiKeyChannelGrant.count({ where: { api_key_id: key.id } })).toBe(1);
+});
