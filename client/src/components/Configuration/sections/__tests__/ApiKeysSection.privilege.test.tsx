@@ -41,6 +41,7 @@ const externalKey = {
 const props = (): React.ComponentProps<typeof ApiKeysSection> => ({
   token: 'test-token',
   apiKeyRateLimit: 10,
+  externalApiEnabled: true,
   onRateLimitChange: jest.fn(),
   showRequestsNavLink: true,
   onShowRequestsNavLinkChange: jest.fn(),
@@ -256,5 +257,91 @@ describe('ApiKeysSection privilege confirmation', () => {
     expect(screen.getByText('Edit External Access — Second Client')).toBeInTheDocument();
     expect(secondChannelCheckbox).toBeChecked();
     expect(screen.queryByLabelText('Safe Channel')).not.toBeInTheDocument();
+  });
+});
+
+describe('API key dialog lifecycle', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedUseApiKeys.mockReturnValue({
+      fetchApiKeys: jest.fn().mockResolvedValue([externalKey]),
+      fetchAvailableChannels: jest.fn().mockResolvedValue([safeChannel]),
+      fetchChannelGrants: jest.fn().mockResolvedValue([]),
+      createApiKey: jest.fn(), updateExternalAccess: jest.fn().mockResolvedValue({ success: true }),
+      revokeApiKey: jest.fn(), regenerateApiKey: jest.fn(),
+    });
+  });
+
+  it('ignores a cancelled create load while a different editor is loading', async () => {
+    const createChannels = deferred<ChannelListEntry[]>();
+    const editChannels = deferred<ChannelListEntry[]>();
+    const api = mockedUseApiKeys('test-token');
+    (api.fetchAvailableChannels as jest.Mock).mockReturnValueOnce(createChannels.promise)
+      .mockReturnValueOnce(editChannels.promise);
+    const user = userEvent.setup();
+    renderWithProviders(<ApiKeysSection {...props()} />);
+    await user.click(await screen.findByRole('button', { name: 'Create external key' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(screen.getByRole('button', { name: 'Edit External Client external access' }));
+    await act(async () => createChannels.resolve([{ ...safeChannel, database_id: 99, title: 'Obsolete channel' }]));
+    expect(screen.getByRole('button', { name: 'Save External Access' })).toBeDisabled();
+    expect(screen.queryByLabelText('Obsolete channel')).not.toBeInTheDocument();
+    await act(async () => editChannels.resolve([safeChannel]));
+    expect(await screen.findByLabelText('Safe Channel')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save External Access' })).toBeEnabled();
+  });
+
+  it('blocks duplicate creation and cannot dismiss a submission before the secret arrives', async () => {
+    const created = deferred<{ success: boolean; id: number; name: string; key: string; prefix: string; message: string }>();
+    const api = mockedUseApiKeys('test-token');
+    (api.createApiKey as jest.Mock).mockReturnValue(created.promise);
+    const user = userEvent.setup();
+    renderWithProviders(<ApiKeysSection {...props()} />);
+    await user.click(await screen.findByRole('button', { name: 'Create external key' }));
+    await user.type(screen.getByLabelText('Key Name'), 'Synthetic client');
+    await user.dblClick(screen.getByRole('button', { name: 'Create' }));
+    expect(api.createApiKey).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    await user.keyboard('{Escape}');
+    expect(screen.getByText('Create External Access Key')).toBeInTheDocument();
+    await act(async () => created.resolve({ success: true, id: 1, name: 'Synthetic client', key: 'synthetic-only-secret', prefix: 'synthetic', message: '' }));
+    expect(await screen.findByText('synthetic-only-secret')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Done' }));
+    expect(screen.queryByText('synthetic-only-secret')).not.toBeInTheDocument();
+  });
+
+  it('shows legacy creation errors inside the dialog when external access is disabled', async () => {
+    const api = mockedUseApiKeys('test-token');
+    (api.createApiKey as jest.Mock).mockRejectedValue(new Error('Creation failed'));
+    const user = userEvent.setup();
+    renderWithProviders(<ApiKeysSection {...props()} externalApiEnabled={false} />);
+    await user.click(await screen.findByRole('button', { name: 'Create legacy key' }));
+    await user.type(screen.getByLabelText('Key Name'), 'Bookmarklet');
+    await user.click(screen.getByRole('button', { name: 'Create' }));
+    expect(await screen.findByText('Creation failed')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create' })).toBeEnabled();
+  });
+
+  it('keeps an edit open during saving and only submits it once', async () => {
+    const saved = deferred<{ success: boolean }>();
+    const api = mockedUseApiKeys('test-token');
+    (api.updateExternalAccess as jest.Mock).mockReturnValue(saved.promise);
+    const user = userEvent.setup();
+    renderWithProviders(<ApiKeysSection {...props()} />);
+    await user.click(await screen.findByRole('button', { name: 'Edit External Client external access' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save External Access' })).toBeEnabled());
+    await user.dblClick(screen.getByRole('button', { name: 'Save External Access' }));
+    expect(api.updateExternalAccess).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    await user.keyboard('{Escape}');
+    expect(screen.getByText('Edit External Access — External Client')).toBeInTheDocument();
+    await act(async () => saved.resolve({ success: true }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('fails closed when effective feature availability has not been supplied', async () => {
+    renderWithProviders(<ApiKeysSection {...props()} externalApiEnabled={undefined} />);
+    expect(await screen.findByText(/External API access is disabled/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create external key' })).not.toBeInTheDocument();
   });
 });

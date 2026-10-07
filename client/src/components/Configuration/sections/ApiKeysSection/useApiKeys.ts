@@ -103,14 +103,14 @@ export const useApiKeys = (token: string | null) => {
     return data.keys || [];
   }, [headers, token]);
 
-  const fetchAvailableChannels = useCallback(async () => {
+  const fetchAvailableChannels = useCallback(async (signal?: AbortSignal) => {
     if (!token) return [];
     const channels: ChannelListEntry[] = [];
     let page = 1;
     let totalPages = 1;
     do {
       const { data } = await axios.get<ChannelListResponse>('/getchannels', {
-        headers,
+        headers, signal,
         params: { page, pageSize: 100, sortOrder: 'asc' },
       });
       channels.push(...(data.channels || []));
@@ -121,8 +121,8 @@ export const useApiKeys = (token: string | null) => {
     return channels;
   }, [headers, token]);
 
-  const fetchChannelGrants = useCallback(async (keyId: number) => {
-    const { data } = await axios.get<ChannelGrantsResponse>(`/api/keys/${keyId}/channels`, { headers });
+  const fetchChannelGrants = useCallback(async (keyId: number, signal?: AbortSignal) => {
+    const { data } = await axios.get<ChannelGrantsResponse>(`/api/keys/${keyId}/channels`, { headers, signal });
     return data.channelIds || [];
   }, [headers]);
 
