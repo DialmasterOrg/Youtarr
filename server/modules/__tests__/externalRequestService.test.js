@@ -225,10 +225,8 @@ describe('external video request service', () => {
       status: 503,
       code: 'work_queue_full',
     });
-    expect(limited.created.update).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'failed',
-      active_dedupe_key: null,
-    }));
+    expect(limited.created.status).toBe('pending');
+    expect(limited.created.active_dedupe_key).toBe(`4:video:${youtubeId}`);
   });
 
   test('revalidates a channel grant inside the work slot before enqueue', async () => {
