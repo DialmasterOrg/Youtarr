@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
+import { MemoryRouter } from 'react-router-dom';
 
 jest.mock('axios', () => ({
   post: jest.fn(),
@@ -10,9 +11,21 @@ jest.mock('axios', () => ({
 const axios = require('axios');
 
 import { VideoFilenameTemplate } from '../VideoFilenameTemplate';
-import { FILENAME_PRESETS } from '../../../../../utils/filenameTemplate/presets';
+import { FILENAME_PRESETS, PLEX_TV_SERIES_PRESET_PREFIX } from '../../../../../utils/filenameTemplate/presets';
 
 const defaultPrefix = '%(uploader,channel,uploader_id).80B - %(title).76B';
+
+type TemplateProps = React.ComponentProps<typeof VideoFilenameTemplate>;
+
+function renderTemplate(props: Partial<TemplateProps> = {}) {
+  const element = (next: Partial<TemplateProps>) => (
+    <MemoryRouter>
+      <VideoFilenameTemplate value={defaultPrefix} onChange={() => {}} token="tok" {...next} />
+    </MemoryRouter>
+  );
+  const view = render(element(props));
+  return { ...view, rerenderTemplate: (next: Partial<TemplateProps>) => view.rerender(element({ ...props, ...next })) };
+}
 
 const SAMPLE_RESPONSE = {
   fileLine: 'TEDx Talks - How to Get Your Brain... [Hu4Yvq-g7_Y].mp4',
@@ -25,14 +38,14 @@ describe('VideoFilenameTemplate', () => {
   beforeEach(() => jest.clearAllMocks());
 
   it('renders the input with the current value', () => {
-    render(<VideoFilenameTemplate value={defaultPrefix} onChange={() => {}} token="tok" />);
+    renderTemplate();
     const input = screen.getByLabelText(/video filename template/i) as HTMLInputElement;
     expect(input.value).toBe(defaultPrefix);
   });
 
   it('calls onChange when the user types', () => {
     const handleChange = jest.fn();
-    render(<VideoFilenameTemplate value={defaultPrefix} onChange={handleChange} token="tok" />);
+    renderTemplate({ onChange: handleChange });
     const input = screen.getByLabelText(/video filename template/i);
     fireEvent.change(input, { target: { value: '%(title)s' } });
     expect(handleChange).toHaveBeenCalledWith('%(title)s');
@@ -40,7 +53,7 @@ describe('VideoFilenameTemplate', () => {
 
   it('renders all five presets and applies one when clicked', () => {
     const handleChange = jest.fn();
-    render(<VideoFilenameTemplate value="x" onChange={handleChange} token="tok" />);
+    renderTemplate({ value: 'x', onChange: handleChange });
     expect(screen.getByRole('button', { name: /default/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /date prefix/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /plex youtube-agent/i })).toBeInTheDocument();
@@ -52,21 +65,21 @@ describe('VideoFilenameTemplate', () => {
   });
 
   describe('TV show hint next to the Plex TV Series preset', () => {
-    it('points TV-style channels at the TV Show channel setting on hover', async () => {
+    it('points TV-style channels at TV shows folders on hover', async () => {
       const user = userEvent.setup();
-      render(<VideoFilenameTemplate value={defaultPrefix} onChange={() => {}} token="tok" />);
+      renderTemplate();
 
       await user.hover(screen.getByRole('button', { name: 'About saving channels as TV shows' }));
 
       expect(await screen.findByRole('tooltip')).toHaveTextContent(
-        'For TV-style channels, save the channel as a TV show instead: Channel Settings > TV Show. Episodes then get season folders and NFO files.'
+        'For TV-style channels, use a TV shows folder instead. Episodes then get Season folders, SxxEyy names and .nfo files.'
       );
     });
 
     it('still applies the Plex TV Series preset when clicked', () => {
       const handleChange = jest.fn();
       const tvSeriesPrefix = FILENAME_PRESETS.find((preset) => preset.label === 'Plex TV Series')!.prefix;
-      render(<VideoFilenameTemplate value="x" onChange={handleChange} token="tok" />);
+      renderTemplate({ value: 'x', onChange: handleChange });
 
       fireEvent.click(screen.getByRole('button', { name: /plex tv series/i }));
 
@@ -74,40 +87,26 @@ describe('VideoFilenameTemplate', () => {
     });
   });
 
-  describe('Plex TV Series channel prefix tip', () => {
-    const tvSeriesPrefix = FILENAME_PRESETS.find((preset) => preset.label === 'Plex TV Series')!.prefix;
+  test('presets are toggle buttons pressed for the current value', () => {
+    renderTemplate({ value: PLEX_TV_SERIES_PRESET_PREFIX });
+    expect(screen.getByRole('button', { name: 'Plex TV Series' })).toHaveAttribute('aria-pressed', 'true');
+  });
 
-    it('shows the tip when the TV Series preset is active and the channel prefix is enabled', () => {
-      render(
-        <VideoFilenameTemplate value={tvSeriesPrefix} onChange={() => {}} token="tok" channelPrefixEnabled />
-      );
-      expect(screen.getByTestId('tv-series-channel-prefix-tip')).toBeInTheDocument();
-    });
-
-    it('hides the tip when the channel prefix is already disabled', () => {
-      render(
-        <VideoFilenameTemplate value={tvSeriesPrefix} onChange={() => {}} token="tok" channelPrefixEnabled={false} />
-      );
-      expect(screen.queryByTestId('tv-series-channel-prefix-tip')).not.toBeInTheDocument();
-    });
-
-    it('hides the tip for templates other than the TV Series preset', () => {
-      render(
-        <VideoFilenameTemplate value={defaultPrefix} onChange={() => {}} token="tok" channelPrefixEnabled />
-      );
-      expect(screen.queryByTestId('tv-series-channel-prefix-tip')).not.toBeInTheDocument();
-    });
+  test('the Plex TV Series preset points at TV shows folders', () => {
+    renderTemplate({ value: PLEX_TV_SERIES_PRESET_PREFIX });
+    expect(screen.getByText(/Want channels as real TV shows\?/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Library folders' })).toHaveAttribute('href', '/settings/library');
   });
 
   it('does not show preview lines until the user clicks Preview', () => {
-    render(<VideoFilenameTemplate value={defaultPrefix} onChange={() => {}} token="tok" />);
+    renderTemplate();
     expect(screen.queryByTestId('filename-preview-file')).not.toBeInTheDocument();
     expect(screen.queryByTestId('filename-preview-folder')).not.toBeInTheDocument();
   });
 
   it('renders both file and folder lines after Preview is clicked and resolves', async () => {
     axios.post.mockResolvedValueOnce({ data: SAMPLE_RESPONSE });
-    render(<VideoFilenameTemplate value={defaultPrefix} onChange={() => {}} token="tok" />);
+    renderTemplate();
 
     fireEvent.click(screen.getByTestId('filename-preview-button'));
 
@@ -118,7 +117,7 @@ describe('VideoFilenameTemplate', () => {
   });
 
   it('Preview button is disabled when prefix fails client-side validation', () => {
-    render(<VideoFilenameTemplate value="" onChange={() => {}} token="tok" />);
+    renderTemplate({ value: '' });
     expect(screen.getByTestId('filename-preview-button')).toBeDisabled();
   });
 
@@ -127,7 +126,7 @@ describe('VideoFilenameTemplate', () => {
     axios.post.mockImplementationOnce(
       () => new Promise((resolve) => { resolveAxios = resolve; })
     );
-    render(<VideoFilenameTemplate value={defaultPrefix} onChange={() => {}} token="tok" />);
+    renderTemplate();
 
     fireEvent.click(screen.getByTestId('filename-preview-button'));
     expect(screen.getByTestId('filename-preview-button')).toBeDisabled();
@@ -148,7 +147,7 @@ describe('VideoFilenameTemplate', () => {
         },
       },
     });
-    render(<VideoFilenameTemplate value="%(title)Z" onChange={() => {}} token="tok" />);
+    renderTemplate({ value: '%(title)Z' });
 
     fireEvent.click(screen.getByTestId('filename-preview-button'));
 
@@ -158,32 +157,32 @@ describe('VideoFilenameTemplate', () => {
   });
 
   it('shows the structural warning when %(title)s lacks .NB truncation', () => {
-    render(<VideoFilenameTemplate value="%(title)s" onChange={() => {}} token="tok" />);
+    renderTemplate({ value: '%(title)s' });
     expect(screen.getByText(/untruncated/i)).toBeInTheDocument();
   });
 
   it('shows the oversized-title warning when title byte truncation exceeds the recommended limit', () => {
-    render(<VideoFilenameTemplate value="%(title).150B" onChange={() => {}} token="tok" />);
+    renderTemplate({ value: '%(title).150B' });
     expect(screen.getByTestId('oversized-title-warning')).toHaveTextContent(/64B/);
   });
 
   it('does not show the oversized-title warning at the recommended .64B', () => {
-    render(<VideoFilenameTemplate value="%(title).64B" onChange={() => {}} token="tok" />);
+    renderTemplate({ value: '%(title).64B' });
     expect(screen.queryByTestId('oversized-title-warning')).not.toBeInTheDocument();
   });
 
   it('shows a soft warning when the prefix includes locked suffix tokens', () => {
-    render(<VideoFilenameTemplate value="%(title).76B %(id)s" onChange={() => {}} token="tok" />);
+    renderTemplate({ value: '%(title).76B %(id)s' });
     expect(screen.getByTestId('locked-suffix-warning')).toHaveTextContent(/added automatically/i);
   });
 
   it('shows a validation error when prefix is empty', () => {
-    render(<VideoFilenameTemplate value="" onChange={() => {}} token="tok" />);
+    renderTemplate({ value: '' });
     expect(screen.getByText(/may not be empty/i)).toBeInTheDocument();
   });
 
   it('shows a validation error when prefix contains a path separator', () => {
-    render(<VideoFilenameTemplate value="bad/value" onChange={() => {}} token="tok" />);
+    renderTemplate({ value: 'bad/value' });
     expect(screen.getByText(/path separator/i)).toBeInTheDocument();
   });
 
@@ -196,7 +195,7 @@ describe('VideoFilenameTemplate', () => {
         folderLineLength: 115,
       },
     });
-    render(<VideoFilenameTemplate value={defaultPrefix} onChange={() => {}} token="tok" />);
+    renderTemplate();
 
     fireEvent.click(screen.getByTestId('filename-preview-button'));
 
@@ -214,7 +213,7 @@ describe('VideoFilenameTemplate', () => {
         folderLineLength: 135,
       },
     });
-    render(<VideoFilenameTemplate value={defaultPrefix} onChange={() => {}} token="tok" />);
+    renderTemplate();
 
     fireEvent.click(screen.getByTestId('filename-preview-button'));
 
@@ -225,16 +224,14 @@ describe('VideoFilenameTemplate', () => {
 
   it('marks the preview block stale (opacity-60) after the prefix changes following a successful preview', async () => {
     axios.post.mockResolvedValueOnce({ data: SAMPLE_RESPONSE });
-    const { rerender } = render(
-      <VideoFilenameTemplate value={defaultPrefix} onChange={() => {}} token="tok" />
-    );
+    const { rerenderTemplate } = renderTemplate();
 
     fireEvent.click(screen.getByTestId('filename-preview-button'));
     await waitFor(() => {
       expect(screen.getByTestId('filename-preview')).toBeInTheDocument();
     });
 
-    rerender(<VideoFilenameTemplate value="%(title).50B" onChange={() => {}} token="tok" />);
+    rerenderTemplate({ value: '%(title).50B' });
 
     expect(screen.getByTestId('filename-preview')).toHaveClass('opacity-60');
   });

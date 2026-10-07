@@ -104,7 +104,6 @@ function registerRoutes(app, deps) {
   app.use(createConfigRoutes({
     verifyToken, configModule, validateEnvAuthCredentials, isWslEnvironment, filenamePreviewRateLimiter,
     cookieDetails, cookieTest, cookieTestRateLimiter, getLoggingStatus: logger.getLoggingStatus,
-    libraryFolders, jobModule,
   }));
 
   // Channel routes

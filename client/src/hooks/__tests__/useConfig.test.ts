@@ -69,9 +69,21 @@ describe('useConfig patched from elsewhere', () => {
     expect(result.current.initialConfig?.preferredResolution).toBe('720');
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
+
+  test('takes a default folder change into both copies', async () => {
+    const { result } = renderHook(() => useConfig('tok'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent(CONFIG_PATCHED_EVENT, { detail: { defaultSubfolder: 'TV' } }));
+    });
+
+    expect(result.current.config.defaultSubfolder).toBe('TV');
+    expect(result.current.initialConfig?.defaultSubfolder).toBe('TV');
+  });
 });
 
-describe('useConfig patched while the mappings themselves have unsaved edits', () => {
+describe('useConfig patched while the same field has unsaved edits', () => {
   const originalFetch = global.fetch;
   const KIDS = { subfolder: 'Kids', libraryId: '12' };
   const TV = { subfolder: 'TV', libraryId: '41' };
@@ -87,7 +99,7 @@ describe('useConfig patched while the mappings themselves have unsaved edits', (
     global.fetch = originalFetch;
   });
 
-  test('keeps a pending removal of another folder\'s mapping and still shows the draft as changed', async () => {
+  test('replaces the draft with the saved value', async () => {
     const { result } = renderHook(() => useConfig('tok'));
     await waitFor(() => expect(result.current.loading).toBe(false));
     act(() => { result.current.setConfig((prev) => ({ ...prev, plexSubfolderLibraryMappings: [] })); });
@@ -96,20 +108,6 @@ describe('useConfig patched while the mappings themselves have unsaved edits', (
       window.dispatchEvent(new CustomEvent(CONFIG_PATCHED_EVENT, { detail: { plexSubfolderLibraryMappings: [KIDS, TV] } }));
     });
 
-    expect(result.current.config.plexSubfolderLibraryMappings).toEqual([TV]);
-    expect(result.current.initialConfig?.plexSubfolderLibraryMappings).toEqual([KIDS, TV]);
-  });
-
-  test('keeps a pending change of another folder\'s mapping', async () => {
-    const edited = { subfolder: 'Kids', libraryId: '99' };
-    const { result } = renderHook(() => useConfig('tok'));
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    act(() => { result.current.setConfig((prev) => ({ ...prev, plexSubfolderLibraryMappings: [edited] })); });
-
-    act(() => {
-      window.dispatchEvent(new CustomEvent(CONFIG_PATCHED_EVENT, { detail: { plexSubfolderLibraryMappings: [KIDS, TV] } }));
-    });
-
-    expect(result.current.config.plexSubfolderLibraryMappings).toEqual([edited, TV]);
+    expect(result.current.config.plexSubfolderLibraryMappings).toEqual([KIDS, TV]);
   });
 });

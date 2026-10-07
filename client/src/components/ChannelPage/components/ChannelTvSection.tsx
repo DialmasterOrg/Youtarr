@@ -22,7 +22,7 @@ const HAS_DOWNLOADS_NOTE = 'This channel has downloaded videos: switching moves 
 const SWITCH_SAVES_NOTE = 'Switching saves right away.';
 const REORGANIZING_NOTE = "This channel's downloaded videos are being moved.";
 const DEFAULT_FOLDER_TV_NOTE =
-  "The default subfolder is a TV folder, so downloads from channels you haven't subscribed to are each saved as their own TV show.";
+  "The default folder is a TV folder, so downloads from channels you haven't subscribed to are each saved as their own TV show.";
 const NO_VIDEOS_FOLDER_MESSAGE = 'No library folder uses the Videos layout yet.';
 
 type Step = 'idle' | 'pickTv' | 'pickVideos' | 'setupTv';

@@ -93,7 +93,7 @@ const RowSettingsPopover: React.FC<RowSettingsPopoverProps> = ({
           subfolders={subfolders}
           createSubfolder={createSubfolder}
           defaultSubfolderDisplay={defaultSubfolderDisplay}
-          label="Subfolder"
+          label="Library folder"
         />
 
         <FormControl fullWidth>

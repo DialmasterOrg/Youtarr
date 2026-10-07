@@ -1,3 +1,5 @@
+import React from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import DownloadSettingsDialog from '../DownloadSettingsDialog';
@@ -5,6 +7,7 @@ import DownloadSettingsDialog from '../DownloadSettingsDialog';
 const meta: Meta<typeof DownloadSettingsDialog> = {
   title: 'Components/DownloadManager/DownloadSettingsDialog',
   component: DownloadSettingsDialog,
+  decorators: [(Story) => <MemoryRouter><Story /></MemoryRouter>],
   args: {
     open: true,
     onClose: fn(),

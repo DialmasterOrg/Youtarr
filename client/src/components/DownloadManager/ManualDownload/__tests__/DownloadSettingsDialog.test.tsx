@@ -1,8 +1,12 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render as rtlRender, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import type { ReactElement } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import DownloadSettingsDialog from '../DownloadSettingsDialog';
+
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: MemoryRouter });
 
 jest.mock('../../../../hooks/useLibraryFolders', () => ({
   useLibraryFolders: jest.fn(),
@@ -1184,7 +1188,7 @@ describe('DownloadSettingsDialog', () => {
     };
 
     const chooseDestination = async (user: ReturnType<typeof userEvent.setup>, name: RegExp) => {
-      await user.click(screen.getByLabelText('Override Destination'));
+      await user.click(screen.getByLabelText('Library folder'));
       await user.click(screen.getByRole('option', { name }));
     };
 
@@ -1197,7 +1201,7 @@ describe('DownloadSettingsDialog', () => {
       render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
       openCustomSettings();
 
-      await chooseDestination(user, /Root directory \(no subfolder\) \(TV\)/);
+      await chooseDestination(user, /Main folder \(TV\)/);
       await user.click(screen.getByLabelText('Download Type'));
 
       expect(screen.getByRole('option', { name: 'Video Only' })).toBeInTheDocument();
@@ -1210,7 +1214,7 @@ describe('DownloadSettingsDialog', () => {
       render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
       openCustomSettings();
 
-      await chooseDestination(user, /Root directory \(no subfolder\) \(TV\)/);
+      await chooseDestination(user, /Main folder \(TV\)/);
 
       expect(screen.getByText('TV folders are video-only.')).toBeInTheDocument();
     });
@@ -1232,7 +1236,7 @@ describe('DownloadSettingsDialog', () => {
 
       await user.click(screen.getByLabelText('Download Type'));
       await user.click(screen.getByRole('option', { name: 'MP3 Only' }));
-      await chooseDestination(user, /Root directory \(no subfolder\) \(TV\)/);
+      await chooseDestination(user, /Main folder \(TV\)/);
       fireEvent.click(screen.getByRole('button', { name: /Start Download/i }));
 
       expect(mockOnConfirm).toHaveBeenCalledWith(
@@ -1249,7 +1253,7 @@ describe('DownloadSettingsDialog', () => {
       render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
       openCustomSettings();
 
-      await chooseDestination(user, /Use Global Default Subfolder \(TV\)/);
+      await chooseDestination(user, /Use the default folder \(TV\)/);
 
       expect(screen.getByText('TV folders are video-only.')).toBeInTheDocument();
     });

@@ -1042,4 +1042,13 @@ describe('PlexIntegrationSection Component', () => {
       expect(link).toHaveAttribute('target', '_blank');
     });
   });
+
+  describe('Library folders pointer', () => {
+    test('points at Library folders for each folder\'s refresh library', () => {
+      renderWithProviders(<PlexIntegrationSection {...createSectionProps()} />);
+      expect(screen.queryByText(/Per-Subfolder Library Mappings/)).not.toBeInTheDocument();
+      expect(screen.getByText(/Each library folder's refresh library is set on its page in Library folders\./)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Open Library folders' })).toHaveAttribute('href', '/settings/library');
+    });
+  });
 });

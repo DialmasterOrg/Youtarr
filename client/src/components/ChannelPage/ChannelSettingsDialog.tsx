@@ -842,7 +842,7 @@ function ChannelSettingsDialog({
 
             <div>
               <Typography variant="subtitle2" gutterBottom style={{ fontWeight: 600 }}>
-                Subfolder
+                Library folder
               </Typography>
               <SubfolderAutocomplete
                 mode="channel"
@@ -855,18 +855,18 @@ function ChannelSettingsDialog({
                 }}
                 subfolders={subfolders}
                 defaultSubfolderDisplay={config.defaultSubfolder || null}
-                label="Subfolder"
+                label="Library folder"
                 helperText="Choose where this channel's videos are saved"
                 createSubfolder={createSubfolder}
                 layoutOf={layoutOf}
               />
               <Alert severity="info" style={{ marginTop: 8 }}>
                 <Typography variant="caption">
-                  Subfolders are automatically prefixed with <code>__</code> on the filesystem.
+                  Library folders are named with a <code>__</code> prefix on disk.
                 </Typography>
               </Alert>
               <Typography variant="caption" color="text.secondary" style={{ marginTop: 8, display: 'block' }}>
-                Note: Changing the subfolder will move the channel&apos;s existing folder and files!
+                Changing the library folder moves the channel&apos;s existing folder and files.
               </Typography>
             </div>
           </div>

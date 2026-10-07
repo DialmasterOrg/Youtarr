@@ -221,7 +221,7 @@ describe('ChannelTvSection', () => {
 
     expect(
       screen.getByText(
-        "The default subfolder is a TV folder, so downloads from channels you haven't subscribed to are each saved as their own TV show."
+        "The default folder is a TV folder, so downloads from channels you haven't subscribed to are each saved as their own TV show."
       )
     ).toBeInTheDocument();
   });

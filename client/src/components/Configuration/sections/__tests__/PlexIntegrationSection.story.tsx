@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import React, { useState } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { DEFAULT_CONFIG } from '../../../../config/configSchema';
 import { PlexIntegrationSection } from '../PlexIntegrationSection';
 import { PlatformManagedState } from '../../types';
@@ -8,6 +9,7 @@ import { PlatformManagedState } from '../../types';
 const meta: Meta<typeof PlexIntegrationSection> = {
   title: 'Components/Configuration/Sections/PlexIntegrationSection',
   component: PlexIntegrationSection,
+  decorators: [(Story) => <MemoryRouter><Story /></MemoryRouter>],
   render: (args) => {
     const [config, setConfig] = useState({
       ...DEFAULT_CONFIG,

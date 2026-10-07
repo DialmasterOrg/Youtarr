@@ -30,7 +30,7 @@ import { EMPTY_PATTERN, useTitleShowForm } from './useTitleShowForm';
 const SYNTAX_HELP = 'Placeholders: {season}, {episode}, {title} (the episode title), {episode_end} and {part} (recognized, '
   + 'not placed yet). * matches any text, a space any spaces, letters ignore case; start with ^ to match from the start of the title.';
 const NO_TV_FOLDER = 'Set up a TV folder first: switch this channel to TV show above, or set a folder to TV shows in '
-  + 'Settings > Core > File Structure.';
+  + 'Settings > Library folders.';
 const EXCLUDE_HELP = 'One per line. A title containing any of them never joins this show (another show can still take it).';
 
 export interface TitleShowEditorDialogProps {

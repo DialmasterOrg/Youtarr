@@ -392,7 +392,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
               )}
 
               <Typography variant="caption" color="text.secondary" className="block mt-2">
-                Configured channels will use their subfolder settings.
+                Configured channels will use their library folder settings.
                 Enable custom settings to download MP3 audio.
               </Typography>
             </Paper>
@@ -504,8 +504,8 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                     createSubfolder={createSubfolder}
                     defaultSubfolderDisplay={defaultLibraryFolder || null}
                     layoutOf={layoutOf}
-                    label="Override Destination"
-                    helperText="Configured channels use their subfolder, unconfigured channels use global default."
+                    label="Library folder"
+                    helperText="Channels you subscribe to use their own library folder; others use the default folder."
                   />
 
                   <Typography variant="subtitle2" color="text.secondary" className="mb-2 mt-4">

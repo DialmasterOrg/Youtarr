@@ -36,7 +36,8 @@ export const CONFIG_FIELDS = {
   // Video settings
   preferredResolution: { default: '1080', trackChanges: true },
   videoCodec: { default: 'default', trackChanges: true },
-  defaultSubfolder: { default: '', trackChanges: true },
+  // Changed through the Library folders API, never through a Settings save.
+  defaultSubfolder: { default: '', trackChanges: false },
   defaultSkipVideoFolder: { default: false, trackChanges: true },
   // Changed through the library folders API, never through a Settings save.
   mainFolderLayout: { default: 'videos', trackChanges: false },
@@ -48,9 +49,10 @@ export const CONFIG_FIELDS = {
   // Plex integration
   plexApiKey: { default: '', trackChanges: true },
   plexYoutubeLibraryId: { default: '', trackChanges: true },
+  // Changed through the Library folders API, never through a Settings save.
   plexSubfolderLibraryMappings: {
     default: [] as Array<{ subfolder: string | null; libraryId: string | null }>,
-    trackChanges: true,
+    trackChanges: false,
   },
   plexIP: { default: '', trackChanges: true },
   plexPort: { default: '32400', trackChanges: true },

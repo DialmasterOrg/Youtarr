@@ -141,6 +141,19 @@ describe('LibraryFolders page', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /__Kids/ })).toHaveFocus());
   });
 
+  test('narrow: the guide stays expanded after Back when a TV folder was created meanwhile', async () => {
+    const { rerender } = renderAt('/settings/library', 800);
+    expect(screen.getByRole('button', { name: 'Hide the guide' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /__Kids/ }));
+    await screen.findByText('inspector Kids');
+    (useLibraryFolders as jest.Mock).mockReturnValue(libraryResult({ folders: [...folders, folder('Shows', { layout: 'tv' })] }));
+    rerender(pageAt('/settings/library/Kids'));
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Library folders' }));
+
+    expect(await screen.findByRole('button', { name: 'Hide the guide' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
   test('narrow: deleting from a detail opened from the list goes back instead of adding a list entry', async () => {
     (useContainerWidth as jest.Mock).mockReturnValue([jest.fn(), 800]);
     render(

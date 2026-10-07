@@ -12,7 +12,7 @@ import { useMediaServerStatus } from '../../hooks/useMediaServerStatus';
 import { useContainerWidth } from '../../hooks/useContainerWidth';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { ReorganizeDialog, useActiveReorganize } from '../shared/Reorganize';
-import { MainFolderTvDialog } from '../Configuration/sections/components/MainFolderTvDialog';
+import { MainFolderTvDialog } from './components/dialogs/MainFolderTvDialog';
 import { SERVER_ORDER, buildAttention, serversOf } from '../../utils/libraryAttention';
 import { folderKey } from '../../utils/libraryLayouts';
 import { HEADER_HEIGHT_DESKTOP } from '../layout/navLayoutConstants';
@@ -68,6 +68,12 @@ export default function LibraryFolders({
     folders: library.folders, loaded: library.loaded, loading: library.loading, error: library.error, twoColumn,
   });
   const { readBackDefault } = useDefaultFolder(token);
+  // The guide's default is decided once, here: the narrow detail screen unmounts the guide, and a
+  // remount after the first TV folder was created would otherwise decide "folded".
+  const [guideDefaultOpen, setGuideDefaultOpen] = useState<boolean | null>(null);
+  if (guideDefaultOpen === null && library.loaded) {
+    setGuideDefaultOpen(!phone && !library.folders.some((folder) => folder.layout === 'tv'));
+  }
   const [addLayout, setAddLayout] = useState<LibraryLayout | null>(null);
   const [startTvOpen, setStartTvOpen] = useState(false);
   const [mainTvOpen, setMainTvOpen] = useState(false);
@@ -139,7 +145,7 @@ export default function LibraryFolders({
 
   const value: LibraryPageValue = {
     token, config, isPlatformManaged, timeZone: deploymentEnvironment.timezone ?? null, phone, twoColumn: twoColumn === true,
-    folders: library.folders, foldersLoaded: library.loaded, mainDetail, check, configuredServers,
+    folders: library.folders, foldersLoaded: library.loaded, guideDefaultOpen, mainDetail, check, configuredServers,
     serversKnown: !serverStatusLoading || checkData !== null, servers, plexLibraries, plexConnectionStatus,
     reorganizing: Boolean(operation), movingFolders,
     layoutResult: layoutChange.result, busyLayoutFolder: layoutChange.busyFolder, changeLayout: layoutChange.changeLayout,

@@ -132,7 +132,7 @@ const AddChannelSettingsDialog: React.FC<AddChannelSettingsDialogProps> = ({
             onChange={(patch) => setSettings({ ...settings, ...patch })}
             globalQuality={config.preferredResolution || '1080'}
             defaultSubfolder={config.defaultSubfolder || null}
-            subfolderLabel="Subfolder"
+            subfolderLabel="Library folder"
             subfolderHelperText="Choose where this channel's videos are saved"
             showTvShowCaption
           />

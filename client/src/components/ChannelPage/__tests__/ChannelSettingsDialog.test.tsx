@@ -1,10 +1,14 @@
 import React from 'react';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render as rtlRender, screen, waitFor, within } from '@testing-library/react';
+import type { ReactElement } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import ChannelSettingsDialog from '../ChannelSettingsDialog';
 import { useConfig } from '../../../hooks/useConfig';
 import { DEFAULT_CONFIG } from '../../../config/configSchema';
+
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: MemoryRouter });
 
 // Mock the useConfig hook
 const mockRefetchConfig = jest.fn();
@@ -224,7 +228,7 @@ describe('ChannelSettingsDialog', () => {
       });
 
       expect(screen.getByLabelText('Channel Video Quality Override')).toBeInTheDocument();
-      expect(screen.getByLabelText('Subfolder')).toBeInTheDocument();
+      expect(screen.getByLabelText('Library folder')).toBeInTheDocument();
 
       await openSettingsSection('Filters');
 
@@ -260,7 +264,7 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      const subfolderInput = screen.getByLabelText('Subfolder');
+      const subfolderInput = screen.getByLabelText('Library folder');
       expect(subfolderInput).toHaveValue('__Sports');
 
       await openSettingsSection('Filters');
@@ -289,7 +293,7 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      const subfolderInput = screen.getByLabelText('Subfolder');
+      const subfolderInput = screen.getByLabelText('Library folder');
       await user.click(subfolderInput);
 
       // Subfolders from the hook appear as options
@@ -349,7 +353,7 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      expect(screen.getByLabelText('Subfolder')).toBeInTheDocument();
+      expect(screen.getByLabelText('Library folder')).toBeInTheDocument();
 
       consoleSpy.mockRestore();
     });
@@ -478,11 +482,11 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      const subfolderInput = screen.getByLabelText('Subfolder');
+      const subfolderInput = screen.getByLabelText('Library folder');
       expect(subfolderInput).toHaveValue('__Sports');
     });
 
-    test('allows adding new subfolder via Add Subfolder dialog', async () => {
+    test('allows adding new subfolder via Add library folder dialog', async () => {
       const user = userEvent.setup();
 
       mockFetch
@@ -498,34 +502,34 @@ describe('ChannelSettingsDialog', () => {
       });
 
       // Open the subfolder dropdown
-      const subfolderInput = screen.getByLabelText('Subfolder');
+      const subfolderInput = screen.getByLabelText('Library folder');
       await user.click(subfolderInput);
 
-      // Click "Add Subfolder" option
-      const addOption = await screen.findByText('Add Subfolder');
+      // Click "Add library folder"
+      const addOption = await screen.findByText('Add library folder');
       await user.click(addOption);
 
-      // The Add Subfolder dialog should open
-      expect(screen.getByText('Add New Subfolder')).toBeInTheDocument();
+      // The Add library folder dialog should open
+      expect(await screen.findByText(/Creates a Videos folder/)).toBeInTheDocument();
 
       // Enter a new subfolder name
-      const dialogInput = screen.getByLabelText('Subfolder Name');
+      const dialogInput = screen.getByLabelText('Library folder name');
       await user.type(dialogInput, 'Gaming');
 
       // Click Add button
-      const addButton = screen.getByRole('button', { name: 'Add Subfolder' });
+      const addButton = screen.getByRole('button', { name: 'Add library folder' });
       await user.click(addButton);
 
       // The dialog should close and the new value should be selected
       await waitFor(() => {
-        expect(screen.queryByText('Add New Subfolder')).not.toBeInTheDocument();
+        expect(screen.queryByText(/Creates a Videos folder/)).not.toBeInTheDocument();
       });
 
       // The input should show the new subfolder
       expect(subfolderInput).toHaveValue('__Gaming');
     });
 
-    test('sends clean subfolder name when saving via Add Subfolder', async () => {
+    test('sends clean subfolder name when saving via Add library folder', async () => {
       const user = userEvent.setup();
 
       mockFetch
@@ -547,20 +551,20 @@ describe('ChannelSettingsDialog', () => {
       });
 
       // Open the subfolder dropdown and add a new subfolder
-      const subfolderInput = screen.getByLabelText('Subfolder');
+      const subfolderInput = screen.getByLabelText('Library folder');
       await user.click(subfolderInput);
 
-      const addOption = await screen.findByText('Add Subfolder');
+      const addOption = await screen.findByText('Add library folder');
       await user.click(addOption);
 
-      const dialogInput = screen.getByLabelText('Subfolder Name');
+      const dialogInput = screen.getByLabelText('Library folder name');
       await user.type(dialogInput, 'Gaming');
 
-      const addButton = screen.getByRole('button', { name: 'Add Subfolder' });
+      const addButton = screen.getByRole('button', { name: 'Add library folder' });
       await user.click(addButton);
 
       await waitFor(() => {
-        expect(screen.queryByText('Add New Subfolder')).not.toBeInTheDocument();
+        expect(screen.queryByText(/Creates a Videos folder/)).not.toBeInTheDocument();
       });
 
       const saveButton = screen.getByRole('button', { name: 'Save' });
@@ -593,7 +597,7 @@ describe('ChannelSettingsDialog', () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText(/Changing the subfolder will move the channel's existing folder/i)
+          screen.getByText(/Changing the library folder moves the channel's existing folder and files/i)
         ).toBeInTheDocument();
       });
     });
@@ -1288,7 +1292,7 @@ describe('ChannelSettingsDialog', () => {
       });
 
       expect(
-        screen.getByText(/Subfolders are automatically prefixed with/i)
+        screen.getByText(/Library folders are named with a/i)
       ).toBeInTheDocument();
     });
 
@@ -2194,7 +2198,7 @@ describe('ChannelSettingsDialog', () => {
       });
       await openSettingsSection('General');
 
-      expect(screen.getByLabelText('Subfolder')).toHaveValue('__Anime');
+      expect(screen.getByLabelText('Library folder')).toHaveValue('__Anime');
       expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     });
 

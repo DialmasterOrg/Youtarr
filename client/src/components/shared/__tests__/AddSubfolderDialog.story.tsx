@@ -1,3 +1,5 @@
+import React from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import AddSubfolderDialog from '../AddSubfolderDialog';
@@ -5,6 +7,7 @@ import AddSubfolderDialog from '../AddSubfolderDialog';
 const meta: Meta<typeof AddSubfolderDialog> = {
   title: 'Atomic/Shared/AddSubfolderDialog',
   component: AddSubfolderDialog,
+  decorators: [(Story) => <MemoryRouter><Story /></MemoryRouter>],
   args: {
     open: true,
     onClose: fn(),
@@ -28,7 +31,7 @@ export const ValidatesAndSubmits: Story = {
   play: async ({ canvasElement, args }) => {
     const body = within(canvasElement.ownerDocument.body);
 
-    const input = body.getByLabelText(/subfolder name/i);
+    const input = body.getByLabelText(/library folder name/i);
 
     // Invalid: reserved prefix
     await userEvent.clear(input);

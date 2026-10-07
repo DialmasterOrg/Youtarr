@@ -83,7 +83,7 @@ test('explains that an idle schedule waits for its feature and links to where to
   renderWithProviders(<SchedulingSection {...props} />);
   const downloads = within(screen.getByRole('region', { name: 'Automatic downloads' }));
   expect(downloads.getByText(/Automatic downloads are off, so this schedule is idle/)).toBeInTheDocument();
-  expect(downloads.getByRole('link', { name: 'Turn on in Core settings' })).toHaveAttribute('href', '/settings/core');
+  expect(downloads.getByRole('link', { name: 'Turn on in Core settings' })).toHaveAttribute('href', '/settings/core#downloads');
 });
 
 test('disabled video removal still allows scheduling empty-folder cleanup', () => {

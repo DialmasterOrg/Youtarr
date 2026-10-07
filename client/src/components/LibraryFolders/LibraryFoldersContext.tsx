@@ -20,6 +20,8 @@ export interface LibraryPageValue {
   folders: LibraryFolder[];
   /** The folder list's first answer (or failure) has arrived */
   foldersLoaded: boolean;
+  /** Whether the guide starts open, decided once when the folders first load (null until then) */
+  guideDefaultOpen: boolean | null;
   /** The main folder's detail, loaded once for every section that lists its channels */
   mainDetail: LibraryFolderDetail | null;
   check: LibraryCheckState & {

@@ -2,8 +2,6 @@ import { useCallback, useState } from 'react';
 import { SCHEDULE_FIELDS, ScheduleFieldErrors } from '../schedules';
 import { ConfigState, SnackbarState } from '../types';
 import { CONFIG_UPDATED_EVENT } from '../../../hooks/useConfig';
-import { ReorganizeChange } from '../../../types/reorganize';
-import { reorganizeChangeOf } from '../../shared/Reorganize/reorganizeErrors';
 
 interface UseConfigSaveParams {
   token: string | null;
@@ -17,8 +15,6 @@ interface UseConfigSaveParams {
 interface SaveFailure {
   error: string;
   fieldErrors: ScheduleFieldErrors;
-  /** A default subfolder change that moves downloads, to review in the reorganize dialog */
-  reorganizeChange: ReorganizeChange | null;
 }
 
 async function getSaveError(response: Response): Promise<SaveFailure> {
@@ -29,12 +25,12 @@ async function getSaveError(response: Response): Promise<SaveFailure> {
       if (typeof body?.fieldErrors?.[key] === 'string') fieldErrors[key] = body.fieldErrors[key];
     }
     if (typeof body?.error === 'string' && body.error.trim()) {
-      return { error: body.error, fieldErrors, reorganizeChange: reorganizeChangeOf(body) };
+      return { error: body.error, fieldErrors };
     }
   } catch {
     // Fall through when the server didn't return JSON.
   }
-  return { error: 'Failed to save configuration', fieldErrors: {}, reorganizeChange: null };
+  return { error: 'Failed to save configuration', fieldErrors: {} };
 }
 
 export const useConfigSave = ({
@@ -47,36 +43,6 @@ export const useConfigSave = ({
 }: UseConfigSaveParams) => {
   const [isSaving, setIsSaving] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<ScheduleFieldErrors>({});
-  const [reorganizeChange, setReorganizeChange] = useState<ReorganizeChange | null>(null);
-  const clearReorganizeChange = useCallback(() => setReorganizeChange(null), []);
-
-  /**
-   * Read the saved default subfolder back into the saved baseline: the server
-   * undoes a reorganize's change when no video could be moved, so it is read
-   * rather than assumed, when the review closes and again when the move ends.
-   * Resolves to the saved value, or null when the read failed.
-   */
-  const readBackDefaultSubfolder = useCallback(async (): Promise<string | null> => {
-    if (!token) return null;
-    try {
-      const response = await fetch('/getconfig', { headers: { 'x-access-token': token } });
-      if (!response.ok) return null;
-      const data = await response.json();
-      const saved = typeof data?.defaultSubfolder === 'string' ? data.defaultSubfolder : '';
-      setInitialConfig((current) => (current ? { ...current, defaultSubfolder: saved } : current));
-      return saved;
-    } catch {
-      return null;
-    }
-  }, [token, setInitialConfig]);
-
-  /** Close out the reorganize dialog, reading the saved default back when it was for one. */
-  const finishReorganize = useCallback(async (): Promise<string | null> => {
-    const change = reorganizeChange;
-    setReorganizeChange(null);
-    if (!change || change.type !== 'defaultSubfolder') return null;
-    return readBackDefaultSubfolder();
-  }, [reorganizeChange, readBackDefaultSubfolder]);
   const clearFieldErrors = (updates: Partial<ConfigState>) => {
     setFieldErrors((current) => {
       const next = { ...current };
@@ -102,10 +68,6 @@ export const useConfigSave = ({
       if (!response.ok) {
         const failure = await getSaveError(response);
         setFieldErrors(failure.fieldErrors);
-        if (failure.reorganizeChange) {
-          setReorganizeChange(failure.reorganizeChange);
-          return false;
-        }
         setSnackbar({
           open: true,
           message: failure.error,
@@ -152,9 +114,5 @@ export const useConfigSave = ({
     isSaving,
     fieldErrors,
     clearFieldErrors,
-    reorganizeChange,
-    clearReorganizeChange,
-    finishReorganize,
-    readBackDefaultSubfolder,
   };
 };

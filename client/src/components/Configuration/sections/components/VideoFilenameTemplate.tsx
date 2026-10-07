@@ -1,14 +1,18 @@
 import React, { ChangeEvent, useMemo } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
+import { LIBRARY_FOLDERS_PATH } from '../../../../utils/libraryLayouts';
 import {
   Box,
   TextField,
   Typography,
   Button,
-  Link,
   CircularProgress,
   Tooltip,
 } from '../../../ui';
-import { Info as InfoIcon } from '../../../../lib/icons';
+import { Info as InfoIcon, Tv } from '../../../../lib/icons';
+import { cn } from '../../../../lib/cn';
+import { useMediaQuery } from '../../../../hooks/useMediaQuery';
+import { settingDescriptionId } from '../../common/SettingRow';
 import {
   FILENAME_PRESETS,
   PLEX_TV_SERIES_PRESET_PREFIX,
@@ -28,9 +32,11 @@ interface VideoFilenameTemplateProps {
   token: string | null;
   saveRequirement?: string | null;
   onPreviewSuccess?: (prefix: string) => void;
-  /** Whether the embedded MP4 title is still prefixed with the channel name. */
-  channelPrefixEnabled?: boolean;
+  /** Id of the template input; its SettingRow label and description point at it */
+  inputId?: string;
 }
+
+const PHONE_QUERY = '(max-width: 767px)';
 
 const SEVERITY_TEXT: Record<'warn' | 'danger', string> = {
   warn:
@@ -40,7 +46,7 @@ const SEVERITY_TEXT: Record<'warn' | 'danger', string> = {
 };
 
 const TV_SHOW_HINT =
-  'For TV-style channels, save the channel as a TV show instead: Channel Settings > TV Show. Episodes then get season folders and NFO files.';
+  'For TV-style channels, use a TV shows folder instead. Episodes then get Season folders, SxxEyy names and .nfo files.';
 
 export const VideoFilenameTemplate: React.FC<VideoFilenameTemplateProps> = ({
   value,
@@ -48,10 +54,10 @@ export const VideoFilenameTemplate: React.FC<VideoFilenameTemplateProps> = ({
   token,
   saveRequirement,
   onPreviewSuccess,
-  channelPrefixEnabled = false,
+  inputId = 'videoFilenamePrefix',
 }) => {
+  const phone = useMediaQuery(PHONE_QUERY);
   const validation = useMemo(() => validatePrefix(value), [value]);
-  const showTvSeriesPrefixTip = channelPrefixEnabled && value === PLEX_TV_SERIES_PRESET_PREFIX;
   const preview = useFilenamePreview(token);
   const isStale = preview.isStale(value);
 
@@ -82,37 +88,16 @@ export const VideoFilenameTemplate: React.FC<VideoFilenameTemplateProps> = ({
 
   return (
     <Box className="flex flex-col gap-3">
-      <Typography variant="subtitle2" className="font-bold">
-        Video Filename Template
-      </Typography>
-      <Typography variant="caption" color="text.secondary">
-        How yt-dlp names downloaded video files and per-video folders. Youtarr always appends{' '}
-        <span className="font-mono px-1 py-0.5 rounded text-xs bg-muted">
-          [VIDEO_ID].EXT
-        </span>{' '}
-        to filenames and{' '}
-        <span className="font-mono px-1 py-0.5 rounded text-xs bg-muted">
-          - VIDEO_ID
-        </span>{' '}
-        to folder names so it can re-find your videos on disk. Only applies to new downloads.{' '}
-        <Link
-          href="https://github.com/yt-dlp/yt-dlp#output-template"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          See yt-dlp output template docs
-        </Link>
-        .
-      </Typography>
-
       <TextField
+        id={inputId}
         fullWidth
-        label="Video Filename Template"
+        className="[&_input]:font-mono"
         value={value}
         onChange={handleChange as React.ChangeEventHandler<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>}
         error={!validation.ok}
         helperText={validation.error}
-        inputProps={{ style: { fontFamily: 'monospace' } }}
+        aria-describedby={settingDescriptionId(inputId)}
+        inputProps={{ 'aria-label': 'Video filename template' }}
       />
 
       <Box className="flex flex-wrap gap-2">
@@ -122,6 +107,8 @@ export const VideoFilenameTemplate: React.FC<VideoFilenameTemplateProps> = ({
               key={preset.label}
               variant="outlined"
               size="small"
+              aria-pressed={value === preset.prefix}
+              className={cn(value === preset.prefix && 'border-primary bg-primary/10', phone ? 'min-h-[44px]' : 'h-[30px]')}
               onClick={() => onChange(preset.prefix)}
               title={preset.description}
             >
@@ -136,7 +123,7 @@ export const VideoFilenameTemplate: React.FC<VideoFilenameTemplateProps> = ({
                 <button
                   type="button"
                   aria-label="About saving channels as TV shows"
-                  className="inline-flex items-center justify-center rounded-full p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="inline-flex items-center justify-center rounded-full p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:min-h-[44px] max-md:min-w-[44px]"
                 >
                   <InfoIcon size={16} aria-hidden />
                 </button>
@@ -146,24 +133,25 @@ export const VideoFilenameTemplate: React.FC<VideoFilenameTemplateProps> = ({
         })}
       </Box>
 
-      {showTvSeriesPrefixTip && (
-        <Box
-          data-testid="tv-series-channel-prefix-tip"
-          className="rounded p-2 bg-muted"
-        >
-          <Typography variant="caption" color="text.secondary">
-            Tip: in a Plex TV Shows library the channel is already the show name, so turn off
-            &quot;Prefix channel name in embedded video title&quot; under Download Settings to keep
-            episode titles clean.
-          </Typography>
-        </Box>
+      {value === PLEX_TV_SERIES_PRESET_PREFIX && (
+        <p data-testid="tv-series-tip" className="flex items-start gap-2 rounded-ui bg-muted p-2 text-[13px] text-muted-foreground">
+          <Tv size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-info" />
+          <span>
+            Want channels as real TV shows? Download them to a TV shows folder instead: episodes get Season folders, SxxEyy names and
+            .nfo files, and this template doesn&apos;t apply there. This preset doesn&apos;t convert anything: switching a folder to TV
+            shows is a separate step you review first.{' '}
+            <RouterLink to={LIBRARY_FOLDERS_PATH} className="text-primary underline max-md:inline-flex max-md:min-h-[44px] max-md:items-center">Library folders</RouterLink>
+          </span>
+        </p>
       )}
 
-      <Box className="flex items-center gap-3">
+      <Box className={cn('flex gap-3', phone ? 'flex-col items-stretch' : 'items-center')}>
         <Button
           data-testid="filename-preview-button"
-          variant="contained"
+          variant="outlined"
           size="small"
+          fullWidth={phone}
+          className={cn(phone && 'min-h-[44px]')}
           onClick={handlePreviewClick}
           disabled={previewDisabled}
           startIcon={preview.loading ? <CircularProgress size={14} /> : undefined}

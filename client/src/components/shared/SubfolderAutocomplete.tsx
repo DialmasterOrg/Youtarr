@@ -13,9 +13,10 @@ import {
   isExplicitlyNoSubfolder,
   isExplicitlyRoot,
 } from '../../utils/channelHelpers';
+import { Link as RouterLink } from 'react-router-dom';
 import { AddSubfolderDialog } from './AddSubfolderDialog';
 import { addSubfolderPrefix, stripSubfolderPrefix } from '../../utils/subfolderDisplay';
-import type { LayoutResolver } from '../../utils/libraryLayouts';
+import { LIBRARY_FOLDERS_PATH, type LayoutResolver } from '../../utils/libraryLayouts';
 
 /**
  * Represents an option in the subfolder autocomplete
@@ -28,13 +29,13 @@ interface SubfolderOption {
   group: 'special' | 'subfolders' | 'actions';
 }
 
-type SubfolderMode = 'global' | 'channel' | 'download';
+type SubfolderMode = 'channel' | 'download';
 
 interface SubfolderAutocompleteProps {
   /** Current value (clean, without __ prefix). null = root (backwards compat), ##USE_GLOBAL_DEFAULT## = use default */
   value: string | null | undefined;
-  /** Callback when value changes. meta.isNewlyCreated is true when the value came from the Add Subfolder dialog */
-  onChange: (value: string | null, meta?: { isNewlyCreated?: boolean }) => void;
+  /** Callback when value changes */
+  onChange: (value: string | null) => void;
   /** List of existing subfolders (with __ prefix from API) */
   subfolders: string[];
   /** Global default subfolder for display purposes (without __ prefix) */
@@ -51,8 +52,6 @@ interface SubfolderAutocompleteProps {
   label?: string;
   /** Optional callback to persist a newly added subfolder (e.g. via API) */
   createSubfolder?: (name: string) => Promise<void>;
-  /** Whether to render the inline "Add Subfolder" action (default true). Set false when the parent provides its own add flow */
-  showAddAction?: boolean;
   /** Folder layouts ('' = main folder): TV folders are labelled "(TV)" */
   layoutOf?: LayoutResolver;
 }
@@ -60,10 +59,9 @@ interface SubfolderAutocompleteProps {
 const ADD_NEW_SENTINEL = '__ADD_NEW__';
 
 /**
- * Reusable subfolder autocomplete component
- * Supports three modes:
- * - 'global': For CoreSettingsSection - shows "No Subfolder (root)" + existing subfolders + Add
- * - 'channel': For channel settings - adds "Default Subfolder" and "No Subfolder" special options + Add
+ * Reusable library folder picker
+ * Supports two modes:
+ * - 'channel': For channel settings - adds "Default folder" and "Main folder" special options + Add
  * - 'download': For manual downloads - adds "No override" option plus channel options + Add
  */
 export function SubfolderAutocomplete({
@@ -75,12 +73,11 @@ export function SubfolderAutocomplete({
   disabled = false,
   loading = false,
   helperText,
-  label = 'Subfolder',
+  label = 'Library folder',
   createSubfolder,
-  showAddAction = true,
   layoutOf,
 }: SubfolderAutocompleteProps) {
-  // State for the Add Subfolder dialog
+  // State for the Add library folder dialog
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   // Pending flag: true → open the dialog on the next effect flush (avoids Radix layer conflicts)
   const [pendingAddDialog, setPendingAddDialog] = useState(false);
@@ -111,29 +108,20 @@ export function SubfolderAutocomplete({
     const tvTag = (libraryFolder: string) => (layoutOf && layoutOf(libraryFolder) === 'tv' ? ' (TV)' : '');
 
     // Add special options based on mode
-    if (mode === 'global') {
-      // "No Subfolder" option - maps to null (root directory)
+    if (mode === 'channel') {
+      // "Main folder" option - maps to null (backwards compatible root)
       opts.push({
-        label: `No Subfolder (root)${tvTag('')}`,
-        value: null,
-        isSpecial: true,
-        isAddNew: false,
-        group: 'special',
-      });
-    } else if (mode === 'channel') {
-      // "No Subfolder" option - maps to null (backwards compatible root)
-      opts.push({
-        label: `No Subfolder (root)${tvTag('')}`,
+        label: `Main folder${tvTag('')}`,
         value: null,
         isSpecial: true,
         isAddNew: false,
         group: 'special',
       });
 
-      // "Default Subfolder" option - maps to ##USE_GLOBAL_DEFAULT##
+      // "Default folder" option - maps to ##USE_GLOBAL_DEFAULT##
       const defaultLabel = (defaultSubfolderDisplay
-        ? `Default Subfolder (__${defaultSubfolderDisplay})`
-        : 'Default Subfolder (root)') + tvTag(defaultSubfolderDisplay || '');
+        ? `Default folder (__${defaultSubfolderDisplay})`
+        : 'Default folder (main folder)') + tvTag(defaultSubfolderDisplay || '');
       opts.push({
         label: defaultLabel,
         value: GLOBAL_DEFAULT_SENTINEL,
@@ -151,18 +139,18 @@ export function SubfolderAutocomplete({
         group: 'special',
       });
 
-      // "Root directory" option - explicitly download to root (no subfolder)
+      // "Main folder" option - explicitly download to the main folder
       opts.push({
-        label: `Root directory (no subfolder)${tvTag('')}`,
+        label: `Main folder${tvTag('')}`,
         value: ROOT_SENTINEL,
         isSpecial: true,
         isAddNew: false,
         group: 'special',
       });
 
-      // "Use Global Default" option - uses global default subfolder
+      // "Use the default folder" option - uses the default library folder
       opts.push({
-        label: `Use Global Default Subfolder${tvTag(defaultSubfolderDisplay || '')}`,
+        label: `Use the default folder${tvTag(defaultSubfolderDisplay || '')}`,
         value: GLOBAL_DEFAULT_SENTINEL,
         isSpecial: true,
         isAddNew: false,
@@ -183,7 +171,7 @@ export function SubfolderAutocomplete({
       });
     });
 
-    // Note: "Add Subfolder" is rendered as a button BELOW the Select, not as a dropdown option.
+    // Note: "Add library folder" is rendered as a button BELOW the Select, not as a dropdown option.
     // This makes it reliably clickable in tests without depending on Radix Select portal events.
 
     return opts;
@@ -191,24 +179,6 @@ export function SubfolderAutocomplete({
 
   // Find the current option based on value
   const currentOption = useMemo((): SubfolderOption | null => {
-    if (mode === 'global') {
-      // For global mode, null/empty means root
-      if (!value) {
-        return options.find((o) => o.value === null && o.isSpecial) || null;
-      }
-      // Find existing subfolder option
-      const existingOption = options.find((o) => o.value === value && !o.isAddNew);
-      if (existingOption) return existingOption;
-      // Custom value (shouldn't happen without freeSolo, but handle gracefully)
-      return {
-        label: `__${value}`,
-        value: value as string,
-        isSpecial: false,
-        isAddNew: false,
-        group: 'subfolders',
-      };
-    }
-
     if (mode === 'channel') {
       if (isExplicitlyNoSubfolder(value)) {
         // null/empty = root (backwards compatible)
@@ -271,11 +241,11 @@ export function SubfolderAutocomplete({
     onChange(val);
   };
 
-  // Handle new subfolder addition from dialog
+  // Handle new library folder addition from dialog
   const handleAddSubfolder = (newName: string) => {
     // Optimistically show it immediately.
     setLocalSubfolders((prev) => [...prev, addSubfolderPrefix(newName)]);
-    onChange(newName, { isNewlyCreated: true });
+    onChange(newName);
     setAddDialogOpen(false);
     // Persist so it survives navigation and is reusable everywhere.
     if (createSubfolder) {
@@ -395,13 +365,12 @@ export function SubfolderAutocomplete({
           {helperText}
         </Typography>
       )}
-      {/* "Add Subfolder" lives outside the Radix portal so it sits inside the
+      {/* "Add library folder" lives outside the Radix portal so it sits inside the
           Dialog's DOM subtree and keeps pointer-events: auto even when a parent
           Radix Dialog has set body pointer-events to none. */}
-      {showAddAction && (
-        <button
+      <button
           type="button"
-          aria-label="Open add subfolder dialog"
+          aria-label="Open add library folder dialog"
           onClick={() => { setIsOpen(false); setPendingAddDialog(true); }}
           style={{
             marginTop: 4,
@@ -419,18 +388,24 @@ export function SubfolderAutocomplete({
           }}
         >
           <AddIcon size={14} style={{ color: 'var(--primary)' }} />
-          Add Subfolder
+          Add library folder
         </button>
-      )}
+      <RouterLink
+        to={LIBRARY_FOLDERS_PATH}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-1 block text-[0.8rem] text-primary underline max-md:inline-flex max-md:min-h-[44px] max-md:items-center"
+      >
+        Manage library folders
+        <span className="sr-only"> (opens in a new tab)</span>
+      </RouterLink>
       </div>
-      {showAddAction && (
-        <AddSubfolderDialog
-          open={addDialogOpen}
-          onClose={() => setAddDialogOpen(false)}
-          onAdd={handleAddSubfolder}
-          existingSubfolders={allSubfolders}
-        />
-      )}
+      <AddSubfolderDialog
+        open={addDialogOpen}
+        onClose={() => setAddDialogOpen(false)}
+        onAdd={handleAddSubfolder}
+        existingSubfolders={allSubfolders}
+      />
     </>
   );
 }

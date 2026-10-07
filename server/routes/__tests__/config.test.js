@@ -234,34 +234,30 @@ describe('POST /updateconfig', () => {
       expect(configModule.updateConfig.mock.calls[0][0].mainFolderLayout).toBe('tv');
     });
 
-    test('checks a default subfolder change against folder layouts', async () => {
-      const libraryFolders = { checkDefaultSubfolderChange: jest.fn().mockResolvedValue(undefined) };
-      const jobModule = { getInProgressJobId: jest.fn(() => 'job-1') };
-      const { app, configModule } = makeApp({ libraryFolders, jobModule });
+    test('keeps the stored default folder and Plex mappings over the posted ones', async () => {
+      const { app, configModule } = makeApp();
       configModule._config.defaultSubfolder = 'Kids';
+      configModule._config.plexSubfolderLibraryMappings = [{ subfolder: 'TV', libraryId: '41' }];
 
-      const res = await supertest(app).post('/updateconfig').send({ defaultSubfolder: 'TV' });
+      const res = await supertest(app).post('/updateconfig').send({ defaultSubfolder: 'Other', plexSubfolderLibraryMappings: [] });
 
       expect(res.status).toBe(200);
-      const args = libraryFolders.checkDefaultSubfolderChange.mock.calls[0][0];
-      expect(args).toMatchObject({ oldDefault: 'Kids', newDefault: 'TV' });
-      expect(args.isDownloadRunning()).toBe(true);
+      const saved = configModule.updateConfig.mock.calls[0][0];
+      expect(saved.defaultSubfolder).toBe('Kids');
+      expect(saved.plexSubfolderLibraryMappings).toEqual([{ subfolder: 'TV', libraryId: '41' }]);
     });
 
-    test('refuses a default subfolder change the layout check rejects', async () => {
-      const libraryFolders = {
-        checkDefaultSubfolderChange: jest.fn().mockRejectedValue(refusal('channels have downloads', 409)),
-      };
-      const { app, configModule } = makeApp({ libraryFolders });
+    test('does not bring back a deleted Plex mapping from a stale posted list', async () => {
+      const { app, configModule } = makeApp();
+      configModule._config.plexSubfolderLibraryMappings = [];
 
-      const res = await supertest(app).post('/updateconfig').send({ defaultSubfolder: 'TV' });
+      const res = await supertest(app).post('/updateconfig').send({ plexSubfolderLibraryMappings: [{ subfolder: 'Gone', libraryId: '9' }] });
 
-      expect(res.status).toBe(409);
-      expect(res.body).toEqual({ error: 'channels have downloads' });
-      expect(configModule.updateConfig).not.toHaveBeenCalled();
+      expect(res.status).toBe(200);
+      expect(configModule.updateConfig.mock.calls[0][0].plexSubfolderLibraryMappings).toEqual([]);
     });
 
-    test('names the reorganize to preview when the default change moves downloads', async () => {
+    test('never answers with a reorganize for a posted default folder', async () => {
       const libraryFolders = {
         checkDefaultSubfolderChange: jest.fn().mockRejectedValue(Object.assign(refusal('Review the move', 409), {
           reorganizeRequired: true, change: { type: 'defaultSubfolder', value: 'TV' },
@@ -271,9 +267,34 @@ describe('POST /updateconfig', () => {
 
       const res = await supertest(app).post('/updateconfig').send({ defaultSubfolder: 'TV' });
 
-      expect(res.status).toBe(409);
-      expect(res.body).toEqual({
-        error: 'Review the move', reorganizeRequired: true, change: { type: 'defaultSubfolder', value: 'TV' },
+      expect(res.status).toBe(200);
+      expect(res.body.reorganizeRequired).toBeUndefined();
+      expect(libraryFolders.checkDefaultSubfolderChange).not.toHaveBeenCalled();
+    });
+
+    test('keeps folder settings saved elsewhere while the template check runs', async () => {
+      const { app, configModule } = makeApp();
+      configModule._config.defaultSubfolder = 'Kids';
+      configModule._config.plexSubfolderLibraryMappings = [];
+      filenamePreview.validateTemplate.mockImplementationOnce(async () => {
+        // Another writer replaces the stored config while yt-dlp checks the template.
+        configModule._config = {
+          ...configModule._config,
+          defaultSubfolder: 'TV',
+          plexSubfolderLibraryMappings: [{ subfolder: 'TV', libraryId: '41' }],
+          mainFolderLayout: 'tv',
+        };
+        return { ok: true };
+      });
+
+      const res = await supertest(app).post('/updateconfig').send({ videoFilenamePrefix: '%(title).76B' });
+
+      expect(res.status).toBe(200);
+      const saved = configModule.updateConfig.mock.calls[0][0];
+      expect(saved).toMatchObject({
+        defaultSubfolder: 'TV',
+        plexSubfolderLibraryMappings: [{ subfolder: 'TV', libraryId: '41' }],
+        mainFolderLayout: 'tv',
       });
     });
   });

@@ -145,7 +145,7 @@ const PlaylistSettingsDialog: React.FC<PlaylistSettingsDialogProps> = ({
 
           <div>
             <Typography variant="subtitle2" gutterBottom style={{ fontWeight: 600 }}>
-              Subfolder
+              Library folder
             </Typography>
             <SubfolderAutocomplete
               mode="channel"
@@ -156,8 +156,8 @@ const PlaylistSettingsDialog: React.FC<PlaylistSettingsDialogProps> = ({
               createSubfolder={createSubfolder}
               defaultSubfolderDisplay={config.defaultSubfolder || null}
               layoutOf={layoutOf}
-              label="Default Subfolder"
-              helperText="Where this playlist's videos are saved when the channel has no subfolder of its own."
+              label="Library folder"
+              helperText="Where this playlist's videos are saved when the channel has no library folder of its own."
             />
           </div>
 

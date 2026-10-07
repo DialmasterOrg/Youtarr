@@ -30,8 +30,7 @@ const ALL_SERVERS: SetupServer[] = ['plex', 'jellyfin', 'emby', 'kodi'];
 /** How library folders work (UI 5.4, 6.2). */
 export function LibraryGuide() {
   const page = useLibraryPage();
-  const hasTv = page.folders.some((folder) => folder.layout === 'tv');
-  const [open, toggle] = useGuideOpen(page.foldersLoaded ? !page.phone && !hasTv : null);
+  const [open, toggle] = useGuideOpen(page.guideDefaultOpen);
   const servers: SetupServer[] = page.servers.length > 0 ? page.servers.map((server) => server.serverType) : ALL_SERVERS;
 
   return (

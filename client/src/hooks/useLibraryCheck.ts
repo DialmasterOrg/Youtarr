@@ -104,9 +104,8 @@ export function useLibraryCheck(
     } catch (err: unknown) {
       throw new Error(serverMessage(err, MAPPING_FAILED_MESSAGE));
     }
-    // The mappings live in the config, which an open Settings page keeps a
-    // copy of (and saves whole): hand it the saved list rather than reloading
-    // it over the page's unsaved edits.
+    // The mappings live in the config, which each open useConfig holds a copy
+    // of: hand them the saved list (only the Library folders API writes it).
     const patch: Partial<ConfigState> = { plexSubfolderLibraryMappings: saved.plexSubfolderLibraryMappings };
     window.dispatchEvent(new CustomEvent(CONFIG_PATCHED_EVENT, { detail: patch }));
     // The folder list reads each folder's mapping. This instance checks once itself, awaited

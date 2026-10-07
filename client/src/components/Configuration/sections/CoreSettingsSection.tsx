@@ -1,48 +1,20 @@
-import React, { ChangeEvent, useState } from 'react';
-import {
-  SelectChangeEvent,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  FormControlLabel,
-  TextField,
-  Grid,
-  Box,
-  Chip,
-  Switch,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions,
-  Button,
-  Collapse,
-  CircularProgress,
-  Link,
-  Typography,
-} from '../../ui';
-import { ConfigurationCard } from '../common/ConfigurationCard';
-import { InfoTooltip } from '../common/InfoTooltip';
+import React, { useEffect, useState } from 'react';
+import { Link as RouterLink, useLocation } from 'react-router-dom';
+import { LIBRARY_FOLDERS_PATH } from '../../../utils/libraryLayouts';
+import { Chip, MenuItem, Select, SelectChangeEvent, Switch } from '../../ui';
+import { Film, Info } from '../../../lib/icons';
+import { useMediaQuery } from '../../../hooks/useMediaQuery';
+import { cn } from '../../../lib/cn';
 import SubtitleLanguageSelector from '../SubtitleLanguageSelector';
-import { VideoFilenameTemplate } from './components/VideoFilenameTemplate';
-import { LibraryFoldersList } from './components/LibraryFoldersList';
-import { SubfolderAutocomplete } from '../../shared/SubfolderAutocomplete';
-import { ManageSubfoldersDialog } from '../../shared/ManageSubfoldersDialog';
-import { AddSubfolderDialog } from '../../shared/AddSubfolderDialog';
-import { Plus as AddIcon, Settings as SettingsIcon } from '../../../lib/icons';
-import { useSubfolders } from '../../../hooks/useSubfolders';
-import { useLibraryFolders } from '../../../hooks/useLibraryFolders';
-import { ConfigState, DeploymentEnvironment, PlatformManagedState } from '../types';
-import { getChannelFilesOptions } from '../helpers';
+import { SettingsSection } from '../common/SettingsSection';
+import { SettingRow, settingDescriptionId } from '../common/SettingRow';
+import { SettingNote } from '../common/SettingNote';
+import { LibraryFoldersCard } from './components/LibraryFoldersCard';
+import { FlatStructureDialog } from './components/FlatStructureDialog';
 import { ScheduleSummary } from './components/ScheduleSummary';
-
-const DEFAULT_LAYOUT_CHANGE_NOTE =
-  'One of these folders saves videos and the other saves TV shows, so the downloaded videos of the channels that use '
-  + 'the default subfolder move. When you save, you review the move first.';
+import { VideoFilenameTemplate } from './components/VideoFilenameTemplate';
+import { getChannelFilesOptions } from '../helpers';
+import { ConfigState, DeploymentEnvironment, PlatformManagedState } from '../types';
 
 interface CoreSettingsSectionProps {
   config: ConfigState;
@@ -55,798 +27,181 @@ interface CoreSettingsSectionProps {
   onFilenameTemplatePreviewSuccess?: (prefix: string) => void;
 }
 
+type BooleanConfigKey = { [K in keyof ConfigState]: ConfigState[K] extends boolean ? K : never }[keyof ConfigState];
+
+const PHONE_QUERY = '(max-width: 767px)';
+const RESOLUTIONS = [['2160', '4K (2160p)'], ['1440', '1440p'], ['1080', '1080p'], ['720', '720p'], ['480', '480p'], ['360', '360p']];
+const CODECS = [['default', 'Default (no preference)'], ['h264', 'H.264/AVC (best compatibility)'], ['h265', 'H.265/HEVC (balanced)']];
+const MEDIA_FILES: Array<{ key: 'writeVideoNfoFiles' | 'writeChannelPosters' | 'writeVideoFanart' | 'writeBackdropImages'; label: string; description: string }> = [
+  { key: 'writeVideoNfoFiles', label: 'Video .nfo files', description: 'Metadata for Kodi, Jellyfin and Emby. Episodes in TV shows folders always get one.' },
+  { key: 'writeChannelPosters', label: 'Channel poster.jpg', description: 'Copies the channel thumbnail into each channel folder.' },
+  { key: 'writeVideoFanart', label: 'Video fanart', description: 'A -fanart.jpg per video. Some Plex clients (NVIDIA Shield) use it as the background.' },
+  { key: 'writeBackdropImages', label: 'Backdrop images', description: 'A backdrop.jpg in video and channel folders, for Jellyfin and Emby.' },
+];
+const NAMING_TV_NOTE = 'TV shows folders always use Season folders, SxxEyy file names and plain episode titles.';
+
+/** Settings > Core: downloads, media server files, naming, interface, advanced (Core spec). */
 export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
-  config,
-  deploymentEnvironment,
-  isPlatformManaged,
-  onConfigChange,
-  onMobileTooltipClick,
-  token,
-  filenameTemplateSaveRequirement,
-  onFilenameTemplatePreviewSuccess,
+  config, deploymentEnvironment, isPlatformManaged, onConfigChange, onMobileTooltipClick, token,
+  filenameTemplateSaveRequirement, onFilenameTemplatePreviewSuccess,
 }) => {
-  // Fetch available subfolders
-  const { subfolders, loading: subfoldersLoading, createSubfolder } = useSubfolders(token);
-  const libraryFolders = useLibraryFolders(token);
-  const { layoutOf } = libraryFolders;
+  const { hash } = useLocation();
+  const phone = useMediaQuery(PHONE_QUERY);
+  const [pendingFlat, setPendingFlat] = useState<boolean | null>(null);
+  const elfhosted = deploymentEnvironment.platform?.toLowerCase() === 'elfhosted';
 
-  // State for confirmation dialog when setting default subfolder
-  const [manageOpen, setManageOpen] = useState(false);
-  const [addSubfolderOpen, setAddSubfolderOpen] = useState(false);
-  const [pendingDefaultSubfolder, setPendingDefaultSubfolder] = useState<string | null>(null);
-  // True when the pending value came from the Add Subfolder dialog (already persisted);
-  // the confirmation dialog copy changes so Cancel doesn't read as undoing the add.
-  const [pendingIsNewSubfolder, setPendingIsNewSubfolder] = useState(false);
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [affectedChannels, setAffectedChannels] = useState<{ count: number; channelNames: string[] }>({ count: 0, channelNames: [] });
-  const [loadingAffectedChannels, setLoadingAffectedChannels] = useState(false);
-  const [showAffectedList, setShowAffectedList] = useState(false);
+  useEffect(() => {
+    const id = hash.slice(1);
+    if (!id) return;
+    document.getElementById(id)?.scrollIntoView?.({ block: 'start' });
+  }, [hash]);
 
-  // Handle default subfolder change with confirmation
-  const handleDefaultSubfolderChange = async (
-    newValue: string | null,
-    meta?: { isNewlyCreated?: boolean }
-  ) => {
-    const currentValue = config.defaultSubfolder || '';
-    const newValueNormalized = newValue || '';
-
-    // No change
-    if (currentValue === newValueNormalized) {
-      return;
-    }
-
-    // Show dialog immediately with loading state
-    setPendingDefaultSubfolder(newValue);
-    setPendingIsNewSubfolder(meta?.isNewlyCreated === true);
-    setShowConfirmDialog(true);
-    setLoadingAffectedChannels(true);
-    setAffectedChannels({ count: 0, channelNames: [] });
-
-    // Fetch affected channels count
-    try {
-      const response = await fetch('/api/channels/using-default-subfolder', {
-        headers: { 'x-access-token': token || '' },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setAffectedChannels(data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch affected channels:', err);
-      setAffectedChannels({ count: 0, channelNames: [] });
-    } finally {
-      setLoadingAffectedChannels(false);
-    }
-  };
-
-  // Between a Videos and a TV folder, saving moves the downloaded videos of the channels on the default.
-  const defaultLayoutChanges = pendingDefaultSubfolder !== null
-    && layoutOf(config.defaultSubfolder || '') !== layoutOf(pendingDefaultSubfolder || '');
-
-  const handleConfirmDefaultSubfolder = () => {
-    onConfigChange({ defaultSubfolder: pendingDefaultSubfolder || '' });
-    setShowConfirmDialog(false);
-    setPendingDefaultSubfolder(null);
-    setPendingIsNewSubfolder(false);
-    setShowAffectedList(false);
-  };
-
-  const handleCancelDefaultSubfolder = () => {
-    setShowConfirmDialog(false);
-    setPendingDefaultSubfolder(null);
-    setPendingIsNewSubfolder(false);
-    setShowAffectedList(false);
-  };
-
-  // Page-level Add Subfolder action: persist the new name, then offer to set
-  // it as the default via the confirmation dialog
-  const handleAddSubfolderFromPage = (name: string) => {
-    setAddSubfolderOpen(false);
-    createSubfolder(name).catch((err) => {
-      console.error('Failed to persist subfolder:', err);
-    });
-    handleDefaultSubfolderChange(name, { isNewlyCreated: true });
-  };
-
-  const [pendingFlatDefault, setPendingFlatDefault] = useState<boolean | null>(null);
-  const [showFlatConfirmDialog, setShowFlatConfirmDialog] = useState(false);
-  const [flatAffectedChannels, setFlatAffectedChannels] = useState<{ count: number; channelNames: string[] } | null>(null);
-  const [loadingFlatAffectedChannels, setLoadingFlatAffectedChannels] = useState(false);
-  const [showFlatAffectedList, setShowFlatAffectedList] = useState(false);
-
-  const handleFlatDefaultChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const newValue = event.target.checked;
-    if (newValue === config.defaultSkipVideoFolder) {
-      return;
-    }
-
-    setPendingFlatDefault(newValue);
-    setShowFlatConfirmDialog(true);
-    setLoadingFlatAffectedChannels(true);
-    setFlatAffectedChannels(null);
-
-    try {
-      const response = await fetch('/api/channels/using-global-file-structure', {
-        headers: { 'x-access-token': token || '' },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setFlatAffectedChannels(data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch affected channels:', err);
-      setFlatAffectedChannels(null);
-    } finally {
-      setLoadingFlatAffectedChannels(false);
-    }
-  };
-
-  const handleConfirmFlatDefault = () => {
-    onConfigChange({ defaultSkipVideoFolder: pendingFlatDefault === true });
-    setShowFlatConfirmDialog(false);
-    setPendingFlatDefault(null);
-    setShowFlatAffectedList(false);
-  };
-
-  const handleCancelFlatDefault = () => {
-    setShowFlatConfirmDialog(false);
-    setPendingFlatDefault(null);
-    setShowFlatAffectedList(false);
-  };
-
-  const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = event.target;
-    let parsedValue: any = value;
-
-    if (name === 'channelFilesToDownload') {
-      parsedValue = Number(value);
-    }
-
-    onConfigChange({ [name]: parsedValue });
-  };
-
-  const handleCheckboxChange = (event: ChangeEvent<HTMLInputElement>) => {
-    onConfigChange({ [event.target.name]: event.target.checked });
-  };
-
-  const handleChannelFilesChange = (event: SelectChangeEvent<string>) => {
-    onConfigChange({ channelFilesToDownload: Number(event.target.value) });
-  };
-
+  const toggle = (key: BooleanConfigKey) => (event: React.ChangeEvent<HTMLInputElement>) => onConfigChange({ [key]: event.target.checked });
+  const switchFor = (key: BooleanConfigKey, extra: Partial<React.ComponentProps<typeof Switch>> = {}) => (
+    <Switch id={key} name={key} checked={config[key]} onChange={toggle(key)} aria-describedby={settingDescriptionId(key)} {...extra} />
+  );
+  const describedBy = (controlId: string) => ({ 'aria-describedby': settingDescriptionId(controlId) });
 
   return (
-    <ConfigurationCard
-      title="Core Settings"
-    >
-      <Grid container spacing={2} className="mt-2">
-        <Grid item xs={12}>
-          <Accordion defaultExpanded style={{ border: 'var(--border-weight) solid var(--border)', borderRadius: 'var(--radius-ui)' }}>
-            <AccordionSummary>
-              <Typography variant="subtitle2" style={{ fontWeight: 700 }}>
-                General Settings
-              </Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Grid container spacing={3} alignItems="center">
-                <Grid item xs={12} md={6}>
-                  <Box className="flex items-center">
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          name="channelVideosHotLoad"
-                          checked={config.channelVideosHotLoad}
-                          onChange={handleCheckboxChange}
-                        />
-                      }
-                      label="Enable Hot Loading"
-                    />
-                    <InfoTooltip
-                      text="When enabled, channel lists, channel videos, and download history use infinite hot loading. When disabled, they use page-by-page controls."
-                      onMobileClick={onMobileTooltipClick}
-                    />
-                  </Box>
-                </Grid>
+    <div className="flex flex-col">
+      <p className="text-sm text-muted-foreground">How Youtarr downloads videos, and the files it writes next to them.</p>
+      <div className="mt-6 flex flex-col gap-8 lg:gap-12">
+        <LibraryFoldersCard token={token} config={config} isPlatformManaged={isPlatformManaged}
+          deploymentEnvironment={deploymentEnvironment} onMobileTooltipClick={onMobileTooltipClick} />
 
-                <Grid item xs={12} md={6}>
-                  <Box className="flex items-center">
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          name="subtitlesEnabled"
-                          checked={config.subtitlesEnabled}
-                          onChange={handleCheckboxChange}
-                        />
-                      }
-                      label="Enable Subtitle Downloads"
-                    />
-                    <InfoTooltip
-                      text="Download subtitles in SRT format when available. Manual subtitles are preferred, with auto-generated subtitles as fallback."
-                      onMobileClick={onMobileTooltipClick}
-                    />
-                  </Box>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Box className="flex items-center">
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          name="channelAutoDownload"
-                          checked={config.channelAutoDownload}
-                          onChange={handleCheckboxChange}
-                        />
-                      }
-                      label="Enable Automatic Downloads"
-                    />
-                    <InfoTooltip
-                      text="Globally enable or disable automatic scheduled downloading of videos from your channels and playlists. Only enabled channel tabs and auto-download enabled playlists will be checked and downloaded."
-                      onMobileClick={onMobileTooltipClick}
-                    />
-                  </Box>
-                </Grid>
-
-                {config.subtitlesEnabled && (
-                  <Grid item xs={12} md={6}>
-                    <Box className="flex items-start">
-                      <SubtitleLanguageSelector
-                        value={config.subtitleLanguage}
-                        onChange={(value) => onConfigChange({ subtitleLanguage: value })}
-                      />
-                      <Box className="flex items-center min-h-[48px] mt-5">
-                        <InfoTooltip
-                          text="Select one or more subtitle languages. Subtitles will be downloaded when available; videos without subtitles will still download successfully."
-                          onMobileClick={onMobileTooltipClick}
-                        />
-                      </Box>
-                    </Box>
-                  </Grid>
-                )}
-              </Grid>
-            </AccordionDetails>
-          </Accordion>
-        </Grid>
-
-        <Grid item xs={12}>
-          <Accordion defaultExpanded style={{ border: 'var(--border-weight) solid var(--border)', borderRadius: 'var(--radius-ui)' }}>
-            <AccordionSummary>
-              <Typography variant="subtitle2" style={{ fontWeight: 700 }}>
-                Download Settings
-              </Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Grid container spacing={2}>
-                <Grid item xs={12} md={6}>
-                  <ScheduleSummary scheduleKey="channelDownloadFrequency" value={config.channelDownloadFrequency} />
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <FormControl fullWidth>
-                    <InputLabel>Files to Download per Channel/Playlist</InputLabel>
-                    <Box className="flex items-center gap-1">
-                      <Select
-                        value={config.channelFilesToDownload}
-                        onChange={handleChannelFilesChange}
-                        label="Videos to Download per Channel Tab"
-                        className="flex-1 min-w-0"
-                      >
-                        {getChannelFilesOptions(config.channelFilesToDownload).map(count => (
-                          <MenuItem key={count} value={count}>
-                            {count} {count === 1 ? 'video' : 'videos'}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                      <InfoTooltip
-                        text="How many videos Youtarr will attempt to download per channel tab and per playlist when downloads run (channels: newest uploads; playlists: most recently added). Already downloaded videos will be skipped."
-                        onMobileClick={onMobileTooltipClick}
-                      />
-                    </Box>
-                  </FormControl>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <FormControl fullWidth>
-                    <InputLabel>Preferred Resolution</InputLabel>
-                    <Box className="flex items-center gap-1">
-                      <Select
-                        value={config.preferredResolution}
-                        onChange={(e: SelectChangeEvent<string>) =>
-                          onConfigChange({ preferredResolution: e.target.value })
-                        }
-                        label="Preferred Resolution"
-                        className="flex-1 min-w-0"
-                      >
-                        <MenuItem value="2160">4K (2160p)</MenuItem>
-                        <MenuItem value="1440">1440p</MenuItem>
-                        <MenuItem value="1080">1080p</MenuItem>
-                        <MenuItem value="720">720p</MenuItem>
-                        <MenuItem value="480">480p</MenuItem>
-                        <MenuItem value="360">360p</MenuItem>
-                      </Select>
-                      <InfoTooltip
-                        text="The resolution we will try to download from YouTube. Note that this is not guaranteed as YouTube may not have your preferred resolution available. YouTube only provides H.264 MP4 up to 1080p. Selecting 1440p or 2160p (4K) will use VP9 or AV1 (remuxed into MP4), which older Plex clients (Apple TV HD, iOS, older Rokus) may need to transcode."
-                        onMobileClick={onMobileTooltipClick}
-                      />
-                    </Box>
-                    {(config.preferredResolution === '1440' || config.preferredResolution === '2160') && (
-                      <Box component="span" className="text-xs text-muted-foreground">
-                        1440p+ uses VP9/AV1 (remuxed into MP4). Older Plex clients without native VP9/AV1 decode may transcode. Select H.264 codec below for best compatibility (caps at 1080p).
-                      </Box>
-                    )}
-                  </FormControl>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <FormControl fullWidth>
-                    <InputLabel>Preferred Video Codec</InputLabel>
-                    <Box className="flex items-center gap-1">
-                      <Select
-                        value={config.videoCodec}
-                        onChange={(e: SelectChangeEvent<string>) =>
-                          onConfigChange({ videoCodec: e.target.value })
-                        }
-                        label="Preferred Video Codec"
-                        className="flex-1 min-w-0"
-                      >
-                        <MenuItem value="default">Default (No Preference)</MenuItem>
-                        <MenuItem value="h264">H.264/AVC (Best Compatibility)</MenuItem>
-                        <MenuItem value="h265">H.265/HEVC (Balanced)</MenuItem>
-                      </Select>
-                      <InfoTooltip
-                        text="Select your preferred video codec. Youtarr will download this codec when available, and fall back if it is not. H.264 is recommended for Apple TV and maximum device compatibility, but YouTube does not provide H.264 above 1080p so selecting it effectively caps downloads at 1080p regardless of the resolution preference above. Default lets YouTube pick the best codec (typically VP9 or AV1 at 1440p+)."
-                        onMobileClick={onMobileTooltipClick}
-                      />
-                    </Box>
-                    <Box component="span" className="text-xs text-muted-foreground">
-                      Note: H.264 offers maximum compatibility (Apple TV HD, iOS, older Rokus direct-play) but YouTube caps H.264 at 1080p, so it will override any 1440p/2160p preference.
-                    </Box>
-                  </FormControl>
-                </Grid>
-
-                <Grid item xs={12}>
-                  <Accordion style={{ border: 'var(--border-weight) solid var(--border)', borderRadius: 'var(--radius-ui)' }}>
-                    <AccordionSummary>
-                      <Typography variant="body2" style={{ fontWeight: 600 }}>
-                        Jellyfin / Kodi / Emby Setting Information
-                      </Typography>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                      <Typography variant="body2" style={{ marginBottom: 8 }}>
-                        Control generation of metadata and artwork files that help Kodi, Emby and Jellyfin index your downloads cleanly.
-                      </Typography>
-                      <Typography variant="body2" style={{ fontWeight: 500, marginBottom: 8 }}>
-                        For best results:
-                      </Typography>
-                      <Typography variant="body2">
-                        • Add your download library as Content Type: <strong>Movies</strong>
-                        <br />
-                        • Under Metadata Readers/Savers, select <strong>Nfo</strong> to read the .nfo files
-                        <br />
-                        • Uncheck all metadata downloaders since we provide metadata via .nfo files
-                      </Typography>
-                    </AccordionDetails>
-                  </Accordion>
-                </Grid>
-
-                <Grid item xs={12} md={6} className="mt-3">
-                  <FormControl>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          name="writeVideoNfoFiles"
-                          checked={config.writeVideoNfoFiles}
-                          onChange={handleCheckboxChange}
-                        />
-                      }
-                      label={
-                        <Box className="flex items-center">
-                          Generate video .nfo files
-                          <InfoTooltip
-                            text="Create .nfo metadata alongside each download so Kodi, Emby and Jellyfin can import videos with full details."
-                            onMobileClick={onMobileTooltipClick}
-                          />
-                        </Box>
-                      }
-                    />
-                  </FormControl>
-                </Grid>
-
-                <Grid item xs={12} md={6} className="mt-3">
-                  <FormControl>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          name="writeChannelPosters"
-                          checked={config.writeChannelPosters}
-                          onChange={handleCheckboxChange}
-                        />
-                      }
-                      label={
-                        <Box className="flex items-center">
-                          Copy channel poster.jpg files
-                          <InfoTooltip
-                            text="Copy channel thumbnails into each channel folder as poster.jpg for media server compatibility."
-                            onMobileClick={onMobileTooltipClick}
-                          />
-                        </Box>
-                      }
-                    />
-                  </FormControl>
-                </Grid>
-
-                <Grid item xs={12} md={6} className="mt-3">
-                  <FormControl>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          name="writeVideoFanart"
-                          checked={config.writeVideoFanart}
-                          onChange={handleCheckboxChange}
-                        />
-                      }
-                      label={
-                        <Box className="flex items-center">
-                          Create video fanart files
-                          <InfoTooltip
-                            text="Create -fanart.jpg files for each video with the video thumbnail. Some Plex clients like NVIDIA Shield use this as the background preview instead of the poster."
-                            onMobileClick={onMobileTooltipClick}
-                          />
-                        </Box>
-                      }
-                    />
-                  </FormControl>
-                </Grid>
-
-                <Grid item xs={12} md={6} className="mt-3">
-                  <FormControl>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          name="writeBackdropImages"
-                          checked={config.writeBackdropImages}
-                          onChange={handleCheckboxChange}
-                        />
-                      }
-                      label={
-                        <Box className="flex items-center">
-                          Create backdrop images
-                          <InfoTooltip
-                            text="Generates `backdrop` image files and places them in the video and channel directories for use by Emby and Jellyfin"
-                            onMobileClick={onMobileTooltipClick}
-                          />
-                        </Box>
-                      }
-                    />
-                  </FormControl>
-                </Grid>
-
-                <Grid item xs={12} md={6} className="mt-3">
-                  <FormControl>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          name="prefixChannelNameInTitle"
-                          checked={config.prefixChannelNameInTitle}
-                          onChange={handleCheckboxChange}
-                        />
-                      }
-                      label={
-                        <Box className="flex items-center">
-                          Prefix channel name in embedded video title
-                          <InfoTooltip
-                            text="Write the MP4's embedded title as 'Channel - Title'. Plex shows this tag as the video title. Turn it off for a Plex TV Shows library, where the channel is already the show name. Only applies to new downloads; existing files are not re-tagged."
-                            onMobileClick={onMobileTooltipClick}
-                          />
-                        </Box>
-                      }
-                    />
-                  </FormControl>
-                </Grid>
-              </Grid>
-            </AccordionDetails>
-          </Accordion>
-        </Grid>
-
-        <Grid item xs={12}>
-          <Accordion defaultExpanded style={{ border: 'var(--border-weight) solid var(--border)', borderRadius: 'var(--radius-ui)' }}>
-            <AccordionSummary>
-              <Typography variant="subtitle2" style={{ fontWeight: 700 }}>
-                File Structure Settings
-              </Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Grid container spacing={2}>
-                <Grid item xs={12}>
-                  <FormControl fullWidth>
-                    <InputLabel htmlFor="youtubeOutputDirectory" className="flex items-center gap-2">
-                      YouTube Output Directory
-                      <Chip label="Docker Volume" size="small" />
-                    </InputLabel>
-                    <TextField
-                      id="youtubeOutputDirectory"
-                      fullWidth
-                      name="youtubeOutputDirectory"
-                      value={config.youtubeOutputDirectory}
-                      onChange={handleInputChange}
-                      disabled={true}
-                      helperText={
-                        deploymentEnvironment.platform?.toLowerCase() === "elfhosted"
-                          ? "This path is configured by your platform deployment and cannot be changed here."
-                          : "Configured via YOUTUBE_OUTPUT_DIR environment variable. Edit .env and restart to change."
-                      }
-                    />
-                  </FormControl>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Box className="flex items-start">
-                    <SubfolderAutocomplete
-                      mode="global"
-                      value={config.defaultSubfolder || null}
-                      onChange={handleDefaultSubfolderChange}
-                      subfolders={subfolders}
-                      loading={subfoldersLoading}
-                      label="Default Subfolder"
-                      helperText="Default download location for channels using 'Default Subfolder'"
-                      showAddAction={false}
-                      layoutOf={layoutOf}
-                    />
-                    <Box className="flex items-center min-h-[48px] mt-5">
-                      <InfoTooltip
-                        text="Set the default download location for untracked channels and channels using 'Default Subfolder'. Leave empty to download to the root directory by default."
-                        onMobileClick={onMobileTooltipClick}
-                      />
-                    </Box>
-                  </Box>
-                  <Box className="mt-1 flex flex-wrap items-center gap-2">
-                    <Button
-                      variant="text"
-                      size="sm"
-                      startIcon={<AddIcon size={14} />}
-                      onClick={() => setAddSubfolderOpen(true)}
-                    >
-                      Add Subfolder
-                    </Button>
-                    <Button
-                      variant="text"
-                      size="sm"
-                      startIcon={<SettingsIcon size={14} />}
-                      onClick={() => setManageOpen(true)}
-                    >
-                      Manage Subfolders
-                    </Button>
-                  </Box>
-                  <AddSubfolderDialog
-                    open={addSubfolderOpen}
-                    onClose={() => setAddSubfolderOpen(false)}
-                    onAdd={handleAddSubfolderFromPage}
-                    existingSubfolders={subfolders}
-                  />
-                  <ManageSubfoldersDialog
-                    open={manageOpen}
-                    onClose={() => setManageOpen(false)}
-                    token={token}
-                  />
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Box className="flex items-center md:mt-5 md:min-h-[48px]">
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          name="useTmpForDownloads"
-                          checked={config.useTmpForDownloads}
-                          onChange={handleCheckboxChange}
-                          disabled={isPlatformManaged.useTmpForDownloads}
-                        />
-                      }
-                      label={
-                        <Box className="flex items-center gap-2">
-                          Use external temp directory
-                          {isPlatformManaged.useTmpForDownloads && (
-                            <Chip
-                              label={deploymentEnvironment.platform?.toLowerCase() === "elfhosted" ? "Managed by Elfhosted" : "Platform Managed"}
-                              size="small"
-                            />
-                          )}
-                        </Box>
-                      }
-                    />
-                    <InfoTooltip
-                      text={
-                        isPlatformManaged.useTmpForDownloads
-                          ? 'This setting is managed by your platform deployment and cannot be changed.'
-                          : 'Controls where downloads are staged before moving to final location. When enabled, uses external /tmp path (useful for slow network storage). When disabled, uses a hidden .youtarr_tmp/ folder in your output directory (faster for local/SSD storage). Both options hide in-progress files from media servers.'
-                      }
-                      onMobileClick={onMobileTooltipClick}
-                    />
-                  </Box>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Box className="flex items-center">
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          name="defaultSkipVideoFolder"
-                          checked={config.defaultSkipVideoFolder}
-                          onChange={handleFlatDefaultChange}
-                        />
-                      }
-                      label="Flat file structure by default"
-                    />
-                    <InfoTooltip
-                      text="When enabled, new downloads are saved directly in each channel folder instead of individual per-video subfolders. Channels can override this in their own settings (Flat or Video subfolders). Only affects new downloads; existing files are not moved."
-                      onMobileClick={onMobileTooltipClick}
-                    />
-                  </Box>
-                </Grid>
-
-                <Grid item xs={12}>
-                  <Box className="border-t pt-3">
-                    <LibraryFoldersList library={libraryFolders} token={token} />
-                  </Box>
-                </Grid>
-
-                <Grid item xs={12}>
-                  <Box className="border-t pt-3">
-                    <VideoFilenameTemplate
-                      value={config.videoFilenamePrefix}
-                      onChange={(newValue) => onConfigChange({ videoFilenamePrefix: newValue })}
-                      token={token}
-                      saveRequirement={filenameTemplateSaveRequirement}
-                      onPreviewSuccess={onFilenameTemplatePreviewSuccess}
-                      channelPrefixEnabled={config.prefixChannelNameInTitle}
-                    />
-                  </Box>
-                </Grid>
-              </Grid>
-            </AccordionDetails>
-          </Accordion>
-        </Grid>
-      </Grid>
-
-      {/* Confirmation Dialog for Default Subfolder */}
-      <Dialog open={showConfirmDialog} onClose={handleCancelDefaultSubfolder}>
-        <DialogTitle>
-          {pendingIsNewSubfolder ? 'Set New Subfolder as Default?' : 'Set Default Subfolder?'}
-        </DialogTitle>
-        <DialogContent>
-          {pendingIsNewSubfolder && (
-            <DialogContentText className="mb-2">
-              Subfolder <strong>{`__${pendingDefaultSubfolder}`}</strong> has been created and is
-              available anywhere subfolders can be selected.
-            </DialogContentText>
-          )}
-          <DialogContentText>
-            {pendingIsNewSubfolder
-              ? 'Would you also like to make it the default subfolder? This will affect where videos are downloaded for:'
-              : 'Setting a default subfolder will affect where videos are downloaded for:'}
-          </DialogContentText>
-          <Box component="ul" className="mt-2 pl-4">
-            <li>Untracked channels (manual URL downloads)</li>
-            <li>Channels configured to use &quot;Default Subfolder&quot;</li>
-          </Box>
-
-          {/* Affected channels section */}
-          <Box className="mt-4 mb-4">
-            {loadingAffectedChannels ? (
-              <Box className="flex items-center gap-2">
-                <CircularProgress size={16} />
-                  <span>Checking affected channels...</span>
-              </Box>
-            ) : affectedChannels.count === 0 ? (
-              <DialogContentText>
-                No tracked channels are currently using Default Subfolder.
-              </DialogContentText>
-            ) : (
-              <>
-                <DialogContentText>
-                  {affectedChannels.count} tracked channel{affectedChannels.count !== 1 ? 's' : ''} configured to use Default Subfolder.
-                </DialogContentText>
-                <Link
-                  component="button"
-                  variant="body2"
-                  onClick={() => setShowAffectedList(!showAffectedList)}
-                  className="mt-1 block cursor-pointer"
-                >
-                  {showAffectedList ? 'Hide affected channels ▲' : 'Show affected channels ▼'}
-                </Link>
-                <Collapse in={showAffectedList}>
-                  <Box
-                    component="ul"
-                    className="mt-2 pl-4 max-h-[200px] overflow-auto bg-muted/50 rounded py-2"
-                  >
-                    {affectedChannels.channelNames.map((name, index) => (
-                      <li key={index}>{name}</li>
-                    ))}
-                  </Box>
-                </Collapse>
-              </>
+        <SettingsSection id="downloads" title="Downloads" description="What Youtarr downloads, and when.">
+          <SettingRow controlId="channelAutoDownload" label="Automatic downloads"
+            description="Check enabled channel tabs and auto-download playlists for new videos on a schedule."
+            control={switchFor('channelAutoDownload')}>
+            <ScheduleSummary scheduleKey="channelDownloadFrequency" value={config.channelDownloadFrequency} />
+            {!config.channelAutoDownload && <p className="mt-1 text-[13px] text-muted-foreground">The schedule is idle until you turn this on.</p>}
+          </SettingRow>
+          <SettingRow controlId="channelFilesToDownload" label="Videos per channel tab and playlist" controlSize="select-compact"
+            description="Newest uploads per channel tab, latest additions per playlist. Videos you already have are skipped."
+            control={(
+              <Select id="channelFilesToDownload" size="small" inputProps={describedBy('channelFilesToDownload')}
+                value={config.channelFilesToDownload}
+                onChange={(event: SelectChangeEvent<string>) => onConfigChange({ channelFilesToDownload: Number(event.target.value) })}>
+                {getChannelFilesOptions(config.channelFilesToDownload).map((count) => (
+                  <MenuItem key={count} value={count}>{count} {count === 1 ? 'video' : 'videos'}</MenuItem>
+                ))}
+              </Select>
+            )} />
+          <SettingRow controlId="preferredResolution" label="Preferred resolution" controlSize="select-compact"
+            description="Youtarr takes the closest resolution YouTube has."
+            control={(
+              <Select id="preferredResolution" size="small" inputProps={describedBy('preferredResolution')}
+                value={config.preferredResolution}
+                onChange={(event: SelectChangeEvent<string>) => onConfigChange({ preferredResolution: event.target.value })}>
+                {RESOLUTIONS.map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}
+              </Select>
+            )}>
+            {(config.preferredResolution === '1440' || config.preferredResolution === '2160') && (
+              <SettingNote tone="warning">
+                1440p and 4K come as VP9 or AV1 (remuxed into MP4). Older Plex clients without VP9 or AV1 decoding may transcode.
+              </SettingNote>
             )}
-          </Box>
-
-          <DialogContentText>
-            Videos will be downloaded to channel folders in:{' '}
-            <strong>
-              {pendingDefaultSubfolder ? `__${pendingDefaultSubfolder}` : 'the root directory'}
-            </strong>
-          </DialogContentText>
-          <DialogContentText className="mt-2" style={{ fontStyle: 'italic' }}>
-            {defaultLayoutChanges ? DEFAULT_LAYOUT_CHANGE_NOTE : 'Existing videos will not be moved.'}
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCancelDefaultSubfolder}>
-            {pendingIsNewSubfolder ? "Don't Set as Default" : 'Cancel'}
-          </Button>
-          <Button onClick={handleConfirmDefaultSubfolder} variant="contained" color="primary">
-            Set as Default
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={showFlatConfirmDialog} onClose={handleCancelFlatDefault}>
-        <DialogTitle>Change default file structure?</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            {pendingFlatDefault
-              ? 'New downloads for channels using the global setting will be saved directly in the channel folder (flat structure, no per-video subfolders).'
-              : 'New downloads for channels using the global setting will be saved in individual per-video subfolders.'}
-          </DialogContentText>
-
-          <Box className="mt-4 mb-4">
-            {loadingFlatAffectedChannels ? (
-              <Box className="flex items-center gap-2">
-                <CircularProgress size={16} />
-                <span>Checking affected channels...</span>
-              </Box>
-            ) : flatAffectedChannels === null ? (
-              <DialogContentText style={{ color: 'var(--warning)' }}>
-                Could not determine how many channels are affected. You can still continue, but the
-                affected channel count is unknown.
-              </DialogContentText>
-            ) : flatAffectedChannels.count === 0 ? (
-              <DialogContentText>
-                No tracked channels are currently using the global setting.
-              </DialogContentText>
-            ) : (
-              <>
-                <DialogContentText>
-                  {flatAffectedChannels.count} tracked channel{flatAffectedChannels.count !== 1 ? 's' : ''} follow{flatAffectedChannels.count === 1 ? 's' : ''} the global setting and will be affected.
-                </DialogContentText>
-                <Link
-                  component="button"
-                  variant="body2"
-                  onClick={() => setShowFlatAffectedList(!showFlatAffectedList)}
-                  className="mt-1 block cursor-pointer"
-                >
-                  {showFlatAffectedList ? 'Hide affected channels ▲' : 'Show affected channels ▼'}
-                </Link>
-                <Collapse in={showFlatAffectedList}>
-                  <Box
-                    component="ul"
-                    className="mt-2 pl-4 max-h-[200px] overflow-auto bg-muted/50 rounded py-2"
-                  >
-                    {flatAffectedChannels.channelNames.map((name, index) => (
-                      <li key={index}>{name}</li>
-                    ))}
-                  </Box>
-                </Collapse>
-              </>
+          </SettingRow>
+          <SettingRow controlId="videoCodec" label="Preferred video codec" controlSize="select" stackControlOnPhone
+            description="Used when YouTube has it; otherwise Youtarr falls back."
+            tooltip="Default lets YouTube pick the best codec (typically VP9 or AV1 at 1440p and above)." onMobileTooltipClick={onMobileTooltipClick}
+            control={(
+              <Select id="videoCodec" size="small" inputProps={describedBy('videoCodec')}
+                value={config.videoCodec}
+                onChange={(event: SelectChangeEvent<string>) => onConfigChange({ videoCodec: event.target.value })}>
+                {CODECS.map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}
+              </Select>
+            )}>
+            <SettingNote tone="info">
+              H.264 direct-plays on the most devices (Apple TV HD, iOS, older Rokus), but YouTube only offers it up to 1080p, so it
+              overrides a 1440p or 4K resolution.
+            </SettingNote>
+          </SettingRow>
+          <SettingRow controlId="subtitlesEnabled" label="Subtitles"
+            description="SRT files when available: manual subtitles first, auto-generated as a fallback."
+            control={switchFor('subtitlesEnabled')}>
+            {config.subtitlesEnabled && (
+              <div className="mt-1 rounded-ui border border-border bg-background px-3.5 py-3">
+                <p className="text-[13px] font-medium">Languages</p>
+                <SubtitleLanguageSelector value={config.subtitleLanguage} onChange={(value) => onConfigChange({ subtitleLanguage: value })} />
+                <p className="mt-2 text-[13px] text-muted-foreground">Videos without subtitles in these languages still download.</p>
+              </div>
             )}
-          </Box>
+          </SettingRow>
+        </SettingsSection>
 
-          <DialogContentText>
-            Previously downloaded videos are not affected. Existing files will not be moved or renamed; only new downloads use the new structure.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCancelFlatDefault}>Cancel</Button>
-          <Button onClick={handleConfirmFlatDefault} variant="contained" color="primary" disabled={loadingFlatAffectedChannels}>
-            Confirm
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </ConfigurationCard>
+        <SettingsSection id="media-server-files" title="Media server files"
+          description="Extra files saved next to each download so media servers show full details and artwork.">
+          {MEDIA_FILES.map((row) => (
+            <SettingRow key={row.key} controlId={row.key} label={row.label} description={row.description} control={switchFor(row.key)} />
+          ))}
+          <div className={cn('flex items-start gap-2 bg-muted/30 text-[13px] text-muted-foreground', phone ? 'px-4 py-3.5' : 'px-5 py-4')}>
+            <Info size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-info" />
+            <span>
+              Which library type a folder needs depends on its layout: <strong className="text-foreground">Movies</strong> or{' '}
+              <strong className="text-foreground">Other Videos</strong> for Videos folders, <strong className="text-foreground">TV Shows</strong> or{' '}
+              <strong className="text-foreground">Shows</strong> for TV shows folders.{phone ? '' : ' Library folders shows the setup for every folder and checks your servers.'}{' '}
+              <RouterLink to={LIBRARY_FOLDERS_PATH} className="text-primary underline max-md:inline-flex max-md:min-h-[44px] max-md:items-center">Open Library folders</RouterLink>
+            </span>
+          </div>
+        </SettingsSection>
+
+        <SettingsSection id="naming" title="Naming"
+          description={phone ? `How files in Videos folders are named. ${NAMING_TV_NOTE}` : 'How files in Videos folders are named and organized.'}
+          aside={phone ? undefined : (
+            <>
+              <Chip icon={<Film size={12} aria-hidden="true" />} label="Videos folders only" size="small" variant="outlined" />
+              <p className="mt-2.5 text-[13px] text-muted-foreground">{NAMING_TV_NOTE}</p>
+            </>
+          )}>
+          <SettingRow controlId="defaultSkipVideoFolder" label="Flat file structure by default"
+            description="Save new downloads directly in the channel folder instead of a folder per video. Channels can override this."
+            control={(
+              <Switch id="defaultSkipVideoFolder" name="defaultSkipVideoFolder" checked={config.defaultSkipVideoFolder}
+                aria-describedby={settingDescriptionId('defaultSkipVideoFolder')}
+                onChange={(event) => { if (event.target.checked !== config.defaultSkipVideoFolder) setPendingFlat(event.target.checked); }} />
+            )} />
+          <SettingRow controlId="prefixChannelNameInTitle" label="Channel name in embedded title"
+            description={'Write the MP4 title as "Channel - Title"; Plex shows it as the video title. New downloads only.'}
+            control={switchFor('prefixChannelNameInTitle')} />
+          <SettingRow controlId="videoFilenamePrefix" label="Video filename template"
+            description={(
+              <>How yt-dlp names video files and per-video folders. Youtarr always adds <code className="font-mono">[VIDEO_ID].EXT</code> to file
+                names and <code className="font-mono">- VIDEO_ID</code> to folder names so it can find your videos again. New downloads only.</>
+            )}
+            controlSize="link"
+            control={(
+              <a href="https://github.com/yt-dlp/yt-dlp#output-template" target="_blank" rel="noopener noreferrer" className="text-[13px] text-primary underline">
+                {phone ? 'yt-dlp docs' : 'yt-dlp output template docs'}
+              </a>
+            )}>
+            <VideoFilenameTemplate inputId="videoFilenamePrefix" value={config.videoFilenamePrefix}
+              onChange={(value) => onConfigChange({ videoFilenamePrefix: value })} token={token}
+              saveRequirement={filenameTemplateSaveRequirement} onPreviewSuccess={onFilenameTemplatePreviewSuccess} />
+          </SettingRow>
+        </SettingsSection>
+
+        <SettingsSection id="interface" title="Interface" description="Applies to everyone who uses this Youtarr.">
+          <SettingRow controlId="channelVideosHotLoad" label="Infinite scrolling (hot loading)"
+            description="Channel lists, channel videos and download history load more as you scroll. Off: page-by-page controls."
+            control={switchFor('channelVideosHotLoad')} />
+        </SettingsSection>
+
+        <SettingsSection id="advanced" title="Advanced" description="Download staging. Doesn't change where finished files go.">
+          <SettingRow controlId="useTmpForDownloads" label="External temp directory"
+            description="Download to /tmp first, then move finished files into the library. Faster with slow network storage. Off: a hidden .youtarr_tmp folder inside the downloads folder."
+            tooltip={isPlatformManaged.useTmpForDownloads
+              ? 'This setting is managed by your platform deployment and cannot be changed.'
+              : 'Both options hide unfinished downloads from media servers. Off is faster on local or SSD storage.'}
+            onMobileTooltipClick={onMobileTooltipClick}
+            badge={isPlatformManaged.useTmpForDownloads ? <Chip label={elfhosted ? 'Managed by Elfhosted' : 'Platform Managed'} size="small" /> : undefined}
+            control={switchFor('useTmpForDownloads', { disabled: isPlatformManaged.useTmpForDownloads })} />
+        </SettingsSection>
+      </div>
+
+      <FlatStructureDialog open={pendingFlat !== null} turningOn={pendingFlat === true} token={token}
+        onCancel={() => setPendingFlat(null)}
+        onConfirm={() => { onConfigChange({ defaultSkipVideoFolder: pendingFlat === true }); setPendingFlat(null); }} />
+    </div>
   );
 };

@@ -26,6 +26,7 @@ export function makePageValue(overrides: Partial<LibraryPageValue> = {}): Librar
     twoColumn: true,
     folders: [folder('', { isDefault: true })],
     foldersLoaded: true,
+    guideDefaultOpen: true,
     mainDetail: null,
     check: { data: emptyCheck, loading: false, error: null, lastCheckedAt: Date.now(), refetch: jest.fn().mockResolvedValue(undefined), applyPlexMapping: jest.fn().mockResolvedValue(undefined) },
     configuredServers: [],

@@ -1,3 +1,5 @@
+import React from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, userEvent, within } from 'storybook/test';
 import { http, HttpResponse } from 'msw';
@@ -6,6 +8,7 @@ import ChannelSettingsDialog from '../ChannelSettingsDialog';
 const meta: Meta<typeof ChannelSettingsDialog> = {
   title: 'Components/ChannelPage/ChannelSettingsDialog',
   component: ChannelSettingsDialog,
+  decorators: [(Story) => <MemoryRouter><Story /></MemoryRouter>],
   args: {
     open: true,
     channelId: 'chan-1',

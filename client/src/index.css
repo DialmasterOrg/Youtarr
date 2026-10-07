@@ -349,8 +349,6 @@ body[data-motion='off'] [data-chip],
 body[data-motion='off'] .pop-toggle,
 body[data-motion='off'] [data-card],
 body[data-motion='off'] [data-btn],
-body[data-motion='off'] .settings-splash-card,
-body[data-motion='off'] .settings-splash-card [data-card-action],
 body[data-motion='off'] .linear-top-rail::after {
   animation-duration: 0ms !important;
   animation-iteration-count: 1 !important;
@@ -367,19 +365,6 @@ body[data-motion='off'] [data-btn]:hover {
 /* Theme-Specific Animations - Only Active When Motion is On */
 body[data-motion='on'][data-theme='playful'] .animate-on-mount {
   animation: pop-in 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-/* Settings splash card: ensure Playful shows bold gold border and shadow on hover */
-body[data-theme='playful'] .settings-splash-card:hover {
-  border-color: var(--settings-splash-border) !important;
-  box-shadow: var(--settings-splash-shadow-hover) !important;
-}
-
-/* Ensure CardActionArea inside the splash card also gets the gold hover and background */
-body[data-theme='playful'] .settings-splash-card [data-card-action]:hover,
-body[data-theme='playful'] .settings-splash-card:hover [data-card-action] {
-  box-shadow: var(--settings-splash-shadow-hover) !important;
-  background-color: var(--nav-item-bg-hover) !important;
 }
 
 body[data-motion='on'][data-theme='playful'] .animate-bounce {

@@ -1,9 +1,13 @@
 import React from 'react';
-import { render, screen, within, fireEvent, waitFor } from '@testing-library/react';
+import { render as rtlRender, screen, within, fireEvent, waitFor } from '@testing-library/react';
+import type { ReactElement } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { SubfolderAutocomplete } from '../SubfolderAutocomplete';
 import { GLOBAL_DEFAULT_SENTINEL, ROOT_SENTINEL } from '../../../utils/channelHelpers';
+
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: MemoryRouter });
 
 // Mock AddSubfolderDialog to simplify testing
 jest.mock('../AddSubfolderDialog', () => ({
@@ -20,7 +24,7 @@ jest.mock('../AddSubfolderDialog', () => ({
     const [inputValue, setInputValue] = React.useState('');
     if (!open) return null;
     return React.createElement('div', { 'data-testid': 'add-subfolder-dialog' },
-      React.createElement('label', { htmlFor: 'subfolder-name-input' }, 'Subfolder Name'),
+      React.createElement('label', { htmlFor: 'subfolder-name-input' }, 'Library folder name'),
       React.createElement('input', {
         id: 'subfolder-name-input',
         value: inputValue,
@@ -33,7 +37,7 @@ jest.mock('../AddSubfolderDialog', () => ({
       React.createElement('button', {
         'data-testid': 'dialog-add',
         onClick: () => onAdd(inputValue || 'NewFolder'),
-      }, 'Add Subfolder'),
+      }, 'Add library folder'),
     );
   }
 }));
@@ -46,91 +50,12 @@ describe('SubfolderAutocomplete', () => {
     jest.clearAllMocks();
   });
 
-  describe('Global Mode', () => {
-    const globalModeProps = {
-      mode: 'global' as const,
-      value: null,
-      onChange: mockOnChange,
-      subfolders: defaultSubfolders,
-    };
-
-    test('renders with correct label', () => {
-      render(<SubfolderAutocomplete {...globalModeProps} />);
-      expect(screen.getByLabelText('Subfolder')).toBeInTheDocument();
-    });
-
-    test('renders with custom label', () => {
-      render(<SubfolderAutocomplete {...globalModeProps} label="Custom Label" />);
-      expect(screen.getByLabelText('Custom Label')).toBeInTheDocument();
-    });
-
-    test('shows "No Subfolder (root)" special option when dropdown opened', async () => {
-      const user = userEvent.setup();
-      render(<SubfolderAutocomplete {...globalModeProps} />);
-
-      const autocomplete = screen.getByRole('combobox');
-      await user.click(autocomplete);
-
-      expect(within(screen.getByRole('listbox')).getByText('No Subfolder (root)')).toBeInTheDocument();
-    });
-
-    test('shows existing subfolders with __ prefix', async () => {
-      const user = userEvent.setup();
-      render(<SubfolderAutocomplete {...globalModeProps} />);
-
-      const autocomplete = screen.getByRole('combobox');
-      await user.click(autocomplete);
-
-      expect(screen.getByText('__Sports')).toBeInTheDocument();
-      expect(screen.getByText('__Music')).toBeInTheDocument();
-      expect(screen.getByText('__Tech')).toBeInTheDocument();
-    });
-
-    test('shows "Add Subfolder" action option', async () => {
-      const user = userEvent.setup();
-      render(<SubfolderAutocomplete {...globalModeProps} />);
-
-      const autocomplete = screen.getByRole('combobox');
-      await user.click(autocomplete);
-
-      expect(screen.getByText('Add Subfolder')).toBeInTheDocument();
-    });
-
-    test('displays null value as "No Subfolder (root)"', () => {
-      render(<SubfolderAutocomplete {...globalModeProps} value={null} />);
-
-      const autocomplete = screen.getByRole('combobox');
-      expect(autocomplete).toHaveValue('No Subfolder (root)');
-    });
-
-    test('displays subfolder value with __ prefix', () => {
-      render(<SubfolderAutocomplete {...globalModeProps} value="Sports" />);
-
-      const autocomplete = screen.getByRole('combobox');
-      expect(autocomplete).toHaveValue('__Sports');
-    });
-
-    test('calls onChange with null when "No Subfolder (root)" selected', async () => {
-      const user = userEvent.setup();
-      render(<SubfolderAutocomplete {...globalModeProps} value="Sports" />);
-
-      const autocomplete = screen.getByRole('combobox');
-      await user.click(autocomplete);
-      await user.click(within(screen.getByRole('listbox')).getByText('No Subfolder (root)'));
-
-      expect(mockOnChange).toHaveBeenCalledWith(null);
-    });
-
-    test('calls onChange with clean value when subfolder selected', async () => {
-      const user = userEvent.setup();
-      render(<SubfolderAutocomplete {...globalModeProps} />);
-
-      const autocomplete = screen.getByRole('combobox');
-      await user.click(autocomplete);
-      await user.click(screen.getByText('__Sports'));
-
-      expect(mockOnChange).toHaveBeenCalledWith('Sports');
-    });
+  test('links to Library folders', () => {
+    render(<SubfolderAutocomplete mode="channel" value={null} onChange={mockOnChange} subfolders={defaultSubfolders} />);
+    const link = screen.getByRole('link', { name: 'Manage library folders (opens in a new tab)' });
+    expect(link).toHaveAttribute('href', '/settings/library');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   });
 
   describe('Channel Mode', () => {
@@ -141,34 +66,34 @@ describe('SubfolderAutocomplete', () => {
       subfolders: defaultSubfolders,
     };
 
-    test('shows "No Subfolder (root)" special option', async () => {
+    test('shows "Main folder" special option', async () => {
       const user = userEvent.setup();
       render(<SubfolderAutocomplete {...channelModeProps} />);
 
       const autocomplete = screen.getByRole('combobox');
       await user.click(autocomplete);
 
-      expect(within(screen.getByRole('listbox')).getByText('No Subfolder (root)')).toBeInTheDocument();
+      expect(within(screen.getByRole('listbox')).getByText('Main folder')).toBeInTheDocument();
     });
 
-    test('shows "Default Subfolder (root)" when no defaultSubfolderDisplay', async () => {
+    test('shows "Default folder (main folder)" when no defaultSubfolderDisplay', async () => {
       const user = userEvent.setup();
       render(<SubfolderAutocomplete {...channelModeProps} />);
 
       const autocomplete = screen.getByRole('combobox');
       await user.click(autocomplete);
 
-      expect(screen.getByText('Default Subfolder (root)')).toBeInTheDocument();
+      expect(screen.getByText('Default folder (main folder)')).toBeInTheDocument();
     });
 
-    test('shows "Default Subfolder (__name)" when defaultSubfolderDisplay provided', async () => {
+    test('shows "Default folder (__name)" when defaultSubfolderDisplay provided', async () => {
       const user = userEvent.setup();
       render(<SubfolderAutocomplete {...channelModeProps} defaultSubfolderDisplay="Videos" />);
 
       const autocomplete = screen.getByRole('combobox');
       await user.click(autocomplete);
 
-      expect(screen.getByText('Default Subfolder (__Videos)')).toBeInTheDocument();
+      expect(screen.getByText('Default folder (__Videos)')).toBeInTheDocument();
     });
 
     test('calls onChange with GLOBAL_DEFAULT_SENTINEL when default option selected', async () => {
@@ -177,7 +102,7 @@ describe('SubfolderAutocomplete', () => {
 
       const autocomplete = screen.getByRole('combobox');
       await user.click(autocomplete);
-      await user.click(screen.getByText('Default Subfolder (root)'));
+      await user.click(screen.getByText('Default folder (main folder)'));
 
       expect(mockOnChange).toHaveBeenCalledWith(GLOBAL_DEFAULT_SENTINEL);
     });
@@ -186,7 +111,7 @@ describe('SubfolderAutocomplete', () => {
       render(<SubfolderAutocomplete {...channelModeProps} value={GLOBAL_DEFAULT_SENTINEL} />);
 
       const autocomplete = screen.getByRole('combobox');
-      expect(autocomplete).toHaveValue('Default Subfolder (root)');
+      expect(autocomplete).toHaveValue('Default folder (main folder)');
     });
   });
 
@@ -208,24 +133,24 @@ describe('SubfolderAutocomplete', () => {
       expect(within(screen.getByRole('listbox')).getByText('No override (use channel settings)')).toBeInTheDocument();
     });
 
-    test('shows "Root directory (no subfolder)" option', async () => {
+    test('shows "Main folder" option', async () => {
       const user = userEvent.setup();
       render(<SubfolderAutocomplete {...downloadModeProps} />);
 
       const autocomplete = screen.getByRole('combobox');
       await user.click(autocomplete);
 
-      expect(screen.getByText('Root directory (no subfolder)')).toBeInTheDocument();
+      expect(screen.getByText('Main folder')).toBeInTheDocument();
     });
 
-    test('shows "Use Global Default Subfolder" option', async () => {
+    test('shows "Use the default folder" option', async () => {
       const user = userEvent.setup();
       render(<SubfolderAutocomplete {...downloadModeProps} />);
 
       const autocomplete = screen.getByRole('combobox');
       await user.click(autocomplete);
 
-      expect(screen.getByText('Use Global Default Subfolder')).toBeInTheDocument();
+      expect(screen.getByText('Use the default folder')).toBeInTheDocument();
     });
 
     test('calls onChange with ROOT_SENTINEL when root directory selected', async () => {
@@ -234,16 +159,16 @@ describe('SubfolderAutocomplete', () => {
 
       const autocomplete = screen.getByRole('combobox');
       await user.click(autocomplete);
-      await user.click(screen.getByText('Root directory (no subfolder)'));
+      await user.click(screen.getByText('Main folder'));
 
       expect(mockOnChange).toHaveBeenCalledWith(ROOT_SENTINEL);
     });
 
-    test('displays ROOT_SENTINEL as "Root directory (no subfolder)"', () => {
+    test('displays ROOT_SENTINEL as "Main folder"', () => {
       render(<SubfolderAutocomplete {...downloadModeProps} value={ROOT_SENTINEL} />);
 
       const autocomplete = screen.getByRole('combobox');
-      expect(autocomplete).toHaveValue('Root directory (no subfolder)');
+      expect(autocomplete).toHaveValue('Main folder');
     });
 
     test('displays null as "No override (use channel settings)"', () => {
@@ -254,12 +179,12 @@ describe('SubfolderAutocomplete', () => {
     });
   });
 
-  describe('Add Subfolder Dialog', () => {
-    test('opens dialog when "Add Subfolder" clicked', async () => {
+  describe('Add library folder dialog', () => {
+    test('opens dialog when "Add library folder" clicked', async () => {
       const user = userEvent.setup();
       render(
         <SubfolderAutocomplete
-          mode="global"
+          mode="channel"
           value={null}
           onChange={mockOnChange}
           subfolders={defaultSubfolders}
@@ -268,16 +193,16 @@ describe('SubfolderAutocomplete', () => {
 
       const autocomplete = screen.getByRole('combobox');
       await user.click(autocomplete);
-      await user.click(screen.getByText('Add Subfolder'));
+      await user.click(screen.getByText('Add library folder'));
 
       expect(screen.getByTestId('add-subfolder-dialog')).toBeInTheDocument();
     });
 
-    test('does not change value when "Add Subfolder" clicked', async () => {
+    test('does not change value when "Add library folder" clicked', async () => {
       const user = userEvent.setup();
       render(
         <SubfolderAutocomplete
-          mode="global"
+          mode="channel"
           value={null}
           onChange={mockOnChange}
           subfolders={defaultSubfolders}
@@ -286,7 +211,7 @@ describe('SubfolderAutocomplete', () => {
 
       const autocomplete = screen.getByRole('combobox');
       await user.click(autocomplete);
-      await user.click(screen.getByText('Add Subfolder'));
+      await user.click(screen.getByText('Add library folder'));
 
       expect(mockOnChange).not.toHaveBeenCalled();
     });
@@ -295,7 +220,7 @@ describe('SubfolderAutocomplete', () => {
       const user = userEvent.setup();
       render(
         <SubfolderAutocomplete
-          mode="global"
+          mode="channel"
           value={null}
           onChange={mockOnChange}
           subfolders={defaultSubfolders}
@@ -304,7 +229,7 @@ describe('SubfolderAutocomplete', () => {
 
       const autocomplete = screen.getByRole('combobox');
       await user.click(autocomplete);
-      await user.click(screen.getByText('Add Subfolder'));
+      await user.click(screen.getByText('Add library folder'));
 
       expect(screen.getByTestId('add-subfolder-dialog')).toBeInTheDocument();
 
@@ -313,11 +238,11 @@ describe('SubfolderAutocomplete', () => {
       expect(screen.queryByTestId('add-subfolder-dialog')).not.toBeInTheDocument();
     });
 
-    test('calls onChange with isNewlyCreated meta and closes dialog when subfolder added', async () => {
+    test('calls onChange with the new name and closes dialog when library folder added', async () => {
       const user = userEvent.setup();
       render(
         <SubfolderAutocomplete
-          mode="global"
+          mode="channel"
           value={null}
           onChange={mockOnChange}
           subfolders={defaultSubfolders}
@@ -326,10 +251,10 @@ describe('SubfolderAutocomplete', () => {
 
       const autocomplete = screen.getByRole('combobox');
       await user.click(autocomplete);
-      await user.click(screen.getByText('Add Subfolder'));
+      await user.click(screen.getByText('Add library folder'));
       await user.click(screen.getByTestId('dialog-add'));
 
-      expect(mockOnChange).toHaveBeenCalledWith('NewFolder', { isNewlyCreated: true });
+      expect(mockOnChange).toHaveBeenCalledWith('NewFolder');
       expect(screen.queryByTestId('add-subfolder-dialog')).not.toBeInTheDocument();
     });
 
@@ -337,37 +262,23 @@ describe('SubfolderAutocomplete', () => {
       const user = userEvent.setup();
       render(
         <SubfolderAutocomplete
-          mode="global"
+          mode="channel"
           value={null}
           onChange={mockOnChange}
           subfolders={defaultSubfolders}
         />
       );
 
-      // Add a new subfolder via dialog
+      // Add a new library folder via dialog
       const autocomplete = screen.getByRole('combobox');
       await user.click(autocomplete);
-      await user.click(screen.getByText('Add Subfolder'));
+      await user.click(screen.getByText('Add library folder'));
       await user.click(screen.getByTestId('dialog-add'));
 
-      // Reopen dropdown and check for the new subfolder
+      // Reopen dropdown and check for the new library folder
       await user.click(autocomplete);
 
       expect(screen.getByText('__NewFolder')).toBeInTheDocument();
-    });
-
-    test('hides the Add Subfolder action when showAddAction is false', () => {
-      render(
-        <SubfolderAutocomplete
-          mode="global"
-          value={null}
-          onChange={mockOnChange}
-          subfolders={defaultSubfolders}
-          showAddAction={false}
-        />
-      );
-
-      expect(screen.queryByText('Add Subfolder')).not.toBeInTheDocument();
     });
 
     test('persists a newly added subfolder via createSubfolder when provided', async () => {
@@ -383,12 +294,12 @@ describe('SubfolderAutocomplete', () => {
         />
       );
 
-      fireEvent.click(screen.getByText('Add Subfolder'));
-      fireEvent.change(screen.getByLabelText('Subfolder Name'), { target: { value: 'Sports' } });
-      fireEvent.click(screen.getByRole('button', { name: 'Add Subfolder' }));
+      fireEvent.click(screen.getByText('Add library folder'));
+      fireEvent.change(screen.getByLabelText('Library folder name'), { target: { value: 'Sports' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Add library folder' }));
 
       await waitFor(() => expect(createSubfolder).toHaveBeenCalledWith('Sports'));
-      expect(onChange).toHaveBeenCalledWith('Sports', { isNewlyCreated: true });
+      expect(onChange).toHaveBeenCalledWith('Sports');
     });
   });
 
@@ -396,7 +307,7 @@ describe('SubfolderAutocomplete', () => {
     test('disables autocomplete when disabled prop is true', () => {
       render(
         <SubfolderAutocomplete
-          mode="global"
+          mode="channel"
           value={null}
           onChange={mockOnChange}
           subfolders={defaultSubfolders}
@@ -412,7 +323,7 @@ describe('SubfolderAutocomplete', () => {
       // Verify the component accepts and handles the loading prop correctly
       render(
         <SubfolderAutocomplete
-          mode="global"
+          mode="channel"
           value={null}
           onChange={mockOnChange}
           subfolders={defaultSubfolders}
@@ -428,7 +339,7 @@ describe('SubfolderAutocomplete', () => {
     test('displays helper text when provided', () => {
       render(
         <SubfolderAutocomplete
-          mode="global"
+          mode="channel"
           value={null}
           onChange={mockOnChange}
           subfolders={defaultSubfolders}
@@ -443,7 +354,7 @@ describe('SubfolderAutocomplete', () => {
       const user = userEvent.setup();
       render(
         <SubfolderAutocomplete
-          mode="global"
+          mode="channel"
           value={null}
           onChange={mockOnChange}
           subfolders={[]}
@@ -453,9 +364,9 @@ describe('SubfolderAutocomplete', () => {
       const autocomplete = screen.getByRole('combobox');
       await user.click(autocomplete);
 
-      // Should still show special options and Add Subfolder
-      expect(within(screen.getByRole('listbox')).getByText('No Subfolder (root)')).toBeInTheDocument();
-      expect(screen.getByText('Add Subfolder')).toBeInTheDocument();
+      // Should still show special options and Add library folder
+      expect(within(screen.getByRole('listbox')).getByText('Main folder')).toBeInTheDocument();
+      expect(screen.getByText('Add library folder')).toBeInTheDocument();
     });
 
     test('handles undefined value', () => {
@@ -470,7 +381,7 @@ describe('SubfolderAutocomplete', () => {
 
       const autocomplete = screen.getByRole('combobox');
       // undefined should be treated as null (no subfolder)
-      expect(autocomplete).toHaveValue('No Subfolder (root)');
+      expect(autocomplete).toHaveValue('Main folder');
     });
 
     test('handles custom subfolder value not in list', () => {
@@ -478,7 +389,7 @@ describe('SubfolderAutocomplete', () => {
       // This test just verifies the component doesn't crash
       render(
         <SubfolderAutocomplete
-          mode="global"
+          mode="channel"
           value="CustomFolder"
           onChange={mockOnChange}
           subfolders={defaultSubfolders}
@@ -496,7 +407,7 @@ describe('SubfolderAutocomplete', () => {
       const user = userEvent.setup();
       render(
         <SubfolderAutocomplete
-          mode="global"
+          mode="channel"
           value={null}
           onChange={mockOnChange}
           subfolders={defaultSubfolders}
@@ -542,12 +453,12 @@ describe('SubfolderAutocomplete', () => {
 
       await user.click(screen.getByRole('combobox'));
 
-      expect(within(screen.getByRole('listbox')).getByText('Default Subfolder (__Sports) (TV)')).toBeInTheDocument();
+      expect(within(screen.getByRole('listbox')).getByText('Default folder (__Sports) (TV)')).toBeInTheDocument();
     });
 
     test('labels the root option when the main folder is TV', () => {
       render(<SubfolderAutocomplete mode="channel" value={null} onChange={mockOnChange} subfolders={[]} layoutOf={layoutOf} />);
-      expect(screen.getByRole('combobox')).toHaveValue('No Subfolder (root) (TV)');
+      expect(screen.getByRole('combobox')).toHaveValue('Main folder (TV)');
     });
 
     test('shows no layout labels without a resolver', async () => {
