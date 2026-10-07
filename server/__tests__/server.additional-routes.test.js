@@ -56,7 +56,8 @@ const createServerModule = ({
   skipInitialize = false,
   configOverrides = {},
   channelVideoMock = null,
-  archiveModuleMock = null
+  archiveModuleMock = null,
+  videoDeletionModuleMock = null
 } = {}) => {
   jest.resetModules();
   jest.clearAllMocks();
@@ -265,7 +266,7 @@ const createServerModule = ({
           register: jest.fn().mockResolvedValue(undefined),
           delete: jest.fn().mockResolvedValue(undefined),
         }));
-        jest.doMock('../modules/videoDeletionModule', () => ({
+        jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock || ({
           deleteVideos: jest.fn().mockResolvedValue({ deleted: [], failed: [] }),
           deleteVideosByYoutubeIds: jest.fn().mockResolvedValue({ deleted: [], failed: [] })
         }));
@@ -354,6 +355,11 @@ const createServerModule = ({
         jest.doMock('fs', () => ({ readFileSync: jest.fn(() => '') }));
         jest.doMock('child_process', () => childProcessMock);
         jest.doMock('pino-http', () => pinoHttpMock);
+        jest.doMock('swagger-jsdoc', () => jest.fn(() => ({
+          openapi: '3.0.0',
+          paths: {},
+          components: { schemas: {} },
+        })));
 
         const setupTokenModuleMock = {
           setTokenPath: jest.fn(),
@@ -699,8 +705,6 @@ describe('server routes - validateToken', () => {
 
 describe('server routes - auto-removal dry run', () => {
   test('performs dry run with boolean autoRemovalEnabled', async () => {
-    const { app } = await createServerModule();
-
     const videoDeletionModuleMock = {
       performAutomaticCleanup: jest.fn().mockResolvedValue({
         success: true,
@@ -718,7 +722,7 @@ describe('server routes - auto-removal dry run', () => {
       })
     };
 
-    jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
+    const { app } = await createServerModule({ videoDeletionModuleMock });
 
     const handlers = findRouteHandlers(app, 'post', '/api/auto-removal/dry-run');
     const dryRunHandler = handlers[handlers.length - 1];
@@ -748,8 +752,6 @@ describe('server routes - auto-removal dry run', () => {
   });
 
   test('performs dry run with string "true" autoRemovalEnabled', async () => {
-    const { app } = await createServerModule();
-
     const videoDeletionModuleMock = {
       performAutomaticCleanup: jest.fn().mockResolvedValue({
         success: true,
@@ -759,7 +761,7 @@ describe('server routes - auto-removal dry run', () => {
       })
     };
 
-    jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
+    const { app } = await createServerModule({ videoDeletionModuleMock });
 
     const handlers = findRouteHandlers(app, 'post', '/api/auto-removal/dry-run');
     const dryRunHandler = handlers[handlers.length - 1];
@@ -783,8 +785,6 @@ describe('server routes - auto-removal dry run', () => {
   });
 
   test('performs dry run with string "false" autoRemovalEnabled', async () => {
-    const { app } = await createServerModule();
-
     const videoDeletionModuleMock = {
       performAutomaticCleanup: jest.fn().mockResolvedValue({
         success: true,
@@ -794,7 +794,7 @@ describe('server routes - auto-removal dry run', () => {
       })
     };
 
-    jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
+    const { app } = await createServerModule({ videoDeletionModuleMock });
 
     const handlers = findRouteHandlers(app, 'post', '/api/auto-removal/dry-run');
     const dryRunHandler = handlers[handlers.length - 1];
@@ -818,8 +818,6 @@ describe('server routes - auto-removal dry run', () => {
   });
 
   test('performs dry run with numeric autoRemovalEnabled (truthy)', async () => {
-    const { app } = await createServerModule();
-
     const videoDeletionModuleMock = {
       performAutomaticCleanup: jest.fn().mockResolvedValue({
         success: true,
@@ -829,7 +827,7 @@ describe('server routes - auto-removal dry run', () => {
       })
     };
 
-    jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
+    const { app } = await createServerModule({ videoDeletionModuleMock });
 
     const handlers = findRouteHandlers(app, 'post', '/api/auto-removal/dry-run');
     const dryRunHandler = handlers[handlers.length - 1];
@@ -853,8 +851,6 @@ describe('server routes - auto-removal dry run', () => {
   });
 
   test('performs dry run with only threshold values', async () => {
-    const { app } = await createServerModule();
-
     const videoDeletionModuleMock = {
       performAutomaticCleanup: jest.fn().mockResolvedValue({
         success: true,
@@ -864,7 +860,7 @@ describe('server routes - auto-removal dry run', () => {
       })
     };
 
-    jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
+    const { app } = await createServerModule({ videoDeletionModuleMock });
 
     const handlers = findRouteHandlers(app, 'post', '/api/auto-removal/dry-run');
     const dryRunHandler = handlers[handlers.length - 1];
@@ -890,8 +886,6 @@ describe('server routes - auto-removal dry run', () => {
   });
 
   test('performs dry run with empty body', async () => {
-    const { app } = await createServerModule();
-
     const videoDeletionModuleMock = {
       performAutomaticCleanup: jest.fn().mockResolvedValue({
         success: true,
@@ -901,7 +895,7 @@ describe('server routes - auto-removal dry run', () => {
       })
     };
 
-    jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
+    const { app } = await createServerModule({ videoDeletionModuleMock });
 
     const handlers = findRouteHandlers(app, 'post', '/api/auto-removal/dry-run');
     const dryRunHandler = handlers[handlers.length - 1];
@@ -921,13 +915,11 @@ describe('server routes - auto-removal dry run', () => {
   });
 
   test('handles error during dry run', async () => {
-    const { app } = await createServerModule();
-
     const videoDeletionModuleMock = {
       performAutomaticCleanup: jest.fn().mockRejectedValue(new Error('Cleanup failed'))
     };
 
-    jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
+    const { app } = await createServerModule({ videoDeletionModuleMock });
 
     const handlers = findRouteHandlers(app, 'post', '/api/auto-removal/dry-run');
     const dryRunHandler = handlers[handlers.length - 1];
