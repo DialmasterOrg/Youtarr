@@ -2,11 +2,18 @@ const { Op } = require('sequelize');
 const { sequelize } = require('../db');
 const { ApiKey, ApiKeyChannelGrant, Channel } = require('../models');
 
+class ChannelGrantValidationError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'ChannelGrantValidationError';
+  }
+}
+
 function normalizeChannelIds(channelIds) {
-  if (!Array.isArray(channelIds)) throw new Error('channelIds must be an array');
+  if (!Array.isArray(channelIds)) throw new ChannelGrantValidationError('channelIds must be an array');
   const normalized = [...new Set(channelIds)];
   if (normalized.some((id) => !Number.isSafeInteger(id) || id < 1)) {
-    throw new Error('channelIds must contain only positive integer database IDs');
+    throw new ChannelGrantValidationError('channelIds must contain only positive integer database IDs');
   }
   return normalized.sort((a, b) => a - b);
 }
@@ -15,7 +22,7 @@ async function requireExternalKey(keyId, transaction) {
   const key = await ApiKey.findByPk(keyId, { transaction, ...(transaction ? { lock: transaction.LOCK.UPDATE } : {}) });
   if (!key) return null;
   if (!key.is_active || key.revoked_at || key.role === 'legacy_download') {
-    throw new Error('Only active external API keys can receive channel grants');
+    throw new ChannelGrantValidationError('Only active external API keys can receive channel grants');
   }
   return key;
 }
@@ -71,7 +78,7 @@ async function replaceChannelGrants(keyId, channelIds, { transaction: existingTr
         transaction,
       });
       if (enabledCount !== normalized.length) {
-        throw new Error('Every channel ID must identify an enabled, non-terminated channel');
+        throw new ChannelGrantValidationError('Every channel ID must identify an enabled, non-terminated channel');
       }
     }
 
