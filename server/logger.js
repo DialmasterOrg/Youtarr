@@ -112,6 +112,9 @@ const pinoConfig = {
   },
 };
 
+// Tests use a synchronous destination without opening transport workers.
+if (process.env.NODE_ENV === 'test') delete pinoConfig.transport;
+
 const logger = pino(pinoConfig);
 
 if (logDirectoryError) {

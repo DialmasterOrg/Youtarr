@@ -204,8 +204,7 @@ Build and run the full stack using the pre-built static frontend served by the a
 ```
 
 This starts:
-- **Backend** on http://localhost:3011 (Node.js Express server with `--watch` for auto-restart)
-- **Frontend (static, served by the app container)** on http://localhost:3087
+- **Backend and static frontend** on http://localhost:3087 (the Node.js Express server listens on port 3011 inside the container; only host port 3087, or `YOUTARR_HOST_PORT`, is published)
 - **MariaDB** database on the internal Docker network only
 
 Optional flags:
@@ -228,7 +227,7 @@ npm run dev
 Then access:
 - **Frontend (HMR)** at http://localhost:3000
 
-The Vite dev server will proxy API and WebSocket requests to the backend at port `3011` so API calls work the same as the full-stack run.
+The Vite dev server will proxy API and WebSocket requests to the backend on host port `3087` (override with `VITE_BACKEND_PORT`) so API calls work the same as the full-stack run.
 
 The dev server binds to all interfaces (`0.0.0.0`) by default so workflows that reach the host from another network namespace (Docker, WSL2, remote dev containers) work without extra configuration. Override with the `VITE_HOST` env var (e.g. `VITE_HOST=localhost npm run dev`) if you want to bind to loopback only.
 
@@ -287,7 +286,7 @@ The development setup is a "build-and-test-in-Docker" workflow that ensures your
 3. Builds a Docker image with the pre-built static files
 
 **Runtime Phase** (`./scripts/start-dev.sh`):
-- Runs the Node.js Express server with `node --watch server/server.js` - backend code changes auto-restart the server without a rebuild
+- Runs the Node.js Express server from the mounted `./server/` source - backend code changes take effect after a container restart (`docker restart youtarr-dev`), without a rebuild
 - Serves the pre-built React static files from `/app/client/build` (frontend changes require a rebuild unless you are running the Vite dev server)
 - Application accessible at http://localhost:3087
 
@@ -301,14 +300,20 @@ volumes:
   - ./server/images:/app/server/images                     # Generated thumbnails
   - ./config:/app/config                                   # Configuration files
   - ./jobs:/app/jobs                                       # Job state
-  # Backend source and migrations for hot reload with --watch
+  # Backend source and migrations (picked up on container restart)
   - ./server:/app/server
   - ./migrations:/app/migrations
   - ./package.json:/app/package.json
   - ./package-lock.json:/app/package-lock.json
 ```
 
-**Backend hot reload:** `./server/` is mounted and the container runs `node --watch server/server.js`, so backend code changes auto-restart the server without a rebuild. Check the container logs to confirm the restart.
+**Backend changes:** `./server/` is mounted, so backend code changes need only a container restart, not a rebuild:
+
+```bash
+docker restart youtarr-dev
+```
+
+There is no automatic reload on save. `docker-compose.dev.yml` sets `command: ["node", "--watch", "server/server.js"]`, but the image's entrypoint (`scripts/docker-entrypoint-simple.sh`) ignores its arguments and always starts `node /app/server/server.js`, so `--watch` never takes effect.
 
 **Frontend:** `client/src/` is NOT mounted. Frontend changes reach the running app one of two ways:
 - **Full rebuild**: `./scripts/build-dev.sh` rebuilds the static bundle that the app container serves at http://localhost:3087.
@@ -324,8 +329,8 @@ You **must** rebuild (`./scripts/build-dev.sh`) for:
 - First time setup.
 
 You **do not** need to rebuild for:
-- Backend code changes (server/*.js, modules, routes) - `node --watch` picks them up automatically.
-- New migration files - `./migrations/` is mounted, though you still need to restart the container for them to run.
+- Backend code changes (server/*.js, modules, routes) - `./server/` is mounted; run `docker restart youtarr-dev` to load them.
+- New migration files - `./migrations/` is mounted; the same container restart runs them.
 - Frontend changes while the Vite dev server is running - Vite HMR updates the browser.
 
 ### Benefits of This Approach
@@ -351,7 +356,7 @@ cd client
 npm run dev
 
 # Make code changes - frontend updates instantly!
-# Backend changes auto-restart via --watch
+# Backend changes: run `docker restart youtarr-dev` to load them
 
 # View logs
 docker compose -f docker-compose.dev.yml logs -f youtarr
@@ -440,7 +445,7 @@ git commit --no-verify
 
 ### Running Tests
 
-All tests run on your host machine (not in Docker) since they're isolated unit tests:
+The unit suites run on your host machine without a database:
 
 ```bash
 # Run all tests (backend + frontend)
@@ -458,6 +463,15 @@ npm run test:coverage
 # Watch mode (backend)
 npm run test:watch
 ```
+
+### External API Database Tests
+
+The separate external API integration suite requires a disposable MariaDB 10.3
+or MySQL 8.0 server. It runs the real migrations and model-backed request,
+approval, quota, and catalog flows without contacting YouTube. Follow the
+[database setup and query-plan commands](EXTERNAL_API.md#database-integration-and-query-plans)
+to run both engines, including rollback/reapply and the synthetic index report.
+The ordinary backend Jest command does not run these database tests.
 
 ### External Cookie Validation Tests
 
@@ -514,7 +528,7 @@ Create `.vscode/launch.json`:
       "type": "node",
       "request": "attach",
       "name": "Docker: Attach to Node",
-      "remoteRoot": "/usr/src/app",
+      "remoteRoot": "/app",
       "localRoot": "${workspaceFolder}",
       "protocol": "inspector",
       "port": 9229,
@@ -525,13 +539,19 @@ Create `.vscode/launch.json`:
 }
 ```
 
-Modify `docker-compose.yml` to expose debug port:
+Expose the inspector from the `youtarr` service in `docker-compose.dev.yml` (locally, do not commit), then restart with `./scripts/start-dev.sh`:
 ```yaml
 ports:
-  - "3011:3011"
-  - "9229:9229"  # Debug port
-command: node --inspect=0.0.0.0:9229 server/server.js
+  - "${YOUTARR_HOST_PORT:-3087}:3011"
+  - "127.0.0.1:9229:9229"  # Debug port, published on host loopback only
+environment:
+  # ...keep the existing entries and add:
+  - NODE_OPTIONS=--inspect=0.0.0.0:9229
 ```
+
+> **Security warning**: the Node.js inspector lets anyone who can connect to it run arbitrary code in the container, with no Youtarr authentication. Always publish it on `127.0.0.1` as shown, never as plain `"9229:9229"` (which listens on every host interface), and remove these lines when you finish debugging. The `0.0.0.0` inside `NODE_OPTIONS` is only the container-side address that Docker's port forwarding needs. See the [Node.js debugging security notes](https://nodejs.org/learn/getting-started/debugging#security-implications).
+
+Use `NODE_OPTIONS` rather than a `command:` override. The image's entrypoint ignores the compose `command` and always starts `node /app/server/server.js`, but every `node` process reads `NODE_OPTIONS`. The app code lives at `/app` in the container, which is why `remoteRoot` above is `/app`.
 
 **Option 2: Logger Debugging**
 
@@ -812,8 +832,8 @@ docker compose down -v
 
 ```bash
 # Find process using port
-lsof -i :3011  # Mac/Linux
-netstat -ano | findstr :3011  # Windows
+lsof -i :3087  # Mac/Linux (or your YOUTARR_HOST_PORT)
+netstat -ano | findstr :3087  # Windows
 
 # Or stop all Docker containers
 docker compose down
@@ -841,9 +861,9 @@ docker compose down
 Backend and frontend reload differently in the dev setup.
 
 **Backend code changes** (`server/*.js`, `server/modules/`, `server/routes/`, `migrations/`):
-- `./server/` and `./migrations/` are volume-mounted into the container and the container runs `node --watch`.
-- Saves auto-restart the server within a few seconds; check the container logs to confirm the restart fired.
-- No rebuild required. (New migration files still require a container restart to actually run.)
+- `./server/` and `./migrations/` are volume-mounted into the container, but nothing reloads on save.
+- Run `docker restart youtarr-dev` to load backend changes and run new migrations.
+- No rebuild required.
 
 **Frontend code changes** (`client/src/`):
 - `client/src/` is NOT mounted into the app container; the static bundle is baked into the image at build time.
@@ -855,7 +875,7 @@ Backend and frontend reload differently in the dev setup.
 ./scripts/start-dev.sh  # automatically stops and restarts containers
 ```
 
-If a backend change is not being picked up, verify the container is actually running `node --watch` (`docker compose -f docker-compose.dev.yml logs youtarr` should show restart messages when you save) and that you edited a file under `./server/`.
+If a backend change is not being picked up, confirm you restarted the container after saving (`docker compose -f docker-compose.dev.yml logs youtarr` shows `Starting Node.js server...` on each start) and that you edited a file under `./server/`.
 
 ### Module Not Found Errors
 

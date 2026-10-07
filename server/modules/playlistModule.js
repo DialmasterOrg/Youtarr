@@ -5,8 +5,8 @@ const { sequelize } = require('../db');
 const { Playlist, PlaylistVideo, Channel, Video, Job, JobVideo } = require('../models');
 const youtubeApi = require('./youtubeApi');
 const { MAX_PLAYLIST_VIDEOS } = require('./playlistConstants');
-const { redactSensitiveText } = require('./safeCommandLogging');
 const storageGuard = require('./storageGuard');
+const { redactSensitiveText } = require('./safeCommandLogging');
 
 // yt-dlp's flat-playlist listing still returns private/deleted/members-only
 // videos but strips their metadata: the title comes back null (current yt-dlp)

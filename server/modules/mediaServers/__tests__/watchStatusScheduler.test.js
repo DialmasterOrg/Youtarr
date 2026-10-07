@@ -51,10 +51,13 @@ describe('watchStatusScheduler', () => {
 
   test('the scheduled callback resolves to a run record describing the sync', async () => {
     configModule.getConfig.mockReturnValue({ watchStatusSyncEnabled: true, watchStatusSyncFrequency: '0 */4 * * *' });
-    watchStatusSync.syncAll.mockResolvedValue({ servers: { plex: { updated: 2 } } });
+    watchStatusSync.syncAll.mockResolvedValue({
+      servers: { plex: { changed: 1 } },
+      totals: { changed: 1 },
+    });
     scheduler.scheduleTask();
     await expect(cron.schedule.mock.calls[0][1]()).resolves.toEqual(expect.objectContaining({
-      status: 'success', outcome: 'completed', message: 'Synced 1 server, 2 videos updated.',
+      status: 'success', outcome: 'completed', message: 'Synced 1 server; 1 video had a watch status change.',
     }));
   });
 

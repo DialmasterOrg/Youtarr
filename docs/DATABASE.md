@@ -45,7 +45,7 @@ Youtarr uses MariaDB/MySQL for storing:
 
 ### External API Policy Foundation
 
-The external API policy fields and supporting tables are dormant until the runtime/control plane is enabled. Existing keys retain their single-video download behavior and are backfilled with the `legacy_download` role. API-key values remain hashed and cannot be recovered from the database. Revocation is represented by `revoked_at` together with the key's active status.
+The external API policy fields and supporting tables are enforced when `EXTERNAL_API_ENABLED=true`; the runtime is disabled by default. Existing keys retain their single-video download behavior and are backfilled with the `legacy_download` role. API-key values remain hashed and cannot be recovered from the database. Revocation is represented by `revoked_at` together with the key's active status. The runtime adds two request-history indexes for catalog status and administrator queue queries; see [External API query plans](EXTERNAL_API.md#database-integration-and-query-plans) for measured plans and rollback behavior.
 
 ## Internal Database (Default)
 
@@ -100,6 +100,8 @@ What the script does (in this order, so any failure leaves the simplest possible
 6. Verifies that the table set matches the source **and** that every table has the same row count as the source.
 7. **Only after verification succeeds**, snapshots `.env` to `./.env.bak.<timestamp>` and pins `COMPOSE_PATH_SEPARATOR=:` and `COMPOSE_FILE=docker-compose.yml:docker-compose.arm.yml` in `.env`. This means a failure during step 5 or 6 leaves `.env` untouched, and recovery is just `mv ./database.bind-mount-backup.<timestamp> ./database` plus removing the partial named volume.
 8. Brings the full stack (app + database) back up so Youtarr is immediately usable.
+
+**If you use `docker-compose.override.yml`** (for example, to mount a NAS share): once `COMPOSE_FILE` is pinned, Compose no longer loads the override automatically, and the script does not add it. Add it to `COMPOSE_FILE` before `docker-compose.arm.yml` right after the migration, or whatever the override configured (such as your video share) disappears from the containers. See [Keeping docker-compose.override.yml](DOCKER.md#keeping-docker-composeoverrideyml).
 
 **What the migration does *not* copy**: `mysqldump` runs with `--single-transaction --routines --triggers --events`. Schema, data, stored routines, triggers, and events all migrate. MariaDB users and `GRANT` statements (anything in `mysql.user` / `mysql.db`) do **not**. The default Youtarr install only uses the bundled `root` user, so this is a no-op for almost everyone. If you have created additional database users on the bundled MariaDB, recreate them after the migration completes.
 

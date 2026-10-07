@@ -6,6 +6,7 @@ const path = require('path');
 const configModule = require('./configModule');
 const fileCheckModule = require('./fileCheckModule');
 const watchStatusQueries = require('./mediaServers/watchStatusQueries');
+const ratingMapper = require('./ratingMapper');
 const logger = require('../logger');
 const messageEmitter = require('./messageEmitter');
 const m3uGenerator = require('./m3uGenerator');
@@ -49,6 +50,7 @@ class VideosModule {
       protectedFilter = 'off',
       missingFilter = 'off',
       watchedFilter = 'off',
+      maxRating = null,
     } = options;
 
     try {
@@ -96,6 +98,17 @@ class VideosModule {
         const sql = injectReplacements(watched.sql, sequelize.dialect, watched.replacements);
         where[Sequelize.Op.and] ??= [];
         where[Sequelize.Op.and].push(sequelize.literal(watchedFilter === 'only' ? sql : `NOT ${sql}`));
+      }
+
+      const allowedRatings = maxRating ? ratingMapper.getRatingsAtOrBelow(maxRating) : null;
+      if (allowedRatings) {
+        where[Sequelize.Op.and] ??= [];
+        where[Sequelize.Op.and].push({
+          [Sequelize.Op.or]: [
+            { normalized_rating: null },
+            { normalized_rating: { [Sequelize.Op.in]: allowedRatings } },
+          ],
+        });
       }
 
       const options = {

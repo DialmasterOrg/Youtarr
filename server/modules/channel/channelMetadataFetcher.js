@@ -4,6 +4,7 @@ const { sanitizeNameLikeYtDlp } = require('../filesystem');
 const youtubeApi = require('../youtubeApi');
 const channelYtdlpExecutor = require('./channelYtdlpExecutor');
 const { logApiFallback } = require('./apiFallbackLogger');
+const { summarizeCommandArgs } = require('../safeCommandLogging');
 
 class ChannelMetadataFetcher {
   /**
@@ -65,8 +66,10 @@ class ChannelMetadataFetcher {
         playlistEnd: 1,
         skipSleepRequests: true,
       });
-      logger.info('fetchChannelMetadata executing yt-dlp with args' + JSON.stringify(args));
-      const content = await channelYtdlpExecutor.executeYtDlpCommand(args, outputFilePath);
+      logger.info(summarizeCommandArgs(args), 'Fetching channel metadata with yt-dlp');
+      const content = await channelYtdlpExecutor.executeYtDlpCommand(args, outputFilePath, {
+        timeoutMs: 120000,
+      });
       logger.info('fetchChannelMetadata received yt-dlp output of length ' + content.length);
 
       const metadata = JSON.parse(content);

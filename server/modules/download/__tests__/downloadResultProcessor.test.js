@@ -114,6 +114,20 @@ describe('downloadResultProcessor', () => {
       });
     });
 
+    it('leaves archive-skipped videos out of both successful and failed', () => {
+      const videoData = [
+        { youtubeId: 'skip1234567', youTubeVideoName: 'Old', youTubeChannelName: 'Chan', fileSize: '1000' },
+        { youtubeId: 'new12345678', youTubeVideoName: 'New', youTubeChannelName: 'Chan', fileSize: '1000' }
+      ];
+
+      const { successfulVideos, failedVideosList } = partitionDownloadResults(
+        videoData, makeErrorTracker(), [], new Set(['skip1234567'])
+      );
+
+      expect(successfulVideos.map(v => v.youtubeId)).toEqual(['new12345678']);
+      expect(failedVideosList).toHaveLength(0);
+    });
+
     it('treats fileSize of "0" or "null" string as failed', () => {
       const videoData = [
         { youtubeId: 'zero1234567', youTubeVideoName: 'Zero', youTubeChannelName: 'Chan', fileSize: '0' },

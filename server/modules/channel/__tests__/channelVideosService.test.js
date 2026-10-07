@@ -13,6 +13,7 @@ jest.mock('../../mediaServers/watchStatusQueries', () => ({
 jest.mock('../../configModule', () => mockFactories.mockConfigModule());
 jest.mock('../../fileCheckModule', () => mockFactories.mockFileCheckModule());
 jest.mock('../../youtubeApi', () => mockFactories.mockYoutubeApi());
+jest.mock('../../archiveModule', () => ({ filterArchivedVideoIds: jest.fn() }));
 jest.mock('../../../db', () => mockFactories.mockDb());
 
 // yt-dlp --dump-json output: one JSON document per line.
@@ -24,6 +25,7 @@ describe('channelVideosService', () => {
   let ChannelVideo;
   let logger;
   let youtubeApi;
+  let archiveModule;
 
   const mockChannelData = {
     channel_id: 'UC123456',
@@ -58,6 +60,9 @@ describe('channelVideosService', () => {
     youtubeApi.isAvailable.mockReturnValue(false);
     youtubeApi.getApiKey.mockReturnValue(null);
 
+    archiveModule = require('../../archiveModule');
+    archiveModule.filterArchivedVideoIds.mockReturnValue(new Set());
+
     channelVideosService = require('../channelVideosService');
   });
 
@@ -69,7 +74,7 @@ describe('channelVideosService', () => {
       const result = channelVideosService.buildChannelVideosResponse(videos, channel, 'yt_dlp', null, false, 'video');
 
       expect(result).toEqual({
-        videos: videos,
+        videos: [{ ...mockVideoData, inArchive: false }],
         dataSource: 'yt_dlp',
         lastFetched: new Date('2024-01-01'),
         totalCount: videos.length,
@@ -122,6 +127,35 @@ describe('channelVideosService', () => {
         const result = channelVideosService.buildChannelVideosResponse([{ ...mockVideoData, added: false }], nrChannel);
 
         expect(result.videos[0].normalized_rating).toBeUndefined();
+      });
+    });
+
+    describe('inArchive', () => {
+      // Every downloaded or ignored video is in the archive too, so the mock
+      // answers the way the real lookup does: only for the ids it is asked about.
+      const archived = new Set(['orphan', 'ignored', 'downloaded']);
+      const inArchiveFor = (video) => {
+        archiveModule.filterArchivedVideoIds.mockImplementation(
+          (ids) => new Set(ids.filter((id) => archived.has(id)))
+        );
+        const result = channelVideosService.buildChannelVideosResponse([video], mockChannelData);
+        return result.videos[0].inArchive;
+      };
+
+      test('flags a never-downloaded video that is listed in the archive', () => {
+        expect(inArchiveFor({ ...mockVideoData, youtube_id: 'orphan', added: false })).toBe(true);
+      });
+
+      test('does not flag a never-downloaded video that is not in the archive', () => {
+        expect(inArchiveFor({ ...mockVideoData, youtube_id: 'fresh', added: false })).toBe(false);
+      });
+
+      test('does not flag an ignored video, whose archive entry is deliberate', () => {
+        expect(inArchiveFor({ ...mockVideoData, youtube_id: 'ignored', added: false, ignored: true })).toBe(false);
+      });
+
+      test('does not flag a video that has a database record', () => {
+        expect(inArchiveFor({ ...mockVideoData, youtube_id: 'downloaded', added: true, removed: true })).toBe(false);
       });
     });
 
@@ -226,6 +260,58 @@ describe('channelVideosService', () => {
 
       expect(result.videos.map((v) => v.youtube_id)).toEqual(['video1']);
       expect(result.totalCount).toBe(1);
+    });
+
+    describe('maxRating', () => {
+      const setupRatedChannel = (defaultRating) => {
+        const Video = require('../../../models/video');
+        const fileCheckModule = require('../../fileCheckModule');
+        fileCheckModule.checkVideoFiles.mockImplementation(async (videos) => ({ videos, updates: [] }));
+        Channel.findOne.mockResolvedValue({
+          ...mockChannelData,
+          lastFetchedByTab: JSON.stringify({ video: new Date().toISOString() }),
+          auto_download_enabled_tabs: 'video',
+          default_rating: defaultRating,
+        });
+        // A fresh check timestamp skips the live YouTube existence check.
+        const checkedAt = new Date();
+        ChannelVideo.findAll.mockResolvedValue([
+          { youtube_id: 'downloaded', publishedAt: new Date().toISOString(), youtube_removed_checked_at: checkedAt, toJSON() { return this; } },
+          { youtube_id: 'notDownloaded', publishedAt: new Date().toISOString(), youtube_removed_checked_at: checkedAt, toJSON() { return this; } },
+        ]);
+        Video.findAll = jest.fn().mockResolvedValue([
+          { id: 1, youtubeId: 'downloaded', removed: false, fileSize: 1000, filePath: '/path', normalized_rating: 'PG' },
+        ]);
+      };
+
+      const getWithMaxRating = (maxRating) => channelVideosService.getChannelVideos(
+        'UC123', 1, 50, 'off', '', 'date', 'desc', 'videos',
+        null, null, null, null, 'off', 'off', 'off', 'off', maxRating
+      );
+
+      test('hides videos whose channel default rating is above the maximum', async () => {
+        setupRatedChannel('TV-MA');
+
+        const result = await getWithMaxRating('PG');
+
+        expect(result.videos.map((v) => v.youtube_id)).toEqual(['downloaded']);
+      });
+
+      test('counts only videos within the maximum', async () => {
+        setupRatedChannel('TV-MA');
+
+        const result = await getWithMaxRating('PG');
+
+        expect(result.totalCount).toBe(1);
+      });
+
+      test('keeps unrated videos when the channel has no default rating', async () => {
+        setupRatedChannel(null);
+
+        const result = await getWithMaxRating('PG');
+
+        expect(result.totalCount).toBe(2);
+      });
     });
 
     test('should skip auto-refresh when fetch already in progress', async () => {

@@ -145,8 +145,7 @@ describe('external API durable quotas', () => {
     });
 
     expect(completedRequest.update).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'completed', active_dedupe_key: null }),
-      {}
+      expect.objectContaining({ status: 'completed', active_dedupe_key: null })
     );
     expect(result.remaining.activeJobs).toBe(5);
   });

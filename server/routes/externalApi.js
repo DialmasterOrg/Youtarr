@@ -38,6 +38,12 @@ function createExternalApiRoutes({
   });
   router.use(externalApiAuth, externalApiLimiter, recordExternalApiUse);
   router.use((req, res, next) => {
+    if (Object.values(req.query).some(value => typeof value !== 'string')) {
+      return sendExternalError(res, 400, 'Query parameters must be single string values', { requestId: req.id });
+    }
+    return next();
+  });
+  router.use((req, res, next) => {
     if (req.method !== 'POST') return next();
     const contentEncoding = String(req.get('content-encoding') || 'identity').toLowerCase();
     if (contentEncoding !== 'identity') {

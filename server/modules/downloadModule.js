@@ -1,3 +1,4 @@
+const os = require('os');
 const { normalizeUrlToVideoId } = require('./youtubeUrlParser');
 const configModule = require('./configModule');
 const jobModule = require('./jobModule');
@@ -25,6 +26,17 @@ const GROUP_STOP_STATUSES = new Set(['Error', 'Terminated', 'Killed']);
 function describeGroupStop(group, job) {
   const reason = job.status === 'Error' ? job.output : (job.notes || job.output);
   return { group, status: job.status, reason: reason || null };
+}
+
+// Why a channel download could not start, for job output and run summaries.
+// A full disk surfaces as a bare "ENOSPC: no space left on device, write"
+// from the channel list written to the system temp folder. No trailing
+// period: callers put this inside a longer sentence.
+function describeStartError(err) {
+  if (err && err.code === 'ENOSPC') {
+    return `Out of disk space in the temporary folder (${os.tmpdir()}); free up space and try again`;
+  }
+  return err.message;
 }
 
 // The shape run summaries and notifications receive.
@@ -391,9 +403,10 @@ class DownloadModule {
             // Ignore cleanup errors
           }
         }
+        const reason = describeStartError(err);
         await jobModule.updateJob(jobId, {
           status: 'Failed',
-          output: `Error: ${err.message}`,
+          output: `Error: ${reason}`,
         });
         // yt-dlp never started, so no finalizer will report this job or start
         // the next one: report the failure to its run so the sweep can finish,
@@ -403,7 +416,7 @@ class DownloadModule {
         if (downloadRunTracker.isActive(runId)) {
           downloadRunTracker.recordJobResult(runId, jobId, {
             jobType,
-            jobIssue: { status: 'Failed', reason: err.message, byUser: false },
+            jobIssue: { status: 'Failed', reason, byUser: false },
           });
         }
         await jobModule.startNextJob();
@@ -474,11 +487,12 @@ class DownloadModule {
         logger.info({ groupJobType }, 'Completed download group');
       } catch (err) {
         logger.error({ err, group: groupDesc }, 'Error processing download group');
+        const reason = describeStartError(err);
         await jobModule.updateJob(jobId, {
           status: 'Error',
-          output: `Error in ${groupDesc}: ${err.message}`,
+          output: `Error in ${groupDesc}: ${reason}`,
         });
-        stopped = { group: groupDesc, status: 'Error', reason: err.message };
+        stopped = { group: groupDesc, status: 'Error', reason };
         break;
       }
 

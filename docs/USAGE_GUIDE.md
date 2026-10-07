@@ -344,27 +344,27 @@ Automatically remove or mark sponsored segments, intros, outros, and other unwan
 
 ## Enable Download Notifications
 
-Get Discord notifications when new videos finish downloading.
+Get notified when new videos finish downloading. Notifications are delivered through [Apprise](https://github.com/caronc/apprise/wiki), so you can use Discord, Slack, Telegram, email, Pushover, Gotify, ntfy, Matrix, and many other services.
 
-1. **Create a Discord webhook**
-   - In Discord, go to: Server Settings -> Integrations -> Webhooks
-   - Click "New Webhook"
-   - Choose the channel for notifications
-   - Copy the webhook URL
+1. **Get a notification URL for your service**
+   - Discord example: in Discord, go to Server Settings -> Integrations -> Webhooks, click "New Webhook", choose the channel, and copy the webhook URL. You can paste the `https://discord.com/api/webhooks/...` URL as-is or use the `discord://webhook_id/webhook_token` form.
+   - Other services: see the [Apprise URL formats](https://github.com/caronc/apprise/wiki) for your service.
 
-2. **Open Youtarr Settings -> Notifications**
+2. **Open Youtarr Settings -> Notifications** and turn on **Enable Notifications**
 
-3. **Enable notifications**
-   - Toggle notifications on
-   - Paste your Discord webhook URL
+3. **Add the service**
+   - Optionally enter a **Name** (for example "Discord - Gaming Server")
+   - Paste the URL into **Notification URL**
+   - Click **Add Service** (or press Enter). A URL left in the field without clicking Add Service is not saved.
+   - Repeat for as many services as you like
 
 4. **Save configuration**
 
 5. **Test the notification**
-   - Click "Send Test Notification" to verify delivery
-   - Check your Discord channel for the test message
+   - Click the test button (paper-plane icon, "Send test notification") next to the service
+   - Check the service for the test message
 
-**Note**: Youtarr sends notifications after successful downloads that include at least one new video. It won't spam for every single video - notifications are batched per download job.
+**Note**: Download notifications are sent when a run downloads at least one new video, or when a run fails with a diagnosed cause or stops early. They are batched: a scheduled download run sends one summary covering all of its channels and playlists, not one message per video. Youtarr also sends notifications when automatic cleanup deletes videos and when downloads pause or resume because of a storage limit.
 
 ## Re-download Missing Videos
 
@@ -607,15 +607,23 @@ The `backfill-ratings.js` script finds all videos with no `normalized_rating` an
 
 > **Warning — this can take a very long time for large libraries.** Each video requires a yt-dlp metadata fetch (~5 seconds per video). For example: 1,000 videos ≈ 1.5 hours; 10,000 videos ≈ 14+ hours. Run `--dry-run` first to see how many videos need backfilling, then plan accordingly (e.g., run overnight, use `screen`/`tmux`).
 
-The script must be run inside the Docker container:
+The script must run inside the Docker container, but the Youtarr image does not include the `scripts/` folder. Copy the script in first, from your Youtarr checkout (without a git checkout, download [`scripts/backfill-ratings.js`](https://github.com/DialmasterOrg/Youtarr/blob/main/scripts/backfill-ratings.js) from GitHub and adjust the source path):
 
 ```bash
-# Preview what would change (no database writes) — run this first!
+# 1. Copy the script into the running container
+docker exec -u 0 youtarr mkdir -p /app/scripts
+docker cp scripts/backfill-ratings.js youtarr:/app/scripts/backfill-ratings.js
+# Let the container's user write the log file next to the script
+docker exec -u 0 youtarr chown -R "$(docker exec youtarr id -u):$(docker exec youtarr id -g)" /app/scripts
+
+# 2. Preview what would change (no database writes) - run this first!
 docker exec youtarr node scripts/backfill-ratings.js --dry-run
 
-# Run for real (consider using screen/tmux for large libraries)
+# 3. Run for real (consider using screen/tmux for large libraries)
 docker exec -it youtarr node scripts/backfill-ratings.js
 ```
+
+The copied script lives only in the current container. Recreating the container (for example when updating Youtarr) removes it, so copy it in again if you need to re-run it.
 
 **`--dry-run` flag** — Previews changes without modifying the database and shows how many videos need backfilling. Always run this first.
 
@@ -637,6 +645,12 @@ How ratings are determined (priority):
 2. Channel Default — a `default_rating` can be configured on a channel and applies to unrated videos for that channel.
 3. Mapped Metadata — ratings parsed and normalized from yt-dlp/YouTube metadata (MPAA, TV-PG, YT age-restrictions, or `age_limit` heuristics).
 4. NR / Not Rated — no rating could be determined; treated as unrated/null.
+
+### Max Rating filter
+
+The Videos and Channel pages have a **Max Rating** filter that hides videos rated above the rating you pick. Film and TV ratings share one scale: G, TV-Y, and TV-G; then PG, TV-PG, and TV-Y7; then PG-13 and TV-14; then R and TV-MA; then NC-17. For example, a maximum of R keeps TV-MA videos but hides NC-17 ones.
+
+Unrated videos are always shown, since most YouTube videos carry no rating. On a Channel page, a video that hasn't been downloaded is judged by the channel's default rating (the rating shown on its badge), so setting a channel default also controls how the filter treats that channel's undownloaded videos.
 
 ## External Access with API Keys
 Send videos to Youtarr from anywhere using API keys. This enables one-click downloads from browser bookmarklets, mobile shortcuts, and automation tools.

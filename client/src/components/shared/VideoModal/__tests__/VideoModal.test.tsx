@@ -1,5 +1,8 @@
 // Local metadata refresh is covered by the hook tests; isolate action/search requests here.
-jest.mock('../../../../hooks/useLocalVideoStatus', () => ({ useLocalVideoStatus: () => ({}) }));
+const mockLocalStatus: { statuses: Record<string, unknown> } = { statuses: {} };
+jest.mock('../../../../hooks/useLocalVideoStatus', () => ({
+  useLocalVideoStatus: () => mockLocalStatus.statuses,
+}));
 
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -256,6 +259,7 @@ describe('VideoModal', () => {
     watchStatusReturn.statuses = [];
     watchStatusReturn.loading = false;
     watchStatusCalls.length = 0;
+    mockLocalStatus.statuses = {};
   });
 
   test('renders video title when open', () => {
@@ -487,6 +491,37 @@ describe('VideoModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /download video/i }));
 
     expect(screen.getByTestId('download-dialog-missing-count')).toHaveTextContent('0');
+  });
+
+  test('passes missingVideoCount 1 to the download dialog when the page reports the video is in the download archive', () => {
+    renderModal({ video: { ...neverDownloadedVideo, inArchive: true } });
+
+    fireEvent.click(screen.getByRole('button', { name: /download video/i }));
+
+    expect(screen.getByTestId('download-dialog-missing-count')).toHaveTextContent('1');
+  });
+
+  test('passes missingVideoCount 1 to the download dialog when the local status lookup reports the video is in the download archive', () => {
+    const modal = (
+      <MemoryRouter>
+        <VideoModal open onClose={jest.fn()} video={neverDownloadedVideo} token="test-token" />
+      </MemoryRouter>
+    );
+    const { rerender } = render(modal);
+
+    // The local status lookup resolves after the modal has opened.
+    mockLocalStatus.statuses = {
+      [neverDownloadedVideo.youtubeId]: {
+        youtubeId: neverDownloadedVideo.youtubeId,
+        status: 'never_downloaded',
+        inArchive: true,
+      },
+    };
+    rerender(modal);
+
+    fireEvent.click(screen.getByRole('button', { name: /download video/i }));
+
+    expect(screen.getByTestId('download-dialog-missing-count')).toHaveTextContent('1');
   });
 
   test('calls onClose when close button clicked', async () => {
