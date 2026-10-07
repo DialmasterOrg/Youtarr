@@ -1,4 +1,5 @@
 import React from 'react';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { Key } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
@@ -43,6 +44,7 @@ interface RequestsPageProps {
 }
 
 const RequestsPage: React.FC<RequestsPageProps> = ({ token }) => {
+  const compact = useMediaQuery('(max-width: 767px)');
   const state = useExternalRequests(token);
   const {
     filters,
@@ -180,7 +182,26 @@ const RequestsPage: React.FC<RequestsPageProps> = ({ token }) => {
               </Typography>
             </div>
           )}
-          {!loading && !error && requests.length > 0 && (
+          {!loading && !error && requests.length > 0 && (compact ? (
+            <div className="space-y-3" aria-label="External requests">
+              {requests.map(request => (
+                <article key={request.id} data-testid={`request-card-${request.id}`}
+                  className="min-w-0 space-y-3 rounded border border-border p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <RequestStatus status={request.status} />
+                    <div className="[&_button]:h-11 [&_button]:w-11">{controls(request)}</div>
+                  </div>
+                  <div data-testid={`request-summary-${request.id}`}>
+                    <RequestTarget request={request} compact />
+                  </div>
+                  <div className="space-y-1 text-xs text-muted-foreground">
+                    <p className="break-words">{request.requester?.name || 'Unavailable key'}</p>
+                    <p>{dateLabel(request.createdAt)}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
             <TableContainer>
               <Table>
                 <TableHead>
@@ -221,7 +242,7 @@ const RequestsPage: React.FC<RequestsPageProps> = ({ token }) => {
                 </TableBody>
               </Table>
             </TableContainer>
-          )}
+          ))}
           {!loading && !error && totalPages > 1 && (
             <PageControls
               page={Math.min(page, totalPages)}
