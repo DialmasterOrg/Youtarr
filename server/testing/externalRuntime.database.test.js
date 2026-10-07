@@ -279,3 +279,71 @@ test('runtime indexes preserve equivalent indexes and survive rollback and parti
     await migration.up(queryInterface);
   }
 });
+
+test('manual approval retries reuse the durable job after request persistence fails', async () => {
+  const created = await service().createVideoRequest(key, { youtubeId, channelId: channel.id });
+  models.ExternalRequest.addHook('beforeUpdate', 'simulateApprovalLoss', row => {
+    if (row.status === 'processing') throw new Error('Synthetic approval connection loss');
+  });
+  try {
+    await expect(service().reviewRequest(created.request.id, 'approve')).rejects.toThrow('Synthetic approval');
+  } finally { models.ExternalRequest.removeHook('beforeUpdate', 'simulateApprovalLoss'); }
+  const executor = jest.fn();
+  expect((await service({ executor }).reviewRequest(created.request.id, 'approve')).status).toBe('processing');
+  expect(executor).not.toHaveBeenCalled();
+  expect(await models.Job.count()).toBe(1);
+});
+
+test('channel approval retries preserve an explicit decision not to grant access', async () => {
+  await models.ApiKeyChannelGrant.destroy({ where: { api_key_id: key.id } });
+  const created = await service().createChannelRequest(key, { channelUrl: 'youtube.com/@synthetic' });
+  const limiter = createExternalWorkLimiter({ concurrency: 1, maxQueue: 0 });
+  let release;
+  const blocker = limiter.run(() => new Promise(resolve => { release = resolve; }));
+  try {
+    await expect(service({ workLimiter: limiter }).reviewRequest(created.request.id, 'approve',
+      { grantToRequestingKey: false })).rejects.toMatchObject({ status: 503 });
+  } finally { release(); await blocker; }
+  await expect(service().reviewRequest(created.request.id, 'approve',
+    { grantToRequestingKey: true })).rejects.toMatchObject({ status: 409 });
+  const result = await service().reviewRequest(created.request.id, 'approve');
+  expect(result).toMatchObject({ status: 'completed', grantToRequestingKey: false });
+  expect(await models.ApiKeyChannelGrant.count()).toBe(0);
+});
+
+test('a completed video idempotency replay returns the original request after downloading', async () => {
+  await policy({ auto_approve_video_requests: true });
+  const input = { youtubeId, channelId: channel.id, idempotencyKey: 'completed-video' };
+  const first = await service().createVideoRequest(key, input);
+  await downloadedVideo();
+  const replay = await service().createVideoRequest(key, input);
+  expect(replay).toMatchObject({ outcome: 'duplicate', request: { id: first.request.id, status: 'completed' } });
+});
+
+test('an active request cannot shadow an idempotency key used for a different operation', async () => {
+  const api = service();
+  await api.createVideoRequest(key, { youtubeId, channelId: channel.id });
+  await api.createChannelRequest(key, { channelUrl: 'youtube.com/@synthetic', idempotencyKey: 'used-elsewhere' });
+  await expect(api.createVideoRequest(key, { youtubeId, channelId: channel.id,
+    idempotencyKey: 'used-elsewhere' })).rejects.toMatchObject({ status: 409 });
+});
+
+test('catalog request status selects the newest own-key history and preserves duplicate channels', async () => {
+  const duplicate = await models.Channel.create({ channel_id: youtubeChannelId,
+    title: 'Unrelated duplicate', enabled: true, default_rating: 'TV-Y' });
+  const otherKey = await models.ApiKey.create({ name: 'Other synthetic key', key_hash: 'other-test-only-hash',
+    key_prefix: 'otherkey', created_at: timestamp, role: 'admin' });
+  await models.ExternalRequest.bulkCreate([
+    { api_key_id: key.id, channel_id: channel.id, youtube_id: youtubeId, request_type: 'video',
+      status: 'rejected', created_at: new Date(timestamp.getTime() - 1000), updated_at: timestamp },
+    { api_key_id: key.id, channel_id: channel.id, youtube_id: youtubeId, request_type: 'video',
+      status: 'pending', created_at: timestamp, updated_at: timestamp },
+    { api_key_id: otherKey.id, channel_id: duplicate.id, youtube_id: youtubeId, request_type: 'video',
+      status: 'failed', created_at: new Date(timestamp.getTime() + 1000), updated_at: timestamp },
+  ]);
+  expect((await catalog.listVideos(key)).data).toEqual([
+    expect.objectContaining({ channelDatabaseId: channel.id, requestStatus: 'pending' }),
+  ]);
+  expect((await catalog.listChannels(key)).data.map(row => row.id)).toEqual([channel.id]);
+  expect(await models.Channel.count()).toBe(2);
+});
