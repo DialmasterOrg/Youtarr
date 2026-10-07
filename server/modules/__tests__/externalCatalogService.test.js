@@ -126,7 +126,7 @@ describe('external cached catalog', () => {
         channel_database_id: 8,
         channel_id: 'UCsafe',
         channel_title: 'Safe Channel',
-        }])
+      }])
       .mockResolvedValueOnce([{ youtube_id: 'abcdefghijk', status: 'failed' }]);
 
     const result = await catalog.listVideos(key(), {
@@ -323,7 +323,7 @@ describe('external cached catalog', () => {
       channel_database_id: 8,
       channel_id: 'UCsafe',
       channel_title: 'Safe Channel',
-      }])
+    }])
       .mockResolvedValueOnce([{ youtube_id: 'abcdefghijk', status: 'approved' }]);
     const metadataService = {
       getVideoMetadata: jest.fn().mockResolvedValue({
