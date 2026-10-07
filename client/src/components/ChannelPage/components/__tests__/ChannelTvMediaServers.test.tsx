@@ -34,6 +34,7 @@ function setCheck(overrides: Partial<UseLibraryCheckResult>) {
     data: null,
     loading: false,
     error: null,
+    lastCheckedAt: null,
     refetch: jest.fn().mockResolvedValue(undefined),
     applyPlexMapping: jest.fn().mockResolvedValue(undefined),
     ...overrides,
@@ -95,5 +96,13 @@ describe('ChannelTvMediaServers', () => {
     await user.click(screen.getByRole('button', { name: 'Check again' }));
 
     expect(mockCheck.refetch).toHaveBeenCalled();
+  });
+
+  test('does not map a folder whose refresh library the user chose', () => {
+    const applyPlexMapping = jest.fn().mockResolvedValue(undefined);
+    setCheck({ data: checkWith({ mappedLibraryId: null, suggestedLibraryId: '41', choice: 'default' }), applyPlexMapping });
+    render(<ChannelTvMediaServers token="token" folder="TV Shows" />);
+
+    expect(applyPlexMapping).not.toHaveBeenCalled();
   });
 });

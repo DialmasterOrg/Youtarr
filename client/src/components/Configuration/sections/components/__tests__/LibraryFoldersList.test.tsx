@@ -58,6 +58,7 @@ function mockHook(overrides: Partial<UseLibraryFoldersResult> = {}) {
   library = {
     folders: FOLDERS,
     loading: false,
+    loaded: true,
     error: null,
     layoutOf: () => 'videos',
     refetch: mockRefetch,

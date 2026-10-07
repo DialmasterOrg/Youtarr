@@ -81,6 +81,70 @@ describe('useLibraryFolders', () => {
     await expect(result.current.setFolderLayout('', 'tv')).rejects.toMatchObject({ name: 'ReorganizeRequiredError', change });
   });
 
+  test('asks for the included fields', async () => {
+    axios.get.mockResolvedValueOnce({ data: { folders: [] } });
+
+    renderHook(() => useLibraryFolders('token', { include: ['usage', 'files'] }));
+
+    await waitFor(() => expect(axios.get).toHaveBeenCalledWith('/api/library-folders', {
+      headers: { 'x-access-token': 'token' },
+      params: { include: 'usage,files' },
+    }));
+  });
+
+  test('is loaded only after the first answer', async () => {
+    axios.get.mockResolvedValueOnce({ data: { folders: [{ name: '', layout: 'videos', isDefault: true, hasFiles: false, channels: 0 }] } });
+
+    const { result } = renderHook(() => useLibraryFolders('token'));
+
+    expect(result.current.loaded).toBe(false);
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+  });
+
+  test('with include, a layout change refetches instead of taking the plain list', async () => {
+    const withUsage = { name: 'TV', layout: 'tv', isDefault: false, hasFiles: false, channels: 0, fileCount: 3 };
+    axios.get.mockResolvedValueOnce({ data: { folders: [withUsage] } });
+    // The refetch the layout event triggers never answers, so only the PUT's list could change the state.
+    axios.get.mockImplementation(() => new Promise(() => {}));
+    axios.put.mockResolvedValueOnce({ data: { changed: true, folders: [{ ...withUsage, fileCount: undefined }] } });
+    const { result } = renderHook(() => useLibraryFolders('token', { include: ['files'] }));
+    await waitFor(() => expect(result.current.folders).toHaveLength(1));
+
+    await act(async () => { await result.current.setFolderLayout('TV', 'videos'); });
+
+    expect(result.current.folders[0].fileCount).toBe(3);
+    expect(axios.get).toHaveBeenCalledTimes(2);
+  });
+
+  test('an older answer that arrives last does not overwrite the newer one, and loading lasts until the latest answers', async () => {
+    const answers: Array<(value: unknown) => void> = [];
+    axios.get.mockImplementation(() => new Promise((resolve) => { answers.push(resolve); }));
+    const { result } = renderHook(() => useLibraryFolders('token', { include: ['usage', 'files'] }));
+    await waitFor(() => expect(answers).toHaveLength(1));
+    act(() => { void result.current.refetch(); });
+    await waitFor(() => expect(answers).toHaveLength(2));
+
+    await act(async () => { answers[1]({ data: { folders: [FOLDERS[1]] } }); });
+    await act(async () => { answers[0]({ data: { folders: FOLDERS } }); });
+
+    expect(result.current.folders).toEqual([FOLDERS[1]]);
+    expect(result.current.loading).toBe(false);
+  });
+
+  test('loading stays on while a newer request is still running', async () => {
+    const answers: Array<(value: unknown) => void> = [];
+    axios.get.mockImplementation(() => new Promise((resolve) => { answers.push(resolve); }));
+    const { result } = renderHook(() => useLibraryFolders('token', { include: ['usage', 'files'] }));
+    await waitFor(() => expect(answers).toHaveLength(1));
+    act(() => { void result.current.refetch(); });
+    await waitFor(() => expect(answers).toHaveLength(2));
+
+    await act(async () => { answers[0]({ data: { folders: FOLDERS } }); });
+
+    expect(result.current.loading).toBe(true);
+    expect(result.current.folders).toEqual([]);
+  });
+
   test('refetches when subfolders change', async () => {
     renderHook(() => useLibraryFolders('token'));
     await waitFor(() => expect(axios.get).toHaveBeenCalledTimes(1));

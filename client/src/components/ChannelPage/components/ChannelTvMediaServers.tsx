@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Box, Button, CircularProgress, Typography } from '../../ui';
 import { useLibraryCheck } from '../../../hooks/useLibraryCheck';
+import { plexMappingChoice } from '../../../utils/libraryAttention';
 import { folderKey } from '../../../utils/libraryLayouts';
 import { LibraryCheckNotes } from '../../shared/LibraryCheck/LibraryCheckNotes';
 
@@ -45,7 +46,7 @@ function ChannelTvMediaServers({ token, folder }: ChannelTvMediaServersProps) {
   const report = data?.folders.find((entry) => folderKey(entry.name) === folderKey(folder)) ?? null;
   const plex = report?.servers.find((server) => server.serverType === 'plex');
   const suggestion = plex?.plexMapping?.suggestedLibraryId ?? null;
-  const needsMapping = Boolean(report?.name && suggestion && !plex?.plexMapping?.mappedLibraryId);
+  const needsMapping = Boolean(report?.name && suggestion && plexMappingChoice(plex?.plexMapping) === 'none');
 
   useEffect(() => {
     if (!needsMapping || !report || !suggestion) return;

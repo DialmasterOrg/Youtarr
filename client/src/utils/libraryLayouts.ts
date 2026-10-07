@@ -35,3 +35,25 @@ export function folderKey(name: string | null | undefined): string {
 export function libraryFolderLabel(name: string): string {
   return name ? `__${name}` : 'Main folder';
 }
+
+/** Route key of the main folder in /settings/library/:folder; `~` can't appear in a subfolder name. */
+export const MAIN_FOLDER_ROUTE_KEY = '~main';
+export const LIBRARY_FOLDERS_PATH = '/settings/library';
+
+export function folderRouteKey(name: string): string {
+  return name ? encodeURIComponent(name) : MAIN_FOLDER_ROUTE_KEY;
+}
+
+/** The folder a route key names ('' = main folder). Router params may arrive decoded or not. */
+export function folderFromRouteKey(key: string): string {
+  if (key === MAIN_FOLDER_ROUTE_KEY) return '';
+  try {
+    return decodeURIComponent(key);
+  } catch {
+    return key;
+  }
+}
+
+export function libraryFolderUrl(name: string): string {
+  return `${LIBRARY_FOLDERS_PATH}/${folderRouteKey(name)}`;
+}

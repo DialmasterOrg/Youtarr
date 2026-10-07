@@ -85,6 +85,8 @@ export interface PlatformManagedState {
   authEnabled: boolean;
   useTmpForDownloads: boolean;
   ytdlpUpdates: boolean;
+  /** DATA_PATH sets the downloads folder (platform deployments) */
+  youtubeOutputDirectory?: boolean;
 }
 
 export interface DeploymentEnvironment {

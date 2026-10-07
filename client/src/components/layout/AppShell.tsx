@@ -114,8 +114,9 @@ export function AppShell({
     () =>
       SETTINGS_PAGES.map((page) => ({
         key: page.key,
-        label: page.title,
+        label: page.navLabel ?? page.title,
         to: `/settings/${page.key}`,
+        matchPrefix: true,
       })),
     []
   );

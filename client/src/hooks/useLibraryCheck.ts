@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { LibraryCheckResponse } from '../types/libraryCheck';
-import type { LibraryLayout } from '../types/tvShows';
+import type { LibraryLayout, PlexMappingChoice } from '../types/tvShows';
 import { LIBRARY_FOLDERS_UPDATED_EVENT } from './useLibraryFolders';
 import { CONFIG_PATCHED_EVENT } from './useConfig';
 import type { ConfigState } from '../components/Configuration/types';
@@ -22,6 +22,8 @@ export interface UseLibraryCheckResult {
   data: LibraryCheckResponse | null;
   loading: boolean;
   error: string | null;
+  /** Client time of the last successful check; kept when a refresh fails */
+  lastCheckedAt: number | null;
   refetch: () => Promise<void>;
   /** Map a TV subfolder to the Plex library that holds it, then check again; throws with the server's message */
   applyPlexMapping: (folder: string, libraryId: string) => Promise<void>;
@@ -30,6 +32,7 @@ export interface UseLibraryCheckResult {
 /** PUT /api/library-folders/plex-mapping */
 interface PlexMappingResponse {
   mappedLibraryId: string;
+  choice?: PlexMappingChoice;
   plexSubfolderLibraryMappings: ConfigState['plexSubfolderLibraryMappings'];
 }
 
@@ -49,7 +52,9 @@ export function useLibraryCheck(
   const [data, setData] = useState<LibraryCheckResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastCheckedAt, setLastCheckedAt] = useState<number | null>(null);
   const requestSeq = useRef(0);
+  const skipOwnEvent = useRef(false);
   const foldersKey = folders ? JSON.stringify(folders) : null;
   // A report is about the folders it was asked for: a new set starts from nothing.
   const reportedKey = useRef(foldersKey);
@@ -58,6 +63,7 @@ export function useLibraryCheck(
     if (reportedKey.current !== foldersKey) {
       reportedKey.current = foldersKey;
       setData(null);
+      setLastCheckedAt(null);
     }
     if (!token || !enabled) {
       setLoading(false);
@@ -74,7 +80,10 @@ export function useLibraryCheck(
         headers: { 'x-access-token': token },
         params,
       });
-      if (seq === requestSeq.current) setData(response.data);
+      if (seq === requestSeq.current) {
+        setData(response.data);
+        setLastCheckedAt(Date.now());
+      }
     } catch (err: unknown) {
       if (seq === requestSeq.current) setError(serverMessage(err, CHECK_FAILED_MESSAGE));
     } finally {
@@ -100,6 +109,11 @@ export function useLibraryCheck(
     // it over the page's unsaved edits.
     const patch: Partial<ConfigState> = { plexSubfolderLibraryMappings: saved.plexSubfolderLibraryMappings };
     window.dispatchEvent(new CustomEvent(CONFIG_PATCHED_EVENT, { detail: patch }));
+    // The folder list reads each folder's mapping. This instance checks once itself, awaited
+    // so callers' spinners last until the refreshed check is in; its own listener skips this event.
+    skipOwnEvent.current = true;
+    window.dispatchEvent(new Event(LIBRARY_FOLDERS_UPDATED_EVENT));
+    skipOwnEvent.current = false;
     await fetchCheck();
   }, [token, fetchCheck]);
 
@@ -111,12 +125,15 @@ export function useLibraryCheck(
   }, [fetchCheck]);
 
   useEffect(() => {
-    const handler = () => { fetchCheck(); };
+    const handler = () => {
+      if (skipOwnEvent.current) return;
+      fetchCheck();
+    };
     window.addEventListener(LIBRARY_FOLDERS_UPDATED_EVENT, handler);
     return () => window.removeEventListener(LIBRARY_FOLDERS_UPDATED_EVENT, handler);
   }, [fetchCheck]);
 
-  return { data, loading, error, refetch: fetchCheck, applyPlexMapping };
+  return { data, loading, error, lastCheckedAt, refetch: fetchCheck, applyPlexMapping };
 }
 
 export default useLibraryCheck;

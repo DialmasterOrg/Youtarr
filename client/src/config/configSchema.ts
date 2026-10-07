@@ -49,7 +49,7 @@ export const CONFIG_FIELDS = {
   plexApiKey: { default: '', trackChanges: true },
   plexYoutubeLibraryId: { default: '', trackChanges: true },
   plexSubfolderLibraryMappings: {
-    default: [] as Array<{ subfolder: string | null; libraryId: string }>,
+    default: [] as Array<{ subfolder: string | null; libraryId: string | null }>,
     trackChanges: true,
   },
   plexIP: { default: '', trackChanges: true },

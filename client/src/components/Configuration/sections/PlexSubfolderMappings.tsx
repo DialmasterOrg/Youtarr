@@ -28,7 +28,7 @@ import { PlexLibraryLabel } from './components/PlexLibraryLabel';
 
 export interface PlexSubfolderMapping {
   subfolder: string | null;
-  libraryId: string;
+  libraryId: string | null;
 }
 
 interface PlexSubfolderMappingsProps {
@@ -155,7 +155,7 @@ export const PlexSubfolderMappings: React.FC<PlexSubfolderMappingsProps> = ({
           </TableHead>
           <TableBody>
             {mappings.map((mapping) => {
-              const display = resolveLibraryDisplay(plexLibraries, mapping.libraryId);
+              const display = resolveLibraryDisplay(plexLibraries, mapping.libraryId ?? '');
               return (
                 <TableRow key={`${mapping.subfolder === null ? '\x00root' : mapping.subfolder}-${mapping.libraryId}`}>
                   <TableCell>

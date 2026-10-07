@@ -45,7 +45,9 @@ import { ConfigState, SnackbarState } from '../Configuration/types';
 import { validateConfig } from '../Configuration/utils/configValidation';
 import { FILENAME_PRESETS } from '../../utils/filenameTemplate/presets';
 import { validatePrefix } from '../../utils/filenameTemplate/validate';
-import { SETTINGS_PAGES, SettingsIndex } from './SettingsIndex';
+import { SettingsIndex } from './SettingsIndex';
+import { settingsHeading } from './settingsHeading';
+import LibraryFolders from '../LibraryFolders';
 import { MaintenanceSection } from './MaintenanceSection';
 import { SchedulingSection } from '../Configuration/sections/SchedulingSection';
 import { LoggingSection } from '../Configuration/sections/LoggingSection';
@@ -315,12 +317,7 @@ export function Settings({ token }: SettingsProps) {
     setHasUnsavedChanges(changed);
   }, [config, initialConfig]);
 
-  const pageTitle = useMemo(() => {
-    if (location.pathname === '/settings') return 'Settings';
-    const suffix = location.pathname.replace('/settings/', '');
-    const page = SETTINGS_PAGES.find((entry) => entry.key === suffix);
-    return `Settings / ${page?.title || suffix}`;
-  }, [location.pathname]);
+  const pageTitle = useMemo(() => settingsHeading(location.pathname), [location.pathname]);
 
   return (
     <div>
@@ -347,11 +344,13 @@ export function Settings({ token }: SettingsProps) {
         onClose={() => setChannelApplyTarget(null)}
       />
 
-      <div style={{ marginBottom: 16 }}>
-        <Typography variant="h5" style={{ fontWeight: 800 }}>
-          {pageTitle}
-        </Typography>
-      </div>
+      {pageTitle !== null && (
+        <div style={{ marginBottom: 16 }}>
+          <Typography variant="h5" style={{ fontWeight: 800 }}>
+            {pageTitle}
+          </Typography>
+        </div>
+      )}
 
       {isLoading ? (
         <ConfigurationSkeleton compact />
@@ -370,6 +369,20 @@ export function Settings({ token }: SettingsProps) {
                 token={token}
                 filenameTemplateSaveRequirement={filenameTemplateSaveRequirement}
                 onFilenameTemplatePreviewSuccess={handleFilenameTemplatePreviewSuccess}
+              />
+            }
+          />
+          <Route
+            path="library/*"
+            element={
+              <LibraryFolders
+                token={token}
+                config={config}
+                isPlatformManaged={isPlatformManaged}
+                deploymentEnvironment={deploymentEnvironment}
+                plexLibraries={plexLibraries}
+                plexConnectionStatus={plexConnectionStatus}
+                setSnackbar={setSnackbar}
               />
             }
           />

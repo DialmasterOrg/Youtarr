@@ -12,7 +12,7 @@ import {
   Typography,
 } from '../ui';
 import { StorageFooterWidget } from './StorageFooterWidget';
-import { NavItem, isNavItemExpanded, isNavPathActive } from './navigation';
+import { NavItem, isNavItemExpanded, isNavSubItemActive } from './navigation';
 import type { ThemeSidebarBehavior } from '../../themes/types';
 import {
   NAV_MAIN_BUTTON_SIDE_PADDING,
@@ -76,7 +76,7 @@ export const NavDrawerContent: React.FC<NavDrawerContentProps> = ({
 
   useEffect(() => {
     const activeItem = navItems.find((item) =>
-      item.subItems?.some((subItem) => isNavPathActive(location.pathname, subItem.to))
+      item.subItems?.some((subItem) => isNavSubItemActive(location.pathname, subItem))
     );
 
     if (activeItem?.key) {
@@ -238,7 +238,7 @@ export const NavDrawerContent: React.FC<NavDrawerContentProps> = ({
                   {item.subItems && (
                     <List disablePadding style={{ marginTop: NAV_SUB_VERTICAL_GAP * 8, display: 'flex', flexDirection: 'column', gap: `${NAV_SUB_VERTICAL_GAP * 8}px` }}>
                       {item.subItems.map((subItem) => {
-                        const subSelected = isNavPathActive(location.pathname, subItem.to);
+                        const subSelected = isNavSubItemActive(location.pathname, subItem);
                         return (
                           <ListItemButton
                             key={subItem.key}

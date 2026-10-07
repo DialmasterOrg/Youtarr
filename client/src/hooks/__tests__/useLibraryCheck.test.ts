@@ -28,6 +28,23 @@ describe('useLibraryCheck', () => {
     }));
   });
 
+  describe('lastCheckedAt', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    test('records when the last check succeeded and keeps it after a failed refresh', async () => {
+      jest.spyOn(Date, 'now').mockReturnValue(1_000);
+      axios.get.mockResolvedValueOnce({ data: { servers: [], folders: [] } });
+      const { result } = renderHook(() => useLibraryCheck('token'));
+      await waitFor(() => expect(result.current.lastCheckedAt).toBe(1_000));
+
+      axios.get.mockRejectedValueOnce(new Error('down'));
+      await act(async () => { await result.current.refetch(); });
+
+      expect(result.current.lastCheckedAt).toBe(1_000);
+      expect(result.current.data).toEqual({ servers: [], folders: [] });
+    });
+  });
+
   test('asks only for the given folders', async () => {
     const { result } = renderHook(() => useLibraryCheck('token', { folders: ['TV', ''] }));
 
@@ -126,6 +143,46 @@ describe('useLibraryCheck', () => {
     expect(patches).toEqual([{ plexSubfolderLibraryMappings: mappings }]);
     expect(axios.get).toHaveBeenCalledTimes(2);
     window.removeEventListener(CONFIG_PATCHED_EVENT, listener);
+  });
+
+  test('tells the folder list a saved mapping changed, checking once', async () => {
+    axios.put.mockResolvedValue({ data: { mappedLibraryId: '41', plexSubfolderLibraryMappings: [] } });
+    const updated = jest.fn();
+    window.addEventListener(LIBRARY_FOLDERS_UPDATED_EVENT, updated);
+    const { result } = renderHook(() => useLibraryCheck('token'));
+    await waitFor(() => expect(result.current.data).toEqual(RESPONSE));
+
+    await act(async () => { await result.current.applyPlexMapping('TV', '41'); });
+
+    expect(updated).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(axios.get).toHaveBeenCalledTimes(2));
+    window.removeEventListener(LIBRARY_FOLDERS_UPDATED_EVENT, updated);
+  });
+
+  test('resolves applyPlexMapping only once the refreshed check is in, with one check request', async () => {
+    axios.put.mockResolvedValue({ data: { mappedLibraryId: '41', plexSubfolderLibraryMappings: [] } });
+    const updated = jest.fn();
+    window.addEventListener(LIBRARY_FOLDERS_UPDATED_EVENT, updated);
+    const { result } = renderHook(() => useLibraryCheck('token'));
+    await waitFor(() => expect(result.current.data).toEqual(RESPONSE));
+
+    const refreshed = { servers: [], folders: [] };
+    let release: (value: { data: typeof refreshed }) => void = () => undefined;
+    axios.get.mockReturnValueOnce(new Promise((resolve) => { release = resolve; }));
+    let done = false;
+    let applied: Promise<void> = Promise.resolve();
+    act(() => { applied = result.current.applyPlexMapping('TV', '41').then(() => { done = true; }); });
+    await waitFor(() => expect(axios.get).toHaveBeenCalledTimes(2));
+    await act(async () => { await Promise.resolve(); });
+    expect(done).toBe(false);
+
+    await act(async () => { release({ data: refreshed }); await applied; });
+
+    expect(done).toBe(true);
+    expect(result.current.data).toEqual(refreshed);
+    expect(axios.get).toHaveBeenCalledTimes(2);
+    expect(updated).toHaveBeenCalledTimes(1);
+    window.removeEventListener(LIBRARY_FOLDERS_UPDATED_EVENT, updated);
   });
 
   test("throws the server's refusal when the mapping fails", async () => {

@@ -5,6 +5,9 @@ import '@testing-library/jest-dom';
 import { MemoryRouter } from 'react-router-dom';
 import { ThemeEngineProvider } from '../../../contexts/ThemeEngineContext';
 import { AppShell } from '../AppShell';
+import { NavItem, NavSubItem, isNavSubItemActive } from '../navigation';
+
+const mockNav: { items: NavItem[] } = { items: [] };
 
 jest.mock('../BackgroundDecorations', () => ({
   BackgroundDecorations: () => null,
@@ -33,12 +36,21 @@ jest.mock('../DownloadPauseBanner', () => ({
 }));
 
 jest.mock('../NavSidebar', () => ({
-  NavSidebar: ({ collapsed, isTopNav }: { collapsed: boolean; isTopNav: boolean }) => (
-    <div data-testid="nav-sidebar">
-      collapsed:{String(collapsed)}|topnav:{String(isTopNav)}
-    </div>
-  ),
+  NavSidebar: ({ collapsed, isTopNav, navItems }: { collapsed: boolean; isTopNav: boolean; navItems: NavItem[] }) => {
+    mockNav.items = navItems;
+    return (
+      <div data-testid="nav-sidebar">
+        collapsed:{String(collapsed)}|topnav:{String(isTopNav)}
+      </div>
+    );
+  },
 }));
+
+function navSubItem(key: string): NavSubItem {
+  const found = mockNav.items.flatMap((item) => item.subItems ?? []).find((subItem) => subItem.key === key);
+  if (!found) throw new Error(`No nav sub-item ${key}`);
+  return found;
+}
 
 function setViewportMatch(isMobile: boolean, isLandscape = false) {
   Object.defineProperty(window, 'matchMedia', {
@@ -157,6 +169,26 @@ describe('AppShell', () => {
     expect(screen.getByRole('main')).toHaveAttribute('data-nav-placement', 'top');
     expect(getLayoutRoot().style.getPropertyValue('--layout-main-padding')).toBe('8px 4px calc(20px + env(safe-area-inset-bottom))');
     expect(getLayoutRoot().style.getPropertyValue('--layout-content-padding')).toBe('8px 4px');
+  });
+
+  it('keeps the Library settings sub-item, labelled by its nav label, active on a folder page', () => {
+    renderShell('playful');
+
+    expect(navSubItem('library').label).toBe('Library');
+    expect(isNavSubItemActive('/settings/library/Kids', navSubItem('library'))).toBe(true);
+  });
+
+  it('labels settings sub-items without a nav label by their title', () => {
+    renderShell('playful');
+
+    expect(navSubItem('core').label).toBe('Core');
+  });
+
+  it('matches the Channels and Videos sub-items exactly', () => {
+    renderShell('playful');
+
+    expect(isNavSubItemActive('/subscriptions/find', navSubItem('subscriptions-list'))).toBe(false);
+    expect(isNavSubItemActive('/videos/find', navSubItem('videos-downloaded'))).toBe(false);
   });
 
   it('removes landscape mobile side gutters so the content fills the window', () => {

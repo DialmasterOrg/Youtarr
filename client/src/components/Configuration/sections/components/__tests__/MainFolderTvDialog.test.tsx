@@ -50,6 +50,11 @@ describe('MainFolderTvDialog', () => {
     expect(screen.getByText(/Choose this if all your content is TV-style/)).toBeInTheDocument();
   });
 
+  test('uses the confirm label it is given', () => {
+    showDialog({ confirmLabel: 'Review the move' });
+    expect(screen.getByRole('button', { name: 'Review the move' })).toBeInTheDocument();
+  });
+
   test('confirm calls onConfirm', async () => {
     const user = userEvent.setup();
     const props = showDialog();

@@ -4,9 +4,18 @@ import { Link as RouterLink } from 'react-router-dom';
 
 const SETTINGS_CARD_CONTENT_HEIGHT = 72;
 
-export const SETTINGS_PAGES = [
+export interface SettingsPage {
+  key: string;
+  title: string;
+  description: string;
+  /** Shorter label for the nav sub-item and phone tab strip */
+  navLabel?: string;
+}
+
+export const SETTINGS_PAGES: SettingsPage[] = [
   { key: 'scheduling', title: 'Scheduling', description: 'Choose when automatic downloads and maintenance tasks run.' },
   { key: 'core', title: 'Core', description: 'Downloads folder, quality, defaults, and core behavior.' },
+  { key: 'library', title: 'Library folders', navLabel: 'Library', description: 'Folders, their Videos or TV shows layout, and the media server library for each.' },
   { key: 'downloading', title: 'YT-DLP', description: 'yt-dlp backend settings for downloads and reliability.' },
   { key: 'api-keys', title: 'API Keys', description: 'API key settings and rate limits.' },
   { key: 'appearance', title: 'Appearance', description: 'Theme, animations, and visual preferences.' },

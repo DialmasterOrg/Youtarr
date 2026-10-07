@@ -14,6 +14,8 @@ interface MainFolderTvDialogProps {
   onCancel: () => void;
   onConfirm: () => void;
   busy?: boolean;
+  /** "Review the move" when the server says the change moves files */
+  confirmLabel?: string;
 }
 
 const PARAGRAPHS = [
@@ -28,6 +30,7 @@ export const MainFolderTvDialog: React.FC<MainFolderTvDialogProps> = ({
   onCancel,
   onConfirm,
   busy = false,
+  confirmLabel = 'Use for TV shows',
 }) => {
   const titleId = useId();
 
@@ -58,7 +61,7 @@ export const MainFolderTvDialog: React.FC<MainFolderTvDialogProps> = ({
           disabled={busy}
           startIcon={busy ? <CircularProgress size={14} /> : undefined}
         >
-          Use for TV shows
+          {confirmLabel}
         </Button>
       </DialogActions>
     </Dialog>

@@ -1,4 +1,8 @@
 import {
+  MAIN_FOLDER_ROUTE_KEY,
+  folderFromRouteKey,
+  folderRouteKey,
+  libraryFolderUrl,
   folderKey,
   effectiveLibraryFolder,
   buildLayoutResolver,
@@ -50,5 +54,16 @@ describe('libraryLayouts utils', () => {
 
   test('compares folder names ignoring case and surrounding spaces', () => {
     expect([folderKey(' TV Shows '), folderKey(''), folderKey(null)]).toEqual(['tv shows', '', '']);
+  });
+});
+
+describe('library folder route keys', () => {
+  test('round-trips names with spaces and the main folder', () => {
+    expect(folderRouteKey('Science Shows')).toBe('Science%20Shows');
+    expect(folderFromRouteKey('Science%20Shows')).toBe('Science Shows');
+    expect(folderFromRouteKey('Science Shows')).toBe('Science Shows');
+    expect(folderRouteKey('')).toBe(MAIN_FOLDER_ROUTE_KEY);
+    expect(folderFromRouteKey('~main')).toBe('');
+    expect(libraryFolderUrl('Kids')).toBe('/settings/library/Kids');
   });
 });

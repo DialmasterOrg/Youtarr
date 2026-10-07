@@ -1,4 +1,4 @@
-import type { LibraryLayout } from './tvShows';
+import type { LibraryLayout, PlexMappingChoice } from './tvShows';
 
 export type MediaServerType = 'plex' | 'jellyfin' | 'emby';
 
@@ -27,6 +27,7 @@ export interface PlexMappingState {
   mappedLibraryId: string | null;
   /** The one Plex TV library that holds the folder */
   suggestedLibraryId: string | null;
+  choice?: PlexMappingChoice;
 }
 
 export interface LibraryCheckServerReport {
@@ -52,6 +53,8 @@ export interface LibraryCheckServer {
   name: string;
   reachable: boolean;
   error: string | null;
+  /** Where this server sees the downloads folder, in its own spelling; null unless exactly one place is known */
+  downloadsPath?: string | null;
 }
 
 /** GET /api/library-folders/check */
