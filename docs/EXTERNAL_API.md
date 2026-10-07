@@ -409,8 +409,8 @@ deciding whether to offer external API controls.
 
 When the shared work queue is full, writes return 503 while retaining the
 accepted request and its idempotency key. Retry the same body to resume it
-without charging another accepted write. An already completed channel or
-deletion request returns its original result on an idempotent retry.
+without charging another accepted write. Completed video, channel, and
+deletion requests return their original result on an idempotent retry.
 
 Saving an external key with zero approved channels is intentional and does not
 backfill or grant access. That key fails closed: catalog reads and requests

@@ -17,9 +17,10 @@ class ChannelYtdlpExecutor {
    * @param {string|null} outputFile - Optional output file path
    * @param {Object} options - Options object
    * @param {Function} options.onStdoutData - Called with each raw stdout chunk as it arrives
+   * @param {number|null} options.timeoutMs - Optional deadline for bounded metadata calls
    * @returns {Promise<string>} - Output content if outputFile provided
    */
-  async executeYtDlpCommand(args, outputFile = null, { onStdoutData, timeoutMs = 120000 } = {}) {
+  async executeYtDlpCommand(args, outputFile = null, { onStdoutData, timeoutMs = null } = {}) {
     const ytDlp = spawnYtDlp(args, {
       env: {
         ...process.env,
@@ -52,21 +53,27 @@ class ChannelYtdlpExecutor {
 
     const exited = new Promise((resolve, reject) => {
       let settled = false;
+      let forceKill;
       const finish = (callback, value) => {
         if (settled) return;
         settled = true;
         clearTimeout(timeout);
         callback(value);
       };
-      const timeout = setTimeout(() => {
+      const timeout = timeoutMs > 0 ? setTimeout(() => {
         const error = new Error(`yt-dlp channel metadata request timed out after ${timeoutMs}ms`);
         error.code = 'YT_DLP_TIMEOUT';
-        if (typeof ytDlp.kill === 'function') ytDlp.kill('SIGTERM');
+        if (typeof ytDlp.kill === 'function') {
+          forceKill = setTimeout(() => ytDlp.kill('SIGKILL'), 5000);
+          forceKill.unref?.();
+          ytDlp.kill('SIGTERM');
+        }
         finish(reject, error);
-      }, timeoutMs);
-      timeout.unref?.();
+      }, timeoutMs) : null;
+      timeout?.unref?.();
 
       ytDlp.on('exit', (code) => {
+        clearTimeout(forceKill);
         // Check for bot detection
         if (stderrBuffer.includes('Sign in to confirm you\'re not a bot') ||
             stderrBuffer.includes('Sign in to confirm that you\'re not a bot')) {
