@@ -71,6 +71,6 @@ describe('StartTvShowsDialog', () => {
       folders: [folder(''), folder('Kids', { channels: 2 })], servers: [{ serverType: 'jellyfin', name: 'Jellyfin' }],
     }) });
     expect(screen.getByRole('radio', { name: /Make the whole downloads folder TV shows/ })).toBeDisabled();
-    expect(screen.getByText(/You use Video folders \(__Kids\)/)).toBeInTheDocument();
+    expect(screen.getByText(/You use other folders \(__Kids\)/)).toBeInTheDocument();
   });
 });

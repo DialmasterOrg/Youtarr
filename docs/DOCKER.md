@@ -134,7 +134,7 @@ See [Troubleshooting](TROUBLESHOOTING.md#docker-desktop--arm-incorrect-informati
     ```
 - Start containers with `docker compose up -d`
 - Container auto-creates `config.json`
-- **UI Behavior**: YouTube Output Directory field is **read-only** - shows "Docker Volume" chip
+- **UI Behavior**: Settings -> Core opens with a **Library folders** card whose **Downloads folder** line shows this path, read-only, with "Docker volume, set by YOUTUBE_OUTPUT_DIR. Edit .env and restart to change it."
 - **Host Path Reminder**: Create the `/your/host/path` directory ahead of time and ensure it is writable. Docker will otherwise create it as root-owned!
 
 ### Network Storage

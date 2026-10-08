@@ -23,7 +23,7 @@ export const EmptyDisabled: Story = {
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body);
 
-    await expect(body.getByRole('button', { name: /add subfolder/i })).toBeDisabled();
+    await expect(body.getByRole('button', { name: /add library folder/i })).toBeDisabled();
   },
 };
 
@@ -37,14 +37,14 @@ export const ValidatesAndSubmits: Story = {
     await userEvent.clear(input);
     await userEvent.type(input, '__Bad');
     await expect(body.getByText(/cannot start with __/i)).toBeInTheDocument();
-    await expect(body.getByRole('button', { name: /add subfolder/i })).toBeDisabled();
+    await expect(body.getByRole('button', { name: /add library folder/i })).toBeDisabled();
 
     // Valid
     await userEvent.clear(input);
     await userEvent.type(input, 'Sports');
-    await expect(body.getByRole('button', { name: /add subfolder/i })).toBeEnabled();
+    await expect(body.getByRole('button', { name: /add library folder/i })).toBeEnabled();
 
-    await userEvent.click(body.getByRole('button', { name: /add subfolder/i }));
+    await userEvent.click(body.getByRole('button', { name: /add library folder/i }));
 
     await expect(args.onAdd).toHaveBeenCalledWith('Sports');
   },

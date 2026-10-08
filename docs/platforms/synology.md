@@ -797,7 +797,7 @@ If you have existing data in `./database/` that you want to preserve:
 
 **Solutions**:
 - Schedule downloads during off-peak hours (configure via Youtarr UI)
-- Lower **Files to Download per Channel/Playlist** in Settings -> Core, or set a **Download Rate Limit** in Settings -> YT-DLP
+- Lower **Videos per channel tab and playlist** in Settings -> Core -> **Downloads**, or set a **Download Rate Limit** in Settings -> YT-DLP
 - Lower video quality settings to reduce processing time
 - Disable SponsorBlock integration (if enabled)
 
@@ -953,7 +953,7 @@ If your NAS has SSD cache:
 ### Schedule Downloads During Low-Activity Periods
 
 Configure Youtarr's cron schedule for late night:
-- Settings -> Core, "Download Frequency" field
+- Settings -> **Scheduling**, the **Automatic downloads** schedule (a daily time, or a custom cron expression)
 - Example: `0 2 * * *` (runs at 2 AM daily)
 
 ---

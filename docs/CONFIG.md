@@ -138,26 +138,28 @@ Youtarr must be running at the scheduled time; missed occurrences are not replay
   - `h265`: Better compression, requires modern devices
   - `default`: H.264 at 1080p and below, and usually VP9 without HDR above that, where YouTube has no H.264. H.264 files are noticeably larger than the AV1 equivalent at the same resolution, which is the cost of direct play on clients without AV1 decode. (VP9 and AV1 are not selectable values for this key; `-S res,vcodec:av01` in the custom yt-dlp arguments is the way to get AV1.)
 
-### Default Subfolder
+### Default Folder
 - **Config Key**: `defaultSubfolder`
 - **Type**: `string`
-- **Default**: `""` (empty - downloads to root directory)
-- **Description**: Default download location for untracked channels and channels set to use "Default Subfolder"
-- **Note**: Subfolders are prefixed with `__` on the filesystem (e.g., setting `Sports` creates `__Sports/`)
-- **Channel Subfolder Semantics**:
-  - **"Default Subfolder"** (NULL in database): Channel uses this global default setting
-  - **"No Subfolder"** (special value): Channel explicitly downloads to root directory, ignoring the global default
-  - **Specific subfolder**: Channel downloads to that specific subfolder
+- **Default**: `""` (empty - the main folder)
+- **Description**: The **Default folder**: where channels set to "Default folder" download, and the fallback for downloads with no more specific folder (untracked channels, including their manual downloads)
+- **Set via**: Settings -> **Library folders**, **Make default** on a folder's page. `PUT /api/library-folders/default` changes it; `/updateconfig` keeps the stored value, so a Settings save never changes it. Making a folder with the other layout the default folder while channels that follow the default have downloads opens a review of the move first; the reorganize then applies the new default folder (and restores the old one if no video could be moved).
+- **Note**: Library folders are prefixed with `__` on the filesystem (e.g., the folder `Sports` is `__Sports/`)
+- **Channel Library Folder Semantics** (the channel's **Library folder** setting):
+  - **"Default folder"** (`##USE_GLOBAL_DEFAULT##` in the database): Channel follows this setting
+  - **"Main folder"** (NULL in the database): Channel downloads to the main folder, whatever the default folder is
+  - **Specific library folder**: Channel downloads to that folder
 - **Use Cases**:
   - Organize untracked manual downloads into a specific folder
   - Set a default location while allowing individual channels to override
-  - Explicitly place specific channels in the root directory using "No Subfolder"
+  - Explicitly place specific channels in the main folder using "Main folder"
 
 ### Flat File Structure Default
 - **Config Key**: `defaultSkipVideoFolder`
 - **Type**: `boolean`
 - **Default**: `false`
 - **Description**: When `true`, new downloads are saved directly in the channel folder (flat structure) instead of an individual per-video subfolder, for every channel that has not chosen its own File Structure setting.
+- **UI**: Settings -> Core -> **Naming**, **Flat file structure by default**. Changing it asks for confirmation and names the channels that follow it.
 - **TV folders**: Ignored for folders with the TV layout (see Main Folder Layout), where episodes always sit directly in `Season NN` folders.
 - **Channel Override Semantics** (channel setting `skip_video_folder`, edited via the channel's "Video File Structure" select):
   - **"Use global setting"** (NULL in database): channel follows this global default
@@ -170,8 +172,8 @@ Youtarr must be running at the scheduled time; missed occurrences are not replay
 - **Type**: `string`
 - **Default**: `"videos"`
 - **Options**: `"videos"`, `"tv"`
-- **Description**: Layout of the main downloads folder, for files saved directly in it rather than in a `__subfolder`. `"videos"` saves each video movie-style, as before. `"tv"` saves channels as TV shows (`<show>/Season NN/SxxEyy - Title [id].ext`) for a TV-type media server library. Each `__subfolder` has its own layout, set in **Settings > Core > File Structure > Library folders**.
-- **Note**: Changed only through the Library folders list. When the main folder holds downloaded videos, the change moves them into the other layout after you review the move (the reorganize); a direct change is refused while a download runs. A Settings save keeps the stored value. Switching the main folder to TV writes a `.plexignore` containing `__*/*` to the main folder, so a Plex TV library pointed there skips the subfolders.
+- **Description**: Layout of the main downloads folder, for files saved directly in it rather than in a `__subfolder`. `"videos"` saves each video movie-style, as before. `"tv"` saves channels as TV shows (`<show>/Season NN/SxxEyy - Title [id].ext`) for a TV-type media server library. Each `__subfolder` has its own layout, set on Settings -> **Library folders**.
+- **Note**: Changed only on Settings -> **Library folders** (`PUT /api/library-folders`, or the reorganize it hands off to). When the main folder holds downloaded videos, the change moves them into the other layout after you review the move (the reorganize); a direct change is refused while a download runs. `/updateconfig` keeps the stored value, so a Settings save never changes it. Switching the main folder to TV writes a `.plexignore` containing `__*/*` to the main folder, so a Plex TV library pointed there skips the subfolders.
 - **TV folders are video-only**: TV library scanners skip audio files. A channel or playlist whose download type is MP3 cannot be saved to a TV folder, a folder with MP3 channels or playlists cannot switch to TV, and a download request that names a TV folder together with an MP3 type is refused. When the destination is only known per video (a pasted URL whose channel saves to a TV folder, an MP3 playlist with a video from such a channel), the MP3 type is downgraded to video for that video, so the episode is saved as video; an MP3 playlist's such videos therefore have no audio file and are left out of its music playlist sync (`unsyncable_count`).
 
 ### Video Filename Template
@@ -188,7 +190,7 @@ Youtarr must be running at the scheduled time; missed occurrences are not replay
   - **Date prefix** (`%(upload_date>%Y-%m-%d)s - %(title).64B`): `2025-10-17 - ESCAPING 99 Nights ... [Cbq15X05wyY].mp4`
   - **Plex YouTube-Agent** (`%(upload_date>%Y_%m_%d)s %(title).64B`): `2025_10_17 ESCAPING 99 Nights ... [Cbq15X05wyY].mp4` (compatible with [Absolute-Series-Scanner](https://github.com/ZeroQI/Absolute-Series-Scanner) and [YouTube-Agent.bundle](https://github.com/ZeroQI/YouTube-Agent.bundle))
   - **Title only** (`%(title).64B`): `ESCAPING 99 Nights ... [Cbq15X05wyY].mp4`
-- **UI**: A live preview in **Settings -> Core Settings -> File Structure Settings** shows the rendered folder and file names against a sample video, with length warnings (yellow > 110 chars, red > 130 chars on the rendered name).
+- **UI**: A live preview under **Video filename template** in Settings -> Core -> **Naming** shows the rendered folder and file names against a sample video, with length warnings (yellow > 110 chars, red > 130 chars on the rendered name).
 
 ### Enable Subtitles
 - **Config Key**: `subtitlesEnabled`
@@ -223,26 +225,27 @@ Youtarr must be running at the scheduled time; missed occurrences are not replay
 - **Config Key**: `plexYoutubeLibraryId`
 - **Type**: `string`
 - **Default**: `""` (empty)
-- **Description**: Default Plex library section ID for YouTube videos. Used for all downloads that do not match a per-subfolder mapping (see below).
+- **Description**: Default Plex library section ID for YouTube videos. Used for all downloads whose library folder has no mapping of its own (see below).
 - **Note**: Library refresh is automatically triggered if configured when new videos are downloaded
 
 ### Plex Subfolder Library Mappings
 - **Config Key**: `plexSubfolderLibraryMappings`
-- **Type**: `Array<{ subfolder: string | null, libraryId: string }>`
-- **Default**: `[]` (empty — all downloads use the default library above)
-- **Description**: Maps channel subfolders to specific Plex library IDs, enabling different subfolders to refresh different Plex libraries after a download.
-- **Usage**: Configured via the web UI under **Plex Media Server Integration → Per-Subfolder Library Mappings** once connected to Plex.
-- **Format**: Each entry specifies a `subfolder` (the clean name without the `__` filesystem prefix, or `null` for the root/no-subfolder case) and the target `libraryId`.
+- **Type**: `Array<{ subfolder: string | null, libraryId: string | null }>`
+- **Default**: `[]` (empty - all downloads refresh the default library above)
+- **Description**: Which Plex library each library folder's downloads refresh, so different folders can refresh different Plex libraries after a download.
+- **Usage**: Set per folder on Settings -> **Library folders**: open the folder and choose a library under **After downloads here, Plex refreshes**, or **Remove setting**. Picking a library there needs a Plex connection: the page lists the libraries (and the default library) only while Plex is connected, and Youtarr checks that Plex lists the one you pick. Without a Plex connection the page shows the current setting, plus **Remove setting** (which still works) when the folder has a setting. The API also accepts the default library (`libraryId: null`) without a Plex connection. `PUT /api/library-folders/plex-mapping` (with `replace: true`) and `DELETE /api/library-folders/plex-mapping` change the list; `/updateconfig` keeps the stored list, so a Settings save never changes it.
+- **Format**: Each entry specifies a `subfolder` (the folder name without the `__` filesystem prefix, or `null` for the main folder) and the `libraryId` it refreshes. An entry with `libraryId: null` is the explicit choice of the default library: the folder refreshes `plexYoutubeLibraryId`, and Youtarr never maps it automatically. Folder names match ignoring case (`"KIDS"` is the `__Kids` folder). Deleting a library folder removes its entry.
 - **Example**:
   ```json
   "plexSubfolderLibraryMappings": [
     { "subfolder": "kids", "libraryId": "2" },
     { "subfolder": "music", "libraryId": "3" },
+    { "subfolder": "news", "libraryId": null },
     { "subfolder": null, "libraryId": "1" }
   ]
   ```
-- **Fallback**: Any subfolder not listed here will fall back to `plexYoutubeLibraryId`.
-- **TV folders**: Youtarr adds the entry for a TV subfolder when exactly one Plex TV Shows library holds it: automatically in Channel Settings -> TV Show, or with **Refresh this library** in the library check under Settings -> Core -> File Structure. It never replaces an existing entry.
+- **Fallback**: A folder without an entry, or with `libraryId: null`, refreshes `plexYoutubeLibraryId`.
+- **TV folders**: Youtarr adds the entry for a TV subfolder that has none when exactly one Plex TV Shows library holds it: automatically when you add a TV folder with **Add folder** or open Channel Settings -> TV Show, or with **Refresh this library** on the folder's page in Settings -> **Library folders**. It never replaces an existing entry, including an explicit choice of the default library.
 
 ### Plex IP
 - **Config Key**: `plexIP`

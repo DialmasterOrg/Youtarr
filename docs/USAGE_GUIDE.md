@@ -15,6 +15,7 @@ This guide provides step-by-step instructions for common tasks in Youtarr. After
 - [Rescan Files on Disk](#rescan-files-on-disk)
 - [Organize Channels with Multi-Library Support](#organize-channels-with-multi-library-support)
 - [Save Channels as TV Shows](#save-channels-as-tv-shows)
+  - [Move an existing setup to TV shows](#move-an-existing-setup-to-tv-shows)
 - [Browse and Filter Channel Videos](#browse-and-filter-channel-videos)
 - [Find Videos on YouTube](#find-videos-on-youtube)
 - [Preview and Play Videos](#preview-and-play-videos)
@@ -62,7 +63,7 @@ Subscribe to YouTube channels to automatically download new videos as they're pu
        - `https://www.youtube.com/channel/UCX6OQ3DkcsbYNE6H8uQQuVA`
    - Youtarr looks the channel up on YouTube (this can take a few seconds), then opens the **Add channel** dialog with the usual defaults filled in:
      - **Auto Downloads**: a toggle for each tab the channel has (**New Videos**, **New Shorts**, **New Live/Streams**)
-     - **Video Quality**, **Download Type** (Video Only, Video + MP3, or MP3 Only), and **Subfolder**
+     - **Video Quality**, **Download Type** (Video Only, Video + MP3, or MP3 Only), and **Library folder**
    - Click **Continue** to keep the defaults or your changes. The channel joins the list as a pending addition; use its edit (pencil) button to change these settings before saving.
    - A channel you subscribed to before comes back with its saved settings filled in.
    - Click **Save Changes** to subscribe. Filters, ratings, and auto-removal are set later from the channel page.
@@ -77,10 +78,10 @@ Subscribe to YouTube channels to automatically download new videos as they're pu
    - Click **Open in YouTube** next to the channel name to open the channel on YouTube in a new tab
    - Click **Edit** (the gear button) in the **Channel Settings** bar to open channel settings. The dialog has five tabs:
      - **General**:
-       - **Subfolder**: pick or create a subfolder to organize channels into separate media libraries (e.g., `__kids`, `__music`); the picker has an inline **Add Subfolder** action for new names
+       - **Library folder**: pick or create a library folder to organize channels into separate media libraries (e.g., `__kids`, `__music`); the picker has an **Add library folder** action for new names and a **Manage library folders** link that opens Settings -> **Library folders** in a new tab
        - **Resolution Override**: a **Channel Video Quality Override** that takes precedence over the global setting
        - **Video File Structure**: download videos directly into the channel folder (flat) or into individual video subfolders (see [Folder Structure](YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md))
-       - **Auto Downloads**: separate toggles for **New Videos**, **New Shorts**, and **New Live/Streams**. These only take effect while the global **Enable Automatic Downloads** toggle in Settings -> Core is on.
+       - **Auto Downloads**: separate toggles for **New Videos**, **New Shorts**, and **New Live/Streams**. These only take effect while the global **Automatic downloads** toggle in Settings -> Core -> **Downloads** is on.
      - **Filters**: duration limits and a title regex to control which videos auto-download
      - **Ratings**: a default content rating for this channel's downloads
      - **Tags**: custom tags that can be automatically added to downloaded videos separated by '|'. This applies only to videos downloaded in the future.
@@ -158,7 +159,7 @@ After uploading, Youtarr displays a review table with all discovered channels.
   - **Auto-download enabled** - toggle automatic downloads on or off
   - **Video quality** - set a quality override (720p through 2160p, or use the global default)
   - **Download type** - choose Videos, Shorts, or Livestreams
-  - **Subfolder** - assign the channel to a subfolder for multi-library organization
+  - **Library folder** - assign the channel to a library folder for multi-library organization
   - **Content rating** - set a default content rating (G, PG, PG-13, R, NC-17)
 - Use the **Enable auto-download** / **Disable auto-download** button to toggle auto-download for all selected channels at once
 
@@ -193,7 +194,7 @@ Subscribe to a YouTube playlist and Youtarr tracks its videos, downloads them, a
    - If you opened the dialog without a URL first, paste the link inside it and click **Fetch info**
 
 3. **Choose settings and subscribe**
-   - Below the preview, set **Automatically download new videos**, **Video Quality**, **Download Type**, and **Default Subfolder**. Automatic downloads only pick up videos added to the playlist from now on; choose existing videos to download from the playlist's detail page.
+   - Below the preview, set **Automatically download new videos**, **Video Quality**, **Download Type**, and **Library folder**. Automatic downloads only pick up videos added to the playlist from now on; choose existing videos to download from the playlist's detail page.
    - The dialog shows which media servers the playlist will sync to. If you haven't connected any, the videos still download and a `.m3u` file is still written; you just won't get a native server playlist.
    - Click **Subscribe**. Youtarr pulls in the video list and opens the playlist's detail page.
    - A playlist you subscribed to before is restored with its saved settings, shown read-only in the dialog; change them from the playlist page afterwards. If you're already subscribed, the dialog offers **Go to playlist** instead.
@@ -204,8 +205,8 @@ Subscribe to a YouTube playlist and Youtarr tracks its videos, downloads them, a
 
 Playlists don't get their own folder. Each video is saved under the channel that uploaded it, so a playlist that pulls from five channels lands in five channel folders.
 
-- If you're already subscribed to that channel, the video uses that channel's subfolder and quality settings.
-- If you're not, the video uses the playlist's default subfolder (your global default unless you change it), and Youtarr creates a hidden channel record behind the scenes to keep future downloads organized.
+- If you're already subscribed to that channel, the video uses that channel's library folder and quality settings.
+- If you're not, the video uses the playlist's library folder (the default folder unless you change it), and Youtarr creates a hidden channel record behind the scenes to keep future downloads organized.
 
 The same video never downloads twice just because it shows up in a playlist.
 
@@ -221,7 +222,7 @@ Open a playlist to manage it:
 - **Auto-download new videos**: first enable refreshes the playlist and defaults to following future additions only. You can also preview and select an existing batch during setup. Later runs download newly discovered entries wherever they appear, even when the video itself is old. Your global per-run download count applies to new discoveries. Each scheduled run can also retry up to the same number of older saved selections, starting with those attempted least recently. Extra entries wait for later runs; neither allowance borrows unused slots from the other. Already queued or downloading videos do not take another slot. Pause/resume preserves tracking (see [Configure Automation](#configure-automation)).
 - **Choose existing videos**: select up to a chosen count by newest publication date, beginning of playlist, or end of playlist. Review the titles and adjust checkboxes before queuing. Missing publication dates require a positional or manual choice. This works for existing playlists too and preserves automatic tracking. Selected older videos remain eligible for retry while auto-download is enabled and a starting point exists.
 - **Follow from now** (in Playlist settings): refreshes the playlist and skips its current undownloaded backlog, including saved batch requests, after confirmation. This preserves whether automatic downloads are running or paused. Files and already queued downloads are kept.
-- **Playlist settings**: set a subfolder, resolution, download type, and default rating for this playlist. A video's own channel settings take precedence; these apply when the channel has no override. The download type also decides whether the playlist syncs to media servers as a video or music playlist (see [Switching a playlist's download type](MEDIA_SERVER_PLAYLISTS.md#switching-a-playlists-download-type)).
+- **Playlist settings**: set a library folder, resolution, download type, and default rating for this playlist. A video's own channel settings take precedence; these apply when the channel has no override. The download type also decides whether the playlist syncs to media servers as a video or music playlist (see [Switching a playlist's download type](MEDIA_SERVER_PLAYLISTS.md#switching-a-playlists-download-type)).
 - **Sync chips**: one per media server. Click to enable or disable sync for that server, or click an unconfigured server to jump to its settings.
 - **Public on media servers**: makes the playlist visible to other users on Jellyfin and Emby. Plex playlists are always created under one account and shared manually, so this setting doesn't affect Plex.
 - **Sync now** and **Rebuild .m3u file**: push the current state to your servers or regenerate the `.m3u` on demand. Sync runs in the background and can take a minute or two while your media server's library scan finishes.
@@ -428,7 +429,8 @@ Create separate media server libraries for different content types (e.g., kids c
 ### How to Set Up Multi-Library Organization
 
 1. **Plan your library structure**
-   - Decide on subfolder names (convention: use `__` prefix like `__kids`, `__music`)
+   - Decide on folder names. Youtarr saves library folders with a `__` prefix on disk, like `__kids` and `__music`, so leave the underscores out when you name one.
+   - You can create them ahead of time on Settings -> **Library folders** with **Add folder**, or while assigning a channel (next step).
    - Examples:
      - `__kids` - Child-friendly YouTube channels
      - `__music` - Music videos and concerts
@@ -436,20 +438,20 @@ Create separate media server libraries for different content types (e.g., kids c
      - `__education` - Educational content
      - `__gaming` - Gaming content
 
-2. **Assign channels to subfolders**
+2. **Assign channels to library folders**
    - Go to the Channels & Playlists page
    - Click on a channel
    - Click the settings icon (gear)
-   - Pick or create a subfolder with the **Subfolder** field (use its **Add Subfolder** action for a new name)
+   - Pick or create a folder with the **Library folder** field (use its **Add library folder** action for a new name)
    - Save changes
 
 3. **Configure your media server**
    - Create separate libraries in your media server (Plex/Jellyfin/etc.)
-   - Point each library to a specific subfolder:
+   - Point each library to a specific library folder:
      - Library 1: `/path/to/downloads/__kids`
      - Library 2: `/path/to/downloads/__music`
-     - Library 3: `/path/to/downloads` (for channels without a subfolder)
-   - Jellyfin and Emby show a folder in only one library, so a library at `/path/to/downloads` leaves libraries for its subfolders empty there; give every channel a subfolder instead. Plex shows those videos in both libraries.
+     - Library 3: `/path/to/downloads` (Plex only, for channels saved in the main folder)
+   - Jellyfin and Emby show a folder in only one library, so a library at `/path/to/downloads` leaves libraries for its subfolders empty there; give every channel a library folder instead. Plex shows those videos in both libraries. See [Supported library setups](#supported-library-setups).
 
 4. **Apply restrictions and sharing**
    - Configure library-specific access controls in your media server
@@ -463,16 +465,113 @@ Media servers show Youtarr's videos as movies. A **TV folder** shows them as TV 
 ### Set up a TV folder
 
 - **From a channel**: open the channel page, click the settings icon (gear), open **TV Show** and click **TV show**. Without a TV folder yet, Youtarr asks for a name (default `TV Shows`, saved as `__TV Shows`), creates the folder and switches the channel to it. With several TV folders, you pick one.
-- **From Settings**: under Settings -> Core -> File Structure -> **Library folders**, set a folder's layout to **TV shows**. Every channel that downloads to that folder becomes a show.
+- **From Settings**: on Settings -> **Library folders**, click **Add folder** and choose the **TV shows** layout, or open an existing folder and choose **Use for TV shows** (**Move to TV shows** when its downloads have to move). Every channel that downloads to that folder becomes a show.
 
-Then add a TV library for the folder on your media server (see [Media Server Integration](MEDIA_SERVERS.md#tv-shows)). The **Media servers** box under Channel Settings -> **TV Show** shows, per server, whether a library holds the folder and what to fix. For Plex, Youtarr adds the folder's refresh mapping as soon as it finds the one TV Shows library that holds it.
+Then add a TV library for the folder on your media server (see [Media Server Integration](MEDIA_SERVERS.md#tv-shows)). If your media server already has libraries for your downloads, read [Move an existing setup to TV shows](#move-an-existing-setup-to-tv-shows) first. The folder's page in Settings -> **Library folders** and the **Media servers** box under Channel Settings -> **TV Show** show, per server, whether a library holds the folder and what to fix. For Plex, Youtarr adds the folder's refresh mapping as soon as it finds the one TV Shows library that holds it.
 
 What changes for a TV channel:
 
 - Episodes go to `<TV folder>/<channel>/Season <year>/` and are named by upload time in UTC: `S2026E09281530 - Title [id].mp4` was uploaded on September 28 at 15:30. See [TV folders](YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md#tv-folders).
 - The download type is video only, and the file structure and channel playlist (.m3u) options don't apply.
 - The channel page and Subscriptions show a **TV** chip, and videos show their episode code.
-- If the default subfolder is a TV folder, a download from a channel you haven't subscribed to becomes a show of its own.
+- If the default folder is a TV folder, a download from a channel you haven't subscribed to becomes a show of its own.
+
+### Move an existing setup to TV shows
+
+TV shows is optional. Videos is Youtarr's existing movie-style layout, and upgrading Youtarr changes nothing: your folders keep their layout, channels and playlists keep their library folders, and the default folder, your file names and your Plex refresh mappings stay as they are. Youtarr never switches a folder to TV shows on its own, even one named `TV Shows`.
+
+On Settings -> **Library folders**, **Start using TV shows** reads your folders and your media server libraries, offers the paths below that fit your setup, and fills in your library names and paths for each server. This section covers every setup, including media servers Youtarr isn't connected to.
+
+#### Supported library setups
+
+A Video folder is shown by a Videos library pointed at the folder itself or at a folder above it, such as your whole downloads folder. A TV show folder needs a TV library pointed at the folder itself. A folder is in use when channels or playlists download into it, it is the default folder, or it holds downloaded videos.
+
+| Your setup | Supported | Why |
+|---|---|---|
+| One library on your whole downloads folder, while every folder uses Videos | Yes | Most upgraded installs look like this. The library shows the main folder and every Video folder. |
+| A library for each folder, or one library that lists several folders | Yes | The setup to use once you have a TV show folder. Plex, Jellyfin and Emby libraries can each list several folders. |
+| A library on your whole downloads folder, plus a TV show folder | No | Jellyfin and Emby show a folder in one library only, so the TV library stays empty. Plex shows every episode twice: in the TV library and again as a plain video. |
+| The main folder uses TV shows, with no other folder in use | Yes | One TV library on the downloads folder. Youtarr writes a `.plexignore` there so Plex skips the `__subfolders`. |
+| The main folder uses TV shows, with other folders in use (Video or TV show folders) | Plex only | Jellyfin and Emby show a folder in one library only: the TV library on the downloads folder shows each `__subfolder` as an extra show, and the subfolder's own library stays empty. |
+
+The library check on each folder's page in Settings -> **Library folders** reports an unsupported setup and shows the library edit that fixes it.
+
+A library's type can't be changed after you create it, on Plex, Jellyfin or Emby. You can still edit which folders a library shows: it keeps its type, and the watch state of the videos it still shows stays. So moving a folder from Videos to TV shows means a new TV library for that folder on each server.
+
+| Server | Library for Video folders | Library for TV show folders |
+|---|---|---|
+| Plex | Other Videos | TV Shows |
+| Jellyfin | Movies | Shows |
+| Emby | Movies | TV shows |
+| Kodi | Movies source | TV shows source |
+
+The settings for each kind of library are in [Media Server Integration](MEDIA_SERVERS.md#tv-shows). **Start using TV shows** shows them too, under **Library settings**.
+
+#### Path A: Add a TV show folder next to your Video folders
+
+Recommended when you already have downloads. Your Video folders stay as they are, and the new folder gets its own TV library.
+
+In Youtarr:
+
+1. If channels download straight into the main folder and one library shows your whole downloads folder, give each of those channels a Video folder first: Channel Settings -> **Library folder** moves its videos. Once that library stops showing the whole downloads folder, it can't show videos saved in the main folder. Youtarr doesn't restore watch state for moves between Video folders, so on Jellyfin and Emby these videos can come back unwatched.
+2. On Settings -> **Library folders**, click **Add folder**, enter a name and choose the **TV shows** layout.
+3. Switch the channels you want as shows to the new folder: Channel Settings -> **Library folder**, or Channel Settings -> **TV Show** -> **Show this channel as** -> **TV show**. A channel that has downloads shows its moves in **Review the move** first (see [Switch a channel or folder that already has downloads](#switch-a-channel-or-folder-that-already-has-downloads)).
+
+On each media server:
+
+- **One library on your whole downloads folder**: edit it, remove the downloads folder and add each Video folder instead, for example `/path/to/downloads/__kids`. It keeps its type, and the watch state of its videos stays. Then add a TV library pointed at the new TV show folder only.
+- **A library for each folder**: add a TV library pointed at the new TV show folder only.
+- **No library yet**: add a TV library pointed at the new TV show folder only. Your Video folders need a Videos library too.
+
+#### Path B: Make the whole downloads folder TV shows
+
+Every channel in the main folder becomes a show, and one TV library shows the downloads folder. This fits when no other folder is in use. With other folders in use, Video or TV show folders, it works on Plex only: Plex skips the `__subfolders`, but Jellyfin and Emby would show each one as an extra show and leave its own library empty.
+
+In Youtarr:
+
+1. On Settings -> **Library folders**, open the main folder and choose **Move to TV shows** (**Use for TV shows** when nothing has to move). Youtarr asks you to confirm; when downloads have to move, it then shows every move in **Review the move**.
+
+On each media server:
+
+- **A Videos library (Other Videos, Movies) on your whole downloads folder, and no Video folder in use**: its type can't change, so remove it and create a TV library pointed at the downloads folder.
+- **The same library, with Video folders in use (Plex only)**: keep it for your Video folders. Edit it, remove the downloads folder and add your Video folders instead. It keeps its type, and the watch state of their videos stays. Then create a TV Shows library pointed at the downloads folder.
+- **Already a TV library on your downloads folder** (for example from the Plex TV Series preset): keep it.
+- **No library on the downloads folder**: create a TV library pointed at the downloads folder.
+- **Video folders in use (Plex only) with no Other Videos library of their own**: the TV library skips them, so point an Other Videos library at your Video folders as well.
+- **TV show folders in use (Plex only)**: keep their TV libraries as they are. The TV library on the downloads folder skips them.
+
+#### Path C: Turn a Video folder into a TV show folder
+
+The folder's channels become shows and their videos move. You review every move first.
+
+In Youtarr:
+
+1. If channels download straight into the main folder and one library shows your whole downloads folder, give them a Video folder first, as in path A. Youtarr doesn't restore watch state for those moves between Video folders.
+2. On Settings -> **Library folders**, open the folder and choose **Move to TV shows** (**Use for TV shows** when nothing has to move). Review the moves, then click **Move N videos**.
+
+On each media server:
+
+- **One library on your whole downloads folder**: edit it, remove the downloads folder and add your other Video folders. It keeps its type, and the watch state of its videos stays. If no other Video folder is in use, remove the library instead. Then add a TV library pointed at this folder only.
+- **A library on this folder alone**: its type can't change, so remove it and create a TV library pointed at the folder.
+- **No library on this folder**: create a TV library pointed at the folder.
+
+Kodi isn't checked by Youtarr. On every path, add each TV show folder to Kodi as its own **TV shows** source set to **Local information only**, and keep your Video folders in a **Movies** source (see [Kodi](media-servers/kodi.md#tv-shows)).
+
+#### Watch state
+
+For the moves Youtarr shows in **Review the move** (into, out of or between TV show folders), Youtarr restores played state and resume positions once the new library has scanned them: for every Jellyfin and Emby user, and for the Plex owner account (see [Restore watch state after a move](#restore-watch-state-after-a-move)). Moves between Video folders, such as step 1 of paths A and C, get no restore. Editing a library's folders keeps the watch state of the videos it still shows. A library you remove and create again starts over: played state and resume positions in it aren't restored.
+
+Do the steps in Youtarr first, then change your libraries right away, before the next watch status sync (every 4 hours by default):
+
+- Removing or editing a library before the move can lose the watch state Youtarr would restore.
+- Until you remove or edit it, the old library still shows the moved files, so Youtarr restores the watch state there, and the next sync counts the restore as done. A TV library you create after that starts over.
+
+Settings -> **Watch Status** shows, under **Watch state restores**, how many restores are still waiting for the media servers.
+
+#### Plex only
+
+- **.plexignore**: when the main folder uses TV shows, Youtarr writes a `.plexignore` there with `__*/*`, so a Plex TV library on the downloads folder skips your `__subfolders`. Jellyfin and Emby can't skip them.
+- **Episodes shown twice**: Plex shows a folder in every library that includes it. A library on your whole downloads folder next to a TV library shows each episode a second time as a plain video, and Youtarr restores watch state to only one of the copies. The library check reports this on the TV show folder's page.
 
 ### Switch a channel or folder that already has downloads
 
@@ -490,7 +589,7 @@ Click **Move N videos** to start. While the files move, a banner shows on every 
 - **Videos not moved**: the result lists them with **Retry**. The channel's settings also say how many videos were not moved, with a **Review** link to the result.
 - **Restarted**: a move interrupted by a restart resumes when Youtarr starts.
 
-The same review opens when you change the default subfolder (Settings -> Core) to a folder with the other layout while channels on the default have downloads. Save again afterwards to apply your other changes.
+The same review opens when you make a folder with the other layout the default folder (Settings -> Library folders -> **Make default**) while channels that follow the default have downloads.
 
 ### Title shows: series inside a channel
 
@@ -498,7 +597,7 @@ Some channels upload real series: "Hermitcraft 10: Episode 5 - ...", "BEYBLADE E
 
 Open the channel page, click the settings icon (gear), open **TV Show**, and under **Shows in this channel** click **Add show**:
 
-- **Name** and **Folder name** (the show folder; the name by default). A title show needs a TV folder: Youtarr uses the channel's TV folder, else the default subfolder if it is a TV folder, else your only TV folder, and asks when there is more than one. Two shows can't share a folder name in one TV folder; Youtarr suggests `<Name> (<Channel>)`, or offers to restore a removed show that used the name.
+- **Name** and **Folder name** (the show folder; the name by default). A title show needs a TV folder: Youtarr uses the channel's TV folder, else the default folder if it is a TV folder, else your only TV folder, and asks when there is more than one. Two shows can't share a folder name in one TV folder; Youtarr suggests `<Name> (<Channel>)`, or offers to restore a removed show that used the name.
 - **Title patterns**, tried in order. Text matches ignoring case and spaces match any spacing; `*` matches any text; a pattern matches anywhere in the title unless it starts with `^`. Placeholders capture the numbers and the episode title: `{season}`, `{episode}` and `{title}`. For example `Hermitcraft {season}: Episode {episode} - {title}`. **Edit as regular expression** shows the pattern as a Python regular expression with the named groups `season`, `episode` and `title`; backreferences and conditional groups aren't supported there (channel downloads use the same regular expression with its groups unnamed).
 - **Season** and **Episode** per pattern: the season from the title, a fixed season (0 is specials), or the upload year; the episode from the title, the next number in the season (given once, oldest upload first, and never reused), or the upload time (with upload-year seasons only, like channel shows). A video not downloaded yet gets its upload-year season when it downloads; a downloaded video's year is already known, so the preview shows its number.
 - **Exclude titles containing**: a title with any of these words never joins the show, for example `Official Clip`.

@@ -169,7 +169,7 @@ The rescan recognizes `.mp4`, `.webm`, `.mkv`, `.m4v`, `.avi`, and `.mp3`. Files
 
 **Diagnosis**: Measure the full path as Plex sees it (drive letter through `.mp4`). At 260 characters or more, this is your problem.
 
-**Solution**: Shorten the video's folder and file names on disk, keeping the `[<youtube-id>]` segment in the filename. Then run **Settings -> Maintenance & Rescan -> Rescan files on disk** so Youtarr picks up the new path, let Plex scan the library, and (for playlists) run **Sync now**. To prevent recurrence, shorten the filename template under **Settings -> Core Settings -> Video Filename Template**: reduce the title truncation to the current recommended `%(title).64B` (or smaller), or use a preset without the channel-name prefix; see [Video Filename Template](CONFIG.md#video-filename-template). Only new downloads are affected; existing files keep their names.
+**Solution**: Shorten the video's folder and file names on disk, keeping the `[<youtube-id>]` segment in the filename. Then run **Settings -> Maintenance & Rescan -> Rescan files on disk** so Youtarr picks up the new path, let Plex scan the library, and (for playlists) run **Sync now**. To prevent recurrence, shorten the filename template under **Settings -> Core -> Naming -> Video filename template**: reduce the title truncation to the current recommended `%(title).64B` (or smaller), or use a preset without the channel-name prefix; see [Video Filename Template](CONFIG.md#video-filename-template). Only new downloads are affected; existing files keep their names.
 
 ## Docker Issues
 
@@ -789,7 +789,7 @@ If you only enabled cookies to get past a "Sign in to confirm you're not a bot" 
 
 This is the subtitle request (YouTube's timedtext endpoint), not the video: video streams come from `googlevideo.com`. YouTube throttles or hangs subtitle requests that don't look like they come from a browser, so yt-dlp sends them with browser impersonation, which needs the `curl_cffi` library. Youtarr's Docker image includes it; if you see `WARNING: The extractor specified to use impersonation for this download, but no impersonate target is available` in the logs, you are on an older image and should pull the latest.
 
-Even with impersonation, YouTube's subtitle endpoint is flaky at times. When the subtitle fetch fails, yt-dlp still downloads the video; Youtarr keeps the video, does not count it as a failed download, and marks the job "Complete with Warnings". If the extra retry time bothers you, disable subtitles in **Settings -> Core** until it settles.
+Even with impersonation, YouTube's subtitle endpoint is flaky at times. When the subtitle fetch fails, yt-dlp still downloads the video; Youtarr keeps the video, does not count it as a failed download, and marks the job "Complete with Warnings". If the extra retry time bothers you, turn off **Subtitles** in **Settings -> Core -> Downloads** until it settles.
 
 ### Downloads Fail with "Conversion failed!" or "No space left on device" {#download-out-of-space}
 
@@ -797,7 +797,7 @@ Even with impersonation, YouTube's subtitle endpoint is flaky at times. When the
 
 `Conversion failed!` is what ffmpeg reports when it cannot write the merged file. Merging the video and audio streams needs a second copy of the video, so the folder downloads are staged in needs free space of about **twice the video's size**. When Youtarr measures that this is what happened, the failed job shows a "Not enough disk space to finish the download" diagnosis (Downloads page, Download History, and notifications) and the log has a `Download failed because the temporary download folder is out of space` line with the folder and its free space. Youtarr normally removes the failed video's leftover files when that download run ends, so the space comes back on its own; anything left is cleared when the next download job starts.
 
-Which disk is full depends on **Use external temp directory** (Settings -> Core):
+Which disk is full depends on **External temp directory** (Settings -> Core -> **Advanced**):
 
 - **Off (default)**: downloads are staged in `.youtarr_tmp/` inside your output folder, so your media drive is the one that is short on space.
 - **On**: downloads are staged inside the container (`/tmp/youtarr-downloads` unless you changed it). Unless you mounted a volume there, this is Docker's own storage. On Docker Desktop (Windows/macOS) that is a virtual disk with a fixed maximum size, shared with every image, the build cache, and every other container; free space on your drives does not count.
@@ -826,9 +826,9 @@ docker exec youtarr df -h /tmp/youtarr-downloads
   docker image prune -a
   ```
 
-If large videos regularly do not fit in the external temp path, mount a volume with enough room there, or turn **Use external temp directory** off so staging uses your output drive (some managed platforms, such as ElfHosted, choose the staging location for you).
+If large videos regularly do not fit in the external temp path, mount a volume with enough room there, or turn **External temp directory** off so staging uses your output drive (some managed platforms, such as ElfHosted, choose the staging location for you).
 
-A channel video that failed this way is retried by each scheduled download for as long as it is still among the most recent videos the check looks at (**Files to Download per Channel**) and passes the channel's filters, so it normally completes once there is room. If it has dropped out of that window, download it manually.
+A channel video that failed this way is retried by each scheduled download for as long as it is still among the most recent videos the check looks at (**Videos per channel tab and playlist**, Settings -> Core -> **Downloads**) and passes the channel's filters, so it normally completes once there is room. If it has dropped out of that window, download it manually.
 
 ### No Download Progress Shown (Downloads Work, Videos "Just Appear")
 
@@ -1066,7 +1066,7 @@ The cookies preview endpoint is rate-limited to 3 requests per minute because ea
 
 **Solution**:
 - Verify poster.jpg exists in each channel folder
-- Check that "Copy channel poster.jpg files" is enabled in **Settings -> Core**
+- Check that **Channel poster.jpg** is enabled in **Settings -> Core -> Media server files**
 - Ensure media server has read permissions for image files
 - Some servers cache artwork - try:
   - Clearing server cache
@@ -1090,7 +1090,7 @@ The cookies preview endpoint is rate-limited to 3 requests per minute because ea
 **Problem**: Videos download but no .nfo files are generated.
 
 **Solution**:
-- Check that "Generate video .nfo files" is enabled in **Settings -> Core**
+- Check that **Video .nfo files** is enabled in **Settings -> Core -> Media server files** (episodes in TV shows folders always get one)
 - Verify post-processing completed (check container logs)
 - Ensure write permissions in video directories
 - Look for errors in logs during post-processing phase

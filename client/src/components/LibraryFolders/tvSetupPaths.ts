@@ -126,16 +126,19 @@ export function pathOptions(setup: DetectedSetup, servers: ServerRef[]): PathOpt
   }];
   if (!setup.main || setup.main.layout === 'videos') {
     const onlyPlex = servers.length === 1 && servers[0].serverType === 'plex';
-    const blocked = setup.videoFolders.length > 0 && !onlyPlex;
+    // Jellyfin and Emby show a folder in one library only, so a TV library on the downloads
+    // folder takes in every subfolder in use, a TV show folder as much as a Video folder.
+    const otherFolders = [...setup.videoFolders, ...setup.tvFolders.filter((f) => f.name && inUse(f))].sort(byLabel);
+    const blocked = otherFolders.length > 0 && !onlyPlex;
     options.push({
       key: 'B',
       title: 'Make the whole downloads folder TV shows',
       description: 'Every channel becomes a show; one TV library shows the downloads folder.',
       recommended: false,
       disabledReason: blocked
-        ? `You use Video folders (${setup.videoFolders.map((f) => folderLabel(f.name)).join(', ')}): Jellyfin and Emby would show each one as an extra show.`
+        ? `You use other folders (${otherFolders.map((f) => folderLabel(f.name)).join(', ')}): Jellyfin and Emby would show each one as an extra show.`
         : null,
-      note: setup.videoFolders.length > 0 && onlyPlex ? "Plex skips the __subfolders; Jellyfin and Emby wouldn't." : null,
+      note: otherFolders.length > 0 && onlyPlex ? "Plex skips the __subfolders; Jellyfin and Emby wouldn't." : null,
     });
   }
   if (setup.videoSubfolders.length > 0) {

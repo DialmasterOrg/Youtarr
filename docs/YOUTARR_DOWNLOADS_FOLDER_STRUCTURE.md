@@ -6,7 +6,7 @@ By default, videos in each channel folder are placed into their own subfolders w
 
 ### File and Folder Names
 
-The examples below use the default **Video Filename Template** (Settings -> Core -> File Structure Settings), which names files `<Channel> - <Title>` with the title capped at 64 bytes. You can change the template or pick a preset (Date prefix, Plex YouTube-Agent, Plex TV Series, Title only); see [Video Filename Template](CONFIG.md#video-filename-template). Whatever template you choose, Youtarr always appends:
+The examples below use the default **Video filename template** (Settings -> Core -> **Naming**), which names files `<Channel> - <Title>` with the title capped at 64 bytes. You can change the template or pick a preset (Date prefix, Plex YouTube-Agent, Plex TV Series, Title only); see [Video Filename Template](CONFIG.md#video-filename-template). Whatever template you choose, Youtarr always appends:
 
 - ` [<youtube-id>]` to file names, for example `Channel - Title [dQw4w9WgXcQ].mp4`
 - ` - <youtube-id>` to per-video folder names, for example `Channel - Title - dQw4w9WgXcQ/` (a dash, not brackets)
@@ -15,26 +15,26 @@ Youtarr uses these ID suffixes to find your videos on disk, so they cannot be ch
 
 ### Expected Default Layout
 
-This is the folder/file layout for channels that do not have a configured subfolder setting. It
-is also used for manually downloaded files from channels that are not set up in `Channels & Playlists`, as long as the global **Default Subfolder** setting is empty.
+This is the folder/file layout for channels saved to the main folder: their **Library folder** setting is **Main folder**, or **Default folder** while the main folder is the default folder. It
+is also used for manually downloaded files from channels that are not set up in `Channels & Playlists`, as long as the main folder is the **Default folder** (Settings -> **Library folders**).
 
 ```
 <YOUTUBE_OUTPUT_DIR>/
 ├── Channel Name/
 │   ├── poster.jpg                               # Channel poster
-│   ├── backdrop.jpg                             # Optional; written from the channel banner when "Create backdrop images" is on
+│   ├── backdrop.jpg                             # Optional; written from the channel banner when "Backdrop images" is on
 │   ├── Channel Name.m3u                         # Optional; written when the channel's "Generate channel playlist file" setting is on
 │   └── Channel - Title - id/
 │       ├── Channel - Title [id].mp4             # Video file
 │       ├── Channel - Title [id].nfo             # Video metadata
 │       ├── Channel - Title [id].[lang].srt      # Subtitle file(s)
 │       ├── Channel - Title [id].jpg             # Video thumbnail
-│       ├── Channel - Title [id]-fanart.jpg      # Optional; written when "Create video fanart files" is on
-│       └── Channel - Title [id]-backdrop.jpg    # Optional; written when "Create backdrop images" is on
+│       ├── Channel - Title [id]-fanart.jpg      # Optional; written when "Video fanart" is on
+│       └── Channel - Title [id]-backdrop.jpg    # Optional; written when "Backdrop images" is on
 ├── Another Channel/
 ```
 
-The optional artwork and `.m3u` files follow the channel wherever it lives; they are written the same way in the subfolder and flat layouts below.
+The optional artwork is turned on under Settings -> Core -> **Media server files** (**Video fanart**, **Backdrop images**). The optional artwork and `.m3u` files follow the channel wherever it lives; they are written the same way in the subfolder and flat layouts below.
 
 ## Layout For Channels with Subfolder Settings
 
@@ -52,13 +52,13 @@ YouTube Downloads/
 ├── __Music/                                       # Music subfolder
 │   └── Music Channel/
 │       └── [videos]
-└── Regular Channel/                               # Channel with no subfolder setting
+└── Regular Channel/                               # Channel saved to the main folder
     └── [videos]
 ```
 
 ## TV Folders
 
-A library folder (the main folder or a `__subfolder`) can use the **TV shows** layout instead of Videos: set it under Settings -> Core -> File Structure -> **Library folders**, or switch a channel to **TV show** under Channel Settings -> **TV Show**. Every channel that downloads to a TV folder is saved as a show:
+A library folder (the main folder or a `__subfolder`) can use the **TV shows** layout instead of Videos: set it on Settings -> **Library folders**, or switch a channel to **TV show** under Channel Settings -> **TV Show**. Every channel that downloads to a TV folder is saved as a show:
 
 ```
 YouTube Downloads/
@@ -66,7 +66,7 @@ YouTube Downloads/
 │   └── Channel Name/                              # The show folder
 │       ├── tvshow.nfo                             # Show metadata (always written)
 │       ├── poster.jpg                             # Channel poster
-│       ├── backdrop.jpg                           # Optional; "Create backdrop images"
+│       ├── backdrop.jpg                           # Optional; "Backdrop images"
 │       ├── Season 2025/
 │       │   └── S2025E12011500 - Title [id].mp4
 │       └── Season 2026/
@@ -74,8 +74,8 @@ YouTube Downloads/
 │           ├── S2026E09281530 - Title [id].nfo    # Episode metadata (always written)
 │           ├── S2026E09281530 - Title [id].jpg    # Episode thumbnail
 │           ├── S2026E09281530 - Title [id].[lang].srt
-│           ├── S2026E09281530 - Title [id]-fanart.jpg     # Optional; "Create video fanart files"
-│           └── S2026E09281530 - Title [id]-backdrop.jpg   # Optional; "Create backdrop images"
+│           ├── S2026E09281530 - Title [id]-fanart.jpg     # Optional; "Video fanart"
+│           └── S2026E09281530 - Title [id]-backdrop.jpg   # Optional; "Backdrop images"
 └── __Kids/                                        # A Videos folder, laid out as above
 ```
 
@@ -84,10 +84,10 @@ YouTube Downloads/
 - **No video folders and no channel `.m3u`**: TV folders are always flat inside season folders, and video-only (MP3 download types aren't offered for them).
 - **Titles** in file names are cut to 64 bytes; the full title is in the episode NFO file and the embedded MP4 title (never prefixed with the channel name).
 - **Deleting** an episode in Youtarr removes its files, then an empty season folder, then the show folder once it holds only show files.
-- **Downloads from channels you haven't subscribed to** that land in a TV folder (a manual download, a playlist, or a TV default subfolder) each become a show of their own channel.
+- **Downloads from channels you haven't subscribed to** that land in a TV folder (a manual download, a playlist, or a TV default folder) each become a show of their own channel.
 - **Main folder as TV**: when the main folder uses the TV shows layout, Youtarr writes a `.plexignore` containing `__*/*` there so a Plex TV library pointed at it skips your subfolders. Jellyfin and Emby can't skip them, so they'd show each `__subfolder` as an extra show.
 
-Switching a channel or a folder that already has downloads between Videos and TV shows moves its files into the other layout; you review the move first. See [Save Channels as TV Shows](USAGE_GUIDE.md#save-channels-as-tv-shows).
+Switching a channel or a folder that already has downloads between Videos and TV shows moves its files into the other layout; you review the move first. See [Save Channels as TV Shows](USAGE_GUIDE.md#save-channels-as-tv-shows), and [Move an existing setup to TV shows](USAGE_GUIDE.md#move-an-existing-setup-to-tv-shows) for changing the libraries you already have.
 
 ### Title shows
 
@@ -113,7 +113,7 @@ Videos that match no title show stay where the channel puts them: its Videos fol
 
 You can use a flat file structure, where video files are placed directly in the channel folder instead of individual video subfolders. It only affects new downloads. There are three places to set it:
 
-- **Global default**: turn on **Flat file structure by default** in Settings -> Core -> File Structure Settings. Every channel that has not chosen its own structure follows this, as do downloads from untracked channels. See [Flat File Structure Default](CONFIG.md#flat-file-structure-default).
+- **Global default**: turn on **Flat file structure by default** in Settings -> Core -> **Naming**. Every channel that has not chosen its own structure follows this, as do downloads from untracked channels. See [Flat File Structure Default](CONFIG.md#flat-file-structure-default).
 - **Per channel**: in the channel settings dialog, set "Video File Structure" to "Flat (no video subfolders)" or "Video subfolders" to override the global default. The default option, "Use global setting", follows the global default.
 - **One download**: the manual download settings dialog can force either structure for a single download.
 

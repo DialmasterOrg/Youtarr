@@ -53,7 +53,7 @@ Add your Youtarr download directory:
    - Kids: `/path/to/youtube/__kids`
    - Music: `/path/to/youtube/__music`
 
-   Jellyfin shows a folder in only one library, so don't add a library at `/path/to/youtube` next to subfolder libraries: the subfolder libraries would stay empty. One library per folder; see [One library per folder](#one-library-per-folder).
+   While every folder uses Videos, one library at `/path/to/youtube` shows them all. Jellyfin shows a folder in only one library, though, so don't add a library at `/path/to/youtube` next to subfolder libraries: the subfolder libraries would stay empty. Once you use a TV folder, give each TV folder its own library and list the Video folders in your Movies library; see [One library per folder](#one-library-per-folder).
 
 ### Step 3: Configure Metadata Sources
 
@@ -73,7 +73,7 @@ In the library's settings (everything not listed can keep its default):
 
 ## TV Shows
 
-Youtarr can save channels as TV shows in a **TV folder**: a library folder whose layout is TV shows (Settings -> Core -> File Structure -> **Library folders**, or Channel Settings -> **TV Show**). Each channel becomes a show with year seasons and episodes named `Season 2026/S2026E09281530 - Title [id].mp4`, each with an episode NFO file and a thumbnail, plus `tvshow.nfo`, `poster.jpg` and (when enabled) `backdrop.jpg` in the show folder. The episode number is the upload's month, day, hour and minute in UTC, so Jellyfin lists episodes in upload order with large numbers (`9281530. Title` is September 28 at 15:30).
+Youtarr can save channels as TV shows in a **TV folder**: a library folder whose layout is TV shows (Settings -> **Library folders**, or Channel Settings -> **TV Show**). Each channel becomes a show with year seasons and episodes named `Season 2026/S2026E09281530 - Title [id].mp4`, each with an episode NFO file and a thumbnail, plus `tvshow.nfo`, `poster.jpg` and (when enabled) `backdrop.jpg` in the show folder. The episode number is the upload's month, day, hour and minute in UTC, so Jellyfin lists episodes in upload order with large numbers (`9281530. Title` is September 28 at 15:30).
 
 ### Library setup
 
@@ -94,12 +94,16 @@ Youtarr's library check (below) reports the Nfo saver and the online metadata do
 
 ### One library per folder
 
-Jellyfin shows a folder in only one library. A library whose folder sits inside another library's folder is skipped (the Jellyfin log says `Found duplicate path`), so a Shows library for `__TV Shows` stays empty while another library includes your downloads folder. Once you use a TV folder:
+While every folder uses Videos, one Movies library on your whole downloads folder shows them all. Jellyfin shows a folder in only one library, though. A library whose folder sits inside another library's folder is skipped (the Jellyfin log says `Found duplicate path`), so a Shows library for `__TV Shows` stays empty while another library includes your downloads folder. Once a `__subfolder` is a TV folder:
 
-- Point your Movies library at your Videos folders one by one, not at the downloads folder.
-- Channels saved directly in the downloads folder (no subfolder) can only be reached through a library at the downloads folder, which would include the TV folder. Give those channels a subfolder first (Channel Settings -> Subfolder).
+- Point your Movies library at your Video folders one by one, not at the downloads folder. Editing a library's folders keeps its type, and the watch state of its videos stays.
+- Channels saved directly in the downloads folder (no subfolder) can only be reached through a library at the downloads folder, which would include the TV folder. Give those channels a library folder first (Channel Settings -> **Library folder**).
 
-Youtarr's library check points this out: Settings -> Core -> File Structure lists, under each folder, the libraries that hold it and anything to fix (also a library of the wrong type, the Nfo saver, or online metadata downloaders). Channel Settings -> **TV Show** shows the same for the channel's TV folder.
+When the main folder itself uses TV shows, point one Shows library at the downloads folder instead. Jellyfin shows each `__subfolder` there as an extra show, and the subfolder's own library stays empty, so this fits only while no other folder is in use (Video or TV show).
+
+[Move an existing setup to TV shows](../USAGE_GUIDE.md#move-an-existing-setup-to-tv-shows) walks through each starting setup.
+
+Youtarr's library check points this out in Settings -> **Library folders**, on each folder's page: the libraries that hold it and anything to fix (also a library of the wrong type, the Nfo saver, or online metadata downloaders). Channel Settings -> **TV Show** shows the same for the channel's TV folder.
 
 ### Watch state
 
@@ -129,7 +133,7 @@ Jellyfin reads NFO files containing:
 Youtarr provides:
 - **`poster.jpg`**: Channel artwork in each channel folder
 - **`<VIDEO NAME>.jpg`**: Video thumbnail in each video folder
-- **`backdrop.jpg`**: Channel background art from the YouTube channel banner, written when "Create backdrop images" is enabled in Settings -> Core (off by default)
+- **`backdrop.jpg`**: Channel background art from the YouTube channel banner, written when "Backdrop images" is enabled in Settings -> Core -> **Media server files** (off by default)
 - **`<VIDEO NAME>-backdrop.jpg`**: Per-video background art from the video thumbnail, controlled by the same setting (new downloads only)
 - Proper image naming for Jellyfin recognition
 
@@ -237,7 +241,7 @@ Organize content by type:
 
 **Cause**: Jellyfin's mixed-library TV-detection heuristics misread episode-like video titles or folder names starting with digits. Jellyfin has deprecated this library type.
 
-**Solution**: Change the library's content type to `Movies` (or recreate the library as `Movies`) and rescan. Channel `.m3u` playlists will no longer auto-import; see [Choosing a library type](#choosing-a-library-type) for the tradeoff.
+**Solution**: Jellyfin can't change a library's content type, so remove the Mixed library, create a `Movies` library for the same folders, and scan. A library you remove and create again starts over: played state and resume positions in it aren't restored. Channel `.m3u` playlists will no longer auto-import; see [Choosing a library type](#choosing-a-library-type) for the tradeoff.
 
 ### Poster Issues
 
@@ -259,7 +263,7 @@ Organize content by type:
 
 **Cause**: Another library includes the TV folder (usually a library at the downloads folder). Jellyfin shows a folder in one library only and skips the nested one; its log says `Found duplicate path`.
 
-**Solution**: Point the other library at your Videos folders one by one instead of the downloads folder, then scan. See [One library per folder](#one-library-per-folder).
+**Solution**: Edit the other library: remove the downloads folder and add your Video folders one by one instead, then scan. It keeps its type, and the watch state of its videos stays. See [One library per folder](#one-library-per-folder) and [Move an existing setup to TV shows](../USAGE_GUIDE.md#move-an-existing-setup-to-tv-shows).
 
 ## File Structure
 

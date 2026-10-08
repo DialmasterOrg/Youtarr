@@ -47,7 +47,7 @@ Configure the following settings:
 
 ## TV Shows
 
-Youtarr can save channels as TV shows in a **TV folder**: a library folder whose layout is TV shows (Settings -> Core -> File Structure -> **Library folders**, or Channel Settings -> **TV Show**). Each channel becomes a show with year seasons and episodes named `Season 2026/S2026E09281530 - Title [id].mp4`, each with an episode NFO file and a thumbnail, plus `tvshow.nfo` and `poster.jpg` in the show folder. The episode number is the upload's month, day, hour and minute in UTC.
+Youtarr can save channels as TV shows in a **TV folder**: a library folder whose layout is TV shows (Settings -> **Library folders**, or Channel Settings -> **TV Show**). Each channel becomes a show with year seasons and episodes named `Season 2026/S2026E09281530 - Title [id].mp4`, each with an episode NFO file and a thumbnail, plus `tvshow.nfo` and `poster.jpg` in the show folder. The episode number is the upload's month, day, hour and minute in UTC.
 
 To add a TV folder to Kodi:
 

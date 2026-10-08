@@ -34,9 +34,28 @@ describe('tvSetupPaths', () => {
     const options = pathOptions(detectSetup(folders, check(true, false), servers), servers);
     expect(options.map((option) => [option.key, option.recommended, option.disabledReason])).toEqual([
       ['A', true, null],
-      ['B', false, 'You use Video folders (__Kids): Jellyfin and Emby would show each one as an extra show.'],
+      ['B', false, 'You use other folders (__Kids): Jellyfin and Emby would show each one as an extra show.'],
       ['C', false, null],
     ]);
+  });
+
+  test('B unavailable while a TV show folder is in use on Jellyfin', () => {
+    const tvInUse = [f('', { channels: 3, channelsChosen: 3 }), f('Shows', { layout: 'tv', channels: 2 })];
+    const pathB = pathOptions(detectSetup(tvInUse, null, servers), servers).find((option) => option.key === 'B');
+    expect(pathB?.disabledReason).toBe('You use other folders (__Shows): Jellyfin and Emby would show each one as an extra show.');
+  });
+
+  test('B stays available with an unused TV show folder', () => {
+    const tvUnused = [f('', { channels: 3, channelsChosen: 3 }), f('Shows', { layout: 'tv' })];
+    const pathB = pathOptions(detectSetup(tvUnused, null, servers), servers).find((option) => option.key === 'B');
+    expect(pathB?.disabledReason).toBeNull();
+  });
+
+  test('B notes that Plex skips a TV show folder in use when only Plex is connected', () => {
+    const plex = [{ serverType: 'plex' as const, name: 'Plex' }];
+    const tvInUse = [f('', { channels: 3, channelsChosen: 3 }), f('Shows', { layout: 'tv', channels: 2 })];
+    const pathB = pathOptions(detectSetup(tvInUse, null, plex), plex).find((option) => option.key === 'B');
+    expect(pathB).toMatchObject({ disabledReason: null, note: "Plex skips the __subfolders; Jellyfin and Emby wouldn't." });
   });
 
   test('path A steps edit the whole-folder library with exact paths', () => {
