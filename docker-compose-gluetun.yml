@@ -24,36 +24,34 @@
 
 services:
   gluetun:
-    image: qmcgaw/gluetun:latest
+    image: qmcgaw/gluetun:v3
+    container_name: ${GLUETUN_CONTAINER_NAME:-youtarr-gluetun}
     restart: unless-stopped
-    container_name: ${GLUETUN_CONTAINER_NAME:-gluetun}
     cap_add:
       - NET_ADMIN
     devices:
       - /dev/net/tun:/dev/net/tun
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       VPN_SERVICE_PROVIDER: ${VPN_SERVICE_PROVIDER:?Set VPN_SERVICE_PROVIDER in .env}
-      VPN_TYPE: ${VPN_TYPE:-wireguard}
+      VPN_TYPE: wireguard
       WIREGUARD_PRIVATE_KEY: ${WIREGUARD_PRIVATE_KEY:?Set WIREGUARD_PRIVATE_KEY in .env}
-      WIREGUARD_PRESHARED_KEY: ${WIREGUARD_PRESHARED_KEY:?Set WIREGUARD_PRESHARED_KEY in .env}
+      WIREGUARD_PRESHARED_KEY: ${WIREGUARD_PRESHARED_KEY:-}
       WIREGUARD_ADDRESSES: ${WIREGUARD_ADDRESSES:?Set WIREGUARD_ADDRESSES in .env}
-      WIREGUARD_MTU: ${WIREGUARD_MTU:-1420}
-      UPDATER_VPN_SERVICE_PROVIDERS: ${VPN_SERVICE_PROVIDER:?Set VPN_SERVICE_PROVIDER in .env}
+      WIREGUARD_MTU: ${WIREGUARD_MTU:-}
+      FIREWALL_OUTBOUND_SUBNETS: ${FIREWALL_OUTBOUND_SUBNETS:-}
       TZ: ${TZ:-UTC}
-      FIREWALL_OUTBOUND_SUBNETS: ${FIREWALL_OUTBOUND_SUBNETS}
     ports:
       - "${YOUTARR_HOST_PORT:-3087}:3011"
     volumes:
-      - gluetun:/gluetun
+      - youtarr-gluetun:/gluetun
       - /lib/modules:/lib/modules
 
   youtarr-db:
     image: mariadb:10.3
     container_name: youtarr-db
     restart: unless-stopped
-    depends_on:
-      gluetun:
-        condition: service_healthy
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-123qweasd}
       MYSQL_DATABASE: ${DB_NAME:-youtarr}
@@ -64,8 +62,6 @@ services:
       # MYSQL_PASSWORD: ${DB_PASSWORD}
       MYSQL_CHARSET: utf8mb4
       MYSQL_COLLATION: utf8mb4_unicode_ci
-    volumes:
-      - ./database:/var/lib/mysql
     command: --port=${DB_PORT:-3321} --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --innodb-file-per-table=1 --innodb-large-prefix=ON
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-P", "${DB_PORT:-3321}", "-u", "${DB_USER:-root}", "-p${DB_PASSWORD:-123qweasd}"]
@@ -85,6 +81,7 @@ services:
         condition: service_healthy
       gluetun:
         condition: service_healthy
+        restart: true
     environment:
       # DEPRECATED but retained for backwards compatibility with old images for now
       IN_DOCKER_CONTAINER: 1
@@ -112,10 +109,9 @@ services:
       # DATA_PATH: /storage/rclone/storagebox/youtube
     volumes:
       - ${YOUTUBE_OUTPUT_DIR}:/usr/src/app/data
-      - ./server/images:/app/server/images
-      - ./config:/app/config
-      - ./jobs:/app/jobs
-    network_mode: "container:${GLUETUN_CONTAINER_NAME:-gluetun}"
+    network_mode: "service:gluetun"
+    ports: !reset []
+    extra_hosts: !reset []
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--output", "/dev/null", "http://localhost:3011/api/health"]
       interval: 30s
@@ -127,7 +123,5 @@ networks:
   default:
     name: youtarr-network
 
-# Named volume definition (used by docker-compose.arm.yml override)
 volumes:
   gluetun:
-  youtarr-db-data:
