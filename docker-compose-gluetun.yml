@@ -31,8 +31,6 @@ services:
       - NET_ADMIN
     devices:
       - /dev/net/tun:/dev/net/tun
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     environment:
       VPN_SERVICE_PROVIDER: ${VPN_SERVICE_PROVIDER:?Set VPN_SERVICE_PROVIDER in .env}
       VPN_TYPE: wireguard
