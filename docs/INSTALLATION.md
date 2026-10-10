@@ -7,7 +7,37 @@ Before setting up Youtarr, ensure you have:
 1. **Docker & Docker Compose** installed on your system
 2. **Bash Shell** (Git Bash for Windows users)
 3. **Git** to clone the repository
-4. Some network and VPN knowledge if using Gluetun
+4. Some network and VPN knowledge, and a VPN provider if using Gluetun
+
+## Table of contents:
+- [Youtarr Setup Guide](#youtarr-setup-guide)
+- [Prerequisites](#prerequisites)
+- [Table of contents:](#table-of-contents)
+- [Quick Start Guide](#quick-start-guide)
+- [Method 1: First-Time Installation via `./start.sh` helper](#method-1-first-time-installation-via-startsh-helper)
+   - [Optional flags:](#optional-flags) 
+- [Method 2: Standard Docker Compose (For Docker-Native Setups)](#method-2-standard-docker-compose-for-docker-native-setups)
+   - [Optionally configure other settings:](#optionally-configure-other-settings)
+- [Method 3: Manual Setup Without Git (Advanced Users Only)](#method-3-manual-setup-without-git-advanced-users-only)
+- [Authentication](#authentication)
+- [Configuration](#configuration)
+   - [Required Settings](#required-settings)
+   - [Configuration Settings](#configuration-settings)
+- [Important Operational Notes](#important-operational-notes)
+   - [Critical: Download Archive File](#critical-download-archive-file)
+   - [Storage Management](#storage-management)
+   - [File Management Restrictions](#file-management-restrictions)
+   - [Network Storage Considerations](#network-storage-considerations)
+   - [Content Filtering](#content-filtering)
+   - [Platform Deployments (Elfhosted, Kubernetes, etc.)](#platform-deployments-elfhosted-kubernetes-etc)
+- [Network Access](#network-access)
+- [Upgrading](#upgrading)
+   - [Checking for Updates](#checking-for-updates)
+   - [How to Update to the Latest Version](#how-to-update-to-the-latest-version)
+      - [Method 1: Using Helper Scripts](#method-1-using-helper-scripts)
+      - [Method 2: Manual Docker Compose Update](#method-2-manual-docker-compose-update)
+      - [Method 3: Asustor App Central](#method-3-asustor-app-central)
+   - [What Happens During Updates](#what-happens-during-updates)
 
 ## Quick Start Guide
 
@@ -62,7 +92,7 @@ If you prefer to use standard `docker compose up` commands:
    cp .env.example .env
    ```
 
-4. **Edit the .env file**:
+3. **Edit the .env file**:
    ```bash
    vim .env  # or use your preferred editor
    ```
@@ -71,11 +101,17 @@ If you prefer to use standard `docker compose up` commands:
    ```bash
    YOUTUBE_OUTPUT_DIR=/path/to/your/videos
    ```
-   
-> [!NOTE]
-> If using Gluetun, you must set all the required variables, or else it will fail.
 
-   Optionally configure other settings:
+> [!IMPORTANT]
+> If using Gluetun, you must set all the required variables, or else it will fail.
+>
+> Example:
+> - `VPN_SERVICE_PROVIDER`
+> - `WIREGUARD_PRIVATE_KEY`
+> - `WIREGUARD_PRESHARED_KEY`
+> - `WIREGUARD_ADDRESSES`
+
+#### Optionally configure other settings:
    - `YOUTARR_HOST_PORT=3087` - Change this if you need the web interface on a different host port
    - For **headless deployments** (e.g., Unraid, NAS, remote VPS), you have two options:
      - **One-time setup token:** open the web UI from localhost, your trusted LAN, VPN, or SSH tunnel and paste the token from `docker logs youtarr` or `config/setup-token`.
@@ -83,21 +119,32 @@ If you prefer to use standard `docker compose up` commands:
    - `AUTH_ENABLED=false` - Only if behind external authentication (VPN, reverse proxy)
    - `TRUST_PROXY=false` - Recommended when exposing Youtarr directly without a reverse proxy. Leave unset for the current backwards-compatible default.
    - `LOG_LEVEL` - Set to `debug` for troubleshooting, `info` for normal/production use (default), `warn` for minimal logging
+   - If using Gluetun, set `FIREWALL_OUTBOUND_SUBNETS` if Youtarr needs to reach Plex, Jellyfin, Emby, or an external DB on your LAN. Otherwise, that traffic goes into the VPN and will time out.
 
    See: [ENVIRONMENT VARIABLES](ENVIRONMENT_VARIABLES.md) for more details
 
-6. **Start with Docker Compose**:
+4. **Start with Docker Compose**:
    ```bash
    docker compose up -d
    ```
+   If using Gluetun, start with the [docker-compose-gluetun.yml](https://github.com/DialmasterOrg/Youtarr/blob/main/docker-compose-gluetun.yml) file.
+   ```bash
+   docker compose docker-compose-gluetun.yml up -d
+   ```
 
-   > **Docker Desktop/ARM/NAS users**: For a fresh install, use the named-volume database override to avoid MariaDB bind-mount issues on virtualized filesystems:
-   > ```bash
-   > docker compose -f docker-compose.yml -f docker-compose.arm.yml up -d
-   > ```
-   > If you already have data in `./database/`, use `./scripts/migrate-to-named-volume.sh` instead. See [Database Management](DATABASE.md#migrating-from-bind-mount-to-named-volume) and [Troubleshooting](TROUBLESHOOTING.md#docker-desktop--arm-incorrect-information-in-file-errors) for details.
+> [!IMPORTANT]
+> **Docker Desktop/ARM/NAS users**: For a fresh install, use the named-volume database override to avoid MariaDB bind-mount issues on virtualized filesystems:
+> ```bash
+> docker compose -f docker-compose.yml -f docker-compose.arm.yml up -d
+> ```
+>
+> If using Gluetun, use the [docker-compose-gluetun.yml](https://github.com/DialmasterOrg/Youtarr/blob/main/docker-compose-gluetun.yml) file.
+> ```bash
+> docker compose -f docker-compose-gluetun.yml -f docker-compose.arm.yml up -d
+> ```
+> If you already have data in `./database/`, use `./scripts/migrate-to-named-volume.sh` instead. See [Database Management](DATABASE.md#migrating-from-bind-mount-to-named-volume) and [Troubleshooting](TROUBLESHOOTING.md#docker-desktop--arm-incorrect-information-in-file-errors) for details.
 
-7. **Access the web interface**:
+5. **Access the web interface**:
    - Navigate to `http://localhost:3087` (or your server's LAN IP)
    - If you set preset credentials in .env, use those to log in
    - If not, you'll be prompted to complete the setup wizard using the one-time token from `docker logs youtarr` or `config/setup-token`
@@ -110,7 +157,7 @@ This method gives you direct control over environment variables and compose file
 
 ### Method 3: Manual Setup Without Git (Advanced Users Only)
 
-> [!WARNING]
+> [!CAUTION]
 > **Not Recommended**: This method requires manual directory creation, permission management, and lacks helper scripts. It is more error-prone and provides limited community support.
 >
 > **For advanced users only.** If you cannot clone the repository (e.g., Portainer, TrueNAS, limited Git access), see [Manual Docker Setup Without Git](DOCKER.md#manual-setup-without-git-clone) in the Docker documentation.
@@ -119,11 +166,11 @@ This method gives you direct control over environment variables and compose file
 
 ## Authentication
 
-See [AUTHENTICATION.md](AUTHENTICATION.md)
+> [!IMPORTANT]
+> - Initial setup requires the one-time setup token from `docker logs youtarr` or `config/setup-token`; plain HTTP setup is intended for localhost, private LAN, VPN, or SSH tunnel access only
+> - If you need to reset your admin password, see the [Troubleshooting Guide](TROUBLESHOOTING.md#reset-admin-password)
 
-### Important Notes:
-- Initial setup requires the one-time setup token from `docker logs youtarr` or `config/setup-token`; plain HTTP setup is intended for localhost, private LAN, VPN, or SSH tunnel access only
-- If you need to reset your admin password, see the [Troubleshooting Guide](TROUBLESHOOTING.md#reset-admin-password)
+See [AUTHENTICATION.md](AUTHENTICATION.md)
 
 ## Configuration
 
@@ -210,16 +257,14 @@ For external access:
 
 ## Upgrading
 
-### Important: Youtarr Does Not Auto-Update
-
-**Youtarr does not automatically update itself.** When you run `./start.sh` or `docker compose up -d`, it uses your currently installed version. Simply restarting Youtarr without pulling updates will restart the same version you currently have installed.
-
-**If you're wondering why you don't see new features after a restart, you likely need to run the update commands below.**
+> [!IMPORTANT]
+> **Youtarr does not automatically update itself.** When you run `./start.sh` or `docker compose up -d`, it uses your currently installed version. Simply restarting Youtarr without pulling updates will restart the same version you currently have installed.
+>
+> **If you're wondering why you don't see new features after a restart, you likely need to run the update commands below.**
 
 ### Checking for Updates
 
 Before upgrading, you can check if updates are available:
-
 - **View release notes and changelog**: [GitHub Releases](https://github.com/DialmasterOrg/Youtarr/releases)
 - **Check your current version**: Look in the footer of the Youtarr web interface
 - **Compare versions**: If your version number is older than the latest release, an update is available
