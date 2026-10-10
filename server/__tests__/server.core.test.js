@@ -175,9 +175,12 @@ const createServerModule = ({
         };
 
         const jobModuleMock = {
+          onJobAbandoned: jest.fn(),
+          onJobEnded: jest.fn(),
           getJob: jest.fn(),
           getRunningJobs: jest.fn(() => []),
-          getRunningJobsWithFreshVideos: jest.fn().mockResolvedValue([])
+          getRunningJobsWithFreshVideos: jest.fn().mockResolvedValue([]),
+          getInProgressJobId: jest.fn(() => null)
         };
 
         const videosModuleMock = {
@@ -198,6 +201,29 @@ const createServerModule = ({
         const cronMock = { schedule: jest.fn() };
         const cronJobsMock = { initialize: jest.fn() };
         const watchStatusSchedulerMock = { scheduleTask: jest.fn(), subscribe: jest.fn() };
+        const logLevelSyncMock = { apply: jest.fn(), subscribe: jest.fn() };
+        const scheduledTaskRunsMock = {
+          markInterruptedRuns: jest.fn().mockResolvedValue(undefined),
+          getLatestRuns: jest.fn().mockResolvedValue({}),
+          getLatestFinishedRuns: jest.fn().mockResolvedValue({}),
+          getLatestRun: jest.fn().mockResolvedValue(null),
+          record: jest.fn().mockResolvedValue(undefined)
+        };
+        const scheduledTaskManagerMock = {
+          setRunRecorder: jest.fn(),
+          getStatus: jest.fn(() => []),
+          stopAll: jest.fn(),
+          updateTask: jest.fn()
+        };
+        const tabVideoCountsMock = {
+          setRunHistory: jest.fn(),
+          setDownloadActivityCheck: jest.fn(),
+          refreshAtStartup: jest.fn().mockResolvedValue({})
+        };
+        const autoDownloadSchedulerMock = { setRunTracker: jest.fn() };
+        const downloadRunTrackerMock = {
+          isActive: jest.fn(), getUnfinishedJobs: jest.fn(), handleAbandonedJob: jest.fn(), handleJobEnded: jest.fn(),
+        };
         const rateLimitMiddleware = jest.fn(() => (req, res, next) => next());
         // Mock ipKeyGenerator to normalize IPv6 addresses
         rateLimitMiddleware.ipKeyGenerator = jest.fn((ip) => ip);
@@ -255,7 +281,19 @@ const createServerModule = ({
         }));
         jest.doMock('../modules/cronJobs', () => cronJobsMock);
         jest.doMock('../modules/mediaServers/watchStatusScheduler', () => watchStatusSchedulerMock);
+        jest.doMock('../modules/scheduledTaskRuns', () => scheduledTaskRunsMock);
+        jest.doMock('../modules/scheduledTaskManager', () => scheduledTaskManagerMock);
         jest.doMock('../modules/channel/channelBackdropBackfill', () => ({ subscribe: jest.fn() }));
+        jest.doMock('../modules/channel/tabVideoCounts', () => tabVideoCountsMock);
+        jest.doMock('../modules/channel/autoDownloadScheduler', () => autoDownloadSchedulerMock);
+        jest.doMock('../modules/download/downloadRunTracker', () => downloadRunTrackerMock);
+        jest.doMock('../modules/logLevelSync', () => logLevelSyncMock);
+        jest.doMock('../modules/storageGuard', () => ({
+          initialize: jest.fn().mockResolvedValue({ paused: false, reasons: [] }),
+          refresh: jest.fn().mockResolvedValue({ paused: false, reasons: [] }),
+          isPausedError: jest.fn(() => false),
+          describe: jest.fn(() => ''),
+        }));
         jest.doMock('../modules/webSocketServer.js', () => jest.fn());
         jest.doMock('node-cron', () => cronMock);
         jest.doMock('express-rate-limit', () => Object.assign(rateLimitMiddleware, { ipKeyGenerator: rateLimitMiddleware.ipKeyGenerator }));
@@ -275,6 +313,13 @@ const createServerModule = ({
         state.plexModuleMock = plexModuleMock;
         state.rateLimitMiddleware = rateLimitMiddleware;
         state.watchStatusSchedulerMock = watchStatusSchedulerMock;
+        state.logLevelSyncMock = logLevelSyncMock;
+        state.scheduledTaskRunsMock = scheduledTaskRunsMock;
+        state.scheduledTaskManagerMock = scheduledTaskManagerMock;
+        state.tabVideoCountsMock = tabVideoCountsMock;
+        state.autoDownloadSchedulerMock = autoDownloadSchedulerMock;
+        state.downloadRunTrackerMock = downloadRunTrackerMock;
+        state.jobModuleMock = jobModuleMock;
         state.sessionUpdateMock = effectiveSession?.update || defaultSessionUpdate;
 
         const finalize = () => resolve(state);
@@ -325,13 +370,63 @@ describe('server initialization', () => {
     );
   });
 
+  test('applies the saved log level and follows config changes at startup', async () => {
+    const { logLevelSyncMock } = await createServerModule();
+
+    expect(logLevelSyncMock.apply).toHaveBeenCalledTimes(1);
+    expect(logLevelSyncMock.subscribe).toHaveBeenCalledTimes(1);
+  });
+
+  test('hands the run history to the channel video count refresh', async () => {
+    const { scheduledTaskRunsMock, tabVideoCountsMock } = await createServerModule();
+
+    expect(tabVideoCountsMock.setRunHistory).toHaveBeenCalledWith(scheduledTaskRunsMock);
+  });
+
+  test('tells the channel video count refresh when a download is running', async () => {
+    const { tabVideoCountsMock, jobModuleMock } = await createServerModule();
+    const isDownloadActive = tabVideoCountsMock.setDownloadActivityCheck.mock.calls[0][0];
+    jobModuleMock.getInProgressJobId.mockReturnValue('job-1');
+
+    expect(isDownloadActive()).toBe(true);
+  });
+
+  test('hands the download run tracker to the automatic downloads scheduler', async () => {
+    const { autoDownloadSchedulerMock, downloadRunTrackerMock } = await createServerModule();
+
+    expect(autoDownloadSchedulerMock.setRunTracker).toHaveBeenCalledWith(downloadRunTrackerMock);
+  });
+
+  test('reports queued jobs abandoned before they start to their download run', async () => {
+    const { jobModuleMock, downloadRunTrackerMock } = await createServerModule();
+    const listener = jobModuleMock.onJobAbandoned.mock.calls[0][0];
+    const event = { jobId: 'job-1', runId: 'run-1', reason: 'Job could not be started: boom' };
+
+    listener(event);
+
+    expect(downloadRunTrackerMock.handleAbandonedJob).toHaveBeenCalledWith(event);
+  });
+
+  test('tells the download run tracker whenever a job ends', async () => {
+    const { jobModuleMock, downloadRunTrackerMock } = await createServerModule();
+    const listener = jobModuleMock.onJobEnded.mock.calls[0][0];
+
+    listener({ jobId: 'job-1' });
+
+    expect(downloadRunTrackerMock.handleJobEnded).toHaveBeenCalledWith({ jobId: 'job-1' });
+  });
+
   test('initializes database and exposes health route', async () => {
-    const { app, dbMock, channelModuleMock, watchStatusSchedulerMock } = await createServerModule();
+    const {
+      app, dbMock, channelModuleMock, watchStatusSchedulerMock, scheduledTaskRunsMock, scheduledTaskManagerMock
+    } = await createServerModule();
 
     expect(dbMock.initializeDatabase).toHaveBeenCalledTimes(1);
-    expect(channelModuleMock.subscribe).toHaveBeenCalledTimes(1);
+    expect(channelModuleMock.subscribe).not.toHaveBeenCalled();
     expect(watchStatusSchedulerMock.scheduleTask).toHaveBeenCalledTimes(1);
     expect(watchStatusSchedulerMock.subscribe).toHaveBeenCalledTimes(1);
+    expect(scheduledTaskRunsMock.markInterruptedRuns).toHaveBeenCalledTimes(1);
+    expect(scheduledTaskManagerMock.setRunRecorder).toHaveBeenCalledWith(scheduledTaskRunsMock);
 
     const [healthHandler] = findRouteHandlers(app, 'get', '/api/health');
     const req = createMockRequest({ path: '/api/health' });
@@ -537,6 +632,7 @@ describe('server initialization', () => {
       protectedFilter: 'off',
       missingFilter: 'off',
       watchedFilter: 'off',
+      maxRating: null,
     });
 
     expect(res.statusCode).toBe(200);
@@ -634,6 +730,7 @@ describe('server initialization', () => {
       protectedFilter: 'off',
       missingFilter: 'off',
       watchedFilter: 'off',
+      maxRating: null,
     });
 
     expect(res.statusCode).toBe(200);

@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  Alert,
   Button,
   CardHeader,
   Grid,
@@ -30,6 +31,7 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
 }) => {
   const [tabValue, setTabValue] = useState(0);
   const [showChannelSettingsDialog, setShowChannelSettingsDialog] = useState(false);
+  const [channelDownloadError, setChannelDownloadError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   // Use config hook to get default resolution and video count
@@ -43,6 +45,7 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
 
   const handleTriggerChannelDownloads = async (settings: DownloadSettings | null) => {
     setShowChannelSettingsDialog(false);
+    setChannelDownloadError(null);
     downloadInitiatedRef.current = true;
 
     const body: any = {};
@@ -59,13 +62,12 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
       },
       body: JSON.stringify(body),
     });
-    // If the result is a 400 then we already have a running Channel Download
-    // job and we should display an alert
-    if (result.status === 400) {
-      alert('Channel Download already running');
-    } else {
-      navigate('/downloads/activity');
+    if (!result.ok) {
+      const data: { error?: string } = await result.json().catch(() => ({}));
+      setChannelDownloadError(data.error || 'Could not start channel downloads.');
+      return;
     }
+    navigate('/downloads/activity');
     setTimeout(fetchRunningJobs, 500);
   };
 
@@ -74,7 +76,6 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
     settings?: DownloadSettings | null,
     videoChannelMap?: Record<string, string>
   ) => {
-    downloadInitiatedRef.current = true;
     const strippedUrls = urls.map((url) =>
       url.includes('&') ? url.substring(0, url.indexOf('&')) : url
     );
@@ -88,15 +89,25 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
       body.videoChannelMap = videoChannelMap;
     }
 
-    await fetch('/triggerspecificdownloads', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-access-token': token || '',
-      },
-      body: JSON.stringify(body),
-    });
+    let result: Response;
+    try {
+      result = await fetch('/triggerspecificdownloads', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-access-token': token || '',
+        },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      throw new Error('Could not start downloads.');
+    }
+    if (!result.ok) {
+      const data: { error?: string } = await result.json().catch(() => ({}));
+      throw new Error(data.error || 'Could not start downloads.');
+    }
 
+    downloadInitiatedRef.current = true;
     setTimeout(fetchRunningJobs, 1000);
     navigate('/downloads/activity');
   }, [token, fetchRunningJobs, downloadInitiatedRef, navigate]);
@@ -137,6 +148,11 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
             fallbackMessage="An error occurred with channel downloads. Please refresh the page and try again."
             onReset={() => setTabValue(1)}
           >
+            {channelDownloadError && (
+              <Alert severity="warning" onClose={() => setChannelDownloadError(null)} className="mb-2">
+                {channelDownloadError}
+              </Alert>
+            )}
             <div
               style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 16, marginTop: 24 }}
             >

@@ -10,12 +10,43 @@ const channelVideoQuery = require('./channelVideoQuery');
 const channelVideoFetcher = require('./channelVideoFetcher');
 const fetchRegistry = require('./fetchRegistry');
 const tabState = require('./tabState');
+const ratingMapper = require('../ratingMapper');
+const archiveModule = require('../archiveModule');
 
 // Maximum number of videos to load when user clicks "Load More"
 // Limit set here because some channels have tens or hundreds of thousands of videos...
 // which effectively is not "loadable", so we had to set some reasonable limit.
 // Unfortunately, yt-dlp ALWAYS starts a fetch with the newest video, so there is no way to "page" through
 const MAX_LOAD_MORE_VIDEOS = 5000;
+const NEWLINE_BYTE = 0x0a;
+
+/**
+ * Parse yt-dlp's --dump-json output: one JSON document per line.
+ * @param {string} content - Raw stdout
+ * @returns {Array<Object>} - Parsed entries
+ */
+function parseEntryLines(content) {
+  return content
+    .split('\n')
+    .filter((line) => line.trim())
+    .map((line) => JSON.parse(line));
+}
+
+/**
+ * Rebuild the channel URL a single-JSON dump reports as uploader_url (the
+ * handle URL, else the /channel/ URL) from the playlist_* fields that
+ * streamed entries carry instead, the same way yt-dlp builds it.
+ * @param {Array<Object>} entries - Streamed tab entries
+ * @returns {string|null} - Channel URL, or null when no entry names the owner
+ */
+function channelUrlFromEntries(entries) {
+  const entry = entries.find((e) => e && (e.playlist_uploader_id || e.playlist_channel_id));
+  if (!entry) return null;
+  if (entry.playlist_uploader_id) {
+    return `https://www.youtube.com/${entry.playlist_uploader_id}`;
+  }
+  return `https://www.youtube.com/channel/${entry.playlist_channel_id}`;
+}
 
 class ChannelVideosService {
   /**
@@ -38,7 +69,7 @@ class ChannelVideosService {
     const lastFetched = channel ? tabState.getLastFetchedForTab(channel, mediaType) : null;
 
     return {
-      videos: videos,
+      videos: this.applyChannelDefaultRating(this.applyArchiveFlag(videos), channel),
       dataSource: dataSource,
       lastFetched: lastFetched,
       totalCount: stats ? stats.totalCount : videos.length,
@@ -46,6 +77,40 @@ class ChannelVideosService {
       autoDownloadsEnabled: autoDownloadsEnabled,
       availableTabs: availableTabs,
     };
+  }
+
+  /**
+   * Flag videos yt-dlp would skip as already downloaded although no Videos
+   * row exists, so the download dialog can offer a re-download. Ignored videos
+   * are never flagged: ignoring writes the archive entry on purpose.
+   * @param {Array} videos - Enriched channel videos
+   * @returns {Array} - Videos with inArchive set
+   */
+  applyArchiveFlag(videos) {
+    const archiveOnlyIds = archiveModule.filterArchivedVideoIds(
+      videos.filter((video) => !video.added && !video.ignored).map((video) => video.youtube_id)
+    );
+    return videos.map((video) => ({ ...video, inArchive: archiveOnlyIds.has(video.youtube_id) }));
+  }
+
+  /**
+   * Show the rating a download would receive on videos that are not downloaded.
+   * yt-dlp's flat channel listings carry no rating metadata, so for these
+   * videos that is the channel's default rating, resolved at read time so a
+   * changed or cleared default shows up immediately. Downloaded videos keep
+   * the rating recorded on their Videos row.
+   * @param {Array} videos - Enriched channel videos
+   * @param {Object|null} channel - Channel database record
+   * @returns {Array} - Videos with normalized_rating/rating_source filled where applicable
+   */
+  applyChannelDefaultRating(videos, channel) {
+    const { normalized_rating: rating, rating_source: source } =
+      ratingMapper.determineEffectiveRating({}, channel ? channel.default_rating : null);
+    if (!rating) return videos;
+
+    return videos.map((video) => (video.added
+      ? video
+      : { ...video, normalized_rating: rating, rating_source: source }));
   }
 
   /**
@@ -66,7 +131,7 @@ class ChannelVideosService {
    * @param {string|null} dateTo - Filter videos to this date (ISO string, default null)
    * @returns {Promise<Object>} - Response object with videos and metadata
    */
-  async getChannelVideos(channelId, page = 1, pageSize = 50, downloadedFilter = 'off', searchQuery = '', sortBy = 'date', sortOrder = 'desc', tabType = TAB_TYPES.VIDEOS, minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = 'off', missingFilter = 'off', ignoredFilter = 'off', watchedFilter = 'off') {
+  async getChannelVideos(channelId, page = 1, pageSize = 50, downloadedFilter = 'off', searchQuery = '', sortBy = 'date', sortOrder = 'desc', tabType = TAB_TYPES.VIDEOS, minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = 'off', missingFilter = 'off', ignoredFilter = 'off', watchedFilter = 'off', maxRating = null) {
     const channel = await Channel.findOne({
       where: { channel_id: channelId },
     });
@@ -78,6 +143,7 @@ class ChannelVideosService {
     // Convert tabType to mediaType for database filtering
     const mediaType = MEDIA_TAB_TYPE_MAP[tabType] || 'video';
     const autoDownloadsEnabled = channel.auto_download_enabled_tabs.split(',').includes(mediaType);
+    const ratingFilter = maxRating ? { maxRating, channelDefaultRating: channel.default_rating } : null;
 
     // Check if the requested tab exists in available_tabs
     // If available_tabs is populated and the requested tab doesn't exist, don't try to fetch from YouTube
@@ -132,7 +198,7 @@ class ChannelVideosService {
 
       // Now fetch the requested page of videos with file checking enabled
       const offset = (page - 1) * pageSize;
-      const paginatedVideos = await channelVideoQuery.fetchNewestVideosFromDb(channelId, pageSize, offset, downloadedFilter, searchQuery, sortBy, sortOrder, true, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter);
+      const paginatedVideos = await channelVideoQuery.fetchNewestVideosFromDb(channelId, pageSize, offset, downloadedFilter, searchQuery, sortBy, sortOrder, true, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, ratingFilter);
 
       // Check if videos still exist on YouTube and mark as removed if they don't
       const videoValidationModule = require('../videoValidationModule');
@@ -202,7 +268,7 @@ class ChannelVideosService {
       }
 
       // Get stats for the response
-      const stats = await channelVideoQuery.getChannelVideoStats(channelId, downloadedFilter, searchQuery, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter);
+      const stats = await channelVideoQuery.getChannelVideoStats(channelId, downloadedFilter, searchQuery, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, ratingFilter);
 
       return {
         ...this.buildChannelVideosResponse(paginatedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType),
@@ -212,8 +278,8 @@ class ChannelVideosService {
     } catch (error) {
       logger.error({ err: error, channelId }, 'Error fetching channel videos');
       const offset = (page - 1) * pageSize;
-      const cachedVideos = await channelVideoQuery.fetchNewestVideosFromDb(channelId, pageSize, offset, downloadedFilter, searchQuery, sortBy, sortOrder, true, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter);
-      const stats = await channelVideoQuery.getChannelVideoStats(channelId, downloadedFilter, searchQuery, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter);
+      const cachedVideos = await channelVideoQuery.fetchNewestVideosFromDb(channelId, pageSize, offset, downloadedFilter, searchQuery, sortBy, sortOrder, true, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, ratingFilter);
+      const stats = await channelVideoQuery.getChannelVideoStats(channelId, downloadedFilter, searchQuery, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, ratingFilter);
       const response = this.buildChannelVideosResponse(cachedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType);
       // Only surface a user-visible error when we have nothing to show.
       // Silent recovery when cached results exist; the filter-aware empty
@@ -249,7 +315,8 @@ class ChannelVideosService {
     fetchRegistry.set(fetchKey, {
       startTime: new Date().toISOString(),
       type: 'fetchAll',
-      tabType: tabType
+      tabType: tabType,
+      progress: { itemsFetched: 0, stage: 'listing' }
     });
 
     try {
@@ -268,18 +335,28 @@ class ChannelVideosService {
         const canonicalUrl = `${channelIdentity.resolveChannelUrlFromId(channelId)}/${tabType}`;
         const YtdlpCommandBuilder = require('../download/ytdlpCommandBuilder');
         const result = await channelYtdlpExecutor.withTempFile('channel-all-videos', async (outputFilePath) => {
+          // Streamed entries (one JSON line each, printed as each page of the
+          // tab arrives) let the fetch-status endpoint report a running count.
           const args = YtdlpCommandBuilder.buildMetadataFetchArgs(canonicalUrl, {
             flatPlaylist: true,
+            streamEntries: true,
             extractorArgs: 'youtubetab:approximate_date',
             playlistEnd: MAX_LOAD_MORE_VIDEOS
           });
-          const content = await channelYtdlpExecutor.executeYtDlpCommand(args, outputFilePath);
+          let itemsFetched = 0;
+          const onStdoutData = (chunk) => {
+            for (const byte of chunk) {
+              if (byte === NEWLINE_BYTE) itemsFetched++;
+            }
+            fetchRegistry.update(fetchKey, { progress: { itemsFetched, stage: 'listing' } });
+          };
+          const content = await channelYtdlpExecutor.executeYtDlpCommand(args, outputFilePath, { onStdoutData });
 
-          const jsonOutput = JSON.parse(content);
-          const videos = videoEntryParser.extractVideosFromYtDlpResponse(jsonOutput, channel.default_rating);
-          const currentChannelUrl = jsonOutput.uploader_url || jsonOutput.channel_url || jsonOutput.url;
-          return { videos, currentChannelUrl };
+          const entries = parseEntryLines(content);
+          const videos = videoEntryParser.extractVideosFromYtDlpResponse({ entries }, channel.default_rating);
+          return { videos, currentChannelUrl: channelUrlFromEntries(entries) };
         });
+        fetchRegistry.update(fetchKey, { progress: { itemsFetched: result.videos.length, stage: 'saving' } });
 
         const fetchDuration = (Date.now() - startTime) / 1000;
         logger.info({

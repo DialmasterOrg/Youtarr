@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { MemoryRouter } from 'react-router-dom';
@@ -21,6 +21,14 @@ jest.mock('../NavHeader', () => ({
         toggle:{layoutPolicy.navPlacement}:{layoutPolicy.breakpoint}:{String(isCollapsed)}
       </button>
     ) : null;
+  },
+}));
+
+jest.mock('../DownloadPauseBanner', () => ({
+  __esModule: true,
+  default: function MockDownloadPauseBanner() {
+    const React = require('react');
+    return React.createElement('div', { 'data-testid': 'download-pause-banner' });
   },
 }));
 
@@ -98,6 +106,12 @@ describe('AppShell', () => {
     expect(screen.getByTestId('nav-sidebar')).toHaveTextContent('collapsed:true|topnav:false');
     expect(screen.getByText('Shell content')).toBeInTheDocument();
   }, 10000);
+
+  it('renders the download pause banner inside the content frame', () => {
+    renderShell('playful');
+
+    expect(within(getContentFrame()).getByTestId('download-pause-banner')).toBeInTheDocument();
+  });
 
   it('uses top-nav layout width rules for flat theme', async () => {
     renderShell('flat');

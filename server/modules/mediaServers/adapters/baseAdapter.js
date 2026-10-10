@@ -35,9 +35,14 @@ class BaseAdapter {
    * watch state (video libraries in v1), per server user. Returns
    *   { entries: Array<{ path, serverUserId, played, playCount, positionMs,
    *                      percentWatched, lastWatchedAt }>,
-   *     users: Array<{ id, name }> }
+   *     users: Array<{ id, name }>,
+   *     completeUserIds?: Array<string> }
    * where `users` lists the accounts the adapter observed (empty in
-   * single-user mode so stored names are never clobbered). Adapters accept an
+   * single-user mode so stored names are never clobbered), and
+   * `completeUserIds` names the accounts whose entries include every watched
+   * or in-progress item, so a stored watched/in-progress state missing from
+   * them has been cleared on the server (Jellyfin/Emby list only such
+   * items). Adapters accept an
    * opts object; `opts.since` is an incremental watermark only Plex uses (its
    * non-owner data comes from the server's play history). Throws
    * MediaServerUnavailableError when the server is unreachable.

@@ -50,6 +50,15 @@ describe('validateConfig', () => {
     expect(validateConfig(config)).toBeNull();
   });
 
+  test('passes when only a total size limit is configured', () => {
+    const config = createConfig({
+      autoRemovalEnabled: true,
+      autoRemovalUsageLimit: '500GB'
+    });
+
+    expect(validateConfig(config)).toBeNull();
+  });
+
   test('passes when only watched-based removal is enabled', () => {
     const config = createConfig({
       autoRemovalEnabled: true,
@@ -123,4 +132,11 @@ describe('validateConfig', () => {
     expect(() => validateConfig(config)).not.toThrow();
     expect(validateConfig(config)).toMatch(/Cannot save:/);
   });
+});
+
+
+test('an incomplete daily schedule blocks saving', () => {
+  expect(validateConfig(createConfig({ autoRemovalFrequency: '' }))).toBe(
+    'Cannot save: Automatic video cleanup requires a schedule'
+  );
 });

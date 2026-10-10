@@ -15,7 +15,7 @@ const parseFilterMode = (value) =>
  * @param {Object} deps.ratingMapper - Rating validation/normalization module
  * @returns {express.Router}
  */
-module.exports = function createChannelRoutes({ verifyToken, channelModule, archiveModule, channelDownloadAllModule, ratingMapper }) {
+module.exports = function createChannelRoutes({ verifyToken, channelModule, archiveModule, channelDownloadAllModule, ratingMapper, storageGuard }) {
   const router = express.Router();
   const logger = require('../logger');
   const channelSettingsModule = require('../modules/channelSettingsModule');
@@ -124,8 +124,32 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *                   add:
    *                     type: array
    *                     items:
-   *                       type: string
-   *                     description: Channel URLs to enable
+   *                       oneOf:
+   *                         - type: string
+   *                         - type: object
+   *                           properties:
+   *                             url:
+   *                               type: string
+   *                             channel_id:
+   *                               type: string
+   *                             settings:
+   *                               type: object
+   *                               description: Settings chosen in the Add Channel dialog, applied before the channel is enabled. Unknown keys are rejected.
+   *                               properties:
+   *                                 auto_download_enabled_tabs:
+   *                                   type: string
+   *                                   description: Comma-separated media types (video, short, livestream); empty turns auto-download off
+   *                                 video_quality:
+   *                                   type: string
+   *                                   nullable: true
+   *                                 audio_format:
+   *                                   type: string
+   *                                   nullable: true
+   *                                   enum: [video_mp3, mp3_only]
+   *                                 sub_folder:
+   *                                   type: string
+   *                                   nullable: true
+   *                     description: Channel URLs (or objects with url, channel_id, and settings) to enable
    *                   remove:
    *                     type: array
    *                     items:
@@ -135,7 +159,9 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *       200:
    *         description: Channels updated successfully
    *       400:
-   *         description: Invalid payload
+   *         description: Invalid payload, or invalid settings on an add item (no channel is changed)
+   *       409:
+   *         description: An add item changes the subfolder of a channel that has downloads in progress
    *       500:
    *         description: Failed to update channels
    */
@@ -159,7 +185,7 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
           });
         }
 
-        await channelModule.updateChannelsByDelta({ enableUrls, disableUrls });
+        await channelModule.updateChannelsByDelta({ enableUrls, disableUrls, channelSettingsModule });
         return res.json({ status: 'success' });
       }
 
@@ -168,6 +194,12 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
         message: 'Invalid payload for channel update'
       });
     } catch (error) {
+      if (error.code === 'INVALID_CHANNEL_SETTINGS') {
+        return res.status(400).json({ error: error.message });
+      }
+      if (error.message?.includes('Cannot change subfolder while downloads are in progress')) {
+        return res.status(409).json({ error: error.message });
+      }
       req.log.error({ err: error }, 'Failed to update channels');
       res.status(500).json({
         status: 'error',
@@ -366,6 +398,74 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
 
   /**
    * @swagger
+   * /api/channels/{channelId}/tab-stats:
+   *   get:
+   *     summary: Get per-tab download stats
+   *     description: >
+   *       For each visible tab, the number of public videos on YouTube (from the
+   *       tab's auto-generated playlist, refreshed first when older than 24 hours),
+   *       how many of them are downloaded (including videos deleted locally), how many
+   *       are ignored, how many are loaded in Youtarr, and the downloaded percentage.
+   *       Members-only videos are not counted.
+   *     tags: [Channels]
+   *     parameters:
+   *       - in: path
+   *         name: channelId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: YouTube channel ID
+   *     responses:
+   *       200:
+   *         description: Tab stats
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 channelId:
+   *                   type: string
+   *                 tabs:
+   *                   type: object
+   *                   additionalProperties:
+   *                     type: object
+   *                     properties:
+   *                       total:
+   *                         type: integer
+   *                         nullable: true
+   *                       fetchedAt:
+   *                         type: string
+   *                         nullable: true
+   *                       downloaded:
+   *                         type: integer
+   *                       ignored:
+   *                         type: integer
+   *                       loaded:
+   *                         type: integer
+   *                       percent:
+   *                         type: integer
+   *                         nullable: true
+   *       404:
+   *         description: Channel not found
+   *       500:
+   *         description: Failed to get channel tab stats
+   */
+  router.get('/api/channels/:channelId/tab-stats', verifyToken, async (req, res) => {
+    const { channelId } = req.params;
+    try {
+      const result = await channelModule.getChannelTabStats(channelId);
+      if (!result) {
+        return res.status(404).json({ error: 'Channel not found' });
+      }
+      return res.status(200).json(result);
+    } catch (error) {
+      req.log.error({ err: error, channelId }, 'Failed to get channel tab stats');
+      return res.status(500).json({ error: 'Failed to get channel tab stats' });
+    }
+  });
+
+  /**
+   * @swagger
    * /api/channels/{channelId}/tabs/{tabType}/auto-download:
    *   patch:
    *     summary: Update tab auto-download setting
@@ -554,6 +654,9 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *                 type: string
    *               title_filter_regex:
    *                 type: string
+   *               additional_tags:
+   *                 type: string
+   *                 description: Add additional and custom tags to newly downloaded videos from the channel. It is text limited to 1000 characters. The tags are separated by a | character, and is restricted to alphanumeric characters, spaces, dashes, underscores, and (of course) | characters.
    *               m3u_enabled:
    *                 type: boolean
    *                 description: Generate a .m3u playlist file in the channel folder
@@ -782,9 +885,17 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *           enum: [off, only, exclude]
    *           default: off
    *         description: Tri-state filter on watched status (per the configured watched rule). `only` keeps watched videos, `exclude` hides them.
+   *       - in: query
+   *         name: maxRating
+   *         schema:
+   *           type: string
+   *           enum: [G, PG, PG-13, R, NC-17, TV-Y, TV-Y7, TV-G, TV-PG, TV-14, TV-MA]
+   *         description: Hide videos rated above this rating. Unrated videos are always included. A video not yet downloaded is judged by the channel's default rating, if one is set.
    *     responses:
    *       200:
    *         description: List of channel videos
+   *       400:
+   *         description: Invalid maxRating
    */
   router.get('/getchannelvideos/:channelId', verifyToken, async (req, res) => {
     req.log.info({ channelId: req.params.channelId }, 'Getting channel videos');
@@ -807,7 +918,11 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
     const missingFilter = parseFilterMode(req.query.missingFilter);
     const ignoredFilter = parseFilterMode(req.query.ignoredFilter);
     const watchedFilter = parseFilterMode(req.query.watchedFilter);
-    const result = await channelModule.getChannelVideos(channelId, page, pageSize, downloadedFilter, searchQuery, sortBy, sortOrder, tabType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter);
+    const maxRating = ratingMapper.parseMaxRatingParam(req.query.maxRating);
+    if (!maxRating.valid) {
+      return res.status(400).json({ error: 'Invalid maxRating' });
+    }
+    const result = await channelModule.getChannelVideos(channelId, page, pageSize, downloadedFilter, searchQuery, sortBy, sortOrder, tabType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, maxRating.value);
 
     if (Array.isArray(result)) {
       res.status(200).json({ videos: result });
@@ -923,6 +1038,16 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *                   type: string
    *                 tabType:
    *                   type: string
+   *                 progress:
+   *                   type: object
+   *                   description: Load More progress, present only on a tab-specific check of a Load More fetch
+   *                   properties:
+   *                     itemsFetched:
+   *                       type: integer
+   *                       description: Entries read from the tab so far (saving stage - entries read in total)
+   *                     stage:
+   *                       type: string
+   *                       enum: [listing, saving]
    */
   router.get('/api/channels/:channelId/fetch-status', verifyToken, async (req, res) => {
     const { channelId } = req.params;
@@ -1059,6 +1184,16 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *         description: Invalid tabType or overrideSettings
    *       404:
    *         description: Channel not found
+   *       409:
+   *         description: Downloads are paused because a storage limit was reached (Settings > Storage Limits); the error message gives the reason
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 error:
+   *                   type: string
+   *                   example: 'Downloads are paused: downloaded videos use 512.0 GB, over the 500 GB limit'
    *       500:
    *         description: Failed to start download
    */
@@ -1084,6 +1219,9 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
     } catch (error) {
       if (error.message === 'CHANNEL_NOT_FOUND') {
         return res.status(404).json({ error: 'Channel not found' });
+      }
+      if (storageGuard.isPausedError(error)) {
+        return res.status(409).json({ error: error.message });
       }
       req.log.error({ err: error, channelId, tabType }, 'Failed to start channel download-all');
       res.status(500).json({ error: 'Failed to start channel download-all' });

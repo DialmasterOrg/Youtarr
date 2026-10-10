@@ -1,3 +1,5 @@
+import { ScheduleSummary } from '../Configuration/sections/components/ScheduleSummary';
+import { ConfigState } from '../Configuration/types';
 import React from 'react';
 import { Alert, Button, CircularProgress, Typography } from '../ui';
 import { ConfigurationCard } from '../Configuration/common/ConfigurationCard';
@@ -6,9 +8,10 @@ import { formatDateTime } from '../../utils/formatters';
 
 interface MaintenanceSectionProps {
   token: string | null;
+  config: ConfigState;
 }
 
-export function MaintenanceSection({ token }: MaintenanceSectionProps) {
+export function MaintenanceSection({ token, config }: MaintenanceSectionProps) {
   const { running, lastRun, loading, error, triggerRescan } = useRescanStatus(token);
   const persistentError = !running && lastRun?.status === 'error' ? lastRun.errorMessage : null;
   const transientError = error && error !== persistentError ? error : null;
@@ -47,6 +50,8 @@ export function MaintenanceSection({ token }: MaintenanceSectionProps) {
           example, converting mp4 to mkv. The rescan walks your Youtarr downloads folder
           and updates Youtarr&apos;s view of which files exist and where.
         </Typography>
+
+        <ScheduleSummary scheduleKey="videoRescanFrequency" value={config.videoRescanFrequency} />
 
         <div>
           <Button

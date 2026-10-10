@@ -1,5 +1,6 @@
 const express = require('express');
 const logger = require('../logger');
+const { sendRunBlocked } = require('./runNowResponse');
 
 /**
  * Maintenance routes.
@@ -10,7 +11,9 @@ const logger = require('../logger');
  *   name: Maintenance
  *   description: Filesystem reconciliation actions
  */
-function createMaintenanceRoutes({ verifyToken, videosModule, configModule }) {
+function createMaintenanceRoutes({
+  verifyToken, videosModule, configModule, scheduledTaskRuns, rescanRunSummary, scheduledTaskManager,
+}) {
   const router = express.Router();
 
   /**
@@ -23,13 +26,18 @@ function createMaintenanceRoutes({ verifyToken, videosModule, configModule }) {
    *       202:
    *         description: Rescan started
    *       409:
-   *         description: A rescan is already in progress
+   *         description: A rescan is already in progress, or the task cannot start (reason in the body)
+   *       503:
+   *         description: The task is not registered yet (server still starting or database unavailable)
    */
-  router.post('/api/maintenance/rescan-files', verifyToken, (req, res) => {
+  router.post('/api/maintenance/rescan-files', verifyToken, async (req, res) => {
     try {
-      const result = videosModule.tryStartBackfill({ trigger: 'manual' });
-      if (!result.started) {
-        return res.status(409).json({ error: 'Rescan already in progress' });
+      const outcome = await scheduledTaskManager.runNow('videoRescanFrequency', {
+        trigger: 'manual',
+        enforceCooldown: false,
+      });
+      if (!outcome.started) {
+        return sendRunBlocked(res, outcome, { running: 'Rescan already in progress' });
       }
       return res.status(202).json({ status: 'started', trigger: 'manual' });
     } catch (err) {
@@ -48,10 +56,14 @@ function createMaintenanceRoutes({ verifyToken, videosModule, configModule }) {
    *       200:
    *         description: Status object
    */
-  router.get('/api/maintenance/rescan-status', verifyToken, (req, res) => {
+  router.get('/api/maintenance/rescan-status', verifyToken, async (req, res) => {
     try {
       const running = videosModule.isBackfillRunning();
-      const lastRun = configModule.getConfig().rescanLastRun ?? null;
+      const run = await scheduledTaskRuns.getLatestRun(rescanRunSummary.TASK_KEY, { statuses: rescanRunSummary.LAST_RUN_STATUSES });
+      // Legacy fallback: releases before the run history stored the summary in config.json.
+      const lastRun = run
+        ? rescanRunSummary.fromRunRecord(run)
+        : (configModule.getConfig().rescanLastRun ?? null);
       return res.status(200).json({ running, lastRun });
     } catch (err) {
       logger.error({ err }, 'Failed to read rescan status');

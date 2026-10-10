@@ -18,21 +18,12 @@ import {
   Typography,
 } from '../../ui';
 import { ConfigurationCard } from '../common/ConfigurationCard';
-import { FREQUENCY_MAPPING } from '../constants';
-import { reverseFrequencyMapping } from '../helpers';
+import { ScheduleSummary } from './components/ScheduleSummary';
 import { ConfigState } from '../types';
 import { MEDIA_SERVER_LABELS } from '../../../utils/mediaServerLabels';
 import { formatDateTime } from '../../../utils/formatters';
 import { useMediaServerStatus } from '../../../hooks/useMediaServerStatus';
 import { useWatchStatusSync, WatchStatusSyncRun } from '../hooks/useWatchStatusSync';
-
-// Each sync tick does a full library listing on every connected server, so
-// sub-hourly schedules are excluded from this menu; "Sync Now" covers the
-// impatient case.
-const SUB_HOURLY_OPTIONS = new Set(['Every 15 minutes', 'Every 30 minutes']);
-const FREQUENCY_OPTIONS = Object.keys(FREQUENCY_MAPPING).filter(
-  (key) => !SUB_HOURLY_OPTIONS.has(key)
-);
 
 type ServerKey = 'plex' | 'jellyfin' | 'emby';
 
@@ -51,6 +42,11 @@ interface WatchStatusSectionProps {
   config: ConfigState;
   token: string | null;
   onConfigChange: (updates: Partial<ConfigState>) => void;
+}
+
+function describeChanges(changed: number): string {
+  if (changed === 0) return 'no changes';
+  return `${changed.toLocaleString('en-US')} ${changed === 1 ? 'video' : 'videos'} updated`;
 }
 
 function SyncRunSummary({ run }: { run: WatchStatusSyncRun }) {
@@ -81,7 +77,7 @@ function SyncRunSummary({ run }: { run: WatchStatusSyncRun }) {
           {MEDIA_SERVER_LABELS[server] || server}:{' '}
           {result.error
             ? `failed (${result.error})`
-            : `${result.updated} ${result.updated === 1 ? 'video' : 'videos'} updated`}
+            : describeChanges(result.changed ?? 0)}
         </Typography>
       ))}
     </Box>
@@ -105,22 +101,9 @@ export function WatchStatusSection({ config, token, onConfigChange }: WatchStatu
     onConfigChange({ watchStatusSyncEnabled: event.target.checked });
   };
 
-  const handleFrequencyChange = (event: SelectChangeEvent) => {
-    const mapped = FREQUENCY_MAPPING[String(event.target.value)];
-    if (mapped) onConfigChange({ watchStatusSyncFrequency: mapped });
-  };
-
   const handleRuleChange = (event: SelectChangeEvent) => {
     onConfigChange({ watchStatusWatchedRule: event.target.value as 'any' | 'primary' });
   };
-
-  const currentFrequency = reverseFrequencyMapping(config.watchStatusSyncFrequency);
-  // A saved value outside the curated list (e.g. a sub-hourly pick, or a
-  // hand-edited cron) still has to render in the Select, so surface it as an
-  // extra option instead of showing a blank.
-  const frequencyOptions = FREQUENCY_OPTIONS.includes(currentFrequency)
-    ? FREQUENCY_OPTIONS
-    : [currentFrequency, ...FREQUENCY_OPTIONS];
 
   return (
     <ConfigurationCard title="Watch Status Sync">
@@ -223,20 +206,7 @@ export function WatchStatusSection({ config, token, onConfigChange }: WatchStatu
         )}
 
         <Grid item xs={12} md={6}>
-          <InputLabel>Sync Frequency</InputLabel>
-          <Select
-            fullWidth
-            value={currentFrequency}
-            onChange={handleFrequencyChange}
-            disabled={!config.watchStatusSyncEnabled}
-          >
-            {frequencyOptions.map((key) => (
-              <MenuItem key={key} value={key}>
-                {key}
-              </MenuItem>
-            ))}
-          </Select>
-          <FormHelperText>How often Youtarr checks your media servers.</FormHelperText>
+          <ScheduleSummary scheduleKey="watchStatusSyncFrequency" value={config.watchStatusSyncFrequency} />
         </Grid>
 
         <Grid item xs={12} md={6}>

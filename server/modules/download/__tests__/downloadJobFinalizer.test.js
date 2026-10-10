@@ -55,6 +55,10 @@ jest.mock('../failedVideoEnricher', () => ({
   enrichFailedVideos: jest.fn().mockResolvedValue()
 }));
 
+jest.mock('../tempSpaceProbe', () => ({
+  findOutOfSpaceFailures: jest.fn().mockResolvedValue(new Set())
+}));
+
 const jobModule = require('../../jobModule');
 const configModule = require('../../configModule');
 const failureAdvisor = require('../failureAdvisor');
@@ -65,6 +69,7 @@ const downloadResultProcessor = require('../downloadResultProcessor');
 const downloadCleanup = require('../downloadCleanup');
 const { runCompletionSideEffects } = require('../downloadCompletionEffects');
 const failedVideoEnricher = require('../failedVideoEnricher');
+const tempSpaceProbe = require('../tempSpaceProbe');
 const logger = require('../../../logger');
 const {
   finalizeDownloadJob,
@@ -142,6 +147,7 @@ describe('downloadJobFinalizer', () => {
     downloadRunTracker.isActive.mockReturnValue(false);
     downloadResultProcessor.resolveUrlsToProcess.mockReturnValue([]);
     downloadResultProcessor.partitionDownloadResults.mockReturnValue({ successfulVideos: [], failedVideosList: [] });
+    tempSpaceProbe.findOutOfSpaceFailures.mockResolvedValue(new Set());
   });
 
   describe('finalizeDownloadJob', () => {
@@ -154,6 +160,16 @@ describe('downloadJobFinalizer', () => {
       expect(fields.status).toBe('Complete');
       expect(fields.output).toBe('0 videos.');
       expect('endDate' in fields).toBe(false);
+    });
+
+    it('excludes the run\'s archive skips from the downloaded videos', async () => {
+      const archiveSkippedIds = new Set(['skip1234567']);
+
+      await finalizeDownloadJob(makeContext({ router: makeRouter({ archiveSkippedIds }) }));
+
+      expect(downloadResultProcessor.partitionDownloadResults).toHaveBeenCalledWith(
+        expect.anything(), expect.anything(), expect.anything(), archiveSkippedIds
+      );
     });
 
     it('marks the job Error with COOKIES_REQUIRED when bot detection was seen', async () => {
@@ -332,6 +348,40 @@ describe('downloadJobFinalizer', () => {
       expect(fields.data).toEqual(expect.objectContaining({ cumulativeSkipped: 0 }));
     });
 
+    it('removes the temp files of unfinished videos when yt-dlp exits non-zero', async () => {
+      await finalizeDownloadJob(makeContext({ code: 1 }));
+
+      expect(downloadCleanup.cleanupInProgressVideos).toHaveBeenCalledWith(mockJobId);
+    });
+
+    it('keeps the temp files when yt-dlp\'s output never closed, since a child may still be moving them', async () => {
+      await finalizeDownloadJob(makeContext({ code: 1, stdioClosed: false }));
+
+      expect(downloadCleanup.cleanupInProgressVideos).not.toHaveBeenCalled();
+    });
+
+    it('removes the temp files of unfinished videos when a bot check ended the run', async () => {
+      await finalizeDownloadJob(makeContext({ code: 1, router: makeRouter({ botDetected: true }) }));
+
+      expect(downloadCleanup.cleanupInProgressVideos).toHaveBeenCalledWith(mockJobId);
+    });
+
+    it('keeps the temp files after a bot check when yt-dlp\'s output never closed', async () => {
+      await finalizeDownloadJob(makeContext({
+        code: 1,
+        stdioClosed: false,
+        router: makeRouter({ botDetected: true })
+      }));
+
+      expect(downloadCleanup.cleanupInProgressVideos).not.toHaveBeenCalled();
+    });
+
+    it('leaves in-progress tracking alone after a clean exit', async () => {
+      await finalizeDownloadJob(makeContext());
+
+      expect(downloadCleanup.cleanupInProgressVideos).not.toHaveBeenCalled();
+    });
+
     it('broadcasts a final payload with finalSummary for standalone completions', async () => {
       await finalizeDownloadJob(makeContext());
 
@@ -345,6 +395,75 @@ describe('downloadJobFinalizer', () => {
         jobType: 'Manually Added Urls'
       }));
       expect(notificationModule.sendDownloadNotification).toHaveBeenCalled();
+    });
+
+    describe('job issues reported to the run', () => {
+      beforeEach(() => {
+        downloadRunTracker.isActive.mockReturnValue(true);
+      });
+
+      it('reports a user termination with its reason', async () => {
+        jobModule.getJob.mockReturnValue({
+          status: 'Terminated', notes: 'User requested termination', output: '0 videos completed before termination', data: {},
+        });
+
+        await finalizeDownloadJob(makeContext({ runId: 'run-1', wasManuallyTerminated: true, manualReason: 'User requested termination' }));
+
+        expect(downloadRunTracker.recordJobResult).toHaveBeenCalledWith('run-1', mockJobId, expect.objectContaining({
+          jobIssue: { status: 'Terminated', reason: 'User requested termination', byUser: true },
+        }));
+      });
+
+      it('reports a job that ended in an error with its output', async () => {
+        jobModule.getJob.mockReturnValue({ status: 'Error', output: 'Bot detection encountered.', data: {} });
+
+        await finalizeDownloadJob(makeContext({ runId: 'run-1' }));
+
+        expect(downloadRunTracker.recordJobResult).toHaveBeenCalledWith('run-1', mockJobId, expect.objectContaining({
+          jobIssue: { status: 'Error', reason: 'Bot detection encountered.', byUser: false },
+        }));
+      });
+
+      describe('failures handed to an automatic retry', () => {
+        const failure = (youtubeId, error = 'unable to download video data: HTTP Error 403: Forbidden') => ({
+          youtubeId, title: 'Failing Video', channel: 'Some Channel', error, url: null,
+        });
+
+        const endWith = (failures) => {
+          downloadResultProcessor.partitionDownloadResults.mockReturnValue({ successfulVideos: [], failedVideosList: failures });
+          jobModule.getJob.mockReturnValue({ status: 'Error', output: '0 videos. Error: YouTube returned HTTP 403 (Forbidden)', data: {} });
+        };
+
+        it('reports no issue when every failed video went to the retry', async () => {
+          endWith([failure('vid403aaaa1')]);
+
+          await finalizeDownloadJob(makeContext({ runId: 'run-1', code: 1, enqueueAutoRetry: jest.fn().mockResolvedValue() }));
+
+          const [, , summary] = downloadRunTracker.recordJobResult.mock.calls[0];
+          expect(summary).toMatchObject({ totalFailed: 0 });
+          expect(summary).not.toHaveProperty('jobIssue');
+        });
+
+        it('still reports the error when a failed video was not retried', async () => {
+          endWith([failure('vid403aaaa1'), failure('vidprivate1', 'Private video. Sign in if you have been granted access')]);
+
+          await finalizeDownloadJob(makeContext({ runId: 'run-1', code: 1, enqueueAutoRetry: jest.fn().mockResolvedValue() }));
+
+          expect(downloadRunTracker.recordJobResult).toHaveBeenCalledWith('run-1', mockJobId, expect.objectContaining({
+            totalFailed: 1,
+            jobIssue: expect.objectContaining({ status: 'Error' }),
+          }));
+        });
+      });
+
+      it('reports no issue for a job that completed', async () => {
+        jobModule.getJob.mockReturnValue({ status: 'Complete', output: '2 videos.', data: {} });
+
+        await finalizeDownloadJob(makeContext({ runId: 'run-1' }));
+
+        const [, , summary] = downloadRunTracker.recordJobResult.mock.calls[0];
+        expect(summary).not.toHaveProperty('jobIssue');
+      });
     });
 
     it('reports to the run tracker instead of summary/notification when the run is active', async () => {
@@ -728,6 +847,41 @@ describe('downloadJobFinalizer', () => {
         }));
 
         expect(notificationModule.sendDownloadNotification).not.toHaveBeenCalled();
+      });
+
+      describe('out of temp space', () => {
+        const mergeFailure = () => make403Failure({ youtubeId: 'bigvideo001', error: 'Conversion failed!' });
+
+        it('diagnoses a failed merge the probe measured as out of space', async () => {
+          const failure = mergeFailure();
+          primeFailure(failure);
+          tempSpaceProbe.findOutOfSpaceFailures.mockResolvedValue(new Set(['bigvideo001']));
+
+          await finalizeDownloadJob(makeContext({ code: 1 }));
+
+          expect(failure.diagnosisKey).toBe('temp-out-of-space');
+        });
+
+        it('gives the probe the failed videos and the files this run downloaded', async () => {
+          const failure = mergeFailure();
+          primeFailure(failure);
+          const partialDestinations = new Set(['/tmp/youtarr-downloads/Chan/Big [bigvideo001].f298.mp4']);
+
+          await finalizeDownloadJob(makeContext({ code: 1, router: makeRouter({ partialDestinations }) }));
+
+          expect(tempSpaceProbe.findOutOfSpaceFailures).toHaveBeenCalledWith([failure], partialDestinations);
+        });
+
+        it('measures before the failed video\'s temp files are removed', async () => {
+          primeFailure(mergeFailure());
+
+          await finalizeDownloadJob(makeContext({ code: 1 }));
+
+          const [measuredAt] = tempSpaceProbe.findOutOfSpaceFailures.mock.invocationCallOrder;
+          const [partialCleanedAt] = downloadCleanup.cleanupPartialFiles.mock.invocationCallOrder;
+          const [videoCleanedAt] = downloadCleanup.cleanupInProgressVideos.mock.invocationCallOrder;
+          expect(measuredAt).toBeLessThan(Math.min(partialCleanedAt, videoCleanedAt));
+        });
       });
 
       it('finalizes normally when the advisor throws', async () => {

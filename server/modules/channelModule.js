@@ -8,6 +8,7 @@ const channelProvisioning = require('./channel/channelProvisioning');
 const channelCatalog = require('./channel/channelCatalog');
 const autoDownloadScheduler = require('./channel/autoDownloadScheduler');
 const channelVideosService = require('./channel/channelVideosService');
+const tabDownloadStats = require('./channel/tabDownloadStats');
 
 class ChannelModule {
   constructor() {
@@ -153,6 +154,16 @@ class ChannelModule {
   }
 
   /**
+   * Per-tab download stats for the channel page, refreshing YouTube totals
+   * older than 24 hours first.
+   * @param {string} channelId
+   * @returns {Promise<{ channelId: string, tabs: Object } | null>}
+   */
+  async getChannelTabStats(channelId) {
+    return tabDownloadStats.getChannelTabStats(channelId);
+  }
+
+  /**
    * Update the auto download setting for a specific tab type for a channel
    * @param {string} channelId - Channel ID
    * @param {string} tabType - Tab type ('videos', 'shorts', or 'streams')
@@ -190,8 +201,8 @@ class ChannelModule {
    * @param {string|null} dateTo - Filter videos to this date (ISO string, default null)
    * @returns {Promise<Object>} - Response object with videos and metadata
    */
-  async getChannelVideos(channelId, page = 1, pageSize = 50, downloadedFilter = 'off', searchQuery = '', sortBy = 'date', sortOrder = 'desc', tabType = TAB_TYPES.VIDEOS, minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = 'off', missingFilter = 'off', ignoredFilter = 'off', watchedFilter = 'off') {
-    return channelVideosService.getChannelVideos(channelId, page, pageSize, downloadedFilter, searchQuery, sortBy, sortOrder, tabType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter);
+  async getChannelVideos(channelId, page = 1, pageSize = 50, downloadedFilter = 'off', searchQuery = '', sortBy = 'date', sortOrder = 'desc', tabType = TAB_TYPES.VIDEOS, minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = 'off', missingFilter = 'off', ignoredFilter = 'off', watchedFilter = 'off', maxRating = null) {
+    return channelVideosService.getChannelVideos(channelId, page, pageSize, downloadedFilter, searchQuery, sortBy, sortOrder, tabType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, maxRating);
   }
 
   /**

@@ -13,7 +13,11 @@ jest.mock('../../mediaServers/watchStatusQueries', () => ({
 jest.mock('../../configModule', () => mockFactories.mockConfigModule());
 jest.mock('../../fileCheckModule', () => mockFactories.mockFileCheckModule());
 jest.mock('../../youtubeApi', () => mockFactories.mockYoutubeApi());
+jest.mock('../../archiveModule', () => ({ filterArchivedVideoIds: jest.fn() }));
 jest.mock('../../../db', () => mockFactories.mockDb());
+
+// yt-dlp --dump-json output: one JSON document per line.
+const toEntryLines = (entries) => entries.map((entry) => `${JSON.stringify(entry)}\n`).join('');
 
 describe('channelVideosService', () => {
   let channelVideosService;
@@ -21,6 +25,7 @@ describe('channelVideosService', () => {
   let ChannelVideo;
   let logger;
   let youtubeApi;
+  let archiveModule;
 
   const mockChannelData = {
     channel_id: 'UC123456',
@@ -55,6 +60,9 @@ describe('channelVideosService', () => {
     youtubeApi.isAvailable.mockReturnValue(false);
     youtubeApi.getApiKey.mockReturnValue(null);
 
+    archiveModule = require('../../archiveModule');
+    archiveModule.filterArchivedVideoIds.mockReturnValue(new Set());
+
     channelVideosService = require('../channelVideosService');
   });
 
@@ -66,7 +74,7 @@ describe('channelVideosService', () => {
       const result = channelVideosService.buildChannelVideosResponse(videos, channel, 'yt_dlp', null, false, 'video');
 
       expect(result).toEqual({
-        videos: videos,
+        videos: [{ ...mockVideoData, inArchive: false }],
         dataSource: 'yt_dlp',
         lastFetched: new Date('2024-01-01'),
         totalCount: videos.length,
@@ -87,6 +95,67 @@ describe('channelVideosService', () => {
         oldestVideoDate: null,
         autoDownloadsEnabled: false,
         availableTabs: []
+      });
+    });
+
+    describe('channel default rating', () => {
+      const ratedChannel = { ...mockChannelData, default_rating: 'TV-Y' };
+
+      test('applies the channel default to a video that is not downloaded', () => {
+        const result = channelVideosService.buildChannelVideosResponse([{ ...mockVideoData, added: false }], ratedChannel);
+
+        expect(result.videos[0]).toMatchObject({ normalized_rating: 'TV-Y', rating_source: 'Channel Default' });
+      });
+
+      test('keeps the recorded rating of a downloaded video', () => {
+        const downloaded = { ...mockVideoData, added: true, normalized_rating: 'PG' };
+
+        const result = channelVideosService.buildChannelVideosResponse([downloaded], ratedChannel);
+
+        expect(result.videos[0].normalized_rating).toBe('PG');
+      });
+
+      test('leaves videos unrated when the channel has no default', () => {
+        const result = channelVideosService.buildChannelVideosResponse([{ ...mockVideoData, added: false }], mockChannelData);
+
+        expect(result.videos[0].normalized_rating).toBeUndefined();
+      });
+
+      test('leaves videos unrated when the channel default is NR', () => {
+        const nrChannel = { ...mockChannelData, default_rating: 'NR' };
+
+        const result = channelVideosService.buildChannelVideosResponse([{ ...mockVideoData, added: false }], nrChannel);
+
+        expect(result.videos[0].normalized_rating).toBeUndefined();
+      });
+    });
+
+    describe('inArchive', () => {
+      // Every downloaded or ignored video is in the archive too, so the mock
+      // answers the way the real lookup does: only for the ids it is asked about.
+      const archived = new Set(['orphan', 'ignored', 'downloaded']);
+      const inArchiveFor = (video) => {
+        archiveModule.filterArchivedVideoIds.mockImplementation(
+          (ids) => new Set(ids.filter((id) => archived.has(id)))
+        );
+        const result = channelVideosService.buildChannelVideosResponse([video], mockChannelData);
+        return result.videos[0].inArchive;
+      };
+
+      test('flags a never-downloaded video that is listed in the archive', () => {
+        expect(inArchiveFor({ ...mockVideoData, youtube_id: 'orphan', added: false })).toBe(true);
+      });
+
+      test('does not flag a never-downloaded video that is not in the archive', () => {
+        expect(inArchiveFor({ ...mockVideoData, youtube_id: 'fresh', added: false })).toBe(false);
+      });
+
+      test('does not flag an ignored video, whose archive entry is deliberate', () => {
+        expect(inArchiveFor({ ...mockVideoData, youtube_id: 'ignored', added: false, ignored: true })).toBe(false);
+      });
+
+      test('does not flag a video that has a database record', () => {
+        expect(inArchiveFor({ ...mockVideoData, youtube_id: 'downloaded', added: true, removed: true })).toBe(false);
       });
     });
 
@@ -191,6 +260,58 @@ describe('channelVideosService', () => {
 
       expect(result.videos.map((v) => v.youtube_id)).toEqual(['video1']);
       expect(result.totalCount).toBe(1);
+    });
+
+    describe('maxRating', () => {
+      const setupRatedChannel = (defaultRating) => {
+        const Video = require('../../../models/video');
+        const fileCheckModule = require('../../fileCheckModule');
+        fileCheckModule.checkVideoFiles.mockImplementation(async (videos) => ({ videos, updates: [] }));
+        Channel.findOne.mockResolvedValue({
+          ...mockChannelData,
+          lastFetchedByTab: JSON.stringify({ video: new Date().toISOString() }),
+          auto_download_enabled_tabs: 'video',
+          default_rating: defaultRating,
+        });
+        // A fresh check timestamp skips the live YouTube existence check.
+        const checkedAt = new Date();
+        ChannelVideo.findAll.mockResolvedValue([
+          { youtube_id: 'downloaded', publishedAt: new Date().toISOString(), youtube_removed_checked_at: checkedAt, toJSON() { return this; } },
+          { youtube_id: 'notDownloaded', publishedAt: new Date().toISOString(), youtube_removed_checked_at: checkedAt, toJSON() { return this; } },
+        ]);
+        Video.findAll = jest.fn().mockResolvedValue([
+          { id: 1, youtubeId: 'downloaded', removed: false, fileSize: 1000, filePath: '/path', normalized_rating: 'PG' },
+        ]);
+      };
+
+      const getWithMaxRating = (maxRating) => channelVideosService.getChannelVideos(
+        'UC123', 1, 50, 'off', '', 'date', 'desc', 'videos',
+        null, null, null, null, 'off', 'off', 'off', 'off', maxRating
+      );
+
+      test('hides videos whose channel default rating is above the maximum', async () => {
+        setupRatedChannel('TV-MA');
+
+        const result = await getWithMaxRating('PG');
+
+        expect(result.videos.map((v) => v.youtube_id)).toEqual(['downloaded']);
+      });
+
+      test('counts only videos within the maximum', async () => {
+        setupRatedChannel('TV-MA');
+
+        const result = await getWithMaxRating('PG');
+
+        expect(result.totalCount).toBe(1);
+      });
+
+      test('keeps unrated videos when the channel has no default rating', async () => {
+        setupRatedChannel(null);
+
+        const result = await getWithMaxRating('PG');
+
+        expect(result.totalCount).toBe(2);
+      });
     });
 
     test('should skip auto-refresh when fetch already in progress', async () => {
@@ -360,13 +481,10 @@ describe('channelVideosService', () => {
 
       // Mock executeYtDlpCommand to return video data
       const channelYtdlpExecutor = require('../channelYtdlpExecutor');
-      jest.spyOn(channelYtdlpExecutor, 'executeYtDlpCommand').mockResolvedValue(JSON.stringify({
-        entries: [
-          { id: 'video1', title: 'Video 1', timestamp: 1704067200 },
-          { id: 'video2', title: 'Video 2', timestamp: 1704067300 }
-        ],
-        uploader_url: 'https://youtube.com/@test'
-      }));
+      jest.spyOn(channelYtdlpExecutor, 'executeYtDlpCommand').mockResolvedValue(toEntryLines([
+        { id: 'video1', title: 'Video 1', timestamp: 1704067200, playlist_uploader_id: '@test' },
+        { id: 'video2', title: 'Video 2', timestamp: 1704067300, playlist_uploader_id: '@test' }
+      ]));
 
       ChannelVideo.findOrCreate.mockResolvedValue([{}, true]);
       ChannelVideo.findAll.mockResolvedValue([
@@ -434,10 +552,9 @@ describe('channelVideosService', () => {
       Channel.findOne.mockResolvedValue(mockChannel);
 
       const channelYtdlpExecutor = require('../channelYtdlpExecutor');
-      jest.spyOn(channelYtdlpExecutor, 'executeYtDlpCommand').mockResolvedValue(JSON.stringify({
-        entries: [{ id: 'v1', title: 'V1', timestamp: 1704067200 }],
-        uploader_url: 'https://youtube.com/@test'
-      }));
+      jest.spyOn(channelYtdlpExecutor, 'executeYtDlpCommand').mockResolvedValue(toEntryLines([
+        { id: 'v1', title: 'V1', timestamp: 1704067200, playlist_uploader_id: '@test' }
+      ]));
 
       ChannelVideo.findOrCreate.mockResolvedValue([{}, true]);
       ChannelVideo.findAll.mockResolvedValue([
@@ -465,10 +582,9 @@ describe('channelVideosService', () => {
       Channel.findOne.mockResolvedValue(mockChannel);
 
       const channelYtdlpExecutor = require('../channelYtdlpExecutor');
-      jest.spyOn(channelYtdlpExecutor, 'executeYtDlpCommand').mockResolvedValue(JSON.stringify({
-        entries: [{ id: 'v1', title: 'V1', timestamp: 1704067200 }],
-        uploader_url: 'https://youtube.com/@test'
-      }));
+      jest.spyOn(channelYtdlpExecutor, 'executeYtDlpCommand').mockResolvedValue(toEntryLines([
+        { id: 'v1', title: 'V1', timestamp: 1704067200, playlist_uploader_id: '@test' }
+      ]));
 
       ChannelVideo.findOrCreate.mockResolvedValue([{}, true]);
       ChannelVideo.findAll.mockResolvedValue([
@@ -491,10 +607,9 @@ describe('channelVideosService', () => {
       youtubeApi.isAvailable.mockReturnValue(true);
       youtubeApi.getApiKey.mockReturnValue('key');
       const channelYtdlpExecutor = require('../channelYtdlpExecutor');
-      jest.spyOn(channelYtdlpExecutor, 'executeYtDlpCommand').mockResolvedValue(JSON.stringify({
-        entries: [{ id: 'yt-v1', title: 'yt-dlp V1', timestamp: 1714521600 }],
-        uploader_url: 'https://www.youtube.com/@test',
-      }));
+      jest.spyOn(channelYtdlpExecutor, 'executeYtDlpCommand').mockResolvedValue(toEntryLines([
+        { id: 'yt-v1', title: 'yt-dlp V1', timestamp: 1714521600, playlist_uploader_id: '@test' }
+      ]));
 
       ChannelVideo.findOrCreate.mockResolvedValue([{}, true]);
       ChannelVideo.findAll.mockResolvedValue([
@@ -512,7 +627,7 @@ describe('channelVideosService', () => {
 
     test('should update channel URL if changed', async () => {
       const Video = require('../../../models/video');
-      const newUrl = 'https://youtube.com/@newhandle';
+      const newUrl = 'https://www.youtube.com/@newhandle';
       const mockChannel = {
         ...mockChannelData,
         url: 'https://youtube.com/@oldhandle',
@@ -523,10 +638,9 @@ describe('channelVideosService', () => {
       Channel.findOne.mockResolvedValue(mockChannel);
 
       const channelYtdlpExecutor = require('../channelYtdlpExecutor');
-      jest.spyOn(channelYtdlpExecutor, 'executeYtDlpCommand').mockResolvedValue(JSON.stringify({
-        entries: [{ id: 'video1', title: 'Video 1', timestamp: 1704067200 }],
-        uploader_url: newUrl
-      }));
+      jest.spyOn(channelYtdlpExecutor, 'executeYtDlpCommand').mockResolvedValue(toEntryLines([
+        { id: 'video1', title: 'Video 1', timestamp: 1704067200, playlist_uploader_id: '@newhandle' }
+      ]));
 
       ChannelVideo.findOrCreate.mockResolvedValue([{}, true]);
       ChannelVideo.findAll.mockResolvedValue([
@@ -546,6 +660,94 @@ describe('channelVideosService', () => {
         }),
         'Channel URL updated'
       );
+    });
+  });
+
+  describe('fetchAllChannelVideos progress', () => {
+    let channelYtdlpExecutor;
+    let fetchRegistry;
+    let mockChannel;
+
+    beforeEach(() => {
+      const Video = require('../../../models/video');
+      mockChannel = { ...mockChannelData, save: jest.fn(), reload: jest.fn(), url: 'https://www.youtube.com/@test' };
+      Channel.findOne.mockResolvedValue(mockChannel);
+      ChannelVideo.findOrCreate.mockResolvedValue([{}, true]);
+      ChannelVideo.findAll.mockResolvedValue([]);
+      ChannelVideo.count.mockResolvedValue(0);
+      Video.findAll = jest.fn().mockResolvedValue([]);
+
+      channelYtdlpExecutor = require('../channelYtdlpExecutor');
+      fetchRegistry = require('../fetchRegistry');
+    });
+
+    const entry = (id) => ({ id, title: id, timestamp: 1704067200, playlist_uploader_id: '@test' });
+
+    test('reports the number of entries yt-dlp has printed so far', async () => {
+      let progressMidFetch;
+      jest.spyOn(channelYtdlpExecutor, 'executeYtDlpCommand').mockImplementation(async (args, file, { onStdoutData }) => {
+        onStdoutData(Buffer.from(toEntryLines([entry('v1'), entry('v2')])));
+        onStdoutData(Buffer.from(toEntryLines([entry('v3')])));
+        progressMidFetch = fetchRegistry.isFetchInProgress('UC123', 'videos').progress;
+        return toEntryLines([entry('v1'), entry('v2'), entry('v3')]);
+      });
+
+      await channelVideosService.fetchAllChannelVideos('UC123', 1, 50);
+
+      expect(progressMidFetch).toEqual({ itemsFetched: 3, stage: 'listing' });
+    });
+
+    test('reports zero entries before yt-dlp prints anything', async () => {
+      let progressAtStart;
+      jest.spyOn(channelYtdlpExecutor, 'executeYtDlpCommand').mockImplementation(async () => {
+        progressAtStart = fetchRegistry.isFetchInProgress('UC123', 'videos').progress;
+        return '';
+      });
+
+      await channelVideosService.fetchAllChannelVideos('UC123', 1, 50);
+
+      expect(progressAtStart).toEqual({ itemsFetched: 0, stage: 'listing' });
+    });
+
+    test('reports the saving stage while the listing is written to the database', async () => {
+      const channelVideoWriter = require('../channelVideoWriter');
+      let progressWhileSaving;
+      jest.spyOn(channelVideoWriter, 'insertVideosIntoDb').mockImplementation(async () => {
+        progressWhileSaving = fetchRegistry.isFetchInProgress('UC123', 'videos').progress;
+      });
+      jest.spyOn(channelYtdlpExecutor, 'executeYtDlpCommand').mockResolvedValue(toEntryLines([entry('v1'), entry('v2')]));
+
+      await channelVideosService.fetchAllChannelVideos('UC123', 1, 50);
+
+      expect(progressWhileSaving).toEqual({ itemsFetched: 2, stage: 'saving' });
+    });
+
+    test('asks yt-dlp to stream entries as each page arrives', async () => {
+      jest.spyOn(channelYtdlpExecutor, 'executeYtDlpCommand').mockResolvedValue('');
+
+      await channelVideosService.fetchAllChannelVideos('UC123', 1, 50);
+
+      const [args] = channelYtdlpExecutor.executeYtDlpCommand.mock.calls[0];
+      expect(args).toEqual(expect.arrayContaining(['--dump-json', '--lazy-playlist']));
+    });
+
+    test('falls back to the /channel/ URL for a channel without a handle', async () => {
+      jest.spyOn(channelYtdlpExecutor, 'executeYtDlpCommand').mockResolvedValue(toEntryLines([
+        { id: 'v1', title: 'V1', timestamp: 1704067200, playlist_uploader_id: null, playlist_channel_id: 'UC123' }
+      ]));
+
+      await channelVideosService.fetchAllChannelVideos('UC123', 1, 50);
+
+      expect(mockChannel.url).toBe('https://www.youtube.com/channel/UC123');
+    });
+
+    test('keeps the stored URL when the tab lists no videos', async () => {
+      jest.spyOn(channelYtdlpExecutor, 'executeYtDlpCommand').mockResolvedValue('');
+
+      const result = await channelVideosService.fetchAllChannelVideos('UC123', 1, 50);
+
+      expect(result.videosFound).toBe(0);
+      expect(mockChannel.url).toBe('https://www.youtube.com/@test');
     });
   });
 

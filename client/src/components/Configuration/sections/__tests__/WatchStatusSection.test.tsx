@@ -155,15 +155,32 @@ describe('WatchStatusSection', () => {
         startedAt: '2026-07-16T09:58:00Z',
         completedAt: '2026-07-16T10:00:00Z',
         servers: {
-          plex: { updated: 12 },
+          plex: { changed: 1200 },
           jellyfin: { error: 'server not reachable or not responding' },
         },
       },
     };
     renderWithProviders(<WatchStatusSection {...defaultProps} />);
     expect(screen.getByText(/last sync/i)).toBeInTheDocument();
-    expect(screen.getByText(/Plex: 12 videos updated/)).toBeInTheDocument();
+    expect(screen.getByText('Plex: 1,200 videos updated')).toBeInTheDocument();
     expect(screen.getByText(/Jellyfin: failed \(server not reachable or not responding\)/)).toBeInTheDocument();
+  });
+
+  test.each([
+    [0, 'Emby: no changes'],
+    [1, 'Emby: 1 video updated'],
+  ])('describes a server with %i changed videos', (changed, text) => {
+    watchStatusSyncReturn.syncState = {
+      running: false,
+      lastRun: {
+        trigger: 'manual',
+        startedAt: '2026-07-16T09:58:00Z',
+        completedAt: '2026-07-16T10:00:00Z',
+        servers: { emby: { changed } },
+      },
+    };
+    renderWithProviders(<WatchStatusSection {...defaultProps} />);
+    expect(screen.getByText(text)).toBeInTheDocument();
   });
 
   test('shows a skipped last run', () => {
@@ -180,34 +197,18 @@ describe('WatchStatusSection', () => {
     expect(screen.getByText(/skipped, no media servers configured/i)).toBeInTheDocument();
   });
 
-  test('shows the current frequency and reports the mapped cron when changed', async () => {
-    const user = userEvent.setup();
+  test('shows the schedule and links to its editor', () => {
     renderWithProviders(<WatchStatusSection {...defaultProps} />);
-
-    const selectButton = screen.getByRole('button', { name: /every 4 hours/i });
-    await user.click(selectButton);
-
-    const dailyOption = await screen.findByRole('option', { name: 'Daily' });
-    await user.click(dailyOption);
-
-    expect(defaultProps.onConfigChange).toHaveBeenCalledWith({ watchStatusSyncFrequency: '0 0 * * *' });
+    expect(screen.getByText(/Schedule: Every 4 hours/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Edit schedule' })).toHaveAttribute(
+      'href', '/settings/scheduling#watchStatusSyncFrequency'
+    );
   });
 
-  test('does not offer sub-hourly frequencies', async () => {
-    const user = userEvent.setup();
-    renderWithProviders(<WatchStatusSection {...defaultProps} />);
-
-    await user.click(screen.getByRole('button', { name: /every 4 hours/i }));
-    await screen.findByRole('option', { name: 'Daily' });
-
-    expect(screen.queryByRole('option', { name: 'Every 15 minutes' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: 'Every 30 minutes' })).not.toBeInTheDocument();
-  });
-
-  test('still renders a saved sub-hourly frequency as the current selection', () => {
+  test('still displays a saved sub-hourly schedule', () => {
     const config = { ...DEFAULT_CONFIG, watchStatusSyncFrequency: '*/15 * * * *' };
     renderWithProviders(<WatchStatusSection {...defaultProps} config={config} />);
-    expect(screen.getByRole('button', { name: /every 15 minutes/i })).toBeInTheDocument();
+    expect(screen.getByText(/Schedule: Every 15 minutes/)).toBeInTheDocument();
   });
 
   test('shows an all-users toggle per connected server and reports changes', async () => {

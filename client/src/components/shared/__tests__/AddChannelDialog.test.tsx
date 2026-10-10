@@ -32,6 +32,11 @@ describe('AddChannelDialog', () => {
     expect(screen.getByText(/add "alpha channel" to your channels\?/i)).toBeInTheDocument();
   });
 
+  test('tells the user they will choose download settings next', () => {
+    renderDialog();
+    expect(screen.getByText(/choose its download settings/i)).toBeInTheDocument();
+  });
+
   test('renders nothing when closed', () => {
     renderDialog({ open: false });
     expect(screen.queryByText(/add "alpha channel"/i)).not.toBeInTheDocument();

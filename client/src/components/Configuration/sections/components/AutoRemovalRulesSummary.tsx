@@ -13,6 +13,9 @@ const formatAgeThreshold = (threshold: string): string => {
 
 const formatDays = (value: string): string => `${value} day${value === '1' ? '' : 's'}`;
 
+// "500GB" -> "500 GB"
+const formatStorageSize = (value: string): string => value.replace(/^(\d+)(MB|GB|TB)$/, '$1 $2');
+
 interface AutoRemovalRulesSummaryProps {
   config: ConfigState;
 }
@@ -46,6 +49,12 @@ export const AutoRemovalRulesSummary: React.FC<AutoRemovalRulesSummaryProps> = (
     );
   }
 
+  if (config.autoRemovalUsageLimit) {
+    rules.push(
+      <>Downloaded videos total more than <strong>{formatStorageSize(config.autoRemovalUsageLimit)}</strong> (the oldest videos are deleted first until the total is back under it)</>
+    );
+  }
+
   if (rules.length === 0) {
     return null;
   }
@@ -53,7 +62,7 @@ export const AutoRemovalRulesSummary: React.FC<AutoRemovalRulesSummaryProps> = (
   return (
     <Alert severity="success" className="mt-2">
       <Typography variant="body2" className="font-medium mb-2">
-        Every night at 2:00 AM, a video is deleted if it matches {rules.length > 1 ? 'any of these rules' : 'this rule'}:
+        On each scheduled cleanup, a video is deleted if it matches {rules.length > 1 ? 'any of these rules' : 'this rule'}:
       </Typography>
       {rules.map((rule, index) => (
         <Typography key={`rule-${index}`} variant="body2">

@@ -5,13 +5,16 @@ import { Link as RouterLink } from 'react-router-dom';
 const SETTINGS_CARD_CONTENT_HEIGHT = 72;
 
 export const SETTINGS_PAGES = [
+  { key: 'scheduling', title: 'Scheduling', description: 'Choose when automatic downloads and maintenance tasks run.' },
   { key: 'core', title: 'Core', description: 'Downloads folder, quality, defaults, and core behavior.' },
   { key: 'downloading', title: 'YT-DLP', description: 'yt-dlp backend settings for downloads and reliability.' },
   { key: 'api-keys', title: 'API Keys', description: 'API key settings and rate limits.' },
   { key: 'appearance', title: 'Appearance', description: 'Theme, animations, and visual preferences.' },
   { key: 'autoremove', title: 'Auto Removal', description: 'Automated cleanup and retention policies.' },
+  { key: 'storage-limits', title: 'Storage Limits', description: 'Pause downloads when storage is full or over a size limit.' },
   { key: 'cookies', title: 'Cookies', description: 'Cookie configuration and login helpers.' },
   { key: 'maintenance', title: 'Maintenance & Rescan', description: 'Rescan files on disk and other maintenance actions.' },
+  { key: 'logging', title: 'Logging', description: 'Log level and log files for troubleshooting.' },
   { key: 'notifications', title: 'Notifications', description: 'Toast notifications and alert behavior.' },
   { key: 'plex', title: 'Plex', description: 'Plex integration and library configuration.' },
   { key: 'jellyfin', title: 'Jellyfin', description: 'Jellyfin connection for native playlist sync.' },

@@ -6,6 +6,9 @@ const {
   mapToNumericRating,
   mapToITunEXTC,
   validateRating,
+  getRatingsAtOrBelow,
+  parseMaxRatingParam,
+  isRatingAllowed,
 } = require('../ratingMapper');
 
 describe('ratingMapper', () => {
@@ -260,6 +263,66 @@ describe('ratingMapper', () => {
       const out = validateRating(42);
       expect(out.valid).toBe(false);
       expect(out.error).toMatch(/must be a string or null/);
+    });
+  });
+
+  describe('getRatingsAtOrBelow', () => {
+    test('includes film and TV ratings at the same level', () => {
+      expect(getRatingsAtOrBelow('PG').sort()).toEqual(['G', 'PG', 'TV-G', 'TV-PG', 'TV-Y', 'TV-Y7']);
+    });
+
+    test('excludes NC-17 when the maximum is R', () => {
+      expect(getRatingsAtOrBelow('R')).not.toContain('NC-17');
+    });
+
+    test('includes TV-MA when the maximum is R', () => {
+      expect(getRatingsAtOrBelow('R')).toContain('TV-MA');
+    });
+
+    test('includes every rating when the maximum is NC-17', () => {
+      expect(getRatingsAtOrBelow('NC-17')).toHaveLength(11);
+    });
+
+    test('returns null for an unknown rating', () => {
+      expect(getRatingsAtOrBelow('NR')).toBeNull();
+    });
+  });
+
+  describe('parseMaxRatingParam', () => {
+    test('treats a missing value as no limit', () => {
+      expect(parseMaxRatingParam(undefined)).toEqual({ valid: true, value: null });
+    });
+
+    test('treats an empty value as no limit', () => {
+      expect(parseMaxRatingParam('')).toEqual({ valid: true, value: null });
+    });
+
+    test('accepts a known rating', () => {
+      expect(parseMaxRatingParam('TV-14')).toEqual({ valid: true, value: 'TV-14' });
+    });
+
+    test('rejects an unknown rating', () => {
+      expect(parseMaxRatingParam('X').valid).toBe(false);
+    });
+
+    test('rejects a repeated query parameter', () => {
+      expect(parseMaxRatingParam(['PG', 'R']).valid).toBe(false);
+    });
+  });
+
+  describe('isRatingAllowed', () => {
+    const allowed = ['G', 'PG'];
+
+    test('allows unrated videos', () => {
+      expect(isRatingAllowed(null, allowed)).toBe(true);
+    });
+
+    test('allows a rating in the allowed list', () => {
+      expect(isRatingAllowed('PG', allowed)).toBe(true);
+    });
+
+    test('rejects a rating outside the allowed list', () => {
+      expect(isRatingAllowed('R', allowed)).toBe(false);
     });
   });
 });

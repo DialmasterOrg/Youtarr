@@ -54,9 +54,21 @@ describe('SubscriptionAddBar', () => {
       expect(screen.getByRole('button', { name: /^channel$/i })).toBeDisabled();
     });
 
-    test('shows a loading label and disables the button while adding', () => {
+    test('shows a loading label and disables the button while looking up', () => {
       renderWithProviders(<SubscriptionAddBar {...baseProps} mode="channels" url="x" isAddingChannel />);
-      expect(screen.getByRole('button', { name: /adding/i })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /looking up/i })).toBeDisabled();
+    });
+
+    test('explains the lookup while it runs', () => {
+      renderWithProviders(<SubscriptionAddBar {...baseProps} mode="channels" url="x" isAddingChannel />);
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Looking up channel on YouTube... this can take a few seconds.'
+      );
+    });
+
+    test('shows no lookup status when idle', () => {
+      renderWithProviders(<SubscriptionAddBar {...baseProps} mode="channels" url="x" />);
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
     });
 
     test('submits a channel on Enter', async () => {

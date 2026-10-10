@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { useConfigSave } from '../useConfigSave';
 import { ConfigState } from '../../types';
@@ -1184,4 +1184,28 @@ describe('useConfigSave', () => {
       });
     });
   });
+});
+
+
+test('schedule errors preserve the draft and clear when the affected field is edited', async () => {
+  const setInitialConfig = jest.fn();
+  const config = { ...DEFAULT_CONFIG, autoRemovalFrequency: 'invalid' };
+  (global.fetch as jest.Mock).mockResolvedValueOnce({
+    ok: false,
+    json: async () => ({
+      error: 'Automatic video cleanup: enter a valid cron expression.',
+      fieldErrors: { autoRemovalFrequency: 'Enter a valid cron expression.' },
+    }),
+  });
+  const { result } = renderHook(() => useConfigSave({
+    token: 'token', config, setInitialConfig, setSnackbar: jest.fn(),
+    hasPlexServerConfigured: false, checkPlexConnection: jest.fn(),
+  }));
+  await act(async () => { expect(await result.current.saveConfig()).toBe(false); });
+  expect(setInitialConfig).not.toHaveBeenCalled();
+  expect(result.current.fieldErrors.autoRemovalFrequency).toBe('Enter a valid cron expression.');
+  act(() => result.current.clearFieldErrors({ channelFilesToDownload: 10 }));
+  expect(result.current.fieldErrors.autoRemovalFrequency).toBeDefined();
+  act(() => result.current.clearFieldErrors({ autoRemovalFrequency: '0 18 * * *' }));
+  expect(result.current.fieldErrors.autoRemovalFrequency).toBeUndefined();
 });

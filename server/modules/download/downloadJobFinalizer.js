@@ -17,6 +17,7 @@ const downloadCleanup = require('./downloadCleanup');
 const transient403RetryPlanner = require('./transient403RetryPlanner');
 const failureAdvisor = require('./failureAdvisor');
 const failedVideoEnricher = require('./failedVideoEnricher');
+const tempSpaceProbe = require('./tempSpaceProbe');
 const { containsHttp403 } = require('./ytdlpStderrSignals');
 const { runCompletionSideEffects } = require('./downloadCompletionEffects');
 const {
@@ -50,6 +51,25 @@ const BENIGN_STDERR_WARNING_PATTERNS = [
 // whitespace). Used to avoid flagging a clean, exit-0 download as "Complete
 // with Warnings" over informational noise like the subtitle impersonation
 // notice. Returns false for empty stderr so callers keep their own guard.
+
+// Terminal statuses a download run should report as a problem with the job
+// itself, beyond its per-video counts.
+const JOB_ISSUE_STATUSES = new Set(['Error', 'Failed', 'Terminated', 'Killed']);
+
+// The job-level problem to hand the run, read back from the status the
+// branches above persisted (they differ in how they choose it), or null. An
+// error whose failed videos were all handed to an automatic retry is the
+// retry's to report: its own result says whether they finally downloaded.
+function describeJobIssue(jobId, { wasManuallyTerminated, failuresHandedOff }) {
+  const job = jobModule.getJob(jobId);
+  const status = job && job.status;
+  if (!JOB_ISSUE_STATUSES.has(status)) return null;
+  const terminated = status === 'Terminated' || status === 'Killed';
+  if (!terminated && failuresHandedOff) return null;
+  const reason = (terminated && job.notes) || job.output || status;
+  return { status, reason, byUser: terminated && Boolean(wasManuallyTerminated) };
+}
+
 function stderrHasOnlyBenignWarnings(stderrBuffer = '') {
   const lines = String(stderrBuffer)
     .split('\n')
@@ -148,6 +168,7 @@ async function finalizeDownloadJob({
   enqueueAutoRetry = null,
   cookiesEnabled = Boolean(configModule.getCookiesPath()),
   anonymousRetry = false,
+  stdioClosed = true,
 }) {
   // True once the job's terminal status has been persisted; the catch
   // below must not overwrite it with 'Error' for failures that happen
@@ -183,7 +204,12 @@ async function finalizeDownloadJob({
     const videoCount = urlsToProcess.length;
     let videoData = await VideoMetadataProcessor.processVideoMetadata(urlsToProcess);
 
-    const { successfulVideos, failedVideosList } = downloadResultProcessor.partitionDownloadResults(videoData, errorTracker, urlsToProcess);
+    const { successfulVideos, failedVideosList } = downloadResultProcessor.partitionDownloadResults(
+      videoData,
+      errorTracker,
+      urlsToProcess,
+      router.archiveSkippedIds
+    );
     // Use successful videos for further processing (archive, database, etc.)
     videoData = successfulVideos;
 
@@ -257,11 +283,18 @@ async function finalizeDownloadJob({
     // must never break finalization.
     let diagnoses = [];
     try {
+      // Measured here, while the failed videos' files are still in temp; the
+      // cleanup further down frees the space this looks at.
+      const outOfSpaceVideoIds = await tempSpaceProbe.findOutOfSpaceFailures(
+        reportableFailedVideos,
+        partialDestinations
+      );
       diagnoses = failureAdvisor.adviseFailures(reportableFailedVideos, {
         cookiesEnabled,
         anonymousRetry,
         httpForbiddenDetected,
         botDetected,
+        outOfSpaceVideoIds,
       });
     } catch (err) {
       logger.error({ err, jobId }, 'Failure advisor threw; continuing without diagnoses');
@@ -305,6 +338,11 @@ async function finalizeDownloadJob({
           ? 'Bot detection encountered even though cookies are configured - they are likely expired or rotated.'
           : 'Bot detection encountered. Please set cookies in your Configuration.';
 
+      // Same leftovers, and the same guard, as the non-zero exit branch below.
+      if (stdioClosed) {
+        await downloadCleanup.cleanupInProgressVideos(jobId);
+      }
+
       await persistCompletedVideosBeforeTerminalUpdate(jobId, videoData, failedVideosList);
       await jobModule.updateJob(jobId, {
         status: status,
@@ -346,6 +384,14 @@ async function finalizeDownloadJob({
     } else if (code !== 0) {
       // Download actually failed (non-zero exit code)
       await downloadCleanup.cleanupPartialFiles(Array.from(partialDestinations));
+      // A video that failed after its streams finished downloading (a failed
+      // merge, say) leaves them whole in temp, and they are not .part files.
+      // Left there they can fill the disk before the next job's temp clean.
+      // Skipped when yt-dlp's output never closed: a post-processor child may
+      // still be moving a finished video out of temp.
+      if (stdioClosed) {
+        await downloadCleanup.cleanupInProgressVideos(jobId);
+      }
 
       const failureDetails = monitor.lastParsed || null;
 
@@ -575,7 +621,12 @@ async function finalizeDownloadJob({
 
     // Fold this job's totals into the run; it emits one aggregated summary + notification when its last job finishes.
     if (runActive) {
+      const jobIssue = describeJobIssue(jobId, {
+        wasManuallyTerminated,
+        failuresHandedOff: autoRetryQueuedCount > 0 && reportableFailedVideos.length === 0 && !botDetected,
+      });
       downloadRunTracker.recordJobResult(runId, jobId, {
+        ...(jobIssue ? { jobIssue } : {}),
         totalDownloaded: videoData.length,
         totalSkipped: monitor.videoCount.skipped || 0,
         totalFailed: reportableFailedVideos.length,

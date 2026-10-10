@@ -8,6 +8,7 @@ const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
 const mockNavigate = jest.fn();
+const mockOnManualDownloadFailure = jest.fn();
 jest.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }));
@@ -25,7 +26,8 @@ jest.mock('../ManualDownload/ManualDownload', () => ({
     return React.createElement('div', { 'data-testid': 'manual-download' },
       React.createElement('span', null, `Resolution: ${defaultResolution}`),
       React.createElement('button', {
-        onClick: () => onStartDownload(['https://youtube.com/watch?v=test'], { resolution: '1080' }),
+        onClick: () => onStartDownload(['https://youtube.com/watch?v=test'], { resolution: '1080' })
+          .catch(mockOnManualDownloadFailure),
         'data-testid': 'trigger-manual-download'
       }, 'Start Manual Download'),
       React.createElement('button', {
@@ -311,15 +313,12 @@ describe('DownloadNew', () => {
     expect(mockDownloadInitiatedRef.current).toBe(true);
   });
 
-  test('shows alert when channel download already running', async () => {
+  test('shows the reason when channel downloads cannot start', async () => {
     const user = userEvent.setup({ delay: null });
-    const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {});
-
-    // Mock the fetch to return 400 status for the channel download endpoint
     mockFetch.mockResolvedValueOnce({
       ok: false,
-      status: 400,
-      json: jest.fn().mockResolvedValueOnce({}),
+      status: 409,
+      json: jest.fn().mockResolvedValueOnce({ error: 'A channel and playlist update is already running.' }),
     });
 
     render(<DownloadNew {...defaultProps} />);
@@ -333,14 +332,44 @@ describe('DownloadNew', () => {
     const confirmButton = screen.getByTestId('confirm-default');
     await user.click(confirmButton);
 
-    await waitFor(() => {
-      expect(alertSpy).toHaveBeenCalledWith('Channel Download already running');
+    expect(await screen.findByText('A channel and playlist update is already running.')).toBeInTheDocument();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  test('falls back to a generic message when the refusal has no reason', async () => {
+    const user = userEvent.setup({ delay: null });
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: jest.fn().mockRejectedValueOnce(new Error('not json')),
     });
 
-    expect(mockDownloadInitiatedRef.current).toBe(true);
-    expect(mockNavigate).not.toHaveBeenCalled();
+    render(<DownloadNew {...defaultProps} />);
 
-    alertSpy.mockRestore();
+    await user.click(screen.getByRole('tab', { name: 'Channel/Playlist Downloads' }));
+    await user.click(screen.getByRole('button', { name: 'Download new from all channels/playlists' }));
+    await user.click(screen.getByTestId('confirm-default'));
+
+    expect(await screen.findByText('Could not start channel downloads.')).toBeInTheDocument();
+  });
+
+  test('dismisses the refusal message', async () => {
+    const user = userEvent.setup({ delay: null });
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 409,
+      json: jest.fn().mockResolvedValueOnce({ error: 'A channel and playlist update is already running.' }),
+    });
+
+    render(<DownloadNew {...defaultProps} />);
+
+    await user.click(screen.getByRole('tab', { name: 'Channel/Playlist Downloads' }));
+    await user.click(screen.getByRole('button', { name: 'Download new from all channels/playlists' }));
+    await user.click(screen.getByTestId('confirm-default'));
+    await screen.findByText('A channel and playlist update is already running.');
+    await user.click(screen.getByRole('button', { name: /close/i }));
+
+    expect(screen.queryByText('A channel and playlist update is already running.')).not.toBeInTheDocument();
   });
 
   test('cancels channel settings dialog', async () => {
@@ -388,17 +417,129 @@ describe('DownloadNew', () => {
       }),
     });
 
-    expect(mockDownloadInitiatedRef.current).toBe(true);
-
     await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith('/downloads/activity');
     });
+    expect(mockDownloadInitiatedRef.current).toBe(true);
 
     act(() => {
       jest.advanceTimersByTime(1000);
     });
 
     expect(mockFetchRunningJobs).toHaveBeenCalled();
+  });
+
+  test('rejects with the server reason when manual downloads cannot start', async () => {
+    const user = userEvent.setup({ delay: null });
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 409,
+      json: jest.fn().mockResolvedValueOnce({ error: 'Downloads are paused: storage limit reached' }),
+    });
+
+    render(<DownloadNew {...defaultProps} />);
+
+    await user.click(screen.getByTestId('trigger-manual-download'));
+
+    await waitFor(() => {
+      expect(mockOnManualDownloadFailure).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'Downloads are paused: storage limit reached' })
+      );
+    });
+  });
+
+  test('rejects with a generic message when the manual download refusal has no reason', async () => {
+    const user = userEvent.setup({ delay: null });
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: jest.fn().mockRejectedValueOnce(new Error('not json')),
+    });
+
+    render(<DownloadNew {...defaultProps} />);
+
+    await user.click(screen.getByTestId('trigger-manual-download'));
+
+    await waitFor(() => {
+      expect(mockOnManualDownloadFailure).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'Could not start downloads.' })
+      );
+    });
+  });
+
+  test('rejects with a generic message when the manual download request fails to send', async () => {
+    const user = userEvent.setup({ delay: null });
+    mockFetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+    render(<DownloadNew {...defaultProps} />);
+
+    await user.click(screen.getByTestId('trigger-manual-download'));
+
+    await waitFor(() => {
+      expect(mockOnManualDownloadFailure).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'Could not start downloads.' })
+      );
+    });
+  });
+
+  test('does not set the download-initiated flag when the manual download request fails to send', async () => {
+    const user = userEvent.setup({ delay: null });
+    mockFetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+    render(<DownloadNew {...defaultProps} />);
+
+    await user.click(screen.getByTestId('trigger-manual-download'));
+    await waitFor(() => expect(mockOnManualDownloadFailure).toHaveBeenCalled());
+
+    expect(mockDownloadInitiatedRef.current).toBe(false);
+  });
+
+  test('stays on the page when the manual download request fails to send', async () => {
+    const user = userEvent.setup({ delay: null });
+    mockFetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+    render(<DownloadNew {...defaultProps} />);
+
+    await user.click(screen.getByTestId('trigger-manual-download'));
+    await waitFor(() => expect(mockOnManualDownloadFailure).toHaveBeenCalled());
+
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  test('stays on the page when manual downloads cannot start', async () => {
+    const user = userEvent.setup({ delay: null });
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      json: jest.fn().mockResolvedValueOnce({ error: 'Invalid subfolder' }),
+    });
+
+    render(<DownloadNew {...defaultProps} />);
+
+    await user.click(screen.getByTestId('trigger-manual-download'));
+    await waitFor(() => expect(mockOnManualDownloadFailure).toHaveBeenCalled());
+    act(() => {
+      jest.advanceTimersByTime(1000);
+    });
+
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(mockFetchRunningJobs).not.toHaveBeenCalled();
+  });
+
+  test('does not set the download-initiated flag when manual downloads cannot start', async () => {
+    const user = userEvent.setup({ delay: null });
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 409,
+      json: jest.fn().mockResolvedValueOnce({ error: 'Downloads are paused' }),
+    });
+
+    render(<DownloadNew {...defaultProps} />);
+
+    await user.click(screen.getByTestId('trigger-manual-download'));
+    await waitFor(() => expect(mockOnManualDownloadFailure).toHaveBeenCalled());
+
+    expect(mockDownloadInitiatedRef.current).toBe(false);
   });
 
   test('strips URLs with ampersands in manual download', async () => {

@@ -56,6 +56,8 @@ describe('channelModule facade', () => {
       jest.resetModules();
       jest.clearAllMocks();
       const cron = require('node-cron');
+      cron.validate.mockReturnValue(true);
+      cron.schedule.mockReturnValue({ start: jest.fn(), stop: jest.fn() });
       const configModule = require('../configModule');
 
       require('../channelModule');
@@ -63,7 +65,8 @@ describe('channelModule facade', () => {
 
       expect(cron.schedule).toHaveBeenCalledWith(
         '0 */6 * * *',
-        expect.any(Function)
+        expect.any(Function),
+        expect.objectContaining({ scheduled: false })
       );
       expect(configModule.onConfigChange).toHaveBeenCalled();
     });
@@ -80,7 +83,7 @@ describe('channelModule facade', () => {
       ['getChannelsPaginated', '../channel/channelCatalog', 'getChannelsPaginated', [{ page: 2, pageSize: 10 }], 'async'],
       ['writeChannels', '../channel/channelCatalog', 'writeChannels', [['https://www.youtube.com/@a']], 'async'],
       ['updateChannelsByDelta', '../channel/channelCatalog', 'updateChannelsByDelta', [{ enableUrls: ['https://www.youtube.com/@a'], disableUrls: [] }], 'async'],
-      ['getChannelVideos', '../channel/channelVideosService', 'getChannelVideos', ['UC1', 2, 25, 'only', 'q', 'title', 'asc', 'shorts', 60, 600, '2026-01-01', '2026-02-01', 'only', 'exclude', 'off', 'only'], 'async'],
+      ['getChannelVideos', '../channel/channelVideosService', 'getChannelVideos', ['UC1', 2, 25, 'only', 'q', 'title', 'asc', 'shorts', 60, 600, '2026-01-01', '2026-02-01', 'only', 'exclude', 'off', 'only', 'PG'], 'async'],
       ['fetchAllChannelVideos', '../channel/channelVideosService', 'fetchAllChannelVideos', ['UC1', 2, 25, 'only', 'shorts'], 'async'],
       ['getChannelAvailableTabs', '../channel/tabManager', 'getChannelAvailableTabs', ['UC1'], 'async'],
       ['updateAutoDownloadForTab', '../channel/tabManager', 'updateAutoDownloadForTab', ['UC1', 'shorts', true], 'async'],

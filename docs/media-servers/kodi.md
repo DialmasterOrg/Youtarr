@@ -49,7 +49,7 @@ Configure the following settings:
 ### NFO Support
 
 Youtarr generates comprehensive NFO files containing:
-- **Title**: Video title with channel prefix
+- **Title**: Video title as it appears on YouTube (the NFO title never includes the channel name)
 - **Plot**: Full video description
 - **Premiered**: Original YouTube upload date
 - **Year**: Upload year

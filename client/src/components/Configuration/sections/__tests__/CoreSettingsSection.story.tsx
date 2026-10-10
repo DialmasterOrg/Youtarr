@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router-dom';
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import React, { useState } from 'react';
@@ -8,6 +9,7 @@ import { CoreSettingsSection } from '../CoreSettingsSection';
 const meta: Meta<typeof CoreSettingsSection> = {
   title: 'Components/Configuration/Sections/CoreSettingsSection',
   component: CoreSettingsSection,
+  decorators: [(Story) => <MemoryRouter><Story /></MemoryRouter>],
   parameters: {
     msw: {
       handlers: [
@@ -54,15 +56,9 @@ export const ToggleAutoDownloads: Story = {
     await userEvent.click(checkbox);
     await expect(checkbox).toBeChecked();
 
-    const frequencyLabels = await canvas.findAllByText('Download Frequency');
-    const frequencyLabel =
-      frequencyLabels.find((label: HTMLElement) => label.tagName === 'LABEL') ||
-      frequencyLabels[0];
-    const frequencySelect = frequencyLabel
-      .closest('[class*="FormControl"]')
-      ?.querySelector('[role="button"]');
-    await expect(frequencySelect as HTMLElement).toBeInTheDocument();
-    await expect(frequencySelect as HTMLElement).toBeEnabled();
+    await expect(canvas.getByRole('link', { name: 'Edit schedule' })).toHaveAttribute(
+      'href', '/settings/scheduling#channelDownloadFrequency'
+    );
   },
 };
 

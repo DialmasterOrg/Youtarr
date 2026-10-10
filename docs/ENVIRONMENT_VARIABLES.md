@@ -198,7 +198,16 @@ Note: *The `/path/to/youtube/videos` is just an example. Use the path you have c
 **Default**: None
 **Description**: Pre-configured Plex server URL
 **Example**: `http://plex:32400`
-**Note**: Overrides plexIP, plexPort and plexViaHttps from config.json
+**Note**: When set inside the container, it takes precedence over `plexUrl`, `plexIP`, `plexPort` and `plexViaHttps` from config.json. It is also copied into `plexUrl` when config.json is first created.
+
+**Not passed through by default**: the bundled `docker-compose.yml` and `docker-compose.external-db.yml` do not forward `PLEX_URL` into the container, so setting it in `.env` alone has no effect. Either add it to the `youtarr` service's `environment:` section:
+
+```yaml
+    environment:
+      PLEX_URL: ${PLEX_URL:-}
+```
+
+or, for a standard install, set [`plexUrl`](CONFIG.md#plex-url-override) in `config/config.json` instead, which needs no compose change. Only `docker-compose.dev.yml` forwards `PLEX_URL` out of the box. `DATA_PATH` is in the same position: it is commented out in `docker-compose.yml` and must be added to the service's `environment:` to take effect.
 
 > **Jellyfin and Emby have no environment variables.** Their playlist-sync settings (URL, API key, user ID) are managed in `config/config.json` through the web UI under Settings, not via env vars. There is no `JELLYFIN_URL` or `EMBY_URL` equivalent to `PLEX_URL`.
 
@@ -212,6 +221,18 @@ Note: *The `/path/to/youtube/videos` is just an example. Use the path you have c
 - `warn`: Minimal logging, errors and warnings only
 - `info`: Standard logging for production
 - `debug`: Verbose logging for troubleshooting
+**Note**: **Settings -> Logging** can override this while Youtarr runs, without a restart. Its **Default** option uses `LOG_LEVEL`.
+
+### LOG_FILE_MAX_SIZE
+**Required**: No
+**Default**: `10MB`
+**Format**: A whole number of MB or GB, such as `25MB` or `1GB`. A number without a unit means MB.
+**Description**: Youtarr writes its log to rolling files in `config/logs/` (`youtarr.1.log`, `youtarr.2.log`, ...; the highest number is the current file) as well as to the console. When the current file reaches this size, a new one starts. An invalid value logs a warning and uses the default.
+
+### LOG_FILE_MAX_COUNT
+**Required**: No
+**Default**: `5`
+**Description**: How many older log files to keep in addition to the current one. When a new file starts, the oldest files beyond this count are deleted, so with the defaults the log files never use more than about 60 MB. Must be a whole number of 1 or more; an invalid value logs a warning and uses the default.
 
 ### TZ
 **Required**: No

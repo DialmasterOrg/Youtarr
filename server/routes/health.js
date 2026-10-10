@@ -9,12 +9,16 @@ const ytdlpModule = require('../modules/ytdlpModule');
  * Creates health routes
  * @param {Object} deps - Dependencies
  * @param {Function} deps.getCachedYtDlpVersion - Function to get cached yt-dlp version
- * @param {Function} deps.refreshYtDlpVersionCache - Function to refresh yt-dlp version cache
  * @param {Function} deps.verifyToken - Authentication middleware
  * @param {Object} deps.configModule - Configuration module
+ * @param {Object} deps.scheduledTaskRuns - Scheduled task run history
+ * @param {Object} deps.ytdlpUpdateRunSummary - Maps yt-dlp update results to and from run records
+ * @param {Object} deps.scheduledTaskManager - Starts and tracks scheduled task runs
  * @returns {express.Router}
  */
-module.exports = function createHealthRoutes({ getCachedYtDlpVersion, refreshYtDlpVersionCache, verifyToken, configModule }) {
+module.exports = function createHealthRoutes({
+  getCachedYtDlpVersion, verifyToken, configModule, scheduledTaskRuns, ytdlpUpdateRunSummary, scheduledTaskManager,
+}) {
   /**
    * @swagger
    * /api/health:
@@ -188,6 +192,20 @@ module.exports = function createHealthRoutes({ getCachedYtDlpVersion, refreshYtD
    *                   type: string
    *                   enum: [stable, nightly]
    *                   description: Configured yt-dlp update channel
+   *                 lastChecked:
+   *                   type: string
+   *                   format: date-time
+   *                   nullable: true
+   *                   description: When an update check (scheduled or manual) last ran
+   *                 lastUpdated:
+   *                   type: string
+   *                   format: date-time
+   *                   nullable: true
+   *                   description: When a new version was last installed
+   *                 lastResult:
+   *                   type: object
+   *                   nullable: true
+   *                   description: Outcome of the most recent check ({ status, message?, version? })
    *       401:
    *         description: Unauthorized
    *       500:
@@ -199,12 +217,17 @@ module.exports = function createHealthRoutes({ getCachedYtDlpVersion, refreshYtD
       const currentVersion = getCachedYtDlpVersion();
       const latestVersion = await ytdlpModule.getLatestVersion(channel);
       const updateAvailable = ytdlpModule.isUpdateAvailable(currentVersion, latestVersion);
+      const [lastRun, lastUpdate] = await Promise.all([
+        scheduledTaskRuns.getLatestRun(ytdlpUpdateRunSummary.TASK_KEY, { statuses: ytdlpUpdateRunSummary.LAST_CHECK_STATUSES }),
+        scheduledTaskRuns.getLatestRun(ytdlpUpdateRunSummary.TASK_KEY, { outcome: 'updated' }),
+      ]);
 
       res.json({
         currentVersion,
         latestVersion,
         updateAvailable,
         channel,
+        ...ytdlpUpdateRunSummary.toUpdateState({ lastRun, lastUpdate, config: configModule.getConfig() }),
       });
     } catch (error) {
       logger.error({ err: error }, 'Failed to get yt-dlp version information');
@@ -240,6 +263,12 @@ module.exports = function createHealthRoutes({ getCachedYtDlpVersion, refreshYtD
    *                   description: New version after update (if applicable)
    *       401:
    *         description: Unauthorized
+   *       403:
+   *         description: yt-dlp is managed by the hosting platform
+   *       409:
+   *         description: An update is already running
+   *       503:
+   *         description: The task is not registered yet (server still starting or database unavailable)
    *       500:
    *         description: Update failed
    */
@@ -252,15 +281,22 @@ module.exports = function createHealthRoutes({ getCachedYtDlpVersion, refreshYtD
         });
       }
 
-      const channel = ytdlpModule.normalizeChannel(configModule.getConfig().ytdlpUpdateChannel);
-      const result = await ytdlpModule.performUpdate({ channel });
-
-      // Refresh the cached version after update
-      if (result.success) {
-        refreshYtDlpVersionCache();
+      const outcome = await scheduledTaskManager.runNow(ytdlpUpdateRunSummary.TASK_KEY, {
+        trigger: 'manual',
+        enforceEnabled: false,
+        enforceCooldown: false,
+      });
+      if (!outcome.started) {
+        const message = outcome.reason === 'running' ? 'An update is already in progress' : outcome.message;
+        return res.status(outcome.reason === 'not-registered' ? 503 : 409).json({ success: false, message });
       }
-
-      res.json(result);
+      // The task records the run and refreshes the cached version itself.
+      const record = await outcome.completion;
+      return res.json({
+        success: record.status === 'success',
+        message: record.message,
+        newVersion: record.details && record.details.version ? record.details.version : undefined,
+      });
     } catch (error) {
       logger.error({ err: error }, 'Failed to update yt-dlp');
       res.status(500).json({

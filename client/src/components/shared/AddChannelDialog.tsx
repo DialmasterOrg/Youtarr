@@ -22,7 +22,7 @@ export default function AddChannelDialog({ open, onClose, channelName, channelUr
       <DialogTitle>Add channel?</DialogTitle>
       <DialogContent>
         <Typography variant="body2">
-          Add &quot;{channelName}&quot; to your channels? You will be taken to the Channels page to review and save.
+          Add &quot;{channelName}&quot; to your channels? You will be taken to the Channels page to choose its download settings, then save.
         </Typography>
       </DialogContent>
       <DialogActions>

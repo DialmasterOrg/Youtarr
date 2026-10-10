@@ -30,8 +30,16 @@ describe('logger.js', () => {
       }))
     };
 
-    // Mock pino constructor
-    mockPino = jest.fn(() => mockPinoInstance);
+    const LEVEL_VALUES = { trace: 10, debug: 20, info: 30, warn: 40, error: 50, fatal: 60 };
+    mockPinoInstance.isLevelEnabled = jest.fn(
+      (level) => LEVEL_VALUES[level] >= LEVEL_VALUES[mockPinoInstance.level]
+    );
+
+    // Mock pino constructor; like pino, the instance starts at the configured level
+    mockPino = jest.fn((config) => {
+      mockPinoInstance.level = config.level;
+      return mockPinoInstance;
+    });
     mockPino.stdSerializers = {
       req: jest.fn(),
       res: jest.fn(),
@@ -43,6 +51,8 @@ describe('logger.js', () => {
     // Reset environment variables
     delete process.env.NODE_ENV;
     delete process.env.LOG_LEVEL;
+    delete process.env.LOG_FILE_MAX_SIZE;
+    delete process.env.LOG_FILE_MAX_COUNT;
   });
 
   afterEach(() => {
@@ -192,14 +202,11 @@ describe('logger.js', () => {
       });
     });
 
-    it('should configure pretty logs when log level is debug', () => {
-      process.env.LOG_LEVEL = 'debug';
-
+    it('should configure pretty console logs', () => {
       require('../logger');
 
       const config = mockPino.mock.calls[0][0];
-      expect(config.transport).toBeDefined();
-      expect(config.transport.target).toBe('pino-pretty');
+      expect(config.transport.targets[0].target).toBe('pino-pretty');
     });
 
   });
@@ -230,12 +237,9 @@ describe('logger.js', () => {
     });
 
     it('should configure pino-pretty options correctly', () => {
-      process.env.LOG_LEVEL = 'debug';
-
       require('../logger');
 
-      const config = mockPino.mock.calls[0][0];
-      const transportOptions = config.transport.options;
+      const transportOptions = mockPino.mock.calls[0][0].transport.targets[0].options;
 
       expect(transportOptions.colorize).toBe(true);
       expect(transportOptions.translateTime).toBe('SYS:yyyy-mm-dd HH:MM:ss.l o');
@@ -349,6 +353,196 @@ describe('logger.js', () => {
 
       // remove: true means data is completely removed, not replaced with [Redacted]
       expect(config.redact.remove).toBe(true);
+    });
+  });
+
+  describe('Log file target', () => {
+    const path = require('path');
+    const serverPath = path.join(__dirname, '..', 'server.js');
+    let mockCheckWritable;
+    let originalArgv;
+
+    beforeEach(() => {
+      originalArgv = process.argv;
+      mockCheckWritable = jest.fn(() => null);
+      jest.doMock('../logging/logFileConfig', () => ({
+        ...jest.requireActual('../logging/logFileConfig'),
+        checkLogDirectoryWritable: mockCheckWritable,
+      }));
+    });
+
+    afterEach(() => {
+      process.argv = originalArgv;
+    });
+
+    const fileTarget = () => mockPino.mock.calls[0][0].transport.targets
+      .find((target) => target.target.endsWith('logFileTransport.js'));
+
+    it('adds the rolling file target in the server process', () => {
+      process.argv = ['node', serverPath];
+      require('../logger');
+
+      expect(fileTarget().options).toEqual(expect.objectContaining({
+        maxSizeBytes: 10 * 1024 * 1024,
+        maxFiles: 5,
+      }));
+    });
+
+    it('pins both targets to trace so the root level is the only filter', () => {
+      process.argv = ['node', serverPath];
+      require('../logger');
+
+      const levels = mockPino.mock.calls[0][0].transport.targets.map((target) => target.level);
+      expect(levels).toEqual(['trace', 'trace']);
+    });
+
+    it('leaves the file target out of other processes such as the post-processor', () => {
+      process.argv = ['node', path.join(__dirname, '..', 'modules', 'videoDownloadPostProcessFiles.js')];
+      require('../logger');
+
+      expect(fileTarget()).toBeUndefined();
+    });
+
+    it('logs to the console only when the log folder is not writable', () => {
+      process.argv = ['node', serverPath];
+      mockCheckWritable.mockReturnValue(Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' }));
+      require('../logger');
+
+      expect(fileTarget()).toBeUndefined();
+    });
+
+    it('warns when the log folder is not writable', () => {
+      process.argv = ['node', serverPath];
+      mockCheckWritable.mockReturnValue(new Error('EACCES: permission denied'));
+      require('../logger');
+
+      expect(mockPinoInstance.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ directory: expect.stringMatching(/config[\\/]logs$/) }),
+        'Cannot write to the log folder; logging to the console only'
+      );
+    });
+
+    it('reports the folder error in the logging status', () => {
+      process.argv = ['node', serverPath];
+      mockCheckWritable.mockReturnValue(new Error('EACCES: permission denied'));
+      const logger = require('../logger');
+
+      expect(logger.getLoggingStatus().file).toEqual(expect.objectContaining({
+        enabled: false,
+        error: 'EACCES: permission denied',
+      }));
+    });
+
+    it('uses LOG_FILE_MAX_SIZE and LOG_FILE_MAX_COUNT', () => {
+      process.argv = ['node', serverPath];
+      process.env.LOG_FILE_MAX_SIZE = '25MB';
+      process.env.LOG_FILE_MAX_COUNT = '3';
+      require('../logger');
+
+      expect(fileTarget().options).toEqual(expect.objectContaining({
+        maxSizeBytes: 25 * 1024 * 1024,
+        maxFiles: 3,
+      }));
+    });
+
+    it('warns about an invalid LOG_FILE_MAX_COUNT and uses the default', () => {
+      process.argv = ['node', serverPath];
+      process.env.LOG_FILE_MAX_COUNT = 'many';
+      require('../logger');
+
+      expect(mockPinoInstance.warn).toHaveBeenCalledWith(
+        { variable: 'LOG_FILE_MAX_COUNT', value: 'many', fallback: 5 },
+        'Invalid LOG_FILE_MAX_COUNT; using the default'
+      );
+    });
+  });
+
+  describe('applyLevelSetting', () => {
+    it('switches to the saved setting', () => {
+      const logger = require('../logger');
+
+      logger.applyLevelSetting('debug');
+
+      expect(mockPinoInstance.level).toBe('debug');
+    });
+
+    it('falls back to LOG_LEVEL when the setting is Default', () => {
+      process.env.LOG_LEVEL = 'warn';
+      const logger = require('../logger');
+      logger.applyLevelSetting('debug');
+
+      logger.applyLevelSetting('');
+
+      expect(mockPinoInstance.level).toBe('warn');
+    });
+
+    it('logs which level is now active and where it came from', () => {
+      const logger = require('../logger');
+
+      logger.applyLevelSetting('debug');
+
+      // Not `level`: that key would overwrite pino's own level field and the
+      // record would be dropped.
+      expect(mockPinoInstance.info).toHaveBeenCalledWith(
+        { newLevel: 'debug', previousLevel: 'info', source: 'setting' },
+        'Log level changed'
+      );
+    });
+
+    it('records a change to a quieter level before applying it', () => {
+      const logger = require('../logger');
+      let levelWhenLogged;
+      mockPinoInstance.info.mockImplementation(() => { levelWhenLogged = mockPinoInstance.level; });
+
+      logger.applyLevelSetting('warn');
+
+      expect(levelWhenLogged).toBe('info');
+    });
+
+    it('records a change to a louder level after applying it', () => {
+      process.env.LOG_LEVEL = 'warn';
+      const logger = require('../logger');
+      let levelWhenLogged;
+      mockPinoInstance.info.mockImplementation(() => { levelWhenLogged = mockPinoInstance.level; });
+
+      logger.applyLevelSetting('debug');
+
+      expect(levelWhenLogged).toBe('debug');
+    });
+
+    it('can change the level without recording it', () => {
+      const logger = require('../logger');
+
+      logger.applyLevelSetting('debug', { announce: false });
+
+      expect(mockPinoInstance.level).toBe('debug');
+      expect(mockPinoInstance.info).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when the level is unchanged', () => {
+      const logger = require('../logger');
+
+      logger.applyLevelSetting('info');
+
+      expect(mockPinoInstance.info).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getLoggingStatus', () => {
+    it('reports the LOG_LEVEL value and log file settings', () => {
+      process.env.LOG_LEVEL = 'warn';
+      const logger = require('../logger');
+
+      expect(logger.getLoggingStatus()).toEqual({
+        envLevel: 'warn',
+        file: {
+          enabled: false,
+          directory: expect.stringMatching(/config[\\/]logs$/),
+          maxSizeBytes: 10 * 1024 * 1024,
+          maxFiles: 5,
+          error: null,
+        },
+      });
     });
   });
 });

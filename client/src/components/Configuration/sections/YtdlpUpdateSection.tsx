@@ -1,3 +1,4 @@
+import { ScheduleSummary } from './components/ScheduleSummary';
 import React, { ChangeEvent, useState } from 'react';
 import {
   Box,
@@ -58,6 +59,9 @@ export const YtdlpUpdateSection: React.FC<YtdlpUpdateSectionProps> = ({
 
   const platformManaged = isPlatformManaged.ytdlpUpdates;
   const isElfhosted = deploymentEnvironment.platform?.toLowerCase() === 'elfhosted';
+  const lastChecked = ytDlpVersionInfo?.lastChecked ?? null;
+  const lastUpdated = ytDlpVersionInfo?.lastUpdated ?? null;
+  const lastResult = ytDlpVersionInfo?.lastResult ?? null;
 
   return (
     <ConfigurationCard title="yt-dlp Version & Updates">
@@ -154,33 +158,35 @@ export const YtdlpUpdateSection: React.FC<YtdlpUpdateSectionProps> = ({
                   onChange={handleCheckboxChange}
                 />
               }
-              label="Automatically update yt-dlp daily (4:00 AM)"
+              label="Automatically update yt-dlp"
             />
             <InfoTooltip
-              text="Checks for a new yt-dlp release on the selected update channel each night at 4:00 AM (server local time) and installs it automatically. If an update fails, Youtarr keeps running on the previous version."
+              text="Checks for a new yt-dlp release on the selected update channel on the configured schedule and installs it automatically. If an update fails, Youtarr keeps running on the previous version."
               onMobileClick={onMobileTooltipClick}
             />
           </Box>
 
-          {(config.ytdlpLastChecked || config.ytdlpLastResult || config.ytdlpLastUpdated) && (
+          <ScheduleSummary scheduleKey="ytdlpUpdateFrequency" value={config.ytdlpUpdateFrequency} />
+
+          {(lastChecked || lastResult || lastUpdated) && (
             <Box className="mt-1">
-              {config.ytdlpLastChecked && (
+              {lastChecked && (
                 <Typography
                   variant="caption"
                   className="block"
-                  style={{ color: config.ytdlpLastResult?.status === 'error' ? 'var(--warning)' : undefined }}
-                  color={config.ytdlpLastResult?.status === 'error' ? undefined : 'text.secondary'}
+                  style={{ color: lastResult?.status === 'error' ? 'var(--warning)' : undefined }}
+                  color={lastResult?.status === 'error' ? undefined : 'text.secondary'}
                 >
-                  Last checked: {formatDateTime(config.ytdlpLastChecked)}
-                  {config.ytdlpLastResult?.status === 'up-to-date' && ' — already up to date'}
-                  {config.ytdlpLastResult?.status === 'updated' && config.ytdlpLastResult.version && ` — updated to ${config.ytdlpLastResult.version}`}
-                  {config.ytdlpLastResult?.status === 'skipped' && ` — skipped: ${config.ytdlpLastResult.message || 'reason unknown'}`}
-                  {config.ytdlpLastResult?.status === 'error' && ` — update failed: ${config.ytdlpLastResult.message || 'reason unknown'}`}
+                  Last checked: {formatDateTime(lastChecked)}
+                  {lastResult?.status === 'up-to-date' && ' - already up to date'}
+                  {lastResult?.status === 'updated' && lastResult.version && ` - updated to ${lastResult.version}`}
+                  {lastResult?.status === 'skipped' && ` - skipped: ${lastResult.message || 'reason unknown'}`}
+                  {lastResult?.status === 'error' && ` - update failed: ${lastResult.message || 'reason unknown'}`}
                 </Typography>
               )}
-              {config.ytdlpLastUpdated && (
+              {lastUpdated && (
                 <Typography variant="caption" color="text.secondary" className="block">
-                  Last updated: {formatDateTime(config.ytdlpLastUpdated)}
+                  Last updated: {formatDateTime(lastUpdated)}
                 </Typography>
               )}
             </Box>

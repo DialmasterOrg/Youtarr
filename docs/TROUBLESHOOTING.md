@@ -1,5 +1,17 @@
 # Youtarr Troubleshooting Guide
 
+## Collecting Logs {#collecting-logs}
+
+Youtarr writes its log to the container console (`docker logs youtarr`) and to rolling files in `config/logs/` (`youtarr.1.log`, `youtarr.2.log`, ...; the highest number is the newest).
+
+To capture a problem:
+1. Open **Settings -> Logging**, set **Log level** to **Debug**, and save. No restart is needed.
+2. Reproduce the problem.
+3. Click **Download logs** to save all log files as one file, or copy the files from `config/logs/` on the host.
+4. Set **Log level** back to **Default** and save.
+
+**Download logs** replaces the API keys and tokens saved in Settings, token parameters in URLs, and proxy passwords with `[REDACTED]`. The files in `config/logs/` are not changed. Logs can still include video titles, channel names, file paths and server addresses, so check them before posting them publicly.
+
 ## Login Issues
 
 ### Cannot Find the Setup Token
@@ -80,25 +92,25 @@ See [Authentication - Cannot Find the Setup Token](AUTHENTICATION.md#cannot-find
    - Restart: `./start.sh`
    - Get a new key using method 1 or 2 above
 
-### Discord Notifications Not Sending
+### Notifications Not Sending
 
-**Problem**: You never receive Discord alerts after downloads.
+**Problem**: You never receive notifications after downloads (Discord, Slack, Telegram, email, ntfy, or any other service).
 
 **Solution**:
 1. Open **Settings -> Notifications** and confirm **Enable Notifications** is on.
-2. Verify the Discord webhook URL is correct and saved; use the test notification button next to the saved URL to confirm delivery.
-3. Notifications only send when at least one new video downloads successfully—skipped runs will not trigger an alert.
-4. Check the server logs (`docker compose logs -f`) for `Failed to send notification` errors that may indicate network or webhook permission issues.
+2. Confirm your service appears in the list of added services. A URL typed into the **Notification URL** field is only added when you click **Add Service** (or press Enter); save the settings page afterwards.
+3. Use the test button (paper-plane icon, "Send test notification") next to the service to confirm delivery.
+4. Download notifications are sent when a run downloads at least one new video, or when a run fails with a diagnosed cause or stops early. A run with nothing new and no problems sends nothing.
+5. Check the server logs (`docker compose logs -f`) for `Failed to send notification` errors that may indicate network or permission issues.
 
 ### Test Notification Fails
 
 **Problem**: Sending a test notification shows an error.
 
 **Solution**:
-1. Ensure the webhook URL is saved and not blank or whitespace.
-2. Confirm the webhook belongs to Discord (URL should start with `https://discord.com/api/webhooks/`).
-3. Make sure the Discord channel still exists and the webhook has permission to post.
-4. Retry after checking network/firewall rules that may block outbound HTTPS requests.
+1. Check the URL format for your service. Notifications are delivered through [Apprise](https://github.com/caronc/apprise/wiki), so any Apprise URL works: for example `discord://webhook_id/webhook_token`, `https://discord.com/api/webhooks/...`, `slack://...`, `tgram://...`, or `ntfy://...`.
+2. Make sure the destination still exists (for example the Discord channel or webhook, Slack channel, or Telegram chat) and that the credentials in the URL still have permission to post.
+3. Retry after checking network/firewall rules that may block outbound requests to the service.
 
 ## Automatic Video Removal Issues
 
@@ -109,18 +121,28 @@ See [Authentication - Cannot Find the Setup Token](AUTHENTICATION.md#cannot-find
 **Solution**:
 - Confirm the storage indicator (shown in the app header and at the bottom of the navigation sidebar) is visible and shows valid values. Space-based removal requires the server to resolve the download directory path and gather disk usage via `df`.
 - Ensure the `DATA_PATH` (or selected YouTube directory) exists within the container/host and is mounted with read access to filesystem metadata.
-- If you're running on network storage or uncommon mounts, try remounting with `df` support or rely on age-based cleanup instead.
+- If you're running on network storage or uncommon mounts, try remounting with `df` support or rely on age-based or total-size cleanup instead (the total size rule does not use `df`).
 - Retry the preview after saving the configuration again. The preview endpoint requires a valid auth token; log back in if necessary.
+
+### Downloads Stopped with "Downloads are paused"
+
+**Problem**: New downloads are refused (HTTP 409 from the API), scheduled downloads show as skipped, and a "Downloads are paused" banner appears.
+
+**Solution**:
+- A storage limit on **Settings -> Storage Limits** was reached. The banner and the notification say which one and by how much.
+- Usage further past the limit than one video is expected: limits are checked between download jobs, so a job that was already running when the limit was crossed finishes all of its videos first.
+- Free space or remove videos (manually, or with Auto Removal), or raise or clear the limit. Downloads resume on their own: Youtarr re-checks after deletions, on settings changes, and every 5 minutes while paused. Queued downloads then start automatically.
+- If downloads stay paused after an Auto Removal run, check that the pause limits are not stricter than the Auto Removal limits (the Storage Limits page shows a warning when they are).
 
 ### Nightly Cleanup Didn't Delete Anything
 
-**Problem**: Automatic cleanup runs at 2:00 AM but no videos are removed.
+**Problem**: Automatic cleanup runs on schedule but no videos are removed.
 
 **Solution**:
-- Verify Automatic Video Removal is enabled on **Settings -> Auto Removal** and at least one rule is configured: an age threshold, a free-space threshold, or watched-based removal. Note that watched-based removal only runs while watch status sync is enabled.
+- Verify Automatic Video Removal is enabled on **Settings -> Auto Removal** and at least one rule is configured: an age threshold, a free-space threshold, a total size limit, or watched-based removal. Note that watched-based removal only runs while watch status sync is enabled.
 - Remember the exclusions. Videos you've marked as Protected, videos of channels with auto-removal protection enabled, and the newest downloads kept by "Keep this many newest downloads" (the global setting plus any per-channel keep counts) are never removed, so a run can legitimately delete nothing.
 - Run the dry-run preview to see how many videos currently match the rules - it also shows how many videos the protection settings are keeping. Adjust values if needed (for example, lower the free-space threshold or reduce the age requirement).
-- Check server logs around 2:00 AM for `[Auto-Removal]` messages to confirm the job is executing (`docker compose logs -f youtarr`).
+- Use **Run now** on the Automatic video cleanup card in **Settings -> Scheduling** to see the result immediately (for example 'No videos matched the removal rules'), or check the logs directly with `docker compose logs -f youtarr`.
 - If errors appear in the logs (e.g., permission issues deleting files), resolve those first - the cron job will skip files it cannot delete.
 
 ## Library / File Issues
@@ -171,6 +193,8 @@ The start script:
 2. Using docker-compose commands:
 - Ensure that you have created your `.env` file from the provided `.env.example` and configured your `YOUTUBE_OUTPUT_DIR` before attempting to run `docker compose up -d`
 
+3. In Portainer: don't deploy the repository's compose file there at all. Use the stack in the [Portainer guide](platforms/portainer.md), which doesn't need `YOUTUBE_OUTPUT_DIR` set separately.
+
 ### Docker Desktop Mount Path Error (Windows)
 
 **Problem**: Error message: `Error response from daemon: error while creating mount source path '/run/desktop/mnt/host/...': mkdir /run/desktop/mnt/host/...: file exists`
@@ -217,6 +241,37 @@ This is a known Docker Desktop issue on Windows where mount points become corrup
    ```bash
    netstat -an | grep 3087
    ```
+
+### "EMFILE: too many open files, watch" or "Cannot watch config.json" {#config-file-watcher-limit}
+
+**Problem**: Youtarr logs this warning on startup:
+
+```
+Cannot watch config.json for changes; Youtarr will keep running, but hand edits to config.json will not be picked up until restart ...
+```
+
+Older versions crashed on startup instead, with:
+
+```
+Error: EMFILE: too many open files, watch '/app/config/config.json'
+```
+
+**Cause**: Youtarr watches `config.json` so it can pick up changes you make to the file by hand. Linux limits how many file watchers (inotify instances) each user can create, and the default is 128. On hosts running many containers as the same user (on Unraid most containers run as `nobody`), the other containers can use up that shared limit, leaving none for Youtarr. A related limit, `fs.inotify.max_user_watches`, produces an `ENOSPC` "System limit for number of file watchers reached" error instead.
+
+Youtarr keeps running without the watcher. Settings saved from the web UI still work; the only thing lost is auto-reload of hand edits to `config.json`, which take effect after a restart instead.
+
+**Solution**: Raise the limit on the host (not inside the container):
+
+```bash
+sysctl -w fs.inotify.max_user_instances=512
+# If the warning mentions max_user_watches / ENOSPC:
+sysctl -w fs.inotify.max_user_watches=524288
+```
+
+Then restart Youtarr. `sysctl -w` doesn't survive a reboot. To make it permanent:
+
+- **Unraid**: install the **Tips and Tweaks** plugin and raise the inotify limits there, or add the `sysctl -w ...` line(s) to `/boot/config/go` so they run at every boot.
+- **Other Linux hosts**: create `/etc/sysctl.d/99-inotify.conf` containing `fs.inotify.max_user_instances=512` (and `fs.inotify.max_user_watches=524288` if needed), then run `sysctl --system`.
 
 ### Asustor App Central: Stuck on an Old Version
 
@@ -479,6 +534,52 @@ value, so setting only one of them in `.env` makes the two sides disagree and th
 either use that password or wipe the database directory and let it re-initialize (**this deletes all DB
 data**). `docker logs youtarr-db` will show `Access denied` warnings when it's a credentials problem.
 
+MariaDB only reads its password settings the first time it starts with empty storage, so changing them
+later has no effect on an existing database. This often catches Portainer users: deleting and re-creating
+a stack keeps its database volume, so the old password is still in place. See
+[Changing the database password](platforms/portainer.md#changing-the-database-password) in the Portainer guide.
+
+### Database Empty After a Reboot or Redeploy {#database-empty-after-reboot-or-redeploy}
+
+**Problem**: After a server reboot, re-creating a stack, or moving Youtarr to a new folder, your channels
+and download history are gone. Some videos may still be listed: when the config folder survives, Youtarr
+refills up to 300 recent videos from its download record (`config/complete.list`) on startup, so the
+Videos page can look partly filled while the Channels page is empty.
+
+**Cause**: Youtarr started on a new, empty database because the database storage it used before is no
+longer the one mounted. Common ways this happens:
+- **A stack manager with the repository's compose file.** Portainer and similar tools run each stack from
+  their own folder, so `./database` lives somewhere like `/data/compose/<stack id>/database` on the host.
+  A re-created stack gets a new ID and a new, empty folder. On Unraid, that folder is in memory and is
+  wiped on reboot.
+- **A renamed folder or stack with a named volume.** Docker Compose names the `youtarr-db-data` volume
+  after the project (usually the folder or stack name), for example `youtarr_youtarr-db-data`. A new name
+  gives you a new, empty volume.
+- **A database folder copied into the wrong place**, for example ending up at `database/database`.
+
+To see where the current database is stored:
+```bash
+docker inspect youtarr-db --format '{{range .Mounts}}{{if .Name}}{{.Name}}{{else}}{{.Source}}{{end}}{{end}}'
+```
+
+To see when the current database was created (a date matching the day your data disappeared means
+Youtarr started from scratch then):
+```bash
+docker exec youtarr-db sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" youtarr -e "SELECT MIN(migration_date) AS created FROM _charset_migration_log"'
+```
+
+**Solution**:
+1. Look for the old database before changing anything: an older volume in `docker volume ls`, the old
+   `./database` folder, or, for Portainer, the other folders in `/data/compose/`. If you find it, point
+   the stack back at it (the [Portainer guide](platforms/portainer.md#moving-an-existing-install-out-of-datacompose)
+   shows how to move it to a permanent place).
+2. If it's gone, restore from a backup if you have one (see [Backup and Restore](BACKUP_RESTORE.md)).
+3. Otherwise, re-add your channels. As long as `config/complete.list` survived, Youtarr won't download
+   videos it already downloaded.
+
+**Prevention**: Store the database at a fixed, absolute path or in a volume with a fixed `name:`, and
+back it up. Portainer users should use the stack in the [Portainer guide](platforms/portainer.md).
+
 ### Access Denied for Custom Database User
 
 **Problem**: After changing `DB_USER` and `DB_PASSWORD` in your `.env` file to use a non-root user, you see access denied errors in the logs:
@@ -505,9 +606,11 @@ youtarr-db  | 2025-11-22  6:28:19 8 [Warning] Access denied for user '<DB_USER>'
 
    **WARNING: This will completely remove your DB data!**
    ```bash
+   docker compose down
    rm -rf ./database
-   # Or if using a named volume:
-   docker volume rm youtarr-db-data
+   # Or if using a named volume. Compose prefixes the name with the project name,
+   # usually youtarr_youtarr-db-data; confirm with: docker volume ls | grep youtarr-db-data
+   docker volume rm youtarr_youtarr-db-data
    ```
 
 4. Start Youtarr again:
@@ -526,7 +629,7 @@ ERROR 1396 (HY000) at line 21: Operation CREATE USER failed for 'root'@'%'
 
 **Solution**:
 1. Leave the `MYSQL_USER` / `MYSQL_PASSWORD` lines commented out in `docker-compose.yml` when `DB_USER=root` (the default). Only uncomment them if you explicitly set a non-root `DB_USER` / `DB_PASSWORD` in `.env`.
-2. Remove the broken datadir (`rm -rf ./database` or `docker volume rm youtarr-db-data`, depending on which storage you use).
+2. Stop the stack with `docker compose down`, then remove the broken datadir: `rm -rf ./database` for a bind mount, or `docker volume rm youtarr_youtarr-db-data` for a named volume. Compose prefixes the volume with the project name, so confirm yours with `docker volume ls | grep youtarr-db-data`.
 3. Run `docker compose up -d` again. MariaDB will initialize cleanly.
 
 ### Duplicate Column Errors After Upgrade
@@ -599,8 +702,8 @@ COMPOSE_FILE=docker-compose.yml:docker-compose.arm.yml
    ```bash
    docker compose logs -f youtarr | grep yt-dlp
    ```
-4. Ensure the cron schedule is configured (default: every 6 hours)
-5. Manually trigger a download from the Channels page
+4. Ensure the cron schedule is configured (default: hourly)
+5. Open **Settings -> Scheduling** and check the Automatic downloads card: it shows the next run, the last run and its result, and its **Run now** button starts a check immediately; you can also manually trigger a download with **Download new** under **Downloads -> Manual Download**.
 
 ### yt-dlp Errors
 
@@ -610,7 +713,7 @@ COMPOSE_FILE=docker-compose.yml:docker-compose.arm.yml
 
 Update yt-dlp. Most download failures are extractor breakage that a newer yt-dlp fixes.
 
-- The fastest fix is in-app: go to **Settings -> YT-DLP** and update yt-dlp manually. With **Automatically update yt-dlp daily (4:00 AM)** enabled this happens each night on its own.
+- The fastest fix is in-app: go to **Settings -> YT-DLP** and update yt-dlp manually. With **Automatically update yt-dlp** enabled, this happens on the schedule configured in **Settings -> Scheduling** (daily at 04:00 by default).
 - If the latest stable yt-dlp still fails, switch the **Update Channel** to **Nightly** on the same page. Nightly gets extractor fixes days earlier than stable.
 - Youtarr's Docker image also bundles the latest yt-dlp at release time, so pulling a new image updates it too:
   - Via docker compose:
@@ -644,7 +747,7 @@ Youtarr detects this pattern and shows a "Likely cause" diagnosis on the Downloa
 
 Uploaded cookies change which YouTube player client yt-dlp can use, and YouTube enforces stricter requirements on that path. Stale or rotated cookies are the most common trigger - YouTube rotates cookie values regularly, so an exported cookies file goes invalid over time.
 
-1. **Refresh your cookies first**: sign into YouTube in your browser, re-export cookies with a browser extension (e.g., "Get cookies.txt LOCALLY"), and upload the fresh file. Refreshing preserves whatever you enabled cookies for.
+1. **Refresh your cookies first**: sign into YouTube in your browser, re-export cookies with a browser extension (e.g., "Get cookies.txt LOCALLY"), and upload the fresh file. Refreshing preserves whatever you enabled cookies for. **Test cookies** in Settings -> Cookies confirms whether the current file is still signed in.
 2. **If fresh cookies still fail**, temporarily disable cookies and retry the video. Many videos download fine without cookies because yt-dlp can then use a less restricted client.
 
 **If cookies are not enabled**:
@@ -652,6 +755,18 @@ Uploaded cookies change which YouTube player client yt-dlp can use, and YouTube 
 The 403 is sometimes a temporary block on YouTube's side - retrying later can work. If it keeps failing, uploading YouTube cookies from your browser (Settings -> Cookies) often resolves it.
 
 **Note**: The same failure on one machine but not another usually comes down to this cookies difference, not the network - both machines can share an IP and behave differently.
+
+### Test Cookies Says Not Signed In
+
+**Problem**: Settings -> Cookies -> **Test cookies** reports that YouTube did not recognize a signed-in session.
+
+The cookie file no longer belongs to a signed-in YouTube session. The cookies expired, YouTube rotated them (it does this regularly, and signing out or exporting from a browser that then keeps using the session can invalidate the exported copy), or they were exported from a signed-out browser. The details above the button may also show expired login cookies or none at all.
+
+1. Sign into YouTube in your browser (ideally a private window you close right after exporting, so the browser does not rotate the exported session).
+2. Re-export cookies with a browser extension (e.g., "Get cookies.txt LOCALLY").
+3. Upload the fresh file (or replace your `YOUTARR_COOKIES_FILE` source) and run **Test cookies** again.
+
+If the test reports a bot check instead, sign into YouTube in your browser, solve any challenge it shows, then re-export. A network or timeout failure means YouTube could not be reached; check the server's internet connection and the proxy setting in Settings.
 
 ### Downloads Are Only 360p With Cookies Enabled
 
@@ -675,6 +790,45 @@ If you only enabled cookies to get past a "Sign in to confirm you're not a bot" 
 This is the subtitle request (YouTube's timedtext endpoint), not the video: video streams come from `googlevideo.com`. YouTube throttles or hangs subtitle requests that don't look like they come from a browser, so yt-dlp sends them with browser impersonation, which needs the `curl_cffi` library. Youtarr's Docker image includes it; if you see `WARNING: The extractor specified to use impersonation for this download, but no impersonate target is available` in the logs, you are on an older image and should pull the latest.
 
 Even with impersonation, YouTube's subtitle endpoint is flaky at times. When the subtitle fetch fails, yt-dlp still downloads the video; Youtarr keeps the video, does not count it as a failed download, and marks the job "Complete with Warnings". If the extra retry time bothers you, disable subtitles in **Settings -> Core** until it settles.
+
+### Downloads Fail with "Conversion failed!" or "No space left on device" {#download-out-of-space}
+
+**Problem**: A video (usually a large one) downloads completely and then fails with `Conversion failed!`, or a job stops with `Out of disk space in the temporary folder`. If the disk is completely full you may also see every list in the app come up empty (no channels, no videos) until space is freed.
+
+`Conversion failed!` is what ffmpeg reports when it cannot write the merged file. Merging the video and audio streams needs a second copy of the video, so the folder downloads are staged in needs free space of about **twice the video's size**. When Youtarr measures that this is what happened, the failed job shows a "Not enough disk space to finish the download" diagnosis (Downloads page, Download History, and notifications) and the log has a `Download failed because the temporary download folder is out of space` line with the folder and its free space. Youtarr normally removes the failed video's leftover files when that download run ends, so the space comes back on its own; anything left is cleared when the next download job starts.
+
+Which disk is full depends on **Use external temp directory** (Settings -> Core):
+
+- **Off (default)**: downloads are staged in `.youtarr_tmp/` inside your output folder, so your media drive is the one that is short on space.
+- **On**: downloads are staged inside the container (`/tmp/youtarr-downloads` unless you changed it). Unless you mounted a volume there, this is Docker's own storage. On Docker Desktop (Windows/macOS) that is a virtual disk with a fixed maximum size, shared with every image, the build cache, and every other container; free space on your drives does not count.
+
+**To check**: look at free space on the folder downloads are staged in, as the container sees it. The log line above names that folder (`tempPath`); use it if you changed the output or temp path.
+
+```bash
+# Setting off (default): staging is under the output folder
+docker exec youtarr df -h /usr/src/app/data
+
+# Setting on: staging is the external temp path
+docker exec youtarr df -h /tmp/youtarr-downloads
+```
+
+**To fix**:
+
+- **Your media drive is full** (setting off, or a volume you mounted at the external temp path): free up space on that drive.
+- **Docker's own storage is full** (setting on, nothing mounted at the external temp path): see what is using it and reclaim what you do not need:
+
+  ```bash
+  # What is using Docker's disk
+  docker system df
+
+  # Reclaim build cache, then images no container uses
+  docker builder prune
+  docker image prune -a
+  ```
+
+If large videos regularly do not fit in the external temp path, mount a volume with enough room there, or turn **Use external temp directory** off so staging uses your output drive (some managed platforms, such as ElfHosted, choose the staging location for you).
+
+A channel video that failed this way is retried by each scheduled download for as long as it is still among the most recent videos the check looks at (**Files to Download per Channel**) and passes the channel's filters, so it normally completes once there is room. If it has dropped out of that window, download it manually.
 
 ### No Download Progress Shown (Downloads Work, Videos "Just Appear")
 

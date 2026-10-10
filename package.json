@@ -1,6 +1,6 @@
 {
   "name": "youtarr",
-  "version": "1.84.0",
+  "version": "1.87.0",
   "description": "",
   "main": "server/index.js",
   "engines": {
@@ -19,6 +19,7 @@
     "test": "npm run lint && npm run test:unit",
     "test:unit": "npm run test:backend -- --passWithNoTests && npm run test:frontend -- --passWithNoTests",
     "test:backend": "jest --config jest.config.js",
+    "test:external-api-database": "jest --config jest.external-api-database.config.js --runInBand",
     "test:frontend": "cd client && npm test -- --watchAll=false",
     "test:coverage": "npm run lint && jest --config jest.config.js --coverage && cd client && npm test -- --coverage --watchAll=false",
     "test:watch": "jest --config jest.config.js --watch",
@@ -68,8 +69,10 @@
     "mysql2": "^3.9.4",
     "node-cron": "^3.0.2",
     "pino": "^10.0.0",
+    "pino-abstract-transport": "^3.0.0",
     "pino-http": "^11.0.0",
     "pino-pretty": "^13.1.2",
+    "pino-roll": "^4.0.0",
     "sequelize": "^6.31.1",
     "sequelize-cli": "^6.6.0",
     "swagger-jsdoc": "^6.2.8",

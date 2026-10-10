@@ -187,7 +187,43 @@ describe('ChannelVideosDialogs Component', () => {
       );
 
       expect(screen.getByText('Load More Shorts')).toBeInTheDocument();
-      expect(screen.getByText(/This will load up to 5000 additional videos from this channel's 'Shorts' tab on YouTube/)).toBeInTheDocument();
+      expect(screen.getByText(/This will load up to the newest 5,000 videos from this channel's 'Shorts' tab on YouTube/)).toBeInTheDocument();
+    });
+
+    test('says Load More will load the full list when the tab fits', () => {
+      renderWithProviders(
+        <ChannelVideosDialogs
+          {...defaultProps}
+          refreshConfirmOpen={true}
+          tabStats={{ total: 449, fetchedAt: null, downloaded: 120, ignored: 0, percent: 26, loaded: 50 }}
+        />
+      );
+
+      expect(screen.getByText(/YouTube lists 449 public videos on this tab and 50 are loaded\. Load More will load the full list\./)).toBeInTheDocument();
+    });
+
+    test('says how many of the oldest videos are out of reach for a tab over 5,000', () => {
+      renderWithProviders(
+        <ChannelVideosDialogs
+          {...defaultProps}
+          refreshConfirmOpen={true}
+          tabStats={{ total: 6070, fetchedAt: null, downloaded: 9, ignored: 0, percent: 0, loaded: 4954 }}
+        />
+      );
+
+      expect(screen.getByText(/Load More reads only the newest 5,000, so about 1,070 of the oldest can't be loaded here\./)).toBeInTheDocument();
+    });
+
+    test('says everything is already loaded when the listing is complete', () => {
+      renderWithProviders(
+        <ChannelVideosDialogs
+          {...defaultProps}
+          refreshConfirmOpen={true}
+          tabStats={{ total: 449, fetchedAt: null, downloaded: 120, ignored: 0, percent: 26, loaded: 449 }}
+        />
+      );
+
+      expect(screen.getByText(/All 449 public videos on this tab are already loaded\. Loading again refreshes the list\./)).toBeInTheDocument();
     });
 
     test('calls onRefreshCancel when Cancel is clicked', async () => {

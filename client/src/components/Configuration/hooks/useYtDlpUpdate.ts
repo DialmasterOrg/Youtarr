@@ -3,11 +3,29 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 // Event name for notifying other components when yt-dlp is updated
 export const YTDLP_UPDATED_EVENT = 'ytdlp-updated';
 
+export interface YtDlpLastResult {
+  status: 'updated' | 'up-to-date' | 'skipped' | 'error';
+  message?: string;
+  version?: string;
+}
+
 export interface YtDlpVersionInfo {
   currentVersion: string | null;
   latestVersion: string | null;
   updateAvailable: boolean;
+  lastChecked: string | null;
+  lastUpdated: string | null;
+  lastResult: YtDlpLastResult | null;
 }
+
+const EMPTY_VERSION_INFO: YtDlpVersionInfo = {
+  currentVersion: null,
+  latestVersion: null,
+  updateAvailable: false,
+  lastChecked: null,
+  lastUpdated: null,
+  lastResult: null,
+};
 
 export type YtDlpUpdateStatus = 'idle' | 'checking' | 'updating' | 'success' | 'error';
 
@@ -23,11 +41,7 @@ interface UseYtDlpUpdateResult {
 }
 
 export function useYtDlpUpdate(token: string | null): UseYtDlpUpdateResult {
-  const [versionInfo, setVersionInfo] = useState<YtDlpVersionInfo>({
-    currentVersion: null,
-    latestVersion: null,
-    updateAvailable: false,
-  });
+  const [versionInfo, setVersionInfo] = useState<YtDlpVersionInfo>(EMPTY_VERSION_INFO);
   const [updateStatus, setUpdateStatus] = useState<YtDlpUpdateStatus>('idle');
   const [checkingVersion, setCheckingVersion] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -78,6 +92,9 @@ export function useYtDlpUpdate(token: string | null): UseYtDlpUpdateResult {
         currentVersion: data.currentVersion,
         latestVersion: data.latestVersion,
         updateAvailable: data.updateAvailable,
+        lastChecked: data.lastChecked ?? null,
+        lastUpdated: data.lastUpdated ?? null,
+        lastResult: data.lastResult ?? null,
       });
       setUpdateStatus('idle');
     } catch (err) {

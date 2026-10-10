@@ -58,6 +58,7 @@ function toModalData(r: SearchResult): VideoModalData {
     status: r.status === 'queued' || r.status === 'downloading'
       ? (r.isDownloaded ? 'downloaded' : r.databaseId ? 'missing' : 'never_downloaded')
       : r.status,
+    inArchive: r.inArchive,
     isDownloaded: r.isDownloaded ?? r.status === 'downloaded',
     filePath: r.filePath ?? null,
     fileSize: r.fileSize ?? null,
@@ -197,7 +198,9 @@ export default function FindVideos({ token }: FindVideosProps) {
   );
 
   const missingVideoCount = useMemo(
-    () => results.filter((r) => selection.isSelected(r.youtubeId) && r.status === 'missing').length,
+    () => results.filter(
+      (r) => selection.isSelected(r.youtubeId) && (r.status === 'missing' || r.inArchive)
+    ).length,
     [results, selection.isSelected]
   );
   const defaultResolution = config.preferredResolution || '1080';

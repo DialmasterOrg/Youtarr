@@ -52,13 +52,65 @@ function resolveAnchor(anchor, targetSource, headingIndex) {
   return candidates?.length === 1 ? `#${candidates[0]}` : anchor;
 }
 
-export function rewriteLinks(body, source, routes, root = ROOT, headingIndex = createHeadingIndex(routes, root)) {
-  const sourceFile = source.startsWith('docs/') ? path.join(root, source) : path.join(root, source);
+export class DocumentationLinkError extends Error {
+  constructor(issues) {
+    super(`Found ${issues.length} broken documentation link${issues.length === 1 ? '' : 's'}:\n\n${issues.map((issue) => `${issue.source}:${issue.line}\n  ${issue.message}`).join('\n\n')}`);
+    this.name = 'DocumentationLinkError';
+    this.issues = issues;
+  }
+}
+
+const escapeCommandData = (value) => String(value).replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A');
+const escapeCommandProperty = (value) => escapeCommandData(value).replaceAll(':', '%3A').replaceAll(',', '%2C');
+
+export function formatLinkAnnotation(issue) {
+  return `::error file=${escapeCommandProperty(issue.source)},line=${issue.line},title=Broken documentation link::${escapeCommandData(issue.message)}`;
+}
+
+function describeBrokenLink({source, href, target, resolved, routes, root, isImage}) {
+  const relative = path.relative(root, resolved).replaceAll('\\', '/');
+  const insideRoot = relative !== '..' && !relative.startsWith('../') && !path.isAbsolute(relative);
+  const isMarkdown = target.toLowerCase().endsWith('.md');
+  const lookup = insideRoot ? relative : resolved;
+  let message = `Broken link ${JSON.stringify(href)}. Looked for ${JSON.stringify(lookup)}${insideRoot ? ' in the repository' : ' on the filesystem'}, but ${isMarkdown ? 'it is not a published documentation page' : 'it does not exist'}.`;
+  if (path.isAbsolute(target)) {
+    message += ' A leading / points to the filesystem root, not the repository root.';
+  } else {
+    message += ` Relative links start from ${JSON.stringify(path.posix.dirname(source))}.`;
+  }
+  const candidate = path.resolve(root, target.replace(/^\/+/, ''));
+  const candidateSource = path.relative(root, candidate).replaceAll('\\', '/');
+  const safeCandidate = candidateSource !== '..' && !candidateSource.startsWith('../') && !path.isAbsolute(candidateSource);
+  const candidateExists = Boolean(safeCandidate && (isMarkdown ? routes.has(candidateSource) : fs.statSync(candidate, {throwIfNoEntry: false})?.isFile()));
+  if (candidateExists && isMarkdown) {
+    const corrected = path.relative(path.dirname(path.join(root, source)), candidate).replaceAll('\\', '/') + href.slice(target.length);
+    message += ` Try ${JSON.stringify(corrected)}.`;
+  } else if (candidateExists) {
+    message += isImage
+      ? ' Publish this image under website/static/ and link to its published location on the docs site.'
+      : ' Use a full GitHub URL for this repository file; a relative filesystem path does not make it available on the docs site.';
+  } else {
+    message += ' Check the filename, capitalization, and path relative to this document.';
+  }
+  if (!candidateExists && !isMarkdown && !isImage) {
+    message += ' For repository files such as Compose YAML, use a full GitHub URL if the file is not published with the docs site.';
+  }
+  return message;
+}
+
+export function rewriteLinks(body, source, routes, root = ROOT, headingIndex = createHeadingIndex(routes, root), {lineOffset = 0} = {}) {
+  const sourceFile = path.join(root, source);
+  const issues = [];
   let fenced = false;
   const htmlTags = new Set(['details','summary','img','br','a','div','span','p','table','thead','tbody','tr','th','td','figure','figcaption','video','source','sup','sub']);
   const sanitize = (text) => text.replace(/<([A-Z][A-Z0-9_ -]*)>/g, '&lt;$1&gt;').replace(/<\/?([A-Za-z][A-Za-z0-9-]*)(?:\s[^>]*)?>/g, (tag, name) => htmlTags.has(name.toLowerCase()) ? tag : tag.replace(/</g, '&lt;').replace(/>/g, '&gt;')).replace(/<(?=[^A-Za-z\/])/g, '&lt;').replace(/\{/g, '&#123;').replace(/\}/g, '&#125;');
   const safeMdx = body.split('\n').map((line) => { if (/^\s*(```|~~~)/.test(line)) { fenced = !fenced; return line; } if (fenced) return line; let output = ''; let cursor = 0; const codeSpan = /(`+)([\s\S]*?)\1/g; let match; while ((match = codeSpan.exec(line))) { output += sanitize(line.slice(cursor, match.index)) + match[0]; cursor = codeSpan.lastIndex; } return output + sanitize(line.slice(cursor)); }).join('\n');
-  return safeMdx.replace(/(!?\[[^\]]*\])\(([^)]+)\)/g, (all, label, href) => {
+  const codeRanges = [];
+  visit(headingParser.parse(safeMdx), ['code', 'inlineCode'], (node) => {
+    codeRanges.push([node.position.start.offset, node.position.end.offset]);
+  });
+  const rewritten = safeMdx.replace(/(!?\[[^\]]*\])\(([^)]+)\)/g, (all, label, href, offset) => {
+    if (codeRanges.some(([start, end]) => offset >= start && offset < end)) return all;
     if (href.startsWith('#')) {
       const anchor = resolveAnchor(href, source, headingIndex);
       if (href.startsWith('#-')) return `${label}(/docs/${routes.get(source)}${anchor})`;
@@ -67,16 +119,27 @@ export function rewriteLinks(body, source, routes, root = ROOT, headingIndex = c
     if (/^(?:[a-z]+:|\/\/|data:)/i.test(href)) return all;
     const [target, ...anchorParts] = href.split('#');
     if (!target) return all;
+    const resolvedPath = path.resolve(path.dirname(sourceFile), target);
+    const report = () => {
+      issues.push({
+        source,
+        line: lineOffset + safeMdx.slice(0, offset).split('\n').length,
+        message: describeBrokenLink({source, href, target, resolved: resolvedPath, routes, root, isImage: label.startsWith('!')}),
+      });
+      return all;
+    };
     if (!target.toLowerCase().endsWith('.md')) {
-      if (!fs.existsSync(path.resolve(path.dirname(sourceFile), target))) throw new Error(`unresolved relative asset ${source}:${href}`);
+      if (!fs.existsSync(resolvedPath)) return report();
       return all;
     }
-    const resolved = path.normalize(path.relative(root, path.resolve(path.dirname(sourceFile), target))).replaceAll('\\', '/');
+    const resolved = path.normalize(path.relative(root, resolvedPath)).replaceAll('\\', '/');
     const canonical = resolved;
-    if (!routes.has(canonical)) throw new Error(`unresolved canonical link ${source}:${href}`);
+    if (!routes.has(canonical)) return report();
     const anchor = anchorParts.length ? resolveAnchor(`#${anchorParts.join('#')}`, canonical, headingIndex) : '';
     return `${label}(/docs/${routes.get(canonical)}${anchor})`;
   });
+  if (issues.length) throw new DocumentationLinkError(issues);
+  return rewritten;
 }
 
 export function assertManifest(manifest, root = ROOT) {
@@ -99,14 +162,25 @@ export async function generate({root = ROOT, outputRoot, swaggerSpec} = {}) {
   const manifest = createManifest(root); assertManifest(manifest, root);
   const routes = new Map(manifest.map((item) => [item.source, item.slug]));
   const headingIndex = createHeadingIndex(routes, root);
+  const linkIssues = [];
   for (const item of manifest) {
     const sourceFile = path.join(root, item.source);
-    const body = fs.readFileSync(sourceFile, 'utf8').replace(/^---[\s\S]*?---\s*/, '');
-    const rewritten = rewriteLinks(body, item.source, routes, root, headingIndex);
+    const markdown = fs.readFileSync(sourceFile, 'utf8');
+    const body = stripFrontMatter(markdown);
+    const lineOffset = markdown.slice(0, markdown.length - body.length).split('\n').length - 1;
+    let rewritten;
+    try {
+      rewritten = rewriteLinks(body, item.source, routes, root, headingIndex, {lineOffset});
+    } catch (error) {
+      if (!(error instanceof DocumentationLinkError)) throw error;
+      linkIssues.push(...error.issues);
+      continue;
+    }
     const dest = path.join(outRoot, 'docs', `${item.slug}.md`);
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.writeFileSync(dest, `---\nid: ${item.id}\ntitle: ${item.title}\nslug: /${item.slug}\neditUrl: ${item.sourceEditUrl}\n---\n\n${rewritten.trim()}\n`);
   }
+  if (linkIssues.length) throw new DocumentationLinkError(linkIssues);
   const read = (name) => fs.readFileSync(path.join(root, name), 'utf8');
   const compose = [['docker-compose.yml', 'Base compose (required)'], ['docker-compose.arm.yml', 'ARM/NAS override (use with base)'], ['docker-compose.external-db.yml', 'External database compose (standalone)'], ['docker-compose.dev.yml', 'Development compose (build first; see Development Guide)']];
   let quick = '# Quick start\n\n## Prerequisites\n\nInstall Docker Engine with Compose v2 (Docker Desktop on Windows/macOS). Windows users can run the shell scripts from WSL.\n\n## Configure and start\n\n```bash\ngit clone https://github.com/DialmasterOrg/Youtarr.git\ncd Youtarr\ncp .env.example .env\n# Edit .env and set YOUTUBE_OUTPUT_DIR=./downloads (or an absolute host path)\nmkdir -p downloads config jobs server/images database\n\n# Standard bundled database\ndocker compose -f docker-compose.yml up -d\n# ARM/NAS or Docker Desktop safer named-volume database\ndocker compose -f docker-compose.yml -f docker-compose.arm.yml up -d\n# External MariaDB/MySQL (DB_HOST, DB_USER, DB_PASSWORD are required)\ndocker compose -f docker-compose.external-db.yml up -d\n```\n\nThe ARM compose file is an override and must be layered with the base file. The external database file is standalone and must be used by itself so it does not start the bundled database. Development is a separate source-built alternative; follow the [Development Guide](/docs/development) for the required client build and startup sequence. For external DB, set `DB_HOST`, `DB_USER`, `DB_PASSWORD`, and optionally `DB_PORT`/`DB_NAME` in `.env`.\n\n## Verify, open, and stop\n\nRun the matching `docker compose ... ps`, then open `http://localhost:3087`. Complete the setup-token wizard on first access, or inspect matching `docker compose ... logs -f youtarr` output. Stop the selected project with the same file flags and `down` (for example, `docker compose -f docker-compose.yml down`).\n\nOn Windows, use Docker Desktop Compose commands above or run the referenced shell scripts under WSL. Generation only references scripts; it never executes them.\n';
@@ -135,4 +209,16 @@ export async function generate({root = ROOT, outputRoot, swaggerSpec} = {}) {
   return manifest;
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) generate().then((m) => console.log(`Generated ${m.length} canonical docs`)).catch((error) => { console.error(error.stack || error); process.exitCode = 1; });
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  generate().then((m) => console.log(`Generated ${m.length} canonical docs`)).catch((error) => {
+    if (error instanceof DocumentationLinkError) {
+      console.error(error.message);
+      if (process.env.GITHUB_ACTIONS === 'true') {
+        for (const issue of error.issues) console.log(formatLinkAnnotation(issue));
+      }
+    } else {
+      console.error(error.stack || error);
+    }
+    process.exitCode = 1;
+  });
+}

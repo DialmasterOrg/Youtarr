@@ -5,7 +5,9 @@
 
 const https = require('https');
 const { spawn } = require('child_process');
+const fs = require('fs');
 const logger = require('../logger');
+const configModule = require('./configModule');
 
 // Lazy-loaded to avoid circular dependency issues during test mocking
 let _tempPathManager = null;
@@ -259,6 +261,7 @@ function performUpdate({ channel } = {}) {
         : null;
 
       clearVersionCache();
+      clearYtdlpDiskCache();
 
       logger.info({ newVersion, output }, 'yt-dlp updated successfully');
       resolve({
@@ -291,6 +294,15 @@ function performUpdate({ channel } = {}) {
         message: 'Update timed out. Please try again later.',
       });
     }, timeout);
+  });
+}
+
+// The cache persists on the config volume, so a new yt-dlp version starts
+// clean instead of inheriting entries written by the previous one.
+function clearYtdlpDiskCache() {
+  const cacheDir = configModule.getYtdlpCacheDir();
+  fs.promises.rm(cacheDir, { recursive: true, force: true }).catch((err) => {
+    logger.warn({ err, cacheDir }, 'Failed to clear yt-dlp cache after update');
   });
 }
 
