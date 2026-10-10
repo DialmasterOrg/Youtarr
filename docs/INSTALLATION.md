@@ -329,4 +329,5 @@ If you installed Youtarr from App Central on an Asustor NAS, updates come throug
 - Database schema (via automatic migrations)
 - Docker container and dependencies
 
-**Important**: Database migrations run automatically on startup. If a migration fails, check the logs with `docker compose logs -f` and see the [Troubleshooting Guide](TROUBLESHOOTING.md) for assistance.
+> [!IMPORTANT]
+> Database migrations run automatically on startup. If a migration fails, check the logs with `docker compose logs -f` and see the [Troubleshooting Guide](TROUBLESHOOTING.md) for assistance.
