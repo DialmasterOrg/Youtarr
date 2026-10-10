@@ -127,9 +127,9 @@ If you prefer to use standard `docker compose up` commands:
    ```bash
    docker compose up -d
    ```
-   If using Gluetun, start with the [docker-compose-gluetun.yml](https://github.com/DialmasterOrg/Youtarr/blob/main/docker-compose-gluetun.yml) file.
+   If using Gluetun, start with the [docker-compose.gluetun.yml](https://github.com/DialmasterOrg/Youtarr/blob/main/docker-compose.gluetun.yml) file.
    ```bash
-   docker compose docker-compose-gluetun.yml up -d
+   docker compose docker-compose.gluetun.yml up -d
    ```
 
 > [!IMPORTANT]
@@ -138,9 +138,9 @@ If you prefer to use standard `docker compose up` commands:
 > docker compose -f docker-compose.yml -f docker-compose.arm.yml up -d
 > ```
 >
-> If using Gluetun, use the [docker-compose-gluetun.yml](https://github.com/DialmasterOrg/Youtarr/blob/main/docker-compose-gluetun.yml) file.
+> If using Gluetun, use the [docker-compose.gluetun.yml](https://github.com/DialmasterOrg/Youtarr/blob/main/docker-compose.gluetun.yml) file.
 > ```bash
-> docker compose -f docker-compose-gluetun.yml -f docker-compose.arm.yml up -d
+> docker compose -f docker-compose.gluetun.yml -f docker-compose.arm.yml up -d
 > ```
 > If you already have data in `./database/`, use `./scripts/migrate-to-named-volume.sh` instead. See [Database Management](DATABASE.md#migrating-from-bind-mount-to-named-volume) and [Troubleshooting](TROUBLESHOOTING.md#docker-desktop--arm-incorrect-information-in-file-errors) for details.
 
