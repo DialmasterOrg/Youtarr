@@ -1,5 +1,6 @@
 import React from 'react';
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MediaServersSection } from '../MediaServersSection';
 import { emptyCheck, folder, makePageValue, renderInPage } from '../../__tests__/renderPage';
 import type { LibraryFolderDetail } from '../../../../types/tvShows';
@@ -47,29 +48,33 @@ describe('MediaServersSection', () => {
     expect(screen.getByRole('link', { name: 'Plex settings' })).toHaveClass('min-h-[44px]');
   });
 
-  test('lists channels on a phone without nesting a list in a paragraph', () => {
-    const errors = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+  test('an active main folder beside a TV folder offers the main folder move', async () => {
+    const value = makePageValue({
+      servers: [{ serverType: 'plex', name: 'Plex' }], configuredServers: ['plex'],
+      folders: [folder('', { isDefault: true, channels: 3 }), folder('TV', { layout: 'tv', channels: 1 })],
+    });
+    renderInPage(<MediaServersSection folder={value.folders[0]} />, { value });
+    await userEvent.click(screen.getByRole('button', { name: "Move the main folder's downloads" }));
+    expect(value.reviewChange).toHaveBeenCalledWith({ type: 'mainFolderMove' }, { kind: 'default', folder: '' });
+  });
+
+  test('the main folder move button has a 44px target on phones', () => {
     const value = makePageValue({
       phone: true, servers: [{ serverType: 'plex', name: 'Plex' }], configuredServers: ['plex'],
+      folders: [folder('', { isDefault: true, channels: 1 }), folder('TV', { layout: 'tv', channels: 1 })],
+    });
+    renderInPage(<MediaServersSection folder={value.folders[0]} />, { value });
+    expect(screen.getByRole('button', { name: "Move the main folder's downloads" })).toHaveClass('min-h-[44px]');
+  });
+
+  test('no longer lists channels to fix one at a time', () => {
+    const value = makePageValue({
+      servers: [{ serverType: 'plex', name: 'Plex' }], configuredServers: ['plex'],
       folders: [folder('', { isDefault: true, channels: 1 }), folder('TV', { layout: 'tv', channels: 1 })],
       mainDetail: mainDetail(),
     });
     renderInPage(<MediaServersSection folder={value.folders[0]} />, { value });
-    expect(screen.getByRole('link', { name: 'Blippi' })).toBeInTheDocument();
-    expect(errors).not.toHaveBeenCalled();
-    errors.mockRestore();
-  });
-
-  test('the main folder intro names the channels that follow the default folder after its links', () => {
-    const value = makePageValue({
-      servers: [{ serverType: 'plex', name: 'Plex' }], configuredServers: ['plex'],
-      folders: [folder('', { isDefault: true, channels: 3, channelsChosen: 1, channelsFollowing: 2 }), folder('TV', { layout: 'tv', channels: 1 })],
-      mainDetail: mainDetail({ followers: { count: 2, sample: ['Cocomelon', 'Peppa'] } }),
-    });
-    renderInPage(<MediaServersSection folder={value.folders[0]} />, { value });
-    expect(screen.getByRole('link', { name: 'Blippi' })).toBeInTheDocument();
-    expect(screen.getByText('2 more follow the default folder (Cocomelon and Peppa): make another folder the default, '
-      + 'or set their Library folder in Channel Settings.')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Blippi' })).not.toBeInTheDocument();
   });
 
   test('gives the intro\'s Start using TV shows button a 44px target on phones', () => {

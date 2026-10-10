@@ -5,10 +5,14 @@
  * refuses when the token no longer matches.
  */
 
+const fs = require('fs');
 const path = require('path');
 const { Op } = require('sequelize');
+const logger = require('../../logger');
 const configModule = require('../configModule');
 const VideoWatchStatus = require('../../models/videowatchstatus');
+const { SUBFOLDER_PREFIX } = require('../filesystem/constants');
+const { isIgnorableEntry } = require('../filesystem/directoryManager');
 const { LAYOUT_TV } = require('../tvShows/constants');
 const { episodeCode } = require('../tvShows/episodeNaming');
 const { isHoldable } = require('../mediaServers/watchStatusHolds');
@@ -18,7 +22,7 @@ const { planShows } = require('./showPlanner');
 const { planDestinations } = require('./destinationPlanner');
 const { planRevision } = require('./revision');
 const { takeTitleSnapshot } = require('./titleSnapshot');
-const { PREVIEW_ITEM_LIMIT, PROBLEM, FLAG, CHANGE_TITLE_SHOWS } = require('./constants');
+const { PREVIEW_ITEM_LIMIT, PROBLEM, FLAG, CHANGE_TITLE_SHOWS, CHANGE_MAIN_FOLDER_MOVE } = require('./constants');
 
 // Date-numbered codes (channel shows, adopted preset names, year/date title
 // patterns) are 8 digits; title, order and manual numbers 2.
@@ -110,7 +114,9 @@ async function watchStateAtRisk(items) {
 }
 
 function describeItem(item) {
-  const from = item.oldVideoPath || item.oldAudioPath;
+  // The video file, or the MP3 when no video file moves (a relocation can
+  // leave a stored video path with no file behind).
+  const from = item.newVideoPath ? item.oldVideoPath : item.oldAudioPath;
   const to = item.newVideoPath || item.newAudioPath;
   return {
     youtubeId: item.youtubeId,
@@ -126,6 +132,50 @@ function describeItem(item) {
       : null,
     flags: item.flags,
   };
+}
+
+// The preview names at most this many of the files a main folder move leaves.
+const LEFTOVER_PATH_LIMIT = 10;
+// The walk stops after this many entries (a downloads folder that also holds
+// a large collection of other media); the count is then a lower bound, as it
+// is when a folder could not be read (it is skipped and logged).
+const LEFTOVER_WALK_LIMIT = 20000;
+
+/**
+ * Files under the main folder that stay after a main folder move: no planned
+ * move takes them and the emptied-folder cleanup won't remove them (it only
+ * removes Youtarr's art and playlist names, isIgnorableEntry). __ folders and
+ * hidden entries are skipped.
+ */
+async function mainFolderLeftovers(items) {
+  const base = configModule.directoryPath;
+  // An item's old NFO is replaced by a fresh one (non-relocate items), so it doesn't stay either.
+  const moving = new Set(items.flatMap((item) => [...item.files.map((file) => file.from), ...(item.nfoSources || [])]));
+  const left = [];
+  let seen = 0;
+  let skippedUnreadable = false;
+  const walk = async (dir, topLevel) => {
+    let entries;
+    try {
+      entries = await fs.promises.readdir(dir, { withFileTypes: true });
+    } catch (err) {
+      if (err.code === 'ENOENT' || err.code === 'ENOTDIR') return;
+      logger.warn({ err, folder: dir }, 'Skipping an unreadable folder while listing files left in the main folder');
+      skippedUnreadable = true;
+      return;
+    }
+    for (const entry of entries) {
+      if (seen >= LEFTOVER_WALK_LIMIT) return;
+      seen += 1;
+      if (entry.name.startsWith('.') || (topLevel && entry.name.startsWith(SUBFOLDER_PREFIX))) continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) await walk(full, false);
+      else if (!moving.has(full) && !isIgnorableEntry(entry.name)) left.push(path.relative(base, full));
+    }
+  };
+  await walk(base, true);
+  left.sort((a, b) => a.localeCompare(b));
+  return { count: left.length, paths: left.slice(0, LEFTOVER_PATH_LIMIT), truncated: skippedUnreadable || seen >= LEFTOVER_WALK_LIMIT };
 }
 
 /**
@@ -173,6 +223,8 @@ async function summarizePlan(plan, { blocked = null } = {}) {
     problems: problems.slice(0, PREVIEW_ITEM_LIMIT).map((problem) => ({ ...problem, detail: relative(problem.detail) })),
     watchState: await watchStateAtRisk(items),
     blocked: blocked || applyRefusal(plan),
+    // Only for a preview someone can act on: the dialog recomputes a blocked preview every 5 s.
+    leftInMain: context.type === CHANGE_MAIN_FOLDER_MOVE && !blocked ? await mainFolderLeftovers(items) : null,
   };
 }
 

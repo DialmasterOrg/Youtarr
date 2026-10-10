@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Dialog,
   DialogTitle,
@@ -32,7 +33,7 @@ import { CheckCircle as CheckCircleIcon, XCircle as CancelIcon, Info as InfoIcon
 import useMediaQuery from '../../hooks/useMediaQuery';
 import { useConfig } from '../../hooks/useConfig';
 import { useSubfolders } from '../../hooks/useSubfolders';
-import { useLibraryFolders } from '../../hooks/useLibraryFolders';
+import { useLibraryFolders, LIBRARY_FOLDERS_UPDATED_EVENT } from '../../hooks/useLibraryFolders';
 import { SubfolderAutocomplete } from '../shared/SubfolderAutocomplete';
 import { ResolutionSelect } from '../shared/ResolutionSelect';
 import { AudioFormatSelect } from '../shared/AudioFormatSelect';
@@ -46,7 +47,8 @@ import ChannelTvSection from './components/ChannelTvSection';
 import TitleShowsSection from './components/TitleShows/TitleShowsSection';
 import { useChannelTv } from './hooks/useChannelTv';
 import {
-  ReorganizeDialog, useReorganizeRequest, useReorganizeOutcome, isReorganizeRequired, reorganizeChangeOf,
+  ReorganizeDialog, MainFolderMovedNote, useReorganizeRequest, useReorganizeOutcome, isReorganizeRequired, reorganizeChangeOf,
+  ReorganizeRequiredError,
 } from '../shared/Reorganize';
 import { ReorganizeStartResult } from '../../types/reorganize';
 
@@ -195,7 +197,7 @@ function ChannelSettingsDialog({
   const globalQuality = config.preferredResolution || '1080';
 
   const { subfolders, createSubfolder } = useSubfolders(token);
-  const { folders: libraryFolders, layoutOf, setFolderLayout } = useLibraryFolders(token);
+  const { folders: libraryFolders, layoutOf } = useLibraryFolders(token);
   const { tv, loading: tvLoading, error: tvError, switchLayout, refetch: refetchTv } = useChannelTv(channelId, token, open);
   // A folder change that moves downloaded files is reviewed in the reorganize dialog.
   const reorganize = useReorganizeRequest();
@@ -524,8 +526,21 @@ function ChannelSettingsDialog({
     }
   };
 
+  // Adding a TV folder while videos sit in the main folder: review the main folder move first.
+  const handleFolderReview = (err: ReorganizeRequiredError): boolean => {
+    if (err.change.type !== 'mainFolderMove') return false;
+    reorganize.review(err.change);
+    return true;
+  };
+
   // The reorganize applies the folder change when it starts.
   const handleReorganizeApplied = (result: ReorganizeStartResult) => {
+    // A main folder move changes the default folder: at once when nothing moves, else in
+    // the background run, after which the outcome callback reads the config again.
+    if (reorganize.change?.type === 'mainFolderMove') {
+      if (!result.operationId) void refetchConfig();
+      window.dispatchEvent(new Event(LIBRARY_FOLDERS_UPDATED_EVENT));
+    }
     if (reorganize.change && reorganize.change.type === 'channel') {
       const subFolder = reorganize.change.subFolder;
       applySavedSubFolder(subFolder);
@@ -565,9 +580,15 @@ function ChannelSettingsDialog({
   };
 
   // Each end of the move (the first run or a retry) decides the saved folder.
-  useReorganizeOutcome(token, trackedMove?.operationId ?? null, () => {
+  useReorganizeOutcome(token, trackedMove?.operationId ?? null, (operation) => {
     void refetchTv();
     void reloadSavedSubFolder();
+    // The default folder changed, or went back when nothing moved, and the main
+    // folder's leftover files decide what the moved note says.
+    if (operation.changeType === 'mainFolderMove') {
+      void refetchConfig();
+      window.dispatchEvent(new Event(LIBRARY_FOLDERS_UPDATED_EVENT));
+    }
   }, { attempt: trackedMove?.attempt ?? 0 });
 
   const handlePreviewFilter = async () => {
@@ -883,7 +904,7 @@ function ChannelSettingsDialog({
               folders={libraryFolders}
               onSwitch={handleLayoutSwitch}
               createSubfolder={createSubfolder}
-              setFolderLayout={setFolderLayout}
+              onReviewRequired={handleFolderReview}
               onShowReorganize={reorganize.showOperation}
               disabled={saving}
             />
@@ -1307,6 +1328,19 @@ function ChannelSettingsDialog({
         onClose={handleReorganizeClosed}
         onApplied={handleReorganizeApplied}
         onRetried={handleReorganizeRetried}
+        onMainFolderMoveRequired={(change) => reorganize.review(change)}
+        afterMove={reorganize.change?.type === 'mainFolderMove' ? (operation) => (
+          <MainFolderMovedNote
+            operation={operation}
+            mainFolderHasFiles={Boolean(libraryFolders.find((folder) => !folder.name)?.hasFiles)}
+            stepsAction={(
+              <Typography variant="body2">
+                <RouterLink to="/settings/library" className="text-primary underline">Settings &gt; Library folders</RouterLink>,
+                {' '}Start using TV shows, lists the exact change. Then create the TV folder here again.
+              </Typography>
+            )}
+          />
+        ) : undefined}
       />
     </Dialog>
   );

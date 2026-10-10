@@ -8,6 +8,7 @@
  *   tracked or not.
  * - The default subfolder's videos: those of every channel that follows it.
  * - A title show change: the downloaded videos its title plan moves.
+ * - A main folder move: every row with a file in the main folder.
  *
  * Only rows with a file inside the downloads folder are moved; rows marked
  * missing are left alone.
@@ -25,7 +26,9 @@ const { resolveChannelFolderName, buildSubfolderSegment } = require('../filesyst
 const { GLOBAL_DEFAULT_SENTINEL } = require('../filesystem/constants');
 const { LAYOUT_TV, folderKey } = require('../tvShows/constants');
 const { resolveChannelDirectory } = require('../tvShows/channelFolders');
-const { CHANGE_CHANNEL, CHANGE_FOLDER_LAYOUT, CHANGE_DEFAULT_SUBFOLDER, CHANGE_TITLE_SHOWS } = require('./constants');
+const {
+  CHANGE_CHANNEL, CHANGE_FOLDER_LAYOUT, CHANGE_DEFAULT_SUBFOLDER, CHANGE_TITLE_SHOWS, CHANGE_MAIN_FOLDER_MOVE,
+} = require('./constants');
 
 const VIDEO_ATTRIBUTES = [
   'id', 'youtubeId', 'channel_id', 'youTubeVideoName', 'youTubeChannelName', 'originalDate', 'removed',
@@ -129,13 +132,16 @@ function ownerInFolder(video, { libraryFolder, layout, classifications, channelB
   return video.channel_id;
 }
 
-async function videosOfFolder(libraryFolder, context, channels) {
+// anyPath: a row belongs when either of its files is in the folder (a main
+// folder move relocates only those files, so a split row is safe to take).
+async function videosOfFolder(libraryFolder, context, channels, { anyPath = false } = {}) {
   const root = libraryRootOf(libraryFolder);
+  const inFolder = (filePath) => {
+    const located = filePath ? resolveLibraryFolder(filePath, configModule.directoryPath) : null;
+    return Boolean(located) && folderKey(located.libraryFolder) === folderKey(libraryFolder);
+  };
   const videos = (await Video.findAll({ where: { removed: false, ...withPrefix(root) }, attributes: VIDEO_ATTRIBUTES, raw: true }))
-    .filter((video) => {
-      const located = resolveLibraryFolder(mediaPathOf(video), configModule.directoryPath);
-      return located && folderKey(located.libraryFolder) === folderKey(libraryFolder);
-    });
+    .filter((video) => (anyPath ? [video.filePath, video.audioFilePath].some(inFolder) : inFolder(mediaPathOf(video))));
   const classifications = await classificationsOf(videos.map((video) => video.youtubeId));
   const channelByFolder = new Map();
   for (const channel of channels.values()) {
@@ -173,6 +179,8 @@ async function selectSubjects(context) {
     subjects = await videosOfChannel(channels.get(context.channel.channel_id) || context.channel, context, channels);
   } else if (context.type === CHANGE_FOLDER_LAYOUT) {
     subjects = await videosOfFolder(context.folder, context, channels);
+  } else if (context.type === CHANGE_MAIN_FOLDER_MOVE) {
+    subjects = await videosOfFolder('', context, channels, { anyPath: true });
   } else if (context.type === CHANGE_TITLE_SHOWS) {
     subjects = await videosOfTitleChange(context, channels);
   } else if (context.type === CHANGE_DEFAULT_SUBFOLDER) {

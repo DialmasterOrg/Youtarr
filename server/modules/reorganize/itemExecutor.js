@@ -7,6 +7,8 @@
  * file moves (a failure part-way moves the earlier files back), then the
  * NFO and art are written, the old NFO removed, the videos row and the
  * stored info.json updated, and emptied source folders removed.
+ * A relocation (main folder move) keeps the video's files as they are, its NFO
+ * included, and only updates paths.
  */
 
 const fs = require('fs');
@@ -39,6 +41,21 @@ function movedButUnfinished(err) {
   wrapped.filesMoved = true;
   wrapped.cause = err;
   return wrapped;
+}
+
+// What to tell the user when a file can't move; other errors keep their message.
+const MOVE_ERROR_MESSAGES = Object.freeze({
+  EACCES: 'Youtarr doesn\'t have permission to move this video\'s files. Make sure its folders belong to the user '
+    + 'Youtarr runs as (YOUTARR_UID and YOUTARR_GID), then retry.',
+  EPERM: 'Youtarr couldn\'t move this video\'s files: another program may have one open, or Youtarr lacks permission '
+    + 'for its folder. Retry in a minute; if it keeps failing, check the folder\'s owner (YOUTARR_UID and YOUTARR_GID).',
+  EBUSY: 'Another program has one of this video\'s files open, often the media server scanning or playing it. Retry in a minute.',
+  ENOSPC: 'There wasn\'t enough free space to copy this video\'s files. Free up space, then retry.',
+});
+
+function describeMoveError(err) {
+  const message = MOVE_ERROR_MESSAGES[err.code];
+  return message ? Object.assign(new Error(message), { code: err.code, cause: err }) : err;
 }
 
 function nfoPathOf(filePath) {
@@ -139,8 +156,9 @@ async function moveFiles(files, mediaPaths) {
         logger.error({ err: rollbackErr, from: file.to, to: file.from }, 'Could not move a file back after a failed reorganize move');
       }
     }
-    err.filesMoved = await anyFileAtDestination(files);
-    throw err;
+    const reported = describeMoveError(err);
+    reported.filesMoved = await anyFileAtDestination(files);
+    throw reported;
   }
 }
 
@@ -159,10 +177,11 @@ async function removeOldNfos(nfoSources, keep) {
 async function updateRow(video, plan) {
   const atNew = video.filePath === plan.newVideoPath && video.audioFilePath === plan.newAudioPath;
   if (atNew) return;
-  const [affected] = await Video.update(
-    { filePath: plan.newVideoPath, audioFilePath: plan.newAudioPath },
-    { where: unchangedSinceRead(video) }
-  );
+  const values = { filePath: plan.newVideoPath, audioFilePath: plan.newAudioPath };
+  // A relocation found no file for a stored path: the row loses it, as the rescan would.
+  if (plan.relocate && plan.oldVideoPath && !plan.newVideoPath) Object.assign(values, { fileSize: null, video_resolution: null });
+  if (plan.relocate && plan.oldAudioPath && !plan.newAudioPath) values.audioFileSize = null;
+  const [affected] = await Video.update(values, { where: unchangedSinceRead(video) });
   if (affected === 0) {
     throw itemError('The video changed while its files were moving; the next rescan corrects its path.');
   }
@@ -215,15 +234,18 @@ async function executeItem(record, { showIdFor }) {
 
   const mediaPath = plan.newVideoPath || plan.newAudioPath;
   try {
-    const info = await videoInfoStore.readInfoOrFallback(video);
-    await sidecarWriter.writeVideoSidecars({
-      videoPath: mediaPath,
-      info,
-      episode: classification
-        ? { showTitle: classification.showTitle, season: classification.season, episode: classification.episode, episodeTitle: classification.episodeTitle }
-        : null,
-    });
-    await removeOldNfos(plan.nfoSources, nfoPathOf(mediaPath));
+    // A relocation moved the NFO with the other files; only the paths change.
+    if (!plan.relocate) {
+      const info = await videoInfoStore.readInfoOrFallback(video);
+      await sidecarWriter.writeVideoSidecars({
+        videoPath: mediaPath,
+        info,
+        episode: classification
+          ? { showTitle: classification.showTitle, season: classification.season, episode: classification.episode, episodeTitle: classification.episodeTitle }
+          : null,
+      });
+      await removeOldNfos(plan.nfoSources, nfoPathOf(mediaPath));
+    }
     await updateRow(video, plan);
     await videoInfoStore.rewriteActualPaths(record.youtube_id, new Map(plan.files.map((file) => [file.from, file.to])));
   } catch (err) {

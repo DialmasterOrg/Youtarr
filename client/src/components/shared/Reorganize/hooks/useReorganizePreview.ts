@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { ReorganizeChange, ReorganizePreview } from '../../../../types/reorganize';
-import { serverMessageOf } from '../reorganizeErrors';
+import { isReorganizeRequired, toRequestError } from '../reorganizeErrors';
 
 // A preview held up by a task that ends on its own (a download, a sync) is
 // computed again until the task ends, so the move can start without
@@ -13,6 +13,8 @@ export interface UseReorganizePreviewResult {
   preview: ReorganizePreview | null;
   loading: boolean;
   error: string | null;
+  /** The change the server asked for first, when the preview was refused with reorganizeRequired */
+  requiredChange: ReorganizeChange | null;
   /** Compute the preview again (after a stale-preview refusal, or a retry) */
   refresh: () => Promise<void>;
 }
@@ -22,6 +24,7 @@ export function useReorganizePreview(token: string | null, change: ReorganizeCha
   const [preview, setPreview] = useState<ReorganizePreview | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [requiredChange, setRequiredChange] = useState<ReorganizeChange | null>(null);
   // Only the newest request may set state.
   const requestSeq = useRef(0);
   const changeKey = change ? JSON.stringify(change) : null;
@@ -32,6 +35,7 @@ export function useReorganizePreview(token: string | null, change: ReorganizeCha
     if (!quiet) {
       setLoading(true);
       setError(null);
+      setRequiredChange(null);
     }
     try {
       const response = await axios.post<ReorganizePreview>(
@@ -44,7 +48,9 @@ export function useReorganizePreview(token: string | null, change: ReorganizeCha
       // A failed recheck keeps the preview on screen.
       if (seq === requestSeq.current && !quiet) {
         setPreview(null);
-        setError(serverMessageOf(err, 'Failed to preview the move'));
+        const failure = toRequestError(err, 'Failed to preview the move');
+        setError(failure.message);
+        setRequiredChange(isReorganizeRequired(failure) ? failure.change : null);
       }
     } finally {
       // Also ends a full load this recheck overtook.
@@ -74,7 +80,7 @@ export function useReorganizePreview(token: string | null, change: ReorganizeCha
 
   const refresh = useCallback(() => fetchPreview(), [fetchPreview]);
 
-  return { preview, loading, error, refresh };
+  return { preview, loading, error, requiredChange, refresh };
 }
 
 export default useReorganizePreview;

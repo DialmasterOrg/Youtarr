@@ -18,6 +18,8 @@ interface Options {
   onLayoutSettled: (folder: string, target: LibraryLayout) => void;
   /** Patches the config and announces the folder change (which refetches folders and the check); null when it failed */
   readBackDefault: () => Promise<string | null>;
+  /** A main folder move applied without moving anything (the dialog closes on its own) */
+  onMainFolderMoved?: () => void;
 }
 
 interface TrackedOperation {
@@ -34,16 +36,22 @@ interface TrackedOperation {
  * folder back for a default switch, since the server undoes the change when
  * nothing moved. Each settle refreshes once.
  */
-export function useReorganizeHandoff(token: string | null, { onSettled, onLayoutMoving, onLayoutSettled, readBackDefault }: Options) {
+export function useReorganizeHandoff(
+  token: string | null,
+  { onSettled, onLayoutMoving, onLayoutSettled, readBackDefault, onMainFolderMoved }: Options,
+) {
   const request = useReorganizeRequest();
   const [context, setContext] = useState<ReorganizeHandoffContext | null>(null);
   const [tracked, setTracked] = useState<TrackedOperation | null>(null);
   const { review: openReview, close } = request;
 
   const review = useCallback((change: ReorganizeChange, next: ReorganizeHandoffContext) => {
-    setContext(next);
+    // A main folder move changes the default folder, whatever started it.
+    setContext(change.type === 'mainFolderMove' ? { kind: 'default', folder: change.folder ?? '' } : next);
     openReview(change);
   }, [openReview]);
+
+  const mainFolderMove = request.change?.type === 'mainFolderMove';
 
   // The read-back's announcement refetches folders and the check; refresh here only when it failed.
   const settleDefault = useCallback(() => {
@@ -60,7 +68,8 @@ export function useReorganizeHandoff(token: string | null, { onSettled, onLayout
         operationId: result.operationId, attempt: 0, kind: context?.kind ?? 'layout', folder: context?.folder ?? '', target: context?.target,
       });
     }
-  }, [context, onLayoutMoving]);
+    if (!result.operationId && mainFolderMove) onMainFolderMoved?.();
+  }, [context, onLayoutMoving, mainFolderMove, onMainFolderMoved]);
 
   const onRetried = useCallback((operationId: number) => {
     setTracked((current) => (current && current.operationId === operationId ? { ...current, attempt: current.attempt + 1 } : current));
@@ -88,6 +97,7 @@ export function useReorganizeHandoff(token: string | null, { onSettled, onLayout
     review,
     /** The operation this page started and follows to its end, or null */
     trackedOperationId: tracked?.operationId ?? null,
+    mainFolderMove,
     dialogProps: {
       open: request.open, change: request.change, operationId: request.operationId, onClose, onApplied, onRetried,
     },

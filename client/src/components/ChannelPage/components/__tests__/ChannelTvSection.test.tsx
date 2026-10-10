@@ -53,7 +53,6 @@ function renderSection(overrides: Partial<ChannelTvSectionProps> = {}) {
     folders: libraryFolders,
     onSwitch: jest.fn().mockResolvedValue(undefined),
     createSubfolder: jest.fn().mockResolvedValue(undefined),
-    setFolderLayout: jest.fn().mockResolvedValue(undefined),
     ...overrides,
   };
   render(<ChannelTvSection {...props} />);
@@ -151,8 +150,7 @@ describe('ChannelTvSection', () => {
       const calls: string[] = [];
       const { user } = renderSection({
         tv: { ...videosTv, tvFolders: [] },
-        createSubfolder: jest.fn(async (name: string) => { calls.push(`create:${name}`); }),
-        setFolderLayout: jest.fn(async (name: string, layout: string) => { calls.push(`layout:${name}:${layout}`); }),
+        createSubfolder: jest.fn(async (name: string, layout?: string) => { calls.push(`create:${name}:${layout}`); }),
         onSwitch: jest.fn(async (layout: string, target?: string) => { calls.push(`switch:${layout}:${target}`); }),
       });
 
@@ -160,7 +158,7 @@ describe('ChannelTvSection', () => {
       await user.click(screen.getByRole('button', { name: 'Create TV folder' }));
 
       await waitFor(() => {
-        expect(calls).toEqual(['create:TV Shows', 'layout:TV Shows:tv', 'switch:tv:TV Shows']);
+        expect(calls).toEqual(['create:TV Shows:tv', 'switch:tv:TV Shows']);
       });
     });
 

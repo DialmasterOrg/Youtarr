@@ -46,7 +46,7 @@ We recommend against `Mixed Movies and Shows` for any Youtarr folder, Videos or 
 
 ### Step 2: Add Folders
 
-Add your Youtarr download directory:
+Add your Youtarr videos folder. Point the library at `__Videos` inside your Youtarr download directory (new installs save there), or at the download directory itself on installs that save into it. Before you add a TV show folder, Youtarr moves those downloads into `__Videos` and you point the library there.
 1. Click "Add" under Folders
 2. Browse to your YouTube directory
 3. For subfolders, add specific paths:
@@ -97,7 +97,7 @@ Youtarr's library check (below) reports the Nfo saver and the online metadata do
 While every folder uses Videos, one Movies library on your whole downloads folder shows them all. Jellyfin shows a folder in only one library, though. A library whose folder sits inside another library's folder is skipped (the Jellyfin log says `Found duplicate path`), so a Shows library for `__TV Shows` stays empty while another library includes your downloads folder. Once a `__subfolder` is a TV folder:
 
 - Point your Movies library at your Video folders one by one, not at the downloads folder. Editing a library's folders keeps its type, and the watch state of its videos stays.
-- Channels saved directly in the downloads folder (no subfolder) can only be reached through a library at the downloads folder, which would include the TV folder. Give those channels a library folder first (Channel Settings -> **Library folder**).
+- Channels saved directly in the downloads folder (no subfolder) can only be reached through a library at the downloads folder, which would include the TV folder. Move what is saved directly in the downloads folder into a Video folder first (Youtarr offers this when you add a TV show folder).
 
 When the main folder itself uses TV shows, point one Shows library at the downloads folder instead. Jellyfin shows each `__subfolder` there as an extra show, and the subfolder's own library stays empty, so this fits only while no other folder is in use (Video or TV show).
 

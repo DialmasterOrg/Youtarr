@@ -10,12 +10,12 @@ import {
   DialogTitle,
   LinearProgress,
 } from '../../ui';
-import { ReorganizeChange, ReorganizeStartResult } from '../../../types/reorganize';
+import { ReorganizeChange, ReorganizeOperation, ReorganizeStartResult } from '../../../types/reorganize';
 import { useReorganizePreview } from './hooks/useReorganizePreview';
 import { useReorganizeOperation } from './hooks/useReorganizeOperation';
 import ReorganizePreviewBody from './ReorganizePreviewBody';
 import ReorganizeOperationBody from './ReorganizeOperationBody';
-import { serverCodeOf, serverMessageOf } from './reorganizeErrors';
+import { isReorganizeRequired, serverCodeOf, toRequestError } from './reorganizeErrors';
 import { useLibraryCheck } from '../../../hooks/useLibraryCheck';
 import { countOf } from './reorganizeText';
 
@@ -33,6 +33,10 @@ export interface ReorganizeDialogProps {
   onApplied?: (result: ReorganizeStartResult) => void;
   /** A retry of the shown operation started (it applies the settings again when they were undone) */
   onRetried?: (operationId: number) => void;
+  /** What to show under the result once the move finished (completed or partial); gets the operation so a partial result can say something else */
+  afterMove?: (operation: ReorganizeOperation) => React.ReactNode;
+  /** Opens the main folder move when the server asks for it before this change */
+  onMainFolderMoveRequired?: (change: ReorganizeChange) => void;
 }
 
 /**
@@ -40,11 +44,13 @@ export interface ReorganizeDialogProps {
  * follow it to its result.
  */
 function ReorganizeDialog({
-  open, token, change = null, operationId: initialOperationId = null, onClose, onApplied, onRetried,
+  open, token, change = null, operationId: initialOperationId = null, onClose, onApplied, onRetried, afterMove,
+  onMainFolderMoveRequired,
 }: ReorganizeDialogProps) {
   const [operationId, setOperationId] = useState<number | null>(initialOperationId);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  const [startRequiredChange, setStartRequiredChange] = useState<ReorganizeChange | null>(null);
   // Ref, not state, so a double click can't start two operations.
   const startingRef = useRef(false);
 
@@ -52,11 +58,12 @@ function ReorganizeDialog({
     if (!open) return;
     setOperationId(initialOperationId);
     setStartError(null);
+    setStartRequiredChange(null);
     startingRef.current = false;
   }, [open, initialOperationId, change]);
 
   const previewing = open && operationId === null;
-  const { preview, loading, error: previewError, refresh } = useReorganizePreview(token, previewing ? change : null);
+  const { preview, loading, error: previewError, requiredChange: previewRequiredChange, refresh } = useReorganizePreview(token, previewing ? change : null);
   const { operation, error: operationError, retrying, retry } = useReorganizeOperation(token, open ? operationId : null);
   const tvFolders = preview?.tvFolders ?? [];
   // Checked as TV folders: a folder switching layouts is still saved as a Videos folder until the move.
@@ -69,6 +76,7 @@ function ReorganizeDialog({
     startingRef.current = true;
     setStarting(true);
     setStartError(null);
+    setStartRequiredChange(null);
     try {
       const response = await axios.post<ReorganizeStartResult>(
         '/api/tv/reorganize',
@@ -83,7 +91,9 @@ function ReorganizeDialog({
       }
     } catch (err: unknown) {
       startingRef.current = false;
-      setStartError(serverMessageOf(err, 'Failed to start the move'));
+      const failure = toRequestError(err, 'Failed to start the move');
+      setStartError(failure.message);
+      setStartRequiredChange(isReorganizeRequired(failure) ? failure.change : null);
       if (serverCodeOf(err) === STALE_PREVIEW_CODE) await refresh();
     } finally {
       setStarting(false);
@@ -94,7 +104,18 @@ function ReorganizeDialog({
     if (await retry() && operationId !== null) onRetried?.(operationId);
   };
 
+  const mainFolderMoveFor = (requiredChange: ReorganizeChange | null) => (
+    requiredChange?.type === 'mainFolderMove' && onMainFolderMoveRequired ? (
+      <div>
+        <Button size="sm" variant="outlined" onClick={() => onMainFolderMoveRequired(requiredChange)}>
+          Review the main folder move
+        </Button>
+      </div>
+    ) : null
+  );
+
   const running = operation !== null && (operation.status === 'running' || operation.status === 'starting');
+  const finished = operation !== null && (operation.status === 'completed' || operation.status === 'partial');
   const canStart = Boolean(preview) && !loading && !preview?.blocked && !starting;
   const startLabel = preview && preview.needed ? `Move ${countOf(preview.totals.videos, 'video')}` : 'Apply';
 
@@ -106,12 +127,15 @@ function ReorganizeDialog({
           <div className="flex flex-col gap-3 pt-2">
             {loading && <LinearProgress />}
             {previewError && <Alert severity="error">{previewError}</Alert>}
+            {previewError && mainFolderMoveFor(previewRequiredChange)}
             {startError && <Alert severity="error">{startError}</Alert>}
+            {startError && mainFolderMoveFor(startRequiredChange)}
             {preview && <ReorganizePreviewBody preview={preview} libraryCheck={libraryCheck} />}
           </div>
         ) : (
           <div className="pt-2">
             <ReorganizeOperationBody operation={operation} error={operationError} retrying={retrying} onRetry={() => { void handleRetry(); }} />
+            {finished && operation && afterMove?.(operation)}
           </div>
         )}
       </DialogContent>

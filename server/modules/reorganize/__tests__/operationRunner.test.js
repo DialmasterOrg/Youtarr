@@ -381,6 +381,48 @@ describe('reorganize operationRunner', () => {
     });
   });
 
+  describe('a main folder move', () => {
+    const MAIN_CHANGE = {
+      type: 'mainFolderMove', folder: 'Videos', previousDefault: '', channels: [{ channelId: 'UC9', previous: null }], playlists: [],
+    };
+    let setScope;
+
+    const lastScopedChannelIds = () => setScope.mock.calls[setScope.mock.calls.length - 1][1].channelIds;
+
+    beforeEach(() => {
+      setScope = jest.spyOn(lock, 'setScope');
+      operation.settings_change = JSON.stringify({ change: MAIN_CHANGE, label: 'Videos', shows: [] });
+    });
+
+    it('covers every channel it switches when it starts', async () => {
+      planner.buildPlan.mockResolvedValue({
+        ...plan(),
+        context: { type: 'mainFolderMove', label: 'Videos', stored: MAIN_CHANGE, layoutBefore: () => 'videos' },
+      });
+      await runner.start({ type: 'mainFolderMove' }, 'rev');
+      expect(lastScopedChannelIds()).toEqual(expect.arrayContaining(['UC1', 'UC9']));
+      await flush(() => !lock.isActive());
+    });
+
+    it('covers them on Retry', async () => {
+      operation.status = 'partial';
+      operation.settings_applied = true;
+      store.findOperation.mockResolvedValue(operation);
+      store.itemsWithStatus.mockResolvedValue([item(2)]);
+      await runner.retry(3);
+      expect(lastScopedChannelIds()).toEqual(expect.arrayContaining(['UC1', 'UC9']));
+      await flush(() => !lock.isActive());
+    });
+
+    it('covers them when a restart resumes the move', async () => {
+      operation.settings_applied = true;
+      store.findUnfinished.mockResolvedValue([operation]);
+      store.itemsWithStatus.mockImplementation(async (id, statuses) => (statuses.includes('pending') ? [item(2)] : []));
+      await runner.recover();
+      expect(setScope.mock.calls[0][1].channelIds).toEqual(expect.arrayContaining(['UC1', 'UC9']));
+    });
+  });
+
   it('resumes an interrupted operation at startup without a fresh sync', async () => {
     deps.watchStatusSync.getStatus.mockReturnValue({ running: false, lastRun: null });
     operation.settings_applied = true;

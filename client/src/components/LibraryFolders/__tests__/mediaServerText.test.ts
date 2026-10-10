@@ -33,6 +33,31 @@ describe('mediaServerText', () => {
       .toEqual({ text: 'Everything downloads here. A Plex Other Videos and a Jellyfin Movies library on the downloads folder shows it.' });
   });
 
+  test('an active main folder beside a TV folder offers the main folder move', () => {
+    const intro = inspectorIntro({
+      folder: f('', { isDefault: true, channels: 2 }), folders: [f('', { isDefault: true, channels: 2 }), f('TV', { layout: 'tv', channels: 1 })],
+      check: null, servers: [plex],
+    });
+    expect(intro?.link).toEqual({ kind: 'moveMain' });
+    expect(intro?.text).toContain('Move what is saved in the main folder into a Video folder (you review every move first)');
+  });
+
+  test('a main folder that only holds old videos offers the main folder move', () => {
+    const main = f('', { hasFiles: true, fileCount: 3 });
+    expect(inspectorIntro({ folder: main, folders: [main, f('Kids', { channels: 1 })], check: null, servers: [plex] })).toEqual({
+      text: 'No library shows the 3 videos still in the main folder. To watch them, move them into a Video folder (you review every move first), '
+        + 'or point a library at the whole downloads folder while every folder uses Videos.',
+      link: { kind: 'moveMain' },
+    });
+  });
+
+  test('an active main folder beside Video subfolders says Youtarr moves what is saved there before TV folders', () => {
+    const main = f('', { isDefault: true, channels: 2 });
+    const intro = inspectorIntro({ folder: main, folders: [main, f('Kids', { channels: 1 })], check: null, servers: [plex] });
+    expect(intro?.text).toContain('Before you add a TV show folder, Youtarr moves what is saved here into a Video folder.');
+    expect(intro?.link).toEqual({ kind: 'startTv' });
+  });
+
   test('a TV subfolder needs its own library', () => {
     expect(inspectorIntro({ folder: f('TV', { layout: 'tv', channels: 1 }), folders: [f(''), f('TV', { layout: 'tv', channels: 1 })], check: null, servers: [plex, jellyfin] }))
       .toEqual({ text: "TV show folders need their own Plex TV Shows and Jellyfin Shows library, pointed at __TV itself. A library on a parent folder doesn't count on Jellyfin and Emby." });

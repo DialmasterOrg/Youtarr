@@ -27,6 +27,7 @@ function itemPayload(item) {
     libraryFolder: item.libraryFolder,
     fromLayout: item.fromLayout,
     fromLibraryFolder: item.fromLibraryFolder,
+    relocate: Boolean(item.relocate),
   };
 }
 

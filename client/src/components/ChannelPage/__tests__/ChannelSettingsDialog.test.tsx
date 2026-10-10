@@ -26,6 +26,8 @@ jest.mock('axios', () => ({
   isAxiosError: jest.fn(() => false),
 }));
 
+const mockCreateSubfolder = jest.fn((_name: string, _layout?: string) => Promise.resolve());
+
 // Mock useSubfolders so tests don't make real fetch calls for the subfolder list.
 jest.mock('../../../hooks/useSubfolders', () => ({
   useSubfolders: () => ({
@@ -33,7 +35,7 @@ jest.mock('../../../hooks/useSubfolders', () => ({
     loading: false,
     error: null,
     refetch: jest.fn(),
-    createSubfolder: jest.fn(() => Promise.resolve()),
+    createSubfolder: (name: string, layout?: string) => mockCreateSubfolder(name, layout),
     deleteSubfolder: jest.fn(() => Promise.resolve()),
   }),
 }));
@@ -58,6 +60,7 @@ jest.mock('../../shared/Reorganize', () => {
     ...actual,
     ReorganizeDialog: function MockReorganizeDialog(props: {
       open: boolean; change: unknown; onClose: () => void;
+      afterMove?: (operation: unknown) => unknown;
       onApplied?: (result: { operationId: number | null; applied: boolean }) => void;
       onRetried?: (operationId: number) => void;
     }) {
@@ -66,12 +69,16 @@ jest.mock('../../shared/Reorganize', () => {
       return React.createElement('div', { 'data-testid': 'reorganize-dialog' },
         JSON.stringify(props.change),
         React.createElement('button', { type: 'button', onClick: () => props.onApplied?.({ operationId: 5, applied: false }) }, 'mock apply'),
+        React.createElement('button', { type: 'button', onClick: () => props.onApplied?.({ operationId: null, applied: true }) }, 'mock apply nothing'),
         React.createElement('button', { type: 'button', onClick: () => props.onRetried?.(5) }, 'mock retry'),
-        React.createElement('button', { type: 'button', onClick: () => props.onClose() }, 'mock close'));
+        React.createElement('button', { type: 'button', onClick: () => props.onClose() }, 'mock close'),
+        props.afterMove?.(mockFinishedOperation.current));
     },
   };
 });
 
+// What the mocked review hands to afterMove, as the real dialog does once the move ended.
+const mockFinishedOperation: { current: unknown } = { current: { id: 5, label: 'Main folder', status: 'completed' } };
 const mockSwitchLayout = jest.fn();
 const mockRefetchTv = jest.fn();
 const mockChannelTv: { current: unknown } = { current: null };
@@ -169,6 +176,9 @@ describe('ChannelSettingsDialog', () => {
     mockLayoutOf.mockImplementation(() => 'videos');
     mockSwitchLayout.mockReset();
     mockChannelTv.current = null;
+    mockCreateSubfolder.mockReset();
+    mockCreateSubfolder.mockResolvedValue(undefined);
+    mockFinishedOperation.current = { id: 5, label: 'Main folder', status: 'completed' };
   });
 
   async function openSettingsSection(sectionName: 'General' | 'TV Show' | 'Auto Download' | 'Filters' | 'Ratings' | 'Auto-Removal') {
@@ -2389,6 +2399,120 @@ describe('ChannelSettingsDialog', () => {
         expect(mockOnSettingsSaved).toHaveBeenLastCalledWith(expect.objectContaining({ sub_folder: 'Kids' }));
       });
       expect(screen.queryByTestId('reorganize-dialog')).not.toBeInTheDocument();
+    });
+
+    test('opens the main folder move when creating the TV folder needs it', async () => {
+      const { ReorganizeRequiredError } = jest.requireActual('../../shared/Reorganize');
+      mockChannelTv.current = { ...videosChannelTv, tvFolders: [] };
+      mockCreateSubfolder.mockRejectedValueOnce(
+        new ReorganizeRequiredError('Move first', { type: 'mainFolderMove', folder: 'Videos' })
+      );
+      await renderLoaded();
+      const user = await openSettingsSection('TV Show');
+
+      await user.click(screen.getByRole('button', { name: 'TV show' }));
+      await user.click(screen.getByRole('button', { name: 'Create TV folder' }));
+
+      expect(await screen.findByTestId('reorganize-dialog')).toHaveTextContent('"type":"mainFolderMove"');
+      expect(screen.queryByText('Move first')).not.toBeInTheDocument();
+    });
+
+    test('asks for a retry after a partial main folder move', async () => {
+      const { ReorganizeRequiredError } = jest.requireActual('../../shared/Reorganize');
+      mockChannelTv.current = { ...videosChannelTv, tvFolders: [] };
+      mockCreateSubfolder.mockRejectedValueOnce(
+        new ReorganizeRequiredError('Move first', { type: 'mainFolderMove', folder: 'Videos' })
+      );
+      mockFinishedOperation.current = { id: 5, label: 'Main folder', status: 'partial' };
+      await renderLoaded();
+      const user = await openSettingsSection('TV Show');
+      await user.click(screen.getByRole('button', { name: 'TV show' }));
+      await user.click(screen.getByRole('button', { name: 'Create TV folder' }));
+
+      expect(
+        await screen.findByText(/Retry them above before you change your media server libraries/)
+      ).toBeInTheDocument();
+    });
+
+    describe('library folders after a main folder move', () => {
+      const libraryFoldersUpdated = jest.fn();
+
+      beforeEach(() => {
+        libraryFoldersUpdated.mockReset();
+        window.addEventListener('library-folders-updated', libraryFoldersUpdated);
+      });
+
+      afterEach(() => {
+        window.removeEventListener('library-folders-updated', libraryFoldersUpdated);
+      });
+
+      async function startMainFolderMove(applyButton = 'mock apply') {
+        const { ReorganizeRequiredError } = jest.requireActual('../../shared/Reorganize');
+        mockChannelTv.current = { ...videosChannelTv, tvFolders: [] };
+        mockCreateSubfolder.mockRejectedValueOnce(
+          new ReorganizeRequiredError('Move first', { type: 'mainFolderMove', folder: 'Videos' })
+        );
+        await renderLoaded();
+        const user = await openSettingsSection('TV Show');
+        await user.click(screen.getByRole('button', { name: 'TV show' }));
+        await user.click(screen.getByRole('button', { name: 'Create TV folder' }));
+        await screen.findByTestId('reorganize-dialog');
+        await user.click(screen.getByRole('button', { name: applyButton }));
+      }
+
+      const completedOperation = () => {
+        mockAxios.get.mockImplementation((url: string) => (url === '/api/tv/operations/5'
+          ? Promise.resolve({ data: {
+            id: 5, label: 'Main folder', status: 'completed', changeType: 'mainFolderMove',
+            total: 2, done: 2, failed: 0, finishedAt: '2026-10-09T12:00:00.000Z', failedItems: [],
+          } })
+          : new Promise(() => {})));
+      };
+
+      test('leaves the config refetch to the end of a move that runs in the background', async () => {
+        mockAxios.get.mockImplementation(() => new Promise(() => {}));
+
+        await startMainFolderMove();
+
+        // Only the refetch on open: the default folder changes once the run applies the settings.
+        expect(mockRefetchConfig).toHaveBeenCalledTimes(1);
+      });
+
+      test('refetches the config when the main folder move ends', async () => {
+        completedOperation();
+
+        await startMainFolderMove();
+
+        await waitFor(() => {
+          expect(mockRefetchConfig).toHaveBeenCalledTimes(2);
+        });
+      });
+
+      test('refetches the config at once when the main folder move had nothing to move', async () => {
+        mockAxios.get.mockImplementation(() => new Promise(() => {}));
+
+        await startMainFolderMove('mock apply nothing');
+
+        expect(mockRefetchConfig).toHaveBeenCalledTimes(2);
+      });
+
+      test('refetches the library folders when the main folder move is applied', async () => {
+        mockAxios.get.mockImplementation(() => new Promise(() => {}));
+
+        await startMainFolderMove();
+
+        expect(libraryFoldersUpdated).toHaveBeenCalledTimes(1);
+      });
+
+      test('refetches the library folders again when the main folder move ends', async () => {
+        completedOperation();
+
+        await startMainFolderMove();
+
+        await waitFor(() => {
+          expect(libraryFoldersUpdated).toHaveBeenCalledTimes(2);
+        });
+      });
     });
   });
 });

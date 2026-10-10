@@ -132,6 +132,34 @@ describe('useReorganizeHandoff', () => {
     expect(options.onLayoutSettled).toHaveBeenCalledWith('Old', 'tv');
   });
 
+  test('reads the default folder back after a main folder move', async () => {
+    useReorganizeOutcome.mockImplementation(() => undefined);
+    const { result, options } = renderHandoff({ readBackDefault: jest.fn().mockResolvedValue('Videos') });
+    act(() => { result.current.review({ type: 'mainFolderMove', folder: 'Videos' }, { kind: 'create', folder: 'TV Shows' }); });
+
+    await act(async () => { result.current.dialogProps.onClose(); });
+
+    expect(options.readBackDefault).toHaveBeenCalled();
+  });
+
+  test('reports a main folder move that had nothing to move', () => {
+    useReorganizeOutcome.mockImplementation(() => undefined);
+    const onMainFolderMoved = jest.fn();
+    const { result } = renderHandoff({ onMainFolderMoved });
+    act(() => { result.current.review({ type: 'mainFolderMove', folder: 'Videos' }, { kind: 'create', folder: 'TV Shows' }); });
+
+    act(() => { result.current.dialogProps.onApplied?.({ operationId: null, applied: true }); });
+
+    expect(onMainFolderMoved).toHaveBeenCalled();
+  });
+
+  test('flags a main folder move for the dialog', () => {
+    useReorganizeOutcome.mockImplementation(() => undefined);
+    const { result } = renderHandoff();
+    act(() => { result.current.review({ type: 'mainFolderMove', folder: 'Videos' }, { kind: 'create', folder: 'TV Shows' }); });
+    expect(result.current.mainFolderMove).toBe(true);
+  });
+
   test('names the operation it follows', () => {
     useReorganizeOutcome.mockImplementation(() => undefined);
     const { result } = renderHandoff();

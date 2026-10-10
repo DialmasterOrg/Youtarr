@@ -15,7 +15,7 @@ const { resolveChannelFolderName } = require('../filesystem/pathBuilder');
 const { ROOT_SENTINEL } = require('../filesystem/constants');
 const { LAYOUT_TV, LAYOUT_VIDEOS, folderKey } = require('../tvShows/constants');
 const { showDirectory } = require('../tvShows/channelFolders');
-const { CHANGE_CHANNEL, CHANGE_FOLDER_LAYOUT, SHOW_ACTION } = require('./constants');
+const { CHANGE_CHANNEL, CHANGE_FOLDER_LAYOUT, CHANGE_MAIN_FOLDER_MOVE, SHOW_ACTION } = require('./constants');
 const { libraryRootOf } = require('./changeScope');
 const { resolveTitleTargets } = require('./titleTargets');
 
@@ -29,6 +29,8 @@ function targetOf(subject, context) {
     return { libraryFolder: subject.libraryFolder, layout: context.layoutAfter(subject.libraryFolder) };
   }
   const owner = subject.ownerChannel;
+  // A download with no tracked owner leaves the main folder for the target folder.
+  if (!owner && context.type === CHANGE_MAIN_FOLDER_MOVE) return { libraryFolder: context.toFolder, layout: LAYOUT_VIDEOS };
   const libraryFolder = owner ? context.folderAfter(owner) : subject.libraryFolder;
   return { libraryFolder, layout: context.layoutAfter(libraryFolder) };
 }

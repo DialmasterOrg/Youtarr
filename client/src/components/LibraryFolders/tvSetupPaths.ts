@@ -154,15 +154,23 @@ export function pathOptions(setup: DetectedSetup, servers: ServerRef[]): PathOpt
   return options;
 }
 
-export type YoutarrAction = { kind: 'addTvFolder' } | { kind: 'mainFolderTv' } | { kind: 'openFolder'; folder: string };
+export const MOVE_MAIN_FOLDER_STEP = 'Move everything saved directly in the main folder into a Video folder (__Videos). You review '
+  + 'every move first: file names stay the same, new downloads go there too, and watch state is restored after the move.';
+
+export type YoutarrAction = { kind: 'addTvFolder' } | { kind: 'mainFolderTv' } | { kind: 'moveMainFolder' } | { kind: 'openFolder'; folder: string };
 
 export interface YoutarrStep {
   text: string;
   action?: YoutarrAction;
   actionLabel?: string;
-  /** List the channels saved in the main folder under this step */
-  channelLinks?: boolean;
 }
+
+export const MOVE_MAIN_FOLDER_LABEL = "Move the main folder's downloads";
+
+const moveMainFolderStep: YoutarrStep = {
+  text: MOVE_MAIN_FOLDER_STEP, action: { kind: 'moveMainFolder' }, actionLabel: MOVE_MAIN_FOLDER_LABEL,
+};
+const mainFolderInUse = (setup: DetectedSetup): boolean => Boolean(setup.main && setup.main.layout === 'videos' && inUse(setup.main));
 
 export interface ServerStep {
   text: string;
@@ -196,15 +204,9 @@ const newTvFolderPath = (server: ServerSetup): ServerPath => ({ text: `the new T
 export function pathSteps(key: PathKey, setup: DetectedSetup, { folder }: { folder?: string }): PathSteps {
   const tvType = (server: ServerSetup): string => LIBRARY_TYPE_NAMES[server.serverType].tv;
   const movieType = (server: ServerSetup): string => LIBRARY_TYPE_NAMES[server.serverType].videos;
-  const anyWhole = setup.servers.some((server) => server.kind === 'whole');
   if (key === 'A') {
     const youtarr: YoutarrStep[] = [];
-    if (setup.mainChannels > 0 && anyWhole) {
-      youtarr.push({
-        text: `Give the ${countOf(setup.mainChannels, 'channel', 'channels')} in the main folder a Video folder (Channel Settings > Library folder moves their videos).`,
-        channelLinks: true,
-      });
-    }
+    if (mainFolderInUse(setup)) youtarr.push(moveMainFolderStep);
     youtarr.push({ text: 'Add a TV show folder.', action: { kind: 'addTvFolder' }, actionLabel: 'Add TV folder' });
     youtarr.push({
       text: 'Switch the channels you want as shows to it: Channel Settings > Library folder, or TV Show > Show this channel as TV show. Each switch shows its moves first.',
@@ -218,14 +220,16 @@ export function pathSteps(key: PathKey, setup: DetectedSetup, { folder }: { fold
         };
         if (server.kind === 'whole' && server.whole) {
           const paths = setup.videoFolders.map((videoFolder) => folderServerPath(videoFolder.name, server.downloadsPath, server.name));
-          return {
-            serverType: server.serverType, name: server.name, steps: [
-              paths.length > 0
-                ? { text: `Edit ${server.whole.name}: remove ${server.whole.location} and add your Video folders:`, paths, after: 'It keeps its type.' }
-                : { text: `Edit ${server.whole.name}: remove ${server.whole.location} and add your Video folders instead. It keeps its type.` },
-              addTv,
-            ],
-          };
+          const editWhole: ServerStep = mainFolderInUse(setup)
+            ? {
+              text: `Edit ${server.whole.name}: remove ${server.whole.location} and add your Video folders, including the Video folder step 1 moves your downloads into${paths.length > 0 ? ':' : '.'}`,
+              paths,
+              after: 'It keeps its type.',
+            }
+            : paths.length > 0
+              ? { text: `Edit ${server.whole.name}: remove ${server.whole.location} and add your Video folders:`, paths, after: 'It keeps its type.' }
+              : { text: `Edit ${server.whole.name}: remove ${server.whole.location} and add your Video folders instead. It keeps its type.` };
+          return { serverType: server.serverType, name: server.name, steps: [editWhole, addTv] };
         }
         const steps = [addTv];
         if (server.kind === 'none') steps.push({ text: `Your Video folders need a ${movieType(server)} library too.` });
@@ -254,10 +258,13 @@ export function pathSteps(key: PathKey, setup: DetectedSetup, { folder }: { fold
   }
   const chosen = folder ?? setup.videoSubfolders[0]?.name ?? '';
   return {
-    youtarr: [{
-      text: `Open ${folderLabel(chosen)} and choose Move to TV shows. You review every move first.`,
-      action: { kind: 'openFolder', folder: chosen }, actionLabel: `Open ${folderLabel(chosen)}`,
-    }],
+    youtarr: [
+      ...(mainFolderInUse(setup) ? [moveMainFolderStep] : []),
+      {
+        text: `Open ${folderLabel(chosen)} and choose Move to TV shows. You review every move first.`,
+        action: { kind: 'openFolder', folder: chosen }, actionLabel: `Open ${folderLabel(chosen)}`,
+      },
+    ],
     servers: groupsFor(setup).map((server) => {
       const folderPath = folderServerPath(chosen, server.downloadsPath, server.name);
       const own = server.folderLibraries[folderKey(chosen)] ?? null;

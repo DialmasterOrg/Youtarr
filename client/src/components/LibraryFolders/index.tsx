@@ -11,7 +11,7 @@ import { useLibraryCheck } from '../../hooks/useLibraryCheck';
 import { useMediaServerStatus } from '../../hooks/useMediaServerStatus';
 import { useContainerWidth } from '../../hooks/useContainerWidth';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
-import { ReorganizeDialog, useActiveReorganize } from '../shared/Reorganize';
+import { MainFolderMovedNote, ReorganizeDialog, useActiveReorganize } from '../shared/Reorganize';
 import { MainFolderTvDialog } from './components/dialogs/MainFolderTvDialog';
 import { SERVER_ORDER, buildAttention, serversOf } from '../../utils/libraryAttention';
 import { folderKey } from '../../utils/libraryLayouts';
@@ -99,6 +99,7 @@ export default function LibraryFolders({
   const onLayoutSettled = useCallback((folder: string, target: LibraryLayout) => { void settleMoving(folder, target); }, [settleMoving]);
   const handoff = useReorganizeHandoff(token, {
     onSettled: refreshAll, onLayoutMoving: layoutChange.showMoving, onLayoutSettled, readBackDefault,
+    onMainFolderMoved: () => setStartTvOpen(true),
   });
   reviewRef.current = handoff.review;
   const { trackedOperationId } = handoff;
@@ -130,6 +131,7 @@ export default function LibraryFolders({
     if (!change) return [];
     if (change.type === 'folderLayout') return [folderKey(change.folder)];
     if (change.type === 'defaultSubfolder') return [folderKey(change.value), folderKey(change.previousValue ?? '')];
+    if (change.type === 'mainFolderMove') return [folderKey(''), folderKey(change.folder ?? '')];
     return [];
   }, [operation]);
 
@@ -266,7 +268,7 @@ export default function LibraryFolders({
           onCreated={(name) => select(name)}
           onNeedsReview={(change, name) => {
             setAddLayout(null);
-            select(name);
+            if (change.type !== 'mainFolderMove') select(name);
             handoff.review(change, { kind: 'create', folder: name, target: 'tv' });
           }} />
       )}
@@ -276,7 +278,22 @@ export default function LibraryFolders({
       <MainFolderTvDialog open={mainTvOpen} confirmLabel={main?.layoutChangeNeedsReview ? 'Review the move' : 'Use for TV shows'}
         busy={layoutChange.busyFolder === ''} onCancel={() => setMainTvOpen(false)}
         onConfirm={() => { setMainTvOpen(false); void layoutChange.changeLayout('', 'tv'); }} />
-      <ReorganizeDialog token={token} {...handoff.dialogProps} />
+      <ReorganizeDialog
+        token={token}
+        {...handoff.dialogProps}
+        onMainFolderMoveRequired={(change) => handoff.review(change, { kind: 'default', folder: '' })}
+        afterMove={handoff.mainFolderMove ? (movedOperation) => (
+          <MainFolderMovedNote
+            operation={movedOperation}
+            mainFolderHasFiles={Boolean(library.folders.find((folder) => !folder.name)?.hasFiles)}
+            stepsAction={(
+              <Button variant="outlined" size="sm" onClick={() => { handoff.dialogProps.onClose(); setStartTvOpen(true); }}>
+                Show the next steps
+              </Button>
+            )}
+          />
+        ) : undefined}
+      />
     </LibraryPageProvider>
   );
 }

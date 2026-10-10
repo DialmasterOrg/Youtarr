@@ -6,7 +6,7 @@ const mockRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'library-folders-'));
 
 jest.mock('../../../models/channel', () => ({ findAll: jest.fn() }));
 jest.mock('../../../models/playlist', () => ({ findAll: jest.fn() }));
-jest.mock('../../../models/video', () => ({ count: jest.fn() }));
+jest.mock('../../../models/video', () => ({ count: jest.fn(), findAll: jest.fn() }));
 jest.mock('../../../models/subfolder', () => ({ findOne: jest.fn() }));
 jest.mock('../../../models/videoclassification', () => ({ findAll: jest.fn().mockResolvedValue([]) }));
 jest.mock('../../../models/tvshow', () => ({ findAll: jest.fn().mockResolvedValue([]) }));
@@ -68,6 +68,7 @@ describe('libraryFolders', () => {
     Channel.findAll.mockResolvedValue([]);
     Playlist.findAll.mockResolvedValue([]);
     Video.count.mockResolvedValue(0);
+    Video.findAll.mockResolvedValue([]);
   });
 
   afterAll(() => fs.rmSync(mockRoot, { recursive: true, force: true }));
@@ -323,6 +324,149 @@ describe('libraryFolders', () => {
     it('refuses a TV default when a playlist on the default downloads MP3', async () => {
       Playlist.findAll.mockResolvedValue([{ title: 'Mix', audio_format: 'mp3_only' }]);
       await expect(check()).rejects.toMatchObject({ status: 409 });
+    });
+  });
+
+  describe('main folder move helpers', () => {
+    const layoutWith = (tv = []) => async () => (folder) => (tv.includes(String(folder).toLowerCase()) ? 'tv' : 'videos');
+
+    beforeEach(() => {
+      configModule.getDefaultSubfolder.mockReturnValue(null);
+      subfolderModule.getAll.mockResolvedValue(['__Kids']);
+      libraryLayouts.getLayoutResolver.mockImplementation(layoutWith());
+      Video.findAll.mockResolvedValue([]);
+    });
+
+    it('suggests Videos when no folder has that name', async () => {
+      await expect(libraryFolders.mainFolderMoveTarget()).resolves.toBe('Videos');
+    });
+
+    it('keeps the registered spelling of an existing Videos folder', async () => {
+      subfolderModule.getAll.mockResolvedValue(['__videos']);
+      await expect(libraryFolders.mainFolderMoveTarget()).resolves.toBe('videos');
+    });
+
+    it('keeps the spelling of a Videos folder found only on disk', async () => {
+      fs.mkdirSync(path.join(mockRoot, '__VIDEOS'));
+      await expect(libraryFolders.mainFolderMoveTarget()).resolves.toBe('VIDEOS');
+    });
+
+    it('skips a TV folder named Videos', async () => {
+      libraryLayouts.getLayoutResolver.mockImplementation(layoutWith(['videos']));
+      await expect(libraryFolders.mainFolderMoveTarget()).resolves.toBe('Videos 2');
+    });
+
+    it('refuses a requested TV folder', async () => {
+      libraryLayouts.getLayoutResolver.mockImplementation(layoutWith(['tv shows']));
+      await expect(libraryFolders.mainFolderMoveTarget('TV Shows')).rejects.toMatchObject({ status: 400 });
+    });
+
+    it('counts the main folder in use when an enabled channel saves there', async () => {
+      Channel.findAll.mockResolvedValue([{ channel_id: 'UC1', sub_folder: null, enabled: true }]);
+      await expect(libraryFolders.mainFolderInUse()).resolves.toBe(true);
+    });
+
+    it('ignores a disabled channel that points at the main folder', async () => {
+      Channel.findAll.mockResolvedValue([{ channel_id: 'UC1', sub_folder: null, enabled: false }]);
+      await expect(libraryFolders.mainFolderInUse()).resolves.toBe(false);
+    });
+
+    it('counts the main folder in use when downloads are saved there', async () => {
+      writeFile('Chan/a [abcdefghijk].mp4');
+      Video.findAll.mockResolvedValue([{ filePath: path.join(mockRoot, 'Chan', 'a [abcdefghijk].mp4'), audioFilePath: null }]);
+      await expect(libraryFolders.mainFolderInUse()).resolves.toBe(true);
+    });
+
+    it('counts an MP3 in the main folder whose video is in a __ folder', async () => {
+      writeFile('Chan/a [abcdefghijk].mp3');
+      Video.findAll.mockResolvedValue([{
+        filePath: path.join(mockRoot, '__Kids', 'Chan', 'a [abcdefghijk].mp4'),
+        audioFilePath: path.join(mockRoot, 'Chan', 'a [abcdefghijk].mp3'),
+      }]);
+      await expect(libraryFolders.mainFolderHasDownloads()).resolves.toBe(true);
+    });
+
+    it('does not count a row whose main-folder file is missing on disk', async () => {
+      Video.findAll.mockResolvedValue([{ filePath: path.join(mockRoot, 'Chan', 'a [abcdefghijk].mp4'), audioFilePath: null }]);
+      await expect(libraryFolders.mainFolderHasDownloads()).resolves.toBe(false);
+    });
+
+    it('does not count a split row whose main-folder MP3 is missing, even with its video in a __ folder', async () => {
+      writeFile('__Kids/Chan/a [abcdefghijk].mp4');
+      Video.findAll.mockResolvedValue([{
+        filePath: path.join(mockRoot, '__Kids', 'Chan', 'a [abcdefghijk].mp4'),
+        audioFilePath: path.join(mockRoot, 'Chan', 'a [abcdefghijk].mp3'),
+      }]);
+      await expect(libraryFolders.mainFolderHasDownloads()).resolves.toBe(false);
+    });
+
+    it('counts a main-folder file that cannot be checked', async () => {
+      Video.findAll.mockResolvedValue([{ filePath: path.join(mockRoot, `${'a'.repeat(300)}.mp4`), audioFilePath: null }]);
+      await expect(libraryFolders.mainFolderHasDownloads()).resolves.toBe(true);
+    });
+
+    it('ignores rows whose files are all in __ folders', async () => {
+      Video.findAll.mockResolvedValue([{ filePath: path.join(mockRoot, '__Kids', 'Chan', 'a [abcdefghijk].mp4'), audioFilePath: null }]);
+      await expect(libraryFolders.mainFolderHasDownloads()).resolves.toBe(false);
+    });
+
+    it('never counts a TV main folder as in use', async () => {
+      libraryLayouts.getLayoutResolver.mockImplementation(async () => (folder) => (folder ? 'videos' : 'tv'));
+      Video.findAll.mockResolvedValue([{ filePath: path.join(mockRoot, 'Chan', 'a [abcdefghijk].mp4'), audioFilePath: null }]);
+      await expect(libraryFolders.mainFolderInUse()).resolves.toBe(false);
+    });
+
+    it('asks for the reorganize when the main folder is in use', async () => {
+      writeFile('Chan/a [abcdefghijk].mp4');
+      Video.findAll.mockResolvedValue([{ filePath: path.join(mockRoot, 'Chan', 'a [abcdefghijk].mp4'), audioFilePath: null }]);
+      await expect(libraryFolders.assertMainFolderClear()).rejects.toMatchObject({
+        status: 409,
+        reorganizeRequired: true,
+        change: { type: 'mainFolderMove', folder: 'Videos' },
+      });
+    });
+
+    it('passes when nothing is saved in the main folder', async () => {
+      await expect(libraryFolders.assertMainFolderClear()).resolves.toBeUndefined();
+    });
+  });
+
+  describe('adding a TV show folder while the main folder is in use', () => {
+    beforeEach(() => {
+      configModule.getDefaultSubfolder.mockReturnValue(null);
+      subfolderModule.getAll.mockResolvedValue(['__Kids']);
+      libraryLayouts.getLayoutResolver.mockImplementation(async () => () => 'videos');
+      Channel.findAll.mockResolvedValue([]);
+      Playlist.findAll.mockResolvedValue([]);
+      Subfolder.findOne.mockResolvedValue(null);
+      writeFile('Chan/a [abcdefghijk].mp4');
+      Video.findAll.mockResolvedValue([{ filePath: path.join(mockRoot, 'Chan', 'a [abcdefghijk].mp4'), audioFilePath: null }]);
+      subfolderModule.register.mockImplementation(async (name, { layout } = {}) => ({ name, layout: layout || 'videos', created: true }));
+    });
+
+    it('asks for the main folder move before creating anything', async () => {
+      await expect(libraryFolders.createLibraryFolder('TV Shows', 'tv'))
+        .rejects.toMatchObject({ status: 409, reorganizeRequired: true, change: { type: 'mainFolderMove', folder: 'Videos' } });
+      expect(fs.existsSync(path.join(mockRoot, '__TV Shows'))).toBe(false);
+    });
+
+    it('still creates a Videos folder', async () => {
+      await expect(libraryFolders.createLibraryFolder('Kids2', 'videos')).resolves.toMatchObject({ layout: 'videos' });
+    });
+
+    it('asks for the move before switching a subfolder to TV', async () => {
+      await expect(libraryFolders.setFolderLayout('Kids', 'tv'))
+        .rejects.toMatchObject({ reorganizeRequired: true, change: { type: 'mainFolderMove' } });
+    });
+
+    it('creates the TV folder once nothing is saved in the main folder', async () => {
+      Video.findAll.mockResolvedValue([]);
+      await expect(libraryFolders.createLibraryFolder('TV Shows', 'tv')).resolves.toMatchObject({ layout: 'tv' });
+    });
+
+    it('creates the TV folder when the main-folder row\'s file was deleted outside Youtarr', async () => {
+      fs.rmSync(path.join(mockRoot, 'Chan'), { recursive: true, force: true });
+      await expect(libraryFolders.createLibraryFolder('TV Shows', 'tv')).resolves.toMatchObject({ layout: 'tv' });
     });
   });
 });

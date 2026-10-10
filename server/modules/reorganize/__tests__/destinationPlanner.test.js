@@ -4,6 +4,12 @@ jest.mock('../../../models/videoclassification', () => ({ findAll: jest.fn() }))
 jest.mock('../../videoInfoStore', () => ({ readInfoOrFallback: jest.fn() }));
 jest.mock('../movieNameRenderer', () => ({ renderMovieNames: jest.fn() }));
 jest.mock('../../tvShows/titleShowStore', () => ({ highWaterMarks: jest.fn(async () => new Map()) }));
+jest.mock('../changeScope', () => {
+  const path = require('path');
+  return {
+    libraryRootOf: (folder) => path.join(require('../../configModule').directoryPath, folder ? `__${folder}` : ''),
+  };
+});
 jest.mock('../showPlanner', () => {
   const path = require('path');
   return {
@@ -443,5 +449,111 @@ describe('reorganize destinationPlanner', () => {
 
     expect(result.items).toEqual([]);
     expect(result.unchanged).toBe(1);
+  });
+
+  describe('main folder moves', () => {
+    const mainContext = { type: 'mainFolderMove', toFolder: 'Videos', folderBefore: () => '' };
+    const inMain = (filePath, overrides = {}) => subjectFor(filePath, { ...overrides, subject: { libraryFolder: '', ...overrides.subject } });
+    const relocate = (subject, target = { libraryFolder: 'Videos', layout: 'videos' }, context = mainContext) => planner.planDestinations({
+      subjects: [subject], context, targets: new Map([[subject.video.id, target]]), shows: new Map(),
+    });
+
+    it('keeps every file name and the path below the main folder', async () => {
+      const videoPath = touch(`Chan/Chan - Big Build - ${ID}/Chan - Big Build [${ID}].mp4`);
+      touch(`Chan/Chan - Big Build - ${ID}/Chan - Big Build [${ID}].jpg`);
+      const { items } = await relocate(inMain(videoPath));
+      expect(items[0].files.map((file) => file.to).sort()).toEqual([
+        path.join(root, '__Videos', 'Chan', `Chan - Big Build - ${ID}`, `Chan - Big Build [${ID}].jpg`),
+        path.join(root, '__Videos', 'Chan', `Chan - Big Build - ${ID}`, `Chan - Big Build [${ID}].mp4`),
+      ]);
+    });
+
+    it('keeps a sidecar name that differs from the video name', async () => {
+      const videoPath = touch(`Chan/New Title [${ID}].mp4`);
+      touch(`Chan/Old Title [${ID}].jpg`);
+      const { items } = await relocate(inMain(videoPath));
+      expect(items[0].files.map((file) => path.basename(file.to)).sort()).toEqual([`New Title [${ID}].mp4`, `Old Title [${ID}].jpg`]);
+    });
+
+    it('moves the NFO as a file', async () => {
+      const videoPath = touch(`Chan/Chan - Big Build [${ID}].mp4`);
+      touch(`Chan/Chan - Big Build [${ID}].nfo`);
+      const { items } = await relocate(inMain(videoPath));
+      expect([items[0].nfoSources, items[0].files.some((file) => file.to.endsWith('.nfo'))]).toEqual([[], true]);
+    });
+
+    it('reads no info.json and renders no names', async () => {
+      const videoPath = touch(`Chan/Chan - Big Build [${ID}].mp4`);
+      await relocate(inMain(videoPath));
+      expect([videoInfoStore.readInfoOrFallback.mock.calls.length, movieNameRenderer.renderMovieNames.mock.calls[0][0]]).toEqual([0, []]);
+    });
+
+    it('marks the item as a relocation', async () => {
+      const videoPath = touch(`Chan/Chan - Big Build [${ID}].mp4`);
+      const { items } = await relocate(inMain(videoPath));
+      expect([items[0].relocate, items[0].flags]).toEqual([true, []]);
+    });
+
+    it('moves leftovers of a channel saved elsewhere into its folder, with the override note', async () => {
+      const videoPath = touch(`Chan/Chan - Big Build [${ID}].mp4`);
+      const context = { ...mainContext, folderBefore: () => 'Kids' };
+      const { items } = await relocate(inMain(videoPath), { libraryFolder: 'Kids', layout: 'videos' }, context);
+      expect([path.dirname(items[0].newVideoPath), items[0].flags]).toEqual([path.join(root, '__Kids', 'Chan'), ['override-placed']]);
+    });
+
+    it('leaves an MP3 saved in a __ folder where it is', async () => {
+      const videoPath = touch(`Chan/Chan - Big Build [${ID}].mp4`);
+      const audioPath = touch(`__Music/Chan/Chan - Big Build [${ID}].mp3`);
+      const { items } = await relocate(inMain(videoPath, { video: { audioFilePath: audioPath } }));
+      expect(items[0].newAudioPath).toBe(audioPath);
+    });
+
+    it('moves the MP3 and sidecars of a row whose video file is gone', async () => {
+      const audioPath = touch(`Chan/Chan - Big Build [${ID}].mp3`);
+      touch(`Chan/Chan - Big Build [${ID}].jpg`);
+      const videoPath = path.join(root, 'Chan', `Chan - Big Build [${ID}].mp4`);
+      const { items, problems } = await relocate(inMain(videoPath, { video: { audioFilePath: audioPath } }));
+      expect(problems).toEqual([]);
+      expect(items[0].files.map((file) => path.basename(file.to)).sort()).toEqual([`Chan - Big Build [${ID}].jpg`, `Chan - Big Build [${ID}].mp3`]);
+    });
+
+    it('drops the stored video path of a row whose video file is gone', async () => {
+      const audioPath = touch(`Chan/Chan - Big Build [${ID}].mp3`);
+      const videoPath = path.join(root, 'Chan', `Chan - Big Build [${ID}].mp4`);
+      const { items } = await relocate(inMain(videoPath, { video: { audioFilePath: audioPath } }));
+      expect([items[0].newVideoPath, items[0].newAudioPath]).toEqual([null, path.join(root, '__Videos', 'Chan', `Chan - Big Build [${ID}].mp3`)]);
+    });
+
+    it('moves the MP3 of a row whose video folder is gone', async () => {
+      const audioPath = touch(`Chan/Chan - Big Build [${ID}].mp3`);
+      const videoPath = path.join(root, 'Chan', `Chan - Big Build - ${ID}`, `Chan - Big Build [${ID}].mp4`);
+      const { items, problems } = await relocate(inMain(videoPath, { video: { audioFilePath: audioPath } }));
+      expect([problems, items[0].newVideoPath, items[0].newAudioPath])
+        .toEqual([[], null, path.join(root, '__Videos', 'Chan', `Chan - Big Build [${ID}].mp3`)]);
+    });
+
+    it('still reports a row missing when its only folder is gone', async () => {
+      const videoPath = path.join(root, 'Chan', `Chan - Big Build - ${ID}`, `Chan - Big Build [${ID}].mp4`);
+      const audioPath = path.join(root, 'Chan', `Chan - Big Build - ${ID}`, `Chan - Big Build [${ID}].mp3`);
+      const { items, problems } = await relocate(inMain(videoPath, { video: { audioFilePath: audioPath } }));
+      expect([items, problems.map((problem) => problem.problem)]).toEqual([[], ['missing']]);
+    });
+
+    it('still reports a row missing when neither media file is on disk', async () => {
+      touch(`Chan/Chan - Big Build [${ID}].jpg`);
+      const videoPath = path.join(root, 'Chan', `Chan - Big Build [${ID}].mp4`);
+      const audioPath = path.join(root, 'Chan', `Chan - Big Build [${ID}].mp3`);
+      const { items, problems } = await relocate(inMain(videoPath, { video: { audioFilePath: audioPath } }));
+      expect([items, problems.map((problem) => problem.problem)]).toEqual([[], ['missing']]);
+    });
+
+    it('moves only the MP3 of a row whose video is in a __ folder', async () => {
+      const videoPath = touch(`__Kids/Chan/Chan - Big Build [${ID}].mp4`);
+      const audioPath = touch(`Chan/Chan - Big Build [${ID}].mp3`);
+      const subject = subjectFor(videoPath, { subject: { libraryFolder: 'Kids' }, video: { audioFilePath: audioPath } });
+      const { items } = await relocate(subject);
+      expect([items[0].newVideoPath, items[0].newAudioPath])
+        .toEqual([videoPath, path.join(root, '__Videos', 'Chan', `Chan - Big Build [${ID}].mp3`)]);
+    });
   });
 });

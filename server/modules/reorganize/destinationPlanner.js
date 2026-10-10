@@ -18,7 +18,7 @@ const videoInfoStore = require('../videoInfoStore');
 const downloadSettingsResolver = require('../download/downloadSettingsResolver');
 const { isFileForVideo, buildChannelPath } = require('../filesystem/pathBuilder');
 const { NO_CLOBBER_STAGING_SUFFIX } = require('../filesystem/fileOperations');
-const { YOUTUBE_ID_BRACKET_PATTERN } = require('../filesystem/constants');
+const { YOUTUBE_ID_BRACKET_PATTERN, SUBFOLDER_PREFIX } = require('../filesystem/constants');
 const { LAYOUT_TV, folderKey } = require('../tvShows/constants');
 const { STATUS_ASSIGNED } = require('../tvShows/episodeAllocator');
 const { releaseTime, parseDateEpisodeCode, assignDateEpisodes, SOURCE_UPLOAD_DATE } = require('../tvShows/dateNumbering');
@@ -28,7 +28,22 @@ const { KIND_TITLE_SHOW } = require('../tvShows/constants');
 const { renderMovieNames } = require('./movieNameRenderer');
 const { plannedShowDirectory } = require('./showPlanner');
 const { assignTitleEpisodes } = require('./titleAssignments');
-const { PROBLEM, FLAG, CHANGE_FOLDER_LAYOUT } = require('./constants');
+const { libraryRootOf } = require('./changeScope');
+const { PROBLEM, FLAG, CHANGE_FOLDER_LAYOUT, CHANGE_MAIN_FOLDER_MOVE } = require('./constants');
+
+// A main folder move rebases a file under its new library folder and leaves a
+// file saved in a __ folder (an MP3 kept elsewhere) where it is.
+function relocationDirs(toRoot) {
+  const fromRoot = libraryRootOf('');
+  return (dir) => {
+    const relative = path.relative(fromRoot, dir);
+    if (!relative || relative.startsWith('..') || path.isAbsolute(relative)
+      || relative.split(path.sep)[0].startsWith(SUBFOLDER_PREFIX)) {
+      return relative === '' ? toRoot : dir;
+    }
+    return path.join(toRoot, relative);
+  };
+}
 
 // Partial downloads and copies left by an interrupted move are not the video's files.
 const LEFTOVER_SUFFIXES = ['.part', NO_CLOBBER_STAGING_SUFFIX];
@@ -93,9 +108,11 @@ async function existsOtherThan(target, source, sourceStat) {
  * @param {string} destDir
  * @param {string} stem
  * @param {DirectoryIndex} [index] - Shared across the videos of one plan
+ * @param {Object} [options] - A relocation's: keepNfo (the NFO moves as a file), destDirFor (the
+ *   destination of each source directory), anyMedia (missing only when no media file is on disk)
  * @returns {Promise<Object>} { files, nfoSources, newVideoPath, newAudioPath, unchanged, missing, collisions }
  */
-async function planFiles(video, destDir, stem, index = new DirectoryIndex()) {
+async function planFiles(video, destDir, stem, index = new DirectoryIndex(), { keepNfo = false, destDirFor = null, anyMedia = false } = {}) {
   const sourceDirs = [...new Set([video.filePath, video.audioFilePath].filter(Boolean).map((p) => path.dirname(p)))];
   const files = [];
   const sourceStats = new Map();
@@ -105,13 +122,16 @@ async function planFiles(video, destDir, stem, index = new DirectoryIndex()) {
     try {
       names = await index.namesFor(dir, video.youtubeId);
     } catch (err) {
-      if (err.code === 'ENOENT') return { missing: true };
-      throw err;
+      if (err.code !== 'ENOENT') throw err;
+      // A relocation moves what is on disk: a folder gone with its file is
+      // judged by the media check below, like a missing file.
+      if (anyMedia) continue;
+      return { missing: true };
     }
     for (const name of names) {
       const from = path.join(dir, name);
-      // The NFO is written fresh for the new layout.
-      if (name.endsWith('.nfo')) {
+      // The NFO is written fresh for the new layout; a relocated video's moves as it is.
+      if (name.endsWith('.nfo') && !keepNfo) {
         nfoSources.push(from);
         continue;
       }
@@ -119,13 +139,18 @@ async function planFiles(video, destDir, stem, index = new DirectoryIndex()) {
       const stat = await statFile(from);
       if (!stat) continue;
       sourceStats.set(from, stat);
-      files.push({
-        from, to: path.join(destDir, episodeFileName(name, video.youtubeId, stem)), size: stat.size, mtimeMs: Math.trunc(stat.mtimeMs),
-      });
+      const targetDir = destDirFor ? destDirFor(dir) : destDir;
+      // A null stem keeps the file's name.
+      const targetName = stem ? episodeFileName(name, video.youtubeId, stem) : name;
+      files.push({ from, to: path.join(targetDir, targetName), size: stat.size, mtimeMs: Math.trunc(stat.mtimeMs) });
     }
   }
-  const mediaPath = video.filePath || video.audioFilePath;
-  if (!files.some((file) => file.from === mediaPath)) return { missing: true };
+  // A relocation moves whichever media files are on disk (a video deleted outside
+  // Youtarr leaves its MP3 behind until the rescan clears the stored path); every
+  // other change needs the primary one, whose name the stem replaces.
+  const mediaPaths = [video.filePath, video.audioFilePath].filter(Boolean);
+  const required = anyMedia ? mediaPaths : mediaPaths.slice(0, 1);
+  if (!required.some((mediaPath) => files.some((file) => file.from === mediaPath))) return { missing: true };
 
   const destinationOf = (source) => (source ? (files.find((file) => file.from === source) || {}).to || null : null);
   const collisions = [];
@@ -306,8 +331,13 @@ function isInside(baseDir, dir) {
 async function planDestinations({ subjects, context, targets, shows, titleTargets = new Map() }) {
   const config = configModule.getConfig() || {};
   const baseDir = configModule.directoryPath;
+  const relocating = context.type === CHANGE_MAIN_FOLDER_MOVE;
+  const relocates = (subject) => relocating && targets.get(subject.video.id).layout !== LAYOUT_TV;
   const infos = new Map();
-  for (const subject of subjects) infos.set(subject.video.youtubeId, await videoInfoStore.readInfoOrFallback(subject.video));
+  // A relocated video keeps its names, so its info.json isn't needed.
+  for (const subject of subjects) {
+    if (!relocates(subject)) infos.set(subject.video.youtubeId, await videoInfoStore.readInfoOrFallback(subject.video));
+  }
 
   const tvEntries = new Map();
   const movieSubjects = [];
@@ -317,7 +347,7 @@ async function planDestinations({ subjects, context, targets, shows, titleTarget
       const key = target.showKey || subject.ownerChannelId;
       if (!tvEntries.has(key)) tvEntries.set(key, []);
       tvEntries.get(key).push({ subject, info: infos.get(subject.video.youtubeId) });
-    } else {
+    } else if (!relocates(subject)) {
       movieSubjects.push(subject);
     }
   }
@@ -364,6 +394,9 @@ async function planDestinations({ subjects, context, targets, shows, titleTarget
       stem = classification.fileStem;
       const show = shows.get(target.showKey || subject.ownerChannelId);
       destDir = path.join(plannedShowDirectory(show), seasonFolderName(classification.season));
+    } else if (relocates(subject)) {
+      stem = null;
+      destDir = relocationDirs(libraryRootOf(target.libraryFolder))(path.dirname(video.filePath || video.audioFilePath));
     } else {
       const rendered = names.get(video.youtubeId);
       if (!rendered) {
@@ -391,7 +424,10 @@ async function planDestinations({ subjects, context, targets, shows, titleTarget
       continue;
     }
 
-    const planned = await planFiles(video, destDir, stem, index);
+    const relocated = relocates(subject);
+    const planned = await planFiles(video, destDir, stem, index, relocated
+      ? { keepNfo: true, destDirFor: relocationDirs(libraryRootOf(target.libraryFolder)), anyMedia: true }
+      : {});
     if (planned.missing) {
       problems.push(problemOf(subject, PROBLEM.MISSING));
       continue;
@@ -435,6 +471,7 @@ async function planDestinations({ subjects, context, targets, shows, titleTarget
       oldAudioPath: video.audioFilePath || null,
       newAudioPath: planned.newAudioPath,
       classification,
+      relocate: relocated,
       flags: itemFlags,
     });
   }

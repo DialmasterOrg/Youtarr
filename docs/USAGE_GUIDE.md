@@ -467,6 +467,8 @@ Media servers show Youtarr's videos as movies. A **TV folder** shows them as TV 
 - **From a channel**: open the channel page, click the settings icon (gear), open **TV Show** and click **TV show**. Without a TV folder yet, Youtarr asks for a name (default `TV Shows`, saved as `__TV Shows`), creates the folder and switches the channel to it. With several TV folders, you pick one.
 - **From Settings**: on Settings -> **Library folders**, click **Add folder** and choose the **TV shows** layout, or open an existing folder and choose **Use for TV shows** (**Move to TV shows** when its downloads have to move). Every channel that downloads to that folder becomes a show.
 
+If videos are saved directly in your downloads folder, Youtarr first offers to move them into a Video folder; see [Move an existing setup to TV shows](#move-an-existing-setup-to-tv-shows).
+
 Then add a TV library for the folder on your media server (see [Media Server Integration](MEDIA_SERVERS.md#tv-shows)). If your media server already has libraries for your downloads, read [Move an existing setup to TV shows](#move-an-existing-setup-to-tv-shows) first. The folder's page in Settings -> **Library folders** and the **Media servers** box under Channel Settings -> **TV Show** show, per server, whether a library holds the folder and what to fix. For Plex, Youtarr adds the folder's refresh mapping as soon as it finds the one TV Shows library that holds it.
 
 What changes for a TV channel:
@@ -513,13 +515,13 @@ Recommended when you already have downloads. Your Video folders stay as they are
 
 In Youtarr:
 
-1. If channels download straight into the main folder and one library shows your whole downloads folder, give each of those channels a Video folder first: Channel Settings -> **Library folder** moves its videos. Once that library stops showing the whole downloads folder, it can't show videos saved in the main folder. Youtarr doesn't restore watch state for moves between Video folders, so on Jellyfin and Emby these videos can come back unwatched.
+1. If anything is saved directly in the downloads folder (the main folder), Youtarr moves it out first. **Start using TV shows** offers this as the first step, and Youtarr asks for it when you add a TV show folder. Every video saved there, including manual downloads and channels you no longer follow, moves into `__Videos`, or into its channel's folder when the channel saves elsewhere; file names stay the same, and `__Videos` becomes the default folder. You review every move first, and watch state is restored like any other move. Files Youtarr has no record of stay where they are; the review lists them. If some videos can't move, the result lists them with Retry: keep your library on the whole downloads folder until they have moved. Channel art and playlist files Youtarr made in the folders it empties are written again in the new folders (a `poster.jpg` you put in such a folder yourself is removed with them).
 2. On Settings -> **Library folders**, click **Add folder**, enter a name and choose the **TV shows** layout.
 3. Switch the channels you want as shows to the new folder: Channel Settings -> **Library folder**, or Channel Settings -> **TV Show** -> **Show this channel as** -> **TV show**. A channel that has downloads shows its moves in **Review the move** first (see [Switch a channel or folder that already has downloads](#switch-a-channel-or-folder-that-already-has-downloads)).
 
 On each media server:
 
-- **One library on your whole downloads folder**: edit it, remove the downloads folder and add each Video folder instead, for example `/path/to/downloads/__kids`. It keeps its type, and the watch state of its videos stays. Then add a TV library pointed at the new TV show folder only.
+- **One library on your whole downloads folder**: edit it, remove the downloads folder and add `__Videos` and your other Video folders, for example `/path/to/downloads/__Videos` and `/path/to/downloads/__kids`. It keeps its type, and the watch state of its videos stays. Then add a TV library pointed at the new TV show folder only.
 - **A library for each folder**: add a TV library pointed at the new TV show folder only.
 - **No library yet**: add a TV library pointed at the new TV show folder only. Your Video folders need a Videos library too.
 
@@ -546,7 +548,7 @@ The folder's channels become shows and their videos move. You review every move 
 
 In Youtarr:
 
-1. If channels download straight into the main folder and one library shows your whole downloads folder, give them a Video folder first, as in path A. Youtarr doesn't restore watch state for those moves between Video folders.
+1. If anything is saved directly in the downloads folder (the main folder), Youtarr moves it into `__Videos` first, as in step 1 of path A. Review the move and keep your library on the whole downloads folder until it is done.
 2. On Settings -> **Library folders**, open the folder and choose **Move to TV shows** (**Use for TV shows** when nothing has to move). Review the moves, then click **Move N videos**.
 
 On each media server:
@@ -559,12 +561,13 @@ Kodi isn't checked by Youtarr. On every path, add each TV show folder to Kodi as
 
 #### Watch state
 
-For the moves Youtarr shows in **Review the move** (into, out of or between TV show folders), Youtarr restores played state and resume positions once the new library has scanned them: for every Jellyfin and Emby user, and for the Plex owner account (see [Restore watch state after a move](#restore-watch-state-after-a-move)). Moves between Video folders, such as step 1 of paths A and C, get no restore. Editing a library's folders keeps the watch state of the videos it still shows. A library you remove and create again starts over: played state and resume positions in it aren't restored.
+For the moves Youtarr shows in **Review the move** (into, out of or between TV show folders), Youtarr restores played state and resume positions once the new library has scanned them: for every Jellyfin and Emby user, and for the Plex owner account (see [Restore watch state after a move](#restore-watch-state-after-a-move)). The main folder move restores watch state like the moves in Review the move. A channel moved to another Video folder through Channel Settings > Library folder gets no restore. Editing a library's folders keeps the watch state of the videos it still shows. A library you remove and create again starts over: played state and resume positions in it aren't restored.
 
 Do the steps in Youtarr first, then change your libraries right away, before the next watch status sync (every 4 hours by default):
 
 - Removing or editing a library before the move can lose the watch state Youtarr would restore.
 - Until you remove or edit it, the old library still shows the moved files, so Youtarr restores the watch state there, and the next sync counts the restore as done. A TV library you create after that starts over.
+- Change your libraries after the main folder move: the old library keeps showing the moved videos until you edit it, so their watch state is restored there first and stays when you edit the library.
 
 Settings -> **Watch Status** shows, under **Watch state restores**, how many restores are still waiting for the media servers.
 

@@ -111,6 +111,34 @@ describe('reorganize changeScope', () => {
     });
   });
 
+  describe('a main folder move', () => {
+    const mainContext = context({ type: 'mainFolderMove', toFolder: 'Videos', channel: undefined });
+
+    const splitRow = video(4, 'split000001', '/data/__Kids/Chan/D [split000001].mp4', { audioFilePath: '/data/Chan/D [split000001].mp3' });
+
+    it('takes every video saved in the main folder for a main folder move', async () => {
+      Video.findAll.mockResolvedValue([
+        video(1, 'tracked0001', '/data/Chan/A [tracked0001].mp4'),
+        video(2, 'untracked01', '/data/Other/B [untracked01].mp4', { channel_id: 'UCUNTRACKED' }),
+        video(3, 'kids0000001', '/data/__Kids/Chan/C [kids0000001].mp4'),
+      ]);
+      const { subjects } = await changeScope.selectSubjects({ ...mainContext, type: 'mainFolderMove', toFolder: 'Videos' });
+      expect(subjects.map((subject) => subject.video.youtubeId).sort()).toEqual(['tracked0001', 'untracked01']);
+    });
+
+    it('takes a row whose MP3 is in the main folder and whose video is in a __ folder', async () => {
+      Video.findAll.mockResolvedValue([splitRow]);
+      const { subjects } = await changeScope.selectSubjects({ ...mainContext, type: 'mainFolderMove', toFolder: 'Videos' });
+      expect(subjects.map((subject) => subject.video.youtubeId)).toContain('split000001');
+    });
+
+    it('leaves that row out of a folder layout change of the main folder', async () => {
+      Video.findAll.mockResolvedValue([splitRow]);
+      const { subjects } = await changeScope.selectSubjects({ ...mainContext, type: 'folderLayout', folder: '' });
+      expect(subjects.map((subject) => subject.video.youtubeId)).not.toContain('split000001');
+    });
+  });
+
   describe('a title show change', () => {
     const titleContext = (entries) => context({ type: 'titleShows', titlePlan: { entries } });
 

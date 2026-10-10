@@ -55,6 +55,13 @@ describe('reorganize operationStore', () => {
     expect(JSON.parse(rows[0].classification)).toEqual({ season: 2024 });
   });
 
+  it('stores whether an item is a relocation', async () => {
+    await store.createOperation({ ...plan, items: [{ ...plan.items[0], relocate: true }] });
+
+    const [rows] = TvReorganizeItem.bulkCreate.mock.calls[0];
+    expect(JSON.parse(rows[0].files).relocate).toBe(true);
+  });
+
   it('stores the pinned shows when the settings are applied', async () => {
     const operation = { settings_change: JSON.stringify({ change: {}, label: 'Chan', shows: [] }), update: jest.fn() };
 

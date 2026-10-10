@@ -7,6 +7,14 @@ const { getExternalCookiesPath, getExternalCookiesStatus } = require('./external
 const { getDefaultNameForUrl } = require('./notificationHelpers');
 const { SCHEDULES, normalizeToMinimumInterval, violatesMinimumInterval } = require('./scheduleConfig');
 const { normalizeLevelSetting } = require('../logging/logLevel');
+const { SUBFOLDER_PREFIX } = require('./filesystem/constants');
+
+// A new install saves into this library folder instead of the downloads folder
+// itself, so adding a TV show folder later never means moving downloads. Only
+// for an empty downloads folder: a config recreated over an existing library
+// keeps saving where it did. The template keeps "" because mergeWithTemplate
+// copies missing keys into existing configs.
+const NEW_INSTALL_DEFAULT_FOLDER = 'Videos';
 
 // Storage limit settings: a positive whole number with a unit, or '' for off.
 const STORAGE_SIZE_KEYS = ['downloadPauseUsageLimit', 'downloadPauseMinFreeSpace', 'autoRemovalUsageLimit'];
@@ -109,12 +117,37 @@ class ConfigModule extends EventEmitter {
       // Don't save these overrides - they're runtime only
     }
 
+    if (this.createdConfig && this.applyNewInstallFolder()) legacyMigrationNeeded = true;
+
     // Save config if modified by merge or legacy migrations
     if (mergeResult.modified || legacyMigrationNeeded) {
       this.saveConfig();
     }
 
     this.watchConfig();
+  }
+
+  // The downloads folder holds nothing but __ folders and hidden entries.
+  downloadsFolderIsEmpty() {
+    try {
+      return fs.readdirSync(this.directoryPath).every((name) => name.startsWith(SUBFOLDER_PREFIX) || name.startsWith('.'));
+    } catch (err) {
+      return err.code === 'ENOENT';
+    }
+  }
+
+  /** @returns {boolean} true when the config changed */
+  applyNewInstallFolder() {
+    if (!this.downloadsFolderIsEmpty()) return false;
+    const folderPath = path.join(this.directoryPath, `${SUBFOLDER_PREFIX}${NEW_INSTALL_DEFAULT_FOLDER}`);
+    try {
+      fs.mkdirSync(folderPath, { recursive: true });
+    } catch (err) {
+      logger.warn({ err, folderPath }, 'Could not create the default Videos folder; the first download creates it');
+    }
+    this.config.defaultSubfolder = NEW_INSTALL_DEFAULT_FOLDER;
+    logger.info({ defaultSubfolder: NEW_INSTALL_DEFAULT_FOLDER }, 'New install: downloads save into the Videos folder');
+    return true;
   }
 
   /**
@@ -265,6 +298,7 @@ class ConfigModule extends EventEmitter {
 
     // Remove comment-only keys
     delete defaultConfig['//comment'];
+    this.createdConfig = true;
 
     // Generate UUID for this instance
     defaultConfig.uuid = uuidv4();

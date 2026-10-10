@@ -154,3 +154,36 @@ describe('ReorganizePreviewBody', () => {
     });
   });
 });
+
+describe('ReorganizePreviewBody main folder move', () => {
+  const mainFolderPreview = (overrides: Partial<ReorganizePreview> = {}): ReorganizePreview => preview({
+    change: { type: 'mainFolderMove', folder: 'Videos', label: 'the main folder' },
+    leftInMain: { count: 2, paths: ['My Movies/film.mkv', 'notes.txt'], truncated: false },
+    ...overrides,
+  });
+
+  test('explains the main folder move', () => {
+    render(<ReorganizePreviewBody preview={mainFolderPreview()} />);
+    expect(screen.getByText(/out of your downloads folder, keeping every file name/)).toBeInTheDocument();
+  });
+
+  test('lists what stays in the downloads folder', () => {
+    render(<ReorganizePreviewBody preview={mainFolderPreview()} />);
+    expect(screen.getByText(/2 files stay in the downloads folder because no move takes them: My Movies\/film.mkv, notes.txt/)).toBeInTheDocument();
+  });
+
+  test('says when the list of files that stay was cut short', () => {
+    render(<ReorganizePreviewBody preview={mainFolderPreview({ leftInMain: { count: 20000, paths: ['a.mkv'], truncated: true } })} />);
+    expect(screen.getByText(/At least 20000 files/)).toBeInTheDocument();
+  });
+
+  test('explains the move when nothing has to move', () => {
+    render(<ReorganizePreviewBody preview={mainFolderPreview({ needed: false, leftInMain: { count: 0, paths: [], truncated: false } })} />);
+    expect(screen.getByText(/out of your downloads folder, keeping every file name/)).toBeInTheDocument();
+  });
+
+  test('says leftovers of a channel saved elsewhere join that channel', () => {
+    render(<ReorganizePreviewBody preview={mainFolderPreview({ totals: { ...preview().totals, overridePlaced: 3 } })} />);
+    expect(screen.getByText(/3 videos of channels that now save in another folder move into that channel's folder/)).toBeInTheDocument();
+  });
+});

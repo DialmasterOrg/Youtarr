@@ -172,7 +172,7 @@ function registerRoutes(app, deps) {
   app.use(createTvTitleShowRoutes({ verifyToken, titleShowService, models, layoutGuards }));
 
   // Reorganize (moving downloads between the Videos and TV layouts) and watch-state restores
-  app.use(createTvReorganizeRoutes({ verifyToken, reorganize, watchStatusHolds, watchStatusPushBack }));
+  app.use(createTvReorganizeRoutes({ verifyToken, reorganize, watchStatusHolds, watchStatusPushBack, layoutGuards }));
 
   // Defensive redirect: /channels -> /subscriptions (frontend handles client-side routing,
   // this fallback covers direct server-side hits during the transition period)

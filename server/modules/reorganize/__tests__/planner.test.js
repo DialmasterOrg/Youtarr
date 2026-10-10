@@ -1,3 +1,8 @@
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
+jest.mock('../../../logger', () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }));
 jest.mock('../../configModule', () => ({ directoryPath: '/data' }));
 jest.mock('../../../models/videowatchstatus', () => ({ findAll: jest.fn() }));
 jest.mock('../../mediaServers/watchStatusHolds', () => ({
@@ -125,6 +130,19 @@ describe('reorganize planner', () => {
     });
   });
 
+  it('names the MP3 in the preview when a relocation moves no video file', async () => {
+    require('../destinationPlanner').planDestinations.mockResolvedValue({
+      items: [item({
+        relocate: true, layout: 'videos', classification: null, flags: [],
+        oldVideoPath: '/data/Chan/A [abcdefghijk].mp4', newVideoPath: null,
+        oldAudioPath: '/data/Chan/A [abcdefghijk].mp3', newAudioPath: '/data/__Videos/Chan/A [abcdefghijk].mp3',
+      })],
+      problems: [],
+    });
+    const preview = await planner.summarizePlan(await planner.buildPlan({ type: 'channel' }));
+    expect(preview.items[0]).toMatchObject({ from: 'Chan/A [abcdefghijk].mp3', to: '__Videos/Chan/A [abcdefghijk].mp3' });
+  });
+
   it('counts the MP3 files that move into a TV folder', async () => {
     require('../destinationPlanner').planDestinations.mockResolvedValue({
       items: [item({ flags: ['audio-to-tv'] }), item({ youtubeId: 'ccccccccccc' })], problems: [],
@@ -185,5 +203,78 @@ describe('reorganize planner', () => {
     const plan = await planner.buildPlan({ type: 'channel' });
 
     expect(planner.applyRefusal(plan)).toBeNull();
+  });
+
+  describe('main folder moves', () => {
+    let root;
+
+    beforeEach(() => {
+      root = fs.mkdtempSync(path.join(os.tmpdir(), 'planner-main-'));
+      require('../../configModule').directoryPath = root;
+    });
+
+    afterEach(() => {
+      fs.rmSync(root, { recursive: true, force: true });
+      require('../../configModule').directoryPath = '/data';
+    });
+
+    const write = (relative) => {
+      const full = path.join(root, relative);
+      fs.mkdirSync(path.dirname(full), { recursive: true });
+      fs.writeFileSync(full, 'x');
+      return full;
+    };
+    const basePlan = () => ({ context: { type: 'channel', label: 'Chan', stored: { type: 'channel' } }, items: [], problems: [], unchanged: 0, shows: [], revision: 'r' });
+    const mainPlan = (moving) => ({
+      ...basePlan(),
+      context: { type: 'mainFolderMove', stored: { type: 'mainFolderMove' }, label: 'the main folder' },
+      items: moving.map((from, index) => item({ videoId: index + 1, files: [{ from, to: `${from}.moved` }] })),
+    });
+
+    it('lists a file no planned move takes inside a folder that moves', async () => {
+      const tracked = write('Chan/a [abcdefghijk].mp4');
+      write('Chan/unknown.mp4');
+      const summary = await planner.summarizePlan(mainPlan([tracked]));
+      expect(summary.leftInMain).toEqual({ count: 1, paths: [path.join('Chan', 'unknown.mp4')], truncated: false });
+    });
+
+    it('lists files in folders nothing moves, and skips __ folders, hidden files and channel art', async () => {
+      const tracked = write('Chan/a [abcdefghijk].mp4');
+      write('Chan/poster.jpg');
+      write('My Movies/film.mkv');
+      write('__Kids/Other/b [bbbbbbbbbbb].mp4');
+      write('.plexignore');
+      write('notes.txt');
+      const summary = await planner.summarizePlan(mainPlan([tracked]));
+      expect(summary.leftInMain.paths).toEqual([path.join('My Movies', 'film.mkv'), 'notes.txt']);
+    });
+
+    it('skips an unreadable folder, lists the rest and marks the list incomplete', async () => {
+      const tracked = write('Chan/a [abcdefghijk].mp4');
+      write('notes.txt');
+      write('lost+found/x.txt');
+      const realReaddir = fs.promises.readdir;
+      const spy = jest.spyOn(fs.promises, 'readdir').mockImplementation((dir, ...args) => {
+        if (dir === path.join(root, 'lost+found')) return Promise.reject(Object.assign(new Error('denied'), { code: 'EACCES' }));
+        return realReaddir(dir, ...args);
+      });
+      try {
+        const summary = await planner.summarizePlan(mainPlan([tracked]));
+        expect(summary.leftInMain).toEqual({ count: 1, paths: ['notes.txt'], truncated: true });
+        expect(require('../../../logger').warn).toHaveBeenCalled();
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it('skips the walk while the preview is blocked', async () => {
+      write('notes.txt');
+      const summary = await planner.summarizePlan(mainPlan([]), { blocked: { reason: 'download-running', message: 'Wait' } });
+      expect(summary.leftInMain).toBeNull();
+    });
+
+    it('has no leftovers for other changes', async () => {
+      expect((await planner.summarizePlan(basePlan())).leftInMain).toBeNull();
+    });
   });
 });

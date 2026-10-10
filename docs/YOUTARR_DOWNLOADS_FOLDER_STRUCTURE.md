@@ -13,6 +13,8 @@ The examples below use the default **Video filename template** (Settings -> Core
 
 Youtarr uses these ID suffixes to find your videos on disk, so they cannot be changed. The template only affects new downloads; existing files are not renamed.
 
+New installs save into `__Videos` (the default folder), so the layout below sits inside `<YOUTUBE_OUTPUT_DIR>/__Videos/` there; older installs keep saving where they did.
+
 ### Expected Default Layout
 
 This is the folder/file layout for channels saved to the main folder: their **Library folder** setting is **Main folder**, or **Default folder** while the main folder is the default folder. It

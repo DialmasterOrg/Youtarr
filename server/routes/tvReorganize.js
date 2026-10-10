@@ -20,17 +20,16 @@ function positiveInt(value) {
  * @param {Object} deps.reorganize - modules/reorganize
  * @param {Object} deps.watchStatusHolds - modules/mediaServers/watchStatusHolds
  * @param {Object} deps.watchStatusPushBack - modules/mediaServers/watchStatusPushBack
+ * @param {Object} deps.layoutGuards - modules/tvShows/layoutGuards
  * @returns {express.Router}
  */
-function createTvReorganizeRoutes({ verifyToken, reorganize, watchStatusHolds, watchStatusPushBack }) {
+function createTvReorganizeRoutes({ verifyToken, reorganize, watchStatusHolds, watchStatusPushBack, layoutGuards }) {
   const router = express.Router();
 
   // Refusals carry .status (400/404/409); anything else is unexpected.
   const sendError = (res, error, failure, context) => {
     if (error.status) {
-      const body = { error: error.message };
-      if (error.code) body.code = error.code;
-      return res.status(error.status).json(body);
+      return res.status(error.status).json(layoutGuards.errorBody(error));
     }
     logger.error({ err: error, ...context }, failure);
     return res.status(500).json({ error: failure });
@@ -53,11 +52,13 @@ function createTvReorganizeRoutes({ verifyToken, reorganize, watchStatusHolds, w
    *         { type: channel, channelId, subFolder } (a channel's sub_folder value),
    *         { type: folderLayout, folder ("" = main folder), layout },
    *         { type: defaultSubfolder, value ("" = main folder)},
+   *         { type: mainFolderMove, folder? } (moves everything saved in the main folder out of it: into a Videos
+   *         folder, Videos by default, or the folder of the channel it belongs to, keeping file names),
    *         { type: titleShows, channelId, shows, overrides? } (a channel's title shows after the change, as a
    *         reorganizeRequired refusal from a title show save names them).
    *       required: [type]
    *       properties:
-   *         type: { type: string, enum: [channelLayout, channel, folderLayout, defaultSubfolder, titleShows] }
+   *         type: { type: string, enum: [channelLayout, channel, folderLayout, defaultSubfolder, mainFolderMove, titleShows] }
    *         channelId: { type: string }
    *         layout: { type: string, enum: [videos, tv] }
    *         folder: { type: string }
@@ -87,7 +88,7 @@ function createTvReorganizeRoutes({ verifyToken, reorganize, watchStatusHolds, w
    *       200: { description: The preview, with revision, needed, totals, shows, items, problems, watchState and blocked }
    *       400: { description: Invalid change, or a change that doesn't need a reorganize }
    *       404: { description: Channel or subfolder not found }
-   *       409: { description: The change is refused (an MP3 download type for a TV folder) }
+   *       409: { description: The change is refused (an MP3 download type for a TV folder), or reorganizeRequired with a mainFolderMove change when a subfolder switching to TV needs the main folder move first }
    *       500: { description: Failed to preview the reorganize }
    */
   router.post('/api/tv/reorganize/preview', verifyToken, async (req, res) => {
@@ -122,7 +123,7 @@ function createTvReorganizeRoutes({ verifyToken, reorganize, watchStatusHolds, w
    *       202: { description: Started; operationId identifies the operation }
    *       400: { description: Invalid change or missing revision }
    *       404: { description: Channel or subfolder not found }
-   *       409: { description: A download, a file task or another reorganize is running, or files or settings changed since the preview (code STALE_PREVIEW) }
+   *       409: { description: A download, a file task or another reorganize is running, or files or settings changed since the preview (code STALE_PREVIEW), or reorganizeRequired with a mainFolderMove change when a subfolder switching to TV needs the main folder move first }
    *       500: { description: Failed to start the reorganize }
    */
   router.post('/api/tv/reorganize', verifyToken, async (req, res) => {

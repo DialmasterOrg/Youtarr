@@ -59,7 +59,7 @@ function createSubfolderRoutes({ verifyToken, subfolderModule, libraryFolders, l
    *       201: { description: "Created: { name, layout, created: true, existingContent }" }
    *       200: { description: "Already existed: { name, layout, created: false }" }
    *       400: { description: Invalid name (including the reserved playlists) or layout }
-   *       409: { description: "Its downloads must move (reorganizeRequired, with change), or a download, a reorganize or MP3 channels refuse the layout" }
+   *       409: { description: "Its downloads must move (reorganizeRequired, with change) or, for a TV show folder while videos are saved directly in the main folder, reorganizeRequired with a mainFolderMove change, or a download, a reorganize or MP3 channels refuse the layout" }
    *       500: { description: "Couldn't create the directory, or the folder couldn't be saved" }
    */
   router.post('/api/subfolders', verifyToken, async (req, res) => {

@@ -5,6 +5,8 @@
  * the layout of every channel that downloads there, so when downloaded videos
  * would be left in the old layout the change goes through the reorganize
  * (a reorganizeRequired 409 naming the change for its preview).
+ * A TV show folder is added only once nothing is saved in the main folder: until
+ * then the request answers with a reorganizeRequired 409 for the main folder move.
  */
 
 const fs = require('fs');
@@ -14,6 +16,8 @@ const subfolderModule = require('../subfolderModule');
 const logger = require('../../logger');
 const Channel = require('../../models/channel');
 const Subfolder = require('../../models/subfolder');
+const Video = require('../../models/video');
+const { resolveLibraryFolder } = require('../filesystem/showFolderCleanup');
 const { buildSubfolderSegment, directoryHasFiles, ensureDir } = require('../filesystem');
 const { LAYOUT_TV, LAYOUT_VIDEOS, folderKey } = require('./constants');
 const libraryLayouts = require('./libraryLayouts');
@@ -21,7 +25,11 @@ const layoutGuards = require('./layoutGuards');
 const { effectiveLibraryFolder } = require('./channelFolders');
 const folderUsage = require('./folderUsage');
 const reorganizeLock = require('../reorganize/reorganizeLock');
-const { CHANGE_FOLDER_LAYOUT, CHANGE_DEFAULT_SUBFOLDER } = require('../reorganize/constants');
+const { CHANGE_FOLDER_LAYOUT, CHANGE_DEFAULT_SUBFOLDER, CHANGE_MAIN_FOLDER_MOVE } = require('../reorganize/constants');
+
+// The Videos folder the main folder's downloads move into.
+const MAIN_FOLDER_MOVE_NAME = 'Videos';
+const MAIN_FOLDER_MOVE_MAX_NAMES = 50;
 
 const LAYOUTS = new Set([LAYOUT_VIDEOS, LAYOUT_TV]);
 // Main folder as TV: a Plex TV library pointed there skips the subfolders.
@@ -37,6 +45,8 @@ const MESSAGES = {
   defaultReorganize: 'Channels that use the default folder have downloaded videos, so switching the default to a '
     + 'folder with a different layout moves them. Review the move first.',
   reorganizing: 'Downloads are being reorganized. Change folder layouts when that finishes.',
+  mainFolderFirst: 'Videos are saved directly in your downloads folder. Before you add a TV show folder, Youtarr '
+    + 'moves them into a Videos folder, so each folder can have its own media server library. Review the move first.',
 };
 
 /**
@@ -97,6 +107,91 @@ async function syncPlexIgnore(layout) {
   }
 }
 
+// A row counts when its video file or its MP3 is in the main folder and still
+// on disk: a row split across folders (video in __Kids, MP3 in the main folder)
+// has a file there too, while a file deleted outside Youtarr (before the rescan
+// marks the row removed) doesn't count, since the move would only plan it as
+// missing. A file that can't be checked counts, so an unreadable mount never
+// lets a TV show folder in. One scan of the videos table (no index on
+// filePath), as folderUsage does; only main-folder paths are checked.
+async function mainFolderFileExists(filePath) {
+  try {
+    await fs.promises.stat(filePath);
+    return true;
+  } catch (err) {
+    return err.code !== 'ENOENT' && err.code !== 'ENOTDIR';
+  }
+}
+
+async function mainFolderHasDownloads() {
+  const videos = await Video.findAll({ where: { removed: false }, attributes: ['filePath', 'audioFilePath'], raw: true });
+  for (const video of videos) {
+    for (const filePath of [video.filePath, video.audioFilePath]) {
+      const located = filePath ? resolveLibraryFolder(filePath, configModule.directoryPath) : null;
+      if (located && located.libraryFolder === '' && await mainFolderFileExists(filePath)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * The main folder holds Videos-layout downloads or is where enabled channels
+ * or playlists save: a library showing it would also show any TV show folder.
+ */
+async function mainFolderInUse() {
+  const layoutOf = await libraryLayouts.getLayoutResolver();
+  if (layoutOf('') !== LAYOUT_VIDEOS) return false;
+  const users = await layoutGuards.usersOfFolder('');
+  if (users.channels.some((channel) => channel.enabled) || users.playlists.length > 0) return true;
+  return mainFolderHasDownloads();
+}
+
+// __ folders in the downloads folder, by name without the prefix: a folder
+// nothing registered yet still decides the spelling on a case-sensitive disk.
+async function subfolderNamesOnDisk() {
+  try {
+    const entries = await fs.promises.readdir(configModule.directoryPath, { withFileTypes: true });
+    return entries.filter((entry) => entry.isDirectory() && entry.name.startsWith('__')).map((entry) => entry.name.slice(2));
+  } catch (err) {
+    if (err.code === 'ENOENT') return [];
+    throw err;
+  }
+}
+
+/**
+ * The Videos folder the main folder's downloads move into: the requested one,
+ * else Videos (Videos 2, 3... when a TV folder holds the name). An existing
+ * folder keeps its spelling.
+ * @param {string|null} [requested]
+ * @returns {Promise<string>} subfolder name without __
+ */
+async function mainFolderMoveTarget(requested = null) {
+  const [known, onDisk, layoutOf] = await Promise.all([
+    subfolderModule.getAll(), subfolderNamesOnDisk(), libraryLayouts.getLayoutResolver(),
+  ]);
+  const names = [...known.map((display) => display.replace(/^__/, '')), ...onDisk];
+  const spellingOf = (wanted) => names.find((name) => folderKey(name) === folderKey(wanted)) || wanted;
+  if (requested) {
+    if (layoutOf(requested) === LAYOUT_TV) {
+      throw layoutGuards.guardError(`__${spellingOf(requested)} is a TV show folder. Choose a Videos folder.`, 400);
+    }
+    return spellingOf(requested);
+  }
+  for (let attempt = 1; attempt <= MAIN_FOLDER_MOVE_MAX_NAMES; attempt += 1) {
+    const wanted = attempt === 1 ? MAIN_FOLDER_MOVE_NAME : `${MAIN_FOLDER_MOVE_NAME} ${attempt}`;
+    if (layoutOf(wanted) !== LAYOUT_TV) return spellingOf(wanted);
+  }
+  throw layoutGuards.guardError('Every Videos folder name is taken by a TV show folder.', 409);
+}
+
+// A TV show folder is added only once nothing is saved in the main folder.
+async function assertMainFolderClear() {
+  if (!(await mainFolderInUse())) return;
+  throw layoutGuards.reorganizeRequiredError(MESSAGES.mainFolderFirst, {
+    type: CHANGE_MAIN_FOLDER_MOVE, folder: await mainFolderMoveTarget(),
+  });
+}
+
 /**
  * Change a library folder's layout.
  * @param {string} name - '' for the main folder, else the subfolder name without __
@@ -119,6 +214,7 @@ async function setFolderLayout(name, layout, { isDownloadRunning } = {}) {
   if (layoutOf(folder) === layout) return { changed: false };
 
   reorganizeLock.assertInactive(MESSAGES.reorganizing);
+  if (folder && layout === LAYOUT_TV) await assertMainFolderClear();
   const users = await layoutGuards.usersOfFolder(folder);
   if (layout === LAYOUT_TV) layoutGuards.assertNoMp3Users(users, 'this folder');
   else await layoutGuards.assertNoTitleShows(folder);
@@ -170,6 +266,8 @@ async function createLibraryFolder(name, layout, { isDownloadRunning } = {}) {
     await setFolderLayout(existing.name, layout, { isDownloadRunning });
     return { name: existing.name, layout, created: false };
   }
+
+  if (layout === LAYOUT_TV) await assertMainFolderClear();
 
   const directory = path.join(configModule.directoryPath, buildSubfolderSegment(clean));
   try {
@@ -259,6 +357,10 @@ module.exports = {
   MESSAGES,
   syncPlexIgnore,
   listLibraryFolders,
+  mainFolderHasDownloads,
+  mainFolderInUse,
+  mainFolderMoveTarget,
+  assertMainFolderClear,
   setFolderLayout,
   createLibraryFolder,
   checkDefaultSubfolderChange,

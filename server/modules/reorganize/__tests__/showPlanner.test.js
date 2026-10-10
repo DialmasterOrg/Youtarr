@@ -34,6 +34,34 @@ const channelToTv = {
   folderAfter: () => 'TV',
 };
 
+describe('reorganize showPlanner main folder moves', () => {
+  let showPlanner;
+  const context = {
+    type: 'mainFolderMove', toFolder: 'Videos', layoutAfter: (folder) => (folder === 'TV' ? 'tv' : 'videos'),
+    folderAfter: (channel) => (channel.sub_folder === 'Kids' ? 'Kids' : 'Videos'),
+  };
+
+  beforeEach(() => {
+    jest.resetModules();
+    showPlanner = require('../showPlanner');
+  });
+
+  it('sends a channel saved in the main folder to the target folder', () => {
+    expect(showPlanner.targetOf({ ownerChannel: { sub_folder: null }, libraryFolder: '' }, context))
+      .toEqual({ libraryFolder: 'Videos', layout: 'videos' });
+  });
+
+  it('sends an untracked download to the target folder', () => {
+    expect(showPlanner.targetOf({ ownerChannel: null, libraryFolder: '' }, context))
+      .toEqual({ libraryFolder: 'Videos', layout: 'videos' });
+  });
+
+  it('sends leftovers of a channel saved elsewhere to that channel', () => {
+    expect(showPlanner.targetOf({ ownerChannel: { sub_folder: 'Kids' }, libraryFolder: '' }, context))
+      .toEqual({ libraryFolder: 'Kids', layout: 'videos' });
+  });
+});
+
 describe('reorganize showPlanner', () => {
   let showPlanner;
   let showStore;

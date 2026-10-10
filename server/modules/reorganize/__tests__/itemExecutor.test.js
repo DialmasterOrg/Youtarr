@@ -8,6 +8,10 @@ jest.mock('../../videoInfoStore', () => ({
 }));
 jest.mock('../../sidecarWriter', () => ({ writeVideoSidecars: jest.fn().mockResolvedValue([]) }));
 jest.mock('../../tvShows/titleShowStore', () => ({ raiseHighWater: jest.fn() }));
+jest.mock('../../filesystem/fileOperations', () => {
+  const actual = jest.requireActual('../../filesystem/fileOperations');
+  return { ...actual, moveFileNoClobber: jest.fn(actual.moveFileNoClobber) };
+});
 
 const fs = require('fs');
 const os = require('os');
@@ -23,6 +27,7 @@ describe('reorganize itemExecutor', () => {
   let VideoClassification;
   let videoInfoStore;
   let sidecarWriter;
+  let fileOperations;
   let root;
   let sourceDir;
   let seasonDir;
@@ -78,11 +83,100 @@ describe('reorganize itemExecutor', () => {
     VideoClassification.findByPk.mockResolvedValue(null);
     videoInfoStore = require('../../videoInfoStore');
     sidecarWriter = require('../../sidecarWriter');
+    fileOperations = require('../../filesystem/fileOperations');
     executor = require('../itemExecutor');
   });
 
   afterEach(() => {
     fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  describe('a relocated video (main folder move)', () => {
+    const oldDir = () => at('Chan');
+    const newDir = () => at('__Videos', 'Chan');
+    const oldVideo = () => path.join(oldDir(), `x [${ID}].mp4`);
+    const newVideo = () => path.join(newDir(), `x [${ID}].mp4`);
+    const newNfo = () => path.join(newDir(), `x [${ID}].nfo`);
+
+    function relocateRecord() {
+      const plan = {
+        files: [
+          { from: oldVideo(), to: newVideo() },
+          { from: path.join(oldDir(), `x [${ID}].nfo`), to: newNfo() },
+        ],
+        nfoSources: [],
+        sourceDirs: [oldDir()],
+        oldVideoPath: oldVideo(),
+        newVideoPath: newVideo(),
+        oldAudioPath: null,
+        newAudioPath: null,
+        layout: 'videos',
+        fromLayout: 'videos',
+        relocate: true,
+      };
+      touch(oldVideo(), 'video');
+      touch(path.join(oldDir(), `x [${ID}].nfo`), '<movie/>');
+      Video.findByPk.mockResolvedValue(videoRow(oldVideo()));
+      return { youtube_id: ID, video_id: 1, files: JSON.stringify(plan), classification: null, plan };
+    }
+
+    it('moves a relocated video without rewriting its metadata', async () => {
+      await executor.executeItem(relocateRecord(), { showIdFor: () => null });
+      expect([sidecarWriter.writeVideoSidecars.mock.calls.length, fs.existsSync(newNfo())]).toEqual([0, true]);
+    });
+
+    it('clears the stored video path and size when the relocation found no video file', async () => {
+      const record = relocateRecord();
+      const audioOld = path.join(oldDir(), `x [${ID}].mp3`);
+      const audioNew = path.join(newDir(), `x [${ID}].mp3`);
+      touch(audioOld, 'audio');
+      fs.rmSync(oldVideo());
+      record.plan = {
+        ...record.plan, files: [{ from: audioOld, to: audioNew }, record.plan.files[1]], newVideoPath: null, oldAudioPath: audioOld, newAudioPath: audioNew,
+      };
+      record.files = JSON.stringify(record.plan);
+      Video.findByPk.mockResolvedValue({ ...videoRow(oldVideo()), audioFilePath: audioOld, audioFileSize: 2, video_resolution: '1920x1080' });
+
+      await executor.executeItem(record, { showIdFor: () => null });
+
+      expect(Video.update).toHaveBeenCalledWith(
+        { filePath: null, audioFilePath: audioNew, fileSize: null, video_resolution: null },
+        expect.anything()
+      );
+    });
+
+    it('merges into a destination folder that already holds other videos', async () => {
+      touch(at('__Videos', 'Chan', 'Other [zzzzzzzzzzz].mp4'));
+      await executor.executeItem(relocateRecord(), { showIdFor: () => null });
+      expect([fs.existsSync(newVideo()), fs.existsSync(at('__Videos', 'Chan', 'Other [zzzzzzzzzzz].mp4'))]).toEqual([true, true]);
+    });
+
+    it('keeps the channel folder when it still holds files with no record', async () => {
+      touch(at('Chan', 'unknown.txt'));
+      await executor.executeItem(relocateRecord(), { showIdFor: () => null });
+      expect(fs.existsSync(at('Chan', 'unknown.txt'))).toBe(true);
+    });
+
+    it('explains a permission failure in plain words', async () => {
+      fileOperations.moveFileNoClobber.mockRejectedValueOnce(Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' }));
+      await expect(executor.executeItem(relocateRecord(), { showIdFor: () => null }))
+        .rejects.toMatchObject({ message: expect.stringContaining('YOUTARR_UID'), code: 'EACCES', filesMoved: false });
+    });
+
+    it('fails and keeps both files when a different file with the same name, size and time is there', async () => {
+      const record = relocateRecord();
+      touch(oldVideo(), 'video-data');
+      touch(newVideo(), 'other-data');
+      const when = new Date('2024-01-01T00:00:00Z');
+      fs.utimesSync(oldVideo(), when, when);
+      fs.utimesSync(newVideo(), when, when);
+      expect(fs.statSync(oldVideo()).size).toBe(fs.statSync(newVideo()).size);
+
+      await expect(executor.executeItem(record, { showIdFor: () => null }))
+        .rejects.toMatchObject({ code: 'EEXIST', message: expect.stringContaining('already exists') });
+
+      expect([fs.readFileSync(oldVideo(), 'utf8'), fs.existsSync(newVideo())]).toEqual(['video-data', true]);
+    });
   });
 
   describe('a title show episode', () => {

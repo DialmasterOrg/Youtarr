@@ -141,7 +141,7 @@ Youtarr must be running at the scheduled time; missed occurrences are not replay
 ### Default Folder
 - **Config Key**: `defaultSubfolder`
 - **Type**: `string`
-- **Default**: `""` (empty - the main folder)
+- **Default**: `""` (empty - the main folder). A new install whose downloads folder is empty starts with `Videos` (saved as `__Videos`). The template value stays empty, so upgrading never changes it.
 - **Description**: The **Default folder**: where channels set to "Default folder" download, and the fallback for downloads with no more specific folder (untracked channels, including their manual downloads)
 - **Set via**: Settings -> **Library folders**, **Make default** on a folder's page. `PUT /api/library-folders/default` changes it; `/updateconfig` keeps the stored value, so a Settings save never changes it. Making a folder with the other layout the default folder while channels that follow the default have downloads opens a review of the move first; the reorganize then applies the new default folder (and restores the old one if no video could be moved).
 - **Note**: Library folders are prefixed with `__` on the filesystem (e.g., the folder `Sports` is `__Sports/`)

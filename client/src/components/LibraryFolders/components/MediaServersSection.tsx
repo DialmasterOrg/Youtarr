@@ -6,11 +6,10 @@ import type { LibraryFolder } from '../../../types/tvShows';
 import { useNow } from '../../Configuration/hooks/useNow';
 import { serverStatuses, timeAgo } from '../../../utils/libraryAttention';
 import { useLibraryPage } from '../LibraryFoldersContext';
-import { followersLine } from '../folderText';
 import { SETUP_SERVER_NAMES, folderServerPath } from '../libraryTypes';
 import { footerNote, inspectorIntro } from '../mediaServerText';
+import { MOVE_MAIN_FOLDER_LABEL } from '../tvSetupPaths';
 import { libraryFolderLabel } from '../../../utils/libraryLayouts';
-import { ChannelLinks } from './ChannelLinks';
 import { PlexRefreshControl } from './PlexRefreshControl';
 import { SectionHeading } from './SectionHeading';
 import { ServerCard } from './ServerCard';
@@ -27,12 +26,10 @@ const ALL_SERVERS = ['plex', 'jellyfin', 'emby', 'kodi'] as const;
 /** The inspector's first section (UI 5.7.2). */
 export function MediaServersSection({ folder }: { folder: LibraryFolder }) {
   const page = useLibraryPage();
-  const { mainDetail } = page;
   const headingId = useId();
   const now = useNow();
   const statuses = serverStatuses(folder, page.check, page.configuredServers);
   const intro = inspectorIntro({ folder, folders: page.folders, check: page.check.data, servers: page.servers });
-  const followers = mainDetail ? followersLine(mainDetail.followers, mainDetail.channels.length > 0) : null;
   const downloadsPathOf = (serverType: string) => page.check.data?.servers.find((server) => server.serverType === serverType)?.downloadsPath ?? null;
   const checked = page.check.loading ? 'Checking...'
     : page.check.lastCheckedAt !== null ? `Checked ${timeAgo(page.check.lastCheckedAt, now, page.timeZone)}` : 'Not checked';
@@ -55,11 +52,10 @@ export function MediaServersSection({ folder }: { folder: LibraryFolder }) {
               {libraryFolderLabel((intro.link as { folder: string }).folder)}
             </button>{intro.trailing}</>
           )}
-          {intro.link?.kind === 'channels' && mainDetail && (
-            <>
-              {' '}<ChannelLinks channels={mainDetail.channels} />
-              {followers && <span className="mt-0.5 block">{followers}</span>}
-            </>
+          {intro.link?.kind === 'moveMain' && (
+            <> <button type="button" onClick={() => page.reviewChange({ type: 'mainFolderMove' }, { kind: 'default', folder: '' })} className={introLink}>
+              {MOVE_MAIN_FOLDER_LABEL}
+            </button></>
           )}
         </div>
       )}

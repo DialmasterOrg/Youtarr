@@ -7,12 +7,15 @@
 
 const configModule = require('../configModule');
 const Channel = require('../../models/channel');
+const Playlist = require('../../models/playlist');
 const subfolderModule = require('../subfolderModule');
 const { validateSubFolderName } = require('../filesystem/subfolderValidation');
 const { resolveEffectiveSubfolder } = require('../filesystem/pathBuilder');
 const { LAYOUT_TV, LAYOUT_VIDEOS, folderKey, isMp3Format } = require('../tvShows/constants');
 const { getLayoutResolver } = require('../tvShows/libraryLayouts');
 const layoutGuards = require('../tvShows/layoutGuards');
+const libraryFolders = require('../tvShows/libraryFolders');
+const { GLOBAL_DEFAULT_SENTINEL, ROOT_SENTINEL } = require('../filesystem/constants');
 const channelLayout = require('../tvShows/channelLayout');
 const titleShowSaver = require('../tvShows/titleShowSaver');
 const {
@@ -21,6 +24,7 @@ const {
   CHANGE_FOLDER_LAYOUT,
   CHANGE_DEFAULT_SUBFOLDER,
   CHANGE_TITLE_SHOWS,
+  CHANGE_MAIN_FOLDER_MOVE,
 } = require('./constants');
 
 const LAYOUTS = new Set([LAYOUT_VIDEOS, LAYOUT_TV]);
@@ -100,6 +104,8 @@ async function resolveFolderLayoutChange(raw, base) {
     throw badRequest(`${folderLabel(folder)} already has that layout.`);
   }
   if (layout === LAYOUT_TV) {
+    // A TV show folder is added only once nothing is saved in the main folder.
+    if (folder) await libraryFolders.assertMainFolderClear();
     layoutGuards.assertNoMp3Users(await layoutGuards.usersOfFolder(folder), 'this folder');
   } else {
     await layoutGuards.assertNoTitleShows(folder);
@@ -171,6 +177,60 @@ async function resolveTitleShowsChange(raw, base) {
   };
 }
 
+const byId = (key) => (a, b) => (a[key] < b[key] ? -1 : a[key] > b[key] ? 1 : 0);
+
+// The value names the main folder itself, not the default folder.
+function namesMainFolder(subFolderValue) {
+  return subFolderValue !== GLOBAL_DEFAULT_SENTINEL && !resolveEffectiveSubfolder(subFolderValue, null);
+}
+
+// Everything saved in the main folder moves out of it; channels and playlists
+// that name the main folder, and the default folder when it is the main folder,
+// switch to a Videos folder.
+async function resolveMainFolderMove(raw, base) {
+  if (base.layoutBefore('') !== LAYOUT_VIDEOS) {
+    throw badRequest('The main folder uses TV shows, so its downloads stay where they are.');
+  }
+  const requested = optionalString(raw.folder, 'folder');
+  if (requested) {
+    // validateSubFolderName accepts the folder settings sentinels, which are not folder names.
+    if (requested === GLOBAL_DEFAULT_SENTINEL || requested === ROOT_SENTINEL) throw badRequest('folder must be a folder name');
+    const validation = validateSubFolderName(requested);
+    if (!validation.valid) throw badRequest(validation.error);
+  }
+  const folder = await libraryFolders.mainFolderMoveTarget(requested || null);
+  const [channels, playlists] = await Promise.all([
+    Channel.findAll({ attributes: ['channel_id', 'sub_folder'], raw: true }),
+    Playlist.findAll({ attributes: ['playlist_id', 'default_sub_folder'], raw: true }),
+  ]);
+  const channelMoves = channels.filter((row) => namesMainFolder(row.sub_folder))
+    .map((row) => ({ channelId: row.channel_id, previous: row.sub_folder ?? null }))
+    .sort(byId('channelId'));
+  const playlistMoves = playlists.filter((row) => namesMainFolder(row.default_sub_folder))
+    .map((row) => ({ playlistId: row.playlist_id, previous: row.default_sub_folder ?? null }))
+    .sort(byId('playlistId'));
+  if (channelMoves.length === 0 && playlistMoves.length === 0 && base.defaultBefore
+    && !(await libraryFolders.mainFolderHasDownloads())) {
+    throw badRequest('Nothing is saved in the main folder, so nothing needs to move.');
+  }
+  const defaultAfter = base.defaultBefore || folder;
+  const explicit = new Set(channelMoves.map((move) => move.channelId));
+  return {
+    ...base,
+    type: CHANGE_MAIN_FOLDER_MOVE,
+    stored: {
+      type: CHANGE_MAIN_FOLDER_MOVE, folder, previousDefault: base.defaultBefore, channels: channelMoves, playlists: playlistMoves,
+    },
+    scope: '',
+    label: 'the main folder',
+    fromFolder: '',
+    toFolder: folder,
+    layoutAfter: base.layoutBefore,
+    defaultAfter,
+    folderAfter: (row) => (explicit.has(row.channel_id) ? folder : libraryFolderOf(row.sub_folder, defaultAfter)),
+  };
+}
+
 /**
  * Resolve a change requested by the API.
  *
@@ -180,6 +240,7 @@ async function resolveTitleShowsChange(raw, base) {
  *   | { type: 'folderLayout', folder, layout }
  *   | { type: 'defaultSubfolder', value }
  *   | { type: 'titleShows', channelId, shows, overrides? }
+ *   | { type: 'mainFolderMove', folder? }
  * @returns {Promise<Object>} The resolved change. Errors carry .status (400/404/409).
  */
 async function resolveChange(raw) {
@@ -208,6 +269,8 @@ async function resolveChange(raw) {
     return resolveDefaultSubfolderChange(raw, base);
   case CHANGE_TITLE_SHOWS:
     return resolveTitleShowsChange(raw, base);
+  case CHANGE_MAIN_FOLDER_MOVE:
+    return resolveMainFolderMove(raw, base);
   default:
     throw badRequest('Unknown change type');
   }

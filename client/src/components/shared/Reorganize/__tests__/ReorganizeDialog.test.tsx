@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import ReorganizeDialog from '../ReorganizeDialog';
+import { ReorganizeOperation } from '../../../../types/reorganize';
 
 jest.mock('axios', () => ({
   get: jest.fn(),
@@ -86,6 +87,42 @@ describe('ReorganizeDialog', () => {
     await waitFor(() => expect(axios.post).toHaveBeenCalledTimes(3));
   });
 
+  describe('when the server asks for the main folder move first', () => {
+    const REQUIRED = { type: 'mainFolderMove' as const, folder: 'Videos' };
+    const REFUSAL = {
+      response: { status: 409, data: { error: 'Move the main folder first.', reorganizeRequired: true, change: REQUIRED } },
+    };
+
+    test('offers the move after a refused preview', async () => {
+      axios.post.mockRejectedValueOnce(REFUSAL);
+      const onMainFolderMoveRequired = jest.fn();
+      const { user } = renderDialog({ onMainFolderMoveRequired });
+
+      await user.click(await screen.findByRole('button', { name: 'Review the main folder move' }));
+
+      expect(onMainFolderMoveRequired).toHaveBeenCalledWith(REQUIRED);
+    });
+
+    test('does not offer the move without a handler', async () => {
+      axios.post.mockRejectedValueOnce(REFUSAL);
+      renderDialog();
+
+      expect(await screen.findByText('Move the main folder first.')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Review the main folder move' })).not.toBeInTheDocument();
+    });
+
+    test('offers the move after a refused start', async () => {
+      axios.post.mockResolvedValueOnce({ data: PREVIEW }).mockRejectedValueOnce(REFUSAL);
+      const onMainFolderMoveRequired = jest.fn();
+      const { user } = renderDialog({ onMainFolderMoveRequired });
+
+      await user.click(await screen.findByRole('button', { name: 'Move 2 videos' }));
+      await user.click(await screen.findByRole('button', { name: 'Review the main folder move' }));
+
+      expect(onMainFolderMoveRequired).toHaveBeenCalledWith(REQUIRED);
+    });
+  });
+
   test('tells the parent when a retry of the shown operation starts', async () => {
     axios.get.mockResolvedValue({ data: {
       id: 7, label: 'Chan', status: 'partial', total: 2, done: 1, failed: 1,
@@ -159,6 +196,32 @@ describe('ReorganizeDialog', () => {
 
     await screen.findByRole('button', { name: 'Move 2 videos' });
     await waitFor(() => expect(screen.queryByText(/Check the media server libraries/)).not.toBeInTheDocument());
+  });
+
+  describe('afterMove', () => {
+    const afterMove = (operation: ReorganizeOperation) => <p>{`Next steps for ${operation.status}`}</p>;
+    const mockOperationResponse = (fields: { status: ReorganizeOperation['status']; done: number; failed: number }) => {
+      axios.get.mockResolvedValue({ data: { id: 5, label: 'the main folder', total: 3, failedItems: [], ...fields } });
+    };
+
+    test('shows what comes next once the move finished', async () => {
+      mockOperationResponse({ status: 'completed', done: 3, failed: 0 });
+      renderDialog({ change: null, operationId: 5, afterMove });
+      expect(await screen.findByText('Next steps for completed')).toBeInTheDocument();
+    });
+
+    test('passes a partial result to what comes next', async () => {
+      mockOperationResponse({ status: 'partial', done: 2, failed: 1 });
+      renderDialog({ change: null, operationId: 5, afterMove });
+      expect(await screen.findByText('Next steps for partial')).toBeInTheDocument();
+    });
+
+    test('hides what comes next while the move runs', async () => {
+      mockOperationResponse({ status: 'running', done: 1, failed: 0 });
+      renderDialog({ change: null, operationId: 5, afterMove });
+      await screen.findByRole('progressbar');
+      expect(screen.queryByText(/Next steps for/)).not.toBeInTheDocument();
+    });
   });
 
   test("doesn't check media servers when no video becomes a TV episode", async () => {

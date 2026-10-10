@@ -15,13 +15,13 @@ const MAIN_TV_INTRO = 'Everything here is saved as TV shows: one TV library per 
   + 'as an extra show.';
 const MAIN_ACTIVE_WITH_TV = 'Channels download straight into the main folder, but you also have TV show folders. A '
   + 'Jellyfin or Emby library on the whole downloads folder keeps your TV libraries empty, and Plex shows the episodes '
-  + 'twice. Give these channels a Video folder (Channel Settings > Library folder moves their videos), then point a '
+  + 'twice. Move what is saved in the main folder into a Video folder (you review every move first), then point a '
   + 'library at each folder.';
 const MAIN_ACTIVE_WITH_SUBFOLDERS = 'Channels download straight into the main folder, and you also use subfolders. That '
   + 'works while every folder uses Videos: one library on the whole downloads folder shows them all. Before you add a TV '
-  + 'show folder, give these channels a Video folder.';
+  + 'show folder, Youtarr moves what is saved here into a Video folder.';
 
-export type IntroLink = { kind: 'startTv' } | { kind: 'folder'; folder: string } | { kind: 'channels' };
+export type IntroLink = { kind: 'startTv' } | { kind: 'folder'; folder: string } | { kind: 'moveMain' };
 
 export interface IntroSpec {
   text: string;
@@ -88,7 +88,7 @@ export function inspectorIntro({ folder, folders, check, servers }: {
     if (state === 'active' && !subfolderActive) {
       return { text: `Everything downloads here. ${capitalize(typesWithArticles(servers, 'videos'))} library on the downloads folder shows it.` };
     }
-    if (state === 'active' && tvExists) return { text: MAIN_ACTIVE_WITH_TV, link: { kind: 'channels' } };
+    if (state === 'active' && tvExists) return { text: MAIN_ACTIVE_WITH_TV, link: { kind: 'moveMain' } };
     if (state === 'active') return { text: MAIN_ACTIVE_WITH_SUBFOLDERS, link: { kind: 'startTv' } };
     if (whole.length > 0 && !tvExists) {
       const held = count > 0 ? ` It also shows the ${countOf(count, unit.one, unit.many)} still in the main folder.` : '';
@@ -101,9 +101,10 @@ export function inspectorIntro({ folder, folders, check, servers }: {
     }
     if (state === 'holdsVideos') {
       return {
-        text: `No library shows the ${count > 0 ? countOf(count, unit.one, unit.many) : 'files'} still in the main folder. To watch them, give their `
-          + 'channels a Video folder (Channel Settings > Library folder moves their videos), or point a library at the whole '
+        text: `No library shows the ${count > 0 ? countOf(count, unit.one, unit.many) : 'files'} still in the main folder. To watch them, `
+          + 'move them into a Video folder (you review every move first), or point a library at the whole '
           + 'downloads folder while every folder uses Videos.',
+        link: { kind: 'moveMain' },
       };
     }
     return { text: 'Nothing is saved in the main folder itself, so it needs no library of its own while you use subfolders.' };

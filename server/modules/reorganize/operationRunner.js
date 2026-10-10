@@ -23,10 +23,20 @@ const { buildPlan, summarizePlan, applyRefusal } = require('./planner');
 const { applySettings, rollbackSettings } = require('./settingsApplier');
 const { executeItem } = require('./itemExecutor');
 const followUp = require('./followUp');
-const { OPERATION_STATUS, ITEM_STATUS, PROGRESS_MESSAGE_TYPE, CHANGE_CHANNEL, CHANGE_TITLE_SHOWS } = require('./constants');
+const {
+  OPERATION_STATUS, ITEM_STATUS, PROGRESS_MESSAGE_TYPE, CHANGE_CHANNEL, CHANGE_TITLE_SHOWS, CHANGE_MAIN_FOLDER_MOVE,
+} = require('./constants');
 
 // Changes made to one channel, which the lock covers from the start.
 const CHANNEL_CHANGES = new Set([CHANGE_CHANNEL, CHANGE_TITLE_SHOWS]);
+
+// Channels a change switches whether or not their videos move: a main folder
+// move switches every channel that names the main folder. Channels following
+// a main-folder default keep their sub_folder value, so a save can't undo
+// their switch and they need no cover.
+function switchedChannelIds(change) {
+  return change && change.type === CHANGE_MAIN_FOLDER_MOVE ? change.channels.map((entry) => entry.channelId) : [];
+}
 
 // Scheduled tasks that read or write downloaded files or their rows, refused
 // while a reorganize runs (and which refuse a reorganize while they run).
@@ -168,6 +178,7 @@ class OperationRunner {
         channelIds: [
           ...plan.items.map((item) => item.channelId),
           ...(CHANNEL_CHANGES.has(plan.context.type) ? [plan.context.channel.channel_id] : []),
+          ...switchedChannelIds(plan.context.stored),
         ],
         videoIds: plan.items.map((item) => item.videoId),
         youtubeIds: plan.items.map((item) => item.youtubeId),
@@ -202,7 +213,10 @@ class OperationRunner {
     // Failed videos, plus any a stopped run never reached.
     const unfinished = await operationStore.itemsWithStatus(operation.id, [ITEM_STATUS.FAILED, ITEM_STATUS.PENDING]);
     if (unfinished.length === 0) throw badRequest('Nothing failed in this reorganize.');
-    const channelIds = [...new Set(unfinished.map((item) => item.channel_id).filter(Boolean))];
+    const channelIds = [...new Set([
+      ...unfinished.map((item) => item.channel_id),
+      ...switchedChannelIds(operationStore.settingsOf(operation).change),
+    ].filter(Boolean))];
     if (await operationStore.hasNewerOperationFor(operation.id, channelIds)) {
       throw conflict('A newer reorganize changed these channels. Review the move again from Channel Settings.');
     }
@@ -250,7 +264,7 @@ class OperationRunner {
       const token = reorganizeLock.acquire({ label: operationStore.settingsOf(operation).label });
       reorganizeLock.setScope(token, {
         operationId: operation.id,
-        channelIds: pending.map((item) => item.channel_id),
+        channelIds: [...pending.map((item) => item.channel_id), ...switchedChannelIds(operationStore.settingsOf(operation).change)],
         videoIds: pending.map((item) => item.video_id),
         youtubeIds: pending.map((item) => item.youtube_id),
       });

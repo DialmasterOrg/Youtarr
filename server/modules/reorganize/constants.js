@@ -12,6 +12,9 @@ const CHANGE_CHANNEL_LAYOUT = 'channelLayout';
 // A channel's title shows (or episode assignments) changed in a way that
 // moves downloaded videos.
 const CHANGE_TITLE_SHOWS = 'titleShows';
+// Everything saved directly in the main folder moves into Videos folders,
+// keeping its path and names, before a TV show folder is added.
+const CHANGE_MAIN_FOLDER_MOVE = 'mainFolderMove';
 
 // What a change does to a show it plans.
 const SHOW_ACTION = Object.freeze({ KEEP: 'keep', CREATE: 'create', MOVE: 'move' });
@@ -63,6 +66,7 @@ module.exports = {
   CHANGE_DEFAULT_SUBFOLDER,
   CHANGE_CHANNEL_LAYOUT,
   CHANGE_TITLE_SHOWS,
+  CHANGE_MAIN_FOLDER_MOVE,
   SHOW_ACTION,
   OPERATION_STATUS,
   ITEM_STATUS,

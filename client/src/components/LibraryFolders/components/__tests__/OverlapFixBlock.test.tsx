@@ -22,23 +22,32 @@ describe('OverlapFixBlock', () => {
     expect(screen.getByText('Q:\\Y\\__Kids')).toBeInTheDocument();
   });
 
-  test('names the channels still in the main folder from the page\'s main folder detail', () => {
+  test('an active Videos main folder offers the main folder move instead of channel links', async () => {
     const value = makePageValue({
       folders: [folder('', { channels: 1, channelsChosen: 1 }), folder('TV', { layout: 'tv', channels: 1 })], mainDetail: mainDetail(),
     });
     renderInPage(<OverlapFixBlock issue={issue} server={{ serverType: 'jellyfin', name: 'Jellyfin' }} report={report} downloadsPath={null} />, { value });
     expect(screen.getByText(/1 channel still downloads straight into the main folder, which YouTube would stop showing/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Blippi' })).toHaveAttribute('href', '/channel/UC1');
+    expect(screen.queryByRole('link', { name: 'Blippi' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: "Move the main folder's downloads" }));
+    expect(value.reviewChange).toHaveBeenCalledWith({ type: 'mainFolderMove' }, { kind: 'default', folder: '' });
   });
 
-  test('after the links, says which channels follow the default folder and how to move them', () => {
+  test('a Videos main folder holding files offers the move', async () => {
+    const value = makePageValue({ folders: [folder('', { hasFiles: true, fileCount: 4 }), folder('TV', { layout: 'tv', channels: 1 })] });
+    renderInPage(<OverlapFixBlock issue={issue} server={{ serverType: 'jellyfin', name: 'Jellyfin' }} report={report} downloadsPath={null} />, { value });
+    expect(screen.getByText(/Move them into a Video folder first:/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: "Move the main folder's downloads" }));
+    expect(value.reviewChange).toHaveBeenCalledWith({ type: 'mainFolderMove' }, { kind: 'default', folder: '' });
+  });
+
+  test('a TV main folder keeps the channel links and no move button', () => {
     const value = makePageValue({
-      folders: [folder('', { isDefault: true, channels: 4, channelsChosen: 1, channelsFollowing: 3 }), folder('TV', { layout: 'tv', channels: 1 })],
-      mainDetail: mainDetail({ followers: { count: 3, sample: ['Cocomelon', 'Numberblocks', 'Peppa'] } }),
+      folders: [folder('', { layout: 'tv', channels: 1, channelsChosen: 1 }), folder('TV', { layout: 'tv', channels: 1 })], mainDetail: mainDetail({ layout: 'tv' }),
     });
     renderInPage(<OverlapFixBlock issue={issue} server={{ serverType: 'jellyfin', name: 'Jellyfin' }} report={report} downloadsPath={null} />, { value });
-    expect(screen.getByText('3 more follow the default folder (Cocomelon, Numberblocks and Peppa): make another folder the default, '
-      + 'or set their Library folder in Channel Settings.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Blippi' })).toHaveAttribute('href', '/channel/UC1');
+    expect(screen.queryByRole('button', { name: "Move the main folder's downloads" })).not.toBeInTheDocument();
   });
 
   test('opens the panel', async () => {

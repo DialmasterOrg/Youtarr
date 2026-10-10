@@ -1,23 +1,24 @@
 import React, { useState } from 'react';
 import { Alert, Box, Button, TextField, Typography } from '../../ui';
 import { LibraryLayout } from '../../../types/tvShows';
+import { isReorganizeRequired, ReorganizeRequiredError } from '../../shared/Reorganize';
 
 export const DEFAULT_TV_FOLDER_NAME = 'TV Shows';
 export const EMPTY_FOLDER_NAME_MESSAGE = 'Enter a folder name.';
 const SETUP_FAILED_MESSAGE = "Couldn't set up the TV folder.";
 
 export interface TvFolderSetupProps {
-  /** Registers the subfolder; rejects with the server's message */
-  createSubfolder: (name: string) => Promise<void>;
-  /** Sets a folder's layout; rejects with the server's message */
-  setFolderLayout: (name: string, layout: LibraryLayout) => Promise<void>;
+  /** Creates the TV folder; rejects with the server's message, or a ReorganizeRequiredError */
+  createSubfolder: (name: string, layout: LibraryLayout) => Promise<void>;
   /** Switches the channel into the new folder; rejects with the server's message */
   onSwitch: (layout: LibraryLayout, folder: string) => Promise<void>;
+  /** Opens the review a refusal asks for; true when it did, so no error shows */
+  onReviewRequired?: (error: ReorganizeRequiredError) => boolean;
   disabled?: boolean;
 }
 
 /** Inline step that creates a TV folder and moves the channel into it. */
-function TvFolderSetup({ createSubfolder, setFolderLayout, onSwitch, disabled = false }: TvFolderSetupProps) {
+function TvFolderSetup({ createSubfolder, onSwitch, onReviewRequired, disabled = false }: TvFolderSetupProps) {
   const [name, setName] = useState(DEFAULT_TV_FOLDER_NAME);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,10 +33,10 @@ function TvFolderSetup({ createSubfolder, setFolderLayout, onSwitch, disabled = 
     setBusy(true);
     setError(null);
     try {
-      await createSubfolder(trimmedName);
-      await setFolderLayout(trimmedName, 'tv');
+      await createSubfolder(trimmedName, 'tv');
       await onSwitch('tv', trimmedName);
     } catch (err: unknown) {
+      if (isReorganizeRequired(err) && onReviewRequired?.(err)) return;
       setError(err instanceof Error && err.message ? err.message : SETUP_FAILED_MESSAGE);
     } finally {
       setBusy(false);

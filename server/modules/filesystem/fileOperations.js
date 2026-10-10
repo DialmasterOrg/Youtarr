@@ -288,6 +288,23 @@ async function statOrNull(filePath) {
   }
 }
 
+// A file another program holds open (Windows hosts, SMB shares) can refuse a
+// rename for a moment; a permission error is not retried.
+const BUSY_RENAME_RETRIES = 3;
+const BUSY_RENAME_DELAY_MS = 500;
+
+async function renameRetryingBusy(src, dest, { busyRetries, busyDelayMs }) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await fsPromises.rename(src, dest);
+      return;
+    } catch (err) {
+      if (err.code !== 'EBUSY' || attempt >= busyRetries) throw err;
+      await sleep(busyDelayMs * Math.pow(2, attempt));
+    }
+  }
+}
+
 async function copyWithFallback(src, dest) {
   try {
     await fs.copy(src, dest, { overwrite: true, preserveTimestamps: true });
@@ -298,6 +315,35 @@ async function copyWithFallback(src, dest) {
   }
 }
 
+const CONTENT_COMPARE_CHUNK_BYTES = 1024 * 1024;
+
+// Fills the buffer from the file at the position, short only at the end.
+async function readFully(handle, buffer, position) {
+  let filled = 0;
+  while (filled < buffer.length) {
+    const { bytesRead } = await handle.read(buffer, filled, buffer.length - filled, position + filled);
+    if (bytesRead === 0) break;
+    filled += bytesRead;
+  }
+  return filled;
+}
+
+// Whether two files hold the same bytes (their sizes already match).
+async function sameContents(a, b) {
+  const [left, right] = await Promise.all([fsPromises.open(a, 'r'), fsPromises.open(b, 'r')]);
+  try {
+    const bufferA = Buffer.allocUnsafe(CONTENT_COMPARE_CHUNK_BYTES);
+    const bufferB = Buffer.allocUnsafe(CONTENT_COMPARE_CHUNK_BYTES);
+    for (let position = 0; ; position += CONTENT_COMPARE_CHUNK_BYTES) {
+      const [filledA, filledB] = await Promise.all([readFully(left, bufferA, position), readFully(right, bufferB, position)]);
+      if (filledA !== filledB || !bufferA.subarray(0, filledA).equals(bufferB.subarray(0, filledB))) return false;
+      if (filledA < CONTENT_COMPARE_CHUNK_BYTES) return true;
+    }
+  } finally {
+    await Promise.all([left.close(), right.close()]);
+  }
+}
+
 /**
  * Move one file to a destination that must not already hold another file.
  * Safe to call again after an interruption: a leftover staging copy is
@@ -305,6 +351,12 @@ async function copyWithFallback(src, dest) {
  * that is a finished copy of the source (same size and modification time,
  * left when a cross-filesystem move stopped before removing the source)
  * completes the move, unless the two paths differ only in case or accents.
+ * A destination on another filesystem (`stat.dev` differs) that matches is
+ * taken for that copy. On the same device the match is read byte for byte
+ * first: a rename within one filesystem is atomic, so a matching file there
+ * is normally another file (EEXIST, keeping the source), but two mounts of
+ * one filesystem share a device id while a rename across them is refused, so
+ * a copy left between them is recognized by its contents.
  *
  * On one filesystem the move is a rename. Across filesystems (a __subfolder
  * can be another mount) the file is copied to `<dest>.reorganize.part`,
@@ -316,10 +368,17 @@ async function copyWithFallback(src, dest) {
  * @param {Object} [options]
  * @param {number} [options.retries=3] - Attempts for the cross-filesystem copy
  * @param {number} [options.delayMs=200] - Base backoff between copy attempts
+ * @param {number} [options.busyRetries=3] - Retries of a rename refused with EBUSY
+ * @param {number} [options.busyDelayMs=500] - Base backoff between busy retries
  * @returns {Promise<'moved'|'already-moved'>}
  * @throws {Error} code EEXIST when another file holds the destination, ENOENT when neither exists
  */
-async function moveFileNoClobber(src, dest, { retries = 3, delayMs = 200 } = {}) {
+async function moveFileNoClobber(src, dest, {
+  retries = 3,
+  delayMs = 200,
+  busyRetries = BUSY_RENAME_RETRIES,
+  busyDelayMs = BUSY_RENAME_DELAY_MS,
+} = {}) {
   const staging = `${dest}${NO_CLOBBER_STAGING_SUFFIX}`;
   await safeRemove(staging);
 
@@ -339,8 +398,12 @@ async function moveFileNoClobber(src, dest, { retries = 3, delayMs = 200 } = {})
     // itself on a filesystem whose inode numbers vary by spelling (SMB
     // without server inode numbers): never taken for a finished copy, which
     // would delete the only one.
+    // A finished copy sits on another filesystem, or on another mount of the
+    // same one (same device id, rename refused across): on one device only
+    // matching contents tell it from another file.
     if (!sameIgnoringCaseAndAccents(src, dest)
-      && srcStat.size === destStat.size && Math.abs(srcStat.mtimeMs - destStat.mtimeMs) < COPY_MTIME_TOLERANCE_MS) {
+      && srcStat.size === destStat.size && Math.abs(srcStat.mtimeMs - destStat.mtimeMs) < COPY_MTIME_TOLERANCE_MS
+      && (srcStat.dev !== destStat.dev || await sameContents(src, dest))) {
       await fsPromises.unlink(src);
       return 'already-moved';
     }
@@ -349,7 +412,7 @@ async function moveFileNoClobber(src, dest, { retries = 3, delayMs = 200 } = {})
 
   await fsPromises.mkdir(path.dirname(dest), { recursive: true });
   try {
-    await fsPromises.rename(src, dest);
+    await renameRetryingBusy(src, dest, { busyRetries, busyDelayMs });
     return 'moved';
   } catch (err) {
     if (err.code !== 'EXDEV') throw err;

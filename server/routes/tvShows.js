@@ -134,7 +134,7 @@ function createTvShowRoutes({
    *       200: { description: The updated folder list and whether anything changed }
    *       400: { description: Invalid name or layout }
    *       404: { description: Unknown subfolder }
-   *       409: { description: "The folder holds downloaded videos (reorganizeRequired, with the change to preview through /api/tv/reorganize/preview), a download or a reorganize is running, or its channels download MP3" }
+   *       409: { description: "The folder holds downloaded videos (reorganizeRequired, with the change to preview through /api/tv/reorganize/preview) or, for a TV show folder while videos are saved directly in the main folder, reorganizeRequired with a mainFolderMove change, a download or a reorganize is running, or its channels download MP3" }
    *       500: { description: Failed to change the folder layout }
    */
   router.put('/api/library-folders', verifyToken, async (req, res) => {

@@ -13,19 +13,15 @@ const wholeFolderCheck: LibraryCheckResponse = {
 };
 
 describe('StartTvShowsDialog', () => {
-  test('path A lists the main folder\'s channels, then the ones that follow the default folder', () => {
-    renderInPage(<StartTvShowsDialog open onClose={jest.fn()} />, { value: makePageValue({
+  test('opens the main folder move from path A', async () => {
+    const value = makePageValue({
       folders: [folder('', { isDefault: true, channels: 4, channelsChosen: 1, channelsFollowing: 3 })],
       servers: [{ serverType: 'plex', name: 'Plex' }], configuredServers: ['plex'],
       check: { ...makePageValue().check, data: wholeFolderCheck },
-      mainDetail: {
-        name: '', layout: 'videos', channels: [{ channelId: 'UC1', name: 'Blippi', videoCount: 3 }],
-        followers: { count: 5, sample: ['Cocomelon', 'Numberblocks', 'Peppa'] }, playlists: [], titleShows: [], example: null,
-      },
-    }) });
-    expect(screen.getByRole('link', { name: 'Blippi' })).toHaveAttribute('href', '/channel/UC1');
-    expect(screen.getByText('5 more follow the default folder (Cocomelon, Numberblocks, Peppa and 2 more): make another folder the default, '
-      + 'or set their Library folder in Channel Settings.')).toBeInTheDocument();
+    });
+    renderInPage(<StartTvShowsDialog open onClose={jest.fn()} />, { value });
+    await userEvent.click(screen.getByRole('button', { name: "Move the main folder's downloads" }));
+    expect(value.reviewChange).toHaveBeenCalledWith({ type: 'mainFolderMove' }, { kind: 'default', folder: '' });
   });
 
   test('everything in the main folder: A preselected, B available, the steps and the guide link', () => {

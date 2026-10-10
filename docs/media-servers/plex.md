@@ -67,9 +67,12 @@ Choose the appropriate agent:
 
 #### Step 4: Add Folder
 
-Point the library to your Youtarr download directory:
-- Default: `/path/to/youtube`
+Point the library at `__Videos` inside your Youtarr download directory (new installs save there), or at the download directory itself on installs that save into it:
+- New installs: `/path/to/youtube/__Videos`
+- Installs that save into the download directory: `/path/to/youtube`
 - Or specific subfolder: `/path/to/youtube/__kids`
+
+Before you add a TV show folder, Youtarr moves those downloads into `__Videos` and you point the library there.
 
 Once one of your folders is a TV folder, point the Other Videos library at your Video folders only (one location per folder). A library at the whole download directory would show the TV folder's episodes a second time. See [Move an existing setup to TV shows](../USAGE_GUIDE.md#move-an-existing-setup-to-tv-shows).
 

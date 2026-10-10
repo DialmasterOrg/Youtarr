@@ -1,4 +1,4 @@
-import { detectSetup, pathOptions, pathSteps, setupLines } from '../tvSetupPaths';
+import { MOVE_MAIN_FOLDER_STEP, detectSetup, pathOptions, pathSteps, setupLines } from '../tvSetupPaths';
 import type { LibraryFolder } from '../../../types/tvShows';
 import type { LibraryCheckResponse } from '../../../types/libraryCheck';
 
@@ -61,20 +61,48 @@ describe('tvSetupPaths', () => {
   test('path A steps edit the whole-folder library with exact paths', () => {
     const steps = pathSteps('A', detectSetup(folders, check(true, false), servers), {});
     expect(steps.youtarr.map((step) => step.text)).toEqual([
-      'Give the 3 channels in the main folder a Video folder (Channel Settings > Library folder moves their videos).',
+      MOVE_MAIN_FOLDER_STEP,
       'Add a TV show folder.',
       'Switch the channels you want as shows to it: Channel Settings > Library folder, or TV Show > Show this channel as TV show. Each switch shows its moves first.',
     ]);
     expect(steps.servers[0].steps[0]).toMatchObject({
-      text: 'Edit YouTube: remove /yt and add your Video folders:',
+      text: 'Edit YouTube: remove /yt and add your Video folders, including the Video folder step 1 moves your downloads into:',
       paths: [{ text: '/yt/__Kids', copyable: true }],
       after: 'It keeps its type.',
     });
   });
 
+  test('path A starts with the main folder move while the main folder is in use', () => {
+    const setup = detectSetup([f('', { channels: 3 })], null, []);
+    expect(pathSteps('A', setup, {}).youtarr[0]).toMatchObject({ action: { kind: 'moveMainFolder' } });
+  });
+
+  test('path C starts with the main folder move too', () => {
+    const setup = detectSetup([f('', { channels: 3 }), f('Kids', { channels: 1 })], null, []);
+    expect(pathSteps('C', setup, { folder: 'Kids' }).youtarr[0]).toMatchObject({ action: { kind: 'moveMainFolder' } });
+  });
+
+  test('no move step once nothing is saved in the main folder', () => {
+    const setup = detectSetup([f('', { channels: 0, hasFiles: false, isDefault: false }), f('Videos', { channels: 3 })], null, []);
+    expect(pathSteps('A', setup, {}).youtarr.map((step) => step.action?.kind)).not.toContain('moveMainFolder');
+  });
+
+  test('the whole-folder library step mentions the folder step 1 creates', () => {
+    const setup = detectSetup([f('', { channels: 3 })], check(true, false), servers);
+    expect(pathSteps('A', setup, {}).servers[0].steps[0].text).toMatch(/the Video folder step 1 moves your downloads into/);
+  });
+
+  test('the whole-folder library step ends with a period when no Video folder path is listed', () => {
+    const setup = detectSetup([f('', { channels: 3 })], check(true, false), servers);
+    expect(pathSteps('A', setup, {}).servers[0].steps[0]).toMatchObject({
+      text: 'Edit YouTube: remove /yt and add your Video folders, including the Video folder step 1 moves your downloads into.',
+      paths: [],
+    });
+  });
+
   test('path C with a library on the folder itself says to rebuild it', () => {
     const steps = pathSteps('C', detectSetup(folders, check(false, true), servers), { folder: 'Kids' });
-    expect(steps.youtarr[0]).toMatchObject({ text: 'Open __Kids and choose Move to TV shows. You review every move first.', action: { kind: 'openFolder', folder: 'Kids' } });
+    expect(steps.youtarr[1]).toMatchObject({ text: 'Open __Kids and choose Move to TV shows. You review every move first.', action: { kind: 'openFolder', folder: 'Kids' } });
     expect(steps.servers[0].steps[0].text).toBe("Jellyfin can't change a library's type: remove Kids and create a Shows library pointed at /yt/__Kids.");
   });
 

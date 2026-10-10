@@ -3,11 +3,10 @@ import { Info } from '../../../../lib/icons';
 import { Button, Dialog, DialogActions, DialogTitle, MenuItem, Select } from '../../../ui';
 import { cn } from '../../../../lib/cn';
 import { useLibraryPage } from '../../LibraryFoldersContext';
-import { folderLabel, followersLine } from '../../folderText';
+import { folderLabel } from '../../folderText';
 import {
   FULL_GUIDE_URL, PathKey, WATCH_STATE_FIRST, WATCH_STATE_REBUILD, YoutarrAction, detectSetup, pathOptions, pathSteps, setupLines,
 } from '../../tvSetupPaths';
-import { ChannelLinks } from '../ChannelLinks';
 import { CopyButton } from '../CopyButton';
 import { SetupBox } from '../SetupBox';
 
@@ -23,14 +22,13 @@ export function StartTvShowsDialog({ open, onClose }: { open: boolean; onClose: 
   const [chosen, setChosen] = useState<PathKey>(firstAvailable);
   // The page mounts the panel only while it is open, so these start fresh on every open.
   const [cFolder, setCFolder] = useState(setup.videoSubfolders[0]?.name ?? '');
-  const { mainDetail } = page;
-  const followers = mainDetail ? followersLine(mainDetail.followers, mainDetail.channels.length > 0) : null;
 
   const steps = pathSteps(chosen, setup, { folder: cFolder });
   const act = (action: YoutarrAction) => {
     onClose();
     if (action.kind === 'addTvFolder') page.openAddFolder('tv');
     else if (action.kind === 'mainFolderTv') { page.selectFolder(''); page.openMainFolderTv(); }
+    else if (action.kind === 'moveMainFolder') page.reviewChange({ type: 'mainFolderMove' }, { kind: 'default', folder: '' });
     else page.selectFolder(action.folder);
   };
   const full = page.phone ? 'min-h-[44px] w-full' : undefined;
@@ -83,8 +81,6 @@ export function StartTvShowsDialog({ open, onClose }: { open: boolean; onClose: 
             {steps.youtarr.map((step) => (
               <li key={step.text}>
                 {step.text}
-                {step.channelLinks && mainDetail && <> <ChannelLinks channels={mainDetail.channels} /></>}
-                {step.channelLinks && followers && <span className="mt-0.5 block">{followers}</span>}
                 {step.action && (
                   <div className="mt-1">
                     <Button variant="outlined" size="sm" onClick={() => act(step.action as YoutarrAction)} className={full}>{step.actionLabel}</Button>

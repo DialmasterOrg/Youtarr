@@ -61,8 +61,11 @@ function noteLines(preview: ReorganizePreview): string[] {
   const notes: string[] = [];
   const { overridePlaced, adopted, uploadDateOnly, downloadTime, movieTags, audioToTv } = totals;
   if (overridePlaced > 0) {
-    notes.push(`${countOf(overridePlaced, 'video')} downloaded to another folder with a download override `
-      + `${agree(overridePlaced, 'moves', 'move')} with the channel.`);
+    notes.push(preview.change.type === 'mainFolderMove'
+      ? `${countOf(overridePlaced, 'video')} of channels that now save in another folder `
+        + `${agree(overridePlaced, 'moves', 'move')} into that channel's folder.`
+      : `${countOf(overridePlaced, 'video')} downloaded to another folder with a download override `
+        + `${agree(overridePlaced, 'moves', 'move')} with the channel.`);
   }
   if (adopted > 0) {
     notes.push(`${countOf(adopted, 'file')} named by the Plex TV Series preset ${agree(adopted, 'keeps its', 'keep their')} episode `
@@ -120,12 +123,38 @@ function BlockedAlert({ blocked }: { blocked: NonNullable<ReorganizePreview['blo
   return <Alert severity="warning">{blocked.message}{suffix}</Alert>;
 }
 
+/** What a main folder move does, and what it leaves behind. */
+function MainFolderMoveIntro({ preview }: { preview: ReorganizePreview }) {
+  if (preview.change.type !== 'mainFolderMove') return null;
+  const folder = folderName(preview.change.folder ?? 'Videos');
+  const left = preview.leftInMain;
+  return (
+    <Alert severity="info">
+      <Typography variant="body2">
+        Youtarr moves everything it saved directly into your downloads folder out of your downloads folder, keeping every
+        file name: into {folder}, or into the folder of the channel it belongs to. New downloads go to {folder} from now on.
+        Your media server libraries keep showing these videos until you change them; the steps for that come after the move.
+        Channel art and playlist files Youtarr made are written again in the new folders.
+      </Typography>
+      {left && left.count > 0 && (
+        <Typography variant="body2" className="mt-1">
+          {left.truncated ? 'At least ' : ''}{countOf(left.count, 'file')} {agree(left.count, 'stays', 'stay')} in the
+          downloads folder because no move takes {agree(left.count, 'it', 'them')}: {left.paths.join(', ')}
+          {left.count > left.paths.length ? ', and more' : ''}. To keep them in your media server library, move them
+          into a Video folder yourself.
+        </Typography>
+      )}
+    </Alert>
+  );
+}
+
 /** The dry run of a reorganize: what moves where, and what to know first. */
 function ReorganizePreviewBody({ preview, libraryCheck = null }: ReorganizePreviewBodyProps) {
   const problems = problemLines(preview);
   if (!preview.needed) {
     return (
       <Box className="flex flex-col gap-3">
+        <MainFolderMoveIntro preview={preview} />
         {preview.blocked && <BlockedAlert blocked={preview.blocked} />}
         {problems.length > 0 && (
           <Alert severity="warning">
@@ -144,6 +173,7 @@ function ReorganizePreviewBody({ preview, libraryCheck = null }: ReorganizePrevi
 
   return (
     <Box className="flex flex-col gap-3">
+      <MainFolderMoveIntro preview={preview} />
       {preview.blocked && <BlockedAlert blocked={preview.blocked} />}
       <Box>
         <Typography variant="body2" className="font-semibold">

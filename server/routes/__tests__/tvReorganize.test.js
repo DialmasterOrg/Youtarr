@@ -33,9 +33,21 @@ describe('reorganize routes', () => {
     };
     watchStatusPushBack = { pushPendingHolds: jest.fn().mockResolvedValue({ pushed: 1, notIndexed: 0, failed: 0 }) };
     const createRoutes = require('../tvReorganize');
+    // Same body shape as layoutGuards.errorBody (the real module loads the models).
+    const layoutGuards = {
+      errorBody: (error) => {
+        const body = { error: error.message };
+        if (error.reorganizeRequired) {
+          body.reorganizeRequired = true;
+          body.change = error.change;
+        }
+        if (error.code) body.code = error.code;
+        return body;
+      },
+    };
     app = express();
     app.use(express.json());
-    app.use(createRoutes({ verifyToken: (req, res, next) => next(), reorganize, watchStatusHolds, watchStatusPushBack }));
+    app.use(createRoutes({ verifyToken: (req, res, next) => next(), reorganize, watchStatusHolds, watchStatusPushBack, layoutGuards }));
   });
 
   describe('POST /api/tv/reorganize/preview', () => {
@@ -50,6 +62,16 @@ describe('reorganize routes', () => {
       const res = await request(app).post('/api/tv/reorganize/preview').send({ change: 'tv' });
       expect(res.status).toBe(400);
       expect(reorganize.preview).not.toHaveBeenCalled();
+    });
+
+    test('passes a reorganizeRequired change through to the client', async () => {
+      const change = { type: 'mainFolderMove', folder: 'Videos' };
+      reorganize.preview.mockRejectedValueOnce(
+        Object.assign(new Error('Move the main folder first.'), { status: 409, reorganizeRequired: true, change })
+      );
+      const res = await request(app).post('/api/tv/reorganize/preview').send({ change: CHANGE });
+      expect(res.status).toBe(409);
+      expect(res.body).toEqual({ error: 'Move the main folder first.', reorganizeRequired: true, change });
     });
 
     test('passes a refusal through with its status', async () => {

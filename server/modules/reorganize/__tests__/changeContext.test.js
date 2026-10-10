@@ -1,6 +1,12 @@
 jest.mock('../../../logger', () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }));
 jest.mock('../../configModule', () => ({ getDefaultSubfolder: jest.fn() }));
-jest.mock('../../../models/channel', () => ({ findOne: jest.fn() }));
+jest.mock('../../../models/channel', () => ({ findOne: jest.fn(), findAll: jest.fn() }));
+jest.mock('../../../models/playlist', () => ({ findAll: jest.fn() }));
+jest.mock('../../tvShows/libraryFolders', () => ({
+  mainFolderMoveTarget: jest.fn(async (requested) => requested || 'Videos'),
+  mainFolderHasDownloads: jest.fn().mockResolvedValue(true),
+  assertMainFolderClear: jest.fn().mockResolvedValue(undefined),
+}));
 jest.mock('../../subfolderModule', () => ({ getAll: jest.fn() }));
 jest.mock('../../tvShows/libraryLayouts', () => ({ getLayoutResolver: jest.fn() }));
 jest.mock('../../tvShows/layoutGuards', () => ({
@@ -177,6 +183,82 @@ describe('reorganize changeContext', () => {
     it('refuses a default with the same layout', async () => {
       await expect(changeContext.resolveChange({ type: 'defaultSubfolder', value: 'Kids' }))
         .rejects.toMatchObject({ status: 400 });
+    });
+  });
+
+  describe('main folder moves', () => {
+    let Playlist;
+    let libraryFolders;
+
+    beforeEach(() => {
+      Playlist = require('../../../models/playlist');
+      libraryFolders = require('../../tvShows/libraryFolders');
+      configModule.getDefaultSubfolder.mockReturnValue(null);
+      Channel.findAll.mockResolvedValue([
+        { channel_id: 'UC2', sub_folder: null },
+        { channel_id: 'UC1', sub_folder: '##ROOT##' },
+        { channel_id: 'UC3', sub_folder: '##USE_GLOBAL_DEFAULT##' },
+        { channel_id: 'UC4', sub_folder: 'Kids' },
+      ]);
+      Playlist.findAll.mockResolvedValue([
+        { playlist_id: 'PL1', default_sub_folder: null },
+        { playlist_id: 'PL2', default_sub_folder: '##USE_GLOBAL_DEFAULT##' },
+      ]);
+    });
+
+    it('switches the channels and playlists that name the main folder', async () => {
+      const context = await changeContext.resolveChange({ type: 'mainFolderMove' });
+      expect([context.stored.channels, context.stored.playlists]).toEqual([
+        [{ channelId: 'UC1', previous: '##ROOT##' }, { channelId: 'UC2', previous: null }],
+        [{ playlistId: 'PL1', previous: null }],
+      ]);
+    });
+
+    it('makes the target the default when the main folder was the default', async () => {
+      const context = await changeContext.resolveChange({ type: 'mainFolderMove' });
+      expect([context.defaultAfter, context.folderAfter({ channel_id: 'UC3', sub_folder: '##USE_GLOBAL_DEFAULT##' })])
+        .toEqual(['Videos', 'Videos']);
+    });
+
+    it('keeps another default folder', async () => {
+      configModule.getDefaultSubfolder.mockReturnValue('Kids');
+      const context = await changeContext.resolveChange({ type: 'mainFolderMove' });
+      expect([context.defaultAfter, context.folderAfter({ channel_id: 'UC2', sub_folder: null })]).toEqual(['Kids', 'Videos']);
+    });
+
+    it('refuses a TV main folder', async () => {
+      require('../../tvShows/libraryLayouts').getLayoutResolver.mockResolvedValueOnce(() => 'tv');
+      await expect(changeContext.resolveChange({ type: 'mainFolderMove' })).rejects.toMatchObject({ status: 400 });
+    });
+
+    it('refuses when nothing is saved in the main folder', async () => {
+      configModule.getDefaultSubfolder.mockReturnValue('Kids');
+      Channel.findAll.mockResolvedValue([{ channel_id: 'UC4', sub_folder: 'Kids' }]);
+      Playlist.findAll.mockResolvedValue([]);
+      libraryFolders.mainFolderHasDownloads.mockResolvedValue(false);
+      await expect(changeContext.resolveChange({ type: 'mainFolderMove' })).rejects.toMatchObject({ status: 400 });
+    });
+
+    it('refuses an invalid folder name', async () => {
+      await expect(changeContext.resolveChange({ type: 'mainFolderMove', folder: '../x' })).rejects.toMatchObject({ status: 400 });
+    });
+
+    it.each(['##ROOT##', '##USE_GLOBAL_DEFAULT##'])('refuses the folder setting %s as a folder name', async (folder) => {
+      await expect(changeContext.resolveChange({ type: 'mainFolderMove', folder })).rejects.toMatchObject({ status: 400 });
+    });
+  });
+
+  describe('a subfolder switching to TV while the main folder is in use', () => {
+    it('asks for the main folder move first', async () => {
+      const refusal = Object.assign(new Error('Move first'), { status: 409, reorganizeRequired: true, change: { type: 'mainFolderMove' } });
+      require('../../tvShows/libraryFolders').assertMainFolderClear.mockRejectedValueOnce(refusal);
+      await expect(changeContext.resolveChange({ type: 'folderLayout', folder: 'Kids', layout: 'tv' }))
+        .rejects.toMatchObject({ reorganizeRequired: true, change: { type: 'mainFolderMove' } });
+    });
+
+    it('lets the main folder itself switch to TV', async () => {
+      await changeContext.resolveChange({ type: 'folderLayout', folder: '', layout: 'tv' });
+      expect(require('../../tvShows/libraryFolders').assertMainFolderClear).not.toHaveBeenCalled();
     });
   });
 

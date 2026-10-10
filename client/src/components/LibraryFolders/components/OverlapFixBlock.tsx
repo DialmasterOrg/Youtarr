@@ -7,6 +7,7 @@ import { useLibraryPage } from '../LibraryFoldersContext';
 import { countOf, folderLabel, followersLine, units } from '../folderText';
 import { joinServerPath } from '../libraryTypes';
 import { libraryTypeLabel } from '../mediaServerText';
+import { MOVE_MAIN_FOLDER_LABEL } from '../tvSetupPaths';
 import { ChannelLinks } from './ChannelLinks';
 import { CopyButton } from './CopyButton';
 
@@ -31,6 +32,13 @@ export function OverlapFixBlock({ issue, server, report, downloadsPath }: Overla
   const name = library?.name ?? `library ${issue.libraryId}`;
   const videoFolders = page.folders.filter((entry) => entry.name && entry.layout === 'videos' && needsLibrary(folderState(entry)));
   const mainUnit = units(main?.layout ?? 'videos');
+  const mainIsVideos = main?.layout === 'videos';
+  const moveMainButton = (
+    <Button variant="outlined" size="sm" onClick={() => page.reviewChange({ type: 'mainFolderMove' }, { kind: 'default', folder: '' })}
+      className={page.phone ? 'mt-1 min-h-[44px] w-full' : 'h-[30px]'}>
+      {MOVE_MAIN_FOLDER_LABEL}
+    </Button>
+  );
 
   return (
     <div className="rounded-ui border border-border bg-card px-2.5 py-2 text-[13px]">
@@ -56,7 +64,14 @@ export function OverlapFixBlock({ issue, server, report, downloadsPath }: Overla
             )}
           </li>
         )}
-        {main && mainState === 'active' && main.channels > 0 && (
+        {main && mainState === 'active' && main.channels > 0 && mainIsVideos && (
+          <li>
+            {countOf(main.channels, 'channel still downloads', 'channels still download')} straight into the main folder, which {name}{' '}
+            would stop showing. Move what is saved there into a Video folder first; you review every move:{' '}
+            {moveMainButton}
+          </li>
+        )}
+        {main && mainState === 'active' && main.channels > 0 && !mainIsVideos && (
           <li>
             {countOf(main.channels, 'channel still downloads', 'channels still download')} straight into the main folder, which {name}{' '}
             would stop showing. Give each a Video folder first (Channel Settings &gt; Library folder moves its videos):{' '}
@@ -65,7 +80,10 @@ export function OverlapFixBlock({ issue, server, report, downloadsPath }: Overla
           </li>
         )}
         {main && mainState === 'holdsVideos' && (
-          <li>{countOf(main.fileCount ?? 0, mainUnit.one, mainUnit.many)} still sit in the main folder; {name} would stop showing them.</li>
+          <li>
+            {countOf(main.fileCount ?? 0, mainUnit.one, mainUnit.many)} still sit in the main folder; {name} would stop showing them.
+            {mainIsVideos && <> Move them into a Video folder first:{' '}{moveMainButton}</>}
+          </li>
         )}
         <li>
           Then check again.{' '}

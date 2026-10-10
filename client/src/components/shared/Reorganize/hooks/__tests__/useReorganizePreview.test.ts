@@ -40,6 +40,27 @@ describe('useReorganizePreview', () => {
     expect(result.current.preview).toBeNull();
   });
 
+  test('exposes the change the server asked for first', async () => {
+    const required = { type: 'mainFolderMove', folder: 'Videos' };
+    axios.post.mockRejectedValueOnce({
+      response: { status: 409, data: { error: 'Move the main folder first.', reorganizeRequired: true, change: required } },
+    });
+
+    const { result } = renderHook(() => useReorganizePreview('token', CHANGE));
+
+    await waitFor(() => expect(result.current.error).toBe('Move the main folder first.'));
+    expect(result.current.requiredChange).toEqual(required);
+  });
+
+  test('leaves requiredChange null for a plain refusal', async () => {
+    axios.post.mockRejectedValueOnce({ response: { status: 400, data: { error: 'Nothing to move' } } });
+
+    const { result } = renderHook(() => useReorganizePreview('token', CHANGE));
+
+    await waitFor(() => expect(result.current.error).toBe('Nothing to move'));
+    expect(result.current.requiredChange).toBeNull();
+  });
+
   test('previews again on refresh', async () => {
     axios.post.mockResolvedValueOnce({ data: PREVIEW }).mockResolvedValueOnce({ data: { ...PREVIEW, revision: 'rev2' } });
     const { result } = renderHook(() => useReorganizePreview('token', CHANGE));

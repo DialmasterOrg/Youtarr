@@ -12,6 +12,7 @@ import {
 } from '../../ui';
 import { ChannelTvState, LibraryFolder, LibraryLayout } from '../../../types/tvShows';
 import { libraryFolderLabel } from '../../../utils/libraryLayouts';
+import { ReorganizeRequiredError } from '../../shared/Reorganize';
 import TvFolderSetup from './TvFolderSetup';
 import ChannelTvMediaServers, { MediaServerSetupNotes } from './ChannelTvMediaServers';
 
@@ -37,8 +38,9 @@ export interface ChannelTvSectionProps {
   folders: LibraryFolder[];
   /** Switches the channel's layout; rejects with the server's refusal message */
   onSwitch: (layout: LibraryLayout, folder?: string) => Promise<void>;
-  createSubfolder: (name: string) => Promise<void>;
-  setFolderLayout: (name: string, layout: LibraryLayout) => Promise<void>;
+  createSubfolder: (name: string, layout?: LibraryLayout) => Promise<void>;
+  /** Opens the review a TV folder setup asks for; true when it did */
+  onReviewRequired?: (error: ReorganizeRequiredError) => boolean;
   /** Show the result of the reorganize that left some of this channel's videos unmoved */
   onShowReorganize?: (operationId: number) => void;
   disabled?: boolean;
@@ -97,7 +99,7 @@ function ChannelTvSection({
   folders,
   onSwitch,
   createSubfolder,
-  setFolderLayout,
+  onReviewRequired,
   onShowReorganize,
   disabled = false,
 }: ChannelTvSectionProps) {
@@ -268,7 +270,7 @@ function ChannelTvSection({
       {step === 'setupTv' && !isTv && (
         <TvFolderSetup
           createSubfolder={createSubfolder}
-          setFolderLayout={setFolderLayout}
+          onReviewRequired={onReviewRequired}
           onSwitch={handleSetupSwitch}
           disabled={locked}
         />

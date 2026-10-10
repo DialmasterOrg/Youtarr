@@ -9,7 +9,8 @@ export type ReorganizeChange =
   | { type: 'channel'; channelId: string; subFolder: string | null; previousSubFolder?: string | null }
   | { type: 'folderLayout'; folder: string; layout: 'videos' | 'tv'; previousLayout?: 'videos' | 'tv' }
   | { type: 'defaultSubfolder'; value: string; previousValue?: string }
-  | { type: 'titleShows'; channelId: string; shows: TitleShowDraft[]; overrides?: EpisodeOverride[] };
+  | { type: 'titleShows'; channelId: string; shows: TitleShowDraft[]; overrides?: EpisodeOverride[] }
+  | { type: 'mainFolderMove'; folder?: string; previousDefault?: string };
 
 export type ReorganizeFlag = 'override-placed' | 'adopted' | 'upload-date-only' | 'download-time' | 'movie-tags';
 
@@ -93,6 +94,8 @@ export interface ReorganizePreview {
   problems: ReorganizeProblem[];
   watchState: ReorganizeWatchState[];
   blocked: ReorganizeBlocker | null;
+  /** Main folder move: files Youtarr has no record of that stay in the downloads folder (count is a lower bound when truncated) */
+  leftInMain?: { count: number; paths: string[]; truncated: boolean } | null;
 }
 
 /** POST /api/tv/reorganize */

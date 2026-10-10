@@ -1,7 +1,16 @@
 jest.mock('../../../logger', () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }));
-jest.mock('../../configModule', () => ({ getConfig: jest.fn(() => ({ x: 1 })), getDefaultSubfolder: jest.fn(() => 'GlobalDefault'), updateConfig: jest.fn() }));
+jest.mock('../../configModule', () => ({
+  getConfig: jest.fn(() => ({ x: 1 })),
+  getDefaultSubfolder: jest.fn(() => 'GlobalDefault'),
+  updateConfig: jest.fn(),
+  directoryPath: '/data',
+  config: null,
+}));
+jest.mock('../../../models/playlist', () => ({ update: jest.fn() }));
+jest.mock('../../filesystem', () => ({ buildSubfolderSegment: (name) => `__${name}`, ensureDir: jest.fn() }));
+jest.mock('../../../db', () => ({ sequelize: { transaction: jest.fn(async (work) => work('tx')) } }));
 jest.mock('../../subfolderModule', () => ({ register: jest.fn() }));
-jest.mock('../../m3uGenerator', () => ({ deleteChannelM3U: jest.fn() }));
+jest.mock('../../m3uGenerator', () => ({ deleteChannelM3U: jest.fn(), generateChannelM3U: jest.fn() }));
 jest.mock('../../../models/channel', () => ({ findOne: jest.fn(), update: jest.fn() }));
 jest.mock('../../../models/tvshow', () => ({ findByPk: jest.fn() }));
 jest.mock('../../tvShows/showStore', () => ({ findChannelShow: jest.fn(), createChannelShowAt: jest.fn(), moveShowTo: jest.fn() }));
@@ -150,6 +159,127 @@ describe('reorganize settingsApplier', () => {
       await applier.rollbackSettings({ change: { type: 'defaultSubfolder', value: 'TV', previousValue: 'GlobalDefault' }, shows: [] });
 
       expect(configModule.updateConfig).toHaveBeenCalledWith({ x: 1, defaultSubfolder: 'GlobalDefault' });
+    });
+  });
+
+  describe('main folder moves', () => {
+    const { Op } = require('sequelize');
+    const namesMainFolder = (column) => ({ [Op.or]: [{ [column]: null }, { [column]: ['', '##ROOT##'] }] });
+    const change = {
+      type: 'mainFolderMove', folder: 'Videos', previousDefault: '',
+      channels: [{ channelId: 'UC1', previous: null }, { channelId: 'UC2', previous: '##ROOT##' }],
+      playlists: [{ playlistId: 'PL1', previous: null }],
+    };
+    let Playlist;
+
+    beforeEach(() => {
+      Playlist = require('../../../models/playlist');
+    });
+
+    it('registers and creates the folder', async () => {
+      await applier.applySettings({ change, shows: [], layoutBefore: layoutOf });
+      expect([require('../../subfolderModule').register.mock.calls[0], require('../../filesystem').ensureDir.mock.calls[0]])
+        .toEqual([['Videos', { layout: 'videos', throwOnError: true }], ['/data/__Videos']]);
+    });
+
+    it('removes the channel playlists of channels leaving the main folder first', async () => {
+      await applier.applySettings({ change, shows: [], layoutBefore: layoutOf });
+      expect(m3uGenerator.deleteChannelM3U.mock.calls.map(([id]) => id)).toEqual(['UC1', 'UC2', 'UC8']);
+      const removedAt = m3uGenerator.deleteChannelM3U.mock.invocationCallOrder;
+      expect(removedAt.every((order) => order < Channel.update.mock.invocationCallOrder[0]
+        && order < configModule.updateConfig.mock.invocationCallOrder[0])).toBe(true);
+    });
+
+    it('switches the channels and playlists that still name the main folder, in one transaction', async () => {
+      await applier.applySettings({ change, shows: [], layoutBefore: layoutOf });
+      expect([Channel.update.mock.calls[0], Playlist.update.mock.calls[0]]).toEqual([
+        [{ sub_folder: 'Videos' }, { where: { channel_id: ['UC1', 'UC2'], ...namesMainFolder('sub_folder') }, transaction: 'tx' }],
+        [{ default_sub_folder: 'Videos' }, { where: { playlist_id: ['PL1'], ...namesMainFolder('default_sub_folder') }, transaction: 'tx' }],
+      ]);
+    });
+
+    it('writes no config when the row writes fail', async () => {
+      Playlist.update.mockRejectedValueOnce(new Error('db down'));
+      await expect(applier.applySettings({ change, shows: [], layoutBefore: layoutOf })).rejects.toThrow('db down');
+      expect(configModule.updateConfig).not.toHaveBeenCalled();
+    });
+
+    it('undoes the row writes and the in-memory config when the config write fails', async () => {
+      const before = { x: 1, defaultSubfolder: '' };
+      configModule.getConfig.mockReturnValue(before);
+      configModule.updateConfig.mockImplementationOnce((next) => { configModule.config = next; throw new Error('EACCES'); });
+      await expect(applier.applySettings({ change, shows: [], layoutBefore: layoutOf })).rejects.toThrow('EACCES');
+      expect([Channel.update.mock.calls.slice(1), configModule.config]).toEqual([
+        [
+          [{ sub_folder: null }, { where: { channel_id: 'UC1', sub_folder: 'Videos' }, transaction: 'tx' }],
+          [{ sub_folder: '##ROOT##' }, { where: { channel_id: 'UC2', sub_folder: 'Videos' }, transaction: 'tx' }],
+        ],
+        before,
+      ]);
+    });
+
+    it('rejects with the config error and logs the restore error when the row restore also fails', async () => {
+      const { sequelize } = require('../../../db');
+      const logger = require('../../../logger');
+      const restoreError = new Error('db gone');
+      sequelize.transaction
+        .mockImplementationOnce(async (work) => work('tx'))
+        .mockImplementationOnce(async () => { throw restoreError; });
+      configModule.updateConfig.mockImplementationOnce(() => { throw new Error('EACCES'); });
+
+      await expect(applier.applySettings({ change, shows: [], layoutBefore: layoutOf })).rejects.toThrow('EACCES');
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ err: restoreError, originalError: 'EACCES' }), expect.any(String)
+      );
+    });
+
+    it('makes the folder the default when the main folder was', async () => {
+      await applier.applySettings({ change, shows: [], layoutBefore: layoutOf });
+      expect(configModule.updateConfig).toHaveBeenCalledWith(expect.objectContaining({ defaultSubfolder: 'Videos' }));
+    });
+
+    it('leaves another default alone', async () => {
+      await applier.applySettings({ change: { ...change, previousDefault: 'Kids' }, shows: [], layoutBefore: layoutOf });
+      expect(configModule.updateConfig).not.toHaveBeenCalled();
+    });
+
+    it('restores only rows that still hold the target folder on rollback', async () => {
+      await applier.rollbackSettings({ change, shows: [] });
+      expect(Channel.update.mock.calls).toEqual([
+        [{ sub_folder: null }, { where: { channel_id: 'UC1', sub_folder: 'Videos' }, transaction: 'tx' }],
+        [{ sub_folder: '##ROOT##' }, { where: { channel_id: 'UC2', sub_folder: 'Videos' }, transaction: 'tx' }],
+      ]);
+    });
+
+    it('puts the main folder back as the default on rollback while it is still the target', async () => {
+      configModule.getDefaultSubfolder.mockReturnValue('Videos');
+      await applier.rollbackSettings({ change, shows: [] });
+      expect(configModule.updateConfig.mock.calls[0][0].defaultSubfolder).toBe('');
+    });
+
+    it('leaves a default someone changed during the move', async () => {
+      configModule.getDefaultSubfolder.mockReturnValue('Kids');
+      await applier.rollbackSettings({ change, shows: [] });
+      expect(configModule.updateConfig).not.toHaveBeenCalled();
+    });
+
+    it('writes the channel playlists again on rollback, after the rows and the default went back', async () => {
+      configModule.getDefaultSubfolder.mockReturnValue('Videos');
+      await applier.rollbackSettings({ change, shows: [] });
+      expect(m3uGenerator.generateChannelM3U.mock.calls.map(([id]) => id)).toEqual(['UC1', 'UC2', 'UC8']);
+      const restoredAt = Math.max(...Channel.update.mock.invocationCallOrder, ...configModule.updateConfig.mock.invocationCallOrder);
+      expect(m3uGenerator.generateChannelM3U.mock.invocationCallOrder.every((order) => order > restoredAt)).toBe(true);
+    });
+
+    it('leaves the follower playlists alone on rollback when the default was another folder', async () => {
+      await applier.rollbackSettings({ change: { ...change, previousDefault: 'Kids' }, shows: [] });
+      expect(m3uGenerator.generateChannelM3U.mock.calls.map(([id]) => id)).toEqual(['UC1', 'UC2']);
+    });
+
+    it('finishes the rollback when a channel playlist cannot be written', async () => {
+      m3uGenerator.generateChannelM3U.mockRejectedValueOnce(new Error('EACCES'));
+      await expect(applier.rollbackSettings({ change, shows: [] })).resolves.toBeUndefined();
+      expect(m3uGenerator.generateChannelM3U).toHaveBeenCalledTimes(3);
     });
   });
 
