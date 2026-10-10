@@ -32,7 +32,7 @@
    - IP address users **not** using Docker container IP addresses will not need to change anything.
 5. Recreate the Youtarr container and add Gluetun by running
    ```
-    docker compose -f docker-compose-gluetun.yml up -d --force-recreate
+    docker compose -f docker-compose.gluetun.yml up -d --force-recreate
    ```
 6. Profit!
 
