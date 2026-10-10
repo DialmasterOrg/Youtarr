@@ -1,0 +1,38 @@
+# Add-on Docker Compose file for Gluetun integration
+# Use COMPOSE_FILE to add this Docker Compose file in addition to your main compose file
+# See https://github.com/DialmasterOrg/Youtarr/docs/GLUETUN_INTEGRATION.md for more info
+
+services:
+  gluetun:
+    image: qmcgaw/gluetun:v3
+    container_name: ${GLUETUN_CONTAINER_NAME:-youtarr-gluetun}
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      VPN_SERVICE_PROVIDER: ${VPN_SERVICE_PROVIDER:?Set VPN_SERVICE_PROVIDER in .env}
+      VPN_TYPE: wireguard
+      WIREGUARD_PRIVATE_KEY: ${WIREGUARD_PRIVATE_KEY:?Set WIREGUARD_PRIVATE_KEY in .env}
+      WIREGUARD_PRESHARED_KEY: ${WIREGUARD_PRESHARED_KEY:-}
+      WIREGUARD_ADDRESSES: ${WIREGUARD_ADDRESSES:?Set WIREGUARD_ADDRESSES in .env}
+      WIREGUARD_MTU: ${WIREGUARD_MTU:-}
+      FIREWALL_OUTBOUND_SUBNETS: ${FIREWALL_OUTBOUND_SUBNETS:-}
+      TZ: ${TZ:-UTC}
+    ports:
+      - "${YOUTARR_HOST_PORT:-3087}:3011"
+    volumes:
+      - youtarr-gluetun:/gluetun
+
+  youtarr:
+    network_mode: "service:gluetun"
+    ports: !reset []
+    extra_hosts: !reset []
+    depends_on:
+      gluetun:
+        condition: service_healthy
+        restart: true
+
+volumes:
+  gluetun:

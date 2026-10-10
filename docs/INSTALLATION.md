@@ -7,11 +7,43 @@ Before setting up Youtarr, ensure you have:
 1. **Docker & Docker Compose** installed on your system
 2. **Bash Shell** (Git Bash for Windows users)
 3. **Git** to clone the repository
+4. Some network and VPN knowledge, and a VPN provider if using Gluetun
+
+## Table of contents:
+- [Youtarr Setup Guide](#youtarr-setup-guide)
+- [Prerequisites](#prerequisites)
+- [Table of contents:](#table-of-contents)
+- [Quick Start Guide](#quick-start-guide)
+- [Method 1: First-Time Installation via `./start.sh` helper](#method-1-first-time-installation-via-startsh-helper)
+   - [Optional flags:](#optional-flags) 
+- [Method 2: Standard Docker Compose (For Docker-Native Setups)](#method-2-standard-docker-compose-for-docker-native-setups)
+   - [Optionally configure other settings:](#optionally-configure-other-settings)
+- [Method 3: Manual Setup Without Git (Advanced Users Only)](#method-3-manual-setup-without-git-advanced-users-only)
+- [Authentication](#authentication)
+- [Configuration](#configuration)
+   - [Required Settings](#required-settings)
+   - [Configuration Settings](#configuration-settings)
+- [Important Operational Notes](#important-operational-notes)
+   - [Critical: Download Archive File](#critical-download-archive-file)
+   - [Storage Management](#storage-management)
+   - [File Management Restrictions](#file-management-restrictions)
+   - [Network Storage Considerations](#network-storage-considerations)
+   - [Content Filtering](#content-filtering)
+   - [Platform Deployments (Elfhosted, Kubernetes, etc.)](#platform-deployments-elfhosted-kubernetes-etc)
+- [Network Access](#network-access)
+- [Upgrading](#upgrading)
+   - [Checking for Updates](#checking-for-updates)
+   - [How to Update to the Latest Version](#how-to-update-to-the-latest-version)
+      - [Method 1: Using Helper Scripts](#method-1-using-helper-scripts)
+      - [Method 2: Manual Docker Compose Update](#method-2-manual-docker-compose-update)
+      - [Method 3: Asustor App Central](#method-3-asustor-app-central)
+   - [What Happens During Updates](#what-happens-during-updates)
 
 ## Quick Start Guide
 
 Choose your preferred installation method
 
+> [!TIP]
 > Running on a NAS or Unraid, or using Portainer? There are dedicated platform guides for [Synology](platforms/synology.md), [Unraid](platforms/unraid.md), [Asustor](platforms/asustor.md), and [Portainer](platforms/portainer.md) - start there instead.
 
 ### Method 1: First-Time Installation via `./start.sh` helper
@@ -25,14 +57,14 @@ Choose your preferred installation method
    ```bash
    ./start.sh
    ```
-   If this is a first time run you will:
-   - Be prompted to setup your output directory for videos (defaults to `./downloads`)
+   If this is a first-time run, you will:
+   - Be prompted to set up your output directory for videos (defaults to `./downloads`)
    - Choose your timezone (default `UTC`), which drives scheduled downloads and nightly cleanup jobs.
 
    #### Optional flags:
-     - `--no-auth`: Completely disable auth. Never expose Youtarr directly to the internet in this manner, only use if you have your own authentication layer (Cloudflare Tunnel, OAuth Proxy, etc)
-     - `--headless-auth`: Set auth credentials in `.env`, bypassing the need to setup credentials in the UI (as that may be difficult to do over localhost for headless setups)
-     - `--pull-latest`: Pull latest code from Github and latest image from DockerHub
+     - `--no-auth`: Completely disable auth. Never expose Youtarr directly to the internet in this manner; only use if you have your own authentication layer (Cloudflare Tunnel, OAuth Proxy, etc.)
+     - `--headless-auth`: Set auth credentials in `.env`, bypassing the need to set up credentials in the UI (as that may be difficult to do over localhost for headless setups)
+     - `--pull-latest`: Pull latest code from GitHub and latest image from DockerHub
      - `--debug`: Set log level to debug
 
    This automatically creates a `.env` file from the included `.env.example` and starts both the Youtarr application and MariaDB database containers. On a fresh install, `./start.sh` uses Docker named-volume storage for MariaDB. If an existing `./database/` MariaDB directory is present, it preserves that bind-mounted database and prints a migration warning.
@@ -70,7 +102,16 @@ If you prefer to use standard `docker compose up` commands:
    YOUTUBE_OUTPUT_DIR=/path/to/your/videos
    ```
 
-   Optionally configure other settings:
+> [!IMPORTANT]
+> If using Gluetun, you must set all the required variables, or else it will fail.
+>
+> Example:
+> - `VPN_SERVICE_PROVIDER`
+> - `WIREGUARD_PRIVATE_KEY`
+> - `WIREGUARD_PRESHARED_KEY`
+> - `WIREGUARD_ADDRESSES`
+
+#### Optionally configure other settings:
    - `YOUTARR_HOST_PORT=3087` - Change this if you need the web interface on a different host port
    - For **headless deployments** (e.g., Unraid, NAS, remote VPS), you have two options:
      - **One-time setup token:** open the web UI from localhost, your trusted LAN, VPN, or SSH tunnel and paste the token from `docker logs youtarr` or `config/setup-token`.
@@ -78,6 +119,7 @@ If you prefer to use standard `docker compose up` commands:
    - `AUTH_ENABLED=false` - Only if behind external authentication (VPN, reverse proxy)
    - `TRUST_PROXY=false` - Recommended when exposing Youtarr directly without a reverse proxy. Leave unset for the current backwards-compatible default.
    - `LOG_LEVEL` - Set to `debug` for troubleshooting, `info` for normal/production use (default), `warn` for minimal logging
+   - If using Gluetun, set `FIREWALL_OUTBOUND_SUBNETS` if Youtarr needs to reach Plex, Jellyfin, Emby, or an external DB on your LAN. Otherwise, that traffic goes into the VPN and will time out.
 
    See: [ENVIRONMENT VARIABLES](ENVIRONMENT_VARIABLES.md) for more details
 
@@ -85,12 +127,22 @@ If you prefer to use standard `docker compose up` commands:
    ```bash
    docker compose up -d
    ```
+   If using Gluetun, start with the [docker-compose.gluetun.yml](https://github.com/DialmasterOrg/Youtarr/blob/main/docker-compose.gluetun.yml) file.
+   ```bash
+   docker compose docker-compose.gluetun.yml up -d
+   ```
 
-   > **Docker Desktop/ARM/NAS users**: For a fresh install, use the named-volume database override to avoid MariaDB bind-mount issues on virtualized filesystems:
-   > ```bash
-   > docker compose -f docker-compose.yml -f docker-compose.arm.yml up -d
-   > ```
-   > If you already have data in `./database/`, use `./scripts/migrate-to-named-volume.sh` instead. See [Database Management](DATABASE.md#migrating-from-bind-mount-to-named-volume) and [Troubleshooting](TROUBLESHOOTING.md#docker-desktop--arm-incorrect-information-in-file-errors) for details.
+> [!IMPORTANT]
+> **Docker Desktop/ARM/NAS users**: For a fresh install, use the named-volume database override to avoid MariaDB bind-mount issues on virtualized filesystems:
+> ```bash
+> docker compose -f docker-compose.yml -f docker-compose.arm.yml up -d
+> ```
+>
+> If using Gluetun, use the [docker-compose.gluetun.yml](https://github.com/DialmasterOrg/Youtarr/blob/main/docker-compose.gluetun.yml) file.
+> ```bash
+> docker compose -f docker-compose.gluetun.yml -f docker-compose.arm.yml up -d
+> ```
+> If you already have data in `./database/`, use `./scripts/migrate-to-named-volume.sh` instead. See [Database Management](DATABASE.md#migrating-from-bind-mount-to-named-volume) and [Troubleshooting](TROUBLESHOOTING.md#docker-desktop--arm-incorrect-information-in-file-errors) for details.
 
 5. **Access the web interface**:
    - Navigate to `http://localhost:3087` (or your server's LAN IP)
@@ -98,25 +150,27 @@ If you prefer to use standard `docker compose up` commands:
    - If not, you'll be prompted to complete the setup wizard using the one-time token from `docker logs youtarr` or `config/setup-token`
    - Configure Plex (and optionally Jellyfin or Emby for playlist sync) and other settings from the Settings page
 
-> **Important**: Ensure the path you assign to `YOUTUBE_OUTPUT_DIR` already exists on the host and is writable before starting the stack. Otherwise Docker will create it as root-owned and the container may not be able to write downloads.
+> [!IMPORTANT]
+> Ensure the path you assign to `YOUTUBE_OUTPUT_DIR` already exists on the host and is writable before starting the stack. Otherwise Docker will create it as root-owned, and the container may not be able to write downloads.
 
 This method gives you direct control over environment variables and compose files, but it is not identical to `./start.sh`: plain `docker compose up -d` uses the legacy bind-mounted database unless you include or pin `docker-compose.arm.yml`.
 
 ### Method 3: Manual Setup Without Git (Advanced Users Only)
 
+> [!CAUTION]
 > **Not Recommended**: This method requires manual directory creation, permission management, and lacks helper scripts. It is more error-prone and provides limited community support.
 >
 > **For advanced users only.** If you cannot clone the repository (e.g., TrueNAS, limited Git access), see [Manual Docker Setup Without Git](DOCKER.md#manual-setup-without-git-clone) in the Docker documentation. For Portainer, use the [Portainer guide](platforms/portainer.md) instead.
-
-Most users should use Method 1 or 2 above for the best experience and easiest updates.
+> 
+> Most users should use Method 1 or 2 above for the best experience and easiest updates.
 
 ## Authentication
 
-See [AUTHENTICATION.md](AUTHENTICATION.md)
+> [!IMPORTANT]
+> - Initial setup requires the one-time setup token from `docker logs youtarr` or `config/setup-token`; plain HTTP setup is intended for localhost, private LAN, VPN, or SSH tunnel access only
+> - If you need to reset your admin password, see the [Troubleshooting Guide](TROUBLESHOOTING.md#reset-admin-password)
 
-### Important Notes:
-- Initial setup requires the one-time setup token from `docker logs youtarr` or `config/setup-token`; plain HTTP setup is intended for localhost, private LAN, VPN, or SSH tunnel access only
-- If you need to reset your admin password, see the [Troubleshooting Guide](TROUBLESHOOTING.md#reset-admin-password)
+See [AUTHENTICATION.md](AUTHENTICATION.md)
 
 ## Configuration
 
@@ -153,7 +207,7 @@ The `config/complete.list` file tracks all downloaded videos and prevents re-dow
 
 **Do Not Rename or Move Files**
 
-Videos must retain their `[youtubeid].mp4` filename and remain in the Youtarr configured mount. Moving or renaming files will cause Youtarr to mark them as "missing" from disk.
+Videos must retain their `[youtubeid].mp4` filename and remain in the Youtarr-configured mount. Moving or renaming files will cause Youtarr to mark them as "missing" from disk.
 If videos are moved WITHIN the mount, on restart, Youtarr will attempt to find them, but do so at your own risk.
 
 **Format**: All videos download as MP4 with comprehensive embedded metadata (title, genre, studio, keywords) and NFO files for maximum media server compatibility.
@@ -165,11 +219,11 @@ If videos are moved WITHIN the mount, on restart, Youtarr will attempt to find t
 - Your media server (Plex/Jellyfin/etc.) can read from the same media location
 - Youtarr can reach your media server API over the network (if using Plex integration)
 
-**Docker Desktop (Windows/macOS)**: When configuring Plex, use `host.docker.internal` or your LAN IP (e.g. `192.168.x.x`) as your Plex server address to allow the container to reach the host machine.
+**Docker Desktop (Windows/macOS)**: When configuring Plex, use `host.docker.internal` or your LAN IP (e.g., `192.168.x.x`) as your Plex server address to allow the container to reach the host machine.
 
 **Docker on macOS without Docker Desktop** (e.g., Colima): Use the Mac's LAN IP (e.g., `192.168.x.x`) or `host.lima.internal`.
 
-**Docker on Linux**: Use the host's LAN IP (e.g., `192.168.x.x`). `host.docker.internal` normally resolves to the Docker bridge and Plex may not be listening there.
+**Docker on Linux**: Use the host's LAN IP (e.g., `192.168.x.x`). `host.docker.internal` normally resolves to the Docker bridge, and Plex may not be listening there.
 
 ### Content Filtering
 
@@ -182,9 +236,9 @@ If videos are moved WITHIN the mount, on restart, Youtarr will attempt to find t
 Youtarr fully supports platform-managed deployments with automatic configuration:
 
 - **Auto-Configuration**: When `DATA_PATH` is set, config.json is auto-created on first run
-- **Platform Authentication**: Set `AUTH_ENABLED=false` to bypass internal auth (only when platform handles it). Never expose a no-auth instance directly; protect it behind your platform's authentication layer.
+- **Platform Authentication**: Set `AUTH_ENABLED=false` to bypass internal auth (only when the platform handles it). Never expose a no-auth instance directly; protect it behind your platform's authentication layer.
 - **Pre-configured Plex**: Set `PLEX_URL` for automatic Plex server configuration
-- **Consolidated Storage**: All persistent data stored under single `/app/config` mount
+- **Consolidated Storage**: All persistent data stored under a single `/app/config` mount
 - **Example**: `DATA_PATH=/storage/rclone/storagebox/youtube`
 - **Details**: See [Docker Guide](DOCKER.md#platform-deployment-configuration) for full configuration
 
@@ -198,21 +252,19 @@ To access Youtarr from other devices on your private network:
 For external access:
 - Do not expose Youtarr directly to the internet over plain HTTP
 - Use a reverse proxy with HTTPS, or use a VPN/SSH tunnel instead of port forwarding the app directly
-- If you use a reverse proxy, make sure WebSocket support is enabled for the Youtarr host - otherwise real-time download progress won't display. See [Troubleshooting](TROUBLESHOOTING.md#no-download-progress-shown-downloads-work-videos-just-appear)
+- If you use a reverse proxy, make sure WebSocket support is enabled for the Youtarr host; otherwise, real-time download progress won't display. See [Troubleshooting](TROUBLESHOOTING.md#no-download-progress-shown-downloads-work-videos-just-appear)
 - Keep `AUTH_ENABLED=true` unless an upstream authentication layer protects every request
 
 ## Upgrading
 
-### Important: Youtarr Does Not Auto-Update
-
-**Youtarr does not automatically update itself.** When you run `./start.sh` or `docker compose up -d`, it uses your currently installed version. Simply restarting Youtarr without pulling updates will restart the same version you currently have installed.
-
-**If you're wondering why you don't see new features after a restart, you likely need to run the update commands below.**
+> [!IMPORTANT]
+> **Youtarr does not automatically update itself.** When you run `./start.sh` or `docker compose up -d`, it uses your currently installed version. Simply restarting Youtarr without pulling updates will restart the same version you currently have installed.
+>
+> **If you're wondering why you don't see new features after a restart, you likely need to run the update commands below.**
 
 ### Checking for Updates
 
 Before upgrading, you can check if updates are available:
-
 - **View release notes and changelog**: [GitHub Releases](https://github.com/DialmasterOrg/Youtarr/releases)
 - **Check your current version**: Look in the footer of the Youtarr web interface
 - **Compare versions**: If your version number is older than the latest release, an update is available
@@ -277,4 +329,5 @@ If you installed Youtarr from App Central on an Asustor NAS, updates come throug
 - Database schema (via automatic migrations)
 - Docker container and dependencies
 
-**Important**: Database migrations run automatically on startup. If a migration fails, check the logs with `docker compose logs -f` and see the [Troubleshooting Guide](TROUBLESHOOTING.md) for assistance.
+> [!IMPORTANT]
+> Database migrations run automatically on startup. If a migration fails, check the logs with `docker compose logs -f` and see the [Troubleshooting Guide](TROUBLESHOOTING.md) for assistance.
