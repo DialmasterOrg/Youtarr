@@ -174,6 +174,22 @@ export function issueHint(code: string, serverName: string, libraryName: string,
   }
 }
 
+/** What a fine, checking or unchecked server says about a folder, and the retry it offers. */
+export function serverLineText(status: ServerStatus, folder: LibraryFolder, checkFailed: boolean): { text: string; action: string | null } {
+  if (status.display === 'checking') return { text: 'Checking...', action: null };
+  if (status.display === 'fine') {
+    return {
+      text: folderState(folder) === 'emptyMain'
+        ? "Not in a library, and doesn't need one while you use subfolders."
+        : 'Not in a library. Fine while nothing downloads here.',
+      action: null,
+    };
+  }
+  if (status.report?.status === 'unreachable') return { text: "Couldn't be reached, so this folder wasn't checked.", action: 'Check again' };
+  if (checkFailed) return { text: 'Not checked. The library check failed.', action: 'Try again' };
+  return { text: 'Not checked yet.', action: 'Check again' };
+}
+
 export function noLibraryLine(server: ServerRef, folder: LibraryFolder): string {
   return `No ${server.name} ${libraryTypeName(server.serverType, folder.layout)} library holds ${folderLabel(folder.name, true)}.`;
 }

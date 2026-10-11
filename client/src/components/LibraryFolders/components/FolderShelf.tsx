@@ -10,6 +10,7 @@ import { useLibraryPage } from '../LibraryFoldersContext';
 import { GENERIC_LIBRARY_TYPES, libraryTypeName } from '../libraryTypes';
 import { SEP } from '../folderText';
 import { FolderRow } from './FolderRow';
+import { InfoPopover } from './InfoPopover';
 import { UnusedFolderRow } from './UnusedFolderRow';
 
 const UNUSED_VISIBLE = 3;
@@ -19,11 +20,11 @@ const STATUS_CELL_WIDTH = 120;
 const SHELF = {
   tv: {
     title: 'TV show folders', rule: 'Each channel is a show, each upload year a season, each video an episode.',
-    add: 'Add TV folder', addLabel: 'Add a TV show folder', Icon: Tv,
+    add: 'Add TV folder', addLabel: 'Add a TV show folder', aboutLabel: 'About TV show folders', Icon: Tv,
   },
   videos: {
     title: 'Video folders', rule: 'Each video is a movie, filed in its channel\'s folder.',
-    add: 'Add video folder', addLabel: 'Add a video folder', Icon: Film,
+    add: 'Add video folder', addLabel: 'Add a video folder', aboutLabel: 'About video folders', Icon: Film,
   },
 } as const;
 
@@ -73,12 +74,13 @@ export function FolderShelf({ layout, folders, selectedName, focusName, onFocuse
   const touch = page.phone ? 'min-h-[44px]' : 'h-[30px]';
 
   return (
-    <section aria-labelledby={titleId} className="rounded-ui border border-border bg-card">
-      <div ref={measureRef}>
-        <div className="px-3 pb-2.5 pt-3">
+    <section aria-labelledby={titleId}>
+      <div ref={measureRef} className="flex flex-col gap-2">
+        {/* The heading sits on the page, the card holds only folder rows, so the two never read alike. */}
+        <div className="px-0.5">
           <div className="flex items-center gap-2">
-            <shelf.Icon size={page.phone ? 18 : 16} aria-hidden="true" className="text-muted-foreground" />
-            <h2 id={titleId} ref={headingRef} tabIndex={-1} className={cn('font-display font-semibold', page.phone ? 'text-[17px]' : 'text-base')}>
+            <shelf.Icon size={page.phone ? 18 : 17} aria-hidden="true" className="text-foreground" />
+            <h2 id={titleId} ref={headingRef} tabIndex={-1} className={cn('font-display font-bold', page.phone ? 'text-lg' : 'text-[17px]')}>
               {shelf.title}
             </h2>
             <span className="rounded-ui border border-border px-1.5 text-xs text-muted-foreground">{folders.length}</span>
@@ -88,64 +90,59 @@ export function FolderShelf({ layout, folders, selectedName, focusName, onFocuse
               {page.phone ? 'Add' : shelf.add}
             </Button>
           </div>
-          <p className="mt-1 text-[13px] text-muted-foreground">{shelf.rule}</p>
-          {!wide && needs.length > 0 && (
-            <p className="mt-1.5 flex flex-wrap gap-1.5">
-              {needs.map((need) => (
-                <span key={need.server} className="rounded-ui border border-border px-1.5 text-[11.5px]">
-                  <span className="text-muted-foreground">{need.server}:</span> {need.type}
-                </span>
-              ))}
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-1 text-[12.5px] text-muted-foreground">
+            Library type: {needs.length > 0 ? needs.map((need, index) => (
+              <span key={need.server} className="whitespace-nowrap">
+                {need.server} <span className="font-medium text-foreground">{need.type}</span>{index < needs.length - 1 ? SEP : ''}
+              </span>
+            )) : GENERIC_LIBRARY_TYPES[layout]}
+            <InfoPopover label={shelf.aboutLabel}>{shelf.rule}</InfoPopover>
+          </div>
+        </div>
+        <div className="overflow-hidden rounded-ui border border-border bg-card [&>*:first-child]:border-t-0">
+          {wide && needs.length > 0 && (
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2.5 border-t border-border bg-background py-1.5 pl-3.5 pr-3">
+              <span className="text-[11px] font-semibold uppercase tracking-[.06em] text-muted-foreground">Folder and what downloads here</span>
+              <span className="flex gap-1.5">
+                {needs.map((need) => (
+                  <span key={need.server} className="inline-flex h-[22px] w-[120px] items-center truncate px-1.5 text-[11.5px] text-muted-foreground">
+                    {need.server}
+                  </span>
+                ))}
+                {page.twoColumn && <span aria-hidden="true" data-testid="column-pointer-slot" className="w-[18px] shrink-0" />}
+              </span>
+            </div>
+          )}
+          {rows.map((folder) => (
+            <FolderRow
+              key={folderKey(folder.name) || '~main'}
+              folder={folder}
+              statuses={serverStatuses(folder, page.check, page.configuredServers)}
+              selected={isSelected(folder)}
+              wide={wide}
+              moving={page.movingFolders.includes(folderKey(folder.name))}
+              autoFocus={isFocus(folder)}
+              onFocused={onFocused}
+              onSelect={page.selectFolder}
+            />
+          ))}
+          {visibleUnused.map((folder) => (
+            <UnusedFolderRow key={folderKey(folder.name)} folder={folder} selected={isSelected(folder)}
+              autoFocus={isFocus(folder)} onFocused={onFocused} onSelect={page.selectFolder} />
+          ))}
+          {unused.length > UNUSED_VISIBLE && (
+            <button type="button" onClick={() => setExpanded((open) => !open)}
+              className={cn('flex w-full items-center gap-1.5 border-t border-border px-3 text-[13px] text-primary', page.phone ? 'min-h-[44px]' : 'h-9')}>
+              {expanded ? <ChevronUp size={16} aria-hidden="true" /> : <ChevronDown size={16} aria-hidden="true" />}
+              {expanded ? 'Show fewer' : `Show ${unused.length - UNUSED_VISIBLE} more unused`}
+            </button>
+          )}
+          {folders.length === 0 && layout === 'videos' && (
+            <p className="border-t border-border px-3 py-2.5 text-[13px] text-muted-foreground">
+              No video folders. Add one for channels you want filed as movies.
             </p>
           )}
         </div>
-        {wide && (
-          <div className="grid grid-cols-[16px_minmax(0,1fr)_auto] gap-x-2.5 border-t border-border bg-background px-3 py-1.5">
-            <span className="col-start-2 text-[11px] font-semibold uppercase tracking-[.06em] text-muted-foreground">
-              Folder and what downloads here
-              {needs.length === 0 ? <span className="normal-case tracking-normal">{SEP}Library type: {GENERIC_LIBRARY_TYPES[layout]}</span> : null}
-            </span>
-            <span className="flex gap-1.5">
-              {needs.map((need) => (
-                <span key={need.server} className="inline-flex h-[22px] w-[120px] items-center gap-1 truncate rounded-ui border border-border px-1.5 text-[11.5px]">
-                  <span className="text-muted-foreground">{need.server}:</span>{need.type}
-                </span>
-              ))}
-            </span>
-          </div>
-        )}
-        {!wide && needs.length === 0 && (
-          <p className="px-3 pb-2 text-xs text-muted-foreground">Library type: {GENERIC_LIBRARY_TYPES[layout]}</p>
-        )}
-        {rows.map((folder) => (
-          <FolderRow
-            key={folderKey(folder.name) || '~main'}
-            folder={folder}
-            statuses={serverStatuses(folder, page.check, page.configuredServers)}
-            selected={isSelected(folder)}
-            wide={wide}
-            moving={page.movingFolders.includes(folderKey(folder.name))}
-            autoFocus={isFocus(folder)}
-            onFocused={onFocused}
-            onSelect={page.selectFolder}
-          />
-        ))}
-        {visibleUnused.map((folder) => (
-          <UnusedFolderRow key={folderKey(folder.name)} folder={folder} selected={isSelected(folder)}
-            autoFocus={isFocus(folder)} onFocused={onFocused} onSelect={page.selectFolder} />
-        ))}
-        {unused.length > UNUSED_VISIBLE && (
-          <button type="button" onClick={() => setExpanded((open) => !open)}
-            className={cn('flex w-full items-center gap-1.5 border-t border-border px-3 text-[13px] text-primary', page.phone ? 'min-h-[44px]' : 'h-9')}>
-            {expanded ? <ChevronUp size={16} aria-hidden="true" /> : <ChevronDown size={16} aria-hidden="true" />}
-            {expanded ? 'Show fewer' : `Show ${unused.length - UNUSED_VISIBLE} more unused`}
-          </button>
-        )}
-        {folders.length === 0 && layout === 'videos' && (
-          <p className="border-t border-border px-3 py-2.5 text-[13px] text-muted-foreground">
-            No video folders. Add one for channels you want filed as movies.
-          </p>
-        )}
       </div>
     </section>
   );

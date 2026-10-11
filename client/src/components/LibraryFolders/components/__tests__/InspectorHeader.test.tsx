@@ -54,6 +54,54 @@ describe('InspectorHeader', () => {
     expect(value.notify).toHaveBeenCalledWith("Couldn't copy to the clipboard", 'error');
   });
 
+  test('names the kind of folder above its name', () => {
+    const { unmount } = renderInPage(<InspectorHeader folder={folder('Kids')} headingRef={createRef()} asPageTitle={false} />);
+    expect(screen.getByText('Video folder')).toBeInTheDocument();
+    unmount();
+    renderInPage(<InspectorHeader folder={folder('Shows', { layout: 'tv' })} headingRef={createRef()} asPageTitle={false} />);
+    expect(screen.getByText('TV show folder')).toBeInTheDocument();
+  });
+
+  test('says the layout and what is on disk', () => {
+    renderInPage(<InspectorHeader folder={folder('Kids', { channels: 1, fileCount: 12 })} headingRef={createRef()} asPageTitle={false} />);
+    expect(screen.getByText(/^Videos layout/)).toHaveTextContent('Videos layout · 12 videos on disk');
+  });
+
+  test('an empty folder reads as nothing on disk', () => {
+    renderInPage(<InspectorHeader folder={folder('Kids')} headingRef={createRef()} asPageTitle={false} />);
+    expect(screen.getByText(/^Videos layout/)).toHaveTextContent('Videos layout · Nothing on disk');
+  });
+
+  test('the menu deletes a deletable folder', async () => {
+    const value = makePageValue();
+    const kids = folder('Kids');
+    renderInPage(<InspectorHeader folder={kids} headingRef={createRef()} asPageTitle={false} />, { value });
+    await userEvent.click(screen.getByRole('button', { name: 'More actions for __Kids' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Delete folder...' }));
+    expect(value.openDelete).toHaveBeenCalledWith(kids);
+  });
+
+  test('the menu says why a folder can\'t be deleted', async () => {
+    const value = makePageValue();
+    renderInPage(<InspectorHeader folder={folder('Kids', { channels: 2, deletable: false, deleteBlockers: [{ code: 'channels', count: 2 }] })} headingRef={createRef()} asPageTitle={false} />, { value });
+    await userEvent.click(screen.getByRole('button', { name: 'More actions for __Kids' }));
+    const item = screen.getByRole('menuitem', { name: 'Delete folder...' });
+    expect(item).toHaveAttribute('aria-disabled', 'true');
+    expect(item).toHaveAccessibleDescription("Can't delete: 2 channels download here.");
+  });
+
+  test('the delete reason is not presented as a menu entry', async () => {
+    renderInPage(<InspectorHeader folder={folder('Kids', { channels: 2, deletable: false, deleteBlockers: [{ code: 'channels', count: 2 }] })} headingRef={createRef()} asPageTitle={false} />);
+    await userEvent.click(screen.getByRole('button', { name: 'More actions for __Kids' }));
+    expect(screen.getByText("Can't delete: 2 channels download here.")).toHaveAttribute('role', 'presentation');
+  });
+
+  test('the main folder\'s menu has no Delete', async () => {
+    renderInPage(<InspectorHeader folder={folder('', { isDefault: true })} headingRef={createRef()} asPageTitle={false} />);
+    await userEvent.click(screen.getByRole('button', { name: 'More actions for Main folder' }));
+    expect(screen.queryByRole('menuitem', { name: 'Delete folder...' })).not.toBeInTheDocument();
+  });
+
   test('the overflow button announces a menu', () => {
     renderInPage(<InspectorHeader folder={folder('Kids')} headingRef={createRef()} asPageTitle={false} />);
     expect(screen.getByRole('button', { name: 'More actions for __Kids' })).toHaveAttribute('aria-haspopup', 'menu');

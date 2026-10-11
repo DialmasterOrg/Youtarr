@@ -1,4 +1,4 @@
-import React, { useId } from 'react';
+import React, { useId, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { cn } from '../../../lib/cn';
 import type { LibraryFolder, LibraryFolderDetail } from '../../../types/tvShows';
@@ -6,6 +6,7 @@ import { folderState } from '../../../utils/libraryAttention';
 import { useLibraryPage } from '../LibraryFoldersContext';
 import { countOf, folderLabel, formatCount, units } from '../folderText';
 import { ChannelLinks } from './ChannelLinks';
+import { InfoPopover } from './InfoPopover';
 import { SectionHeading } from './SectionHeading';
 
 const ROUTING_NOTE = 'A channel picks its folder in Channel Settings > Library folder, a playlist in its own settings, and a '
@@ -13,6 +14,11 @@ const ROUTING_NOTE = 'A channel picks its folder in Channel Settings > Library f
   + 'download overrides both.';
 const FALLBACK = "Downloads with no more specific folder land here: videos from channels you don't subscribe to, unless a "
   + 'playlist or a single download picks another folder.';
+const PLAYLIST_NOTE = "A playlist's videos land here only when their channel has no folder of its own.";
+const SHORT_LIST = 3;
+
+/** Long lists show three then "and N more"; four or fewer show in full, so "and 1 more" never appears. */
+const shownCount = (total: number) => (total > SHORT_LIST + 1 ? SHORT_LIST : total);
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   const { phone } = useLibraryPage();
@@ -31,23 +37,32 @@ export function DownloadsHereSection({ folder, detail }: { folder: LibraryFolder
   const state = folderState(folder);
   const unit = units(folder.layout);
   const count = folder.fileCount ?? 0;
-  const onDisk = count > 0 ? `${countOf(count, unit.one, unit.many)} on disk` : folder.hasFiles ? "Holds files Youtarr doesn't track" : 'Nothing on disk';
   const label = folderLabel(folder.name, true);
   const followers = detail?.followers ?? { count: 0, sample: [] };
   const chosen = detail?.channels ?? [];
   const inlineLink = cn('text-primary', page.phone && 'inline-flex min-h-[44px] items-center');
+  const [allPlaylists, setAllPlaylists] = useState(false);
+  const [allShows, setAllShows] = useState(false);
+  const playlists = detail?.playlists ?? [];
+  const titleShows = detail?.titleShows ?? [];
+  const shownPlaylists = allPlaylists ? playlists : playlists.slice(0, shownCount(playlists.length));
+  const shownShows = allShows ? titleShows : titleShows.slice(0, shownCount(titleShows.length));
+  const more = (hidden: number, onClick: () => void) => (hidden > 0
+    ? <button type="button" onClick={onClick} className={cn('text-primary underline', page.phone && 'min-h-[44px]')}>and {hidden} more</button>
+    : null);
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-1.5 px-4 pb-4 pt-3.5">
-      <div className="flex items-baseline justify-between gap-2">
+      <div className="flex items-center gap-1">
         <SectionHeading id={headingId}>Downloads here</SectionHeading>
-        <span className="text-xs text-muted-foreground">{onDisk}</span>
+        <InfoPopover label="How downloads pick a folder">{ROUTING_NOTE}</InfoPopover>
       </div>
       {state === 'holdsVideos' && (
         <p className="text-[13px]">
           Nothing downloads here now. {count > 0 ? `${countOf(count, unit.one, unit.many)} ${count === 1 ? 'is' : 'are'} on disk.` : "It holds files Youtarr doesn't track."}
         </p>
       )}
+      {state === 'emptyMain' && <p className="text-[13px] text-muted-foreground">Nothing is saved here. Downloads go to subfolders.</p>}
       {state === 'unused' && (
         <p className="flex flex-wrap items-center gap-2 text-[13px]">
           Nothing downloads here yet.
@@ -59,7 +74,7 @@ export function DownloadsHereSection({ folder, detail }: { folder: LibraryFolder
       {chosen.length > 0 && (
         <Row label="Channels">
           <p className="font-semibold">{formatCount(chosen.length)} chose this folder</p>
-          <ChannelLinks channels={chosen} unit={unit} />
+          <ChannelLinks channels={chosen} unit={unit} limit={shownCount(chosen.length)} />
         </Row>
       )}
       {folder.isDefault && followers.count > 0 && (
@@ -71,35 +86,57 @@ export function DownloadsHereSection({ folder, detail }: { folder: LibraryFolder
           </p>
         </Row>
       )}
-      {(detail?.playlists.length ?? 0) > 0 && detail && (
+      {playlists.length > 0 && (
         <Row label="Playlists">
-          <p className="font-semibold">{formatCount(detail.playlists.length)} {detail.playlists.length === 1 ? 'uses it as its default' : 'use it as their default'}</p>
-          <p>{detail.playlists.map((playlist, index) => (
-            <span key={playlist.playlistId}>
-              {index > 0 ? ', ' : ''}
-              <Link to={`/playlist/${playlist.playlistId}`} className={inlineLink}>{playlist.name}</Link>
-              <span className="text-xs text-muted-foreground"> {countOf(playlist.videoCount, unit.one, unit.many)}</span>
-            </span>
-          ))}</p>
-          <p className="text-xs text-muted-foreground">A playlist&apos;s videos land here only when their channel has no folder of its own.</p>
+          <div className="flex items-center gap-1 font-semibold">
+            {formatCount(playlists.length)} {playlists.length === 1 ? 'uses it as its default' : 'use it as their default'}
+            <InfoPopover label="When playlist videos land here">{PLAYLIST_NOTE}</InfoPopover>
+          </div>
+          {/* Phones list one per row: 44px links inside running text break items apart with gaps. */}
+          {page.phone ? (
+            <ul aria-label="Playlists" className="flex flex-col">
+              {shownPlaylists.map((playlist) => (
+                <li key={playlist.playlistId} className="flex items-center gap-1">
+                  <Link to={`/playlist/${playlist.playlistId}`} className={inlineLink}>{playlist.name}</Link>
+                  <span className="text-xs text-muted-foreground">{countOf(playlist.videoCount, unit.one, unit.many)}</span>
+                </li>
+              ))}
+              {shownPlaylists.length < playlists.length && <li>{more(playlists.length - shownPlaylists.length, () => setAllPlaylists(true))}</li>}
+            </ul>
+          ) : (
+            <p>{shownPlaylists.map((playlist, index) => (
+              <span key={playlist.playlistId}>
+                {index > 0 ? ', ' : ''}
+                <Link to={`/playlist/${playlist.playlistId}`} className={inlineLink}>{playlist.name}</Link>
+                <span className="text-xs text-muted-foreground"> {countOf(playlist.videoCount, unit.one, unit.many)}</span>
+              </span>
+            ))}{shownPlaylists.length < playlists.length && <> {more(playlists.length - shownPlaylists.length, () => setAllPlaylists(true))}</>}</p>
+          )}
         </Row>
       )}
-      {(detail?.titleShows.length ?? 0) > 0 && detail && (
+      {titleShows.length > 0 && (
         <Row label="Title shows">
-          {detail.titleShows.map((show) => (
+          <div className="flex items-center gap-1 font-semibold">
+            {countOf(titleShows.length, 'title show', 'title shows')}
+            <InfoPopover label="Where title shows are edited">Each title show is edited in its channel&apos;s Channel Settings &gt; TV Show.</InfoPopover>
+          </div>
+          {shownShows.map((show) => (
             <p key={show.id}>
               <Link to={`/channel/${show.channelId}`} className={inlineLink}>{show.name}</Link>
-              <span className="text-muted-foreground"> from {show.channelName}, {countOf(show.episodeCount, 'episode', 'episodes')} (Channel Settings &gt; TV Show)</span>
+              <span className="text-muted-foreground"> from {show.channelName}, {countOf(show.episodeCount, 'episode', 'episodes')}</span>
             </p>
           ))}
+          {more(titleShows.length - shownShows.length, () => setAllShows(true))}
         </Row>
       )}
       {folder.isDefault && (
         <Row label="Fallback">
-          <p>{FALLBACK}{folder.layout === 'tv' ? ' Each of those channels becomes its own show.' : ''}</p>
+          <div className="flex items-center gap-1">
+            Unsubscribed channels and single downloads
+            <InfoPopover label="About the fallback">{FALLBACK}{folder.layout === 'tv' ? ' Each of those channels becomes its own show.' : ''}</InfoPopover>
+          </div>
         </Row>
       )}
-      <p className="mt-1 text-xs text-muted-foreground">{ROUTING_NOTE}</p>
     </section>
   );
 }

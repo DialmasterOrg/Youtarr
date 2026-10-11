@@ -34,11 +34,30 @@ describe('PlexRefreshControl', () => {
     expect(setMapping).toHaveBeenCalledWith('TV', '41');
   });
 
-  test('an explicit default reads as the user\'s choice and can be removed', async () => {
+  test('an explicit default explains itself behind the info button', async () => {
     renderInPage(<PlexRefreshControl folder={folder('TV', { layout: 'tv', plexMapping: { choice: 'default', libraryId: null } })} report={null} />, { value: connected() });
+    await userEvent.click(screen.getByRole('button', { name: 'About this refresh setting' }));
     expect(screen.getByText("You chose the default library for this folder, so Youtarr won't change it.")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Remove setting' }));
+  });
+
+  test('Remove setting is the list\'s last entry', async () => {
+    renderInPage(<PlexRefreshControl folder={folder('TV', { layout: 'tv', plexMapping: { choice: 'default', libraryId: null } })} report={null} />, { value: connected() });
+    await userEvent.click(screen.getByRole('combobox', { name: 'After downloads here, Plex refreshes' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Remove setting' }));
     expect(removeMapping).toHaveBeenCalledWith('TV');
+  });
+
+  test('a folder without a setting has nothing to remove', async () => {
+    renderInPage(<PlexRefreshControl folder={folder('TV', { layout: 'tv', channels: 1 })} report={null} />, { value: connected() });
+    await userEvent.click(screen.getByRole('combobox', { name: 'After downloads here, Plex refreshes' }));
+    await screen.findByRole('option', { name: 'YouTube TV' });
+    expect(screen.queryByRole('option', { name: 'Remove setting' })).not.toBeInTheDocument();
+  });
+
+  test('a library that holds the folder shows a check', () => {
+    const report = { serverType: 'plex' as const, status: 'ok' as const, issues: [], libraries: [{ id: '41', name: 'YouTube TV', type: 'tv' as const, location: '/tv', relation: 'exact' as const }] };
+    renderInPage(<PlexRefreshControl folder={folder('TV', { layout: 'tv', channels: 1, plexMapping: { choice: 'library', libraryId: '41' } })} report={report} />, { value: connected() });
+    expect(screen.getByRole('button', { name: 'Matches the library that holds this folder.' })).toBeInTheDocument();
   });
 
   test('shows a read-only line when Plex is unreachable, still removable', async () => {

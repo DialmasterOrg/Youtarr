@@ -34,6 +34,33 @@ describe('layoutPreview', () => {
     expect(readsAs('tv', dated)).toBe('Shows up as the show Blippi, Season 2026, episode 09280000: uploaded Sep 28 (no time recorded, read as 00:00 UTC).');
   });
 
+  test('a TV folder\'s real title show episode reads as its own show and numbers', () => {
+    const episode = exampleFrom({ ...stored, channelName: 'Grian', relativePath: 'Hermitcraft/Season 11/S11E25 - Diamond Prank [abcDEF12345].mp4' });
+    expect(readsAs('tv', episode, 'tv')).toBe('Shows up as the show Hermitcraft, Season 11, episode 25.');
+  });
+
+  test('a real title show episode\'s tree names its season and episode without the upload time', () => {
+    const episode = exampleFrom({ ...stored, relativePath: 'Hermitcraft/Season 11/S11E25 - Diamond Prank [abcDEF12345].mp4' });
+    const rows = previewRows({ folderName: 'TV', baseName: 'data', layout: 'tv', currentLayout: 'tv', example: episode, flat: false });
+    expect(rows.map((row) => row.note ?? '')).toEqual(['library folder', 'the show', '', 'the season', 'the episode, plus an .nfo']);
+  });
+
+  test('a real date-numbered episode keeps the upload time and reads as its show folder', () => {
+    const episode = exampleFrom({ ...stored, relativePath: 'Blippi Fun/Season 2026/S2026E09281530 - Fire Trucks [abcDEF12345].mp4' });
+    expect(readsAs('tv', episode, 'tv')).toBe('Shows up as the show Blippi Fun, Season 2026, episode 09281530: uploaded Sep 28, 15:30 UTC.');
+  });
+
+  test('a bumped date number keeps the upload year but no longer calls the episode the upload time', () => {
+    const bumped = exampleFrom({ ...stored, relativePath: 'Blippi/Season 2026/S2026E09281531 - Fire Trucks [abcDEF12345].mp4' });
+    const rows = previewRows({ folderName: 'TV', baseName: 'data', layout: 'tv', currentLayout: 'tv', example: bumped, flat: false });
+    expect(rows.map((row) => row.note ?? '')).toEqual(['library folder', 'the show', '', 'upload year', 'the episode, plus an .nfo']);
+  });
+
+  test('a bumped date number reads without the upload time', () => {
+    const bumped = exampleFrom({ ...stored, relativePath: 'Blippi/Season 2026/S2026E09281531 - Fire Trucks [abcDEF12345].mp4' });
+    expect(readsAs('tv', bumped, 'tv')).toBe('Shows up as the show Blippi, Season 2026, episode 09281531.');
+  });
+
   test('falls back to the sample video without a download', () => {
     expect(exampleFrom(null)).toMatchObject({ channelName: 'Channel Name', title: 'Video Title', youtubeId: 'aBcD3fGh1jK', real: false });
   });

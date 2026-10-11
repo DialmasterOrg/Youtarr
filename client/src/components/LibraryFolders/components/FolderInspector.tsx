@@ -3,16 +3,15 @@ import type { LibraryFolder } from '../../../types/tvShows';
 import { folderKey } from '../../../utils/libraryLayouts';
 import { useLibraryPage } from '../LibraryFoldersContext';
 import { useLibraryFolderDetail } from '../hooks/useLibraryFolderDetail';
-import { DeleteSection } from './DeleteSection';
 import { DownloadsHereSection } from './DownloadsHereSection';
 import { InspectorHeader } from './InspectorHeader';
 import { LayoutSection } from './LayoutSection';
 import { MediaServersSection } from './MediaServersSection';
 
 /**
- * The selected folder: Media servers, Layout, Downloads here, Delete (UI 5.7). Remounted per folder so its
- * preview resets: the page keys the scrolling inspector aside by folder (a new folder starts at the top), the
- * detail screen keys this component.
+ * The selected folder: Media servers, Downloads here, then Layout, which changes least; Delete is in the header's
+ * menu (UI 5.7). Remounted per folder so its preview resets: the page keys the scrolling inspector aside by folder
+ * (a new folder starts at the top), the detail screen keys this component.
  */
 export function FolderInspector({ folder, asPageTitle = false }: { folder: LibraryFolder; asPageTitle?: boolean }) {
   const page = useLibraryPage();
@@ -36,9 +35,8 @@ export function FolderInspector({ folder, asPageTitle = false }: { folder: Libra
     <div className="flex flex-col divide-y divide-border">
       <InspectorHeader folder={folder} headingRef={headingRef} asPageTitle={asPageTitle} />
       <MediaServersSection folder={folder} />
-      <LayoutSection folder={folder} detail={detail} />
       <DownloadsHereSection folder={folder} detail={detail} />
-      <DeleteSection folder={folder} />
+      <LayoutSection folder={folder} detail={detail} />
     </div>
   );
 }

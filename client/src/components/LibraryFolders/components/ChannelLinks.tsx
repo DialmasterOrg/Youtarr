@@ -12,15 +12,15 @@ export interface ChannelLink {
   videoCount?: number;
 }
 
-/** Channel page links, the first eight then "and N more" (UI 5.7.2, 5.7.4). Phones get 44px rows. */
-export function ChannelLinks({ channels, unit }: { channels: ChannelLink[]; unit?: { one: string; many: string } }) {
+/** Channel page links, the first eight (or `limit`) then "and N more" (UI 5.7.2, 5.7.4). Phones get 44px rows. */
+export function ChannelLinks({ channels, unit, limit = VISIBLE }: { channels: ChannelLink[]; unit?: { one: string; many: string }; limit?: number }) {
   const { phone } = useLibraryPage();
   const [all, setAll] = useState(false);
-  const shown = all ? channels : channels.slice(0, VISIBLE);
+  const shown = all ? channels : channels.slice(0, limit);
   const count = (channel: ChannelLink) => (unit && channel.videoCount !== undefined
     ? <span className="text-xs text-muted-foreground"> {countOf(channel.videoCount, unit.one, unit.many)}</span> : null);
-  const more = !all && channels.length > VISIBLE
-    ? <button type="button" onClick={() => setAll(true)} className={cn('text-primary underline', phone && 'min-h-[44px]')}>and {channels.length - VISIBLE} more</button>
+  const more = !all && channels.length > limit
+    ? <button type="button" onClick={() => setAll(true)} className={cn('text-primary underline', phone && 'min-h-[44px]')}>and {channels.length - limit} more</button>
     : null;
   if (phone) {
     return (

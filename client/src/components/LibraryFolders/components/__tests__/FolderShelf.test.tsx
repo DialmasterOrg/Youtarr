@@ -54,6 +54,47 @@ describe('FolderShelf', () => {
     expect(screen.getByText(/Library type: Plex TV Shows, Jellyfin Shows, Emby TV shows, Kodi TV shows source/)).toBeInTheDocument();
   });
 
+  test('explains its layout behind an info button', async () => {
+    renderInPage(<FolderShelf layout="videos" folders={folders} selectedName={null} focusName={null} onFocused={jest.fn()} />);
+    expect(screen.queryByText("Each video is a movie, filed in its channel's folder.")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'About video folders' }));
+    expect(screen.getByText("Each video is a movie, filed in its channel's folder.")).toBeInTheDocument();
+  });
+
+  test('keeps its info button out of a paragraph, where the popover\'s blocks would be invalid markup', () => {
+    renderInPage(<FolderShelf layout="videos" folders={folders} selectedName={null} focusName={null} onFocused={jest.fn()} />);
+    expect(screen.getByRole('button', { name: 'About video folders' })).toBeInTheDocument();
+    expect(screen.queryAllByRole('paragraph').filter((paragraph) => within(paragraph).queryByRole('button', { name: 'About video folders' }))).toHaveLength(0);
+  });
+
+  test('names each connected server\'s library type on one line', () => {
+    mockWidth = 600;
+    const three = [
+      { serverType: 'plex' as const, name: 'Plex' }, { serverType: 'jellyfin' as const, name: 'Jellyfin' }, { serverType: 'emby' as const, name: 'Emby' },
+    ];
+    renderInPage(<FolderShelf layout="videos" folders={[folder('Kids', { channels: 1 })]} selectedName={null} focusName={null} onFocused={jest.fn()} />,
+      { value: makePageValue({ servers: three }) });
+    expect(screen.getByText(/^Library type:/)).toHaveTextContent('Library type: Plex Other Videos · Jellyfin Movies · Emby Movies');
+  });
+
+  test('each server\'s library type wraps as one piece, its separator ending the line', () => {
+    const three = [
+      { serverType: 'plex' as const, name: 'Plex' }, { serverType: 'jellyfin' as const, name: 'Jellyfin' }, { serverType: 'emby' as const, name: 'Emby' },
+    ];
+    renderInPage(<FolderShelf layout="videos" folders={[folder('Kids', { channels: 1 })]} selectedName={null} focusName={null} onFocused={jest.fn()} />,
+      { value: makePageValue({ servers: three }) });
+    const jellyfin = screen.getByText(/^Jellyfin ·$/);
+    expect(jellyfin).toHaveTextContent('Jellyfin Movies ·');
+    expect(jellyfin).toHaveClass('whitespace-nowrap');
+  });
+
+  test('in two columns the wide column labels keep the rows\' pointer slot', () => {
+    const plex = [{ serverType: 'plex' as const, name: 'Plex' }];
+    renderInPage(<FolderShelf layout="videos" folders={[folder('Kids', { channels: 1 })]} selectedName={null} focusName={null} onFocused={jest.fn()} />,
+      { value: makePageValue({ servers: plex, twoColumn: true }) });
+    expect(screen.getByTestId('column-pointer-slot')).toBeInTheDocument();
+  });
+
   test('with three servers on a narrow shelf, rows stack their status', () => {
     mockWidth = 600;
     const three = [

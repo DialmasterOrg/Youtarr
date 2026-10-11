@@ -29,9 +29,14 @@ describe('UnusedFolderRow', () => {
     expect(screen.getByRole('button', { name: /^__A/ })).not.toHaveAttribute('aria-controls');
   });
 
-  test('a selected row takes the link color on its icon', () => {
+  test('a selected row in two columns points at the panel', () => {
     renderInPage(<UnusedFolderRow folder={folder('A')} selected onSelect={jest.fn()} />);
-    expect(within(screen.getByRole('button', { name: /^__A/ })).getByTestId('unused-folder-icon')).toHaveClass('text-primary');
+    expect(screen.getByTestId('row-pointer')).toBeInTheDocument();
+  });
+
+  test('a row that is not selected has no pointer', () => {
+    renderInPage(<UnusedFolderRow folder={folder('A')} selected={false} onSelect={jest.fn()} />);
+    expect(screen.queryByTestId('row-pointer')).not.toBeInTheDocument();
   });
 
   test('on phones the delete button is icon-only with an 18px icon and a 44px target', () => {

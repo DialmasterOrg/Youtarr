@@ -9,7 +9,10 @@ jest.mock('../MediaServersSection', () => ({ MediaServersSection: () => {
   const React = require('react');
   return React.createElement('p', null, 'media servers');
 } }));
-jest.mock('../LayoutSection', () => ({ LayoutSection: () => null }));
+jest.mock('../LayoutSection', () => ({ LayoutSection: () => {
+  const React = require('react');
+  return React.createElement('p', null, 'layout section');
+} }));
 jest.mock('../DownloadsHereSection', () => ({ DownloadsHereSection: ({ detail }: { detail: { channels: Array<{ name: string }> } | null }) => {
   const React = require('react');
   return React.createElement('p', null, `downloads here${detail ? `: ${detail.channels.map((channel) => channel.name).join(', ')}` : ''}`);
@@ -23,6 +26,18 @@ describe('FolderInspector', () => {
     expect(screen.getByRole('heading', { name: '__Kids' })).toBeInTheDocument();
     expect(screen.getByText('media servers')).toBeInTheDocument();
     expect(useLibraryFolderDetail).toHaveBeenCalledWith('token', 'Kids');
+  });
+
+  test('puts the servers first, then what downloads here, then the layout', () => {
+    const { container } = renderInPage(<FolderInspector folder={folder('Kids')} />);
+    const text = container.textContent ?? '';
+    expect(text.indexOf('media servers')).toBeLessThan(text.indexOf('downloads here'));
+    expect(text.indexOf('downloads here')).toBeLessThan(text.indexOf('layout section'));
+  });
+
+  test('leaves Delete to the header menu', () => {
+    renderInPage(<FolderInspector folder={folder('Kids')} />);
+    expect(screen.queryByRole('button', { name: 'Delete folder' })).not.toBeInTheDocument();
   });
 
   test('the main folder takes the page\'s main folder detail instead of loading it again', () => {

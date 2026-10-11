@@ -62,7 +62,7 @@ export function ServerCard({ folder, status, downloadsPath, compact = false }: S
           <XCircle size={15} aria-hidden="true" className="mt-0.5 shrink-0 text-destructive" />{noLibraryLine(status, folder)}
         </p>}
         {setupHere && <SetupBox server={status.serverType} layout={folder.layout} path={folderServerPath(folder.name, downloadsPath, status.name)} />}
-        {showPlex && <PlexRefreshControl folder={folder} report={report} />}
+        {showPlex && <div className="border-t border-border pt-2.5"><PlexRefreshControl folder={folder} report={report} /></div>}
       </div>}
     </section>
   );

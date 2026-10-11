@@ -6,10 +6,16 @@ import type { LibraryCheckServerReport } from '../../../types/libraryCheck';
 import { holdingLibraries } from '../../../utils/libraryAttention';
 import { useLibraryPage } from '../LibraryFoldersContext';
 import { PLEX_MAPPING_SAVE_ERROR, usePlexRefreshMapping } from '../hooks/usePlexRefreshMapping';
+import { InfoPopover } from './InfoPopover';
 
 const REFRESHABLE_TYPES = new Set(['movie', 'show']);
+// The list's last entry clears the folder's setting; it is never a library id.
+const REMOVE_VALUE = '__remove';
 
-/** "After downloads here, Plex refreshes [library]" (UI 5.7.2.5); replaces the Settings > Plex table. */
+/**
+ * "After downloads here, Plex refreshes [library]" (UI 5.7.2.5), with Remove setting as the list's last entry; replaces
+ * the Settings > Plex table.
+ */
 export function PlexRefreshControl({ folder, report }: { folder: LibraryFolder; report: LibraryCheckServerReport | null }) {
   const { token, phone, config, plexLibraries, plexConnectionStatus } = useLibraryPage();
   const { saving, setMapping, removeMapping } = usePlexRefreshMapping(token);
@@ -48,7 +54,7 @@ export function PlexRefreshControl({ folder, report }: { folder: LibraryFolder; 
     const shownId = mapping.libraryId ?? defaultId;
     const libraryText = titleOf(shownId) ?? (shownId ? `library ${shownId}` : 'no library');
     return (
-      <div className="border-t border-border pt-2.5 text-[13px]">
+      <div className="text-[12.5px]">
         <span>After downloads here, Plex refreshes {libraryText}</span>{' '}
         {plexKnown && (
           <span className="text-muted-foreground">{listed ? '(Plex no longer lists this library)' : "(Plex couldn't be reached)"}</span>
@@ -65,25 +71,33 @@ export function PlexRefreshControl({ folder, report }: { folder: LibraryFolder; 
   const value = pending ?? (mapping.choice === 'library' && mapping.libraryId ? mapping.libraryId : '');
   const selectedId = value || defaultId;
   const holders = new Set((report ? holdingLibraries(report) : []).map((library) => library.id));
-  const caption = selectedId && holders.has(selectedId)
-    ? { className: 'text-success', text: 'Matches the library that holds this folder.' }
-    : mapping.choice === 'default'
-      ? { className: 'text-muted-foreground', text: "You chose the default library for this folder, so Youtarr won't change it." }
-      : { className: 'text-muted-foreground', text: 'Folders without their own choice refresh the default library.' };
+  const matches = Boolean(selectedId && holders.has(selectedId));
+  const about = mapping.choice === 'default'
+    ? "You chose the default library for this folder, so Youtarr won't change it."
+    : 'Folders without their own choice refresh the default library.';
+  const onChange = (next: string) => {
+    if (next === REMOVE_VALUE) void run(() => removeMapping(folder.name), null);
+    else void run(() => setMapping(folder.name, next || null), next);
+  };
 
   return (
-    <div className="border-t border-border pt-2.5">
-      <div className={cn('flex gap-2', phone ? 'flex-col' : 'flex-wrap items-center')}>
-        <span id={labelId} className="text-[13px]">After downloads here, Plex refreshes</span>
-        <Select value={value} labelId={labelId} triggerRole="combobox" size="small" disabled={saving} fullWidth={phone}
-          onChange={(event) => { const next = String(event.target.value); void run(() => setMapping(folder.name, next || null), next); }}
-          className={phone ? 'min-h-[44px] text-[13px]' : 'h-[30px] min-h-0 text-[13px]'}>
-          <MenuItem value="">{defaultId ? `Default library (${titleOf(defaultId) ?? `library ${defaultId}`})` : 'No default library (nothing refreshes)'}</MenuItem>
-          {options.map((library) => <MenuItem key={library.id} value={String(library.id)}>{library.title}</MenuItem>)}
-        </Select>
-        {remove}
+    <div>
+      <div className={cn('flex gap-1.5', phone ? 'flex-col' : 'flex-wrap items-center')}>
+        <span id={labelId} className="text-[12.5px] text-muted-foreground">After downloads here, Plex refreshes</span>
+        <div className="flex min-w-0 items-center gap-1">
+          <Select value={value} labelId={labelId} triggerRole="combobox" size="small" disabled={saving} fullWidth={phone}
+            onChange={(event) => onChange(String(event.target.value))}
+            className={phone ? 'min-h-[44px] text-[13px]' : 'h-[28px] min-h-0 text-[12.5px]'}>
+            <MenuItem value="">{defaultId ? `Default library (${titleOf(defaultId) ?? `library ${defaultId}`})` : 'No default library (nothing refreshes)'}</MenuItem>
+            {options.map((library) => <MenuItem key={library.id} value={String(library.id)}>{library.title}</MenuItem>)}
+            {mapping.choice !== 'none' && <MenuItem value={REMOVE_VALUE} className="mt-1 border-t border-border">Remove setting</MenuItem>}
+          </Select>
+          {!error && (matches
+            ? <InfoPopover label="Matches the library that holds this folder." variant="check">Matches the library that holds this folder.</InfoPopover>
+            : <InfoPopover label="About this refresh setting">{about}</InfoPopover>)}
+        </div>
       </div>
-      <p className={cn('mt-1 text-xs', error ? 'text-destructive' : caption.className)}>{error ?? caption.text}</p>
+      {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
     </div>
   );
 }

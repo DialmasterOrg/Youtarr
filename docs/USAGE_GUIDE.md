@@ -465,7 +465,7 @@ Media servers show Youtarr's videos as movies. A **TV folder** shows them as TV 
 ### Set up a TV folder
 
 - **From a channel**: open the channel page, click the settings icon (gear), open **TV Show** and click **TV show**. Without a TV folder yet, Youtarr asks for a name (default `TV Shows`, saved as `__TV Shows`), creates the folder and switches the channel to it. With several TV folders, you pick one.
-- **From Settings**: on Settings -> **Library folders**, click **Add folder** and choose the **TV shows** layout, or open an existing folder and choose **Use for TV shows** (**Move to TV shows** when its downloads have to move). Every channel that downloads to that folder becomes a show.
+- **From Settings**: on Settings -> **Library folders**, click **Add folder** and choose the **TV shows** layout, or open an existing folder, click **Change...** under **Layout**, and choose **Use for TV shows** (**Move to TV shows** when its downloads have to move). Every channel that downloads to that folder becomes a show.
 
 If videos are saved directly in your downloads folder, Youtarr first offers to move them into a Video folder; see [Move an existing setup to TV shows](#move-an-existing-setup-to-tv-shows).
 
@@ -531,7 +531,7 @@ Every channel in the main folder becomes a show, and one TV library shows the do
 
 In Youtarr:
 
-1. On Settings -> **Library folders**, open the main folder and choose **Move to TV shows** (**Use for TV shows** when nothing has to move). Youtarr asks you to confirm; when downloads have to move, it then shows every move in **Review the move**.
+1. On Settings -> **Library folders**, open the main folder, click **Change...** under **Layout**, and choose **Move to TV shows** (**Use for TV shows** when nothing has to move). Youtarr asks you to confirm; when downloads have to move, it then shows every move in **Review the move**.
 
 On each media server:
 
@@ -549,7 +549,7 @@ The folder's channels become shows and their videos move. You review every move 
 In Youtarr:
 
 1. If anything is saved directly in the downloads folder (the main folder), Youtarr moves it into `__Videos` first, as in step 1 of path A. Review the move and keep your library on the whole downloads folder until it is done.
-2. On Settings -> **Library folders**, open the folder and choose **Move to TV shows** (**Use for TV shows** when nothing has to move). Review the moves, then click **Move N videos**.
+2. On Settings -> **Library folders**, open the folder, click **Change...** under **Layout**, and choose **Move to TV shows** (**Use for TV shows** when nothing has to move). Review the moves, then click **Move N videos**.
 
 On each media server:
 

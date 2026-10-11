@@ -244,7 +244,7 @@ export default function LibraryFolders({
               {check.data && <AttentionStrip items={attention} />}
               {twoColumn ? (
                 <div className="grid grid-cols-[minmax(560px,1fr)_432px] items-start gap-5">
-                  <div className="flex flex-col gap-4">{body}</div>
+                  <div className="flex flex-col gap-6">{body}</div>
                   {/* Keyed by folder: the aside is the scroll container, so a new folder starts at the top. */}
                   <aside key={selectedKey ?? '~none'} id="library-inspector" aria-labelledby="insp-title"
                     className="sticky overflow-y-auto overscroll-contain rounded-ui border border-border bg-card"
@@ -257,7 +257,7 @@ export default function LibraryFolders({
                   </aside>
                 </div>
               ) : (
-                twoColumn === false && <div className="flex flex-col gap-4">{body}</div>
+                twoColumn === false && <div className="flex flex-col gap-6">{body}</div>
               )}
             </div>
           )}

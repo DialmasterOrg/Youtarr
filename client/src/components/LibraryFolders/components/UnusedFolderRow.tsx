@@ -1,11 +1,12 @@
 import React, { useEffect, useId, useRef } from 'react';
-import { Film, Trash2, Tv } from '../../../lib/icons';
+import { ChevronRight, Trash2 } from '../../../lib/icons';
 import { Button, IconButton } from '../../ui';
 import { cn } from '../../../lib/cn';
 import type { LibraryFolder } from '../../../types/tvShows';
 import { libraryFolderLabel } from '../../../utils/libraryLayouts';
 import { useLibraryPage } from '../LibraryFoldersContext';
 import { deleteReasons, layoutName, SEP } from '../folderText';
+import { SELECTED_ROW } from './FolderRow';
 
 export interface UnusedFolderRowProps {
   folder: LibraryFolder;
@@ -27,9 +28,8 @@ export function UnusedFolderRow({ folder, selected, autoFocus = false, onFocused
   }, [autoFocus, onFocused]);
   const label = libraryFolderLabel(folder.name);
   const reason = folder.deletable ? null : deleteReasons(folder)[0] ?? null;
-  const Icon = folder.layout === 'tv' ? Tv : Film;
   return (
-    <div className={cn('flex items-center border-t border-border', selected && 'bg-muted/40 ring-1 ring-inset ring-primary')}>
+    <div className={cn('relative flex items-center border-t border-border', selected && SELECTED_ROW)}>
       <button
         ref={ref}
         type="button"
@@ -37,19 +37,19 @@ export function UnusedFolderRow({ folder, selected, autoFocus = false, onFocused
         aria-current={selected ? 'true' : undefined}
         aria-controls={twoColumn ? 'library-inspector' : undefined}
         className={cn(
-          'grid min-w-0 flex-1 grid-cols-[16px_minmax(0,1fr)] gap-x-2.5 gap-y-[3px] px-3 pb-2.5 pt-[9px] text-left text-muted-foreground hover:bg-muted/40',
+          'grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)] gap-y-[3px] pb-2.5 pl-3.5 pr-3 pt-[9px] text-left text-muted-foreground',
+          !selected && 'hover:bg-muted/40',
           phone && 'min-h-[52px]'
         )}
       >
-        <Icon size={16} aria-hidden="true" data-testid="unused-folder-icon" className={cn('mt-0.5', selected && 'text-primary')} />
-        <span className="truncate text-sm font-semibold">{label}</span>
-        <span className="col-start-2 text-[12.5px]">
+        <span className={cn('truncate text-sm font-semibold', selected && 'text-primary')}>{label}</span>
+        <span className="text-[12.5px]">
           {phone ? `${layoutName(folder.layout)}${SEP}Empty` : `Unused${SEP}Empty`}
           {!phone && reason ? <>{SEP}<span id={reasonId}>{reason}</span></> : null}
         </span>
-        {phone && reason ? <span id={reasonId} className="col-start-2 text-[12.5px]">{reason}</span> : null}
+        {phone && reason ? <span id={reasonId} className="text-[12.5px]">{reason}</span> : null}
       </button>
-      <span className="shrink-0 pr-3">
+      <span className="flex shrink-0 items-center gap-1 pr-3">
         {phone ? (
           <IconButton
             color={folder.deletable ? 'error' : 'inherit'}
@@ -76,6 +76,7 @@ export function UnusedFolderRow({ folder, selected, autoFocus = false, onFocused
             Delete
           </Button>
         )}
+        {twoColumn && selected && <ChevronRight size={18} aria-hidden="true" data-testid="row-pointer" className="-mr-2 text-primary" />}
       </span>
     </div>
   );

@@ -62,6 +62,33 @@ function realSegments(example: PreviewExample, layout: LibraryLayout): string[] 
   return segments.length === 2 || segments.length === 3 ? segments : null;
 }
 
+const EPISODE_STEM = /^S(\d+)E(\d+)/;
+
+interface RealEpisode {
+  show: string;
+  season: string;
+  episode: string;
+  /** Year season and MMDDHHMM episode, the date numbering's shape */
+  dateShaped: boolean;
+  /** The season is the upload year */
+  uploadYear: boolean;
+  /** Season and episode are the upload time itself, not a number bumped past one already taken */
+  uploadTime: boolean;
+}
+
+// A real TV path is the show the episode is filed under, which for a title show is not its channel.
+function realEpisode(example: PreviewExample, segments: string[]): RealEpisode | null {
+  const match = EPISODE_STEM.exec(segments[2]);
+  if (!match) return null;
+  const [, season, episode] = match;
+  const uploadYear = season === seasonOf(example.uploadedAt);
+  return {
+    show: segments[0], season, episode, uploadYear,
+    dateShaped: /^\d{4}$/.test(season) && /^\d{8}$/.test(episode),
+    uploadTime: uploadYear && episode === episodeOf(example.uploadedAt),
+  };
+}
+
 export function previewRows({ folderName, baseName, layout, currentLayout, example, flat }: {
   folderName: string; baseName: string; layout: LibraryLayout; currentLayout: LibraryLayout; example: PreviewExample; flat: boolean;
 }): PreviewRow[] {
@@ -76,10 +103,17 @@ export function previewRows({ folderName, baseName, layout, currentLayout, examp
       example.channelName, `Season ${season}`,
       `S${season}E${episodeOf(example.uploadedAt)} - ${example.title} [${example.youtubeId}].mp4`,
     ];
+    // A computed example is the upload time by definition; a real one says so only when its numbers match it.
+    const episode = real ? realEpisode(example, real) : null;
+    const uploadYear = real ? Boolean(episode?.uploadYear) : true;
+    const uploadTime = real ? Boolean(episode?.uploadTime) : true;
     rows.push({ prefix: LAST, name: `${show}/`, note: 'the show', kind: 'dir' });
     rows.push({ prefix: `${INDENT}${BRANCH}`, name: 'tvshow.nfo, poster.jpg', kind: 'file' });
-    rows.push({ prefix: `${INDENT}${LAST}`, name: `${seasonDir}/`, note: 'upload year', kind: 'dir' });
-    rows.push({ prefix: `${INDENT}${INDENT}${LAST}`, name: file, note: 'episode number = upload time, plus an .nfo', kind: 'media' });
+    rows.push({ prefix: `${INDENT}${LAST}`, name: `${seasonDir}/`, note: uploadYear ? 'upload year' : 'the season', kind: 'dir' });
+    rows.push({
+      prefix: `${INDENT}${INDENT}${LAST}`, name: file,
+      note: uploadTime ? 'episode number = upload time, plus an .nfo' : 'the episode, plus an .nfo', kind: 'media',
+    });
     return rows;
   }
   const computed = flat
@@ -102,12 +136,22 @@ export function previewRows({ folderName, baseName, layout, currentLayout, examp
   return rows;
 }
 
-export function readsAs(layout: LibraryLayout, example: PreviewExample): string {
+/** currentLayout: the folder's layout, so a real path is read only when it is shown as it is. */
+export function readsAs(layout: LibraryLayout, example: PreviewExample, currentLayout?: LibraryLayout): string {
   if (layout === 'videos') return `Shows up as one movie per video, titled "${example.title}".`;
+  const real = layout === currentLayout ? realSegments(example, layout) : null;
+  const episode = real ? realEpisode(example, real) : null;
+  if (episode && !episode.dateShaped) {
+    return `Shows up as the show ${episode.show}, Season ${Number(episode.season)}, episode ${Number(episode.episode)}.`;
+  }
   const date = example.uploadedAt;
   const day = date.toLocaleString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
   const uploaded = example.uploadedAtSource === 'upload_date'
     ? `uploaded ${day} (no time recorded, read as 00:00 UTC)`
     : `uploaded ${day}, ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())} UTC`;
-  return `Shows up as the show ${example.channelName}, Season ${seasonOf(date)}, episode ${episodeOf(date)}: ${uploaded}.`;
+  const season = episode?.season ?? seasonOf(date);
+  const number = episode?.episode ?? episodeOf(date);
+  // A bumped date number (taken by another video) no longer says the upload time.
+  const uploadTime = episode ? episode.uploadTime : true;
+  return `Shows up as the show ${episode?.show ?? example.channelName}, Season ${season}, episode ${number}${uploadTime ? `: ${uploaded}` : ''}.`;
 }

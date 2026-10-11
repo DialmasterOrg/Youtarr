@@ -27,7 +27,7 @@ export function LayoutPreviewTree({ folder, layout, previewing, example }: {
         Example structure, with {sample.channelName}
         {previewing && <span className="text-primary"> (preview, not applied)</span>}
       </p>
-      <ul aria-label="Example file structure" className={cn('flex flex-col gap-0.5 px-2.5 py-2 font-mono leading-[1.45]', phone ? 'text-[11px]' : 'text-[11.5px]')}>
+      <ul aria-label="Example file structure" className={cn('flex flex-col gap-0.5 overflow-x-auto px-2.5 py-2 font-mono leading-[1.45]', phone ? 'text-[11px]' : 'text-[11.5px]')}>
         {rows.map((row, index) => (
           <li key={`${index}:${row.name}`} className={cn('flex flex-wrap items-baseline gap-x-2',
             row.kind === 'file' ? 'text-muted-foreground' : 'text-foreground', row.kind === 'media' && 'font-medium')}>
@@ -47,7 +47,7 @@ export function LayoutPreviewTree({ folder, layout, previewing, example }: {
       <p className="flex items-start gap-1.5 border-t border-border px-2.5 py-2 text-[12.5px]">
         <Library size={14} aria-hidden="true" className="mt-0.5 shrink-0" />
         <span>
-          {readsAs(layout, sample)}
+          {readsAs(layout, sample, folder.layout)}
           {layout === 'videos' && (
             <> <Link to="/settings/core#naming" className={cn('text-primary underline', phone && 'inline-flex min-h-[44px] items-center')}>
               Filename template: Settings &gt; Core

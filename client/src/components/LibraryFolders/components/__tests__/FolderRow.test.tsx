@@ -45,6 +45,26 @@ describe('FolderRow', () => {
     expect(screen.queryByTestId('row-chevron')).not.toBeInTheDocument();
   });
 
+  test('a selected row in two columns points at the panel', () => {
+    renderInPage(<FolderRow folder={kids} statuses={[ok]} selected wide={false} moving={false} onSelect={jest.fn()} />, { value: makePageValue({ twoColumn: true }) });
+    expect(screen.getByTestId('row-pointer')).toBeInTheDocument();
+  });
+
+  test('in two columns an unselected wide row keeps the pointer\'s slot, so its status cells line up', () => {
+    renderInPage(<FolderRow folder={kids} statuses={[ok]} selected={false} wide moving={false} onSelect={jest.fn()} />, { value: makePageValue({ twoColumn: true }) });
+    expect(screen.getByTestId('row-pointer-slot')).toBeInTheDocument();
+  });
+
+  test('a selected wide row in two columns points at the panel', () => {
+    renderInPage(<FolderRow folder={kids} statuses={[ok]} selected wide moving={false} onSelect={jest.fn()} />, { value: makePageValue({ twoColumn: true }) });
+    expect(screen.getByTestId('row-pointer')).toBeInTheDocument();
+  });
+
+  test('a row that is not selected has no pointer', () => {
+    renderInPage(<FolderRow folder={kids} statuses={[ok]} selected={false} wide={false} moving={false} onSelect={jest.fn()} />, { value: makePageValue({ twoColumn: true }) });
+    expect(screen.queryByTestId('row-pointer')).not.toBeInTheDocument();
+  });
+
   test('points aria-controls at the inspector only in two columns', () => {
     const { unmount } = renderInPage(<FolderRow folder={kids} statuses={[ok]} selected={false} wide moving={false} onSelect={jest.fn()} />, { value: makePageValue({ twoColumn: true }) });
     expect(screen.getByRole('button', { name: /__Kids/ })).toHaveAttribute('aria-controls', 'library-inspector');
