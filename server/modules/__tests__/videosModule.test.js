@@ -233,7 +233,7 @@ describe('VideosModule', () => {
       );
     });
 
-    test('should execute the correct SQL query', async () => {
+    test('lists a video once when it is linked to several jobs (groups the jobvideos join)', async () => {
       const { JobVideo, Job } = require('../../models');
 
       mockVideo.count.mockResolvedValue(0);
@@ -250,7 +250,7 @@ describe('VideosModule', () => {
               mockSequelize.fn(
                 'COALESCE',
                 mockSequelize.col('Video.last_downloaded_at'),
-                mockSequelize.col('jobVideos->job.time_created'),
+                mockSequelize.fn('MAX', mockSequelize.col('jobVideos->job.time_created')),
                 mockSequelize.fn('STR_TO_DATE', mockSequelize.col('Video.original_date'), '%Y%m%d'),
               ),
               'timeCreated',
@@ -268,6 +268,7 @@ describe('VideosModule', () => {
           }],
         }],
         where: {},
+        group: 'Video.id',
         order: [['timeCreated', 'DESC']],
         limit: 12,
         offset: 0,
