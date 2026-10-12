@@ -138,13 +138,17 @@ class VideosModule {
             sequelize.fn(
               'COALESCE',
               sequelize.col('Video.last_downloaded_at'),
-              sequelize.col('jobVideos->job.time_created'),
+              sequelize.fn('MAX', sequelize.col('jobVideos->job.time_created')),
               sequelize.fn('STR_TO_DATE', sequelize.col('Video.original_date'), '%Y%m%d'),
             ),
             'timeCreated',
           ],
         ],
       };
+
+      // A video downloaded by more than one job has a jobvideos row per job;
+      // without grouping, each of those rows became a listing row (#922).
+      options.group = 'Video.id';
 
       // Add ordering
       let orderByColumn;
