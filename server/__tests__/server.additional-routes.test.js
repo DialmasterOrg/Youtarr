@@ -564,6 +564,22 @@ describe('server routes - channel operations', () => {
         channel_id: 'UC123456'
       });
     });
+
+    test('answers 500 when the channel information cannot be loaded', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+      channelModuleMock.getChannelInfo.mockRejectedValueOnce(new Error('Network error: Unable to connect to YouTube'));
+
+      const handlers = findRouteHandlers(app, 'get', '/getchannelinfo/:channelId');
+      const getInfoHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({ params: { channelId: 'UC123456' } });
+      const res = createMockResponse();
+
+      await getInfoHandler(req, res);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.body).toEqual({ error: 'Failed to get channel information' });
+    });
   });
 
   describe('POST /addchannelinfo', () => {

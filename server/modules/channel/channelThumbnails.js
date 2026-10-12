@@ -92,25 +92,60 @@ class ChannelThumbnails {
     return new Promise((resolve, reject) => {
       const protocol = imageUrl.startsWith('https') ? https : http;
       const file = fs.createWriteStream(imagePath);
+      // Set once this attempt finishes or hands off to a redirect, which
+      // writes the same path: later errors from this attempt must leave it.
+      let settled = false;
 
-      const req = protocol.get(imageUrl, { timeout: 15000 }, (response) => {
+      // Everything below runs in stream and socket callbacks, where a throw
+      // is an uncaught exception that ends the process, so nothing may throw.
+      const removePartialFile = () => {
+        try {
+          fs.unlinkSync(imagePath);
+        } catch (err) {
+          if (err.code !== 'ENOENT') {
+            logger.warn({ err, imagePath }, 'Could not remove partial image download');
+          }
+        }
+      };
+
+      let req;
+      const fail = (err) => {
+        if (settled) return;
+        settled = true;
+        // Also releases the connection: after a failed file write the
+        // response sits paused, holding the socket until the timeout.
+        if (req) req.destroy();
+        file.close();
+        removePartialFile();
+        reject(err);
+      };
+
+      file.on('error', fail);
+
+      req = protocol.get(imageUrl, { timeout: 15000 }, (response) => {
+        // Node reports a connection lost mid-body ("aborted") only to an
+        // error listener; without one this promise would never settle.
+        response.on('error', fail);
+
         // Handle redirects
         if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+          settled = true;
+          response.resume();
           file.close();
-          fs.unlinkSync(imagePath);
+          removePartialFile();
           return this.downloadImageToFile(response.headers.location, targetFileName)
             .then(resolve)
             .catch(reject);
         }
 
         if (response.statusCode !== 200) {
-          file.close();
-          fs.unlinkSync(imagePath);
-          return reject(new Error(`Failed to download thumbnail: HTTP ${response.statusCode}`));
+          response.resume();
+          return fail(new Error(`Failed to download thumbnail: HTTP ${response.statusCode}`));
         }
 
         response.pipe(file);
         file.on('finish', () => {
+          settled = true;
           file.close();
           logger.debug({ targetFileName, imagePath }, 'Image downloaded via HTTP');
           resolve();
@@ -119,20 +154,10 @@ class ChannelThumbnails {
 
       req.on('timeout', () => {
         req.destroy();
-        file.close();
-        if (fs.existsSync(imagePath)) {
-          fs.unlinkSync(imagePath);
-        }
-        reject(new Error('Thumbnail download timed out'));
+        fail(new Error('Thumbnail download timed out'));
       });
 
-      req.on('error', (err) => {
-        file.close();
-        if (fs.existsSync(imagePath)) {
-          fs.unlinkSync(imagePath);
-        }
-        reject(err);
-      });
+      req.on('error', fail);
     });
   }
 

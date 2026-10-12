@@ -342,11 +342,18 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *     responses:
    *       200:
    *         description: Channel information
+   *       500:
+   *         description: Failed to get channel information
    */
   router.get('/getchannelinfo/:channelId', verifyToken, async (req, res) => {
     const channelId = req.params.channelId;
-    const channelInfo = await channelModule.getChannelInfo(channelId, true);
-    res.json(channelInfo);
+    try {
+      const channelInfo = await channelModule.getChannelInfo(channelId, true);
+      res.json(channelInfo);
+    } catch (error) {
+      req.log.error({ err: error, channelId }, 'Failed to get channel information');
+      res.status(500).json({ error: 'Failed to get channel information' });
+    }
   });
 
   /**
@@ -896,6 +903,10 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *         description: List of channel videos
    *       400:
    *         description: Invalid maxRating
+   *       404:
+   *         description: Channel not found
+   *       500:
+   *         description: Failed to get channel videos
    */
   router.get('/getchannelvideos/:channelId', verifyToken, async (req, res) => {
     req.log.info({ channelId: req.params.channelId }, 'Getting channel videos');
@@ -922,7 +933,16 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
     if (!maxRating.valid) {
       return res.status(400).json({ error: 'Invalid maxRating' });
     }
-    const result = await channelModule.getChannelVideos(channelId, page, pageSize, downloadedFilter, searchQuery, sortBy, sortOrder, tabType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, maxRating.value);
+    let result;
+    try {
+      result = await channelModule.getChannelVideos(channelId, page, pageSize, downloadedFilter, searchQuery, sortBy, sortOrder, tabType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, maxRating.value);
+    } catch (error) {
+      if (error.code === 'CHANNEL_NOT_FOUND') {
+        return res.status(404).json({ error: 'Channel not found' });
+      }
+      req.log.error({ err: error, channelId }, 'Failed to get channel videos');
+      return res.status(500).json({ error: 'Failed to get channel videos' });
+    }
 
     if (Array.isArray(result)) {
       res.status(200).json({ videos: result });
