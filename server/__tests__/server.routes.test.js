@@ -592,9 +592,45 @@ describe('server routes - authentication', () => {
       expect(res.statusCode).toBe(503);
       expect(res.body.error).toBe('Authentication not configured');
     });
+
+    test('answers 500 when the session cannot be saved', async () => {
+      const { app, dbMock } = await createServerModule();
+      dbMock.Session.create.mockRejectedValueOnce(new Error('connect ETIMEDOUT'));
+
+      const handlers = findRouteHandlers(app, 'post', '/auth/login');
+      const loginHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { username: 'tester', password: 'password123' }
+      });
+      const res = createMockResponse();
+
+      await loginHandler(req, res);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.body).toEqual({ error: 'Login failed' });
+    });
   });
 
   describe('POST /auth/logout', () => {
+    test('answers 500 when the session cannot be ended', async () => {
+      const { app, dbMock } = await createServerModule();
+      dbMock.Session.update.mockRejectedValueOnce(new Error('connect ETIMEDOUT'));
+
+      const handlers = findRouteHandlers(app, 'post', '/auth/logout');
+      const logoutHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        headers: { 'x-access-token': 'valid-token' }
+      });
+      const res = createMockResponse();
+
+      await logoutHandler(req, res);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.body).toEqual({ error: 'Failed to log out' });
+    });
+
     test('successful logout with valid token', async () => {
       const { app, dbMock } = await createServerModule();
 
@@ -1214,6 +1250,40 @@ describe('server routes - channels', () => {
       expect(res.statusCode).toBe(400);
       expect(res.body).toEqual({ error: 'Invalid maxRating' });
       expect(channelModuleMock.getChannelVideos).not.toHaveBeenCalled();
+    });
+
+    test('answers 404 for an unknown channel', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+      channelModuleMock.getChannelVideos.mockRejectedValueOnce(
+        Object.assign(new Error('Channel not found'), { code: 'CHANNEL_NOT_FOUND' })
+      );
+
+      const handlers = findRouteHandlers(app, 'get', '/getchannelvideos/:channelId');
+      const getVideosHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({ params: { channelId: 'UCmissing' }, query: {} });
+      const res = createMockResponse();
+
+      await getVideosHandler(req, res);
+
+      expect(res.statusCode).toBe(404);
+      expect(res.body).toEqual({ error: 'Channel not found' });
+    });
+
+    test('answers 500 when the videos cannot be loaded', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+      channelModuleMock.getChannelVideos.mockRejectedValueOnce(new Error('connect ETIMEDOUT'));
+
+      const handlers = findRouteHandlers(app, 'get', '/getchannelvideos/:channelId');
+      const getVideosHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({ params: { channelId: 'channel-1' }, query: {} });
+      const res = createMockResponse();
+
+      await getVideosHandler(req, res);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.body).toEqual({ error: 'Failed to get channel videos' });
     });
   });
 

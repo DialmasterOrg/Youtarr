@@ -820,6 +820,13 @@ const initialize = async () => {
 };
 
 if (process.env.NODE_ENV !== 'test') {
+  // Log a rejected promise nothing handled instead of exiting: one failed
+  // request or background task must not take down running downloads and
+  // every other request with it (issue #921).
+  process.on('unhandledRejection', (reason) => {
+    logger.error({ err: reason }, 'Unhandled promise rejection');
+  });
+
   initialize();
 
   // Graceful shutdown handlers
