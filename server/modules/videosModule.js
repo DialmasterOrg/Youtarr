@@ -17,6 +17,9 @@ const { probeVideoDimensions } = require('./resolutionTier');
 const createLimiter = require('./subscriptionImport/concurrencyLimiter');
 const { isRescanCandidate, resolveRescanUpdate } = require('./rescanRowUpdate');
 const { unchangedSinceRead, GUARDED_COLUMNS } = require('./videoRowGuard');
+const youtubeExistenceCheck = require('./youtubeExistenceCheck');
+
+const { EXISTENCE } = youtubeExistenceCheck;
 
 // Backfill row updates are applied in parameterized batches of this size,
 // and flushed mid-chunk at the same cadence so completed work survives a
@@ -138,13 +141,17 @@ class VideosModule {
             sequelize.fn(
               'COALESCE',
               sequelize.col('Video.last_downloaded_at'),
-              sequelize.col('jobVideos->job.time_created'),
+              sequelize.fn('MAX', sequelize.col('jobVideos->job.time_created')),
               sequelize.fn('STR_TO_DATE', sequelize.col('Video.original_date'), '%Y%m%d'),
             ),
             'timeCreated',
           ],
         ],
       };
+
+      // A video downloaded by more than one job has a jobvideos row per job;
+      // without grouping, each of those rows became a listing row (#922).
+      options.group = 'Video.id';
 
       // Add ordering
       let orderByColumn;
@@ -176,7 +183,6 @@ class VideosModule {
       await fileCheckModule.applyVideoUpdates(updates);
 
       // Check if videos still exist on YouTube and mark as removed if they don't
-      const videoValidationModule = require('./videoValidationModule');
       const youtubeUpdates = [];
       const timestampUpdates = [];
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -194,9 +200,12 @@ class VideosModule {
         }
 
         if (video.youtubeId) {
-          const exists = await videoValidationModule.checkVideoExistsOnYoutube(video.youtubeId);
+          const existence = await youtubeExistenceCheck.check(video.youtubeId);
+          if (existence === EXISTENCE.UNKNOWN) {
+            return null;
+          }
 
-          if (!exists) {
+          if (existence === EXISTENCE.REMOVED) {
             logger.info({ youtubeId: video.youtubeId }, 'Video no longer exists on YouTube, marking as removed');
             video.youtube_removed = true;
             video.youtube_removed_checked_at = checkedAt;

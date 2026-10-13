@@ -8,7 +8,7 @@ describe('VideosModule', () => {
   let mockWatchStatusQueries;
   let mockFs;
   let mockConfigModule;
-  let mockVideoValidationModule;
+  let mockYoutubeExistenceCheck;
   let mockLogger;
   let mockNfoGenerator;
   let mockMessageEmitter;
@@ -67,8 +67,9 @@ describe('VideosModule', () => {
       getJobsPath: jest.fn().mockReturnValue('/test/jobs')
     };
 
-    mockVideoValidationModule = {
-      checkVideoExistsOnYoutube: jest.fn().mockResolvedValue(true)
+    mockYoutubeExistenceCheck = {
+      check: jest.fn().mockResolvedValue('exists'),
+      EXISTENCE: { EXISTS: 'exists', REMOVED: 'removed', UNKNOWN: 'unknown' }
     };
 
     // Mock logger - use the mock from __mocks__/logger.js
@@ -127,7 +128,7 @@ describe('VideosModule', () => {
     // Mock configModule
     jest.doMock('../configModule', () => mockConfigModule);
 
-    jest.doMock('../videoValidationModule', () => mockVideoValidationModule);
+    jest.doMock('../youtubeExistenceCheck', () => mockYoutubeExistenceCheck);
 
     jest.doMock('../nfoGenerator', () => mockNfoGenerator);
 
@@ -224,7 +225,7 @@ describe('VideosModule', () => {
       }));
       expect(mockVideo.findAll).toHaveBeenCalledTimes(1);
       expect(mockVideo.aggregate).toHaveBeenCalledTimes(1);
-      expect(mockVideoValidationModule.checkVideoExistsOnYoutube).toHaveBeenCalledTimes(2);
+      expect(mockYoutubeExistenceCheck.check).toHaveBeenCalledTimes(2);
       expect(mockVideo.update).toHaveBeenCalledTimes(1);
       expect(mockVideo.update).toHaveBeenCalledWith(
         { youtube_removed_checked_at: expect.any(Date) },
@@ -232,7 +233,7 @@ describe('VideosModule', () => {
       );
     });
 
-    test('should execute the correct SQL query', async () => {
+    test('lists a video once when it is linked to several jobs (groups the jobvideos join)', async () => {
       const { JobVideo, Job } = require('../../models');
 
       mockVideo.count.mockResolvedValue(0);
@@ -249,7 +250,7 @@ describe('VideosModule', () => {
               mockSequelize.fn(
                 'COALESCE',
                 mockSequelize.col('Video.last_downloaded_at'),
-                mockSequelize.col('jobVideos->job.time_created'),
+                mockSequelize.fn('MAX', mockSequelize.col('jobVideos->job.time_created')),
                 mockSequelize.fn('STR_TO_DATE', mockSequelize.col('Video.original_date'), '%Y%m%d'),
               ),
               'timeCreated',
@@ -267,6 +268,7 @@ describe('VideosModule', () => {
           }],
         }],
         where: {},
+        group: 'Video.id',
         order: [['timeCreated', 'DESC']],
         limit: 12,
         offset: 0,
@@ -695,11 +697,11 @@ describe('VideosModule', () => {
       mockVideo.aggregate.mockResolvedValue([]);
 
       mockFs.stat.mockResolvedValueOnce({ size: 1000 });
-      mockVideoValidationModule.checkVideoExistsOnYoutube.mockResolvedValueOnce(false);
+      mockYoutubeExistenceCheck.check.mockResolvedValueOnce('removed');
 
       const result = await VideosModule.getVideosPaginated();
 
-      expect(mockVideoValidationModule.checkVideoExistsOnYoutube).toHaveBeenCalledWith('abc123');
+      expect(mockYoutubeExistenceCheck.check).toHaveBeenCalledWith('abc123');
       expect(mockVideo.update).toHaveBeenCalledTimes(1);
       const [updateData, updateOptions] = mockVideo.update.mock.calls[0];
       expect(updateData.youtube_removed).toBe(true);
@@ -707,6 +709,31 @@ describe('VideosModule', () => {
       expect(updateOptions).toEqual({ where: { id: [1] } });
       expect(result.videos[0].youtube_removed).toBe(true);
       expect(result.videos[0].youtube_removed_checked_at).toBeInstanceOf(Date);
+    });
+
+    test('leaves the video unchecked when YouTube does not answer', async () => {
+      mockVideo.count.mockResolvedValue(1);
+      mockVideo.findAll.mockResolvedValue([
+        {
+          id: 1,
+          youtubeId: 'abc123',
+          youTubeChannelName: 'Test Channel',
+          youTubeVideoName: 'Test Video',
+          filePath: '/test/output/dir/Test Channel/video [abc123].mp4',
+          fileSize: '1000',
+          removed: false,
+          youtube_removed: false,
+          youtube_removed_checked_at: null
+        }
+      ]);
+      mockVideo.aggregate.mockResolvedValue([]);
+      mockFs.stat.mockResolvedValueOnce({ size: 1000 });
+      mockYoutubeExistenceCheck.check.mockResolvedValueOnce('unknown');
+
+      const result = await VideosModule.getVideosPaginated();
+
+      expect(mockVideo.update).not.toHaveBeenCalled();
+      expect(result.videos[0].youtube_removed_checked_at).toBeNull();
     });
 
     test('should write the same checked-at timestamp it returns', async () => {
@@ -742,7 +769,7 @@ describe('VideosModule', () => {
         ]);
         mockVideo.aggregate.mockResolvedValue([]);
         mockFs.stat.mockResolvedValueOnce({ size: 1000 });
-        mockVideoValidationModule.checkVideoExistsOnYoutube.mockResolvedValueOnce(true);
+        mockYoutubeExistenceCheck.check.mockResolvedValueOnce('exists');
 
         const result = await VideosModule.getVideosPaginated();
 
@@ -781,7 +808,7 @@ describe('VideosModule', () => {
 
       const result = await VideosModule.getVideosPaginated();
 
-      expect(mockVideoValidationModule.checkVideoExistsOnYoutube).not.toHaveBeenCalled();
+      expect(mockYoutubeExistenceCheck.check).not.toHaveBeenCalled();
       expect(mockVideo.update).not.toHaveBeenCalled();
       expect(result.videos[0].youtube_removed).toBe(false);
       expect(result.videos[0].youtube_removed_checked_at).toBe(recentIso);

@@ -1,6 +1,6 @@
 /* eslint-env jest */
 const loggerMock = require('../__mocks__/logger');
-const { findRouteHandlers } = require('./testUtils');
+const { findRouteHandlers, runRouteHandlers } = require('./testUtils');
 
 const createMockRequest = (overrides = {}) => ({
   method: 'GET',
@@ -428,13 +428,10 @@ describe('server routes - plex integration', () => {
     test('returns error when auth not configured', async () => {
       const { app } = await createServerModule({ passwordHash: null });
 
-      const handlers = findRouteHandlers(app, 'get', '/plex/auth-url');
-      const authUrlHandler = handlers[handlers.length - 1];
-
-      const req = createMockRequest({});
+      const req = createMockRequest({ path: '/plex/auth-url' });
       const res = createMockResponse();
 
-      await authUrlHandler(req, res);
+      await runRouteHandlers(app, 'get', '/plex/auth-url', req, res);
 
       expect(res.statusCode).toBe(503);
       expect(res.body.error).toBe('Authentication not configured');
@@ -563,6 +560,22 @@ describe('server routes - channel operations', () => {
         title: 'Test Channel',
         channel_id: 'UC123456'
       });
+    });
+
+    test('answers 500 when the channel information cannot be loaded', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+      channelModuleMock.getChannelInfo.mockRejectedValueOnce(new Error('Network error: Unable to connect to YouTube'));
+
+      const handlers = findRouteHandlers(app, 'get', '/getchannelinfo/:channelId');
+      const getInfoHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({ params: { channelId: 'UC123456' } });
+      const res = createMockResponse();
+
+      await getInfoHandler(req, res);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.body).toEqual({ error: 'Failed to get channel information' });
     });
   });
 

@@ -531,6 +531,7 @@ export function Settings({ token }: SettingsProps) {
         open={openPlexAuthDialog}
         onClose={() => setOpenPlexAuthDialog(false)}
         onSuccess={handlePlexAuthSuccess}
+        token={token}
       />
 
       <Snackbar
