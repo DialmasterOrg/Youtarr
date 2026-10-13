@@ -9,42 +9,11 @@ Before setting up Youtarr, ensure you have:
 3. **Git** to clone the repository
 4. Some network and VPN knowledge, and a VPN provider if using Gluetun
 
-## Table of contents:
-- [Youtarr Setup Guide](#youtarr-setup-guide)
-- [Prerequisites](#prerequisites)
-- [Table of contents:](#table-of-contents)
-- [Quick Start Guide](#quick-start-guide)
-- [Method 1: First-Time Installation via `./start.sh` helper](#method-1-first-time-installation-via-startsh-helper)
-   - [Optional flags:](#optional-flags) 
-- [Method 2: Standard Docker Compose (For Docker-Native Setups)](#method-2-standard-docker-compose-for-docker-native-setups)
-   - [Optionally configure other settings:](#optionally-configure-other-settings)
-- [Method 3: Manual Setup Without Git (Advanced Users Only)](#method-3-manual-setup-without-git-advanced-users-only)
-- [Authentication](#authentication)
-- [Configuration](#configuration)
-   - [Required Settings](#required-settings)
-   - [Configuration Settings](#configuration-settings)
-- [Important Operational Notes](#important-operational-notes)
-   - [Critical: Download Archive File](#critical-download-archive-file)
-   - [Storage Management](#storage-management)
-   - [File Management Restrictions](#file-management-restrictions)
-   - [Network Storage Considerations](#network-storage-considerations)
-   - [Content Filtering](#content-filtering)
-   - [Platform Deployments (Elfhosted, Kubernetes, etc.)](#platform-deployments-elfhosted-kubernetes-etc)
-- [Network Access](#network-access)
-- [Upgrading](#upgrading)
-   - [Checking for Updates](#checking-for-updates)
-   - [How to Update to the Latest Version](#how-to-update-to-the-latest-version)
-      - [Method 1: Using Helper Scripts](#method-1-using-helper-scripts)
-      - [Method 2: Manual Docker Compose Update](#method-2-manual-docker-compose-update)
-      - [Method 3: Asustor App Central](#method-3-asustor-app-central)
-   - [What Happens During Updates](#what-happens-during-updates)
-
 ## Quick Start Guide
 
 Choose your preferred installation method
 
-> [!TIP]
-> Running on a NAS or Unraid, or using Portainer? There are dedicated platform guides for [Synology](platforms/synology.md), [Unraid](platforms/unraid.md), [Asustor](platforms/asustor.md), and [Portainer](platforms/portainer.md) - start there instead.
+**Tip:** Running on a NAS or Unraid, or using Portainer? There are dedicated platform guides for [Synology](platforms/synology.md), [Unraid](platforms/unraid.md), [Asustor](platforms/asustor.md), and [Portainer](platforms/portainer.md) - start there instead.
 
 ### Method 1: First-Time Installation via `./start.sh` helper
 
@@ -102,13 +71,12 @@ If you prefer to use standard `docker compose up` commands:
    YOUTUBE_OUTPUT_DIR=/path/to/your/videos
    ```
 
-> [!IMPORTANT]
+> **Important:**
 > If using Gluetun, you must set all the required variables, or else it will fail.
 >
 > Example:
 > - `VPN_SERVICE_PROVIDER`
 > - `WIREGUARD_PRIVATE_KEY`
-> - `WIREGUARD_PRESHARED_KEY`
 > - `WIREGUARD_ADDRESSES`
 
 #### Optionally configure other settings:
@@ -129,10 +97,9 @@ If you prefer to use standard `docker compose up` commands:
    ```
    If using Gluetun, start with the [docker-compose.gluetun.yml](https://github.com/DialmasterOrg/Youtarr/blob/main/docker-compose.gluetun.yml) file.
    ```bash
-   docker compose docker-compose.gluetun.yml up -d
+   docker compose -f docker-compose.yml -f docker-compose.gluetun.yml up -d
    ```
 
-> [!IMPORTANT]
 > **Docker Desktop/ARM/NAS users**: For a fresh install, use the named-volume database override to avoid MariaDB bind-mount issues on virtualized filesystems:
 > ```bash
 > docker compose -f docker-compose.yml -f docker-compose.arm.yml up -d
@@ -140,24 +107,22 @@ If you prefer to use standard `docker compose up` commands:
 >
 > If using Gluetun, use the [docker-compose.gluetun.yml](https://github.com/DialmasterOrg/Youtarr/blob/main/docker-compose.gluetun.yml) file.
 > ```bash
-> docker compose -f docker-compose.gluetun.yml -f docker-compose.arm.yml up -d
+> docker compose -f docker-compose.yml -f docker-compose.gluetun.yml -f docker-compose.arm.yml up -d
 > ```
 > If you already have data in `./database/`, use `./scripts/migrate-to-named-volume.sh` instead. See [Database Management](DATABASE.md#migrating-from-bind-mount-to-named-volume) and [Troubleshooting](TROUBLESHOOTING.md#docker-desktop--arm-incorrect-information-in-file-errors) for details.
 
-5. **Access the web interface**:
+1. **Access the web interface**:
    - Navigate to `http://localhost:3087` (or your server's LAN IP)
    - If you set preset credentials in .env, use those to log in
    - If not, you'll be prompted to complete the setup wizard using the one-time token from `docker logs youtarr` or `config/setup-token`
    - Configure Plex (and optionally Jellyfin or Emby for playlist sync) and other settings from the Settings page
 
-> [!IMPORTANT]
-> Ensure the path you assign to `YOUTUBE_OUTPUT_DIR` already exists on the host and is writable before starting the stack. Otherwise Docker will create it as root-owned, and the container may not be able to write downloads.
+**Important:** Ensure the path you assign to `YOUTUBE_OUTPUT_DIR` already exists on the host and is writable before starting the stack. Otherwise Docker will create it as root-owned, and the container may not be able to write downloads.
 
 This method gives you direct control over environment variables and compose files, but it is not identical to `./start.sh`: plain `docker compose up -d` uses the legacy bind-mounted database unless you include or pin `docker-compose.arm.yml`.
 
 ### Method 3: Manual Setup Without Git (Advanced Users Only)
 
-> [!CAUTION]
 > **Not Recommended**: This method requires manual directory creation, permission management, and lacks helper scripts. It is more error-prone and provides limited community support.
 >
 > **For advanced users only.** If you cannot clone the repository (e.g., TrueNAS, limited Git access), see [Manual Docker Setup Without Git](DOCKER.md#manual-setup-without-git-clone) in the Docker documentation. For Portainer, use the [Portainer guide](platforms/portainer.md) instead.
@@ -166,7 +131,7 @@ This method gives you direct control over environment variables and compose file
 
 ## Authentication
 
-> [!IMPORTANT]
+> **Important:**
 > - Initial setup requires the one-time setup token from `docker logs youtarr` or `config/setup-token`; plain HTTP setup is intended for localhost, private LAN, VPN, or SSH tunnel access only
 > - If you need to reset your admin password, see the [Troubleshooting Guide](TROUBLESHOOTING.md#reset-admin-password)
 
@@ -257,7 +222,6 @@ For external access:
 
 ## Upgrading
 
-> [!IMPORTANT]
 > **Youtarr does not automatically update itself.** When you run `./start.sh` or `docker compose up -d`, it uses your currently installed version. Simply restarting Youtarr without pulling updates will restart the same version you currently have installed.
 >
 > **If you're wondering why you don't see new features after a restart, you likely need to run the update commands below.**
@@ -329,5 +293,4 @@ If you installed Youtarr from App Central on an Asustor NAS, updates come throug
 - Database schema (via automatic migrations)
 - Docker container and dependencies
 
-> [!IMPORTANT]
-> Database migrations run automatically on startup. If a migration fails, check the logs with `docker compose logs -f` and see the [Troubleshooting Guide](TROUBLESHOOTING.md) for assistance.
+**Important:** Database migrations run automatically on startup. If a migration fails, check the logs with `docker compose logs -f` and see the [Troubleshooting Guide](TROUBLESHOOTING.md) for assistance.

@@ -1,6 +1,6 @@
 # Add-on Docker Compose file for Gluetun integration
 # Use COMPOSE_FILE to add this Docker Compose file in addition to your main compose file
-# See https://github.com/DialmasterOrg/Youtarr/docs/GLUETUN_INTEGRATION.md for more info
+# See https://github.com/DialmasterOrg/Youtarr/blob/main/docs/GLUETUN_INTEGRATION.md for more info
 
 services:
   gluetun:
@@ -29,10 +29,11 @@ services:
     network_mode: "service:gluetun"
     ports: !reset []
     extra_hosts: !reset []
+      - "host.docker.internal:host-gateway"
     depends_on:
       gluetun:
         condition: service_healthy
         restart: true
 
 volumes:
-  gluetun:
+  youtarr-gluetun:

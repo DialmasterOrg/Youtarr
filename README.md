@@ -8,10 +8,9 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 
 **Docs:** [dialmasterorg.github.io/Youtarr](https://dialmasterorg.github.io/Youtarr/) - searchable install, configuration, media server, and troubleshooting guides.
 
-> [!TIP]
+> **Tip:**
 > Don't want to self-host? You can also run Youtarr on [ElfHosted](https://store.elfhosted.com/product/youtarr/) with a managed deployment – see their [Youtarr docs](https://docs.elfhosted.com/app/youtarr/).
 
-> [!NOTE]
 > **Like Youtarr?** Consider [supporting the project on Patreon](https://www.patreon.com/c/ChrisDial) to help keep it free and actively developed!
 
 https://github.com/user-attachments/assets/a80548fc-bcf9-4ad0-889c-dbd5aac250ee
@@ -62,14 +61,11 @@ Youtarr predates [Pinchflat](https://github.com/kieraneglin/pinchflat) (first co
 
 You'll need Docker, Docker Compose, Git, and a Bash shell (Git Bash on Windows). See the [Installation Guide](docs/INSTALLATION.md) for prerequisites, install methods, initial setup, and updating.
 
-> [!NOTE]
-> **Heads up:** Youtarr runs exclusively via Docker; direct `npm start`/Node deployments are unsupported.
+**Heads up:** Youtarr runs exclusively via Docker; direct `npm start`/Node deployments are unsupported.
 
-> [!NOTE]
-> Want to try unreleased features? See [Using Development Builds](docs/DEVELOPMENT.md#using-development-builds) for the bleeding-edge `dev-latest` image.
+**Note:** Want to try unreleased features? See [Using Development Builds](docs/DEVELOPMENT.md#using-development-builds) for the bleeding-edge `dev-latest` image.
 
-> [!NOTE]
-> **Database note for Docker Desktop/ARM/NAS users:** Fresh installs started with `./start.sh` use Docker named-volume storage for MariaDB. Existing bind-mounted installs and plain `docker compose up -d` installs may use `./database`; on virtualized filesystems, this can be risky for MariaDB schema migrations. If you see `Table ... doesn't exist in engine` or `Incorrect information in file` errors, or if you want to proactively migrate, see [Database Management](docs/DATABASE.md#migrating-from-bind-mount-to-named-volume).
+**Database note for Docker Desktop/ARM/NAS users:** Fresh installs started with `./start.sh` use Docker named-volume storage for MariaDB. Existing bind-mounted installs and plain `docker compose up -d` installs may use `./database`; on virtualized filesystems, this can be risky for MariaDB schema migrations. If you see `Table ... doesn't exist in engine` or `Incorrect information in file` errors, or if you want to proactively migrate, see [Database Management](docs/DATABASE.md#migrating-from-bind-mount-to-named-volume).
 
 ## Documentation
 
