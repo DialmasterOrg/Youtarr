@@ -12,6 +12,22 @@ const {
   composeVideoFolderName,
 } = require('../filesystem/constants');
 
+const { parseSubtitleLanguages, isExpandableLanguageCode } = require('./subtitleLanguages');
+
+// yt-dlp matches each --sub-langs entry as a case-insensitive full regex, so a
+// bare code never matches YouTube's regional or script tracks (en-GB, zh-Hans,
+// zh-Hans-SG, es-419). This suffix accepts an optional Script and REGION
+// subtag. Case-sensitivity is switched back on inside the subtag groups
+// because the tracks to leave out differ from those only by case: "en-orig"
+// is the original auto caption (its own selector option), and the machine
+// translations of an uploaded track are named "<target>-<source>" (en-fr,
+// en-zh-SG). Machine translations of the auto-generated track use the bare
+// target code (en, pt, zh-Hans) and are matched like before; the post-download
+// pruning in subtitleSidecarPruner.js keeps the preferred track(s) per language.
+// Checked against yt-dlp's own matcher (orderedSet_from_options with
+// use_regex=True); Node 20 cannot evaluate the (?-i:...) groups.
+const LANGUAGE_VARIANT_SUFFIX = '(-(?-i:[A-Z][a-z]{3}))?(-(?-i:[A-Z]{2}|[0-9]{3}))?';
+
 class YtdlpCommandBuilder {
   /**
    * Build output path with optional subfolder support
@@ -432,18 +448,34 @@ class YtdlpCommandBuilder {
     return args;
   }
 
+  /**
+   * Build the --sub-langs value from the configured comma-separated list.
+   * Bare language codes are expanded to also match their regional and script
+   * variants; anything else (en-orig, a hand-edited pt-BR or regex) is passed
+   * to yt-dlp as-is.
+   * @param {string|null} subtitleLanguage - Comma-separated codes from config
+   * @returns {string} - Comma-separated yt-dlp language selectors
+   */
+  static buildSubtitleLanguageSelector(subtitleLanguage) {
+    return parseSubtitleLanguages(subtitleLanguage)
+      .map((code) => (isExpandableLanguageCode(code) ? `${code}${LANGUAGE_VARIANT_SUFFIX}` : code))
+      .join(',');
+  }
+
   // Build subtitle args based on configuration
   static buildSubtitleArgs(config) {
     const args = [];
 
     if (!config.subtitlesEnabled) return args;
 
-    const language = config.subtitleLanguage || 'en';
-
     args.push(
-      '--write-sub',           // Download manual subtitles (preferred)
-      '--write-auto-sub',      // Fallback to auto-generated if manual not available
-      '--sub-langs', language,
+      '--write-sub',           // Uploaded subtitles
+      // Auto-generated captions as well. yt-dlp only lets an uploaded track
+      // replace an auto one under the same code, so an uploaded "en-GB" and
+      // the auto "en" both download; subtitleSidecarPruner keeps the preferred
+      // track(s) per language after the download.
+      '--write-auto-sub',
+      '--sub-langs', this.buildSubtitleLanguageSelector(config.subtitleLanguage),
       '--convert-subs', 'srt',
       '--sleep-subtitles', '5' // Add 5 second delay between subtitle requests to avoid rate limiting
     );

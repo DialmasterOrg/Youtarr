@@ -9,6 +9,7 @@ const { parseAdditionalTags } = require('./additionalTags');
 const tempPathManager = require('./download/tempPathManager');
 const downloadSettingsResolver = require('./download/downloadSettingsResolver');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
+const { selectSubtitleFilesToPrune } = require('./download/subtitleSidecarPruner');
 const { JobVideoDownload } = require('../models');
 const videoPersistence = require('./videoPersistence');
 const { VIDEO_PERSISTED_MARKER } = require('./constants/outputMarkers');
@@ -284,6 +285,34 @@ async function copyChannelBackdropIfNeeded(channelId, channelFolderPath) {
     }
   } catch (err) {
     logger.warn({ err }, 'Error copying channel backdrop');
+  }
+}
+
+// Delete the subtitle sidecars that subtitleSidecarPruner marks as extra for
+// this video: auto-generated tracks superseded by an uploaded track of the
+// same language, or extra machine-translated variants next to the bare one.
+async function pruneSubtitleSidecars(videoDirectory, fileNames, youtubeId, jsonData) {
+  const config = configModule.getConfig() || {};
+  if (!config.subtitlesEnabled) return;
+
+  const subtitles = jsonData && jsonData.subtitles;
+  const uploadedCodes = subtitles && typeof subtitles === 'object' ? Object.keys(subtitles) : undefined;
+  const toPrune = selectSubtitleFilesToPrune({
+    fileNames,
+    youtubeId,
+    uploadedCodes,
+    subtitleLanguage: config.subtitleLanguage,
+    ytdlpCustomArgs: config.ytdlpCustomArgs,
+  });
+
+  for (const fileName of toPrune) {
+    const subtitlePath = path.join(videoDirectory, fileName);
+    try {
+      await fs.remove(subtitlePath);
+      logger.info({ subtitlePath }, '[Post-Process] Removed extra subtitle track for a selected language');
+    } catch (err) {
+      logger.warn({ err, subtitlePath }, '[Post-Process] Failed to remove extra subtitle track');
+    }
   }
 }
 
@@ -749,6 +778,17 @@ async function resolveTrackedOwnerChannelId(youtubeId, metadataChannelId) {
             logger.info({ vttPath }, '[Post-Process] Removing original vtt subtitle');
             await fs.remove(vttPath);
           }
+        }
+
+        // yt-dlp is asked for every regional and script variant of each
+        // selected subtitle language and cannot prefer an uploaded "en-GB"
+        // over the auto-generated "en", so keep the preferred track(s) per
+        // language here.
+        // Best effort: a leftover extra subtitle must never block the move.
+        try {
+          await pruneSubtitleSidecars(videoDirectory, filesInDir, id, jsonData);
+        } catch (err) {
+          logger.warn({ err, videoDirectory }, '[Post-Process] Subtitle pruning failed; keeping every subtitle file');
         }
 
         if (outgoingFlat) {

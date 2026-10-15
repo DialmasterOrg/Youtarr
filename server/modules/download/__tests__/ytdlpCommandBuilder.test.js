@@ -476,46 +476,104 @@ describe('YtdlpCommandBuilder', () => {
       expect(result).toEqual([]);
     });
 
+    // yt-dlp matches every --sub-langs entry as a case-insensitive full regex,
+    // so a bare code must be expanded to also accept YouTube's Script and
+    // REGION subtags (en-GB, zh-Hans, zh-Hans-SG, es-419). The subtag groups
+    // switch case-sensitivity back on so "en-orig" (original auto captions)
+    // and the machine translations of uploaded tracks, named
+    // "<target>-<source>" (en-fr, en-zh-SG), stay out. These tests pin the
+    // string handed to yt-dlp; Node 20 cannot evaluate the (?-i:...) groups,
+    // so the matching itself was checked against yt-dlp's own matcher
+    // (orderedSet_from_options with use_regex=True). Do the same after
+    // changing the suffix.
+    const VARIANT_SUFFIX = '(-(?-i:[A-Z][a-z]{3}))?(-(?-i:[A-Z]{2}|[0-9]{3}))?';
+
+    const subLangsOf = (result) => result[result.indexOf('--sub-langs') + 1];
+
     it('should include subtitle args when enabled with default language', () => {
       const config = { subtitlesEnabled: true };
       const result = YtdlpCommandBuilder.buildSubtitleArgs(config);
       expect(result).toEqual([
         '--write-sub',
         '--write-auto-sub',
-        '--sub-langs', 'en',
+        '--sub-langs', `en${VARIANT_SUFFIX}`,
         '--convert-subs', 'srt',
         '--sleep-subtitles', '5'
       ]);
     });
 
-    it('should use custom subtitle language when specified', () => {
+    it('expands a selected language so its regional and script variants match', () => {
       const config = {
         subtitlesEnabled: true,
         subtitleLanguage: 'es'
       };
       const result = YtdlpCommandBuilder.buildSubtitleArgs(config);
-      expect(result).toEqual([
-        '--write-sub',
-        '--write-auto-sub',
-        '--sub-langs', 'es',
-        '--convert-subs', 'srt',
-        '--sleep-subtitles', '5'
-      ]);
+      expect(subLangsOf(result)).toBe(`es${VARIANT_SUFFIX}`);
     });
 
-    it('should use custom subtitle language for multiple languages', () => {
+    it('expands every selected language when several are configured', () => {
       const config = {
         subtitlesEnabled: true,
         subtitleLanguage: 'en,es,fr'
       };
       const result = YtdlpCommandBuilder.buildSubtitleArgs(config);
-      expect(result).toEqual([
-        '--write-sub',
-        '--write-auto-sub',
-        '--sub-langs', 'en,es,fr',
-        '--convert-subs', 'srt',
-        '--sleep-subtitles', '5'
-      ]);
+      expect(subLangsOf(result)).toBe(
+        `en${VARIANT_SUFFIX},es${VARIANT_SUFFIX},fr${VARIANT_SUFFIX}`
+      );
+    });
+
+    it('expands three-letter language codes too', () => {
+      const config = {
+        subtitlesEnabled: true,
+        subtitleLanguage: 'fil'
+      };
+      const result = YtdlpCommandBuilder.buildSubtitleArgs(config);
+      expect(subLangsOf(result)).toBe(`fil${VARIANT_SUFFIX}`);
+    });
+
+    it('keeps the Original/Uploaded option as an exact match', () => {
+      const config = {
+        subtitlesEnabled: true,
+        subtitleLanguage: 'en,en-orig'
+      };
+      const result = YtdlpCommandBuilder.buildSubtitleArgs(config);
+      expect(subLangsOf(result)).toBe(`en${VARIANT_SUFFIX},en-orig`);
+    });
+
+    it('passes hand-edited regional codes and patterns through unchanged', () => {
+      const config = {
+        subtitlesEnabled: true,
+        subtitleLanguage: 'pt-BR,en.*'
+      };
+      const result = YtdlpCommandBuilder.buildSubtitleArgs(config);
+      expect(subLangsOf(result)).toBe('pt-BR,en.*');
+    });
+
+    it('passes the yt-dlp "all" alias through unchanged', () => {
+      const config = {
+        subtitlesEnabled: true,
+        subtitleLanguage: 'all'
+      };
+      const result = YtdlpCommandBuilder.buildSubtitleArgs(config);
+      expect(subLangsOf(result)).toBe('all');
+    });
+
+    it('keeps "all" combined with an exclusion as yt-dlp expects it', () => {
+      const config = {
+        subtitlesEnabled: true,
+        subtitleLanguage: 'all,-live_chat'
+      };
+      const result = YtdlpCommandBuilder.buildSubtitleArgs(config);
+      expect(subLangsOf(result)).toBe('all,-live_chat');
+    });
+
+    it('trims whitespace around hand-edited language codes', () => {
+      const config = {
+        subtitlesEnabled: true,
+        subtitleLanguage: 'en, zh'
+      };
+      const result = YtdlpCommandBuilder.buildSubtitleArgs(config);
+      expect(subLangsOf(result)).toBe(`en${VARIANT_SUFFIX},zh${VARIANT_SUFFIX}`);
     });
 
     it('should default to en when language is not specified', () => {
@@ -524,9 +582,16 @@ describe('YtdlpCommandBuilder', () => {
         subtitleLanguage: null
       };
       const result = YtdlpCommandBuilder.buildSubtitleArgs(config);
-      expect(result).toContain('--sub-langs');
-      const langIndex = result.indexOf('--sub-langs');
-      expect(result[langIndex + 1]).toBe('en');
+      expect(subLangsOf(result)).toBe(`en${VARIANT_SUFFIX}`);
+    });
+
+    it('defaults to en when the value holds only separators and spaces', () => {
+      const config = {
+        subtitlesEnabled: true,
+        subtitleLanguage: ' , '
+      };
+      const result = YtdlpCommandBuilder.buildSubtitleArgs(config);
+      expect(subLangsOf(result)).toBe(`en${VARIANT_SUFFIX}`);
     });
   });
 
