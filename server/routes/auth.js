@@ -94,6 +94,8 @@ module.exports = function createAuthRoutes({ verifyToken, loginLimiter, configMo
    *         description: Invalid credentials
    *       429:
    *         description: Too many failed login attempts
+   *       500:
+   *         description: Login failed
    *       503:
    *         description: Authentication not configured
    */
@@ -128,28 +130,33 @@ module.exports = function createAuthRoutes({ verifyToken, loginLimiter, configMo
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const validPassword = await bcrypt.compare(password, config.passwordHash);
-    if (!validPassword) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+    try {
+      const validPassword = await bcrypt.compare(password, config.passwordHash);
+      if (!validPassword) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+
+      const sessionToken = uuidv4();
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      const clientIP = getClientAddress(req);
+
+      await db.Session.create({
+        session_token: sessionToken,
+        username: username,
+        user_agent: req.headers['user-agent'],
+        ip_address: clientIP,
+        expires_at: expiresAt
+      });
+
+      res.json({
+        token: sessionToken,
+        expires: expiresAt.toISOString(),
+        username: username
+      });
+    } catch (error) {
+      req.log.error({ err: error }, 'Login failed');
+      res.status(500).json({ error: 'Login failed' });
     }
-
-    const sessionToken = uuidv4();
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    const clientIP = getClientAddress(req);
-
-    await db.Session.create({
-      session_token: sessionToken,
-      username: username,
-      user_agent: req.headers['user-agent'],
-      ip_address: clientIP,
-      expires_at: expiresAt
-    });
-
-    res.json({
-      token: sessionToken,
-      expires: expiresAt.toISOString(),
-      username: username
-    });
   });
 
   /**
@@ -172,16 +179,22 @@ module.exports = function createAuthRoutes({ verifyToken, loginLimiter, configMo
    *                   example: true
    *       403:
    *         description: No token provided
+   *       500:
+   *         description: Failed to log out
    */
   router.post('/auth/logout', verifyToken, async (req, res) => {
     const token = req.headers['x-access-token'];
 
-    await db.Session.update(
-      { is_active: false },
-      { where: { session_token: token } }
-    );
-
-    res.json({ success: true });
+    try {
+      await db.Session.update(
+        { is_active: false },
+        { where: { session_token: token } }
+      );
+      res.json({ success: true });
+    } catch (error) {
+      req.log.error({ err: error }, 'Failed to log out');
+      res.status(500).json({ error: 'Failed to log out' });
+    }
   });
 
   /**
@@ -213,21 +226,27 @@ module.exports = function createAuthRoutes({ verifyToken, loginLimiter, configMo
    *                   last_used_at:
    *                     type: string
    *                     format: date-time
+   *       500:
+   *         description: Failed to load sessions
    */
   router.get('/auth/sessions', verifyToken, async (req, res) => {
-    const sessions = await db.Session.findAll({
-      where: {
-        username: req.username,
-        is_active: true,
-        expires_at: {
-          [db.Sequelize.Op.gt]: new Date()
-        }
-      },
-      attributes: ['id', 'user_agent', 'ip_address', 'createdAt', 'last_used_at'],
-      order: [['last_used_at', 'DESC']]
-    });
-
-    res.json(sessions);
+    try {
+      const sessions = await db.Session.findAll({
+        where: {
+          username: req.username,
+          is_active: true,
+          expires_at: {
+            [db.Sequelize.Op.gt]: new Date()
+          }
+        },
+        attributes: ['id', 'user_agent', 'ip_address', 'createdAt', 'last_used_at'],
+        order: [['last_used_at', 'DESC']]
+      });
+      res.json(sessions);
+    } catch (error) {
+      req.log.error({ err: error }, 'Failed to load sessions');
+      res.status(500).json({ error: 'Failed to load sessions' });
+    }
   });
 
   /**
@@ -249,23 +268,30 @@ module.exports = function createAuthRoutes({ verifyToken, loginLimiter, configMo
    *         description: Session deleted successfully
    *       404:
    *         description: Session not found
+   *       500:
+   *         description: Failed to end session
    */
   router.delete('/auth/sessions/:id', verifyToken, async (req, res) => {
-    const result = await db.Session.update(
-      { is_active: false },
-      {
-        where: {
-          id: req.params.id,
-          username: req.username
+    try {
+      const result = await db.Session.update(
+        { is_active: false },
+        {
+          where: {
+            id: req.params.id,
+            username: req.username
+          }
         }
+      );
+
+      if (result[0] === 0) {
+        return res.status(404).json({ error: 'Session not found' });
       }
-    );
 
-    if (result[0] === 0) {
-      return res.status(404).json({ error: 'Session not found' });
+      res.json({ success: true });
+    } catch (error) {
+      req.log.error({ err: error, sessionId: req.params.id }, 'Failed to end session');
+      res.status(500).json({ error: 'Failed to end session' });
     }
-
-    res.json({ success: true });
   });
 
   /**
@@ -298,6 +324,8 @@ module.exports = function createAuthRoutes({ verifyToken, loginLimiter, configMo
    *         description: Invalid password format
    *       401:
    *         description: Current password is incorrect
+   *       500:
+   *         description: Failed to change password
    */
   router.post('/auth/change-password', verifyToken, async (req, res) => {
     const { currentPassword, newPassword } = req.body;
@@ -320,18 +348,23 @@ module.exports = function createAuthRoutes({ verifyToken, loginLimiter, configMo
 
     const config = configModule.getConfig();
 
-    const validPassword = await bcrypt.compare(currentPassword, config.passwordHash);
-    if (!validPassword) {
-      return res.status(401).json({ error: 'Current password is incorrect' });
+    try {
+      const validPassword = await bcrypt.compare(currentPassword, config.passwordHash);
+      if (!validPassword) {
+        return res.status(401).json({ error: 'Current password is incorrect' });
+      }
+
+      const saltRounds = 10;
+      const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
+
+      config.passwordHash = newPasswordHash;
+      configModule.updateConfig(config);
+
+      res.json({ success: true, message: 'Password updated successfully' });
+    } catch (error) {
+      req.log.error({ err: error }, 'Failed to change password');
+      res.status(500).json({ error: 'Failed to change password' });
     }
-
-    const saltRounds = 10;
-    const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
-
-    config.passwordHash = newPasswordHash;
-    configModule.updateConfig(config);
-
-    res.json({ success: true, message: 'Password updated successfully' });
   });
 
   /**
