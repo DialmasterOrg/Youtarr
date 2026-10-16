@@ -333,6 +333,16 @@ You **do not** need to rebuild for:
 - New migration files - `./migrations/` is mounted; the same container restart runs them.
 - Frontend changes while the Vite dev server is running - Vite HMR updates the browser.
 
+### Regenerating the yt-dlp Option List
+
+The custom yt-dlp options check (`server/modules/download/ytdlpOptionTable.js`) resolves options against `server/modules/download/ytdlpOptionSpecs.js`, which is generated from yt-dlp's own parser. Regenerate it from time to time so options added by newer yt-dlp releases are recognized (until then they are blocked as unknown), then classify any new option in `ytdlpOptionTable.js`:
+
+```bash
+docker exec -i youtarr-dev python3 - /opt/yt-dlp/yt-dlp \
+  < scripts/generate-ytdlp-option-specs.py \
+  > server/modules/download/ytdlpOptionSpecs.js
+```
+
 ### Benefits of This Approach
 
 - ✅ Tests your code in the actual Docker environment it will run in
