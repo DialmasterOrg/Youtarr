@@ -264,26 +264,98 @@ describe('POST /updateconfig', () => {
     );
   });
 
-  test('returns 400 with the offending flag when ytdlpCustomArgs contains a denylisted flag', async () => {
+  test('returns 400 with the offending flag when a changed ytdlpCustomArgs contains a blocked flag', async () => {
     const { app, configModule } = makeApp();
     const res = await supertest(app)
       .post('/updateconfig')
       .send({ ytdlpCustomArgs: '--exec "rm -rf /"' });
     expect(res.status).toBe(400);
     expect(res.body.error).toContain('--exec');
+    expect(res.body.customArgsCheck.blocked[0].option).toBe('--exec');
     expect(configModule.updateConfig).not.toHaveBeenCalled();
   });
 
-  test('returns 400 on unterminated-quote parse error', async () => {
+  test('never persists a client-supplied customArgsCheck field', async () => {
+    const { app, configModule } = makeApp();
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ ytdlpCustomArgs: '--no-mtime', customArgsCheck: { blocked: [{ option: 'injected' }] } });
+    expect(res.status).toBe(200);
+    const saved = configModule.updateConfig.mock.calls[0][0];
+    expect(saved).not.toHaveProperty('customArgsCheck');
+  });
+
+  test('does not re-check ytdlpCustomArgs that are unchanged from the saved value', async () => {
+    const { app, configModule } = makeApp();
+    // Simulate a saved value that would now be rejected if re-checked.
+    configModule._config.ytdlpCustomArgs = '--exec "rm -rf /"';
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ ytdlpCustomArgs: '--exec "rm -rf /"', channelAutoDownload: true });
+    expect(res.status).toBe(200);
+    expect(configModule.updateConfig).toHaveBeenCalled();
+  });
+
+  test('returns the check of unchanged saved ytdlpCustomArgs so the client can refresh its notices', async () => {
+    const { app, configModule } = makeApp();
+    configModule._config.ytdlpCustomArgs = '--exec "rm -rf /"';
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ ytdlpCustomArgs: '--exec "rm -rf /"' });
+    expect(res.body.customArgsCheck.blocked[0].option).toBe('--exec');
+  });
+
+  test('returns a null customArgsCheck after saving blank ytdlpCustomArgs', async () => {
+    const { app, configModule } = makeApp();
+    configModule._config.ytdlpCustomArgs = '--exec "rm -rf /"';
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ ytdlpCustomArgs: '' });
+    expect(res.status).toBe(200);
+    expect(res.body.customArgsCheck).toBeNull();
+  });
+
+  test('names both a stray token and a blocked flag in the 400 error', async () => {
+    const { app } = makeApp();
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ ytdlpCustomArgs: 'stray --exec rm' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/"stray"/);
+    expect(res.body.error).toMatch(/--exec/);
+  });
+
+  test('saves changed ytdlpCustomArgs that only warn, and returns the warnings', async () => {
+    const { app, configModule } = makeApp();
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ ytdlpCustomArgs: '--extract-audio' });
+    expect(res.status).toBe(200);
+    expect(configModule.updateConfig).toHaveBeenCalled();
+    expect(res.body.customArgsCheck.warnings[0].option).toBe('--extract-audio');
+  });
+
+  test('resolves an abbreviated flag before saving', async () => {
+    const { app, configModule } = makeApp();
+    const res = await supertest(app)
+      .post('/updateconfig')
+      .send({ ytdlpCustomArgs: '-N 4' });
+    expect(res.status).toBe(200);
+    expect(configModule.updateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ ytdlpCustomArgs: '-N 4' })
+    );
+  });
+
+  test('returns 400 on an unterminated quote in a changed value', async () => {
     const { app } = makeApp();
     const res = await supertest(app)
       .post('/updateconfig')
       .send({ ytdlpCustomArgs: '--user-agent \'unterminated' });
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/parse error/i);
+    expect(res.body.error).toMatch(/quote/i);
   });
 
-  test('returns 400 when ytdlpCustomArgs exceeds 2000 characters', async () => {
+  test('returns 400 when a changed ytdlpCustomArgs exceeds 2000 characters', async () => {
     const { app } = makeApp();
     const longArgs = '--no-mtime '.repeat(200); // ~2200 chars
     const res = await supertest(app)
@@ -736,5 +808,18 @@ describe('schedule configuration', () => {
     const { app } = makeApp();
     const res = await supertest(app).get('/getconfig');
     expect(res.body.logging).toEqual(LOGGING_STATUS);
+  });
+
+  test('reports a customArgsCheck for saved custom args that are now blocked', async () => {
+    const { app, configModule } = makeApp();
+    configModule._config.ytdlpCustomArgs = '--no-mtime --exec rm';
+    const res = await supertest(app).get('/getconfig');
+    expect(res.body.customArgsCheck.blocked[0].option).toBe('--exec');
+  });
+
+  test('customArgsCheck is null when no custom args are saved', async () => {
+    const { app } = makeApp();
+    const res = await supertest(app).get('/getconfig');
+    expect(res.body.customArgsCheck).toBeNull();
   });
 });

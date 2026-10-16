@@ -15,21 +15,24 @@ import {
 } from '../../ui';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
 import { InfoTooltip } from '../common/InfoTooltip';
-import { ConfigState } from '../types';
+import { ConfigState, CustomArgsCheck } from '../types';
 import { validateProxyUrl } from '../utils/configValidation';
 import { useYtdlpArgsValidation } from '../hooks/useYtdlpArgsValidation';
 import {
   MAX_CUSTOM_ARGS_LENGTH,
-  getBlockedFlagInArgs,
   getPositionalTokenInArgs,
   validateRateLimit,
 } from './ytdlpOptionsHelpers';
+import { CustomArgsCheckAlerts } from './components/CustomArgsCheckAlerts';
 
 interface YtdlpOptionsSectionProps {
   config: ConfigState;
   onConfigChange: (updates: Partial<ConfigState>) => void;
   onMobileTooltipClick?: (text: string) => void;
   token: string | null;
+  // Allowlist check of the SAVED custom args, from /getconfig. Shown on load so
+  // a user whose saved args are now blocked sees why immediately.
+  savedCustomArgsCheck?: CustomArgsCheck | null;
 }
 
 export const YtdlpOptionsSection: React.FC<YtdlpOptionsSectionProps> = ({
@@ -37,6 +40,7 @@ export const YtdlpOptionsSection: React.FC<YtdlpOptionsSectionProps> = ({
   onConfigChange,
   onMobileTooltipClick,
   token,
+  savedCustomArgsCheck,
 }) => {
   const [proxyError, setProxyError] = useState<string | null>(null);
   const [rateLimitError, setRateLimitError] = useState<string | null>(null);
@@ -55,14 +59,11 @@ export const YtdlpOptionsSection: React.FC<YtdlpOptionsSectionProps> = ({
   }, [config.ytdlpDownloadRateLimit]);
 
   const customArgs = config.ytdlpCustomArgs || '';
-  const blockedFlag = getBlockedFlagInArgs(customArgs);
   const positionalToken = getPositionalTokenInArgs(customArgs);
   const tooLong = customArgs.length > MAX_CUSTOM_ARGS_LENGTH;
 
   let customArgsError: string | null = null;
-  if (blockedFlag) {
-    customArgsError = `${blockedFlag} is not allowed in custom args. Use the dedicated setting field instead.`;
-  } else if (positionalToken) {
+  if (positionalToken) {
     customArgsError = `"${positionalToken}" looks like a positional argument. Custom args must be yt-dlp flags (start with -). Quote values that contain spaces.`;
   } else if (tooLong) {
     customArgsError = `Custom arguments exceed the ${MAX_CUSTOM_ARGS_LENGTH}-character limit.`;
@@ -193,6 +194,18 @@ export const YtdlpOptionsSection: React.FC<YtdlpOptionsSectionProps> = ({
             inputProps={{ style: { fontFamily: 'monospace' } }}
           />
 
+          {/* The server's check of the SAVED args (what downloads actually use).
+              The Validate button below checks unsaved edits. */}
+          {savedCustomArgsCheck && (
+            <CustomArgsCheckAlerts
+              check={savedCustomArgsCheck}
+              blockedTitle='Some saved options are not allowed and are being skipped'
+              errorsTitle='Some saved options could not be read and are being skipped'
+              warningsTitle='Some saved options may cause problems'
+              blockedNote='The rest of your options still apply.'
+            />
+          )}
+
           <Box style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 16 }}>
             <Button
               variant='outlined'
@@ -208,7 +221,16 @@ export const YtdlpOptionsSection: React.FC<YtdlpOptionsSectionProps> = ({
             )}
           </Box>
 
-          {result?.ok === false && (
+          {result && (
+            <CustomArgsCheckAlerts
+              check={result}
+              blockedTitle='These options are not allowed'
+              errorsTitle='These options could not be read'
+              warningsTitle='These options may cause problems'
+            />
+          )}
+
+          {result?.ok === false && !result.blocked?.length && !result.errors?.length && (
             <Alert severity='error' style={{ marginTop: 8 }}>
               <AlertTitle>yt-dlp rejected the arguments</AlertTitle>
               <pre style={{ whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'monospace', fontSize: '0.85rem' }}>

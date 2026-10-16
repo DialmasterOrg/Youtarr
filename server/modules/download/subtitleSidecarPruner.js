@@ -1,5 +1,5 @@
 const { isFileForVideo } = require('../filesystem/pathBuilder');
-const { tokenize, normalizeFlag } = require('./customArgsParser');
+const { checkCustomArgs } = require('./customArgsParser');
 const {
   parseSubtitleLanguages,
   isExpandableLanguageCode,
@@ -10,37 +10,24 @@ const {
 // the track code yt-dlp used (en, en-GB, zh-Hans, en-orig).
 const SUBTITLE_SIDECAR_CODE = /\]\.([A-Za-z0-9-]+)\.srt$/;
 
-// yt-dlp flags that change which subtitle tracks are requested. A repeated
-// --sub-langs is appended to Youtarr's own value rather than replacing it, so
-// with any of these in the custom args the effective selection is unknown
-// here and nothing is pruned.
-const SUBTITLE_SELECTION_FLAGS = ['--sub-langs', '--srt-langs', '--all-subs'];
+// Canonical yt-dlp options that change which subtitle tracks are requested. A
+// repeated --sub-langs is appended to Youtarr's own value rather than replacing
+// it, so with any of these in the custom args the effective selection is
+// unknown here and nothing is pruned. checkCustomArgs resolves every spelling
+// (--srt-langs, --sub-lang, --all-sub, ...) to one of these canonical names.
+const SUBTITLE_SELECTION_CANONICAL = new Set(['--sub-langs', '--all-subs']);
 
 function baseLanguage(code) {
   return code.split('-')[0];
 }
 
-// yt-dlp's option parser also accepts any unique prefix of a long option, such
-// as youtube-dl's "--sub-lang", so match prefixes. An ambiguous prefix like
-// "--sub" is rejected by yt-dlp as ambiguous, so the download fails anyway
-// and matching it here costs nothing.
-function isSubtitleSelectionFlag(token) {
-  const flag = normalizeFlag(token);
-  if (!flag.startsWith('--') || flag.length <= 2) return false;
-  return SUBTITLE_SELECTION_FLAGS.some((fullFlag) => fullFlag.startsWith(flag));
-}
-
 function customArgsSelectSubtitles(ytdlpCustomArgs) {
   if (!ytdlpCustomArgs) return false;
-  let tokens;
-  try {
-    tokens = tokenize(ytdlpCustomArgs);
-  } catch (err) {
-    // Unparseable custom args: the builder rejects them too, but stay on the
-    // safe side and keep every file.
-    return true;
-  }
-  return tokens.some(isSubtitleSelectionFlag);
+  const check = checkCustomArgs(ytdlpCustomArgs);
+  // Unparseable or otherwise invalid custom args: the builder drops them too,
+  // but stay on the safe side and keep every subtitle file.
+  if (check.errors.length > 0) return true;
+  return check.args.some((token) => SUBTITLE_SELECTION_CANONICAL.has(token));
 }
 
 /**

@@ -32,7 +32,7 @@ describe('useYtdlpArgsValidation', () => {
       { headers: { 'x-access-token': 'tok-abc' } }
     );
     await waitFor(() => {
-      expect(result.current.result).toEqual({ ok: true, message: 'Arguments parsed successfully' });
+      expect(result.current.result).toEqual({ ok: true, message: 'Arguments parsed successfully', stderr: undefined, warnings: [] });
     });
   });
 
@@ -46,7 +46,7 @@ describe('useYtdlpArgsValidation', () => {
     });
 
     await waitFor(() => {
-      expect(result.current.result).toEqual({ ok: false, stderr: 'yt-dlp: error: no such option' });
+      expect(result.current.result).toEqual({ ok: false, message: undefined, stderr: 'yt-dlp: error: no such option', warnings: [] });
     });
   });
 
@@ -65,6 +65,9 @@ describe('useYtdlpArgsValidation', () => {
       expect(result.current.result).toEqual({
         ok: false,
         stderr: '--exec is not allowed in custom args.',
+        blocked: [],
+        warnings: [],
+        errors: [],
       });
     });
   });

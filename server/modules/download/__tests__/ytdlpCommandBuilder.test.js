@@ -1336,16 +1336,37 @@ describe('YtdlpCommandBuilder', () => {
       ).toEqual(['--concurrent-fragments', '4']);
     });
 
-    test('silently drops a denylisted flag and logs a warning', () => {
+    test('drops a blocked flag but keeps the allowed flags around it, and warns', () => {
       const logger = require('../../../logger');
       const warnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => {});
-      const result = YtdlpCommandBuilder.buildCustomArgs({ ytdlpCustomArgs: '--exec rm' });
-      expect(result).toEqual([]);
+      const result = YtdlpCommandBuilder.buildCustomArgs({
+        ytdlpCustomArgs: '--concurrent-fragments 4 --exec rm --retries 5',
+      });
+      expect(result).toEqual(['--concurrent-fragments', '4', '--retries', '5']);
       expect(warnSpy).toHaveBeenCalled();
       warnSpy.mockRestore();
     });
 
-    test('silently drops args with unterminated quote and logs a warning', () => {
+    test('the warn log names the skipped option but never its value', () => {
+      const logger = require('../../../logger');
+      const warnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => {});
+      YtdlpCommandBuilder.buildCustomArgs({ ytdlpCustomArgs: '--exec SECRETCMD123' });
+      const logged = JSON.stringify(warnSpy.mock.calls);
+      expect(logged).toContain('--exec');
+      expect(logged).not.toContain('SECRETCMD123');
+      warnSpy.mockRestore();
+    });
+
+    test('the warn log never includes a stray token that follows an unknown option', () => {
+      const logger = require('../../../logger');
+      const warnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => {});
+      YtdlpCommandBuilder.buildCustomArgs({ ytdlpCustomArgs: '--made-up-opt hunter2SECRET' });
+      const logged = JSON.stringify(warnSpy.mock.calls);
+      expect(logged).not.toContain('hunter2SECRET');
+      warnSpy.mockRestore();
+    });
+
+    test('drops args with an unterminated quote and logs a warning', () => {
       const logger = require('../../../logger');
       const warnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => {});
       const result = YtdlpCommandBuilder.buildCustomArgs({
@@ -1356,7 +1377,7 @@ describe('YtdlpCommandBuilder', () => {
       warnSpy.mockRestore();
     });
 
-    test('silently drops args that bypass the denylist via --flag=value form', () => {
+    test('drops a flag that bypassed the old denylist via --flag=value form', () => {
       const logger = require('../../../logger');
       const warnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => {});
       const result = YtdlpCommandBuilder.buildCustomArgs({
@@ -1365,6 +1386,12 @@ describe('YtdlpCommandBuilder', () => {
       expect(result).toEqual([]);
       expect(warnSpy).toHaveBeenCalled();
       warnSpy.mockRestore();
+    });
+
+    test('resolves an abbreviated allowed flag to its canonical name', () => {
+      expect(
+        YtdlpCommandBuilder.buildCustomArgs({ ytdlpCustomArgs: '-N 4 --embed-th' })
+      ).toEqual(['--concurrent-fragments', '4', '--embed-thumbnail']);
     });
   });
 

@@ -790,7 +790,7 @@ describe('server routes - configuration', () => {
         })
       );
       expect(res.statusCode).toBe(200);
-      expect(res.body).toEqual({ status: 'success' });
+      expect(res.body).toEqual({ status: 'success', customArgsCheck: null });
     });
 
     test('accepts update even with different data types', async () => {

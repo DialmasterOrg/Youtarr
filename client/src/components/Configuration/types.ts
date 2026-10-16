@@ -104,6 +104,22 @@ export interface LoggingStatus {
   };
 }
 
+// One custom-args option that the server blocked or warned about. `given` is
+// what the user typed (option name only, never a value); `option` is the
+// canonical yt-dlp name it resolved to.
+export interface CustomArgEntry {
+  given: string;
+  option: string;
+  reason: string;
+}
+
+// Result of the server's allowlist check of the saved custom yt-dlp args.
+export interface CustomArgsCheck {
+  blocked: CustomArgEntry[];
+  warnings: CustomArgEntry[];
+  errors: string[];
+}
+
 export interface CookieDetails {
   loginCookiesFound: number;
   sessionLoginCookies: number;

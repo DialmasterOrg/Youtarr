@@ -285,14 +285,15 @@ class YtdlpCommandBuilder {
   }
 
   /**
-   * Tokenize and validate the user's custom yt-dlp args. Returns a token
-   * array suitable for spreading at the END of a command (after managed
-   * flags, before URL operands) so yt-dlp's last-wins semantics let the
-   * user override managed defaults.
+   * Resolve and policy-check the user's custom yt-dlp args, returning the
+   * canonical option tokens suitable for spreading at the END of a command
+   * (after managed flags, before URL operands) so yt-dlp's last-wins semantics
+   * let the user override managed defaults.
    *
-   * Defense-in-depth: re-validates against the denylist in case config.json
-   * was hand-edited after the route-level gate. Invalid args are silently
-   * dropped with a warn log; never crashes yt-dlp.
+   * Defense-in-depth: re-runs the same allowlist check as the route-level gate
+   * in case config.json was hand-edited. Blocked options and malformed tokens
+   * are skipped individually (the rest still apply) with a warn log that names
+   * the skipped options but never their values; never crashes yt-dlp.
    *
    * @param {Object} config
    * @returns {string[]}
@@ -301,24 +302,20 @@ class YtdlpCommandBuilder {
     if (!config.ytdlpCustomArgs || !config.ytdlpCustomArgs.trim()) {
       return [];
     }
-    try {
-      const tokens = customArgsParser.tokenize(config.ytdlpCustomArgs);
-      const validation = customArgsParser.validate(tokens);
-      if (!validation.ok) {
-        logger.warn(
-          { reason: validation.error },
-          'Skipping invalid custom yt-dlp args (denylist)'
-        );
-        return [];
-      }
-      return tokens;
-    } catch (err) {
+    const check = customArgsParser.checkCustomArgs(config.ytdlpCustomArgs);
+    if (check.blocked.length > 0 || check.errors.length > 0) {
+      // Log canonical option names and a count only. Never log check.errors
+      // verbatim: a stray-token error echoes the raw token, which could be a
+      // value the user mistyped (logs are written to disk and shared).
       logger.warn(
-        { err: err.message },
-        'Failed to parse custom yt-dlp args; ignoring'
+        {
+          blocked: check.blocked.map((b) => b.option),
+          invalidTokenCount: check.errors.length,
+        },
+        'Skipping disallowed custom yt-dlp args; applying the rest'
       );
-      return [];
     }
+    return check.args;
   }
 
   /**
