@@ -690,7 +690,7 @@ router.get('/api/your-endpoint', verifyToken, async (req, res) => {
 
 ### WebSocket Events
 
-WebSocket shares the HTTP port (3011 in container, 3087 on host) and emits:
+WebSocket shares the HTTP port (3011 in container, 3087 on host) at path `/ws`. Unless `AUTH_ENABLED=false`, it requires an active session token: browsers cannot set headers on the handshake, so the client offers two subprotocols, `youtarr` and `youtarr.auth.<session token>`, and the server answers with `youtarr`. Connections without a valid session are refused with 401 before the handshake (API keys are not accepted), and an open connection is closed once its session expires or is revoked. To listen from a script: `new WebSocket('ws://localhost:3087/ws', ['youtarr', 'youtarr.auth.' + token])`. It emits:
 - `downloadProgress` - Download progress updates
 - `downloadComplete` - Video download finished
 - `jobsUpdated` - Download job enqueued or started
