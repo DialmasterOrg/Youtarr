@@ -2087,7 +2087,7 @@ describe('server routes - downloads', () => {
 
       const req = createMockRequest({
         body: {
-          urls: ['https://youtube.com/watch?v=1'],
+          urls: ['https://youtube.com/watch?v=dQw4w9WgXcQ'],
           overrideSettings: { resolution: '1080' }
         }
       });
@@ -2098,6 +2098,69 @@ describe('server routes - downloads', () => {
       expect(downloadModuleMock.doGroupedManualDownloads).toHaveBeenCalledWith(req);
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({ status: 'success' });
+    });
+
+    test('forwards only the video for a share link opened from a playlist', async () => {
+      const { app, downloadModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/triggerspecificdownloads');
+      const downloadHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { urls: ['https://youtu.be/dQw4w9WgXcQ?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf'] }
+      });
+      const res = createMockResponse();
+
+      await downloadHandler(req, res);
+
+      expect(downloadModuleMock.doGroupedManualDownloads).toHaveBeenCalledWith(expect.objectContaining({
+        body: expect.objectContaining({ urls: ['https://www.youtube.com/watch?v=dQw4w9WgXcQ'] })
+      }));
+    });
+
+    test('rejects a URL that is not a single video', async () => {
+      const { app, downloadModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/triggerspecificdownloads');
+      const downloadHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: {
+          urls: [
+            'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+            'https://www.youtube.com/playlist?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf'
+          ]
+        }
+      });
+      const res = createMockResponse();
+
+      await downloadHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(downloadModuleMock.doGroupedManualDownloads).not.toHaveBeenCalled();
+    });
+
+    test('names the rejected URL and its position in the error', async () => {
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/triggerspecificdownloads');
+      const downloadHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: {
+          urls: [
+            'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+            'https://www.youtube.com/playlist?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf'
+          ]
+        }
+      });
+      const res = createMockResponse();
+
+      await downloadHandler(req, res);
+
+      expect(res.body.error).toBe(
+        'URL 2 is not a single YouTube video: https://www.youtube.com/playlist?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf'
+      );
     });
 
     test('rejects invalid resolution in override settings', async () => {
@@ -2148,7 +2211,7 @@ describe('server routes - downloads', () => {
 
       const req = createMockRequest({
         body: {
-          urls: ['https://youtube.com/watch?v=1'],
+          urls: ['https://youtube.com/watch?v=dQw4w9WgXcQ'],
           overrideSettings: { rating: ' nr ' }
         }
       });
@@ -2210,7 +2273,7 @@ describe('server routes - downloads', () => {
 
       const req = createMockRequest({
         body: {
-          urls: ['https://youtube.com/watch?v=1'],
+          urls: ['https://youtube.com/watch?v=dQw4w9WgXcQ'],
           overrideSettings: { subfolderFallback: 'PlaylistFolder' }
         }
       });

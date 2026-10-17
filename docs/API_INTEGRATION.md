@@ -66,6 +66,8 @@ Add a single YouTube video to the download queue.
 
 > **Scope Limitation**: This endpoint only accepts individual video URLs. Playlist URLs, channel URLs, and batch requests are not supported via API keys. Use the web UI for those operations.
 
+Accepted URLs are watch, Shorts, live, and embed links on `youtube.com`, `m.youtube.com`, or `music.youtube.com`, plus `youtu.be` links. A watch URL opened from a playlist (`watch?v=VIDEO_ID&list=...`) downloads only that video; the playlist part is ignored.
+
 **Headers:**
 | Header | Required | Description |
 |--------|----------|-------------|

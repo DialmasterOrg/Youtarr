@@ -6,6 +6,17 @@ jest.mock('../../modules/videoDeletionModule', () => ({
   performAutomaticCleanup: jest.fn(),
 }));
 const videoDeletionModuleShared = require('../../modules/videoDeletionModule');
+const youtubeUrlParser = require('../../modules/youtubeUrlParser');
+
+describe('createVideoRoutes', () => {
+  test('throws when built without the YouTube URL parser', () => {
+    expect(() => createVideoRoutes({
+      verifyToken: (req, res, next) => next(),
+      videosModule: {},
+      downloadModule: {},
+    })).toThrow('youtubeUrlParser dependency is required');
+  });
+});
 
 describe('POST /api/videos/rating', () => {
   const loggerMock = {
@@ -24,7 +35,8 @@ describe('POST /api/videos/rating', () => {
     const router = createVideoRoutes({
       verifyToken: (req, res, next) => next(),
       videosModule: videosModuleMock,
-      downloadModule: {}
+      downloadModule: {},
+      youtubeUrlParser,
     });
 
     const app = express();
@@ -97,7 +109,8 @@ describe('POST /api/auto-removal/dry-run', () => {
     const router = createVideoRoutes({
       verifyToken: (req, res, next) => next(),
       videosModule: {},
-      downloadModule: {}
+      downloadModule: {},
+      youtubeUrlParser,
     });
     const app = express();
     app.use(router);
@@ -211,6 +224,7 @@ describe('POST /api/bulkEnrichVideos', () => {
       videosModule: {},
       downloadModule: {},
       videoOembedEnricher: enricherStub,
+      youtubeUrlParser,
     });
     const app = express();
     app.use(express.json());
@@ -285,7 +299,8 @@ describe('PATCH /api/videos/:id/protected', () => {
     const router = createVideoRoutes({
       verifyToken: (req, res, next) => next(),
       videosModule: videosModuleMock,
-      downloadModule: {}
+      downloadModule: {},
+      youtubeUrlParser,
     });
 
     const app = express();
@@ -443,6 +458,7 @@ describe('POST /triggerchanneldownloads', () => {
       videosModule: {},
       downloadModule: {},
       scheduledTaskManager: scheduledTaskManagerMock,
+      youtubeUrlParser,
     });
     const app = express();
     app.use(express.json());
