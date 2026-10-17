@@ -6,6 +6,7 @@ const { Playlist, PlaylistVideo, Channel, Video, Job, JobVideo } = require('../m
 const youtubeApi = require('./youtubeApi');
 const { MAX_PLAYLIST_VIDEOS } = require('./playlistConstants');
 const storageGuard = require('./storageGuard');
+const { redactSensitiveText } = require('./safeCommandLogging');
 
 // yt-dlp's flat-playlist listing still returns private/deleted/members-only
 // videos but strips their metadata: the title comes back null (current yt-dlp)
@@ -78,13 +79,13 @@ class PlaylistModule {
           if (/confirm you.re not a bot|sign in|cookies/i.test(stderr)) {
             return reject(new Error('COOKIES_REQUIRED'));
           }
-          logger.error({ stderr, code }, 'getPlaylistInfo failed');
+          logger.error({ stderr: redactSensitiveText(stderr), code }, 'getPlaylistInfo failed');
           return reject(new Error('NETWORK_ERROR'));
         }
         try {
           resolve(JSON.parse(stdout));
         } catch (err) {
-          logger.error({ err, stdout }, 'getPlaylistInfo parse error');
+          logger.error({ error: redactSensitiveText(err?.message) }, 'getPlaylistInfo parse error');
           reject(new Error('PARSE_ERROR'));
         }
       });
@@ -492,7 +493,10 @@ class PlaylistModule {
       child.stderr.on('data', (d) => { stderr += d.toString(); });
       child.on('close', (code) => {
         if (code !== 0) {
-          logger.error({ stderr, code }, '_spawnFlatPlaylist failed');
+          logger.error({
+            stderr: redactSensitiveText(stderr),
+            code,
+          }, '_spawnFlatPlaylist failed');
           return reject(new Error('NETWORK_ERROR'));
         }
         try {

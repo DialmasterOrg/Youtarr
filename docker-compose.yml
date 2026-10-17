@@ -67,6 +67,8 @@ services:
       DB_NAME: ${DB_NAME:-youtarr}
       # Optional: Disable authentication (for platforms with external auth like Elfhosted)
       AUTH_ENABLED: ${AUTH_ENABLED:-}
+      # Optional: Enable the separately authenticated versioned external API
+      EXTERNAL_API_ENABLED: ${EXTERNAL_API_ENABLED:-false}
       # Optional: Seed initial admin credentials for headless deployments
       AUTH_PRESET_USERNAME: ${AUTH_PRESET_USERNAME:-}
       AUTH_PRESET_PASSWORD: ${AUTH_PRESET_PASSWORD:-}

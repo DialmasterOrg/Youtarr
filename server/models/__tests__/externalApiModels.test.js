@@ -15,9 +15,12 @@ describe('external API persistence models', () => {
     expect(ExternalRequest.options.indexes.map((index) => index.name)).toEqual(expect.arrayContaining([
       'external_requests_key_created_idx', 'external_requests_key_status_idx',
     ]));
-    expect(ExternalRequest.options.indexes.map((index) => index.name)).not.toEqual(expect.arrayContaining([
-      'external_requests_catalog_status_idx', 'external_requests_management_idx',
-    ]));
+    const runtimeIndexes = require('../../../migrations/20261007041058-add-external-api-runtime-indexes').INDEXES;
+    for (const index of runtimeIndexes) {
+      expect(ExternalRequest.options.indexes).toContainEqual(expect.objectContaining({
+        name: index.name, fields: index.fields,
+      }));
+    }
   });
 
   test('register associations for grants, requests, jobs, and quota buckets', () => {

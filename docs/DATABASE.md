@@ -45,7 +45,7 @@ Youtarr uses MariaDB/MySQL for storing:
 
 ### External API Policy Foundation
 
-The external API policy fields and supporting tables are dormant until the runtime/control plane is enabled. Existing keys retain their single-video download behavior and are backfilled with the `legacy_download` role. API-key values remain hashed and cannot be recovered from the database. Revocation is represented by `revoked_at` together with the key's active status.
+The external API policy fields and supporting tables are enforced when `EXTERNAL_API_ENABLED=true`; the runtime is disabled by default. Existing keys retain their single-video download behavior and are backfilled with the `legacy_download` role. API-key values remain hashed and cannot be recovered from the database. Revocation is represented by `revoked_at` together with the key's active status. The runtime adds two request-history indexes for catalog status and administrator queue queries; see [External API query plans](EXTERNAL_API.md#database-integration-and-query-plans) for measured plans and rollback behavior.
 
 ## Internal Database (Default)
 
