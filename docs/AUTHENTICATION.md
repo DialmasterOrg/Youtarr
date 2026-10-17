@@ -136,7 +136,7 @@ API Keys provide persistent authentication for external integrations like bookma
 
 ### Creating API Keys
 
-1. Navigate to **Settings -> API Keys** in the web UI
+1. Navigate to **Settings -> API Keys & Bookmarklet** in the web UI
 2. Click **Create Key**
 3. Enter a descriptive name (e.g., "iPhone Shortcut", "Bookmarklet")
 4. **Important**: Copy and save the key immediately - it will not be shown again!
@@ -162,7 +162,7 @@ curl -X POST https://your-server.com/api/videos/download \
 ### API Key Management
 
 #### Via Web UI
-- View all keys in Settings -> API Keys
+- View all keys in Settings -> API Keys & Bookmarklet
 - Delete keys by clicking the trash icon
 - See last usage time for each key
 
