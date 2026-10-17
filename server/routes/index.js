@@ -32,6 +32,7 @@ const playlistVideoFilters = require('../modules/playlistVideoFilters');
 const playlistDownloadModule = require('../modules/playlistDownloadModule');
 const models = require('../models');
 const videoLocalStatus = require('../modules/videoLocalStatus');
+const youtubeUrlParser = require('../modules/youtubeUrlParser');
 const videoActivity = require('../modules/download/videoActivity');
 const scheduledTaskManager = require('../modules/scheduledTaskManager');
 const scheduledTaskRuns = require('../modules/scheduledTaskRuns');
@@ -99,6 +100,7 @@ function registerRoutes(app, deps) {
   // Video routes
   app.use(createVideoRoutes({
     verifyToken, videosModule, downloadModule, videoOembedEnricher, videoLocalStatus, storageGuard, scheduledTaskManager, ratingMapper,
+    youtubeUrlParser,
   }));
 
   // Video search routes
