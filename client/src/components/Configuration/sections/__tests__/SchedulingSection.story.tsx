@@ -62,7 +62,7 @@ const meta: Meta<typeof SchedulingSection> = {
     config: DEFAULT_CONFIG,
     savedConfig: DEFAULT_CONFIG,
     deploymentEnvironment: { timezone: 'Europe/Paris', isWsl: false },
-    isPlatformManaged: { plexUrl: false, authEnabled: true, useTmpForDownloads: false, ytdlpUpdates: false },
+    isPlatformManaged: { plexUrl: false, authEnabled: true, useTmpForDownloads: false, ytdlpUpdates: false, externalApiEnabled: false },
     fieldErrors: {},
     token: 'story-token',
   },

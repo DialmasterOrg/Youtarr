@@ -51,12 +51,14 @@ const createMockResponse = () => {
 
 const createServerModule = ({
   authEnabled = 'true',
+  externalApiEnabled,
   passwordHash = 'hashed-password',
   session,
   skipInitialize = false,
   configOverrides = {},
   channelVideoMock = null,
-  archiveModuleMock = null
+  archiveModuleMock = null,
+  videoDeletionModuleMock = null
 } = {}) => {
   jest.resetModules();
   jest.clearAllMocks();
@@ -71,6 +73,11 @@ const createServerModule = ({
           delete process.env.AUTH_ENABLED;
         } else {
           process.env.AUTH_ENABLED = authEnabled;
+        }
+        if (externalApiEnabled === undefined) {
+          delete process.env.EXTERNAL_API_ENABLED;
+        } else {
+          process.env.EXTERNAL_API_ENABLED = externalApiEnabled;
         }
 
         const defaultSessionUpdate = jest.fn().mockResolvedValue();
@@ -265,7 +272,7 @@ const createServerModule = ({
           register: jest.fn().mockResolvedValue(undefined),
           delete: jest.fn().mockResolvedValue(undefined),
         }));
-        jest.doMock('../modules/videoDeletionModule', () => ({
+        jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock || ({
           deleteVideos: jest.fn().mockResolvedValue({ deleted: [], failed: [] }),
           deleteVideosByYoutubeIds: jest.fn().mockResolvedValue({ deleted: [], failed: [] })
         }));
@@ -354,6 +361,11 @@ const createServerModule = ({
         jest.doMock('fs', () => ({ readFileSync: jest.fn(() => '') }));
         jest.doMock('child_process', () => childProcessMock);
         jest.doMock('pino-http', () => pinoHttpMock);
+        jest.doMock('swagger-jsdoc', () => jest.fn(() => ({
+          openapi: '3.0.0',
+          paths: {},
+          components: { schemas: {} },
+        })));
 
         const setupTokenModuleMock = {
           setTokenPath: jest.fn(),
@@ -402,6 +414,7 @@ const createServerModule = ({
 
 afterEach(() => {
   delete process.env.AUTH_ENABLED;
+  delete process.env.EXTERNAL_API_ENABLED;
 });
 
 describe('server routes - plex integration', () => {
@@ -712,8 +725,6 @@ describe('server routes - validateToken', () => {
 
 describe('server routes - auto-removal dry run', () => {
   test('performs dry run with boolean autoRemovalEnabled', async () => {
-    const { app } = await createServerModule();
-
     const videoDeletionModuleMock = {
       performAutomaticCleanup: jest.fn().mockResolvedValue({
         success: true,
@@ -731,7 +742,7 @@ describe('server routes - auto-removal dry run', () => {
       })
     };
 
-    jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
+    const { app } = await createServerModule({ videoDeletionModuleMock });
 
     const handlers = findRouteHandlers(app, 'post', '/api/auto-removal/dry-run');
     const dryRunHandler = handlers[handlers.length - 1];
@@ -761,8 +772,6 @@ describe('server routes - auto-removal dry run', () => {
   });
 
   test('performs dry run with string "true" autoRemovalEnabled', async () => {
-    const { app } = await createServerModule();
-
     const videoDeletionModuleMock = {
       performAutomaticCleanup: jest.fn().mockResolvedValue({
         success: true,
@@ -772,7 +781,7 @@ describe('server routes - auto-removal dry run', () => {
       })
     };
 
-    jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
+    const { app } = await createServerModule({ videoDeletionModuleMock });
 
     const handlers = findRouteHandlers(app, 'post', '/api/auto-removal/dry-run');
     const dryRunHandler = handlers[handlers.length - 1];
@@ -796,8 +805,6 @@ describe('server routes - auto-removal dry run', () => {
   });
 
   test('performs dry run with string "false" autoRemovalEnabled', async () => {
-    const { app } = await createServerModule();
-
     const videoDeletionModuleMock = {
       performAutomaticCleanup: jest.fn().mockResolvedValue({
         success: true,
@@ -807,7 +814,7 @@ describe('server routes - auto-removal dry run', () => {
       })
     };
 
-    jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
+    const { app } = await createServerModule({ videoDeletionModuleMock });
 
     const handlers = findRouteHandlers(app, 'post', '/api/auto-removal/dry-run');
     const dryRunHandler = handlers[handlers.length - 1];
@@ -831,8 +838,6 @@ describe('server routes - auto-removal dry run', () => {
   });
 
   test('performs dry run with numeric autoRemovalEnabled (truthy)', async () => {
-    const { app } = await createServerModule();
-
     const videoDeletionModuleMock = {
       performAutomaticCleanup: jest.fn().mockResolvedValue({
         success: true,
@@ -842,7 +847,7 @@ describe('server routes - auto-removal dry run', () => {
       })
     };
 
-    jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
+    const { app } = await createServerModule({ videoDeletionModuleMock });
 
     const handlers = findRouteHandlers(app, 'post', '/api/auto-removal/dry-run');
     const dryRunHandler = handlers[handlers.length - 1];
@@ -866,8 +871,6 @@ describe('server routes - auto-removal dry run', () => {
   });
 
   test('performs dry run with only threshold values', async () => {
-    const { app } = await createServerModule();
-
     const videoDeletionModuleMock = {
       performAutomaticCleanup: jest.fn().mockResolvedValue({
         success: true,
@@ -877,7 +880,7 @@ describe('server routes - auto-removal dry run', () => {
       })
     };
 
-    jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
+    const { app } = await createServerModule({ videoDeletionModuleMock });
 
     const handlers = findRouteHandlers(app, 'post', '/api/auto-removal/dry-run');
     const dryRunHandler = handlers[handlers.length - 1];
@@ -903,8 +906,6 @@ describe('server routes - auto-removal dry run', () => {
   });
 
   test('performs dry run with empty body', async () => {
-    const { app } = await createServerModule();
-
     const videoDeletionModuleMock = {
       performAutomaticCleanup: jest.fn().mockResolvedValue({
         success: true,
@@ -914,7 +915,7 @@ describe('server routes - auto-removal dry run', () => {
       })
     };
 
-    jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
+    const { app } = await createServerModule({ videoDeletionModuleMock });
 
     const handlers = findRouteHandlers(app, 'post', '/api/auto-removal/dry-run');
     const dryRunHandler = handlers[handlers.length - 1];
@@ -934,13 +935,11 @@ describe('server routes - auto-removal dry run', () => {
   });
 
   test('handles error during dry run', async () => {
-    const { app } = await createServerModule();
-
     const videoDeletionModuleMock = {
       performAutomaticCleanup: jest.fn().mockRejectedValue(new Error('Cleanup failed'))
     };
 
-    jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
+    const { app } = await createServerModule({ videoDeletionModuleMock });
 
     const handlers = findRouteHandlers(app, 'post', '/api/auto-removal/dry-run');
     const dryRunHandler = handlers[handlers.length - 1];
@@ -1451,5 +1450,28 @@ describe('server routes - getplexlibraries with test params', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual([]);
+  });
+});
+
+
+describe('external API capability consistency', () => {
+  test.each([
+    ['true', true],
+    [' true ', true],
+    ['TRUE', true],
+    ['false', false],
+    [undefined, false],
+  ])('keeps the route gate and /getconfig aligned for EXTERNAL_API_ENABLED=%s', async (externalApiEnabled, expected) => {
+    const { app } = await createServerModule({ externalApiEnabled });
+    const handlers = findRouteHandlers(app, 'get', '/getconfig');
+    const getConfigHandler = handlers[handlers.length - 1];
+    const req = createMockRequest({});
+    const res = createMockResponse();
+
+    await getConfigHandler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.isPlatformManaged.externalApiEnabled).toBe(expected);
+    expect(require('../modules/externalApiConfig').isExternalApiEnabled()).toBe(expected);
   });
 });

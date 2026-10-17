@@ -25,6 +25,8 @@ ExternalRequest.init({
     { unique: true, fields: ['api_key_id', 'idempotency_hash'], name: 'external_requests_key_idempotency_uq' },
     { fields: ['api_key_id', 'created_at'], name: 'external_requests_key_created_idx' },
     { fields: ['api_key_id', 'status'], name: 'external_requests_key_status_idx' },
+    { fields: ['api_key_id', 'request_type', 'youtube_id', 'created_at', 'id', 'status'], name: 'external_requests_catalog_status_idx' },
+    { fields: ['request_type', 'status', 'created_at', 'id'], name: 'external_requests_management_idx' },
   ] });
 ExternalRequest.REQUEST_STATUSES = REQUEST_STATUSES;
 module.exports = ExternalRequest;

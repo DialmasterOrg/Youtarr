@@ -7,7 +7,37 @@ import * as subtitleLanguageStories from '../components/Configuration/__tests__/
 import * as appShellStories from '../components/layout/__tests__/AppShell.story';
 import * as navHeaderStories from '../components/layout/__tests__/NavHeader.story';
 
+jest.mock('msw', () => ({
+  http: {
+    get: () => ({}),
+    post: () => ({}),
+  },
+  HttpResponse: {
+    json: (body, init = {}) => ({ body, ...init }),
+  },
+}));
+
+const externalRequestStories = require('../components/ExternalRequests/RequestsPage.stories');
+
 describe('storybook parity coverage', () => {
+
+  describe('external request Storybook coverage', () => {
+    test('keeps lifecycle and failure stories interactive with a11y checks enabled', () => {
+      const requiredStories = [
+        'LifecycleStates',
+        'QueueErrorRetry',
+        'StaleDetail',
+        'ThumbnailFailure',
+        'ApprovalActionError',
+      ];
+      requiredStories.forEach((storyName) => {
+        expect(externalRequestStories[storyName]).toBeDefined();
+        expect(typeof externalRequestStories[storyName].play).toBe('function');
+      });
+      expect(externalRequestStories.default.parameters?.a11y?.disable).not.toBe(true);
+    });
+  });
+
   test('VideoListItem Selectable story preserves selection behavior parity', async () => {
     const { args } = await runStoryWithPlay(videoListItemStories, 'Selectable');
 

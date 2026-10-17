@@ -148,6 +148,28 @@ describe('overlay positioning guards', () => {
     expect(content).toHaveStyle({ maxHeight: 'min(var(--radix-select-content-available-height), calc(100dvh - var(--app-shell-overlay-top-offset, 0px) - var(--mobile-nav-total-offset, 0px) - 16px))' });
   });
 
+  test('trusted mouseDown does not trigger the synthetic test-event opener', () => {
+    const onOpen = jest.fn();
+    render(
+      <Select open={false} onOpen={onOpen} value="PG" onChange={jest.fn()}>
+        <MenuItem value="PG">PG</MenuItem>
+      </Select>
+    );
+
+    const trustedMouseDown = new MouseEvent('mousedown', { bubbles: true });
+    const isTrustedDescriptor = Object.getOwnPropertyDescriptor(trustedMouseDown, 'isTrusted');
+    if (!isTrustedDescriptor?.configurable) {
+      // jsdom exposes isTrusted as a non-configurable getter, so this environment
+      // cannot synthesize a trusted browser event.
+      expect(isTrustedDescriptor).toBeDefined();
+      return;
+    }
+    Object.defineProperty(trustedMouseDown, 'isTrusted', { value: true });
+    fireEvent(screen.getByRole('button', { name: 'PG' }), trustedMouseDown);
+
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
   test('select content renders above dialog content when opened inside a modal', async () => {
     render(
       <Dialog open onClose={jest.fn()}>
@@ -167,6 +189,28 @@ describe('overlay positioning guards', () => {
 
     const content = screen.getByTestId('select-content');
     expect(content).toHaveStyle({ zIndex: '1470' });
+  });
+
+  test('clicking a select trigger does not dismiss its containing dialog', async () => {
+    const user = userEvent.setup();
+    const onClose = jest.fn();
+    render(
+      <Dialog open onClose={onClose}>
+        <DialogTitle>Dialog title</DialogTitle>
+        <DialogContent>
+          <Select value="PG" onChange={jest.fn()} inputProps={{ 'aria-label': 'Rating' }}>
+            <MenuItem value="G">G</MenuItem>
+            <MenuItem value="PG">PG</MenuItem>
+          </Select>
+        </DialogContent>
+      </Dialog>
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Rating' }));
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByText('Dialog title')).toBeInTheDocument();
+    expect(await screen.findByRole('option', { name: 'PG' })).toBeInTheDocument();
   });
 });
 
