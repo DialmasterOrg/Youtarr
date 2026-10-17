@@ -19,7 +19,7 @@ These settings can be changed from the Settings pages in the web UI.
 - [Advanced Settings](#advanced-settings)
 - [Auto-Removal Settings](#auto-removal-settings)
 - [Storage Limits (Download Pause)](#storage-limits-download-pause)
-- [API Keys & External Access](#api-keys--external-access)
+- [API Keys & Bookmarklet](#api-keys--bookmarklet)
 - [yt-dlp Auto-Update](#yt-dlp-auto-update)
 - [Filesystem Rescan](#filesystem-rescan)
 - [Logging](#logging)
@@ -904,9 +904,9 @@ When combining these with Auto Removal, set the pause usage limit at or above `a
 - **Examples**: `"1GB"`, `"50GB"`, `"1TB"` (the UI offers 1 GB, 5 GB, 10 GB, 50 GB, 100 GB, 250 GB, 500 GB, and 1 TB)
 - **Note**: Uses the same `df`-based measurement as the storage indicator. Some mounts (network shares, overlays, bind mounts) report free space incorrectly; use `downloadPauseUsageLimit` instead on those.
 
-## API Keys & External Access
+## API Keys & Bookmarklet
 
-Settings for API key authentication used by bookmarklets, mobile shortcuts, and automation tools.
+Settings for API key authentication used by the "Send to Youtarr" bookmarklet, mobile shortcuts, and automation tools. The rate limit field is on Settings -> API Keys & Bookmarklet, below the key list.
 
 ### API Key Rate Limit
 - **Config Key**: `apiKeyRateLimit`
