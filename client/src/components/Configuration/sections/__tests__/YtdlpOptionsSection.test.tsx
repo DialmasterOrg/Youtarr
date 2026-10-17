@@ -10,7 +10,7 @@ const axios = require('axios');
 import { YtdlpOptionsSection } from '../YtdlpOptionsSection';
 import { renderWithProviders } from '../../../../test-utils';
 import { DEFAULT_CONFIG } from '../../../../config/configSchema';
-import { ConfigState } from '../../types';
+import { ConfigState, CustomArgsCheck } from '../../types';
 
 const createConfig = (overrides: Partial<ConfigState> = {}): ConfigState => ({
   ...DEFAULT_CONFIG,
@@ -20,9 +20,10 @@ const createConfig = (overrides: Partial<ConfigState> = {}): ConfigState => ({
 interface SetupOpts {
   initialConfig?: Partial<ConfigState>;
   token?: string | null;
+  savedCustomArgsCheck?: CustomArgsCheck | null;
 }
 
-const setup = ({ initialConfig = {}, token = 'tok' }: SetupOpts = {}) => {
+const setup = ({ initialConfig = {}, token = 'tok', savedCustomArgsCheck = null }: SetupOpts = {}) => {
   const user = userEvent.setup();
   const onConfigChange = jest.fn();
 
@@ -38,6 +39,7 @@ const setup = ({ initialConfig = {}, token = 'tok' }: SetupOpts = {}) => {
         onConfigChange={handleConfigChange}
         onMobileTooltipClick={jest.fn()}
         token={token}
+        savedCustomArgsCheck={savedCustomArgsCheck}
       />
     );
   };
@@ -65,11 +67,108 @@ describe('YtdlpOptionsSection', () => {
     expect(screen.getByText(/ipv4 is recommended/i)).toBeInTheDocument();
   });
 
-  test('typing a denylisted flag in custom args shows inline error', async () => {
+  test('typing a flag no longer shows an inline block error (the server decides)', async () => {
     const { user } = setup();
     const textarea = screen.getByLabelText(/custom yt-dlp arguments/i);
     await user.type(textarea, '--exec foo');
-    expect(await screen.findByText(/--exec is not allowed/i)).toBeInTheDocument();
+    expect(screen.queryByText(/not allowed/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /validate arguments/i })).not.toBeDisabled();
+  });
+
+  test('renders a blocked notice for saved args the server rejected', () => {
+    setup({
+      initialConfig: { ytdlpCustomArgs: '--no-mtime --exec rm' },
+      savedCustomArgsCheck: {
+        blocked: [{ given: '--exec', option: '--exec', reason: 'can run programs or load code on the server' }],
+        warnings: [],
+        errors: [],
+      },
+    });
+    expect(screen.getByText(/not allowed and are being skipped/i)).toBeInTheDocument();
+    expect(screen.getByText(/can run programs or load code/i)).toBeInTheDocument();
+    expect(screen.getByText(/rest of your options still apply/i)).toBeInTheDocument();
+  });
+
+  test('renders a notice for saved args that could not be read', () => {
+    setup({
+      initialConfig: { ytdlpCustomArgs: '--no-mtime --format' },
+      savedCustomArgsCheck: {
+        blocked: [],
+        warnings: [],
+        errors: ['--format needs a value but none was given.'],
+      },
+    });
+    expect(screen.getByText(/could not be read and are being skipped/i)).toBeInTheDocument();
+    expect(screen.getByText(/--format needs a value/i)).toBeInTheDocument();
+  });
+
+  test('renders a warning notice for saved args that may break downloads', () => {
+    setup({
+      initialConfig: { ytdlpCustomArgs: '--extract-audio' },
+      savedCustomArgsCheck: {
+        blocked: [],
+        warnings: [{ given: '--extract-audio', option: '--extract-audio', reason: 'this turns every video download into an audio-only file' }],
+        errors: [],
+      },
+    });
+    expect(screen.getByText(/may cause problems/i)).toBeInTheDocument();
+    expect(screen.getByText(/audio-only file/i)).toBeInTheDocument();
+  });
+
+  test('Validate shows a blocked alert when the server returns 400 with customArgsCheck', async () => {
+    axios.post.mockRejectedValueOnce({
+      response: {
+        status: 400,
+        data: {
+          error: 'Custom yt-dlp options are not valid: --exec (can run programs or load code on the server)',
+          customArgsCheck: {
+            blocked: [{ given: '--exec', option: '--exec', reason: 'can run programs or load code on the server' }],
+            warnings: [],
+            errors: [],
+          },
+        },
+      },
+    });
+    const { user } = setup({ initialConfig: { ytdlpCustomArgs: '--exec rm' } });
+    await user.click(screen.getByRole('button', { name: /validate arguments/i }));
+    expect(await screen.findByText(/these options are not allowed/i)).toBeInTheDocument();
+    expect(screen.getByText(/can run programs or load code/i)).toBeInTheDocument();
+  });
+
+  test('Validate shows both blocked options and parse errors when the server returns both', async () => {
+    axios.post.mockRejectedValueOnce({
+      response: {
+        status: 400,
+        data: {
+          error: 'Custom yt-dlp options are not valid: "stray" looks like a positional argument. Not allowed: --exec (can run programs).',
+          customArgsCheck: {
+            blocked: [{ given: '--exec', option: '--exec', reason: 'can run programs or load code on the server' }],
+            warnings: [],
+            errors: ['"stray" looks like a positional argument.'],
+          },
+        },
+      },
+    });
+    const { user } = setup({ initialConfig: { ytdlpCustomArgs: '--exec rm' } });
+    await user.click(screen.getByRole('button', { name: /validate arguments/i }));
+    expect(await screen.findByText(/these options could not be read/i)).toBeInTheDocument();
+    expect(screen.getByText('"stray" looks like a positional argument.')).toBeInTheDocument();
+    expect(screen.getByText(/these options are not allowed/i)).toBeInTheDocument();
+    expect(screen.queryByText(/yt-dlp rejected the arguments/i)).not.toBeInTheDocument();
+  });
+
+  test('Validate shows a warning alert when the server accepts but flags a risky option', async () => {
+    axios.post.mockResolvedValueOnce({
+      data: {
+        ok: true,
+        message: 'Arguments parsed successfully',
+        warnings: [{ given: '--extract-audio', option: '--extract-audio', reason: 'this turns every video download into an audio-only file' }],
+      },
+    });
+    const { user } = setup({ initialConfig: { ytdlpCustomArgs: '--extract-audio' } });
+    await user.click(screen.getByRole('button', { name: /validate arguments/i }));
+    expect(await screen.findByText(/may cause problems/i)).toBeInTheDocument();
+    expect(screen.getByText(/audio-only file/i)).toBeInTheDocument();
   });
 
   test('typing a positional token in custom args shows inline error and disables validation', async () => {

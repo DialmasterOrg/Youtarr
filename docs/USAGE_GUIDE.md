@@ -25,6 +25,8 @@ This guide provides step-by-step instructions for common tasks in Youtarr. After
 
 Download specific YouTube videos manually without subscribing to channels.
 
+To queue videos while you browse YouTube instead, set up the **Send to Youtarr** bookmarklet or a phone shortcut. A tip on the Manual Download page links to its setup page; see [External Access with API Keys](#external-access-with-api-keys).
+
 Video listings and the video preview show **Queued…** while a known video is waiting and **Downloading…** while it is being prepared, transferred, or post-processed. Busy videos cannot be selected for another download. Status updates automatically across tabs, including when an individual video finishes within a larger batch.
 
 Scheduled channel sweeps discover videos as they run, so per-video activity appears once yt-dlp identifies the video. Explicit selections, playlist downloads, and channel **Download all** can show their known queued videos immediately.
@@ -659,8 +661,8 @@ Send videos to Youtarr from anywhere using API keys. This enables one-click down
 
 ### Create an API Key
 
-1. **Open Settings -> API Keys**
-   - Click "Settings" in the navigation menu, then open the **API Keys** page
+1. **Open Settings -> API Keys & Bookmarklet**
+   - Click "Settings" in the navigation menu, then open the **API Keys & Bookmarklet** page
 
 2. **Create a new key**
    - Click "Create Key"
@@ -678,6 +680,7 @@ After creating an API key, you can set up a bookmarklet to send videos with one 
 1. **Get the bookmarklet**
    - In the key creation dialog, drag the "📥 Send to Youtarr" button to your bookmarks bar
    - Or copy the bookmarklet code and create a bookmark manually
+   - The button is only shown in that dialog. If you close it before saving the button, create another key to get a new one
 
 2. **Use the bookmarklet**
    - Navigate to any YouTube video page
@@ -701,7 +704,7 @@ For detailed setup instructions and code examples, see the [API Integration Guid
 
 ### Manage Your API Keys
 
-- **View keys**: Settings -> API Keys shows all your keys
+- **View keys**: Settings -> API Keys & Bookmarklet shows all your keys
 - **Monitor usage**: Check "Last Used" and "Uses" columns to track activity
 - **Delete keys**: Click the trash icon to revoke a key instantly
 - **Rate limiting**: Adjust requests per minute to prevent abuse

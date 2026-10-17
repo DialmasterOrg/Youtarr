@@ -73,14 +73,32 @@ describe('ApiKeysSection Component', () => {
     test('renders with ConfigurationAccordion wrapper', async () => {
       const props = createSectionProps();
       renderWithProviders(<ApiKeysSection {...props} />);
-      expect(screen.getByText(/API Keys & External Access/i)).toBeInTheDocument();
+      expect(screen.getByText(/API Keys & Bookmarklet/i)).toBeInTheDocument();
     });
 
     test('accordion is collapsed by default', () => {
       const props = createSectionProps();
       renderWithProviders(<ApiKeysSection {...props} />);
 
-      expect(screen.getByRole('heading', { name: /API Keys & External Access/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /API Keys & Bookmarklet/i })).toBeInTheDocument();
+    });
+
+    test('first setup step includes the Create click that opens the button window', async () => {
+      renderWithProviders(<ApiKeysSection {...createSectionProps()} />);
+
+      expect(await screen.findByText(/give it a name like "Laptop browser", and click/i)).toBeInTheDocument();
+    });
+
+    test('explains that creating a key opens the Send to Youtarr button', async () => {
+      renderWithProviders(<ApiKeysSection {...createSectionProps()} />);
+
+      expect(await screen.findByText(/In the window that opens, drag the/i)).toBeInTheDocument();
+    });
+
+    test('warns that the Send to Youtarr button is only shown once', async () => {
+      renderWithProviders(<ApiKeysSection {...createSectionProps()} />);
+
+      expect(await screen.findByText(/The button is only shown once/i)).toBeInTheDocument();
     });
 
     test('shows loading skeleton initially', () => {
@@ -164,7 +182,7 @@ describe('ApiKeysSection Component', () => {
 
 
       await waitFor(() => {
-        expect(screen.getByText(/No API keys created yet/i)).toBeInTheDocument();
+        expect(screen.getByText(/No API keys yet. Create one to get your Send to Youtarr button/i)).toBeInTheDocument();
       });
     });
 
@@ -288,6 +306,15 @@ describe('ApiKeysSection Component', () => {
       expect(screen.getByLabelText(/Key Name/i)).toBeInTheDocument();
     });
 
+    test('create dialog says the Send to Youtarr button comes next', async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<ApiKeysSection {...createSectionProps()} />);
+
+      await user.click(await screen.findByRole('button', { name: /Create Key/i }));
+
+      expect(screen.getByText(/Next you'll get your key, the Send to Youtarr button/i)).toBeInTheDocument();
+    });
+
     test('Create button is disabled when name is empty', async () => {
       const user = userEvent.setup();
       mockFetch.mockResolvedValue({
@@ -383,7 +410,8 @@ describe('ApiKeysSection Component', () => {
       await user.click(screen.getByRole('button', { name: /^Create$/i }));
 
       expect(await screen.findByText(/Add to Bookmarks/i)).toBeInTheDocument();
-      expect(screen.getByText(/Send to Youtarr/i)).toBeInTheDocument();
+      const createdDialog = screen.getByRole('dialog', { name: /API Key Created/i });
+      expect(within(createdDialog).getByText(/Send to Youtarr/i)).toBeInTheDocument();
       expect(screen.getByText(/Mobile \/ Shortcuts/i)).toBeInTheDocument();
     });
 
@@ -564,7 +592,7 @@ describe('ApiKeysSection Component', () => {
 
 
       await waitFor(() => {
-        expect(screen.getByText(/No API keys created yet/i)).toBeInTheDocument();
+        expect(screen.getByText(/No API keys yet. Create one to get your Send to Youtarr button/i)).toBeInTheDocument();
       });
 
       // Should not show HTTP warning on localhost (default in jsdom)
@@ -636,7 +664,7 @@ describe('ApiKeysSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<ApiKeysSection {...props} />);
 
-      expect(screen.getByRole('heading', { name: /API Keys & External Access/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /API Keys & Bookmarklet/i })).toBeInTheDocument();
     });
 
     test('Create Key button is accessible', async () => {

@@ -785,6 +785,65 @@ describe('videoDownloadPostProcessFiles', () => {
       );
     });
 
+    describe('subtitle pruning before the move', () => {
+      const tempJsonPath = '/tmp/youtarr-downloads/Channel/Video Title [abc123].info.json';
+      const uploadedSrt = 'Video Title [abc123].en-GB.srt';
+      const autoSrt = 'Video Title [abc123].en.srt';
+
+      function setupTempDownloadWithSubtitles({ subtitlesEnabled, ytdlpCustomArgs = '' }) {
+        process.argv = ['node', 'script', tempVideoPath];
+        tempPathManager.isEnabled.mockReturnValue(true);
+        tempPathManager.isTempPath.mockReturnValue(true);
+        tempPathManager.convertTempToFinal.mockImplementation((path) => path.replace('/tmp/youtarr-downloads', '/library'));
+        fs.existsSync.mockImplementation((path) => path === tempJsonPath || path === finalVideoPath);
+        fs.readFileSync.mockReturnValue(JSON.stringify({
+          id: 'abc123',
+          upload_date: '20240131',
+          title: 'Video Title',
+          uploader: 'Channel',
+          channel_id: 'channel123',
+          subtitles: { 'en-GB': [{ ext: 'vtt' }] }
+        }));
+        fs.readdir.mockResolvedValue(['Video Title [abc123].mp4', uploadedSrt, autoSrt]);
+        configModule.__setConfig({
+          writeChannelPosters: false,
+          writeVideoNfoFiles: true,
+          ffmpegPath: '/usr/bin/ffmpeg',
+          subtitlesEnabled,
+          subtitleLanguage: 'en',
+          ytdlpCustomArgs
+        });
+      }
+
+      it('removes the auto-generated track when an uploaded track of the same language was written', async () => {
+        setupTempDownloadWithSubtitles({ subtitlesEnabled: true });
+
+        await loadModule();
+        await settleAsync();
+
+        expect(fs.remove).toHaveBeenCalledWith(`${tempVideoDir}/${autoSrt}`);
+        expect(fs.remove).not.toHaveBeenCalledWith(`${tempVideoDir}/${uploadedSrt}`);
+      });
+
+      it('leaves every subtitle file alone when custom yt-dlp args choose the subtitle languages', async () => {
+        setupTempDownloadWithSubtitles({ subtitlesEnabled: true, ytdlpCustomArgs: '--sub-langs en,en-orig' });
+
+        await loadModule();
+        await settleAsync();
+
+        expect(fs.remove).not.toHaveBeenCalledWith(expect.stringMatching(/\.srt$/));
+      });
+
+      it('leaves every subtitle file alone when subtitles are disabled', async () => {
+        setupTempDownloadWithSubtitles({ subtitlesEnabled: false });
+
+        await loadModule();
+        await settleAsync();
+
+        expect(fs.remove).not.toHaveBeenCalledWith(expect.stringMatching(/\.srt$/));
+      });
+    });
+
     it('successfully moves files from temp to final location', async () => {
       process.argv = ['node', 'script', tempVideoPath];
 

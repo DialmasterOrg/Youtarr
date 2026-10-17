@@ -837,7 +837,7 @@ A channel video that failed this way is retried by each scheduled download for a
 **Cause**: Youtarr delivers all real-time updates over a WebSocket connection that shares the same host and port as the web UI. Regular page loads and downloads use plain HTTP, so everything else works - but if something between your browser and Youtarr (most commonly a reverse proxy) doesn't forward WebSocket upgrade requests, the progress display never gets live updates.
 
 **How to confirm**:
-1. Open your browser devtools (F12) -> **Network** tab -> filter by "WS", then reload the Youtarr page. A working setup shows a WebSocket connection with status `101 Switching Protocols`. If it fails or keeps retrying, the WebSocket is being blocked.
+1. Open your browser devtools (F12) -> **Network** tab -> filter by "WS", then reload the Youtarr page. A working setup shows a WebSocket connection with status `101 Switching Protocols`. A `401` status means the connection reached Youtarr but was refused because the page has no valid login: reload the page (a tab left open across an upgrade still runs the old page) or log in again. If it fails in any other way or keeps retrying, the WebSocket is being blocked.
 2. While a download is running, watch the Activity page. It seeds its state over plain HTTP, so it will show the running job and catch up whenever you refresh or refocus the tab - but live progress between refreshes only arrives over the WebSocket. If the page stays frozen until you refresh, the WebSocket is the problem.
 
 **Solution**: Enable WebSocket support for the Youtarr host in your reverse proxy:

@@ -8,7 +8,7 @@ export const SETTINGS_PAGES = [
   { key: 'scheduling', title: 'Scheduling', description: 'Choose when automatic downloads and maintenance tasks run.' },
   { key: 'core', title: 'Core', description: 'Downloads folder, quality, defaults, and core behavior.' },
   { key: 'downloading', title: 'YT-DLP', description: 'yt-dlp backend settings for downloads and reliability.' },
-  { key: 'api-keys', title: 'API Keys', description: 'API key settings and rate limits.' },
+  { key: 'api-keys', title: 'API Keys & Bookmarklet', description: 'One-click "Send to Youtarr" bookmarklet and phone shortcuts.' },
   { key: 'appearance', title: 'Appearance', description: 'Theme, animations, and visual preferences.' },
   { key: 'autoremove', title: 'Auto Removal', description: 'Automated cleanup and retention policies.' },
   { key: 'storage-limits', title: 'Storage Limits', description: 'Pause downloads when storage is full or over a size limit.' },

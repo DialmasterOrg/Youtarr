@@ -178,39 +178,34 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
 
   if (loading) {
     return (
-      <ConfigurationAccordion title="API Keys & External Access">
+      <ConfigurationAccordion title="API Keys & Bookmarklet">
         <Skeleton variant="rectangular" height={200} />
       </ConfigurationAccordion>
     );
   }
 
   return (
-    <ConfigurationAccordion title="API Keys & External Access">
-      <Typography variant="body2" color="secondary" className="mb-4">
-        API keys allow external tools like bookmarklets and mobile shortcuts to send individual videos to Youtarr.
-        <strong> Note:</strong> API keys currently support single video downloads only—playlists and channels require the web UI.
-      </Typography>
-
-      {/* Rate Limit Setting */}
-      <Box className="flex items-center mb-6">
-        <TextField
-          type="number"
-          label="Rate Limit (requests/min)"
-          value={apiKeyRateLimit}
-          onChange={(e) => {
-            const val = parseInt(e.target.value, 10);
-            if (!isNaN(val) && val >= 1 && val <= 100) {
-              onRateLimitChange(val);
-            }
-          }}
-          inputProps={{ min: 1, max: 100 }}
-          size="small"
-          className="w-[200px]"
-        />
-        <InfoTooltip text="Maximum download requests per minute per API key. Helps prevent abuse." />
+    <ConfigurationAccordion title="API Keys & Bookmarklet">
+      <Box className="mb-6">
+        <Typography variant="subtitle1" gutterBottom>
+          Get the "Send to Youtarr" button
+        </Typography>
+        <ol className="list-decimal space-y-1 pl-5 text-sm">
+          <li>
+            Click <strong>Create Key</strong>, give it a name like "Laptop browser", and click <strong>Create</strong>.
+          </li>
+          <li>In the window that opens, drag the <strong>Send to Youtarr</strong> button to your bookmarks bar.</li>
+          <li>On any YouTube video, click the button to queue it.</li>
+        </ol>
+        <Typography variant="body2" color="secondary" className="mt-2">
+          The button is only shown once. If you lose it, create another key.
+        </Typography>
       </Box>
 
-      <Divider className="mb-6" />
+      <Typography variant="body2" color="secondary" className="mb-4">
+        Keys also work with Apple Shortcuts, Tasker, and other tools.
+        <strong> Note:</strong> API keys currently support single video downloads only. Playlists and channels require the web UI.
+      </Typography>
 
       <Box className="flex justify-between items-center mb-4">
         <Typography variant="subtitle1">Manage API Keys</Typography>
@@ -239,7 +234,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
       {apiKeys.length === 0 ? (
         <Paper className="p-6 text-center">
           <Typography color="secondary">
-            No API keys created yet. Create one to enable external integrations.
+            No API keys yet. Create one to get your Send to Youtarr button.
           </Typography>
         </Paper>
       ) : (
@@ -295,6 +290,27 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
         </TableContainer>
       )}
 
+      <Divider className="my-6" />
+
+      {/* Rate Limit Setting */}
+      <Box className="flex items-center">
+        <TextField
+          type="number"
+          label="Rate Limit (requests/min)"
+          value={apiKeyRateLimit}
+          onChange={(e) => {
+            const val = parseInt(e.target.value, 10);
+            if (!isNaN(val) && val >= 1 && val <= 100) {
+              onRateLimitChange(val);
+            }
+          }}
+          inputProps={{ min: 1, max: 100 }}
+          size="small"
+          className="w-[200px]"
+        />
+        <InfoTooltip text="Maximum download requests per minute per API key. Helps prevent abuse." />
+      </Box>
+
       {/* Create Key Dialog */}
       <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Create API Key</DialogTitle>
@@ -310,6 +326,10 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
             inputProps={{ maxLength: 100 }}
             helperText="A descriptive name to identify this key"
           />
+          <Typography variant="body2" color="secondary" className="mt-2">
+            Next you'll get your key, the Send to Youtarr button, and the details for phone shortcuts. They're
+            shown only once.
+          </Typography>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setCreateDialogOpen(false)}>Cancel</Button>

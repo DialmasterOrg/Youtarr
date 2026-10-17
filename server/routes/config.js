@@ -6,6 +6,14 @@ const filenamePreview = require('../modules/filenamePreview');
 const { getExternalCookiesPath } = require('../modules/externalCookies');
 const { isValidLevelSetting } = require('../logging/logLevel');
 
+// Summarize the allowlist check of a saved custom-args string for the client,
+// without the resolved args (which may carry secret values). Returns null when
+// nothing is configured.
+function summarizeCustomArgs(value) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  return customArgsParser.summarize(customArgsParser.checkCustomArgs(value));
+}
+
 // Mirror of the frontend RATE_LIMIT_REGEX. Matches yt-dlp's --limit-rate
 // format: digits with optional decimal, optional K/M/G suffix.
 const RATE_LIMIT_REGEX = /^\d+(\.\d+)?[KkMmGg]?$/;
@@ -145,6 +153,10 @@ module.exports = function createConfigRoutes({
    *                 logging:
    *                   type: object
    *                   description: LOG_LEVEL value and log file status (read-only)
+   *                 customArgsCheck:
+   *                   type: object
+   *                   nullable: true
+   *                   description: Allowlist check of the saved ytdlpCustomArgs (blocked, warnings, errors; option names only, never values). Null when no custom args are saved. Read-only.
    */
   router.get('/getconfig', verifyToken, (req, res) => {
     const config = configModule.getConfig();
@@ -170,6 +182,7 @@ module.exports = function createConfigRoutes({
     safeConfig.envAuthApplied = validateEnvAuthCredentials();
     safeConfig.youtubeOutputDirectory = process.env.YOUTUBE_OUTPUT_DIR || process.env.DATA_PATH || null;
     safeConfig.logging = getLoggingStatus();
+    safeConfig.customArgsCheck = summarizeCustomArgs(config.ytdlpCustomArgs);
 
     res.json(safeConfig);
   });
@@ -221,7 +234,7 @@ module.exports = function createConfigRoutes({
    *                 enum: ['', warn, info, debug]
    *     responses:
    *       400:
-   *         description: Invalid configuration; schedule errors include a fieldErrors object keyed by config field
+   *         description: Invalid configuration; schedule errors include a fieldErrors object keyed by config field, and a changed ytdlpCustomArgs that fails the allowlist check includes its customArgsCheck
    *       200:
    *         description: Configuration updated successfully
    *         content:
@@ -232,6 +245,10 @@ module.exports = function createConfigRoutes({
    *                 status:
    *                   type: string
    *                   example: success
+   *                 customArgsCheck:
+   *                   type: object
+   *                   nullable: true
+   *                   description: Allowlist check of the ytdlpCustomArgs just saved (null when blank), so the client can refresh its saved-args notices
    */
   async function handleUpdateConfig(req, res) {
     req.log.info('Updating application configuration');
@@ -261,22 +278,27 @@ module.exports = function createConfigRoutes({
       return res.status(400).json({ error: firstScheduleError, fieldErrors });
     }
 
-    // Custom args denylist gate (defense-in-depth; buildCustomArgs also re-validates)
-    if (typeof updateData.ytdlpCustomArgs === 'string' && updateData.ytdlpCustomArgs.trim()) {
+    // Custom args allowlist gate. Only re-check when the value actually changed:
+    // the client saves the whole config on every save, so re-checking an
+    // unchanged value would block every Settings save for a user whose saved
+    // args contain a now-disallowed option. buildCustomArgs re-checks at
+    // download time as defense-in-depth.
+    if (
+      typeof updateData.ytdlpCustomArgs === 'string' &&
+      updateData.ytdlpCustomArgs.trim() &&
+      updateData.ytdlpCustomArgs !== currentConfig.ytdlpCustomArgs
+    ) {
       if (updateData.ytdlpCustomArgs.length > customArgsParser.MAX_CUSTOM_ARGS_LENGTH) {
         return res.status(400).json({
           error: `Custom args exceed ${customArgsParser.MAX_CUSTOM_ARGS_LENGTH} character limit`,
         });
       }
-      let tokens;
-      try {
-        tokens = customArgsParser.tokenize(updateData.ytdlpCustomArgs);
-      } catch (err) {
-        return res.status(400).json({ error: `Custom args parse error: ${err.message}` });
-      }
-      const validation = customArgsParser.validate(tokens);
-      if (!validation.ok) {
-        return res.status(400).json({ error: validation.error });
+      const check = customArgsParser.checkCustomArgs(updateData.ytdlpCustomArgs);
+      if (!check.ok) {
+        return res.status(400).json({
+          error: customArgsParser.describeCheckFailure(check),
+          customArgsCheck: customArgsParser.summarize(check),
+        });
       }
     }
 
@@ -348,6 +370,8 @@ module.exports = function createConfigRoutes({
 
     delete updateData.passwordHash;
     delete updateData.username;
+    // Read-only, server-computed; never persist a client-supplied copy.
+    delete updateData.customArgsCheck;
 
     updateData.passwordHash = currentConfig.passwordHash;
     updateData.username = currentConfig.username;
@@ -358,7 +382,9 @@ module.exports = function createConfigRoutes({
 
     configModule.updateConfig(updateData);
 
-    res.json({ status: 'success' });
+    // The check of what was just saved (updateConfig replaces the whole
+    // config), so the client's saved-args notices match the saved value.
+    res.json({ status: 'success', customArgsCheck: summarizeCustomArgs(updateData.ytdlpCustomArgs) });
   }
 
   router.post('/updateconfig', verifyToken, (req, res, next) => {

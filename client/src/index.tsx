@@ -20,7 +20,6 @@ import './index.css';
 import './themeTokens.css';
 import App from './App';
 import { ThemeEngineProvider } from './contexts/ThemeEngineContext';
-import WebSocketProvider from './providers/WebSocketProvider';
 import { TooltipProvider } from './components/ui/tooltip';
 
 const root = ReactDOM.createRoot(
@@ -29,11 +28,9 @@ const root = ReactDOM.createRoot(
 root.render(
   <React.StrictMode>
     <ThemeEngineProvider>
-      <WebSocketProvider>
-        <TooltipProvider>
-          <App />
-        </TooltipProvider>
-      </WebSocketProvider>
+      <TooltipProvider>
+        <App />
+      </TooltipProvider>
     </ThemeEngineProvider>
   </React.StrictMode>
 );
