@@ -1,5 +1,31 @@
 # Changelog
 
+## [v1.89.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.89.0) - 2026-10-17
+
+### Features
+
+* make the bookmarklet easier to find ([4bb98fc](https://github.com/DialmasterOrg/Youtarr/commit/4bb98fcf322b619148a1cf8b51adeea66b264aad))
+
+
+### Bug Fixes
+
+* accept video urls opened from a playlist ([c1dbe18](https://github.com/DialmasterOrg/Youtarr/commit/c1dbe18d7083fa7ec9b12e84537c6a81853d9ed4)), closes [#937](https://github.com/DialmasterOrg/Youtarr/issues/937)
+* download regional subtitle language variants ([cf333d7](https://github.com/DialmasterOrg/Youtarr/commit/cf333d717f9997fdc10bc99dc2cd6dc16502e363)), closes [#914](https://github.com/DialmasterOrg/Youtarr/issues/914)
+* replace custom args denylist with allowlist ([bf2471d](https://github.com/DialmasterOrg/Youtarr/commit/bf2471dea42e54983a0446f412fdf5c949dd2794))
+* require a session for WebSocket connections ([b5cee60](https://github.com/DialmasterOrg/Youtarr/commit/b5cee606245ebb457f76ebf270681977b146d5db))
+
+
+### Continuous Integration
+
+* Add dependabot to repo ([7469cdb](https://github.com/DialmasterOrg/Youtarr/commit/7469cdbba0f901c4e9320aee6e48b7a332cdb47c))
+
+
+### Documentation
+
+* update CHANGELOG for v1.88.0 [skip ci] ([d7938d5](https://github.com/DialmasterOrg/Youtarr/commit/d7938d552a13dbf4bbc76f7e2b8f18d3d22cf2b6))
+
+**Full Changelog**: https://github.com/DialmasterOrg/Youtarr/compare/v1.88.0...v1.89.0
+
 ## [v1.88.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.88.0) - 2026-10-13
 
 ### Features
