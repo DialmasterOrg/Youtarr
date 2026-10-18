@@ -52,8 +52,27 @@ describe('videoPersistence', () => {
         fileSize: '1000',
       }, true);
 
-      expect(data.removed).toBe(false);
+      expect(data).toEqual(expect.objectContaining({
+        removed: false, removed_reason: null, removed_at: null, removed_detail: null,
+      }));
       expect(data.last_downloaded_at).toBeInstanceOf(Date);
+    });
+
+    test('drops every removal column on update when nothing is verified', () => {
+      const data = videoPersistence.prepareVideoDataForSave({
+        youtubeId: 'abc123',
+        filePath: null,
+        fileSize: null,
+        removed: false,
+        removed_reason: null,
+        removed_at: null,
+        removed_detail: null,
+      }, false);
+
+      expect(data).not.toHaveProperty('removed');
+      expect(data).not.toHaveProperty('removed_reason');
+      expect(data).not.toHaveProperty('removed_at');
+      expect(data).not.toHaveProperty('removed_detail');
     });
 
     test('does not set last_downloaded_at when no file is verified', () => {

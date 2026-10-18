@@ -1,20 +1,8 @@
 const { Video } = require('../models');
-const ChannelVideo = require('../models/channelvideo');
-const archiveModule = require('./archiveModule');
+const { findArchiveOnlyIds } = require('./archiveOnlyIds');
+const { REMOVAL_STATES, removalState } = require('./videoRemovalState');
 
-// IDs yt-dlp would skip as already downloaded even though no Videos row
-// exists. Ignored videos are left out: ignoring writes the archive entry on
-// purpose, and an explicit download removes it again.
-async function findArchiveOnlyIds(youtubeIds) {
-  const archived = archiveModule.filterArchivedVideoIds(youtubeIds);
-  if (archived.size === 0) return archived;
-  const ignored = await ChannelVideo.findAll({
-    where: { youtube_id: [...archived], ignored: true },
-    attributes: ['youtube_id'],
-  });
-  for (const row of ignored) archived.delete(row.youtube_id);
-  return archived;
-}
+const toIso = (value) => (value ? new Date(value).toISOString() : null);
 
 async function applyLocalVideoStatus(results) {
   const youtubeIds = results.map(r => r.youtubeId).filter(Boolean);
@@ -25,6 +13,9 @@ async function applyLocalVideoStatus(results) {
       'id',
       'youtubeId',
       'removed',
+      'removed_reason',
+      'removed_at',
+      'removed_detail',
       'filePath',
       'fileSize',
       'audioFilePath',
@@ -43,7 +34,11 @@ async function applyLocalVideoStatus(results) {
     r.inArchive = archiveOnlyIds.has(r.youtubeId);
     const record = recordByYoutubeId.get(r.youtubeId);
     if (!record) continue;
-    r.status = record.removed ? 'missing' : 'downloaded';
+    const state = removalState(record);
+    r.status = state === REMOVAL_STATES.PRESENT ? 'downloaded' : state;
+    r.removedReason = record.removed_reason ?? null;
+    r.removedAt = toIso(record.removed_at);
+    r.removedDetail = record.removed_detail ?? null;
     r.databaseId = record.id;
     r.filePath = record.filePath;
     r.fileSize = record.fileSize;

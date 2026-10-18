@@ -893,6 +893,18 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *           default: off
    *         description: Tri-state filter on watched status (per the configured watched rule). `only` keeps watched videos, `exclude` hides them.
    *       - in: query
+   *         name: missingFilter
+   *         schema:
+   *           type: string
+   *           enum: [off, only, exclude]
+   *         description: Tri-state filter on missing videos (previously downloaded; a file was expected on disk and not found)
+   *       - in: query
+   *         name: deletedFilter
+   *         schema:
+   *           type: string
+   *           enum: [off, only, exclude]
+   *         description: Tri-state filter on deleted videos (previously downloaded; deleted in Youtarr or by automatic cleanup, marked as deleted, or removed before Youtarr recorded why)
+   *       - in: query
    *         name: maxRating
    *         schema:
    *           type: string
@@ -929,13 +941,14 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
     const missingFilter = parseFilterMode(req.query.missingFilter);
     const ignoredFilter = parseFilterMode(req.query.ignoredFilter);
     const watchedFilter = parseFilterMode(req.query.watchedFilter);
+    const deletedFilter = parseFilterMode(req.query.deletedFilter);
     const maxRating = ratingMapper.parseMaxRatingParam(req.query.maxRating);
     if (!maxRating.valid) {
       return res.status(400).json({ error: 'Invalid maxRating' });
     }
     let result;
     try {
-      result = await channelModule.getChannelVideos(channelId, page, pageSize, downloadedFilter, searchQuery, sortBy, sortOrder, tabType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, maxRating.value);
+      result = await channelModule.getChannelVideos(channelId, page, pageSize, downloadedFilter, searchQuery, sortBy, sortOrder, tabType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter, missingFilter, ignoredFilter, watchedFilter, maxRating.value, deletedFilter);
     } catch (error) {
       if (error.code === 'CHANNEL_NOT_FOUND') {
         return res.status(404).json({ error: 'Channel not found' });

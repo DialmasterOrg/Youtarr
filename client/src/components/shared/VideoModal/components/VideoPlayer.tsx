@@ -9,7 +9,9 @@ import {
   Close as CloseIcon,
   WarningAmber as WarningAmberIcon,
   Lock as LockIcon,
+  Trash2 as DeletedIcon,
 } from '../../../../lib/icons';
+import { isRemovedStatus } from '../../../../utils/videoStatus';
 import { VideoModalData } from '../types';
 import { YOUTUBE_URL_BASE } from '../constants';
 
@@ -36,7 +38,7 @@ function VideoPlayer({ video, token, onDownloadClick, isMobile }: VideoPlayerPro
     setStreamAspectRatio(null);
   }, [video.youtubeId]);
 
-  const canStream = video.isDownloaded && video.status !== 'missing';
+  const canStream = video.isDownloaded && !isRemovedStatus(video.status);
   const playbackType: 'video' | 'audio' =
     !video.filePath && video.audioFilePath ? 'audio' : 'video';
   const streamUrl = token
@@ -209,11 +211,15 @@ function VideoPlayer({ video, token, onDownloadClick, isMobile }: VideoPlayerPro
                 Ignored
               </Typography>
             </>
-          ) : video.status === 'missing' ? (
+          ) : isRemovedStatus(video.status) ? (
             <>
-              <WarningAmberIcon size={48} color="var(--warning)" />
+              {video.status === 'deleted' ? (
+                <DeletedIcon size={48} color="var(--muted-foreground)" />
+              ) : (
+                <WarningAmberIcon size={48} color="var(--warning)" />
+              )}
               <Typography variant="body1" sx={{ color: 'common.white', fontWeight: 500 }}>
-                File Missing
+                {video.status === 'deleted' ? 'File Deleted' : 'File Missing'}
               </Typography>
               <IconButton
                 onClick={onDownloadClick}

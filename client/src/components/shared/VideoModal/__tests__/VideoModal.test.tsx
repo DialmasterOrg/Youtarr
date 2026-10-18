@@ -470,6 +470,23 @@ describe('VideoModal', () => {
     expect(screen.queryByRole('button', { name: /delete video/i })).not.toBeInTheDocument();
   });
 
+  test('hides delete and protect for a deleted video and offers a download instead', () => {
+    renderModal({
+      video: { ...baseVideo, status: 'deleted' },
+    });
+    expect(screen.queryByRole('button', { name: /delete video/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /protect/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /download video/i })).toBeInTheDocument();
+  });
+
+  test('passes missingVideoCount 1 to the download dialog for a deleted video', () => {
+    renderModal({
+      video: { ...baseVideo, status: 'deleted' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /download video/i }));
+    expect(screen.getByTestId('download-dialog-missing-count')).toHaveTextContent('1');
+  });
+
   test('renders ignore button for non-downloaded videos', () => {
     renderModal({ video: neverDownloadedVideo });
     expect(screen.getByRole('button', { name: /ignore/i })).toBeInTheDocument();

@@ -1,7 +1,9 @@
 import React from 'react';
 import { Box, Typography, Skeleton, Tooltip, Chip, Accordion, AccordionSummary, AccordionDetails } from '../../../ui';
-import { formatDate } from '../../../../utils/formatters';
+import { formatDate, stripInternalPath } from '../../../../utils/formatters';
 import { tierFromDimensions } from '../../../../utils/videoResolution';
+import { isRemovedStatus } from '../../../../utils/videoStatus';
+import { describeRemoval } from '../../../../utils/videoRemoval';
 import { VideoModalData, VideoExtendedMetadata } from '../types';
 
 interface VideoTechnicalProps {
@@ -13,8 +15,6 @@ interface VideoTechnicalProps {
 const BYTES_PER_KB = 1024;
 const BYTES_PER_MB = 1024 * 1024;
 const BYTES_PER_GB = 1024 * 1024 * 1024;
-
-const INTERNAL_PATH_PREFIX = '/usr/src/app/data/';
 
 function formatFileSize(bytes: number): string {
   if (bytes >= BYTES_PER_GB) {
@@ -29,12 +29,6 @@ function formatFileSize(bytes: number): string {
   return `${bytes} B`;
 }
 
-function stripInternalPath(filePath: string): string {
-  if (filePath.startsWith(INTERNAL_PATH_PREFIX)) {
-    return filePath.slice(INTERNAL_PATH_PREFIX.length);
-  }
-  return filePath;
-}
 
 function getOrientationLabel(ratio: number): string {
   if (ratio > 1) return 'Landscape';
@@ -154,7 +148,11 @@ function VideoTechnical({ video, metadata, loading }: VideoTechnicalProps) {
   const hasAudioFile = video.audioFilePath !== null;
   const relatedFiles = !loading ? (metadata?.relatedFiles ?? null) : null;
   const addedDate = formatDate(video.addedAt);
-  const showFileDetails = video.isDownloaded || video.status === 'missing';
+  const showFileDetails = video.isDownloaded || isRemovedStatus(video.status);
+  // Why there is no file, in plain words, so nobody has to find the tooltip.
+  const removalStatus = isRemovedStatus(video.status)
+    ? describeRemoval(video.status, video.removal ?? undefined, video.filePath)
+    : null;
 
   return (
     <Box style={{ display: 'flex', flexDirection: 'column', gap: 'var(--video-modal-section-gap, 12px)' }}>
@@ -209,6 +207,7 @@ function VideoTechnical({ video, metadata, loading }: VideoTechnicalProps) {
           <AccordionSummary>File Details</AccordionSummary>
           <AccordionDetails>
             <Box>
+              {removalStatus && <DetailRow label="Status" value={removalStatus} />}
               {hasVideoFile && (
                 <FileRow
                   label="Video"

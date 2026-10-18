@@ -10,8 +10,15 @@ jest.mock('../../../hooks/useRescanStatus', () => ({
   useRescanStatus: jest.fn()
 }));
 
+jest.mock('../hooks/useRemovedVideos', () => ({
+  useRemovedVideos: jest.fn()
+}));
+
 const { useRescanStatus } = require('../../../hooks/useRescanStatus') as {
   useRescanStatus: jest.Mock<UseRescanStatusReturn, [string | null]>;
+};
+const { useRemovedVideos } = require('../hooks/useRemovedVideos') as {
+  useRemovedVideos: jest.Mock;
 };
 
 function setup(overrides: Partial<UseRescanStatusReturn> = {}) {
@@ -24,6 +31,16 @@ function setup(overrides: Partial<UseRescanStatusReturn> = {}) {
     triggerRescan,
     ...overrides
   });
+  useRemovedVideos.mockReturnValue({
+    summary: { deleted: 2, missing: 1, legacy: 0, libraryCheck: { ok: true, reason: null, path: null, message: null } },
+    loading: false,
+    error: null,
+    refetch: jest.fn(),
+    markAllMissingDeleted: jest.fn(),
+    emptyTrash: jest.fn(),
+    actionPending: false,
+    actionError: null,
+  });
   renderWithProviders(<MaintenanceSection token="tok" config={DEFAULT_CONFIG} />);
   return { triggerRescan };
 }
@@ -35,6 +52,12 @@ describe('MaintenanceSection', () => {
     setup();
     expect(screen.getByRole('button', { name: /rescan files on disk/i })).toBeEnabled();
     expect(screen.getByText(/no rescan has run yet/i)).toBeInTheDocument();
+  });
+
+  test('hosts the deleted and missing videos card below the rescan card', () => {
+    setup();
+    expect(screen.getByText('Deleted and missing videos')).toBeInTheDocument();
+    expect(screen.getByText('Deleted: 2. Missing: 1.')).toBeInTheDocument();
   });
 
   test('renders idle with last-run summary', () => {

@@ -8,12 +8,18 @@ const m3uGenerator = require('./m3uGenerator');
 const storageUsage = require('./storageUsage');
 const { STORED_BYTES_SQL } = storageUsage;
 const storageGuard = require('./storageGuard');
+const { REMOVAL_REASONS, removedColumns } = require('./videoRemovalState');
 
 // Oldest-first removal (free-space and total-usage strategies) works in
 // batches and stops after a bounded number of them per run.
 const OLDEST_FIRST_BATCH_SIZE = 50;
 const OLDEST_FIRST_MAX_BATCHES = 10;
 const PLAN_SAMPLE_LIMIT = 10;
+
+// What a delete records on the row unless the caller says otherwise: the
+// user deleted it in the app. Automatic cleanup passes its own reason and
+// the rule that selected the video.
+const USER_DELETED_REMOVAL = { reason: REMOVAL_REASONS.USER_DELETED, detail: null };
 
 class VideoDeletionModule {
   constructor() {}
@@ -95,9 +101,10 @@ class VideoDeletionModule {
    * Delete a single video by ID
    * Deletes the video directory from disk and marks the video as removed in the database
    * @param {number} videoId - The database ID of the video to delete
+   * @param {{reason: string, detail: (string|null)}} [removal] - Why the video is removed (see videoRemovalState)
    * @returns {Promise<{success: boolean, videoId: number, error?: string}>}
    */
-  async deleteVideoById(videoId) {
+  async deleteVideoById(videoId, removal = USER_DELETED_REMOVAL) {
     try {
       // Fetch video from database
       const video = await Video.findByPk(videoId);
@@ -125,7 +132,7 @@ class VideoDeletionModule {
 
       if (!primaryPath) {
         // No file path, just mark as removed in database
-        await video.update({ removed: true });
+        await video.update(removedColumns(removal.reason, { detail: removal.detail }));
         return {
           success: true,
           videoId,
@@ -200,7 +207,7 @@ class VideoDeletionModule {
       }
 
       // Mark video as removed in database
-      await video.update({ removed: true });
+      await video.update(removedColumns(removal.reason, { detail: removal.detail }));
 
       // Best-effort cleanup of empty channel directory
       await this._tryCleanupChannelDirectory(primaryPath, flat);
@@ -224,16 +231,17 @@ class VideoDeletionModule {
   /**
    * Delete multiple videos
    * @param {number[]} videoIds - Array of video IDs to delete
+   * @param {{reason: string, detail: (string|null)}} [removal] - Why the videos are removed
    * @returns {Promise<{success: boolean, deleted: number[], failed: Array<{videoId: number, error: string}>}>}
    */
-  async deleteVideos(videoIds) {
+  async deleteVideos(videoIds, removal = USER_DELETED_REMOVAL) {
     const deleted = [];
     const failed = [];
     const affectedChannelIds = [];
 
     // Process deletions sequentially to avoid overwhelming the file system
     for (const videoId of videoIds) {
-      const result = await this.deleteVideoById(videoId);
+      const result = await this.deleteVideoById(videoId, removal);
 
       if (result.success) {
         deleted.push(videoId);
@@ -259,9 +267,10 @@ class VideoDeletionModule {
   /**
    * Delete videos by YouTube IDs
    * @param {string[]} youtubeIds - Array of YouTube video IDs
+   * @param {{reason: string, detail: (string|null)}} [removal] - Why the videos are removed
    * @returns {Promise<{success: boolean, deleted: string[], failed: Array<{youtubeId: string, error: string}>}>}
    */
-  async deleteVideosByYoutubeIds(youtubeIds) {
+  async deleteVideosByYoutubeIds(youtubeIds, removal = USER_DELETED_REMOVAL) {
     const deleted = [];
     const failed = [];
     const affectedChannelIds = [];
@@ -282,7 +291,7 @@ class VideoDeletionModule {
         }
 
         // Delete using the database ID
-        const result = await this.deleteVideoById(video.id);
+        const result = await this.deleteVideoById(video.id, removal);
 
         if (result.success) {
           deleted.push(youtubeId);
@@ -516,13 +525,14 @@ ${excludeClause}        ORDER BY timeCreated ASC
    * @param {object} options.bucket - The strategy's entry in result.plan
    * @param {string} options.deletedKey - Result counter to increment, e.g. 'deletedBySpace'
    * @param {string} options.label - Strategy name for log messages
+   * @param {{reason: string, detail: (string|null)}} options.removal - Recorded on each deleted row
    * @param {boolean} options.dryRun
    * @param {boolean} options.includeSamples
    * @param {object} options.result - The cleanup result being built
    * @returns {Promise<{selectedIds: number[]}>}
    * @private
    */
-  async _removeOldestUntilFreed({ bytesToFree, excludeIds, bucket, deletedKey, label, dryRun, includeSamples, result }) {
+  async _removeOldestUntilFreed({ bytesToFree, excludeIds, bucket, deletedKey, label, removal, dryRun, includeSamples, result }) {
     const triedIds = new Set();
     const affectedChannelIds = [];
     let freedSoFar = 0;
@@ -567,7 +577,7 @@ ${excludeClause}        ORDER BY timeCreated ASC
           continue;
         }
 
-        const deleteResult = await this.deleteVideoById(video.id);
+        const deleteResult = await this.deleteVideoById(video.id, removal);
 
         if (deleteResult.success) {
           freedSoFar += videoSize;
@@ -801,7 +811,10 @@ ${excludeClause}        ORDER BY timeCreated ASC
           } else if (oldVideos.length > 0) {
             logger.info({ count: oldVideos.length }, '[Auto-Removal] Deleting videos older than threshold');
             const videoIds = oldVideos.map(v => v.id);
-            const deleteResult = await this.deleteVideos(videoIds);
+            const deleteResult = await this.deleteVideos(videoIds, {
+              reason: REMOVAL_REASONS.AUTO_REMOVAL,
+              detail: `older than ${thresholdDays} days`
+            });
 
             result.deletedByAge = deleteResult.deleted.length;
             result.plan.ageStrategy.deletedCount = deleteResult.deleted.length;
@@ -883,7 +896,10 @@ ${excludeClause}        ORDER BY timeCreated ASC
           } else if (watchedVideos.length > 0) {
             logger.info({ count: watchedVideos.length }, '[Auto-Removal] Deleting watched videos');
             const videoIds = watchedVideos.map(v => v.id);
-            const deleteResult = await this.deleteVideos(videoIds);
+            const deleteResult = await this.deleteVideos(videoIds, {
+              reason: REMOVAL_REASONS.AUTO_REMOVAL,
+              detail: minDaysSinceWatched > 0 ? `watched at least ${minDaysSinceWatched} days ago` : 'watched'
+            });
 
             result.deletedByWatched = deleteResult.deleted.length;
             result.plan.watchedStrategy.deletedCount = deleteResult.deleted.length;
@@ -954,6 +970,10 @@ ${excludeClause}        ORDER BY timeCreated ASC
                 bucket: result.plan.spaceStrategy,
                 deletedKey: 'deletedBySpace',
                 label: 'space-based',
+                removal: {
+                  reason: REMOVAL_REASONS.AUTO_REMOVAL,
+                  detail: `to keep ${config.autoRemovalFreeSpaceThreshold} free`
+                },
                 dryRun,
                 includeSamples,
                 result
@@ -1011,6 +1031,10 @@ ${excludeClause}        ORDER BY timeCreated ASC
               bucket,
               deletedKey: 'deletedByUsage',
               label: 'usage-based',
+              removal: {
+                reason: REMOVAL_REASONS.AUTO_REMOVAL,
+                detail: `over the ${config.autoRemovalUsageLimit} total size limit`
+              },
               dryRun,
               includeSamples,
               result

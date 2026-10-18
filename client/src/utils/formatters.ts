@@ -16,6 +16,14 @@ export const decodeHtml = (html: string): string => {
   return txt.value;
 };
 
+// Where the container keeps the downloads folder. The host path differs per
+// install, so paths shown to users drop this prefix.
+export const INTERNAL_PATH_PREFIX = '/usr/src/app/data/';
+
+export function stripInternalPath(filePath: string): string {
+  return filePath.startsWith(INTERNAL_PATH_PREFIX) ? filePath.slice(INTERNAL_PATH_PREFIX.length) : filePath;
+}
+
 export function parseDate(dateStr: string | null | undefined): Date | null {
   if (!dateStr) {
     return null;

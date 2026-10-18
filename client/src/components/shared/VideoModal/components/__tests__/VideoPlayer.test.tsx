@@ -20,6 +20,7 @@ jest.mock('../../../../../lib/icons', () => {
     Close: createIcon('CloseIcon'),
     WarningAmber: createIcon('WarningAmberIcon'),
     Lock: createIcon('LockIcon'),
+    Trash2: createIcon('Trash2Icon'),
   };
 });
 
@@ -119,6 +120,18 @@ describe('VideoPlayer', () => {
     expect(screen.getByText('File Missing')).toBeInTheDocument();
     expect(screen.getByTestId('WarningAmberIcon')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /re-download video/i })).toBeInTheDocument();
+  });
+
+  test('renders "deleted file" state with a re-download button and no player', () => {
+    renderPlayer({
+      status: 'deleted',
+      isDownloaded: true,
+    });
+
+    expect(screen.getByText('File Deleted')).toBeInTheDocument();
+    expect(screen.queryByText('File Missing')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /re-download video/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Play video' })).not.toBeInTheDocument();
   });
 
   test('renders "members only" state with lock icon and no download button', () => {

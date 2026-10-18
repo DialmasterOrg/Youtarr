@@ -18,6 +18,7 @@ import {
   getStatusColor,
   getStatusIcon,
   getStatusLabel,
+  isRemovedStatus,
 } from '../../../../utils/videoStatus';
 import { SHARED_STATUS_CHIP_STYLE, SHARED_THEMED_CHIP_STYLE } from '../../../shared/chipStyles';
 import { YOUTUBE_URL_BASE } from '../constants';
@@ -45,7 +46,7 @@ function VideoActions({
   isMobile,
   allowIgnore = true,
 }: VideoActionsProps) {
-  const isDownloadedAndPresent = video.isDownloaded && video.status !== 'missing';
+  const isDownloadedAndPresent = video.isDownloaded && !isRemovedStatus(video.status);
   const showProtect = isDownloadedAndPresent;
   const showDownload = !isDownloadedAndPresent && video.status !== 'queued' && video.status !== 'downloading';
   const showIgnore = (!isDownloadedAndPresent || video.isIgnored) && allowIgnore;

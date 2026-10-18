@@ -18,6 +18,14 @@ jest.mock('../storageGuard', () => ({
 // which fs-extra (required by directoryManager) cannot load against.
 const { isVideoDirectoryFor } = jest.requireActual('../filesystem/directoryManager');
 
+// What a delete in the app writes on the row: removed, by the user, now.
+const USER_DELETED_COLUMNS = expect.objectContaining({
+  removed: true,
+  removed_reason: 'user_deleted',
+  removed_at: expect.any(Date),
+  removed_detail: null
+});
+
 describe('VideoDeletionModule', () => {
   let VideoDeletionModule;
   let mockVideo;
@@ -101,7 +109,7 @@ describe('VideoDeletionModule', () => {
       expect(mockFilesystem.removeDirectoryResilient).toHaveBeenCalledWith(
         '/test/output/Channel Name/Channel Name - Video Title - abc123'
       );
-      expect(mockVideoRecord.update).toHaveBeenCalledWith({ removed: true });
+      expect(mockVideoRecord.update).toHaveBeenCalledWith(USER_DELETED_COLUMNS);
       expect(result).toEqual({
         success: true,
         videoId: 1,
@@ -111,6 +119,26 @@ describe('VideoDeletionModule', () => {
         expect.objectContaining({ videoId: 1 }),
         'Deleted video directory'
       );
+    });
+
+    test('records the removal reason and detail it is given', async () => {
+      const mockVideoRecord = {
+        id: 1,
+        youtubeId: 'abc123',
+        filePath: '/test/output/Channel Name/Channel Name - Video Title - abc123/video.mp4',
+        removed: false,
+        update: jest.fn().mockResolvedValue()
+      };
+      mockVideo.findByPk.mockResolvedValue(mockVideoRecord);
+
+      await VideoDeletionModule.deleteVideoById(1, { reason: 'auto_removal', detail: 'older than 30 days' });
+
+      expect(mockVideoRecord.update).toHaveBeenCalledWith(expect.objectContaining({
+        removed: true,
+        removed_reason: 'auto_removal',
+        removed_at: expect.any(Date),
+        removed_detail: 'older than 30 days'
+      }));
     });
 
     test('should return error when video not found', async () => {
@@ -159,7 +187,7 @@ describe('VideoDeletionModule', () => {
 
       const result = await VideoDeletionModule.deleteVideoById(1);
 
-      expect(mockVideoRecord.update).toHaveBeenCalledWith({ removed: true });
+      expect(mockVideoRecord.update).toHaveBeenCalledWith(USER_DELETED_COLUMNS);
       expect(mockFilesystem.removeDirectoryResilient).not.toHaveBeenCalled();
       expect(result).toEqual({
         success: true,
@@ -273,7 +301,7 @@ describe('VideoDeletionModule', () => {
         const result = await VideoDeletionModule.deleteVideoById(1);
 
         expect(result.success).toBe(true);
-        expect(record.update).toHaveBeenCalledWith({ removed: true });
+        expect(record.update).toHaveBeenCalledWith(USER_DELETED_COLUMNS);
       });
     });
 
@@ -336,7 +364,7 @@ describe('VideoDeletionModule', () => {
       expect(mockFilesystem.removeDirectoryResilient).toHaveBeenCalledWith(
         '/test/output/Channel/Channel - Video - abc123'
       );
-      expect(mockVideoRecord.update).toHaveBeenCalledWith({ removed: true });
+      expect(mockVideoRecord.update).toHaveBeenCalledWith(USER_DELETED_COLUMNS);
       expect(result).toEqual({
         success: true,
         videoId: 1,
@@ -1502,6 +1530,11 @@ describe('VideoDeletionModule', () => {
       expect(result.freedBytes).toBeGreaterThan(0);
       expect(result.plan.ageStrategy.deletedCount).toBe(1);
       expect(mockFilesystem.removeDirectoryResilient).toHaveBeenCalled();
+      expect(mockVideoRecord.update).toHaveBeenCalledWith(expect.objectContaining({
+        removed: true,
+        removed_reason: 'auto_removal',
+        removed_detail: 'older than 30 days'
+      }));
     });
 
     test('should perform space-based cleanup in dry-run mode', async () => {
@@ -2115,6 +2148,26 @@ describe('VideoDeletionModule', () => {
         const result = await VideoDeletionModule.performAutomaticCleanup();
 
         expect(result.deletedByUsage).toBe(2);
+      });
+
+      test('records the usage limit as the reason on each deleted video', async () => {
+        const records = {};
+        mockVideo.findByPk.mockImplementation((id) => {
+          records[id] = deletableRecord(id);
+          return Promise.resolve(records[id]);
+        });
+        mockConfigModule.getConfig.mockReturnValue({ autoRemovalEnabled: true, autoRemovalUsageLimit: '10GB' });
+        mockStorageUsage.getDownloadedBytes.mockResolvedValue(11 * GB);
+        mockSequelize.query.mockResolvedValueOnce([
+          { id: 1, youtubeId: 'yt1', fileSize: String(2 * GB) }
+        ]);
+
+        await VideoDeletionModule.performAutomaticCleanup();
+
+        expect(records[1].update).toHaveBeenCalledWith(expect.objectContaining({
+          removed_reason: 'auto_removal',
+          removed_detail: 'over the 10GB total size limit'
+        }));
       });
 
       test('does nothing while usage is within the limit', async () => {

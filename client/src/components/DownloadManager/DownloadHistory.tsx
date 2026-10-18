@@ -29,7 +29,8 @@ import PageControls from '../shared/PageControls';
 import VideoModal from '../shared/VideoModal';
 import { VideoModalData } from '../shared/VideoModal/types';
 import VideoThumbnail from './VideoThumbnail';
-import MissingVideoChip from './MissingVideoChip';
+import AvailabilityChip from '../shared/AvailabilityChip';
+import { describeRow, getRemovalState, removalFromRow, removedState } from '../../utils/videoRemoval';
 import FailedVideoChip from './FailedVideoChip';
 import FailedDownloadsDetail from './FailedDownloadsDetail';
 import { jobTypeLabel } from '../../utils/jobTypeLabel';
@@ -68,11 +69,12 @@ function getDiagnosisTitles(job: Job): string[] {
 function jobVideoToModalData(video: VideoData): VideoModalData {
   const isDownloaded = Boolean(video.filePath || video.audioFilePath) && !video.removed;
   const status: VideoModalData['status'] = video.removed
-    ? 'missing'
+    ? removedState(video.removed_reason)
     : isDownloaded
     ? 'downloaded'
     : 'never_downloaded';
   return {
+    removal: removalFromRow(video),
     youtubeId: video.youtubeId,
     title: video.youTubeVideoName,
     channelName: video.youTubeChannelName,
@@ -268,7 +270,8 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                     const titleText = singleVideo?.youTubeVideoName || (hasMultiple ? `Multiple (${videos.length})` : cleanJobTypeLabel(job.jobType));
                     const channelText = !hasMultiple ? singleVideo?.youTubeChannelName : undefined;
                     const showThumbnail = !hasMultiple && !!singleVideo;
-                    const missingCount = videos.filter((v: VideoData) => v.removed).length;
+                    const missingCount = videos.filter((v: VideoData) => getRemovalState(v.removed, v.removed_reason) === 'missing').length;
+                    const deletedCount = videos.filter((v: VideoData) => getRemovalState(v.removed, v.removed_reason) === 'deleted').length;
                     const failedForJob = getDisplayableFailedVideos(job);
                     const hasExpandable = hasMultiple || failedForJob.length > 0;
 
@@ -298,9 +301,17 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                               )}
                             </Typography>
                             {hasMultiple && missingCount > 0 && (
-                              <MissingVideoChip
+                              <AvailabilityChip
+                                state="missing"
                                 label={`${missingCount} missing`}
                                 tooltip={`${missingCount} of ${videos.length} video files not found on disk`}
+                              />
+                            )}
+                            {hasMultiple && deletedCount > 0 && (
+                              <AvailabilityChip
+                                state="deleted"
+                                label={`${deletedCount} deleted`}
+                                tooltip={`${deletedCount} of ${videos.length} videos were deleted by Youtarr or marked as deleted`}
                               />
                             )}
                             {failedForJob.length > 0 && (
@@ -390,7 +401,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                                       {video.youTubeChannelName}
                                     </Typography>
                                     <VideoActivityChip youtubeId={video.youtubeId} />
-                                    {video.removed && <MissingVideoChip />}
+                                    {video.removed && <AvailabilityChip state={removedState(video.removed_reason)} tooltip={describeRow(video)} />}
                                   </Box>
                                 </Box>
                               ))}
@@ -496,7 +507,8 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                     const failedForJob = getDisplayableFailedVideos(job);
 
                     if (videos.length > 1 || failedForJob.length > 0) {
-                      const missingCount = videos.filter((v: VideoData) => v.removed).length;
+                      const missingCount = videos.filter((v: VideoData) => getRemovalState(v.removed, v.removed_reason) === 'missing').length;
+                      const deletedCount = videos.filter((v: VideoData) => getRemovalState(v.removed, v.removed_reason) === 'deleted').length;
                       const summaryLabel = videos.length > 1
                         ? `Multiple (${videos.length})`
                         : videos[0]?.youTubeVideoName || cleanJobTypeLabel(job.jobType);
@@ -508,9 +520,17 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                               <Box className="flex items-center gap-2 flex-wrap">
                                 <span>{summaryLabel}</span>
                                 {missingCount > 0 && (
-                                  <MissingVideoChip
+                                  <AvailabilityChip
+                                    state="missing"
                                     label={`${missingCount} missing`}
                                     tooltip={`${missingCount} of ${videos.length} video files not found on disk`}
+                                  />
+                                )}
+                                {deletedCount > 0 && (
+                                  <AvailabilityChip
+                                    state="deleted"
+                                    label={`${deletedCount} deleted`}
+                                    tooltip={`${deletedCount} of ${videos.length} videos were deleted by Youtarr or marked as deleted`}
                                   />
                                 )}
                                 {failedForJob.length > 0 && (
@@ -551,7 +571,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                                                 {video.youTubeVideoName}
                                               </Link>
                                               <VideoActivityChip youtubeId={video.youtubeId} />
-                                              {video.removed && <MissingVideoChip />}
+                                              {video.removed && <AvailabilityChip state={removedState(video.removed_reason)} tooltip={describeRow(video)} />}
                                             </Box>
                                             <Typography variant="caption" color="secondary" className="block">{video.youTubeChannelName}</Typography>
                                           </TableCell>

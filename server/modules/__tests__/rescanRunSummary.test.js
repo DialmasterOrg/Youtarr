@@ -21,8 +21,22 @@ describe('rescanRunSummary', () => {
           videosKept: 0,
           videosSkipped: 0,
           videosFailed: 0,
+          videosNotMarkedMissing: 0,
         },
       });
+    });
+
+    test('records a scan that held back missing marks behind a library check as partial, naming the cause', () => {
+      const record = toRunRecord({
+        status: 'completed', processed: 10, updated: 1, removed: 0,
+        notMarkedMissing: 2, libraryCheckMessage: 'The subfolder /d/__Music is empty.',
+      });
+      expect(record).toEqual(expect.objectContaining({
+        status: 'error',
+        outcome: 'partial',
+        message: 'Scanned 10 videos: 1 updated, 0 marked missing, 2 not marked missing (The subfolder /d/__Music is empty.).',
+      }));
+      expect(record.details.videosNotMarkedMissing).toBe(2);
     });
 
     test('reports rows skipped because they changed during the scan without treating the run as skipped', () => {

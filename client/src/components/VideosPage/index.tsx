@@ -3,8 +3,8 @@ import { useVideoActivity } from '../../providers/VideoActivityProvider';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { useSwipeable } from 'react-swipeable';
-import { Alert, Box, Grid, Snackbar, Typography } from '../ui';
-import { Trash2 as DeleteIcon, Star as RatingIcon, Download as DownloadIcon } from '../../lib/icons';
+import { Alert, Box, Button, Grid, Snackbar, Typography } from '../ui';
+import { Trash2 as DeleteIcon, Star as RatingIcon, Download as DownloadIcon, CloudOff as CloudOffIcon } from '../../lib/icons';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useConfig } from '../../hooks/useConfig';
 import { useDownloadListingsRefresh } from '../../hooks/useDownloadListingsRefresh';
@@ -17,6 +17,9 @@ import ChangeRatingDialog from '../shared/ChangeRatingDialog';
 import { useVideoProtection } from '../shared/useVideoProtection';
 import VideoModal from '../shared/VideoModal';
 import { VideoModalData } from '../shared/VideoModal/types';
+import { getRemovalState, removalFromRow, removedState, type RemovalState } from '../../utils/videoRemoval';
+import MarkDeletedDialog from './components/MarkDeletedDialog';
+import { useMarkDeleted } from './hooks/useMarkDeleted';
 import DownloadSettingsDialog from '../DownloadManager/ManualDownload/DownloadSettingsDialog';
 import { DownloadSettings } from '../DownloadManager/ManualDownload/types';
 import VideoCard from './components/VideoCard';
@@ -28,6 +31,7 @@ import {
   VideoListContainer,
   VideoListPaginationBar,
   useListPageSize,
+  usePersistedChipFilter,
   useVideoListState,
   useVideoSelection,
   type ChipFilterMode,
@@ -43,6 +47,8 @@ interface VideosPageProps {
 }
 
 const VIEW_MODE_STORAGE_KEY = 'youtarr:videosPageViewMode';
+// Deleted videos are hidden by default; showing them is remembered in this browser.
+const DELETED_FILTER_STORAGE_KEY = 'youtarr.videosPage.deletedFilter';
 
 const YOUTUBE_CHANNEL_ID_PATTERN = /^UC[a-zA-Z0-9_-]{22}$/;
 
@@ -50,6 +56,7 @@ interface VideoSelectionMeta {
   youtubeId: string;
   channelId: string | null;
   removed: boolean;
+  removalState: RemovalState;
   youtubeRemoved: boolean;
 }
 
@@ -63,7 +70,8 @@ function videoDataToModalData(video: VideoData): VideoModalData {
     publishedAt: video.originalDate || null,
     addedAt: video.timeCreated || null,
     mediaType: video.media_type || 'video',
-    status: video.removed ? 'missing' : 'downloaded',
+    status: video.removed ? removedState(video.removed_reason) : 'downloaded',
+    removal: removalFromRow(video),
     isDownloaded: !video.removed,
     filePath: video.filePath || null,
     fileSize: video.fileSize ? Number(video.fileSize) : null,
@@ -95,10 +103,12 @@ function VideosPage({ token }: VideosPageProps) {
   const [maxRatingFilter, setMaxRatingFilter] = useState('');
   const [protectedFilter, setProtectedFilter] = useState<ChipFilterMode>('off');
   const [missingFilter, setMissingFilter] = useState<ChipFilterMode>('off');
+  const [deletedFilter, setDeletedFilter] = usePersistedChipFilter(DELETED_FILTER_STORAGE_KEY, 'exclude');
   const [watchedFilter, setWatchedFilter] = useState<ChipFilterMode>('off');
 
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [markDeletedDialogOpen, setMarkDeletedDialogOpen] = useState(false);
   const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -117,6 +127,7 @@ function VideosPage({ token }: VideosPageProps) {
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const { deleteVideos, loading: deleteLoading } = useVideoDeletion();
+  const { markDeleted, loading: markDeletedLoading, error: markDeletedError } = useMarkDeleted(token);
   const configState = useConfig(token);
   const useInfiniteScroll = configState?.config?.channelVideosHotLoad ?? false;
   const {
@@ -141,6 +152,8 @@ function VideosPage({ token }: VideosPageProps) {
     totalPages,
     uniqueChannels,
     enabledChannels,
+    hiddenDeletedCount,
+    libraryWarning,
     loading,
     loadError,
     refetch,
@@ -157,6 +170,7 @@ function VideosPage({ token }: VideosPageProps) {
     maxRatingFilter,
     protectedFilter,
     missingFilter,
+    deletedFilter,
     watchedFilter,
     useInfiniteScroll,
   });
@@ -169,6 +183,7 @@ function VideosPage({ token }: VideosPageProps) {
         youtubeId: video.youtubeId,
         channelId: video.channel_id || null,
         removed: Boolean(video.removed),
+        removalState: getRemovalState(video.removed, video.removed_reason),
         youtubeRemoved: Boolean(video.youtube_removed),
       });
     }
@@ -247,6 +262,34 @@ function VideosPage({ token }: VideosPageProps) {
     }
   };
 
+  // Mark as deleted applies to the missing videos in the selection only.
+  const missingSelectedIds = (selectedIds: number[]) =>
+    selectedIds.filter((id) => videoMetaRef.current.get(id)?.removalState === 'missing');
+
+  const handleMarkDeletedConfirm = async (selectedIds: number[]) => {
+    const ids = missingSelectedIds(selectedIds);
+    if (ids.length === 0) {
+      setMarkDeletedDialogOpen(false);
+      return;
+    }
+    const result = await markDeleted(ids);
+    setMarkDeletedDialogOpen(false);
+    if (!result) {
+      setErrorMessage(markDeletedError || 'Failed to mark videos as deleted');
+      return;
+    }
+    setSuccessMessage(`Marked ${result.updated} video${result.updated !== 1 ? 's' : ''} as deleted`);
+    selection.clear();
+    // Refetching a later infinite-scroll page would retain stale earlier rows.
+    // Changing page triggers the hook's fetch; page one needs an explicit fetch.
+    setVideos([]);
+    if (page === 1) {
+      void refetch();
+    } else {
+      setPage(1);
+    }
+  };
+
   const handleApplyRating = async (rating: string | null, selectedIds: number[]) => {
     if (!token) return;
     try {
@@ -303,8 +346,18 @@ function VideosPage({ token }: VideosPageProps) {
           }),
         onClick: () => setDeleteDialogOpen(true),
       },
+      {
+        id: 'mark-deleted',
+        label: 'Mark as deleted',
+        icon: <CloudOffIcon size={14} />,
+        intent: 'warning',
+        disabled: (ids) =>
+          markDeletedLoading ||
+          !ids.some((id) => videoMetaRef.current.get(id)?.removalState === 'missing'),
+        onClick: () => setMarkDeletedDialogOpen(true),
+      },
     ],
-    [deleteLoading, snapshot]
+    [deleteLoading, markDeletedLoading, snapshot]
   );
 
   const selection = useVideoSelection<number>({ actions: selectionActions });
@@ -322,6 +375,7 @@ function VideosPage({ token }: VideosPageProps) {
     maxRatingFilter,
     protectedFilter,
     missingFilter,
+    deletedFilter,
     watchedFilter,
     selection.clear,
   ]);
@@ -374,6 +428,13 @@ function VideosPage({ token }: VideosPageProps) {
     return { deletable, skipped };
   };
   const deleteCounts = getDeleteCounts();
+
+  const markDeletedCounts = markDeletedDialogOpen
+    ? {
+        eligible: missingSelectedIds(selection.selectedIds).length,
+        skipped: selection.selectedIds.length - missingSelectedIds(selection.selectedIds).length,
+      }
+    : { eligible: 0, skipped: 0 };
 
   const handleDownloadConfirm = async (settings: DownloadSettings | null) => {
     setDownloadDialogOpen(false);
@@ -458,6 +519,7 @@ function VideosPage({ token }: VideosPageProps) {
       { id: 'maxRating', value: maxRatingFilter, onChange: withPageReset(setMaxRatingFilter) },
       { id: 'protected', value: protectedFilter, onChange: withPageReset(setProtectedFilter) },
       { id: 'missing', value: missingFilter, onChange: withPageReset(setMissingFilter) },
+      { id: 'deleted', value: deletedFilter, onChange: withPageReset(setDeletedFilter), defaultValue: 'exclude' },
       { id: 'watched', value: watchedFilter, onChange: withPageReset(setWatchedFilter) },
       {
         id: 'channel',
@@ -467,7 +529,7 @@ function VideosPage({ token }: VideosPageProps) {
       },
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateFrom, dateTo, maxRatingFilter, protectedFilter, missingFilter, watchedFilter, channelFilter, uniqueChannels]);
+  }, [dateFrom, dateTo, maxRatingFilter, protectedFilter, missingFilter, deletedFilter, watchedFilter, channelFilter, uniqueChannels]);
 
   const sortConfig: SortConfig = useMemo(
     () => ({
@@ -485,11 +547,28 @@ function VideosPage({ token }: VideosPageProps) {
     [orderBy, sortOrder]
   );
 
+  const showDeleted = () => {
+    setDeletedFilter('off');
+    setPage(1);
+  };
+
   const headerSlot = (
     <div style={{ padding: '12px 16px 0 16px' }}>
       <Typography variant={isMobile ? 'h6' : 'h5'} component="h2" gutterBottom align="center">
         Library ({totalVideos} total)
       </Typography>
+      {hiddenDeletedCount !== null && hiddenDeletedCount > 0 && (
+        <Typography variant="caption" color="text.secondary" component="p" align="center" className="flex items-center justify-center gap-1">
+          <span>{hiddenDeletedCount} deleted {hiddenDeletedCount === 1 ? 'video' : 'videos'} hidden.</span>
+          <Button variant="text" size="sm" onClick={showDeleted}>Show</Button>
+        </Typography>
+      )}
+      {libraryWarning && (
+        <Alert severity="warning" style={{ marginTop: 8 }}>
+          {libraryWarning.message} Videos are not being marked missing until it is back. If your downloads
+          live on a drive or network share, check that it is mounted.
+        </Alert>
+      )}
     </div>
   );
 
@@ -638,6 +717,15 @@ function VideosPage({ token }: VideosPageProps) {
         onConfirm={() => handleDeleteConfirm(selection.selectedIds)}
         videoCount={deleteCounts.deletable}
         skippedCount={deleteCounts.skipped}
+      />
+
+      <MarkDeletedDialog
+        open={markDeletedDialogOpen}
+        onClose={() => setMarkDeletedDialogOpen(false)}
+        onConfirm={() => handleMarkDeletedConfirm(selection.selectedIds)}
+        count={markDeletedCounts.eligible}
+        skippedCount={markDeletedCounts.skipped}
+        pending={markDeletedLoading}
       />
 
       <ChangeRatingDialog

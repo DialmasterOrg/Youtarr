@@ -5,6 +5,7 @@ import { Alert, Button, CircularProgress, Typography } from '../ui';
 import { ConfigurationCard } from '../Configuration/common/ConfigurationCard';
 import { useRescanStatus } from '../../hooks/useRescanStatus';
 import { formatDateTime } from '../../utils/formatters';
+import RemovedVideosCard from './components/RemovedVideosCard';
 
 interface MaintenanceSectionProps {
   token: string | null;
@@ -43,6 +44,7 @@ export function MaintenanceSection({ token, config }: MaintenanceSectionProps) {
   }
 
   return (
+    <div className="flex flex-col gap-6">
     <ConfigurationCard title="Rescan files on disk">
       <div className="flex flex-col gap-4">
         <Typography variant="body2" color="text.secondary">
@@ -76,6 +78,9 @@ export function MaintenanceSection({ token, config }: MaintenanceSectionProps) {
         )}
       </div>
     </ConfigurationCard>
+
+    <RemovedVideosCard token={token} />
+    </div>
   );
 }
 

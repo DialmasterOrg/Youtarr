@@ -9,6 +9,11 @@ export interface ToggleChipFilterProps {
   inactiveLabel: string;
   onlyLabel: string;
   excludeLabel: string;
+  // The value the chip returns to when cleared (default off). A chip whose
+  // resting value is exclude, like "deleted videos hidden", is active when off.
+  restingValue?: ChipFilterMode;
+  // Label for the off state when it is not the resting value (e.g. "Show: Deleted").
+  offLabel?: string;
   size?: 'small' | 'medium';
 }
 
@@ -25,11 +30,23 @@ function ToggleChipFilter({
   inactiveLabel,
   onlyLabel,
   excludeLabel,
+  restingValue = 'off',
+  offLabel,
   size = 'small',
 }: ToggleChipFilterProps) {
-  const label = value === 'only' ? onlyLabel : value === 'exclude' ? excludeLabel : inactiveLabel;
-  const color = value === 'only' ? 'primary' : value === 'exclude' ? 'warning' : 'default';
-  const variant = value === 'off' ? 'outlined' : 'filled';
+  const offIsActive = restingValue !== 'off';
+  const label = value === 'only'
+    ? onlyLabel
+    : value === 'exclude'
+      ? excludeLabel
+      : (offIsActive && offLabel) || inactiveLabel;
+  const color = value === 'only'
+    ? 'primary'
+    : value === 'exclude'
+      ? 'warning'
+      : offIsActive ? 'primary' : 'default';
+  const isResting = value === restingValue;
+  const variant = isResting ? 'outlined' : 'filled';
   const ariaPressed: boolean | 'mixed' =
     value === 'off' ? false : value === 'only' ? true : 'mixed';
 
@@ -41,7 +58,7 @@ function ToggleChipFilter({
       color={color}
       size={size}
       onClick={() => onChange(NEXT_MODE[value])}
-      onDelete={value === 'off' ? undefined : () => onChange('off')}
+      onDelete={isResting ? undefined : () => onChange(restingValue)}
       style={{ cursor: 'pointer' }}
       aria-pressed={ariaPressed}
     />

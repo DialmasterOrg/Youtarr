@@ -11,12 +11,17 @@ function count(value) {
   return Number(value) || 0;
 }
 
-// Rows skipped because another writer changed them, and rows whose write
-// failed; empty when there were none.
+// Rows skipped because another writer changed them, rows whose write failed,
+// and rows left unmarked because the downloads folder looked unmounted;
+// empty when there were none.
 function describeRowProblems(result) {
   const parts = [];
   if (count(result.skippedChanged) > 0) parts.push(`${count(result.skippedChanged)} skipped (changed during the scan)`);
   if (count(result.failed) > 0) parts.push(`${count(result.failed)} failed`);
+  if (count(result.notMarkedMissing) > 0) {
+    const cause = result.libraryCheckMessage ? ` (${result.libraryCheckMessage})` : '';
+    parts.push(`${count(result.notMarkedMissing)} not marked missing${cause}`);
+  }
   return parts;
 }
 
@@ -37,10 +42,11 @@ function toRunRecord(result = {}) {
     return { status: 'skipped', outcome: 'skipped', message: 'A rescan was already running.', details: null };
   }
   let outcome = result.status || (result.timedOut ? 'timed-out' : 'completed');
-  // A finished scan with failed row writes partly failed, like other scheduled
-  // tasks. A timed-out scan keeps its outcome so the Maintenance page still
-  // offers to continue it; its message carries the count.
-  if (outcome === 'completed' && count(result.failed) > 0) outcome = 'partial';
+  // A finished scan with failed row writes, or with rows it could not mark
+  // missing because the downloads folder looked unmounted, partly failed,
+  // like other scheduled tasks. A timed-out scan keeps its outcome so the
+  // Maintenance page still offers to continue it; its message carries the count.
+  if (outcome === 'completed' && (count(result.failed) > 0 || count(result.notMarkedMissing) > 0)) outcome = 'partial';
   return {
     status: outcome === 'error' || outcome === 'partial' ? 'error' : 'success',
     outcome,
@@ -58,6 +64,8 @@ function toRunRecord(result = {}) {
       // Rows another writer changed after the rescan read them; left for a later run.
       videosSkipped: count(result.skippedChanged),
       videosFailed: count(result.failed),
+      // Rows left unmarked because the downloads folder looked unmounted.
+      videosNotMarkedMissing: count(result.notMarkedMissing),
     },
   };
 }

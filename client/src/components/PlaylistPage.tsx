@@ -21,6 +21,7 @@ import { useDownloadListingsRefresh } from '../hooks/useDownloadListingsRefresh'
 import { usePlaylistMutations } from '../hooks/usePlaylistMutations';
 import { useMediaServerStatus } from '../hooks/useMediaServerStatus';
 import { MediaServerType, PlaylistSubscribeSettings, PlaylistVideo } from '../types/playlist';
+import { removalFromRow, removedState } from '../utils/videoRemoval';
 import PlaylistHeader from './PlaylistPage/components/PlaylistHeader';
 import NoMediaServerWarning from './PlaylistPage/components/NoMediaServerWarning';
 import PlaylistVideoList from './PlaylistPage/components/PlaylistVideoList';
@@ -51,12 +52,15 @@ interface SnackbarState {
 }
 
 function toModalData(v: PlaylistVideo): VideoModalData {
-  const status = v.youtube_removed || v.previously_downloaded
+  const status: VideoModalData['status'] = v.youtube_removed
     ? 'missing'
-    : v.downloaded
-      ? 'downloaded'
-      : 'never_downloaded';
+    : v.previously_downloaded
+      ? removedState(v.removed_reason)
+      : v.downloaded
+        ? 'downloaded'
+        : 'never_downloaded';
   return {
+    removal: removalFromRow(v),
     youtubeId: v.youtube_id,
     title: v.title || v.youtube_id,
     channelName: v.channel_name || '',

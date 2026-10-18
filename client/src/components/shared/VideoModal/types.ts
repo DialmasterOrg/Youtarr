@@ -1,4 +1,5 @@
 import { VideoStatus } from '../../../utils/videoStatus';
+import type { RemovalInfo } from '../../../utils/videoRemoval';
 
 export interface VideoModalData {
   youtubeId: string;
@@ -13,6 +14,8 @@ export interface VideoModalData {
   // Listed in the download archive without a database record. Pages that know
   // it pass it in; the modal's local status lookup then keeps it current.
   inArchive?: boolean;
+  // Why the file is gone, for a 'deleted' or 'missing' status (see utils/videoRemoval).
+  removal?: RemovalInfo | null;
   isDownloaded: boolean;
   filePath: string | null;
   fileSize: number | null;

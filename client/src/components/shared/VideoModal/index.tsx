@@ -27,6 +27,7 @@ import AddChannelDialog from '../AddChannelDialog';
 import DownloadSettingsDialog from '../../DownloadManager/ManualDownload/DownloadSettingsDialog';
 import { useConfig } from '../../../hooks/useConfig';
 import { uploadDateToIso } from '../../../utils/formatters';
+import { isRemovedStatus } from '../../../utils/videoStatus';
 
 const SNACKBAR_AUTO_HIDE_MS = 4000;
 
@@ -303,7 +304,7 @@ function VideoModal({
         onClose={() => setDownloadDialogOpen(false)}
         onConfirm={handleDownloadConfirm}
         videoCount={1}
-        missingVideoCount={displayVideo.status === 'missing' || displayVideo.inArchive ? 1 : 0}
+        missingVideoCount={isRemovedStatus(displayVideo.status) || displayVideo.inArchive ? 1 : 0}
         mode="manual"
         token={token}
         defaultResolution={defaultResolution}

@@ -187,6 +187,32 @@ describe('VideoTechnical', () => {
       expect(screen.getByText('File Details')).toBeInTheDocument();
     });
 
+    test('explains why a deleted video has no file in a Status row', () => {
+      renderTech({
+        isDownloaded: false,
+        status: 'deleted',
+        removal: { reason: 'auto_removal', at: null, detail: 'older than 30 days' },
+      });
+      expect(screen.getByText('File Details')).toBeInTheDocument();
+      expect(screen.getByText('Status')).toBeInTheDocument();
+      expect(screen.getByText('Deleted by automatic cleanup (older than 30 days). It can be downloaded again from its channel or playlist page.')).toBeInTheDocument();
+    });
+
+    test('tells a missing video from a deleted one in the Status row', () => {
+      renderTech({
+        isDownloaded: false,
+        status: 'missing',
+        filePath: '/usr/src/app/data/Channel/video.mp4',
+        removal: { reason: 'not_found', at: null, detail: null },
+      });
+      expect(screen.getByText(/Youtarr expected a file at .*video\.mp4 and could not find it\./)).toBeInTheDocument();
+    });
+
+    test('has no Status row for a present file', () => {
+      renderTech({ isDownloaded: true, status: 'downloaded', filePath: '/videos/a.mp4', fileSize: 10 });
+      expect(screen.queryByText('Status')).not.toBeInTheDocument();
+    });
+
     test('renders the video file row with stripped internal path and formatted size', () => {
       renderTech({
         filePath: '/usr/src/app/data/Channel/video.mp4',

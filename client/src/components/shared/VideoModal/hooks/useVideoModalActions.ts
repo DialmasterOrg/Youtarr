@@ -83,6 +83,11 @@ export function useVideoModalActions({
       audioFilePath: current.audioFilePath ?? null,
       audioFileSize: current.audioFileSize ?? null,
       addedAt: current.addedAt ?? null,
+      removal: {
+        reason: current.removedReason ?? null,
+        at: current.removedAt ?? null,
+        detail: current.removedDetail ?? null,
+      },
     }));
   }, [statuses, video.youtubeId]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);

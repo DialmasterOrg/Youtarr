@@ -17,6 +17,7 @@ const { buildYtdlpEnv } = require('./ytdlpEnvBuilder');
 const DownloadTimeoutController = require('./DownloadTimeoutController');
 const { YtdlpErrorTracker } = require('./YtdlpErrorTracker');
 const downloadRunTracker = require('./downloadRunTracker');
+const archiveAccess = require('./archiveAccess');
 
 // Tells the job's download run about a job that failed before yt-dlp ran, so
 // the run counts it instead of treating the job as quietly finished.
@@ -158,6 +159,12 @@ class DownloadExecutor {
   }
 
   async doDownload(args, jobId, jobType, urlCount = 0, originalUrls = null, allowRedownload = false, skipJobTransition = false, postProcessDirectives = {}) {
+    return archiveAccess.withDownload(() => this.runDownload(
+      args, jobId, jobType, urlCount, originalUrls, allowRedownload, skipJobTransition, postProcessDirectives
+    ));
+  }
+
+  async runDownload(args, jobId, jobType, urlCount, originalUrls, allowRedownload, skipJobTransition, postProcessDirectives) {
     const subfolderOverride = (postProcessDirectives || {}).subfolderOverride ?? null;
     const initialCount = downloadResultProcessor.getCountOfDownloadedVideos();
     const config = configModule.getConfig();
