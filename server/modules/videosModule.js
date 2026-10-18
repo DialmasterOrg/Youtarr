@@ -564,6 +564,8 @@ class VideosModule {
     const opts = typeof arg === 'number' ? { timeLimit: arg } : arg;
     const timeLimit = opts.timeLimit ?? 5 * 60 * 1000;
     const trigger = opts.trigger ?? 'scheduled';
+    // Rescan anyway: a manual run over a folder the user emptied on purpose.
+    const ignoreLibraryCheck = opts.ignoreLibraryCheck === true;
 
     if (this._backfillRunning) {
       logger.info({ trigger }, 'Backfill already running, skipping');
@@ -612,12 +614,15 @@ class VideosModule {
       // gone. With no present rows there is nothing to protect (a fresh
       // install with an empty folder), so the scan simply runs.
       let suppressMissing = false;
-      const libraryCheck = await checkLibraryRoot(outputDir);
+      if (ignoreLibraryCheck) logger.warn({ trigger }, 'Rescan is skipping the downloads folder check by request');
+      const libraryCheck = ignoreLibraryCheck ? { ok: true } : await checkLibraryRoot(outputDir);
       if (!libraryCheck.ok && (await Video.count({ where: { removed: false } })) > 0) {
-        if (libraryCheck.reason === LIBRARY_CHECK_REASONS.SUBFOLDER_EMPTY) {
+        const subfolderOnly = libraryCheck.reason === LIBRARY_CHECK_REASONS.SUBFOLDER_EMPTY
+          || libraryCheck.reason === LIBRARY_CHECK_REASONS.SUBFOLDER_UNREADABLE;
+        if (subfolderOnly) {
           suppressMissing = true;
           libraryCheckMessage = libraryCheck.message;
-          logger.warn({ libraryCheck }, 'A subfolder looks unmounted; the rescan will not mark videos missing');
+          logger.warn({ libraryCheck }, 'A subfolder looks unmounted or unreadable; the rescan will not mark videos missing');
         } else {
           logger.warn({ libraryCheck }, 'The downloads folder looks unmounted; skipping the rescan');
           result = {
@@ -776,6 +781,7 @@ class VideosModule {
         failed: totalFailed,
         notMarkedMissing: totalNotMarkedMissing,
         libraryCheckMessage,
+        libraryCheckSkipped: ignoreLibraryCheck,
         timeElapsed: elapsed,
         trigger,
         startedAt: startedAtIso,
@@ -803,7 +809,8 @@ class VideosModule {
           skippedChanged: totalSkipped,
           failed: totalFailed,
           notMarkedMissing: totalNotMarkedMissing,
-          libraryCheckMessage
+          libraryCheckMessage,
+          libraryCheckSkipped: ignoreLibraryCheck
         };
         return result;
       }
@@ -823,7 +830,8 @@ class VideosModule {
         skippedChanged: totalSkipped,
         failed: totalFailed,
         notMarkedMissing: totalNotMarkedMissing,
-        libraryCheckMessage
+        libraryCheckMessage,
+        libraryCheckSkipped: ignoreLibraryCheck
       };
       // Resolve with the failure and the counters it reached rather than
       // rethrow, so every caller and the run history keep the partial progress.

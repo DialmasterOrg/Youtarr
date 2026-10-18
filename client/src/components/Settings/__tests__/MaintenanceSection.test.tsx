@@ -5,6 +5,7 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MaintenanceSection } from '../MaintenanceSection';
 import { UseRescanStatusReturn, RescanLastRun } from '../../../hooks/useRescanStatus';
+import type { RemovedVideosLibraryCheck } from '../hooks/useRemovedVideos';
 
 jest.mock('../../../hooks/useRescanStatus', () => ({
   useRescanStatus: jest.fn()
@@ -21,8 +22,11 @@ const { useRemovedVideos } = require('../hooks/useRemovedVideos') as {
   useRemovedVideos: jest.Mock;
 };
 
-function setup(overrides: Partial<UseRescanStatusReturn> = {}) {
-  const triggerRescan = jest.fn().mockResolvedValue(undefined);
+function setup(
+  overrides: Partial<UseRescanStatusReturn> = {},
+  libraryCheck: RemovedVideosLibraryCheck = { ok: true, reason: null, path: null, message: null }
+) {
+  const triggerRescan = jest.fn().mockResolvedValue({ started: true });
   useRescanStatus.mockReturnValue({
     running: false,
     lastRun: null,
@@ -32,7 +36,7 @@ function setup(overrides: Partial<UseRescanStatusReturn> = {}) {
     ...overrides
   });
   useRemovedVideos.mockReturnValue({
-    summary: { deleted: 2, missing: 1, legacy: 0, libraryCheck: { ok: true, reason: null, path: null, message: null } },
+    summary: { deleted: 2, missing: 1, legacy: 0, libraryCheck },
     loading: false,
     error: null,
     refetch: jest.fn(),
@@ -58,6 +62,16 @@ describe('MaintenanceSection', () => {
     setup();
     expect(screen.getByText('Deleted and missing videos')).toBeInTheDocument();
     expect(screen.getByText('Deleted: 2. Missing: 1.')).toBeInTheDocument();
+  });
+
+  test('wires Rescan anyway to a rescan that skips the downloads folder check', async () => {
+    const user = userEvent.setup();
+    const { triggerRescan } = setup({}, { ok: false, reason: 'empty', path: '/d', message: 'The downloads folder /d is empty.' });
+
+    await user.click(screen.getByRole('button', { name: 'Rescan anyway...' }));
+    await user.click(screen.getByRole('button', { name: 'Rescan anyway' }));
+
+    expect(triggerRescan).toHaveBeenCalledWith({ ignoreLibraryCheck: true });
   });
 
   test('renders idle with last-run summary', () => {

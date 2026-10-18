@@ -235,11 +235,12 @@ class JobModule {
             videoData.fileSize = resolvedStats?.size !== undefined ? resolvedStats.size.toString() : null;
             Object.assign(videoData, presentColumns());
           } else {
-            // File not found, but we still want to record the expected metadata location
+            // File not found: record the expected location but leave the removal
+            // columns alone, so a video deleted in-app while its job ran stays
+            // deleted and a new row simply awaits the file check.
             const assumedPath = actualFilePath || `${fallbackBasePath}.mp4`;
             videoData.filePath = assumedPath;
             videoData.fileSize = null;
-            Object.assign(videoData, presentColumns());
           }
 
           // Upsert video into Videos table and ensure JobVideo relationship exists

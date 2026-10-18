@@ -39,7 +39,11 @@ class ChannelVideoQuery {
         'protected',
         'last_downloaded_at',
         'video_resolution'
-      ]
+      ],
+      // Plain rows: the file check spreads these ({ ...video }) to build its
+      // updated copies, and spreading a Sequelize instance drops the attribute
+      // getters, so the updated rows would never match the status map below.
+      raw: true
     });
 
     // Create Maps for O(1) lookup of download status
@@ -47,10 +51,11 @@ class ChannelVideoQuery {
     const videosToCheck = [];
 
     downloadedVideos.forEach(v => {
+      // Plain rows carry TINYINT flags as 0/1; keep the listing's booleans.
       downloadStatusMap.set(v.youtubeId, {
         id: v.id,
         added: true,
-        removed: v.removed,
+        removed: Boolean(v.removed),
         removed_reason: v.removed_reason ?? null,
         removed_at: v.removed_at ?? null,
         removed_detail: v.removed_detail ?? null,
@@ -59,7 +64,7 @@ class ChannelVideoQuery {
         audioFilePath: v.audioFilePath,
         audioFileSize: v.audioFileSize,
         normalized_rating: v.normalized_rating,
-        protected: v.protected,
+        protected: Boolean(v.protected),
         last_downloaded_at: v.last_downloaded_at,
         video_resolution: v.video_resolution
       });
@@ -78,7 +83,7 @@ class ChannelVideoQuery {
       checkedVideos.forEach(v => {
         const status = downloadStatusMap.get(v.youtubeId);
         if (status) {
-          status.removed = v.removed;
+          status.removed = Boolean(v.removed);
           status.removed_reason = v.removed_reason ?? null;
           status.removed_at = v.removed_at ?? null;
           status.removed_detail = v.removed_detail ?? null;

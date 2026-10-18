@@ -127,7 +127,7 @@ function VideosPage({ token }: VideosPageProps) {
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const { deleteVideos, loading: deleteLoading } = useVideoDeletion();
-  const { markDeleted, loading: markDeletedLoading, error: markDeletedError } = useMarkDeleted(token);
+  const { markDeleted, loading: markDeletedLoading } = useMarkDeleted(token);
   const configState = useConfig(token);
   const useInfiniteScroll = configState?.config?.channelVideosHotLoad ?? false;
   const {
@@ -231,6 +231,18 @@ function VideosPage({ token }: VideosPageProps) {
     }
   };
 
+  // Reload after rows leave the listing (deleted, marked deleted). In hot-load
+  // mode a refetch of a later page merges into the rows already shown, so the
+  // removed rows would stay: go back to page one, which the hook fetches on the
+  // page change. Classic pagination replaces the page in place, so it stays put.
+  const reloadFromFirstPage = () => {
+    if (useInfiniteScroll && page !== 1) {
+      setPage(1);
+    } else {
+      void refetch();
+    }
+  };
+
   const handleDeleteConfirm = async (selectedIds: number[]) => {
     setDeleteDialogOpen(false);
     const deletableIds = selectedIds.filter((id) => {
@@ -244,7 +256,7 @@ function VideosPage({ token }: VideosPageProps) {
         `Successfully deleted ${result.deleted.length} video${result.deleted.length !== 1 ? 's' : ''}`
       );
       selection.clear();
-      refetch();
+      reloadFromFirstPage();
     } else {
       const deletedCount = result.deleted.length;
       const failedCount = result.failed.length;
@@ -253,7 +265,7 @@ function VideosPage({ token }: VideosPageProps) {
           `Deleted ${deletedCount} video${deletedCount !== 1 ? 's' : ''}, but ${failedCount} failed`
         );
         selection.clear();
-        refetch();
+        reloadFromFirstPage();
       } else {
         setErrorMessage(
           `Failed to delete videos: ${result.failed[0]?.error || 'Unknown error'}`
@@ -274,20 +286,16 @@ function VideosPage({ token }: VideosPageProps) {
     }
     const result = await markDeleted(ids);
     setMarkDeletedDialogOpen(false);
-    if (!result) {
-      setErrorMessage(markDeletedError || 'Failed to mark videos as deleted');
-      return;
-    }
-    setSuccessMessage(`Marked ${result.updated} video${result.updated !== 1 ? 's' : ''} as deleted`);
-    selection.clear();
-    // Refetching a later infinite-scroll page would retain stale earlier rows.
-    // Changing page triggers the hook's fetch; page one needs an explicit fetch.
-    setVideos([]);
-    if (page === 1) {
-      void refetch();
+    const marked = `${result.updated} video${result.updated !== 1 ? 's' : ''}`;
+    if (result.error) {
+      // A later batch may have failed after earlier ones went through.
+      setErrorMessage(result.updated > 0 ? `Marked ${marked} as deleted, then failed: ${result.error}` : result.error);
     } else {
-      setPage(1);
+      setSuccessMessage(`Marked ${marked} as deleted`);
     }
+    if (result.updated === 0) return;
+    selection.clear();
+    reloadFromFirstPage();
   };
 
   const handleApplyRating = async (rating: string | null, selectedIds: number[]) => {
@@ -564,9 +572,11 @@ function VideosPage({ token }: VideosPageProps) {
         </Typography>
       )}
       {libraryWarning && (
-        <Alert severity="warning" style={{ marginTop: 8 }}>
+        <Alert severity="warning" className="mt-2">
           {libraryWarning.message} Videos are not being marked missing until it is back. If your downloads
-          live on a drive or network share, check that it is mounted.
+          live on a drive or network share, check that it is mounted. If the folder really is empty on purpose,
+          you can rescan anyway from{' '}
+          <Button variant="text" size="sm" onClick={() => navigate('/settings/maintenance')}>Maintenance</Button>.
         </Alert>
       )}
     </div>
@@ -796,7 +806,7 @@ function VideosPage({ token }: VideosPageProps) {
           token={token}
           onVideoDeleted={() => {
             setModalVideo(null);
-            refetch();
+            reloadFromFirstPage();
           }}
           onProtectionChanged={(youtubeId, isProtected) => {
             setVideos((prev) =>

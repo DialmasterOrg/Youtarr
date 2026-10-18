@@ -28,13 +28,15 @@ function describeRowProblems(result) {
 function describe(outcome, result) {
   const scanned = count(result.processed).toLocaleString('en-US');
   const problems = describeRowProblems(result);
+  // A manual "Rescan anyway" marked videos missing without the unmounted-drive check.
+  const skipped = result.libraryCheckSkipped ? ' The downloads folder check was skipped.' : '';
   if (outcome === 'error') return result.errorMessage || 'Unknown error';
   if (outcome === 'timed-out') {
     const suffix = problems.length > 0 ? ` (${problems.join(', ')})` : '';
-    return `Reached the time limit after ${scanned} videos${suffix}; continues at the next run.`;
+    return `Reached the time limit after ${scanned} videos${suffix}; continues at the next run.${skipped}`;
   }
   const counts = [`${count(result.updated)} updated`, `${count(result.removed)} marked missing`, ...problems];
-  return `Scanned ${scanned} videos: ${counts.join(', ')}.`;
+  return `Scanned ${scanned} videos: ${counts.join(', ')}.${skipped}`;
 }
 
 function toRunRecord(result = {}) {
@@ -66,6 +68,7 @@ function toRunRecord(result = {}) {
       videosFailed: count(result.failed),
       // Rows left unmarked because the downloads folder looked unmounted.
       videosNotMarkedMissing: count(result.notMarkedMissing),
+      ...(result.libraryCheckSkipped ? { libraryCheckSkipped: true } : {}),
     },
   };
 }

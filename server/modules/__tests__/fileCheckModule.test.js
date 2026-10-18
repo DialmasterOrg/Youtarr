@@ -621,7 +621,7 @@ describe('FileCheckModule', () => {
       );
     });
 
-    test('should update removed status only', async () => {
+    test('marks missing only while the row is still present, so a delete landing meanwhile wins', async () => {
       const updates = [
         { id: 1, removed: true }
       ];
@@ -631,7 +631,7 @@ describe('FileCheckModule', () => {
       expect(mockVideo.update).toHaveBeenCalledTimes(1);
       expect(mockVideo.update).toHaveBeenCalledWith(
         { removed: true },
-        { where: { id: 1 } },
+        { where: { id: 1, removed: false } },
       );
     });
 
@@ -643,11 +643,11 @@ describe('FileCheckModule', () => {
 
       expect(mockVideo.update).toHaveBeenCalledWith(
         { removed: true, removed_reason: 'not_found', removed_at: at, removed_detail: null },
-        { where: { id: 1 } },
+        { where: { id: 1, removed: false } },
       );
     });
 
-    test('should update both fileSize and removed status', async () => {
+    test('restores a row only while it is still removed', async () => {
       const updates = [
         { id: 1, fileSize: 2000, removed: false }
       ];
@@ -657,7 +657,7 @@ describe('FileCheckModule', () => {
       expect(mockVideo.update).toHaveBeenCalledTimes(1);
       expect(mockVideo.update).toHaveBeenCalledWith(
         { fileSize: 2000, removed: false },
-        { where: { id: 1 } },
+        { where: { id: 1, removed: true } },
       );
     });
 
@@ -674,12 +674,12 @@ describe('FileCheckModule', () => {
       expect(mockVideo.update).toHaveBeenNthCalledWith(
         1,
         { fileSize: 2000, removed: false },
-        { where: { id: 1 } },
+        { where: { id: 1, removed: true } },
       );
       expect(mockVideo.update).toHaveBeenNthCalledWith(
         2,
         { removed: true },
-        { where: { id: 2 } },
+        { where: { id: 2, removed: false } },
       );
       expect(mockVideo.update).toHaveBeenNthCalledWith(
         3,
@@ -697,7 +697,7 @@ describe('FileCheckModule', () => {
 
       expect(mockVideo.update).toHaveBeenCalledWith(
         { removed: false },
-        { where: { id: 1 } },
+        { where: { id: 1, removed: true } },
       );
     });
 
@@ -710,7 +710,7 @@ describe('FileCheckModule', () => {
 
       expect(mockVideo.update).toHaveBeenCalledWith(
         { removed: true },
-        { where: { id: 1 } },
+        { where: { id: 1, removed: false } },
       );
     });
 
@@ -773,7 +773,7 @@ describe('FileCheckModule', () => {
 
       expect(mockVideo.update).toHaveBeenCalledWith(
         { filePath: '/videos/channel/video [abc123].mkv', fileSize: 5000, removed: false },
-        { where: { id: 1 } },
+        { where: { id: 1, removed: true } },
       );
     });
 

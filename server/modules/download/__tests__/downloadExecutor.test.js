@@ -304,15 +304,27 @@ describe('DownloadExecutor', () => {
   describe('archive access during downloads', () => {
     it('defers startup until the purge releases the archive', async () => {
       const release = archiveAccess.acquirePurge();
-      const download = executor.doDownload([], 'job-123', 'Channel Downloads');
-      await Promise.resolve();
-      expect(archiveModule.readCompleteListLines).not.toHaveBeenCalled();
-      expect(mockSpawn).not.toHaveBeenCalled();
-      release();
-      await new Promise((resolve) => setImmediate(resolve));
-      expect(mockSpawn).toHaveBeenCalled();
-      endProcess(0, null);
-      await download;
+      // Released in finally too: a failed assertion must not leave the lock
+      // held, or every later download in this file would wait forever.
+      let released = false;
+      const releasePurge = () => {
+        if (released) return;
+        released = true;
+        release();
+      };
+      try {
+        const download = executor.doDownload([], 'job-123', 'Channel Downloads');
+        await Promise.resolve();
+        expect(archiveModule.readCompleteListLines).not.toHaveBeenCalled();
+        expect(mockSpawn).not.toHaveBeenCalled();
+        releasePurge();
+        await new Promise((resolve) => setImmediate(resolve));
+        expect(mockSpawn).toHaveBeenCalled();
+        endProcess(0, null);
+        await download;
+      } finally {
+        releasePurge();
+      }
     });
 
     it('blocks archive removal through finalization and releases it afterward', async () => {

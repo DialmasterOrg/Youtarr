@@ -508,6 +508,21 @@ describe('VideosPage Component', () => {
       expect(await screen.findByText(/The downloads folder \/data\/youtube is empty\. Videos are not being marked missing until it is back\./)).toBeInTheDocument();
     });
 
+    test('links the unmounted-folder warning to Maintenance for a folder emptied on purpose', async () => {
+      const user = setupUser();
+      axios.get.mockResolvedValueOnce({
+        data: {
+          ...mockPaginatedResponse(mockVideos),
+          libraryWarning: { reason: 'empty', path: '/data/youtube', message: 'The downloads folder /data/youtube is empty.', heldBack: 2 },
+        },
+      });
+
+      render(<VideosPage token={mockToken} />);
+
+      await user.click(await screen.findByRole('button', { name: 'Maintenance' }));
+      expect(mockNavigate).toHaveBeenCalledWith('/settings/maintenance');
+    });
+
     test('fetches and displays videos when token is provided', async () => {
       axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
 
@@ -1341,6 +1356,23 @@ describe('VideosPage Component', () => {
         expect(await screen.findByText('Marked 1 video as deleted')).toBeInTheDocument();
       });
 
+      test('shows the server message when marking as deleted is refused', async () => {
+        const user = setupUser();
+        const missingVideo = { ...mockVideos[0], removed: true, removed_reason: 'not_found' as const };
+        axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse([missingVideo]) });
+        axios.post.mockRejectedValueOnce({ response: { data: { error: 'Send either videoIds (1 to 1000 video ids) or all: true' } } });
+
+        render(<VideosPage token={mockToken} />);
+        await screen.findByText('How to Code');
+
+        await user.click(screen.getAllByRole('checkbox')[1]);
+        await user.click(screen.getByText('Actions (1)'));
+        await user.click(screen.getByText('Mark as deleted Selected'));
+        await user.click(await screen.findByRole('button', { name: 'Mark 1 as deleted' }));
+
+        expect(await screen.findByText('Send either videoIds (1 to 1000 video ids) or all: true')).toBeInTheDocument();
+      });
+
       test('offers Mark as deleted only when the selection holds a missing video', async () => {
         const user = setupUser();
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
@@ -1401,6 +1433,86 @@ describe('VideosPage Component', () => {
           window.IntersectionObserver = originalObserver;
           useConfig.mockReturnValue({ config: { channelVideosHotLoad: false } });
         }
+      });
+
+      test('reloads page one after deleting a video from a later infinite-scroll page', async () => {
+        const { useConfig } = require('../../hooks/useConfig');
+        const originalObserver = window.IntersectionObserver;
+        let intersect = () => {};
+        window.IntersectionObserver = jest.fn().mockImplementation((callback: IntersectionObserverCallback) => {
+          const observer = {
+            observe: jest.fn(), unobserve: jest.fn(), disconnect: jest.fn(),
+            takeRecords: () => [], root: null, rootMargin: '', thresholds: [0],
+          };
+          intersect = () => callback([{ isIntersecting: true } as IntersectionObserverEntry], observer);
+          return observer;
+        });
+        useConfig.mockReturnValue({ config: { channelVideosHotLoad: true } });
+        useTableView();
+        const user = setupUser();
+        axios.get
+          .mockResolvedValueOnce({ data: { ...mockPaginatedResponse([mockVideos[0]]), total: 2, totalPages: 2 } })
+          .mockResolvedValueOnce({ data: { ...mockPaginatedResponse([mockVideos[1]]), page: 2, total: 2, totalPages: 2 } })
+          .mockResolvedValueOnce({ data: mockPaginatedResponse([mockVideos[1]]) });
+        mockDeleteVideos.mockResolvedValueOnce({ success: true, deleted: [mockVideos[0].id], failed: [] });
+
+        const { unmount } = render(<VideosPage token={mockToken} />);
+        try {
+          await screen.findByText('How to Code');
+          act(() => intersect());
+          await screen.findByText('Game Review');
+
+          await user.click(screen.getAllByRole('checkbox')[1]);
+          await user.click(screen.getByText('Actions (1)'));
+          await user.click(screen.getByText('Delete Selected'));
+          await user.click(screen.getByTestId('dialog-confirm'));
+
+          await waitFor(() => expect(axios.get).toHaveBeenCalledTimes(3));
+          expect(axios.get.mock.calls[2][0]).toContain('page=1');
+          await screen.findByText('Game Review');
+          expect(screen.queryByText('How to Code')).not.toBeInTheDocument();
+        } finally {
+          unmount();
+          window.IntersectionObserver = originalObserver;
+          useConfig.mockReturnValue({ config: { channelVideosHotLoad: false } });
+        }
+      });
+
+      test('stays on the current page after deleting in classic pagination', async () => {
+        const user = setupUser();
+        useTableView();
+        const manyVideos = Array.from({ length: 15 }, (_, i) => ({
+          id: i,
+          youtubeId: `video${i}`,
+          youTubeChannelName: 'Channel',
+          youTubeVideoName: `Video ${i}`,
+          timeCreated: '2024-01-15T10:30:00',
+          originalDate: '20240110',
+          duration: 600,
+          description: 'Description',
+          removed: false,
+          fileSize: null
+        }));
+        axios.get
+          .mockResolvedValueOnce({ data: mockPaginatedResponse(manyVideos, 1, 12) })
+          .mockResolvedValueOnce({ data: mockPaginatedResponse(manyVideos, 2, 12) })
+          .mockResolvedValueOnce({ data: mockPaginatedResponse(manyVideos.filter((v) => v.id !== 12), 2, 12) });
+        mockDeleteVideos.mockResolvedValueOnce({ success: true, deleted: [12], failed: [] });
+
+        render(<VideosPage token={mockToken} />);
+        await screen.findByText('Video 0');
+        await user.click(screen.getByRole('button', { name: /go to page 2/i }));
+        await screen.findByText('Video 12');
+
+        await user.click(screen.getAllByRole('checkbox')[1]);
+        await user.click(screen.getByText('Actions (1)'));
+        await user.click(screen.getByText('Delete Selected'));
+        await user.click(screen.getByTestId('dialog-confirm'));
+
+        await waitFor(() => expect(axios.get).toHaveBeenCalledTimes(3));
+        expect(axios.get.mock.calls[2][0]).toContain('page=2');
+        expect(await screen.findByText('Video 13')).toBeInTheDocument();
+        expect(screen.queryByText('Video 12')).not.toBeInTheDocument();
       });
 
       test('opens delete dialog when delete button is clicked', async () => {

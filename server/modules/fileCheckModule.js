@@ -186,7 +186,12 @@ class FileCheckModule {
       };
 
       if (Object.values(attributes).some((v) => v !== undefined)) {
-        await Video.update(attributes, { where: { id: update.id } });
+        // Only a present row becomes missing and only a removed row is
+        // restored, so a delete that lands between the check's read and this
+        // write keeps its reason instead of being overwritten with not_found.
+        const where = { id: update.id };
+        if (update.removed !== undefined) where.removed = !update.removed;
+        await Video.update(attributes, { where });
       }
     }
   }

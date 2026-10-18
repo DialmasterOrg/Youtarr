@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { isDownloadable, statusLabel, PublishedDate, toDownloadFileProps } from '../playlistVideoHelpers';
+import { isDownloadable, statusLabel, PublishedDate, toDownloadFileProps, toModalData } from '../playlistVideoHelpers';
 import { PlaylistVideo } from '../../../../types/playlist';
 
 function makeVideo(overrides: Partial<PlaylistVideo> = {}): PlaylistVideo {
@@ -118,6 +118,31 @@ describe('toDownloadFileProps', () => {
       audioFileSize: null,
       videoResolution: null,
     });
+  });
+});
+
+describe('toModalData', () => {
+  test('shows a present file as downloaded even when YouTube removed the video', () => {
+    const data = toModalData(makeVideo({ downloaded: true, youtube_removed: true, file_path: '/d/Chan/v [v1].mp4' }));
+    expect(data.status).toBe('downloaded');
+    expect(data.isDownloaded).toBe(true);
+  });
+
+  test('shows a previously downloaded video whose file was not found as missing, YouTube-removed or not', () => {
+    const data = toModalData(makeVideo({ previously_downloaded: true, youtube_removed: true, removed_reason: 'not_found' }));
+    expect(data.status).toBe('missing');
+  });
+
+  test('shows a previously downloaded video Youtarr removed as deleted', () => {
+    expect(toModalData(makeVideo({ previously_downloaded: true, removed_reason: 'user_deleted' })).status).toBe('deleted');
+  });
+
+  test('shows a never downloaded video that YouTube removed as missing', () => {
+    expect(toModalData(makeVideo({ youtube_removed: true })).status).toBe('missing');
+  });
+
+  test('shows a tracked video as never downloaded', () => {
+    expect(toModalData(makeVideo()).status).toBe('never_downloaded');
   });
 });
 

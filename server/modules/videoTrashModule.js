@@ -54,15 +54,22 @@ class VideoTrashModule {
   }
 
   /**
-   * @returns {Promise<{deleted: number, missing: number, legacy: number, libraryCheck: Object}>}
-   *   legacy: deleted rows removed before the reason was recorded (a subset of deleted)
+   * @returns {Promise<{deleted: number, missing: number, legacy: number, libraryCheck: Object, downloadsActive: boolean}>}
+   *   legacy: deleted rows removed before the reason was recorded (a subset of deleted);
+   *   downloadsActive: a purge that removes archive entries would be refused right now
    */
   async getRemovedSummary() {
     const deleted = await Video.count({ where: stateWhere(REMOVAL_STATES.DELETED) });
     const missing = await Video.count({ where: stateWhere(REMOVAL_STATES.MISSING) });
     const legacy = await Video.count({ where: { removed: true, removed_reason: null } });
     const libraryCheck = await checkLibraryRoot(configModule.directoryPath);
-    return { deleted, missing, legacy, libraryCheck: normalizeLibraryCheck(libraryCheck) };
+    return {
+      deleted,
+      missing,
+      legacy,
+      libraryCheck: normalizeLibraryCheck(libraryCheck),
+      downloadsActive: archiveAccess.isDownloading(),
+    };
   }
 
   /**

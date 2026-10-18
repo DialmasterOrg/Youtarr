@@ -633,6 +633,33 @@ describe('JobModule', () => {
       expect(Video.create).not.toHaveBeenCalled();
     });
 
+    test('leaves the removal columns alone when the recovered file is not found', async () => {
+      JobVideoDownload.findAll.mockResolvedValue([
+        { job_id: 'job-1', youtube_id: 'video-1', status: 'completed' }
+      ]);
+      fsPromises.readFile.mockResolvedValue(JSON.stringify({
+        id: 'video-1',
+        uploader: 'Channel 1',
+        title: 'Video 1',
+        duration: 100,
+        upload_date: '20240101',
+        channel_id: 'channel-1',
+        _actual_filepath: '/data/Channel 1/Channel 1 - Video 1 - video-1/Channel 1 - Video 1  [video-1].mp4'
+      }));
+      fsPromises.access.mockResolvedValue();
+      fsPromises.stat.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+      Job.findOne.mockResolvedValue({ id: 'job-1' });
+      Video.findOne.mockResolvedValue(null);
+
+      await JobModule.recoverCompletedVideos('job-1');
+
+      expect(Video.create).toHaveBeenCalledTimes(1);
+      const created = Video.create.mock.calls[0][0];
+      expect(created.fileSize).toBeNull();
+      expect(created).not.toHaveProperty('removed');
+      expect(created).not.toHaveProperty('removed_reason');
+    });
+
     test('should skip videos with missing info.json files', async () => {
 
       JobVideoDownload.findAll.mockResolvedValue([

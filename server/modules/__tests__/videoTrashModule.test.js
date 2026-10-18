@@ -58,10 +58,20 @@ describe('getRemovedSummary', () => {
       missing: 4,
       legacy: 3,
       libraryCheck: { ok: true, reason: null, path: null, message: null },
+      downloadsActive: false,
     });
     expect(Video.count).toHaveBeenNthCalledWith(1, { where: stateWhere('deleted') });
     expect(Video.count).toHaveBeenNthCalledWith(2, { where: stateWhere('missing') });
     expect(Video.count).toHaveBeenNthCalledWith(3, { where: { removed: true, removed_reason: null } });
+  });
+
+  test('says when a download is active, so the archive choice can be disabled up front', async () => {
+    Video.count.mockResolvedValue(0);
+
+    await archiveAccess.withDownload(async () => {
+      const summary = await videoTrashModule.getRemovedSummary();
+      expect(summary.downloadsActive).toBe(true);
+    });
   });
 
   test('passes a failed library check through so the page can disable the missing actions', async () => {
@@ -457,8 +467,12 @@ describe('purgeRemoved', () => {
     const rejected = expect(purge).rejects.toBeInstanceOf(LibraryUnavailableError);
     const run = jest.fn().mockResolvedValue(undefined);
     const download = archiveAccess.withDownload(run);
-    expect(run).not.toHaveBeenCalled();
-    finishCheck(LIBRARY_EMPTY);
+    try {
+      expect(run).not.toHaveBeenCalled();
+    } finally {
+      // Always let the purge finish, or it would hold the lock for the rest of the file.
+      finishCheck(LIBRARY_EMPTY);
+    }
     await rejected;
     await download;
     expect(run).toHaveBeenCalledTimes(1);

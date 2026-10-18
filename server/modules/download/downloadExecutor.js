@@ -18,6 +18,7 @@ const DownloadTimeoutController = require('./DownloadTimeoutController');
 const { YtdlpErrorTracker } = require('./YtdlpErrorTracker');
 const downloadRunTracker = require('./downloadRunTracker');
 const archiveAccess = require('./archiveAccess');
+const { HEALTHCHECK_FILE_PREFIX } = require('../filesystem/constants');
 
 // Tells the job's download run about a job that failed before yt-dlp ran, so
 // the run counts it instead of treating the job as quietly finished.
@@ -123,7 +124,7 @@ class DownloadExecutor {
 
     const fsPromises = require('fs').promises;
     const crypto = require('crypto');
-    const testFile = path.join(outputDir, `.youtarr_healthcheck_${crypto.randomUUID()}`);
+    const testFile = path.join(outputDir, `${HEALTHCHECK_FILE_PREFIX}${crypto.randomUUID()}`);
 
     let timer;
     const timeoutPromise = new Promise((_, reject) => {

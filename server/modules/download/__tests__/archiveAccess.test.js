@@ -29,6 +29,16 @@ describe('archive access', () => {
     expect(run).toHaveBeenCalledTimes(1);
   });
 
+  test('reports whether a download is active', async () => {
+    let finish;
+    expect(access.isDownloading()).toBe(false);
+    const download = access.withDownload(() => new Promise((resolve) => { finish = resolve; }));
+    expect(access.isDownloading()).toBe(true);
+    finish();
+    await download;
+    expect(access.isDownloading()).toBe(false);
+  });
+
   test('releases access even when a download throws', async () => {
     await expect(access.withDownload(async () => { throw new Error('failed'); })).rejects.toThrow('failed');
     const release = access.acquirePurge();

@@ -47,8 +47,8 @@ function ToggleChipFilter({
       : offIsActive ? 'primary' : 'default';
   const isResting = value === restingValue;
   const variant = isResting ? 'outlined' : 'filled';
-  const ariaPressed: boolean | 'mixed' =
-    value === 'off' ? false : value === 'only' ? true : 'mixed';
+  // Pressed means "moved off the resting value"; the label carries which mode.
+  const ariaPressed = !isResting;
 
   return (
     <Chip

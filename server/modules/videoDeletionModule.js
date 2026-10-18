@@ -9,6 +9,7 @@ const storageUsage = require('./storageUsage');
 const { STORED_BYTES_SQL } = storageUsage;
 const storageGuard = require('./storageGuard');
 const { REMOVAL_REASONS, removedColumns } = require('./videoRemovalState');
+const { checkLibraryRoot, isUnderLibraryCheckPath } = require('./libraryRootCheck');
 
 // Oldest-first removal (free-space and total-usage strategies) works in
 // batches and stops after a bounded number of them per run.
@@ -102,9 +103,12 @@ class VideoDeletionModule {
    * Deletes the video directory from disk and marks the video as removed in the database
    * @param {number} videoId - The database ID of the video to delete
    * @param {{reason: string, detail: (string|null)}} [removal] - Why the video is removed (see videoRemovalState)
+   * @param {{libraryCheck?: (Object|null)}} [options] - libraryCheck: a checkLibraryRoot result; when it fails
+   *   and covers this video's file, the delete is refused rather than stamping a row whose file may be on an
+   *   unmounted share
    * @returns {Promise<{success: boolean, videoId: number, error?: string}>}
    */
-  async deleteVideoById(videoId, removal = USER_DELETED_REMOVAL) {
+  async deleteVideoById(videoId, removal = USER_DELETED_REMOVAL, { libraryCheck = null } = {}) {
     try {
       // Fetch video from database
       const video = await Video.findByPk(videoId);
@@ -138,6 +142,14 @@ class VideoDeletionModule {
           videoId,
           channelId: video.channel_id,
           message: 'Video marked as removed (no file path)'
+        };
+      }
+
+      if (libraryCheck && isUnderLibraryCheckPath(libraryCheck, primaryPath)) {
+        return {
+          success: false,
+          videoId,
+          error: `${libraryCheck.message} Nothing was deleted; check that the drive is mounted.`
         };
       }
 
@@ -228,6 +240,27 @@ class VideoDeletionModule {
     }
   }
 
+  // One check per batch: a delete must not stamp a row whose file sits on an
+  // unmounted share. A check that itself fails does not block deletes.
+  async _checkLibraryForDeletes() {
+    try {
+      return await checkLibraryRoot(configModule.directoryPath);
+    } catch (err) {
+      logger.warn({ err }, 'Could not check the downloads folder before deleting; deleting anyway');
+      return null;
+    }
+  }
+
+  // Why the library must not be touched right now: the downloads folder looks
+  // unmounted (see libraryRootCheck) while downloaded videos are on record. A
+  // fresh install with nothing recorded is never blocked. Null when fine.
+  async _libraryBlock() {
+    const libraryCheck = await checkLibraryRoot(configModule.directoryPath);
+    if (libraryCheck.ok) return null;
+    if ((await Video.count({ where: { removed: false } })) === 0) return null;
+    return { reason: libraryCheck.reason, message: libraryCheck.message };
+  }
+
   /**
    * Delete multiple videos
    * @param {number[]} videoIds - Array of video IDs to delete
@@ -238,10 +271,11 @@ class VideoDeletionModule {
     const deleted = [];
     const failed = [];
     const affectedChannelIds = [];
+    const libraryCheck = videoIds.length > 0 ? await this._checkLibraryForDeletes() : null;
 
     // Process deletions sequentially to avoid overwhelming the file system
     for (const videoId of videoIds) {
-      const result = await this.deleteVideoById(videoId, removal);
+      const result = await this.deleteVideoById(videoId, removal, { libraryCheck });
 
       if (result.success) {
         deleted.push(videoId);
@@ -274,6 +308,7 @@ class VideoDeletionModule {
     const deleted = [];
     const failed = [];
     const affectedChannelIds = [];
+    const libraryCheck = youtubeIds.length > 0 ? await this._checkLibraryForDeletes() : null;
 
     for (const youtubeId of youtubeIds) {
       try {
@@ -291,7 +326,7 @@ class VideoDeletionModule {
         }
 
         // Delete using the database ID
-        const result = await this.deleteVideoById(video.id, removal);
+        const result = await this.deleteVideoById(video.id, removal, { libraryCheck });
 
         if (result.success) {
           deleted.push(youtubeId);
@@ -453,7 +488,8 @@ ${excludeClause}        ORDER BY timeCreated ASC
    * Unlike _tryCleanupChannelDirectory (which only runs after a video deletion), this
    * proactively finds directories that are already empty (or contain only ignorable files
    * like poster.jpg) and cleans them up. Handles both root-level and subfolder-level channels.
-   * @returns {Promise<{removed: string[], errors: string[]}>}
+   * @returns {Promise<{removed: string[], errors: string[], skipped?: {reason: string, message: string}}>}
+   *   skipped: the sweep did not run because the downloads folder looked unmounted
    */
   async cleanupOrphanDirectories() {
     const baseDir = configModule.directoryPath;
@@ -463,6 +499,14 @@ ${excludeClause}        ORDER BY timeCreated ASC
     if (!baseDir) {
       logger.debug('[Orphan Cleanup] No output directory configured, skipping');
       return { removed, errors };
+    }
+
+    // Never tidy folders while the library looks unmounted: an empty subfolder
+    // mount point would read as an orphan.
+    const block = await this._libraryBlock();
+    if (block) {
+      logger.warn({ libraryCheck: block }, '[Orphan Cleanup] The downloads folder looks unmounted; skipping the sweep');
+      return { removed, errors, skipped: block };
     }
 
     try {
@@ -738,6 +782,19 @@ ${excludeClause}        ORDER BY timeCreated ASC
     if (!hasAgeThreshold && !hasSpaceThreshold && !hasUsageLimit && !watchedEnabled) {
       logger.info('[Auto-Removal] No thresholds configured, skipping cleanup');
       return result;
+    }
+
+    // An unmounted drive makes every file look gone, and a run then would stamp
+    // healthy videos "deleted by automatic cleanup". With downloaded videos on
+    // record and the folder looking unmounted, the run is skipped; a fresh
+    // install with nothing recorded runs normally.
+    if (!dryRun) {
+      const block = await this._libraryBlock();
+      if (block) {
+        logger.warn({ libraryCheck: block }, '[Auto-Removal] The downloads folder looks unmounted; skipping cleanup');
+        result.skipped = block;
+        return result;
+      }
     }
 
     // The N most recently downloaded videos are protected from every strategy.

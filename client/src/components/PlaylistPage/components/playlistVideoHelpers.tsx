@@ -2,6 +2,7 @@ import React from 'react';
 import { CalendarToday as CalendarTodayIcon } from '../../../lib/icons';
 import { PlaylistSortOrder } from '../../../hooks/usePlaylistDetail';
 import { PlaylistVideo } from '../../../types/playlist';
+import { VideoModalData } from '../../shared/VideoModal/types';
 import { describeRemoval, removalFromRow, removedState } from '../../../utils/videoRemoval';
 
 export type PlaylistVideoStatusColor = 'success' | 'default' | 'warning' | 'error' | 'info';
@@ -33,6 +34,39 @@ export function toDownloadFileProps(v: PlaylistVideo): {
     fileSize: v.file_size,
     audioFileSize: v.audio_file_size,
     videoResolution: v.video_resolution ?? null,
+  };
+}
+
+// The modal's status follows the file first: a present file is downloaded
+// whatever YouTube did since, a previously downloaded one reads its removal
+// state, and only a never-downloaded video that YouTube removed is missing.
+export function toModalData(v: PlaylistVideo): VideoModalData {
+  const status: VideoModalData['status'] = v.downloaded
+    ? 'downloaded'
+    : v.previously_downloaded
+      ? removedState(v.removed_reason)
+      : v.youtube_removed
+        ? 'missing'
+        : 'never_downloaded';
+  return {
+    removal: removalFromRow(v),
+    youtubeId: v.youtube_id,
+    title: v.title || v.youtube_id,
+    channelName: v.channel_name || '',
+    thumbnailUrl: v.thumbnail || `https://i.ytimg.com/vi/${v.youtube_id}/hqdefault.jpg`,
+    duration: v.duration,
+    publishedAt: v.published_at,
+    addedAt: v.downloaded_at ?? null,
+    mediaType: 'video',
+    status,
+    isDownloaded: v.downloaded,
+    ...toDownloadFileProps(v),
+    isProtected: false,
+    isIgnored: v.ignored,
+    normalizedRating: null,
+    ratingSource: null,
+    databaseId: v.video_id,
+    channelId: v.channel_id,
   };
 }
 

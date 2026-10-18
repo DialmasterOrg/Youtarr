@@ -14,6 +14,8 @@ export interface RemovedVideosSummary {
   // Deleted videos removed before Youtarr recorded why (a subset of deleted).
   legacy: number;
   libraryCheck: RemovedVideosLibraryCheck;
+  // A download is running, so emptying the trash with archive removal would be refused.
+  downloadsActive: boolean;
 }
 
 export type TrashState = 'deleted' | 'missing';

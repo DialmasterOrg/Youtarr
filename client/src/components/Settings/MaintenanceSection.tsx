@@ -79,7 +79,11 @@ export function MaintenanceSection({ token, config }: MaintenanceSectionProps) {
       </div>
     </ConfigurationCard>
 
-    <RemovedVideosCard token={token} />
+    <RemovedVideosCard
+      token={token}
+      onRescanAnyway={() => triggerRescan({ ignoreLibraryCheck: true })}
+      rescanRunning={running}
+    />
     </div>
   );
 }

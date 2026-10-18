@@ -16,6 +16,11 @@ class ArchiveAccess {
     }
   }
 
+  // Whether a purge that removes archive entries would be refused right now.
+  isDownloading() {
+    return this.downloads > 0;
+  }
+
   // Claim synchronously, before the purge's first await. New downloads wait
   // for release; a purge requested during a download is refused immediately.
   acquirePurge() {

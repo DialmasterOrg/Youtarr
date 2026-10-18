@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import {
   Alert,
   Button,
@@ -22,7 +22,15 @@ interface EmptyTrashDialogProps {
   counts: { deleted: number; missing: number };
   // Why the missing choices are unavailable (the downloads folder looks unmounted), or null.
   missingDisabledReason: string | null;
+  // Why archive entries cannot be removed right now (a download is running), or null.
+  archiveRemovalDisabledReason: string | null;
   pending: boolean;
+}
+
+// The first choice that is both available and non-empty, so the dialog never
+// opens on a choice the user cannot confirm.
+function defaultChoice(counts: { deleted: number; missing: number }, missingDisabled: boolean): WhichChoice {
+  return counts.deleted === 0 && !missingDisabled ? 'missing' : 'deleted';
 }
 
 const STATES_FOR: Record<WhichChoice, TrashState[]> = {
@@ -67,23 +75,33 @@ const EmptyTrashDialog: React.FC<EmptyTrashDialogProps> = ({
   onConfirm,
   counts,
   missingDisabledReason,
+  archiveRemovalDisabledReason,
   pending,
 }) => {
   const id = useId();
-  const [which, setWhich] = useState<WhichChoice>('deleted');
+  const missingDisabled = missingDisabledReason !== null || counts.missing === 0;
+  const [which, setWhich] = useState<WhichChoice>(() => defaultChoice(counts, missingDisabled));
   const [archive, setArchive] = useState<ArchiveChoice>('keep');
   const [acknowledged, setAcknowledged] = useState(false);
 
-  // Every opening starts from the safe defaults.
+  // Every opening starts from the safe defaults. Only an opening resets, from
+  // the counts current at that moment: the ref is refreshed after each render
+  // (never during one), so a parent re-render cannot wipe the user's choices.
+  const openingChoice = useRef(which);
+  useEffect(() => {
+    openingChoice.current = defaultChoice(counts, missingDisabled);
+  });
   useEffect(() => {
     if (open) {
-      setWhich('deleted');
+      setWhich(openingChoice.current);
       setArchive('keep');
       setAcknowledged(false);
     }
   }, [open]);
 
-  const missingDisabled = missingDisabledReason !== null || counts.missing === 0;
+  // Archive removal is refused while a download runs; the choice falls back to keep.
+  const archiveRemovalDisabled = archiveRemovalDisabledReason !== null;
+  const effectiveArchive: ArchiveChoice = archiveRemovalDisabled ? 'keep' : archive;
   const total = counts.deleted + counts.missing;
   const count = which === 'deleted' ? counts.deleted : which === 'missing' ? counts.missing : total;
 
@@ -124,7 +142,7 @@ const EmptyTrashDialog: React.FC<EmptyTrashDialogProps> = ({
 
           <fieldset className="space-y-3">
             <legend className="text-sm font-semibold mb-2">Download archive</legend>
-            <RadioGroup value={archive} onValueChange={(value) => setArchive(value as ArchiveChoice)} className="space-y-3">
+            <RadioGroup value={effectiveArchive} onValueChange={(value) => setArchive(value as ArchiveChoice)} className="space-y-3">
               <Choice
                 id={`${id}-keep`}
                 value="keep"
@@ -135,7 +153,8 @@ const EmptyTrashDialog: React.FC<EmptyTrashDialogProps> = ({
                 id={`${id}-remove`}
                 value="remove"
                 label="Remove them from the download archive"
-                help="Automatic downloads treat them as new and may download them again at the next run."
+                help={archiveRemovalDisabledReason ?? 'Automatic downloads treat them as new and may download them again at the next run.'}
+                disabled={archiveRemovalDisabled}
               />
             </RadioGroup>
           </fieldset>
@@ -174,7 +193,7 @@ const EmptyTrashDialog: React.FC<EmptyTrashDialogProps> = ({
           Cancel
         </Button>
         <Button
-          onClick={() => onConfirm({ states: STATES_FOR[which], removeFromArchive: archive === 'remove' })}
+          onClick={() => onConfirm({ states: STATES_FOR[which], removeFromArchive: effectiveArchive === 'remove' })}
           variant="outlined"
           color="error"
           disabled={!acknowledged || count === 0 || pending}

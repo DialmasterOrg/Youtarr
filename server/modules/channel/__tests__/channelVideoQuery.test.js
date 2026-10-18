@@ -48,7 +48,8 @@ describe('channelVideoQuery', () => {
         where: {
           youtubeId: ['video1', 'video2', 'video3']
         },
-        attributes: ['id', 'youtubeId', 'removed', 'removed_reason', 'removed_at', 'removed_detail', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at', 'video_resolution']
+        attributes: ['id', 'youtubeId', 'removed', 'removed_reason', 'removed_at', 'removed_detail', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at', 'video_resolution'],
+        raw: true
       });
       expect(result[0].added).toBe(true);
       expect(result[0].removed).toBe(false);
@@ -95,12 +96,29 @@ describe('channelVideoQuery', () => {
         where: {
           youtubeId: ['video1', 'video2']
         },
-        attributes: ['id', 'youtubeId', 'removed', 'removed_reason', 'removed_at', 'removed_detail', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at', 'video_resolution']
+        attributes: ['id', 'youtubeId', 'removed', 'removed_reason', 'removed_at', 'removed_detail', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at', 'video_resolution'],
+        raw: true
       });
       expect(result[0].added).toBe(true);
       expect(result[0].removed).toBe(false);
       expect(result[1].added).toBe(false);
       expect(result[1].removed).toBe(false);
+    });
+
+    test('normalizes the raw 0/1 flags of plain rows to booleans', async () => {
+      const Video = require('../../../models/video');
+      const videos = [{ youtube_id: 'video1' }, { youtube_id: 'video2' }];
+      Video.findAll = jest.fn().mockResolvedValue([
+        { youtubeId: 'video1', removed: 1, protected: 1 },
+        { youtubeId: 'video2', removed: 0, protected: 0 }
+      ]);
+
+      const result = await channelVideoQuery.enrichVideosWithDownloadStatus(videos);
+
+      expect(result[0].removed).toBe(true);
+      expect(result[0].protected).toBe(true);
+      expect(result[1].removed).toBe(false);
+      expect(result[1].protected).toBe(false);
     });
 
     test('should correctly handle removed videos', async () => {
@@ -152,7 +170,8 @@ describe('channelVideoQuery', () => {
         where: {
           youtubeId: ['video1', 'video2']
         },
-        attributes: ['id', 'youtubeId', 'removed', 'removed_reason', 'removed_at', 'removed_detail', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at', 'video_resolution']
+        attributes: ['id', 'youtubeId', 'removed', 'removed_reason', 'removed_at', 'removed_detail', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at', 'video_resolution'],
+        raw: true
       });
       expect(result[0].added).toBe(true);
       expect(result[0].removed).toBe(false);
@@ -181,7 +200,8 @@ describe('channelVideoQuery', () => {
         where: {
           youtubeId: ['video1', 'video2', 'video3']
         },
-        attributes: ['id', 'youtubeId', 'removed', 'removed_reason', 'removed_at', 'removed_detail', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at', 'video_resolution']
+        attributes: ['id', 'youtubeId', 'removed', 'removed_reason', 'removed_at', 'removed_detail', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at', 'video_resolution'],
+        raw: true
       });
 
       // Video1 - not downloaded
@@ -209,7 +229,8 @@ describe('channelVideoQuery', () => {
         where: {
           youtubeId: []
         },
-        attributes: ['id', 'youtubeId', 'removed', 'removed_reason', 'removed_at', 'removed_detail', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at', 'video_resolution']
+        attributes: ['id', 'youtubeId', 'removed', 'removed_reason', 'removed_at', 'removed_detail', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at', 'video_resolution'],
+        raw: true
       });
       expect(result).toEqual([]);
     });
@@ -373,7 +394,8 @@ describe('channelVideoQuery', () => {
         where: {
           youtubeId: ['video1', 'video2']
         },
-        attributes: ['id', 'youtubeId', 'removed', 'removed_reason', 'removed_at', 'removed_detail', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at', 'video_resolution']
+        attributes: ['id', 'youtubeId', 'removed', 'removed_reason', 'removed_at', 'removed_detail', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected', 'last_downloaded_at', 'video_resolution'],
+        raw: true
       });
       expect(result[0].added).toBe(true);
       expect(result[0].removed).toBe(false);

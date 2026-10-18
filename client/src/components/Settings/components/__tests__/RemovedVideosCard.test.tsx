@@ -19,10 +19,20 @@ const summary = (overrides: Partial<RemovedVideosSummary> = {}): RemovedVideosSu
   missing: 4,
   legacy: 0,
   libraryCheck: { ok: true, reason: null, path: null, message: null },
+  downloadsActive: false,
   ...overrides,
 });
 
-function setup(summaryValue: RemovedVideosSummary | null = summary(), overrides: Partial<UseRemovedVideosReturn> = {}) {
+type CardProps = Partial<React.ComponentProps<typeof RemovedVideosCard>>;
+
+const EMPTY_ROOT = { ok: false, reason: 'empty', path: '/d', message: 'The downloads folder /d is empty.' };
+const rescanThatStarts = () => jest.fn().mockResolvedValue({ started: true });
+
+function setup(
+  summaryValue: RemovedVideosSummary | null = summary(),
+  overrides: Partial<UseRemovedVideosReturn> = {},
+  props: CardProps = {}
+) {
   const hook: UseRemovedVideosReturn = {
     summary: summaryValue,
     loading: false,
@@ -35,8 +45,8 @@ function setup(summaryValue: RemovedVideosSummary | null = summary(), overrides:
     ...overrides,
   };
   useRemovedVideos.mockReturnValue(hook);
-  renderWithProviders(<RemovedVideosCard token="tok" />);
-  return { hook, user: userEvent.setup() };
+  const view = renderWithProviders(<RemovedVideosCard token="tok" {...props} />);
+  return { hook, user: userEvent.setup(), rerender: view.rerender };
 }
 
 describe('RemovedVideosCard', () => {
@@ -59,6 +69,91 @@ describe('RemovedVideosCard', () => {
     expect(screen.getByText('The downloads folder /d is empty. Marking or emptying missing videos is disabled until it is back.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mark all missing as deleted' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Empty trash...' })).toBeEnabled();
+  });
+
+  test('offers Rescan anyway while the downloads folder looks empty', () => {
+    setup(summary({ libraryCheck: EMPTY_ROOT }), {}, { onRescanAnyway: rescanThatStarts(), rescanRunning: false });
+    expect(screen.getByText(/If the folder really is empty because you removed the files yourself/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Rescan anyway...' })).toBeEnabled();
+  });
+
+  test('does not offer Rescan anyway when the downloads folder is missing', () => {
+    const missingRoot = { ok: false, reason: 'missing', path: '/d', message: 'The downloads folder /d does not exist.' };
+    setup(summary({ libraryCheck: missingRoot }), {}, { onRescanAnyway: rescanThatStarts(), rescanRunning: false });
+    expect(screen.queryByRole('button', { name: 'Rescan anyway...' })).not.toBeInTheDocument();
+  });
+
+  test('runs the rescan anyway after a confirmation that explains it', async () => {
+    const onRescanAnyway = rescanThatStarts();
+    const { user } = setup(summary({ libraryCheck: EMPTY_ROOT }), {}, { onRescanAnyway, rescanRunning: false });
+
+    await user.click(screen.getByRole('button', { name: 'Rescan anyway...' }));
+    expect(screen.getByText(/Only continue if you removed the files yourself/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Rescan anyway' }));
+
+    expect(onRescanAnyway).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText('Rescan started. When it finishes, the missing videos can be marked as deleted here.')).toBeInTheDocument();
+  });
+
+  test('does not claim a rescan started when it was refused', async () => {
+    const onRescanAnyway = jest.fn().mockResolvedValue({ started: false });
+    const { user } = setup(summary({ libraryCheck: EMPTY_ROOT }), {}, { onRescanAnyway, rescanRunning: false });
+
+    await user.click(screen.getByRole('button', { name: 'Rescan anyway...' }));
+    await user.click(screen.getByRole('button', { name: 'Rescan anyway' }));
+
+    expect(await screen.findByText('The rescan did not start. The rescan card above shows why.')).toBeInTheDocument();
+    expect(screen.queryByText(/Rescan started\./)).not.toBeInTheDocument();
+  });
+
+  test('reloads the summary when Empty trash opens, so the download state is current', async () => {
+    const { hook, user } = setup();
+
+    await user.click(screen.getByRole('button', { name: 'Empty trash...' }));
+
+    expect(hook.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  test('clears a stale rescan message when another action runs', async () => {
+    const onRescanAnyway = jest.fn().mockResolvedValue({ started: false });
+    const { user } = setup(summary({ libraryCheck: EMPTY_ROOT }), {}, { onRescanAnyway, rescanRunning: false });
+    await user.click(screen.getByRole('button', { name: 'Rescan anyway...' }));
+    await user.click(screen.getByRole('button', { name: 'Rescan anyway' }));
+    expect(await screen.findByText('The rescan did not start. The rescan card above shows why.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Empty trash...' }));
+    await user.click(screen.getByRole('checkbox', { name: 'I understand this cannot be undone' }));
+    await user.click(screen.getByRole('button', { name: /^Empty trash \(/ }));
+
+    expect(await screen.findByText(/Emptied trash:/)).toBeInTheDocument();
+    expect(screen.queryByText('The rescan did not start. The rescan card above shows why.')).not.toBeInTheDocument();
+  });
+
+  test('reloads the counts when a rescan finishes', () => {
+    const onRescanAnyway = rescanThatStarts();
+    const { hook, rerender } = setup(summary(), {}, { onRescanAnyway, rescanRunning: true });
+    expect(hook.refetch).not.toHaveBeenCalled();
+
+    rerender(<RemovedVideosCard token="tok" onRescanAnyway={onRescanAnyway} rescanRunning={false} />);
+
+    expect(hook.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  test('disables Empty trash when only missing videos remain and the folder looks unmounted', () => {
+    setup(summary({ deleted: 0, missing: 5, libraryCheck: EMPTY_ROOT }));
+    expect(screen.getByRole('button', { name: 'Empty trash...' })).toBeDisabled();
+  });
+
+  test('keeps Empty trash available for missing videos alone while the folder is mounted', () => {
+    setup(summary({ deleted: 0, missing: 5 }));
+    expect(screen.getByRole('button', { name: 'Empty trash...' })).toBeEnabled();
+  });
+
+  test('tells the dialog when a download is running so archive removal is disabled up front', async () => {
+    const { user } = setup(summary({ downloadsActive: true }));
+    await user.click(screen.getByRole('button', { name: 'Empty trash...' }));
+    expect(screen.getByRole('radio', { name: 'Remove them from the download archive' })).toBeDisabled();
+    expect(screen.getByText('Unavailable while a download is running.')).toBeInTheDocument();
   });
 
   test('disables both actions when the trash is empty', () => {

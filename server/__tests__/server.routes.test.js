@@ -1143,7 +1143,8 @@ describe('server routes - channels', () => {
           searchQuery: 'test search',
           sortBy: 'title',
           sortOrder: 'asc',
-          watchedFilter: 'only'
+          watchedFilter: 'only',
+          deletedFilter: 'only'
         }
       });
       const res = createMockResponse();
@@ -1168,7 +1169,7 @@ describe('server routes - channels', () => {
         'off', // default ignoredFilter
         'only', // watchedFilter
         null, // default maxRating
-        'off' // default deletedFilter
+        'only' // deletedFilter
       );
       expect(res.statusCode).toBe(200);
     });

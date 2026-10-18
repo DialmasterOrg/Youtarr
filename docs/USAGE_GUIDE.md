@@ -411,7 +411,7 @@ You can also start a rescan with **Run now** on the Rescan files on disk card in
 
 A scan also runs daily on a schedule and once at server startup, so changes you make outside Youtarr will eventually be picked up even if you don't trigger a manual rescan.
 
-If the downloads folder (or one of its `__subfolders`) is missing or empty when the scan runs, as it is while a drive or network share is unmounted, the scan does not mark anything missing: it records a run that names the folder and asks whether the drive is mounted, and the Videos page shows the same warning. Mount the share and run it again.
+If the downloads folder (or one of its `__subfolders`) is missing or empty when the scan runs, as it is while a drive or network share is unmounted, the scan does not mark anything missing: it records a run that names the folder and asks whether the drive is mounted, and the Videos page shows the same warning. Mount the share and run it again. If the folder really is empty because you removed the files yourself, **Rescan anyway...** on the Deleted and missing videos card runs the scan without that check; it marks every video whose file is gone as missing, and you can then mark them as deleted.
 
 **Supported file extensions**: `.mp4`, `.webm`, `.mkv`, `.m4v`, `.avi` for video, plus `.mp3` for audio-only downloads. Youtarr only writes `.mp4` (or `.mp3` for audio-only), but the rescan recognizes any of these so transcoding outside Youtarr won't orphan your library. Files must keep the `[<youtube-id>]` segment in their filename (the 11-character ID in brackets that yt-dlp writes by default) for Youtarr to match them back to the database.
 

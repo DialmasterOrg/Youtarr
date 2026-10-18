@@ -140,7 +140,7 @@ describe('VideosModule', () => {
 
     // The downloads folder looks mounted unless a test says otherwise.
     mockLibraryRootCheck = {
-      LIBRARY_CHECK_REASONS: { MISSING: 'missing', EMPTY: 'empty', UNREADABLE: 'unreadable', SUBFOLDER_EMPTY: 'subfolder-empty' },
+      LIBRARY_CHECK_REASONS: { MISSING: 'missing', EMPTY: 'empty', UNREADABLE: 'unreadable', SUBFOLDER_EMPTY: 'subfolder-empty', SUBFOLDER_UNREADABLE: 'subfolder-unreadable' },
       checkLibraryRoot: jest.fn().mockResolvedValue({ ok: true }),
     };
     jest.doMock('../libraryRootCheck', () => mockLibraryRootCheck);
@@ -715,10 +715,11 @@ describe('VideosModule', () => {
 
       // Check update was called
       expect(mockVideo.update).toHaveBeenCalledTimes(2);
+      // Marked missing only while still present: a delete landing meanwhile keeps its reason.
       expect(mockVideo.update).toHaveBeenNthCalledWith(
         1,
         { ...MISSING_COLUMNS },
-        { where: { id: 1 } },
+        { where: { id: 1, removed: false } },
       );
       expect(mockVideo.update).toHaveBeenNthCalledWith(
         2,
@@ -1541,6 +1542,45 @@ describe('VideosModule', () => {
         expect(result.notMarkedMissing).toBe(1);
         expect(result.libraryCheckMessage).toBe(emptySubfolder.message);
         expect(mockVideo.update).not.toHaveBeenCalled();
+      });
+
+      test('finishes the scan but holds back missing marks while a subfolder cannot be read', async () => {
+        const unreadableSubfolder = { ok: false, reason: 'subfolder-unreadable', path: '/test/output/dir/__Music', message: 'The subfolder /test/output/dir/__Music could not be read.' };
+        mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue(unreadableSubfolder);
+        mockVideo.count.mockResolvedValueOnce(1); // present rows
+        mockVideo.count.mockResolvedValueOnce(1); // total rows
+        mockFs.readdir.mockResolvedValueOnce([]);
+        mockVideo.findAll.mockResolvedValueOnce([
+          dbRow({ youtubeId: 'missing123', filePath: '/test/output/dir/__Music/missing.mp4', fileSize: '1000' })
+        ]);
+        mockFs.stat.mockRejectedValue(fsError('ENOENT'));
+
+        const result = await VideosModule.backfillVideoMetadata();
+
+        expect(result.status).toBe('completed');
+        expect(result.removed).toBe(0);
+        expect(result.notMarkedMissing).toBe(1);
+        expect(result.libraryCheckMessage).toBe(unreadableSubfolder.message);
+        expect(mockVideo.update).not.toHaveBeenCalled();
+      });
+
+      test('skips the folder check when a manual run asks to, marking missing and saying so', async () => {
+        mockLibraryRootCheck.checkLibraryRoot.mockResolvedValue(missingRoot);
+        mockVideo.count.mockResolvedValueOnce(1); // total rows
+        mockFs.readdir.mockResolvedValueOnce([]);
+        mockVideo.findAll.mockResolvedValueOnce([
+          dbRow({ youtubeId: 'missing123', filePath: '/test/output/dir/Channel/missing.mp4', fileSize: '1000' })
+        ]);
+        mockFs.stat.mockRejectedValue(fsError('ENOENT'));
+        mockVideo.update.mockResolvedValue([1]);
+
+        const result = await VideosModule.backfillVideoMetadata({ trigger: 'manual', ignoreLibraryCheck: true });
+
+        expect(mockLibraryRootCheck.checkLibraryRoot).not.toHaveBeenCalled();
+        expect(result.status).toBe('completed');
+        expect(result.removed).toBe(1);
+        expect(result.notMarkedMissing).toBe(0);
+        expect(result.libraryCheckSkipped).toBe(true);
       });
     });
 

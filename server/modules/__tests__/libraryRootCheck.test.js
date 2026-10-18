@@ -1,6 +1,6 @@
 /* eslint-env jest */
 const path = require('path');
-const { LIBRARY_CHECK_REASONS, checkLibraryRoot, describeLibraryCheck } = require('../libraryRootCheck');
+const { LIBRARY_CHECK_REASONS, checkLibraryRoot, describeLibraryCheck, isUnderLibraryCheckPath } = require('../libraryRootCheck');
 
 const ROOT = '/data/youtube';
 
@@ -60,6 +60,29 @@ describe('checkLibraryRoot', () => {
     });
   });
 
+  test('reports empty when the root holds only Youtarr\'s temp folder', async () => {
+    const result = await checkLibraryRoot(ROOT, { readdir: diskWith({ [ROOT]: [dir('.youtarr_tmp')] }) });
+    expect(result).toEqual(expect.objectContaining({ ok: false, reason: 'empty', path: ROOT }));
+  });
+
+  test('reports empty when the root holds only entries Youtarr itself creates', async () => {
+    const readdir = diskWith({
+      [ROOT]: [dir('.youtarr_tmp'), dir('__playlists__'), file('.youtarr_healthcheck_1234')],
+      [path.join(ROOT, '__playlists__')]: [],
+    });
+    await expect(checkLibraryRoot(ROOT, { readdir })).resolves.toEqual(
+      expect.objectContaining({ ok: false, reason: 'empty', path: ROOT })
+    );
+  });
+
+  test('does not treat the playlists folder as a library subfolder', async () => {
+    const readdir = diskWith({
+      [ROOT]: [dir('Channel A'), dir('__playlists__')],
+      [path.join(ROOT, '__playlists__')]: [],
+    });
+    await expect(checkLibraryRoot(ROOT, { readdir })).resolves.toEqual({ ok: true });
+  });
+
   test('fails when a __subfolder exists but is empty, naming that subfolder', async () => {
     const music = path.join(ROOT, '__Music');
     const readdir = diskWith({
@@ -88,12 +111,15 @@ describe('checkLibraryRoot', () => {
     await expect(checkLibraryRoot(ROOT, { readdir })).resolves.toEqual({ ok: true });
   });
 
-  test('fails as unreadable when a __subfolder cannot be listed', async () => {
+  test('fails as subfolder-unreadable when a __subfolder cannot be listed, naming that subfolder', async () => {
     const music = path.join(ROOT, '__Music');
     const readdir = diskWith({ [ROOT]: [dir('__Music')], [music]: 'EIO' });
-    await expect(checkLibraryRoot(ROOT, { readdir })).resolves.toEqual(
-      expect.objectContaining({ ok: false, reason: 'unreadable', path: music })
-    );
+    await expect(checkLibraryRoot(ROOT, { readdir })).resolves.toEqual({
+      ok: false,
+      reason: 'subfolder-unreadable',
+      path: music,
+      message: 'The subfolder /data/youtube/__Music could not be read.',
+    });
   });
 
   test('treats no configured folder as missing', async () => {
@@ -111,5 +137,27 @@ describe('describeLibraryCheck', () => {
     expect(describeLibraryCheck({ reason: 'empty', path: '/d' })).toBe('The downloads folder /d is empty.');
     expect(describeLibraryCheck({ reason: 'unreadable', path: '/d' })).toBe('The downloads folder /d could not be read.');
     expect(describeLibraryCheck({ reason: 'subfolder-empty', path: '/d/__Music' })).toBe('The subfolder /d/__Music is empty.');
+    expect(describeLibraryCheck({ reason: 'subfolder-unreadable', path: '/d/__Music' })).toBe('The subfolder /d/__Music could not be read.');
+  });
+});
+
+describe('isUnderLibraryCheckPath', () => {
+  const music = path.join(ROOT, '__Music');
+
+  test('a failing root covers every file path', () => {
+    expect(isUnderLibraryCheckPath({ ok: false, reason: 'empty', path: ROOT }, '/data/youtube/Channel/v [abc].mp4')).toBe(true);
+    expect(isUnderLibraryCheckPath({ ok: false, reason: 'missing', path: ROOT }, '/elsewhere/v [abc].mp4')).toBe(true);
+  });
+
+  test('a failing subfolder covers only the files under it', () => {
+    const check = { ok: false, reason: 'subfolder-empty', path: music };
+    expect(isUnderLibraryCheckPath(check, path.join(music, 'Artist', 'song [abc].mp3'))).toBe(true);
+    expect(isUnderLibraryCheckPath(check, path.join(ROOT, '__Music2', 'song [abc].mp3'))).toBe(false);
+    expect(isUnderLibraryCheckPath(check, path.join(ROOT, 'Channel', 'v [abc].mp4'))).toBe(false);
+  });
+
+  test('a passing check and a video without a file path cover nothing', () => {
+    expect(isUnderLibraryCheckPath({ ok: true }, '/data/youtube/Channel/v [abc].mp4')).toBe(false);
+    expect(isUnderLibraryCheckPath({ ok: false, reason: 'empty', path: ROOT }, null)).toBe(false);
   });
 });

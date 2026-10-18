@@ -50,13 +50,16 @@ module.exports = function createVideoTrashRoutes({ verifyToken, videoTrashModule
    *                     reason:
    *                       type: string
    *                       nullable: true
-   *                       enum: [missing, empty, unreadable, subfolder-empty]
+   *                       enum: [missing, empty, unreadable, subfolder-empty, subfolder-unreadable]
    *                     path:
    *                       type: string
    *                       nullable: true
    *                     message:
    *                       type: string
    *                       nullable: true
+   *                 downloadsActive:
+   *                   type: boolean
+   *                   description: A download is running, so a purge that removes archive entries would be refused
    *       401:
    *         description: Authentication required
    *       500:

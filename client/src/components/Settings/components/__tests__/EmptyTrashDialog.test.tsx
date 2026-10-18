@@ -15,6 +15,7 @@ const renderDialog = (overrides: Partial<React.ComponentProps<typeof EmptyTrashD
       onConfirm={onConfirm}
       counts={{ deleted: 12, missing: 4 }}
       missingDisabledReason={null}
+      archiveRemovalDisabledReason={null}
       pending={false}
       {...overrides}
     />
@@ -25,6 +26,24 @@ const renderDialog = (overrides: Partial<React.ComponentProps<typeof EmptyTrashD
 const confirmButton = () => screen.getByRole('button', { name: /^Empty trash \(/ });
 
 describe('EmptyTrashDialog', () => {
+  test('opens on Missing when there are no deleted videos', () => {
+    renderDialog({ counts: { deleted: 0, missing: 4 } });
+
+    expect(screen.getByRole('radio', { name: 'Missing (4)' })).toHaveAttribute('aria-checked', 'true');
+    expect(confirmButton()).toHaveTextContent('Empty trash (4 videos)');
+  });
+
+  test('disables removing archive entries with the reason while a download runs, and keeps them', async () => {
+    const { onConfirm, user } = renderDialog({ archiveRemovalDisabledReason: 'Unavailable while a download is running.' });
+
+    expect(screen.getByRole('radio', { name: 'Remove them from the download archive' })).toBeDisabled();
+    expect(screen.getByText('Unavailable while a download is running.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('checkbox', { name: 'I understand this cannot be undone' }));
+    await user.click(confirmButton());
+    expect(onConfirm).toHaveBeenCalledWith({ states: ['deleted'], removeFromArchive: false });
+  });
+
   test('starts with Deleted and Keep selected, the confirm button disabled until the risk is acknowledged', async () => {
     const { user } = renderDialog();
 

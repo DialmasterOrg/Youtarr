@@ -26,6 +26,13 @@ describe('rescanRunSummary', () => {
       });
     });
 
+    test('says when the downloads folder check was skipped on request', () => {
+      const record = toRunRecord({ status: 'completed', processed: 5, updated: 1, removed: 2, libraryCheckSkipped: true });
+      expect(record.status).toBe('success');
+      expect(record.message).toBe('Scanned 5 videos: 1 updated, 2 marked missing. The downloads folder check was skipped.');
+      expect(record.details.libraryCheckSkipped).toBe(true);
+    });
+
     test('records a scan that held back missing marks behind a library check as partial, naming the cause', () => {
       const record = toRunRecord({
         status: 'completed', processed: 10, updated: 1, removed: 0,
