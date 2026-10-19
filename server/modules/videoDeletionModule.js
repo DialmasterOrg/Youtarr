@@ -5,6 +5,7 @@ const logger = require('../logger');
 const configModule = require('./configModule');
 const { isVideoDirectoryFor, isFileForVideo, cleanupEmptyChannelDirectory, cleanupEmptyParents, isSubfolderDir, listSubdirectories, removeDirectoryResilient } = require('./filesystem');
 const m3uGenerator = require('./m3uGenerator');
+const playlistOutputRefresh = require('./playlistOutputRefresh');
 const storageUsage = require('./storageUsage');
 const { STORED_BYTES_SQL } = storageUsage;
 const storageGuard = require('./storageGuard');
@@ -140,6 +141,7 @@ class VideoDeletionModule {
         return {
           success: true,
           videoId,
+          youtubeId: video.youtubeId,
           channelId: video.channel_id,
           message: 'Video marked as removed (no file path)'
         };
@@ -227,6 +229,7 @@ class VideoDeletionModule {
       return {
         success: true,
         videoId,
+        youtubeId: video.youtubeId,
         channelId: video.channel_id,
         message: 'Video deleted successfully'
       };
@@ -271,6 +274,7 @@ class VideoDeletionModule {
     const deleted = [];
     const failed = [];
     const affectedChannelIds = [];
+    const deletedYoutubeIds = [];
     const libraryCheck = videoIds.length > 0 ? await this._checkLibraryForDeletes() : null;
 
     // Process deletions sequentially to avoid overwhelming the file system
@@ -280,6 +284,7 @@ class VideoDeletionModule {
       if (result.success) {
         deleted.push(videoId);
         affectedChannelIds.push(result.channelId);
+        deletedYoutubeIds.push(result.youtubeId);
       } else {
         failed.push({
           videoId,
@@ -289,6 +294,7 @@ class VideoDeletionModule {
     }
 
     this._regenerateM3usForChannels(affectedChannelIds);
+    this._refreshPlaylistsForVideos(deletedYoutubeIds);
     if (deleted.length > 0) this._refreshDownloadPauseIfPaused();
 
     return {
@@ -346,6 +352,7 @@ class VideoDeletionModule {
     }
 
     this._regenerateM3usForChannels(affectedChannelIds);
+    this._refreshPlaylistsForVideos(deleted);
     if (deleted.length > 0) this._refreshDownloadPauseIfPaused();
 
     return {
@@ -365,6 +372,16 @@ class VideoDeletionModule {
     storageGuard.refresh().catch((err) => {
       logger.error({ err }, 'Failed to re-check the download pause state after deleting videos');
     });
+  }
+
+  /**
+   * Rebuild the playlist .m3u files and media server playlists that list the
+   * deleted videos, so they stop pointing at files that are gone.
+   * @param {string[]} youtubeIds
+   */
+  _refreshPlaylistsForVideos(youtubeIds) {
+    if (youtubeIds.length === 0) return;
+    playlistOutputRefresh.refreshForVideosInBackground(youtubeIds, 'video-deletion');
   }
 
   /**
@@ -579,6 +596,7 @@ ${excludeClause}        ORDER BY timeCreated ASC
   async _removeOldestUntilFreed({ bytesToFree, excludeIds, bucket, deletedKey, label, removal, dryRun, includeSamples, result }) {
     const triedIds = new Set();
     const affectedChannelIds = [];
+    const deletedYoutubeIds = [];
     let freedSoFar = 0;
     let iterations = 0;
 
@@ -628,6 +646,7 @@ ${excludeClause}        ORDER BY timeCreated ASC
           batchFreed += videoSize;
           batchDeletedCount += 1;
           affectedChannelIds.push(deleteResult.channelId);
+          deletedYoutubeIds.push(deleteResult.youtubeId);
 
           result[deletedKey] += 1;
           bucket.deletedCount += 1;
@@ -663,6 +682,7 @@ ${excludeClause}        ORDER BY timeCreated ASC
         result.errors.push('Reached maximum iterations, may need additional cleanup');
       }
       this._regenerateM3usForChannels(affectedChannelIds);
+      this._refreshPlaylistsForVideos(deletedYoutubeIds);
     }
 
     return { selectedIds: Array.from(triedIds) };

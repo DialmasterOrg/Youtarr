@@ -3,6 +3,7 @@ const configModule = require('../configModule');
 const serverRegistry = require('./serverRegistry');
 const { MediaServerUnavailableError, describeHttpError } = require('./adapters/baseAdapter');
 const { Playlist, PlaylistVideo, PlaylistSyncState, Video } = require('../../models');
+const { REMOVAL_STATES, removalState } = require('../videoRemovalState');
 
 // Backoff retry for resolving items after library scan. Tuned for typical Plex/Jellyfin
 // scan completion times — short initial delays, then longer as more time passes.
@@ -108,7 +109,9 @@ class MediaServerSync {
     let mismatched = 0;
     for (const pv of videos) {
       const v = byYoutubeId.get(pv.youtube_id);
-      if (!v) continue;
+      // A deleted row keeps its stored paths, but its file is gone for good.
+      // A missing one stays: its file may come back.
+      if (!v || removalState(v) === REMOVAL_STATES.DELETED) continue;
       const mediaPath = mediaType === 'audio' ? v.audioFilePath : v.filePath;
       if (mediaPath) {
         entries.push({ youtube_id: pv.youtube_id, filePath: mediaPath });
@@ -148,12 +151,15 @@ class MediaServerSync {
     });
 
     // With zero resolved items, the only case that proceeds is a deliberately
-    // emptied playlist (every video ignored/removed) with an existing server
-    // playlist to empty. Everything else defers: the servers reject empty
-    // playlist creation, and replacing an existing playlist with nothing would
-    // wipe it over a transient condition (scan lag, or downloads that don't
-    // match a just-changed Download Type).
-    if (itemIds.length === 0 && !(state?.server_playlist_id && videos.length === 0)) {
+    // emptied playlist (every video ignored, or every downloaded file deleted)
+    // with an existing server playlist to empty (Jellyfin/Emby delete it
+    // instead; see replacePlaylistItems). Everything else defers: the
+    // servers reject empty playlist creation, and replacing an existing
+    // playlist with nothing would wipe it over a transient condition (scan
+    // lag, a missing file that may come back, or downloads that don't match a
+    // just-changed Download Type).
+    const hasFiles = entries.length > 0 || mismatched > 0;
+    if (itemIds.length === 0 && !(state?.server_playlist_id && !hasFiles)) {
       const reason = entries.length === 0
         ? mismatched > 0
           ? `none of the downloaded items has a ${mediaType === 'audio' ? 'mp3' : 'video'} file matching the playlist's Download Type`
@@ -176,7 +182,9 @@ class MediaServerSync {
       const replaced = await adapter.replacePlaylistItems(state.server_playlist_id, itemIds, {
         name, public: !!playlist.public_on_servers, mediaType,
       });
-      const effectiveId = replaced?.id || state.server_playlist_id;
+      // id null: emptying it left no playlist on the server (it cannot hold an
+      // empty one); the next sync with items creates a fresh one.
+      const effectiveId = replaced?.id === null ? null : (replaced?.id || state.server_playlist_id);
       if (state.update) await state.update({
         server_playlist_id: effectiveId,
         last_synced_at: new Date(),

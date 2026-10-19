@@ -124,10 +124,16 @@ describe('PlaylistVideoList container sizing', () => {
   test('uses the available container width to switch between cards and a table', () => {
     render(<PlaylistVideoList {...baseProps} videos={[makeVideo({ published_at: '20260827' })]} loading={false} />);
     expect(screen.getByRole('table')).toBeInTheDocument();
-    resize(900);
+    resize(719);
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
     expect(screen.getByText('2026-08-27')).toBeVisible();
-    resize(1200);
+    resize(720);
+    expect(screen.getByRole('table')).toBeInTheDocument();
+  });
+
+  test('keeps the table on a list narrower than a full desktop page', () => {
+    render(<PlaylistVideoList {...baseProps} videos={[makeVideo()]} loading={false} />);
+    resize(900);
     expect(screen.getByRole('table')).toBeInTheDocument();
   });
 

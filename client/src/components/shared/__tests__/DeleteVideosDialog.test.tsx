@@ -161,7 +161,7 @@ describe('DeleteVideosDialog', () => {
 
       expect(
         screen.getByText(
-          '1 selected video will not be affected because its file is already missing from disk.'
+          '1 selected video will not be affected because it has no file on disk.'
         )
       ).toBeInTheDocument();
     });
@@ -171,7 +171,7 @@ describe('DeleteVideosDialog', () => {
 
       expect(
         screen.getByText(
-          '2 selected videos will not be affected because their files are already missing from disk.'
+          '2 selected videos will not be affected because they have no file on disk.'
         )
       ).toBeInTheDocument();
     });
