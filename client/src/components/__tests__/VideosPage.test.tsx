@@ -508,7 +508,7 @@ describe('VideosPage Component', () => {
 
       render(<VideosPage token={mockToken} />);
 
-      expect(await screen.findByText(/The downloads folder is empty\. Videos stored there are not being marked missing until it is back/)).toBeInTheDocument();
+      expect(await screen.findByText(/The downloads folder is empty\. Until that changes, videos stored there are not being marked missing; check/)).toBeInTheDocument();
     });
 
     test('hides the unmounted-folder warning once dismissed', async () => {
@@ -521,11 +521,11 @@ describe('VideosPage Component', () => {
       });
 
       render(<VideosPage token={mockToken} />);
-      await screen.findByText(/Videos stored there are not being marked missing/);
+      await screen.findByText(/videos stored there are not being marked missing/);
 
       await user.click(screen.getByRole('button', { name: 'Close' }));
 
-      expect(screen.queryByText(/Videos stored there are not being marked missing/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/videos stored there are not being marked missing/)).not.toBeInTheDocument();
     });
 
     test('shows the warning again when a later problem follows one that cleared', async () => {
@@ -542,7 +542,7 @@ describe('VideosPage Component', () => {
         .mockResolvedValueOnce(warned);
 
       render(<VideosPage token={mockToken} />);
-      await screen.findByText(/Videos stored there are not being marked missing/);
+      await screen.findByText(/videos stored there are not being marked missing/);
       await user.click(screen.getByRole('button', { name: 'Close' }));
 
       // Each mark from the modal reloads the list: first with the folder back, then failing again.
@@ -551,7 +551,7 @@ describe('VideosPage Component', () => {
       await waitFor(() => expect(axios.get).toHaveBeenCalledTimes(2));
       await user.click(screen.getByRole('button', { name: 'Modal mark as deleted' }));
 
-      expect(await screen.findByText(/Videos stored there are not being marked missing/)).toBeInTheDocument();
+      expect(await screen.findByText(/videos stored there are not being marked missing/)).toBeInTheDocument();
     });
 
     test('does not suggest rescanning anyway when a folder could not be read', async () => {
@@ -567,7 +567,7 @@ describe('VideosPage Component', () => {
 
       render(<VideosPage token={mockToken} />);
 
-      expect(await screen.findByText(/Videos stored there are not being marked missing/)).toBeInTheDocument();
+      expect(await screen.findByText(/videos stored there are not being marked missing/)).toBeInTheDocument();
       expect(screen.queryByText(/rescan anyway/)).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Maintenance' })).not.toBeInTheDocument();
     });

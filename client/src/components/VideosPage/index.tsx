@@ -585,11 +585,11 @@ function VideosPage({ token }: VideosPageProps) {
       )}
       {libraryWarning && libraryWarning.message !== dismissedLibraryWarning && (
         <Alert severity="warning" className="mt-2 break-words" onClose={() => setDismissedLibraryWarning(libraryWarning.message)}>
-          {libraryWarning.message} Videos stored there are not being marked missing until it is back; check that
-          the drive or share is mounted.
+          {libraryWarning.message} Until that changes, videos stored there are not being marked missing; check
+          that the drive or share is mounted.
           {EMPTY_FOLDER_REASONS.includes(libraryWarning.reason) && (
             <>
-              {' '}If you emptied it on purpose, you can rescan anyway from{' '}
+              {' '}If you removed the files yourself, you can rescan anyway from{' '}
               <Button
                 variant="link"
                 className="h-auto p-0 align-baseline text-sm"

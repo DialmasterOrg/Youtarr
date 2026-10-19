@@ -149,6 +149,11 @@ describe('rescanRunSummary', () => {
       });
     });
 
+    test('carries a skipped downloads folder check through to the maintenance page', () => {
+      const skippedRun = { ...run, details: { ...run.details, libraryCheckSkipped: true } };
+      expect(fromRunRecord(skippedRun).libraryCheckSkipped).toBe(true);
+    });
+
     test('reports an interrupted run as an error with its message', () => {
       expect(fromRunRecord({ ...run, status: 'interrupted', outcome: null, message: 'Interrupted by a restart.', details: null })).toEqual(
         expect.objectContaining({ status: 'error', errorMessage: 'Interrupted by a restart.', videosScanned: 0 })

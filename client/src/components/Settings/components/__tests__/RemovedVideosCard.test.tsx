@@ -67,9 +67,17 @@ describe('RemovedVideosCard', () => {
 
   test('disables the missing action with the warning while the downloads folder looks unmounted', () => {
     setup(summary({ libraryCheck: { ok: false, reason: 'missing', path: '/d', message: 'The downloads folder does not exist.' }, missingActionsBlocked: true }));
-    expect(screen.getByText('The downloads folder does not exist. Marking or emptying missing videos is disabled until it is back.')).toBeInTheDocument();
+    expect(screen.getByText('The downloads folder does not exist. Until that changes, marking or emptying missing videos is disabled.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mark all missing as deleted' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Empty trash...' })).toBeEnabled();
+  });
+
+  test('words the warning to fit a message that names several subfolders', () => {
+    const check = { ok: false, reason: 'subfolder-empty', path: '/d/__Kids', message: 'The subfolders __Kids and __Music are empty.' };
+    setup(summary({ libraryCheck: check }));
+    expect(screen.getByText(
+      'The subfolders __Kids and __Music are empty. Until that changes, videos stored there are not being marked missing.'
+    )).toBeInTheDocument();
   });
 
   test('offers Rescan anyway while the downloads folder looks empty', () => {
@@ -250,6 +258,14 @@ describe('RemovedVideosCard', () => {
 
     expect(hook.markAllMissingDeleted).toHaveBeenCalledWith({ ignoreLibraryCheck: false });
     expect(await screen.findByText('Marked 4 videos as deleted.')).toBeInTheDocument();
+  });
+
+  test('speaks of one file when marking the only missing video', async () => {
+    const { user } = setup(summary({ missing: 1 }));
+
+    await user.click(screen.getByRole('button', { name: 'Mark all missing as deleted' }));
+
+    expect(screen.getByText(/Only do this if the file is really gone, not sitting on an unmounted drive\./)).toBeInTheDocument();
   });
 
   test('empties the trash through the dialog and reports what went', async () => {

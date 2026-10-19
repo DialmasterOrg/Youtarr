@@ -145,11 +145,11 @@ function RemovedVideosCard({ token, onRescanAnyway, rescanRunning = false }: Rem
           <Alert severity="warning" className="break-words">
             {missingBlocked
               ? folderLooksEmpty
-                ? `${libraryWarning} Missing videos stored there cannot be emptied from the trash until it is back;`
+                ? `${libraryWarning} Until that changes, missing videos stored there cannot be emptied from the trash;`
                   + ' Mark all missing as deleted asks you to confirm that you removed the files yourself.'
                   + (canRescanAnyway ? ' Rescan anyway first if some of the videos stored there still show as available.' : '')
-                : `${libraryWarning} Marking or emptying missing videos is disabled until it is back.`
-              : `${libraryWarning} Videos stored there are not being marked missing until it is back.`
+                : `${libraryWarning} Until that changes, marking or emptying missing videos is disabled.`
+              : `${libraryWarning} Until that changes, videos stored there are not being marked missing.`
                 + (canRescanAnyway ? ' If you removed the files yourself, rescan anyway to mark them missing.' : '')}
           </Alert>
         )}
@@ -205,9 +205,8 @@ function RemovedVideosCard({ token, onRescanAnyway, rescanRunning = false }: Rem
           <div className="space-y-3">
             <Typography variant="body2">
               {missing === 1
-                ? '1 missing video will be marked as deleted and hidden from the Videos page by default. Its record is kept, so it can still be re-downloaded, and if its file turns up again the rescan marks it downloaded.'
-                : `${missing} missing videos will be marked as deleted and hidden from the Videos page by default. Their records are kept, so they can still be re-downloaded, and if a file turns up again the rescan marks it downloaded.`}
-              {' '}Only do this if the files are really gone, not sitting on an unmounted drive.
+                ? '1 missing video will be marked as deleted and hidden from the Videos page by default. Its record is kept, so it can still be re-downloaded, and if its file turns up again the rescan marks it downloaded. Only do this if the file is really gone, not sitting on an unmounted drive.'
+                : `${missing} missing videos will be marked as deleted and hidden from the Videos page by default. Their records are kept, so they can still be re-downloaded, and if a file turns up again the rescan marks it downloaded. Only do this if the files are really gone, not sitting on an unmounted drive.`}
             </Typography>
             {needsEmptiedAcknowledgement && (
               <>

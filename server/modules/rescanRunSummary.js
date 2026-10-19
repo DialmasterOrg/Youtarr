@@ -90,6 +90,7 @@ function fromRunRecord(run) {
     videosScanned: count(details.videosScanned),
     filesFoundOnDisk: count(details.filesFoundOnDisk),
     errorMessage: status === 'error' ? (run.message || null) : null,
+    ...(details.libraryCheckSkipped ? { libraryCheckSkipped: true } : {}),
   };
 }
 

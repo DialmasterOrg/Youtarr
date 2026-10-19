@@ -730,6 +730,31 @@ describe('VideoModal', () => {
       expect(screen.queryByRole('button', { name: 'Mark as deleted' })).not.toBeInTheDocument();
     });
 
+    describe('on a phone', () => {
+      const originalMatchMedia = window.matchMedia;
+      beforeEach(() => {
+        window.matchMedia = jest.fn().mockImplementation((query: string) => ({
+          matches: query === '(max-width: 599px)',
+          media: query,
+          onchange: null,
+          addListener: jest.fn(),
+          removeListener: jest.fn(),
+          addEventListener: jest.fn(),
+          removeEventListener: jest.fn(),
+          dispatchEvent: jest.fn(),
+        }));
+      });
+      afterEach(() => {
+        window.matchMedia = originalMatchMedia;
+      });
+
+      test('keeps its label while the other actions show only icons', () => {
+        renderModal({ video: missingVideo });
+        expect(screen.getByRole('button', { name: 'Download video' })).not.toHaveTextContent('Download');
+        expect(screen.getByRole('button', { name: 'Mark as deleted' })).toHaveTextContent('Mark as deleted');
+      });
+    });
+
     test('shows the server message when marking fails', async () => {
       axios.post.mockRejectedValueOnce({ response: { data: { error: 'Failed to mark videos as deleted' } } });
 

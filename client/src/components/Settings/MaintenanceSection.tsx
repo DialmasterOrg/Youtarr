@@ -33,6 +33,7 @@ export function MaintenanceSection({ token, config }: MaintenanceSectionProps) {
         Last rescan: {formatDateTime(lastRun.completedAt)} ({lastRun.trigger}). Updated{' '}
         {lastRun.videosUpdated} videos, marked {lastRun.videosMarkedMissing} missing.
         {lastRun.status === 'timed-out' && ' (timed out; click to continue)'}
+        {lastRun.libraryCheckSkipped && ' The downloads folder check was skipped.'}
       </Typography>
     );
   } else {

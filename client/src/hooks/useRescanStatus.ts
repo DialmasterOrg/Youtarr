@@ -15,6 +15,8 @@ export interface RescanLastRun {
   videosScanned: number;
   filesFoundOnDisk: number;
   errorMessage: string | null;
+  // A "Rescan anyway" run, which skipped the unmounted-drive check.
+  libraryCheckSkipped?: boolean;
 }
 
 interface RescanStatusResponse {

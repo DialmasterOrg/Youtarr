@@ -89,7 +89,8 @@ function VideoActions({
     <Box
       style={{
         display: 'flex',
-        flexWrap: 'nowrap',
+        // On a phone, a labeled button that does not fit moves to a second line instead of being cut off.
+        flexWrap: isMobile ? 'wrap' : 'nowrap',
         alignItems: 'center',
         gap: 'var(--video-modal-action-row-gap, 8px)',
         paddingTop: 'var(--video-modal-action-row-padding-y, 2px)',
@@ -229,6 +230,7 @@ function VideoActions({
       <Box style={{ flex: 1, minWidth: isMobile ? 0 : 12 }} />
 
       {showMarkDeleted && (
+        // Labeled even on a phone: it acts on the first tap, and its icon alone does not say what it does.
         <Tooltip title="The file is really gone: hide this video from the Videos page by default">
           <Button
             size="small"
@@ -237,10 +239,10 @@ function VideoActions({
             onClick={onMarkDeleted}
             disabled={markDeletedPending}
             aria-label="Mark as deleted"
-            startIcon={useIconOnlyActions ? undefined : <MarkDeletedIcon size={16} />}
-            style={actionButtonStyle}
+            startIcon={<MarkDeletedIcon size={16} />}
+            style={labeledActionButtonStyle}
           >
-            {useIconOnlyActions ? <MarkDeletedIcon size={16} /> : 'Mark as deleted'}
+            Mark as deleted
           </Button>
         </Tooltip>
       )}

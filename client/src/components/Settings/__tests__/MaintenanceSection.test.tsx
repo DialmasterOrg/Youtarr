@@ -91,6 +91,23 @@ describe('MaintenanceSection', () => {
     expect(screen.getByText(/marked 2 missing/i)).toBeInTheDocument();
   });
 
+  test('says when the last rescan skipped the downloads folder check', () => {
+    const lastRun: RescanLastRun = {
+      startedAt: '2026-05-04T15:00:00.000Z',
+      completedAt: '2026-05-04T15:01:00.000Z',
+      trigger: 'manual',
+      status: 'completed',
+      videosUpdated: 0,
+      videosMarkedMissing: 3,
+      videosScanned: 100,
+      filesFoundOnDisk: 97,
+      errorMessage: null,
+      libraryCheckSkipped: true
+    };
+    setup({ lastRun });
+    expect(screen.getByText(/The downloads folder check was skipped\./)).toBeInTheDocument();
+  });
+
   test('disables button while running', () => {
     setup({ running: true });
     expect(screen.getByRole('button', { name: /rescan files on disk/i })).toBeDisabled();
